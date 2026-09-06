@@ -1526,10 +1526,17 @@ function openTenantDetail(orgId){
     /* Counted on open, never on the table render — one query per tenant is
        fine when somebody asks for it and thirteen on every page load is not. */
     db.collection('projects').where('orgId','==',orgId).get()
-      .then(function(sn){ return sn.size; }).catch(function(){ return null; })
+      .then(function(sn){ return sn.size; }).catch(function(){ return null; }),
+    /* Who has ACTUALLY signed in. team_members has been recording people since
+       long before omega_orgs existed, and it is keyed by email. The control
+       plane keys members by uid, which only the Admin SDK can resolve from an
+       email — so this is shown, not silently merged. */
+    db.collection('team_members').where('orgId','==',orgId).get()
+      .then(function(sn){ var o=[]; sn.forEach(function(d){ o.push(d.data()||{}); }); return o; })
+      .catch(function(){ return []; })
   ]).then(function(r){
-    var bill=r[0], members=r[1], projects=r[2];
-    cell.innerHTML = _tnDetailHtml(orgId, org, bill, members, projects);
+    var bill=r[0], members=r[1], projects=r[2], seen=r[3];
+    cell.innerHTML = _tnDetailHtml(orgId, org, bill, members, projects, seen);
   }).catch(function(e){
     cell.innerHTML='<div class="sub-txt">Could not load '+esc(orgId)+' — '+esc(e.message||'denied')+'</div>';
   });
@@ -1542,7 +1549,8 @@ function _tnField(label, id, val, type, ph){
     + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px;font:500 12.5px system-ui"></label>';
 }
 
-function _tnDetailHtml(orgId, org, bill, members, projects){
+function _tnDetailHtml(orgId, org, bill, members, projects, seen){
+  seen = seen || [];
   var TIERS=['trial','standard','deluxe','enterprise','partner','internal'];
   var h='<div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:6px 2px 12px">';
 
@@ -1607,7 +1615,9 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   h+='<button onclick="saveTenantRelationship(&quot;'+esc(orgId)+'&quot;)">Save relationship</button>';
   h+=' <span id="tbrel-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div style="display:flex;gap:18px;margin-top:14px">'
-   + '<div><div class="sub-txt">Members</div><div style="font:700 20px system-ui">'+members.length+'</div></div>'
+   + '<div><div class="sub-txt">Members</div><div style="font:700 20px system-ui">'+members.length
+   +   (seen.length && !members.length ? '<span class="sub-txt" style="font:500 12px system-ui"> of '+seen.length+' seen</span>' : '')
+   + '</div></div>'
    + '<div><div class="sub-txt">Projects</div><div style="font:700 20px system-ui">'+(projects==null?'—':projects)+'</div></div>'
    + '<div><div class="sub-txt">Vertical</div><div style="font:700 20px system-ui">'+esc(org.vertical||'—')+'</div></div>'
    + '</div>';
@@ -1617,7 +1627,26 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   /* ── People ── */
   h+='<div class="block-title" style="font-size:13px;margin:6px 0 8px">People</div>';
   if(!members.length){
-    h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A member row is created on first sign-in.</div>';
+    if (seen.length){
+      /* The honest version. Saying "nobody has signed in" while sixteen of
+         their projects exist is plainly wrong, and the reason is knowable:
+         omega_orgs did not exist when these people signed in, so the
+         self-registration in omega-tenant.js had no document to write under.
+         It works now — it just needs each of them to come back once. */
+      h+='<div class="sub-txt" style="margin-bottom:8px">'
+       + '<b>'+seen.length+' '+(seen.length===1?'person has':'people have')+' signed in</b>, but none has a '
+       + 'control-plane member row yet. omega_orgs was empty until it was seeded, so there was nothing '
+       + 'for the self-registration to write under. Each row appears on that person\u2019s next sign-in; '
+       + 'roles can be set from here once it does.</div>';
+      h+='<table class="ptable"><thead><tr><th>Signed in</th><th>Name</th><th>Last seen</th></tr></thead><tbody>';
+      seen.forEach(function(m){
+        h+='<tr><td class="sub-txt">'+esc(m.email||'\u2014')+'</td><td class="sub-txt">'+esc(m.name||'\u2014')+'</td>'
+         + '<td class="sub-txt">'+(m.lastSeen?esc(timeAgo(m.lastSeen)):'\u2014')+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    } else {
+      h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A member row is created on first sign-in.</div>';
+    }
   } else {
     h+='<table class="ptable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
     members.forEach(function(m){
