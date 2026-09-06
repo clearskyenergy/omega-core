@@ -50,6 +50,24 @@
   var M_PER_MI  = 1609.344;
   var FT_PER_M  = 3.280839895;
 
+  /* Hand-traced rings are not survey-accurate. Anything this close is treated
+     as on the parcel rather than beside it. */
+  var ON_PARCEL_FT = 200;
+  var ADJACENT_FT  = 1320;                /* a quarter mile */
+
+  /* PLANNING SETBACKS, NOT CODE. A screening buffer that scales with diameter,
+     because the consequence area of a hazardous liquid line does. The real
+     number is the recorded easement plus the operator's own potential impact
+     radius under 49 CFR 195, and neither is in a KMZ — so this exists to size
+     the problem, and gets replaced the moment a title report or a one-call
+     ticket comes back. Override with OmegaSiteIntel.setHazardSetback(). */
+  var HAZ_SETBACK_MIN_FT = 100;
+  var HAZ_SETBACK_PER_IN = 25;
+  function hazardSetbackFt(diameterIn) {
+    if (!diameterIn) return HAZ_SETBACK_MIN_FT;
+    return Math.max(HAZ_SETBACK_MIN_FT, Math.round(diameterIn * HAZ_SETBACK_PER_IN));
+  }
+
   /* ═══════════════════════════════════════════════════════════════════════
      1.  GEODESY
      Areas are geodesic. A planar shoelace on lat/lon degrees is wrong by the
@@ -163,10 +181,27 @@
      2.  PARSING
      ═══════════════════════════════════════════════════════════════════════ */
 
+  /* Entities are decoded, and that is not cosmetic. Google Earth writes a
+     pipeline diameter as 5.56&quot; — the inch mark is escaped because KML is
+     XML. Without this the diameter never parses, every gas line reads as
+     unknown, and the gas component of the score is silently zero on a site
+     that has three of them. */
+  var ENTS = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  function decodeEnts(s) {
+    return String(s || '').replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, function (m, e) {
+      if (e.charAt(0) === '#') {
+        var n = e.charAt(1) === 'x' || e.charAt(1) === 'X'
+          ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return isFinite(n) ? String.fromCharCode(n) : m;
+      }
+      var v = ENTS[e.toLowerCase()];
+      return v === undefined ? m : v;
+    });
+  }
   function strip(s) {
-    return String(s || '')
+    return decodeEnts(String(s || '')
       .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-      .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      .replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
   }
   function validLngLat(p) {
     return p && isFinite(p[0]) && isFinite(p[1]) &&
@@ -526,18 +561,67 @@
       return (G.distM != null && G.distM < m) ? G.distM : m; }, Infinity);
     if (!isFinite(s.nearestGasM)) s.nearestGasM = null;
 
+    /* HAZARD PROXIMITY IS A BAND, NOT A CROSSING TEST.
+
+       This was originally "distance < 1 m = crosses", and on the corpus that
+       reported every site as clean — including one carrying a 36" crude line
+       and a 30" HVL line 58 to 158 FEET off the boundary. A ring traced by
+       hand over imagery is not survey-accurate to the metre, so an exact
+       crossing test asks a question the data cannot answer.
+
+       Anything inside ON_PARCEL_FT is treated as on the parcel: it is within
+       the tracing error, and at that range the setback lands on the site
+       either way. */
     var haz = of('pipeline_hazard');
     haz.forEach(function (H) {
       H.distM = ref ? distRingToLineM(ref, H.coords) : null;
-      H.crosses = !!(ref && H.distM === 0);
+      H.setbackFt = hazardSetbackFt(H.attrs.diameterIn);
+      H.proximity = !ref || H.distM == null ? 'unknown'
+        : H.distM <= ON_PARCEL_FT / FT_PER_M   ? 'on_parcel'
+        : H.distM <= ADJACENT_FT / FT_PER_M    ? 'adjacent'
+        : H.distM <= 0.5 * M_PER_MI            ? 'nearby'
+                                               : 'distant';
+      /* The corridor the setback consumes, both sides of the line, over the
+         length that runs against the parcel. An area estimate for screening —
+         it does not clip to the boundary, so it is an upper bound. */
+      H.lengthM = lengthM(H.coords);
+      H.corridorAcres = (H.proximity === 'on_parcel')
+        ? (H.lengthM * (H.setbackFt * 2 / FT_PER_M)) / M2_PER_AC : 0;
     });
+    haz.sort(function (a, b) { return (a.distM == null ? 1e9 : a.distM) - (b.distM == null ? 1e9 : b.distM); });
     s.hazards = haz;
-    s.hazardCrossings = haz.filter(function (H) { return H.distM != null && H.distM < 1; }).length;
-    if (s.hazardCrossings) {
+
+    s.hazardOnParcel = haz.filter(function (H) { return H.proximity === 'on_parcel'; }).length;
+    s.hazardAdjacent = haz.filter(function (H) { return H.proximity === 'adjacent'; }).length;
+    s.hazardCrossings = s.hazardOnParcel;          /* kept: older callers read this */
+    s.hazardCorridorAcres = haz.reduce(function (a, H) { return a + H.corridorAcres; }, 0);
+
+    if (s.hazardOnParcel) {
+      var biggest = haz.filter(function (H) { return H.proximity === 'on_parcel'; })
+        .reduce(function (m, H) { return (H.attrs.diameterIn || 0) > (m.attrs.diameterIn || 0) ? H : m; });
       s.flags.push({ level: 'warn', code: 'hazard_pipeline_on_site',
-        msg: s.hazardCrossings + ' hazardous-liquid pipeline' + (s.hazardCrossings > 1 ? 's cross' : ' crosses') +
-             ' the parcel. Setbacks come off the buildable area and the operator has to be consulted before any layout is fixed.' });
+        msg: s.hazardOnParcel + ' hazardous-liquid pipeline' + (s.hazardOnParcel > 1 ? 's run' : ' runs') +
+             ' on or within ' + ON_PARCEL_FT + ' ft of the parcel — largest is ' +
+             (biggest.attrs.diameterIn ? biggest.attrs.diameterIn + '" ' : '') +
+             (biggest.attrs.commodity || 'hazardous liquid') +
+             ' (' + (biggest.attrs.operator || 'operator not named') + '). ' +
+             'A planning setback takes roughly ' + Math.round(s.hazardCorridorAcres) +
+             ' ac out of the buildable area. Confirm the recorded easement and the ' +
+             'operator\'s own impact radius before any layout is fixed.' });
     }
+    if (s.hazardAdjacent) {
+      s.flags.push({ level: 'info', code: 'hazard_pipeline_adjacent',
+        msg: s.hazardAdjacent + ' hazardous-liquid pipeline' + (s.hazardAdjacent > 1 ? 's' : '') +
+             ' within ' + ADJACENT_FT + ' ft of the boundary. Not on the site, but it constrains ' +
+             'access, trenching and where the gen-tie can cross.' });
+    }
+
+    /* Buildable is gross less the hazard corridor. It is NOT the AutoDesign
+       buildable figure — SFHA, wetlands, easements, setbacks and slope all
+       come off as well, and none of those are in a KMZ. It is the ceiling
+       that ceiling has to sit under. */
+    s.buildableCeilingAcres = s.grossAcres != null
+      ? Math.max(0, s.grossAcres - s.hazardCorridorAcres) : null;
 
     s.gentie     = of('gentie');
     s.generation = of('generation');
@@ -703,11 +787,20 @@
     /* Hazard penalty. Applied AFTER the components rather than inside land,
        because it is a risk and a schedule problem as much as an area one —
        burying it in the acreage would hide it. */
-    var penalty = 0;
-    if (s.hazardCrossings) {
-      penalty = Math.min(12, s.hazardCrossings * 4);
-      parts.push({ key: 'hazard', points: -penalty, max: 0,
-        note: s.hazardCrossings + ' hazardous-liquid crossing' + (s.hazardCrossings > 1 ? 's' : '') + ' on the parcel' });
+    var penalty = 0, hnote = null;
+    if (s.hazardOnParcel || s.hazardAdjacent) {
+      /* On-parcel lines cost real points; adjacent ones cost a token amount,
+         because they constrain access and the gen-tie route without taking
+         land. Capped so a pipeline corridor can never by itself sink a site
+         that is otherwise strong — it is a cost and a schedule item, not a
+         disqualification. */
+      penalty = Math.min(18, (s.hazardOnParcel || 0) * 5 + (s.hazardAdjacent || 0) * 1.5);
+      var lost = s.hazardCorridorAcres ? ', ~' + Math.round(s.hazardCorridorAcres) + ' ac of setback' : '';
+      hnote = (s.hazardOnParcel || 0) + ' on-parcel and ' + (s.hazardAdjacent || 0) +
+              ' adjacent hazardous-liquid line' +
+              ((s.hazardOnParcel + s.hazardAdjacent) > 1 ? 's' : '') + lost;
+      penalty = Math.round(penalty * 10) / 10;
+      parts.push({ key: 'hazard', points: -penalty, max: 0, note: hnote });
       total -= penalty;
     }
 
@@ -728,6 +821,10 @@
     return {
       score: total,
       confidence: conf,
+      hazardOnParcel: s.hazardOnParcel || 0,
+      hazardAdjacent: s.hazardAdjacent || 0,
+      hazardCorridorAcres: Math.round(s.hazardCorridorAcres || 0),
+      buildableCeilingAcres: s.buildableCeilingAcres != null ? Math.round(s.buildableCeilingAcres) : null,
       missing: missing,
       components: parts,
       kv: kv,
@@ -758,6 +855,13 @@
     classify: classify, intake: intake, gridScore: gridScore,
     analyzeKML: analyzeKML, analyzeKMZ: analyzeKMZ,
     mwCeilingFor: mwCeilingFor,
+    hazardSetbackFt: hazardSetbackFt,
+    setHazardSetback: function (minFt, perIn) {
+      if (isFinite(minFt)) HAZ_SETBACK_MIN_FT = +minFt;
+      if (isFinite(perIn)) HAZ_SETBACK_PER_IN = +perIn;
+      return { minFt: HAZ_SETBACK_MIN_FT, perIn: HAZ_SETBACK_PER_IN };
+    },
+    decodeEnts: decodeEnts,
     geo: { haversineM: haversineM, areaAcres: areaAcres, lengthM: lengthM,
            isClosed: isClosed, pointInRing: pointInRing,
            distPointToLineM: distPointToLineM, distRingToLineM: distRingToLineM },
