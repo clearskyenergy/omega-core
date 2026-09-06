@@ -634,7 +634,7 @@ window._omegaReady = function(){
 <div id="app">
   <nav id="side-nav">
     <div class="sn-head">
-      <span class="sn-logo-txt">NextNRG</span>
+      <span class="sn-logo-txt" id="sn-logo-txt"></span>
       <span class="sn-sub">EnergyOS</span>
     </div>
     <div class="sn-scroll">
@@ -650,6 +650,33 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
         <span>Marketplace</span>
       </a>
+
+      <!-- ══ JOINT DEVELOPMENT / ADMINISTRATION ══ Same sections and the same
+           gates as the dashboard. They were missing here, so the sidebar
+           changed shape depending on which page you were on — which reads as
+           "my links disappeared" rather than "this page has a different nav".
+           Plain links, so they need no page-specific handler. -->
+      <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
+      <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
+      <a class="sn-item" id="sn-osa" href="https://osa.clearskyomega.com/" target="_blank" rel="noopener" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span>OSA Workspace</span>
+      </a>
+      <a class="sn-item" id="sn-jda" href="/jda.html" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h3"/></svg>
+        <span>JD Partners</span>
+      </a>
+      <div class="sn-divider" id="sn-adm-divider" style="display:none"></div>
+      <div class="sn-section-label" id="sn-adm-label" style="display:none">Administration</div>
+      <a class="sn-item" id="sn-admin" href="/admin/" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span>Admin Console</span>
+      </a>
+      <a class="sn-item" id="sn-ops" href="/console/" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>
+        <span>Ops Console</span>
+      </a>
+
     </div>
   </nav>
 
@@ -1092,6 +1119,43 @@ function signOut(){ auth.signOut(); }
 
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', build);
   else build();
+})();
+</script>
+<script>
+/* Sidebar gates, mirroring index.html. Duplicated rather than shared because
+   these are single-file pages by convention; if a fourth page needs them this
+   should become omega-nav.js instead of a third copy.
+   Showing a link grants nothing — /admin/ and OSA both gate independently. */
+(function () {
+  var OSA_ORGS = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+  var ADMIN_NAV_DOMAINS = ['clearsky-usa.com'];
+  function show(id){ var el = document.getElementById(id); if (el) el.style.display = ''; }
+  function orgOf(e){ return String(e || '').toLowerCase().split('@')[1] || ''; }
+
+  function gate(email) {
+    var d = orgOf(email);
+    if (!d) return;
+    if (ADMIN_NAV_DOMAINS.indexOf(d) >= 0) {
+      show('sn-adm-divider'); show('sn-adm-label'); show('sn-admin'); show('sn-ops');
+    }
+    var staff = (d === 'clearsky-usa.com' || d === 'csebuilders.com');
+    if (typeof firebase === 'undefined' || !firebase.apps.length) return;
+    firebase.firestore().collection('omega_orgs').doc(d).get().then(function (doc) {
+      var o = (doc && doc.exists) ? doc.data() : {};
+      var isOsa = staff || o.osaMember === true || OSA_ORGS.indexOf(d) >= 0;
+      var isJd  = isOsa || o.jdPartner === true;
+      if (!isOsa && !isJd) return;
+      show('sn-jv-divider'); show('sn-jv-label');
+      if (isOsa) show('sn-osa');
+      if (isJd)  show('sn-jda');
+    }).catch(function () { /* fail closed */ });
+  }
+
+  function start(){
+    if (typeof firebase === 'undefined' || !firebase.apps.length) { setTimeout(start, 250); return; }
+    firebase.auth().onAuthStateChanged(function (u) { if (u && u.email) gate(u.email); });
+  }
+  start();
 })();
 </script>
 </body>
