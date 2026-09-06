@@ -6577,6 +6577,7 @@ function _serializeCanvas(){
     vendorOverride: JSON.parse(JSON.stringify(S.vendorOverride||{})),
     computeCost: S.computeCost ? JSON.parse(JSON.stringify(S.computeCost)) : null,
     supplyLinks: Array.isArray(S.supplyLinks) ? JSON.parse(JSON.stringify(S.supplyLinks)) : [],
+    interconMode: S.interconMode || null,
     costOverrides: S.costOverrides ? JSON.parse(JSON.stringify(S.costOverrides)) : null,
     trenches:  JSON.parse(JSON.stringify(S._trenches||[])),
     pxPerFt:   S.pxPerFt || null,
@@ -6609,6 +6610,7 @@ function _restoreCanvas(snap){
   window._ceVendorOverride = S.vendorOverride;
   try{ S.computeCost = snap.computeCost ? JSON.parse(JSON.stringify(snap.computeCost)) : null; }catch(e){ S.computeCost = null; }
   try{ S.supplyLinks = Array.isArray(snap.supplyLinks) ? JSON.parse(JSON.stringify(snap.supplyLinks)) : []; }catch(e){ S.supplyLinks = []; }
+  if (snap.interconMode) S.interconMode = snap.interconMode; else { try{ delete S.interconMode; }catch(e){} }
   try{ S.costOverrides = snap.costOverrides ? JSON.parse(JSON.stringify(snap.costOverrides)) : null; }catch(e){ S.costOverrides = null; }
   S.pxPerFt = snap.pxPerFt || null;
   S.unitLabel = snap.unitLabel || 'ft';
@@ -23917,6 +23919,7 @@ async function saveProject(){
          that made it. Both save here and restore on load. */
       computeCost:   S.computeCost   || null,
       supplyLinks:   S.supplyLinks   || null,
+      interconMode:  S.interconMode  || null,
       costOverrides: S.costOverrides || null,
       omegaSizing:   S.omegaSizing   || null,
       omegaSizingAt: S.omegaSizingAt || null,
@@ -24063,6 +24066,8 @@ async function _loadProject(id){
        the project has none so they cannot leak from the previous project. */
     S.computeCost   = (d.computeCost   && typeof d.computeCost==='object')   ? d.computeCost   : null;
     S.supplyLinks   = Array.isArray(d.supplyLinks) ? d.supplyLinks : [];
+    if (d.interconMode) S.interconMode = d.interconMode; else { try{ delete S.interconMode; }catch(e){} }
+    try{ if(window.OmegaIntercon) setTimeout(function(){ try{ OmegaIntercon.button(); }catch(e){} }, 400); }catch(e){}
     try{ if(window.OmegaSupply) setTimeout(function(){ try{ OmegaSupply.repaint(); }catch(e){} }, 300); }catch(e){}
     S.costOverrides = (d.costOverrides && typeof d.costOverrides==='object') ? d.costOverrides : null;
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
@@ -96528,9 +96533,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
     var m=document.getElementById('ocb-modal'); if(m) m.remove();
     var msg=' Compute site placed \u2014 '+(r.itKw/1000).toFixed(1)+' MW IT, '
-      +r.pods+' pods, '+r.fcBlocks+' fuel cells ('+(r.fcKw/1000).toFixed(2)+' MW), '
-      +r.gasMmbtuHr+' MMBtu/hr gas. BESS to size: '+r.bessKw.toLocaleString()+' kW / '+r.bessKwh.toLocaleString()+' kWh.'
-      +(cond&&cond.ok?(' '+cond.runs+' conduit runs trenched'+(cond.diverse?', A/B diverse':'')+'.'):'');
+      +r.pods+' pods'
+      +(r.fcBlocks?(', '+r.fcBlocks+' \u00d7 '+(r.genLabel||'generation')+' ('+(r.fcKw/1000).toFixed(2)+' MW), '+r.gasMmbtuHr+' MMBtu/hr gas'):', no on-site generation')
+      +'. BESS to size: '+r.bessKw.toLocaleString()+' kW / '+r.bessKwh.toLocaleString()+' kWh.'
+      +(cond&&cond.ok
+        ?(' '+cond.runs+' conduit runs trenched'+(cond.diverse?', A/B diverse':'')
+          +(cond.bess?(', battery tied in'):'')+(cond.mgc?', microgrid controller placed':'')+'.')
+        :'');
     try{ if(typeof showBanner==='function') showBanner('cal',msg);
          else if(typeof _evBanner==='function') _evBanner(msg); }catch(e){}
   }
@@ -96921,6 +96930,58 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return 2;
   }
 
+  /* ── PATCH 125: THE BATTERY WAS NOT IN ANY OF THIS ────────────────────
+     The trencher walked S.shapes looking for 'deralt' and 'derdc'. A BESS
+     is not a shape -- it is an ELEMENT, type 'bess-asm' -- so it was
+     invisible to every run: a site with a pod and a battery got the pod
+     trenched, the battery left floating, and (because the controller was
+     gated on fuel cells existing) no microgrid controller at all. A pod
+     and a battery IS a microgrid; something has to arbitrate between the
+     grid, the battery and the load, and on that drawing nothing did. */
+  function storageAssets(){
+    var out=[];
+    try{
+      (S.elements||[]).forEach(function(el){
+        if(!el) return;
+        var isB = (el.type==='bess-asm') || el.bgbRole==='bess' || el.evKind==='bess';
+        if(!isB) return;
+        var w=+el.w||0, h=+el.h||(w*0.35);
+        out.push({ el:el, id:el.id, cx:(+el.x||0)+w/2, cy:(+el.y||0)+h/2,
+                   hw:w/2, hh:h/2,
+                   kw:+el.kw||+el.bessKw||0, kwh:+el.kwh||+el.bessKwh||0,
+                   label:el.label||'BESS' });
+      });
+    }catch(e){}
+    return out;
+  }
+
+  /* Power plus controls, from each battery to the hub. Storage is
+     bidirectional, so this is a feeder and not a tap: the same pair a
+     generator gets, because in an outage the battery IS the source. */
+  function runStorage(list, h){
+    if(!list||!list.length||!h) return 0;
+    var hp=hubXY(h), n=0;
+    list.forEach(function(b){
+      var mid=(b.cy+hp.y)/2;
+      var big=(+b.kw||0)>=1500;
+      push({ condType:big?'MV-UG':'RMC-AC', cluster:true, spine:true, toId:h.id,
+             fromElId:b.id, omegaStore:true, emsEdgeOff:0, laneY:mid,
+             spineMinX:Math.min(b.cx,hp.x), labelDx:60, labelDy:-20,
+             pts:seal([{x:b.cx,y:b.cy},{x:b.cx,y:mid},{x:hp.x,y:mid},{x:hp.x,y:hp.y}],
+                      {x:b.cx,y:b.cy}, hp) });
+      n++;
+      /* The battery cannot be dispatched without a control path, and it
+         must not share the power trench. */
+      push({ condType:'EMT-BMS', cluster:true, spine:true, toId:h.id,
+             fromElId:b.id, omegaStore:true, emsEdgeOff:5, laneY:mid+5,
+             spineMinX:Math.min(b.cx,hp.x), labelHidden:true,
+             pts:seal([{x:b.cx+5,y:b.cy},{x:b.cx+5,y:mid+5},{x:hp.x+5,y:mid+5},{x:hp.x+5,y:hp.y+5}],
+                      {x:b.cx+5,y:b.cy}, hp) });
+      n++;
+    });
+    return n;
+  }
+
   /* ── ENTRY POINT used by the Compute guided build ──────────────────── */
   function runAll(opts){
     opts=opts||{};
@@ -96933,15 +96994,22 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       if(sh.kind==='deralt') fc.push(sh);
       else if(sh.kind==='derdc') pods.push(sh);
     });
+    var bess=storageAssets();
     var n=0;
     n+=runCompute(pods, h, opts.diverse!==false);
     n+=runGeneration(fc, h);
+    n+=runStorage(bess, h);
     if(opts.tieTo) n+=tieTo(opts.tieTo, h);
 
     /* MGC and its hardwired interface. Fast load shed and islanding are
        deterministic actions -- they cannot depend on the same data path
-       that carries telemetry, so the trip/close pair is its own run. */
-    if(fc.length){
+       that carries telemetry, so the trip/close pair is its own run.
+
+       PATCH 125: this was gated on fuel cells. A battery behind the meter
+       needs the same arbitration -- more so, because it has to decide in
+       milliseconds whether to ride through or open the tie. The gate is
+       now ANY dispatchable source on site. */
+    if(fc.length || bess.length){
       var hp2=hubXY(h);
       var mg=mgcAsset(hp2.x, hp2.y);
       var mp={ x:mg.pts[0].x+((mg.lf||3)*ppf())/2, y:mg.pts[0].y };
@@ -96955,11 +97023,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
     try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
     return { ok:true, runs:n, hub:h.id, pods:pods.length, fc:fc.length,
+             bess:bess.length, mgc:!!(fc.length||bess.length),
              diverse:opts.diverse!==false };
   }
 
   window.OmegaConduit={
     runAll:runAll, runCompute:runCompute, runGeneration:runGeneration,
+    runStorage:runStorage, storageAssets:storageAssets,
     tieTo:tieTo, generationTargets:generationTargets, hub:hub
   };
   if(window.console) console.info(TAG+' ready \u2014 OmegaConduit.runAll()');
@@ -151039,12 +151109,23 @@ if (root.console && console.info) {
       return placed;
     }
 
-    /* Substation on the edge facing the tap, so the tie line leaves the
-       site pointing at where the tap actually is. */
+    /* Interconnection, on the edge facing the tap so the tie line leaves
+       the site pointing at where the tap actually is.
+
+       PATCH 126: this used to drop a 120 x 90 ft substation yard on every
+       design regardless of load. On a 1 MW site that is a quarter acre of
+       a 1.7 acre parcel spent on a yard the utility would never build for
+       that load. The mode now decides, and the mode defaults by size and
+       by what the substation lookup found. */
     var sub = null;
     try {
-      var has = (S.shapes || []).some(function (s) { return s && s.kind === 'substation'; });
-      if (!has) sub = root.OmegaComputePlace.placeSubstation();
+      if (root.OmegaIntercon) {
+        if (opts.intercon && root.OmegaIntercon.set) root.OmegaIntercon.set(opts.intercon, { quiet: true });
+        else root.OmegaIntercon.apply(true);
+      } else {
+        var has = (S.shapes || []).some(function (s) { return s && s.kind === 'substation'; });
+        if (!has) sub = root.OmegaComputePlace.placeSubstation();
+      }
     } catch (e) {}
 
     var gas = null;
@@ -152831,6 +152912,30 @@ if (root.console && console.info) {
   var netCache = null;      /* {facility, metro, route, rtt} */
   var hidden = false;       /* set by OmegaComputeHUD.hide() */
 
+  /* PATCH 129: THE LADDER WAS A TRAP.
+     It sat over the bottom-left of the canvas, covered the imagery, and
+     the only way to get rid of it was a double-click that was documented
+     nowhere except its own tooltip -- and once dismissed there was no way
+     back short of reloading. A panel you cannot close is bad; a panel you
+     cannot reopen is worse, because the second one teaches people never
+     to close it. Three states now, remembered per browser, with a switch
+     on the View tab that says which state it is in. */
+  var LKEY = 'omega.ui.ladder';
+  var ladderState = 'open';                  /* open | min | closed */
+  try {
+    var _ls = localStorage.getItem(LKEY);
+    if (_ls === 'min' || _ls === 'closed' || _ls === 'open') ladderState = _ls;
+  } catch (e) {}
+  function setLadder(st) {
+    ladderState = (st === 'min' || st === 'closed') ? st : 'open';
+    try { localStorage.setItem(LKEY, ladderState); } catch (e) {}
+    var box = document.getElementById('omega-ladder');
+    if (ladderState === 'closed' && box) box.remove();
+    paintLadder();
+    paintLadderButton();
+    return ladderState;
+  }
+
   function n1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
   function n0(v) { return Math.round(v).toLocaleString(); }
   function esc(s) {
@@ -152941,7 +153046,7 @@ if (root.console && console.info) {
 
   /* ── the ladder ─────────────────────────────────────────────────────── */
 
-  function ladderHtml(r) {
+  function ladderHtml(r, ctrls) {
     var fac = r.facKw, util = r.utilKw || 0, gen = r.fcKw || 0;
     var gap = Math.max(0, r.genNeedKw || 0);
     if (!(fac > 0)) return '';
@@ -152990,11 +153095,11 @@ if (root.console && console.info) {
         + '<span style="font-family:\'IBM Plex Mono\',monospace">' + v + '</span></span>';
     };
 
-    return '<div style="display:flex;justify-content:space-between;align-items:baseline;'
-      + 'margin-bottom:9px"><span style="font-size:10px;letter-spacing:1.2px;'
+    return '<div style="display:flex;justify-content:space-between;align-items:center;'
+      + 'gap:8px;margin-bottom:9px"><span style="font-size:10px;letter-spacing:1.2px;'
       + 'text-transform:uppercase;color:var(--sub)">Load vs grid ceiling</span>'
       + '<span style="font-size:11px;color:#A78BFA;font-family:\'IBM Plex Mono\',monospace">'
-      + n1(fac / 1000) + ' MW facility</span></div>'
+      + n1(fac / 1000) + ' MW facility</span>' + (ctrls || '') + '</div>'
       + bar
       + '<div style="display:flex;justify-content:space-between;font-size:9px;'
       + 'color:var(--sub);font-family:\'IBM Plex Mono\',monospace;margin-top:5px">'
@@ -153009,22 +153114,53 @@ if (root.console && console.info) {
       + '</div>';
   }
 
+  /* The three-state chrome. Minimised keeps one line -- the facility
+     load and whether the gap is closed -- because that is the number
+     people keep the panel open for, and it costs 28 px instead of 150. */
+  function chrome(r) {
+    var btn = function (act, glyph, title) {
+      return '<button onclick="OmegaComputeHUD.ladderState(\'' + act + '\')" title="' + title + '" '
+        + 'style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:13px;'
+        + 'line-height:1;padding:2px 4px;font-family:inherit">' + glyph + '</button>';
+    };
+    return '<div style="display:flex;gap:1px;align-items:center;margin-left:auto">'
+      + (ladderState === 'min'
+          ? btn('open', '\u25a2', 'Expand')
+          : btn('min', '\u2013', 'Minimise to one line'))
+      + btn('closed', '\u00d7', 'Close \u2014 reopen it from the View tab')
+      + '</div>';
+  }
+
+  function ladderMinHtml(r) {
+    var gap = Math.max(0, r.genNeedKw || 0), gen = r.fcKw || 0;
+    var closed = gap <= 0 || gen >= gap;
+    return '<div style="display:flex;align-items:center;gap:10px">'
+      + '<span style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--sub)">Load vs ceiling</span>'
+      + '<span style="font-size:11px;color:#A78BFA;font-family:\'IBM Plex Mono\',monospace">'
+      + n1(r.facKw / 1000) + ' MW</span>'
+      + '<span style="font-size:10.5px;font-family:\'IBM Plex Mono\',monospace;color:'
+      + (closed ? '#4ADE80' : '#F87171') + '">'
+      + (gap <= 0 ? 'within the ceiling' : (closed ? 'gap closed on site' : 'gap ' + n1((gap - gen) / 1000) + ' MW'))
+      + '</span>' + chrome(r) + '</div>';
+  }
+
   function paintLadder() {
     var r = compute();
     var box = document.getElementById('omega-ladder');
-    if (!r || !(r.facKw > 0)) { if (box) box.remove(); return; }
+    if (!r || !(r.facKw > 0) || ladderState === 'closed') { if (box) box.remove(); paintLadderButton(); return; }
     if (!box) {
       box = document.createElement('div');
       box.id = 'omega-ladder';
-      box.style.cssText = 'position:absolute;left:18px;bottom:44px;width:400px;z-index:40;'
-        + 'background:rgba(14,18,26,.95);border:1px solid var(--border);border-radius:8px;'
-        + 'padding:12px 14px;backdrop-filter:blur(6px);pointer-events:auto';
       var host = document.getElementById('sc') || document.body;
       host.appendChild(box);
-      box.addEventListener('dblclick', function () { box.remove(); });
-      box.title = 'Double-click to dismiss';
     }
-    box.innerHTML = ladderHtml(r);
+    var min = ladderState === 'min';
+    box.style.cssText = 'position:absolute;left:18px;bottom:44px;width:' + (min ? '340px' : '400px') + ';z-index:40;'
+      + 'background:rgba(14,18,26,.95);border:1px solid var(--border);border-radius:8px;'
+      + 'padding:' + (min ? '8px 10px' : '12px 14px') + ';backdrop-filter:blur(6px);pointer-events:auto';
+    box.title = '';
+    box.innerHTML = min ? ladderMinHtml(r) : ladderHtml(r, chrome(r));
+    paintLadderButton();
   }
 
   /* ── the status bar ─────────────────────────────────────────────────── */
@@ -153121,14 +153257,45 @@ if (root.console && console.info) {
   function boot() {
     var n = 0, iv = setInterval(function () {
       wrapSize(); wrapPlace(); wrapNetwork();
+      try { ladderButton(); } catch (e) {}
       if (++n > 30) clearInterval(iv);
     }, 500);
     setTimeout(paintAll, 1500);
     if (root.console) console.info(TAG + ' ready \u2014 OmegaComputeHUD.refresh()');
   }
 
+  /* The way back. A button on View that reads its own state, so a
+     closed panel is a visible choice rather than a thing that vanished. */
+  function paintLadderButton() {
+    var b = document.getElementById('rb-ladder-toggle');
+    if (!b) return;
+    var lbl = ladderState === 'closed' ? 'Show' : (ladderState === 'min' ? 'Expand' : 'Hide');
+    var col = ladderState === 'closed' ? '#64748B' : '#A78BFA';
+    b.title = 'Load vs grid ceiling panel \u2014 currently ' + ladderState
+      + '. Click to ' + lbl.toLowerCase() + ' it.';
+    b.innerHTML = '<span class="rb-ico" style="color:' + col + '">\u25a4</span>'
+      + '<span class="rb-lbl">Load Bar<br>' + lbl + '</span>';
+  }
+  function ladderButton() {
+    if (document.getElementById('rb-ladder-toggle')) { paintLadderButton(); return true; }
+    var page = document.querySelector('#ribbon .ribbon-page[data-page="view"]');
+    if (!page) return false;
+    var host = page.querySelector('.rpanel .rpanel-body');
+    if (!host) return false;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-ladder-toggle';
+    b.onclick = function () {
+      setLadder(ladderState === 'closed' ? 'open' : (ladderState === 'min' ? 'open' : 'closed'));
+    };
+    host.appendChild(b);
+    paintLadderButton();
+    return true;
+  }
+
   root.OmegaComputeHUD = {
     refresh: paintAll,
+    ladderState: setLadder,
+    ladderButton: ladderButton,
     rail: paintRail,
     ladder: paintLadder,
     network: function () { return netCache; },
@@ -160965,7 +161132,12 @@ if (root.console && console.info) {
     { n: 113, k: 'OmegaSharpExport',  what: 'mosaic aerial at export zoom, print-resolution capture, lossless blueprint image' },
     { n: 114, k: 'OmegaComputeTab',   what: 'Compute ribbon tab: site, place, design, size & cost' },
     { n: 122, k: 'OmegaOGI',          what: 'OGI auto-design rules: templates, prime-mover selector, air-permit cap, land fit, tier gate' },
-    { n: 124, k: 'OmegaSupply',       what: 'supply links: which DERs serve which load, and whether they carry it' }
+    { n: 124, k: 'OmegaSupply',       what: 'supply links: which DERs serve which load, and whether they carry it' },
+    { n: 125, k: 'OmegaSupply',       what: 'BESS trenched and linkable; microgrid controller placed for any dispatchable source' },
+    { n: 126, k: 'OmegaIntercon',     what: 'interconnection choice: none / service point / substation yard' },
+    { n: 127, k: 'OmegaMoveSystem',   what: 'move the placed build as one object and re-trench on drop' },
+    { n: 128, k: 'OmegaMoveSystem',   what: 'move or swap individual compartments, with live separation checking' },
+    { n: 129, k: 'OmegaComputeHUD',   what: 'load-vs-ceiling panel minimises, closes, and reopens from the View tab' }
   ];
 
   /* Source-level edits have no module to look for, so they are detected
@@ -161197,8 +161369,8 @@ if (root.console && console.info) {
      left here is what has no other home: the compute-campus site work,
      the design tools and the sizing and cost tools. */
   var PLAN = {
-    site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
-    design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-feas-csv'],
+    site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
+    design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost']
   };
   function panel(key) {
@@ -162082,7 +162254,29 @@ if (root.console && console.info) {
 
   function S_() { return root.S; }
   function shapes() { try { return S_().shapes || []; } catch (e) { return []; } }
-  function byId(id) { var r = null; shapes().forEach(function (s) { if (s && s.id === id) r = s; }); return r; }
+  /* PATCH 125: a BESS is not a shape. It is an element of type 'bess-asm'
+     placed by the BESS build, so a link dialog that only walked S.shapes
+     offered no battery to link -- on a drawing that plainly had one. Both
+     collections are searched, and an element is wrapped to look like a
+     shape so nothing downstream has to care which it came from. */
+  function elements() { try { return S_().elements || []; } catch (e) { return []; } }
+  function isBessEl(el) {
+    return !!(el && (el.type === 'bess-asm' || el.bgbRole === 'bess' || el.evKind === 'bess'));
+  }
+  function asSource(el) {
+    if (!isBessEl(el)) return null;
+    return { id: el.id, kind: 'bess', __el: el,
+             kw: +el.kw || +el.bessKw || 0, kwh: +el.kwh || +el.bessKwh || 0,
+             label: el.label || el.bessModel || 'BESS', spec: el.spec || '',
+             x: +el.x || 0, y: +el.y || 0, w: +el.w || 0, h: +el.h || 0 };
+  }
+  function byId(id) {
+    var r = null;
+    shapes().forEach(function (s) { if (s && s.id === id) r = s; });
+    if (r) return r;
+    elements().forEach(function (e) { if (e && e.id === id && isBessEl(e)) r = asSource(e); });
+    return r;
+  }
 
   function classify(sh) {
     if (!sh) return null;
@@ -162099,9 +162293,17 @@ if (root.console && console.info) {
      guess when there is nothing to read -- an invented rating here would
      silently change every coverage number downstream. */
   function rating(sh) {
-    var kw = +((sh && (sh.kw || sh.kwAc || sh.kwDc)) || 0);
-    var kwh = +((sh && (sh.kwh || sh.kWh)) || 0);
+    var kw = +((sh && (sh.kw || sh.kwAc || sh.kwDc || sh.bessKw)) || 0);
+    var kwh = +((sh && (sh.kwh || sh.kWh || sh.bessKwh)) || 0);
     if (!kw && sh && sh.kind === 'derdc') kw = +sh.podKw || 0;
+    /* The BESS build writes its rating into the element's spec string
+       ("167kWh . 1000kW") more reliably than into fields, so read it as a
+       last resort rather than report a battery with no rating. */
+    if ((!kw || !kwh) && sh && sh.spec) {
+      var mh = /([\d.,]+)\s*kWh/i.exec(sh.spec), mw = /([\d.,]+)\s*kW\b/i.exec(sh.spec);
+      if (!kwh && mh) kwh = parseFloat(mh[1].replace(/,/g, '')) || 0;
+      if (!kw && mw) kw = parseFloat(mw[1].replace(/,/g, '')) || 0;
+    }
     return { kw: kw, kwh: kwh };
   }
 
@@ -162155,7 +162357,7 @@ if (root.console && console.info) {
   /* Everything on the drawing that could go in a link. */
   function candidates() {
     var out = { loads: [], firm: [], variable: [], store: [] };
-    shapes().forEach(function (sh) {
+    var add = function (sh) {
       var c = classify(sh); if (!c) return;
       var r = rating(sh);
       var row = { id: sh.id, kind: sh.kind, label: label(sh), kw: r.kw, kwh: r.kwh };
@@ -162163,7 +162365,9 @@ if (root.console && console.info) {
       else if (c === 'firm') out.firm.push(row);
       else if (c === 'variable') { row.res = VAR_KINDS[sh.kind]; out.variable.push(row); }
       else out.store.push(row);
-    });
+    };
+    shapes().forEach(add);
+    elements().forEach(function (el) { var b = asSource(el); if (b) add(b); });
     return out;
   }
 
@@ -162291,6 +162495,8 @@ if (root.console && console.info) {
   }
   function centre(sh) {
     try {
+      /* Elements carry x/y/w/h directly; shapes carry pts and feet. */
+      if (sh && sh.__el) return { x: (+sh.x || 0) + (+sh.w || 0) / 2, y: (+sh.y || 0) + (+sh.h || (+sh.w || 0) * 0.35) / 2 };
       var p = (sh.pts && sh.pts[0]) || null; if (!p) return null;
       var ppf = (S_().pxPerFt > 0) ? S_().pxPerFt : 1;
       var w = (+sh.lf || 0) * ppf, h = (+sh.wf || 0) * ppf;
@@ -162478,6 +162684,7 @@ if (root.console && console.info) {
     var n = 0, iv = setInterval(function () {
       try { button(); } catch (e) {}
       try { repaint(); } catch (e) {}
+      if (n === 8) { try { nag(); } catch (e) {} }
       if (++n > 600) clearInterval(iv);
     }, 900);
     if (root.console) console.info(TAG + ' ready \u2014 OmegaSupply.open()');
@@ -162499,8 +162706,38 @@ if (root.console && console.info) {
     return true;
   }
 
+  /* PATCH 125: a drawing can be finished and still be missing the one
+     device that makes it a system. This says so once, quietly, rather
+     than letting a plan set go out with a battery and no arbiter. */
+  function controllerCheck() {
+    var pods = 0, der = 0, mgc = false;
+    shapes().forEach(function (sh) {
+      if (!sh) return;
+      if (sh.kind === 'derdc') pods++;
+      if (sh.kind === 'deralt' || sh.kind === 'dersolar' || sh.kind === 'derwind') der++;
+      if (sh.kind === 'utility' && sh.utype === 'mgc') mgc = true;
+    });
+    elements().forEach(function (el) { if (isBessEl(el)) der++; });
+    var need = pods > 0 && der > 0;
+    return { pods: pods, sources: der, hasController: mgc, needsController: need && !mgc,
+      note: !need ? 'No on-site source paired with a load — no controller required yet.'
+        : (mgc ? 'Microgrid controller is on the drawing.'
+               : 'There is a load and an on-site source on this drawing and no microgrid controller. '
+                 + 'Something has to decide, in milliseconds, whether to ride through or open the tie. '
+                 + 'Run Compute Build’s auto-trench, or place one from Draw.') };
+  }
+  var _warned = false;
+  function nag() {
+    if (_warned) return;
+    var c = controllerCheck();
+    if (!c.needsController) return;
+    _warned = true;
+    try { if (typeof root.showBanner === 'function') root.showBanner('warn', c.note); } catch (e) {}
+    if (root.console) console.warn(TAG + ' ' + c.note);
+  }
+
   root.OmegaSupply = {
-    open: open, button: button, commit: commit, preview: preview, drop: drop, repaint: repaint,
+    open: open, button: button, controllerCheck: controllerCheck, commit: commit, preview: preview, drop: drop, repaint: repaint,
     links: links, get: get, create: create, update: update, remove: remove,
     coverage: coverage, coverageOf: coverageOf, candidates: candidates,
     legendRows: legendRows,
@@ -162516,6 +162753,814 @@ if (root.console && console.info) {
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OmegaSupply;
+  if (typeof document === 'undefined') { /* node */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+ *  OMEGA PATCH 126 — THE SERVICE POINT IS A CHOICE
+ *  ---------------------------------------------------------------------
+ *  Every auto-design dropped a 120 x 90 ft utility substation on the
+ *  parcel, whatever the load was. On a 1 MW site that is wrong twice
+ *  over: a 1.3 MW facility is served by a pad-mount transformer off an
+ *  existing distribution feeder, not by a substation, and the yard eats
+ *  a quarter acre of a 1.7 acre parcel that the design then has to work
+ *  around. Worse, it reads as a design decision to anyone looking at the
+ *  drawing, and nobody chose it.
+ *
+ *  Three honest answers, and the tool should pick a default and then get
+ *  out of the way:
+ *    NONE           existing service is adequate; nothing is drawn.
+ *    SERVICE POINT  pad-mount transformer and metering off a
+ *                   distribution feeder. Roughly 20 x 20 ft.
+ *    SUBSTATION     a yard the utility (or the customer) builds for a
+ *                   new large load. 1-2 acres at 69-138 kV class.
+ *
+ *  The default follows the OGI rule set: a transmission tap gets a
+ *  substation pad, a distribution feeder under about 5 MW gets a service
+ *  point, and an existing on-site yard gets nothing because the land is
+ *  already committed. The user can override it and the override sticks
+ *  with the project.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[intercon]';
+  var MODES = ['none', 'service', 'substation'];
+
+  function S_() { return root.S; }
+  function shapes() { try { return S_().shapes || []; } catch (e) { return []; } }
+
+  /* ── PURE: which interconnection does this load want ────────────────── */
+  function recommend(o) {
+    o = o || {};
+    var facMw = +o.facMw || 0;
+    var kind = o.substationKind || null;     /* transmission-tap | distribution | on-site */
+    if (kind === 'on-site') {
+      return { mode: 'none', why: 'A substation yard already exists on this site \u2014 feed from it. '
+        + 'The rules reserve no new land when the yard is there.' };
+    }
+    if (kind === 'transmission-tap') {
+      return { mode: 'substation', why: 'Transmission tap \u2014 a 1\u20132 acre yard at 69\u2013138 kV class '
+        + 'plus a gen-tie corridor is the interconnection, and it belongs on the drawing.' };
+    }
+    if (facMw >= 5) {
+      return { mode: 'substation', why: facMw.toFixed(1) + ' MW is past what a distribution feeder carries. '
+        + 'Expect a dedicated feeder and a yard, and expect a system impact study to say so.' };
+    }
+    if (facMw > 0) {
+      return { mode: 'service', why: facMw.toFixed(1) + ' MW is a pad-mount transformer and a meter off an '
+        + 'existing feeder, not a substation. Drawing a yard here would commit a quarter acre nobody asked for.' };
+    }
+    return { mode: 'service', why: 'No load sized yet \u2014 a service point is the safe default; it commits nothing.' };
+  }
+
+  function facMw() {
+    var it = 0;
+    shapes().forEach(function (sh) { if (sh && sh.kind === 'derdc') it += (+sh.kw || 0); });
+    var pue = 1.3;
+    try { if (S_().omegaSizing && +S_().omegaSizing.pue > 0) pue = +S_().omegaSizing.pue; } catch (e) {}
+    return it * pue / 1000;
+  }
+  function lookupKind() {
+    try {
+      var L = S_().substationLookup;
+      if (L && L.kind) return L.kind;
+      if (L && L.onSite) return 'on-site';
+      if (L && +L.kv >= 69) return 'transmission-tap';
+      if (L) return 'distribution';
+    } catch (e) {}
+    return null;
+  }
+
+  /* ── the setting ────────────────────────────────────────────────────── */
+  function mode() {
+    try {
+      var m = S_().interconMode;
+      if (MODES.indexOf(m) > -1) return m;
+    } catch (e) {}
+    return recommend({ facMw: facMw(), substationKind: lookupKind() }).mode;
+  }
+  function explicit() { try { return MODES.indexOf(S_().interconMode) > -1; } catch (e) { return false; } }
+
+  function set(m, opts) {
+    opts = opts || {};
+    if (MODES.indexOf(m) < 0) return null;
+    try { S_().interconMode = m; root._workDirty = true; } catch (e) {}
+    apply(opts.quiet);
+    return m;
+  }
+  function clear() { try { delete S_().interconMode; } catch (e) {} apply(); }
+
+  /* ── what is on the drawing now ─────────────────────────────────────── */
+  function existing() {
+    var sub = null, svc = null;
+    shapes().forEach(function (sh) {
+      if (!sh) return;
+      if (sh.kind === 'substation') sub = sub || sh;
+      if (sh.interconService) svc = svc || sh;
+    });
+    return { sub: sub, svc: svc };
+  }
+
+  function removeShape(sh) {
+    if (!sh) return false;
+    try {
+      var a = S_().shapes, i = a.indexOf(sh);
+      if (i > -1) a.splice(i, 1);
+      var n = document.querySelector('[data-shape-id="' + sh.id + '"]');
+      if (n && n.parentNode) n.parentNode.removeChild(n);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* A pad-mount transformer and metering, drawn to scale: 20 x 20 ft,
+     placed where the substation would have gone so the tie still points
+     at the tap. */
+  function placeService() {
+    var e = existing(); if (e.svc) return e.svc;
+    var P = 1; try { if (S_().pxPerFt > 0) P = S_().pxPerFt; } catch (er) {}
+    var cx = 0, cy = 0, got = false;
+    /* Reuse the substation placer's siting, then swap the object out --
+       it already knows which edge faces the tap and how to walk inside a
+       non-rectangular parcel. */
+    try {
+      var CP = root.OmegaComputePlace;
+      if (CP && CP.placeSubstation) {
+        var tmp = CP.placeSubstation();
+        if (tmp && tmp.pts && tmp.pts.length > 1) {
+          cx = (tmp.pts[0].x + tmp.pts[1].x) / 2;
+          cy = (tmp.pts[0].y + tmp.pts[1].y) / 2;
+          got = true;
+          removeShape(tmp);
+        }
+      }
+    } catch (er) {}
+    if (!got) {
+      try {
+        var svg = document.getElementById('csvg');
+        cx = ((svg && svg.clientWidth) || 900) * 0.7;
+        cy = ((svg && svg.clientHeight) || 600) * 0.5;
+      } catch (er2) { cx = 600; cy = 300; }
+    }
+    var w = 20 * P, h = 20 * P;
+    var sh = {
+      id: (typeof root.uid === 'function' ? root.uid() : 'svc' + Date.now()),
+      kind: 'substation',                 /* renders and counts like one */
+      interconService: true,
+      pts: [{ x: cx - w / 2, y: cy - h / 2 }, { x: cx + w / 2, y: cy + h / 2 }],
+      label: 'Service Point \u2014 pad-mount + metering',
+      capMw: null, voltage: '', firm: false,
+      color: '#38BDF8', fill: '#38BDF8', fillOpacity: 0.12,
+      scaled: true, omegaCompute: true
+    };
+    try {
+      S_().shapes.push(sh);
+      if (typeof root.renderShape === 'function') root.renderShape(sh);
+    } catch (er3) {}
+    return sh;
+  }
+
+  /* Make the drawing match the setting. */
+  function apply(quiet) {
+    var m = mode(), e = existing(), changed = [];
+    if (m === 'none') {
+      if (e.sub && e.sub.omegaCompute) { removeShape(e.sub); changed.push('substation removed'); }
+      if (e.svc) { removeShape(e.svc); changed.push('service point removed'); }
+    } else if (m === 'service') {
+      if (e.sub && !e.sub.interconService && e.sub.omegaCompute) { removeShape(e.sub); changed.push('substation removed'); }
+      if (!existing().svc) { placeService(); changed.push('service point placed'); }
+    } else {
+      if (e.svc) { removeShape(e.svc); changed.push('service point removed'); }
+      if (!existing().sub || existing().sub.interconService) {
+        try { if (root.OmegaComputePlace && root.OmegaComputePlace.placeSubstation) { root.OmegaComputePlace.placeSubstation(); changed.push('substation placed'); } } catch (er) {}
+      }
+    }
+    if (changed.length) {
+      try { if (typeof root.updShapeCount === 'function') root.updShapeCount(); } catch (er) {}
+      try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (er) {}
+      try { if (typeof root.pushHist === 'function') root.pushHist(); } catch (er) {}
+      try { if (typeof root.updateSummaryPanel === 'function') root.updateSummaryPanel(); } catch (er) {}
+      if (!quiet && typeof root.showBanner === 'function') {
+        root.showBanner('cal', 'Interconnection \u2014 ' + changed.join(', ') + '.');
+      }
+    }
+    paintButton();
+    return changed;
+  }
+
+  /* ── UI ────────────────────────────────────────────────────────────── */
+  function open() {
+    var host = document.getElementById('ic-modal'); if (host) host.remove();
+    var rec = recommend({ facMw: facMw(), substationKind: lookupKind() });
+    var cur = mode(), mine = explicit();
+    var card = function (key, title, sub) {
+      var on = cur === key;
+      return '<div onclick="OmegaIntercon.pick(\'' + key + '\')" style="border:1px solid '
+        + (on ? '#F59E0B' : '#26364d') + ';background:' + (on ? 'rgba(245,158,11,.10)' : 'transparent')
+        + ';border-radius:10px;padding:11px 12px;cursor:pointer;margin-bottom:8px">'
+        + '<div style="font-size:12px;font-weight:800;color:#E2EEF9">' + (on ? '\u25c9 ' : '\u25cb ') + title
+        + (rec.mode === key ? ' <span style="font-size:9px;color:#4ADE80;font-weight:700">RECOMMENDED</span>' : '') + '</div>'
+        + '<div style="font-size:9.5px;color:#94A3B8;margin-top:4px;line-height:1.5">' + sub + '</div></div>';
+    };
+    host = document.createElement('div');
+    host.id = 'ic-modal';
+    host.style.cssText = 'position:fixed;inset:0;background:rgba(4,10,20,.82);z-index:100004;display:flex;align-items:center;justify-content:center;padding:16px';
+    host.onclick = function (e) { if (e.target === host) host.remove(); };
+    host.innerHTML = '<div style="background:#0F1D30;border:1px solid #F59E0B;border-radius:12px;max-width:520px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55)">'
+      + '<div style="padding:15px 18px;border-bottom:1px solid #26364d;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:15px;font-weight:800;color:#F59E0B">\u26ec Interconnection</div>'
+      + '<div style="font-size:9.5px;color:#8FA3B8;margin-top:3px">What the utility side of this site actually is</div></div>'
+      + '<button onclick="document.getElementById(\'ic-modal\').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer;line-height:1">\u00d7</button>'
+      + '</div><div style="padding:15px 18px">'
+      + '<div style="font-size:10px;color:#CBD5E1;line-height:1.55;margin-bottom:11px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;border:1px solid #26364d">'
+      + '<strong style="color:#4ADE80">Recommended: ' + rec.mode + '</strong> \u2014 ' + rec.why + '</div>'
+      + card('none', 'None', 'Nothing drawn. Use this when the service already exists, or when the utility side is out of scope for this drawing.')
+      + card('service', 'Service point', 'Pad-mount transformer and metering off an existing distribution feeder. About 20 \u00d7 20 ft.')
+      + card('substation', 'Substation yard', 'A 120 \u00d7 90 ft yard for a new large load \u2014 roughly 1\u20132 acres once fenced and set back, at 69\u2013138 kV class.')
+      + (mine ? '<div style="font-size:9px;color:#8FA3B8;margin-top:4px">Set by you. <a href="#" onclick="OmegaIntercon.auto();return false" style="color:#38BDF8">Go back to automatic</a></div>' : '')
+      + '</div></div>';
+    document.body.appendChild(host);
+  }
+  function pick(m) {
+    set(m);
+    var h = document.getElementById('ic-modal'); if (h) h.remove();
+  }
+  function auto() {
+    clear();
+    var h = document.getElementById('ic-modal'); if (h) h.remove();
+  }
+
+  /* ── the ribbon button, which reads as a toggle ─────────────────────── */
+  var LBL = { none: 'None', service: 'Service Pt', substation: 'Substation' };
+  var COL = { none: '#64748B', service: '#38BDF8', substation: '#F59E0B' };
+  function button() {
+    var b = document.getElementById('rb-intercon');
+    if (!b) {
+      var host = document.getElementById('rb-place-sub');
+      if (!host || !host.parentNode) return false;
+      b = document.createElement('button');
+      b.className = 'rbtn'; b.id = 'rb-intercon';
+      b.onclick = function () { open(); };
+      host.parentNode.insertBefore(b, host.nextSibling);
+    }
+    paintButton();
+    return true;
+  }
+  function paintButton() {
+    var b = document.getElementById('rb-intercon'); if (!b) return;
+    var m = mode();
+    b.title = 'Interconnection \u2014 ' + LBL[m] + (explicit() ? ' (set by you)' : ' (automatic)')
+      + '. Click to change between none, a service point and a substation yard.';
+    b.innerHTML = '<span class="rb-ico" style="color:' + COL[m] + '">\u26ec</span>'
+      + '<span class="rb-lbl">Intercon<br>' + LBL[m] + '</span>';
+  }
+
+  function boot() {
+    var n = 0, iv = setInterval(function () {
+      try { button(); } catch (e) {}
+      if (++n > 300) clearInterval(iv);
+    }, 700);
+    if (root.console) console.info(TAG + ' ready \u2014 OmegaIntercon.set("none"|"service"|"substation")');
+  }
+
+  root.OmegaIntercon = {
+    open: open, pick: pick, auto: auto, set: set, clear: clear, mode: mode,
+    explicit: explicit, recommend: recommend, apply: apply, button: button,
+    status: function () {
+      var o = { mode: mode(), setBy: explicit() ? 'user' : 'automatic',
+                facilityMw: +facMw().toFixed(2), lookup: lookupKind() || '(none)',
+                recommended: recommend({ facMw: facMw(), substationKind: lookupKind() }).mode };
+      if (root.console) console.table ? console.table(o) : console.log(o);
+      return o;
+    }
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = root.OmegaIntercon;
+  if (typeof document === 'undefined') { /* node */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+ *  OMEGA PATCH 127 — MOVE THE SYSTEM
+ *  ---------------------------------------------------------------------
+ *  An auto-design lands where the packer put it. That is a starting
+ *  point, not an answer: the pods want to be away from the road, the
+ *  generation wants to be downwind of the office next door, the yard
+ *  wants to be on the side the tap is actually on. Until now the only
+ *  way to act on any of that was to drag two dozen objects one at a time
+ *  and then re-trench, and the conduit left behind after the first drag
+ *  made the drawing look broken while you did it.
+ *
+ *  This moves the build as one thing.
+ *
+ *  WHAT MOVES: every object the build placed -- pods, generation,
+ *  storage, the controller, the service point or substation -- plus the
+ *  conduit between them. What does NOT move: the parcel boundary, the
+ *  exclusions, the scale bar, the north arrow. Those describe the land,
+ *  and the land does not move because the design did.
+ *
+ *  Two ways to drive it, because they suit different moments:
+ *    · Drag -- press inside the system and pull it where you want it.
+ *    · Arrow keys -- one foot a press, ten with shift, for the last bit
+ *      of alignment against a setback line.
+ *  Escape puts it back where it started. On drop, the trenches re-route
+ *  from the new geometry rather than being stretched to reach it.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[move-system]';
+
+  function S_() { return root.S; }
+  function on() { return !!root._omegaMoveSys; }
+
+  /* ── what belongs to the system ─────────────────────────────────────── */
+  var KEEP_PUT = { boundary: 1, exclusion: 1, zone: 1, scalebar: 1, north: 1, dim: 1, text: 1 };
+
+  /* ── PATCH 128: THE COMPARTMENTS ──────────────────────────────────────
+     The auto-design lays the site out in five compartments -- compute,
+     generation, storage, interconnection, solar -- and packs them so
+     none of them touch. Moving the whole build preserved that, but it
+     could not answer the thing people actually want after looking at a
+     first pass: put the battery next to the pods, or swap generation to
+     the far side away from the neighbour. That is a compartment move,
+     not a site move, and it is the one operation that can break the
+     layout, because the gaps between compartments are code minimums and
+     not styling.
+
+     So the compartments are movable INDIVIDUALLY and the separations are
+     checked live while you drag. The tool does not stop you from putting
+     storage against generation -- sometimes the drawing is being used to
+     argue about exactly that -- but it says the number out loud and it
+     names the standard, so nobody discovers it at plan review. */
+  var GROUPS = [
+    { key: 'compute',   label: 'Compute',   color: '#8B7BD8' },
+    { key: 'generation',label: 'Generation',color: '#F472B6' },
+    { key: 'storage',   label: 'Storage',   color: '#4ADE80' },
+    { key: 'intercon',  label: 'Interconnection', color: '#F59E0B' },
+    { key: 'solar',     label: 'Solar',     color: '#FBBF24' },
+    { key: 'control',   label: 'Control',   color: '#38BDF8' }
+  ];
+
+  function groupOfShape(x) {
+    if (!x) return null;
+    if (x.kind === 'derdc') return 'compute';
+    if (x.kind === 'deralt' || x.kind === 'derwind') return 'generation';
+    if (x.kind === 'dersolar' || x.kind === 'solar') return 'solar';
+    if (x.kind === 'substation') return 'intercon';
+    if (x.kind === 'utility' && x.utype === 'mgc') return 'control';
+    if (x.omegaMgc) return 'control';
+    return x.omegaCompute ? 'control' : null;
+  }
+  function groupOfElement(el) {
+    if (!el) return null;
+    if (el.type === 'bess-asm' || el.bgbRole === 'bess' || el.evKind === 'bess') return 'storage';
+    return (el.type === 'eq' || el.omegaCompute) ? 'control' : null;
+  }
+
+  /* The separations the packer honoured, and where each number comes
+     from. Read from the zone rules when they are loaded so there is one
+     source for them rather than two that can drift. */
+  function clearFt() {
+    var C = null;
+    try { C = root.OmegaZones && root.OmegaZones.clearances; } catch (e) {}
+    return {
+      gutter: (C && C.zoneGutterFt) || 30,
+      storage: (C && C.storageExposureFt) || 25,
+      genCompute: (C && C.generationToComputeFt) || 40
+    };
+  }
+  /* Required gap between two named compartments, and the reason. */
+  function requiredFt(a, b) {
+    var c = clearFt();
+    var pair = [a, b].sort().join('|');
+    if (pair === 'compute|generation')
+      return { ft: c.genCompute, why: 'generation to occupied compute — exhaust, noise and fire separation' };
+    if (pair === 'generation|storage' || pair === 'compute|storage')
+      return { ft: c.storage, why: 'battery exposure separation — NFPA 855 / IFC 1207' };
+    if (pair.indexOf('storage') > -1)
+      return { ft: c.storage, why: 'battery exposure separation — NFPA 855 / IFC 1207' };
+    return { ft: c.gutter, why: 'fire-lane gutter between compounds' };
+  }
+
+  function members(key) {
+    var sh = [], el = [], cd = [];
+    try {
+      (S_().shapes || []).forEach(function (x) {
+        if (!x || KEEP_PUT[x.kind]) return;
+        var g = groupOfShape(x);
+        if (!g) return;
+        if (key && key !== 'all' && g !== key) return;
+        sh.push(x);
+      });
+      (S_().elements || []).forEach(function (x) {
+        var g = groupOfElement(x);
+        if (!g) return;
+        if (key && key !== 'all' && g !== key) return;
+        el.push(x);
+      });
+      /* Conduit travels with a whole-site move. On a single compartment
+         it does NOT: a run from the battery to the controller has one end
+         in the group and one end outside it, so translating it would
+         detach it at both ends. Those runs are rebuilt on drop instead. */
+      if (!key || key === 'all') {
+        (S_().conduits || []).forEach(function (x) {
+          if (x && (x.omegaGen || x.omegaStore || x.omegaTie || x.omegaMgc || x.cluster)) cd.push(x);
+        });
+      }
+    } catch (e) {}
+    return { key: key || 'all', shapes: sh, elements: el, conduits: cd,
+             count: sh.length + el.length + cd.length };
+  }
+
+  /* Every compartment that has something in it. */
+  function groups() {
+    return GROUPS.map(function (g) {
+      var m = members(g.key);
+      return { key: g.key, label: g.label, color: g.color, count: m.count, bounds: bounds(m) };
+    }).filter(function (g) { return g.count > 0; });
+  }
+
+  /* How close this compartment now sits to each of the others, against
+     what the rules ask for. Reported, never enforced. */
+  function conflicts(key) {
+    if (!key || key === 'all') return [];
+    var me = bounds(members(key)); if (!me) return [];
+    var out = [];
+    groups().forEach(function (g) {
+      if (g.key === key || !g.bounds) return;
+      var dx = Math.max(0, Math.max(me.x1 - g.bounds.x2, g.bounds.x1 - me.x2));
+      var dy = Math.max(0, Math.max(me.y1 - g.bounds.y2, g.bounds.y1 - me.y2));
+      var gapPx = (dx > 0 && dy > 0) ? Math.sqrt(dx * dx + dy * dy) : Math.max(dx, dy);
+      var gapFt = gapPx / ppf();
+      var req = requiredFt(key, g.key);
+      out.push({ other: g.key, label: g.label, gapFt: gapFt, needFt: req.ft,
+                 why: req.why, ok: gapFt >= req.ft, overlap: gapPx <= 0 });
+    });
+    return out;
+  }
+
+  function bounds(m) {
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, got = false;
+    var eat = function (x, y) { if (x < x1) x1 = x; if (y < y1) y1 = y; if (x > x2) x2 = x; if (y > y2) y2 = y; got = true; };
+    m.shapes.forEach(function (sh) { (sh.pts || []).forEach(function (p) { eat(p.x, p.y); }); });
+    m.elements.forEach(function (el) {
+      var w = +el.w || 0, h = +el.h || (w * 0.35);
+      eat(+el.x || 0, +el.y || 0); eat((+el.x || 0) + w, (+el.y || 0) + h);
+    });
+    if (!got) return null;
+    return { x1: x1, y1: y1, x2: x2, y2: y2, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 };
+  }
+
+  /* ── the translation itself ─────────────────────────────────────────── */
+  function shift(m, dx, dy) {
+    m.shapes.forEach(function (sh) {
+      if (sh.pts) sh.pts = sh.pts.map(function (p) { var q = { x: p.x + dx, y: p.y + dy }; for (var k in p) if (k !== 'x' && k !== 'y') q[k] = p[k]; return q; });
+      if (typeof sh.cx === 'number') { sh.cx += dx; sh.cy += dy; }
+      if (sh.tables) sh.tables = sh.tables.map(function (t) { var c = JSON.parse(JSON.stringify(t)); c.x += dx; c.y += dy; return c; });
+    });
+    m.elements.forEach(function (el) { el.x = (+el.x || 0) + dx; el.y = (+el.y || 0) + dy; });
+    m.conduits.forEach(function (cd) {
+      if (cd.pts) cd.pts = cd.pts.map(function (p) { var q = JSON.parse(JSON.stringify(p)); q.x = (q.x || 0) + dx; q.y = (q.y || 0) + dy; return q; });
+      if (typeof cd.cx === 'number') { cd.cx += dx; cd.cy += dy; }
+      if (typeof cd.laneY === 'number') cd.laneY += dy;
+      if (typeof cd.spineMinX === 'number') cd.spineMinX += dx;
+    });
+  }
+
+  /* Anything moved in pixels still carries the lat/lng it was stamped
+     with, and the next pan or zoom reprojects it from that stale anchor
+     -- which is exactly what makes a moved object snap back. Restamp
+     every member before anything else touches the map. */
+  function restamp(m) {
+    var all = m.shapes.concat(m.elements).concat(m.conduits);
+    all.forEach(function (o) {
+      try { if (typeof root._geoRestampOne === 'function') root._geoRestampOne(o); } catch (e) {}
+      try { if (root.OmegaReanchor) root.OmegaReanchor(o.id); } catch (e) {}
+    });
+  }
+
+  function repaint(m, hard) {
+    try {
+      m.shapes.forEach(function (sh) { if (typeof root.renderShape === 'function') root.renderShape(sh); });
+    } catch (e) {}
+    try { if (typeof root.renderAll === 'function') root.renderAll(); else if (typeof root.doRender === 'function') root.doRender(); } catch (e) {}
+    try { if (typeof root.drawConduits === 'function') root.drawConduits(); } catch (e) {}
+    try { if (root.OmegaSupply) root.OmegaSupply.repaint(); } catch (e) {}
+    if (hard) {
+      try { if (typeof root.updShapeCount === 'function') root.updShapeCount(); } catch (e) {}
+      try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (e) {}
+    }
+  }
+
+  /* ── session state ──────────────────────────────────────────────────── */
+  var M = null, total = { dx: 0, dy: 0 }, drag = null, hud = null, KEY = 'all';
+
+  function ppf() { try { return (S_().pxPerFt > 0) ? S_().pxPerFt : 1; } catch (e) { return 1; } }
+  function ft(px) { return px / ppf(); }
+
+  function start(key) {
+    if (on()) {
+      /* Already moving: switch which compartment is under the hand,
+         keeping whatever has been moved so far. */
+      if (key && key !== KEY) { commitInto(); KEY = key; M = members(KEY); total = { dx: 0, dy: 0 }; paint(); updHud(); return true; }
+      return stop(true);
+    }
+    KEY = key || 'all';
+    M = members(KEY);
+    if (!M.count) {
+      if (typeof root.showBanner === 'function') root.showBanner('cal', 'Nothing placed to move yet \u2014 run a build first.');
+      return false;
+    }
+    root._omegaMoveSys = true;
+    total = { dx: 0, dy: 0 };
+    moved = false;
+    bindings(true);
+    showHud();
+    if (typeof root.showBanner === 'function') {
+      root.showBanner('cal', 'Moving ' + labelOf(KEY) + ' \u2014 drag it, or use the arrow keys (shift = 10 ft). '
+        + 'Pick another compartment from the bar. Enter to keep, Escape to put back.');
+    }
+    paint();
+    return true;
+  }
+
+  /* Switching compartments mid-session banks what has been done so far,
+     so Escape only ever undoes the compartment currently in hand. */
+  var moved = false;
+  function commitInto() {
+    if (Math.abs(total.dx) > 0.5 || Math.abs(total.dy) > 0.5) { moved = true; restamp(M); }
+  }
+  function labelOf(k) {
+    if (!k || k === 'all') return 'the whole system';
+    var g = GROUPS.filter(function (x) { return x.key === k; })[0];
+    return g ? g.label.toLowerCase() : k;
+  }
+
+  function stop(keep) {
+    if (!on()) return false;
+    if (!keep) { shift(M, -total.dx, -total.dy); total = { dx: 0, dy: 0 }; }
+    else commitInto();
+    root._omegaMoveSys = false;
+    bindings(false);
+    hideHud();
+    if (moved) {
+      restamp(M);
+      /* Re-trench rather than drag the old runs along. A conduit that has
+         been translated still turns where the old layout turned; routing
+         it again from the geometry that exists now is the only version
+         that is true. On a compartment move this is not optional -- the
+         runs were deliberately left behind, so without this the battery
+         would be drawn with no feeder at all. */
+      try {
+        if (root.OmegaConduit && root.OmegaConduit.runAll) {
+          var keepRuns = (S_().conduits || []).filter(function (c) {
+            return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc));
+          });
+          S_().conduits = keepRuns;
+          root.OmegaConduit.runAll({ diverse: true });
+        } else if (typeof root.rerouteTrenchConduits === 'function') {
+          root.rerouteTrenchConduits();
+        }
+      } catch (e) {}
+      try { if (typeof root.pushHist === 'function') root.pushHist(); } catch (e) {}
+      try { if (typeof root.updateSummaryPanel === 'function') root.updateSummaryPanel(); } catch (e) {}
+      try { root._workDirty = true; } catch (e) {}
+    }
+    repaint(M, true);
+    if (typeof root.showBanner === 'function') {
+      if (!moved) root.showBanner('cal', 'Nothing moved.');
+      else {
+        var bad = conflicts(KEY).filter(function (c) { return !c.ok; });
+        root.showBanner(bad.length ? 'warn' : 'cal',
+          'Layout updated and re-trenched.'
+          + (bad.length ? ' Separation is now short of the rules: '
+              + bad.map(function (c) { return c.label + ' ' + Math.round(c.gapFt) + ' ft against ' + c.needFt + ' ft'; }).join('; ')
+              + '.' : ''));
+      }
+    }
+    M = null; moved = false; paint();
+    return true;
+  }
+
+  /* ── swap two compartments ────────────────────────────────────────────
+     The commonest thing anyone wants from a first pass: generation and
+     solar are on the wrong sides of the parcel. Translating each to the
+     other's centre keeps both intact rather than repacking, which would
+     throw away every hand adjustment made since the build. */
+  function swap(a, b) {
+    var ma = members(a), mb = members(b);
+    var ba = bounds(ma), bb = bounds(mb);
+    if (!ba || !bb) return false;
+    shift(ma, bb.cx - ba.cx, bb.cy - ba.cy);
+    shift(mb, ba.cx - bb.cx, ba.cy - bb.cy);
+    restamp(ma); restamp(mb);
+    try {
+      if (root.OmegaConduit && root.OmegaConduit.runAll) {
+        S_().conduits = (S_().conduits || []).filter(function (c) {
+          return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc));
+        });
+        root.OmegaConduit.runAll({ diverse: true });
+      }
+    } catch (e) {}
+    try { if (typeof root.pushHist === 'function') root.pushHist(); } catch (e) {}
+    try { root._workDirty = true; } catch (e) {}
+    repaint(ma, true); repaint(mb, false);
+    if (typeof root.showBanner === 'function') {
+      root.showBanner('cal', labelOf(a) + ' and ' + labelOf(b) + ' swapped places, and the site re-trenched.');
+    }
+    return true;
+  }
+
+  function nudge(dx, dy) {
+    if (!on()) return;
+    shift(M, dx, dy);
+    total.dx += dx; total.dy += dy;
+    repaint(M, false); paint(); updHud();
+  }
+
+  /* ── input ──────────────────────────────────────────────────────────── */
+  function surface() { return document.getElementById('cov') || document.getElementById('sc'); }
+  function toCanvas(e) {
+    var sc = document.getElementById('sc'); if (!sc) return null;
+    var r = sc.getBoundingClientRect();
+    var p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    try { if (typeof root._plotUnproject === 'function') return root._plotUnproject(p); } catch (er) {}
+    return p;
+  }
+  function onDown(e) {
+    if (!on()) return;
+    var p = toCanvas(e); if (!p) return;
+    e.preventDefault(); e.stopPropagation();
+    drag = { x: p.x, y: p.y };
+  }
+  function onMove(e) {
+    if (!on() || !drag) return;
+    var p = toCanvas(e); if (!p) return;
+    e.preventDefault(); e.stopPropagation();
+    nudge(p.x - drag.x, p.y - drag.y);
+    drag = { x: p.x, y: p.y };
+  }
+  function onUp(e) { if (!on()) return; if (drag) { e.preventDefault(); e.stopPropagation(); } drag = null; }
+  function onKey(e) {
+    if (!on()) return;
+    var step = (e.shiftKey ? 10 : 1) * ppf();
+    var k = e.key;
+    if (k === 'Escape') { e.preventDefault(); stop(false); return; }
+    if (k === 'Enter') { e.preventDefault(); stop(true); return; }
+    if (k === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); }
+    else if (k === 'ArrowRight') { e.preventDefault(); nudge(step, 0); }
+    else if (k === 'ArrowUp') { e.preventDefault(); nudge(0, -step); }
+    else if (k === 'ArrowDown') { e.preventDefault(); nudge(0, step); }
+  }
+  function bindings(add) {
+    var sf = surface(); if (!sf) return;
+    var f = add ? 'addEventListener' : 'removeEventListener';
+    sf[f]('mousedown', onDown, true);
+    root[f]('mousemove', onMove, true);
+    root[f]('mouseup', onUp, true);
+    root[f]('keydown', onKey, true);
+    if (sf.style) sf.style.cursor = add ? 'move' : '';
+  }
+
+  /* ── the outline, so it is obvious what is being moved ──────────────── */
+  function ns(t) { return document.createElementNS('http://www.w3.org/2000/svg', t); }
+  function paint() {
+    var svg = document.getElementById('csvg'); if (!svg) return;
+    var g = document.getElementById('movesys-g');
+    if (!g) { g = ns('g'); g.setAttribute('id', 'movesys-g'); g.style.pointerEvents = 'none'; svg.appendChild(g); }
+    while (g.firstChild) g.removeChild(g.firstChild);
+    if (!on() || !M) return;
+    var pad = 8 * ppf();
+    var box = function (b, col, w, fill) {
+      var r = ns('rect');
+      r.setAttribute('x', b.x1 - pad); r.setAttribute('y', b.y1 - pad);
+      r.setAttribute('width', (b.x2 - b.x1) + pad * 2); r.setAttribute('height', (b.y2 - b.y1) + pad * 2);
+      r.setAttribute('fill', fill || 'none');
+      r.setAttribute('stroke', col); r.setAttribute('stroke-width', w);
+      r.setAttribute('stroke-dasharray', '9 6');
+      g.appendChild(r);
+      return r;
+    };
+    /* The others, faintly, so it is clear what you are moving relative
+       to -- and any separation that has gone short is drawn in red with
+       the number on it, while you are still holding the thing. */
+    if (KEY !== 'all') {
+      var cf = conflicts(KEY);
+      groups().forEach(function (gr) {
+        if (gr.key === KEY || !gr.bounds) return;
+        var c = cf.filter(function (x) { return x.other === gr.key; })[0];
+        box(gr.bounds, (c && !c.ok) ? '#F87171' : 'rgba(148,163,184,.45)', (c && !c.ok) ? 1.4 : 1);
+        if (c && !c.ok) {
+          var t = ns('text');
+          t.setAttribute('x', gr.bounds.cx); t.setAttribute('y', gr.bounds.y1 - pad - 6);
+          t.setAttribute('text-anchor', 'middle');
+          t.setAttribute('font-family', "'IBM Plex Mono',monospace");
+          t.setAttribute('font-size', '10'); t.setAttribute('fill', '#F87171');
+          t.setAttribute('stroke', 'rgba(4,10,20,.8)'); t.setAttribute('stroke-width', '3');
+          t.setAttribute('paint-order', 'stroke');
+          t.textContent = (c.overlap ? 'OVERLAPS' : Math.round(c.gapFt) + ' ft')
+            + ' · needs ' + c.needFt + ' ft';
+          g.appendChild(t);
+        }
+      });
+    }
+    var b = bounds(M); if (!b) return;
+    box(b, '#38BDF8', 1.6, 'rgba(56,189,248,.07)');
+  }
+
+  function showHud() {
+    hideHud();
+    hud = document.createElement('div');
+    hud.id = 'movesys-hud';
+    hud.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:26px;z-index:100003;'
+      + 'background:#0F1D30;border:1px solid #38BDF8;border-radius:10px;padding:9px 14px;'
+      + "font-family:'IBM Plex Mono',monospace;font-size:11px;color:#E2EEF9;box-shadow:0 12px 40px rgba(0,0,0,.5);"
+      + 'display:flex;gap:9px;align-items:center;flex-wrap:wrap;max-width:min(940px,94vw)';
+    document.body.appendChild(hud);
+    updHud();
+  }
+  function updHud() {
+    if (!hud) return;
+    var n = M ? M.count : 0;
+    var gs = groups();
+    var chip = function (key, label, count) {
+      var live = KEY === key;
+      return '<button onclick="OmegaMoveSystem.start(\'' + key + '\')" style="background:'
+        + (live ? '#38BDF8' : 'rgba(255,255,255,.06)') + ';color:' + (live ? '#0B1626' : '#CBD5E1')
+        + ';border:1px solid ' + (live ? '#38BDF8' : 'rgba(255,255,255,.14)')
+        + ';border-radius:6px;padding:3px 8px;font-family:inherit;font-size:10px;font-weight:'
+        + (live ? '700' : '400') + ';cursor:pointer">' + label
+        + (count != null ? ' <span style="opacity:.65">' + count + '</span>' : '') + '</button>';
+    };
+    var bad = KEY === 'all' ? [] : conflicts(KEY).filter(function (c) { return !c.ok; });
+    hud.innerHTML =
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      + chip('all', 'Whole site', null)
+      + gs.map(function (g) { return chip(g.key, g.label, g.count); }).join('')
+      + '</div>'
+      + '<div style="display:flex;gap:14px;align-items:center">'
+      + '<span style="color:#38BDF8;font-weight:700">' + n + ' items</span>'
+      + '<span style="color:#8FA3B8">' + (total.dx >= 0 ? 'E ' : 'W ') + Math.abs(Math.round(ft(total.dx)))
+      + ' ft \u00b7 ' + (total.dy >= 0 ? 'S ' : 'N ') + Math.abs(Math.round(ft(total.dy))) + ' ft</span>'
+      + (bad.length
+          ? '<span style="color:#F87171">' + bad.map(function (c) {
+              return (c.overlap ? 'overlaps ' : Math.round(c.gapFt) + ' ft to ') + c.label.toLowerCase()
+                + ' \u2014 needs ' + c.needFt;
+            }).join(' \u00b7 ') + '</span>'
+          : '<span style="color:#4ADE80">separations ok</span>')
+      + '<button onclick="OmegaMoveSystem.stop(true)" style="background:#38BDF8;color:#0B1626;border:none;border-radius:6px;padding:4px 10px;font-family:inherit;font-size:10.5px;font-weight:700;cursor:pointer">Keep</button>'
+      + '<button onclick="OmegaMoveSystem.stop(false)" style="background:rgba(255,255,255,.08);color:#8FA3B8;border:1px solid rgba(255,255,255,.16);border-radius:6px;padding:4px 10px;font-family:inherit;font-size:10.5px;cursor:pointer">Put back</button>'
+      + '</div>'
+      + (bad.length ? '<div style="color:#94A3B8;font-size:9.5px;width:100%">'
+          + bad[0].why + '. The tool will let you do it \u2014 it just will not pretend the gap is there.</div>' : '');
+  }
+  function hideHud() { var h = document.getElementById('movesys-hud'); if (h && h.parentNode) h.parentNode.removeChild(h); hud = null; }
+
+  /* ── button ─────────────────────────────────────────────────────────── */
+  function button() {
+    if (document.getElementById('rb-move-system')) return true;
+    var host = document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="design"] .rpanel-body');
+    if (!host) return false;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-move-system';
+    b.title = 'Move System \u2014 move the whole build, or one compartment at a time '
+      + '(compute, generation, storage, interconnection, solar). Drag or use the arrow keys; '
+      + 'separations are checked live and the trenches re-route on drop.';
+    b.onclick = function () { start(); };
+    b.innerHTML = '<span class="rb-ico" style="color:#38BDF8">\u2725</span><span class="rb-lbl">Move<br>System</span>';
+    host.appendChild(b);
+    return true;
+  }
+
+  function boot() {
+    var n = 0, iv = setInterval(function () {
+      try { button(); } catch (e) {}
+      if (++n > 300) clearInterval(iv);
+    }, 700);
+    if (root.console) console.info(TAG + ' ready \u2014 OmegaMoveSystem.start()');
+  }
+
+  root.OmegaMoveSystem = {
+    start: start, stop: stop, nudge: nudge, members: members, bounds: bounds,
+    groups: groups, conflicts: conflicts, swap: swap, clearances: clearFt,
+    isActive: on, button: button,
+    status: function () {
+      var rows = groups().map(function (g) {
+        var bad = conflicts(g.key).filter(function (c) { return !c.ok; });
+        return { compartment: g.label, items: g.count,
+                 widthFt: g.bounds ? Math.round(ft(g.bounds.x2 - g.bounds.x1)) : 0,
+                 heightFt: g.bounds ? Math.round(ft(g.bounds.y2 - g.bounds.y1)) : 0,
+                 separation: bad.length
+                   ? bad.map(function (c) { return c.label + ' ' + Math.round(c.gapFt) + '/' + c.needFt + ' ft'; }).join(', ')
+                   : 'ok' };
+      });
+      if (root.console) console.table ? console.table(rows) : console.log(rows);
+      return rows;
+    }
+  };
   if (typeof document === 'undefined') { /* node */ }
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
