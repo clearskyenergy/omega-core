@@ -2028,6 +2028,22 @@ service cloud.firestore {
       match /billing/{docId} {
         allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
         allow write: if isAdmin();
+
+        /* ── BILLING HISTORY ──  billing/current/history/{entryId}
+           Rules do NOT cascade into a subcollection, so without this block the
+           tenant's own invoice history is denied by default and their account
+           page shows an empty list that looks like "you have never been
+           billed" rather than "this was refused".
+
+           WRITE IS false FOR EVERYONE, INCLUDING ClearSky. Rows are appended by
+           /api/tenant-billing through the Admin SDK, which bypasses rules
+           entirely — so the only way a row appears is a change that actually
+           went through the endpoint. A history a console can write directly is
+           not a history; it is a second editable copy of the same numbers. */
+        match /history/{entryId} {
+          allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+          allow write: if false;
+        }
       }
 
       /* ── MEMBERS ──  omega_orgs/{orgId}/members/{uid}

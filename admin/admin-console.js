@@ -1059,7 +1059,7 @@ function renderTenants(){
          +  (st==='suspended'
               ? '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
               : '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
-         +  ' <button onclick="openTenantUsers(&quot;'+esc(r._id)+'&quot;)">Users</button>'
+         +  ' <button onclick="openTenantDetail(&quot;'+esc(r._id)+'&quot;)">Manage</button>'
          +  '</td></tr>'
          +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="5"></td></tr>';
   });
@@ -1077,30 +1077,177 @@ function tenantAction(orgId, action){
     .catch(function(e){ window.alert('Could not '+action+' '+orgId+':\n\n'+(e.message||e)); });
 }
 
-function openTenantUsers(orgId){
+/* ── TENANT DETAIL ────────────────────────────────────────────────────────
+   Everything about one tenant in one place, because the alternative is what
+   this console had: a hand-kept inventory row that no rule reads, and the real
+   record spread across Firestore, Firebase Auth and Stripe with no screen
+   showing all three.
+
+   Billing and the account operations go through /api. The rules would permit a
+   direct write for billing, but the endpoint allow-lists the fields and writes
+   an audit row — billing you can edit without a trace is not billing anyone
+   can defend later. Password resets and email changes act on Firebase Auth,
+   which rules cannot express at all. */
+function openTenantDetail(orgId){
   var rowId='tn-users-'+orgId.replace(/[^A-Za-z0-9_-]/g,'_');
   var tr=document.getElementById(rowId); if(!tr) return;
   if (tr.style.display!=='none'){ tr.style.display='none'; return; }
   tr.style.display='';
-  var cell=tr.firstChild; cell.innerHTML='<div class="sub-txt">Loading members…</div>';
-  db.collection('omega_orgs').doc(orgId).collection('members').get().then(function(sn){
-    if (sn.empty){ cell.innerHTML='<div class="sub-txt">No members yet — nobody from '+esc(orgId)+' has signed in.</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>';
-    sn.forEach(function(d){
-      var m=d.data()||{}, role=m.role||'member';
-      h += '<tr><td class="sub-txt">'+esc(m.email||d.id)+'</td><td>'
-        +  '<select onchange="setMemberRole(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(d.id)+'&quot;,this.value)">'
-        +  ['owner','admin','member','viewer'].map(function(r){
-             return '<option value="'+r+'"'+(role===r?' selected':'')+'>'+r+'</option>'; }).join('')
-        +  '</select></td><td class="sub-txt">'+esc(m.status||'active')+'</td></tr>';
-    });
-    cell.innerHTML=h+'</tbody></table>';
-  }).catch(function(e){ cell.innerHTML='<div class="sub-txt">Could not read members — '+esc(e.message||'denied')+'</div>'; });
+  var cell=tr.firstChild;
+  cell.innerHTML='<div class="sub-txt">Loading '+esc(orgId)+'…</div>';
+
+  var org=(STATE.tenants||[]).filter(function(t){return t._id===orgId;})[0]||{};
+
+  Promise.all([
+    db.collection('omega_orgs').doc(orgId).collection('billing').doc('current').get()
+      .then(function(d){ return d.exists?d.data():{}; }).catch(function(){ return {}; }),
+    db.collection('omega_orgs').doc(orgId).collection('members').get()
+      .then(function(sn){ var out=[]; sn.forEach(function(d){ var m=d.data()||{}; m._id=d.id; out.push(m); }); return out; })
+      .catch(function(){ return []; }),
+    /* Counted on open, never on the table render — one query per tenant is
+       fine when somebody asks for it and thirteen on every page load is not. */
+    db.collection('projects').where('orgId','==',orgId).get()
+      .then(function(sn){ return sn.size; }).catch(function(){ return null; })
+  ]).then(function(r){
+    var bill=r[0], members=r[1], projects=r[2];
+    cell.innerHTML = _tnDetailHtml(orgId, org, bill, members, projects);
+  }).catch(function(e){
+    cell.innerHTML='<div class="sub-txt">Could not load '+esc(orgId)+' — '+esc(e.message||'denied')+'</div>';
+  });
 }
 
+function _tnField(label, id, val, type, ph){
+  return '<label class="sub-txt" style="display:block;margin-bottom:10px">'+esc(label)
+    + '<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':String(val))+'"'
+    + (ph?' placeholder="'+esc(ph)+'"':'')
+    + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px;font:500 12.5px system-ui"></label>';
+}
+
+function _tnDetailHtml(orgId, org, bill, members, projects){
+  var TIERS=['trial','standard','deluxe','enterprise','partner','internal'];
+  var h='<div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:6px 2px 12px">';
+
+  /* ── Commercial terms ── */
+  h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Commercial terms</div>';
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Tier'
+   + '<select id="tb-tier-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + TIERS.map(function(t){ return '<option value="'+t+'"'+((bill.tier||'trial')===t?' selected':'')+'>'+t+'</option>'; }).join('')
+   + '</select></label>';
+  h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','osa-jv, grid-atlas');
+  h+=_tnField('Amount due (USD)','tb-amt-'+orgId,bill.amountDue==null?'':bill.amountDue,'number','0');
+  h+=_tnField('Subscription due (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-10-01');
+  /* The link the tenant sees on their own account page. https only — it is put
+     in front of a paying customer, and anything else either breaks the button
+     or points somewhere it should not. */
+  h+=_tnField('Payment link (https)','tb-link-'+orgId,bill.paymentLink||'','text','https://buy.stripe.com/…');
+  h+='<button onclick="saveTenantBilling(&quot;'+esc(orgId)+'&quot;)">Save terms</button>';
+  h+=' <span id="tb-msg-'+esc(orgId)+'" class="sub-txt"></span>';
+  h+='<div class="sub-txt" style="margin-top:8px">Last paid: '+esc(bill.lastPaidAt||'—')
+   + ' · Provider: '+esc(bill.paymentProvider||'—')
+   + (bill.stripeCustomerId?(' · Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
+  h+='</div>';
+
+  /* ── Identity & usage ── */
+  h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Identity &amp; usage</div>';
+  h+=_tnField('Display name','tb-name-'+orgId,org.name||'','text','');
+  h+=_tnField('Logo URL','tb-logo-'+orgId,org.logoUrl||'','text','/tenants/'+orgId+'/logo.png');
+  h+='<button onclick="saveTenantBranding(&quot;'+esc(orgId)+'&quot;)">Save branding</button>';
+  h+=' <span id="tbr-msg-'+esc(orgId)+'" class="sub-txt"></span>';
+  h+='<div style="display:flex;gap:18px;margin-top:14px">'
+   + '<div><div class="sub-txt">Members</div><div style="font:700 20px system-ui">'+members.length+'</div></div>'
+   + '<div><div class="sub-txt">Projects</div><div style="font:700 20px system-ui">'+(projects==null?'—':projects)+'</div></div>'
+   + '<div><div class="sub-txt">Vertical</div><div style="font:700 20px system-ui">'+esc(org.vertical||'—')+'</div></div>'
+   + '</div>';
+  h+='<div class="sub-txt" style="margin-top:10px">Hostnames: '+esc((org.domains||[]).join(', ')||'—')+'</div>';
+  h+='</div></div>';
+
+  /* ── People ── */
+  h+='<div class="block-title" style="font-size:13px;margin:6px 0 8px">People</div>';
+  if(!members.length){
+    h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A member row is created on first sign-in.</div>';
+  } else {
+    h+='<table class="tbl"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
+    members.forEach(function(m){
+      var role=m.role||'member', em=m.email||m._id;
+      h+='<tr><td class="sub-txt">'+esc(em)+'</td><td>'
+        +'<select onchange="setMemberRole(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(m._id)+'&quot;,this.value)">'
+        + ['owner','admin','member','viewer'].map(function(r){
+            return '<option value="'+r+'"'+(role===r?' selected':'')+'>'+r+'</option>'; }).join('')
+        +'</select></td><td class="sub-txt">'+esc(m.status||'active')+'</td><td>'
+        +'<button onclick="userAdmin(&quot;resetLink&quot;,&quot;'+esc(em)+'&quot;)">Reset link</button> '
+        +'<button onclick="userAdmin(&quot;setEmail&quot;,&quot;'+esc(em)+'&quot;)">Change email</button> '
+        +'<button class="danger" onclick="userAdmin(&quot;disable&quot;,&quot;'+esc(em)+'&quot;)">Disable</button>'
+        +'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  return h;
+}
+
+function saveTenantBilling(orgId){
+  var msg=document.getElementById('tb-msg-'+orgId);
+  var addons=String(document.getElementById('tb-addons-'+orgId).value||'')
+               .split(',').map(function(x){return x.trim();}).filter(Boolean);
+  var amt=document.getElementById('tb-amt-'+orgId).value;
+  var body={ orgId:orgId,
+    tier: document.getElementById('tb-tier-'+orgId).value,
+    addons: addons,
+    subscriptionDue: document.getElementById('tb-due-'+orgId).value || null,
+    paymentLink: document.getElementById('tb-link-'+orgId).value || null };
+  if(amt!=='') body.amountDue=Number(amt);
+  if(msg) msg.textContent='Saving…';
+  _authedPost('/api/tenant-billing', body)
+    .then(function(){ if(msg) msg.textContent='Saved.'; })
+    .catch(function(e){ if(msg) msg.textContent='Failed — '+(e.message||e); });
+}
+
+function saveTenantBranding(orgId){
+  var msg=document.getElementById('tbr-msg-'+orgId);
+  if(msg) msg.textContent='Saving…';
+  _authedPost('/api/tenant-branding', { orgId:orgId,
+      name: document.getElementById('tb-name-'+orgId).value || undefined,
+      logoUrl: document.getElementById('tb-logo-'+orgId).value || undefined })
+    .then(function(){ if(msg) msg.textContent='Saved — mirrored to every hostname.'; loadTenants(); })
+    .catch(function(e){ if(msg) msg.textContent='Failed — '+(e.message||e); });
+}
+
+/* Role changes go through /api/set-role rather than a direct write, because
+   the endpoint also mints the Auth custom claims. Writing the members document
+   alone leaves request.auth.token.role stale, and Storage rules and the other
+   functions read the claim — so the two sources disagree and the bug shows up
+   somewhere far away from here. */
 function setMemberRole(orgId, uid, role){
   _authedPost('/api/set-role', { orgId:orgId, targetUid:uid, role:role })
-    .catch(function(e){ window.alert('Could not set role:\n\n'+(e.message||e)); openTenantUsers(orgId); openTenantUsers(orgId); });
+    .then(function(){ /* the select already shows the new value */ })
+    .catch(function(e){
+      window.alert('Could not set role:\n\n'+(e.message||e));
+      var rowId='tn-users-'+orgId.replace(/[^A-Za-z0-9_-]/g,'_');
+      var tr=document.getElementById(rowId);
+      if(tr){ tr.style.display='none'; openTenantDetail(orgId); }   /* re-read the truth */
+    });
+}
+
+/* Reset links are shown, never sent. The endpoint mints a credential-bearing
+   URL, and emailing it from software means one wrong address in a support
+   ticket hands over the account. Staff pass it on deliberately. */
+function userAdmin(action, email){
+  var body={ action:action, targetEmail:email };
+  if(action==='setEmail'){
+    var next=window.prompt('New sign-in address for '+email+'.\n\nThis changes which tenant they resolve to — the email domain IS the org key.', '');
+    if(!next) return;
+    body.newEmail=next.trim();
+  }
+  if(action==='disable' && !window.confirm('Disable '+email+'? They will be unable to sign in until re-enabled.')) return;
+  _authedPost('/api/user-admin', body)
+    .then(function(r){
+      if(action==='resetLink' && r && r.link){
+        window.prompt('Password reset link for '+email+' — copy it and send it to them yourself:', r.link);
+      } else {
+        window.alert(action+' done for '+email+'.');
+      }
+      renderTenants();
+    })
+    .catch(function(e){ window.alert('Could not '+action+':\n\n'+(e.message||e)); });
 }
 
 /* ── Import / Update Applications — publish catalog to Firestore. ADMIN ONLY. ── */

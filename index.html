@@ -2312,6 +2312,26 @@ window._omegaReady = function(){
       <div class="acct-row"><span class="k">Workspace</span><span class="v" id="acct-ws">—</span></div>
       <div class="acct-row"><span class="k">Sign-in method</span><span class="v" id="acct-provider">—</span></div>
 
+      <!-- ── BILLING & PLAN ──────────────────────────────────────────────
+           Read-only to the tenant by design: billing/current is writable only
+           by ClearSky (isAdmin) in the rules, so this shows terms and offers
+           the two actions a customer actually needs — pay, and open the Stripe
+           portal for cards and receipts. The history list below is appended by
+           /api/tenant-billing via the Admin SDK; nothing client-side can write
+           it, which is what makes it worth reading. -->
+      <div class="acct-sec-title">Billing &amp; plan</div>
+      <div class="acct-row"><span class="k">Plan</span><span class="v" id="acct-tier">—</span></div>
+      <div class="acct-row"><span class="k">Add-ons</span><span class="v" id="acct-addons">—</span></div>
+      <div class="acct-row"><span class="k">Amount due</span><span class="v" id="acct-amt">—</span></div>
+      <div class="acct-row"><span class="k">Next payment</span><span class="v" id="acct-due">—</span></div>
+      <div id="acct-billing-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px">
+        <a id="acct-pay" class="acct-btn" href="#" target="_blank" rel="noopener" style="display:none;text-decoration:none;text-align:center">Pay now</a>
+        <button class="acct-btn" id="acct-portal" onclick="openBillingPortal()" style="display:none">Manage billing &amp; receipts</button>
+      </div>
+      <div class="acct-msg" id="acct-billing-msg"></div>
+      <div class="acct-sec-title" style="font-size:12px;opacity:.8">Billing history</div>
+      <div id="acct-billing-history" class="acct-msg">—</div>
+
       <!-- Password change (email/password users only) -->
       <div id="acct-pw-section">
         <div class="acct-sec-title">Change password</div>
@@ -3731,9 +3751,81 @@ function _providerId(){
   } catch(e){}
   return 'password';
 }
+/* ── BILLING ON THE ACCOUNT MODAL ────────────────────────────────────────
+   Terms are read-only here: billing/current is writable only by ClearSky in
+   the rules, and a customer editing their own tier is not a feature. What a
+   customer needs is the number, the date, a way to pay, and receipts.
+
+   Everything degrades to "—" rather than erroring. A tenant with no billing
+   document is the normal state for an account ClearSky has not priced yet,
+   and a red failure on the account page for that is noise. */
+function _money(n){
+  n = Number(n);
+  if (!isFinite(n)) return '—';
+  return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+function loadBilling(){
+  var org = (typeof currentOrg !== 'undefined' && currentOrg) || '';
+  if (!org || typeof db === 'undefined' || !db) return;
+  var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
+  ref.get().then(function(d){
+    var b = (d && d.exists) ? d.data() : {};
+    setText('acct-tier',   b.tier || 'not yet priced');
+    setText('acct-addons', (b.addons && b.addons.length) ? b.addons.join(', ') : 'none');
+    setText('acct-amt',    b.amountDue == null ? '—' : _money(b.amountDue));
+    setText('acct-due',    b.subscriptionDue || (b.trialEndsAt ? ('trial ends ' + b.trialEndsAt) : '—'));
+
+    var pay = document.getElementById('acct-pay');
+    if (pay && b.paymentLink){ pay.href = b.paymentLink; pay.style.display = ''; }
+    /* The Stripe portal only exists once a customer record does. Showing the
+       button without one produces a 400 from the endpoint and a dead end. */
+    var portal = document.getElementById('acct-portal');
+    if (portal && b.stripeCustomerId) portal.style.display = '';
+  }).catch(function(){ /* no billing doc yet — leave the dashes */ });
+
+  ref.collection('history').orderBy('at', 'desc').limit(12).get().then(function(sn){
+    var host = document.getElementById('acct-billing-history');
+    if (!host) return;
+    if (!sn || sn.empty){ host.textContent = 'No billing changes recorded yet.'; return; }
+    var rows = [];
+    sn.forEach(function(doc){
+      var h = doc.data() || {}, c = h.changed || {};
+      var when = h.at && h.at.toDate ? h.at.toDate().toLocaleDateString() : '';
+      var parts = [];
+      if (c.tier) parts.push('plan → ' + c.tier);
+      if (c.amountDue != null) parts.push('amount due ' + _money(c.amountDue));
+      if (c.subscriptionDue) parts.push('due ' + c.subscriptionDue);
+      if (c.addons) parts.push('add-ons: ' + (c.addons.length ? c.addons.join(', ') : 'none'));
+      rows.push('<div>' + escHtml(when) + ' — ' + escHtml(parts.join(' · ') || 'terms updated') + '</div>');
+    });
+    host.innerHTML = rows.join('');
+  }).catch(function(){
+    var host = document.getElementById('acct-billing-history');
+    if (host) host.textContent = 'Billing history unavailable.';
+  });
+}
+function openBillingPortal(){
+  var u = currentUser || (auth && auth.currentUser);
+  if (!u) return;
+  var msg = document.getElementById('acct-billing-msg');
+  if (msg) msg.textContent = 'Opening Stripe…';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/stripe-portal', { method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok },
+      body: JSON.stringify({ orgId: currentOrg }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(j){
+    if (j && j.url){ window.open(j.url, '_blank', 'noopener'); if(msg) msg.textContent=''; }
+    else { if(msg) msg.textContent = 'Stripe did not return a portal link.'; }
+  }).catch(function(e){
+    if (msg) msg.textContent = 'Could not open billing — ' + (e.message || e);
+  });
+}
+
 function openAccount(){
   var u = currentUser || (auth && auth.currentUser);
   if (!u){ return; }
+  loadBilling();
   setText('acct-email', u.email || '—');
   var wsName = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.clientName) || '—';
   setText('acct-ws', wsName);
