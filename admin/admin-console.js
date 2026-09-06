@@ -764,29 +764,49 @@ function setPtFilter(f){ ptFilter=f; renderPartners(); }
 /* ── CRM ── */
 var crmFilter='all';
 function renderCrm(){
-  document.getElementById('crm-count').textContent = STATE.clients.length;
-  var filters=[['all','All'],['tier1','Standard'],['tier2','Deluxe'],['tier3','Enterprise'],['attention','Needs Attention']];
+  /* Rows come from the JOIN, not from STATE.clients, so a tenant who signed up
+     five minutes ago is in this table without anyone re-keying them. */
+  var all = reconciledClients();
+  document.getElementById('crm-count').textContent = all.length;
+  var newOnes = all.filter(function(r){ return r._org && !r._crm; }).length;
+  var offPlatform = all.filter(function(r){ return !r._org; }).length;
+
+  var filters=[['all','All'],['tenants','On platform'],['new','New tenants'],
+               ['offplatform','Not on platform'],['attention','Needs Attention']];
   var fh='';
-  for (var i=0;i<filters.length;i++){ fh+='<button class="fpill'+(crmFilter===filters[i][0]?' on':'')+'" onclick="setCrmFilter(&quot;'+filters[i][0]+'&quot;)">'+filters[i][1]+'</button>'; }
+  for (var i=0;i<filters.length;i++){
+    var k=filters[i][0];
+    var n = k==='new'?newOnes : k==='offplatform'?offPlatform
+          : k==='tenants'?all.filter(function(r){return !!r._org;}).length : 0;
+    fh+='<button class="fpill'+(crmFilter===k?' on':'')+'" onclick="setCrmFilter(&quot;'+k+'&quot;)">'
+      + filters[i][1]+(n?(' '+n):'')+'</button>';
+  }
+  if (newOnes){
+    fh += '<button class="fpill" style="margin-left:10px" onclick="syncTenantsIntoCrm()">'
+        + '\u21bb Add ' + newOnes + ' to roster</button>';
+  }
   document.getElementById('crm-filters').innerHTML=fh;
 
   var rows='';
-  for (var j=0;j<STATE.clients.length;j++){
-    var c=STATE.clients[j];
+  for (var j=0;j<all.length;j++){
+    var c=all[j];
     if (crmFilter==='attention'){ if(!(c.status==='down'||c.status==='degraded'||openTasks(c.id)>0)) continue; }
-    else if (crmFilter!=='all' && c.tier!==crmFilter) continue;
+    else if (crmFilter==='tenants'     && !c._org) continue;
+    else if (crmFilter==='new'         && !(c._org && !c._crm)) continue;
+    else if (crmFilter==='offplatform' && c._org) continue;
     var ls = lastStatus(c.id);
     var ot = openTasks(c.id);
     rows += '<tr class="clickable" onclick="openClient(&quot;'+c.id+'&quot;)">'
-      + '<td class="site-nm">'+esc(c.name)+'</td>'
-      + '<td><span class="chip '+c.tier+'">'+tierShort(c.tier)+'</span></td>'
+      + '<td class="site-nm">'+esc(c.name)+'<div class="sub-txt">'+esc(c._key||'')+'</div></td>'
+      + '<td><span class="chip '+esc(c.tier)+'">'+esc(tierShort(c.tier))+'</span></td>'
+      + '<td>'+crmSourceChip(c)+'</td>'
       + '<td class="sub-txt">'+esc(c.owner||'—')+'</td>'
       + '<td>'+healthChip(c)+'</td>'
       + '<td class="num">'+(ot>0?'<b style="color:var(--cs-accent)">'+ot+'</b>':'0')+'</td>'
-      + '<td class="sub-txt">'+(ls?esc(truncate(ls.text,60)):'<span class="mut">none yet</span>')+'</td>'
+      + '<td class="sub-txt">'+(ls?esc(truncate(ls.text,52)):'<span class="mut">none yet</span>')+'</td>'
       + '<td class="sub-txt">'+timeAgo(c.updatedAt)+'</td></tr>';
   }
-  document.getElementById('crm-body').innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--cs-sub)">No clients match.</td></tr>';
+  document.getElementById('crm-body').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--cs-sub)">No clients match.</td></tr>';
 }
 function setCrmFilter(f){ crmFilter=f; renderCrm(); }
 function truncate(s,n){ s=String(s); return s.length>n ? s.slice(0,n-1)+'…' : s; }
@@ -1090,11 +1110,95 @@ function loadTenants(){
   }).then(function(rows){
     STATE.tenants = rows || [];
     renderTenants();
+    /* The roster tabs join against STATE.tenants, so they have to redraw once
+       the live records land — otherwise they show the hand-kept list only and
+       look authoritative while being incomplete. */
+    if (typeof renderClients === 'function') renderClients();
+    if (typeof renderCrm === 'function') renderCrm();
     renderTabs();
   }).catch(function(e){
     document.getElementById('tn-body').innerHTML =
       '<div class="empty">Could not read omega_orgs — '+esc(e.message||'permission denied')+'</div>';
   });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RECONCILING THE BOOK OF BUSINESS WITH THE PLATFORM
+   ══════════════════════════════════════════════════════════════════════
+   Two lists described the same companies and neither knew about the other:
+   Client Inventory / Internal CRM is a hand-kept roster in admin/clients,
+   and omega_orgs is what the security rules actually resolve. A tenant could
+   sign up and never appear in the CRM; a CRM row could name a company with no
+   account at all. Both were true at once and nothing said so.
+
+   THE JOIN KEY IS THE DOMAIN, because that is already the platform's tenant
+   key — orgId IS the email domain, lowercased. Nothing new to maintain.
+
+   THIS IS A VIEW, NOT A MIGRATION. Rows are matched in memory and labelled;
+   admin/clients is not rewritten on load. A CRM row whose company never
+   signed up keeps its notes and is marked "not on platform" rather than
+   vanishing — the sales history is the reason that list exists. Materialising
+   a tenant into the CRM is an explicit click, so the roster only grows when
+   somebody means it to. */
+function crmKeyOf(c){
+  return String((c && (c.domain || c.orgId)) || '').toLowerCase().trim();
+}
+
+/* Every company either side knows about, joined. Called by renderClients and
+   renderCrm so the two tabs can never disagree again. */
+function reconciledClients(){
+  var crm = STATE.clients || [], orgs = STATE.tenants || [];
+  var byKey = {}, out = [];
+
+  crm.forEach(function(c){
+    var k = crmKeyOf(c);
+    var row = {}; for (var f in c) row[f] = c[f];
+    row._key = k; row._crm = true; row._org = null;
+    if (k) byKey[k] = row;
+    out.push(row);
+  });
+
+  orgs.forEach(function(o){
+    var k = String(o._id || '').toLowerCase();
+    var hit = byKey[k];
+    if (hit){ hit._org = o; return; }
+    /* A tenant nobody has a CRM row for — a self-serve signup, or an org
+       seeded after the roster was last touched. Shown, not written. */
+    out.push({
+      id: 'org-' + k, name: o.name || k, domain: k,
+      tier: (o._bill && o._bill.tier) || '—',
+      type: o.vertical || '—', owner: '', status: o.status || 'active',
+      progress: 0, health: 'good', next: '', updatedAt: Date.now(),
+      _key: k, _crm: false, _org: o
+    });
+  });
+
+  out.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+  return out;
+}
+
+/* One badge, used by both tabs, so "is this real" is answered the same way
+   wherever you are looking. */
+function crmSourceChip(r){
+  if (r._org && r._crm)  return '<span class="chip good">tenant</span>';
+  if (r._org && !r._crm) return '<span class="chip warn">new tenant</span>';
+  return '<span class="chip neutral">not on platform</span>';
+}
+
+/* Writes the tenants that have no CRM row into admin/clients, once, on
+   request. Explicit because it changes the roster rather than the view. */
+function syncTenantsIntoCrm(){
+  var rows = reconciledClients().filter(function(r){ return r._org && !r._crm; });
+  if (!rows.length){ window.alert('Every tenant already has a CRM row.'); return; }
+  if (!window.confirm('Add ' + rows.length + ' tenant' + (rows.length===1?'':'s') +
+      ' to the client roster?\n\n' + rows.map(function(r){return '· '+r.name;}).join('\n'))) return;
+  rows.forEach(function(r){
+    var c = {}; for (var f in r) if (f.charAt(0) !== '_') c[f] = r[f];
+    STATE.clients.push(c);
+  });
+  persist('clients');
+  renderClients(); renderCrm(); renderTabs();
+  window.alert('Added ' + rows.length + '. They are ordinary CRM rows now — give them an owner.');
 }
 
 function renderTenants(){
