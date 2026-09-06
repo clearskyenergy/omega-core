@@ -197,6 +197,26 @@ service firebase.storage {
       allow write: if signedIn() && okFile();
     }
 
+    /* -------- Joint development AGREEMENTS  —  jda/{orgId}/{fileName} -------
+       The signed paper between ClearSky and one partner: the JDA itself, side
+       letters, schedules.
+
+       NOT tenants/{orgId}/ ABOVE. That path is `allow read: if true` — world
+       readable, deliberately, because it holds logos that a sign-in page has
+       to paint before anybody authenticates. Putting an executed agreement
+       there would publish it to the internet, and the write rule there is
+       okLogo() anyway so a PDF would be refused. Two different kinds of file
+       needing two different doors.
+
+       READ IS THE TWO PARTIES AND NOBODY ELSE — the partner org and ClearSky.
+       Delete is ClearSky only: a partner removing their own copy of a signed
+       agreement removes the only copy the platform holds. */
+    match /jda/{orgId}/{fileName} {
+      allow read:   if signedIn() && (isAdminDomain() || orgId == userOrg());
+      allow write:  if signedIn() && (isAdminDomain() || orgId == userOrg()) && okFile();
+      allow delete: if isAdminDomain();
+    }
+
     /* -------- Joint development documents  —  SILMARILLION 2.0 --------
        projects/{projectId}/{fileName}. Where documents on a co-developed
        project live, so partners under a JDA pass drawings, studies and signed

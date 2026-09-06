@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Joint Development Partners · ClearSky-OMEGA</title>
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  SILMARILLION 2.0 — the joint-development surface.
+
+  Three things, because they are the three things a JDA actually needs and
+  they were previously in three places or nowhere:
+
+    Partners        who is on the agreement, from omega_orgs
+    Agreements      the signed paper, in Storage under jda/{orgId}/
+    Responsibilities who does what on each co-developed project
+
+  WHY RESPONSIBILITIES LIVE ON THE PROJECT AND NOT ON THE AGREEMENT.
+  A JDA says the parties will co-develop; it does not say who runs
+  interconnection on 800 Progress Drive. That is per project, it changes, and
+  the argument it prevents is always about one site. So it is written to
+  projects/{id}.jdaRoles, beside orgsInvolved, and the same rule governs both.
+
+  ⚠ THE WORKSTREAM LIST BELOW IS A PLACEHOLDER TAXONOMY. It mirrors the
+  pipeline stages this platform already uses (origination → pre-dev → design →
+  interconnection → permitting → finance → construction → O&M) so it is at
+  least consistent with the rest of the product. Brad's map is the real one and
+  should replace WORKSTREAMS wholesale — the storage shape does not change when
+  it does, only the labels and keys.
+-->
+<style>
+:root{--cs-navy:#0A1628;--cs-blue:#0070F2;--cs-teal:#00A9A4;--cs-border:#E1E6EC;--cs-text:#0F2733;--cs-muted:#6B7C8C;--cs-bg:#F6F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cs-bg);color:var(--cs-text);font:400 14px/1.5 'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{background:var(--cs-navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+.top a{color:#9fd4ff;text-decoration:none;font-weight:600;font-size:13px}
+.top h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:18px;margin-bottom:18px}
+.card h2{margin:0 0 4px;font-size:15px}
+.sub{color:var(--cs-muted);font-size:12.5px;margin:0 0 14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--cs-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--cs-border)}
+td{padding:9px 10px;border-bottom:1px solid #EEF1F4;vertical-align:top}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font:600 11px/1.6 inherit;background:#EAF2FF;color:var(--cs-blue)}
+.chip.ok{background:#E6F7EE;color:#1F7A45}.chip.warn{background:#FFF4E5;color:#9A6300}.chip.none{background:#EEF1F4;color:var(--cs-muted)}
+button{background:var(--cs-blue);color:#fff;border:none;border-radius:8px;padding:7px 13px;font:600 12.5px inherit;cursor:pointer}
+button.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border)}
+button:disabled{opacity:.5;cursor:not-allowed}
+select,input[type=text]{padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px}
+.ws{display:inline-flex;align-items:center;gap:5px;margin:0 10px 6px 0;font-size:12.5px}
+.empty{color:var(--cs-muted);padding:16px;text-align:center}
+.msg{font-size:12.5px;color:var(--cs-muted);margin-top:8px;min-height:16px}
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="/">&#8592; Portal</a>
+  <h1>Joint Development Partners</h1>
+  <span id="who" style="margin-left:auto;font-size:12.5px;opacity:.8"></span>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Partners on the agreement</h2>
+    <p class="sub">Organisations co-developing with ClearSky. Read from <code>omega_orgs</code> — the same records the security rules resolve.</p>
+    <div id="partners"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Agreements &amp; contracts</h2>
+    <p class="sub">Signed paper, stored under <code>jda/&lt;org&gt;/</code>. Readable by the two parties only — deliberately not the public logo path.</p>
+    <div id="agreements"><div class="empty">Loading…</div></div>
+    <div style="margin-top:12px">
+      <input type="file" id="file" style="font-size:12.5px">
+      <button id="upBtn" onclick="uploadAgreement()">Upload</button>
+      <div class="msg" id="upMsg"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Responsibilities by project</h2>
+    <p class="sub">Who runs what, per co-developed site. Written to the project beside its partner roster, because a JDA says the parties will co-develop — it does not say who runs interconnection on a given address.</p>
+    <div style="margin-bottom:12px">
+      <select id="proj" onchange="renderRoles()"><option value="">Select a co-developed project…</option></select>
+    </div>
+    <div id="roles"><div class="empty">Pick a project above.</div></div>
+    <div class="msg" id="rolesMsg"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+'use strict';
+/* ⚠ PLACEHOLDER TAXONOMY — replace wholesale with Brad's map.
+   These mirror the pipeline stages already used across the platform so the
+   page is at least internally consistent until the real list arrives. The
+   stored shape is { orgId: { lead:bool, workstreams:[key] } }, which does not
+   change when the labels do. */
+var WORKSTREAMS = [
+  { key:'origination',    label:'Origination' },
+  { key:'predev',         label:'Pre-development' },
+  { key:'design',         label:'Design & engineering' },
+  { key:'interconnection',label:'Interconnection' },
+  { key:'permitting',     label:'Permitting / AHJ' },
+  { key:'finance',        label:'Finance' },
+  { key:'procurement',    label:'Procurement / BOM' },
+  { key:'construction',   label:'Construction' },
+  { key:'om',             label:'O&M' }
+];
+
+var cfg = (window.CLEARSKY_CONFIG || {});
+var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
+var ME = null, MYORG = '', PROJECTS = [], PARTNERS = [];
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
+function isStaff(){ return MYORG==='clearsky-usa.com' || MYORG==='csebuilders.com'; }
+
+auth.onAuthStateChanged(function(u){
+  if(!u){ location.href='/'; return; }
+  ME=u; MYORG=orgOf(u.email);
+  document.getElementById('who').textContent = u.email + ' · ' + MYORG;
+  loadPartners(); loadAgreements(); loadProjects();
+});
+
+/* Partners are the orgs ClearSky co-develops with. Staff see every org on the
+   JV; a partner sees their own row — reading the whole registry is a ClearSky
+   view, and omega_orgs read is scoped that way in the rules anyway. */
+function loadPartners(){
+  var host=document.getElementById('partners');
+  db.collection('omega_orgs').get().then(function(sn){
+    var rows=[];
+    sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
+    PARTNERS=rows;
+    if(!rows.length){ host.innerHTML='<div class="empty">No organisations yet — run the seed.</div>'; return; }
+    var h='<table><thead><tr><th>Organisation</th><th>orgId</th><th>Vertical</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var st=r.status||'active';
+      h+='<tr><td><b>'+esc(r.name||r._id)+'</b></td><td>'+esc(r._id)+'</td><td>'+esc(r.vertical||'—')
+       +'</td><td><span class="chip '+(st==='active'?'ok':st==='pending'?'warn':'none')+'">'+esc(st)+'</span></td></tr>';
+    });
+    host.innerHTML=h+'</tbody></table>';
+  }).catch(function(e){ host.innerHTML='<div class="empty">Could not read organisations — '+esc(e.message)+'</div>'; });
+}
+
+function loadAgreements(){
+  var host=document.getElementById('agreements');
+  storage.ref('jda/'+MYORG).listAll().then(function(res){
+    if(!res.items.length){ host.innerHTML='<div class="empty">No agreements uploaded for '+esc(MYORG)+' yet.</div>'; return; }
+    return Promise.all(res.items.map(function(it){
+      return it.getDownloadURL().then(function(url){ return { name:it.name, url:url }; });
+    })).then(function(files){
+      host.innerHTML='<table><thead><tr><th>Document</th><th></th></tr></thead><tbody>'
+        + files.map(function(f){
+            return '<tr><td>'+esc(f.name)+'</td><td style="text-align:right"><a href="'+esc(f.url)+'" target="_blank" rel="noopener">Open</a></td></tr>';
+          }).join('')
+        + '</tbody></table>';
+    });
+  }).catch(function(e){
+    host.innerHTML='<div class="empty">Could not list agreements — '+esc(e.message)+'</div>';
+  });
+}
+
+function uploadAgreement(){
+  var f=document.getElementById('file').files[0];
+  var msg=document.getElementById('upMsg');
+  if(!f){ msg.textContent='Choose a file first.'; return; }
+  msg.textContent='Uploading…';
+  storage.ref('jda/'+MYORG+'/'+f.name).put(f)
+    .then(function(){ msg.textContent='Uploaded.'; document.getElementById('file').value=''; loadAgreements(); })
+    .catch(function(e){ msg.textContent='Upload failed — '+e.message; });
+}
+
+/* Only co-developed projects appear. A project with an empty roster is an
+   ordinary single-org project and has no responsibilities to divide. */
+function loadProjects(){
+  db.collection('projects').get().then(function(sn){
+    var out=[];
+    sn.forEach(function(d){
+      var v=d.data()||{}; v._id=d.id;
+      if((v.orgsInvolved||[]).length) out.push(v);
+    });
+    PROJECTS=out;
+    var sel=document.getElementById('proj');
+    out.forEach(function(p){
+      var o=document.createElement('option');
+      o.value=p._id; o.textContent=(p.name||p._id)+' — '+(p.orgId||'');
+      sel.appendChild(o);
+    });
+    if(!out.length){
+      document.getElementById('roles').innerHTML =
+        '<div class="empty">No co-developed projects yet. Add a partner org to a project’s roster (orgsInvolved) and it appears here.</div>';
+    }
+  }).catch(function(e){
+    document.getElementById('roles').innerHTML='<div class="empty">Could not read projects — '+esc(e.message)+'</div>';
+  });
+}
+
+function renderRoles(){
+  var id=document.getElementById('proj').value;
+  var host=document.getElementById('roles');
+  if(!id){ host.innerHTML='<div class="empty">Pick a project above.</div>'; return; }
+  var p=PROJECTS.filter(function(x){return x._id===id;})[0]; if(!p) return;
+  var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+  var roles=p.jdaRoles||{};
+
+  var h='<table><thead><tr><th>Organisation</th><th>Lead</th><th>Workstreams</th></tr></thead><tbody>';
+  orgs.forEach(function(o){
+    var r=roles[o]||{}, ws=r.workstreams||[];
+    h+='<tr><td><b>'+esc(o)+'</b>'+(o===p.orgId?' <span class="chip">owner</span>':'')+'</td>'
+     + '<td><input type="checkbox" id="lead-'+esc(o)+'"'+(r.lead?' checked':'')+'></td><td>';
+    WORKSTREAMS.forEach(function(w){
+      h+='<label class="ws"><input type="checkbox" data-org="'+esc(o)+'" data-ws="'+w.key+'"'
+       + (ws.indexOf(w.key)>=0?' checked':'')+'> '+esc(w.label)+'</label>';
+    });
+    h+='</td></tr>';
+  });
+  h+='</tbody></table><div style="margin-top:12px"><button onclick="saveRoles()">Save responsibilities</button></div>';
+  host.innerHTML=h;
+}
+
+function saveRoles(){
+  var id=document.getElementById('proj').value;
+  var msg=document.getElementById('rolesMsg');
+  if(!id) return;
+  var p=PROJECTS.filter(function(x){return x._id===id;})[0]; if(!p) return;
+  var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+
+  var out={};
+  orgs.forEach(function(o){
+    var lead=document.getElementById('lead-'+o);
+    var boxes=document.querySelectorAll('input[data-org="'+o.replace(/"/g,'')+'"]:checked');
+    var ws=[]; Array.prototype.forEach.call(boxes,function(b){ ws.push(b.getAttribute('data-ws')); });
+    out[o]={ lead: !!(lead&&lead.checked), workstreams: ws };
+  });
+
+  msg.textContent='Saving…';
+  /* jdaRoles only. orgId and orgsInvolved are untouched on purpose — the rule
+     requires a collaborator to hand both back unchanged, and a merge that
+     rewrote the roster from a stale copy of the page would silently drop a
+     partner added since it loaded. */
+  db.collection('projects').doc(id).set({ jdaRoles: out }, { merge:true })
+    .then(function(){ p.jdaRoles=out; msg.textContent='Saved.'; })
+    .catch(function(e){ msg.textContent='Could not save — '+e.message; });
+}
+</script>
+</body>
+</html>

@@ -1470,6 +1470,22 @@ window._omegaReady = function(){
         <span>Marketplace</span>
       </a>
 
+      <!-- ══ JOINT DEVELOPMENT ══ Hidden by default, revealed in
+           onAuthStateChanged for the JV orgs. OSA is a separate deployment on
+           its own origin, so the workspace link leaves this app; the partners
+           page below lives here because the agreement, the roster and the
+           responsibilities are about projects in THIS database. -->
+      <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
+      <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
+      <a class="sn-item" data-sn="osa" id="sn-osa" href="https://osa.clearskyomega.com/" target="_blank" rel="noopener" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span>OSA Workspace</span>
+      </a>
+      <a class="sn-item" data-sn="jda" id="sn-jda" href="/jda.html" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h3"/></svg>
+        <span>JD Partners</span>
+      </a>
+
       <div class="sn-divider"></div>
       <div class="sn-section-label">Workspace</div>
 
@@ -2485,6 +2501,30 @@ function revealStaffNav(email){
   });
 }
 
+/* ── JOINT DEVELOPMENT ACCESS ─────────────────────────────────────────────
+   The three orgs in the OSA JV today. This is a list rather than a lookup on
+   purpose and only for now: the durable home is the 'osa-jv' add-on on
+   omega_orgs/{org}/billing/current, so adding a partner is a console action
+   rather than a deploy. Until billing is populated there is nothing to read,
+   and a nav item nobody can see is not better than a hardcoded list you can
+   delete in one line. Move it the day the add-on is set.
+
+   Showing the link grants nothing. OSA gates on omega_users and the JD page
+   reads projects the caller can already see; this only saves them typing a
+   URL they were entitled to reach. */
+var JV_ORGS = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+function revealJointDevNav(email){
+  var d = String(email || '').toLowerCase().split('@')[1] || '';
+  var ws = window.OMEGA_WORKSPACE || {};
+  var addons = (ws.addons || []);
+  var ok = JV_ORGS.indexOf(d) >= 0 || isStaffEmail(email) || addons.indexOf('osa-jv') >= 0;
+  if (!ok) return;
+  ['sn-jv-divider','sn-jv-label','sn-osa','sn-jda'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+}
+
 auth.onAuthStateChanged(user => {
   if (window._omegaReady) window._omegaReady();
   if (user) {
@@ -2506,6 +2546,7 @@ auth.onAuthStateChanged(user => {
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
     revealStaffNav(email);
+    revealJointDevNav(email);
 
     // Route by tenant type:
     //  • developer → their own project portfolio (single-org roll-up)
