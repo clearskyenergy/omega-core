@@ -440,6 +440,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
      there is no session at all. -->
 <div id="auth-screen">
   <div class="auth-card" style="text-align:center">
+    <img src="/clearsky-omega-mark-white.png" alt="OMEGA" style="height:34px;width:auto;margin:0 0 12px;filter:invert(1)" onerror="this.style.display='none'">
     <h1 style="margin:0 0 6px;font-size:20px">Admin Console</h1>
     <p class="auth-note" id="auth-status">Checking your session…</p>
   </div>
@@ -988,7 +989,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 <script src="/config.js"></script>
 
 <script src="/omega-tools.js"></script>
-<script src="/admin-console.js"></script>
+<!-- /admin/, not /. The file lives beside this page; loaded from the root it
+     404s, admin-console.js never executes, and the console sits on "Checking
+     your session" forever with every button inert because none of them exist. -->
+<script src="/admin/admin-console.js"></script>
 
 <!-- ══════════════ CONTRACTS & PRICING ENGINE (self-contained, ES5) ══════════════ -->
 <script>
