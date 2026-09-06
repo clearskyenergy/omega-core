@@ -1269,6 +1269,24 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   h+=_tnField('Logo URL','tb-logo-'+orgId,org.logoUrl||'','text','/tenants/'+orgId+'/logo.png');
   h+='<button onclick="saveTenantBranding(&quot;'+esc(orgId)+'&quot;)">Save branding</button>';
   h+=' <span id="tbr-msg-'+esc(orgId)+'" class="sub-txt"></span>';
+
+  /* ── RELATIONSHIP ─────────────────────────────────────────────────────
+     TWO GRANTS, NOT ONE, and the difference is the whole point:
+       osaMember  may enter the OSA workspace. The JV itself.
+       jdPartner  has a joint development agreement with us, sees JD Partners
+                  and their own side of it, and does NOT see OSA.
+     Every OSA member is implicitly a JD partner; the reverse is not true.
+     These were one test once, which is why a tenant with no JV relationship
+     was shown the OSA link. */
+  h+='<div class="block-title" style="font-size:13px;margin:16px 0 8px">Relationship</div>';
+  h+='<label class="sub-txt" style="display:block;margin-bottom:6px">'
+   + '<input type="checkbox" id="tb-osa-'+esc(orgId)+'"'+(org.osaMember===true?' checked':'')+'> '
+   + 'OSA member \u2014 may enter the OSA workspace</label>';
+  h+='<label class="sub-txt" style="display:block;margin-bottom:8px">'
+   + '<input type="checkbox" id="tb-jd-'+esc(orgId)+'"'+(org.jdPartner===true?' checked':'')+'> '
+   + 'JD partner \u2014 joint development agreement, sees JD Partners only</label>';
+  h+='<button onclick="saveTenantRelationship(&quot;'+esc(orgId)+'&quot;)">Save relationship</button>';
+  h+=' <span id="tbrel-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div style="display:flex;gap:18px;margin-top:14px">'
    + '<div><div class="sub-txt">Members</div><div style="font:700 20px system-ui">'+members.length+'</div></div>'
    + '<div><div class="sub-txt">Projects</div><div style="font:700 20px system-ui">'+(projects==null?'—':projects)+'</div></div>'
@@ -1357,6 +1375,25 @@ function saveTenantBilling(orgId){
   }).catch(function(e){
     if(msg) msg.textContent='Failed — '+(e.message||e);
   });
+}
+
+/* Writes omega_orgs directly — the rules already permit isAdmin(), and unlike
+   branding there is no server mirror to run, because nothing outside this
+   document reads these two flags. The portal reads them at sign-in to decide
+   which doors to show; the doors themselves are gated by omega_users and by
+   what the caller can already read, so a wrong tick shows somebody a link
+   rather than handing them data. */
+function saveTenantRelationship(orgId){
+  var msg=document.getElementById('tbrel-msg-'+orgId);
+  var osa=document.getElementById('tb-osa-'+orgId);
+  var jd =document.getElementById('tb-jd-'+orgId);
+  if(msg) msg.textContent='Saving...';
+  db.collection('omega_orgs').doc(orgId).set({
+    osaMember: !!(osa&&osa.checked),
+    jdPartner: !!(jd&&jd.checked)
+  }, { merge:true })
+    .then(function(){ if(msg) msg.textContent='Saved - takes effect at their next sign-in.'; loadTenants(); })
+    .catch(function(e){ if(msg) msg.textContent='Failed - '+(e.message||e); });
 }
 
 function saveTenantBranding(orgId){

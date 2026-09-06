@@ -238,21 +238,52 @@ auth.onAuthStateChanged(function(u){
 /* Partners are the orgs ClearSky co-develops with. Staff see every org on the
    JV; a partner sees their own row — reading the whole registry is a ClearSky
    view, and omega_orgs read is scoped that way in the rules anyway. */
+/* WHAT A PARTNER MAY SEE IS THEIR OWN SIDE, NOT THE BOOK.
+   omega_orgs read is scoped to your own org unless you are ClearSky, so a
+   collection query here would be refused outright for a partner — Firestore
+   rejects a LIST the moment one returned document fails. That refusal is
+   correct: the tenant registry is the customer list, and a JD partner has no
+   business enumerating who else we work with.
+
+   So: ClearSky reads the whole registry and sees every JV member and JD
+   partner; a partner reads one document, their own. Same page, two honest
+   answers, rather than one query that works for staff and errors for the
+   people the page is mostly for. */
 function loadPartners(){
   var host=document.getElementById('partners');
-  db.collection('omega_orgs').get().then(function(sn){
-    var rows=[];
-    sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
-    PARTNERS=rows;
-    if(!rows.length){ host.innerHTML='<div class="empty">No organisations yet — run the seed.</div>'; return; }
-    var h='<table><thead><tr><th>Organisation</th><th>orgId</th><th>Vertical</th><th>Status</th></tr></thead><tbody>';
+
+  function paint(rows, scoped){
+    if(!rows.length){ host.innerHTML='<div class="empty">No organisation record yet for '+esc(MYORG)+'.</div>'; return; }
+    var h='<table><thead><tr><th>Organisation</th><th>orgId</th><th>Relationship</th><th>Status</th></tr></thead><tbody>';
     rows.forEach(function(r){
       var st=r.status||'active';
-      h+='<tr><td><b>'+esc(r.name||r._id)+'</b></td><td>'+esc(r._id)+'</td><td>'+esc(r.vertical||'—')
+      var rel = r.osaMember ? '<span class="chip">OSA member</span>'
+              : r.jdPartner ? '<span class="chip">JD partner</span>'
+              : '<span class="chip none">—</span>';
+      h+='<tr><td><b>'+esc(r.name||r._id)+'</b></td><td>'+esc(r._id)+'</td><td>'+rel
        +'</td><td><span class="chip '+(st==='active'?'ok':st==='pending'?'warn':'none')+'">'+esc(st)+'</span></td></tr>';
     });
-    host.innerHTML=h+'</tbody></table>';
-  }).catch(function(e){ host.innerHTML='<div class="empty">Could not read organisations — '+esc(e.message)+'</div>'; });
+    h+='</tbody></table>';
+    if(scoped) h+='<p class="sub" style="margin:10px 0 0">Your organisation\u2019s record. ClearSky administers the agreement and the partner list.</p>';
+    host.innerHTML=h;
+  }
+
+  if(isStaff()){
+    db.collection('omega_orgs').get().then(function(sn){
+      var rows=[];
+      sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id;
+        /* Staff view is the JV and its partners, not every tenant on the
+           platform — this page is about the agreement, not the customer book. */
+        if(v.osaMember===true || v.jdPartner===true) rows.push(v);
+      });
+      paint(rows, false);
+    }).catch(function(e){ host.innerHTML='<div class="empty">Could not read organisations — '+esc(e.message)+'</div>'; });
+  } else {
+    db.collection('omega_orgs').doc(MYORG).get().then(function(d){
+      var rows=[]; if(d.exists){ var v=d.data()||{}; v._id=d.id; rows.push(v); }
+      paint(rows, true);
+    }).catch(function(e){ host.innerHTML='<div class="empty">Could not read your organisation — '+esc(e.message)+'</div>'; });
+  }
 }
 
 function loadAgreements(){
