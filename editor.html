@@ -19959,41 +19959,6 @@ function bmExportAnalysis() {
   </div>
 </div>
 <script>window.print();<\/script>
-<script>
-/* ── PLAN GATING ─────────────────────────────────────────────────────────
-   The editor is several products behind one entry: a designer, an
-   engineering suite, and a compute-campus tool. omega-caps.js decides which
-   of those this account has, and removes the rest.
-
-   REMOVED, NOT DISABLED. A greyed "Compute" tab is an advert inside a tool
-   somebody is trying to work in, and it earns a support ticket every time.
-   Upgrading lives on the account page, once.
-
-   TIER IS READ FROM billing/current — the same record the customer sees on
-   their own account page and the same one the tool gate uses, so there is
-   one answer to "what am I paying for" rather than three. Any failure
-   resolves to trial: a read that fails must not hand out the engineering
-   suite.
-
-   ⚠ PRODUCT GATING, NOT SECURITY. This runs in a browser the customer
-   controls. What keeps anyone out of the DATA is firestore.rules and the
-   api/ functions — CLAUDE.md is explicit that pricing and eligibility
-   belong server side. */
-(function () {
-  function gate(){
-    if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
-        typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
-    firebase.auth().onAuthStateChanged(function (u) {
-      if (!u) return;
-      OmegaCaps.resolve(firebase.firestore(), u.email).then(function (tier) {
-        var r = OmegaCaps.apply(tier);
-        if (r.removed) console.info('[caps] plan ' + r.tier + ' — ' + r.removed + ' feature(s) hidden');
-      });
-    });
-  }
-  gate();
-})();
-<\/script>
 </body>
 </html>`;
 
@@ -163875,6 +163840,79 @@ if (root.console && console.info) {
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OmegaSubstationSources;
 })(typeof window !== 'undefined' ? window : globalThis);
 
+</script>
+<!-- ══════════════ PLAN GATING ══════════════ -->
+<script>
+/* ── PLAN GATING ─────────────────────────────────────────────────────────
+   The editor is several products behind one entry: a designer, an
+   engineering suite, and a compute-campus tool. omega-caps.js decides which
+   of those this account has, and removes the rest.
+
+   THIS BLOCK USED TO LIVE INSIDE A TEMPLATE LITERAL. It was added between
+   the two script tags of the HTML document that bmExportAnalysis() builds,
+   which meant it never ran in the editor and was instead written into every
+   exported BESS report — where it tried to resolve a Firebase tier for a
+   static file sitting in somebody's downloads folder. So there has been no
+   tier gating in the editor at all since it was added.
+
+   REMOVED, NOT DISABLED. A greyed "Compute" tab is an advert inside a tool
+   somebody is trying to work in, and it earns a support ticket every time.
+   Upgrading lives on the account page, once.
+
+   TIER IS READ FROM billing/current — the same record the customer sees on
+   their own account page and the same one the tool gate uses, so there is
+   one answer to "what am I paying for" rather than three. Any failure
+   resolves to trial: a read that fails must not hand out the engineering
+   suite.
+
+   RE-APPLIED AFTER THE RIBBON REDRAWS. Panels here are built on demand, so
+   a one-shot pass gates only what exists at sign-in and a tab rendered
+   later comes back ungated. The observer is cheap and idempotent — apply()
+   skips anything already hidden.
+
+   ⚠ PRODUCT GATING, NOT SECURITY. This runs in a browser the customer
+   controls. What keeps anyone out of the DATA is firestore.rules and the
+   api/ functions — CLAUDE.md is explicit that pricing and eligibility
+   belong server side. Hiding a button is an upsell, not a control. */
+(function () {
+  var tier = null, pending = false;
+
+  function reapply(){
+    if (tier == null || pending) return;
+    pending = true;
+    /* Coalesced: a ribbon redraw fires many mutations and they all want the
+       same single pass. */
+    setTimeout(function(){
+      pending = false;
+      try { OmegaCaps.apply(tier); } catch (e) {}
+    }, 60);
+  }
+
+  function watch(){
+    if (!window.MutationObserver || !document.body) return;
+    new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        if (muts[i].addedNodes && muts[i].addedNodes.length) { reapply(); return; }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  function gate(){
+    if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
+        typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
+    firebase.auth().onAuthStateChanged(function (u) {
+      if (!u) return;
+      OmegaCaps.resolve(firebase.firestore(), u.email).then(function (t) {
+        tier = t;
+        var r = OmegaCaps.apply(tier);
+        if (window.console)
+          console.info('[caps] plan ' + r.tier + ' \u2014 ' + r.removed + ' feature(s) hidden');
+        watch();
+      });
+    });
+  }
+  gate();
+})();
 </script>
 </body>
 </html>

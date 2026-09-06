@@ -669,7 +669,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
           <div class="block-sub">Live from <code>omega_orgs</code>. Approve signups, set tier, suspend an account, and change who holds which role — the same records the security rules read.</div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn-ghost" onclick="loadTenants()">&#8635; Refresh</button>
+          <span id="tn-refresh-note" style="font-size:12px;color:#5A7180;margin-right:10px"></span>
+          <button class="btn-ghost" id="tn-refresh" onclick="loadTenants()">&#8635; Refresh</button>
         </div>
       </div>
       <div id="tn-pending-wrap" style="display:none;margin-bottom:16px">

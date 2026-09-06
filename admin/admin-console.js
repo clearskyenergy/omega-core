@@ -1094,8 +1094,29 @@ function _standing(bill, org){
 var tnFilter = 'all';
 function setTnFilter(f){ tnFilter=f; renderTenants(); }
 
+/* REFRESH HAS TO SAY SOMETHING.
+
+   This function was already correct — it re-read omega_orgs and redrew every
+   table. It just did it silently, and when the records have not changed the
+   result is a table that looks exactly the same. Clicking it was
+   indistinguishable from clicking a dead button, which is a bad thing to be
+   on a console where dead buttons have actually shipped.
+
+   So the button now disables itself while the read is in flight and reports
+   the time it finished. Same work, visible. */
+function _tnBusy(on, note){
+  var b = document.getElementById('tn-refresh');
+  if (b){
+    b.disabled = !!on;
+    b.textContent = on ? '\u21bb Refreshing\u2026' : '\u21bb Refresh';
+  }
+  var s = document.getElementById('tn-refresh-note');
+  if (s && note != null) s.textContent = note;
+}
+
 function loadTenants(){
   if (!db){ document.getElementById('tn-body').innerHTML='<div class="empty">Not connected.</div>'; return; }
+  _tnBusy(true, '');
   db.collection('omega_orgs').get().then(function(sn){
     var rows=[];
     sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
@@ -1117,7 +1138,10 @@ function loadTenants(){
     if (typeof renderClients === 'function') renderClients();
     if (typeof renderCrm === 'function') renderCrm();
     renderTabs();
+    _tnBusy(false, 'Updated ' + new Date().toLocaleTimeString() +
+                   ' \u00b7 ' + (rows || []).length + ' tenants');
   }).catch(function(e){
+    _tnBusy(false, 'Refresh failed');
     document.getElementById('tn-body').innerHTML =
       '<div class="empty">Could not read omega_orgs — '+esc(e.message||'permission denied')+'</div>';
   });
