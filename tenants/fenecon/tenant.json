@@ -1,0 +1,14 @@
+{
+  "orgId": "fenecon.com",
+  "name": "FENECON",
+  "domains": [
+    "fenecon.clearskyomega.com"
+  ],
+  "vertical": "oem",
+  "tier": "trial",
+  "logoUrl": "/tenants/fenecon/fenecon-logo.png",
+  "shell": "default",
+  "status": "active",
+  "receivesFullBom": true,
+  "_note": "Seeded from the legacy fenecon repo config.js. THREE SIGN-IN DOMAINS fold to this one orgId: fenecon.com, fenecon.de and fenecon.us. That fold is orgAlias() in firestore.rules and storage.rules and is mirrored client-side — see CLAUDE.md. receivesFullBom is true because FENECON is an OEM that RECEIVES quote requests rather than sending them (config.js sets referrals.canRefer to 'admin' for the same reason). vertical is 'oem' per the CLAUDE.md verticals table, NOT the legacy config's type:'developer' — that field predates the vertical model. TRIAL RAN 2026-08-03 + 30 DAYS AND EXPIRED 2026-09-01; lockOnExpiry was false, so they were never locked out. Price the account or extend the trial."
+}
