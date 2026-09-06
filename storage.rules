@@ -197,6 +197,25 @@ service firebase.storage {
       allow write: if signedIn() && okFile();
     }
 
+    /* -------- CREDIT PACKAGE — fin_applications/{orgId}/{appId}/{fileName} ----
+       Two years of financials, tax returns, YTD interim statements. The most
+       sensitive files this platform stores.
+
+       READ IS THE APPLICANT AND ClearSky. Nobody else, and unlike
+       fin_projects above — which is deliberately open to any signed-in user
+       because a financing MARKETPLACE wants partners browsing open deals —
+       a credit package is not a listing. It is the applicant's balance sheet,
+       and the difference between those two paths is the whole reason they are
+       separate rules rather than one.
+
+       DELETE IS ClearSky ONLY. An applicant removing a document after
+       submission changes what the lender was given without a trace. */
+    match /fin_applications/{orgId}/{appId}/{fileName} {
+      allow read:   if signedIn() && (isAdminDomain() || orgId == userOrg());
+      allow write:  if signedIn() && (isAdminDomain() || orgId == userOrg()) && okFile();
+      allow delete: if isAdminDomain();
+    }
+
     /* -------- Joint development AGREEMENTS  —  jda/{orgId}/{fileName} -------
        The signed paper between ClearSky and one partner: the JDA itself, side
        letters, schedules.

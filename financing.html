@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Apply for financing · ClearSky-OMEGA</title>
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  DLL pricing request. Field-for-field from the Project Intake Sheet, in the
+  sheet's own order and wording, so a completed application can be read
+  side by side with the spreadsheet DLL already works from. Renaming a label
+  to something tidier costs more than it saves the moment somebody has to
+  reconcile the two.
+
+  ⚠ WHAT THIS PAGE HANDLES. Two years of financials, tax returns, YTD
+  interim statements and loans coming due. The rules put fin_applications
+  and its Storage path behind own-org-plus-ClearSky and nothing else — not
+  isConsoleViewer, not isOmegaStaff, not the JV portal. Read the block in
+  firestore.rules before widening anything here.
+
+  SUBMITTED IS FINAL for the applicant. Draft saves as often as you like;
+  once sent, only ClearSky moves it on. An application the applicant can
+  revise after the lender has it is a draft with a send button.
+-->
+<style>
+:root{--navy:#0A1628;--blue:#0070F2;--teal:#00A9A4;--line:#E1E6EC;--ink:#0F2733;--mut:#6B7C8C;--bg:#F6F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.5 'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{background:var(--navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top a{color:#9fd4ff;text-decoration:none;font-weight:600;font-size:13px}
+.top h1{margin:0;font-size:16px;font-weight:700}
+.wrap{max-width:960px;margin:0 auto;padding:22px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+.card h2{margin:0 0 2px;font-size:14px}
+.sub{color:var(--mut);font-size:12.5px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:4px}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:#fff}
+textarea{min-height:72px;resize:vertical}
+.req label::after{content:' *';color:#E0574F}
+button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:10px 16px;font:600 13px inherit;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:12.5px;color:var(--mut);margin-top:10px;min-height:18px}
+.docs li{margin-bottom:4px;font-size:13px}
+.filerow{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #EEF1F4;font-size:13px}
+.note{background:#FFF8E6;border:1px solid #F0DDA8;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:14px}
+.bar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:12px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media (max-width:640px){ .wrap{padding:14px} .card{padding:14px} }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="/" id="back">&#8592; Portal</a>
+  <h1>Apply for financing</h1>
+  <span style="margin-left:auto;font-size:12.5px;opacity:.85" id="who"></span>
+</div>
+
+<div class="wrap">
+  <div class="note">
+    Goes to <b>DLL</b> as a pricing request. Everything below mirrors their intake sheet.
+    Save a draft as often as you like — <b>once submitted it is final on your side</b>, and ClearSky
+    takes it from there.
+  </div>
+
+  <div class="card">
+    <h2>Request</h2>
+    <p class="sub">Indicative gives a ballpark. Executable is a quotable number and needs the credit package below.</p>
+    <div class="grid">
+      <div class="req"><label>Request type</label>
+        <select id="requestType"><option value="indicative">Indicative</option><option value="executable">Executable</option></select></div>
+      <div class="req"><label>Financial product requested</label>
+        <select id="product"><option>Loan</option><option>Capital Lease</option><option>Operating Lease</option><option>PPA</option><option>Other</option></select></div>
+      <div class="req"><label>Desired contract term (months)</label><input id="termMonths" type="number" min="0" placeholder="e.g. 84"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Customer</h2>
+    <p class="sub">The legal entity that would sign, not the trading name.</p>
+    <div class="grid">
+      <div class="req"><label>Customer legal entity name</label><input id="legalName" type="text"></div>
+      <div><label>Legal entity state of incorporation</label><input id="incState" type="text" placeholder="e.g. Delaware"></div>
+      <div><label>Legal entity website</label><input id="website" type="text" placeholder="https://"></div>
+      <div><label>Legal entity phone number</label><input id="phone" type="text"></div>
+      <div><label>Customer industry</label><input id="industry" type="text"></div>
+      <div style="grid-column:1/-1"><label>Customer HQ address</label><input id="hqAddress" type="text"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Project</h2>
+    <div class="grid">
+      <div class="req" style="grid-column:1/-1"><label>Project address</label><input id="projectAddress" type="text"></div>
+      <div style="grid-column:1/-1"><label>Type of facility / business description</label><textarea id="facilityType"></textarea></div>
+      <div style="grid-column:1/-1"><label>Technology / scope of work</label><textarea id="scope"></textarea></div>
+      <div class="req"><label>Project cost — financed amount ($)</label><input id="financedAmount" type="number" min="0"></div>
+      <div><label>Contractor name</label><input id="contractor" type="text"></div>
+      <div><label>Vendor fee (fixed or % of project cost)</label><input id="vendorFee" type="text"></div>
+    </div>
+    <p class="sub" style="margin:10px 0 0">
+      <b>Do not subtract ITC or incentives from the financed amount.</b> DLL finances the gross project
+      cost — netting the credit down here understates the request and the pricing comes back wrong.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>ITC &amp; depreciation</h2>
+    <p class="sub">Whether these are retained by the customer or by DLL is part of what is being priced. Estimates are fine; say so if they are rough.</p>
+    <div class="grid">
+      <div><label>Est. annual production (kWh)</label><input id="annualKwh" type="number" min="0"></div>
+      <div><label>% energy consumption offset</label><input id="offsetPct" type="number" min="0" max="100"></div>
+      <div><label>Est. annual energy savings (year 1, $)</label><input id="savingsY1" type="number" min="0"></div>
+      <div><label>Est. ITC (%)</label><input id="itcPct" type="number" min="0" max="100" placeholder="30"></div>
+      <div><label>Est. ITC amount ($)</label><input id="itcAmount" type="number" min="0"></div>
+      <div><label>Est. SREC (paid over 7 years, $)</label><input id="srec" type="number" min="0"></div>
+      <div><label>Est. federal and state depreciation ($)</label><input id="depreciation" type="number" min="0"></div>
+      <div><label>ITC &amp; depreciation retained by</label>
+        <select id="itcHolder"><option value="">— not decided —</option><option value="customer">Customer</option><option value="dll">DLL</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Timing</h2>
+    <div class="grid">
+      <div><label>Projected contract signing date (NTP)</label><input id="ntpDate" type="date"></div>
+      <div><label>Estimated project completion date (COD)</label><input id="codDate" type="date"></div>
+      <div><label>Construction financing / deferral period needed</label>
+        <select id="deferral"><option value="no">No</option><option value="yes">Yes</option></select></div>
+      <div><label>Deferral period (months, 3–12)</label><input id="deferralMonths" type="number" min="0" max="12"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Credit package</h2>
+    <p class="sub">Under $250k and auto-approved needs no documents. Over $250k, DLL asks for all of the below.</p>
+    <div class="grid">
+      <div style="grid-column:1/-1"><label>Financials available (customer or parent company)</label><input id="financialsAvailable" type="text" placeholder="e.g. 2024 + 2023 reviewed, YTD through August"></div>
+      <div style="grid-column:1/-1"><label>Loans / mortgages / LOC coming due within the term</label><textarea id="debtComingDue" placeholder="Amount, lender and maturity — or 'none'"></textarea></div>
+    </div>
+    <ul class="docs" style="margin:14px 0 6px;padding-left:18px;color:var(--mut)">
+      <li>Project scope / proposal</li>
+      <li>Company mission</li>
+      <li>Additional supporting info</li>
+      <li><b>Credit:</b> 2 years financials (P&amp;L and balance sheet) — <i>or</i> 2 years audited — <i>or</i> 2 years tax returns</li>
+      <li><b>Plus</b> YTD interim financials</li>
+    </ul>
+    <div id="files"></div>
+    <div style="margin-top:10px">
+      <input type="file" id="file" multiple style="font-size:12.5px">
+      <button class="ghost" onclick="upload()" id="upBtn">Attach</button>
+      <div class="msg" id="upMsg"></div>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <button class="ghost" onclick="save('draft')" id="draftBtn">Save draft</button>
+  <button onclick="save('submitted')" id="sendBtn">Submit to DLL</button>
+  <span class="msg" id="msg" style="margin:0"></span>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+'use strict';
+var cfg = (window.CLEARSKY_CONFIG || {});
+firebase.apps.length || firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
+var ME = null, ORG = '', APP_ID = null, PROJECT_ID = null, FILES = [];
+
+function q(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
+function num(id){ var v=q(id).value; return v===''?null:Number(v); }
+function str(id){ return String(q(id).value||'').trim(); }
+
+/* Every field on the sheet, keyed the way the sheet words it. */
+function collect(){
+  return {
+    requestType:str('requestType'), product:str('product'), termMonths:num('termMonths'),
+    legalName:str('legalName'), incState:str('incState'), website:str('website'),
+    phone:str('phone'), industry:str('industry'), hqAddress:str('hqAddress'),
+    projectAddress:str('projectAddress'), facilityType:str('facilityType'), scope:str('scope'),
+    financedAmount:num('financedAmount'), contractor:str('contractor'), vendorFee:str('vendorFee'),
+    annualKwh:num('annualKwh'), offsetPct:num('offsetPct'), savingsY1:num('savingsY1'),
+    itcPct:num('itcPct'), itcAmount:num('itcAmount'), srec:num('srec'),
+    depreciation:num('depreciation'), itcHolder:str('itcHolder'),
+    ntpDate:str('ntpDate'), codDate:str('codDate'),
+    deferral:str('deferral'), deferralMonths:num('deferralMonths'),
+    financialsAvailable:str('financialsAvailable'), debtComingDue:str('debtComingDue')
+  };
+}
+function fill(d){
+  Object.keys(d||{}).forEach(function(k){ var el=q(k); if(el && d[k]!=null) el.value=d[k]; });
+}
+
+auth.onAuthStateChanged(function(u){
+  if(!u){ location.href='/'; return; }
+  ME=u; ORG=orgOf(u.email);
+  q('who').textContent = u.email + ' · ' + ORG;
+  var p = new URLSearchParams(location.search);
+  PROJECT_ID = p.get('project') || null;
+  APP_ID     = p.get('app') || null;
+  if (APP_ID) loadApp(); else if (PROJECT_ID) prefillFromProject();
+});
+
+/* Prefill from the project the editor came from. Address and cost only —
+   guessing a customer's legal entity from a project name is the kind of
+   help that produces a wrong name on a credit application. */
+function prefillFromProject(){
+  db.collection('projects').doc(PROJECT_ID).get().then(function(d){
+    if(!d.exists) return;
+    var v=d.data()||{};
+    if(v.address) q('projectAddress').value=v.address;
+    if(v.capex)   q('financedAmount').value=v.capex;
+    if(v.bessKwh) q('annualKwh').placeholder='sized from '+v.bessKwh+' kWh';
+  }).catch(function(){});
+}
+
+function loadApp(){
+  db.collection('fin_applications').doc(APP_ID).get().then(function(d){
+    if(!d.exists) return;
+    var v=d.data()||{};
+    fill(v.form||{});
+    FILES = v.files||[];
+    renderFiles();
+    if(v.status && v.status!=='draft'){
+      q('draftBtn').disabled=true; q('sendBtn').disabled=true;
+      q('msg').textContent='Submitted '+(v.submittedAt&&v.submittedAt.toDate?v.submittedAt.toDate().toLocaleDateString():'')+' — locked. ClearSky is working it.';
+      document.querySelectorAll('input,select,textarea,#upBtn').forEach(function(el){ el.disabled=true; });
+    }
+  }).catch(function(e){ q('msg').textContent='Could not load — '+e.message; });
+}
+
+function renderFiles(){
+  q('files').innerHTML = FILES.length
+    ? FILES.map(function(f){ return '<div class="filerow"><span>📄</span><a href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.name)+'</a></div>'; }).join('')
+    : '<div class="sub" style="margin:0">No documents attached yet.</div>';
+}
+
+/* Files land under the application id, so the credit package travels with the
+   application rather than with the project — a project can raise more than
+   one request and their packages must not merge. */
+function upload(){
+  var f = q('file').files;
+  if(!f.length){ q('upMsg').textContent='Choose a file first.'; return; }
+  if(!APP_ID){ q('upMsg').textContent='Save a draft first — the documents attach to the application.'; return; }
+  q('upMsg').textContent='Uploading…';
+  var jobs = Array.prototype.map.call(f, function(file){
+    var ref = storage.ref('fin_applications/'+ORG+'/'+APP_id_safe()+'/'+file.name);
+    return ref.put(file).then(function(){ return ref.getDownloadURL(); })
+              .then(function(url){ FILES.push({ name:file.name, url:url, at:Date.now() }); });
+  });
+  Promise.all(jobs).then(function(){
+    return db.collection('fin_applications').doc(APP_ID).set({ files:FILES }, { merge:true });
+  }).then(function(){
+    q('upMsg').textContent='Attached.'; q('file').value=''; renderFiles();
+  }).catch(function(e){ q('upMsg').textContent='Upload failed — '+e.message; });
+}
+function APP_id_safe(){ return String(APP_ID).replace(/[^A-Za-z0-9_-]/g,'_'); }
+
+function save(status){
+  var form = collect();
+  if(status==='submitted'){
+    if(!form.legalName || !form.projectAddress || !form.financedAmount){
+      q('msg').textContent='Legal entity, project address and financed amount are needed before this can go to DLL.';
+      return;
+    }
+    if(!window.confirm('Submit to DLL?\n\nOnce sent you cannot edit it — ClearSky takes it from there.')) return;
+  }
+  q('msg').textContent='Saving…';
+  var FV = firebase.firestore.FieldValue;
+  var doc = {
+    orgId: ORG,
+    projectId: PROJECT_ID || null,
+    submittedByEmail: String(ME.email||'').toLowerCase(),
+    submittedByName: ME.displayName || '',
+    status: status,
+    form: form,
+    files: FILES,
+    updatedAt: FV.serverTimestamp()
+  };
+  if(status==='submitted') doc.submittedAt = FV.serverTimestamp();
+
+  var ref = APP_ID ? db.collection('fin_applications').doc(APP_ID)
+                   : db.collection('fin_applications').doc();
+  if(!APP_ID){ APP_ID = ref.id; doc.createdAt = FV.serverTimestamp(); }
+  ref.set(doc, { merge:true }).then(function(){
+    if(status==='submitted'){
+      q('msg').textContent='Submitted. ClearSky will send the package to DLL.';
+      document.querySelectorAll('input,select,textarea,#upBtn,#draftBtn,#sendBtn').forEach(function(el){ el.disabled=true; });
+    } else {
+      q('msg').textContent='Draft saved. You can attach documents now.';
+      var u=new URL(location.href); u.searchParams.set('app',APP_ID); history.replaceState({},'',u);
+    }
+  }).catch(function(e){ q('msg').textContent='Could not save — '+e.message; });
+}
+</script>
+</body>
+</html>

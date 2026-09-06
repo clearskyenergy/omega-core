@@ -104,6 +104,18 @@ window.addEventListener('unhandledrejection', function(e) {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js" onerror="void 0"></script>
+<script>
+/* Apply for Financing. Carries the project id so the form can prefill the
+   address and cost — and only those two. Guessing a customer's legal entity
+   from a project name is the kind of help that puts a wrong name on a credit
+   application, which is worse than an empty field. */
+function openFinancingApply(){
+  var id = null;
+  try { id = (typeof PROJECT_ID !== 'undefined' && PROJECT_ID)
+           || new URLSearchParams(location.search).get('project'); } catch (e) {}
+  location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
+}
+</script>
 <script src="/omega-caps.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
@@ -2215,6 +2227,10 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openMarketplacePush)" title="Push to Marketplace — file this project into the finance platform as an open deal, attributed to your account and scoped to your organisation."><span class="rb-ico" style="color:#4ADE80">↗</span><span class="rb-lbl">Push to<br>Marketplace</span></button>
+        <!-- Beside Push to Marketplace on purpose: both are ways of taking a
+             finished design outward. The marketplace lists a deal for capital
+             to find; this one asks a named lender for a price. -->
+        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for Financing</span></button>
       </div>
       <div class="rpanel-cap">Marketplace</div>
     </div>

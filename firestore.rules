@@ -1746,6 +1746,82 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ════════════════════════════════════════════════════════════════════════
+       FINANCING APPLICATIONS  —  fin_applications/{appId}
+       ════════════════════════════════════════════════════════════════════════
+       The DLL pricing request raised from the editor's Outputs panel:
+       customer legal entity, project economics, ITC and depreciation
+       estimates, and the credit package.
+
+       ⚠ THE MOST SENSITIVE COLLECTION IN THIS DATABASE. It carries a
+       customer's legal entity, two years of financials, tax returns and any
+       loans coming due. /sites is a prospect list; /referrals is a site and
+       an ask. This is somebody's balance sheet, so it is worth being blunter
+       here than anywhere else about who is deliberately excluded:
+
+         · own org only. NOT isConsoleViewer() — that grants sunesol.com and
+           ogisolar.com a cross-org read and they must never see this.
+         · NOT isOmegaStaff(). A rep works customer queues; a credit file is
+           not a queue. isAdmin() alone, and only because somebody at
+           ClearSky has to send the package to DLL.
+         · NOT isPortalAdmin(). The JV portal has no business in it.
+
+       ── SUBMITTED IS FINAL FOR THE APPLICANT ──
+       An application the applicant can revise after it reaches the lender is
+       not an application, it is a draft with a send button. Editable while
+       'draft'; after that only ClearSky moves it through review.
+
+       ── DELETE IS REFUSED FOR EVERYONE ──
+       Same reasoning as legal_acceptances. A withdrawn application is
+       'withdrawn'; what was asked for and when survives, because that is the
+       half a dispute turns on. */
+    match /fin_applications/{appId} {
+
+      function appOrg() { return resource.data.get('orgId', ''); }
+      function mineApp() {
+        return signedIn() && appOrg() != '' && (appOrg() == userOrg() || ownsDemoBucket(appOrg()));
+      }
+      /* Enumerated because an unknown status drops the application out of
+         every filtered view the console builds — visible nowhere rather than
+         refused, which is the worse of the two failures. */
+      function staffStatus(x) {
+        return x in ['submitted', 'in_review', 'priced', 'declined', 'funded', 'withdrawn'];
+      }
+
+      allow read: if mineApp() || isAdmin();
+
+      /* orgId and submitter pinned to the caller: an application filed under
+         someone else's org lands in their console and gets worked as theirs.
+         Nobody files one that is already priced. */
+      allow create: if signedIn()
+                    && request.resource.data.orgId is string
+                    && (request.resource.data.orgId == userOrg()
+                        || ownsDemoBucket(request.resource.data.orgId))
+                    && request.resource.data.submittedByEmail is string
+                    && request.resource.data.submittedByEmail.lower()
+                         == request.auth.token.email.lower()
+                    && request.resource.data.status in ['draft', 'submitted'];
+
+      /* The applicant, while it is still theirs. orgId pinned so a draft
+         cannot move between tenants on its way to submission. */
+      allow update: if mineApp()
+                    && resource.data.get('status', 'draft') == 'draft'
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.status in ['draft', 'submitted'];
+
+      /* ClearSky works it from there, and the application BODY is pinned: a
+         lender's file the platform can edit after submission is not evidence
+         of what was asked for. Only the workflow fields move. */
+      allow update: if isAdmin()
+                    && request.resource.data.orgId == resource.data.orgId
+                    && staffStatus(request.resource.data.status)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'dllRef', 'dllSentAt', 'reviewNote',
+                                   'pricedAt', 'decidedAt', 'updatedAt', 'activity']);
+
+      allow delete: if false;
+    }
+
     /* ============================================================
        COMED CAPACITY PIPELINE  —  sites
        ------------------------------------------------------------
