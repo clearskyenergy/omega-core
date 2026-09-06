@@ -562,6 +562,18 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         <span>Dashboard</span>
       </a>
+      <!-- My Applications. On the dashboard this is painted by
+           _paintSideApps(), which depends on five of that page's internals
+           (_qualifying, _required, _pinned, DASH_MAX, _withOrg). Porting that
+           to two more pages would be five more things to keep in step, so
+           this builds the same list from OMEGATools' public API instead —
+           same tools, same hrefs, no shared private state. -->
+      <button class="sn-item sn-toggle" data-sn="apps" onclick="snApps(event)" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+        <span>My Applications</span>
+        <svg class="sn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="sn-subnav" id="sn-apps-list"></div>
       <a class="sn-item active" data-sn="projects" href="/projects.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         <span>Projects</span>
@@ -1069,6 +1081,47 @@ async function createProject(){
     firebase.auth().onAuthStateChanged(function (u) { if (u && u.email) gate(u.email); });
   }
   start();
+})();
+</script>
+<script>
+/* Populates the My Applications submenu from OMEGATools. Unlocked tools only,
+   so the list matches what the tenant can actually open — a menu offering
+   something that refuses on click is worse than a shorter menu. */
+(function () {
+  var MAX = 10;
+  function paint(){
+    var host = document.getElementById('sn-apps-list');
+    if (!host || typeof OMEGATools === 'undefined') return;
+    var ws = window.OMEGA_WORKSPACE || (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant) || null;
+    var tools, html = '', n = 0;
+    try { tools = OMEGATools.all(); } catch (e) { return; }
+    for (var i = 0; i < tools.length && n < MAX; i++) {
+      var t = tools[i];
+      if (t.soon) continue;
+      try { if (ws && OMEGATools.isUnlocked && !OMEGATools.isUnlocked(t, ws)) continue; } catch (e) {}
+      var href = null;
+      try { href = OMEGATools.hrefFor(t, ws); } catch (e) {}
+      /* Tools with an action (the editor's new-project flow) have no href —
+         they belong to the dashboard, so link there rather than nowhere. */
+      if (!href) href = '/';
+      html += '<a class="sn-app" href="' + href + '"><span class="sn-app-dot"></span>'
+            + String(t.name || t.key).replace(/</g,'&lt;') + '</a>';
+      n++;
+    }
+    host.innerHTML = html || '<a class="sn-app" href="/marketplace.html"><span class="sn-app-dot"></span>Browse marketplace</a>';
+  }
+  window.snApps = function (e) {
+    if (e) e.preventDefault();
+    var btn = e && e.currentTarget, list = document.getElementById('sn-apps-list');
+    if (!list) return;
+    var open = list.style.display === 'block';
+    list.style.display = open ? 'none' : 'block';
+    if (btn) btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+  };
+  function boot(){ paint(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  window.addEventListener('omega:entitlements', paint);
+  window.addEventListener('omega:tenant', paint);
 })();
 </script>
 </body>

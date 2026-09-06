@@ -37,7 +37,28 @@
   if (location.hash.indexOf('omega_sso=') < 0) return;   // normal visit: inert
   var s = document.createElement('style');
   s.id = 'omega-sso-veil';
-  s.textContent = '#auth-screen{visibility:hidden!important}';
+  s.textContent = '/* ── BOOT ─────────────────────────────────────────────────────────────────
+   The sign-in screen used to be the default paint: it rendered, then
+   onAuthStateChanged fired a moment later and hid it. Every signed-in visit
+   flashed a login form on the way in, which reads as "it logged me out".
+
+   Nothing is shown until auth answers. body carries .auth-ready once it has,
+   and .signed-out only when the answer was no.
+
+   THE SHELL IS HIDDEN WHILE SIGNED OUT TOO. #auth-screen is a normal block in
+   flow with min-height:100vh, so the sidebar and app body sat directly BELOW
+   it — you could scroll straight past the login into the workspace chrome. */
+#boot-splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0B1E35 0%,#1B4F8A 50%,#0D2440 100%)}
+#boot-splash img{height:74px;width:auto;opacity:.96;animation:bootPulse 1.6s ease-in-out infinite}
+@keyframes bootPulse{0%,100%{opacity:.45;transform:scale(.985)}50%{opacity:1;transform:scale(1)}}
+body.auth-ready #boot-splash{display:none}
+body:not(.auth-ready) #auth-screen,
+body:not(.auth-ready) #side-nav,
+body:not(.auth-ready) #app-body{visibility:hidden}
+body.signed-out #side-nav,
+body.signed-out #app-body{display:none !important}
+#auth-screen{visibility:hidden!important}';
   document.documentElement.appendChild(s);
   setTimeout(function () {
     var v = document.getElementById('omega-sso-veil');
@@ -1416,6 +1437,12 @@ window._omegaReady = function(){
 </script>
 
 <!-- ══════════════ AUTH SCREEN (UNCHANGED — Google sign-in + domain restriction preserved) ══════════════ -->
+<!-- Shown until auth answers. The mark, not a spinner: this is the same
+     brand the workspace opens with, so the transition reads as loading
+     rather than as a different page. -->
+<div id="boot-splash"><img src="/clearsky-omega-mark-white.png" alt="ClearSky-OMEGA"
+     onerror="this.style.display='none'"></div>
+
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
@@ -2610,6 +2637,11 @@ function revealJointDevNav(email){
 
 auth.onAuthStateChanged(user => {
   if (window._omegaReady) window._omegaReady();
+  /* Auth has answered — reveal whichever side of it applies. Set before the
+     branches so an early return still leaves a usable page rather than the
+     splash forever. */
+  document.body.classList.add('auth-ready');
+  document.body.classList.toggle('signed-out', !user);
   if (user) {
     const email = user.email || '';
     // Resolve which registered workspace this user belongs to, by email domain.
