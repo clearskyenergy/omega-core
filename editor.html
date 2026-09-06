@@ -123655,6 +123655,48 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
   }
 
   /* ------------------------------------------------------------------ *
+   *  PLANNING BANDS FOR AN UNMEASURED DURATION                          *
+   *                                                                      *
+   *  Used ONLY where a verified pack has no duration for that permit.    *
+   *  A measured duration always wins and is never overwritten.           *
+   *                                                                      *
+   *  These are review-type bands, not jurisdiction facts, and they are   *
+   *  labelled as assumptions in every output. The spread is wide on      *
+   *  purpose: a discretionary hearing running four to nine months is the *
+   *  honest shape of that process, and quoting it as a single number     *
+   *  would be a different kind of lie from quoting it as zero.           *
+   *                                                                      *
+   *  A DISCRETIONARY ITEM WITH A NOTICED HEARING is the long pole and is *
+   *  banded separately from one decided over the counter. Notice periods,*
+   *  agenda cycles, continuances and a vote do not compress.             *
+   * ------------------------------------------------------------------ */
+  var REVIEW_BANDS = {
+    'diligence':             [2, 8],
+    'design gate':           [4, 12],
+    'ministerial':           [2, 6],
+    'independent authority': [4, 10],
+    'discretionary':         [8, 16],   /* no hearing: staff-level */
+    'discretionary-hearing': [16, 36]   /* noticed hearing and a vote */
+  };
+  var BAND_FALLBACK = [4, 12];
+
+  function bandKeyFor(r) {
+    var rv = String(r.review || '').toLowerCase();
+    if (rv === 'discretionary' && r.hearing) return 'discretionary-hearing';
+    return REVIEW_BANDS[rv] ? rv : null;
+  }
+  function reviewBand(r) {
+    var k = bandKeyFor(r);
+    return k ? REVIEW_BANDS[k] : BAND_FALLBACK;
+  }
+  function reviewBandNote(r) {
+    var k = bandKeyFor(r), b = reviewBand(r);
+    return 'assumed ' + b[0] + '\u2013' + b[1] + ' wks (' +
+           (k ? k.replace('-', ', ') : 'unclassified review') +
+           ') \u2014 planning band, not a jurisdiction fact. Confirm with the AHJ.';
+  }
+
+  /* ------------------------------------------------------------------ *
    *  CRITICAL PATH                                                      *
    *  Forward and backward pass. Anything with zero float is on the path. *
    *  Nobody types this column.                                           *
@@ -123682,18 +123724,41 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
                '. Nothing can start.' };
     }
 
-    /* A PERMIT WITH NO DURATION IS NOT INSTANT.
-       Defaulting an unknown to zero collapsed the matrix: every diligence
-       and design-gate step landed at week 0, drew no bar on the Gantt, and
-       the critical path ran through a chain of zero-length tasks, so the
-       programme read shorter than it is. Unknown stays unknown \u2014 the
-       task is carried and flagged, and the total is reported as a FLOOR
-       with a count of what is missing rather than as a duration. */
-    var dur = {}, es = {}, ef = {}, unknown = [];
+    /* A PERMIT WITH NO DURATION IS NOT INSTANT, and until now it was.
+       The comment here already said so; the code below it still wrote zero,
+       because no caller ever passed unknownWeeks. On the M2 Ingredients
+       matrix that put the Conditional Use Permit \u2014 a noticed public
+       hearing, the thing this engine's own doctrine calls the critical path
+       \u2014 at week 0 with a duration of 0. Treating a CUP as a clearance is
+       named twenty lines above as the single biggest error a permitting
+       schedule can make, and the scheduler was making it.
+
+       It also corrupted the critical path itself. A zero-length task has
+       zero float by construction, so every unpriced step came back
+       critical:true \u2014 not because it drove the programme but because it
+       had no length. The M2 critical path listed three such tasks ahead of
+       the only two that actually moved the date.
+
+       SO AN UNKNOWN DURATION NOW GETS A PLANNING BAND BY REVIEW TYPE, and
+       every one is marked assumed wherever it surfaces. This does not
+       contradict the rule at the top of this file. That rule is about
+       JURISDICTION FACTS \u2014 which agency, what fee, what statutory clock
+       \u2014 and those are lookups that must never be guessed. How long a
+       noticed hearing takes is not a lookup; it is a planning assumption
+       every developer makes, and refusing to make it explicitly does not
+       avoid it. It just makes it silently, at zero.
+
+       The totals are reported BOTH ways: a floor from measured durations
+       only, and a planning estimate that includes the bands. */
+    var dur = {}, es = {}, ef = {}, unknown = [], assumed = [];
     rows.forEach(function (r) {
       if (r.weeks) { dur[r.id] = r.weeks[which]; return; }
       unknown.push(r.id);
-      dur[r.id] = opts.unknownWeeks == null ? 0 : opts.unknownWeeks;
+      if (opts.unknownWeeks != null) { dur[r.id] = opts.unknownWeeks; return; }
+      if (opts.assumeUnknown === false) { dur[r.id] = 0; return; }
+      var band = reviewBand(r);
+      dur[r.id] = band[which];
+      assumed.push(r.id);
     });
     order.forEach(function (id) {
       var s = 0;
@@ -123718,10 +123783,14 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
                earliestStart: es[r.id], earliestFinish: ef[r.id],
                latestStart: ls[r.id], latestFinish: lf[r.id],
                floatWeeks: +fl.toFixed(2), critical: Math.abs(fl) < 1e-9,
-               durationUnknown: !r.weeks };
+               durationUnknown: !r.weeks,
+               durationAssumed: assumed.indexOf(r.id) >= 0,
+               durationBasis: r.weeks ? 'measured'
+                 : (assumed.indexOf(r.id) >= 0 ? reviewBandNote(r) : 'no duration') };
     });
     return { ok: true, totalWeeks: total, tasks: out,
-             unknownDurations: unknown, totalIsFloor: unknown.length > 0,
+             unknownDurations: unknown, assumedDurations: assumed,
+             totalIsFloor: unknown.length > 0,
              criticalPath: out.filter(function (t) { return t.critical; })
                               .sort(function (a, b) { return a.earliestStart - b.earliestStart; })
                               .map(function (t) { return t.id; }),
@@ -123729,18 +123798,48 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
                                 : 'conservative (high end of each range)' };
   }
 
-  /* Both ends of every range, which is the honest way to quote a duration. */
+  /* TWO NUMBERS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS.
+
+     The FLOOR counts only durations a verified pack actually measured. It is
+     the number you can defend line by line, and it is always too short,
+     because the permits nobody has timed are usually the slow ones.
+
+     The PLAN adds the review-type bands for those. It is what a schedule has
+     to say to be usable, and every assumption in it is named.
+
+     Quoting only the floor is how a CUP ends up on a programme at zero
+     weeks. Quoting only the plan hides which parts are evidence. */
   function range(rows) {
     var lo = schedule(rows, { use: 'low' }), hi = schedule(rows, { use: 'high' });
     if (!lo.ok) return lo;
-    return { ok: true, lowWeeks: lo.totalWeeks, highWeeks: hi.totalWeeks,
+    var floorLo = schedule(rows, { use: 'low',  assumeUnknown: false });
+    var floorHi = schedule(rows, { use: 'high', assumeUnknown: false });
+
+    return { ok: true,
+             /* headline = the planning estimate, assumptions included */
+             lowWeeks: lo.totalWeeks, highWeeks: hi.totalWeeks,
              criticalPath: hi.criticalPath, low: lo, high: hi,
+
+             /* the defensible subset */
+             measuredLowWeeks: floorLo.ok ? floorLo.totalWeeks : null,
+             measuredHighWeeks: floorHi.ok ? floorHi.totalWeeks : null,
+
              unknownDurations: hi.unknownDurations,
+             assumedDurations: hi.assumedDurations,
              totalIsFloor: hi.totalIsFloor,
+             basisNote: hi.assumedDurations && hi.assumedDurations.length
+               ? hi.assumedDurations.length + ' of ' + rows.length + ' permits carry no ' +
+                 'measured duration and are scheduled on a review-type planning band, ' +
+                 'marked as assumed on every row: ' + hi.assumedDurations.join(', ') + '. ' +
+                 'On measured durations alone the programme is ' +
+                 (floorHi.ok ? floorHi.totalWeeks : '?') + ' weeks, but that figure ' +
+                 'silently treats every unmeasured permit as instantaneous and should ' +
+                 'not be quoted on its own.'
+               : 'Every permit carries a measured duration from a verified pack.',
              floorNote: hi.totalIsFloor
-               ? hi.unknownDurations.length + ' permit(s) carry no duration, so ' +
-                 'they contribute nothing to these totals. The programme is at ' +
-                 'least this long and no shorter \u2014 it is a floor, not an estimate.'
+               ? hi.unknownDurations.length + ' permit(s) have no duration in the pack. ' +
+                 'They are scheduled on a planning band rather than dropped, so the ' +
+                 'programme reflects them \u2014 confirm each with the AHJ.'
                : null };
   }
 
