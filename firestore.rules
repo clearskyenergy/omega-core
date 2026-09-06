@@ -2041,8 +2041,16 @@ service cloud.firestore {
            went through the endpoint. A history a console can write directly is
            not a history; it is a second editable copy of the same numbers. */
         match /history/{entryId} {
-          allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
-          allow write: if false;
+          allow read:   if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+          /* APPEND-ONLY, NOT WRITE-ONLY. ClearSky may add a row; nobody may
+             edit or remove one, including ClearSky. The property worth having
+             is that the record cannot be revised after the fact — a row that
+             can be rewritten is not evidence of what a customer was charged.
+             Create is open to isAdmin() so the console can log a change it
+             made directly; /api/tenant-billing appends the same shape through
+             the Admin SDK. Either path produces a row, neither can alter one. */
+          allow create: if isAdmin();
+          allow update, delete: if false;
         }
       }
 

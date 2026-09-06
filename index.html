@@ -2323,7 +2323,9 @@ window._omegaReady = function(){
       <div class="acct-row"><span class="k">Plan</span><span class="v" id="acct-tier">—</span></div>
       <div class="acct-row"><span class="k">Add-ons</span><span class="v" id="acct-addons">—</span></div>
       <div class="acct-row"><span class="k">Amount due</span><span class="v" id="acct-amt">—</span></div>
+      <div class="acct-row"><span class="k">Paid to date</span><span class="v" id="acct-paid">—</span></div>
       <div class="acct-row"><span class="k">Next payment</span><span class="v" id="acct-due">—</span></div>
+      <div class="acct-row" id="acct-note-row" style="display:none"><span class="k">Note</span><span class="v" id="acct-note">—</span></div>
       <div id="acct-billing-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px">
         <a id="acct-pay" class="acct-btn" href="#" target="_blank" rel="noopener" style="display:none;text-decoration:none;text-align:center">Pay now</a>
         <button class="acct-btn" id="acct-portal" onclick="openBillingPortal()" style="display:none">Manage billing &amp; receipts</button>
@@ -3779,7 +3781,16 @@ function loadBilling(){
     setText('acct-tier',   b.tier || 'not yet priced');
     setText('acct-addons', (b.addons && b.addons.length) ? b.addons.join(', ') : 'none');
     setText('acct-amt',    b.amountDue == null ? '—' : _money(b.amountDue));
+    /* Paying half up front is the ordinary case here, and without this row the
+       account reads "nothing due" while money has already changed hands —
+       which is the version a customer disputes. */
+    setText('acct-paid',   b.amountPaid == null ? '—'
+                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + b.lastPaidAt) : ''));
     setText('acct-due',    b.subscriptionDue || (b.trialEndsAt ? ('trial ends ' + b.trialEndsAt) : '—'));
+    if (b.note){
+      setText('acct-note', b.note);
+      var nr = document.getElementById('acct-note-row'); if (nr) nr.style.display = '';
+    }
 
     var pay = document.getElementById('acct-pay');
     if (pay && b.paymentLink){ pay.href = b.paymentLink; pay.style.display = ''; }

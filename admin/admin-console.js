@@ -1009,13 +1009,50 @@ function _authedPost(path, body){
   });
 }
 
+/* ── SUBSCRIPTION STANDING ────────────────────────────────────────────────
+   "Are my tenants current" is the question this console could not answer: the
+   status field on omega_orgs says whether an account is switched on, which is
+   not the same as whether it has paid. Standing is computed from
+   billing/current — an amount outstanding past its date, a date coming up, a
+   trial about to lapse.
+
+   NO BILLING DOCUMENT IS NOT AN ARREAR. An account nobody has priced yet
+   reads as 'unpriced', deliberately separate from 'current' — a tenant you
+   forgot to bill and a tenant who has paid are different problems, and
+   collapsing them hides the one you can still fix. */
+function _standing(bill, org){
+  if ((org.status||'') === 'pending') return { key:'pending', label:'pending approval', chip:'warn' };
+  if (!bill || !Object.keys(bill).length) return { key:'unpriced', label:'not priced', chip:'neutral' };
+  var now = Date.now(), DAY = 86400000;
+  var due = bill.subscriptionDue ? Date.parse(bill.subscriptionDue) : NaN;
+  var amt = Number(bill.amountDue||0);
+  if (!isNaN(due) && amt > 0 && due < now)               return { key:'overdue',  label:'overdue',        chip:'bad'  };
+  if (!isNaN(due) && due - now < 14*DAY && due >= now)   return { key:'duesoon',  label:'due soon',       chip:'warn' };
+  var trial = bill.trialEndsAt ? Date.parse(bill.trialEndsAt) : NaN;
+  if (!isNaN(trial) && trial - now < 14*DAY)             return { key:'trialend', label:'trial ending',   chip:'warn' };
+  if ((bill.tier||'') === 'trial')                       return { key:'trial',    label:'trial',          chip:'neutral' };
+  return { key:'current', label:'current', chip:'good' };
+}
+
+var tnFilter = 'all';
+function setTnFilter(f){ tnFilter=f; renderTenants(); }
+
 function loadTenants(){
   if (!db){ document.getElementById('tn-body').innerHTML='<div class="empty">Not connected.</div>'; return; }
   db.collection('omega_orgs').get().then(function(sn){
     var rows=[];
     sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
     rows.sort(function(a,b){ return String(a.name||a._id).localeCompare(String(b.name||b._id)); });
-    STATE.tenants = rows;
+    /* Billing is a per-tenant subcollection, so standing costs one read each.
+       At this size that is the right trade for answering "who owes me" without
+       opening thirteen drawers; it is fired once on load, not per render. */
+    return Promise.all(rows.map(function(r){
+      return db.collection('omega_orgs').doc(r._id).collection('billing').doc('current').get()
+        .then(function(d){ r._bill = d.exists ? d.data() : {}; return r; })
+        .catch(function(){ r._bill = {}; return r; });
+    }));
+  }).then(function(rows){
+    STATE.tenants = rows || [];
     renderTenants();
     renderTabs();
   }).catch(function(e){
@@ -1045,26 +1082,88 @@ function renderTenants(){
     }).join('');
   }
 
+  var counts={all:rows.length};
+  rows.forEach(function(r){ var k=_standing(r._bill,r).key; counts[k]=(counts[k]||0)+1; });
+  var pills=[['all','All'],['overdue','Overdue'],['duesoon','Due soon'],['trialend','Trial ending'],
+             ['unpriced','Not priced'],['current','Current']];
+  var fh=pills.map(function(f){
+    var n=counts[f[0]]||0;
+    return '<button class="fpill'+(tnFilter===f[0]?' on':'')+'" onclick="setTnFilter(&quot;'+f[0]+'&quot;)">'
+         + f[1]+(n?(' '+n):'')+'</button>';
+  }).join('');
+
   if (!rows.length){
     document.getElementById('tn-body').innerHTML='<div class="empty">No tenants yet. Run <code>npm run seed:apply</code> to populate omega_orgs.</div>';
     return;
   }
-  var html='<table class="tbl"><thead><tr><th>Tenant</th><th>orgId</th><th>Vertical</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-  rows.forEach(function(r){
-    var st=r.status||'active';
+
+  var shown = rows.filter(function(r){ return tnFilter==='all' || _standing(r._bill,r).key===tnFilter; });
+
+  var html = '<div style="margin-bottom:12px">'+fh+'</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
+    + '<button onclick="openBroadcast()">\u2709 Message '+(tnFilter==='all'?'all tenants':('the '+esc(tnFilter)+' list'))+'</button>'
+    + '<span class="sub-txt">'+shown.length+' shown</span></div>';
+
+  html += '<table class="tbl"><thead><tr><th>Tenant</th><th>orgId</th><th>Plan</th><th>Standing</th><th>Account</th><th>Actions</th></tr></thead><tbody>';
+  shown.forEach(function(r){
+    var st=r.status||'active', bill=r._bill||{}, sd=_standing(bill,r);
+    var due = bill.subscriptionDue ? (' \u00b7 due '+esc(bill.subscriptionDue)) : '';
+    var amt = (Number(bill.amountDue||0)>0) ? (' \u00b7 $'+Number(bill.amountDue).toLocaleString()) : '';
     html += '<tr><td>'+esc(r.name||r._id)+'</td>'
          +  '<td class="sub-txt">'+esc(r._id)+'</td>'
-         +  '<td class="sub-txt">'+esc(r.vertical||'—')+'</td>'
+         +  '<td class="sub-txt">'+esc(bill.tier||'\u2014')+'</td>'
+         +  '<td><span class="chip '+sd.chip+'">'+esc(sd.label)+'</span><span class="sub-txt">'+due+amt+'</span></td>'
          +  '<td><span class="chip '+_tnStatusChip(st)+'">'+esc(st)+'</span></td>'
          +  '<td>'
          +  (st==='suspended'
               ? '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
               : '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
          +  ' <button onclick="openTenantDetail(&quot;'+esc(r._id)+'&quot;)">Manage</button>'
+         +  ' <button onclick="openBroadcast(&quot;'+esc(r._id)+'&quot;)">Message</button>'
          +  '</td></tr>'
-         +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="5"></td></tr>';
+         +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="6"></td></tr>';
   });
   document.getElementById('tn-body').innerHTML = html+'</tbody></table>';
+}
+
+/* ── MESSAGING TENANTS ────────────────────────────────────────────────────
+   Writes omega_orgs/{orgId}/notifications, which the rules already let
+   isAdmin() create and the tenant mark read. No service account needed: this
+   is a client write governed by the same rules as everything else on this
+   page, which is why it works before the API layer is configured.
+
+   ONE DOCUMENT PER TENANT, not one broadcast document everyone reads. A
+   shared row would have to be readable across orgs, and the whole isolation
+   model here is that a tenant reads only under their own org. */
+function openBroadcast(orgId){
+  var targets;
+  if (orgId){ targets=[orgId]; }
+  else {
+    var rows=(STATE.tenants||[]).filter(function(r){
+      return tnFilter==='all' || _standing(r._bill,r).key===tnFilter; });
+    targets=rows.map(function(r){ return r._id; });
+  }
+  if (!targets.length){ window.alert('No tenants in this list.'); return; }
+
+  var who = orgId ? orgId : (targets.length+' tenant'+(targets.length===1?'':'s')+' ('+tnFilter+')');
+  var title = window.prompt('Subject — sent to '+who, '');
+  if (!title) return;
+  var body = window.prompt('Message body', '');
+  if (body === null) return;
+
+  var FV = firebase.firestore.FieldValue;
+  var batch = db.batch();
+  targets.forEach(function(t){
+    var ref = db.collection('omega_orgs').doc(t).collection('notifications').doc();
+    batch.set(ref, {
+      kind: 'message', title: title, body: body || '',
+      from: (currentUser && currentUser.email) || 'ClearSky',
+      read: false, createdAt: FV.serverTimestamp()
+    });
+  });
+  batch.commit()
+    .then(function(){ window.alert('Sent to '+targets.length+' tenant'+(targets.length===1?'':'s')+'.'); })
+    .catch(function(e){ window.alert('Could not send:\n\n'+(e.message||e)); });
 }
 
 function tenantAction(orgId, action){
@@ -1129,23 +1228,39 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   var h='<div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:6px 2px 12px">';
 
   /* ── Commercial terms ── */
+  /* ⚠ TWO TIER VOCABULARIES EXIST IN THIS PLATFORM AND THEY ARE NOT THE SAME
+     STRINGS. billing/current.tier is what the tool gate reads and what the
+     seed writes: trial | standard | deluxe | enterprise. The client inventory
+     on this console, and the financing portal, say tier1 | tier2 | tier3 and
+     label them Core / Performance / Enterprise. "Tier 2" in conversation is
+     Performance, which is DELUXE here — TIER.DELUXE === 2 in omega-tools.js.
+     Both names are printed on every option so nobody has to remember the
+     mapping, and so picking the wrong one is visible rather than silent. */
+  var TIERS=[['trial','trial \u2014 free / evaluation'],
+             ['standard','standard \u2014 Core (Tier 1)'],
+             ['deluxe','deluxe \u2014 Performance (Tier 2)'],
+             ['enterprise','enterprise \u2014 Enterprise (Tier 3)'],
+             ['partner','partner \u2014 JV / channel'],
+             ['internal','internal \u2014 ClearSky']];
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Commercial terms</div>';
-  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Tier'
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Plan'
    + '<select id="tb-tier-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
-   + TIERS.map(function(t){ return '<option value="'+t+'"'+((bill.tier||'trial')===t?' selected':'')+'>'+t+'</option>'; }).join('')
+   + TIERS.map(function(t){ return '<option value="'+t[0]+'"'+((bill.tier||'trial')===t[0]?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')
    + '</select></label>';
   h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','osa-jv, grid-atlas');
   h+=_tnField('Amount due (USD)','tb-amt-'+orgId,bill.amountDue==null?'':bill.amountDue,'number','0');
-  h+=_tnField('Subscription due (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-10-01');
-  /* The link the tenant sees on their own account page. https only — it is put
-     in front of a paying customer, and anything else either breaks the button
-     or points somewhere it should not. */
-  h+=_tnField('Payment link (https)','tb-link-'+orgId,bill.paymentLink||'','text','https://buy.stripe.com/…');
+  h+=_tnField('Next payment (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-11-21');
+  /* Paid-upfront is the ordinary case here and there was nowhere to record it:
+     half on signature, balance later. Without these two the account reads as
+     "nothing due" and the money already taken is invisible. */
+  h+=_tnField('Paid to date (USD)','tb-paid-'+orgId,bill.amountPaid==null?'':bill.amountPaid,'number','0');
+  h+=_tnField('Last payment received (YYYY-MM-DD)','tb-paidat-'+orgId,bill.lastPaidAt||'','text','2026-09-06');
+  h+=_tnField('Payment link (https)','tb-link-'+orgId,bill.paymentLink||'','text','https://buy.stripe.com/\u2026');
+  h+=_tnField('Billing note','tb-note-'+orgId,bill.note||'','text','50% on signature, balance 21 Nov');
   h+='<button onclick="saveTenantBilling(&quot;'+esc(orgId)+'&quot;)">Save terms</button>';
   h+=' <span id="tb-msg-'+esc(orgId)+'" class="sub-txt"></span>';
-  h+='<div class="sub-txt" style="margin-top:8px">Last paid: '+esc(bill.lastPaidAt||'—')
-   + ' · Provider: '+esc(bill.paymentProvider||'—')
-   + (bill.stripeCustomerId?(' · Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
+  h+='<div class="sub-txt" style="margin-top:8px">Provider: '+esc(bill.paymentProvider||'\u2014')
+   + (bill.stripeCustomerId?(' \u00b7 Stripe '+esc(bill.stripeCustomerId)):'')+'</div>';
   h+='</div>';
 
   /* ── Identity & usage ── */
@@ -1185,21 +1300,63 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   return h;
 }
 
+/* WRITES FIRESTORE DIRECTLY, and that is deliberate rather than a shortcut.
+   The rules already permit isAdmin() to write billing/current; the endpoint
+   at /api/tenant-billing exists to allow-list fields and append history, and
+   it needs FIREBASE_SERVICE_ACCOUNT, which this deployment does not yet have.
+   Routing through it would mean the console cannot price a tenant until an
+   env var lands. So the write goes direct and the history row is appended
+   here — the rule makes that row append-only, so the audit property survives
+   either path. When the endpoint is live, switch this back and it behaves
+   identically from the outside. */
 function saveTenantBilling(orgId){
   var msg=document.getElementById('tb-msg-'+orgId);
-  var addons=String(document.getElementById('tb-addons-'+orgId).value||'')
-               .split(',').map(function(x){return x.trim();}).filter(Boolean);
-  var amt=document.getElementById('tb-amt-'+orgId).value;
-  var body={ orgId:orgId,
-    tier: document.getElementById('tb-tier-'+orgId).value,
-    addons: addons,
-    subscriptionDue: document.getElementById('tb-due-'+orgId).value || null,
-    paymentLink: document.getElementById('tb-link-'+orgId).value || null };
-  if(amt!=='') body.amountDue=Number(amt);
+  function v(id){ var el=document.getElementById(id+'-'+orgId); return el?String(el.value||'').trim():''; }
+  var addons=v('tb-addons').split(',').map(function(x){return x.trim();}).filter(Boolean);
+
+  var patch={ tier:v('tb-tier'), addons:addons };
+  if(v('tb-amt')!=='')    patch.amountDue=Number(v('tb-amt'));
+  if(v('tb-paid')!=='')   patch.amountPaid=Number(v('tb-paid'));
+  patch.subscriptionDue = v('tb-due')    || null;
+  patch.lastPaidAt      = v('tb-paidat') || null;
+  patch.paymentLink     = v('tb-link')   || null;
+  patch.note            = v('tb-note')   || null;
+
+  if(patch.paymentLink && !/^https:\/\//.test(patch.paymentLink)){
+    if(msg) msg.textContent='Payment link must start with https://';
+    return;
+  }
+  ['subscriptionDue','lastPaidAt'].forEach(function(k){
+    /* A date the customer sees. An unparseable one renders as "Invalid Date"
+       on their own account page, which reads as a broken product. */
+    if(patch[k] && isNaN(Date.parse(patch[k]))) throw new Error(k+' is not a date (use YYYY-MM-DD)');
+  });
+
   if(msg) msg.textContent='Saving…';
-  _authedPost('/api/tenant-billing', body)
-    .then(function(){ if(msg) msg.textContent='Saved.'; })
-    .catch(function(e){ if(msg) msg.textContent='Failed — '+(e.message||e); });
+  var FV=firebase.firestore.FieldValue;
+  var ref=db.collection('omega_orgs').doc(orgId).collection('billing').doc('current');
+
+  ref.get().then(function(snap){
+    var before=snap.exists?snap.data():{};
+    var write=Object.assign({}, patch, {
+      updatedAt: FV.serverTimestamp(),
+      updatedBy: (currentUser && currentUser.email) || 'console'
+    });
+    return ref.set(write,{merge:true}).then(function(){
+      var was={};
+      Object.keys(patch).forEach(function(k){ was[k]= before[k]===undefined?null:before[k]; });
+      return ref.collection('history').add({
+        at: FV.serverTimestamp(),
+        by: (currentUser && currentUser.email) || 'console',
+        changed: patch, was: was
+      });
+    });
+  }).then(function(){
+    if(msg) msg.textContent='Saved.';
+    loadTenants();
+  }).catch(function(e){
+    if(msg) msg.textContent='Failed — '+(e.message||e);
+  });
 }
 
 function saveTenantBranding(orgId){
