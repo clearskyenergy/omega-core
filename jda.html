@@ -81,7 +81,7 @@ select,input[type=text]{padding:6px 9px;border:1px solid var(--cs-border);border
 
   <div class="card">
     <h2>Responsibilities by project</h2>
-    <p class="sub">Who runs what, per co-developed site. Written to the project beside its partner roster, because a JDA says the parties will co-develop — it does not say who runs interconnection on a given address.</p>
+    <p class="sub">Who runs what, per co-developed site — origination through operations. Written to the project beside its partner roster, because a JDA says the parties will co-develop; it does not say who runs interconnection on a given address. Every row starts unassigned, and the unassigned count is the point: on a joint development it is the unasked questions that surface at financial close.</p>
     <div style="margin-bottom:12px">
       <select id="proj" onchange="renderRoles()"><option value="">Select a co-developed project…</option></select>
     </div>
@@ -104,16 +104,119 @@ select,input[type=text]{padding:6px 9px;border:1px solid var(--cs-border);border
    page is at least internally consistent until the real list arrives. The
    stored shape is { orgId: { lead:bool, workstreams:[key] } }, which does not
    change when the labels do. */
-var WORKSTREAMS = [
-  { key:'origination',    label:'Origination' },
-  { key:'predev',         label:'Pre-development' },
-  { key:'design',         label:'Design & engineering' },
-  { key:'interconnection',label:'Interconnection' },
-  { key:'permitting',     label:'Permitting / AHJ' },
-  { key:'finance',        label:'Finance' },
-  { key:'procurement',    label:'Procurement / BOM' },
-  { key:'construction',   label:'Construction' },
-  { key:'om',             label:'O&M' }
+/* ═══════════════════════════════════════════════════════════════════════
+   THE MAP — what a project needs, cradle to operating.
+
+   A BLANK MAP ON PURPOSE. Nothing here is assigned until somebody assigns
+   it; every row starts unowned. The value is the checklist itself — the
+   question "who is doing the will-serve letter" has to be askable before it
+   can be answered, and on a joint development it is the unasked ones that
+   surface at financial close.
+
+   PHASES ARE THE SPINE, not a filing convenience. They run in the order the
+   money and the risk actually move: you screen before you spend, you get site
+   control before you design, you have a will-serve before you promise a load,
+   you close before you build. An item in the wrong phase reads as a task you
+   can defer when it is actually a gate.
+
+   ⚠ THIS IS THE STARTING TAXONOMY, NOT THE FINAL ONE. Brad's map replaces or
+   refines it. The stored shape is independent of the labels — assignments are
+   keyed by the `key` strings below, so renaming a label costs nothing and
+   removing a key only orphans that one row. Keep keys stable once used.
+
+   Compute is deliberately threaded through rather than bolted on the end: an
+   AI/data-centre load changes the interconnection ask, the design, and the
+   offtake, so it appears in each of those phases instead of as one late
+   line item. */
+var PHASES = [
+  { key:'origination', label:'Origination & screening', hint:'Before anyone spends money.', items:[
+    { key:'site-origination',   label:'Site origination / referral' },
+    { key:'grid-screen',        label:'Grid screening — can it be built (Grid Atlas)' },
+    { key:'bankability-screen', label:'Bankability screening — would it fund (OGI)' },
+    { key:'load-screen',        label:'Load / compute screening — is the demand real' },
+    { key:'site-host-id',       label:'Site host identification & first contact' },
+    { key:'parcel-research',    label:'Parcel, owner & title research' }
+  ]},
+  { key:'control', label:'Site control & terms', hint:'You do not design what you cannot hold.', items:[
+    { key:'site-host-terms',    label:'Site host terms — lease, licence or easement' },
+    { key:'land-agreement',     label:'Land agreement — option, lease, purchase' },
+    { key:'title-survey',       label:'Title, ALTA survey & encumbrances' },
+    { key:'environmental',      label:'Environmental — Phase I, wetlands, endangered species' },
+    { key:'zoning-review',      label:'Zoning & land-use review' },
+    { key:'access-rights',      label:'Access, laydown & construction rights' }
+  ]},
+  { key:'interconnection', label:'Interconnection & utility', hint:'The gate that kills the most projects.', items:[
+    { key:'utility-app',        label:'Utility interconnection application' },
+    { key:'will-serve',         label:'Will-serve / service availability letter' },
+    { key:'capacity-alloc',     label:'Hosting-capacity allocation & circuit hold' },
+    { key:'feasibility-study',  label:'Feasibility study' },
+    { key:'sis',                label:'System impact study' },
+    { key:'facilities-study',   label:'Facilities study & cost estimate' },
+    { key:'ia-execution',       label:'Interconnection agreement execution' },
+    { key:'utility-upgrades',   label:'Utility upgrade scope & cost allocation' }
+  ]},
+  { key:'design', label:'Design & engineering', hint:'What actually gets built.', items:[
+    { key:'conceptual-layout',  label:'Conceptual layout & site map' },
+    { key:'one-line',           label:'One-line diagram' },
+    { key:'civil-structural',   label:'Civil & structural design' },
+    { key:'electrical-design',  label:'Electrical detailed design' },
+    { key:'compute-design',     label:'Compute / IT load design & cooling' },
+    { key:'bess-sizing',        label:'BESS sizing & dispatch modelling' },
+    { key:'pe-stamp',           label:'PE stamp & sealed drawings' },
+    { key:'ifc-set',            label:'Issued-for-construction set' }
+  ]},
+  { key:'permitting', label:'AHJ & permitting', hint:'Local, slow, and never optional.', items:[
+    { key:'ahj-research',       label:'AHJ research — who approves what' },
+    { key:'zoning-approval',    label:'Zoning / special use / variance' },
+    { key:'building-permit',    label:'Building permit' },
+    { key:'electrical-permit',  label:'Electrical permit' },
+    { key:'fire-marshal',       label:'Fire marshal & NFPA 855 review' },
+    { key:'stormwater',         label:'Stormwater / grading / SWPPP' },
+    { key:'air-noise',          label:'Air, noise & other local permits' },
+    { key:'inspections',        label:'Inspections & certificate of occupancy' }
+  ]},
+  { key:'commercial', label:'Commercial & contractual', hint:'What the project sells and what it buys.', items:[
+    { key:'offtake',            label:'Offtake — PPA, tolling or capacity agreement' },
+    { key:'compute-offtake',    label:'Compute offtake / colocation terms' },
+    { key:'utility-programs',   label:'Utility programme & incentive enrolment' },
+    { key:'epc-contract',       label:'EPC contract' },
+    { key:'equipment-supply',   label:'Equipment supply & BOM procurement' },
+    { key:'om-agreement',       label:'O&M agreement' },
+    { key:'warranty-terms',     label:'Warranty & performance guarantees' },
+    { key:'insurance',          label:'Insurance & bonding' }
+  ]},
+  { key:'ownership', label:'Ownership & structure', hint:'Who owns what, and who gets paid.', items:[
+    { key:'spv',                label:'SPV / project entity formation' },
+    { key:'ownership-split',    label:'Ownership split & cap table' },
+    { key:'jda-terms',          label:'JDA terms & development fee' },
+    { key:'dev-cost-sharing',   label:'Development cost sharing & reimbursement' },
+    { key:'tax-structure',      label:'Tax equity / ITC transfer structure' },
+    { key:'flip-transfer',      label:'Flip, buy-out & transfer provisions' },
+    { key:'exit',               label:'Exit — sale, hold or recapitalisation' }
+  ]},
+  { key:'funding', label:'Funding', hint:'Committed is a promise; closed is an obligation.', items:[
+    { key:'proforma',           label:'Pro forma & financial model' },
+    { key:'capital-raise',      label:'Capital raise & lender outreach' },
+    { key:'term-sheet',         label:'Term sheet' },
+    { key:'diligence',          label:'Lender / investor diligence' },
+    { key:'financial-close',    label:'Financial close' },
+    { key:'draw-schedule',      label:'Draw schedule & funding mechanics' }
+  ]},
+  { key:'build', label:'Construction & delivery', hint:'Where the money leaves.', items:[
+    { key:'long-lead',          label:'Long-lead procurement' },
+    { key:'mobilisation',       label:'Mobilisation & site prep' },
+    { key:'construction-mgmt',  label:'Construction management' },
+    { key:'commissioning',      label:'Commissioning & testing' },
+    { key:'pto',                label:'PTO / utility energisation' },
+    { key:'as-built',           label:'As-builts & closeout package' }
+  ]},
+  { key:'operate', label:'Operations', hint:'The twenty years after the ribbon.', items:[
+    { key:'om-delivery',        label:'O&M delivery' },
+    { key:'asset-mgmt',         label:'Asset management & reporting' },
+    { key:'performance',        label:'Performance & availability tracking' },
+    { key:'warranty-admin',     label:'Warranty administration & claims' },
+    { key:'compliance',         label:'Ongoing compliance & renewals' }
+  ]}
 ];
 
 var cfg = (window.CLEARSKY_CONFIG || {});
@@ -205,26 +308,51 @@ function loadProjects(){
   });
 }
 
+/* ONE OWNER PER LINE, not a checkbox grid. Sixty-eight items against four
+   organisations is 272 checkboxes, which nobody fills in and nobody reads.
+   The question a JDA has to answer is "whose job is this", which is one
+   choice per row — and an unassigned row is the useful signal, so it is the
+   default and it is counted. */
 function renderRoles(){
   var id=document.getElementById('proj').value;
   var host=document.getElementById('roles');
   if(!id){ host.innerHTML='<div class="empty">Pick a project above.</div>'; return; }
   var p=PROJECTS.filter(function(x){return x._id===id;})[0]; if(!p) return;
-  var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
-  var roles=p.jdaRoles||{};
 
-  var h='<table><thead><tr><th>Organisation</th><th>Lead</th><th>Workstreams</th></tr></thead><tbody>';
-  orgs.forEach(function(o){
-    var r=roles[o]||{}, ws=r.workstreams||[];
-    h+='<tr><td><b>'+esc(o)+'</b>'+(o===p.orgId?' <span class="chip">owner</span>':'')+'</td>'
-     + '<td><input type="checkbox" id="lead-'+esc(o)+'"'+(r.lead?' checked':'')+'></td><td>';
-    WORKSTREAMS.forEach(function(w){
-      h+='<label class="ws"><input type="checkbox" data-org="'+esc(o)+'" data-ws="'+w.key+'"'
-       + (ws.indexOf(w.key)>=0?' checked':'')+'> '+esc(w.label)+'</label>';
+  var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+  var roles=p.jdaRoles||{}, assign=roles.assignments||{};
+
+  var total=0, done=0;
+  PHASES.forEach(function(ph){ ph.items.forEach(function(it){
+    total++; if(assign[it.key] && assign[it.key].org) done++;
+  }); });
+
+  var h='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
+      + '<div><b>'+done+' of '+total+'</b> assigned</div>'
+      + '<label class="ws">Overall lead: <select id="leadOrg">'
+      + '<option value="">— none —</option>'
+      + orgs.map(function(o){ return '<option value="'+esc(o)+'"'+(roles.leadOrg===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')
+      + '</select></label>'
+      + '<button onclick="saveRoles()" style="margin-left:auto">Save responsibilities</button></div>';
+
+  PHASES.forEach(function(ph){
+    var pd=0; ph.items.forEach(function(it){ if(assign[it.key]&&assign[it.key].org) pd++; });
+    h+='<div class="card" style="margin:0 0 14px;padding:14px">'
+     + '<h2 style="font-size:13.5px">'+esc(ph.label)
+     + ' <span class="chip '+(pd===ph.items.length?'ok':pd?'warn':'none')+'">'+pd+'/'+ph.items.length+'</span></h2>'
+     + '<p class="sub" style="margin-bottom:10px">'+esc(ph.hint)+'</p>'
+     + '<table><thead><tr><th style="width:44%">Item</th><th style="width:26%">Responsible</th><th>Note</th></tr></thead><tbody>';
+    ph.items.forEach(function(it){
+      var a=assign[it.key]||{};
+      h+='<tr><td>'+esc(it.label)+'</td>'
+       + '<td><select data-item="'+it.key+'" style="width:100%">'
+       + '<option value="">— unassigned —</option>'
+       + orgs.map(function(o){ return '<option value="'+esc(o)+'"'+(a.org===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')
+       + '</select></td>'
+       + '<td><input type="text" data-note="'+it.key+'" value="'+esc(a.note||'')+'" placeholder="dates, caveats, who signs" style="width:100%"></td></tr>';
     });
-    h+='</td></tr>';
+    h+='</tbody></table></div>';
   });
-  h+='</tbody></table><div style="margin-top:12px"><button onclick="saveRoles()">Save responsibilities</button></div>';
   host.innerHTML=h;
 }
 
@@ -233,23 +361,32 @@ function saveRoles(){
   var msg=document.getElementById('rolesMsg');
   if(!id) return;
   var p=PROJECTS.filter(function(x){return x._id===id;})[0]; if(!p) return;
-  var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
 
-  var out={};
-  orgs.forEach(function(o){
-    var lead=document.getElementById('lead-'+o);
-    var boxes=document.querySelectorAll('input[data-org="'+o.replace(/"/g,'')+'"]:checked');
-    var ws=[]; Array.prototype.forEach.call(boxes,function(b){ ws.push(b.getAttribute('data-ws')); });
-    out[o]={ lead: !!(lead&&lead.checked), workstreams: ws };
+  var assignments={};
+  Array.prototype.forEach.call(document.querySelectorAll('select[data-item]'), function(sel){
+    var key=sel.getAttribute('data-item');
+    var note=document.querySelector('input[data-note="'+key+'"]');
+    var org=sel.value, n=note?String(note.value||'').trim():'';
+    /* An unassigned row with no note is not stored. Writing 68 empty objects
+       per project would make every document mostly padding and the diff on a
+       real change impossible to read. */
+    if(org || n) assignments[key]={ org:org||null, note:n };
   });
 
+  var lead=document.getElementById('leadOrg');
   msg.textContent='Saving…';
   /* jdaRoles only. orgId and orgsInvolved are untouched on purpose — the rule
      requires a collaborator to hand both back unchanged, and a merge that
-     rewrote the roster from a stale copy of the page would silently drop a
+     rewrote the roster from a stale copy of this page would silently drop a
      partner added since it loaded. */
-  db.collection('projects').doc(id).set({ jdaRoles: out }, { merge:true })
-    .then(function(){ p.jdaRoles=out; msg.textContent='Saved.'; })
+  db.collection('projects').doc(id).set({
+    jdaRoles: { leadOrg: (lead&&lead.value)||null, assignments: assignments,
+                updatedAt: new Date().toISOString(), updatedBy: (ME&&ME.email)||'' }
+  }, { merge:true })
+    .then(function(){
+      p.jdaRoles={ leadOrg:(lead&&lead.value)||null, assignments:assignments };
+      msg.textContent='Saved.'; renderRoles();
+    })
     .catch(function(e){ msg.textContent='Could not save — '+e.message; });
 }
 </script>
