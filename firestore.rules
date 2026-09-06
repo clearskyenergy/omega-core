@@ -1432,8 +1432,17 @@ service cloud.firestore {
           );
       }
 
-      allow read:   if resource != null
-                    && mayWorkBoard(resource.data.get('orgId', ''),
+      /* resource IS null WHEN THE DOCUMENT DOES NOT EXIST YET, and a get() on a
+         missing document still evaluates this rule. Requiring resource != null
+         therefore denied the FIRST read of every board — the exact case that
+         matters, because a project has no board until someone opens one. The
+         symptom was "Task board could not load", indistinguishable from a
+         broken rule, on a rule that was working as written.
+
+         Allowing the absent case leaks nothing: there is no data in a document
+         that does not exist, and create below still decides who may make one. */
+      allow read:   if resource == null
+                    || mayWorkBoard(resource.data.get('orgId', ''),
                                     resource.data.get('projectId', ''));
 
       allow create: if mayWorkBoard(request.resource.data.get('orgId', ''),

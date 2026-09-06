@@ -277,10 +277,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .wg-feed-empty{padding:40px 18px;text-align:center;color:var(--sap-ink-2);font-size:12.5px}
 
 /* ── TWO-COLUMN: TABLE + NEXT ACTIONS ── */
-.dash-cols{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.dash-cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}  /* minmax(0,1fr), never a bare 1fr: 1fr floors at min-content, so the ten-column
+     table widened its own grid track and ran off the card instead of scrolling. */
 
 /* ── PORTFOLIO TABLE ── */
 .table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+/* Scroll BOTH ways, on an inner element so .table-wrap keeps its rounded
+   corners. max-height matches the Next Actions card beside it, so the two
+   line up instead of one running twice as long as the other. */
+.table-scroll{overflow-x:auto;overflow-y:auto;max-height:392px;-webkit-overflow-scrolling:touch}
+.table-scroll .ptable{min-width:920px}  /* narrower than this the columns crush rather than scroll */
+.table-scroll thead th{position:sticky;top:0;z-index:2}
 .ptable{width:100%;border-collapse:collapse;font-size:12.5px}
 .ptable thead th{background:#F5F7F9;color:var(--sap-ink-2);text-align:left;padding:12px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;border-bottom:1px solid var(--sap-card-border)}
 .ptable tbody td{padding:12px 14px;border-bottom:1px solid var(--sap-card-border);color:var(--cs-text);vertical-align:middle}
@@ -1500,10 +1507,6 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>
         <span>Ops Console</span>
       </a>
-      <a class="sn-item" data-sn="finance" id="sn-finance" href="https://financing.csebuilders.com/" target="_blank" rel="noopener" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span>Finance Marketplace</span>
-      </a>
 
       <div class="sn-divider"></div>
       <div class="sn-section-label">Workspace</div>
@@ -2101,6 +2104,7 @@ window._omegaReady = function(){
     </div>
     <div class="dash-cols collapsible" id="portfolio-collapsible">
       <div class="table-wrap">
+        <div class="table-scroll">
         <table class="ptable">
           <thead>
             <tr>
@@ -2111,6 +2115,7 @@ window._omegaReady = function(){
           </thead>
           <tbody id="portfolio-body"><!-- rendered by renderPortfolioTable() --></tbody>
         </table>
+        </div><!-- /.table-scroll -->
         <div class="table-foot">Showing portfolio sites · <a onclick="goToProjects()">Open full project list ›</a></div>
       </div>
 
@@ -2534,7 +2539,12 @@ function isAdminNavEmail(email){
 }
 function revealStaffNav(email){
   if (!isAdminNavEmail(email)) return;
-  ['sn-adm-divider','sn-adm-label','sn-admin','sn-ops','sn-finance',
+  /* Finance Marketplace is NOT here: it is a catalogue tool (key 'financing'
+     in omega-tools.js) and belongs in My Applications with everything else a
+     user launches. Administration is for the two consoles that run the
+     platform rather than a project. A tool listed twice in two different
+     navs is a tool nobody can find. */
+  ['sn-adm-divider','sn-adm-label','sn-admin','sn-ops',
    'tb-tab-admin','tb-tab-ops'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = '';
