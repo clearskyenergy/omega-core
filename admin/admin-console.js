@@ -1646,6 +1646,33 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '</select>'
    + '<span class="sub-txt" style="display:block;margin-top:3px;font-size:11px">Caps what the '
    + 'EDITOR grants. Does not change the plan, the invoice, or which tools they see.</span></label>';
+  /* THE ALLOWLIST. Blank means the plan decides, which is how every account
+     behaved before this existed. Filled, it is the WHOLE list — the tier,
+     unlockedTools and requiredTools are all ignored beneath it, because an
+     allowlist something else can widen is not an allowlist.
+
+     Keys, not names, because keys are what the gate matches and a display
+     name that drifts would silently unlock or lock a tool. The catalog is
+     printed underneath so nobody has to guess one. */
+  var _allKeys = [];
+  try {
+    _allKeys = (window.OMEGATools && (OMEGATools._tools || OMEGATools.SEED_TOOLS) || [])
+      .map(function(t){ return t.key; }).filter(Boolean).sort();
+  } catch(e){}
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Tools allowed'
+   + '<input id="tb-allow-'+esc(orgId)+'" type="text" value="'
+   +   esc((bill.toolAccess||[]).join(', '))+'" placeholder="blank = whatever the plan includes" '
+   +   'style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + '<span class="sub-txt" style="display:block;margin-top:3px;font-size:11px">'
+   +   'Comma-separated tool keys. When set, ONLY these \u2014 the plan, unlockedTools '
+   +   'and requiredTools are all overridden.</span>'
+   + (_allKeys.length
+      ? '<details style="margin-top:4px"><summary class="sub-txt" style="font-size:11px;cursor:pointer">'
+        + _allKeys.length + ' available keys</summary>'
+        + '<div class="sub-txt" style="font-size:10.5px;font-family:ui-monospace,monospace;'
+        + 'line-height:1.6;margin-top:4px">' + esc(_allKeys.join(', ')) + '</div></details>'
+      : '')
+   + '</label>';
   h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','osa-jv, grid-atlas');
   h+=_tnField('Amount due (USD)','tb-amt-'+orgId,bill.amountDue==null?'':bill.amountDue,'number','0');
   h+=_tnField('Next payment (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-11-21');
@@ -1764,7 +1791,12 @@ function saveTenantBilling(orgId){
   function v(id){ var el=document.getElementById(id+'-'+orgId); return el?String(el.value||'').trim():''; }
   var addons=v('tb-addons').split(',').map(function(x){return x.trim();}).filter(Boolean);
 
-  var patch={ tier:v('tb-tier'), addons:addons, capTier: v('tb-cap') || null };
+  var allow = v('tb-allow').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  var patch={ tier:v('tb-tier'), addons:addons, capTier: v('tb-cap') || null,
+              /* null, not [], so "no allowlist" and "an allowlist of nothing"
+                 stay distinguishable — an empty array would lock the account
+                 out of every tool it has. */
+              toolAccess: allow.length ? allow : null };
   if(v('tb-amt')!=='')    patch.amountDue=Number(v('tb-amt'));
   if(v('tb-paid')!=='')   patch.amountPaid=Number(v('tb-paid'));
   patch.subscriptionDue = v('tb-due')    || null;
