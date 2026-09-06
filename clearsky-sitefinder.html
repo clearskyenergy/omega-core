@@ -351,6 +351,22 @@
 .baseSwitch button.on{background:#0b3d63;border-color:#0b3d63;color:#fff;font-weight:600}
 .baseSwitch button:focus-visible{outline:2px solid #0b3d63;outline-offset:1px}
 
+/* Service phase. Unconfirmed is amber and says so — it must never read the
+   same as a value somebody actually checked. */
+.phChip{display:inline-block;font-size:10.5px;padding:2px 7px;border-radius:20px;
+  border:1px solid transparent;white-space:nowrap}
+.phChip.ok{background:#e6f4ea;border-color:#bcdcc6;color:#1e6b38;font-weight:600}
+.phChip.unc{background:#fdf3e0;border-color:#eed9ae;color:#8a6417;font-weight:600}
+.phChip.unset{background:#eef1f4;border-color:#dde2e7;color:#6a747e}
+.phConf{display:flex;gap:7px;align-items:flex-start;margin:7px 0 6px;
+  font-size:12px;line-height:1.4;cursor:pointer}
+.phConf input{margin-top:2px;flex:none}
+#phSrc{width:100%;font:inherit;font-size:12px;padding:5px 7px;border-radius:5px;
+  border:1px solid var(--line,#d9dee3)}
+#phSrc:disabled{background:#f4f6f8;color:#98a2ac}
+#phSel{width:100%;font:inherit;font-size:12.5px;padding:5px 7px;border-radius:5px;
+  border:1px solid var(--line,#d9dee3)}
+
 </style>
 </head>
 <body class="v-split">
@@ -2125,6 +2141,63 @@
       return list;
     } catch (e) { return []; }
   }
+  /* ══════════════════════════════════════════════════════════════════════
+     SERVICE PHASE — and whether anybody has actually checked it
+
+     Phase decides what can be installed and it is the fact most often
+     assumed. Single phase caps a site well below what the circuit suggests;
+     a three-phase service is a different project from a 240 V split-phase
+     one at the same kW. Nothing in a parcel record or a hosting-capacity
+     layer carries it, so it comes from a meter photo, a bill, a site walk or
+     the utility — and until one of those happens it is a guess.
+
+     SO IT IS STORED WITH ITS PROVENANCE, never as a bare value. Unconfirmed
+     is the default and it is shown, not hidden: a phase nobody has verified
+     that renders identically to one somebody stood in front of is how a
+     three-phase assumption reaches a proposal.
+
+     Kept next to the saved site, so it survives a reload and rides along in
+     the CSV and the estimator packet like every other field. */
+  var PHASES = {
+    '1':   { label: 'Single phase',        short: '1\u03c6' },
+    'split': { label: 'Split phase (240 V)', short: '240 V split' },
+    '3':   { label: 'Three phase',         short: '3\u03c6' }
+  };
+
+  function phaseOf(r) {
+    var p = r && r.service;
+    if (!p || !PHASES[p.phase]) return null;
+    return { phase: p.phase, confirmed: p.confirmed === true,
+             src: p.src || '', at: p.at || '' };
+  }
+
+  function setPhase(id, phase, confirmed, src) {
+    var r = ST.byId[id]; if (!r) return;
+    if (!phase) { r.service = null; }
+    else {
+      r.service = { phase: phase, confirmed: !!confirmed,
+                    src: src || '', at: new Date().toISOString() };
+    }
+    /* Mirror onto the saved copy, which is the one that survives a reload. */
+    for (var i = 0; i < ST.saved.length; i++) {
+      if (ST.saved[i].id === id) { ST.saved[i].service = r.service; break; }
+    }
+    persistSaved();
+    try { render(); } catch (e) {}
+  }
+
+  /* One chip, and it always says which of the two it is. */
+  function phaseChip(r) {
+    var p = phaseOf(r);
+    if (!p) return '<span class="phChip unset">Phase unknown</span>';
+    return '<span class="phChip ' + (p.confirmed ? 'ok' : 'unc') + '" title="' +
+      esc(PHASES[p.phase].label + ' \u00b7 ' +
+          (p.confirmed ? ('confirmed' + (p.src ? ' \u2014 ' + p.src : ''))
+                       : 'not confirmed \u2014 assumed until somebody checks')) + '">' +
+      esc(PHASES[p.phase].short) + ' \u00b7 ' +
+      (p.confirmed ? 'confirmed' : 'unconfirmed') + '</span>';
+  }
+
   function persistSaved() {
     try {
       window.localStorage.setItem("cs.savedSites", JSON.stringify(ST.saved));
@@ -3088,6 +3161,7 @@
                  very differently. */
               (r.grainFactor < 1 ? ' \u00b7 capped, block-grain' : '') : '') + '</div>'
           : '') +
+        '<div class="mt" style="margin-top:6px">' + phaseChip(r) + '</div>' +
         warn +
         /* PRICE IT FROM THE CARD. The estimator handoff was only in the detail
            panel, which is two clicks and a scroll from the list a rep is
@@ -4038,7 +4112,23 @@
                        : r.geoSrc || "unknown",
         /* An estimator must not price a site whose position is a postcode
            centre: every distance in the model would be fiction. */
-        positionIsBuilding: !r.approx && !r.geoStreet
+        positionIsBuilding: !r.approx && !r.geoStreet,
+
+        /* Phase travels WITH its provenance, never as a bare value. An
+           estimator that cannot see whether anybody checked will price a
+           three-phase service off an assumption, and the difference between
+           three-phase and 240 V split at the same kW is not a line item. */
+        service: (function () {
+          var ph = phaseOf(r);
+          if (!ph) return { phase: null, confirmed: false,
+                            note: "Not recorded. Nothing in a parcel record or a " +
+                                  "capacity layer carries service phase." };
+          return { phase: ph.phase, label: PHASES[ph.phase].label,
+                   confirmed: ph.confirmed, confirmedBy: ph.src || "",
+                   recordedAt: ph.at || "",
+                   note: ph.confirmed ? "Checked." :
+                         "ASSUMED — not confirmed against a meter, a bill or the utility." };
+        })()
       },
 
       parcel: {
@@ -4212,6 +4302,38 @@
         ' <b>This is an estimate, not a quote.</b> It is not a bid, it carries no ' +
         'contingency you have agreed, and it does not replace a site walk or firm ' +
         'equipment pricing.</p></div>';
+  }
+
+  /* The editable version, in the drawer. Deliberately two controls rather
+     than one: picking a phase and asserting that somebody checked it are
+     different claims, and collapsing them into a single dropdown is what
+     produces confident-looking unverified data. */
+  function phaseBlockHtml(r) {
+    var p = phaseOf(r);
+    var opts = [['', '\u2014 not recorded']].concat(
+      Object.keys(PHASES).map(function (k) { return [k, PHASES[k].label]; }));
+    return '<div class="sec"><h4>Service phase</h4>' +
+      '<div class="setKeyRow">' +
+        '<select id="phSel" data-noselect="1" data-id="' + esc(r.id) + '">' +
+          opts.map(function (o) {
+            return '<option value="' + o[0] + '"' +
+              ((p && p.phase) === o[0] || (!p && !o[0]) ? ' selected' : '') + '>' +
+              esc(o[1]) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<label class="phConf" data-noselect="1">' +
+        '<input type="checkbox" id="phConf" data-noselect="1"' +
+          (p && p.confirmed ? ' checked' : '') + (p ? '' : ' disabled') + '>' +
+        '<span>Confirmed \u2014 somebody checked the meter, the bill or the utility</span>' +
+      '</label>' +
+      '<input id="phSrc" data-noselect="1" type="text" placeholder="How it was confirmed (meter photo, bill, utility call)" ' +
+        'value="' + esc((p && p.src) || '') + '"' + (p && p.confirmed ? '' : ' disabled') + '>' +
+      '<p class="note">Phase decides what can be installed here and nothing in a ' +
+      'parcel record or a capacity layer carries it. Until somebody checks, it is ' +
+      'an assumption \u2014 and it is labelled as one on the card, in the CSV and in ' +
+      'the packet sent to the estimator. A single-phase service caps this site well ' +
+      'below what the circuit suggests.</p></div>';
   }
 
   function packetBlockHtml(r) {
@@ -4501,6 +4623,7 @@
     /* The report card leads, then the save control, then the detail. A rep
        opening a card wants the verdict first and the paperwork after. */
     h.push(reportCardForRecord(r));
+    h.push(phaseBlockHtml(r));
     h.push(packetBlockHtml(r));
     h.push(mapsLinksHtml(r));
     h.push(saveRowHtml(r));
@@ -4808,6 +4931,28 @@
     if (pk) pk.onclick = function () { downloadPacket(r); };
     var cs = document.getElementById("costSite");
     if (cs) cs.onclick = function () { costThisSite(r); };
+    (function () {
+      var sel = document.getElementById("phSel");
+      var chk = document.getElementById("phConf");
+      var src = document.getElementById("phSrc");
+      if (!sel) return;
+      function push() {
+        setPhase(r.id, sel.value, chk && chk.checked, src ? src.value : '');
+      }
+      sel.onchange = function () {
+        /* Changing the phase clears the confirmation. It was confirmed FOR a
+           value; carrying the tick across to a different one would assert
+           somebody checked a thing they never saw. */
+        if (chk) { chk.checked = false; chk.disabled = !sel.value; }
+        if (src) { src.value = ''; src.disabled = true; }
+        push();
+      };
+      if (chk) chk.onchange = function () {
+        if (src) src.disabled = !chk.checked;
+        push();
+      };
+      if (src) src.onchange = push;
+    })();
     renderCostBack(r.id);
 
     var sr = document.getElementById("dSaveRow");
@@ -5303,6 +5448,10 @@
         "deliverable_kw", "deliverable_kwh", "binding_constraint", "peak_kw", "annual_kwh",
         "kwh_source", "battery_score", "large_load_score", "circuit_status",
         "queue_refreshed", "circuits_covering", "address_resolved", "position_source",
+        /* Two columns, not one. A phase with no confirmation state next to it
+           is the same value whether somebody stood at the meter or guessed,
+           and a spreadsheet is exactly where that distinction gets lost. */
+        "service_phase", "phase_confirmed", "phase_confirmed_by",
         "lat", "lon"];
       var out = [head2];
       for (var i = 0; i < rows.length; i++) {
@@ -5318,6 +5467,10 @@
           r.addressResolved === false ? "no" : "yes",
           r.approx ? "ZIP centroid" : r.geoStreet ? "street level"
             : r.geoInterp ? "interpolated" : r.geoSrc || "parcel centroid",
+          (function () { var ph = phaseOf(r); return ph ? PHASES[ph.phase].label : ""; })(),
+          (function () { var ph = phaseOf(r);
+            return ph ? (ph.confirmed ? "confirmed" : "UNCONFIRMED") : ""; })(),
+          (function () { var ph = phaseOf(r); return ph && ph.confirmed ? (ph.src || "") : ""; })(),
           r.lat, r.lon]);
       }
       text = out.map(function (rr) {
