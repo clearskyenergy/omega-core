@@ -162,7 +162,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 @media(max-width:640px){.pl-row{grid-template-columns:1.4fr 60px 70px;font-size:11.5px}.pl-row .pl-hide{display:none}}
 
 /* ── TABLE ── */
-.table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+/* overflow-x:auto at EVERY width, not only under 640px where the mobile
+   query added it. The base was overflow:hidden, so from 641px up to
+   whatever width a given table happened to need — the entire tablet
+   range — columns were CLIPPED with no way to reach them. A clipped table
+   looks like a table with fewer columns, which is the version nobody
+   reports as a bug. */
+.table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;box-shadow:0 2px 12px rgba(0,0,0,.05)}
 .ptable{width:100%;border-collapse:collapse;font-size:12.5px}
 .ptable thead th{background:var(--cs-navy);color:rgba(255,255,255,.85);text-align:left;padding:12px 14px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
 .ptable tbody td{padding:12px 14px;border-bottom:1px solid var(--cs-border);color:var(--cs-text);vertical-align:middle}
@@ -411,8 +417,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .ct-del-note{font-size:11px;color:var(--cs-sub);margin-top:8px;min-height:15px}
 .ct-del-note.err{color:var(--cs-red);font-weight:600}
 
+/* ── TABLET ───────────────────────────────────────────────────────────────
+   Built for a desktop, patched for a phone, nothing in between. These are the
+   things that actually break on an iPad in landscape. */
 @media(max-width:1024px){
-  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Eight tabs do not fit. The bar already scrolls; this stops flex shrinking
+     them into illegible slivers instead of letting them overflow. */
+  .tabbar-inner{padding:0 14px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabbar-inner::-webkit-scrollbar{display:none}
+  .tabbar-inner > *{flex:0 0 auto}
+  #main{padding:24px 18px 48px}
+  /* Pills wrap rather than pushing the row wider than the screen. */
+  .filter-row{flex-wrap:wrap}
+  /* 32px buttons are a mouse assumption. */
+  .ptable button,.btn-ghost{min-height:34px}
 }
 @media(max-width:640px){
   #main{padding:24px 16px 48px}

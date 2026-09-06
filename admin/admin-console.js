@@ -1561,7 +1561,7 @@ function _peopleCount(members, seen){
 function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   seen = seen || [];
   var TIERS=['trial','standard','deluxe','enterprise','partner','internal'];
-  var h='<div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:6px 2px 12px">';
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px;padding:6px 2px 12px">';
 
   /* ── Commercial terms ── */
   /* ⚠ TWO TIER VOCABULARIES EXIST IN THIS PLATFORM AND THEY ARE NOT THE SAME

@@ -52,6 +52,35 @@ select,input[type=text]{padding:6px 9px;border:1px solid var(--cs-border);border
 .ws{display:inline-flex;align-items:center;gap:5px;margin:0 10px 6px 0;font-size:12.5px}
 .empty{color:var(--cs-muted);padding:16px;text-align:center}
 .msg{font-size:12.5px;color:var(--cs-muted);margin-top:8px;min-height:16px}
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────────────
+   This page shipped with no breakpoints at all. Three things break first on
+   a narrow screen and they are the same three on every page here: a table
+   wider than the viewport, a fixed two-column form, and a header that wraps
+   into itself. */
+@media (max-width:900px){
+  .wrap{padding:14px}
+  .card{padding:14px}
+  /* A table is the one thing that must scroll rather than reflow — squeezing
+     nine columns into 380px makes every cell unreadable instead of one
+     gesture away. */
+  .card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .top{flex-wrap:wrap;gap:8px;padding:12px 14px}
+  .top h1{font-size:15px}
+  #who{margin-left:0;width:100%;order:3}
+  select,input[type=text]{max-width:100%}
+}
+@media (max-width:560px){
+  /* The responsibility rows carry a select and a note field. Side by side at
+     this width neither is usable, so they stack — the note keeps its full
+     line, which is where the dates and caveats actually go. */
+  .card table, .card thead, .card tbody, .card tr, .card td, .card th{display:block;white-space:normal}
+  .card thead{display:none}
+  .card tr{border-bottom:1px solid var(--cs-border);padding:10px 0}
+  .card td{border:none;padding:4px 0}
+  .card td:first-child{font-weight:600}
+  .ws{display:flex;margin:4px 0}
+}
 </style>
 </head>
 <body>
