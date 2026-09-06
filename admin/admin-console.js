@@ -1279,6 +1279,90 @@ function syncTenantsIntoCrm(){
   window.alert('Added ' + rows.length + '. They are ordinary CRM rows now — give them an owner.');
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   SEEDING FROM THE BROWSER
+   ══════════════════════════════════════════════════════════════════════
+   npm run seed:apply needs FIREBASE_SERVICE_ACCOUNT, and this Google Cloud
+   organisation enforces constraints/iam.disableServiceAccountKeyCreation —
+   downloadable keys are refused org-wide. That policy is a hardening default
+   doing its job, and lifting it to run a one-off seed would be the wrong
+   trade.
+
+   It is also unnecessary. omega_orgs create/update, billing/* and
+   tenant_public all say `if isAdmin()`, and a signed-in ClearSky address
+   already satisfies isAdmin(). Every document the CLI seed writes is a
+   document this console is already permitted to write. So it writes them
+   from here, as you, through the same rules that govern everything else on
+   this page — no key, no policy exemption, no second credential to store.
+
+   IDENTICAL OUTPUT. admin/seed-plan.json is generated from
+   tenants/<slug>/tenant.json by the same plan() the CLI uses, so both paths
+   produce the same documents. Regenerate it whenever a tenant.json changes.
+
+   WHAT IT DOES NOT DO: custom claims. setCustomUserClaims is Admin SDK only
+   and has no client equivalent, so owners are not minted here. That matters
+   for Storage rules and api/ functions reading request.auth.token.role — set
+   those through /api/set-role once a credential exists. Nothing else in the
+   control plane depends on it.
+
+   MERGE, NEVER OVERWRITE. Every write is { merge: true }, so a tier somebody
+   has already set by hand survives a re-run. Seeding twice is safe. */
+function seedTenantsFromBrowser(){
+  var btn = document.getElementById('tn-seed-btn');
+  function say(m){ var e=document.getElementById('tn-seed-msg'); if(e) e.textContent=m; }
+
+  fetch('/admin/seed-plan.json').then(function(r){
+    if(!r.ok) throw new Error('seed-plan.json '+r.status);
+    return r.json();
+  }).then(function(m){
+    var plans = m.plans || [], skipped = m.skipped || [];
+    var msg = 'Seed ' + plans.length + ' tenant' + (plans.length===1?'':'s') + ' into omega_orgs?\n\n'
+            + plans.map(function(p){ return '\u00b7 ' + p.orgId + '  (' + p.org.slug + ', ' + p.billing.tier + ')'; }).join('\n');
+    if (skipped.length){
+      msg += '\n\nHELD BACK \u2014 no orgId decided:\n'
+           + skipped.map(function(x){ return '\u00b7 ' + x.slug + '  ' + (x.hosts||[]).join(', '); }).join('\n');
+    }
+    msg += '\n\nExisting values are preserved (merge). Safe to run twice.';
+    if (!window.confirm(msg)) return null;
+
+    if (btn) btn.disabled = true;
+    say('Writing…');
+    var FV = firebase.firestore.FieldValue, done = 0, failed = [];
+
+    /* One tenant at a time rather than a batch: a batch is atomic, so a
+       single bad document rolls back the eleven good ones and you learn
+       nothing about which was bad. Sequential writes tell you exactly where
+       it stopped. */
+    return plans.reduce(function(chain, p){
+      return chain.then(function(){
+        var ref = db.collection('omega_orgs').doc(p.orgId);
+        var stamped = Object.assign({}, p.org, { seededAt: FV.serverTimestamp(),
+                                                 seededBy: (currentUser && currentUser.email) || 'console' });
+        return ref.set(stamped, { merge:true })
+          .then(function(){ return ref.collection('billing').doc('current').set(p.billing, { merge:true }); })
+          .then(function(){
+            var hosts = (p.pub.domains || []).filter(Boolean);
+            return hosts.reduce(function(c, h){
+              return c.then(function(){
+                return db.collection('tenant_public').doc(h).set(p.pub, { merge:true });
+              });
+            }, Promise.resolve());
+          })
+          .then(function(){ done++; say('Writing… ' + done + '/' + plans.length); })
+          .catch(function(e){ failed.push(p.orgId + ': ' + (e.message||e)); });
+      });
+    }, Promise.resolve()).then(function(){
+      if (btn) btn.disabled = false;
+      say(done + ' seeded' + (failed.length ? (', ' + failed.length + ' failed') : '') + '.');
+      if (failed.length) window.alert('Some tenants failed:\n\n' + failed.join('\n'));
+      loadTenants();
+    });
+  }).catch(function(e){
+    if (btn) btn.disabled = false;
+    say('Could not seed \u2014 ' + (e.message||e));
+  });
+}
+
 function renderTenants(){
   var rows = STATE.tenants || [];
   var cnt=document.getElementById('tn-count'); if(cnt) cnt.textContent=rows.length;
@@ -1311,7 +1395,15 @@ function renderTenants(){
   }).join('');
 
   if (!rows.length){
-    document.getElementById('tn-body').innerHTML='<div class="empty">No tenants yet. Run <code>npm run seed:apply</code> to populate omega_orgs.</div>';
+    document.getElementById('tn-body').innerHTML =
+        '<div class="empty" style="padding:26px">'
+      +   '<div style="margin-bottom:6px"><b>No tenants yet.</b></div>'
+      +   '<div class="sub-txt" style="margin-bottom:14px">omega_orgs is empty. Seed it from '
+      +     'tenants/<slug>/tenant.json \u2014 written as you, through the same rules as everything '
+      +     'else here. No service account needed.</div>'
+      +   '<button id="tn-seed-btn" onclick="seedTenantsFromBrowser()">Seed tenants from tenant.json</button>'
+      +   ' <span id="tn-seed-msg" class="sub-txt"></span>'
+      + '</div>';
     return;
   }
 

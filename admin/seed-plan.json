@@ -1,0 +1,567 @@
+{
+  "generatedFrom": "tenants/*/tenant.json",
+  "plans": [
+    {
+      "orgId": "cleantechir.com",
+      "org": {
+        "name": "Cleantech Industry Resources",
+        "slug": "cir",
+        "domains": [
+          "cir.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/cir/cir-logo.png",
+        "vertical": "epc",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Cleantech Industry Resources",
+          "logo": "/tenants/cir/cir-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "cleantechir.com",
+        "name": "Cleantech Industry Resources",
+        "logoUrl": "/tenants/cir/cir-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Cleantech Industry Resources",
+          "logo": "/tenants/cir/cir-logo.png"
+        },
+        "tier": "trial",
+        "vertical": "epc",
+        "shell": "default",
+        "domains": [
+          "cir.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "concordenergyusa.com",
+      "org": {
+        "name": "Concord Energy",
+        "slug": "concord",
+        "domains": [
+          "concordenergyusa.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/concord/concord-logo.png",
+        "vertical": "installer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Concord Energy",
+          "logo": "/tenants/concord/concord-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "standard",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "concordenergyusa.com",
+        "name": "Concord Energy",
+        "logoUrl": "/tenants/concord/concord-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Concord Energy",
+          "logo": "/tenants/concord/concord-logo.png"
+        },
+        "tier": "standard",
+        "vertical": "installer",
+        "shell": "default",
+        "domains": [
+          "concordenergyusa.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "iqgen.energy",
+      "org": {
+        "name": "iQGen Technologies",
+        "slug": "iqgen",
+        "domains": [
+          "iqgen.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/iqgen/qgen-logo.png",
+        "vertical": "oem",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "iQGen Technologies",
+          "logo": "/tenants/iqgen/qgen-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "iqgen.energy",
+        "name": "iQGen Technologies",
+        "logoUrl": "/tenants/iqgen/qgen-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "iQGen Technologies",
+          "logo": "/tenants/iqgen/qgen-logo.png"
+        },
+        "tier": "trial",
+        "vertical": "oem",
+        "shell": "default",
+        "domains": [
+          "iqgen.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "joulesai.com",
+      "org": {
+        "name": "Joules AI",
+        "slug": "joules",
+        "domains": [
+          "joules.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/joules/joulesai-logo.png",
+        "vertical": "oem",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Joules AI",
+          "logo": "/tenants/joules/joulesai-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "joulesai.com",
+        "name": "Joules AI",
+        "logoUrl": "/tenants/joules/joulesai-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Joules AI",
+          "logo": "/tenants/joules/joulesai-logo.png"
+        },
+        "tier": "trial",
+        "vertical": "oem",
+        "shell": "default",
+        "domains": [
+          "joules.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "nextnrg.com",
+      "org": {
+        "name": "NextNRG",
+        "slug": "nextnrg",
+        "domains": [
+          "nextnrg.csebuilders.com"
+        ],
+        "logoUrl": "/tenants/nextnrg/nextnrg-logo.png",
+        "vertical": "developer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "NextNRG",
+          "logo": "/tenants/nextnrg/nextnrg-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "enterprise",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "nextnrg.com",
+        "name": "NextNRG",
+        "logoUrl": "/tenants/nextnrg/nextnrg-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "NextNRG",
+          "logo": "/tenants/nextnrg/nextnrg-logo.png"
+        },
+        "tier": "enterprise",
+        "vertical": "developer",
+        "shell": "default",
+        "domains": [
+          "nextnrg.csebuilders.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "ogisolar.com",
+      "org": {
+        "name": "OGI Solar",
+        "slug": "ogisolar",
+        "domains": [
+          "ogisolar.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/ogisolar/ogi-logo.png",
+        "vertical": "installer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "OGI Solar",
+          "logo": "/tenants/ogisolar/ogi-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "standard",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "ogisolar.com",
+        "name": "OGI Solar",
+        "logoUrl": "/tenants/ogisolar/ogi-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "OGI Solar",
+          "logo": "/tenants/ogisolar/ogi-logo.png"
+        },
+        "tier": "standard",
+        "vertical": "installer",
+        "shell": "default",
+        "domains": [
+          "ogisolar.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "demo-clearsky",
+      "org": {
+        "name": "ClearSky-OMEGA Demo",
+        "slug": "salesdemo",
+        "domains": [
+          "demo.clearskyomega.com"
+        ],
+        "logoUrl": "/clearsky-omega-mark-white.png",
+        "vertical": "developer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "ClearSky-OMEGA Demo",
+          "logo": "/clearsky-omega-mark-white.png"
+        }
+      },
+      "billing": {
+        "tier": "enterprise",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "demo-clearsky",
+        "name": "ClearSky-OMEGA Demo",
+        "logoUrl": "/clearsky-omega-mark-white.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "ClearSky-OMEGA Demo",
+          "logo": "/clearsky-omega-mark-white.png"
+        },
+        "tier": "enterprise",
+        "vertical": "developer",
+        "shell": "default",
+        "domains": [
+          "demo.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "chileasing.com",
+      "org": {
+        "name": "Solela / Chileasing",
+        "slug": "solela",
+        "domains": [
+          "solela.csebuilders.com"
+        ],
+        "logoUrl": "/clearsky-omega-mark-white.png",
+        "vertical": "developer",
+        "shell": "solela",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Solela / Chileasing",
+          "logo": "/clearsky-omega-mark-white.png"
+        }
+      },
+      "billing": {
+        "tier": "standard",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "chileasing.com",
+        "name": "Solela / Chileasing",
+        "logoUrl": "/clearsky-omega-mark-white.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Solela / Chileasing",
+          "logo": "/clearsky-omega-mark-white.png"
+        },
+        "tier": "standard",
+        "vertical": "developer",
+        "shell": "solela",
+        "domains": [
+          "solela.csebuilders.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "spatco.com",
+      "org": {
+        "name": "SPATCO",
+        "slug": "spatco",
+        "domains": [
+          "spatco.csebuilders.com"
+        ],
+        "logoUrl": "/tenants/spatco/spatco-logo.jpg",
+        "vertical": "installer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "SPATCO",
+          "logo": "/tenants/spatco/spatco-logo.jpg"
+        }
+      },
+      "billing": {
+        "tier": "standard",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "spatco.com",
+        "name": "SPATCO",
+        "logoUrl": "/tenants/spatco/spatco-logo.jpg",
+        "colors": null,
+        "exportBrand": {
+          "name": "SPATCO",
+          "logo": "/tenants/spatco/spatco-logo.jpg"
+        },
+        "tier": "standard",
+        "vertical": "installer",
+        "shell": "default",
+        "domains": [
+          "spatco.csebuilders.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "sunesol.com",
+      "org": {
+        "name": "SUN Energy Solutions",
+        "slug": "sunesol",
+        "domains": [
+          "sunesol.csebuilders.com",
+          "sunesol.com"
+        ],
+        "logoUrl": "/tenants/sunesol/sunesol-logo-white.png",
+        "vertical": "installer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "SUN Energy Solutions",
+          "logo": "/tenants/sunesol/sunesol-logo-white.png"
+        }
+      },
+      "billing": {
+        "tier": "enterprise",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "sunesol.com",
+        "name": "SUN Energy Solutions",
+        "logoUrl": "/tenants/sunesol/sunesol-logo-white.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "SUN Energy Solutions",
+          "logo": "/tenants/sunesol/sunesol-logo-white.png"
+        },
+        "tier": "enterprise",
+        "vertical": "installer",
+        "shell": "default",
+        "domains": [
+          "sunesol.csebuilders.com",
+          "sunesol.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "tremcoinc.com",
+      "org": {
+        "name": "Tremco Roofing & Building Maintenance",
+        "slug": "tremco",
+        "domains": [
+          "tremco.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/tremco/tremco-logo.png",
+        "vertical": "installer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Tremco Roofing & Building Maintenance",
+          "logo": "/tenants/tremco/tremco-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "standard",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "tremcoinc.com",
+        "name": "Tremco Roofing & Building Maintenance",
+        "logoUrl": "/tenants/tremco/tremco-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Tremco Roofing & Building Maintenance",
+          "logo": "/tenants/tremco/tremco-logo.png"
+        },
+        "tier": "standard",
+        "vertical": "installer",
+        "shell": "default",
+        "domains": [
+          "tremco.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    },
+    {
+      "orgId": "walterswholesale.com",
+      "org": {
+        "name": "Walters Wholesale Electric",
+        "slug": "walters",
+        "domains": [
+          "walters.clearskyomega.com"
+        ],
+        "logoUrl": "/tenants/walters/walters-logo.png",
+        "vertical": "developer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": true,
+        "exportBrand": {
+          "name": "Walters Wholesale Electric",
+          "logo": "/tenants/walters/walters-logo.png"
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": null,
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "walterswholesale.com",
+        "name": "Walters Wholesale Electric",
+        "logoUrl": "/tenants/walters/walters-logo.png",
+        "colors": null,
+        "exportBrand": {
+          "name": "Walters Wholesale Electric",
+          "logo": "/tenants/walters/walters-logo.png"
+        },
+        "tier": "trial",
+        "vertical": "developer",
+        "shell": "default",
+        "domains": [
+          "walters.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": null
+    }
+  ],
+  "skipped": [
+    {
+      "slug": "osa",
+      "hosts": [
+        "osa.clearskyomega.com"
+      ]
+    }
+  ]
+}
