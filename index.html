@@ -2512,8 +2512,28 @@ function isStaffEmail(email){
   var d = String(email || '').toLowerCase().split('@')[1] || '';
   return STAFF_DOMAINS.indexOf(d) >= 0;
 }
+/* ── ADMINISTRATION IS NARROWER THAN STAFF ────────────────────────────────
+   isStaffEmail() mirrors isAdmin() in both rules files, which is
+   clearsky-usa.com OR csebuilders.com, and it stays that way because a
+   dozen rules depend on it. The Administration NAV is deliberately tighter:
+   clearsky-usa.com only.
+
+   ⚠ THIS IS A NAV GATE, NOT A PERMISSION. A csebuilders.com address still
+   satisfies isAdmin() in firestore.rules and storage.rules, so it can still
+   reach /admin/ by typing the URL and every write behind it still succeeds.
+   Hiding the link changes what is offered, not what is allowed. If
+   csebuilders.com should genuinely lose platform administration, that is an
+   edit to isAdmin() in BOTH rules files plus a redeploy — a much larger
+   change, because isAdmin() also gates omega_contracts, equipment deletes,
+   tenant billing and the org registry. Worth deciding on purpose rather than
+   inheriting from a nav tweak. */
+var ADMIN_NAV_DOMAINS = ['clearsky-usa.com'];
+function isAdminNavEmail(email){
+  var d = String(email || '').toLowerCase().split('@')[1] || '';
+  return ADMIN_NAV_DOMAINS.indexOf(d) >= 0;
+}
 function revealStaffNav(email){
-  if (!isStaffEmail(email)) return;
+  if (!isAdminNavEmail(email)) return;
   ['sn-adm-divider','sn-adm-label','sn-admin','sn-ops','sn-finance',
    'tb-tab-admin','tb-tab-ops'].forEach(function(id){
     var el = document.getElementById(id);
