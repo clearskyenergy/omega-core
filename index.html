@@ -1237,6 +1237,23 @@ body.dash-edit-on .dash-block{outline-color:#CFD9E4;padding:6px;margin-bottom:6p
 body.dash-edit-on .dash-block:hover{outline-color:var(--sap-blue,#0070F2)}
 .dash-block.db-dragging{opacity:.5;outline-color:var(--sap-blue,#0070F2) !important}
 .dash-block.db-hidden{opacity:.4}
+/* ── WIDGET WIDTHS ────────────────────────────────────────────────────────
+   #dev-fixed had no layout at all: blocks were plain divs stacking full
+   width, so there was nothing for a size to mean. It is a grid now, and
+   EVERY block spans both columns unless told otherwise — so a dashboard
+   nobody has resized looks exactly as it did, and half-width is opt-in per
+   block. A table or the pipeline needs the full run; a stat card does not. */
+#dev-fixed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+#dev-fixed > .dash-block{grid-column:span 2;min-width:0}
+#dev-fixed > .dash-block.db-w1{grid-column:span 1}
+/* One column below 900px. A half-width card on a phone is a squeezed card,
+   not a compact one. */
+@media (max-width:900px){
+  #dev-fixed{grid-template-columns:minmax(0,1fr)}
+  #dev-fixed > .dash-block, #dev-fixed > .dash-block.db-w1{grid-column:span 1}
+}
+.db-width{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font:600 11px/1 'DM Sans',sans-serif}
+.db-width:hover{background:rgba(255,255,255,.22)}
 .db-bar{display:none}
 body.dash-edit-on .db-bar{display:flex;align-items:center;gap:10px;padding:5px 8px;margin-bottom:6px;
   background:#0B2A3D;color:#C9D6E2;border-radius:8px;font:600 12px/1 'DM Sans',sans-serif}
@@ -5351,7 +5368,7 @@ function _paintSideApps(){
    ══════════════════════════════════════════════════════════════════════ */
 var DASH = (function(){
   var editing=false, dragEl=null, _saveT=null;
-  var state = { order:[], hidden:[], added:[] };  // order: block keys; hidden: keys; added: [{key,type}]
+  var state = { order:[], hidden:[], added:[], sizes:{} };  // + sizes: {key:'half'} — absent means full
 
   // Widgets that can be ADDED (not already on the page by default)
   /* SEED catalogue. verticals[] is the gate CLAUDE.md specifies — empty means
@@ -5449,6 +5466,7 @@ var DASH = (function(){
     blocks().forEach(function(b){
       var k=b.getAttribute('data-block');
       b.style.display = (state.hidden.indexOf(k)>=0 && !editing) ? 'none' : '';
+      if (state.sizes[k]==='half') b.classList.add('db-w1'); else b.classList.remove('db-w1');
     });
   }
 
@@ -5504,9 +5522,23 @@ var DASH = (function(){
          cannot be rebuilt from a type), added widgets leave state.added. */
       bar.innerHTML='<span class="db-handle" title="Drag to reorder">⠿</span>'+
         '<span class="db-key">'+_blockLabel(b,k)+'</span>'+
+        '<button class="db-width" title="Half or full width">'+(state.sizes[k]==='half'?'\u2194 Half':'\u2194 Full')+'</button>'+
         '<button class="db-remove" title="Remove from dashboard">Remove</button>';
       b.insertBefore(bar, b.firstChild);
       b.setAttribute('draggable','true');
+      var wd = bar.querySelector('.db-width');
+      if (wd) wd.addEventListener('click', function(e){
+        e.stopPropagation();
+        var kk=b.getAttribute('data-block');
+        var half = state.sizes[kk]==='half';
+        if (half) delete state.sizes[kk]; else state.sizes[kk]='half';
+        b.classList.toggle('db-w1', !half);
+        this.textContent = half ? '\u2194 Full' : '\u2194 Half';
+        _drawAdded();          /* Chart.js sizes to its box on creation, so a
+                                  resized card needs its chart redrawn or it
+                                  keeps the old width and overflows. */
+        scheduleSave();
+      });
       var rm = bar.querySelector('.db-remove');
       if (rm) rm.addEventListener('click', function(e){
         e.stopPropagation();
@@ -5540,6 +5572,7 @@ var DASH = (function(){
     if(!added && b) _blockLabel(b,key);          // cache the name before it leaves the screen
     for (i=state.added.length-1; i>=0; i--) if (state.added[i].key===key) state.added.splice(i,1);
     i=state.order.indexOf(key);  if(i>=0) state.order.splice(i,1);
+    if (state.sizes[key]) delete state.sizes[key];
     if(b){
       var c=b.querySelector('canvas');
       if(c&&_dch[c.id]){ try{_dch[c.id].destroy();}catch(e){} delete _dch[c.id]; }
@@ -5764,7 +5797,7 @@ var TC={bess:'#0070F2',dcfc:'#00A9A4',solar:'#F0A030',
     hydrateWidgets(function(){
       r.get().then(function(doc){
         var had=false;
-        if(doc&&doc.exists){ try{ var st=JSON.parse(doc.data().state); state.order=st.order||[]; state.hidden=st.hidden||[]; state.added=st.added||[]; had=true; }catch(e){} }
+        if(doc&&doc.exists){ try{ var st=JSON.parse(doc.data().state); state.order=st.order||[]; state.hidden=st.hidden||[]; state.added=st.added||[]; state.sizes=st.sizes||{}; had=true; }catch(e){} }
         if (had){ cb&&cb(); return; }
         _seedFromVertical(function(){ cb&&cb(); });
       }).catch(function(){ cb&&cb(); });
