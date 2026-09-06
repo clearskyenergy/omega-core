@@ -2496,6 +2496,13 @@ window._omegaReady = function(){
      wraps computeLiveRollup, so it polls briefly for both rather than
      assuming script order. Configured under tenant.assets in /config.js. -->
 <script src="/omega-assets.js"></script>
+<!-- Referral inbox. The OEM and technology channel's side of the same loop
+     omega-assets.js serves for owners: a developer with a site sends a quote
+     request, it lands here addressed by toOrgId, and the manufacturer prices
+     it. Defaults on for the oem, epc and installer verticals and off for
+     developers, who send these rather than receive them; referrals.enabled in
+     /config.js overrides in either direction. -->
+<script src="/omega-referrals.js"></script>
 <!-- Service Delivery Console. Dark unless tenant.delivery.enabled is true in
      /config.js, so this tag is inert on every tenant that hasn't asked for it
      — same contract as omega-assets.js above. -->

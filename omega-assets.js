@@ -87,8 +87,33 @@
     var ws = global.OMEGA_WORKSPACE ||
              (global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant) || {};
     var a  = ws.assets || {};
+
+    /* ── WHOSE DASHBOARD IS THIS ─────────────────────────────────────────
+       This block answers an OWNER's questions: what have we been offered,
+       what do we own, what is it earning, is it a good investment. It read
+       `a.enabled !== false`, so it defaulted ON for every tenant that had
+       never heard of it — and a manufacturer opening their workspace was
+       met with "Owned Asset Portfolio", "Assets on the books" and a
+       portfolio IRR, none of which is their business. FENECON, an OEM on a
+       trial, saw exactly that.
+
+       So the default now follows the VERTICAL, which is the field that
+       already says what kind of company this is. Owning and financing
+       assets is the developer vertical's whole subject; for an OEM, an EPC
+       or an installer it is somebody else's balance sheet.
+
+       AN EXPLICIT SETTING STILL WINS IN BOTH DIRECTIONS. assets.enabled
+       true turns it on for any vertical — an OEM that does own a fleet says
+       so once in config — and false turns it off for a developer. Only the
+       DEFAULT moved. */
+    var vertical = String(ws.vertical || '').toLowerCase();
+    var OWNER_VERTICALS = { developer: 1, '': 1 };   /* '' = vertical not set yet */
+    var byVertical = OWNER_VERTICALS[vertical] === 1;
+
     return {
-      enabled:      a.enabled !== false,
+      enabled:      a.enabled === true ? true
+                  : a.enabled === false ? false
+                  : byVertical,
       sampleData:   a.sampleData === true,
       insertAfter:  a.insertAfter || 'apps',
       collection:   a.offersCollection || 'financeOffers',
