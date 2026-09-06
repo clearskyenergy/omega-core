@@ -1442,6 +1442,33 @@ window._omegaReady = function(){
      rather than as a different page. -->
 <div id="boot-splash"><img src="/clearsky-omega-mark-white.png" alt="ClearSky-OMEGA"
      onerror="this.style.display='none'"></div>
+<script>
+/* ── BOOT WATCHDOG ────────────────────────────────────────────────────────
+   The splash hides everything until onAuthStateChanged answers. That is the
+   right default and it has exactly one failure mode: if the handler never
+   runs, the page pulses the logo forever and there is no way to sign in.
+
+   That is not hypothetical. A syntax error in the boot script took this
+   deployment down in precisely this way — the splash is the LAST thing to
+   fail, so it hid a dead page behind a brand animation and looked like a
+   slow network.
+
+   Eight seconds, then show the login regardless. Firebase resolves in well
+   under a second on a cold load, so anything past eight is broken rather
+   than slow, and a login the user can act on beats a spinner they cannot.
+   If auth answers later it sets these same classes itself and the correct
+   view wins — the watchdog only ever ADDS a way forward. */
+(function () {
+  var FAILSAFE_MS = 8000;
+  setTimeout(function () {
+    if (document.body && document.body.classList.contains('auth-ready')) return;
+    if (window.console) console.warn('[boot] auth did not answer in ' +
+      (FAILSAFE_MS / 1000) + 's — revealing the sign-in screen. ' +
+      'Check the console above for a script error.');
+    document.body.classList.add('auth-ready', 'signed-out');
+  }, FAILSAFE_MS);
+})();
+</script>
 
 <div id="auth-screen">
   <div class="auth-card">
@@ -2646,6 +2673,1403 @@ function revealJointDevNav(email){
     if (el) el.style.display = '';
   });
 }
+
+auth.onAuthStateChanged(user => {
+  if (window._omegaReady) window._omegaReady();
+  /* Auth has answered — reveal whichever side of it applies. Set before the
+     branches so an early return still leaves a usable page rather than the
+     splash forever. */
+  document.body.classList.add('auth-ready');
+  document.body.classList.toggle('signed-out', !user);
+  if (user) {
+    const email = user.email || '';
+    // Resolve which registered workspace this user belongs to, by email domain.
+    var ws = resolveWorkspace(email);
+
+    if (!ws) {
+      showAuthErr(OmegaBrand.accessMessage(email, WORKSPACES));
+      auth.signOut();
+      return;
+    }
+    // Bind this session to the resolved tenant.
+    WORKSPACE = ws;
+    window.OMEGA_WORKSPACE = ws;    // every tool page reads the same branding/tenant
+    currentUser = user;
+    currentOrg = ws.orgId;          // scopes this user's own data (developer) or partner org
+
+    showApp(user);
+    applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
+    revealStaffNav(email);
+    revealJointDevNav(email);
+
+    // Route by tenant type:
+    //  • developer → their own project portfolio (single-org roll-up)
+    //  • partner   → cross-org, read-only portfolio across ws.portfolioOrgs
+    if (ws.type === 'partner') {
+      loadPartnerPortfolio(ws);
+    } else {
+      initTeamHub();
+    }
+  } else {
+    currentUser = null;
+    WORKSPACE = null; window.OMEGA_WORKSPACE = null;
+    showLogin();
+  }
+});
+}
+
+function showRedirecting(name){
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  var ok = document.getElementById('auth-ok');
+  ok.textContent = 'Signed in — taking you to the ' + name + ' workspace…';
+  ok.style.display = 'block';
+}
+
+function showLogin() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+/* Resolve the friendliest available name: saved profile → Firebase displayName
+   → email local-part. Used for the welcome greeting and topbar. */
+function _greetName(user) {
+  if (_myProfile && _myProfile.name) return _myProfile.name;
+  if (user && user.displayName) return user.displayName;
+  if (user && user.email) return user.email;
+  return 'there';
+}
+/* (Re)render the welcome line + topbar name. Called at sign-in and again once
+   the saved profile loads, so a chosen display name replaces the email. */
+function refreshGreeting(user) {
+  user = user || currentUser || (auth && auth.currentUser);
+  if (!user) return;
+  var full = _greetName(user);
+  var first = full.split(' ')[0];
+  var wn = document.getElementById('welcome-name');
+  if (wn) wn.textContent = 'Welcome back, ' + first;
+  var tn = document.getElementById('tb-name');
+  if (tn) tn.textContent = full;
+}
+
+function showApp(user) {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';   // flex = sidebar + app-body shell
+
+  var ws = WORKSPACE || {};
+  var isPartner = ws.type === 'partner';
+
+  // ── Brand the platform chrome from the resolved workspace ──
+  OmegaBrand.paint(ws);
+  OmegaBrand.paintTitle(ws, 'Site Development Platform');
+  var badge = document.getElementById('tb-ent-badge');
+  if (badge){
+    // partner badge in blue, developer badge stays green (via existing class)
+    badge.style.color = isPartner ? '#7CC4F2' : '';
+    badge.style.background = isPartner ? 'rgba(46,134,193,.14)' : '';
+    badge.style.borderColor = isPartner ? 'rgba(46,134,193,.35)' : '';
+  }
+
+  // Welcome — prefer the saved display name (team_members profile), then
+  // Firebase displayName, then the email. refreshGreeting() re-runs once the
+  // profile loads (loadMyProfile), so a saved name replaces the email.
+  refreshGreeting(user);
+  var dateEl = document.getElementById('dash-date');
+  if (dateEl) {
+    dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  }
+
+  // Avatar
+  var wrap = document.getElementById('tb-avatar-wrap');
+  var first0 = _greetName(user).split(' ')[0];
+  if (user.photoURL) {
+    wrap.innerHTML = '<img class="tb-avatar" src="'+user.photoURL+'" onerror="this.style.display=\'none\'">';
+  } else {
+    wrap.innerHTML = '<div class="tb-avatar-fallback">'+(first0[0]||'?').toUpperCase()+'</div>';
+  }
+
+  // ── Hero text + section visibility, per tenant type ──
+  if (isPartner){
+    applyPartnerChrome(ws);
+  } else {
+    applyDeveloperChrome(ws);
+    renderDashboard();  // developer: single-org roll-up (existing behavior)
+  }
+
+  // If we arrived here from the Projects page "+ New Project" button
+  // (which navigates to /?new=1 because the create-project modal lives on this
+  // page), auto-open the new-project modal. Developer tenants only; partners
+  // don't create projects. We clear the query param so a refresh won't re-open.
+  try {
+    if (!isPartner && /[?&]new=1(&|$)/.test(window.location.search)) {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      if (typeof openNewProjectModal === 'function') {
+        setTimeout(function(){ openNewProjectModal('bess'); }, 60);
+      }
+    }
+  } catch(e){ /* non-fatal: just skip auto-open */ }
+
+  // Restore this user's saved dashboard layout now that auth + workspace are ready.
+  try { if (window.DASH && DASH.mount) DASH.mount(); } catch(e){}
+  try { if (window.TASKFLOW && TASKFLOW.mount) TASKFLOW.mount(); } catch(e){}
+}
+
+// Developer tenant: keep the existing single-org command center.
+function applyDeveloperChrome(ws){
+  var name = ws.clientName || 'Your organization';
+  setText('dash-label', (name.toUpperCase()) + ' · PORTFOLIO COMMAND CENTER');
+  setText('dash-sub', 'This is your workspace for managing every ' + name + ' site in your portfolio. Build site maps and one-line diagrams, run BESS pro formas and site investment analysis, generate customer-facing sales proposals, produce permit-ready exports, and track each project from origination through interconnection, permitting, financing, construction, and commissioning.');
+  var posEl = document.getElementById('dash-positioning');
+  if (posEl) { posEl.innerHTML = 'Engineering &amp; permit-set generation for BESS and EV infrastructure, powered by ClearSky-OMEGA. Questions or to unlock additional modules, email <a href="mailto:dev@clearsky-usa.com" style="color:var(--cs-accent);font-weight:600">dev@clearsky-usa.com</a>.'; }
+  setDisplay('partner-view', 'none');
+  setDisplay('developer-view', 'grid');   // grid = rail + dev-main two-column layout
+  if (typeof renderPortalApps === 'function') renderPortalApps(ws);
+}
+
+// Partner tenant: swap hero copy, hide developer-only build tools, show the
+// cross-org read-only roll-up view.
+function applyPartnerChrome(ws){
+  var name = ws.clientName || 'Partner';
+  var kind = ws.partnerKind || 'Partner';
+  var n = (ws.portfolioOrgs || []).length;
+  setText('dash-label', name.toUpperCase() + ' · ' + kind.toUpperCase() + ' PORTFOLIO');
+  setText('dash-sub', 'Read-only portfolio view across ' + n + ' developer ' + (n===1?'organization':'organizations') + ' on ClearSky-OMEGA. Track capital deployment, project stage, storage capacity, modeled incentives, and projected revenue across every site you have visibility into — standardized on one platform of record.');
+  setText('dash-positioning', name + ' has partner visibility into developer portfolios running on ClearSky-OMEGA EnergyOS. This is a read-only lens: project data remains owned and controlled by each developer; ' + name + ' sees a de-risked, apples-to-apples roll-up for underwriting and program enrollment.');
+  // Hide everything that lets a user CREATE or EDIT projects.
+  setDisplay('developer-view', 'none');
+  setDisplay('partner-view', 'block');
+}
+
+function setText(id, t){ var el=document.getElementById(id); if(el) el.textContent=t; }
+function setDisplay(id, d){ var el=document.getElementById(id); if(el) el.style.display=d; }
+
+function signInWithGoogle() {
+  const btn = document.getElementById('google-signin-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  const provider = new firebase.auth.GoogleAuthProvider();
+  // Scope the Google account chooser to this tenant's domain so reps land on
+  // the right account. Suppressed when the tenant accepts several domains or
+  // allowlists individual addresses — otherwise Google would hide exactly the
+  // accounts we just permitted. `hd` is only a UI hint; onAuthStateChanged
+  // still verifies via OmegaBrand.resolve().
+  var hdHint = OmegaBrand.googleHint(WORKSPACES);
+  var params = { prompt: 'select_account' };
+  if (hdHint && hdHint.length) params.hd = hdHint;
+  provider.setCustomParameters(params);
+  auth.signInWithPopup(provider).catch(err => {
+    showAuthErr(err.message);
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+  });
+}
+
+function signOut() {
+  auth.signOut();
+}
+
+// ══════════ EMAIL / PASSWORD AUTH (enterprise clients) ══════════
+var authMode = 'signin'; // or 'signup'
+
+function toggleAuthMode() {
+  authMode = (authMode === 'signin') ? 'signup' : 'signin';
+  var isSignup = authMode === 'signup';
+  document.getElementById('auth-name-wrap').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('email-auth-btn').textContent = isSignup ? 'Create account' : 'Sign in';
+  var fw = document.getElementById('auth-forgot-wrap'); if (fw) fw.style.display = isSignup ? 'none' : 'block';
+  document.getElementById('auth-toggle-wrap').innerHTML = isSignup
+    ? 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>'
+    : 'New client? <a onclick="toggleAuthMode()">Create an account</a>';
+  document.getElementById('auth-sub').textContent = isSignup
+    ? 'Create your enterprise workspace account'
+    : 'Project & asset management for distributed energy';
+  clearAuthMsg();
+}
+
+function emailAuth() {
+  clearAuthMsg();
+  var email = document.getElementById('auth-email').value.trim();
+  var pass = document.getElementById('auth-pass').value;
+  if (!email || !pass) { showAuthErr('Enter your email and password.'); return; }
+
+  // Accept any domain registered in the workspace registry. Unknown domains
+  // are rejected up front (and again in onAuthStateChanged as defense-in-depth).
+  var wsPre = resolveWorkspace(email);
+  if (!wsPre) {
+    showAuthErr(OmegaBrand.accessMessage(email, WORKSPACES));
+    return;
+  }
+
+  var btn = document.getElementById('email-auth-btn');
+  btn.disabled = true;
+  btn.textContent = (authMode === 'signup') ? 'Creating…' : 'Signing in…';
+
+  if (authMode === 'signup') {
+    var name = document.getElementById('auth-name').value.trim();
+    auth.createUserWithEmailAndPassword(email, pass)
+      .then(function(cred) {
+        if (name && cred.user) return cred.user.updateProfile({ displayName: name });
+      })
+      .catch(function(err) { showAuthErr(friendlyAuthErr(err)); resetEmailBtn(); });
+    // onAuthStateChanged handles routing on success
+  } else {
+    auth.signInWithEmailAndPassword(email, pass)
+      .catch(function(err) { showAuthErr(friendlyAuthErr(err)); resetEmailBtn(); });
+  }
+}
+
+function resetEmailBtn() {
+  var btn = document.getElementById('email-auth-btn');
+  btn.disabled = false;
+  btn.textContent = (authMode === 'signup') ? 'Create account' : 'Sign in';
+}
+
+function friendlyAuthErr(err) {
+  var m = (err && err.code) || '';
+  if (m === 'auth/email-already-in-use') return 'That email already has an account — try signing in.';
+  if (m === 'auth/invalid-email') return 'That email address looks invalid.';
+  if (m === 'auth/weak-password') return 'Password should be at least 6 characters.';
+  // Firebase returns invalid-credential for both a wrong password and an
+  // unknown account (by design). Treat it as an incorrect password and offer
+  // a reset link — handled specially by showAuthCredErr(), so this returns ''.
+  if (m === 'auth/wrong-password' || m === 'auth/invalid-credential') return '__CRED__';
+  if (m === 'auth/user-not-found') return '__CRED__';
+  if (m === 'auth/too-many-requests') return 'Too many attempts. Try again in a few minutes, or reset your password.';
+  return (err && err.message) || 'Something went wrong. Try again.';
+}
+
+/* Wrong-password / bad-credential message with an inline "Reset it" link. */
+function showAuthCredErr() {
+  var el = document.getElementById('auth-err');
+  if (!el) return;
+  el.innerHTML = 'Incorrect password. <a onclick="sendPasswordReset()" style="color:var(--cs-sky);font-weight:600;cursor:pointer;text-decoration:underline">Reset it</a> if you forgot.';
+  el.style.display = 'block';
+  var ok = document.getElementById('auth-ok'); if (ok) ok.style.display = 'none';
+}
+
+/* Re-enable both sign-in buttons. The Google button in particular could get
+   stuck on 'Signing in…': it only restored itself inside the popup's .catch(),
+   but a domain denial happens after the popup RESOLVES, over in
+   onAuthStateChanged, so that catch never ran. */
+function resetAuthButtons() {
+  var g = document.getElementById('google-signin-btn');
+  if (g) {
+    g.disabled = false;
+    g.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+  }
+  var e = document.getElementById('email-auth-btn');
+  if (e) {
+    e.disabled = false;
+    e.textContent = (typeof authMode !== 'undefined' && authMode === 'signup')
+      ? 'Create account' : 'Sign in';
+  }
+}
+
+function showAuthErr(msg) {
+  resetAuthButtons();
+  if (msg === '__CRED__') { showAuthCredErr(); return; }
+  var el = document.getElementById('auth-err');
+  el.textContent = msg;
+  el.style.display = 'block';
+  var ok = document.getElementById('auth-ok'); if (ok) ok.style.display = 'none';
+}
+function clearAuthMsg() {
+  var e = document.getElementById('auth-err'); if (e) e.style.display = 'none';
+  var o = document.getElementById('auth-ok'); if (o) o.style.display = 'none';
+}
+function showAuthOk(msg) {
+  var el = document.getElementById('auth-ok');
+  if (el){ el.textContent = msg; el.style.display = 'block'; }
+  var e = document.getElementById('auth-err'); if (e) e.style.display = 'none';
+}
+
+/* ── Forgot password: send a reset email (approved domains only) ── */
+function sendPasswordReset() {
+  clearAuthMsg();
+  var email = document.getElementById('auth-email').value.trim();
+  if (!email) { showAuthErr('Enter your email above, then tap “Forgot password?”'); return; }
+  // Only send resets for provisioned domains (mirrors sign-in gating).
+  if (!resolveWorkspace(email)) {
+    showAuthErr('No workspace is provisioned for that email domain. Contact your administrator.');
+    return;
+  }
+  var link = document.getElementById('auth-forgot-link');
+  if (link) link.textContent = 'Sending…';
+  auth.sendPasswordResetEmail(email)
+    .then(function(){
+      showAuthOk('Password reset email sent to ' + email + '. Check your inbox (and spam).');
+    })
+    .catch(function(err){
+      // Don't reveal whether an account exists; show a generic-ish message.
+      var code = (err && err.code) || '';
+      if (code === 'auth/invalid-email') showAuthErr('That email address looks invalid.');
+      else if (code === 'auth/too-many-requests') showAuthErr('Too many attempts. Try again in a few minutes.');
+      else showAuthErr('Could not send reset email. Double-check the address and try again.');
+    })
+    .then(function(){ if (link) link.textContent = 'Forgot password?'; });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  DASHBOARD RENDERING  (new — reads placeholders or live Firestore)
+// ══════════════════════════════════════════════════════════════
+function fmtMoney(n){
+  n = Number(n)||0;
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + Math.round(n/1e3) + 'K';
+  return '$' + n;
+}
+function stageClass(stage){ return stage; } // css class = stage key
+
+function renderKpis(k){
+  /* Top row → SAP-style Overview strip (big numbers, hairline dividers). */
+  var overview = [
+    { l:'Sites Under Control', v:k.sitesUnderControl },
+    { l:'Projects Managed',    v:k.projectsManaged },
+    { l:'Sites Submitted',     v:k.sitesSubmitted },
+    { l:'Sites Online',        v:k.sitesOnline },
+    { l:'Operating Assets',    v:k.operatingAssets }
+  ];
+  document.getElementById('ov-strip').innerHTML = overview.map(function(c){
+    return '<div class="ov-cell"><div class="ov-val">'+c.v+'</div>'+
+           '<div class="ov-label">'+c.l+'</div></div>';
+  }).join('');
+
+  /* Remaining metrics → SAP flat cards below the strip. */
+  var cards = [
+    { l:'Sites Quoted', v:k.sitesQuoted, cls:'' },
+    { l:'Storage Quoted', v:k.storageQuotedMwh, unit:'MWh', cls:'' },
+    { l:'Storage Submitted', v:k.storageSubmittedMwh, unit:'MWh', cls:'blue' },
+    { l:'Storage Online', v:k.storageOnlineMwh, unit:'MWh', cls:'green' },
+    { l:'Estimated Portfolio Capex', v:fmtMoney(k.portfolioCapex), cls:'' },
+    { l:'Modeled Incentives / Rebates', v:fmtMoney(k.modeledIncentives), cls:'' },
+    { l:'Projected Annual Revenue', v:fmtMoney(k.projectedRevenue), cls:'green' },
+    { l:'Storage Under Control', v:k.storageQuotedMwh, unit:'MWh', cls:'blue' }
+  ];
+  document.getElementById('kpi-grid').innerHTML = cards.map(function(c){
+    var unit = c.unit ? '<span class="unit">'+c.unit+'</span>' : '';
+    return '<div class="kpi '+c.cls+'"><div class="kpi-label">'+c.l+'</div>'+
+           '<div class="kpi-val">'+c.v+unit+'</div></div>';
+  }).join('');
+}
+
+function renderPipeline(counts){
+  document.getElementById('pipe-track').innerHTML = STAGE_KEYS.map(function(key,i){
+    var n = counts[key] || 0;
+    var cls = n>0 ? 'filled' : '';
+    if (key==='submitted' && n>0) cls='submitted';
+    if (key==='online' && n>0) cls='online';
+    return '<div class="pipe-stage '+cls+'"><div class="pipe-dot"></div>'+
+           '<div class="pipe-num">'+n+'</div>'+
+           '<div class="pipe-name">'+STAGE_LABEL[key]+'</div></div>';
+  }).join('');
+}
+
+/* ══════════ SAP-STYLE WIDGETS (donut · value chart) ══════════ */
+/* Grouped stage buckets for a clean donut (8 stages → 4 readable slices). */
+var WG_GROUPS = [
+  { key:'early',   label:'Early / package', color:'#5B9BD5', stages:['candidate','package'] },
+  { key:'utility', label:'Utility / permit', color:'#0070F2', stages:['submitted','interconnect','permitting'] },
+  { key:'finconst',label:'Finance / build',  color:'#F0A800', stages:['finance','construction'] },
+  { key:'online',  label:'Online',           color:'#2E9C3C', stages:['online'] }
+];
+
+function _polar(cx,cy,r,deg){ var a=(deg-90)*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
+function _arc(cx,cy,r,a0,a1){
+  var p0=_polar(cx,cy,r,a1), p1=_polar(cx,cy,r,a0);
+  var large = (a1-a0)<=180 ? 0 : 1;
+  return 'M'+p0[0].toFixed(2)+' '+p0[1].toFixed(2)+
+         ' A'+r+' '+r+' 0 '+large+' 0 '+p1[0].toFixed(2)+' '+p1[1].toFixed(2);
+}
+
+var _wgDonutChart=null, _wgValueChart=null;
+
+function renderWidgets(k, counts){
+  if (typeof Chart === 'undefined'){ return; } /* CDN not ready yet */
+
+  /* ── DONUT: portfolio by grouped stage (Chart.js) ── */
+  var groups = WG_GROUPS.map(function(g){
+    var v=0; g.stages.forEach(function(s){ v += (counts[s]||0); });
+    return { label:g.label, color:g.color, v:v };
+  });
+  var total = groups.reduce(function(a,g){return a+g.v;},0);
+  document.getElementById('wg-donut-total').innerHTML = total+'<span class="unit">sites</span>';
+
+  var dCanvas = document.getElementById('wg-donut-canvas');
+  if (_wgDonutChart){ _wgDonutChart.destroy(); _wgDonutChart=null; }
+  var hasData = total>0;
+  _wgDonutChart = new Chart(dCanvas, {
+    type:'doughnut',
+    data:{
+      labels: hasData ? groups.map(function(g){return g.label;}) : ['No sites'],
+      datasets:[{
+        data: hasData ? groups.map(function(g){return g.v;}) : [1],
+        backgroundColor: hasData ? groups.map(function(g){return g.color;}) : ['#EAECEF'],
+        borderWidth:0, hoverOffset: hasData?6:0
+      }]
+    },
+    options:{
+      cutout:'70%', responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{enabled:hasData, callbacks:{label:function(c){
+          var pct=total>0?Math.round(c.parsed/total*100):0;
+          return ' '+c.label+': '+c.parsed+' ('+pct+'%)';
+        }}}
+      }
+    },
+    plugins:[{
+      id:'centerTotal',
+      afterDraw:function(chart){
+        var ctx=chart.ctx, ca=chart.chartArea;
+        var cx=(ca.left+ca.right)/2, cy=(ca.top+ca.bottom)/2;
+        ctx.save(); ctx.textAlign='center';
+        ctx.fillStyle='#223548'; ctx.font='700 30px DM Sans, sans-serif';
+        ctx.fillText(String(total), cx, cy-2);
+        ctx.fillStyle='#556B82'; ctx.font='400 11px DM Sans, sans-serif';
+        ctx.fillText('sites', cx, cy+16);
+        ctx.restore();
+      }
+    }]
+  });
+  document.getElementById('wg-donut-legend').innerHTML = groups.map(function(g){
+    var pct = total>0 ? Math.round(g.v/total*100) : 0;
+    return '<span class="wg-leg"><span class="dot" style="background:'+g.color+'"></span>'+g.label+' '+pct+'%</span>';
+  }).join('');
+
+  /* ── VALUE CHART: capex vs projected revenue, 12-mo ramp to today's totals (Chart.js) ── */
+  var capex = k.portfolioCapex||0, rev = k.projectedRevenue||0;
+  document.getElementById('wg-value-hero').innerHTML = fmtMoney(capex)+'<span class="unit">USD capex</span>';
+  var MO=['S','O','N','D','J','F','M','A','M','J','J','A'];
+  var ramp=[.05,.09,.14,.2,.28,.37,.46,.56,.67,.78,.89,1];
+  var capSeries=ramp.map(function(f){return Math.round(capex*f);});
+  var revSeries=ramp.map(function(f){return Math.round(rev*f);});
+
+  var vCanvas=document.getElementById('wg-value-canvas');
+  if (_wgValueChart){ _wgValueChart.destroy(); _wgValueChart=null; }
+  var g1=vCanvas.getContext('2d').createLinearGradient(0,0,0,160);
+  g1.addColorStop(0,'rgba(46,156,60,.22)'); g1.addColorStop(1,'rgba(46,156,60,0)');
+  _wgValueChart = new Chart(vCanvas, {
+    type:'line',
+    data:{ labels:MO, datasets:[
+      { label:'Portfolio capex', data:capSeries, borderColor:'#2E9C3C', backgroundColor:g1,
+        borderWidth:2.4, fill:true, tension:.35, pointRadius:0, pointHoverRadius:4 },
+      { label:'Projected revenue', data:revSeries, borderColor:'#0070F2', backgroundColor:'transparent',
+        borderWidth:2.4, fill:false, tension:.35, pointRadius:0, pointHoverRadius:4 }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:function(c){return ' '+c.dataset.label+': '+fmtMoney(c.parsed.y);}}}
+      },
+      scales:{
+        x:{grid:{display:false}, ticks:{color:'#556B82', font:{size:10}}, border:{display:false}},
+        y:{display:false, beginAtZero:true}
+      }
+    }
+  });
+}
+
+/* Activity feed — recent project docs, SAP-style. Falls back to a getting-started list. */
+function renderActivityFeed(items){
+  var el = document.getElementById('wg-feed');
+  if (!el) return;
+  var docIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+  if (!items || !items.length){
+    el.innerHTML =
+      '<div class="wg-feeditem"><div class="wg-feedicon">'+docIcon+'</div>'+
+        '<div class="wg-feedmain"><div class="wg-feedtitle">No activity yet</div>'+
+        '<div class="wg-feedsub">Create a site map or run a pro forma to populate your feed.</div></div></div>';
+    return;
+  }
+  el.innerHTML = items.map(function(it){
+    var amt = it.amount ? '<div class="wg-feedamt">'+it.amount+'</div>' : '';
+    return '<div class="wg-feeditem"'+(it.id?' style="cursor:pointer" onclick="openProject(\''+it.id+'\')"':'')+'>'+
+      '<div class="wg-feedicon">'+docIcon+'</div>'+
+      '<div class="wg-feedmain">'+
+        '<div class="wg-feedtitle">'+escHtml(it.title)+'</div>'+
+        '<div class="wg-feedmeta">'+escHtml(it.meta||'')+'</div>'+
+      '</div>'+amt+'</div>';
+  }).join('');
+}
+
+function renderPortfolioTable(rows){
+  var body = document.getElementById('portfolio-body');
+  if (!rows || !rows.length){
+    var emptyMsg = (typeof DASH_SCOPE!=='undefined' && DASH_SCOPE==='mine')
+      ? 'No projects owned by you yet. Create one, or claim an existing project via “Assign ownership.”'
+      : 'No portfolio sites yet. Tag a project with a stage to see it here.';
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--cs-sub)">'+emptyMsg+'</td></tr>';
+    return;
+  }
+  var _me = (typeof _meEmail==='function') ? _meEmail() : '';
+  body.innerHTML = rows.map(function(r){
+    var openAttr = r.id ? ' onclick="openProject(\''+r.id+'\')"' : '';
+    var ownerTxt = r.ownerEmail ? (r.ownerName || r.ownerEmail.split('@')[0]) : 'Unassigned';
+    var ownerCls = !r.ownerEmail ? 'owner-none' : (r.ownerEmail===_me ? 'owner-me' : 'owner-other');
+    return '<tr'+openAttr+'>'+
+      '<td class="site-nm">'+escHtml(r.name)+
+        (r.id ? ' <button class="tf-assign-btn" title="Open task flow" onclick="event.stopPropagation();TASKFLOW.openForProject(\''+r.id+'\',\''+escHtml((r.name||'').replace(/\x27/g,""))+'\')">Task Flow</button>' : '')+'</td>'+
+      '<td><span class="owner-chip '+ownerCls+'">'+escHtml(ownerTxt)+'</span></td>'+
+      '<td>'+escHtml(r.utility||'—')+'</td>'+
+      '<td>'+escHtml(r.program||'—')+'</td>'+
+      '<td><span class="pstatus '+stageClass(r.stage)+'">'+(STAGE_LABEL[r.stage]||r.stage)+'</span></td>'+
+      '<td class="num">'+escHtml(r.bess||'—')+'</td>'+
+      '<td class="num">'+escHtml(r.capex||'$0')+'</td>'+
+      '<td class="num">'+escHtml(r.incentive||'$0')+'</td>'+
+      '<td class="num">'+escHtml(r.revenue||'$0')+'</td>'+
+      '<td class="pnext">'+escHtml(r.next||'—')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+/* Master render: placeholder mode now, live rollup when USE_LIVE_ROLLUP=true */
+function renderDashboard(){
+  _paintScopeToggle();   // toggle removed — this now just clears the container
+  if (!USE_LIVE_ROLLUP){
+    renderKpis(PLACEHOLDER_KPIS);
+    renderPipeline(PLACEHOLDER_PIPELINE);
+    renderPortfolioTable(PLACEHOLDER_ROWS);
+    renderWidgets(PLACEHOLDER_KPIS, PLACEHOLDER_PIPELINE);
+    renderActivityFeed(null);
+  } else {
+    computeLiveRollup();  // reads Firestore, fills the PERSONAL dashboard (mine only)
+  }
+  if (typeof renderCompanyOverview === 'function') renderCompanyOverview();  // company-wide widget
+}
+
+/* LIVE ROLLUP — computes every KPI/pipeline/table row from the projects collection.
+   Each project doc may carry: stage (STAGE_KEYS), bessKwh (number),
+   capex (number), incentive (number), annualRevenue (number),
+   utility, program, nextAction. Missing stage defaults to 'candidate'. */
+async function computeLiveRollup(){
+  if (!currentUser){ renderKpis(PLACEHOLDER_KPIS); renderPipeline(PLACEHOLDER_PIPELINE); renderPortfolioTable(PLACEHOLDER_ROWS); renderWidgets(PLACEHOLDER_KPIS, PLACEHOLDER_PIPELINE); renderActivityFeed(null); return; }
+  try {
+    var snap = await db.collection('projects').where('orgId','==',currentOrg).get();
+    var counts = {}; STAGE_KEYS.forEach(function(s){counts[s]=0;});
+    var k = { sitesUnderControl:0, projectsManaged:0, sitesSubmitted:0, sitesQuoted:0, sitesOnline:0,
+              storageQuotedMwh:0, storageSubmittedMwh:0, storageOnlineMwh:0,
+              portfolioCapex:0, modeledIncentives:0, projectedRevenue:0, operatingAssets:0 };
+    var rows = [];
+    // ── Chart aggregations (real data, filled in the loop below) ──
+    var byType = {};
+    var byOwnerRev = {};
+    var capexByProj = [];
+    var projRows = [];
+    var storageByStage = {};
+    if (typeof STAGE_KEYS!=='undefined'){ STAGE_KEYS.forEach(function(s){ storageByStage[s]=0; }); }
+    var myEmail = _meEmail();
+    var unownedCount = 0;   // projects with no ownerEmail (legacy) — surfaced under Company view
+    snap.forEach(function(doc){
+      var d = doc.data();
+      // Per-user scope: "mine" shows only this user's projects; "company" shows all.
+      // Legacy projects with no ownerEmail are treated as company-wide (claimable).
+      var owner = (d.ownerEmail||'').toLowerCase();
+      if (!owner) unownedCount++;
+      if (DASH_SCOPE === 'mine' && owner !== myEmail){ return; }
+      var stage = STAGE_KEYS.indexOf(d.stage)>=0 ? d.stage : 'candidate';
+      var idx = STAGE_KEYS.indexOf(stage);
+      var kwh = Number(d.bessKwh)||0, mwh = kwh/1000;
+      counts[stage]++; k.sitesUnderControl++; k.projectsManaged++;
+      k.portfolioCapex += Number(d.capex)||0;
+      k.modeledIncentives += Number(d.incentive)||0;
+      k.projectedRevenue += Number(d.annualRevenue)||0;
+      if (d.quoted){ k.sitesQuoted++; k.storageQuotedMwh += mwh; }
+      if (idx >= SUBMITTED_FROM_INDEX){ k.sitesSubmitted++; k.storageSubmittedMwh += mwh; }
+      if (idx === ONLINE_INDEX){ k.sitesOnline++; k.storageOnlineMwh += mwh; k.operatingAssets++; }
+      // chart datasets (real per-project data)
+      var _ty = (d.type||'other').toLowerCase();
+      byType[_ty] = (byType[_ty]||0) + 1;
+      var _rev = Number(d.annualRevenue)||0;
+      var _own = d.ownerName || (owner ? owner.split('@')[0] : 'Unassigned');
+      if (_rev>0){ byOwnerRev[_own] = (byOwnerRev[_own]||0) + _rev; }
+      var _cx = Number(d.capex)||0;
+      if (_cx>0){ capexByProj.push({ name:(d.name||'Untitled'), capex:_cx }); }
+      /* capexByProj is filtered to capex>0 because the Top CapEx bar chart is
+         a ranking and a zero is not a rank. The P&L and matrix widgets need
+         every project including the ones not costed yet, so they get their own
+         row rather than loosening the filter under the existing widget. */
+      projRows.push({ name:(d.name||'Untitled'), capex:_cx, rev:_rev, mwh:mwh, stage:stage,
+                      gridScore:(typeof d.gridScore==='number'?d.gridScore:null),
+                      bankableScore:(typeof d.bankableScore==='number'?d.bankableScore:null) });
+      storageByStage[stage] = (storageByStage[stage]||0) + mwh;
+      rows.push({ id:doc.id, name:d.name||'Untitled', utility:d.utility||'—', program:d.program||'—',
+                  stage:stage, bess: kwh ? (mwh.toFixed(1)+' MWh') : '—',
+                  capex:fmtMoney(d.capex), incentive:fmtMoney(d.incentive),
+                  revenue:fmtMoney(d.annualRevenue), next:d.nextAction||'—',
+                  ownerEmail:owner, ownerName:d.ownerName||'' });
+    });
+    k.storageQuotedMwh = +k.storageQuotedMwh.toFixed(1);
+    k.storageSubmittedMwh = +k.storageSubmittedMwh.toFixed(1);
+    k.storageOnlineMwh = +k.storageOnlineMwh.toFixed(1);
+    renderKpis(k); renderPipeline(counts); renderPortfolioTable(rows);
+    renderWidgets(k, counts);
+    renderCharts({ byType:byType, byOwnerRev:byOwnerRev, capexByProj:capexByProj, storageByStage:storageByStage, counts:counts, k:k, projRows:projRows });
+    _updateScopeBar(rows.length, unownedCount);
+    /* Activity feed from the same rows (most-recently-touched first if available). */
+    var feed = rows.slice(0,6).map(function(r){
+      return { id:r.id, title:r.name, meta:(r.utility&&r.utility!=='—'?r.utility+' · ':'')+(STAGE_LABEL[r.stage]||r.stage),
+               amount:(r.capex&&r.capex!=='$0')?r.capex:'' };
+    });
+    renderActivityFeed(feed);
+  } catch(e){
+    console.error('Live rollup failed, showing placeholders:', e);
+    renderKpis(PLACEHOLDER_KPIS); renderPipeline(PLACEHOLDER_PIPELINE); renderPortfolioTable(PLACEHOLDER_ROWS);
+    renderWidgets(PLACEHOLDER_KPIS, PLACEHOLDER_PIPELINE); renderActivityFeed(null);
+  }
+}
+
+/* Update the sub-label + the "unassigned projects" note under the header. */
+function _updateScopeBar(shownCount, unownedCount){
+  var sub = document.getElementById('dash-scope-sub');
+  if (sub){
+    sub.textContent = 'Your projects — the sites linked to your account';
+  }
+  var note = document.getElementById('dash-scope-note');
+  if (!note) return;
+  // Only nudge about legacy/unassigned projects when there are any.
+  if (unownedCount > 0){
+    note.style.display = 'flex';
+    var label = unownedCount === 1 ? '1 project has' : unownedCount + ' projects have';
+    note.innerHTML = '<span>' + label + ' no owner yet.</span>'
+      + '<a onclick="openClaimModal()">Assign ownership ›</a>';
+  } else {
+    note.style.display = 'none';
+  }
+}
+
+/* ── CLAIM / REASSIGN OWNERSHIP ─────────────────────────────────────────
+   Lets a signed-in SUN user claim legacy (un-owned) projects onto their own
+   dashboard, or reassign any project's owner. Writes ownerEmail/ownerName on
+   the project doc, which the rollup then scopes on. */
+var _claimList = [];
+async function openClaimModal(){
+  var body = document.getElementById('claim-body');
+  body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--cs-sub)">Loading projects…</div>';
+  document.getElementById('claim-modal').classList.add('on');
+  try {
+    var snap = await db.collection('projects').where('orgId','==',currentOrg).get();
+    _claimList = [];
+    snap.forEach(function(doc){
+      var d = doc.data();
+      _claimList.push({ id:doc.id, name:d.name||'Untitled',
+                        ownerEmail:(d.ownerEmail||'').toLowerCase(), ownerName:d.ownerName||'' });
+    });
+    _renderClaimList();
+  } catch(e){
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--cs-red)">Could not load projects: '+escHtml(e.message)+'</div>';
+  }
+}
+function closeClaimModal(){ document.getElementById('claim-modal').classList.remove('on'); }
+function _renderClaimList(){
+  var body = document.getElementById('claim-body');
+  if (!_claimList.length){ body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--cs-sub)">No projects found.</div>'; return; }
+  var me = _meEmail();
+  // Unowned first, then mine, then others — so the actionable ones are on top.
+  var sorted = _claimList.slice().sort(function(a,b){
+    function rank(x){ if(!x.ownerEmail) return 0; if(x.ownerEmail===me) return 1; return 2; }
+    return rank(a)-rank(b);
+  });
+  var h = '';
+  for (var i=0;i<sorted.length;i++){
+    var p = sorted[i];
+    var who = p.ownerEmail ? (p.ownerName || p.ownerEmail.split('@')[0]) : 'Unassigned';
+    var mine = (p.ownerEmail === me);
+    var chip = p.ownerEmail
+      ? '<span class="claim-owner'+(mine?' me':'')+'">'+escHtml(who)+(mine?' (you)':'')+'</span>'
+      : '<span class="claim-owner none">Unassigned</span>';
+    var btn = mine
+      ? '<button class="claim-btn ghost" onclick="claimProject(&quot;'+p.id+'&quot;,&quot;release&quot;)">Release</button>'
+      : '<button class="claim-btn" onclick="claimProject(&quot;'+p.id+'&quot;,&quot;mine&quot;)">Claim to me</button>';
+    h += '<div class="claim-row"><div class="claim-nm">'+escHtml(p.name)+'</div>'+chip+btn+'</div>';
+  }
+  body.innerHTML = h;
+}
+async function claimProject(id, mode){
+  try {
+    var payload;
+    if (mode === 'release'){ payload = { ownerEmail:'', ownerName:'' }; }
+    else { payload = { ownerEmail:_meEmail(), ownerName:_meName() }; }
+    payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('projects').doc(id).set(payload, {merge:true});
+    // Reflect locally + refresh the modal and dashboard.
+    for (var i=0;i<_claimList.length;i++){
+      if (_claimList[i].id===id){ _claimList[i].ownerEmail=payload.ownerEmail; _claimList[i].ownerName=payload.ownerName; break; }
+    }
+    _renderClaimList();
+    if (typeof computeLiveRollup === 'function') computeLiveRollup();
+  } catch(e){
+    alert('Could not update ownership: ' + e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TEAM HUB — to-dos, company messages, direct messages, current users.
+   Everything is scoped to the signed-in user's orgId (email domain), so each
+   tenant's team is isolated. Uses live onSnapshot listeners. Collections:
+     team_todos     { orgId, text, assignedToEmail, assignedToName, createdByEmail, createdByName, done, dueDate, createdAt }
+     team_messages  { orgId, text, authorEmail, authorName, createdAt }
+     team_members   { orgId, email, name, lastSeen }         (doc id = orgId__email)
+     team_dms       { orgId, pairKey, fromEmail, toEmail, text, createdAt }  (pairKey = sorted emails)
+   ══════════════════════════════════════════════════════════════════════ */
+var _teamUnsub = [];
+var _teamMembers = [];       // [{email,name,photo}]
+var _myProfile = null;       // { name, photo } for the signed-in user
+
+function _meEmail(){ return (currentUser && currentUser.email) ? currentUser.email.toLowerCase() : ''; }
+function _meName(){
+  if (_myProfile && _myProfile.name) return _myProfile.name;
+  if (currentUser && currentUser.displayName) return currentUser.displayName;
+  var e = _meEmail(); return e ? e.split('@')[0] : 'You';
+}
+function _memberByEmail(email){
+  for (var i=0;i<_teamMembers.length;i++){ if(_teamMembers[i].email===email) return _teamMembers[i]; }
+  return null;
+}
+function _pretty(email){
+  if (!email) return '—';
+  var m = _memberByEmail(email);
+  if (m && m.name) return m.name;
+  return email.split('@')[0];
+}
+function _initials(s){
+  s = String(s||'?').trim();
+  if (!s) return '?';
+  var parts = s.split(/\s+/);
+  if (parts.length >= 2) return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  return s.charAt(0).toUpperCase();
+}
+/* Deterministic avatar color from an email, so each person is a stable hue. */
+var _AV_COLORS = ['#006F9A','#00A9A4','#2E86C1','#8E44AD','#D35400','#16A085','#C0392B','#2C3E50','#B7791F','#0E7C86'];
+function _avColor(email){
+  var s = String(email||''), h = 0;
+  for (var i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) & 0x7fffffff; }
+  return _AV_COLORS[h % _AV_COLORS.length];
+}
+/* Render an avatar: photo if present, else colored initials. size in px. */
+function _avatarHtml(member, size){
+  size = size || 30;
+  var name = (member && member.name) || (member && member.email ? member.email.split('@')[0] : '?');
+  var email = (member && member.email) || '';
+  var photo = member && member.photo;
+  var dim = 'width:'+size+'px;height:'+size+'px;font-size:'+Math.round(size*0.4)+'px';
+  if (photo){
+    return '<span class="th-avatar" style="'+dim+';background:none"><img src="'+escHtml(photo)+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></span>';
+  }
+  return '<span class="th-avatar" style="'+dim+';background:'+_avColor(email)+'">'+escHtml(_initials(name))+'</span>';
+}
+function _fmtWhen(ts){
+  if (!ts || !ts.toDate) return '';
+  var d = ts.toDate(), now = new Date();
+  var same = d.toDateString()===now.toDateString();
+  var t = d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  return same ? t : (d.toLocaleDateString() + ' ' + t);
+}
+
+function initTeamHub(){
+  if (!currentUser || !currentOrg || !db) return;
+  // Clear any prior listeners (e.g. re-auth).
+  for (var i=0;i<_teamUnsub.length;i++){ try{ _teamUnsub[i](); }catch(e){} }
+  _teamUnsub = [];
+
+  loadMyProfile(function(){
+    registerMember();
+    watchMembers();
+    refreshGreeting();   // saved display name now available → update greeting
+  });
+  watchTodos();
+  watchMessages();
+  watchConversations();
+}
+
+/* ── Load this user's saved profile (name/photo) BEFORE registering, so we
+   never overwrite a chosen display name with the email prefix. ── */
+function loadMyProfile(done){
+  try {
+    var id = currentOrg + '__' + _meEmail();
+    db.collection('team_members').doc(id).get().then(function(doc){
+      if (doc && doc.exists){ var d = doc.data(); _myProfile = { name:d.name||'', photo:d.photo||'' }; }
+      else { _myProfile = { name:'', photo:'' }; }
+      if (done) done();
+    })['catch'](function(){ _myProfile = { name:'', photo:'' }; if (done) done(); });
+  } catch(e){ _myProfile = { name:'', photo:'' }; if (done) done(); }
+}
+
+/* ── Presence: record this member so teammates can assign/DM them.
+   Uses merge + only sets name/photo if we have them, so a saved profile is
+   never clobbered by a plain login. ── */
+function registerMember(){
+  try {
+    var id = currentOrg + '__' + _meEmail();
+    var payload = {
+      orgId: currentOrg,
+      email: _meEmail(),
+      lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    // Only write name if we have a real one (saved profile or Google displayName).
+    var nm = (_myProfile && _myProfile.name) || (currentUser && currentUser.displayName) || '';
+    if (nm) payload.name = nm;
+    if (_myProfile && _myProfile.photo) payload.photo = _myProfile.photo;
+    db.collection('team_members').doc(id).set(payload, {merge:true});
+  } catch(e){ console.warn('registerMember', e); }
+}
+
+function watchMembers(){
+  var un = db.collection('team_members').where('orgId','==',currentOrg)
+    .onSnapshot(function(snap){
+      var list = [];
+      snap.forEach(function(d){ var m=d.data(); if(m.email) list.push({email:m.email, name:m.name||m.email.split('@')[0], photo:m.photo||'', lastSeen:m.lastSeen}); });
+      list.sort(function(a,b){ return a.name.localeCompare(b.name); });
+      _teamMembers = list;
+      renderMembers();
+      fillAssigneeSelect();
+      renderConvoList();
+      if (document.getElementById('convo-modal') && document.getElementById('convo-modal').classList.contains('show')) renderMemberPicker();
+    }, function(err){ console.warn('members', err); });
+  _teamUnsub.push(un);
+}
+
+function renderMembers(){
+  var box = document.getElementById('th-users-list'); if(!box) return;
+  document.getElementById('th-users-count').textContent = _teamMembers.length;
+  if (!_teamMembers.length){ box.innerHTML = '<div class="th-empty">No teammates yet.</div>'; return; }
+  var me = _meEmail(), h = '';
+  for (var i=0;i<_teamMembers.length;i++){
+    var m = _teamMembers[i], you = (m.email===me);
+    h += '<div class="th-user">'+_avatarHtml(m,30)
+       + '<span class="th-user-name">'+escHtml(m.name)+(you?' <span class="th-user-you">YOU</span>':'')+'</span></div>';
+  }
+  box.innerHTML = h;
+}
+
+function fillAssigneeSelect(){
+  var sel = document.getElementById('th-todo-assignee'); if(!sel) return;
+  var cur = sel.value;
+  var h = '<option value="">Assign to…</option>';
+  for (var i=0;i<_teamMembers.length;i++){
+    var m=_teamMembers[i];
+    h += '<option value="'+escHtml(m.email)+'">'+escHtml(m.name)+(m.email===_meEmail()?' (me)':'')+'</option>';
+  }
+  sel.innerHTML = h;
+  if (cur) sel.value = cur;
+}
+
+/* ── To-dos ── */
+function watchTodos(){
+  var un = db.collection('team_todos').where('orgId','==',currentOrg)
+    .onSnapshot(function(snap){
+      var items = [];
+      snap.forEach(function(d){ var t=d.data(); t._id=d.id; items.push(t); });
+      items.sort(function(a,b){
+        if (!!a.done !== !!b.done) return a.done ? 1 : -1;        // open first
+        var ma=(a.createdAt&&a.createdAt.toMillis)?a.createdAt.toMillis():0;
+        var mb=(b.createdAt&&b.createdAt.toMillis)?b.createdAt.toMillis():0;
+        return mb-ma;
+      });
+      renderTodos(items);
+    }, function(err){ console.warn('todos', err); });
+  _teamUnsub.push(un);
+}
+
+function renderTodos(items){
+  var box = document.getElementById('th-todo-list'); if(!box) return;
+  var open = 0; for (var i=0;i<items.length;i++){ if(!items[i].done) open++; }
+  document.getElementById('th-todo-count').textContent = open;
+  if (!items.length){ box.innerHTML = '<div class="th-empty">No to-dos yet. Add one and assign a teammate.</div>'; return; }
+  var today = new Date(); today.setHours(0,0,0,0);
+  var h = '';
+  for (var j=0;j<items.length;j++){
+    var t = items[j];
+    var who = t.assignedToEmail ? ('<span class="th-assignee">@'+escHtml(_pretty(t.assignedToEmail))+'</span>') : '';
+    var due = '';
+    if (t.dueDate){
+      var dd = new Date(t.dueDate+'T00:00:00');
+      var over = (!t.done && dd < today);
+      due = '<span class="th-due'+(over?' over':'')+'">'+(over?'Overdue · ':'Due ')+escHtml(t.dueDate)+'</span>';
+    }
+    var by = t.createdByName ? ('by '+escHtml(t.createdByName)) : '';
+    h += '<div class="th-todo'+(t.done?' done':'')+'">'
+      +   '<span class="th-check'+(t.done?' done':'')+'" onclick="toggleTodo(&quot;'+t._id+'&quot;,'+(t.done?'true':'false')+')"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5"/></svg></span>'
+      +   '<div class="th-todo-main"><div class="th-todo-txt">'+escHtml(t.text||'')+'</div>'
+      +     '<div class="th-todo-meta">'+who+due+'<span>'+by+'</span></div></div>'
+      +   '<button class="th-del" title="Delete" onclick="deleteTodo(&quot;'+t._id+'&quot;)">×</button>'
+      + '</div>';
+  }
+  box.innerHTML = h;
+}
+
+function addTodo(){
+  var txtEl = document.getElementById('th-todo-text');
+  var text = (txtEl.value||'').trim();
+  if (!text){ txtEl.focus(); return; }
+  var assignee = document.getElementById('th-todo-assignee').value || '';
+  var due = document.getElementById('th-todo-due').value || '';
+  var btn = document.getElementById('th-todo-btn'); btn.disabled = true;
+  db.collection('team_todos').add({
+    orgId: currentOrg,
+    text: text,
+    assignedToEmail: assignee,
+    assignedToName: assignee ? _pretty(assignee) : '',
+    createdByEmail: _meEmail(),
+    createdByName: _meName(),
+    done: false,
+    dueDate: due,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    txtEl.value=''; document.getElementById('th-todo-due').value='';
+    document.getElementById('th-todo-assignee').value='';
+  })['catch'](function(e){ alert('Could not add to-do: '+e.message); })
+   .then(function(){ btn.disabled=false; });
+}
+
+function toggleTodo(id, isDone){
+  db.collection('team_todos').doc(id).update({ done: !isDone })['catch'](function(e){ console.warn('toggle', e); });
+}
+function deleteTodo(id){
+  db.collection('team_todos').doc(id)['delete']()['catch'](function(e){ console.warn('del', e); });
+}
+
+/* ── Company messages (shared board) ── */
+function watchMessages(){
+  var un = db.collection('team_messages').where('orgId','==',currentOrg)
+    .onSnapshot(function(snap){
+      var msgs = [];
+      snap.forEach(function(d){ var m=d.data(); m._id=d.id; msgs.push(m); });
+      msgs.sort(function(a,b){
+        var ma=(a.createdAt&&a.createdAt.toMillis)?a.createdAt.toMillis():0;
+        var mb=(b.createdAt&&b.createdAt.toMillis)?b.createdAt.toMillis():0;
+        return mb-ma;
+      });
+      renderMessages(msgs);
+    }, function(err){ console.warn('messages', err); });
+  _teamUnsub.push(un);
+}
+
+function renderMessages(msgs){
+  var box = document.getElementById('th-msg-list'); if(!box) return;
+  document.getElementById('th-msg-count').textContent = msgs.length;
+  if (!msgs.length){ box.innerHTML = '<div class="th-empty">No messages yet. Post an update for the team.</div>'; return; }
+  var me = _meEmail(), h='';
+  for (var i=0;i<msgs.length;i++){
+    var m = msgs[i], mine = (m.authorEmail===me);
+    var who = _pretty(m.authorEmail) || m.authorName || 'Someone';
+    h += '<div class="th-msg'+(mine?' th-msg-mine':'')+'">'
+      +   '<div class="th-msg-top"><span class="th-msg-who">'+escHtml(who)+'</span>'
+      +     '<span class="th-msg-when">'+_fmtWhen(m.createdAt)+'</span></div>'
+      +   '<div class="th-msg-txt">'+escHtml(m.text||'')+'</div></div>';
+  }
+  box.innerHTML = h;
+}
+
+function postMessage(){
+  var el = document.getElementById('th-msg-text');
+  var text = (el.value||'').trim();
+  if (!text){ el.focus(); return; }
+  var btn = document.getElementById('th-msg-btn'); btn.disabled=true;
+  db.collection('team_messages').add({
+    orgId: currentOrg, text: text,
+    authorEmail: _meEmail(), authorName: _meName(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ el.value=''; })
+   ['catch'](function(e){ alert('Could not post: '+e.message); })
+   .then(function(){ btn.disabled=false; });
+}
+
+/* ══════════════════ CONVERSATIONS (1:1 + groups) ══════════════════
+   team_conversations: { orgId, kind:'dm'|'group', name, members:[email],
+                         memberKey, createdBy, createdAt, lastMessage, lastAt }
+   team_convo_messages: { orgId, convoId, fromEmail, text, createdAt }
+   A user sees a conversation if their email is in members[]. */
+var _convos = [];            // list of {id, ...data}
+var _convoOpen = null;       // open conversation id
+var _convoUnsub = null;      // listener for open thread messages
+var _convosUnsub = null;     // listener for the conversation list
+var _convoNewKind = 'dm';    // 'dm' | 'group' in the new-convo modal
+var _convoPicked = {};       // email -> true, selected members in modal
+
+function watchConversations(){
+  if (_convosUnsub){ try{ _convosUnsub(); }catch(e){} _convosUnsub=null; }
+  _convosUnsub = db.collection('team_conversations')
+    .where('orgId','==',currentOrg)
+    .where('members','array-contains',_meEmail())
+    .onSnapshot(function(snap){
+      var list=[];
+      snap.forEach(function(d){ var c=d.data(); c.id=d.id; list.push(c); });
+      list.sort(function(a,b){
+        var ma=(a.lastAt&&a.lastAt.toMillis)?a.lastAt.toMillis():((a.createdAt&&a.createdAt.toMillis)?a.createdAt.toMillis():0);
+        var mb=(b.lastAt&&b.lastAt.toMillis)?b.lastAt.toMillis():((b.createdAt&&b.createdAt.toMillis)?b.createdAt.toMillis():0);
+        return mb-ma;   // most recent first
+      });
+      _convos = list;
+      renderConvoList();
+    }, function(err){ console.warn('conversations', err); });
+  _teamUnsub.push(function(){ if(_convosUnsub){ try{ _convosUnsub(); }catch(e){} } });
+}
+
+function _convoTitle(c){
+  if (c.kind === 'group') return c.name || 'Group';
+  // DM: show the OTHER participant's name
+  var me = _meEmail();
+  for (var i=0;i<(c.members||[]).length;i++){ if(c.members[i]!==me) return _pretty(c.members[i]); }
+  return 'Conversation';
+}
+function _convoIcon(c){
+  if (c.kind === 'group'){
+    return '<span class="convo-item-ico group"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>';
+  }
+  var me=_meEmail(), other=null;
+  for (var i=0;i<(c.members||[]).length;i++){ if(c.members[i]!==me){ other=_memberByEmail(c.members[i]) || {email:c.members[i]}; break; } }
+  return _avatarHtml(other||{}, 34).replace('th-avatar','convo-item-ico');
+}
+
+function renderConvoList(){
+  var box = document.getElementById('convo-list-body'); if(!box) return;
+  if (!_convos.length){ box.innerHTML = '<div class="th-empty" style="padding:20px 12px">No conversations yet. Start one with “+ New”.</div>'; return; }
+  var h='';
+  for (var i=0;i<_convos.length;i++){
+    var c=_convos[i], on=(c.id===_convoOpen);
+    var sub = c.lastMessage ? escHtml(c.lastMessage) : (c.kind==='group' ? ((c.members||[]).length+' members') : '');
+    h += '<div class="convo-item'+(on?' on':'')+'" onclick="openConvo(&quot;'+c.id+'&quot;)">'
+      +   _convoIcon(c)
+      +   '<div class="convo-item-main"><div class="convo-item-name">'+escHtml(_convoTitle(c))+'</div>'
+      +     '<div class="convo-item-last">'+sub+'</div></div></div>';
+  }
+  box.innerHTML = h;
+  _paintSidebarDMs();
+}
+
+// Mirror the conversation list into the left sidebar (#sn-dm-list)
+function _paintSidebarDMs(){
+  var side = document.getElementById('sn-dm-list'); if(!side) return;
+  if (!_convos.length){ side.innerHTML=''; return; }
+  var h='';
+  for (var i=0;i<_convos.length;i++){
+    var c=_convos[i], on=(c.id===_convoOpen);
+    var name=_convoTitle(c); var ini=(name||'?').charAt(0).toUpperCase();
+    h += '<a class="sn-dm-item'+(on?' active':'')+'" href="#" data-convo="'+c.id+'">'
+      +  '<span class="dm-ava">'+ini+'</span><span>'+escHtml(name)+'</span></a>';
+  }
+  side.innerHTML=h;
+}
+
+// Delegated click for sidebar DM items (robust vs inline onclick encoding).
+if (!window.__snDmWired){
+  window.__snDmWired = true;
+  document.addEventListener('click', function(e){
+    var it = e.target && e.target.closest ? e.target.closest('.sn-dm-item') : null;
+    if (it){ e.preventDefault(); var id=it.getAttribute('data-convo'); if(id) openConvo(id); }
+  });
+}
+function openConvo(id){
+  _convoOpen = id;
+  if (window.swSelect) swSelect('msgs');
+  _snHighlight('chat');
+  // open the drawer + scrim (clicking a DM should pop the panel out)
+  var sw=document.getElementById('sw'), scrim=document.getElementById('sw-scrim');
+  var title=document.getElementById('sw-drawer-title'); if(title) title.textContent='Messages';
+  if (sw) sw.classList.add('sw-open');
+  if (scrim) scrim.classList.add('on');
+  document.body.style.overflow='hidden';
+  renderConvoList();
+  var c = null; for (var i=0;i<_convos.length;i++){ if(_convos[i].id===id){ c=_convos[i]; break; } }
+  if (!c) return;
+
+  document.getElementById('convo-thread-title').textContent = _convoTitle(c);
+  var sub = c.kind==='group'
+    ? ((c.members||[]).map(function(e){return _pretty(e);}).join(', '))
+    : '';
+  document.getElementById('convo-thread-sub').textContent = sub;
+
+  var input=document.getElementById('convo-text'), btn=document.getElementById('convo-send');
+  input.disabled=false; btn.disabled=false; input.placeholder='Message '+_convoTitle(c)+'…';
+
+  if (_convoUnsub){ try{ _convoUnsub(); }catch(e){} _convoUnsub=null; }
+  _convoUnsub = db.collection('team_convo_messages')
+    .where('orgId','==',currentOrg).where('convoId','==',id)
+    .onSnapshot(function(snap){
+      var msgs=[];
+      snap.forEach(function(d){ msgs.push(d.data()); });
+      msgs.sort(function(a,b){
+        var ma=(a.createdAt&&a.createdAt.toMillis)?a.createdAt.toMillis():0;
+        var mb=(b.createdAt&&b.createdAt.toMillis)?b.createdAt.toMillis():0;
+        return ma-mb;
+      });
+      renderConvoThread(msgs, c.kind==='group');
+    }, function(err){ console.warn('convo msgs', err); });
+}
+
+function renderConvoThread(msgs, isGroup){
+  var box=document.getElementById('convo-thread'); if(!box) return;
+  if (!msgs.length){ box.innerHTML='<div class="th-empty">No messages yet. Say hello.</div>'; return; }
+  var me=_meEmail(), h='';
+  for (var i=0;i<msgs.length;i++){
+    var m=msgs[i], mine=(m.fromEmail===me);
+    var who = (isGroup && !mine) ? '<div class="th-bubble-who">'+escHtml(_pretty(m.fromEmail))+'</div>' : '';
+    h += '<div class="th-bubble '+(mine?'me':'them')+'">'+who+escHtml(m.text||'')
+      +   '<div class="th-bubble-when">'+_fmtWhen(m.createdAt)+'</div></div>';
+  }
+  box.innerHTML=h;
+  box.scrollTop=box.scrollHeight;
+}
+
+function sendConvoMessage(){
+  if (!_convoOpen) return;
+  var el=document.getElementById('convo-text');
+  var text=(el.value||'').trim();
+  if (!text) return;
+  var btn=document.getElementById('convo-send'); btn.disabled=true;
+  db.collection('team_convo_messages').add({
+    orgId: currentOrg, convoId: _convoOpen,
+    fromEmail: _meEmail(), text: text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    el.value='';
+    // update conversation preview (best-effort)
+    return db.collection('team_conversations').doc(_convoOpen).set({
+      lastMessage: (_meName()+': '+text).slice(0,80),
+      lastAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+  })['catch'](function(e){ alert('Could not send: '+(e&&e.message?e.message:'error')); })
+   .then(function(){ btn.disabled=false; el.focus(); });
+}
+
+/* ── New conversation / group modal ── */
+function openNewConvo(){
+  _convoNewKind='dm'; _convoPicked={};
+  convoTab('dm');
+  document.getElementById('convo-group-name').value='';
+  _convoModalMsg('','');
+  document.getElementById('convo-modal').classList.add('show');
+}
+function closeNewConvo(){ document.getElementById('convo-modal').classList.remove('show'); }
+function _convoModalMsg(t,k){ var m=document.getElementById('convo-modal-msg'); if(m){ m.textContent=t||''; m.className='acct-msg'+(k?(' '+k):''); } }
+
+function convoTab(kind){
+  _convoNewKind = kind;
+  _convoPicked = {};
+  document.getElementById('convo-tab-dm').className = 'convo-tab'+(kind==='dm'?' on':'');
+  document.getElementById('convo-tab-group').className = 'convo-tab'+(kind==='group'?' on':'');
+  document.getElementById('convo-group-name-field').style.display = (kind==='group')?'block':'none';
+  document.getElementById('convo-pick-label').textContent = (kind==='group')?'Add members':'Choose a teammate';
+  document.getElementById('convo-modal-title').textContent = (kind==='group')?'New group':'New conversation';
+  document.getElementById('convo-create-btn').textContent = (kind==='group')?'Create group':'Start conversation';
+  renderMemberPicker();
+}
+
+function renderMemberPicker(){
+  var box=document.getElementById('convo-member-picker'); if(!box) return;
+  var me=_meEmail(), peers=[];
+  for (var i=0;i<_teamMembers.length;i++){ if(_teamMembers[i].email!==me) peers.push(_teamMembers[i]); }
+  if (!peers.length){ box.innerHTML='<div class="th-empty" style="padding:14px">No teammates yet. Invite people by having them sign in.</div>'; return; }
+  var h='';
+  for (var j=0;j<peers.length;j++){
+    var p=peers[j], sel=!!_convoPicked[p.email];
+    h += '<div class="convo-pick'+(sel?' sel':'')+'" onclick="togglePick(&quot;'+escHtml(p.email)+'&quot;)">'
+      +   '<span class="convo-pick-check"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5"/></svg></span>'
+      +   '<span class="convo-pick-name">'+escHtml(p.name)+'</span></div>';
+  }
+  box.innerHTML=h;
+}
+
+function togglePick(email){
+  if (_convoNewKind==='dm'){
+    // single-select for DM
+    var wasSel = !!_convoPicked[email];
+    _convoPicked = {};
+    if (!wasSel) _convoPicked[email]=true;
+  } else {
+    if (_convoPicked[email]) delete _convoPicked[email];
+    else _convoPicked[email]=true;
+  }
+  renderMemberPicker();
+}
+
+function _pickedList(){ var a=[]; for (var k in _convoPicked){ if(_convoPicked.hasOwnProperty(k)) a.push(k); } return a; }
+
+function createConvo(){
+  var picked=_pickedList();
+  if (_convoNewKind==='dm'){
+    if (picked.length!==1){ _convoModalMsg('Pick one teammate.','err'); return; }
+    _startOrOpenDM(picked[0]);
+  } else {
+    var name=(document.getElementById('convo-group-name').value||'').trim();
+    if (!name){ _convoModalMsg('Name your group.','err'); return; }
+    if (!picked.length){ _convoModalMsg('Add at least one member.','err'); return; }
+    _createGroup(name, picked);
+  }
+}
+
+function _startOrOpenDM(email){
+  var me=_meEmail();
+  var key=[me,email].sort().join('__');
+  // reuse an existing DM if present
+  for (var i=0;i<_convos.length;i++){
+    if (_convos[i].kind==='dm' && _convos[i].memberKey===key){
+      closeNewConvo(); openConvo(_convos[i].id); return;
+    }
+  }
+  var btn=document.getElementById('convo-create-btn'); btn.disabled=true; _convoModalMsg('Starting…','');
+  db.collection('team_conversations').add({
+    orgId: currentOrg, kind:'dm',
+    members: [me, email].sort(),
+    memberKey: key,
+    createdBy: me,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastMessage: ''
+  }).then(function(ref){ closeNewConvo(); openConvo(ref.id); })
+   ['catch'](function(e){ _convoModalMsg(_convoErr(e),'err'); })
+   .then(function(){ btn.disabled=false; });
+}
+
+function _createGroup(name, picked){
+  var me=_meEmail();
+  var members=[me].concat(picked);
+  var btn=document.getElementById('convo-create-btn'); btn.disabled=true; _convoModalMsg('Creating…','');
+  db.collection('team_conversations').add({
+    orgId: currentOrg, kind:'group',
+    name: name,
+    members: members,
+    createdBy: me,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastMessage: ''
+  }).then(function(ref){ closeNewConvo(); openConvo(ref.id); })
+   ['catch'](function(e){ _convoModalMsg(_convoErr(e),'err'); })
+   .then(function(){ btn.disabled=false; });
+}
+function _convoErr(e){
+  if (e && e.code==='permission-denied') return 'Permission denied — check Firestore rules for team_conversations.';
+  return 'Could not create: '+(e&&e.message?e.message:'error');
+}
+
+/* ══════════════════ ACCOUNT SETTINGS ══════════════════ */
+function _providerId(){
+  try {
+    var u = currentUser || (auth && auth.currentUser);
+    if (u && u.providerData && u.providerData.length) return u.providerData[0].providerId;
+  } catch(e){}
+  return 'password';
+}
+/* ── BILLING ON THE ACCOUNT MODAL ────────────────────────────────────────
+   Terms are read-only here: billing/current is writable only by ClearSky in
+   the rules, and a customer editing their own tier is not a feature. What a
+   customer needs is the number, the date, a way to pay, and receipts.
+
+   Everything degrades to "—" rather than erroring. A tenant with no billing
+   document is the normal state for an account ClearSky has not priced yet,
+   and a red failure on the account page for that is noise. */
+function _money(n){
+  n = Number(n);
+  if (!isFinite(n)) return '—';
+  return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+function loadBilling(){
+  var org = (typeof currentOrg !== 'undefined' && currentOrg) || '';
+  if (!org || typeof db === 'undefined' || !db) return;
+  var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
+  ref.get().then(function(d){
+    var b = (d && d.exists) ? d.data() : {};
+    setText('acct-tier',   b.tier || 'not yet priced');
+    setText('acct-addons', (b.addons && b.addons.length) ? b.addons.join(', ') : 'none');
+    setText('acct-amt',    b.amountDue == null ? '—' : _money(b.amountDue));
+    /* Paying half up front is the ordinary case here, and without this row the
+       account reads "nothing due" while money has already changed hands —
+       which is the version a customer disputes. */
+    setText('acct-paid',   b.amountPaid == null ? '—'
+                           : _money(b.amountPaid) + (b.lastPaidAt ? (' on ' + b.lastPaidAt) : ''));
+    setText('acct-due',    b.subscriptionDue || (b.trialEndsAt ? ('trial ends ' + b.trialEndsAt) : '—'));
+    if (b.note){
+      setText('acct-note', b.note);
+      var nr = document.getElementById('acct-note-row'); if (nr) nr.style.display = '';
+    }
+
+    var pay = document.getElementById('acct-pay');
+    if (pay && b.paymentLink){ pay.href = b.paymentLink; pay.style.display = ''; }
+    /* The Stripe portal only exists once a customer record does. Showing the
+       button without one produces a 400 from the endpoint and a dead end. */
+    var portal = document.getElementById('acct-portal');
+    if (portal && b.stripeCustomerId) portal.style.display = '';
+  }).catch(function(){ /* no billing doc yet — leave the dashes */ });
+
+  loadInvoices();
+
+  ref.collection('history').orderBy('at', 'desc').limit(12).get().then(function(sn){
+    var host = document.getElementById('acct-billing-history');
+    if (!host) return;
+    if (!sn || sn.empty){ host.textContent = 'No billing changes recorded yet.'; return; }
+    var rows = [];
+    sn.forEach(function(doc){
+      var h = doc.data() || {}, c = h.changed || {};
+      var when = h.at && h.at.toDate ? h.at.toDate().toLocaleDateString() : '';
+      var parts = [];
+      if (c.tier) parts.push('plan → ' + c.tier);
+      if (c.amountDue != null) parts.push('amount due ' + _money(c.amountDue));
+      if (c.subscriptionDue) parts.push('due ' + c.subscriptionDue);
+      if (c.addons) parts.push('add-ons: ' + (c.addons.length ? c.addons.join(', ') : 'none'));
+      rows.push('<div>' + escHtml(when) + ' — ' + escHtml(parts.join(' · ') || 'terms updated') + '</div>');
+    });
+    host.innerHTML = rows.join('');
+  }).catch(function(){
+    var host = document.getElementById('acct-billing-history');
+    if (host) host.textContent = 'Billing history unavailable.';
+  });
+}
+/* Invoices come from Stripe, not from Firestore — what we were billed and
+   what was paid, rather than what we changed. The endpoint answers
+   connected:false for a tenant with no Stripe customer, which is the normal
+   state for an account nobody has priced yet and should read as a plain
+   sentence rather than an error. */
+function loadInvoices(){
+  var host = document.getElementById('acct-invoices');
+  if (!host) return;
+  var u = currentUser || (auth && auth.currentUser);
+  if (!u){ host.textContent = '—'; return; }
+  host.textContent = 'Loading…';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/stripe-invoices', { method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok },
+      body: JSON.stringify({ orgId: currentOrg }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(j){
+    if (!j.connected){ host.textContent = 'No invoices yet — billing has not been set up for this workspace.'; return; }
+    if (!j.invoices.length){ host.textContent = 'No invoices issued yet.'; return; }
+    host.innerHTML = j.invoices.map(function(inv){
+      var when = inv.created ? new Date(inv.created).toLocaleDateString() : '';
+      var amt  = inv.amountDue == null ? '' : _money(inv.amountDue);
+      var link = inv.hostedUrl || inv.pdfUrl;
+      var label = escHtml(when) + ' — ' + escHtml(amt) + ' · ' + escHtml(inv.status)
+                + (inv.number ? (' · ' + escHtml(inv.number)) : '');
+      return '<div>' + (link
+        ? '<a href="' + escHtml(link) + '" target="_blank" rel="noopener">' + label + '</a>'
+        : label) + '</div>';
+    }).join('');
+  }).catch(function(e){
+    host.textContent = 'Invoices unavailable — ' + (e.message || e);
+  });
+}
+
+function openBillingPortal(){
+  var u = currentUser || (auth && auth.currentUser);
+  if (!u) return;
+  var msg = document.getElementById('acct-billing-msg');
+  if (msg) msg.textContent = 'Opening Stripe…';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/stripe-portal', { method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok },
+      body: JSON.stringify({ orgId: currentOrg }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(j){
+    if (j && j.url){ window.open(j.url, '_blank', 'noopener'); if(msg) msg.textContent=''; }
+    else { if(msg) msg.textContent = 'Stripe did not return a portal link.'; }
+  }).catch(function(e){
+    if (msg) msg.textContent = 'Could not open billing — ' + (e.message || e);
+  });
+}
+
 
 function openAccount(){
   var u = currentUser || (auth && auth.currentUser);
