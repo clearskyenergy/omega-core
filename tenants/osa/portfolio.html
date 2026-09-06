@@ -628,6 +628,12 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
   <span class="tb-build" id="tb-build" title="Build stamp — if this is older than the deploy you just made, your browser is on a cached page. Hard refresh.">2026-09-03.1528</span>
   <div class="tb-spacer"></div>
   <div class="tb-user">
+    <!-- Back to the workspace. The portfolio is a product surface of its own
+         on its own host, so browser Back is whatever the person did before
+         rather than a way out — and there was no link at all. Matches the
+         editor's own "<- Portal" so the way home is the same everywhere. -->
+    <a class="btn-sm" href="https://app.clearskyomega.com/" id="btn-portal"
+       title="Back to the OMEGA workspace">&#8592; Portal</a>
     <button class="btn-sm pri" id="btn-new" onclick="openNew()">+ New project</button>
     <button class="btn-sm" onclick="refresh(true)" id="btn-refresh">Refresh</button>
     <span class="tb-name" id="tb-name"></span>
@@ -3262,7 +3268,29 @@ function doRevokeInvite(email){
 function renderInvites(){
   var card=document.getElementById('invite-card'); if(!card) return;
   if(!A.can('approve_any')){ card.style.display='none'; return; }
-  var pending=(S.invites||[]).filter(function(i){ return !i.usedAt; });
+  /* RECONCILED AGAINST REAL ACCOUNTS, NOT AGAINST usedAt.
+
+     usedAt is never set. The invitee's own sign-in tries to mark the invite
+     spent, and firestore.rules allows an invited person to READ their invite
+     but not to UPDATE it — so that write is refused every time, and
+     access-data.js swallows the refusal because failing a sign-in over a
+     bookkeeping field would be the wrong trade.
+
+     The consequence was that everyone who was ever invited AND signed in
+     appeared in both lists at once: active in the members table, and still
+     sitting under "Invited, not yet signed in" as though they had never
+     arrived. Terry Warren showed as never-signed-in for a week while holding
+     an active account created from that very invite.
+
+     An account existing is the fact that matters, and S.users already holds
+     it. So the question this list asks is now "is there an account for this
+     address" rather than "did a best-effort flag get written". That also
+     heals every invite already stranded, with no rule change and no
+     migration. */
+  var have={}; (S.users||[]).forEach(function(u){
+    if(u.email) have[String(u.email).toLowerCase()]=1; });
+  var pending=(S.invites||[]).filter(function(i){
+    return !i.usedAt && !have[String(i.email||'').toLowerCase()]; });
   if(!pending.length){ card.style.display='none'; return; }
   card.style.display='';
   document.getElementById('invite-note').innerHTML =

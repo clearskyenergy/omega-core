@@ -220,14 +220,22 @@
         seed.approvedBy = 'config.access.owner';
       }
       return ref.set(seed).then(function () {
-        /* Mark the invite spent. Non-fatal: the account exists either way, and
-           refusing to sign somebody in because a bookkeeping write failed
-           would be the wrong trade. */
-        if (invite) {
-          db.collection(INVITES).doc(email)
-            .set({ usedAt: stamp(), usedByUid: user.uid }, { merge:true })
-            ['catch'](function () {});
-        }
+        /* THE INVITE IS NOT MARKED SPENT HERE, and the attempt is gone.
+
+           This used to write usedAt and usedByUid back to the invite. It
+           could never succeed: omega_invites allows an invited person to read
+           their own invite and nobody but a portal admin to update one, so
+           the write was refused on every single redemption. The refusal was
+           swallowed — correctly, because a bookkeeping field is not a reason
+           to fail a sign-in — which is exactly why it went unnoticed, while
+           the Users page went on listing active people as never having
+           arrived.
+
+           Loosening the rule to let the invitee write here would hand the
+           account being created write access to the document that decides
+           its own role. Not worth it for a flag. The Users page now asks
+           whether an account exists instead, which is the real question and
+           needs no permission this side does not already have. */
         return finish(normalize(user.uid, seed), ref, user);
       });
   }
