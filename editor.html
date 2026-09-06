@@ -104,6 +104,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js" onerror="void 0"></script>
+<script src="/omega-caps.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1648,12 +1649,12 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rtab"        data-page="__file"  onclick="rbAppMenu(event)">File</div>
     <div class="rtab"        data-page="modify"  onclick="rbTab('modify')">Edit</div>
     <div class="rtab active" data-page="home"    onclick="rbTab('home')">Build</div>
-    <div class="rtab"        data-page="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
+    <div class="rtab"        data-page="compute" data-cap="compute" onclick="rbTab('compute')" title="Compute campus &mdash; site, design, sizing and cost tools for a data-centre campus with on-site power">Compute</div>
     <div class="rtab"        data-page="insert"  onclick="rbTab('insert')">Insert</div>
     <div class="rtab"        data-page="draw"    onclick="rbTab('draw')">Draw</div>
     <div class="rtab"        data-page="annotate" onclick="rbTab('annotate')">Annotate</div>
-    <div class="rtab"        data-page="analyze" onclick="rbTab('analyze')">Analyze</div>
-    <div class="rtab"        data-page="estimate" onclick="rbTab('estimate')">Estimate</div>
+    <div class="rtab"        data-page="analyze" data-cap="engineering" onclick="rbTab('analyze')">Analyze</div>
+    <div class="rtab"        data-page="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
     <div class="rtab"        data-page="view"    onclick="rbTab('view')">View</div>
     <div class="rtab"        data-page="output"  onclick="rbTab('output')">Output</div>
     <div class="rtab"        data-page="settings" onclick="rbTab('settings')">Settings</div>
@@ -1764,7 +1765,7 @@ window.onerror = function(msg, src, line, col, err) {
        here now, in the order you use them. The buttons are the same DOM
        nodes the patches inject; OmegaComputeTab moves them into these
        panels as they appear, so nothing was re-implemented. -->
-  <div class="ribbon-page" data-page="compute">
+  <div class="ribbon-page" data-page="compute" data-cap="compute">
     <div class="rpanel" data-ct="site" data-shelf="1">
       <div class="rpanel-body"></div>
       <div class="rpanel-cap">1 &middot; Site</div>
@@ -2083,7 +2084,7 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
 
   <!-- ANALYZE -->
-  <div class="ribbon-page" data-page="analyze">
+  <div class="ribbon-page" data-page="analyze" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openViabilityWorkflow)"><span class="rb-ico">◪</span><span class="rb-lbl">Viability<br>Workflow</span></button>
@@ -2114,7 +2115,7 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
 
   <!-- ESTIMATE (cost / sourcing / takeoff — grouped for findability) -->
-  <div class="ribbon-page" data-page="estimate">
+  <div class="ribbon-page" data-page="estimate" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
@@ -2187,8 +2188,8 @@ window.onerror = function(msg, src, line, col, err) {
   <div class="ribbon-page" data-page="output">
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openPlotPlanExport)" title="Plot plan cover + site sheets (E0 / E1.1)"><span class="rb-ico">▤</span><span class="rb-lbl">Plot Plan<br>E0 / E1.1</span></button>
-        <button class="rbtn" onclick="rbRun(openOneLineExport)" title="Single-line diagram (E2.0)"><span class="rb-ico">⚡</span><span class="rb-lbl">One-Line<br>E2.0</span></button>
+        <button class="rbtn" onclick="rbRun(openPlotPlanExport)" data-cap="export.plotplan" title="Plot plan cover + site sheets (E0 / E1.1)"><span class="rb-ico">▤</span><span class="rb-lbl">Plot Plan<br>E0 / E1.1</span></button>
+        <button class="rbtn" onclick="rbRun(openOneLineExport)" data-cap="export.oneline" title="Single-line diagram (E2.0)"><span class="rb-ico">⚡</span><span class="rb-lbl">One-Line<br>E2.0</span></button>
         <button class="rbtn" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
         <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — in beta, access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-beta-tag">BETA</span></button>
         <!-- Original call preserved; re-enable by restoring this onclick:
@@ -2924,7 +2925,7 @@ if(document.readyState==='loading'){
   </div>
 
   <!-- -- SITE SCHEMATIC OVERLAY ---------------------------------- -->
-  <div class="sec" id="schematic-sec">
+  <div class="sec" id="schematic-sec" data-cap="schematic">
     <div class="sec-h" style="display:flex;align-items:center;justify-content:space-between">
       <span>📐 Site Schematic</span>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
@@ -19942,6 +19943,41 @@ function bmExportAnalysis() {
   </div>
 </div>
 <script>window.print();<\/script>
+<script>
+/* ── PLAN GATING ─────────────────────────────────────────────────────────
+   The editor is several products behind one entry: a designer, an
+   engineering suite, and a compute-campus tool. omega-caps.js decides which
+   of those this account has, and removes the rest.
+
+   REMOVED, NOT DISABLED. A greyed "Compute" tab is an advert inside a tool
+   somebody is trying to work in, and it earns a support ticket every time.
+   Upgrading lives on the account page, once.
+
+   TIER IS READ FROM billing/current — the same record the customer sees on
+   their own account page and the same one the tool gate uses, so there is
+   one answer to "what am I paying for" rather than three. Any failure
+   resolves to trial: a read that fails must not hand out the engineering
+   suite.
+
+   ⚠ PRODUCT GATING, NOT SECURITY. This runs in a browser the customer
+   controls. What keeps anyone out of the DATA is firestore.rules and the
+   api/ functions — CLAUDE.md is explicit that pricing and eligibility
+   belong server side. */
+(function () {
+  function gate(){
+    if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
+        typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
+    firebase.auth().onAuthStateChanged(function (u) {
+      if (!u) return;
+      OmegaCaps.resolve(firebase.firestore(), u.email).then(function (tier) {
+        var r = OmegaCaps.apply(tier);
+        if (r.removed) console.info('[caps] plan ' + r.tier + ' — ' + r.removed + ' feature(s) hidden');
+      });
+    });
+  }
+  gate();
+})();
+</script>
 </body>
 </html>`;
 
