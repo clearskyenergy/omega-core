@@ -23,6 +23,18 @@ function plan(t) {
 }
 var plans = seeds.map(plan);
 plans.forEach(function (p) { console.log('\n== ' + p.orgId + ' (' + p.org.slug + ')'); console.log('  omega_orgs:', JSON.stringify(p.org)); console.log('  billing/current:', JSON.stringify(p.billing)); console.log('  tenant_public:', p.pub.domains.join(', ') || '(no hostnames!)'); if (p.owner) console.log('  owner:', p.owner); });
+/* A tenant whose orgId is still undecided (OSA, pending the JV agreement)
+   cannot be a Firestore document id: .doc('') throws, and because the write
+   loop is neither transactional nor guarded, that throw would abort the run
+   part-way and leave the control plane half seeded. Hold those back and keep
+   going, so the decided tenants seed cleanly. */
+var skipped = plans.filter(function (p) { return !p.orgId || !String(p.orgId).trim(); });
+plans = plans.filter(function (p) { return p.orgId && String(p.orgId).trim(); });
+if (skipped.length) {
+  console.log('\nSKIPPED — no orgId set (decide it in tenants/<slug>/tenant.json, then re-run):');
+  skipped.forEach(function (p) { console.log('  · ' + p.org.slug + '  hosts: ' + (p.pub.domains.join(', ') || '(none)')); });
+}
+
 if (!APPLY) { console.log('\nDRY RUN — nothing written. Re-run with --apply.'); process.exit(0); }
 
 var admin = require('firebase-admin');
