@@ -1116,7 +1116,14 @@ var PRESETS=[
   {key:"bess", name:"BESS", icon:"▮", layers:["substations","transmission","osm_subs","utility_terr","iso_rto"]},
   {key:"solar", name:"Solar", icon:"☀", layers:["substations","transmission","plants","eia_plants","utility_terr"]},
   {key:"solarbess", name:"Solar+BESS", icon:"⌁", layers:["substations","transmission","plants","eia_plants","osm_subs","utility_terr","iso_rto"]},
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_verified","ll_backbone","subsea","water","flood","utility_terr","iso_rto"]},
+  /* GAS IS ON THIS PRESET NOW. A compute campus that cannot get its full
+     load from the utility inside its schedule bridges on gas, and whether a
+     transmission line is a mile away or thirty decides whether that is an
+     option at all. It was in the layer list and in the site report's own
+     "Gas pipeline (microgrid)" row, but not on the preset for the one
+     project type that most often needs it — so it had to be switched on by
+     hand every time, by somebody who already knew to look. */
+  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_verified","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]}
@@ -1440,12 +1447,44 @@ function analyze(ll){
   var pMarket=containingFeature(ll,cache.iso_rto)?100:70;
   var dcScore=Math.round(pPower*0.42+pFiber*0.24+pWater*0.14+pFlood*0.12+pMarket*0.08);
   dcScore=Math.max(1,Math.min(100,dcScore));
+  /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
+     Each factor falls back to a poor constant when its layer is not loaded:
+     fiber to 15, water to 30, power to whatever the missing substation
+     leaves. Those fallbacks are sensible defaults for an unknown, and then
+     they were fed into the composite as if they were measurements — so a
+     site with no fiber layer switched on scored 24% of the total at 15/100
+     and came back "Challenged for DC scale". That is a false negative on a
+     site nobody looked at, and it reads identically to a site that was
+     looked at and found wanting.
+
+     The score still computes, because a partial read is useful. It now says
+     what it could not see, and it refuses to render a verdict at all when
+     the missing weight is enough to change it. */
+  var dcMissing=[];
+  if(!fiber) dcMissing.push("fiber");
+  if(!water) dcMissing.push("water");
+  if(!sub) dcMissing.push("substations");
+  if(!floodF) dcMissing.push("flood zones");
+  var dcMissWeight=(!fiber?24:0)+(!water?14:0)+(!sub?42:0)+(!floodF?12:0);
+
   var dcBand=dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
   var dcVerdict=dcScore>=72?"Strong data-center candidate":dcScore>=50?"Viable — diligence the constraints":"Challenged for DC scale";
+  /* THRESHOLD IS 20, NOT 25, so a missing FIBER layer alone trips it. Fiber
+     carries 24% and falls back to 15/100, which drags the composite about
+     twenty points — enough to move a site across the "Challenged" line on
+     its own. A threshold that let the single most common gap through would
+     have been a threshold in name only. */
+  if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
   h+='<div class="sec">◆ Data Center Site Report</div>';
-  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+dcScore+'</span><span class="lab">/ 100 DC suitability</span></div>';
+  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+dcScore+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
   h+='<div class="bar"><span style="width:'+dcScore+'%;background:'+dcBand+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
+  if(dcMissing.length){
+    h+='<div class="hint" style="margin:0 0 8px;color:var(--warn)">Not measured here: '+
+       esc(dcMissing.join(", "))+'. Those factors are scored at their unknown default, '+
+       'which is LOW — so this number can only go up once the layers are on. '+
+       'Do not read it as a weak site until it is a complete read.</div>';
+  }
   h+=dcFactor("Power access", pPower, sub?fmtKm(subKm)+" to substation":"no substation loaded");
   h+=dcFactor("Fiber / connectivity", pFiber, fiber?fmtKm(fiber.km)+" to route":"enable a fiber layer");
   h+=dcFactor("Cooling water", pWater, water?fmtKm(water.km)+" to water":"enable Water layer");
