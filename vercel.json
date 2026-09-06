@@ -30,7 +30,7 @@
       ]
     },
     {
-      "source": "/tenants/(.*)/(.*\\.(png|jpg|svg))",
+      "source": "/tenants/(.*)/(.*\\.(?:png|jpg|svg))",
       "headers": [
         {
           "key": "Cache-Control",

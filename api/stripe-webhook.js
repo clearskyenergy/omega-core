@@ -7,7 +7,6 @@
    Vercel must NOT parse the body (we need the raw bytes for the signature). */
 'use strict';
 var A = require('./_lib/admin');
-module.exports.config = { api: { bodyParser: false } };
 
 function rawBody(req) { return new Promise(function (res, rej) { var c = []; req.on('data', function (d) { c.push(d); }); req.on('end', function () { res(Buffer.concat(c)); }); req.on('error', rej); }); }
 
@@ -47,3 +46,9 @@ module.exports = function (req, res) {
     }).then(function () { res.status(200).json({ received: true }); });
   }).catch(function (e) { console.error('[stripe-webhook]', e); res.status(500).end(); });
 };
+
+/* Must come AFTER the handler assignment above: `module.exports = fn`
+   replaces the whole exports object, so setting .config before it was
+   silently discarded and Vercel parsed the body — which breaks the
+   raw-bytes signature check this endpoint depends on. */
+module.exports.config = { api: { bodyParser: false } };

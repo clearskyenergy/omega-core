@@ -28,7 +28,7 @@ const admin = require("firebase-admin");
 /* ---- one-time Admin init ---- */
 if (!admin.apps.length) {
   const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
-  admin.initializeApp({ credential: admin.cert(svc) });
+  admin.initializeApp({ credential: admin.credential.cert(svc) });
 }
 const db = admin.firestore();
 
@@ -247,7 +247,7 @@ module.exports = async (req, res) => {
 /* Recompute hasTelemetry/connectedCount on the status doc so the
    tools' gate and the cron query stay accurate. */
 async function recomputeFlags(orgId) {
-  const CAT = require("./catalog.js"); // small shared map of provider->feeds
+  const CAT = require("./_lib/catalog.js"); // small shared map of provider->feeds
   const d = await statusRef(orgId).get();
   const providers = d.exists ? (d.data().providers || {}) : {};
   let telemetry = 0, total = 0;
