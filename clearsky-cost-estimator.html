@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<!--
+  ClearSky-OMEGA · Cost Estimator  (capex v1)
+  ---------------------------------------------------------------------------
+  The receiving end of `clearsky.site-packet/1`.
+
+  The Site Finder sizes a battery from circuit headroom and customer peak.
+  That is roughly a third of what decides construction cost. This page takes
+  the packet, puts the OTHER two thirds in front of a human as nine explicit
+  questions, and only then produces a number — bottom-up, line by line, with
+  a low/base/high on every division and an AACE class stamped on the total.
+
+  Two rules it will not break:
+
+    1. It never silently defaults a required input. An unanswered question is
+       shown as unanswered and it downgrades the estimate class.
+    2. The $385–485/kWh band is a BENCHMARK RAIL, not a clamp. When the site
+       pushes the model outside it — a 34.5 kV tie, a transformer upgrade, a
+       250 kW system — the page says so and says why. An estimate bent to hit
+       a target band is worse than no estimate.
+
+  ES5 only. Single page. No build step, no dependencies. Matches the Site
+  Finder's tokens so the two read as one product.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost Estimator · ClearSky-OMEGA</title>
+<style>
+  :root{
+    --bg:#f5f6f8;--panel:#fff;--panel2:#f0f2f5;--line:#dfe3e8;
+    --ink:#1a2733;--muted:#5b6b7b;--dim:#9aa7b4;--accent:#0a6ed1;
+    --purple:#8a5cd1;--green:#2ea043;--amber:#c98a2b;--gray:#9aa7b4;--red:#e0533d;
+    --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --topH:56px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);font-size:14px}
+  body{overflow:hidden}
+  button{font-family:inherit}
+  a{color:var(--accent)}
+
+  /* ------------------------------------------------------------ top bar */
+  #top{position:absolute;top:0;left:0;right:0;height:var(--topH);z-index:1300;display:flex;
+    align-items:center;gap:14px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:9px;text-decoration:none;flex:none}
+  .logo .m{width:26px;height:26px;border-radius:6px;background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font:700 12px var(--mono)}
+  .logo .t{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap}
+  .logo .t span{color:var(--accent)}
+  .seprt{width:1px;height:22px;background:var(--line);flex:none}
+  .spacer{flex:1}
+  .srcTag{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--amber);background:#fdf6e8;border:1px solid #f0dcb4;border-radius:5px;
+    padding:3px 7px;flex:none}
+  .srcTag.c4{color:#1f6f3a;background:#eaf7ee;border-color:#bfe3cb}
+  .srcTag.c5{color:#a3372a;background:#fdf1ef;border-color:#f3d3cc}
+  .btn{height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 12px;
+    font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;flex:none}
+  .btn:hover{border-color:var(--dim)}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{background:#0961b8}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:default}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ------------------------------------------------------------- layout */
+  #stage{position:absolute;top:var(--topH);left:0;right:0;bottom:0;display:flex}
+  #rail{width:428px;flex:none;background:rgba(245,246,248,.97);border-right:1px solid var(--line);
+    overflow-y:auto;padding:0 16px 60px}
+  #out{flex:1;overflow-y:auto;padding:18px 22px 70px;background:var(--bg);min-width:0}
+
+  .sec{padding:15px 0;border-bottom:1px solid var(--line)}
+  .sec:last-child{border-bottom:0}
+  .sec h4{margin:0 0 11px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);font-family:var(--mono);display:flex;align-items:center;gap:8px}
+  .sec h4 .ct{margin-left:auto;font-size:10px;letter-spacing:.04em;color:var(--dim);
+    text-transform:none;font-weight:600}
+  .note{font-size:12px;line-height:1.5;color:var(--muted);background:var(--panel2);
+    border-radius:9px;padding:10px 12px;margin-top:10px}
+  .note.bad{background:#fdf1ef;color:#a3372a}
+  .note.warnb{background:#fdf6e8;color:#8a5f16}
+  .note.good{background:#eaf7ee;color:#1f6f3a}
+  .note b{color:inherit}
+  .note ul{margin:6px 0 0;padding-left:17px}
+  .note li{margin:3px 0}
+
+  /* -------------------------------------------------------------- intake */
+  #drop{border:2px dashed var(--line);border-radius:11px;padding:20px 14px;text-align:center;
+    background:#fff;cursor:pointer;transition:border-color .14s,background .14s}
+  #drop:hover,#drop.over{border-color:var(--accent);background:#f2f8fd}
+  #drop b{display:block;font-size:13px;margin-bottom:4px}
+  #drop span{font-size:11.5px;color:var(--muted);line-height:1.5;display:block}
+  #pkFile{display:none}
+
+  .grid2{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:13px;align-items:baseline}
+  .grid2 .lab{color:var(--muted);font-size:12px}
+  .grid2 .val{text-align:right;font-weight:600}
+  .grid2 .val small{font-weight:400;color:var(--dim);font-size:10.5px;display:block;
+    font-family:var(--mono);letter-spacing:.02em}
+  .grid2 .val.none{color:var(--dim);font-weight:400}
+
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .form .full{grid-column:1/-1}
+  .form label{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .form input,.form select{width:100%;height:32px;border:1px solid var(--line);
+    background:#fff;border-radius:7px;padding:0 9px;font-size:13px;color:var(--ink);outline:none;
+    font-family:inherit}
+  .form input:focus,.form select:focus{border-color:var(--accent)}
+  .form .fld.unset input,.form .fld.unset select{border-color:#f0dcb4;background:#fffdf7}
+  .form .why{font-size:10.5px;color:var(--dim);line-height:1.45;margin-top:4px}
+  .form .fld.unset label:after{content:" · not answered";color:var(--amber);font-weight:700}
+
+  /* ---------------------------------------------------------------- hero */
+  .hero{background:#fff;border:1px solid var(--line);border-radius:13px;padding:18px 20px;
+    margin-bottom:14px}
+  .hero .top{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
+  .hero .big{font-size:38px;font-weight:700;letter-spacing:-.025em;line-height:1}
+  .hero .big small{font-size:15px;color:var(--muted);font-weight:600;letter-spacing:0}
+  .hero .sub{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.5}
+  .hero .rng{margin-left:auto;text-align:right;font-family:var(--mono);font-size:12px;
+    color:var(--muted);line-height:1.7}
+  .hero .rng b{color:var(--ink);font-size:14px}
+
+  /* --------------------------- SIGNATURE: the benchmark band rail
+     The Site Finder's one repeated element is the circuit allocation meter.
+     This is its sibling: a fixed rail from 300 to 600 $/kWh with the
+     385–485 benchmark shaded, and this estimate's low–base–high bracket
+     laid over it. A rep learns to read one and gets the other free.        */
+  .rail{margin-top:16px}
+  .rail .tr{position:relative;height:30px;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line);overflow:hidden}
+  .rail .band{position:absolute;top:0;bottom:0;background:#eaf7ee;
+    border-left:1px solid #bfe3cb;border-right:1px solid #bfe3cb}
+  .rail .span{position:absolute;top:8px;height:14px;border-radius:4px;
+    background:rgba(10,110,209,.20);border:1px solid rgba(10,110,209,.45)}
+  .rail .span.out{background:rgba(224,83,61,.18);border-color:rgba(224,83,61,.5)}
+  .rail .dot{position:absolute;top:5px;width:3px;height:20px;border-radius:2px;
+    background:var(--accent)}
+  .rail .dot.out{background:var(--red)}
+  .rail .ax{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;
+    color:var(--dim);margin-top:6px}
+  .rail .cap{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .rail .cap b{color:var(--ink)}
+
+  /* --------------------------------------------------------------- table */
+  table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.t th{text-align:left;font-weight:600;color:var(--muted);font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.07em;padding:0 10px 7px 0;
+    border-bottom:1px solid var(--line);font-family:var(--mono);white-space:nowrap}
+  table.t td{padding:8px 10px 8px 0;border-bottom:1px solid var(--panel2);vertical-align:top}
+  table.t td.r,table.t th.r{text-align:right;font-family:var(--mono)}
+  table.t tr.div>td{font-weight:700;background:var(--panel2);cursor:pointer}
+  table.t tr.div>td:first-child{border-radius:7px 0 0 7px;padding-left:9px}
+  table.t tr.div>td:last-child{border-radius:0 7px 7px 0}
+  table.t tr.div .tw{display:inline-block;width:11px;color:var(--dim);font-size:10px}
+  table.t tr.li td{color:var(--muted);font-size:12px}
+  table.t tr.li td:first-child{padding-left:22px}
+  table.t tr.li .bs{font-family:var(--mono);font-size:10px;color:var(--dim);display:block;
+    margin-top:2px}
+  table.t tr.mk>td{font-weight:600}
+  table.t tr.tot>td{font-weight:700;font-size:14px;border-top:2px solid var(--ink);
+    border-bottom:0;padding-top:11px}
+  .shr{display:inline-block;height:6px;border-radius:3px;background:var(--accent);
+    vertical-align:middle;min-width:2px;opacity:.75}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:11px;margin:14px 0 4px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+  .kpi .n{font-size:21px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .kpi .n small{font-size:12px;color:var(--muted);font-weight:600}
+  .kpi .l{font-size:11px;color:var(--muted);margin-top:3px;font-weight:600;line-height:1.35}
+
+  .panel{background:#fff;border:1px solid var(--line);border-radius:13px;padding:17px 19px;
+    margin-bottom:14px}
+  .panel>h3{margin:0 0 4px;font-size:15px;letter-spacing:-.01em}
+  .panel>p.lead{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.55;max-width:74ch}
+
+  /* --------------------------------------------------------------- gantt */
+  .gWrap{overflow-x:auto;padding-bottom:4px}
+  .gIn{min-width:760px}
+  .gAx{display:flex;border-bottom:1px solid var(--line);margin-left:236px;position:relative;
+    height:21px}
+  .gAx .mo{position:absolute;top:0;font-family:var(--mono);font-size:9.5px;color:var(--dim);
+    border-left:1px solid var(--line);padding-left:4px;height:21px;line-height:19px;
+    white-space:nowrap;overflow:hidden}
+  .gRow{display:flex;align-items:center;height:26px;position:relative}
+  .gRow:nth-child(even){background:rgba(240,242,245,.55)}
+  .gRow .nm{width:236px;flex:none;font-size:11.5px;padding-right:12px;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+  .gRow.crit .nm{color:var(--ink);font-weight:600}
+  .gRow .tk{flex:1;position:relative;height:100%}
+  .gRow .bar{position:absolute;top:6px;height:14px;border-radius:4px;background:var(--gray);
+    opacity:.55}
+  .gRow.crit .bar{background:var(--accent);opacity:1}
+  .gRow .bar .wk{position:absolute;left:100%;top:-1px;margin-left:6px;font-family:var(--mono);
+    font-size:9.5px;color:var(--dim);white-space:nowrap;line-height:16px}
+  .gPh{display:flex;align-items:center;height:24px;margin-top:9px}
+  .gPh .nm{width:236px;flex:none;font:700 10px var(--mono);letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted)}
+  .gPh .rl{flex:1;height:1px;background:var(--line)}
+  .gKey{display:flex;flex-wrap:wrap;gap:14px;margin-top:13px;font-size:11px;color:var(--muted)}
+  .gKey .k{display:flex;align-items:center;gap:6px}
+  .gKey .sw{width:14px;height:7px;border-radius:3px;flex:none}
+
+  .ms{display:grid;grid-template-columns:auto 1fr auto;gap:8px 14px;font-size:12.5px;
+    align-items:baseline;margin-top:4px}
+  .ms .d{font-family:var(--mono);font-size:11.5px;color:var(--accent);font-weight:600;
+    white-space:nowrap}
+  .ms .w{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;white-space:nowrap}
+
+  .empty{padding:60px 26px;text-align:center;color:var(--muted)}
+  .empty h3{margin:0 0 9px;font-size:16px;color:var(--ink)}
+  .empty p{margin:0 auto;max-width:480px;font-size:13px;line-height:1.6}
+
+  @media (max-width:960px){
+    body{overflow:auto}
+    #stage{position:static;display:block}
+    #rail{width:auto;border-right:0;border-bottom:1px solid var(--line);overflow:visible;
+      padding-bottom:20px}
+    #out{padding:16px 14px 60px;overflow:visible}
+    .form{grid-template-columns:1fr}
+    .hero .big{font-size:31px}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+  @media print{
+    body,#stage{position:static;overflow:visible;height:auto}
+    #top,#rail{display:none}
+    #out{padding:0}
+    .panel,.hero{break-inside:avoid;box-shadow:none}
+    .gIn{min-width:0}
+  }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <a class="logo" href="clearsky-sitefinder.html">
+    <span class="m">CS</span>
+    <span class="t">ClearSky<span>·</span>OMEGA</span>
+  </a>
+  <span class="seprt"></span>
+  <b style="font-size:13px">Cost Estimator</b>
+  <span class="srcTag" id="clsChip">NO PACKET</span>
+  <span class="spacer"></span>
+  <button class="btn ghost" id="bReset" type="button">Clear</button>
+  <button class="btn ghost" id="bCsv" type="button" disabled>CSV</button>
+  <button class="btn ghost" id="bJson" type="button" disabled>JSON</button>
+  <button class="btn pri" id="bPrint" type="button" disabled>Print / PDF</button>
+</div>
+
+<div id="stage">
+
+  <!-- ═══════════════════════════════════ inputs rail ═══════════════════ -->
+  <div id="rail">
+
+    <div class="sec">
+      <h4>1 · The site packet</h4>
+      <div id="drop" tabindex="0" role="button">
+        <b>Drop <code>site-packet-*.json</code> here</b>
+        <span>Or click to choose a file. This is the file the Site Finder
+              downloads from <b>Send to the cost estimator</b> on a property
+              card. Nothing is uploaded anywhere.</span>
+      </div>
+      <input type="file" id="pkFile" accept=".json,application/json">
+      <div id="pkSum"></div>
+    </div>
+
+    <div class="sec" id="secReq">
+      <h4>2 · What the packet cannot know <span class="ct" id="reqCt"></span></h4>
+      <div id="reqForm"></div>
+    </div>
+
+    <div class="sec" id="secAsm">
+      <h4>3 · Commercial assumptions</h4>
+      <div id="asmForm"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════ estimate ══════════════════════ -->
+  <div id="out">
+    <div class="empty" id="blank">
+      <h3>No site loaded</h3>
+      <p>Export a site from the Site Finder and drop the JSON on the left, or
+         open the assumptions panel and enter a size by hand. The estimate
+         builds itself line by line as soon as there is a kW figure to build
+         it from.</p>
+    </div>
+    <div id="body" style="display:none"></div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Cost Estimator engine
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+"use strict";
+
+var CS_BUILD = "cost-2026.08.29";
+var SCHEMA_IN  = "clearsky.site-packet/1";
+var SCHEMA_OUT = "clearsky.cost-estimate/1";
+
+/* The benchmark rail. Not a clamp — a reference. See the header comment. */
+var BAND_LO = 385, BAND_HI = 485;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE COST MODEL
+
+   Calibrated on a REFERENCE SYSTEM and everything else scales off it:
+
+       1,000 kW / 2,000 kWh  (2 h)      250 ft to the point of interconnection
+       12 kV primary tie                2,400 sq ft equipment yard
+       typical soil, typical AHJ        open-shop labour, current quote
+
+   That reference lands at $435/kWh base, $389 low, $483 high — inside the
+   385–485 benchmark by construction. Every departure from the reference
+   moves it, and the page says which departure moved it.
+
+   Each line declares:
+     basis  kwh  × system energy          kw   × system power
+            ft   × POI distance           pad  × equipment yard area
+            semi flat, scaled by (kW/1000)^0.75 — engineering, permitting and
+                 mobilisation do not halve when the battery halves, which is
+                 exactly why small systems cost more per kWh
+     labour the fraction of the line that is field labour, for the prevailing
+            wage / PLA multiplier
+     vs     voltage sensitivity key, if the line moves with the tie voltage
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var MODEL = [
+ { id:"eq", name:"Equipment & storage hardware", lines:[
+   { id:"eq.dc",  n:"Battery enclosures — LFP racks, BMS, thermal, internal suppression",
+     basis:"kwh", rate:115, lab:0.00 },
+   { id:"eq.pcs", n:"Power conversion system (PCS) and DC collection",
+     basis:"kw",  rate:58,  lab:0.00 },
+   { id:"eq.xfmr",n:"Step-up transformer",
+     basis:"kw",  rate:42,  lab:0.00, vs:"xfmr" },
+   { id:"eq.swg", n:"AC switchgear, protective relaying, revenue metering",
+     basis:"kw",  rate:38,  lab:0.10, vs:"swg" },
+   { id:"eq.ems", n:"EMS, site controller, SCADA, communications and cyber",
+     basis:"kw",  rate:17,  lab:0.15 },
+   { id:"eq.bop", n:"Auxiliary power, station service, DC/AC balance of plant",
+     basis:"kw",  rate:15,  lab:0.20 }
+ ]},
+
+ { id:"cv", name:"Civil & site works", lines:[
+   { id:"cv.grd", n:"Clearing, grubbing, grading, drainage and erosion control",
+     basis:"pad", rate:9.2,  lab:0.75, soil:true },
+   { id:"cv.fnd", n:"Reinforced concrete equipment foundations and pads",
+     basis:"pad", rate:11.7, lab:0.70, soil:true },
+   { id:"cv.acc", n:"Access drive, fire lane, bollards and gravel apron",
+     basis:"semi",rate:11000,lab:0.70 },
+   { id:"cv.fen", n:"Perimeter fence, gates, signage and site lighting",
+     basis:"semi",rate:9000, lab:0.60 },
+   { id:"cv.swm", n:"Stormwater controls, containment and surface restoration",
+     basis:"semi",rate:5000, lab:0.60, soil:true }
+ ]},
+
+ { id:"el", name:"Electrical installation & interconnection works", lines:[
+   { id:"el.trn", n:"Trenching, duct bank, backfill and surface restoration",
+     basis:"ft",  rate:58,  lab:0.85 },
+   { id:"el.cbl", n:"Power cable, conduit, cable tray and termination kits",
+     basis:"ft",  rate:88,  lab:0.40, vs:"cbl" },
+   { id:"el.gnd", n:"Grounding grid, lightning and surge protection",
+     basis:"semi",rate:8500, lab:0.60 },
+   { id:"el.rig", n:"Rigging, crane, offload and equipment setting",
+     basis:"semi",rate:34000,lab:0.80 },
+   { id:"el.wir", n:"Field wiring, terminations, torque and continuity testing",
+     basis:"semi",rate:31000,lab:0.90 }
+ ]},
+
+ { id:"en", name:"Engineering & design", lines:[
+   { id:"en.bod", n:"Basis of design, one-line, sizing and protection study",
+     basis:"semi",rate:11000,lab:0.00 },
+   { id:"en.dwg", n:"Stamped electrical design and construction drawings",
+     basis:"semi",rate:19000,lab:0.00, vs:"eng" },
+   { id:"en.civ", n:"Civil/structural design, geotechnical and boundary survey",
+     basis:"semi",rate:15000,lab:0.30, soil:true },
+   { id:"en.icx", n:"Interconnection application engineering and study support",
+     basis:"semi",rate:9000, lab:0.00, vs:"eng" },
+   { id:"en.fir", n:"NFPA 855 hazard mitigation analysis and UL 9540A review",
+     basis:"semi",rate:6000, lab:0.00 }
+ ]},
+
+ { id:"pm", name:"Permitting, fees & site control", lines:[
+   { id:"pm.bld", n:"Building, electrical and fire permits, plan review",
+     basis:"semi",rate:10000,lab:0.00, ahj:true },
+   { id:"pm.zon", n:"Zoning, special use or variance proceedings",
+     basis:"semi",rate:7000, lab:0.00, ahj:true },
+   { id:"pm.utl", n:"Utility interconnection application fees and study deposits",
+     basis:"semi",rate:11000,lab:0.00, vs:"fee" },
+   { id:"pm.env", n:"Environmental, stormwater and NPDES filings",
+     basis:"semi",rate:3000, lab:0.00, ahj:true },
+   { id:"pm.leg", n:"Legal, site control, easements and recording",
+     basis:"semi",rate:4000, lab:0.00 }
+ ]},
+
+ { id:"cm", name:"Commissioning, testing & energisation", lines:[
+   { id:"cm.fat", n:"Factory and site acceptance testing",
+     basis:"semi",rate:9000, lab:0.50 },
+   { id:"cm.wit", n:"Utility witness test, relay settings and permission to operate",
+     basis:"semi",rate:7000, lab:0.40, vs:"fee" },
+   { id:"cm.tel", n:"Telemetry, market registration and performance baseline",
+     basis:"semi",rate:4000, lab:0.20 },
+   { id:"cm.trn", n:"Operator training, as-builts and O&M manuals",
+     basis:"semi",rate:3000, lab:0.20 }
+ ]}
+];
+
+/* Per-division low/high spread. Equipment is quoted and therefore tight;
+   permitting and civil are the ones that actually move, because soil and an
+   AHJ are not knowable from a desk. These factors are what produce the
+   $389 / $435 / $483 spread on the reference system. */
+var SPREAD = { eq:0.04, cv:0.18, el:0.15, en:0.12, pm:0.20, cm:0.10 };
+
+/* Markups, compounded in this order on the direct+indirect subtotal. */
+var MARKUP = [
+  { id:"mk.cm",  n:"Construction management and site supervision", lo:0.030, base:0.030, hi:0.030 },
+  { id:"mk.ohp", n:"EPC overhead and profit",                      lo:0.065, base:0.065, hi:0.065 },
+  { id:"mk.ins", n:"Insurance, bonds and builder's risk",          lo:0.015, base:0.015, hi:0.015 },
+  { id:"mk.ctg", n:"Contingency",                                  lo:0.060, base:0.080, hi:0.100 },
+  { id:"mk.dev", n:"Developer fee",                                lo:0.030, base:0.030, hi:0.030 }
+];
+
+/* Voltage regimes. `unknown` prices as 12 kV but forfeits the estimate class,
+   because 480 V secondary and 12 kV primary are different projects, not
+   different line items. */
+var VOLT = {
+  "480":  { label:"480 V secondary (behind the meter)",
+            m:{ xfmr:0.00, swg:0.65, cbl:0.55, eng:0.75, fee:0.70 } },
+  "4160": { label:"4.16 kV",
+            m:{ xfmr:0.80, swg:0.88, cbl:0.85, eng:0.92, fee:0.88 } },
+  "12470":{ label:"12 kV primary",
+            m:{ xfmr:1.00, swg:1.00, cbl:1.00, eng:1.00, fee:1.00 } },
+  "34500":{ label:"34.5 kV primary",
+            m:{ xfmr:1.35, swg:1.30, cbl:1.25, eng:1.30, fee:1.35 } },
+  "":     { label:"Not answered — priced as 12 kV",
+            m:{ xfmr:1.00, swg:1.00, cbl:1.00, eng:1.00, fee:1.00 } }
+};
+
+var SOIL = { good:0.85, "":1.00, poor:1.40, rock:1.55 };
+var SOIL_LBL = { good:"Firm, drains, no import fill", "":"Not answered — priced as typical",
+                 poor:"Soft, fill, or high water table", rock:"Rock or deep foundations" };
+var AHJ  = { fast:0.75, "":1.00, hard:1.45 };
+var AHJ_LBL = { fast:"Streamlined — over-the-counter permit", "":"Not answered — priced as typical",
+                hard:"Difficult — hearings, long review" };
+var LABOR = { open:1.00, "":1.00, pw:1.22, pla:1.30 };
+var LABOR_LBL = { open:"Open shop", "":"Not answered — priced as open shop",
+                  pw:"Prevailing wage", pla:"Union / project labour agreement" };
+
+/* Utility-side upgrades. These are the single biggest thing that can happen
+   to a C&I battery budget and nothing in any layer predicts them — only the
+   interconnection study answers it. `unknown` is carried as a stated
+   EXPOSURE outside the total, never folded quietly into it. */
+var UPGRADE = {
+  none: { label:"None required — study complete", cost:0, wk:0 },
+  "":   { label:"Unknown — study not returned",   cost:0, wk:0, exposure:[185000, 650000] },
+  xfmr: { label:"Utility transformer replacement", cost:185000, wk:22 },
+  swg:  { label:"Transformer plus switchgear or protection", cost:340000, wk:30 },
+  line: { label:"Line reconductor or substation work", cost:650000, wk:44 }
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════════════════════════════ */
+var S = {
+  packet: null,
+  kw: null, hours: 2,
+  req: { interconnectionVoltage:"", poiDistanceFt:"", utilitySideUpgrade:"",
+         padArea:"", soilAndGrading:"", ahj:"", laborBasis:"",
+         equipmentQuoteDate:"", duration:"" },
+  ntp: todayISO(),
+  carryUpgrade: false,
+  leadRelease: "bod"     /* "bod" = deposit at basis of design, at the
+                            developer's risk, which is what actually happens.
+                            "ia" = wait for the signed interconnection
+                            agreement, which is safer and four months slower. */
+};
+
+function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════════════════════════════════════════ */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                        .replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function num(v){ var n = parseFloat(v); return isFinite(n) ? n : null; }
+function usd(v){
+  if (v == null || !isFinite(v)) return "—";
+  var a = Math.abs(v);
+  if (a >= 1000) return "$" + Math.round(v).toLocaleString("en-US");
+  return "$" + (Math.round(v*10)/10).toLocaleString("en-US");
+}
+function usdK(v){
+  if (v == null || !isFinite(v)) return "—";
+  if (Math.abs(v) >= 1e6) return "$" + (v/1e6).toFixed(2) + "M";
+  return "$" + Math.round(v/1000) + "k";
+}
+function n0(v){ return v==null||!isFinite(v) ? "—" : Math.round(v).toLocaleString("en-US"); }
+function pct(v){ return (v*100).toFixed(1).replace(/\.0$/,"") + "%"; }
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+
+/* value/source/asOf triples from the packet, tolerated as bare values too */
+function pv(x){ return (x && typeof x === "object" && "value" in x) ? x.value : x; }
+function psrc(x){ return (x && typeof x === "object" && x.source) ? x.source : null; }
+
+function addWeeks(iso, w){
+  var d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + Math.round(w * 7));
+  return d;
+}
+function fmtDate(d){
+  var M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return M[d.getUTCMonth()] + " " + d.getUTCDate() + ", " + d.getUTCFullYear();
+}
+function fmtMon(d){
+  var M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return M[d.getUTCMonth()] + (d.getUTCMonth()===0 ? " " + String(d.getUTCFullYear()).slice(2) : "");
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DERIVED INPUTS
+   ══════════════════════════════════════════════════════════════════════════ */
+function hours(){ var h = num(S.req.duration); return h && h > 0 ? h : (S.hours || 2); }
+function kw(){ return S.kw; }
+function kwh(){ return S.kw == null ? null : S.kw * hours(); }
+
+/* Default equipment yard: 0.8 sq ft per kWh plus a fixed 800 for clearances,
+   fire access and the PCS/transformer pad. 2,000 kWh → 2,400 sq ft, which is
+   the reference. NFPA 855 separation is inside that number, not on top. */
+function padDefault(){ var e = kwh(); return e == null ? null : Math.round(0.8*e + 800); }
+function pad(){ var p = num(S.req.padArea); return p && p > 0 ? p : padDefault(); }
+function poiFt(){ var f = num(S.req.poiDistanceFt); return f != null && f >= 0 ? f : 250; }
+function volt(){ return VOLT[S.req.interconnectionVoltage] ? S.req.interconnectionVoltage : ""; }
+function sizeF(){ var k = kw(); return k == null ? 1 : Math.pow(Math.max(k,25)/1000, 0.75); }
+
+/* Cell and inverter pricing moves quarterly. Beyond one quarter a quote
+   escalates; beyond two it is not a quote any more. */
+function quoteAgeMonths(){
+  if (!S.req.equipmentQuoteDate) return null;
+  var d = new Date(S.req.equipmentQuoteDate + "T12:00:00Z");
+  if (isNaN(d.getTime())) return null;
+  return (Date.now() - d.getTime()) / (1000*60*60*24*30.44);
+}
+function escalation(){
+  var m = quoteAgeMonths();
+  if (m == null) return 1.015;                 /* no quote: one quarter of drift */
+  if (m <= 3) return 1.0;
+  return 1 + 0.006 * ((m - 3) / 3);            /* 0.6% per quarter beyond the first */
+}
+
+function unanswered(){
+  var out = [], k;
+  for (k in S.req) if (S.req.hasOwnProperty(k)) {
+    if (S.req[k] === "" || S.req[k] == null) out.push(k);
+  }
+  return out;
+}
+
+/* AACE 18R-97. Class 3 is not reachable from a desk and this page will not
+   claim it: it needs a site walk and firm quotes. */
+function estClass(){
+  var miss = unanswered().length;
+  var p = S.packet;
+  var posBad = p && p.site && p.site.positionIsBuilding === false;
+  var gaps = (p && p.gaps) ? p.gaps.length : 0;
+  if (miss >= 3 || posBad || S.req.utilitySideUpgrade === "" || volt() === "")
+    return { n:5, lo:-0.30, hi:0.50, label:"Class 5 — concept screening",
+             why:"Some of what decides the cost is still unanswered." };
+  if (miss >= 1 || gaps > 0)
+    return { n:4, lo:-0.20, hi:0.30, label:"Class 4 — study estimate",
+             why:"Every driver is answered, but nothing is quoted or walked." };
+  return { n:4, lo:-0.20, hi:0.30, label:"Class 4 — study estimate",
+           why:"To reach Class 3 this needs a site walk and firm equipment quotes." };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE CALCULATION
+   ══════════════════════════════════════════════════════════════════════════ */
+function compute(){
+  var K = kw(), E = kwh();
+  if (K == null || !(K > 0)) return null;
+
+  var V = VOLT[volt()], vm = V.m;
+  var soilM  = SOIL[S.req.soilAndGrading] || 1.00;
+  var ahjM   = AHJ[S.req.ahj] || 1.00;
+  var labM   = LABOR[S.req.laborBasis] || 1.00;
+  var escM   = escalation();
+  var F = sizeF(), P = pad(), FT = poiFt();
+
+  var divs = [], subLo = 0, subBase = 0, subHi = 0;
+
+  for (var d = 0; d < MODEL.length; d++) {
+    var D = MODEL[d], lines = [], dTot = 0;
+    for (var i = 0; i < D.lines.length; i++) {
+      var L = D.lines[i], qty, unit = "", raw;
+
+      if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh"; }
+      else if (L.basis === "kw")  { qty = K;  unit = "$" + L.rate + " / kW"; }
+      else if (L.basis === "ft")  { qty = FT; unit = "$" + L.rate + " / ft \u00d7 " + n0(FT) + " ft"; }
+      else if (L.basis === "pad") { qty = P;  unit = "$" + L.rate + " / sq ft \u00d7 " + n0(P) + " sq ft"; }
+      else                        { qty = F;  unit = "flat, scaled \u00d7" + F.toFixed(2) + " for size"; }
+      raw = L.rate * (qty == null ? 0 : qty);
+
+      /* order matters and is documented: voltage regime, then ground
+         conditions, then the AHJ, then the labour basis on the labour
+         fraction only, then equipment escalation on equipment only. */
+      var mods = [];
+      if (L.vs && vm[L.vs] !== 1) { raw *= vm[L.vs]; mods.push(V.label.split(" (")[0] + " \u00d7" + vm[L.vs].toFixed(2)); }
+      if (L.soil && soilM !== 1)  { raw *= soilM;    mods.push("ground \u00d7" + soilM.toFixed(2)); }
+      if (L.ahj  && ahjM  !== 1)  { raw *= ahjM;     mods.push("AHJ \u00d7" + ahjM.toFixed(2)); }
+      if (L.lab > 0 && labM !== 1){
+        raw = raw * (1 - L.lab) + raw * L.lab * labM;
+        mods.push("labour \u00d7" + labM.toFixed(2) + " on " + Math.round(L.lab*100) + "%");
+      }
+      if (D.id === "eq" && escM !== 1) { raw *= escM; mods.push("escalation \u00d7" + escM.toFixed(3)); }
+
+      lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw });
+      dTot += raw;
+    }
+    var sp = SPREAD[D.id];
+    divs.push({ id:D.id, name:D.name, lines:lines,
+                lo:dTot*(1-sp), base:dTot, hi:dTot*(1+sp), spread:sp });
+    subLo += dTot*(1-sp); subBase += dTot; subHi += dTot*(1+sp);
+  }
+
+  /* Utility-side upgrade, only when it is KNOWN. When it is unknown it is
+     an exposure, reported separately, because burying it in the total is
+     how a budget becomes a surprise. */
+  var up = UPGRADE[S.req.utilitySideUpgrade] || UPGRADE[""];
+  var upCost = 0, upLine = null;
+  if (up.cost > 0 || (S.carryUpgrade && up.exposure)) {
+    upCost = up.cost > 0 ? up.cost : up.exposure[0];
+    upLine = { name:"Utility-side upgrade \u2014 " + up.label, cost:upCost,
+               carried: up.cost === 0 };
+    subLo += upCost*0.8; subBase += upCost; subHi += upCost*1.35;
+  }
+
+  /* Markups compound in order. */
+  var runLo = subLo, runBase = subBase, runHi = subHi, marks = [];
+  for (var m = 0; m < MARKUP.length; m++) {
+    var M = MARKUP[m];
+    var aLo = runLo*M.lo, aBase = runBase*M.base, aHi = runHi*M.hi;
+    marks.push({ id:M.id, n:M.n, rate:M.base, lo:aLo, base:aBase, hi:aHi });
+    runLo += aLo; runBase += aBase; runHi += aHi;
+  }
+
+  var per = function (t){ return E ? t/E : null; };
+  var perK = function (t){ return K ? t/K : null; };
+
+  return {
+    kw:K, kwh:E, hours:hours(), pad:P, poiFt:FT,
+    voltage:volt(), voltLabel:V.label,
+    divisions:divs, markups:marks, upgrade:up, upgradeLine:upLine,
+    subtotal:{ lo:subLo, base:subBase, hi:subHi },
+    total:{ lo:runLo, base:runBase, hi:runHi },
+    perKwh:{ lo:per(runLo), base:per(runBase), hi:per(runHi) },
+    perKw:{ lo:perK(runLo), base:perK(runBase), hi:perK(runHi) },
+    escalation:escM, quoteAgeMonths:quoteAgeMonths(),
+    cls:estClass()
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SCHEDULE — forward pass, backward pass, float, critical path
+
+   Durations are C&I norms, not a specific contractor's. The two that
+   actually decide the date are the interconnection study and the MV
+   transformer lead time; everything else has float and the Gantt shows it.
+   ══════════════════════════════════════════════════════════════════════════ */
+function tasks(){
+  var v = volt(), btm = (v === "480");
+  var ahjK = S.req.ahj, up = UPGRADE[S.req.utilitySideUpgrade] || UPGRADE[""];
+  var K = kw() || 1000;
+  /* Where the deposit lands is the single biggest schedule lever a developer
+     actually controls, so it is a stated choice rather than a buried one. */
+  var rel = S.leadRelease === "ia" ? "b4" : "a3";
+
+  function ahjW(fast, typ, hard){ return ahjK === "fast" ? fast : ahjK === "hard" ? hard : typ; }
+
+  var T = [
+    { id:"a1", ph:"Development",   n:"Site control, lease or easement negotiated", w:6,  dep:[] },
+    { id:"a2", ph:"Development",   n:"Site walk, boundary survey and geotechnical", w:3,  dep:["a1"], lag:-4 },
+    { id:"a3", ph:"Development",   n:"Preliminary engineering and basis of design", w:4,  dep:["a2"] },
+
+    { id:"b1", ph:"Interconnection", n:"Interconnection application filed",         w:1,  dep:["a3"] },
+    { id:"b2", ph:"Interconnection", n:"Utility feasibility and system impact study",
+      w: btm ? 6 : 14, dep:["b1"] },
+    { id:"b3", ph:"Interconnection", n:"Facilities study and cost allocation",
+      w: btm ? 3 : 8,  dep:["b2"] },
+    { id:"b4", ph:"Interconnection", n:"Interconnection agreement executed",
+      w: btm ? 3 : 6,  dep:["b3"] },
+
+    { id:"c1", ph:"Design & permitting", n:"Detailed electrical and structural design", w:10, dep:["a3"] },
+    { id:"c2", ph:"Design & permitting", n:"NFPA 855 hazard mitigation, fire marshal review",
+      w: ahjW(5, 8, 13), dep:["c1"], lag:-6 },
+    { id:"c3", ph:"Design & permitting", n:"Zoning, special use or variance",
+      w: ahjW(0, 12, 20), dep:["a3"] },
+    { id:"c4", ph:"Design & permitting", n:"Building, electrical and fire permits issued",
+      w: ahjW(5, 8, 14), dep:["c1","c3","c2"] },
+
+    { id:"d1", ph:"Procurement", n:"Battery enclosures — order to delivery",
+      w: K > 3000 ? 34 : 30, dep:[rel] },
+    { id:"d2", ph:"Procurement", n:"Power conversion system — order to delivery", w:22, dep:[rel] },
+    { id:"d3", ph:"Procurement", n:"Transformer and MV switchgear — order to delivery",
+      w: btm ? 12 : 40, dep:[rel] },
+
+    { id:"e1", ph:"Construction", n:"Mobilisation, clearing and grading",    w:3, dep:["c4","b4"] },
+    { id:"e2", ph:"Construction", n:"Foundations poured and cured",          w:4, dep:["e1"] },
+    { id:"e3", ph:"Construction", n:"Underground, duct bank and conduit",    w:4, dep:["e1"], lag:-2 },
+    { id:"e4", ph:"Construction", n:"Equipment delivered, offloaded and set", w:2,
+      dep:["e2","d1","d2","d3"] },
+    { id:"e5", ph:"Construction", n:"Electrical installation and terminations", w:6, dep:["e4","e3"] },
+    { id:"e6", ph:"Construction", n:"Utility service work and metering",
+      w: btm ? 2 : 4, dep:["e5","b4"] },
+
+    { id:"f1", ph:"Energisation", n:"Pre-commissioning and functional testing", w:3, dep:["e5"] },
+    { id:"f2", ph:"Energisation", n:"Utility witness test, permission to operate",
+      w: btm ? 2 : 4, dep:["f1","e6"] },
+    { id:"f3", ph:"Energisation", n:"Market registration, telemetry and handover", w:3, dep:["f2"] }
+  ];
+
+  if (up.wk > 0) {
+    T.push({ id:"b5", ph:"Interconnection",
+             n:"Utility upgrade designed and constructed \u2014 " + up.label,
+             w: up.wk, dep:["b4"] });
+    /* Nothing energises before the utility's own work finishes. */
+    for (var i = 0; i < T.length; i++) if (T[i].id === "e6") T[i].dep.push("b5");
+  }
+  /* Zoning of zero weeks is not a task. */
+  T = T.filter(function (t){ return t.w > 0; });
+  return T;
+}
+
+function cpm(){
+  var T = tasks(), byId = {}, i, j;
+  for (i = 0; i < T.length; i++) { byId[T[i].id] = T[i]; T[i].es = 0; T[i].ef = 0; }
+
+  /* forward pass — dependencies are finish-to-start, `lag` pulls a task
+     earlier so overlapping trades read honestly on the chart */
+  var changed = true, guard = 0;
+  while (changed && guard++ < 200) {
+    changed = false;
+    for (i = 0; i < T.length; i++) {
+      var t = T[i], es = 0;
+      for (j = 0; j < t.dep.length; j++) {
+        var p = byId[t.dep[j]];
+        if (p && p.ef > es) es = p.ef;
+      }
+      if (t.lag) es = Math.max(0, es + t.lag);
+      if (es !== t.es) { t.es = es; changed = true; }
+      t.ef = t.es + t.w;
+    }
+  }
+  var end = 0;
+  for (i = 0; i < T.length; i++) if (T[i].ef > end) end = T[i].ef;
+
+  /* backward pass */
+  for (i = 0; i < T.length; i++) { T[i].lf = end; }
+  var succ = {};
+  for (i = 0; i < T.length; i++)
+    for (j = 0; j < T[i].dep.length; j++)
+      (succ[T[i].dep[j]] = succ[T[i].dep[j]] || []).push(T[i]);
+
+  changed = true; guard = 0;
+  while (changed && guard++ < 200) {
+    changed = false;
+    for (i = T.length - 1; i >= 0; i--) {
+      var u = T[i], sc = succ[u.id] || [], lf = sc.length ? Infinity : end;
+      for (j = 0; j < sc.length; j++) {
+        /* Forward we did  es = max(pred.ef) + lag.  Backward must undo the
+           same lag or an overlapping trade reports negative float. */
+        var s = sc[j], cand = s.es - (s.lag || 0);
+        if (cand < lf) lf = cand;
+      }
+      if (lf !== u.lf) { u.lf = lf; changed = true; }
+      u.ls = u.lf - u.w;
+      u.float = u.ls - u.es;
+    }
+  }
+  for (i = 0; i < T.length; i++) T[i].crit = T[i].float <= 0.01;
+  return { tasks:T, weeks:end };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PACKET INTAKE
+   ══════════════════════════════════════════════════════════════════════════ */
+function loadPacket(p){
+  if (!p || typeof p !== "object") { alert("That file is not a site packet."); return; }
+  if (p.schemaVersion !== SCHEMA_IN) {
+    if (!confirm("This file says it is \u201c" + (p.schemaVersion || "no schema") +
+                 "\u201d, not " + SCHEMA_IN + ".\n\nRead it anyway? Fields may be missing."))
+      return;
+  }
+  S.packet = p;
+  var sz = p.sizing || {};
+  S.kw    = sz.batteryKw != null ? sz.batteryKw : null;
+  S.hours = sz.assumedHours || 2;
+  if (!S.req.duration) S.req.duration = String(S.hours);
+
+  /* Anything the packet DOES answer, prefill — but only those. The nine
+     required fields are required because the packet cannot answer them. */
+  var lot = pv(p.parcel && p.parcel.lotAcres);
+  if (lot && !S.req.padArea) {
+    /* Lot acreage says nothing about what is USABLE, so this is a ceiling
+       check, not a value. Left blank deliberately. */
+  }
+  render();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HANDOFF FROM THE SITE FINDER
+   --------------------------------------------------------------------------
+   The site finder already builds exactly this packet — same schema string,
+   clearsky.site-packet/1, on both sides. The two tools were designed to fit
+   and the only thing between them was a download and an upload, which meant
+   the estimate usually did not get made.
+
+   The packet travels in sessionStorage rather than the URL: it is a few
+   kilobytes of JSON, same-origin, and a query string that size is fragile
+   and ends up in history and logs. The key is consumed on read so a reload
+   does not silently re-import a stale site.
+
+   WHAT GOES BACK. When there is a usable estimate this posts a summary to
+   the opener — the total band, the dollars per kWh, and the AACE class with
+   its reason. The class travels WITH the number and is not optional: a total
+   with no class attached is the thing this page exists to stop somebody
+   quoting.
+   ══════════════════════════════════════════════════════════════════════════ */
+var HANDOFF_OUT = "clearsky.cost-estimate/1";
+var _reportTo = null;
+
+function adoptHandoff(){
+  var q = null;
+  try { q = new URLSearchParams(location.search).get("packet"); } catch (e) {}
+  if (!q) return;
+  var raw = null;
+  try { raw = sessionStorage.getItem(q); sessionStorage.removeItem(q); } catch (e) {}
+  if (!raw) return;
+  var obj = null;
+  try { obj = JSON.parse(raw); } catch (e) { return; }
+  _reportTo = (window.opener && !window.opener.closed) ? window.opener : null;
+  loadPacket(obj);
+  report();
+}
+
+/* Called after every render, so the opener sees the number improve as the
+   nine required fields get answered rather than only at the end. */
+function report(){
+  if (!_reportTo || _reportTo.closed) return;
+  var r = null;
+  try { r = compute(); } catch (e) { return; }
+  if (!r) return;
+  var p = S.packet || {};
+  try {
+    _reportTo.postMessage({
+      type: HANDOFF_OUT,
+      siteId: (p.site && p.site.id) || null,
+      address: (p.site && p.site.address) || null,
+      kw: r.kw, kwh: r.kwh,
+      total: r.total, perKwh: r.perKwh,
+      estimateClass: r.cls.label,
+      estimateClassWhy: r.cls.why,
+      accuracyLow: r.cls.lo, accuracyHigh: r.cls.hi,
+      unanswered: unanswered(),
+      at: new Date().toISOString()
+    }, location.origin);
+  } catch (e) {}
+}
+
+function readFile(f){
+  var fr = new FileReader();
+  fr.onload = function () {
+    var obj = null;
+    try { obj = JSON.parse(String(fr.result)); }
+    catch (e) { alert("That file is not valid JSON."); return; }
+    loadPacket(obj);
+  };
+  fr.onerror = function () { alert("Could not read that file."); };
+  fr.readAsText(f);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RENDER — the rail
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderPacketSummary(){
+  var el = $("pkSum"), p = S.packet;
+  if (!p) { el.innerHTML = ""; return; }
+
+  var site = p.site || {}, cap = p.capacity || {}, par = p.parcel || {},
+      ut = p.utility || {}, sz = p.sizing || {};
+
+  function row(lab, val, src){
+    if (val == null || val === "") return '<div class="lab">' + esc(lab) + '</div>' +
+      '<div class="val none">not in packet</div>';
+    return '<div class="lab">' + esc(lab) + '</div><div class="val">' + esc(val) +
+      (src ? '<small>' + esc(src) + '</small>' : '') + '</div>';
+  }
+
+  var h = '<div style="margin-top:12px" class="grid2">';
+  h += row("Address", site.address || (site.lat != null ? site.lat.toFixed(5)+", "+site.lon.toFixed(5) : ""), null);
+  h += row("Position", site.positionQuality, site.positionIsBuilding ? "on the building" : "NOT the building");
+  h += row("Utility", ut.name, null);
+  h += row("Circuit", pv(ut.circuit), psrc(ut.circuit));
+  h += row("Net load capacity", pv(cap.netLoadKw) != null ? n0(pv(cap.netLoadKw)) + " kW" : null,
+           (cap.netLoadKw && cap.netLoadKw.asOf) ? "as of " + cap.netLoadKw.asOf : psrc(cap.netLoadKw));
+  h += row("Still sellable", pv(cap.sellableKw) != null ? n0(pv(cap.sellableKw)) + " kW" : null, psrc(cap.sellableKw));
+  h += row("Sized at", sz.batteryKw != null ? n0(sz.batteryKw) + " kW \u00b7 " + n0(sz.batteryKwh) + " kWh" : null,
+           sz.bindingConstraint ? "bound by " + sz.bindingConstraint : null);
+  h += row("Customer peak", sz.customerPeakKw != null ? n0(sz.customerPeakKw) + " kW" : null,
+           sz.peakSource ? sz.peakSource : null);
+  h += row("Lot", pv(par.lotAcres) != null ? pv(par.lotAcres) + " acres" : null, psrc(par.lotAcres));
+  h += row("Building", pv(par.buildingSqft) != null ? n0(pv(par.buildingSqft)) + " sq ft" : null, psrc(par.buildingSqft));
+  h += '</div>';
+
+  if (p.gaps && p.gaps.length) {
+    h += '<div class="note warnb"><b>The packet declares ' + p.gaps.length +
+         ' gap' + (p.gaps.length>1?'s':'') + '</b><ul>';
+    for (var i = 0; i < p.gaps.length; i++) h += '<li>' + esc(p.gaps[i]) + '</li>';
+    h += '</ul></div>';
+  } else {
+    h += '<div class="note good">No gaps declared \u2014 every field the Site Finder ' +
+         'can fill is filled.</div>';
+  }
+  el.innerHTML = h;
+}
+
+var REQ_UI = [
+  { k:"interconnectionVoltage", lab:"Interconnection voltage", type:"select",
+    opts:[["","— choose —"],["480","480 V secondary (behind the meter)"],
+          ["4160","4.16 kV"],["12470","12 kV primary"],["34500","34.5 kV primary"]],
+    why:"480 V secondary and 12 kV primary are different projects, not different line items. Drives the transformer, switchgear, protection and the utility's review." },
+  { k:"poiDistanceFt", lab:"Distance to the POI", type:"number", suffix:"ft", ph:"250",
+    why:"Cable and trench from the pad to the point of interconnection. Comes off a site walk or an aerial \u2014 nothing in the packet measures it." },
+  { k:"utilitySideUpgrade", lab:"Utility-side upgrade", type:"select",
+    opts:[["","— unknown, study not returned —"],["none","None required"],
+          ["xfmr","Utility transformer replacement"],
+          ["swg","Transformer plus switchgear or protection"],
+          ["line","Line reconductor or substation work"]],
+    why:"Can exceed the cost of the battery. Only the interconnection study answers it, and until it does this page carries it as an exposure rather than a line." },
+  { k:"padArea", lab:"Usable equipment yard", type:"number", suffix:"sq ft", ph:"auto",
+    why:"Footprint plus NFPA 855 separation and fire access. Lot acreage is in the packet and says nothing about what is usable. Blank uses 0.8 sq ft per kWh plus 800." },
+  { k:"soilAndGrading", lab:"Ground conditions", type:"select",
+    opts:[["","— unknown —"],["good","Firm, drains, no import fill"],
+          ["poor","Soft, fill, or high water table"],["rock","Rock or deep foundations"]],
+    why:"Foundation design and earthworks. Cannot be inferred from a parcel record." },
+  { k:"ahj", lab:"Authority having jurisdiction", type:"select",
+    opts:[["","— unknown —"],["fast","Streamlined \u2014 over-the-counter"],
+          ["hard","Difficult \u2014 hearings, long review"]],
+    why:"Permitting cost, and more often the schedule. Local and variable." },
+  { k:"laborBasis", lab:"Labour basis", type:"select",
+    opts:[["","— unknown —"],["open","Open shop"],["pw","Prevailing wage"],
+          ["pla","Union / project labour agreement"]],
+    why:"Changes installed cost materially and is a locality question, not a national one." },
+  { k:"equipmentQuoteDate", lab:"Equipment quote date", type:"date",
+    why:"Cell and inverter pricing moves quarterly. An estimate without a quote date cannot be compared with another." },
+  { k:"duration", lab:"Storage duration", type:"number", suffix:"hours", ph:"2",
+    why:"The packet assumes 2 h as a screening figure. Real duration follows the revenue case and it moves both kWh and cost per kW." }
+];
+
+function renderReq(){
+  var h = '<div class="form">', i, j;
+  for (i = 0; i < REQ_UI.length; i++) {
+    var R = REQ_UI[i], v = S.req[R.k], unset = (v === "" || v == null);
+    h += '<div class="fld full' + (unset ? ' unset' : '') + '">';
+    h += '<label for="rq_'+R.k+'">' + esc(R.lab) + (R.suffix ? ' <span style="color:var(--dim)">('+esc(R.suffix)+')</span>' : '') + '</label>';
+    if (R.type === "select") {
+      h += '<select id="rq_'+R.k+'" data-k="'+R.k+'">';
+      for (j = 0; j < R.opts.length; j++)
+        h += '<option value="'+esc(R.opts[j][0])+'"'+(String(v)===R.opts[j][0]?' selected':'')+'>'+esc(R.opts[j][1])+'</option>';
+      h += '</select>';
+    } else {
+      h += '<input id="rq_'+R.k+'" data-k="'+R.k+'" type="'+R.type+'"' +
+           (R.ph ? ' placeholder="'+esc(R.ph)+'"' : '') +
+           ' value="'+esc(v==null?"":v)+'">';
+    }
+    h += '<div class="why">' + esc(R.why) + '</div></div>';
+  }
+  h += '</div>';
+  $("reqForm").innerHTML = h;
+
+  var miss = unanswered().length;
+  $("reqCt").textContent = miss ? (9 - miss) + " of 9 answered" : "all 9 answered";
+
+  var els = $("reqForm").querySelectorAll("[data-k]");
+  for (i = 0; i < els.length; i++) {
+    els[i].onchange = els[i].oninput = function () {
+      S.req[this.getAttribute("data-k")] = this.value;
+      var f = this.parentNode;
+      if (this.value === "") { if (f.className.indexOf("unset") < 0) f.className += " unset"; }
+      else f.className = f.className.replace(/ ?unset/, "");
+      $("reqCt").textContent = unanswered().length ?
+        (9 - unanswered().length) + " of 9 answered" : "all 9 answered";
+      renderOut();
+    };
+  }
+}
+
+function renderAsm(){
+  var up = UPGRADE[S.req.utilitySideUpgrade] || UPGRADE[""];
+  var h = '<div class="form">';
+  h += '<div class="fld full"><label for="aKw">System power (kW)</label>' +
+       '<input id="aKw" type="number" value="'+(S.kw==null?"":S.kw)+'" placeholder="from packet">' +
+       '<div class="why">Comes from the packet. Override to price a different size against the same site.</div></div>';
+  h += '<div class="fld full"><label for="aRel">Long-lead equipment released</label>' +
+       '<select id="aRel">' +
+       '<option value="bod"' + (S.leadRelease==="bod"?" selected":"") + '>At basis of design \u2014 deposit at risk</option>' +
+       '<option value="ia"'  + (S.leadRelease==="ia" ?" selected":"") + '>After the interconnection agreement is signed</option>' +
+       '</select>' +
+       '<div class="why">The biggest schedule lever anyone here actually controls. ' +
+       'Ordering the transformer before the agreement is signed pulls months out ' +
+       'of the programme and puts the deposit at risk if the study goes badly.</div></div>';
+  h += '<div class="fld full"><label for="aNtp">Notice to proceed</label>' +
+       '<input id="aNtp" type="date" value="'+esc(S.ntp)+'">' +
+       '<div class="why">Week zero on the schedule. Everything downstream is counted from here.</div></div>';
+  if (up.exposure) {
+    h += '<div class="fld full"><label style="display:flex;align-items:center;gap:7px;cursor:pointer">' +
+         '<input type="checkbox" id="aCarry" style="width:auto;height:auto;accent-color:var(--accent)"' +
+         (S.carryUpgrade ? ' checked' : '') + '>' +
+         'Carry a utility upgrade allowance in the total</label>' +
+         '<div class="why">Off by default. With the study outstanding, an upgrade belongs in the risk ' +
+         'section as a stated exposure, not folded into a number someone will quote.</div></div>';
+  }
+  h += '</div>';
+  $("asmForm").innerHTML = h;
+
+  $("aKw").oninput = function () { S.kw = num(this.value); renderOut(); };
+  $("aNtp").onchange = function () { S.ntp = this.value || todayISO(); renderOut(); };
+  $("aRel").onchange = function () { S.leadRelease = this.value; renderOut(); };
+  if ($("aCarry")) $("aCarry").onchange = function () { S.carryUpgrade = this.checked; renderOut(); };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RENDER — the estimate
+   ══════════════════════════════════════════════════════════════════════════ */
+var OPEN = {};   /* which divisions are expanded */
+
+function bandRail(r){
+  var LO = 300, HI = 650;
+  function x(v){ return clamp((v - LO) / (HI - LO), 0, 1) * 100; }
+  var b = r.perKwh.base, lo = r.perKwh.lo, hi = r.perKwh.hi;
+  var out = b < BAND_LO || b > BAND_HI;
+
+  var why = "";
+  if (out) {
+    var bits = [];
+    if (r.kw < 500) bits.push("a " + n0(r.kw) + " kW system carries the same engineering, permitting and mobilisation as a megawatt");
+    if (r.kw > 4000) bits.push("size is working in your favour \u2014 the fixed costs spread further");
+    if (r.hours !== 2) bits.push("at " + r.hours + " h the power-side hardware spreads over " +
+        (r.hours > 2 ? "more" : "fewer") + " kWh");
+    if (r.voltage === "34500") bits.push("a 34.5 kV tie is a heavier interconnection than the band assumes");
+    if (r.voltage === "480") bits.push("a behind-the-meter tie skips the step-up transformer entirely");
+    if (r.upgradeLine) bits.push("a utility-side upgrade is carried in the total");
+    if (r.poiFt > 800) bits.push(n0(r.poiFt) + " ft of trench and cable is well past the 250 ft the band assumes");
+    if (S.req.soilAndGrading === "poor" || S.req.soilAndGrading === "rock") bits.push("ground conditions are driving the civil");
+    if (S.req.laborBasis === "pw" || S.req.laborBasis === "pla") bits.push("the labour basis is not open shop");
+    if (S.req.ahj === "hard") bits.push("a difficult AHJ is priced in");
+    why = bits.length
+      ? "<b>Outside the benchmark, and here is why:</b> " + bits.join("; ") + "."
+      : "<b>Outside the benchmark.</b> The drivers above are what moved it.";
+  } else {
+    why = "The base estimate sits inside the <b>$" + BAND_LO + "\u2013$" + BAND_HI +
+          " / kWh</b> benchmark for commercial and industrial storage" +
+          (hi > BAND_HI ? ", though the high case reaches $" + Math.round(hi) + " / kWh"
+           : lo < BAND_LO ? ", though the low case reaches $" + Math.round(lo) + " / kWh"
+           : " and so does the whole range") +
+          ". The band is a reference, not a rule \u2014 a site is allowed to sit outside " +
+          "it, and this one does not.";
+  }
+
+  return '<div class="rail">' +
+    '<div class="tr">' +
+      '<div class="band" style="left:'+x(BAND_LO)+'%;width:'+(x(BAND_HI)-x(BAND_LO))+'%"></div>' +
+      '<div class="span'+(out?' out':'')+'" style="left:'+x(lo)+'%;width:'+Math.max(x(hi)-x(lo),0.6)+'%"></div>' +
+      '<div class="dot'+(out?' out':'')+'" style="left:'+x(b)+'%"></div>' +
+    '</div>' +
+    '<div class="ax"><span>$'+LO+'</span><span>$'+BAND_LO+'</span><span>$'+BAND_HI+'</span><span>$'+HI+' / kWh</span></div>' +
+    '<div class="cap">' + why + '</div>' +
+  '</div>';
+}
+
+function heroHtml(r){
+  var site = (S.packet && S.packet.site) || {};
+  return '<div class="hero"><div class="top">' +
+    '<div>' +
+      '<div class="big">' + usd(r.total.base) + '</div>' +
+      '<div class="sub"><b>' + n0(r.kw) + ' kW / ' + n0(r.kwh) + ' kWh</b> \u00b7 ' + r.hours + ' h \u00b7 ' +
+        esc(r.voltLabel) + '<br>' +
+        (site.address ? esc(site.address) + ' \u00b7 ' : '') +
+        'installed cost, engineering through permission to operate</div>' +
+    '</div>' +
+    '<div class="rng">' +
+      '<b>$' + Math.round(r.perKwh.base) + '</b> / kWh<br>' +
+      '<b>$' + Math.round(r.perKw.base) + '</b> / kW<br>' +
+      usdK(r.total.lo) + ' \u2013 ' + usdK(r.total.hi) +
+    '</div>' +
+  '</div>' + bandRail(r) + '</div>';
+}
+
+function tableHtml(r){
+  var h = '<div class="panel"><h3>Where the money goes</h3>' +
+    '<p class="lead">Bottom-up, at the reference rates listed against each line and scaled to ' +
+    'this site. Click a division to open it. The low and high columns are that division\u2019s own ' +
+    'uncertainty \u2014 equipment is quoted and moves little, ground conditions and an AHJ move a lot \u2014 ' +
+    'not one blanket percentage applied to everything.</p>' +
+    '<table class="t"><thead><tr>' +
+    '<th style="width:46%">Division</th><th class="r">Low</th><th class="r">Base</th>' +
+    '<th class="r">High</th><th class="r">$/kWh</th><th class="r" style="width:70px">Share</th>' +
+    '</tr></thead><tbody>';
+
+  var i, j, maxShare = 0;
+  for (i = 0; i < r.divisions.length; i++) maxShare = Math.max(maxShare, r.divisions[i].base);
+
+  for (i = 0; i < r.divisions.length; i++) {
+    var D = r.divisions[i], open = !!OPEN[D.id];
+    h += '<tr class="div" data-div="'+D.id+'">' +
+      '<td><span class="tw">'+(open?'\u25be':'\u25b8')+'</span>' + esc(D.name) + '</td>' +
+      '<td class="r">'+usdK(D.lo)+'</td><td class="r">'+usd(D.base)+'</td>' +
+      '<td class="r">'+usdK(D.hi)+'</td>' +
+      '<td class="r">$'+ (r.kwh ? (D.base/r.kwh).toFixed(0) : '—') +'</td>' +
+      '<td class="r"><span class="shr" style="width:'+Math.round(56*D.base/maxShare)+'px"></span></td></tr>';
+    if (open) {
+      for (j = 0; j < D.lines.length; j++) {
+        var L = D.lines[j];
+        h += '<tr class="li"><td>' + esc(L.n) +
+             '<span class="bs">' + esc(L.basis) +
+             (L.mods.length ? ' \u00b7 ' + esc(L.mods.join(" \u00b7 ")) : '') + '</span></td>' +
+             '<td class="r"></td><td class="r">'+usd(L.cost)+'</td>' +
+             '<td class="r"></td><td class="r"></td><td></td></tr>';
+      }
+    }
+  }
+
+  if (r.upgradeLine) {
+    h += '<tr class="mk"><td>' + esc(r.upgradeLine.name) +
+         (r.upgradeLine.carried ? ' <span style="color:var(--amber)">\u00b7 carried allowance</span>' : '') +
+         '</td><td class="r">'+usdK(r.upgradeLine.cost*0.8)+'</td>' +
+         '<td class="r">'+usd(r.upgradeLine.cost)+'</td>' +
+         '<td class="r">'+usdK(r.upgradeLine.cost*1.35)+'</td><td class="r"></td><td></td></tr>';
+  }
+
+  h += '<tr class="mk"><td><b>Direct and indirect subtotal</b></td>' +
+       '<td class="r">'+usdK(r.subtotal.lo)+'</td><td class="r"><b>'+usd(r.subtotal.base)+'</b></td>' +
+       '<td class="r">'+usdK(r.subtotal.hi)+'</td>' +
+       '<td class="r">$'+(r.kwh?(r.subtotal.base/r.kwh).toFixed(0):'—')+'</td><td></td></tr>';
+
+  for (i = 0; i < r.markups.length; i++) {
+    var M = r.markups[i];
+    h += '<tr class="li"><td>' + esc(M.n) + '<span class="bs">' +
+         (M.id === "mk.ctg" ? "6% low \u00b7 8% base \u00b7 10% high, compounding on the running total"
+                            : pct(M.rate) + " of the running total") + '</span></td>' +
+         '<td class="r">'+usdK(M.lo)+'</td><td class="r">'+usd(M.base)+'</td>' +
+         '<td class="r">'+usdK(M.hi)+'</td><td class="r"></td><td></td></tr>';
+  }
+
+  h += '<tr class="tot"><td>Total installed cost</td>' +
+       '<td class="r">'+usd(r.total.lo)+'</td><td class="r">'+usd(r.total.base)+'</td>' +
+       '<td class="r">'+usd(r.total.hi)+'</td>' +
+       '<td class="r">$'+Math.round(r.perKwh.base)+'</td><td></td></tr>';
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function kpiHtml(r, sch){
+  var end = addWeeks(S.ntp, sch.weeks);
+  return '<div class="kpis">' +
+    '<div class="kpi"><div class="n">$'+Math.round(r.perKwh.base)+'<small> / kWh</small></div>' +
+      '<div class="l">$'+Math.round(r.perKwh.lo)+'\u2013$'+Math.round(r.perKwh.hi)+' across the model range</div></div>' +
+    '<div class="kpi"><div class="n">$'+Math.round(r.perKw.base)+'<small> / kW</small></div>' +
+      '<div class="l">Installed, at '+r.hours+' h duration</div></div>' +
+    '<div class="kpi"><div class="n">'+Math.round(sch.weeks)+'<small> weeks</small></div>' +
+      '<div class="l">NTP to permission to operate \u00b7 '+(sch.weeks/4.345).toFixed(0)+' months</div></div>' +
+    '<div class="kpi"><div class="n" style="font-size:16px;line-height:1.35">'+fmtDate(end)+'</div>' +
+      '<div class="l">Energisation, if notice to proceed is '+fmtDate(new Date(S.ntp+"T12:00:00Z"))+'</div></div>' +
+  '</div>';
+}
+
+function riskHtml(r){
+  var h = '<div class="panel"><h3>What this number does not include</h3>' +
+    '<p class="lead">An estimate is only as good as its exclusions. These are stated rather than ' +
+    'buried, because each one is a real cheque somebody may have to write.</p>';
+
+  var cls = r.cls;
+  h += '<div class="note ' + (cls.n === 5 ? 'bad' : 'warnb') + '">' +
+       '<b>' + esc(cls.label) + '</b> \u2014 ' + esc(cls.why) +
+       ' On AACE 18R-97 that carries an accuracy range of ' + Math.round(cls.lo*100) + '% to +' +
+       Math.round(cls.hi*100) + '%, which on this estimate is <b>' +
+       usdK(r.total.base*(1+cls.lo)) + ' to ' + usdK(r.total.base*(1+cls.hi)) + '</b>. ' +
+       'That is wider than the low\u2013high columns above, and deliberately so: those columns are ' +
+       'the model\u2019s spread, this is the estimate\u2019s.</div>';
+
+  var un = unanswered(), i, lbl = {};
+  for (i = 0; i < REQ_UI.length; i++) lbl[REQ_UI[i].k] = REQ_UI[i].lab;
+  if (un.length) {
+    h += '<div class="note bad"><b>' + un.length + ' of the nine drivers are unanswered</b>' +
+         ' and are being priced at a default:<ul>';
+    for (i = 0; i < un.length; i++) h += '<li>' + esc(lbl[un[i]] || un[i]) + '</li>';
+    h += '</ul>Answer them on the left and the number moves. That movement is the point.</div>';
+  }
+
+  var up = r.upgrade;
+  if (up.exposure && !S.carryUpgrade) {
+    h += '<div class="note bad"><b>Utility-side upgrade \u2014 not in the total.</b> ' +
+         'The interconnection study has not come back. If it calls for one, exposure runs ' +
+         usdK(up.exposure[0]) + ' to ' + usdK(up.exposure[1]) + ', which would put this project at ' +
+         usdK(r.total.base + up.exposure[0]) + ' to ' + usdK(r.total.base + up.exposure[1]) +
+         ' \u2014 $' + Math.round((r.total.base+up.exposure[0])/r.kwh) + ' to $' +
+         Math.round((r.total.base+up.exposure[1])/r.kwh) + ' / kWh. It is left out because a ' +
+         'number somebody quotes should not contain a guess this large.</div>';
+  }
+
+  if (r.quoteAgeMonths != null && r.quoteAgeMonths > 6) {
+    h += '<div class="note warnb"><b>The equipment quote is ' + r.quoteAgeMonths.toFixed(0) +
+         ' months old.</b> Escalated by ' + pct(r.escalation - 1) + ' in the equipment lines, but past ' +
+         'six months it is not a quote any more. Re-quote before this goes to a customer.</div>';
+  } else if (r.quoteAgeMonths == null) {
+    h += '<div class="note warnb"><b>No equipment quote date.</b> The equipment lines carry ' +
+         pct(r.escalation - 1) + ' of drift \u2014 one quarter\u2019s worth \u2014 as a placeholder.</div>';
+  }
+
+  h += '<p class="lead" style="margin-top:14px;margin-bottom:6px"><b>Excluded entirely:</b></p>' +
+    '<div class="note"><ul style="margin-top:0">' +
+    '<li>Land cost, lease payments and property tax</li>' +
+    '<li>Utility upgrade costs beyond the line above, and any network upgrade assigned by the study</li>' +
+    '<li>Hazardous material abatement, contaminated soil handling and unknown subsurface obstructions</li>' +
+    '<li>Roof structural reinforcement, if any equipment goes on structure</li>' +
+    '<li>Financing cost, interest during construction, and tax equity structuring</li>' +
+    '<li>Long-term O&amp;M, augmentation and warranty extensions past year one</li>' +
+    '<li>Tariffs and duties on imported cells beyond what the quote already carries</li>' +
+    '<li>Escalation past the notice-to-proceed date</li>' +
+    '</ul></div></div>';
+  return h;
+}
+
+function ganttHtml(sch){
+  var W = sch.weeks, T = sch.tasks, i;
+  var start = new Date(S.ntp + "T12:00:00Z");
+  var h = '<div class="panel"><h3>Project schedule</h3>' +
+    '<p class="lead">Critical path in blue, float in grey. Two things decide this date and neither ' +
+    'is construction: the utility\u2019s study queue and the transformer lead time. Everything ' +
+    'shown in grey can slip by the weeks noted without moving energisation. ' +
+    'Long-lead equipment is released ' +
+    (S.leadRelease === "ia" ? '<b>after the interconnection agreement</b>, which is the safe ' +
+       'order and the slow one \u2014 switching to a deposit at basis of design is worth months'
+                            : '<b>at basis of design</b>, with the deposit at risk if the ' +
+       'interconnection study comes back badly') + '.</p>' +
+    '<div class="gWrap"><div class="gIn">';
+
+  /* month axis */
+  h += '<div class="gAx">';
+  var cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  if (cur < start) cur.setUTCMonth(cur.getUTCMonth() + 1);
+  var endD = addWeeks(S.ntp, W);
+  var msWeek = 7*24*3600*1000;
+  while (cur <= endD) {
+    var wk = (cur - start) / msWeek;
+    h += '<div class="mo" style="left:' + (wk/W*100) + '%">' + fmtMon(cur) + '</div>';
+    cur.setUTCMonth(cur.getUTCMonth() + 1);
+  }
+  h += '</div>';
+
+  var lastPh = null;
+  for (i = 0; i < T.length; i++) {
+    var t = T[i];
+    if (t.ph !== lastPh) {
+      h += '<div class="gPh"><div class="nm">' + esc(t.ph) + '</div><div class="rl"></div></div>';
+      lastPh = t.ph;
+    }
+    h += '<div class="gRow' + (t.crit ? ' crit' : '') + '">' +
+         '<div class="nm" title="' + esc(t.n) + '">' + esc(t.n) + '</div>' +
+         '<div class="tk"><div class="bar" style="left:' + (t.es/W*100) + '%;width:' +
+           Math.max(t.w/W*100, 0.6) + '%">' +
+           '<span class="wk">' + t.w + 'w' + (t.crit ? '' : ' \u00b7 ' + Math.round(t.float) + 'w float') +
+         '</span></div></div></div>';
+  }
+
+  h += '</div></div>' +
+    '<div class="gKey">' +
+      '<span class="k"><i class="sw" style="background:var(--accent)"></i>Critical path \u2014 a week lost here is a week lost overall</span>' +
+      '<span class="k"><i class="sw" style="background:var(--gray);opacity:.55"></i>Has float</span>' +
+      '<span class="k">Week 0 = notice to proceed, ' + fmtDate(start) + '</span>' +
+    '</div>';
+
+  /* milestones */
+  var MS = [["b4","Interconnection agreement executed"],["c4","All permits in hand"],
+            ["e4","Equipment on site"],["e5","Construction complete"],
+            ["f2","Permission to operate"],["f3","Handover and first revenue"]];
+  var byId = {}; for (i = 0; i < T.length; i++) byId[T[i].id] = T[i];
+  /* In date order. A milestone list out of sequence is read as an error even
+     when every date on it is right. */
+  MS = MS.filter(function (m){ return !!byId[m[0]]; })
+         .sort(function (a, b){ return byId[a[0]].ef - byId[b[0]].ef; });
+  h += '<h3 style="margin:22px 0 4px;font-size:13px">Milestones</h3><div class="ms">';
+  for (i = 0; i < MS.length; i++) {
+    var m = byId[MS[i][0]];
+    h += '<div class="d">' + fmtDate(addWeeks(S.ntp, m.ef)) + '</div>' +
+         '<div>' + esc(MS[i][1]) + '</div>' +
+         '<div class="w">week ' + Math.round(m.ef) + '</div>';
+  }
+  h += '</div>';
+
+  var crit = [];
+  for (i = 0; i < T.length; i++) if (T[i].crit) crit.push(T[i].n + " (" + T[i].w + "w)");
+  h += '<div class="note" style="margin-top:16px"><b>Critical path:</b> ' +
+       esc(crit.join(" \u2192 ")) + '. Total ' + Math.round(W) + ' weeks, ' +
+       (W/4.345).toFixed(1) + ' months.</div>';
+
+  return h + '</div>';
+}
+
+function renderOut(){
+  var r = compute();
+  if (!r) { $("blank").style.display = ""; $("body").style.display = "none";
+            $("clsChip").textContent = "NO PACKET"; $("clsChip").className = "srcTag";
+            enable(false); return; }
+  var sch = cpm();
+  $("blank").style.display = "none";
+  $("body").style.display = "";
+  $("body").innerHTML = heroHtml(r) + kpiHtml(r, sch) + tableHtml(r) +
+                        ganttHtml(sch) + riskHtml(r);
+
+  $("clsChip").textContent = "CLASS " + r.cls.n;
+  $("clsChip").className = "srcTag " + (r.cls.n === 5 ? "c5" : "c4");
+  enable(true);
+
+  var rows = $("body").querySelectorAll("tr.div");
+  for (var i = 0; i < rows.length; i++) rows[i].onclick = function () {
+    var d = this.getAttribute("data-div"); OPEN[d] = !OPEN[d]; renderOut();
+  };
+  LAST = { r:r, sch:sch };
+}
+var LAST = null;
+
+function enable(on){
+  $("bCsv").disabled = !on; $("bJson").disabled = !on; $("bPrint").disabled = !on;
+}
+
+function render(){ renderPacketSummary(); renderReq(); renderAsm(); renderOut(); report(); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPORT
+   ══════════════════════════════════════════════════════════════════════════ */
+function dl(text, name, mime){
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+function slug(){
+  var p = S.packet, a = (p && p.site && p.site.address) || "site";
+  return a.replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50).toLowerCase() || "site";
+}
+function csvCell(v){
+  v = v == null ? "" : String(v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+function toCsv(){
+  var r = LAST.r, rows = [["Division","Line item","Basis","Modifiers","Cost USD"]], i, j;
+  for (i = 0; i < r.divisions.length; i++)
+    for (j = 0; j < r.divisions[i].lines.length; j++) {
+      var L = r.divisions[i].lines[j];
+      rows.push([r.divisions[i].name, L.n, L.basis, L.mods.join(" | "), Math.round(L.cost)]);
+    }
+  if (r.upgradeLine) rows.push(["Utility", r.upgradeLine.name, "allowance", "", Math.round(r.upgradeLine.cost)]);
+  rows.push(["", "Direct and indirect subtotal", "", "", Math.round(r.subtotal.base)]);
+  for (i = 0; i < r.markups.length; i++)
+    rows.push(["Markup", r.markups[i].n, pct(r.markups[i].rate), "", Math.round(r.markups[i].base)]);
+  rows.push(["", "TOTAL INSTALLED (base)", "", "", Math.round(r.total.base)]);
+  rows.push(["", "TOTAL INSTALLED (low)",  "", "", Math.round(r.total.lo)]);
+  rows.push(["", "TOTAL INSTALLED (high)", "", "", Math.round(r.total.hi)]);
+  rows.push(["", "$ per kWh (base)", "", "", Math.round(r.perKwh.base)]);
+  var out = "";
+  for (i = 0; i < rows.length; i++) {
+    for (j = 0; j < rows[i].length; j++) out += (j?",":"") + csvCell(rows[i][j]);
+    out += "\n";
+  }
+  return out;
+}
+function toJson(){
+  var r = LAST.r, sch = LAST.sch, i;
+  return JSON.stringify({
+    schemaVersion: SCHEMA_OUT,
+    generatedAt: new Date().toISOString(),
+    generatedBy: { tool:"ClearSky-OMEGA Cost Estimator", build:CS_BUILD },
+    sourcePacket: S.packet ? {
+      schemaVersion: S.packet.schemaVersion,
+      generatedAt: S.packet.generatedAt,
+      siteId: S.packet.site && S.packet.site.id,
+      address: S.packet.site && S.packet.site.address,
+      gaps: S.packet.gaps || []
+    } : null,
+    inputs: {
+      batteryKw:r.kw, batteryKwh:r.kwh, durationHours:r.hours,
+      answered: S.req, unanswered: unanswered(),
+      padAreaSqft:r.pad, poiDistanceFt:r.poiFt,
+      noticeToProceed: S.ntp,
+      longLeadReleasedAt: S.leadRelease === "ia" ? "interconnection agreement"
+                                                 : "basis of design",
+      equipmentEscalation: r.escalation
+    },
+    benchmark: { lowPerKwh:BAND_LO, highPerKwh:BAND_HI,
+                 inBand: r.perKwh.base >= BAND_LO && r.perKwh.base <= BAND_HI },
+    estimateClass: { aace: r.cls.n, low: r.cls.lo, high: r.cls.hi,
+                     rangeLowUsd: Math.round(r.total.base*(1+r.cls.lo)),
+                     rangeHighUsd: Math.round(r.total.base*(1+r.cls.hi)),
+                     note: r.cls.why },
+    cost: {
+      divisions: r.divisions.map(function (D){
+        return { id:D.id, name:D.name, low:Math.round(D.lo), base:Math.round(D.base),
+                 high:Math.round(D.hi),
+                 lines: D.lines.map(function (L){
+                   return { id:L.id, name:L.n, basis:L.basis, modifiers:L.mods,
+                            usd:Math.round(L.cost) }; }) };
+      }),
+      utilityUpgrade: r.upgradeLine ? { name:r.upgradeLine.name,
+                                        usd:Math.round(r.upgradeLine.cost),
+                                        carriedAllowance:r.upgradeLine.carried } : null,
+      utilityUpgradeExposureUsd: r.upgrade.exposure || null,
+      markups: r.markups.map(function (M){
+        return { id:M.id, name:M.n, rate:M.rate, usd:Math.round(M.base) }; }),
+      subtotalUsd: Math.round(r.subtotal.base),
+      totalUsd: { low:Math.round(r.total.lo), base:Math.round(r.total.base),
+                  high:Math.round(r.total.hi) },
+      perKwh: { low:Math.round(r.perKwh.lo), base:Math.round(r.perKwh.base),
+                high:Math.round(r.perKwh.hi) },
+      perKw:  { low:Math.round(r.perKw.lo),  base:Math.round(r.perKw.base),
+                high:Math.round(r.perKw.hi) }
+    },
+    schedule: {
+      noticeToProceed: S.ntp,
+      totalWeeks: Math.round(sch.weeks),
+      energisationDate: addWeeks(S.ntp, sch.weeks).toISOString().slice(0,10),
+      tasks: sch.tasks.map(function (t){
+        return { id:t.id, phase:t.ph, name:t.n, weeks:t.w,
+                 startWeek:Math.round(t.es), finishWeek:Math.round(t.ef),
+                 startDate: addWeeks(S.ntp, t.es).toISOString().slice(0,10),
+                 finishDate: addWeeks(S.ntp, t.ef).toISOString().slice(0,10),
+                 floatWeeks:Math.round(t.float), critical:t.crit,
+                 dependsOn:t.dep };
+      })
+    },
+    exclusions: ["Land, lease and property tax",
+                 "Network upgrades assigned by the interconnection study",
+                 "Hazardous material abatement and unknown subsurface conditions",
+                 "Roof structural reinforcement",
+                 "Financing cost and interest during construction",
+                 "O&M, augmentation and warranty beyond year one",
+                 "Tariffs and duties beyond the equipment quote",
+                 "Escalation past the notice-to-proceed date"]
+  }, null, 2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   WIRING
+   ══════════════════════════════════════════════════════════════════════════ */
+function boot(){
+  var drop = $("drop"), file = $("pkFile");
+  drop.onclick = function(){ file.click(); };
+  drop.onkeydown = function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } };
+  file.onchange = function(){ if (this.files && this.files[0]) readFile(this.files[0]); this.value = ""; };
+
+  function stop(e){ e.preventDefault(); e.stopPropagation(); }
+  ["dragenter","dragover"].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ stop(e); drop.className = "over"; }); });
+  ["dragleave","drop"].forEach(function(ev){
+    drop.addEventListener(ev, function(e){ stop(e); drop.className = ""; }); });
+  drop.addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+  /* Dropping anywhere on the page works too — nobody aims for the box. */
+  document.addEventListener("dragover", function(e){ e.preventDefault(); });
+  document.addEventListener("drop", function(e){
+    e.preventDefault();
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f && /\.json$/i.test(f.name)) readFile(f);
+  });
+
+  $("bReset").onclick = function(){
+    if (!confirm("Clear the site and every answer?")) return;
+    S.packet = null; S.kw = null; S.carryUpgrade = false; S.leadRelease = "bod";
+    for (var k in S.req) if (S.req.hasOwnProperty(k)) S.req[k] = "";
+    render();
+  };
+  $("bCsv").onclick   = function(){ if (LAST) dl(toCsv(),  "cost-estimate-"+slug()+".csv", "text/csv;charset=utf-8"); };
+  $("bJson").onclick  = function(){ if (LAST) dl(toJson(), "cost-estimate-"+slug()+".json", "application/json;charset=utf-8"); };
+  $("bPrint").onclick = function(){ window.print(); };
+
+  /* Optional hand-off from the Site Finder: one line there —
+       sessionStorage.setItem("cs.packet.handoff", JSON.stringify(sitePacket(r)));
+     then open this page. Falls back to the drop zone if absent. */
+  try {
+    var ho = window.sessionStorage && sessionStorage.getItem("cs.packet.handoff");
+    if (ho) { sessionStorage.removeItem("cs.packet.handoff"); loadPacket(JSON.parse(ho)); return; }
+  } catch (e) {}
+
+  render();
+
+  /* Last, so a handed-over packet lands on a page that is already wired. */
+  adoptHandoff();
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+}
+
+/* Exposed for the test harness. */
+if (typeof module !== "undefined" && module.exports)
+  module.exports = { MODEL:MODEL, MARKUP:MARKUP, SPREAD:SPREAD, VOLT:VOLT,
+                     UPGRADE:UPGRADE, BAND_LO:BAND_LO, BAND_HI:BAND_HI,
+                     S:S, compute:compute, cpm:cpm, tasks:tasks, estClass:estClass };
+})();
+
+</script>
+
+</body>
+</html>

@@ -313,6 +313,15 @@
       file:'/interconnection-screener.html', badge:'new', tier:TIER.STANDARD, savesData:true,
       icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 
+    /* Reads the site packet the site finder writes — same schema on both
+       sides — and grades its own output under AACE 18R-97. It refuses to
+       claim Class 3 from a desk, which is the reason it is safe to put a
+       number in front of a customer at all. */
+    { key:'costestimator', name:'Cost Estimator', category:'finance',
+      desc:'Installed cost from a site packet, graded to an AACE estimate class \u2014 never a quote.',
+      file:'/clearsky-cost-estimator.html', badge:'new', tier:TIER.DELUXE, savesData:false,
+      icon:'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' },
+
     { key:'interconnectstudy', name:'Interconnection Study', category:'interconnection',
       desc:'Distribution load-flow & short-circuit study — voltages and fault duty per bus.',
       file:'/interconnection-study.html', badge:'new', tier:TIER.ENTERPRISE, savesData:true,

@@ -4042,12 +4042,88 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
 
+  /* ── COST THIS SITE ───────────────────────────────────────────────────
+     The cost estimator reads exactly the packet this tool writes — same
+     schema string, clearsky.site-packet/1, on both sides. The only thing
+     between them was a download and an upload, so the estimate usually did
+     not get made.
+
+     The packet goes through sessionStorage rather than the URL. It is a few
+     kilobytes of JSON, this is same-origin, and a query string that size is
+     fragile and ends up in history. The estimator consumes the key on read.
+
+     THE ESTIMATE COMES BACK, AND SO DOES ITS CLASS. Nine things decide the
+     cost that no packet can answer — interconnection voltage, distance to
+     the POI, whether the utility needs an upgrade, ground conditions,
+     labour basis. The estimator asks for them and grades itself under AACE
+     18R-97 accordingly. The class travels with the number here for the same
+     reason it does there: a total with no class attached is exactly what
+     this must not let anybody quote. */
+  var COST_IN = "clearsky.cost-estimate/1";
+  var _estimates = {};
+
+  function costThisSite(r) {
+    var key = "cs-packet-" + r.id + "-" + Date.now().toString(36);
+    try {
+      sessionStorage.setItem(key, JSON.stringify(sitePacket(r)));
+    } catch (e) {
+      /* Private mode, or the quota is full. Fall back to the file, which is
+         the route that always worked. */
+      downloadPacket(r);
+      return;
+    }
+    var w = window.open("/clearsky-cost-estimator.html?packet=" +
+                        encodeURIComponent(key), "_blank");
+    if (!w) {
+      try { sessionStorage.removeItem(key); } catch (e2) {}
+      alert("The estimator could not open \u2014 a pop-up blocker stopped it. " +
+            "Allow pop-ups for this site, or use Download the packet instead.");
+    }
+  }
+
+  window.addEventListener("message", function (ev) {
+    if (ev.origin !== location.origin) return;              /* same origin only */
+    var d = ev.data;
+    if (!d || d.type !== COST_IN || !d.siteId) return;
+    _estimates[d.siteId] = d;
+    var host = document.getElementById("costBack");
+    if (host && host.getAttribute("data-id") === d.siteId) renderCostBack(d.siteId);
+  });
+
+  function renderCostBack(id) {
+    var host = document.getElementById("costBack");
+    if (!host) return;
+    var d = _estimates[id];
+    if (!d) { host.innerHTML = ""; return; }
+    var band = "$" + Math.round(d.total.lo / 1000).toLocaleString() + "k \u2013 $" +
+               Math.round(d.total.hi / 1000).toLocaleString() + "k";
+    var mid = "$" + Math.round(d.total.base / 1000).toLocaleString() + "k";
+    var open = d.unanswered.length;
+    host.innerHTML =
+      '<div class="sec"><h4>Estimated installed cost</h4>' +
+      '<div style="font-size:22px;font-weight:700;line-height:1.15">' + mid + '</div>' +
+      '<div style="font-size:12px;opacity:.75;margin-top:2px">' + band + ' \u00b7 ' +
+        (d.perKwh && d.perKwh.base ? "$" + Math.round(d.perKwh.base) + " / kWh" : "") + '</div>' +
+      '<p class="note"><b>' + esc(d.estimateClass) + '.</b> ' + esc(d.estimateClassWhy) +
+        ' Accuracy on this class runs ' + Math.round(d.accuracyLow * 100) + '% to +' +
+        Math.round(d.accuracyHigh * 100) + '%. ' +
+        (open ? open + ' of the nine cost drivers ' + (open === 1 ? 'is' : 'are') +
+                ' still unanswered in the estimator \u2014 answering them narrows this.'
+              : 'Every cost driver has been answered.') +
+        ' <b>This is an estimate, not a quote.</b> It is not a bid, it carries no ' +
+        'contingency you have agreed, and it does not replace a site walk or firm ' +
+        'equipment pricing.</p></div>';
+  }
+
   function packetBlockHtml(r) {
     var p = sitePacket(r);
     return '<div class="sec"><h4>Send to the cost estimator</h4>' +
       '<div class="setKeyRow">' +
-      '<button id="dPacket" data-id="' + esc(r.id) + '">Export this site</button>' +
-      '</div><p class="note">One JSON file for this site: what the circuit ' +
+      '<button id="costSite" data-id="' + esc(r.id) + '">Cost site</button>' +
+      '<button id="dPacket" data-id="' + esc(r.id) + '">Download the packet</button>' +
+      '</div>' +
+      '<div id="costBack" data-id="' + esc(r.id) + '"></div>' +
+      '<p class="note">One JSON file for this site: what the circuit ' +
       'publishes, what the county knows, what the ledger holds, and the size ' +
       'this tool arrived at. It also carries <b>' + p.required.length +
       ' things the estimator has to be told</b> \u2014 interconnection voltage, ' +
@@ -4631,6 +4707,9 @@
        and the list agree immediately. */
     var pk = document.getElementById("dPacket");
     if (pk) pk.onclick = function () { downloadPacket(r); };
+    var cs = document.getElementById("costSite");
+    if (cs) cs.onclick = function () { costThisSite(r); };
+    renderCostBack(r.id);
 
     var sr = document.getElementById("dSaveRow");
     if (sr) sr.onclick = function () {
