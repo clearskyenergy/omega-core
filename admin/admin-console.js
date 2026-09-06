@@ -369,6 +369,7 @@ function renderEverything(){
      by its own button — not on every re-render, which would put a collection
      read behind every unrelated edit on this page. */
   loadTenants();
+  renderQuickBooks();
 }
 
 /* ── helpers ── */
@@ -1225,6 +1226,48 @@ function setMemberRole(orgId, uid, role){
       var tr=document.getElementById(rowId);
       if(tr){ tr.style.display='none'; openTenantDetail(orgId); }   /* re-read the truth */
     });
+}
+
+/* ── QUICKBOOKS: NOT CONNECTED ────────────────────────────────────────────
+   Deliberately inert. Rendering sample invoices to "show the shape" is the
+   one thing an accounting screen must never do — a placeholder that looks
+   like data eventually gets reconciled against, and by then nobody remembers
+   it was a mock.
+
+   What it is waiting on is a decision, not code:
+
+     · DIRECTION. Push OMEGA invoices INTO QuickBooks, or pull payment status
+       OUT of it? They are different integrations. Push means OMEGA is the
+       system of record for what a tenant owes and QBO is the ledger. Pull
+       means QBO is the record and OMEGA displays it. Building both is how you
+       get two sources of truth for the same number.
+     · An Intuit app registration (client id + secret, as Vercel env vars) and
+       the target Realm/Company ID.
+     · Sandbox or production. Intuit's sandbox uses different hosts entirely,
+       so this is not a flag flipped later.
+
+   Stripe already answers "what was billed and what was paid" through
+   /api/stripe-invoices. QuickBooks earns its place only if ClearSky's books
+   need the entries, which is an accounting decision rather than a product
+   one. */
+function renderQuickBooks(){
+  var host = document.getElementById('qb-panel');
+  if (!host) return;
+  host.innerHTML =
+      '<div class="info-card">'
+    +   '<div class="ic-top"><div>'
+    +     '<div class="ic-name">QuickBooks Online</div>'
+    +     '<div class="ic-sub">No connection configured</div>'
+    +   '</div><span class="chip neutral">not connected</span></div>'
+    +   '<div class="ic-body">'
+    +     '<div style="margin-bottom:8px">Before this can be switched on, three things have to be settled:</div>'
+    +     '<div class="sub-txt">1 &#183; <b>Direction.</b> Push OMEGA invoices into QuickBooks, or pull payment status out of it? Different integrations \u2014 building both gives the same number two sources of truth.</div>'
+    +     '<div class="sub-txt">2 &#183; <b>Intuit app.</b> Client id and secret as Vercel environment variables, plus the Realm / Company ID to write against.</div>'
+    +     '<div class="sub-txt">3 &#183; <b>Sandbox or production.</b> Intuit uses different hosts for each, so it is not a flag flipped later.</div>'
+    +   '</div>'
+    +   '<div class="ic-tags"><span class="chip neutral">Stripe covers invoices today</span></div>'
+    +   '<div class="ic-actions"><button disabled title="Needs an Intuit app registration first">Connect QuickBooks</button></div>'
+    + '</div>';
 }
 
 /* Reset links are shown, never sent. The endpoint mints a credential-bearing

@@ -678,6 +678,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
         <div id="tn-pending"></div>
       </div>
       <div id="tn-body"><div class="empty">Loading tenants…</div></div>
+
+      <!-- ACCOUNTING — a real not-connected panel, not a mock. Showing sample
+           invoices here would be worse than showing nothing: the one thing an
+           accounting screen has to be is trustworthy, and a placeholder that
+           looks like data gets reconciled against by somebody eventually. -->
+      <div class="block-head" style="margin-top:26px">
+        <div>
+          <div class="block-title">Accounting &#183; QuickBooks<span class="cnt" id="qb-state">not connected</span></div>
+          <div class="block-sub">Invoices and payments currently live in Stripe. This is where a QuickBooks Online connection will sit once the app registration exists.</div>
+        </div>
+      </div>
+      <div id="qb-panel"></div>
     </div>
 
     <div class="tab-panel" id="tab-apps">

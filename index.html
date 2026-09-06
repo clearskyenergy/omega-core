@@ -2329,7 +2329,13 @@ window._omegaReady = function(){
         <button class="acct-btn" id="acct-portal" onclick="openBillingPortal()" style="display:none">Manage billing &amp; receipts</button>
       </div>
       <div class="acct-msg" id="acct-billing-msg"></div>
-      <div class="acct-sec-title" style="font-size:12px;opacity:.8">Billing history</div>
+      <div class="acct-sec-title" style="font-size:12px;opacity:.8">Invoices</div>
+      <div id="acct-invoices" class="acct-msg">—</div>
+
+      <!-- Deliberately a SECOND list. Invoices above are what Stripe billed;
+           this is what ClearSky changed about the terms. Merging them would
+           make a tier change look like a charge. -->
+      <div class="acct-sec-title" style="font-size:12px;opacity:.8">Plan changes</div>
       <div id="acct-billing-history" class="acct-msg">—</div>
 
       <!-- Password change (email/password users only) -->
@@ -3783,6 +3789,8 @@ function loadBilling(){
     if (portal && b.stripeCustomerId) portal.style.display = '';
   }).catch(function(){ /* no billing doc yet — leave the dashes */ });
 
+  loadInvoices();
+
   ref.collection('history').orderBy('at', 'desc').limit(12).get().then(function(sn){
     var host = document.getElementById('acct-billing-history');
     if (!host) return;
@@ -3804,6 +3812,40 @@ function loadBilling(){
     if (host) host.textContent = 'Billing history unavailable.';
   });
 }
+/* Invoices come from Stripe, not from Firestore — what we were billed and
+   what was paid, rather than what we changed. The endpoint answers
+   connected:false for a tenant with no Stripe customer, which is the normal
+   state for an account nobody has priced yet and should read as a plain
+   sentence rather than an error. */
+function loadInvoices(){
+  var host = document.getElementById('acct-invoices');
+  if (!host) return;
+  var u = currentUser || (auth && auth.currentUser);
+  if (!u){ host.textContent = '—'; return; }
+  host.textContent = 'Loading…';
+  u.getIdToken().then(function(tok){
+    return fetch('/api/stripe-invoices', { method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tok },
+      body: JSON.stringify({ orgId: currentOrg }) })
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||r.status); return j; }); });
+  }).then(function(j){
+    if (!j.connected){ host.textContent = 'No invoices yet — billing has not been set up for this workspace.'; return; }
+    if (!j.invoices.length){ host.textContent = 'No invoices issued yet.'; return; }
+    host.innerHTML = j.invoices.map(function(inv){
+      var when = inv.created ? new Date(inv.created).toLocaleDateString() : '';
+      var amt  = inv.amountDue == null ? '' : _money(inv.amountDue);
+      var link = inv.hostedUrl || inv.pdfUrl;
+      var label = escHtml(when) + ' — ' + escHtml(amt) + ' · ' + escHtml(inv.status)
+                + (inv.number ? (' · ' + escHtml(inv.number)) : '');
+      return '<div>' + (link
+        ? '<a href="' + escHtml(link) + '" target="_blank" rel="noopener">' + label + '</a>'
+        : label) + '</div>';
+    }).join('');
+  }).catch(function(e){
+    host.textContent = 'Invoices unavailable — ' + (e.message || e);
+  });
+}
+
 function openBillingPortal(){
   var u = currentUser || (auth && auth.currentUser);
   if (!u) return;
