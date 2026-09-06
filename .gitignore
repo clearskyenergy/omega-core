@@ -5,3 +5,6 @@ sa.json
 *.serviceaccount.json
 audit-*.json
 .DS_Store
+.vercel
+firebase-debug.log
+*-debug.log
