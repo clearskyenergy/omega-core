@@ -34380,8 +34380,183 @@ function openBomSourcing() {
     +   '<div style="display:flex;gap:8px">'
     +     '<button onclick="exportBomCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Sourcing CSV</button>'
     +   '</div>'
+    +   '<div id="bom-rfq" style="margin-top:12px"></div>'
     +   '<div style="font-size:8.5px;color:#6B8299;margin-top:9px;line-height:1.5">Takeoffs are generated from the drawing. Distributor SKUs &amp; live pricing are resolved in the marketplace sourcing portal (Rexel Energy Solutions / City Electric Supply) at order time. Container-internal wiring is excluded — only field runs to the facility connection point are listed.</div>'
     + '</div></div>';
+
+  _bomScanVendors(bom);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   REQUEST FOR QUOTE  —  BOM lines routed to the partners who make them
+   ----------------------------------------------------------------------
+   A BOM already names the equipment. When a line is a SKU belonging to a
+   manufacturer who is also a tenant here, that line is a lead sitting in a
+   spreadsheet — the customer emails somebody, or does not, and the partner
+   never learns the opportunity existed.
+
+   This scans the BOM against /equipment and shows which lines route to a
+   partner BEFORE anything is sent. Sending fans them out: each vendor gets a
+   doc under rfqs/{id}/recipients/{vendorOrgId} carrying THEIR lines only, and
+   quotes back through the same record.
+
+   ── WHAT IS SHOWN HERE AND WHAT IS NOT ────────────────────────────────
+   The line-level matches are shown, because they come from /equipment, which
+   this browser can already read, and because the customer is entitled to know
+   who their own BOM is about to be sent to.
+
+   The DISTRIBUTOR list is NOT shown and is not read here. Which tenants carry
+   receivesFullBom is ClearSky's commercial arrangement, not the customer's
+   business, and enumerating it in a browser would publish the distribution
+   book to every account. It is stated that distributors may also receive the
+   whole BOM, without naming them. The fan-out itself happens in /api/rfq.js.
+
+   ── WHY SENDING NEEDS THE SERVER ──────────────────────────────────────
+   firestore.rules refuses `create` on the rfqs collection and on the
+   recipients subcollection under it —
+   "/api/rfq.js only", deliberately. If a browser could write recipient docs
+   it could route its own BOM to anyone, or route somebody else's away. The
+   routing decision is the product; it is not the client's to make.
+   ══════════════════════════════════════════════════════════════════════ */
+function _bomScanVendors(bom) {
+  var host = document.getElementById('bom-rfq');
+  if (!host) return;
+  var lines = (bom.items || []).filter(function (it) { return it.sku; });
+
+  if (!lines.length) {
+    host.innerHTML = '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">'
+      + 'No line on this BOM carries a catalogue SKU yet, so there is nothing to route to a '
+      + 'manufacturer. Place equipment from the catalogue and the matching lines become '
+      + 'quotable here.</div>';
+    return;
+  }
+
+  host.innerHTML = '<div style="font-size:10px;color:#8BA3C4">Checking '
+    + lines.length + ' catalogue line' + (lines.length === 1 ? '' : 's') + ' against partners\u2026</div>';
+
+  var db = null;
+  try { db = firebase.firestore(); } catch (e) {}
+  if (!db) { host.innerHTML = ''; return; }
+
+  var skus = {};
+  lines.forEach(function (it) { (skus[it.sku] = skus[it.sku] || []).push(it); });
+
+  Promise.all(Object.keys(skus).map(function (sku) {
+    return db.collection('equipment').doc(sku).get()
+      .then(function (d) { return { sku: sku, data: d.exists ? (d.data() || {}) : null }; })
+      .catch(function () { return { sku: sku, data: null }; });
+  })).then(function (res) {
+    var byVendor = {}, unknown = 0;
+    res.forEach(function (r) {
+      var v = r.data && r.data.vendorOrgId;
+      if (!v) { unknown += skus[r.sku].length; return; }
+      var g = byVendor[v] || (byVendor[v] = { org: v, name: (r.data.vendorName || v), lines: [] });
+      skus[r.sku].forEach(function (it) { g.lines.push(it); });
+    });
+    _bomRenderRfq(bom, byVendor, unknown, lines.length);
+  })['catch'](function () { host.innerHTML = ''; });
+}
+
+function _bomRenderRfq(bom, byVendor, unknown, total) {
+  var host = document.getElementById('bom-rfq');
+  if (!host) return;
+  var vendors = Object.keys(byVendor);
+  window._BOM_RFQ = { byVendor: byVendor, bom: bom };
+
+  var head = '<div style="font-size:11px;font-weight:700;color:#E8F0FE;margin-bottom:6px">'
+    + '\u2709 Request for Quote</div>';
+
+  if (!vendors.length) {
+    host.innerHTML = head
+      + '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">None of the '
+      + total + ' catalogue line' + (total === 1 ? '' : 's') + ' on this BOM belongs to a partner '
+      + 'manufacturer, so there is nobody to route it to. Distributors may still quote the whole '
+      + 'package from the sourcing export.</div>';
+    return;
+  }
+
+  var rows = vendors.map(function (v) {
+    var g = byVendor[v];
+    var qty = g.lines.reduce(function (a, l) { return a + (+l.qty || 0); }, 0);
+    return '<div style="display:flex;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)">'
+      + '<span style="font-size:10.5px;color:#E8F0FE;font-weight:600">' + _esc(g.name) + '</span>'
+      + '<span style="font-size:9px;color:#6B8299;font-family:\'IBM Plex Mono\',monospace">' + _esc(g.org) + '</span>'
+      + '<span style="margin-left:auto;font-size:9.5px;color:#60A5FA">' + g.lines.length
+      +   ' line' + (g.lines.length === 1 ? '' : 's') + ' \u00b7 ' + qty + ' units</span></div>';
+  }).join('');
+
+  host.innerHTML = head
+    + '<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.25);border-radius:7px;padding:10px 12px">'
+    +   rows
+    +   '<div style="font-size:9px;color:#6B8299;margin-top:8px;line-height:1.5">'
+    +     'Each manufacturer receives only their own lines \u2014 never the whole BOM, and never '
+    +     'your identity until you accept their quote. Distributors on a full-BOM arrangement may '
+    +     'also receive the package.'
+    +     (unknown ? ' ' + unknown + ' line' + (unknown === 1 ? ' is' : 's are') + ' not in the '
+    +       'partner catalogue and will not be routed.' : '')
+    +   '</div>'
+    +   '<button onclick="sendBomRfq()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;border-radius:7px;padding:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700">'
+    +     'Request quotes from ' + vendors.length + ' partner' + (vendors.length === 1 ? '' : 's') + '</button>'
+    +   '<div id="bom-rfq-msg" style="font-size:9.5px;margin-top:7px;line-height:1.5"></div>'
+    + '</div>';
+}
+
+function _esc(x) {
+  return String(x == null ? '' : x)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function sendBomRfq() {
+  var box = document.getElementById('bom-rfq-msg');
+  var st = window._BOM_RFQ;
+  if (!st || !box) return;
+  function say(msg, bad) {
+    box.innerHTML = '<span style="color:' + (bad ? '#F59E0B' : '#22C55E') + '">' + msg + '</span>';
+  }
+  say('Sending\u2026');
+
+  var u = null;
+  try { u = firebase.auth().currentUser; } catch (e) {}
+  if (!u) return say('Sign in first \u2014 a quote request has to carry who it is from.', true);
+
+  /* The whole BOM goes up. The SERVER decides who sees which slice of it,
+     because that decision is not the client's to make. */
+  var payload = {
+    projectId: (S && S.projectId) || (document.getElementById('pname') || {}).value || '',
+    note: '',
+    bom: (st.bom.items || []).map(function (it) {
+      return { sku: it.sku || '', description: it.description, qty: it.qty,
+               unit: it.unit, category: it.category };
+    })
+  };
+
+  u.getIdToken().then(function (tok) {
+    return fetch('/api/rfq', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+      body: JSON.stringify(payload)
+    });
+  }).then(function (r) {
+    return r.text().then(function (t) {
+      var j = null; try { j = JSON.parse(t); } catch (e) {}
+      if (r.ok) {
+        say('Sent. ' + ((j && j.recipients) || Object.keys(st.byVendor).length)
+          + ' partner(s) can now quote it. Their replies land on the project.');
+        return;
+      }
+      /* Name the reason. "It didn't work" costs somebody twenty minutes. */
+      var d = (j && (j.detail || j.error)) || t.slice(0, 200) || ('HTTP ' + r.status);
+      if (r.status === 500 && /SERVICE_ACCOUNT/i.test(d)) {
+        say('Quote routing is not switched on yet \u2014 the server is missing its Firebase '
+          + 'credential, so it cannot write the request. The BOM is unchanged. '
+          + 'Export the sourcing CSV and send it directly in the meantime.', true);
+        return;
+      }
+      say('Could not send: ' + _esc(d), true);
+    });
+  })['catch'](function (e) {
+    say('Could not reach the quote service: ' + _esc((e && e.message) || 'network error'), true);
+  });
 }
 
 function exportBomCSV() {
