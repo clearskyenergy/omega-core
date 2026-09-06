@@ -122,7 +122,7 @@ window.CLEARSKY_CONFIG = {
        Removing a key from this list locks the tool even if it is still in
        requiredTools above; keep the two lists in sync.                    */
     unlockedTools: [
-      'editor',         // BESS Site Map    (design,          tier 1)
+      'editor',         // Site Editor    (design,          tier 1)
       'gridatlas',      // Grid Atlas       (interconnection, tier 0)
       'sitediscovery'   // Site Discovery   (siting,          tier 2)
     ],

@@ -162,13 +162,52 @@
      the tool gate and their own account page read, so this asks the same
      question they would. Resolves to 'trial' on any failure — a read that
      fails should not hand out the engineering suite. */
+  /* ── A CEILING BELOW THE PAID TIER ─────────────────────────────────────
+     capTier on billing/current caps what the EDITOR grants, without touching
+     what the customer is billed. An account can sit on enterprise for tools,
+     reporting and seats and still be scoped to the designer inside the
+     editor — which is a real commercial arrangement and previously had no
+     way to be expressed.
+
+     IT IS A FIELD, NOT A LIST IN THIS FILE. CLAUDE.md is explicit that core
+     files are never edited for one tenant; a hardcoded domain here would be
+     exactly that, and it would also be invisible to the admin console. As a
+     billing field it shows up next to the tier it caps, and changing it is a
+     console action rather than a deploy.
+
+     LOWER ALWAYS WINS, and it can only narrow. A capTier above the paid tier
+     does nothing — nobody is upgraded by a typo in a field ClearSky
+     writes. */
+  function effectiveTier(tier, capTier) {
+    var t = normalise(tier);
+    if (!capTier) return t;
+    var c = normalise(capTier);
+    var ti = LADDER.indexOf(t), ci = LADDER.indexOf(c);
+    /* OFF-LADDER tiers are not capped by a ladder position. That is partner
+       and internal — how ClearSky and JV partners hold accounts — and NOT
+       enterprise, which is both UNGATED (it grants everything) and the top
+       rung. Testing UNGATED here instead of ladder membership made
+       enterprise uncappable, which is the only tier anybody would ever want
+       to cap. */
+    if (ti < 0 || ci < 0) return t;
+    return ci < ti ? c : t;
+  }
+
   function resolve(db, email) {
     return new Promise(function (done) {
       try {
         var d = setOrg(email);
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
-          .then(function (s) { done(s.exists ? ((s.data() || {}).tier || 'trial') : 'trial'); })
+          .then(function (s) {
+            var b = s.exists ? (s.data() || {}) : {};
+            var eff = effectiveTier(b.tier || 'trial', b.capTier);
+            if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
+              console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
+                           ' by capTier on billing/current');
+            }
+            done(eff);
+          })
           .catch(function () { done('trial'); });
       } catch (e) { done('trial'); }
     });
@@ -178,6 +217,7 @@
     LADDER: LADDER, GRANTS: GRANTS,
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS,
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
-    setOrg: setOrg, orgOf: orgOf, org: function () { return _org; }
+    setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
+    effectiveTier: effectiveTier
   };
 })(typeof window !== 'undefined' ? window : this);

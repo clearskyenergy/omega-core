@@ -1629,6 +1629,23 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '<select id="tb-tier-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
    + TIERS.map(function(t){ return '<option value="'+t[0]+'"'+((bill.tier||'trial')===t[0]?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')
    + '</select></label>';
+  /* A CEILING BELOW THE PAID PLAN. Some accounts are billed at one level and
+     scoped to less inside the editor — enterprise for tools, seats and
+     reporting, designer only for the drawing. Without this the two could not
+     be said separately, and the only alternative was a hardcoded domain in
+     omega-caps.js, which CLAUDE.md forbids and the console could not see.
+     Blank means the plan applies in full. It can only narrow: a cap above
+     the plan is ignored. */
+  var CAPS=[['','\u2014 no cap, the plan applies in full'],
+            ['trial','designer only \u2014 draw, place, annotate'],
+            ['standard','+ plot plan and one-line'],
+            ['deluxe','+ schematics, riser, engineering, parcel screening']];
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Editor cap'
+   + '<select id="tb-cap-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + CAPS.map(function(t){ return '<option value="'+t[0]+'"'+((bill.capTier||'')===t[0]?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')
+   + '</select>'
+   + '<span class="sub-txt" style="display:block;margin-top:3px;font-size:11px">Caps what the '
+   + 'EDITOR grants. Does not change the plan, the invoice, or which tools they see.</span></label>';
   h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','osa-jv, grid-atlas');
   h+=_tnField('Amount due (USD)','tb-amt-'+orgId,bill.amountDue==null?'':bill.amountDue,'number','0');
   h+=_tnField('Next payment (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-11-21');
@@ -1747,7 +1764,7 @@ function saveTenantBilling(orgId){
   function v(id){ var el=document.getElementById(id+'-'+orgId); return el?String(el.value||'').trim():''; }
   var addons=v('tb-addons').split(',').map(function(x){return x.trim();}).filter(Boolean);
 
-  var patch={ tier:v('tb-tier'), addons:addons };
+  var patch={ tier:v('tb-tier'), addons:addons, capTier: v('tb-cap') || null };
   if(v('tb-amt')!=='')    patch.amountDue=Number(v('tb-amt'));
   if(v('tb-paid')!=='')   patch.amountPaid=Number(v('tb-paid'));
   patch.subscriptionDue = v('tb-due')    || null;

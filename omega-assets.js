@@ -682,7 +682,7 @@
   function activeTable(a) {
     if (!a.active.length) {
       return '<div class="oa-empty">No active projects yet.<br>' +
-             'Build one in the <a onclick="if(typeof openNewProjectModal===\'function\')openNewProjectModal(\'bess\')">BESS Site Map</a>, ' +
+             'Build one in the <a onclick="if(typeof openNewProjectModal===\'function\')openNewProjectModal(\'bess\')">Site Editor</a>, ' +
              'then tag it <b>ownership: owned</b> to bring it onto this book.</div>';
     }
     var head = '<tr><th>Project</th><th>Utility</th><th>Status</th><th>Stage</th>' +

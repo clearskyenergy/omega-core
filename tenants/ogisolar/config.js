@@ -141,7 +141,7 @@ window.CLEARSKY_CONFIG = {
        in omega-tools.js. Everything else in the catalog stays visible with an
        "Upgrade" badge.                                                       */
     unlockedTools: [
-      'editor',        // BESS Site Map            (design,         tier 1)
+      'editor',        // Site Editor            (design,         tier 1)
       'batterysizer',  // Battery Sizer            (finance,        tier 1)
       'sales',         // Sales Proposal Builder   (sales,          tier 1)
       'financing',     // Financing Partners       (marketplace,    tier 0)

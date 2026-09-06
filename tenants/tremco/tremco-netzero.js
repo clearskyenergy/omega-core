@@ -361,7 +361,7 @@ function render(R, year){
 
   if (!R.buildings){
     h += '<div class="tnz-empty">No buildings analysed yet. Open a project in the '
-       + '<b>BESS Site Map</b> editor, draw a zone, then use <b>Building / Net-Zero</b> '
+       + '<b>Site Editor</b> editor, draw a zone, then use <b>Building / Net-Zero</b> '
        + 'to assign roof, wall and glazing assemblies. Analysed zones roll up here automatically.</div>';
     host.innerHTML = h;
     return;

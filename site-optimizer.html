@@ -864,7 +864,7 @@
     if (!LAST) return;
     // hand sizing to editor via a shared toolData doc it can read on load
     saveData();
-    $('saveMsg').textContent='Sizing staged for editor — open the BESS Site Map to place '+LAST.kw+' kW / '+LAST.kwh+' kWh.';
+    $('saveMsg').textContent='Sizing staged for editor — open the Site Editor to place '+LAST.kw+' kW / '+LAST.kwh+' kWh.';
   });
   $('toProforma') && $('toProforma').addEventListener('click', function(){
     if (!LAST) return;

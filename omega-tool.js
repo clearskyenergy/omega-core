@@ -71,7 +71,7 @@
        savesData  true => tool persists state via the toolData contract.
      ══════════════════════════════════════════════════════════════════ */
   var SEED_TOOLS = [
-    { key:'editor', name:'BESS Site Map', category:'design',
+    { key:'editor', name:'Site Editor', category:'design',
       desc:'Wizard, conduit routing & equipment on live satellite.',
       action:'new:bess', tier:TIER.STANDARD, custom:true, savesData:true,
       icon:'M2 7h20v14H2zM16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16' },

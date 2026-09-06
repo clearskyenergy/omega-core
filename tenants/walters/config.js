@@ -81,7 +81,7 @@ window.CLEARSKY_CONFIG = {
     /* ── WHAT THIS ACCOUNT CAN USE ────────────────────────────────────────
        Everything else in the catalog still renders, badged "Upgrade". */
     unlockedTools: [
-      'editor',      // BESS Site Map          (design,      tier 1)
+      'editor',      // Site Editor          (design,      tier 1)
       'financing'    // Financing Partners     (marketplace, tier 0)
     ],
 
