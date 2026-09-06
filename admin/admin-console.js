@@ -1124,10 +1124,32 @@ function loadTenants(){
     /* Billing is a per-tenant subcollection, so standing costs one read each.
        At this size that is the right trade for answering "who owes me" without
        opening thirteen drawers; it is fired once on load, not per render. */
+    /* Members are read alongside billing. "Who is paying" and "is anybody
+       actually in there" are the same question asked twice, and a tenant on
+       enterprise with nobody signed in is the single most useful thing this
+       console can tell you — it was not telling anybody. Same cost shape as
+       the billing read, fired once on load rather than per render. */
     return Promise.all(rows.map(function(r){
-      return db.collection('omega_orgs').doc(r._id).collection('billing').doc('current').get()
-        .then(function(d){ r._bill = d.exists ? d.data() : {}; return r; })
-        .catch(function(){ r._bill = {}; return r; });
+      return Promise.all([
+        db.collection('omega_orgs').doc(r._id).collection('billing').doc('current').get()
+          .then(function(d){ return d.exists ? d.data() : {}; })
+          .catch(function(){ return {}; }),
+        db.collection('omega_orgs').doc(r._id).collection('members').get()
+          .then(function(sn){
+            var m = [];
+            sn.forEach(function(d){ var v = d.data() || {}; v._uid = d.id; m.push(v); });
+            return m;
+          })
+          .catch(function(){ return null; })   /* null = could not read, not zero */
+      ]).then(function(res){
+        r._bill = res[0];
+        r._members = res[1];
+        r._memberCount = res[1] ? res[1].length : null;
+        r._activeMembers = res[1]
+          ? res[1].filter(function(m){ return m.status !== 'suspended' && m.status !== 'removed'; }).length
+          : null;
+        return r;
+      });
     }));
   }).then(function(rows){
     STATE.tenants = rows || [];

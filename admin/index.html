@@ -535,7 +535,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
       <div class="table-wrap" style="margin-top:12px">
         <table class="ptable">
           <thead>
-            <tr><th>Client</th><th>Tier</th><th>Seats</th><th>Discount</th><th>MRR</th><th>Annual Total</th><th>Dev Hrs/mo</th><th>Service Fee</th><th>Renewal</th><th style="text-align:right">Actions</th></tr>
+            <tr><th>Client</th><th>Tier</th><th>On platform</th><th>Seats</th><th>Discount</th><th>MRR</th><th>Annual Total</th><th>Dev Hrs/mo</th><th>Service Fee</th><th>Renewal</th><th style="text-align:right">Actions</th></tr>
           </thead>
           <tbody id="ct-body"></tbody>
           <tfoot id="ct-foot"></tfoot>
@@ -1503,6 +1503,72 @@ function resolveCrmColl(id, cb){
   step();
 }
 
+/* ── THE CONTRACT AND THE ACCOUNT ARE TWO DIFFERENT FACTS ─────────────────
+   This table knew what a customer had SIGNED. It knew nothing about whether
+   they had an account, what plan that account was actually on, or whether a
+   single person had ever signed in — and those are the questions the roster
+   exists to answer. A company can be on a Tier 2 contract and be sitting on a
+   trial in omega_orgs with nobody in it, and nothing here said so.
+
+   THE JOIN KEY IS THE DOMAIN, because orgId IS the email domain, lowercased.
+   Twelve of fourteen roster rows have no domain recorded, so an exact
+   normalised NAME match is the fallback — and it is marked as such, because a
+   name match is a weaker claim than a domain match and the reader should be
+   able to tell which one they are looking at.
+
+   NO FUZZY MATCHING. "IQ Gen" and "iQGen Technologies" are probably the same
+   company and this deliberately will not say so. A wrong merge puts one
+   customer's contract against another customer's account, which is worse in
+   every direction than leaving the pair unmatched and visible. */
+function tenantList(){
+  return (window.STATE && STATE.tenants) || [];
+}
+function tenantFor(row){
+  var t = tenantList(), i, n;
+  if (!t.length) return null;
+  var dom = String((row.crm && row.crm.domain) || row.domain || '').toLowerCase().trim();
+  if (dom) {
+    for (i = 0; i < t.length; i++) {
+      if (String(t[i]._id || '').toLowerCase() === dom) { t[i]._joinedBy = 'domain'; return t[i]; }
+    }
+  }
+  n = nkey(row.name);
+  if (!n) return null;
+  for (i = 0; i < t.length; i++) {
+    if (nkey(t[i].name || t[i]._id) === n) { t[i]._joinedBy = 'name'; return t[i]; }
+  }
+  return null;
+}
+
+/* One cell, because these four facts are only useful together: a plan with no
+   people is a different problem from a plan that disagrees with the contract. */
+function platformCell(row){
+  var t = tenantFor(row);
+  if (!tenantList().length)
+    return '<td class="sub-txt">\u2014</td>';
+  if (!t)
+    return '<td><span class="ct-orphan">NO ACCOUNT</span></td>';
+
+  var plan = (t._bill && t._bill.tier) || null;
+  var want = (typeof billingTierFor === 'function') ? billingTierFor(row.tier) : null;
+  var mismatch = !!(plan && want && plan !== want);
+
+  var people = t._memberCount;
+  var peopleTxt = people == null ? 'members unreadable'
+    : people === 0 ? '<span class="ct-flag">nobody signed in</span>'
+    : people + (people === 1 ? ' person' : ' people');
+
+  return '<td>'
+    + '<span class="chip ' + (mismatch ? 'warn' : 'good') + '">'
+    +   esc(plan || 'not priced') + '</span>'
+    + (mismatch ? '<div class="ct-orphan" style="margin-left:0;margin-top:3px">'
+        + 'CONTRACT SAYS ' + esc(String(want).toUpperCase()) + '</div>' : '')
+    + '<div class="sub-txt" style="margin-top:3px">' + peopleTxt
+    +   (t.status && t.status !== 'active' ? ' \u00b7 ' + esc(t.status) : '')
+    +   (t._joinedBy === 'name' ? ' \u00b7 <i>matched by name</i>' : '')
+    + '</div></td>';
+}
+
 /* == 8. merge roster + contracts into the rows the table renders ========== */
 function contractKeyFor(cl){
   if(DATA[cl.id]) return cl.id;
@@ -1796,6 +1862,7 @@ function renderFoot(t){
   foot.innerHTML = '<tr>' +
     '<td>' + head + '</td>' +
     '<td><div class="tf-sub" style="margin-top:0">' + (mix.length ? mix.join(' \u00b7 ') : '\u2014') + '</div></td>' +
+    platformTotalCell(rows) +
     '<td class="num"><div class="tf-big">' + t.seats + '</div>' + (t.extra ? '<div class="tf-sub">+' + t.extra + ' billable</div>' : '') + '</td>' +
     '<td class="num"><div class="tf-big">' + (t.disc ? '\u2212' + money(t.disc) : '\u2014') + '</div>' + (t.disc ? '<div class="tf-sub">off list / mo</div>' : '') + '</td>' +
     '<td class="num"><div class="tf-big">' + money(t.mrr) + '</div>' + splitSub(t.mrrA, t.mrrP) + '</td>' +
@@ -1807,6 +1874,28 @@ function renderFoot(t){
     '<td></td>' +
   '</tr>';
 }
+/* The two numbers worth carrying to the bottom of the table: how many of
+   these companies actually have an account, and how many of those accounts
+   nobody has ever signed into. A paid plan with nobody in it is churn that
+   has not been noticed yet. */
+function platformTotalCell(rows){
+  if (!tenantList().length)
+    return '<td><div class="tf-sub" style="margin-top:0">tenants not loaded</div></td>';
+  var withAcct = 0, empty = 0, noAcct = 0, i, t;
+  for (i = 0; i < rows.length; i++) {
+    t = tenantFor(rows[i]);
+    if (!t) { noAcct++; continue; }
+    withAcct++;
+    if (t._memberCount === 0) empty++;
+  }
+  return '<td>'
+    + '<div class="tf-big">' + withAcct + '<span class="tf-sub" style="display:inline"> / ' + rows.length + '</span></div>'
+    + '<div class="tf-sub">'
+    +   (noAcct ? noAcct + ' with no account' : 'all have accounts')
+    +   (empty ? ' \u00b7 <span class="a">' + empty + ' with nobody in them</span>' : '')
+    + '</div></td>';
+}
+
 function actionsCell(r){
   return '<td><div class="ct-acts">' +
     '<button class="ct-ico" title="Edit pricing" onclick="ctOpenClient(\'' + jsq(r.key) + '\',\'' + jsq(r.crmId || '') + '\',event)">\u270E</button>' +
@@ -1865,7 +1954,7 @@ function renderDash(){
   if(clean) clean.style.display = (nDup || nStray) ? '' : 'none';
 
   if(!vis.length){
-    body.innerHTML = '<tr><td colspan="10" style="padding:28px;text-align:center;color:var(--cs-sub)">' +
+    body.innerHTML = '<tr><td colspan="11" style="padding:28px;text-align:center;color:var(--cs-sub)">' +
       (ctQ ? 'No client matches \u201c' + esc(ctQ) + '\u201d.' : 'Nothing to show under this filter.') + '</td></tr>';
     renderFoot(totalsOf(vis));
     storeNote();
@@ -1886,6 +1975,7 @@ function renderDash(){
       html += '<tr class="clickable ct-nc" onclick="' + open + '">' +
         '<td class="site-nm">' + esc(row.name) + orphan + '<div class="sub-txt">In CRM \u00b7 no contract yet</div></td>' +
         '<td><span class="chip ' + chipCls + '">' + esc(tier.label) + '</span></td>' +
+        platformCell(row) +
         '<td class="num">\u2014</td><td class="num">\u2014</td>' +
         '<td class="num"><span class="ct-set">Set pricing \u2192</span></td>' +
         '<td class="num">\u2014</td><td class="num">\u2014</td><td class="num">\u2014</td><td class="num">\u2014</td>' +
@@ -1907,6 +1997,7 @@ function renderDash(){
       '<td class="site-nm">' + esc(row.name) + (counts(c) ? '' : ' <span class="chip gray">' + esc(c.status || '') + '</span>') + orphan +
         (c.note ? '<div class="sub-txt">' + esc(c.note) + '</div>' : '') + '</td>' +
       '<td><span class="chip ' + chipCls + '">' + esc(tier.label) + '</span></td>' +
+      platformCell(row) +
       '<td class="num">' + num(c.seats) + (m.extraSeats ? ' <span class="sub-txt">(+' + m.extraSeats + ')</span>' : '') + '</td>' +
       '<td class="num">' + discTxt + '</td>' +
       '<td class="num"><b>' + money(m.mrr) + '</b></td>' +
