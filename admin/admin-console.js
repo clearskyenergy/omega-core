@@ -1549,6 +1549,15 @@ function _tnField(label, id, val, type, ph){
     + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px;font:500 12.5px system-ui"></label>';
 }
 
+/* The union, so the headline number matches the table under it. Counting
+   member rows alone reported 1 for NextNRG while three people had signed in. */
+function _peopleCount(members, seen){
+  var e={}, i;
+  (members||[]).forEach(function(m){ var k=String(m.email||m._id||'').toLowerCase(); if(k) e[k]=1; });
+  (seen||[]).forEach(function(t){ var k=String(t.email||'').toLowerCase(); if(k) e[k]=1; });
+  return Object.keys(e).length;
+}
+
 function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   seen = seen || [];
   var TIERS=['trial','standard','deluxe','enterprise','partner','internal'];
@@ -1615,9 +1624,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   h+='<button onclick="saveTenantRelationship(&quot;'+esc(orgId)+'&quot;)">Save relationship</button>';
   h+=' <span id="tbrel-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div style="display:flex;gap:18px;margin-top:14px">'
-   + '<div><div class="sub-txt">Members</div><div style="font:700 20px system-ui">'+members.length
-   +   (seen.length && !members.length ? '<span class="sub-txt" style="font:500 12px system-ui"> of '+seen.length+' seen</span>' : '')
-   + '</div></div>'
+   + '<div><div class="sub-txt">People</div><div style="font:700 20px system-ui">'+_peopleCount(members,seen)+'</div></div>'
    + '<div><div class="sub-txt">Projects</div><div style="font:700 20px system-ui">'+(projects==null?'—':projects)+'</div></div>'
    + '<div><div class="sub-txt">Vertical</div><div style="font:700 20px system-ui">'+esc(org.vertical||'—')+'</div></div>'
    + '</div>';
@@ -1626,40 +1633,54 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
 
   /* ── People ── */
   h+='<div class="block-title" style="font-size:13px;margin:6px 0 8px">People</div>';
-  if(!members.length){
-    if (seen.length){
-      /* The honest version. Saying "nobody has signed in" while sixteen of
-         their projects exist is plainly wrong, and the reason is knowable:
-         omega_orgs did not exist when these people signed in, so the
-         self-registration in omega-tenant.js had no document to write under.
-         It works now — it just needs each of them to come back once. */
-      h+='<div class="sub-txt" style="margin-bottom:8px">'
-       + '<b>'+seen.length+' '+(seen.length===1?'person has':'people have')+' signed in</b>, but none has a '
-       + 'control-plane member row yet. omega_orgs was empty until it was seeded, so there was nothing '
-       + 'for the self-registration to write under. Each row appears on that person\u2019s next sign-in; '
-       + 'roles can be set from here once it does.</div>';
-      h+='<table class="ptable"><thead><tr><th>Signed in</th><th>Name</th><th>Last seen</th></tr></thead><tbody>';
-      seen.forEach(function(m){
-        h+='<tr><td class="sub-txt">'+esc(m.email||'\u2014')+'</td><td class="sub-txt">'+esc(m.name||'\u2014')+'</td>'
-         + '<td class="sub-txt">'+(m.lastSeen?esc(timeAgo(m.lastSeen)):'\u2014')+'</td></tr>';
-      });
-      h+='</tbody></table>';
-    } else {
-      h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A member row is created on first sign-in.</div>';
-    }
+  /* BOTH LISTS, ALWAYS. The previous version only showed who had signed in
+     when there were ZERO member rows, so a tenant with one member hid
+     everybody else — NextNRG showed test@ and concealed the rest. Members and
+     sign-ins are different facts and neither substitutes for the other:
+     a member row is a ROLE, a team_members row is EVIDENCE SOMEBODY LOGGED IN.
+     Merge on the email, show the union, and mark which is which. */
+  var byEmail = {};
+  members.forEach(function(m){
+    var e = String(m.email || m._id || '').toLowerCase();
+    if (e) byEmail[e] = { email:e, role:m.role||'member', status:m.status||'active', uid:m._id, member:true };
+  });
+  seen.forEach(function(t){
+    var e = String(t.email || '').toLowerCase();
+    if (!e) return;
+    if (byEmail[e]) { byEmail[e].name = t.name || byEmail[e].name; byEmail[e].lastSeen = t.lastSeen; return; }
+    byEmail[e] = { email:e, name:t.name||'', lastSeen:t.lastSeen, member:false };
+  });
+  var people = Object.keys(byEmail).map(function(k){ return byEmail[k]; })
+                     .sort(function(a,b){ return a.email.localeCompare(b.email); });
+
+  if (!people.length){
+    h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A row appears on first sign-in.</div>';
   } else {
-    h+='<table class="ptable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
-    members.forEach(function(m){
-      var role=m.role||'member', em=m.email||m._id;
-      h+='<tr><td class="sub-txt">'+esc(em)+'</td><td>'
-        +'<select onchange="setMemberRole(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(m._id)+'&quot;,this.value)">'
-        + ['owner','admin','member','viewer'].map(function(r){
-            return '<option value="'+r+'"'+(role===r?' selected':'')+'>'+r+'</option>'; }).join('')
-        +'</select></td><td class="sub-txt">'+esc(m.status||'active')+'</td><td>'
-        +'<button onclick="userAdmin(&quot;resetLink&quot;,&quot;'+esc(em)+'&quot;)">Reset link</button> '
-        +'<button onclick="userAdmin(&quot;setEmail&quot;,&quot;'+esc(em)+'&quot;)">Change email</button> '
-        +'<button class="danger" onclick="userAdmin(&quot;disable&quot;,&quot;'+esc(em)+'&quot;)">Disable</button>'
-        +'</td></tr>';
+    var pending = people.filter(function(x){ return !x.member; }).length;
+    if (pending){
+      h+='<div class="sub-txt" style="margin-bottom:8px">'
+       + pending+' '+(pending===1?'person has':'people have')+' signed in without a control-plane row yet. '
+       + 'omega_orgs was empty until it was seeded, so the self-registration in omega-tenant.js had nothing '
+       + 'to write under. Each row appears on that person\u2019s next sign-in, and the role dropdown works once it does.</div>';
+    }
+    h+='<table class="ptable"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
+    people.forEach(function(m){
+      h+='<tr><td class="sub-txt">'+esc(m.email)+'</td>'
+       + '<td class="sub-txt">'+esc(m.name||'\u2014')+'</td><td>';
+      if (m.member){
+        h+='<select onchange="setMemberRole(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(m.uid)+'&quot;,this.value)">'
+         + ['owner','admin','member','viewer'].map(function(r){
+             return '<option value="'+r+'"'+(m.role===r?' selected':'')+'>'+r+'</option>'; }).join('')
+         + '</select>';
+      } else {
+        h+='<span class="chip warn">no role row yet</span>';
+      }
+      h+='</td><td class="sub-txt">'+esc(m.member?(m.status||'active'):(m.lastSeen?('seen '+timeAgo(m.lastSeen)):'signed in'))+'</td>'
+       + '<td style="white-space:nowrap">'
+       + '<button class="btn-ghost" onclick="userAdmin(&quot;resetLink&quot;,&quot;'+esc(m.email)+'&quot;)">Reset link</button> '
+       + '<button class="btn-ghost" onclick="userAdmin(&quot;setEmail&quot;,&quot;'+esc(m.email)+'&quot;)">Change email</button> '
+       + '<button class="btn-ghost" onclick="userAdmin(&quot;disable&quot;,&quot;'+esc(m.email)+'&quot;)">Disable</button>'
+       + '</td></tr>';
     });
     h+='</tbody></table>';
   }
