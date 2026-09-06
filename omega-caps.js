@@ -9,8 +9,19 @@
    ── THE LADDER, AS SPECIFIED ──
      trial       the designer only. Draw, place, annotate. No deliverables.
      standard    + plot plan and one-line diagram exports. Nothing else.
-     deluxe      + compute campus, schematics, riser diagrams, engineering.
-     enterprise  everything.
+     deluxe      + schematics, riser diagrams, engineering, parcel screening.
+     enterprise  everything, including the compute campus and the permitting
+                 matrix.
+
+   ── THE JV CARVE-OUT ──
+   The compute campus sits at enterprise, and the three OSA joint-venture
+   organisations hold it regardless of what tier they are on. They co-develop
+   the compute product; gating them out of it would lock the people building
+   it out of the thing they are building.
+
+   It is a GRANT BY ORGANISATION, not a tier promotion. Their billing record
+   is untouched and every other capability still follows their tier, so the
+   carve-out cannot quietly become a free enterprise licence.
 
    Each tier INCLUDES the ones below it, so a capability is added in one place
    and never listed twice — the bug that list-per-tier invites is a capability
@@ -42,16 +53,47 @@
       'export.oneline'     // E2.0
     ],
     deluxe: [
-      'compute',           // compute campus tab
       'schematic',         // schematic editor / overlay
       'riser',             // riser diagrams
       'engineering',       // analyze + estimate
+      'parcelscreen',      // parcel screening from a traced KMZ
       'export'             // the rest of the output page
     ],
     enterprise: [
+      'compute',           // compute campus tab — see THE JV CARVE-OUT above
       'all'
     ]
   };
+
+  /* ── JV CARVE-OUT ──────────────────────────────────────────────────────
+     Capabilities held by organisation rather than by tier.
+
+     THE SAME THREE DOMAINS AS index.html's OSA_ORGS, and that duplication is
+     a known wart — CLAUDE.md already flags the org-alias map for the same
+     reason. This is the narrower of the two lists to keep in step: adding a
+     fourth JV partner means editing both, and a JV is not something that
+     should be switchable from an admin console anyway.
+
+     A literal list cannot leak. The previous JV nav gate honoured Firestore
+     flags as well and showed the section to SPATCO, who have no JV
+     relationship of any kind. */
+  var JV_ORGS   = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+  var JV_GRANTS = ['compute'];
+
+  /* Set by resolve() from the signed-in address, so callers keep the same
+     signatures they always had. One browser, one signed-in person — module
+     state is the honest shape here, and setOrg() is exported so a caller who
+     never goes through resolve() can still be explicit. */
+  var _org = '';
+
+  function orgOf(email) {
+    var d = String(email || '').toLowerCase().split('@')[1] || '';
+    return (d === 'fenecon.de' || d === 'fenecon.us') ? 'fenecon.com' : d;
+  }
+  function setOrg(email) { _org = orgOf(email); return _org; }
+  function orgExtras() {
+    return JV_ORGS.indexOf(_org) >= 0 ? JV_GRANTS : [];
+  }
 
   /* partner and internal are not on the commercial ladder — they are how
      ClearSky and JV partners hold accounts, and gating them like a paying
@@ -75,6 +117,10 @@
       g = GRANTS[LADDER[i]] || [];
       for (j = 0; j < g.length; j++) out[g[j]] = 1;
     }
+    /* Added last and never removes anything, so the carve-out can only ever
+       widen what a tier already grants. */
+    g = orgExtras();
+    for (j = 0; j < g.length; j++) out[g[j]] = 1;
     return out;
   }
 
@@ -119,8 +165,7 @@
   function resolve(db, email) {
     return new Promise(function (done) {
       try {
-        var d = String(email || '').toLowerCase().split('@')[1] || '';
-        if (d === 'fenecon.de' || d === 'fenecon.us') d = 'fenecon.com';
+        var d = setOrg(email);
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) { done(s.exists ? ((s.data() || {}).tier || 'trial') : 'trial'); })
@@ -131,6 +176,8 @@
 
   global.OmegaCaps = {
     LADDER: LADDER, GRANTS: GRANTS,
-    normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve
+    JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS,
+    normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
+    setOrg: setOrg, orgOf: orgOf, org: function () { return _org; }
   };
 })(typeof window !== 'undefined' ? window : this);
