@@ -1723,18 +1723,46 @@
      most sites earliest \u2014 whether the grid is reachable \u2014 so a verdict
      derived from it replaces four questions somebody answered from memory with
      a measurement anybody can check. */
+  /* MEASUREMENTS, AS OPPOSED TO JUDGEMENTS. Both write a prescreen; a person's
+     verdict outranks either. Kept as a list rather than a single string
+     because there is now more than one way to measure a site, and the guard
+     in saveGrid has to mean "a machine wrote this" and not "Grid Atlas wrote
+     this" — otherwise a site-intel prescreen looks hand-typed and is never
+     updated again. */
+  var MACHINE_PRESCREEN = ['grid-atlas', 'site-intel'];
+  function isMachinePrescreen(p) {
+    return !!p && MACHINE_PRESCREEN.indexOf(p.source) >= 0;
+  }
+
   function gridPrescreen(g) {
     var GA = global.GridAtlasAdapter;
     /* NO SCORE, NO VERDICT. A null score means nothing was measured, and
        writing "fail" from an absent measurement is exactly the failure that
        marked a workable NJ site as not viable. */
-    if (!GA || g.score == null) return null;
+    if (g.score == null) return null;
+
+    /* THE SOURCE IS CARRIED THROUGH, not assumed. A score measured off a
+       traced KMZ is not a Grid Atlas run, and labelling it as one puts the
+       wrong provenance on a verdict somebody will later be asked to defend.
+       Both are on the same 0-100 scale, so they share the bar. */
+    var src = g.source || 'grid-atlas';
+    var label = src === 'site-intel' ? 'Site intel (traced KMZ)' : 'Grid Atlas';
+    var bar = (GA && GA.prescreenThreshold) ? GA.prescreenThreshold() : 35;
+
+    /* Grid Atlas owns the verdict when it produced the score. Otherwise the
+       same comparison is made here, so a site-intel score still yields a
+       verdict on a page where the Grid Atlas adapter never loaded. */
+    var verdict = (src === 'grid-atlas' && GA && GA.prescreenVerdict)
+      ? GA.prescreenVerdict(g)
+      : (g.score >= bar ? 'pass' : 'fail');
+    if (!verdict) return null;
+
     return {
-      verdict: GA.prescreenVerdict(g),
-      reason:  (g.summary || 'Grid Atlas') + ' \u2014 scored ' + g.score
-             + ' against a bar of ' + GA.prescreenThreshold(),
+      verdict: verdict,
+      reason:  (g.summary || label) + ' \u2014 scored ' + g.score
+             + ' against a bar of ' + bar,
       fit:'', size:'', offtake:'', timing:'',
-      source:  'grid-atlas',
+      source:  src,
       by:      _me ? _me.email : '',
       at:      stamp()
     };
@@ -1747,9 +1775,9 @@
        and silently overwriting them would be the console deciding it knows
        better than the person who went there. */
     var pre = gridPrescreen(g);
-    if (pre && (!deal.prescreen || deal.prescreen.source === 'grid-atlas')) {
+    if (pre && (!deal.prescreen || isMachinePrescreen(deal.prescreen))) {
       fields.prescreen = pre;
-    } else if (!pre && deal.prescreen && deal.prescreen.source === 'grid-atlas') {
+    } else if (!pre && isMachinePrescreen(deal.prescreen)) {
       /* Nothing was measured this time, and the verdict on the record came
          from Grid Atlas. Clearing it removes a FAIL that was written from a
          score which turned out not to exist \u2014 leaving it would keep condemning
@@ -1758,7 +1786,8 @@
       fields.prescreen = null;
     }
     return patch(deal, fields, { type:'grid',
-      message:'Grid Atlas run' + (g.score != null ? ' \u2014 ' + g.score + '/100'
+      message:(g.source === 'site-intel' ? 'Scored from a traced KMZ' : 'Grid Atlas run')
+        + (g.score != null ? ' \u2014 ' + g.score + '/100'
                                                   : ' \u2014 nothing measured')
         + (pre ? ', prescreen ' + pre.verdict : '')
         + (g.substations && g.substations.length && g.substations[0].distanceKm != null

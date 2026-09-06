@@ -1030,6 +1030,10 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="/tenants/osa/ingest-data.js?v=6"></script>
 <script src="/tenants/osa/grid-atlas-adapter.js?v=9"></script>
+<!-- Scores a site from the KMZ the site team already drew. Grid Atlas is a
+     page with no API and the OGI endpoint is not configured, so this is the
+     only grid measurement the console can currently make on its own. -->
+<script src="/omega-site-intel.js?v=1"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
    OMEGA PORTFOLIO CONSOLE (v1)
@@ -3934,7 +3938,9 @@ function tabOverview(d){
         : '<div style="font-size:12.5px;color:var(--ink-3);line-height:1.6">'
           + 'Not run yet. Checks the address against substations, transmission lines and '
           + 'generating plants near the site \u2014 the measurement the screening score '
-          + 'should be made knowing.</div>')
+          + 'should be made knowing.<br><br>'
+          + 'If you have the site KMZ, <b>Score from KMZ</b> measures the same thing from '
+          + 'the geometry the site team already drew, without waiting on Grid Atlas.</div>')
       + (A.can('write_deal')&&!d._demo
         ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
           + (d.address
@@ -3946,6 +3952,10 @@ function tabOverview(d){
               : '<button class="btn-a" onclick="doEditSite()">Add an address first</button>')
           + (gr.ranAt||!d.address?'':'')
           + '<button class="btn-o" onclick="doEditAddress()">Edit address</button>'
+          + '<button class="'+(gr.ranAt?'btn-o':'btn-a')+'" onclick="doScoreFromKmz()" '
+          +   'title="Measure the grid from the site KMZ \u2014 voltage, distance to the '
+          +   'substation, acreage and pipelines, straight out of Google Earth">'
+          +   'Score from KMZ</button>'
           + '<button class="btn-o" onclick="doOpenGridAtlas()">Open Grid Atlas</button>'
           + '<button class="btn-o" onclick="doGridCoords()">'
           +   (gr.lat!=null?'Coordinates':'Set coordinates')+'</button>'
@@ -5050,6 +5060,167 @@ function doRemoveLink(id){
       + 'where it is in Drive \u2014 nothing is deleted.'}],
     submitLabel:'Remove'
   }).then(function(ok){ if(ok) act(F.removeLink(d,l),'Removed'); });
+}
+
+/* ── Score from a traced KMZ ──────────────────────────────────────────────
+   THE EVIDENCE WAS ALREADY IN THE BUILDING. The matrix has an empty grid axis
+   because that axis waits on Grid Atlas, which is a page rather than a
+   service, and on OGI, whose endpoint is not configured. Meanwhile the site
+   team's own Google Earth files carry the parcel, the transmission line, its
+   voltage and owner, and a pin on the substation — which is most of what the
+   grid axis is asking for.
+
+   This measures those files and writes the result through F.saveGrid, the
+   same path a Grid Atlas run and a hand-entered score both take: same rules,
+   same audit line, same history append. Nothing here writes to Firestore
+   directly.
+
+   IT IS A MEASUREMENT, NOT A CLEARANCE, and the confirmation says so before
+   anything is saved. It cannot see queue position, thermal ratings, ATC or
+   curtailment, so a strong score means "worth the utility conversation",
+   never "this will interconnect". */
+function _kmzToGrid(intake, grid, fileName){
+  var MI = 1609.344;
+  var subs = (intake.substations||[]).map(function(P){
+    return { name: P.name || 'Substation',
+             voltageKv: P.attrs.kv || null,
+             owner: P.attrs.owner || '',
+             distanceKm: P.distM != null ? Math.round(P.distM / 10) / 100 : null };
+  });
+  var lines = (intake.transmission||[]).map(function(L){
+    return { name: L.name || '', voltageKv: L.attrs.kv || null,
+             circuits: L.attrs.circuits || 1, owner: L.attrs.owner || '',
+             distanceKm: L.distM != null ? Math.round(L.distM / 10) / 100 : null };
+  });
+
+  /* Findings carry the flags AND the component that cost the site the most,
+     because "why is this 52" is the question the number always provokes. */
+  var findings = (intake.flags||[]).map(function(f){
+    return { severity: f.level === 'error' ? 'blocker' : f.level === 'warn' ? 'risk' : 'note',
+             text: f.msg };
+  });
+  var worst = (grid.components||[]).filter(function(c){ return c.max > 0; })
+    .sort(function(a,b){ return (a.points/a.max) - (b.points/b.max); })[0];
+  if (worst) findings.push({ severity:'note',
+    text:'Weakest component is ' + worst.key + ' at ' + worst.points + ' of ' + worst.max +
+         ' \u2014 ' + worst.note });
+  if (grid.confidence !== 'good') findings.push({ severity:'risk',
+    text:'Confidence is ' + grid.confidence +
+         (grid.missing.length ? ' \u2014 the file is missing ' + grid.missing.join(', ') : '') +
+         '. The score stands, the evidence behind it is thin.' });
+  findings.push({ severity:'note',
+    text:'Measured from traced geometry, not from utility data. It cannot see queue ' +
+         'position, thermal ratings, ATC or curtailment \u2014 confirm with the utility.' });
+
+  var ring = (intake.parcelRings||[])[0];
+  var c = ring ? (function(r){ var x=0,y=0,n=0;
+    r.coords.forEach(function(p){ x+=p[0]; y+=p[1]; n++; });
+    return n ? {lng:x/n, lat:y/n} : null; })(ring) : null;
+
+  return {
+    score: grid.score,
+    ranAt: new Date().toISOString(),
+    ranBy: (A.me && A.me() && A.me().email) || '',
+    source: 'site-intel',
+    lat: c ? c.lat : null, lng: c ? c.lng : null,
+    resolvedAddress: '', geocode: null,
+    substations: subs, lines: lines, plants: [],
+    findings: findings,
+    summary: [
+      (intake.grossAcres ? Math.round(intake.grossAcres) + ' ac' : 'acreage unknown'),
+      (grid.kv ? grid.kv + ' kV' : 'no voltage labelled'),
+      (grid.poiMi != null ? grid.poiMi.toFixed(2) + ' mi to the ' + grid.poiVia : null),
+      (grid.mwHostable ? '~' + grid.mwHostable + ' MW hostable' : null)
+    ].filter(Boolean).join(' \u00b7 ') + ' \u00b7 from ' + fileName,
+    raw: null
+  };
+}
+
+function _readKmz(file){
+  var isKmz = /\.kmz$/i.test(file.name || '');
+  if (!isKmz) return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=function(){ res(String(r.result||'')); };
+    r.onerror=function(){ rej(new Error('could not be read')); };
+    r.readAsText(file);
+  });
+  return new Promise(function(res,rej){
+    function go(){
+      var r=new FileReader();
+      r.onload=function(){
+        JSZip.loadAsync(r.result).then(function(z){
+          var e=(z.file(/\.kml$/i)||[])[0];
+          if(!e) throw new Error('there is no .kml inside that .kmz');
+          return e.async('string');
+        }).then(res)['catch'](rej);
+      };
+      r.onerror=function(){ rej(new Error('could not be read')); };
+      r.readAsArrayBuffer(file);
+    }
+    if (typeof JSZip !== 'undefined') return go();
+    var t=document.createElement('script');
+    t.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    t.onload=go;
+    t.onerror=function(){ rej(new Error('the zip reader could not be loaded \u2014 unzip it and use the .kml')); };
+    document.head.appendChild(t);
+  });
+}
+
+function doScoreFromKmz(){
+  var d=guard(); if(!d) return;
+  if(!window.OmegaSiteIntel){ toast('The site-intel engine did not load',true); return; }
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='.kmz,.kml'; inp.style.display='none';
+  document.body.appendChild(inp);
+  inp.onchange=function(){
+    var f=inp.files&&inp.files[0];
+    inp.remove();
+    if(!f) return;
+    toast('Reading '+f.name+'\u2026');
+    _readKmz(f).then(function(text){
+      var SI=window.OmegaSiteIntel;
+      var parsed=SI.parseKML(text);
+      if(!parsed.features.length) throw new Error('no placemarks in that file');
+      var intake=SI.intake(parsed.features, d.name);
+      if(!intake.transmission.length && !intake.substations.length)
+        throw new Error('that file has no transmission line and no substation, so there is '
+          + 'nothing to measure the grid against');
+      var g=SI.gridScore(intake);
+      var rec=_kmzToGrid(intake,g,f.name);
+
+      /* Shown before it is written. A score that lands on a deal without
+         anybody reading it is how a wrong number becomes a decision. */
+      return Forms.confirm({
+        title:'Score '+d.name+' at '+g.score+' / 100?',
+        intro:f.name,
+        fields:[
+          {type:'static',html:'<b>'+g.score+' / 100</b> \u00b7 '+esc(g.confidence)
+            +' confidence<br><span style="color:var(--ink-3)">'+esc(rec.summary)+'</span>'},
+          {type:'static',html:'<table style="width:100%;font-size:12px;border-collapse:collapse">'
+            + g.components.map(function(c){
+                return '<tr><td style="padding:2px 8px 2px 0;color:var(--ink-3)">'+esc(c.key)+'</td>'
+                  + '<td style="padding:2px 8px 2px 0;white-space:nowrap">'+c.points
+                  + (c.max?' / '+c.max:'')+'</td>'
+                  + '<td style="padding:2px 0;color:var(--ink-3)">'+esc(c.note)+'</td></tr>'; }).join('')
+            + '</table>'},
+          {type:'static',html:'<b>This is a measurement, not a clearance.</b> It is taken from '
+            + 'lines drawn by eye over imagery and cannot see queue position, thermal ratings, '
+            + 'ATC or curtailment history. It says the site is worth a utility conversation \u2014 '
+            + 'it does not say the site will interconnect.'}
+        ],
+        submitLabel:'Save this score'
+      }).then(function(ok){
+        if(!ok) return;
+        return F.saveGrid(d,rec).then(function(){
+          toast('Scored '+g.score+'/100 from '+f.name);
+          return refresh();
+        });
+      });
+    })['catch'](function(e){
+      toast((e&&e.message)||'That file could not be scored',true);
+    });
+  };
+  inp.click();
 }
 
 /* ── Grid Atlas ───────────────────────────────────────────────────────── */
