@@ -84399,13 +84399,20 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var mode = 'on';                     /* on | off | dims */
 
   function stored() {
-    try { var v = localStorage.getItem(KEY); return (v === 'off' || v === 'dims') ? v : 'on'; }
-    catch (e) { return 'on'; }
+    try { var v = localStorage.getItem(KEY);
+      return (v === 'off' || v === 'dims' || v === 'grouped') ? v : 'grouped'; }
+    catch (e) { return 'grouped'; }
   }
 
   function css(m) {
     var base;
     if (m === 'on') base = '';
+    else if (m === 'grouped') {
+      /* Nothing is hidden by CSS here. Which repeats to fold is a question
+         about position and count, not about a class, so it is decided in
+         groupRepeats() and the losers are hidden individually. */
+      base = '';
+    }
     else if (m === 'dims') {
       /* A dimension is a token like 20.3'x18.79' or 6' x 5'. Names are not.
          Keeping the size and dropping the name is the usual plan-set
@@ -84439,6 +84446,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       (document.head || document.documentElement).appendChild(el);
     }
     el.textContent = css(mode);
+    /* Fold or unfold repeated names. Always cleared first, so switching modes
+       never leaves a stale "x40" callout over a pad somebody has since split. */
+    try { ungroupRepeats(); if (mode === 'grouped') groupRepeats(); } catch (e) {}
     /* the conduit layer already has its own flag — drive it from the same
        switch so callouts do not survive a labels-off */
     try { window._hideConduitLabels = (mode === 'off'); } catch (e) {}
@@ -84454,13 +84464,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   }
 
   function set(m) {
-    mode = (m === 'off' || m === 'dims') ? m : 'on';
+    mode = (m === 'off' || m === 'dims' || m === 'grouped') ? m : 'on';
     apply();
     var b = document.getElementById('rb-labels');
     if (b) b.classList.toggle('active-tool', mode !== 'on');
     try {
       if (typeof showBanner === 'function') {
-        showBanner('shape', mode === 'on' ? ' Labels on'
+        showBanner('shape', mode === 'on' ? ' Labels on \u2014 every item named'
+          : mode === 'grouped' ? ' Labels grouped \u2014 one callout per area'
           : mode === 'dims' ? ' Labels: dimensions only'
             : ' Labels off \u2014 legend, schedule and takeoff unchanged');
       }
@@ -84493,6 +84504,153 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     } catch (e) { return 0; }
   }
 
+  /* ── ONE CALLOUT PER AREA ────────────────────────────────────────────────
+     A compute campus is forty identical pods. Naming each one puts forty
+     copies of the same string on top of each other, and the drawing stops
+     being readable exactly where the density is highest — which is the part
+     somebody opened it to look at.
+
+     So identical names are folded: the repeats are hidden and ONE label is
+     drawn at the centre of where they sit, reading "MDC pod x40". The count
+     is on the label because that is the number the reader wants and it is
+     otherwise only in the legend.
+
+     WHY A CLUSTER TEST AND NOT JUST A NAME MATCH. Two banks of pods at
+     opposite ends of a site are two areas, and collapsing them to one
+     callout in the middle would point at empty ground between them. Repeats
+     are split into spatial clusters first — single-link, threshold set from
+     the typical spacing of the items themselves rather than a fixed
+     distance, so it holds whether the drawing is a 25 acre pad or 1,800.
+
+     FEWER THAN THREE IS LEFT ALONE. Two of a thing is not clutter, and
+     replacing two labels with one that says "x2" reads as a mistake.
+
+     Nothing is deleted. The originals are hidden with a data attribute and
+     ungroupRepeats() puts them all back, so this is a view, not an edit —
+     the schedule, the legend and the takeoff never see it. */
+  var GROUP_MIN = 3;
+  var GLAB = 'omega-grouplab';
+
+  function textCentre(t) {
+    try {
+      var b = t.getBBox();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    } catch (e) {
+      var x = parseFloat(t.getAttribute('x')), y = parseFloat(t.getAttribute('y'));
+      return isFinite(x) && isFinite(y) ? { x: x, y: y } : null;
+    }
+  }
+
+  /* Single-link clustering. n is small — a few dozen labels of one name — so
+     the simple O(n^2) pass is the right call over anything cleverer. */
+  function cluster(pts, radius) {
+    var groups = [], used = [], i, j;
+    for (i = 0; i < pts.length; i++) used[i] = false;
+    for (i = 0; i < pts.length; i++) {
+      if (used[i]) continue;
+      var g = [i]; used[i] = true;
+      for (var k = 0; k < g.length; k++) {
+        for (j = 0; j < pts.length; j++) {
+          if (used[j]) continue;
+          var dx = pts[g[k]].c.x - pts[j].c.x, dy = pts[g[k]].c.y - pts[j].c.y;
+          if (dx * dx + dy * dy <= radius * radius) { used[j] = true; g.push(j); }
+        }
+      }
+      groups.push(g);
+    }
+    return groups;
+  }
+
+  /* The clustering radius comes from the drawing, not from a constant: the
+     median nearest-neighbour distance among these labels, times a slack
+     factor. Items laid out on a grid cluster; items across the site do not. */
+  function radiusFor(pts) {
+    if (pts.length < 2) return 0;
+    var d = [], i, j;
+    for (i = 0; i < pts.length; i++) {
+      var best = Infinity;
+      for (j = 0; j < pts.length; j++) {
+        if (i === j) continue;
+        var dx = pts[i].c.x - pts[j].c.x, dy = pts[i].c.y - pts[j].c.y;
+        var v = dx * dx + dy * dy;
+        if (v < best) best = v;
+      }
+      if (isFinite(best)) d.push(Math.sqrt(best));
+    }
+    if (!d.length) return 0;
+    d.sort(function (a, b) { return a - b; });
+    var med = d[Math.floor(d.length / 2)] || 0;
+    return Math.max(med * 2.5, 1);
+  }
+
+  function ungroupRepeats() {
+    var svg = document.getElementById('csvg'); if (!svg) return;
+    var made = svg.querySelectorAll('.' + GLAB), i;
+    for (i = 0; i < made.length; i++)
+      if (made[i].parentNode) made[i].parentNode.removeChild(made[i]);
+    var hid = svg.querySelectorAll('[data-omega-grouped]');
+    for (i = 0; i < hid.length; i++) {
+      hid[i].removeAttribute('data-omega-grouped');
+      hid[i].style.display = '';
+    }
+  }
+
+  function groupRepeats() {
+    var svg = document.getElementById('csvg'); if (!svg) return 0;
+    classifyText();
+    var nodes = svg.querySelectorAll('text.omega-name'), by = {}, i;
+    for (i = 0; i < nodes.length; i++) {
+      var t = nodes[i];
+      /* User-authored notes and structural utility chips are never folded —
+         they are one-of-a-kind by intent, not repetition. */
+      if (t.classList && (t.classList.contains('omega-annotate') ||
+                          t.classList.contains('omega-utillabel'))) continue;
+      if (t.style && t.style.display === 'none') continue;
+      var key = (t.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!key || key.length > 60) continue;
+      var c = textCentre(t); if (!c) continue;
+      (by[key] || (by[key] = [])).push({ t: t, c: c });
+    }
+
+    var folded = 0;
+    Object.keys(by).forEach(function (key) {
+      var pts = by[key];
+      if (pts.length < GROUP_MIN) return;
+      var r = radiusFor(pts);
+      cluster(pts, r).forEach(function (idx) {
+        if (idx.length < GROUP_MIN) return;      /* an outlier keeps its name */
+        var sx = 0, sy = 0, j;
+        for (j = 0; j < idx.length; j++) {
+          sx += pts[idx[j]].c.x; sy += pts[idx[j]].c.y;
+          pts[idx[j]].t.setAttribute('data-omega-grouped', '1');
+          pts[idx[j]].t.style.display = 'none';
+        }
+        var cx = sx / idx.length, cy = sy / idx.length;
+        var proto = pts[idx[0]].t;
+
+        var lab = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lab.setAttribute('class', GLAB + ' omega-name');
+        lab.setAttribute('x', cx);
+        lab.setAttribute('y', cy);
+        lab.setAttribute('text-anchor', 'middle');
+        lab.setAttribute('dominant-baseline', 'middle');
+        lab.setAttribute('pointer-events', 'none');
+        /* Inherit the look of the label it replaces so a grouped drawing does
+           not read as a different drawing. */
+        ['font-family', 'font-size', 'font-weight', 'fill', 'stroke',
+         'stroke-width', 'paint-order'].forEach(function (a) {
+          var v = proto.getAttribute(a);
+          if (v) lab.setAttribute(a, v);
+        });
+        lab.textContent = key + ' \u00d7' + idx.length;
+        (proto.parentNode || svg).appendChild(lab);
+        folded += idx.length;
+      });
+    });
+    if (folded && window.console) console.info(TAG + ' grouped ' + folded + ' repeated labels');
+    return folded;
+  }
+
   function addButton() {
     var host = document.getElementById('rb-crosshair');
     host = host && host.parentNode;
@@ -84501,9 +84659,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var b = document.createElement('button');
       b.className = 'rbtn';
       b.id = 'rb-labels';
-      b.title = 'Hide the text on the drawing. The legend, schedule and takeoff are unaffected.';
+      b.title = 'Grouped (default): forty identical pods get one callout for the area '
+              + 'instead of forty names. Click to cycle grouped \u2192 every item \u2192 off. '
+              + 'The legend, schedule and takeoff are unaffected by all three.';
       b.innerHTML = '<span class="rb-ico">\u1d40</span><span class="rb-lbl">Labels</span>';
-      b.onclick = function () { set(mode === 'on' ? 'off' : 'on'); };
+      b.onclick = function () {
+        set(mode === 'grouped' ? 'on' : mode === 'on' ? 'off' : 'grouped');
+      };
       host.appendChild(b);
     }
     /* Collapsing the EVSE plates is a VIEW decision, so it belongs on the
