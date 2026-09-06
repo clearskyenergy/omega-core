@@ -131,3 +131,57 @@ vercel --prod               # to next.clearskyomega.com first, NOT a tenant host
 FIREBASE_SERVICE_ACCOUNT="$(cat sa.json)" npm run audit > audit-after.json
 node scripts/audit-counts.js --diff audit-before.json audit-after.json
 ```
+
+## IP: logic that is still in the browser  (2026-09-06)
+
+CLAUDE.md: *"Pricing, scoring, dispatch, eligibility, and financial modeling
+logic runs in `/api/`, never in the browser"*, and it names **site viability
+scoring** among the examples that must be server-side. Three engines added or
+touched this session do not yet comply. Recorded here rather than fixed
+quietly, because each is a real move with a blocker attached.
+
+- [ ] **`omega-site-intel.js` — the grid score.** The whole model ships to the
+      browser: the 35/25/15/15/10 component weights, the voltage-to-MW capacity
+      ladder, the distance bands and the hazard setback formula. Any tenant can
+      read the screening methodology in devtools.
+      **The split:** parsing, feature classification and geodesy stay
+      client-side — they are mechanical, and the KMZ never leaves the machine.
+      Only `gridScore()` moves, to `/api/site-score`, behind a token check and
+      a `billing/current` read.
+      **Not blocked.** `api/_lib/verify-token.js` (added this session) verifies
+      a Firebase ID token against Google's public certificates and reads the
+      caller's own billing record through the Firestore REST API, so this needs
+      no service account. It is the reason the tool can be sold at Deluxe at
+      all: a `data-cap` panel is an upsell, not a gate.
+
+- [ ] **The permitting engine (`editor.html`, OMEGA PERMIT).** Templates, the
+      review-type planning bands and the CPM pass are all client-side. Lower
+      priority than the grid score — the code references are public and the
+      jurisdiction packs are the asset — but the bands and the trigger logic
+      are the product.
+
+- [x] **BOM → partner routing.** Already correct. `api/rfq.js` owns the routing
+      rule and `firestore.rules` refuses `create` on `rfqs` and its
+      `recipients` subcollection to everyone else, so a browser cannot route
+      its own BOM. The editor posts the whole BOM and the server decides the
+      slices. **Blocked on `FIREBASE_SERVICE_ACCOUNT`** — this one needs to
+      write, and the rules deny the caller that write by design, so the
+      read-only path above cannot substitute.
+
+## Also outstanding  (2026-09-06)
+
+- [ ] `/omega-settings.js` 404s on seven tools; `/omega-intake.js` on one.
+      Nothing references `OmegaSettings` anywhere, and
+      `interconnection-study.html` carries a "deploy it alongside this tool"
+      fallback — so the module was planned and never written. Build it or drop
+      the feature; it is a product call, not cleanup.
+- [ ] No Storage rule for `referrals/{orgId}/{referralId}/{file}`. Attachments
+      fail with `storage/unauthorized` and the block degrades to links-only, as
+      its own footer documents. The documented rule lets any signed-in user
+      write 25 MB under that path — widen `storage.rules` deliberately or not
+      at all.
+- [ ] Two CRM rows both named Fenecon (`c-1785202116727` "building",
+      `c-1786550295378` "up"). The DUPLICATE RECORD badge is correct. Which one
+      to delete is a data decision.
+- [ ] `capTier: 'trial'` still to be set on `chileasing.com` — Tenants & Users
+      → Manage → Editor cap → "designer only", signed in as clearsky-usa.com.
