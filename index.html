@@ -3033,6 +3033,7 @@ async function computeLiveRollup(){
     var byType = {};
     var byOwnerRev = {};
     var capexByProj = [];
+    var projRows = [];
     var storageByStage = {};
     if (typeof STAGE_KEYS!=='undefined'){ STAGE_KEYS.forEach(function(s){ storageByStage[s]=0; }); }
     var myEmail = _meEmail();
@@ -3062,6 +3063,11 @@ async function computeLiveRollup(){
       if (_rev>0){ byOwnerRev[_own] = (byOwnerRev[_own]||0) + _rev; }
       var _cx = Number(d.capex)||0;
       if (_cx>0){ capexByProj.push({ name:(d.name||'Untitled'), capex:_cx }); }
+      /* capexByProj is filtered to capex>0 because the Top CapEx bar chart is
+         a ranking and a zero is not a rank. The P&L and matrix widgets need
+         every project including the ones not costed yet, so they get their own
+         row rather than loosening the filter under the existing widget. */
+      projRows.push({ name:(d.name||'Untitled'), capex:_cx, rev:_rev, mwh:mwh, stage:stage });
       storageByStage[stage] = (storageByStage[stage]||0) + mwh;
       rows.push({ id:doc.id, name:d.name||'Untitled', utility:d.utility||'—', program:d.program||'—',
                   stage:stage, bess: kwh ? (mwh.toFixed(1)+' MWh') : '—',
@@ -3074,7 +3080,7 @@ async function computeLiveRollup(){
     k.storageOnlineMwh = +k.storageOnlineMwh.toFixed(1);
     renderKpis(k); renderPipeline(counts); renderPortfolioTable(rows);
     renderWidgets(k, counts);
-    renderCharts({ byType:byType, byOwnerRev:byOwnerRev, capexByProj:capexByProj, storageByStage:storageByStage, counts:counts, k:k });
+    renderCharts({ byType:byType, byOwnerRev:byOwnerRev, capexByProj:capexByProj, storageByStage:storageByStage, counts:counts, k:k, projRows:projRows });
     _updateScopeBar(rows.length, unownedCount);
     /* Activity feed from the same rows (most-recently-touched first if available). */
     var feed = rows.slice(0,6).map(function(r){
@@ -5092,13 +5098,81 @@ var DASH = (function(){
   var state = { order:[], hidden:[], added:[] };  // order: block keys; hidden: keys; added: [{key,type}]
 
   // Widgets that can be ADDED (not already on the page by default)
+  /* SEED catalogue. verticals[] is the gate CLAUDE.md specifies — empty means
+     every vertical. hydrateWidgets() below replaces this from the Firestore
+     `widgets` collection when it is present, exactly as omega-tools.js does
+     for `tools`, so adding a widget is a console action rather than a deploy.
+     Kept as a seed so a cold database still shows a working palette. */
   var ADDABLE = [
-    { key:'w-stage',  type:'stage',  name:'Projects by Stage' },
-    { key:'w-ptype',  type:'ptype',  name:'Projects by Type' },
-    { key:'w-capex',  type:'capex',  name:'Top CapEx' },
-    { key:'w-owner',  type:'owner',  name:'Revenue by Owner' },
-    { key:'w-storage',type:'storage',name:'Storage by Stage' },
+    { key:'w-stage',  type:'stage',  name:'Projects by Stage',      verticals:[] },
+    { key:'w-ptype',  type:'ptype',  name:'Projects by Type',       verticals:[] },
+    { key:'w-capex',  type:'capex',  name:'Top CapEx',              verticals:[] },
+    { key:'w-owner',  type:'owner',  name:'Revenue by Owner',       verticals:[] },
+    { key:'w-storage',type:'storage',name:'Storage by Stage',       verticals:[] },
+
+    /* ── P&L ─────────────────────────────────────────────────────────────
+       Built from the three sums the portfolio loop already keeps:
+       portfolioCapex, projectedRevenue and modeledIncentives. Nothing here is
+       modelled or guessed — if a number is not already on the project
+       documents it is not on these cards. */
+    { key:'w-pl',     type:'pl',     name:'P&L — Portfolio Summary', verticals:[] },
+    { key:'w-plproj', type:'plproj', name:'P&L — Revenue vs CapEx',  verticals:[] },
+    { key:'w-incent', type:'incent', name:'P&L — Incentive Capture', verticals:[] },
+
+    /* ── Project management ──────────────────────────────────────────────
+       The matrix is the OSA portfolio view's idea — every project as a point
+       on two axes, positioned rather than listed — on the two axes core
+       actually holds for a project: what it costs and what it returns. OSA's
+       own version plots Grid Atlas feasibility against bankability, which are
+       scores the deals pipeline produces and core projects do not carry; when
+       they land on projects/, this widget swaps axes and keeps its shape. */
+    { key:'w-matrix', type:'matrix', name:'Portfolio Matrix',        verticals:[] },
+    { key:'w-funnel', type:'funnel', name:'Pipeline Funnel',         verticals:[] },
+
+    /* ── Asset management ────────────────────────────────────────────────
+       The operating end of the book, which is what the Joules fleet view is
+       for: what is actually online and producing, not what is being sold. */
+    { key:'w-fleet',  type:'fleet',  name:'Operating Assets',        verticals:[] },
   ];
+
+  /* ── REGISTRY (MERGE.md TODO 5) ────────────────────────────────────────
+     The palette is seeded by ADDABLE and then replaced from Firestore, the
+     same shape omega-tools.js uses for `tools`: add a row to `widgets` and
+     every portal picks it up without a deploy. A widget only renders if a
+     drawer exists for its `type`, so a row naming an unimplemented type is
+     ignored rather than producing an empty card nobody can remove.
+     verticals[] empty means every vertical; otherwise the tenant's vertical
+     must be in it. */
+  function _drawableTypes(){
+    return ['stage','ptype','capex','owner','storage','pl','plproj','incent','matrix','funnel','fleet'];
+  }
+  function hydrateWidgets(cb){
+    if (typeof db==='undefined' || !db){ cb&&cb(); return; }
+    db.collection('widgets').get().then(function(sn){
+      if (sn && !sn.empty){
+        var ok=_drawableTypes(), out=[];
+        sn.forEach(function(d){
+          var w=d.data()||{};
+          if (!w.type || ok.indexOf(w.type)<0) return;
+          if (w.enabled===false) return;
+          out.push({ key:'w-'+d.id, type:w.type, name:w.name||w.type,
+                     verticals:w.verticals||[], minTier:w.minTier });
+        });
+        if (out.length) ADDABLE = out;
+      }
+      cb&&cb();
+    }).catch(function(){ cb&&cb(); });
+  }
+  /* A widget the tenant's vertical excludes is not offered. The gate is here
+     rather than in the rules because a dashboard card is a view of data the
+     user can already read — hiding it is product, not security. */
+  function _visibleAddable(){
+    var v = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.vertical) || '';
+    return ADDABLE.filter(function(a){
+      if (!a.verticals || !a.verticals.length) return true;
+      return !v || a.verticals.indexOf(v) >= 0;
+    });
+  }
 
   function host(){ return document.getElementById('dev-fixed'); }
   function blocks(){ return Array.prototype.slice.call(host().querySelectorAll(':scope > .dash-block')); }
@@ -5123,7 +5197,8 @@ var DASH = (function(){
   }
 
   function _makeWidgetBlock(key, type){
-    var names={stage:'Projects by Stage',ptype:'Projects by Type',capex:'Top CapEx',owner:'Revenue by Owner',storage:'Storage by Stage'};
+    var names={};
+    ADDABLE.forEach(function(a){ names[a.type]=a.name; });
     var div=document.createElement('div');
     div.className='dash-block'; div.setAttribute('data-block',key); div.setAttribute('data-added','1');
     div.innerHTML='<div class="block-head"><div><div class="block-title">'+(names[type]||type)+'</div></div></div>'+
@@ -5242,7 +5317,7 @@ var DASH = (function(){
   function togglePalette(){ var p=document.getElementById('dash-palette'); if(p.classList.contains('open')) closePalette(); else openPalette(); }
   function openPalette(){
     var p=document.getElementById('dash-palette');
-    p.querySelector('.dp-body').innerHTML = ADDABLE.map(function(a){
+    p.querySelector('.dp-body').innerHTML = _visibleAddable().map(function(a){
       var already = state.added.some(function(x){return x.type===a.type;});
       return '<button class="dp-item" onclick="DASH.addWidget(\''+a.type+'\')" '+(already?'disabled':'')+'>'+a.name+(already?' ✓':'')+'</button>';
     }).join('');
@@ -5275,6 +5350,74 @@ var TC={bess:'#0070F2',dcfc:'#00A9A4',solar:'#F0A030',
     else if(type==='ptype'){var ks=Object.keys(a.byType||{}),L2=[],D2=[],C2=[];ks.forEach(function(k){L2.push(k.toUpperCase());D2.push(a.byType[k]);C2.push(TC[k]||'#8A97A6');});var t2=D2.reduce(function(x,y){return x+y;},0);cfg={type:'doughnut',data:{labels:t2?L2:['No data'],datasets:[{data:t2?D2:[1],backgroundColor:t2?C2:['#EAECEF'],borderWidth:0}]},options:{cutout:'64%',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}}}};}
     else if(type==='capex'){var it=(a.capexByProj||[]).slice().sort(function(x,y){return y.capex-x.capex;}).slice(0,8);cfg={type:'bar',data:{labels:it.length?it.map(function(i){return i.name;}):['No data'],datasets:[{data:it.length?it.map(function(i){return i.capex;}):[0],backgroundColor:'#0070F2',borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}};}
     else if(type==='owner'){var ok=Object.keys(a.byOwnerRev||{}).sort(function(x,y){return a.byOwnerRev[y]-a.byOwnerRev[x];}).slice(0,8);cfg={type:'bar',data:{labels:ok.length?ok:['No data'],datasets:[{data:ok.length?ok.map(function(k){return a.byOwnerRev[k];}):[0],backgroundColor:'#00A9A4',borderRadius:5}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10}}}}}};}
+    /* ── P&L, matrix and fleet ──────────────────────────────────────────
+       Every series below comes off a.k (the totals the portfolio loop already
+       accumulates) or a.projRows (one row per project). No modelling here: a
+       dashboard card that invents a number is worse than one that shows an
+       empty state, so a missing field renders as "No data" rather than zero
+       dressed up as a result. */
+    if(type==='pl'){
+      var K=a.k||{}, rev=Number(K.projectedRevenue)||0, cx=Number(K.portfolioCapex)||0, inc=Number(K.modeledIncentives)||0;
+      var net=rev+inc-cx, any=(rev||cx||inc);
+      cfg={type:'bar',data:{labels:['Projected revenue','Modeled incentives','Portfolio CapEx','Net position'],
+        datasets:[{data:any?[rev,inc,-cx,net]:[0,0,0,0],
+          backgroundColor:['#2E9C3C','#00A9A4','#E06C4F', net>=0?'#0070F2':'#E0574F'],borderRadius:5}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:function(c){return _fmtK(Math.abs(c.raw))+(c.raw<0?' (outflow)':'');}}}},
+          scales:{y:{ticks:{font:{size:9},callback:function(v){return _fmtK(v);}}},x:{ticks:{font:{size:9}}}}}};
+    }
+    else if(type==='plproj'){
+      var rows=(a.projRows||[]).slice().sort(function(x,y){return (y.rev||0)-(x.rev||0);}).slice(0,8);
+      cfg={type:'bar',data:{labels:rows.length?rows.map(function(r){return r.name;}):['No data'],
+        datasets:[{label:'Annual revenue',data:rows.length?rows.map(function(r){return r.rev||0;}):[0],backgroundColor:'#2E9C3C',borderRadius:4},
+                  {label:'CapEx',data:rows.length?rows.map(function(r){return r.capex||0;}):[0],backgroundColor:'#E06C4F',borderRadius:4}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+            tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+_fmtK(c.raw);}}}},
+          scales:{x:{ticks:{font:{size:9},callback:function(v){return _fmtK(v);}}},y:{ticks:{font:{size:10}}}}}};
+    }
+    else if(type==='incent'){
+      var K2=a.k||{}, cx2=Number(K2.portfolioCapex)||0, inc2=Number(K2.modeledIncentives)||0;
+      var rest=Math.max(cx2-inc2,0);
+      cfg={type:'doughnut',data:{labels:(cx2||inc2)?['Covered by incentives','Net CapEx']:['No data'],
+        datasets:[{data:(cx2||inc2)?[inc2,rest]:[1],backgroundColor:(cx2||inc2)?['#00A9A4','#E1E6EC']:['#EAECEF'],borderWidth:0}]},
+        options:{cutout:'64%',responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+            tooltip:{callbacks:{label:function(c){return c.label+': '+_fmtK(c.raw);}}}}}};
+    }
+    else if(type==='matrix'){
+      var pts=(a.projRows||[]).filter(function(r){return (r.capex||0)>0||(r.rev||0)>0;});
+      var mx=pts.map(function(r){return {x:r.capex||0,y:r.rev||0,r:Math.max(4,Math.min(18,Math.sqrt((r.mwh||0))*3)),_n:r.name,_s:r.stage};});
+      cfg={type:'bubble',data:{datasets:[{data:mx,
+        backgroundColor:mx.map(function(m){var i=STAGE.indexOf(m._s);return (SC[i%SC.length]||'#8A97A6')+'C0';}),
+        borderColor:'#ffffff',borderWidth:1}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var m=c.raw;
+            return m._n+' — CapEx '+_fmtK(m.x)+', revenue '+_fmtK(m.y);}}}},
+          scales:{x:{title:{display:true,text:'CapEx',font:{size:10}},ticks:{font:{size:9},callback:function(v){return _fmtK(v);}}},
+                  y:{title:{display:true,text:'Annual revenue',font:{size:10}},ticks:{font:{size:9},callback:function(v){return _fmtK(v);}}}}}};
+      if(!mx.length) cfg.options.plugins.tooltip={enabled:false};
+    }
+    else if(type==='funnel'){
+      var K3=a.k||{};
+      var fl=[['Under control',Number(K3.sitesUnderControl)||0],['Quoted',Number(K3.sitesQuoted)||0],
+              ['Submitted',Number(K3.sitesSubmitted)||0],['Online',Number(K3.sitesOnline)||0]];
+      cfg={type:'bar',data:{labels:fl.map(function(f){return f[0];}),
+        datasets:[{data:fl.map(function(f){return f[1];}),backgroundColor:['#0070F2','#1B90FF','#00A9A4','#2E9C3C'],borderRadius:5}]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+          scales:{x:{ticks:{font:{size:9},precision:0}},y:{ticks:{font:{size:10}}}}}};
+    }
+    else if(type==='fleet'){
+      var K4=a.k||{};
+      var fd=[['Operating assets',Number(K4.operatingAssets)||0],['Sites online',Number(K4.sitesOnline)||0]];
+      var onlineMwh=Number(K4.storageOnlineMwh)||0, subMwh=Number(K4.storageSubmittedMwh)||0;
+      cfg={type:'bar',data:{labels:['Operating assets','Sites online','MWh online','MWh submitted'],
+        datasets:[{data:[fd[0][1],fd[1][1],onlineMwh,subMwh],
+          backgroundColor:['#6B4FA0','#2E9C3C','#00A9A4','#1B90FF'],borderRadius:5}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+          tooltip:{callbacks:{label:function(c){return c.label.indexOf('MWh')>=0?(c.raw+' MWh'):(c.raw+'');}}}},
+          scales:{y:{ticks:{font:{size:9}}},x:{ticks:{font:{size:9}}}}}};
+    }
     else if(type==='storage'){var L3=[],D3=[];STAGE.forEach(function(s){L3.push(LBL[s]||s);D3.push(+((a.storageByStage&&a.storageByStage[s])||0).toFixed(1));});cfg={type:'bar',data:{labels:L3,datasets:[{data:D3,backgroundColor:'#1B90FF',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}}},x:{ticks:{font:{size:9}}}}}};}
     if(cfg) _dch[el.id]=new Chart(el,cfg);
   }
@@ -5291,7 +5434,32 @@ var TC={bess:'#0070F2',dcfc:'#00A9A4',solar:'#F0A030',
   function persist(){ var r=_docRef(); if(!r) return; r.set({state:JSON.stringify(state), updatedAt:(firebase.firestore.FieldValue.serverTimestamp?firebase.firestore.FieldValue.serverTimestamp():Date.now())},{merge:true}).catch(function(){}); }
   function load(cb){
     var r=_docRef(); if(!r){ cb&&cb(); return; }
-    r.get().then(function(doc){ if(doc&&doc.exists){ try{ var s=JSON.parse(doc.data().state); state.order=s.order||[]; state.hidden=s.hidden||[]; state.added=s.added||[]; }catch(e){} } cb&&cb(); }).catch(function(){ cb&&cb(); });
+    /* Catalogue first, then this user's layout. A saved layout may name a
+       widget the registry has since retired; apply() skips keys it cannot
+       build, so a retired row degrades to a missing card rather than a crash.
+       A user with NO saved layout gets their vertical's starter set
+       (verticals/{v}.defaultWidgets) — MERGE.md TODO 5. */
+    hydrateWidgets(function(){
+      r.get().then(function(doc){
+        var had=false;
+        if(doc&&doc.exists){ try{ var st=JSON.parse(doc.data().state); state.order=st.order||[]; state.hidden=st.hidden||[]; state.added=st.added||[]; had=true; }catch(e){} }
+        if (had){ cb&&cb(); return; }
+        _seedFromVertical(function(){ cb&&cb(); });
+      }).catch(function(){ cb&&cb(); });
+    });
+  }
+  function _seedFromVertical(done){
+    var v = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.vertical) || '';
+    if (!v || typeof db==='undefined' || !db){ done&&done(); return; }
+    db.collection('verticals').doc(v).get().then(function(d){
+      var list = (d && d.exists && (d.data()||{}).defaultWidgets) || [];
+      var ok=_drawableTypes();
+      list.slice(0,6).forEach(function(t){
+        if (ok.indexOf(t)<0) return;
+        state.added.push({ key:'w-'+t+'-'+Math.random().toString(36).slice(2,6), type:t });
+      });
+      done&&done();
+    }).catch(function(){ done&&done(); });
   }
 
   return {
