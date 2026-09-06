@@ -324,6 +324,7 @@ var TABS = [
   { id:'infra',     label:'Infrastructure', icon:'M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z' },
   { id:'partners',  label:'Partnerships',   icon:'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75', cnt:function(){return STATE.partners.length;} },
   { id:'crm',       label:'Internal CRM',   icon:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8', cnt:function(){return STATE.clients.length;} },
+  { id:'tenants',   label:'Tenants & Users', icon:'M3 21V7l9-4 9 4v14M9 21v-6h6v6M7 11h.01M12 11h.01M17 11h.01', cnt:function(){return STATE.tenants?STATE.tenants.length:0;} },
   { id:'apps',      label:'Applications',   icon:'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
   { id:'improve',   label:'Tool Improvement', icon:'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2 2.1-2.1z', cnt:function(){return STATE.improvements.length;} }
 ];
@@ -364,6 +365,10 @@ function renderEverything(){
   renderCrm();
   renderApps();
   renderImprove();
+  /* Reads Firestore rather than STATE, so it is fired once here and refreshed
+     by its own button — not on every re-render, which would put a collection
+     read behind every unrelated edit on this page. */
+  loadTenants();
 }
 
 /* ── helpers ── */
@@ -962,6 +967,141 @@ function renderApps(){
 }
 
 function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TENANTS & USERS  —  the live control plane (MERGE.md TODO 8)
+   ══════════════════════════════════════════════════════════════════════════
+   Client Inventory above is SEED_CLIENTS: a hand-kept book of business, good
+   for status and ownership, and completely unrelated to what the platform
+   enforces. This tab reads omega_orgs — the record the security rules
+   resolve, the portals brand from, and billing hangs off.
+
+   Every mutation goes through /api, never straight to Firestore. The API
+   verifies the caller's ID token, and set-role additionally mints custom
+   claims so Storage rules and the other functions can trust the role without
+   a read. A console that wrote these documents directly would leave the
+   claims stale and the two sources disagreeing.
+   ══════════════════════════════════════════════════════════════════════════ */
+STATE.tenants = STATE.tenants || [];
+
+function _tnStatusChip(st){
+  return st==='active' ? 'good' : st==='pending' ? 'warn'
+       : st==='suspended' ? 'bad' : st==='cancelled' ? 'bad' : 'neutral';
+}
+
+/* Staff-only endpoints want a bearer token. Kept in one place so a missing
+   sign-in fails loudly here rather than as a 401 with no explanation. */
+function _authedPost(path, body){
+  var u = auth && auth.currentUser;
+  if (!u) return Promise.reject(new Error('Not signed in'));
+  return u.getIdToken().then(function(tok){
+    return fetch(path, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+tok },
+      body: JSON.stringify(body||{})
+    }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if (!r.ok) throw new Error(j.error || (r.status+' '+r.statusText));
+        return j;
+      });
+    });
+  });
+}
+
+function loadTenants(){
+  if (!db){ document.getElementById('tn-body').innerHTML='<div class="empty">Not connected.</div>'; return; }
+  db.collection('omega_orgs').get().then(function(sn){
+    var rows=[];
+    sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
+    rows.sort(function(a,b){ return String(a.name||a._id).localeCompare(String(b.name||b._id)); });
+    STATE.tenants = rows;
+    renderTenants();
+    renderTabs();
+  }).catch(function(e){
+    document.getElementById('tn-body').innerHTML =
+      '<div class="empty">Could not read omega_orgs — '+esc(e.message||'permission denied')+'</div>';
+  });
+}
+
+function renderTenants(){
+  var rows = STATE.tenants || [];
+  var cnt=document.getElementById('tn-count'); if(cnt) cnt.textContent=rows.length;
+
+  var pending = rows.filter(function(r){ return (r.status||'')==='pending'; });
+  var pw=document.getElementById('tn-pending-wrap');
+  if (pw){
+    pw.style.display = pending.length ? '' : 'none';
+    var pc=document.getElementById('tn-pending-count'); if(pc) pc.textContent=pending.length;
+    document.getElementById('tn-pending').innerHTML = pending.map(function(r){
+      return '<div class="info-card"><div class="ic-top"><div>'
+        + '<div class="ic-name">'+esc(r.name||r._id)+'</div>'
+        + '<div class="ic-sub">'+esc(r._id)+(r.vertical?' · '+esc(r.vertical):'')+'</div></div>'
+        + '<span class="chip warn">pending</span></div>'
+        + '<div class="ic-actions">'
+        + '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;approve&quot;)">Approve</button>'
+        + '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reject&quot;)">Reject</button>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  if (!rows.length){
+    document.getElementById('tn-body').innerHTML='<div class="empty">No tenants yet. Run <code>npm run seed:apply</code> to populate omega_orgs.</div>';
+    return;
+  }
+  var html='<table class="tbl"><thead><tr><th>Tenant</th><th>orgId</th><th>Vertical</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var st=r.status||'active';
+    html += '<tr><td>'+esc(r.name||r._id)+'</td>'
+         +  '<td class="sub-txt">'+esc(r._id)+'</td>'
+         +  '<td class="sub-txt">'+esc(r.vertical||'—')+'</td>'
+         +  '<td><span class="chip '+_tnStatusChip(st)+'">'+esc(st)+'</span></td>'
+         +  '<td>'
+         +  (st==='suspended'
+              ? '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
+              : '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
+         +  ' <button onclick="openTenantUsers(&quot;'+esc(r._id)+'&quot;)">Users</button>'
+         +  '</td></tr>'
+         +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="5"></td></tr>';
+  });
+  document.getElementById('tn-body').innerHTML = html+'</tbody></table>';
+}
+
+function tenantAction(orgId, action){
+  var verb = { approve:'approve', reject:'REJECT', suspend:'SUSPEND', reactivate:'reactivate' }[action]||action;
+  /* Reject and suspend are the two that a customer feels immediately, so they
+     are the two that ask. Approve is additive and reversible by suspending. */
+  if ((action==='reject'||action==='suspend') &&
+      !window.confirm('This will '+verb+' '+orgId+' for every user on it. Continue?')) return;
+  _authedPost('/api/tenant-approve', { orgId:orgId, action:action })
+    .then(function(){ loadTenants(); })
+    .catch(function(e){ window.alert('Could not '+action+' '+orgId+':\n\n'+(e.message||e)); });
+}
+
+function openTenantUsers(orgId){
+  var rowId='tn-users-'+orgId.replace(/[^A-Za-z0-9_-]/g,'_');
+  var tr=document.getElementById(rowId); if(!tr) return;
+  if (tr.style.display!=='none'){ tr.style.display='none'; return; }
+  tr.style.display='';
+  var cell=tr.firstChild; cell.innerHTML='<div class="sub-txt">Loading members…</div>';
+  db.collection('omega_orgs').doc(orgId).collection('members').get().then(function(sn){
+    if (sn.empty){ cell.innerHTML='<div class="sub-txt">No members yet — nobody from '+esc(orgId)+' has signed in.</div>'; return; }
+    var h='<table class="tbl"><thead><tr><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody>';
+    sn.forEach(function(d){
+      var m=d.data()||{}, role=m.role||'member';
+      h += '<tr><td class="sub-txt">'+esc(m.email||d.id)+'</td><td>'
+        +  '<select onchange="setMemberRole(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(d.id)+'&quot;,this.value)">'
+        +  ['owner','admin','member','viewer'].map(function(r){
+             return '<option value="'+r+'"'+(role===r?' selected':'')+'>'+r+'</option>'; }).join('')
+        +  '</select></td><td class="sub-txt">'+esc(m.status||'active')+'</td></tr>';
+    });
+    cell.innerHTML=h+'</tbody></table>';
+  }).catch(function(e){ cell.innerHTML='<div class="sub-txt">Could not read members — '+esc(e.message||'denied')+'</div>'; });
+}
+
+function setMemberRole(orgId, uid, role){
+  _authedPost('/api/set-role', { orgId:orgId, targetUid:uid, role:role })
+    .catch(function(e){ window.alert('Could not set role:\n\n'+(e.message||e)); openTenantUsers(orgId); openTenantUsers(orgId); });
+}
 
 /* ── Import / Update Applications — publish catalog to Firestore. ADMIN ONLY. ── */
 function publishApps(){

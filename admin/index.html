@@ -660,6 +660,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
     </div>
 
     <!-- ════ TAB: APPLICATIONS ════ -->
+    <!-- TENANTS & USERS — the live control plane. Client Inventory above is a
+         hand-maintained book of business; this reads omega_orgs, which is what
+         the rules and every portal actually resolve against. -->
+    <div class="tab-panel" id="tab-tenants">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Tenants &amp; Users<span class="cnt" id="tn-count">0</span></div>
+          <div class="block-sub">Live from <code>omega_orgs</code>. Approve signups, set tier, suspend an account, and change who holds which role — the same records the security rules read.</div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-ghost" onclick="loadTenants()">&#8635; Refresh</button>
+        </div>
+      </div>
+      <div id="tn-pending-wrap" style="display:none;margin-bottom:16px">
+        <div class="block-title" style="font-size:14px;margin-bottom:8px">Pending signups<span class="cnt" id="tn-pending-count">0</span></div>
+        <div id="tn-pending"></div>
+      </div>
+      <div id="tn-body"><div class="empty">Loading tenants…</div></div>
+    </div>
+
     <div class="tab-panel" id="tab-apps">
       <div class="block-head">
         <div>
