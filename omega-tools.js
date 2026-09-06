@@ -206,6 +206,17 @@
       file:'https://financing.csebuilders.com/', soon:false, tier:TIER.ALL,
       icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 
+    /* SILMARILLION 2.0 — the joint-development surface.
+       tier:ENTERPRISE keeps it off every tenant's palette by default; JV
+       members are given it through unlockedTools on their billing doc, so
+       adding a partner to the JV is a console action rather than a deploy and
+       no domain is hardcoded here. Absolute URL because the portal is its own
+       origin — the href builder above passes those through untouched. */
+    { key:'osaportal', name:'OSA Portal', category:'marketplace',
+      desc:'JV verification console, referred-deal pipeline and portfolio matrix.',
+      file:'https://osa.clearskyomega.com/', soon:false, tier:TIER.ENTERPRISE,
+      icon:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
+
     { key:'aggregators', name:'Aggregators', category:'marketplace',
       desc:'VPP / DR aggregator network & dispatch enrollment.',
       file:'/aggregators.html', soon:true, tier:TIER.ALL,

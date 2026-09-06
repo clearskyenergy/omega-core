@@ -573,6 +573,15 @@ function renderClients(){
 }
 function setClFilter(f){ clFilter=f; renderClients(); }
 function shortUrl(u){ return String(u).replace(/^https?:\/\//,'').replace(/\/$/,''); }
+/* DNS is where a tenant cutover actually happens — repointing the customer's
+   domain at the omega-core Vercel project is the last step and the one that is
+   reversible only as fast as TTL allows. Deep-link straight to the zone rather
+   than making somebody hunt for it mid-cutover. Registrar-specific by design:
+   every domain in this book of business is on GoDaddy, and a generic "manage
+   DNS" link that guesses wrong is worse than none. */
+function godaddyDns(domain){
+  return 'https://dcc.godaddy.com/manage/' + encodeURIComponent(String(domain||'')) + '/dns';
+}
 
 /* ── STATUS BOARD ── */
 var stFilter='all';
@@ -787,6 +796,7 @@ function renderDrawerBody(c){
     + '<span class="k">Domain</span><span class="v mono">'+esc(c.domain||'—')+'</span>'
     + '<span class="k">Repository</span><span class="v mono">'+esc(c.repo||'—')+'</span>'
     + '<span class="k">Deployment</span><span class="v">'+(c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener" style="color:var(--cs-sky)">'+esc(shortUrl(c.url))+'</a>':'—')+'</span>'
+    + '<span class="k">DNS</span><span class="v">'+(c.domain?'<a href="'+esc(godaddyDns(c.domain))+'" target="_blank" rel="noopener" style="color:var(--cs-sky)">'+esc(c.domain)+' zone at GoDaddy</a>':'—')+'</span>'
     + '<span class="k">Status</span><span class="v">'+statusDot(c.status)+'</span>'
     + '<span class="k">Progress</span><span class="v">'+(c.progress||0)+'%</span>'
     + '<span class="k">Owner</span><span class="v">'+esc(c.owner||'—')+'</span>'

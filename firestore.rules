@@ -1318,11 +1318,45 @@ service cloud.firestore {
        as its own deploy once omega_orgs is seeded for every live tenant.
        ============================================================ */
     match /projects/{projectId} {
+
+      /* ── JOINT DEVELOPMENT (SILMARILLION 2.0) ──────────────────────
+         orgsInvolved[] is the co-development roster: the orgs working this
+         project WITH its owner under a joint development agreement. Same shape
+         and the same reason as deals.orgsInvolved — one array-contains clause
+         instead of N ORed field comparisons, each of which would need its own
+         composite index and would silently start refusing queries the day
+         somebody signs a JDA with one more partner.
+
+         orgId stays the OWNER. The roster is additive; it never moves
+         ownership, and delete below is deliberately not extended to it — a
+         partner leaving a JDA must not be able to take the project with them.
+
+         .get('orgsInvolved', []) is deliberate. Every project written before
+         this field existed has no such key, and a bare field reference on a
+         missing key fails the WHOLE rule evaluation, which reads to the user
+         as a total outage rather than as one absent value. Same reasoning as
+         pActive() in the partner block above. */
+      function collabRoster() { return resource.data.get('orgsInvolved', []); }
+      function isCollaborator() {
+        return signedIn() && userOrg() != '' && userOrg() in collabRoster();
+      }
+      /* THE ROSTER IS NOT SELF-SERVE. A collaborator who could write
+         orgsInvolved would be able to add their own org to any project they can
+         already see — the entire access model undone in a single write. It is
+         the same trap deals guards with touchesAttribution(), and it gets the
+         same answer: owner and staff set the roster, everyone else must hand
+         both it and orgId back unchanged. */
+      function rosterAndOwnerUnchanged() {
+        return request.resource.data.get('orgsInvolved', []) == collabRoster()
+            && request.resource.data.orgId == resource.data.orgId;
+      }
+
       allow read: if request.auth != null
                   && (
                     resource.data.orgId == userOrg()
                     || resource.data.uid == request.auth.uid
                     || ownsDemoBucket(resource.data.orgId)
+                    || isCollaborator()
                     || isConsoleViewer()
                     || isOmegaStaff()
                   );
@@ -1346,6 +1380,7 @@ service cloud.firestore {
                         ownsDemoBucket(resource.data.orgId)
                         && request.resource.data.orgId == resource.data.orgId
                       )
+                      || (isCollaborator() && rosterAndOwnerUnchanged())
                       || isAdmin()
                       || isOmegaStaff()
                     );
@@ -1356,6 +1391,68 @@ service cloud.firestore {
                       || ownsDemoBucket(resource.data.orgId)
                       || isAdmin()
                     );
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       PROJECT TASK BOARD  —  project_tasks/{orgId__projectId}
+       ════════════════════════════════════════════════════════════════════════
+       ⚠ THIS COLLECTION HAD NO RULE AT ALL, WHICH MEANS DEFAULT DENY.
+       index.html's TASKFLOW has been reading and writing it the whole time and
+       both callbacks swallow the failure — persist() ends in
+       .catch(function(){}), load() falls back to a blank board — so the board
+       rendered, saved nothing, and reported nothing. Every user of it lost
+       their tasks on reload. The rule is the fix; the silent catches are worth
+       removing on their own account.
+
+       ONE BOARD PER PROJECT, NOT ONE PER ORG. The id keeps its historic
+       `<orgId>__<projectId>` shape, but that org is the PROJECT OWNER's and
+       never the viewer's. Keyed by the viewer instead, every partner on a JDA
+       opens a private board of their own and "assign each other tasks" quietly
+       means "write notes nobody else can see".
+
+       Reading the roster costs one get() on the project. That is the price of
+       a shared board, and it is charged only to collaborators — the owner's
+       own org matches on the first clause and short-circuits before the get.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /project_tasks/{taskDocId} {
+
+      function taskRoster(pid) {
+        return pid != '' && exists(/databases/$(database)/documents/projects/$(pid))
+             ? get(/databases/$(database)/documents/projects/$(pid)).data.get('orgsInvolved', [])
+             : [];
+      }
+      function mayWorkBoard(o, pid) {
+        return signedIn()
+          && (
+            (o != '' && o == userOrg())
+            || ownsDemoBucket(o)
+            || (userOrg() != '' && userOrg() in taskRoster(pid))
+            || isOmegaStaff()
+            || isAdmin()
+          );
+      }
+
+      allow read:   if resource != null
+                    && mayWorkBoard(resource.data.get('orgId', ''),
+                                    resource.data.get('projectId', ''));
+
+      allow create: if mayWorkBoard(request.resource.data.get('orgId', ''),
+                                    request.resource.data.get('projectId', ''));
+
+      /* orgId and projectId are the addressing fields the read rule trusts. An
+         update that could move either would let a caller re-point a board they
+         are allowed to write at a project they are not. */
+      allow update: if resource != null
+                    && mayWorkBoard(resource.data.get('orgId', ''),
+                                    resource.data.get('projectId', ''))
+                    && request.resource.data.get('orgId', '')
+                       == resource.data.get('orgId', '')
+                    && request.resource.data.get('projectId', '')
+                       == resource.data.get('projectId', '');
+
+      /* A board is project history. Flag, don't drop — the convention CLAUDE.md
+         sets for migration scripts holds for the live app too. */
+      allow delete: if false;
     }
 
     /* ════════════════════════════════════════════════════════════════════════

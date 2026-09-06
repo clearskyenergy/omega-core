@@ -189,6 +189,48 @@ more from the palette; tenant admin can set an org-level default layout.
 - Identity is revealed only when the customer accepts a quote.
 - Notifications via `api/notify.js` on write.
 
+## Silmarillion 2.0 — joint development
+
+The OMEGA operating system is named **Silmarillion 2.0**. Today it is an
+internal codename: it appears in rules comments, this file, and the admin
+console, and it is deliberately NOT on a tenant-facing page or a public
+domain yet. (Single words and titles are not copyrightable and trademarks are
+class-scoped — the Palantir/Anduril precedent — but publishing is a nearer
+class to a book title than defense is, so keep the decision explicit rather
+than accidental.)
+
+What it names: co-development across orgs, on ONE project.
+
+```
+projects/{id}.orgId              the OWNER. never moves.
+projects/{id}.orgsInvolved[]     the JDA roster. additive. owner+staff write it.
+project_tasks/{ownerOrg__id}     ONE board per project, keyed by the OWNER's org
+  flow[].tasks[].assigneeOrg     which org owns the task
+  flow[].tasks[].assignee        a person, own-org only (see below)
+Storage projects/{id}/{file}     document exchange, gated on the same roster
+```
+
+Rules that matter:
+- `orgsInvolved[]` is array-contains, matching `deals.orgsInvolved` — one
+  clause, one index, and it survives the seventh partner. Every read uses
+  `.get('orgsInvolved', [])`; a bare reference fails the WHOLE evaluation on
+  documents written before the field existed.
+- A collaborator may READ and UPDATE the project but must hand back `orgId`
+  and `orgsInvolved` unchanged. Otherwise a partner adds themselves to any
+  project they can see. Same trap `deals` guards with `touchesAttribution()`.
+- DELETE is not extended to collaborators. A partner leaving a JDA must not
+  take the project with them.
+- Storage `projects/**` is the first cross-service rule in that file — it
+  reads the roster out of Firestore. Read is NOT `signedIn()` the way
+  `fin_projects` is: a financing marketplace wants browsers, a JDA does not.
+
+Assignment is to an ORG, not a person, across a JDA. `team_members` is
+readable only for your own org, so this page cannot enumerate a partner's
+staff; an org-level assignee needs no extra read because the roster is already
+on the project. Person-level cross-org assignment needs a `team_members` read
+widening that has not been designed yet — do not fake it with an empty
+dropdown.
+
 ## Migration safety
 
 - Data does NOT move. All repos already write to `clearsky-portal`.

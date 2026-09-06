@@ -5298,7 +5298,7 @@ var TASKFLOW = (function(){
     var out=[];
     for (var i=0;i<T.length;i++){
       var ph=T[i], tasks=[];
-      for (var j=0;j<ph.tasks.length;j++){ tasks.push({ id:_uid(), text:ph.tasks[j], status:'todo', dept:ph.dept, assignee:'' }); }
+      for (var j=0;j<ph.tasks.length;j++){ tasks.push({ id:_uid(), text:ph.tasks[j], status:'todo', dept:ph.dept, assignee:'', assigneeOrg:'' }); }
       out.push({ key:ph.key, name:ph.name, dept:ph.dept, stage:ph.stage, tasks:tasks });
     }
     return out;
@@ -5307,20 +5307,46 @@ var TASKFLOW = (function(){
 
   var _proj = null;        // {id,name,stage}
   var _view = 0;           // which step/phase is being viewed
-  var _flow = [];          // [{key,name,dept,stage,tasks:[{id,text,status,dept,assignee}]}]
+  var _flow = [];          // [{key,name,dept,stage,tasks:[{id,text,status,dept,assignee,assigneeOrg}]}]
+  /* There is no toast in this page, and a board that fails quietly is the bug
+     we just finished fixing — so the board carries its own status line. */
+  var _status = '';
+  function _note(m){
+    _status = m || '';
+    var h = document.getElementById('tf-status');
+    if (h){ h.textContent = _status; h.style.display = _status ? 'block' : 'none'; }
+  }
   var _projects = [];
   var _saveT = null;
 
+  /* THE PROJECT OWNER'S ORG, NOT THE VIEWER'S. On a joint development each
+     partner has a different currentOrg, and keying the board by the viewer
+     hands every partner a private board of their own — "assign each other
+     tasks" quietly becoming "write notes nobody else can see". The id keeps
+     its historic <orgId>__<projectId> shape; only which org goes in it moves.
+     _boardOrg() is used by persist() too: the rule reads the orgId FIELD, so
+     if the field and the id disagree the write is refused. */
+  function _boardOrg(){
+    return (_proj && _proj.orgId) || (typeof currentOrg!=='undefined' && currentOrg) || 'default';
+  }
   function _docRef(){
     if (typeof db==='undefined' || !db || !_proj) return null;
-    var org = (typeof currentOrg!=='undefined' && currentOrg) || 'default';
-    return db.collection('project_tasks').doc(org+'__'+_proj.id);
+    return db.collection('project_tasks').doc(_boardOrg()+'__'+_proj.id);
   }
   function scheduleSave(){ clearTimeout(_saveT); _saveT=setTimeout(persist,500); }
   function persist(){
     var r=_docRef(); if(!r) return;
-    r.set({ orgId:(currentOrg||''), projectId:_proj.id, flow:JSON.stringify(_flow),
-            updatedAt:(firebase.firestore.FieldValue.serverTimestamp?firebase.firestore.FieldValue.serverTimestamp():Date.now()) },{merge:true})['catch'](function(){});
+    _note('');
+    r.set({ orgId:_boardOrg(), projectId:_proj.id, flow:JSON.stringify(_flow),
+            updatedAt:(firebase.firestore.FieldValue.serverTimestamp?firebase.firestore.FieldValue.serverTimestamp():Date.now()) },{merge:true})['catch'](function(e){
+      /* This used to be an empty catch. project_tasks had no security rule at
+         all, so every write was denied, and the empty catch meant the board
+         looked like it saved and silently discarded the work. Never swallow
+         this one again — a task board that loses tasks without saying so is
+         worse than one that refuses to load. */
+      console.error('[taskflow] save failed:', e && e.message ? e.message : e);
+      _note('Task board could not save — '+((e&&e.code)||'permission denied')+'. Your changes are not stored.');
+    });
   }
   function load(cb){
     var r=_docRef(); if(!r){ _flow=_defaultFlow(); cb&&cb(); return; }
@@ -5334,7 +5360,14 @@ var TASKFLOW = (function(){
       }
       if (!_flow || !_flow.length) _flow=_defaultFlow();
       cb&&cb();
-    })['catch'](function(){ _flow=_defaultFlow(); cb&&cb(); });
+    })['catch'](function(e){
+      /* Falling back to a blank board is right — the tool must still open. But
+         doing it silently is how a denied read looked identical to a brand new
+         project for as long as project_tasks had no rule. Say which it was. */
+      console.error('[taskflow] load failed:', e && e.message ? e.message : e);
+      _note('Task board could not load — showing the default checklist, not your saved one.');
+      _flow=_defaultFlow(); cb&&cb();
+    });
   }
   function _migrateOld(tasksObj){
     var f=_defaultFlow();
@@ -5351,6 +5384,27 @@ var TASKFLOW = (function(){
     })['catch'](function(){ cb&&cb([]); });
   }
 
+  /* ── CROSS-ORG ASSIGNMENT (Silmarillion 2.0) ──────────────────────────────
+     On a joint development a task is handed to a PARTNER ORG — "NextNRG does
+     the interconnection study", "OSA verifies" — not to a named person inside
+     it. That is also the only thing the rules can support today: team_members
+     is readable only for your own org, so this page cannot enumerate a
+     partner's staff, and pretending otherwise would render an empty dropdown
+     that looks broken. Org-level assignment needs no extra read: the roster is
+     already on the project document. */
+  function _orgOptions(selected){
+    var owner = (_proj && _proj.orgId) || (typeof currentOrg!=='undefined' && currentOrg) || '';
+    var roster = (_proj && _proj.orgsInvolved) || [];
+    var opts = '<option value="">Any org</option>', seen = {};
+    function add(o, suffix){
+      if (!o || seen[o]) return; seen[o]=1;
+      opts += '<option value="'+escHtml(o)+'"'+(selected===o?' selected':'')+'>'
+            + escHtml(o)+(suffix||'')+'</option>';
+    }
+    add(owner, ' (owner)');
+    for (var i=0;i<roster.length;i++) add(roster[i], '');
+    return opts;
+  }
   function _teamOptions(selected){
     var opts='<option value="">Anyone</option>', seen={};
     if (typeof _teamMembers!=='undefined'){
@@ -5393,7 +5447,11 @@ var TASKFLOW = (function(){
 
   function render(){
     var host=document.getElementById('tf-body'); if(!host) return;
-    if (!_proj){ host.innerHTML='<div class="tf-empty">Select a project above to see its task flow.</div>'; _renderProgress(); return; }
+    var statusBar = '<div id="tf-status" style="display:'+(_status?'block':'none')
+                  + ';margin:0 0 10px;padding:9px 12px;border-radius:8px;background:#fdecea;'
+                  + 'color:#8a1c12;border:1px solid #f5c6c0;font-weight:600;font-size:13px">'
+                  + escHtml(_status)+'</div>';
+    if (!_proj){ host.innerHTML=statusBar+'<div class="tf-empty">Select a project above to see its task flow.</div>'; _renderProgress(); return; }
     if (_view<0 || _view>=_flow.length) _view = activeStep();
     var active = activeStep();
 
@@ -5431,7 +5489,8 @@ var TASKFLOW = (function(){
            +  '<input class="tf-task-txt-input" value="'+escHtml(tk.text)+'" onchange="TASKFLOW.editTask('+_view+','+t+',this.value)">'
            +  '<select class="tf-status-sel '+meta.cls+'" onchange="TASKFLOW.setStatus('+_view+','+t+',this.value)">'+_statusOptions(tk.status)+'</select>'
            +  '<select class="tf-assign-dept" onchange="TASKFLOW.setDept('+_view+','+t+',this.value)">'+_deptOptions(tk.dept||ph.dept)+'</select>'
-           +  '<select class="tf-assign-who" onchange="TASKFLOW.setAssignee('+_view+','+t+',this.value)">'+_teamOptions(tk.assignee||'')+'</select>'
+           +  '<select class="tf-assign-who" onchange="TASKFLOW.setAssigneeOrg('+_view+','+t+',this.value)" title="Assign to an organisation">'+_orgOptions(tk.assigneeOrg||'')+'</select>'
+           +  '<select class="tf-assign-who" onchange="TASKFLOW.setAssignee('+_view+','+t+',this.value)" title="Assign to a person in your own org">'+_teamOptions(tk.assignee||'')+'</select>'
            +  '<button class="tf-task-del" onclick="TASKFLOW.deleteTask('+_view+','+t+')" title="Delete task">&times;</button>'
            +  '</div>';
     }
@@ -5444,7 +5503,7 @@ var TASKFLOW = (function(){
     panel += '</div>';
     panel += '<button class="tf-add-phase" onclick="TASKFLOW.addPhase()">+ Add phase</button>';
 
-    host.innerHTML = rail + panel;
+    host.innerHTML = statusBar + rail + panel;
     _renderProgress();
     setTimeout(function(){ var s=document.querySelector('#tf-stepper .tf-step.viewing'); if(s&&s.scrollIntoView) s.scrollIntoView({inline:'center',block:'nearest'}); }, 30);
   }
@@ -5463,9 +5522,10 @@ var TASKFLOW = (function(){
   function setStatus(p,t,v){ _flow[p].tasks[t].status=v; scheduleSave(); render(); }
   function setDept(p,t,v){ _flow[p].tasks[t].dept=v; scheduleSave(); }
   function setAssignee(p,t,v){ _flow[p].tasks[t].assignee=v; scheduleSave(); }
+  function setAssigneeOrg(p,t,v){ _flow[p].tasks[t].assigneeOrg=v; scheduleSave(); }
   function editTask(p,t,v){ _flow[p].tasks[t].text=v; scheduleSave(); }
   function deleteTask(p,t){ _flow[p].tasks.splice(t,1); scheduleSave(); render(); }
-  function addTask(p){ _flow[p].tasks.push({ id:_uid(), text:'New task', status:'todo', dept:_flow[p].dept, assignee:'' }); scheduleSave(); render(); }
+  function addTask(p){ _flow[p].tasks.push({ id:_uid(), text:'New task', status:'todo', dept:_flow[p].dept, assignee:'', assigneeOrg:'' }); scheduleSave(); render(); }
   function renamePhase(p,v){ _flow[p].name=v; scheduleSave(); }
   function setPhaseDept(p,v){ _flow[p].dept=v; scheduleSave(); }
   function deletePhase(p){ if(!confirm('Delete this phase and its tasks?')) return; _flow.splice(p,1); scheduleSave(); render(); }
@@ -5506,7 +5566,7 @@ var TASKFLOW = (function(){
       if (blk && blk.scrollIntoView) blk.scrollIntoView({behavior:'smooth', block:'start'});
       selectProject(id);
     },
-    setStatus:setStatus, setDept:setDept, setAssignee:setAssignee,
+    setStatus:setStatus, setDept:setDept, setAssignee:setAssignee, setAssigneeOrg:setAssigneeOrg,
     editTask:editTask, deleteTask:deleteTask, addTask:addTask,
     renamePhase:renamePhase, setPhaseDept:setPhaseDept, deletePhase:deletePhase, addPhase:addPhase,
     toggleManual:toggleManual, goStep:goStep, scrollSteps:scrollSteps,

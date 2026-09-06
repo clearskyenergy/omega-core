@@ -197,6 +197,39 @@ service firebase.storage {
       allow write: if signedIn() && okFile();
     }
 
+    /* -------- Joint development documents  —  SILMARILLION 2.0 --------
+       projects/{projectId}/{fileName}. Where documents on a co-developed
+       project live, so partners under a JDA pass drawings, studies and signed
+       paper back and forth in the same place the project already is.
+
+       ⚠ FIRST CROSS-SERVICE RULE IN THIS FILE. It reads the project's roster
+       out of Firestore because Storage has no other way to know who is on a
+       JDA — orgsInvolved[] IS the access model and it lives over there. That
+       costs one Firestore read per request and is billed as one, so the cheap
+       branches are ordered first: staff and the owning org resolve before the
+       lookup is ever reached.
+
+       READ IS NOT signedIn(). fin_projects above is deliberately open to any
+       signed-in user because a financing marketplace wants partners browsing
+       open deals. A JDA is the opposite: a private agreement between named
+       parties, and these files carry the site, the sponsor and the economics.
+       Only the roster sees them. */
+    match /projects/{projectId}/{fileName} {
+      function projDoc() {
+        return firestore.get(/databases/(default)/documents/projects/$(projectId)).data;
+      }
+      function onProject() {
+        return signedIn()
+          && firestore.exists(/databases/(default)/documents/projects/$(projectId))
+          && (
+            projDoc().get('orgId', '') == userOrg()
+            || userOrg() in projDoc().get('orgsInvolved', [])
+          );
+      }
+      allow read:  if signedIn() && (isAdminDomain() || onProject());
+      allow write: if signedIn() && (isAdminDomain() || onProject()) && okFile();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
