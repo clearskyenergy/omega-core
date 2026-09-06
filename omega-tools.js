@@ -509,6 +509,31 @@
        (Option A / the admin console itself, which is same-repo as the tools). */
     TOOL_HOST: 'https://tools.csebuilders.com',
 
+    /* ── WHAT IS STILL ON THE OLD HOST ────────────────────────────────────
+       TOOL_HOST sent EVERY tool link to tools.csebuilders.com, which was
+       right before the consolidation and is wrong now: 32 of the 42
+       registered tools live in this repo, and pointing at the old
+       deployment meant every fix made here was invisible. The Cost
+       Estimator was the case that surfaced it — registered in omega-core,
+       linked to a host that has never had the file, so it 404s. The Site
+       Finder's new "Cost site" button had the same problem: users were
+       opening the old copy without it.
+
+       THE LIST IS THE REMOTE ONES, NOT THE LOCAL ONES, deliberately. It
+       shrinks as consolidation continues, and it reaches empty, at which
+       point TOOL_HOST can be deleted. Listing the local ones instead would
+       grow forever and a tool added here tomorrow would default to a host
+       that has never heard of it.
+
+       Absolute URLs in tool.file are untouched — they are elsewhere on
+       purpose. */
+    REMOTE_TOOLS: ['intake', 'ahj', 'procurement', 'aggregators',
+                   'offtakers', 'spatco_ev'],
+
+    isRemote: function (tool) {
+      return !!tool && this.REMOTE_TOOLS.indexOf(tool.key) >= 0;
+    },
+
     /* Resolve the full href a given tenant should use for a tool.
        - action tool          => null (caller opens the project modal instead).
        - enterprise override   => the tenant's own bespoke URL (used as-is).
@@ -538,7 +563,8 @@
       // no TOOL_HOST prefix and no ?org= param appended.
       if (/^https?:\/\//i.test(path)) return path;
 
-      var host = this.TOOL_HOST || '';
+      /* Same-origin unless this tool has not been consolidated yet. */
+      var host = this.isRemote(tool) ? (this.TOOL_HOST || '') : '';
       var base = host ? (host.replace(/\/+$/, '') + path) : path;
 
       // Append org scope so the shared tool knows whose data to load/save.
@@ -573,6 +599,29 @@
     isUnlocked: function (tool, workspace) {
       if (!this.isVisible(tool, workspace)) return false;
       if (!workspace) return true;              // admin/internal sees all
+
+      /* ── toolAccess: THE ALLOWLIST, AND IT WINS ────────────────────────
+         CLAUDE.md's formula ends with "∩ member.toolAccess if set". The
+         intersection was never implemented, so there was no way to say "this
+         account gets these three tools and nothing else" — only ways to ADD.
+         Solela / Chileasing sat on enterprise with all 42 unlocked and the
+         only lever available was to list 39 exclusions, which every new tool
+         would then quietly defeat.
+
+         An allowlist is checked FIRST and short-circuits, so it cannot be
+         widened by the tier, by unlockedTools or by requiredTools underneath
+         it. That is the point: an allowlist that something else can override
+         is not an allowlist. Absent, nothing changes. */
+      if (workspace.toolAccess && workspace.toolAccess.length)
+        return workspace.toolAccess.indexOf(tool.key) >= 0;
+
+      /* ── toolOverrides: the per-tool exception, also documented and also
+         never implemented. false removes a tool the tier would have granted;
+         true adds one it would not. Checked before the tier for both. */
+      var ov = workspace.toolOverrides;
+      if (ov && Object.prototype.hasOwnProperty.call(ov, tool.key))
+        return ov[tool.key] === true;
+
       var tier = workspace.tierLevel;
       if (typeof tier !== 'number') tier = TIER.ENTERPRISE; // internal defaults open
       if (workspace.requiredTools &&

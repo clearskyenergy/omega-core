@@ -2704,8 +2704,53 @@ auth.onAuthStateChanged(user => {
     currentUser = user;
     currentOrg = ws.orgId;          // scopes this user's own data (developer) or partner org
 
+    /* ── WHAT THIS ACCOUNT MAY ACTUALLY OPEN ──────────────────────────────
+       unlockedTools comes from /config.js, which is the legacy per-deployment
+       file and grants the same list to everybody it serves. So a tenant's
+       real entitlement — the one ClearSky sells and the console edits — was
+       never consulted here: Solela / Chileasing sat on enterprise with all 42
+       tools because config.js said so, and there was no way to say otherwise
+       short of editing a deployment file.
+
+       billing/current is the record the account page and the tool gate both
+       read, so it is the right place for this. Two fields, both optional and
+       both already described in CLAUDE.md:
+
+         toolAccess     an allowlist. When set, ONLY these, whatever the tier.
+         toolOverrides  per-tool exceptions either way.
+
+       NON-BLOCKING AND FAIL-OPEN. The workspace is already bound and the app
+       is already up; this only ever narrows what is offered. A failed read
+       must not lock a paying customer out of tools they have — so on any
+       error the tier decides, exactly as it did before. */
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
+    (function () {
+      if (!db || !ws.orgId) return;
+      db.collection('omega_orgs').doc(ws.orgId)
+        .collection('billing').doc('current').get()
+        .then(function (snap) {
+          if (!snap.exists) return;
+          var b = snap.data() || {};
+          var changed = false;
+          if (Array.isArray(b.toolAccess) && b.toolAccess.length) {
+            ws.toolAccess = b.toolAccess.slice(); changed = true;
+          }
+          if (b.toolOverrides && typeof b.toolOverrides === 'object' &&
+              Object.keys(b.toolOverrides).length) {
+            ws.toolOverrides = b.toolOverrides; changed = true;
+          }
+          if (!changed) return;
+          window.OMEGA_WORKSPACE = ws;
+          if (window.console) {
+            console.info('[tools] entitlement from billing \u2014 ' +
+              (ws.toolAccess ? ws.toolAccess.length + ' allowed' : 'overrides only'));
+          }
+          try { applyToolLocks(); } catch (e) {}
+          try { if (window.renderApps) renderApps(); } catch (e) {}
+        })
+        .catch(function () { /* tier decides, as before */ });
+    })();
     revealStaffNav(email);
     revealJointDevNav(email);
 
@@ -4737,12 +4782,19 @@ if (document.readyState === 'loading') {
 function applyToolLocks(){
   var ws = window.OMEGA_WORKSPACE;
   if(!ws){ return; }
-  // Enterprise / internal tiers see everything — never lock.
-  if(ws.tierLevel >= 3 || ws.accountTier === 'Enterprise' || ws.accountTier === 'Internal'){ return; }
+  // Enterprise / internal tiers see everything — never lock. Unless an
+  // explicit allowlist says otherwise; see the note below.
+  if(!(ws.toolAccess && ws.toolAccess.length) &&
+     (ws.tierLevel >= 3 || ws.accountTier === 'Enterprise' || ws.accountTier === 'Internal')){ return; }
   // Prefer an explicit unlockedTools allowlist; otherwise fall back to the
   // requiredTools defined per workspace. If neither exists, unlock everything
   // (legacy internal behavior).
-  var list = ws.unlockedTools || ws.requiredTools;
+  /* toolAccess is an ALLOWLIST and outranks everything, including the
+     enterprise/internal early return above — that return exists so a tier-3
+     account is not accidentally locked out, and an explicit allowlist is not
+     an accident. Checked before the list is chosen for that reason. */
+  var list = (ws.toolAccess && ws.toolAccess.length) ? ws.toolAccess
+           : (ws.unlockedTools || ws.requiredTools);
   if(!list){ return; }
   var unlocked = {};
   for(var i=0;i<list.length;i++){ unlocked[list[i]] = true; }
