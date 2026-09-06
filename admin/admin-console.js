@@ -34,22 +34,22 @@
 
    Anyone whose domain is NOT listed here is denied at sign-in.
    ══════════════════════════════════════════════════════════════════════ */
-var ACCESS = {
-  // ── ClearSky team (full admins) ──
-  'clearsky-usa.com':      { role:'admin',        label:'ClearSky' },
-  'csebuilders.com':       { role:'admin',        label:'ClearSky' },
+/* NAMED PEOPLE, NOT A DOMAIN. This console can price tenants, change roles,
+   suspend accounts and mint password-reset links, so "anyone at the company"
+   is the wrong unit. Two addresses hold it.
 
-  // ── Collaborator partners (full visibility · attributed) ──
-  //    EDIT THESE: swap for your real partner domains. Add/remove freely.
-  'amperagecapital.com':   { role:'collaborator', label:'Amperage Capital' },   // example partner
-  'moleculesystems.com':   { role:'collaborator', label:'Molecule Systems' },    // example partner
-  'ogisolar.com':          { role:'collaborator', label:'OGI Solar' },
-  'sunesol.com':           { role:'collaborator', label:'SUNE Solar' }
-  // 'yourpartner.com':    { role:'collaborator', label:'Partner Name' },
-};
+   isAdmin() in firestore.rules is still domain-wide (clearsky-usa.com OR
+   csebuilders.com) and that is what actually enforces every write. This list
+   decides who is shown the console, not what the rules permit — narrowing the
+   rules is a separate, larger change, because isAdmin() also gates
+   omega_contracts, equipment deletes, tenant billing and the org registry. */
+var ADMIN_EMAILS = ['tom@clearsky-usa.com', 'dev@clearsky-usa.com'];
 
 function domainOf(email){ return (email || '').split('@')[1] ? email.split('@')[1].toLowerCase() : ''; }
-function accessFor(email){ return ACCESS[domainOf(email)] || null; }
+function accessFor(email){
+  var e = String(email || '').toLowerCase().trim();
+  return ADMIN_EMAILS.indexOf(e) >= 0 ? { role:'admin', label:'ClearSky' } : null;
+}
 function isAllowed(email){ return !!accessFor(email); }
 
 /* Current signed-in identity's role/label (set at auth). */
@@ -76,27 +76,63 @@ function _wireAuth(){
       var email = user.email || '';
       var access = accessFor(email);
       if (!access){
-        showAuthErr('No access is provisioned for ' + (domainOf(email)||'this domain') + '. Contact ClearSky to be added.');
-        auth.signOut();
+        /* ⚠ NEVER auth.signOut() HERE. This page shares an origin and a
+           Firebase app with the portal, so signing out of the console signs
+           the person out of their whole workspace — for the offence of
+           opening a URL they were not entitled to. Show the wall, leave the
+           session alone. */
+        showNotAuthorised(email);
         return;
       }
       currentUser = user;
-      currentOrg = 'admin';           // single admin data namespace
-      currentRole = access.role;      // 'admin' | 'collaborator'
+      currentOrg = 'admin';
+      currentRole = access.role;
       currentLabel = access.label;
       showApp(user);
       bootData();
     } else {
-      currentUser = null;
-      showLogin();
+      /* No second login form. The console is served from the same origin as
+         the portal and shares its auth session, so a sign-in here would be a
+         second set of credentials for an account that already exists. Send
+         them to the portal to sign in once, and come back. */
+      sendToPortal();
     }
   });
 }
 
-function showLogin(){
-  document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
+function sendToPortal(){
+  var scr = document.getElementById('auth-screen');
+  var app = document.getElementById('app');
+  if (app) app.style.display = 'none';
+  if (!scr) { location.href = '/'; return; }
+  scr.style.display = 'flex';
+  scr.innerHTML =
+      '<div class="auth-card" style="text-align:center">'
+    +   '<h1 style="margin:0 0 6px;font-size:20px">Sign in on the portal</h1>'
+    +   '<p class="auth-note" style="margin:0 0 18px">The Admin Console uses your ClearSky-OMEGA session. '
+    +     'Sign in once on the portal and come straight back.</p>'
+    +   '<a class="btn-google" style="display:inline-block;text-decoration:none;padding:11px 20px" href="/">Go to the portal</a>'
+    + '</div>';
+  /* Bounce automatically if they arrived here cold — a wall with a button is
+     for the case where they DID have a session and it lapsed mid-visit. */
+  setTimeout(function(){ if (!auth.currentUser) location.href = '/'; }, 2500);
 }
+
+function showNotAuthorised(email){
+  var scr = document.getElementById('auth-screen');
+  var app = document.getElementById('app');
+  if (app) app.style.display = 'none';
+  if (!scr) return;
+  scr.style.display = 'flex';
+  scr.innerHTML =
+      '<div class="auth-card" style="text-align:center">'
+    +   '<h1 style="margin:0 0 6px;font-size:20px">Not your console</h1>'
+    +   '<p class="auth-note" style="margin:0 0 18px">' + esc(email) + ' is signed in, but the Admin Console '
+    +     'is limited to named ClearSky administrators. You are still signed in to your workspace.</p>'
+    +   '<a class="btn-google" style="display:inline-block;text-decoration:none;padding:11px 20px" href="/">Back to my portal</a>'
+    + '</div>';
+}
+
 function showApp(user){
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
