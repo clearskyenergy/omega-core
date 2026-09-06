@@ -1409,31 +1409,40 @@ function renderTenants(){
 
   var shown = rows.filter(function(r){ return tnFilter==='all' || _standing(r._bill,r).key===tnFilter; });
 
-  var html = '<div style="margin-bottom:12px">'+fh+'</div>'
-    + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
-    + '<button onclick="openBroadcast()">\u2709 Message '+(tnFilter==='all'?'all tenants':('the '+esc(tnFilter)+' list'))+'</button>'
+  var html = '<div class="filter-row">'+fh+'</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;margin:0 0 12px">'
+    + '<button class="btn-ghost" onclick="openBroadcast()">\u2709 Message '
+    +   (tnFilter==='all'?'all tenants':('the '+esc(tnFilter)+' list'))+'</button>'
     + '<span class="sub-txt">'+shown.length+' shown</span></div>';
 
-  html += '<table class="tbl"><thead><tr><th>Tenant</th><th>orgId</th><th>Plan</th><th>Standing</th><th>Account</th><th>Actions</th></tr></thead><tbody>';
+  /* .table-wrap + .ptable are what every other table on this page uses. The
+     previous markup asked for .tbl, which has no rule anywhere in this
+     stylesheet, so the tenants list rendered as unstyled text while the tabs
+     either side of it looked finished. */
+  html += '<div class="table-wrap"><table class="ptable"><thead><tr>'
+       +  '<th>Tenant</th><th>orgId</th><th>Plan</th><th>Standing</th><th>Account</th><th>Actions</th>'
+       +  '</tr></thead><tbody>';
   shown.forEach(function(r){
     var st=r.status||'active', bill=r._bill||{}, sd=_standing(bill,r);
-    var due = bill.subscriptionDue ? (' \u00b7 due '+esc(bill.subscriptionDue)) : '';
-    var amt = (Number(bill.amountDue||0)>0) ? (' \u00b7 $'+Number(bill.amountDue).toLocaleString()) : '';
-    html += '<tr><td>'+esc(r.name||r._id)+'</td>'
+    var due = bill.subscriptionDue ? ('due '+esc(bill.subscriptionDue)) : '';
+    var amt = (Number(bill.amountDue||0)>0) ? ('$'+Number(bill.amountDue).toLocaleString()) : '';
+    var sub = [due,amt].filter(Boolean).join(' \u00b7 ');
+    html += '<tr><td class="site-nm">'+esc(r.name||r._id)+'</td>'
          +  '<td class="sub-txt">'+esc(r._id)+'</td>'
-         +  '<td class="sub-txt">'+esc(bill.tier||'\u2014')+'</td>'
-         +  '<td><span class="chip '+sd.chip+'">'+esc(sd.label)+'</span><span class="sub-txt">'+due+amt+'</span></td>'
+         +  '<td>'+esc(bill.tier||'\u2014')+'</td>'
+         +  '<td><span class="chip '+sd.chip+'">'+esc(sd.label)+'</span>'
+         +    (sub?('<div class="sub-txt">'+sub+'</div>'):'')+'</td>'
          +  '<td><span class="chip '+_tnStatusChip(st)+'">'+esc(st)+'</span></td>'
-         +  '<td>'
+         +  '<td style="white-space:nowrap">'
          +  (st==='suspended'
-              ? '<button onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
-              : '<button class="danger" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
-         +  ' <button onclick="openTenantDetail(&quot;'+esc(r._id)+'&quot;)">Manage</button>'
-         +  ' <button onclick="openBroadcast(&quot;'+esc(r._id)+'&quot;)">Message</button>'
+              ? '<button class="btn-ghost" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;reactivate&quot;)">Reactivate</button>'
+              : '<button class="btn-ghost" onclick="tenantAction(&quot;'+esc(r._id)+'&quot;,&quot;suspend&quot;)">Suspend</button>')
+         +  ' <button class="btn-ghost" onclick="openTenantDetail(&quot;'+esc(r._id)+'&quot;)">Manage</button>'
+         +  ' <button class="btn-ghost" onclick="openBroadcast(&quot;'+esc(r._id)+'&quot;)">Message</button>'
          +  '</td></tr>'
-         +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="6"></td></tr>';
+         +  '<tr id="tn-users-'+esc(r._id).replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:none"><td colspan="6" style="background:#F7F9FB"></td></tr>';
   });
-  document.getElementById('tn-body').innerHTML = html+'</tbody></table>';
+  document.getElementById('tn-body').innerHTML = html+'</tbody></table></div>';
 }
 
 /* ── MESSAGING TENANTS ────────────────────────────────────────────────────
@@ -1610,7 +1619,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects){
   if(!members.length){
     h+='<div class="sub-txt">Nobody from '+esc(orgId)+' has signed in yet. A member row is created on first sign-in.</div>';
   } else {
-    h+='<table class="tbl"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
+    h+='<table class="ptable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Account</th></tr></thead><tbody>';
     members.forEach(function(m){
       var role=m.role||'member', em=m.email||m._id;
       h+='<tr><td class="sub-txt">'+esc(em)+'</td><td>'
