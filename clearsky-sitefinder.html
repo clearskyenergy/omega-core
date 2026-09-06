@@ -367,6 +367,21 @@
 #phSel{width:100%;font:inherit;font-size:12.5px;padding:5px 7px;border-radius:5px;
   border:1px solid var(--line,#d9dee3)}
 
+/* Battery sizer. Sits inside the hero, so it reads as part of the number
+   rather than as a settings panel bolted underneath it. */
+.sizer{margin-top:11px;padding-top:11px;border-top:1px solid var(--line,#d9dee3)}
+.szRow{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.szRow label{font-size:11.5px;color:var(--muted,#6a747e);min-width:72px;flex:none}
+.szRow input[type=range]{flex:1;min-width:0;accent-color:#0b3d63}
+.szRow input[type=number]{width:74px;font:inherit;font-size:12.5px;padding:4px 6px;
+  border:1px solid var(--line,#d9dee3);border-radius:5px;text-align:right}
+.szU{font-size:11.5px;color:var(--muted,#6a747e)}
+.szHrs{display:flex;gap:4px;flex-wrap:wrap}
+.szHrs button{font:inherit;font-size:11.5px;padding:4px 9px;cursor:pointer;
+  border:1px solid var(--line,#d9dee3);background:#fff;color:#334;border-radius:5px}
+.szHrs button.on{background:#0b3d63;border-color:#0b3d63;color:#fff;font-weight:600}
+.szCap{font-size:10.5px;line-height:1.5;color:var(--muted,#6a747e)}
+
 </style>
 </head>
 <body class="v-split">
@@ -2183,6 +2198,7 @@
       if (ST.saved[i].id === id) { ST.saved[i].service = r.service; break; }
     }
     persistSaved();
+    redrawDrawer(r);
     try { render(); } catch (e) {}
   }
 
@@ -4169,9 +4185,15 @@
         /* What this tool concluded. The estimator should treat it as the
            STARTING POINT, not the design — duration, coupling and topology
            are engineering decisions nobody has made yet. */
-        batteryKw: sz.kw != null ? sz.kw : null,
-        batteryKwh: sz.kwh != null ? sz.kwh : null,
-        assumedHours: sz.hours || 2,
+        /* THE SIZE THE REP CHOSE, not the theoretical maximum. Left alone,
+           this is still everything the circuit allows at two hours — the
+           behaviour before the sizer existed. Touched, it is the system
+           they actually intend to propose, which is what should be priced. */
+        batteryKw: (function () { var q = sizePick(r); return q.kw != null ? q.kw : (sz.kw != null ? sz.kw : null); })(),
+        batteryKwh: (function () { var q = sizePick(r); return q.kwh != null ? q.kwh : (sz.kwh != null ? sz.kwh : null); })(),
+        assumedHours: (function () { var q = sizePick(r); return q.hours || sz.hours || 2; })(),
+        sizedBy: (function () { var q = sizePick(r); return q.custom ? "chosen in the site finder" : "circuit maximum at 2 h (default)"; })(),
+        circuitCeilingKw: (function () { return sizeCap(r); })(),
         bindingConstraint: sz.binds || null,
         customerPeakKw: r.peakKw != null ? Math.round(r.peakKw) : null,
         peakSource: r.annualKwh ? r.annualKwh.src : null,
@@ -4334,6 +4356,108 @@
       'an assumption \u2014 and it is labelled as one on the card, in the CSV and in ' +
       'the packet sent to the estimator. A single-phase service caps this site well ' +
       'below what the circuit suggests.</p></div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     SIZE THE BATTERY AGAINST WHAT IS ACTUALLY LEFT
+
+     The panel showed one number: everything the circuit had, at two hours.
+     That is the right DEFAULT and a poor answer to the question a rep is
+     usually asking, which is "what should I actually propose here". A
+     140 kW circuit does not mean a 140 kW project — the customer may want
+     four hours, or half the wire, or the developer may be leaving headroom
+     for a second phase.
+
+     THE CEILING IS REAL AND THE PICKER CANNOT EXCEED IT. kW is capped at
+     what is still sellable on the feeder AFTER queue, firm claims and this
+     team's own holds — the same figure the "Left to sell" row shows. There
+     is no way to drag it past that, because a number that cannot be
+     interconnected is not a smaller project, it is a wrong one.
+
+     DURATION IS UNCAPPED. Hours are an equipment choice, not a circuit
+     one: an eight-hour system at 140 kW draws the same 140 kW. Only the
+     kWh, the footprint and the price move.
+
+     The choice is per-site and survives a reload, and it is what flows into
+     the estimator packet — so "price this site" prices the system the rep
+     actually intends, not the theoretical maximum. */
+  var DURATIONS = [1, 2, 4, 6, 8];
+
+  function sizeCap(r) {
+    /* Prefer the live sellable figure; fall back to whatever sizing already
+       derived. Never null-coalesce to a bigger number than the circuit. */
+    var st = r.circ || {};
+    var cap = (st.known && st.sellable != null) ? Math.round(st.sellable)
+            : (r.sz && r.sz.kw != null ? r.sz.kw : null);
+    if (cap != null && r.sz && r.sz.circuitCeiling != null)
+      cap = Math.min(cap, r.sz.circuitCeiling);
+    return cap != null && cap > 0 ? cap : null;
+  }
+
+  /* What the rep has chosen, or the default: everything available at 2 h. */
+  function sizePick(r) {
+    var cap = sizeCap(r);
+    if (cap == null) return { kw: null, kwh: null, hours: 2, cap: null, custom: false };
+    var pickKw = cap, hours = 2, custom = false;
+    var v = r.sizePick;
+    if (v) {
+      if (v.kw != null) { pickKw = Math.max(1, Math.min(cap, Math.round(v.kw))); custom = true; }
+      if (v.hours) { hours = v.hours; custom = true; }
+    }
+    return { kw: pickKw, kwh: pickKw * hours, hours: hours, cap: cap, custom: custom };
+  }
+
+  function setSize(id, kw, hours) {
+    var r = ST.byId[id]; if (!r) return;
+    var cap = sizeCap(r);
+    r.sizePick = {
+      kw: kw == null ? null : Math.max(1, Math.min(cap || kw, Math.round(kw))),
+      hours: hours || 2
+    };
+    for (var i = 0; i < ST.saved.length; i++) {
+      if (ST.saved[i].id === id) { ST.saved[i].sizePick = r.sizePick; break; }
+    }
+    persistSaved();
+    redrawDrawer(r);
+    try { render(); } catch (e) {}
+  }
+
+  /* The drawer has no re-render entry point of its own — openDrawer writes
+     dBody and then wires it. Both halves are needed or the controls come
+     back inert, which is how a "nothing happens on the second click" bug
+     gets made. */
+  function redrawDrawer(r) {
+    var body = document.getElementById("dBody");
+    var dw = document.getElementById("drawer");
+    if (!body || !dw || dw.className !== "open") return;
+    body.innerHTML = verifyBlock("done", r, {}) + drawerHtml(r);
+    wireDrawer(r);
+  }
+
+  function sizerHtml(r, pick) {
+    if (pick.cap == null) return '';
+    return '<div class="sizer" data-noselect="1">' +
+      '<div class="szRow">' +
+        '<label for="szKw">System size</label>' +
+        '<input id="szKw" type="range" min="1" max="' + pick.cap + '" step="1" ' +
+          'value="' + pick.kw + '" data-noselect="1" data-id="' + esc(r.id) + '">' +
+        '<input id="szKwN" type="number" min="1" max="' + pick.cap + '" ' +
+          'value="' + pick.kw + '" data-noselect="1"><span class="szU">kW</span>' +
+      '</div>' +
+      '<div class="szRow">' +
+        '<label>Duration</label>' +
+        '<span class="szHrs">' + DURATIONS.map(function (hv) {
+          return '<button type="button" data-noselect="1" data-hrs="' + hv + '"' +
+            (hv === pick.hours ? ' class="on"' : '') + '>' + hv + ' h</button>';
+        }).join('') + '</span>' +
+      '</div>' +
+      '<div class="szCap">Capped at <b>' + fmt(pick.cap) + ' kW</b> \u2014 what is still ' +
+        'sellable on ' + esc(r.feederId) + ' after the queue, filed projects and your ' +
+        'team\u2019s holds. Duration is an equipment choice and is not capped: an 8-hour ' +
+        'system at this kW still draws this kW.' +
+        (pick.custom ? ' <a href="#" data-noselect="1" data-szreset="' + esc(r.id) +
+          '">Reset to the full circuit at 2 h</a>' : '') +
+      '</div></div>';
   }
 
   function packetBlockHtml(r) {
@@ -4629,9 +4753,10 @@
     h.push(saveRowHtml(r));
 
     /* -- headline ------------------------------------------------------- */
+    var pick = sizePick(r);
     h.push('<div class="sec"><div class="hero">' +
-      '<div class="big">' + (sz.kw == null ? "&mdash;" : fmt(sz.kw)) +
-        ' <small>kW</small> &nbsp;/&nbsp; ' + (sz.kwh == null ? "&mdash;" : fmt(sz.kwh)) + ' <small>kWh</small></div>' +
+      '<div class="big" id="szBig">' + (pick.kw == null ? "&mdash;" : fmt(pick.kw)) +
+        ' <small>kW</small> &nbsp;/&nbsp; ' + (pick.kwh == null ? "&mdash;" : fmt(pick.kwh)) + ' <small>kWh</small></div>' +
       '<div class="cap">' + (sz.kw == null
         ? 'Not enough data to size a system here.'
         : sz.circuitLimited
@@ -4641,6 +4766,7 @@
           : 'The load is the binding constraint. The circuit would accept ' + fmt(sz.circuitCeiling) +
             ' kW; this customer\u2019s peak only justifies ' + fmt(sz.loadCeiling) + ' kW of shaving.') +
       '</div></div>' +
+      sizerHtml(r, pick) +
       (r.saveLo ? '<div class="note">Demand-charge exposure removed: <b>' + money(r.saveLo) +
         '\u2013' + money(r.saveHi) + '</b> a year at $' + DEMAND_LO + '\u2013' + DEMAND_HI +
         '/kW-month. Screening range, not a quote.</div>' : '') +
@@ -4931,6 +5057,35 @@
     if (pk) pk.onclick = function () { downloadPacket(r); };
     var cs = document.getElementById("costSite");
     if (cs) cs.onclick = function () { costThisSite(r); };
+
+    /* Sizer. The slider and the number box are two views of one value, so
+       each writes the other before committing — otherwise dragging leaves a
+       stale figure in the box next to it. */
+    (function () {
+      var rng = document.getElementById("szKw");
+      var box = document.getElementById("szKwN");
+      var big = document.getElementById("szBig");
+      if (!rng || !box) return;
+      var cur = sizePick(r);
+
+      function preview(kw, hrs) {
+        if (!big) return;
+        big.innerHTML = fmt(kw) + ' <small>kW</small> &nbsp;/&nbsp; ' +
+                        fmt(kw * hrs) + ' <small>kWh</small>';
+      }
+      rng.oninput = function () {
+        box.value = rng.value;
+        preview(+rng.value, cur.hours);
+      };
+      rng.onchange = function () { setSize(r.id, +rng.value, cur.hours); };
+      box.oninput = function () {
+        var v = Math.max(1, Math.min(cur.cap, Math.round(+box.value || 1)));
+        rng.value = v; preview(v, cur.hours);
+      };
+      box.onchange = function () {
+        setSize(r.id, Math.max(1, Math.min(cur.cap, Math.round(+box.value || 1))), cur.hours);
+      };
+    })();
     (function () {
       var sel = document.getElementById("phSel");
       var chk = document.getElementById("phConf");
@@ -5118,6 +5273,26 @@
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
        not the card behind it. */
+    var hb = e.target.closest && e.target.closest("[data-hrs]");
+    if (hb) {
+      e.preventDefault(); e.stopPropagation();
+      var hr = ST.byId[(document.getElementById("szKw") || {}).getAttribute
+        ? document.getElementById("szKw").getAttribute("data-id") : null];
+      if (hr) setSize(hr.id, sizePick(hr).kw, +hb.getAttribute("data-hrs"));
+      return;
+    }
+    var rs = e.target.closest && e.target.closest("[data-szreset]");
+    if (rs) {
+      e.preventDefault(); e.stopPropagation();
+      var rr = ST.byId[rs.getAttribute("data-szreset")];
+      if (rr) { rr.sizePick = null;
+        for (var si = 0; si < ST.saved.length; si++)
+          if (ST.saved[si].id === rr.id) { ST.saved[si].sizePick = null; break; }
+        persistSaved();
+        redrawDrawer(rr); try { render(); } catch (er) {}
+      }
+      return;
+    }
     var cb = e.target.closest && e.target.closest("[data-cost-id]");
     if (cb) {
       e.preventDefault(); e.stopPropagation();
