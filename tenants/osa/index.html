@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ClearSky-OMEGA · Verification Console</title>
+<title>Omega OS · Silmarillion 2.0 · Verification Console</title>
 <link rel="icon" href="/omega-logo.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -388,9 +388,13 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
   <button class="menu-btn" onclick="document.getElementById('side').classList.toggle('on')" aria-label="Menu">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
   </button>
-  <a href="/" class="tb-logo">
+  <!-- OSA is its own ORIGIN, so "/" is the OSA root, not the portal — the mark
+       used to just reload this page. The href is absolute and set from config
+       so it survives the DNS cutover: portalUrl on CLEARSKY_CONFIG wins, and
+       the hub host from vercel.json is the fallback. -->
+  <a href="https://app.clearskyomega.com/" class="tb-logo" id="tb-home" title="Back to your portal">
     <img src="/omega-logo.png" alt="" onerror="this.style.display='none'">
-    <span class="tb-logo-txt">ClearSky OMEGA</span>
+    <span class="tb-logo-txt">Omega OS &middot; Silmarillion 2.0</span>
   </a>
   <div class="tb-sep"></div>
   <span class="tb-portal">Verification Console</span>
@@ -1468,6 +1472,18 @@ function toast(msg, bad){
   clearTimeout(_toastT);
   _toastT = setTimeout(function(){ el.className = 'toast' + (bad?' bad':''); }, 3200);
 }
+</script>
+<script>
+/* One place to change at DNS cutover. CLEARSKY_CONFIG.portalUrl wins if the
+   tenant config sets it; otherwise the hub host vercel.json already rewrites
+   to /start.html. Left absolute because this page is served from a different
+   origin than the portal — a relative href would come back here. */
+(function () {
+  var a = document.getElementById('tb-home');
+  if (!a) return;
+  var cfg = window.CLEARSKY_CONFIG || {};
+  a.href = cfg.portalUrl || 'https://app.clearskyomega.com/';
+})();
 </script>
 </body>
 </html>
