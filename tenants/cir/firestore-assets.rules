@@ -1,0 +1,57 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Finance marketplace offers rule
+   Paste inside the existing `match /databases/{database}/documents { ... }`
+   block in firestore.rules, then DEPLOY.
+
+     firebase deploy --only firestore:rules
+
+   This backs the Asset Owner Command Center in /omega-assets.js. It reads two
+   collections:
+
+     projects        — already ruled. The optional owner fields the block uses
+                       (ownership, opex, opexLines, inServiceDate, irr,
+                       financedAmount, debtService, residualValue) are new
+                       FIELDS on existing docs, so no rule change is needed
+                       for them.
+     financeOffers   — new. That is what this file adds.
+
+   Unlike termsAcceptances, this one fails OPEN in the sense that matters: a
+   missing rule denies the read, the block paints its empty state, and sign-in
+   is unaffected. Nobody is locked out — the panel is simply blank, and the
+   console says which collection was refused.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+match /financeOffers/{offerId} {
+
+  /* Same tenant scope as every other collection: a user sees only their own
+     org's offers. userOrg() is the existing helper — confirm it maps the
+     signing-in address to the tenant's orgId, exactly as it must for
+     `projects`, or this collection will read as empty rather than as denied. */
+  allow read: if request.auth != null
+              && resource.data.orgId == userOrg();
+
+  /* Offers are normally written by the marketplace backend, not the browser.
+     Client creates are permitted so a user can log an offer that arrived by
+     email, but they are pinned to the caller's own org and to the shape the
+     dashboard reads — an offer with no amount or no partner is noise in a
+     portfolio view. */
+  allow create: if request.auth != null
+                && request.resource.data.orgId == userOrg()
+                && request.resource.data.partner is string
+                && request.resource.data.amount is number
+                && request.resource.data.amount >= 0
+                && request.resource.data.status in
+                   ['received','reviewing','countered','accepted','declined','expired'];
+
+  /* Status moves through the funnel; the org never changes hands. */
+  allow update: if request.auth != null
+                && resource.data.orgId == userOrg()
+                && request.resource.data.orgId == resource.data.orgId
+                && request.resource.data.status in
+                   ['received','reviewing','countered','accepted','declined','expired'];
+
+  /* An offer that was made is a fact about the portfolio. Withdraw it by
+     setting status to 'expired' or 'declined' rather than deleting the row,
+     so the win rate and the offer history stay honest. */
+  allow delete: if false;
+}

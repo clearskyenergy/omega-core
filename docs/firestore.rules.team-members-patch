@@ -1,0 +1,143 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PATCH · team_members — let an administrator write the access flag
+
+   AGAINST THE RULES YOU ARE ACTUALLY RUNNING, not a fresh file. Replace the
+   existing `match /team_members/{memberId}` block with the one below. Nothing
+   else in your rules changes.
+
+   ─────────────────────────────────────────────────────────────────────────────
+   WHY THIS IS NEEDED — the Suspend button is refused today
+   ─────────────────────────────────────────────────────────────────────────────
+   Your deployed block reads:
+
+       allow create: ... && request.resource.data.email == request.auth.token.email
+                         && memberId == request.resource.data.orgId + '__' + request.auth.token.email;
+       allow update: ... && resource.data.email == request.auth.token.email
+       allow delete: if false;
+
+   Both write clauses require the target document's email to be the CALLER'S
+   OWN. That is correct and deliberate for a profile — it is what stops one
+   tenant's staff editing another's. But it means nobody, including a ClearSky
+   administrator, can write anyone else's team_members doc.
+
+   So the ops console's Suspend button currently fails with permission-denied
+   against every user. Not "writes an inert flag" — it does not write at all.
+   The console reports the refusal honestly rather than showing a false
+   success, but the button cannot do its job until this is deployed.
+
+   Reading is fine as-is: isAdmin() already covers it.
+
+   ─────────────────────────────────────────────────────────────────────────────
+   WHAT CHANGES, EXACTLY
+   ─────────────────────────────────────────────────────────────────────────────
+   1. `allow create, update: if isOmegaAdmin()` is added as an alternative.
+      isOmegaAdmin(), not isAdmin(), to match every other administrative
+      clause in your file — one definition of "may act", which is the whole
+      point of omega_staff.
+
+   2. The member's OWN self-update is tightened by exactly one clause: they
+      may no longer write the access fields. Without that, a suspended user's
+      next ordinary profile save sets active back to true and un-suspends
+      them — the enforcement would be real and undone by accident.
+
+   3. `allow delete: if false` is unchanged. Deleting a member doc would
+      erase the suspension along with the person.
+
+   Everything else — the orgId pin, the demo bucket, the email pin, the
+   memberId format check — is carried over verbatim.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+    match /team_members/{memberId} {
+
+      /* The fields the ops console owns. `active` is in here because it is
+         what any enforcement reads, and a member who can write their own
+         `active` can undo their own suspension with one profile save. */
+      function accessFields() {
+        return ['active', 'access', 'suspendedAt', 'suspendedBy', 'suspendedReason',
+                'passwordResetSentAt', 'passwordResetSentBy', 'updatedBy'];
+      }
+      function touchesAccess() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(accessFields());
+      }
+
+      allow read:   if signedIn() && (resource.data.orgId == userOrg()
+                                      || ownsDemoBucket(resource.data.orgId)
+                                      || isAdmin());
+
+      /* UNCHANGED except for the isOmegaAdmin() alternative: a member still
+         self-creates their own profile, pinned to their own email and the
+         "<orgId>__<email>" id format. The console needs create too, because
+         suspending somebody who has never opened the portal writes the first
+         version of their doc. */
+      allow create: if isOmegaAdmin()
+                    || (signedIn()
+                        && (request.resource.data.orgId == userOrg()
+                            || ownsDemoBucket(request.resource.data.orgId))
+                        && request.resource.data.email == request.auth.token.email
+                        && memberId == request.resource.data.orgId + '__' + request.auth.token.email
+                        /* Nobody signs themselves up pre-suspended or
+                           pre-cleared; the flag is the console's to set. */
+                        && !('access' in request.resource.data));
+
+      allow update: if isOmegaAdmin()
+                    || (signedIn()
+                        && (resource.data.orgId == userOrg()
+                            || ownsDemoBucket(resource.data.orgId))
+                        && resource.data.email == request.auth.token.email
+                        && request.resource.data.orgId == resource.data.orgId
+                        && request.resource.data.email == resource.data.email
+                        && !touchesAccess());          /* ← the one addition */
+
+      allow delete: if false;
+    }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   OPTIONAL · omega_access_log — read the audit trail
+
+   Only needed if you deploy /functions. The Admin SDK bypasses rules, so the
+   functions can write this collection with no rule at all; this block exists
+   so an administrator can READ it. Without it the log accumulates and only the
+   Firebase console can see it.
+
+   Writes are refused for everyone on purpose: a browser session that could
+   forge or erase an entry would make the trail worthless.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+    match /omega_access_log/{entryId} {
+      allow read:  if isOmegaAdmin();
+      allow write: if false;
+    }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   NOT A PATCH · two things worth a decision, neither changed here
+   ═══════════════════════════════════════════════════════════════════════════════
+
+   1 · isConsoleViewer() grants sunesol.com and ogisolar.com a cross-org read
+       of EVERY tenant's /projects. Your own file already flags this and asks
+       for a decision before OGI Solar's trial opens.
+
+       It matters more now than it did when that note was written. The
+       Accounts page reads /projects across orgs and screens what it finds —
+       so the same data those two domains can already read is now visibly
+       collated into "what every tenant is building, and how big". The leak
+       was always there; this makes its value obvious.
+
+       If OGI Solar is a restricted trial tenant, remove them from
+       isConsoleViewer() before the trial opens. isOmegaStaff() on the same
+       clause already covers ClearSky's own people, so removing both non-staff
+       domains costs the console nothing.
+
+   2 · omega_orgs and equipment are readable on `orgId == userOrg() || isAdmin()`
+       — NOT isOmegaStaff(). So a rep on a non-ClearSky domain signing into the
+       console gets:
+         · no tenant display names (falls back to title-cased domains)
+         · no equipment registry, so placed items in editor projects size at
+           zero and read as "Needs sizing"
+
+       Everything else works for them. If reps on other domains are meant to
+       use the Accounts page, add `|| isOmegaStaff()` to the READ clause of
+       both — read only, not write. Left alone here because widening a read
+       across every tenant is your call, not a patch to apply unread.
+   ═══════════════════════════════════════════════════════════════════════════════ */

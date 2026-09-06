@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClearSky-OMEGA · Admin Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cs-navy:#08283C;--cs-dark:#061F2E;--cs-blue:#006F9A;--cs-sky:#00A9A4;
+  --cs-accent:#00A9A4;--cs-gold:#00C4BC;--cs-text:#0F2733;--cs-sub:#5A7180;
+  --cs-bg:#EEF2F4;--cs-surface:#FFFFFF;--cs-border:#E1E7EB;
+  --cs-green:#1DB954;--cs-red:#E53935;--cs-amber:#D97706;--cs-purple:#7C3AED;
+  /* tier accents */
+  --tier-core:#5A7180;--tier-perf:#006F9A;--tier-ent:#00A9A4;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-text);min-height:100vh}
+
+/* ── AUTH SCREEN (unchanged) ── */
+#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0B1E35 0%,#1B4F8A 50%,#0D2440 100%);position:relative;overflow:hidden}
+#auth-screen::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 800px 600px at 60% 40%, rgba(201,168,76,.12) 0%, transparent 70%);pointer-events:none}
+.auth-card{background:rgba(255,255,255,.96);border-radius:20px;padding:52px 48px;width:420px;max-width:92vw;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.2);position:relative}
+.auth-logo{margin-bottom:22px}
+.auth-omega{height:74px;width:auto;display:block;margin:0 auto}
+.auth-company{font-size:22px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px;margin-top:10px}
+.auth-sub{font-size:13px;color:var(--cs-sub);margin-top:4px;margin-bottom:32px}
+.auth-divider{height:1px;background:var(--cs-border);margin:20px 0;position:relative}
+.auth-divider span{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#fff;padding:0 10px;font-size:11px;color:var(--cs-sub);font-weight:500}
+.btn-google{width:100%;padding:13px 20px;border:1.5px solid var(--cs-border);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;font-weight:600;color:var(--cs-text);display:flex;align-items:center;justify-content:center;gap:10px;font-family:'DM Sans',sans-serif;transition:all .15s}
+.btn-google:hover{border-color:var(--cs-sky);background:#F8FBFF;box-shadow:0 4px 12px rgba(46,134,193,.15)}
+.auth-fields{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;text-align:left}
+.auth-field label{display:block;font-size:11px;font-weight:600;color:var(--cs-sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.auth-field input{width:100%;padding:12px 14px;border:1.5px solid var(--cs-border);border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--cs-text);background:#fff;outline:none;transition:border-color .15s}
+.auth-field input:focus{border-color:var(--cs-sky)}
+.btn-email{width:100%;padding:13px 20px;border:none;border-radius:10px;background:var(--cs-navy);color:#fff;cursor:pointer;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;transition:background .15s}
+.btn-email:hover{background:var(--cs-blue)}
+.btn-email:disabled{opacity:.6;cursor:default}
+.auth-toggle{margin-top:14px;font-size:12.5px;color:var(--cs-sub)}
+.auth-toggle a{color:var(--cs-sky);font-weight:600;cursor:pointer;text-decoration:none}
+.auth-toggle a:hover{text-decoration:underline}
+.auth-note{font-size:11px;color:var(--cs-sub);margin-top:16px;line-height:1.5}
+#auth-err{display:none;margin-top:14px;padding:10px 14px;background:rgba(229,57,53,.08);border:1px solid rgba(229,57,53,.2);border-radius:8px;font-size:12px;color:var(--cs-red);font-weight:500}
+#auth-ok{display:none;margin-top:14px;padding:10px 14px;background:rgba(29,185,84,.08);border:1px solid rgba(29,185,84,.25);border-radius:8px;font-size:12px;color:#137A38;font-weight:500}
+
+/* ── TOPBAR ── */
+#topbar{height:60px;background:var(--cs-navy);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:200;border-bottom:1px solid rgba(255,255,255,.08)}
+.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.tb-omega{height:26px;width:auto;display:block}
+.tb-logo-txt{color:#fff;font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--cs-gold)}
+.tb-sep{width:1px;height:24px;background:rgba(255,255,255,.12)}
+.tb-portal{color:rgba(255,255,255,.45);font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.tb-admin-chip{background:rgba(201,168,76,.18);color:var(--cs-gold);border:1px solid rgba(201,168,76,.35);border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.tb-spacer{flex:1}
+.tb-user{display:flex;align-items:center;gap:10px}
+.tb-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(201,168,76,.4)}
+.tb-avatar-fallback{width:34px;height:34px;border-radius:50%;background:var(--cs-accent);color:var(--cs-navy);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.tb-name{color:rgba(255,255,255,.85);font-size:13px;font-weight:500}
+.btn-signout{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;transition:all .12s}
+.btn-signout:hover{background:rgba(255,255,255,.14);color:#fff}
+
+/* ── TAB NAV ── */
+#tabbar{background:#fff;border-bottom:1px solid var(--cs-border);position:sticky;top:60px;z-index:150;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+.tabbar-inner{max-width:1280px;margin:0 auto;padding:0 24px;display:flex;gap:2px;overflow-x:auto}
+.tab-btn{background:none;border:none;padding:15px 16px 13px;font-size:13px;font-weight:600;color:var(--cs-sub);cursor:pointer;font-family:'DM Sans',sans-serif;border-bottom:2.5px solid transparent;white-space:nowrap;transition:color .12s;display:flex;align-items:center;gap:7px}
+.tab-btn:hover{color:var(--cs-navy)}
+.tab-btn.on{color:var(--cs-navy);border-bottom-color:var(--cs-accent)}
+.tab-btn svg{width:15px;height:15px}
+.tab-btn .tab-cnt{background:var(--cs-bg);color:var(--cs-sub);border-radius:10px;padding:1px 7px;font-size:10.5px;font-weight:700}
+.tab-btn.on .tab-cnt{background:var(--cs-accent);color:var(--cs-navy)}
+
+/* ── MAIN ── */
+#main{max-width:1280px;margin:0 auto;padding:32px 24px 64px}
+.tab-panel{display:none}
+.tab-panel.on{display:block}
+
+.dash-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--cs-accent)}
+.dash-welcome{font-size:30px;font-weight:700;color:var(--cs-navy);margin-top:6px;letter-spacing:-.5px;line-height:1.1}
+.dash-sub{font-size:14px;color:var(--cs-sub);margin-top:8px;max-width:820px;line-height:1.55}
+
+/* ── SECTION HEADINGS ── */
+.block-head{display:flex;align-items:center;justify-content:space-between;margin:34px 0 16px;flex-wrap:wrap;gap:12px}
+.block-title{font-size:18px;font-weight:700;color:var(--cs-navy)}
+.block-title .cnt{background:var(--cs-accent);color:var(--cs-navy);border-radius:12px;padding:2px 9px;font-size:11px;font-weight:700;margin-left:8px}
+.block-sub{font-size:12px;color:var(--cs-sub);margin-top:2px}
+.btn-add{background:var(--cs-navy);color:#fff;border:none;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:background .12s;display:inline-flex;align-items:center;gap:7px}
+.btn-add:hover{background:var(--cs-blue)}
+.btn-ghost{background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border);border-radius:9px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .12s}
+.btn-ghost:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cs-accent);opacity:.55}
+.kpi.blue::before{background:var(--cs-sky)}
+.kpi.green::before{background:var(--cs-green)}
+.kpi.red::before{background:var(--cs-red)}
+.kpi.purple::before{background:var(--cs-purple)}
+.kpi::before{opacity:1;width:4px}
+.kpi:hover{box-shadow:0 8px 22px rgba(8,40,60,.10);transform:translateY(-1px);transition:all .14s}
+.kpi-label{font-size:11px;font-weight:600;color:var(--cs-sub);text-transform:uppercase;letter-spacing:.4px;line-height:1.3;min-height:28px;display:flex;align-items:center;gap:7px}
+.kpi-label .ic{width:15px;height:15px;stroke:var(--cs-sub);flex-shrink:0}
+.kpi-val{font-size:30px;font-weight:700;color:var(--cs-navy);letter-spacing:-.6px;margin-top:8px;font-variant-numeric:tabular-nums}
+.kpi-val .unit{font-size:14px;font-weight:600;color:var(--cs-sub);margin-left:3px}
+.kpi-foot{font-size:10.5px;color:var(--cs-sub);margin-top:6px}
+.kpi-foot .up{color:#137A38;font-weight:700}
+.kpi-foot .dn{color:#B71C1C;font-weight:700}
+
+/* ── TIER CARDS (Core / Performance / Enterprise) ── */
+.tier-card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(8,40,60,.05);position:relative;overflow:hidden}
+.tier-card::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--tc,var(--cs-sub))}
+.tier-card.core{--tc:var(--tier-core)}
+.tier-card.perf{--tc:var(--tier-perf)}
+.tier-card.ent{--tc:var(--tier-ent)}
+.tier-card.total{--tc:var(--cs-navy);background:var(--cs-navy);color:#fff}
+.tier-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tier-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tc)}
+.tier-card.total .tier-name{color:rgba(255,255,255,.8)}
+.tier-dot{width:9px;height:9px;border-radius:50%;background:var(--tc)}
+.tier-card.total .tier-dot{background:var(--cs-gold)}
+.tier-val{font-size:34px;font-weight:700;letter-spacing:-.8px;margin-top:6px;color:var(--cs-navy);font-variant-numeric:tabular-nums}
+.tier-card.total .tier-val{color:#fff}
+.tier-foot{font-size:11px;color:var(--cs-sub);margin-top:4px}
+.tier-card.total .tier-foot{color:rgba(255,255,255,.65)}
+.tier-split{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap}
+.tier-split div{font-size:10.5px;color:var(--cs-sub)}
+.tier-split b{display:block;font-size:16px;font-weight:700;color:var(--cs-navy);font-family:'DM Mono',monospace}
+.tier-card.total .tier-split div{color:rgba(255,255,255,.6)}
+.tier-card.total .tier-split b{color:#fff}
+
+/* ── PARTNER LEADERBOARD ── */
+.pl-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(8,40,60,.05)}
+.pl-row{display:grid;grid-template-columns:1.6fr 90px 90px 110px;gap:10px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--cs-border);font-size:12.5px}
+.pl-row:last-child{border-bottom:none}
+.pl-row.head{background:var(--cs-navy);color:rgba(255,255,255,.82);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.pl-name{font-weight:700;color:var(--cs-navy);display:flex;align-items:center;gap:9px}
+.pl-rank{width:22px;height:22px;border-radius:6px;background:var(--cs-bg);color:var(--cs-sub);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.pl-rank.g1{background:rgba(0,169,164,.15);color:#00736F}
+.pl-num{font-family:'DM Mono',monospace;font-weight:600;color:var(--cs-navy)}
+.pl-bar{height:6px;border-radius:5px;background:var(--cs-bg);overflow:hidden}
+.pl-bar>i{display:block;height:100%;background:var(--cs-sky);border-radius:5px}
+.pl-tiermix{display:flex;gap:3px;align-items:center}
+.pl-seg{height:8px;border-radius:2px}
+.pl-seg.core{background:var(--tier-core)}
+.pl-seg.perf{background:var(--tier-perf)}
+.pl-seg.ent{background:var(--tier-ent)}
+
+/* ── OPS STRIP (tasks / complete / errors) ── */
+.ops-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ops-card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(8,40,60,.05)}
+.ops-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ops-ico svg{width:20px;height:20px}
+.ops-ico.blue{background:rgba(0,111,154,.12)}.ops-ico.blue svg{stroke:var(--cs-blue)}
+.ops-ico.green{background:rgba(29,185,84,.12)}.ops-ico.green svg{stroke:var(--cs-green)}
+.ops-ico.red{background:rgba(229,57,53,.12)}.ops-ico.red svg{stroke:var(--cs-red)}
+.ops-ico.amber{background:rgba(217,119,6,.12)}.ops-ico.amber svg{stroke:var(--cs-amber)}
+.ops-val{font-size:26px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;line-height:1;font-variant-numeric:tabular-nums}
+.ops-lbl{font-size:11px;font-weight:600;color:var(--cs-sub);text-transform:uppercase;letter-spacing:.3px;margin-top:5px}
+@media(max-width:900px){.ops-strip{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.pl-row{grid-template-columns:1.4fr 60px 70px;font-size:11.5px}.pl-row .pl-hide{display:none}}
+
+/* ── TABLE ── */
+.table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+.ptable{width:100%;border-collapse:collapse;font-size:12.5px}
+.ptable thead th{background:var(--cs-navy);color:rgba(255,255,255,.85);text-align:left;padding:12px 14px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.ptable tbody td{padding:12px 14px;border-bottom:1px solid var(--cs-border);color:var(--cs-text);vertical-align:middle}
+.ptable tbody tr:last-child td{border-bottom:none}
+.ptable tbody tr.clickable:hover{background:#F8F9FA;cursor:pointer}
+.ptable .site-nm{font-weight:600;color:var(--cs-navy)}
+.ptable .num{font-family:'DM Mono',monospace;font-size:12px;white-space:nowrap}
+.ptable .sub-txt{font-size:11px;color:var(--cs-sub)}
+.table-foot{padding:12px 14px;font-size:11px;color:var(--cs-sub);background:var(--cs-surface);border-top:1px solid var(--cs-border)}
+.table-foot a{color:var(--cs-sky);text-decoration:none;font-weight:600;cursor:pointer}
+
+/* ── BADGES / CHIPS ── */
+.chip{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip.tier1{background:rgba(107,122,141,.14);color:#455}
+.chip.tier2{background:rgba(46,134,193,.13);color:#1B5E88}
+.chip.tier3{background:rgba(201,168,76,.18);color:#8A6D1F}
+.chip.internal{background:rgba(124,58,237,.12);color:#5B21B6}
+.chip.partner{background:rgba(29,185,84,.13);color:#137A38}
+.chip.gray{background:rgba(107,122,141,.12);color:#556}
+.chip.neutral{background:var(--cs-bg);color:var(--cs-sub);border:1px solid var(--cs-border)}
+.chip.red2{background:rgba(229,57,53,.12);color:#B71C1C}
+.chip.blue2{background:rgba(46,134,193,.13);color:#1B5E88}
+.chip.gold2{background:rgba(201,168,76,.18);color:#8A6D1F}
+.chip.pri-red{background:rgba(229,57,53,.14);color:#B71C1C}
+.chip.pri-gold{background:rgba(201,168,76,.18);color:#8A6D1F}
+.chip.pri-blue{background:rgba(46,134,193,.13);color:#1B5E88}
+.chip.pri-gray{background:rgba(107,122,141,.12);color:#556}
+/* status dots */
+.sdot{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600}
+.sdot i{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sdot.up i{background:var(--cs-green);box-shadow:0 0 0 3px rgba(29,185,84,.18)}
+.sdot.up{color:#137A38}
+.sdot.degraded i{background:var(--cs-amber);box-shadow:0 0 0 3px rgba(217,119,6,.18)}
+.sdot.degraded{color:#9A5B00}
+.sdot.down i{background:var(--cs-red);box-shadow:0 0 0 3px rgba(229,57,53,.2)}
+.sdot.down{color:#B71C1C}
+.sdot.building i{background:var(--cs-sky);box-shadow:0 0 0 3px rgba(46,134,193,.18)}
+.sdot.building{color:#1B5E88}
+.sdot.paused i{background:var(--cs-sub)}
+.sdot.paused{color:var(--cs-sub)}
+
+/* progress bar */
+.pbar{height:7px;background:var(--cs-bg);border-radius:6px;overflow:hidden;min-width:90px}
+.pbar > i{display:block;height:100%;background:var(--cs-accent);border-radius:6px}
+.pbar.green > i{background:var(--cs-green)}
+.pbar.blue > i{background:var(--cs-sky)}
+
+/* ── STATUS BOARD GRID ── */
+.status-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.status-card{background:#fff;border:1px solid var(--cs-border);border-left:4px solid var(--cs-green);border-radius:12px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.04);cursor:pointer;transition:all .14s}
+.status-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.09);transform:translateY(-1px)}
+.status-card.down{border-left-color:var(--cs-red)}
+.status-card.degraded{border-left-color:var(--cs-amber)}
+.status-card.building{border-left-color:var(--cs-sky)}
+.status-card.paused{border-left-color:var(--cs-sub)}
+.sc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.sc-name{font-size:14px;font-weight:700;color:var(--cs-navy)}
+.sc-repo{font-size:11px;color:var(--cs-sub);font-family:'DM Mono',monospace;margin-top:2px}
+.sc-url{font-size:11px;color:var(--cs-sky);margin-top:8px;word-break:break-all;text-decoration:none}
+.sc-url:hover{text-decoration:underline}
+.sc-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;align-items:center}
+.sc-metric{font-size:10.5px;color:var(--cs-sub)}
+.sc-metric b{color:var(--cs-navy);font-family:'DM Mono',monospace}
+
+/* ── PLATFORM MAP (Applications / Infrastructure) ── */
+.platform-map{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:20px}
+@media (max-width:900px){ .platform-map{grid-template-columns:1fr} }
+.pm-col{display:flex;flex-direction:column}
+.pm-cat{font-size:22px;font-weight:400;color:#8A93A0;letter-spacing:-.2px;text-align:center;margin-bottom:4px}
+.pm-cat-sub{font-size:11.5px;color:var(--cs-sub);text-align:center;margin-bottom:16px}
+.pm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media (max-width:520px){ .pm-grid{grid-template-columns:1fr} }
+.pm-col.wide .pm-grid{grid-template-columns:repeat(3,1fr)}
+@media (max-width:1200px){ .pm-col.wide .pm-grid{grid-template-columns:repeat(2,1fr)} }
+.pm-tile{position:relative;background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:18px 16px 16px;text-decoration:none;color:inherit;cursor:pointer;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.04);display:block}
+.pm-tile:hover{border-color:var(--cs-sky);box-shadow:0 8px 22px rgba(46,134,193,.16);transform:translateY(-2px)}
+.pm-tile:active{transform:translateY(0)}
+.pm-ico{width:44px;height:44px;border-radius:11px;background:rgba(27,79,138,.09);border:1.5px solid rgba(27,79,138,.28);display:flex;align-items:center;justify-content:center;margin-bottom:12px;transition:all .15s}
+.pm-tile:hover .pm-ico{background:rgba(46,134,193,.12);border-color:rgba(46,134,193,.4)}
+.pm-tile:hover .pm-ico svg{stroke:var(--cs-sky)}
+.pm-name{font-size:14px;font-weight:700;color:var(--cs-navy);margin-bottom:4px}
+.pm-desc{font-size:11.5px;color:var(--cs-sub);line-height:1.45}
+.pm-tile.soon{background:#FCFBF9;border-style:dashed;box-shadow:none}
+.pm-tile.soon .pm-ico{background:rgba(107,122,141,.08);border-color:rgba(107,122,141,.25)}
+.pm-tile.soon .pm-name{color:#5B6675}
+.pm-tile.soon .pm-ico svg{stroke:#9AA6B4}
+.pm-tile.soon:hover{border-color:var(--cs-accent);border-style:solid;box-shadow:0 8px 22px rgba(201,168,76,.18)}
+.pm-tile.soon:hover .pm-ico{background:rgba(201,168,76,.15);border-color:rgba(201,168,76,.45)}
+.pm-tile.soon:hover .pm-ico svg{stroke:var(--cs-accent)}
+.pm-tile.soon:hover .pm-name{color:var(--cs-navy)}
+.pm-badge{position:absolute;top:14px;right:14px;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--cs-accent);background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3)}
+.pm-badge.new{color:var(--cs-sky);background:rgba(46,134,193,.1);border-color:rgba(46,134,193,.3)}
+.pm-badge.invest{color:var(--cs-green);background:rgba(29,185,84,.1);border-color:rgba(29,185,84,.3)}
+.pm-badge.count{color:var(--cs-navy);background:var(--cs-bg);border-color:var(--cs-border)}
+
+/* ── CARD GRID (partners / offerings / deals) ── */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.info-card{background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:all .14s}
+.info-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ic-name{font-size:15px;font-weight:700;color:var(--cs-navy)}
+.ic-sub{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
+.ic-body{font-size:12.5px;color:var(--cs-text);line-height:1.5;margin-top:8px}
+.ic-row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--cs-border)}
+.ic-row:last-child{border-bottom:none}
+.ic-row .lbl{color:var(--cs-sub)}
+.ic-row .val{color:var(--cs-navy);font-weight:600;font-family:'DM Mono',monospace}
+.ic-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.ic-actions{display:flex;gap:8px;margin-top:14px}
+.ic-actions button{flex:1;font-size:11.5px;padding:7px;border-radius:8px;border:1px solid var(--cs-border);background:#fff;color:var(--cs-sub);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:all .12s}
+.ic-actions button:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+.ic-actions button.danger:hover{border-color:var(--cs-red);color:var(--cs-red)}
+
+/* ── SUB-FILTER PILLS ── */
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.fpill{background:#fff;border:1.5px solid var(--cs-border);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--cs-sub);cursor:pointer;transition:all .12s;font-family:'DM Sans',sans-serif}
+.fpill:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+.fpill.on{background:var(--cs-navy);border-color:var(--cs-navy);color:#fff}
+
+/* ── CRM DETAIL DRAWER ── */
+.drawer-bg{position:fixed;inset:0;background:rgba(11,30,53,.45);z-index:400;display:none;backdrop-filter:blur(3px)}
+.drawer-bg.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:94vw;background:var(--cs-bg);z-index:401;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;box-shadow:-12px 0 40px rgba(0,0,0,.25)}
+.drawer.on{transform:translateX(0)}
+.dr-head{background:var(--cs-navy);padding:22px 24px;position:sticky;top:0;z-index:2}
+.dr-head h3{color:#fff;font-size:19px;font-weight:700}
+.dr-head .dr-sub{color:rgba(255,255,255,.55);font-size:12px;margin-top:3px}
+.dr-close{position:absolute;top:20px;right:20px;background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;line-height:1}
+.dr-body{padding:20px 24px 40px}
+.dr-sec{margin-bottom:24px}
+.dr-sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cs-accent);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.dr-sec-title button{font-size:11px;background:#fff;border:1px solid var(--cs-border);border-radius:7px;padding:4px 10px;color:var(--cs-sky);cursor:pointer;font-weight:600;font-family:'DM Sans',sans-serif}
+.log-item{background:#fff;border:1px solid var(--cs-border);border-radius:10px;padding:12px 14px;margin-bottom:9px}
+.log-item .li-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.log-item .li-kind{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.log-item .li-kind.task{color:var(--cs-sky)}
+.log-item .li-kind.note{color:var(--cs-sub)}
+.log-item .li-kind.status{color:var(--cs-accent)}
+.log-item .li-date{font-size:10.5px;color:var(--cs-sub);font-family:'DM Mono',monospace}
+.log-item .li-txt{font-size:12.5px;color:var(--cs-text);line-height:1.5}
+.log-item .li-done{text-decoration:line-through;opacity:.55}
+.dr-field{margin-bottom:12px}
+.dr-field label{display:block;font-size:11px;font-weight:600;color:var(--cs-sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.dr-field input,.dr-field select,.dr-field textarea{width:100%;border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--cs-text);background:#fff;outline:none}
+.dr-field textarea{min-height:70px;resize:vertical}
+.dr-kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:12.5px}
+.dr-kv .k{color:var(--cs-sub)}
+.dr-kv .v{color:var(--cs-navy);font-weight:600}
+
+/* ── MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-bg.on{display:flex}
+.modal{background:#fff;border-radius:16px;padding:28px;width:520px;max-width:94vw;max-height:88vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.2)}
+.modal h3{font-size:20px;font-weight:700;color:var(--cs-navy);margin-bottom:6px}
+.modal .modal-sub{font-size:12.5px;color:var(--cs-sub);margin-bottom:20px}
+.mrow{margin-bottom:14px}
+.mrow.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mrow label{display:block;font-size:11px;color:var(--cs-sub);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.mrow input,.mrow select,.mrow textarea{width:100%;border:1.5px solid var(--cs-border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--cs-text);background:#fff;outline:none;transition:border-color .12s}
+.mrow textarea{min-height:70px;resize:vertical}
+.mrow input:focus,.mrow select:focus,.mrow textarea:focus{border-color:var(--cs-sky)}
+.mbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:22px}
+.mb-cancel{background:#F4F1EC;border:1px solid var(--cs-border);color:var(--cs-sub);border-radius:8px;padding:9px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif}
+.mb-create{background:var(--cs-navy);color:#fff;border:none;border-radius:8px;padding:9px 22px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:background .12s}
+.mb-create:hover{background:var(--cs-blue)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cs-navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 12px 30px rgba(0,0,0,.25);opacity:0;transition:all .22s;z-index:600;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast b{color:var(--cs-gold)}
+
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.proj-card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:18px;cursor:pointer;transition:all .15s;text-decoration:none;color:inherit;display:block}
+.proj-card:hover{border-color:var(--cs-sky);box-shadow:0 4px 16px rgba(46,134,193,.12);transform:translateY(-1px)}
+.pc-name{font-size:14px;font-weight:600;color:var(--cs-navy);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-addr{font-size:11px;color:var(--cs-sub);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-meta{display:flex;gap:6px;flex-wrap:wrap}
+.pc-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:rgba(27,79,138,.08);color:var(--cs-blue)}
+.pc-date{font-size:10px;color:var(--cs-sub);margin-top:8px}
+.empty{text-align:center;padding:44px 20px;color:var(--cs-sub);background:#fff;border:1px dashed var(--cs-border);border-radius:14px;font-size:13px}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--cs-sub);font-size:13px}
+.spin{width:18px;height:18px;border:2px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#app{display:none}
+.mut{color:var(--cs-sub)}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── CONTRACT & PRICING ── */
+.chip.tier4{background:rgba(0,169,164,.16);color:#00736F}
+.ct-fieldset{border:1px solid var(--cs-border);border-radius:12px;padding:16px;margin:18px 0 4px;background:#FAFCFD}
+.ct-legend{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cs-navy);margin-bottom:14px}
+.ct-legend em{font-style:normal;font-size:10px;font-weight:600;color:var(--cs-sub);text-transform:none;letter-spacing:0}
+.ct-legend a{font-size:10.5px;font-weight:600;color:var(--cs-red);cursor:pointer;text-transform:none;letter-spacing:0}
+.ct-hint{font-size:10.5px;color:var(--cs-sub);margin-top:4px}
+.ct-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ct-toggle{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--cs-border);border-radius:8px;padding:8px 12px;cursor:pointer;user-select:none}
+.ct-toggle input{display:none}
+.ct-track{width:38px;height:21px;border-radius:12px;background:var(--cs-border);position:relative;flex-shrink:0;transition:background .15s}
+.ct-track::after{content:'';position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+.ct-toggle.on .ct-track{background:var(--cs-amber)}
+.ct-toggle.on .ct-track::after{transform:translateX(17px)}
+.ct-toggle span.lbl{font-size:12px;font-weight:600;color:var(--cs-sub)}
+.ct-toggle.on span.lbl{color:#9A5B00}
+.ct-preview{margin-top:16px;background:var(--cs-navy);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ct-preview div{font-size:9.5px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.ct-preview b{display:block;font-family:'DM Mono',monospace;font-size:16px;font-weight:500;color:#fff;margin-top:4px;letter-spacing:-.3px}
+.ct-preview i{display:block;font-style:normal;font-size:10px;color:var(--cs-gold);margin-top:3px}
+@media(max-width:520px){.ct-preview{grid-template-columns:repeat(2,1fr)}}
+.ct-waived{text-decoration:line-through;opacity:.6}
+.ct-flag{font-size:10px;font-weight:700;color:var(--cs-amber)}
+.ct-store-note{color:var(--cs-amber);font-weight:600}
+
+/* ── CONTRACT TABLE: CRM link, row actions, totals ── */
+.ct-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:16px}
+.ct-seg{display:inline-flex;background:#fff;border:1.5px solid var(--cs-border);border-radius:9px;overflow:hidden}
+.ct-seg button{background:none;border:none;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--cs-sub);cursor:pointer;font-family:'DM Sans',sans-serif;border-right:1px solid var(--cs-border);transition:all .12s}
+.ct-seg button:last-child{border-right:none}
+.ct-seg button:hover{color:var(--cs-navy)}
+.ct-seg button.on{background:var(--cs-navy);color:#fff}
+.ct-search{flex:1;min-width:170px;border:1.5px solid var(--cs-border);border-radius:9px;padding:8px 12px;font-size:12.5px;font-family:'DM Sans',sans-serif;color:var(--cs-text);background:#fff;outline:none}
+.ct-search:focus{border-color:var(--cs-sky)}
+.ct-link-note{font-size:11px;color:var(--cs-sub);margin-top:8px}
+.ct-link-note b{color:var(--cs-navy)}
+.ct-acts{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+.ct-ico{border:1.5px solid var(--cs-border);background:#fff;border-radius:7px;width:29px;height:27px;cursor:pointer;font-size:12px;color:var(--cs-sub);display:inline-flex;align-items:center;justify-content:center;transition:all .12s;padding:0;font-family:'DM Sans',sans-serif;line-height:1}
+.ct-ico:hover{border-color:var(--cs-sky);color:var(--cs-sky);background:#F8FBFF}
+.ct-ico.danger:hover{border-color:var(--cs-red);color:var(--cs-red);background:rgba(229,57,53,.06)}
+.ct-set{color:var(--cs-sky);font-weight:700;font-family:'DM Sans',sans-serif;font-size:11.5px}
+.ptable tbody tr.ct-nc td{background:#FCFDFE}
+.ptable tbody tr.ct-nc .site-nm{color:var(--cs-sub)}
+.ct-orphan{font-size:9.5px;font-weight:700;color:var(--cs-red);background:rgba(229,57,53,.1);border-radius:20px;padding:2px 8px;margin-left:6px;white-space:nowrap}
+
+.ptable tfoot td{background:var(--cs-bg);border-top:2px solid var(--cs-navy);border-bottom:none;padding:13px 14px;vertical-align:top}
+.ptable tfoot .tf-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cs-navy)}
+.ptable tfoot .tf-big{font-family:'DM Mono',monospace;font-size:14.5px;font-weight:500;color:var(--cs-navy);letter-spacing:-.3px;white-space:nowrap}
+.ptable tfoot .tf-sub{font-size:10px;font-weight:600;color:var(--cs-sub);margin-top:4px;font-family:'DM Sans',sans-serif;line-height:1.45}
+.ptable tfoot .tf-sub .g{color:#137A38}
+.ptable tfoot .tf-sub .a{color:var(--cs-amber)}
+
+.ct-choice{border:1.5px solid var(--cs-border);border-radius:10px;padding:13px 15px;margin-bottom:10px;cursor:pointer;background:#fff;transition:all .12s}
+.ct-choice:hover{border-color:var(--cs-sky);background:#F8FBFF}
+.ct-choice.danger:hover{border-color:var(--cs-red);background:rgba(229,57,53,.05)}
+.ct-choice-t{font-size:13.5px;font-weight:700;color:var(--cs-navy)}
+.ct-choice.danger .ct-choice-t{color:var(--cs-red)}
+.ct-choice-s{font-size:11.5px;color:var(--cs-sub);margin-top:3px;line-height:1.5}
+.ct-del-note{font-size:11px;color:var(--cs-sub);margin-top:8px;min-height:15px}
+.ct-del-note.err{color:var(--cs-red);font-weight:600}
+
+@media(max-width:1024px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:640px){
+  #main{padding:24px 16px 48px}
+  .dash-welcome{font-size:24px}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .table-wrap{overflow-x:auto}
+  .ptable{min-width:960px}
+  .drawer{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ AUTH SCREEN (unchanged — Google + domain restriction preserved) ══════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="/clearsky-omega-dark.png" alt="ClearSky OMEGA" class="auth-omega">
+    </div>
+    <div class="auth-company">Admin Console</div>
+    <div class="auth-sub" id="auth-sub">ClearSky-OMEGA · platform operations &amp; client management</div>
+
+    <div class="auth-fields">
+      <div class="auth-field">
+        <label for="auth-email">Work email</label>
+        <input id="auth-email" type="email" placeholder="you@clearsky-usa.com" autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label for="auth-pass">Password</label>
+        <input id="auth-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div class="auth-field" id="auth-name-wrap" style="display:none">
+        <label for="auth-name">Full name</label>
+        <input id="auth-name" type="text" placeholder="Jane Smith" autocomplete="name">
+      </div>
+    </div>
+    <button class="btn-email" id="email-auth-btn" onclick="emailAuth()">Sign in</button>
+    <div class="auth-toggle" id="auth-toggle-wrap">
+      New team member? <a onclick="toggleAuthMode()" id="auth-toggle-link">Create an account</a>
+    </div>
+
+    <div class="auth-divider" style="margin-top:22px"><span>OR</span></div>
+
+    <button class="btn-google" id="google-signin-btn" onclick="signInWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Sign in with Google
+    </button>
+    <p class="auth-note">Restricted to ClearSky team &middot; admin access only</p>
+    <div id="auth-err"></div>
+    <div id="auth-ok"></div>
+  </div>
+</div>
+
+<!-- ══════════════ ADMIN APP ══════════════ -->
+<div id="app">
+  <div id="topbar">
+    <a href="/" class="tb-logo">
+      <img src="/clearsky-omega-mark-white.png" alt="OMEGA" class="tb-omega">
+      <span class="tb-logo-txt">Clear<span>Sky</span> OMEGA</span>
+    </a>
+    <div class="tb-sep"></div>
+    <span class="tb-portal">Admin Console</span>
+    <span class="tb-admin-chip">Internal</span>
+    <div class="tb-spacer"></div>
+    <div class="tb-user">
+      <div id="tb-avatar-wrap"></div>
+      <span class="tb-name" id="tb-name"></span>
+      <button class="btn-signout" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- TAB NAV -->
+  <div id="tabbar">
+    <div class="tabbar-inner" id="tab-nav"><!-- rendered by renderTabs() --></div>
+  </div>
+
+  <div id="main">
+
+    <!-- ════ TAB: OVERVIEW ════ -->
+    <div class="tab-panel on" id="tab-overview">
+      <div class="dash-label">ADMIN CONSOLE</div>
+      <div class="dash-welcome" id="welcome-name">Welcome back</div>
+      <div class="dash-sub">Command center for the ClearSky-OMEGA platform — partner performance, clients sold and onboarded by tier, live deployment health, and the open work across every account. The single source of truth for who's producing, what's live, and what's next.</div>
+
+      <!-- HERO: partner-centric roll-up -->
+      <div class="block-head">
+        <div>
+          <div class="block-title">Partner &amp; Client Performance</div>
+          <div class="block-sub">Roll-up across every channel partner and the clients they've sold &amp; onboarded</div>
+        </div>
+        <button class="btn-ghost" onclick="switchTab('partners')">Open Partnerships →</button>
+      </div>
+      <div class="kpi-grid" id="ov-kpi-grid"></div>
+
+      <!-- CLIENTS BY TIER -->
+      <div class="block-head">
+        <div><div class="block-title">Clients by Tier</div><div class="block-sub">Core · Performance · Enterprise — onboarded client accounts by plan</div></div>
+      </div>
+      <div class="kpi-grid" id="ov-tier-grid" style="grid-template-columns:repeat(4,1fr)"></div>
+
+      <!-- CONTRACT REVENUE -->
+      <div class="block-head">
+        <div><div class="block-title">Contract Revenue</div><div class="block-sub">Live roll-up of every active contract — month-to-month, each on a 12-month term</div></div>
+        <button class="btn-ghost" onclick="ctExportCsv()">Export CSV</button>
+      </div>
+      <div class="kpi-grid" id="ct-kpis"></div>
+
+      <div class="ct-toolbar">
+        <div class="ct-seg" id="ct-seg">
+          <button data-f="all" class="on" onclick="ctFilter('all')">All CRM clients</button>
+          <button data-f="contract" onclick="ctFilter('contract')">Contracted</button>
+          <button data-f="active" onclick="ctFilter('active')">Active only</button>
+        </div>
+        <input class="ct-search" id="ct-q" placeholder="Search clients&hellip;" oninput="ctSearch()">
+        <button class="btn-ghost" onclick="ctSyncCrm()">&#8635; Sync from CRM</button>
+        <button class="btn-ghost" id="ct-clean" style="display:none;border-color:rgba(229,57,53,.35);color:var(--cs-red)" onclick="ctCleanup()">&#9888; Clean up duplicates</button>
+        <button class="btn-ghost" onclick="switchTab('crm')">Open CRM &rarr;</button>
+      </div>
+      <div class="ct-link-note" id="ct-link-note"></div>
+
+      <div class="table-wrap" style="margin-top:12px">
+        <table class="ptable">
+          <thead>
+            <tr><th>Client</th><th>Tier</th><th>Seats</th><th>Discount</th><th>MRR</th><th>Annual Total</th><th>Dev Hrs/mo</th><th>Service Fee</th><th>Renewal</th><th style="text-align:right">Actions</th></tr>
+          </thead>
+          <tbody id="ct-body"></tbody>
+          <tfoot id="ct-foot"></tfoot>
+        </table>
+        <div class="table-foot">Every client in the Internal CRM appears here. Click a row (or &#9998;) to price it &middot; &#128465; to remove. <span id="ct-store-note"></span></div>
+      </div>
+
+      <!-- OPEN WORK / OPS -->
+      <div class="block-head">
+        <div><div class="block-title">Open Work &amp; Reliability</div><div class="block-sub">Tasks in flight, shipped this cycle, and errors across all portals &amp; tools</div></div>
+        <button class="btn-ghost" onclick="switchTab('improve')">Open Tool Board →</button>
+      </div>
+      <div class="ops-strip" id="ov-ops-strip"></div>
+
+      <!-- PARTNER LEADERBOARD -->
+      <div class="block-head">
+        <div><div class="block-title">Partner Leaderboard</div><div class="block-sub">Clients onboarded per partner, with tier mix &amp; open-task load</div></div>
+      </div>
+      <div class="pl-wrap" id="ov-leaderboard"></div>
+
+      <!-- NEEDS ATTENTION -->
+      <div class="block-head">
+        <div><div class="block-title">Needs Attention</div><div class="block-sub">Anything down, degraded, or with overdue tasks surfaces here first</div></div>
+      </div>
+      <div id="ov-attention"></div>
+    </div>
+
+    <!-- ════ TAB: CLIENTS / INVENTORY ════ -->
+    <div class="tab-panel" id="tab-clients">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Client Inventory &amp; Repo Registry<span class="cnt" id="cl-count">0</span></div>
+          <div class="block-sub">Every customer portal repository, its tier, deployment target &amp; live status. Add a row each time you spin up a new repo.</div>
+        </div>
+        <button class="btn-add" onclick="openClientModal()">+ Add Client / Repo</button>
+      </div>
+      <div class="filter-row" id="cl-filters"></div>
+      <div class="table-wrap">
+        <table class="ptable">
+          <thead>
+            <tr>
+              <th>Client / Workspace</th><th>Tier</th><th>Repository</th><th>Deployment</th>
+              <th>Status</th><th>Build Progress</th><th>Type</th><th>Next Action</th>
+            </tr>
+          </thead>
+          <tbody id="cl-body"></tbody>
+        </table>
+        <div class="table-foot">Click any row to open the client's CRM record · <a onclick="switchTab('crm')">Open full CRM →</a></div>
+      </div>
+    </div>
+
+    <!-- ════ TAB: STATUS BOARD ════ -->
+    <div class="tab-panel" id="tab-status">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Deployment Status Board</div>
+          <div class="block-sub">Every deployed portal &amp; tool at a glance — is anyone down? Health, uptime &amp; last check per property.</div>
+        </div>
+        <button class="btn-ghost" onclick="runHealthSweep()">↻ Re-check all</button>
+      </div>
+      <div class="filter-row" id="st-filters"></div>
+      <div class="status-grid" id="st-grid"></div>
+    </div>
+
+    <!-- ════ TAB: INFRASTRUCTURE ════ -->
+    <div class="tab-panel" id="tab-infra">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Infrastructure Ecosystems</div>
+          <div class="block-sub">Manage catalogs, offerings, partners &amp; finance deals inside each value-chain ecosystem.</div>
+        </div>
+      </div>
+      <div class="platform-map" style="grid-template-columns:1fr">
+        <div class="pm-col">
+          <div class="pm-grid" id="infra-grid" style="grid-template-columns:repeat(4,1fr)"></div>
+        </div>
+      </div>
+
+      <div class="block-head" style="margin-top:36px">
+        <div>
+          <div class="block-title" id="infra-detail-title">Procurement Marketplace</div>
+          <div class="block-sub" id="infra-detail-sub">Catalog, offerings &amp; partners in this ecosystem</div>
+        </div>
+        <button class="btn-add" onclick="openOfferingModal()">+ Add Offering / Deal</button>
+      </div>
+      <div class="card-grid" id="infra-detail-grid"></div>
+    </div>
+
+    <!-- ════ TAB: PARTNERSHIPS ════ -->
+    <div class="tab-panel" id="tab-partners">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Partnership Agreements<span class="cnt" id="pt-count">0</span></div>
+          <div class="block-sub">Everyone working with us — categorized by role. Track agreement type, status &amp; what they contribute.</div>
+        </div>
+        <button class="btn-add" onclick="openPartnerModal()">+ Add Partner</button>
+      </div>
+      <div class="filter-row" id="pt-filters"></div>
+      <div class="card-grid" id="pt-grid"></div>
+    </div>
+
+    <!-- ════ TAB: CRM ════ -->
+    <div class="tab-panel" id="tab-crm">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Internal CRM<span class="cnt" id="crm-count">0</span></div>
+          <div class="block-sub">Every client we build a repository for. Log status reports, tasks &amp; notes so a new dev can pick up any account instantly.</div>
+        </div>
+        <button class="btn-add" onclick="openClientModal()">+ New Client</button>
+      </div>
+      <div class="filter-row" id="crm-filters"></div>
+      <div class="table-wrap">
+        <table class="ptable">
+          <thead>
+            <tr><th>Client</th><th>Tier</th><th>Owner</th><th>Health</th><th>Open Tasks</th><th>Last Status Report</th><th>Updated</th></tr>
+          </thead>
+          <tbody id="crm-body"></tbody>
+        </table>
+        <div class="table-foot">Click a client to open its record — log tasks, notes &amp; status reports.</div>
+      </div>
+    </div>
+
+    <!-- ════ TAB: APPLICATIONS ════ -->
+    <div class="tab-panel" id="tab-apps">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Applications</div>
+          <div class="block-sub">One catalog powers every portal. Edit tools in omega-tools.js, then publish so customer marketplaces pick them up.<span id="apps-published-note" class="block-sub"></span></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn-ghost" id="apps-import-btn" onclick="publishApps()">&#8635; Import / Update Applications</button>
+          <button class="btn-add" onclick="openNewProjectModal('bess')">+ New Project</button>
+        </div>
+      </div>
+
+      <div class="platform-map" style="grid-template-columns:1fr">
+        <div class="pm-col wide">
+          <div class="pm-grid" id="apps-grid" style="grid-template-columns:repeat(3,1fr)"></div>
+        </div>
+      </div>
+
+      <div class="block-head" style="margin-top:34px">
+        <div><div class="block-title">Recent Projects<span class="cnt" id="apps-proj-count">0</span></div><div class="block-sub">ClearSky's own site maps &amp; models</div></div>
+      </div>
+      <div id="apps-recent"></div>
+    </div>
+
+    <!-- ════ TAB: TOOL IMPROVEMENT ════ -->
+    <div class="tab-panel" id="tab-improve">
+      <div class="block-head">
+        <div>
+          <div class="block-title">Tool Improvement<span class="cnt" id="imp-count">0</span></div>
+          <div class="block-sub">Shared board for you &amp; collaborator partners — file bugs, request features, track what's shipped. Every entry is attributed to whoever filed it.</div>
+        </div>
+        <button class="btn-add" onclick="openImproveModal()">+ New Item</button>
+      </div>
+      <div class="kpi-grid" id="imp-kpis" style="grid-template-columns:repeat(4,1fr)"></div>
+      <div class="filter-row" id="imp-filters" style="margin-top:20px"></div>
+      <div class="table-wrap">
+        <table class="ptable">
+          <thead>
+            <tr><th>Item</th><th>Tool</th><th>Type</th><th>Priority</th><th>Status</th><th>Reporter</th><th>Assignee</th><th>Updated</th></tr>
+          </thead>
+          <tbody id="imp-body"></tbody>
+        </table>
+        <div class="table-foot">Click a row to update status, priority, or assignee.</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--cs-border);display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--cs-sub)">
+      <span>ClearSky-OMEGA Admin Console · <strong style="color:var(--cs-navy)">internal source of truth</strong></span>
+      <span>© 2026 ClearSky Energy Solutions LLC · Platform &amp; software authored by Tommy Gilmer · Proprietary</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DRAWER (CRM client record) ══ -->
+<div class="drawer-bg" id="drawer-bg" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dr-head">
+    <button class="dr-close" onclick="closeDrawer()">✕</button>
+    <h3 id="dr-title">Client</h3>
+    <div class="dr-sub" id="dr-sub"></div>
+  </div>
+  <div class="dr-body" id="dr-body"></div>
+</div>
+
+<!-- ══ MODALS ══ -->
+<div class="modal-bg" id="client-modal">
+  <div class="modal">
+    <h3 id="client-modal-title">Add Client / Repository</h3>
+    <div class="modal-sub">One entry per customer portal. This appears in the Inventory, Status Board &amp; CRM.</div>
+    <div class="mrow"><label>Client / Workspace Name</label><input id="cm-name" placeholder="e.g. NextNRG"></div>
+    <div class="mrow two">
+      <div><label>Tier</label><select id="cm-tier">
+        <option value="tier1">Tier 1 · Field — $1,299/mo</option>
+        <option value="tier2">Tier 2 · Pro — $2,499/mo</option>
+        <option value="tier3">Tier 3 · Enterprise — $150k–350k/yr</option>
+        <option value="tier4">Tier 4 · Platform — custom</option>
+        <option value="internal">Internal</option>
+        <option value="partner">Partner</option>
+      </select></div>
+      <div><label>Account Type</label><select id="cm-type"><option value="developer">Developer</option><option value="partner">Partner</option><option value="internal">Internal</option></select></div>
+    </div>
+    <div class="mrow two">
+      <div><label>Email Domain (tenant lock)</label><input id="cm-domain" placeholder="nextnrg.com"></div>
+      <div><label>Owner (internal)</label><input id="cm-owner" placeholder="Tommy"></div>
+    </div>
+    <div class="mrow"><label>GitHub Repository</label><input id="cm-repo" placeholder="clearsky-nextnrg"></div>
+    <div class="mrow"><label>Deployment URL</label><input id="cm-url" placeholder="https://nextnrg.csebuilders.com"></div>
+    <div class="mrow two">
+      <div><label>Status</label><select id="cm-status"><option value="up">Up / Live</option><option value="building">Building</option><option value="degraded">Degraded</option><option value="down">Down</option><option value="paused">Paused</option></select></div>
+      <div><label>Build Progress (%)</label><input id="cm-progress" type="number" min="0" max="100" placeholder="100"></div>
+    </div>
+    <div class="mrow two">
+      <div><label>Next Action</label><input id="cm-next" placeholder="e.g. Wire Monday.com write-back"></div>
+      <div><label>Sold By / Channel Partner</label><input id="cm-soldby" placeholder="e.g. Amperage Capital · or Direct / ClearSky"></div>
+    </div>
+
+    <!-- ══ CONTRACT & PRICING (2026 tier card) ══ -->
+    <div class="ct-fieldset">
+      <div class="ct-legend">
+        <span>Contract &amp; Pricing <em>· month-to-month, on a 12-month term</em></span>
+        <a onclick="ctClear()">Clear contract</a>
+      </div>
+
+      <div class="mrow two">
+        <div><label>Contract Status</label><select id="ct-status">
+          <option value="active">Active — counts toward revenue</option>
+          <option value="pending">Pending / in negotiation</option>
+          <option value="paused">Paused</option>
+          <option value="churned">Churned</option>
+          <option value="none">No contract (internal / partner)</option>
+        </select></div>
+        <div><label>Billing Cadence</label><select id="ct-billing">
+          <option value="monthly">Monthly</option>
+          <option value="annual">Annual prepay (2 months free)</option>
+        </select></div>
+      </div>
+
+      <div class="mrow two">
+        <div><label>Contract Start</label><input id="ct-start" type="date"></div>
+        <div><label>Renewal Date (start + 12 mo)</label><input id="ct-renew" readonly style="background:var(--cs-bg);color:var(--cs-sub)"></div>
+      </div>
+
+      <div class="mrow two">
+        <div>
+          <label id="ct-base-lbl">Base Rate ($/mo)</label>
+          <input id="ct-base" type="number" min="0" step="1" placeholder="1299">
+          <div class="ct-hint" id="ct-base-hint">List rate for the selected tier — override to price the deal.</div>
+        </div>
+        <div>
+          <label>Seats</label>
+          <div class="ct-mini">
+            <input id="ct-seats" type="number" min="0" step="1" placeholder="Total">
+            <input id="ct-seatsincl" type="number" min="0" step="1" placeholder="Included">
+          </div>
+          <div class="ct-hint">Total / included. Extra seats bill at <span id="ct-seatrate-inline"></span>.</div>
+        </div>
+      </div>
+
+      <div class="mrow two">
+        <div><label>Extra Seat Rate ($/mo)</label><input id="ct-seatrate" type="number" min="0" step="1" placeholder="200"></div>
+        <div>
+          <label>Discount</label>
+          <div class="ct-mini">
+            <select id="ct-disctype"><option value="none">No discount</option><option value="pct">% off</option><option value="amt">$ off /mo</option></select>
+            <input id="ct-discval" type="number" min="0" step="0.5" placeholder="0">
+          </div>
+          <div class="ct-hint">Applied to the monthly recurring line, before service fee.</div>
+        </div>
+      </div>
+
+      <div class="mrow two">
+        <div>
+          <label>Annual Service Fee ($/yr)</label>
+          <input id="ct-svc" type="number" min="0" step="1" placeholder="3400">
+          <div class="ct-hint">Year one covers onboarding — no separate setup line.</div>
+        </div>
+        <div>
+          <label>Service Fee Waived?</label>
+          <label class="ct-toggle" id="ct-svc-toggle"><input type="checkbox" id="ct-svcwaived"><span class="ct-track"></span><span class="lbl">Billing normally</span></label>
+          <div class="ct-hint" id="ct-svc-hint">Waive it and it drops out of revenue now, and is picked up at renewal.</div>
+        </div>
+      </div>
+
+      <div class="mrow two">
+        <div><label>Included Dev Hours / mo</label><input id="ct-devhrs" type="number" min="0" step="0.5" placeholder="0"></div>
+        <div><label>Dev Rate ($/hr)</label><input id="ct-devrate" type="number" min="0" step="5" placeholder="250"></div>
+      </div>
+
+      <div class="mrow"><label>Deal / Discount Note</label><input id="ct-note" placeholder="e.g. 15% off first 12 mo — signed via Andrew, service fee waived year one"></div>
+
+      <div class="ct-preview" id="ct-preview"></div>
+    </div>
+
+    <div class="mbtns"><button class="mb-cancel" onclick="ctAskDeleteCurrent()" style="margin-right:auto;color:var(--cs-red);border-color:rgba(229,57,53,.3)">Delete client</button><button class="mb-cancel" onclick="closeModal('client-modal')">Cancel</button><button class="mb-create" onclick="saveClient()">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="partner-modal">
+  <div class="modal">
+    <h3 id="partner-modal-title">Add Partner</h3>
+    <div class="modal-sub">Categorize by the role they play in the platform.</div>
+    <div class="mrow"><label>Partner Name</label><input id="pm-name" placeholder="e.g. Amperage Capital"></div>
+    <div class="mrow two">
+      <div><label>Category</label><select id="pm-cat">
+        <option value="data">Data Supplier</option>
+        <option value="engineering">Engineering Firm</option>
+        <option value="tasks">Task / Ops Management</option>
+        <option value="tooling">Tooling / Dev Improvement</option>
+        <option value="financing">Financing / Capital</option>
+        <option value="aggregator">Aggregator (VPP/DR)</option>
+        <option value="offtaker">AI / Data Offtaker</option>
+        <option value="supply">Equipment Supply</option>
+      </select></div>
+      <div><label>Agreement Status</label><select id="pm-status"><option value="signed">Signed</option><option value="loi">LOI / MOU</option><option value="negotiating">Negotiating</option><option value="prospect">Prospect</option><option value="paused">Paused</option></select></div>
+    </div>
+    <div class="mrow two">
+      <div><label>Contact</label><input id="pm-contact" placeholder="Name / email"></div>
+      <div><label>Ecosystem</label><select id="pm-eco"><option value="">— none —</option><option value="procurement">Procurement</option><option value="aggregators">Aggregators</option><option value="financing">Financing</option><option value="offtakers">AI Offtakers</option></select></div>
+    </div>
+    <div class="mrow"><label>What they contribute</label><textarea id="pm-notes" placeholder="e.g. Supplies live utility rate data feeds for CT / MA."></textarea></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="closeModal('partner-modal')">Cancel</button><button class="mb-create" onclick="savePartner()">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="offering-modal">
+  <div class="modal">
+    <h3>Add Offering / Finance Deal</h3>
+    <div class="modal-sub">Adds to the currently selected infrastructure ecosystem.</div>
+    <div class="mrow"><label>Title</label><input id="om-title" placeholder="e.g. Claremont 5 MWh — Debt/Tax-Equity Package"></div>
+    <div class="mrow two">
+      <div><label>Kind</label><select id="om-kind"><option value="offering">Catalog / Offering</option><option value="deal">Finance Deal</option><option value="partner">Partner Link</option></select></div>
+      <div><label>Status</label><select id="om-status"><option value="active">Active</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="closed">Closed</option></select></div>
+    </div>
+    <div class="mrow two">
+      <div><label>Value / Price</label><input id="om-value" placeholder="e.g. $3.2M or $250/kWh"></div>
+      <div><label>Counterparty</label><input id="om-party" placeholder="e.g. Amperage Capital"></div>
+    </div>
+    <div class="mrow"><label>Detail</label><textarea id="om-detail" placeholder="Terms, scope, notes…"></textarea></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="closeModal('offering-modal')">Cancel</button><button class="mb-create" onclick="saveOffering()">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="log-modal">
+  <div class="modal">
+    <h3 id="log-modal-title">Log Entry</h3>
+    <div class="modal-sub" id="log-modal-sub"></div>
+    <div class="mrow"><label>Type</label><select id="lg-kind"><option value="task">Task</option><option value="note">Note</option><option value="status">Status Report</option></select></div>
+    <div class="mrow"><label>Content</label><textarea id="lg-text" placeholder="What happened / what needs doing…"></textarea></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="closeModal('log-modal')">Cancel</button><button class="mb-create" onclick="saveLog()">Add</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="improve-modal">
+  <div class="modal">
+    <h3 id="improve-modal-title">New Improvement Item</h3>
+    <div class="modal-sub">Bug, feature request, or improvement against a specific tool.</div>
+    <div class="mrow"><label>Title</label><input id="im-title" placeholder="e.g. Pro Forma IRR miscalculates with 0% debt"></div>
+    <div class="mrow two">
+      <div><label>Tool</label><select id="im-tool">
+        <option>BESS Site Map</option><option>BESS Pro Forma</option><option>DCFC BESS Pro Forma</option>
+        <option>Residential BESS Analyzer</option><option>3D Fleet Financial Modeler</option><option>Sales Proposal Builder</option>
+        <option>Value Stack Calculator</option><option>Site Investment Analysis</option><option>Permit Creator</option>
+        <option>AHJ Approval Portal</option><option>Editor / SiteMap Designer</option><option>Platform / Other</option>
+      </select></div>
+      <div><label>Type</label><select id="im-type"><option value="bug">Bug</option><option value="feature">Feature</option><option value="improve">Improvement</option><option value="idea">Idea</option></select></div>
+    </div>
+    <div class="mrow two">
+      <div><label>Priority</label><select id="im-priority"><option value="p1">P1 — Critical</option><option value="p2" selected>P2 — High</option><option value="p3">P3 — Normal</option><option value="p4">P4 — Low</option></select></div>
+      <div><label>Assignee</label><input id="im-assignee" placeholder="e.g. Tommy / dev / partner name"></div>
+    </div>
+    <div class="mrow"><label>Detail</label><textarea id="im-detail" placeholder="Steps to reproduce, or what you'd like it to do…"></textarea></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="closeModal('improve-modal')">Cancel</button><button class="mb-create" onclick="saveImprove()">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="improve-edit-modal">
+  <div class="modal">
+    <h3>Update Item</h3>
+    <div class="modal-sub" id="ie-sub"></div>
+    <div class="mrow two">
+      <div><label>Status</label><select id="ie-status"><option value="open">Open</option><option value="progress">In Progress</option><option value="review">In Review</option><option value="shipped">Shipped</option><option value="wontfix">Won't Fix</option></select></div>
+      <div><label>Priority</label><select id="ie-priority"><option value="p1">P1 — Critical</option><option value="p2">P2 — High</option><option value="p3">P3 — Normal</option><option value="p4">P4 — Low</option></select></div>
+    </div>
+    <div class="mrow"><label>Assignee</label><input id="ie-assignee" placeholder="Who's on it"></div>
+    <div class="mrow"><label>Add a comment (optional)</label><textarea id="ie-comment" placeholder="Progress note…"></textarea></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="deleteImprove()" style="margin-right:auto;color:var(--cs-red);border-color:rgba(229,57,53,.3)">Delete</button><button class="mb-cancel" onclick="closeModal('improve-edit-modal')">Cancel</button><button class="mb-create" onclick="saveImproveEdit()">Update</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="new-proj-modal">
+  <div class="modal">
+    <h3>New Project</h3>
+    <div class="modal-sub">Creates a ClearSky project and opens the Site Map editor.</div>
+    <div class="mrow"><label>Project / Site Name</label><input id="np-name" placeholder="e.g. Riverside BESS 5MWh"></div>
+    <div class="mrow"><label>Site Address</label><input id="np-addr" placeholder="e.g. 1234 Main St, Clinton, IA 52732"></div>
+    <div class="mrow"><label>Project Type</label>
+      <select id="np-type">
+        <option value="bess">BESS – Battery Energy Storage System</option>
+        <option value="dcfc">DCFC – DC Fast Charging</option>
+        <option value="solar">Solar + Storage</option>
+        <option value="sandbox">Sandbox</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="mrow"><label>Client / Customer</label><input id="np-client" placeholder="e.g. City of Clinton"></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="closeNewProjectModal()">Cancel</button><button class="mb-create" onclick="createProject()">Create &amp; Open Editor →</button></div>
+  </div>
+</div>
+
+<!-- ââ REMOVE CLIENT / CONTRACT ââ -->
+<div class="modal-bg" id="ct-del-modal">
+  <div class="modal" style="max-width:470px">
+    <h3>Remove client</h3>
+    <div class="modal-sub" id="ct-del-sub"></div>
+    <div class="ct-choice" onclick="ctDoDelete('contract')">
+      <div class="ct-choice-t">Remove the contract only</div>
+      <div class="ct-choice-s">Clears pricing, seats, discount &amp; service fee. The client stays in the CRM and the inventory.</div>
+    </div>
+    <div class="ct-choice danger" onclick="ctDoDelete('client')">
+      <div class="ct-choice-t">Delete the client entirely</div>
+      <div class="ct-choice-s">Removes the contract <em>and</em> the CRM record. Repositories and live deployments are not touched.</div>
+    </div>
+    <div class="ct-del-note" id="ct-del-note"></div>
+    <div class="mbtns"><button class="mb-cancel" onclick="ctCloseDel()">Cancel</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- FIREBASE SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+
+<script src="/omega-tools.js"></script>
+<script src="/admin-console.js"></script>
+
+<!-- ══════════════ CONTRACTS & PRICING ENGINE (self-contained, ES5) ══════════════ -->
+<script>
+(function(){
+'use strict';
+
+/* ── 1. TIER CATALOG — edit here to reprice the whole platform ──────────────
+   Mirrors the 2026 Platform Tiers card. Every number below is a *default*;
+   each contract can override any of them (that's what makes deals editable). */
+var TIERS = {
+  tier1:    { label:'Tier 1 · Field',      mode:'monthly', price:1299,   seatsIncl:3,  seatRate:200, svc:3400,  devHrs:0, devRate:250 },
+  tier2:    { label:'Tier 2 · Pro',        mode:'monthly', price:2499,   seatsIncl:5,  seatRate:200, svc:3400,  devHrs:0, devRate:250 },
+  tier3:    { label:'Tier 3 · Enterprise', mode:'annual',  price:150000, seatsIncl:20, seatRate:0,   svc:10000, devHrs:7, devRate:250,
+              band:'Band: $150k – $350k / yr' },
+  tier4:    { label:'Tier 4 · Platform',   mode:'custom',  price:0,      seatsIncl:0,  seatRate:0,   svc:0,     devHrs:0, devRate:250,
+              band:'Bespoke — scoped per contract' },
+  internal: { label:'Internal',            mode:'monthly', price:0,      seatsIncl:0,  seatRate:0,   svc:0,     devHrs:0, devRate:0 },
+  partner:  { label:'Partner',             mode:'monthly', price:0,      seatsIncl:0,  seatRate:0,   svc:0,     devHrs:0, devRate:250 }
+};
+window.OMEGA_TIERS = TIERS;
+
+var STORE_KEY = 'omega_contracts_v1';
+var COLL      = 'omega_contracts';
+var DATA      = {};      /* key -> contract */
+var curKey    = null;    /* contract key currently open in the modal */
+var curCrmId  = null;    /* the CRM client id that key belongs to */
+var remoteOk  = false;
+
+/* ── 2. helpers ───────────────────────────────────────────────────────────── */
+function $(id){ return document.getElementById(id); }
+function num(v){ v = parseFloat(v); return isNaN(v) ? 0 : v; }
+function val(id){ var e = $(id); return e ? e.value : ''; }
+function setVal(id,v){ var e = $(id); if(e) e.value = (v===null||v===undefined) ? '' : v; }
+function slug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'client'; }
+
+function money(n){
+  n = Math.round(num(n));
+  return '$' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function moneyShort(n){
+  n = num(n);
+  if(n >= 1000000) return '$' + (n/1000000).toFixed(n>=10000000?0:1) + 'M';
+  if(n >= 10000)   return '$' + Math.round(n/1000) + 'k';
+  return money(n);
+}
+function toDate(s){
+  if(!s) return null;
+  var p = String(s).split('-');
+  if(p.length !== 3) return null;
+  var d = new Date(num(p[0]), num(p[1])-1, num(p[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+function pad(n){ return n < 10 ? '0'+n : ''+n; }
+function iso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function renewalOf(startStr){
+  var d = toDate(startStr);
+  if(!d) return null;
+  return new Date(d.getFullYear()+1, d.getMonth(), d.getDate());
+}
+function prettyDate(d){
+  if(!d) return '—';
+  var m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return m[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+function daysUntil(d){
+  if(!d) return null;
+  return Math.ceil((d.getTime() - new Date().getTime()) / 86400000);
+}
+function esc(s){
+  return String(s===null||s===undefined?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── 3. the math ──────────────────────────────────────────────────────────── */
+function calc(c){
+  c = c || {};
+  var base = (c.mode === 'annual') ? num(c.base)/12 : num(c.base);
+  var extraSeats = Math.max(0, num(c.seats) - num(c.seatsIncl));
+  var seatRev = extraSeats * num(c.seatRate);
+  var gross = base + seatRev;
+
+  var disc = 0;
+  if(c.discType === 'pct')      disc = gross * (num(c.discVal)/100);
+  else if(c.discType === 'amt') disc = num(c.discVal);
+  if(disc > gross) disc = gross;
+  if(disc < 0) disc = 0;
+
+  var net = gross - disc;
+  /* annual prepay = 2 months free, normalized back to a monthly figure */
+  var annualRec = (c.billing === 'annual') ? net * 10 : net * 12;
+  var mrr = annualRec / 12;
+
+  var svcFee   = num(c.svc);
+  var svcBill  = c.svcWaived ? 0 : svcFee;
+  var devHrs   = num(c.devHrs);
+
+  return {
+    gross:gross, disc:disc, mrr:mrr, annualRec:annualRec,
+    arr: annualRec + svcBill,
+    svcFee:svcFee, svcBill:svcBill, svcWaived:!!c.svcWaived,
+    devHrs:devHrs, devVal: devHrs * num(c.devRate),
+    extraSeats:extraSeats, seatRev:seatRev
+  };
+}
+function counts(c){ return c && c.status === 'active'; }
+window.omegaContractCalc = calc;
+
+/* ── 4. storage — Firestore with a localStorage mirror ────────────────────── */
+function db(){
+  try { return (window.firebase && firebase.apps && firebase.apps.length) ? firebase.firestore() : null; }
+  catch(e){ return null; }
+}
+function saveLocal(){
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); } catch(e){}
+}
+function loadLocal(){
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if(raw) DATA = JSON.parse(raw) || {};
+  } catch(e){ DATA = {}; }
+}
+function persist(key, c){
+  DATA[key] = c;
+  saveLocal();
+  var d = db();
+  if(!d) { storeNote(); return; }
+  d.collection(COLL).doc(key).set(c).then(function(){
+    remoteOk = true; storeNote();
+  })['catch'](function(err){
+    remoteOk = false; storeNote(err);
+  });
+}
+function loadRemote(){
+  var d = db();
+  if(!d) { storeNote(); return; }
+  d.collection(COLL).get().then(function(snap){
+    snap.forEach(function(doc){ DATA[doc.id] = doc.data(); });
+    remoteOk = true;
+    saveLocal(); storeNote(); renderDash();
+  })['catch'](function(err){ remoteOk = false; storeNote(err); });
+}
+function storeNote(err){
+  var e = $('ct-store-note');
+  if(!e) return;
+  if(remoteOk){ e.innerHTML = 'Synced to Firestore · <span class="mono">' + COLL + '</span>'; e.className=''; }
+  else { e.innerHTML = 'Saved on this device only — add a Firestore rule for <span class="mono">' + COLL + '</span> to sync.'; e.className='ct-store-note'; }
+}
+
+/* ── 5. modal wiring ──────────────────────────────────────────────────────── */
+function tierOf(){ return TIERS[val('cm-tier')] || TIERS.tier1; }
+
+function applyTierDefaults(){
+  var t = tierOf();
+  setVal('ct-base',      t.price || '');
+  setVal('ct-seats',     t.seatsIncl || 0);
+  setVal('ct-seatsincl', t.seatsIncl || 0);
+  setVal('ct-seatrate',  t.seatRate || 0);
+  setVal('ct-svc',       t.svc || 0);
+  setVal('ct-devhrs',    t.devHrs || 0);
+  setVal('ct-devrate',   t.devRate || 0);
+  syncTierLabels();
+  preview();
+}
+function syncTierLabels(){
+  var t = tierOf();
+  var lbl = $('ct-base-lbl'), hint = $('ct-base-hint');
+  if(lbl)  lbl.textContent = (t.mode === 'annual') ? 'Annual Contract Value ($/yr)' : 'Base Rate ($/mo)';
+  if(hint) hint.textContent = t.band ? t.band : 'List rate for ' + t.label + ' — override to price the deal.';
+  var inline = $('ct-seatrate-inline');
+  if(inline) inline.textContent = money(num(val('ct-seatrate'))) + '/mo';
+}
+function readForm(){
+  var t = tierOf();
+  return {
+    name:       val('cm-name'),
+    tier:       val('cm-tier'),
+    mode:       t.mode === 'annual' ? 'annual' : 'monthly',
+    status:     val('ct-status'),
+    billing:    val('ct-billing'),
+    start:      val('ct-start'),
+    base:       num(val('ct-base')),
+    seats:      num(val('ct-seats')),
+    seatsIncl:  num(val('ct-seatsincl')),
+    seatRate:   num(val('ct-seatrate')),
+    discType:   val('ct-disctype'),
+    discVal:    num(val('ct-discval')),
+    svc:        num(val('ct-svc')),
+    svcWaived:  !!($('ct-svcwaived') && $('ct-svcwaived').checked),
+    devHrs:     num(val('ct-devhrs')),
+    devRate:    num(val('ct-devrate')),
+    note:       val('ct-note'),
+    updated:    new Date().toISOString()
+  };
+}
+function fillForm(key){
+  var c = DATA[key];
+  if(!c){
+    setVal('ct-status','pending'); setVal('ct-billing','monthly');
+    setVal('ct-start', iso(new Date()));
+    setVal('ct-disctype','none'); setVal('ct-discval',0); setVal('ct-note','');
+    if($('ct-svcwaived')) $('ct-svcwaived').checked = false;
+    applyTierDefaults();
+    syncWaiveUi(); preview();
+    return;
+  }
+  if(c.tier && $('cm-tier')) $('cm-tier').value = c.tier;
+  setVal('ct-status',   c.status || 'active');
+  setVal('ct-billing',  c.billing || 'monthly');
+  setVal('ct-start',    c.start || '');
+  setVal('ct-base',     c.base);
+  setVal('ct-seats',    c.seats);
+  setVal('ct-seatsincl',c.seatsIncl);
+  setVal('ct-seatrate', c.seatRate);
+  setVal('ct-disctype', c.discType || 'none');
+  setVal('ct-discval',  c.discVal);
+  setVal('ct-svc',      c.svc);
+  setVal('ct-devhrs',   c.devHrs);
+  setVal('ct-devrate',  c.devRate);
+  setVal('ct-note',     c.note || '');
+  if($('ct-svcwaived')) $('ct-svcwaived').checked = !!c.svcWaived;
+  syncTierLabels(); syncWaiveUi(); preview();
+}
+function syncWaiveUi(){
+  var box = $('ct-svcwaived'), wrap = $('ct-svc-toggle'), hint = $('ct-svc-hint');
+  if(!box || !wrap) return;
+  var r = renewalOf(val('ct-start'));
+  if(box.checked){
+    wrap.className = 'ct-toggle on';
+    wrap.getElementsByClassName('lbl')[0].textContent = 'Waived this term';
+    if(hint) hint.innerHTML = 'Out of revenue now — picked up at renewal' + (r ? ' on <b>' + prettyDate(r) + '</b>' : '') + '.';
+  } else {
+    wrap.className = 'ct-toggle';
+    wrap.getElementsByClassName('lbl')[0].textContent = 'Billing normally';
+    if(hint) hint.textContent = 'Waive it and it drops out of revenue now, and is picked up at renewal.';
+  }
+}
+function preview(){
+  var c = readForm(), k = calc(c);
+  var r = renewalOf(c.start);
+  setVal('ct-renew', r ? prettyDate(r) : '—');
+  syncWaiveUi();
+  var inline = $('ct-seatrate-inline');
+  if(inline) inline.textContent = money(c.seatRate) + '/mo';
+
+  var el = $('ct-preview');
+  if(!el) return;
+  var discTxt = k.disc > 0
+    ? '<i>−' + money(k.disc) + '/mo off list</i>'
+    : (k.extraSeats > 0 ? '<i>+' + k.extraSeats + ' seats · ' + money(k.seatRev) + '</i>' : '');
+  var svcTxt = k.svcWaived
+    ? '<i>waived → bills ' + (r ? prettyDate(r) : 'at renewal') + '</i>'
+    : (k.svcFee ? '<i>billed this term</i>' : '');
+  el.innerHTML =
+    '<div>MRR' + '<b>' + money(k.mrr) + '</b>' + discTxt + '</div>' +
+    '<div>Annual Total' + '<b>' + money(k.arr) + '</b><i>' + money(k.annualRec) + ' + fee</i></div>' +
+    '<div>Dev Hours' + '<b>' + (k.devHrs || 0) + ' hr/mo</b>' + (k.devVal ? '<i>' + money(k.devVal) + '/mo value</i>' : '') + '</div>' +
+    '<div>Service Fee' + '<b' + (k.svcWaived ? ' class="ct-waived"' : '') + '>' + money(k.svcFee) + '/yr</b>' + svcTxt + '</div>';
+}
+
+/* ── 6. public actions ────────────────────────────────────────────────────── */
+window.ctPreview = preview;
+window.ctClear = function(){
+  if(!confirm('Clear the contract & pricing on this client? The client stays in the CRM.')) return;
+  if(curKey && DATA[curKey]){
+    delete DATA[curKey];
+    saveLocal();
+    var d = db();
+    if(d) d.collection(COLL).doc(curKey)['delete']()['catch'](function(){});
+    renderDash();
+  }
+  fillForm(null);
+};
+window.ctExportCsv = function(){
+  var rows = ['Client,Tier,Status,Billing,Start,Renewal,Base,Seats,Extra Seats,Discount,MRR,Annual Recurring,Service Fee,Fee Waived,Annual Total,Dev Hrs/mo,Dev Rate,Note'];
+  for(var k in DATA){
+    if(!DATA.hasOwnProperty(k)) continue;
+    var c = DATA[k], m = calc(c), r = renewalOf(c.start);
+    rows.push([
+      '"'+(c.name||k)+'"', (TIERS[c.tier]||{}).label||c.tier, c.status, c.billing, c.start||'',
+      r?iso(r):'', c.base, c.seats, m.extraSeats,
+      (c.discType==='pct'? c.discVal+'%' : c.discType==='amt'? '$'+c.discVal : ''),
+      Math.round(m.mrr), Math.round(m.annualRec), m.svcFee, c.svcWaived?'yes':'no',
+      Math.round(m.arr), c.devHrs, c.devRate, '"'+String(c.note||'').replace(/"/g,'""')+'"'
+    ].join(','));
+  }
+  var blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'omega-contracts-' + iso(new Date()) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+};
+window.ctOpenClient = function(key, crmId, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  curKey = key;
+  var c = DATA[key] || {};
+  var opened = false;
+  if(typeof window.openClientModal === 'function'){
+    try { window.openClientModal(crmId || key); opened = true; } catch(e){ opened = false; }
+  }
+  var modal = $('client-modal');
+  if(modal && modal.className.indexOf('on') === -1) modal.className = 'modal-bg on';
+  /* if the admin console didn't open (and fill) the modal, the name field can
+     still be holding the LAST client we looked at - never trust it blindly */
+  var nm = c.name || crmNameById(crmId) || '';
+  if($('cm-name') && nm && (!opened || !val('cm-name'))) setVal('cm-name', nm);
+  curKey = key;
+  curCrmId = crmId || null;
+  fillForm(key);
+};
+
+/* == 7. CRM BRIDGE - the client roster is the source of truth ============= */
+var CRM_COLLS = ['clients','omega_clients','admin_clients','crm_clients','omega_crm','client_registry','crm'];
+var crmColl   = null;   /* resolved Firestore collection holding client docs */
+var crmSrc    = null;   /* live reference to the in-memory roster admin-console.js owns */
+var crmCache  = [];     /* normalized roster */
+var crmFp     = '';     /* fingerprint, so we only re-render when it actually changes */
+var crmFromDom= false;
+
+function isArr(a){ return Object.prototype.toString.call(a) === '[object Array]'; }
+function jsq(s){ return esc(String(s===null||s===undefined?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")); }
+
+function objToArr(o){
+  var a = [], k;
+  for(k in o){
+    if(!o.hasOwnProperty(k)) continue;
+    var v = o[k];
+    if(v && typeof v === 'object'){ if(!v.id && !v.key) v.id = k; a.push(v); }
+  }
+  return a;
+}
+function normClient(r){
+  if(!r || typeof r !== 'object') return null;
+  var name = r.name || r.client || r.clientName || r.workspace || r.title || '';
+  var id   = r.id || r.key || r._id || r.docId || (name ? slug(name) : '');
+  if(!id) return null;
+  return {
+    id: String(id), name: String(name || id), tier: r.tier || '',
+    owner: r.owner || '', soldBy: r.soldBy || r.soldby || '',
+    domain: r.domain || '', dom: false, raw: r
+  };
+}
+function firstText(el){
+  if(!el) return '';
+  var n = el.firstChild;
+  while(n){
+    if(n.nodeType === 3){
+      var t = String(n.nodeValue).replace(/\s+/g,' ').replace(/^\s+|\s+$/g,'');
+      if(t) return t;
+    }
+    if(n.nodeType === 1 && String(n.className || '').indexOf('chip') === -1){
+      var t2 = firstText(n); if(t2) return t2;
+    }
+    n = n.nextSibling;
+  }
+  return String(el.textContent || '').replace(/\s+/g,' ').replace(/^\s+|\s+$/g,'');
+}
+/* last-resort roster: read the rows the CRM / inventory tabs already rendered */
+function scrapeCrm(){
+  var out = [], seen = {}, tbs = ['crm-body','cl-body'], j, i;
+  for(j=0;j<tbs.length;j++){
+    var tb = $(tbs[j]); if(!tb) continue;
+    var rows = tb.getElementsByTagName('tr');
+    for(i=0;i<rows.length;i++){
+      var tr = rows[i], cells = tr.getElementsByTagName('td');
+      if(cells.length < 2) continue;
+      var nm = firstText(cells[0].getElementsByClassName('site-nm')[0] || cells[0]);
+      if(!nm) continue;
+      var oc = tr.getAttribute('onclick') || '';
+      var m  = oc.match(/['"]([^'"]{2,})['"]/);
+      var id = m ? m[1] : slug(nm);
+      if(seen[id]) continue;
+      seen[id] = 1;
+      out.push({ id:id, name:nm, tier:'', owner:'', soldBy:'', domain:'', dom:true });
+    }
+  }
+  return out;
+}
+function crmRoster(){
+  var i, src = null, kind = '';
+  var holders = [window.STATE, window.State, window.state, window.APP, window.DATA_STATE];
+  var props   = ['clients','crm','clientList','clientRows','accounts','crmClients'];
+  for(i=0;i<holders.length && !src;i++){
+    var S = holders[i];
+    if(!S || typeof S !== 'object') continue;
+    for(var p=0;p<props.length;p++){
+      var v = S[props[p]];
+      if(isArr(v) && v.length){ src = v; kind = 'arr'; break; }
+      if(v && typeof v === 'object' && !isArr(v)){
+        var a = objToArr(v);
+        if(a.length){ src = v; kind = 'obj'; break; }
+      }
+    }
+  }
+  if(!src){
+    var globs = [window.CLIENTS, window.clients, window.CLIENT_ROWS];
+    for(i=0;i<globs.length;i++){ if(isArr(globs[i]) && globs[i].length){ src = globs[i]; kind = 'arr'; break; } }
+  }
+  var res = [];
+  if(src){
+    crmSrc = { kind:kind, ref:src };
+    var list = (kind === 'obj') ? objToArr(src) : src;
+    for(i=0;i<list.length;i++){ var n = normClient(list[i]); if(n) res.push(n); }
+  }
+  crmFromDom = false;
+  if(!res.length){ res = scrapeCrm(); crmFromDom = res.length > 0; crmSrc = null; }
+  return res;
+}
+/* drop a client out of admin-console.js's own in-memory list so its tabs update too */
+function pruneRoster(id){
+  if(!crmSrc) return;
+  var ref = crmSrc.ref, i, k, n;
+  if(crmSrc.kind === 'arr'){
+    for(i = ref.length - 1; i >= 0; i--){ n = normClient(ref[i]); if(n && n.id === id) ref.splice(i,1); }
+  } else {
+    for(k in ref){
+      if(!ref.hasOwnProperty(k)) continue;
+      n = normClient(ref[k]);
+      if(k === id || (n && n.id === id)) delete ref[k];
+    }
+  }
+}
+function refreshCrmUi(){
+  var fns = ['renderClients','renderCrm','renderInventory','renderOverview','renderTabs','renderAll'], i;
+  for(i=0;i<fns.length;i++){
+    if(typeof window[fns[i]] === 'function'){ try { window[fns[i]](); } catch(e){} }
+  }
+}
+/* re-read the roster and repaint NOW - the 1.5s poll is too slow after an
+   edit or a delete, and rendering off the stale cache resurrects dead rows */
+function refreshAll(){
+  crmCache = crmRoster();
+  crmFp = '';
+  renderDash();
+}
+function crmNameById(id){
+  if(!id) return '';
+  for(var i=0;i<crmCache.length;i++){ if(crmCache[i].id === id) return crmCache[i].name; }
+  return '';
+}
+/* normalized name - the only identity we can trust across id schemes */
+function nkey(v){ return String(v===null||v===undefined?'':v).toLowerCase().replace(/[^a-z0-9]+/g,''); }
+
+function rosterIdMap(){
+  var r = crmRoster(), m = {}, i;
+  for(i=0;i<r.length;i++) m[r[i].id] = 1;
+  return m;
+}
+function rosterEntry(id){
+  var r = crmRoster(), i;
+  for(i=0;i<r.length;i++){ if(r[i].id === id) return r[i]; }
+  return null;
+}
+/* admin-console.js appended a copy instead of updating the record we were
+   editing - fold the copy's values back onto the original and drop it */
+function mergeDuplicateClient(dup, keepId){
+  var keep = rosterEntry(keepId);
+  if(!dup || !keep || !dup.raw || !keep.raw) return false;
+  var k;
+  for(k in dup.raw){
+    if(!dup.raw.hasOwnProperty(k)) continue;
+    if(k === 'id' || k === 'key' || k === '_id' || k === 'docId') continue;
+    keep.raw[k] = dup.raw[k];
+  }
+  pruneRoster(dup.id);
+  var d = db();
+  if(d && crmColl){ d.collection(crmColl).doc(dup.id)['delete']()['catch'](function(){}); }
+  else if(d){ resolveCrmColl(dup.id, function(coll){ if(coll) d.collection(coll).doc(dup.id)['delete']()['catch'](function(){}); }); }
+  if(DATA[dup.id]){
+    delete DATA[dup.id]; saveLocal();
+    if(d) d.collection(COLL).doc(dup.id)['delete']()['catch'](function(){});
+  }
+  return true;
+}
+/* find which Firestore collection actually holds this client doc (cached) */
+function resolveCrmColl(id, cb){
+  var d = db();
+  if(!d || !id){ cb(null); return; }
+  if(crmColl){ cb(crmColl); return; }
+  var i = 0;
+  function step(){
+    if(i >= CRM_COLLS.length){ cb(null); return; }
+    var name = CRM_COLLS[i++];
+    d.collection(name).doc(id).get().then(function(doc){
+      if(doc && doc.exists){ crmColl = name; cb(name); }
+      else step();
+    })['catch'](function(){ step(); });
+  }
+  step();
+}
+
+/* == 8. merge roster + contracts into the rows the table renders ========== */
+function contractKeyFor(cl){
+  if(DATA[cl.id]) return cl.id;
+  var sg = slug(cl.name);
+  if(DATA[sg]) return sg;
+  return cl.id;
+}
+var dupInfo = { clients:[], contracts:0 };
+
+/* One row per CRM client. A contract doc is claimed by id first, then by name -
+   so docs written under an old key still land on their client instead of
+   piling up as phantom "NOT IN CRM" rows. */
+function buildRows(){
+  var rows = [], i, k, byName = {}, byId = {}, dupClients = [];
+  dupInfo = { clients:[], contracts:0 };
+
+  var seenId = {}, roster = [];
+  for(i=0;i<crmCache.length;i++){
+    var cl = crmCache[i];
+    /* the same id twice is one record listed twice - not a duplicate to report */
+    if(seenId[cl.id]) continue;
+    seenId[cl.id] = 1; roster.push(cl);
+    var n = nkey(cl.name);
+    byId[cl.id] = cl;
+    if(n){
+      if(byName[n]) dupClients.push(cl);   /* same client entered twice */
+      else byName[n] = cl;
+    }
+  }
+  dupInfo.clients = dupClients;
+
+  var buckets = {}, loose = [];
+  for(k in DATA){
+    if(!DATA.hasOwnProperty(k)) continue;
+    var owner = byId[k] || byName[nkey(DATA[k].name || k)] || null;
+    if(owner){ (buckets[owner.id] = buckets[owner.id] || []).push(k); }
+    else loose.push(k);
+  }
+
+  for(i=0;i<roster.length;i++){
+    var c2 = roster[i];
+    if(byName[nkey(c2.name)] !== c2 && nkey(c2.name)) continue;   /* dup handled below */
+    var keys = buckets[c2.id] || [];
+    keys.sort(function(a,b){
+      var au = String((DATA[a]||{}).updated || ''), bu = String((DATA[b]||{}).updated || '');
+      return au < bu ? 1 : (au > bu ? -1 : 0);
+    });
+    var live = keys.length ? keys[0] : c2.id;
+    dupInfo.contracts += Math.max(0, keys.length - 1);
+    rows.push({
+      key:live, crmId:c2.id, name:c2.name,
+      tier:(DATA[live] && DATA[live].tier) || c2.tier || '',
+      c: DATA[live] || null, inCrm:true,
+      dupKeys: keys.slice(1)
+    });
+  }
+  for(i=0;i<dupClients.length;i++){
+    var dc = dupClients[i];
+    rows.push({ key:dc.id, crmId:dc.id, name:dc.name, tier:dc.tier || '',
+                c: DATA[dc.id] || null, inCrm:true, dupClient:true, dupKeys:[] });
+  }
+  for(i=0;i<loose.length;i++){
+    var lk = loose[i];
+    rows.push({ key:lk, crmId:null, name:DATA[lk].name || lk, tier:DATA[lk].tier || '',
+                c:DATA[lk], inCrm:false, dupKeys:[] });
+  }
+  return rows;
+}
+
+/* == one-click repair for the mess already in the data ==================== */
+function seq(items, work, done){
+  var i = 0;
+  function step(){
+    if(i >= items.length){ done(); return; }
+    work(items[i++], step);
+  }
+  step();
+}
+window.ctCleanup = function(){
+  buildRows();
+  var dc = dupInfo.clients, dk = dupInfo.contracts;
+  if(!dc.length && !dk){ alert('No duplicates found \u2014 the CRM and the contract table agree.'); return; }
+  var msg = 'Clean up:\n\n';
+  if(dc.length) msg += '\u2022 ' + dc.length + ' duplicate client record' + (dc.length===1?'':'s') + ' in the CRM\n';
+  if(dk)        msg += '\u2022 ' + dk + ' stray contract record' + (dk===1?'':'s') + '\n';
+  msg += '\nThe newest copy of each is kept. This cannot be undone.';
+  if(!confirm(msg)) return;
+
+  /* 1. drop stray contract docs */
+  var rows = buildRows(), strays = [], i, j;
+  for(i=0;i<rows.length;i++){
+    for(j=0;j<(rows[i].dupKeys||[]).length;j++) strays.push(rows[i].dupKeys[j]);
+  }
+  var d = db();
+  for(i=0;i<strays.length;i++){
+    delete DATA[strays[i]];
+    if(d) d.collection(COLL).doc(strays[i])['delete']()['catch'](function(){});
+  }
+  if(strays.length) saveLocal();
+
+  /* 2. drop duplicate CRM records */
+  var failed = 0;
+  seq(dc, function(entry, next){
+    dropClient({ key:entry.id, crmId:entry.id }, function(ok){ if(!ok) failed++; next(); });
+  }, function(){
+    refreshAll(); refreshCrmUi();
+    setTimeout(function(){ refreshAll(); }, 500);
+    alert('Removed ' + strays.length + ' stray contract record' + (strays.length===1?'':'s') +
+          ' and ' + (dc.length - failed) + ' duplicate client record' + ((dc.length-failed)===1?'':'s') + '.' +
+          (failed ? '\n\n' + failed + ' CRM record(s) could not be reached \u2014 delete them from the Internal CRM tab.' : ''));
+  });
+};
+
+var ctMode = 'all', ctQ = '';
+window.ctFilter = function(m){
+  ctMode = m;
+  var seg = $('ct-seg');
+  if(seg){
+    var b = seg.getElementsByTagName('button');
+    for(var i=0;i<b.length;i++) b[i].className = (b[i].getAttribute('data-f') === m) ? 'on' : '';
+  }
+  renderDash();
+};
+window.ctSearch = function(){
+  ctQ = String(val('ct-q') || '').toLowerCase();
+  renderDash();
+};
+
+/* re-key every contract onto its CRM client id and pull name/tier back over */
+window.ctSyncCrm = function(){
+  if(!crmCache.length){ alert('No CRM roster is loaded yet — open the Internal CRM tab once, then try again.'); return; }
+  if(crmFromDom){ alert('The CRM list was read off-screen rather than from the live record set. Open the Internal CRM tab and try again.'); return; }
+  var changed = 0, rekeyed = 0, i;
+  for(i=0;i<crmCache.length;i++){
+    var cl = crmCache[i], key = contractKeyFor(cl), c = DATA[key];
+    if(!c) continue;
+    var dirty = false;
+    if(cl.name && c.name !== cl.name){ c.name = cl.name; dirty = true; }
+    if(cl.tier && c.tier !== cl.tier){ c.tier = cl.tier; dirty = true; }
+    if(key !== cl.id){
+      DATA[cl.id] = c; delete DATA[key];
+      var d = db();
+      if(d) d.collection(COLL).doc(key)['delete']()['catch'](function(){});
+      rekeyed++; dirty = true; key = cl.id;
+    }
+    if(dirty){ persist(key, c); changed++; }
+  }
+  saveLocal(); renderDash();
+  alert(changed
+    ? ('Synced ' + changed + ' contract' + (changed===1?'':'s') + ' to the CRM' + (rekeyed ? ' (' + rekeyed + ' re-keyed onto the CRM client id)' : '') + '.')
+    : 'Everything is already in sync with the CRM.');
+};
+
+/* == 9. remove a contract / a client ====================================== */
+var delTarget = null;
+function delNote(msg, err){
+  var e = $('ct-del-note');
+  if(e){ e.innerHTML = msg || ''; e.className = err ? 'ct-del-note err' : 'ct-del-note'; }
+}
+window.ctCloseDel = function(){
+  var m = $('ct-del-modal'); if(m) m.className = 'modal-bg';
+  delTarget = null;
+};
+window.ctAskDelete = function(key, crmId, name, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  delTarget = { key:key, crmId:crmId || null, name:name || key };
+  var sub = $('ct-del-sub');
+  if(sub) sub.innerHTML = '<b>' + esc(delTarget.name) + '</b> &mdash; choose how far to go. This cannot be undone.';
+  delNote('');
+  var m = $('ct-del-modal'); if(m) m.className = 'modal-bg on';
+};
+window.ctAskDeleteCurrent = function(){
+  /* the record we actually have open wins over whatever text is in the field */
+  var nm = (DATA[curKey] && DATA[curKey].name) || crmNameById(curCrmId) || val('cm-name') || curKey;
+  if(!curKey && !curCrmId && !nm){ return; }
+  var mc = $('client-modal'); if(mc) mc.className = 'modal-bg';
+  window.ctAskDelete(curKey || slug(nm), curCrmId, nm);
+};
+function dropContract(key, cb){
+  if(DATA[key]){ delete DATA[key]; saveLocal(); }
+  var d = db();
+  if(!d){ cb(); return; }
+  d.collection(COLL).doc(key)['delete']().then(function(){ cb(); })['catch'](function(){ cb(); });
+}
+function dropClient(t, cb){
+  var id = t.crmId || t.key, i;
+  var fns = ['deleteClient','removeClient','archiveClient'];
+  for(i=0;i<fns.length;i++){
+    if(typeof window[fns[i]] === 'function'){
+      try { window[fns[i]](id); pruneRoster(id); cb(true, 'admin console'); return; } catch(e){}
+    }
+  }
+  resolveCrmColl(id, function(coll){
+    if(!coll){ cb(false); return; }
+    db().collection(coll).doc(id)['delete']().then(function(){
+      pruneRoster(id); cb(true, coll);
+    })['catch'](function(){ cb(false); });
+  });
+}
+window.ctDoDelete = function(mode){
+  if(!delTarget) return;
+  var t = delTarget;
+  delNote('Removing&hellip;');
+  dropContract(t.key, function(){
+    if(mode === 'contract'){
+      refreshAll(); window.ctCloseDel();
+      return;
+    }
+    dropClient(t, function(ok, where){
+      refreshAll();
+      refreshCrmUi();
+      refreshAll();
+      if(ok){ window.ctCloseDel(); }
+      else {
+        delNote('Contract removed, but the CRM record could not be reached. Delete it from the Internal CRM tab.', true);
+      }
+    });
+  });
+};
+
+/* == 10. dashboard render ================================================= */
+function rollup(){
+  var t = { mrr:0, arr:0, devHrs:0, devVal:0, svcBill:0, svcWaived:0, waivedCount:0, active:0, total:0, disc:0, next:null };
+  for(var k in DATA){
+    if(!DATA.hasOwnProperty(k)) continue;
+    var c = DATA[k];
+    t.total++;
+    if(!counts(c)) continue;
+    var m = calc(c);
+    t.active++;
+    t.mrr += m.mrr; t.arr += m.arr; t.disc += m.disc;
+    t.devHrs += m.devHrs; t.devVal += m.devVal;
+    t.svcBill += m.svcBill;
+    if(m.svcWaived && m.svcFee){ t.svcWaived += m.svcFee; t.waivedCount++; }
+    var r = renewalOf(c.start);
+    if(r && (!t.next || r < t.next)) t.next = r;
+  }
+  return t;
+}
+function kpi(cls, label, value, foot){
+  return '<div class="kpi ' + cls + '"><div class="kpi-label">' + label + '</div>' +
+         '<div class="kpi-val">' + value + '</div>' +
+         '<div class="kpi-foot">' + foot + '</div></div>';
+}
+/* totals across exactly the rows on screen */
+function totalsOf(rows){
+  var t = { shown:rows.length, contracted:0, active:0, pipeline:0, churned:0, noContract:0,
+            seats:0, extra:0, disc:0, mrr:0, mrrA:0, mrrP:0, arr:0, arrA:0, arrP:0,
+            dev:0, devA:0, svc:0, svcWaived:0, next:null, tiers:{} };
+  for(var i=0;i<rows.length;i++){
+    var r = rows[i], c = r.c;
+    if(r.tier) t.tiers[r.tier] = (t.tiers[r.tier] || 0) + 1;
+    if(!c){ t.noContract++; continue; }
+    t.contracted++;
+    if(c.status === 'churned' || c.status === 'none'){ t.churned++; continue; }
+    var m = calc(c), live = (c.status === 'active');
+    if(live) t.active++; else t.pipeline++;
+    t.seats += num(c.seats); t.extra += m.extraSeats; t.disc += m.disc;
+    t.mrr += m.mrr; t.arr += m.arr; t.dev += m.devHrs;
+    t.svc += m.svcBill;
+    if(live){ t.mrrA += m.mrr; t.arrA += m.arr; t.devA += m.devHrs; }
+    else    { t.mrrP += m.mrr; t.arrP += m.arr; }
+    if(m.svcWaived && m.svcFee) t.svcWaived += m.svcFee;
+    var rn = renewalOf(c.start);
+    if(rn && (!t.next || rn < t.next)) t.next = rn;
+  }
+  return t;
+}
+function splitSub(a, p){
+  if(!a && !p) return '';
+  var out = [];
+  if(a) out.push('<span class="g">' + money(a) + ' active</span>');
+  if(p) out.push('<span class="a">' + money(p) + ' pipeline</span>');
+  return '<div class="tf-sub">' + out.join(' &middot; ') + '</div>';
+}
+function renderFoot(t){
+  var foot = $('ct-foot');
+  if(!foot) return;
+  if(!t.shown){ foot.innerHTML = ''; return; }
+
+  var mixOrder = ['tier1','tier2','tier3','tier4','internal','partner'], mix = [], i;
+  for(i=0;i<mixOrder.length;i++){
+    if(t.tiers[mixOrder[i]]) mix.push((TIERS[mixOrder[i]] || {label:mixOrder[i]}).label.split(' \u00b7 ').pop() + ' ' + t.tiers[mixOrder[i]]);
+  }
+  var dn = daysUntil(t.next);
+
+  var head = '<div class="tf-lbl">Totals \u00b7 ' + t.shown + ' shown</div>' +
+             '<div class="tf-sub">' + t.contracted + ' contracted \u00b7 ' + t.noContract + ' unpriced' +
+             (t.churned ? ' \u00b7 ' + t.churned + ' churned (excluded)' : '') + '</div>';
+
+  foot.innerHTML = '<tr>' +
+    '<td>' + head + '</td>' +
+    '<td><div class="tf-sub" style="margin-top:0">' + (mix.length ? mix.join(' \u00b7 ') : '\u2014') + '</div></td>' +
+    '<td class="num"><div class="tf-big">' + t.seats + '</div>' + (t.extra ? '<div class="tf-sub">+' + t.extra + ' billable</div>' : '') + '</td>' +
+    '<td class="num"><div class="tf-big">' + (t.disc ? '\u2212' + money(t.disc) : '\u2014') + '</div>' + (t.disc ? '<div class="tf-sub">off list / mo</div>' : '') + '</td>' +
+    '<td class="num"><div class="tf-big">' + money(t.mrr) + '</div>' + splitSub(t.mrrA, t.mrrP) + '</td>' +
+    '<td class="num"><div class="tf-big">' + money(t.arr) + '</div>' + splitSub(t.arrA, t.arrP) + '</td>' +
+    '<td class="num"><div class="tf-big">' + (t.dev || 0) + '</div><div class="tf-sub">' + (t.dev * 12) + ' hr/yr</div></td>' +
+    '<td class="num"><div class="tf-big">' + money(t.svc) + '</div>' + (t.svcWaived ? '<div class="tf-sub"><span class="a">' + money(t.svcWaived) + ' waived</span></div>' : '') + '</td>' +
+    '<td class="num"><div class="tf-big" style="font-size:12.5px">' + (t.next ? prettyDate(t.next) : '\u2014') + '</div>' +
+      (t.next && dn !== null ? '<div class="tf-sub">next \u00b7 ' + dn + ' days</div>' : '') + '</td>' +
+    '<td></td>' +
+  '</tr>';
+}
+function actionsCell(r){
+  return '<td><div class="ct-acts">' +
+    '<button class="ct-ico" title="Edit pricing" onclick="ctOpenClient(\'' + jsq(r.key) + '\',\'' + jsq(r.crmId || '') + '\',event)">\u270E</button>' +
+    '<button class="ct-ico danger" title="Remove" onclick="ctAskDelete(\'' + jsq(r.key) + '\',\'' + jsq(r.crmId || '') + '\',\'' + jsq(r.name) + '\',event)">\uD83D\uDDD1</button>' +
+    '</div></td>';
+}
+function renderDash(){
+  var grid = $('ct-kpis'), body = $('ct-body');
+  if(!body) return;
+  var t = rollup(), dn = daysUntil(t.next), i;
+
+  if(grid){
+    grid.innerHTML =
+      kpi('green','Monthly Recurring Revenue', money(t.mrr),
+          t.active + ' active contract' + (t.active===1?'':'s') + (t.disc>0 ? ' \u00b7 <span class="dn">' + money(t.disc) + '</span> discounted' : '')) +
+      kpi('blue','Annual Total Revenue', t.arr >= 10000000 ? moneyShort(t.arr) : money(t.arr),
+          money(t.mrr*12) + ' recurring + ' + money(t.svcBill) + ' service fees') +
+      kpi('purple','Allocated Dev Hours', t.devHrs + '<span class="unit">hr/mo</span>',
+          (t.devHrs*12) + ' hr/yr \u00b7 ' + money(t.devVal*12) + ' included value') +
+      kpi('','Annual Service Fees', money(t.svcBill),
+          t.waivedCount ? '<span class="ct-flag">' + money(t.svcWaived) + '</span> waived across ' + t.waivedCount + ' \u2014 bills at renewal'
+                        : (t.next ? 'Next renewal ' + prettyDate(t.next) + (dn!==null ? ' \u00b7 ' + dn + ' days' : '') : 'No renewals scheduled'));
+  }
+
+  var rows = buildRows();
+  rows.sort(function(a,b){
+    var am = a.c ? calc(a.c).mrr : -1, bm = b.c ? calc(b.c).mrr : -1;
+    if(bm !== am) return bm - am;
+    var an = String(a.name||'').toLowerCase(), bn = String(b.name||'').toLowerCase();
+    return an < bn ? -1 : (an > bn ? 1 : 0);
+  });
+
+  var vis = [];
+  for(i=0;i<rows.length;i++){
+    var r = rows[i];
+    if(ctMode === 'contract' && !r.c) continue;
+    if(ctMode === 'active' && !(r.c && r.c.status === 'active')) continue;
+    if(ctQ && String(r.name||'').toLowerCase().indexOf(ctQ) === -1) continue;
+    vis.push(r);
+  }
+
+  var note = $('ct-link-note'), clean = $('ct-clean');
+  var nDup = dupInfo.clients.length, nStray = dupInfo.contracts;
+  if(note){
+    note.innerHTML = crmCache.length
+      ? ('Linked to the Internal CRM \u2014 <b>' + crmCache.length + '</b> client record' + (crmCache.length===1?'':'s') +
+         ', <b>' + t.total + '</b> with a contract.' +
+         (crmFromDom ? ' <span class="ct-flag">roster read from the CRM tab \u2014 open it once for a live link</span>' : '') +
+         ((nDup || nStray) ? ' <span class="ct-flag">' +
+            (nDup ? nDup + ' duplicate client record' + (nDup===1?'':'s') : '') +
+            (nDup && nStray ? ' and ' : '') +
+            (nStray ? nStray + ' stray contract record' + (nStray===1?'':'s') : '') +
+            ' found</span>' : ''))
+      : 'Waiting on the CRM roster \u2014 open the <b>Internal CRM</b> tab once so the two lists bind.';
+  }
+  if(clean) clean.style.display = (nDup || nStray) ? '' : 'none';
+
+  if(!vis.length){
+    body.innerHTML = '<tr><td colspan="10" style="padding:28px;text-align:center;color:var(--cs-sub)">' +
+      (ctQ ? 'No client matches \u201c' + esc(ctQ) + '\u201d.' : 'Nothing to show under this filter.') + '</td></tr>';
+    renderFoot(totalsOf(vis));
+    storeNote();
+    return;
+  }
+
+  var html = '';
+  for(i=0;i<vis.length;i++){
+    var row = vis[i], c = row.c;
+    var tier = TIERS[row.tier] || { label: row.tier || '\u2014' };
+    var chipCls = (row.tier && row.tier.indexOf('tier') === 0) ? row.tier : 'gray';
+    var open = 'ctOpenClient(\'' + jsq(row.key) + '\',\'' + jsq(row.crmId || '') + '\')';
+    var orphan = (crmCache.length && !row.inCrm) ? '<span class="ct-orphan">NOT IN CRM</span>' : '';
+    if(row.dupClient) orphan += '<span class="ct-orphan">DUPLICATE RECORD</span>';
+    if(row.dupKeys && row.dupKeys.length) orphan += '<span class="ct-orphan">' + row.dupKeys.length + ' STRAY CONTRACT' + (row.dupKeys.length===1?'':'S') + '</span>';
+
+    if(!c){
+      html += '<tr class="clickable ct-nc" onclick="' + open + '">' +
+        '<td class="site-nm">' + esc(row.name) + orphan + '<div class="sub-txt">In CRM \u00b7 no contract yet</div></td>' +
+        '<td><span class="chip ' + chipCls + '">' + esc(tier.label) + '</span></td>' +
+        '<td class="num">\u2014</td><td class="num">\u2014</td>' +
+        '<td class="num"><span class="ct-set">Set pricing \u2192</span></td>' +
+        '<td class="num">\u2014</td><td class="num">\u2014</td><td class="num">\u2014</td><td class="num">\u2014</td>' +
+        actionsCell(row) +
+      '</tr>';
+      continue;
+    }
+
+    var m = calc(c), rn = renewalOf(c.start), d = daysUntil(rn);
+    var discTxt = c.discType === 'pct' ? c.discVal + '% off'
+                : c.discType === 'amt' ? money(c.discVal) + '/mo off' : '\u2014';
+    var svcTxt = !m.svcFee ? '\u2014'
+               : m.svcWaived ? '<span class="ct-waived">' + money(m.svcFee) + '</span> <span class="ct-flag">WAIVED</span>'
+               : money(m.svcFee);
+    var renewTxt = rn ? prettyDate(rn) + (d !== null && d <= 60 && d >= 0 ? ' <span class="ct-flag">' + d + 'd</span>' : '') : '\u2014';
+    var dim = counts(c) ? '' : ' style="opacity:.55"';
+
+    html += '<tr class="clickable"' + dim + ' onclick="' + open + '">' +
+      '<td class="site-nm">' + esc(row.name) + (counts(c) ? '' : ' <span class="chip gray">' + esc(c.status || '') + '</span>') + orphan +
+        (c.note ? '<div class="sub-txt">' + esc(c.note) + '</div>' : '') + '</td>' +
+      '<td><span class="chip ' + chipCls + '">' + esc(tier.label) + '</span></td>' +
+      '<td class="num">' + num(c.seats) + (m.extraSeats ? ' <span class="sub-txt">(+' + m.extraSeats + ')</span>' : '') + '</td>' +
+      '<td class="num">' + discTxt + '</td>' +
+      '<td class="num"><b>' + money(m.mrr) + '</b></td>' +
+      '<td class="num">' + money(m.arr) + '</td>' +
+      '<td class="num">' + (m.devHrs || '\u2014') + '</td>' +
+      '<td class="num">' + svcTxt + '</td>' +
+      '<td class="num">' + renewTxt + '</td>' +
+      actionsCell(row) +
+    '</tr>';
+  }
+  body.innerHTML = html;
+  renderFoot(totalsOf(vis));
+  storeNote();
+}
+window.ctRenderDash = renderDash;
+
+/* ── 8. hook into the existing client modal ───────────────────────────────── */
+function keyFrom(arg){
+  if(typeof arg === 'string' && arg) return arg;
+  if(arg && typeof arg === 'object' && (arg.id || arg.key)) return arg.id || arg.key;
+  return null;
+}
+/* a contract may live under the CRM id or under a slug of the name - find it */
+function resolveKey(k){
+  if(!k) return null;
+  if(DATA[k]) return k;
+  var nm = val('cm-name');
+  if(nm && DATA[slug(nm)]) return slug(nm);
+  return k;
+}
+function wrap(){
+  if(typeof window.openClientModal === 'function' && !window.openClientModal.__ct){
+    var orig = window.openClientModal;
+    var w = function(){
+      var out = orig.apply(this, arguments);
+      var raw = keyFrom(arguments[0]) || (val('cm-name') ? slug(val('cm-name')) : null);
+      curCrmId = keyFrom(arguments[0]) || null;
+      curKey   = resolveKey(raw);
+      fillForm(curKey);
+      return out;
+    };
+    w.__ct = 1; window.openClientModal = w;
+  }
+  if(typeof window.saveClient === 'function' && !window.saveClient.__ct){
+    var origS = window.saveClient;
+    var ws = function(){
+      var c = readForm(), i;
+      var before   = rosterIdMap();
+      var editing  = curCrmId && before[curCrmId] ? curCrmId : null;
+      var prevKey  = curKey;
+
+      var out = origS.apply(this, arguments);
+
+      /* Whatever id the admin console just assigned is the ONLY identity that
+         matters. Guessing it before the save is what minted duplicate docs. */
+      var after = crmRoster(), added = [];
+      for(i=0;i<after.length;i++){ if(!before[after[i].id]) added.push(after[i]); }
+
+      /* the record the console just appended, if any */
+      var fresh = null;
+      for(i=0;i<added.length;i++){ if(nkey(added[i].name) === nkey(c.name)){ fresh = added[i]; break; } }
+      if(!fresh && added.length) fresh = added[0];
+
+      /* a client that was ALREADY there under this name - an append on top of
+         it is a duplicate, whether or not we were tracking an id for the edit */
+      var prior = editing;
+      if(!prior){
+        for(i=0;i<after.length;i++){
+          if(before[after[i].id] && nkey(after[i].name) === nkey(c.name)){ prior = after[i].id; break; }
+        }
+      }
+
+      var target = prior;
+      if(prior && fresh){ mergeDuplicateClient(fresh, prior); }
+      else if(fresh){ target = fresh.id; }
+      if(!target){
+        /* no roster visibility - fall back to the name, matched case-insensitively */
+        var hit = null;
+        for(i=0;i<after.length;i++){ if(nkey(after[i].name) === nkey(c.name)){ hit = after[i].id; break; } }
+        target = hit || prevKey || slug(c.name);
+      }
+
+      /* collapse any older doc that was written under a different key for this
+         same client, so an existing mess heals itself on the next save */
+      var strays = [], k;
+      for(k in DATA){
+        if(!DATA.hasOwnProperty(k) || k === target) continue;
+        if(nkey(DATA[k].name) === nkey(c.name)) strays.push(k);
+      }
+      var d = db();
+      for(i=0;i<strays.length;i++){
+        delete DATA[strays[i]];
+        if(d) d.collection(COLL).doc(strays[i])['delete']()['catch'](function(){});
+      }
+      if(strays.length) saveLocal();
+
+      if(c.status === 'none' || !(c.base || c.svc || c.devHrs)){
+        if(DATA[target]){
+          delete DATA[target]; saveLocal();
+          if(d) d.collection(COLL).doc(target)['delete']()['catch'](function(){});
+        }
+      } else {
+        persist(target, c);
+      }
+
+      curKey = null; curCrmId = null;
+      refreshAll(); refreshCrmUi();
+      /* admin-console may write asynchronously - re-check once it settles */
+      setTimeout(function(){ refreshAll(); }, 600);
+      return out;
+    };
+    ws.__ct = 1; window.saveClient = ws;
+  }
+}
+
+function bind(){
+  var ids = ['ct-status','ct-billing','ct-start','ct-base','ct-seats','ct-seatsincl','ct-seatrate',
+             'ct-disctype','ct-discval','ct-svc','ct-svcwaived','ct-devhrs','ct-devrate'];
+  for(var i=0;i<ids.length;i++){
+    var e = $(ids[i]);
+    if(!e) continue;
+    e.onchange = preview;
+    if(e.tagName === 'INPUT' && e.type !== 'checkbox') e.oninput = preview;
+  }
+  var tierSel = $('cm-tier');
+  if(tierSel){
+    tierSel.addEventListener('change', function(){
+      var c = DATA[curKey];
+      if(!c || c.tier !== tierSel.value) applyTierDefaults();
+      else fillForm(curKey);
+    });
+  }
+}
+
+/* watch admin-console.js's roster and re-render whenever it changes */
+function crmTick(){
+  var r = crmRoster(), fp = '', i;
+  for(i=0;i<r.length;i++) fp += r[i].id + '\u0001' + r[i].name + '\u0001' + r[i].tier + '\u0002';
+  if(fp === crmFp) return;
+  crmFp = fp; crmCache = r;
+  renderDash();
+}
+function boot(){
+  loadLocal();
+  bind();
+  fillForm(null);
+  crmCache = crmRoster();
+  renderDash();
+  wrap();
+  var tries = 0;
+  var t = setInterval(function(){ wrap(); if(++tries > 20) clearInterval(t); }, 400);
+  setInterval(crmTick, 1500);
+  try {
+    if(window.firebase && firebase.auth){
+      firebase.auth().onAuthStateChanged(function(u){ if(u) loadRemote(); });
+    }
+  } catch(e){}
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+})();
+</script>
+</body>
+</html>

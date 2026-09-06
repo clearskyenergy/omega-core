@@ -1,0 +1,14 @@
+{
+  "orgId": "",
+  "name": "OSA \u2014 Verification Partner (JV)",
+  "domains": [
+    "osa.clearskyomega.com"
+  ],
+  "vertical": "developer",
+  "tier": "partner",
+  "shell": "osa",
+  "logoUrl": "/omega-logo.png",
+  "status": "active",
+  "receivesFullBom": false,
+  "_note": "Seeded from the legacy repo config.js. VERIFY domains, tier and orgId before running scripts/seed-omega-orgs.js --apply. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on. OSA has no single orgId \u2014 it is the partner portal (omega_users). Leave orgId empty until the JV agreement fixes the sign-in domain."
+}

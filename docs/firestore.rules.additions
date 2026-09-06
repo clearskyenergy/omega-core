@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · rules additions for account access control
+
+   A FRAGMENT, NOT A FILE. Merge these into the firestore.rules you already
+   deploy. Do not deploy this on its own — it defines nothing about
+   intake_projects, projects, or omega_staff, so publishing it as-is would
+   revoke every permission the platform currently depends on.
+
+   Three separate concerns below. They deploy in this order, and the order
+   matters: sections 1 and 2 give the ops console permission to WRITE the
+   flags, section 3 makes the tenant portals OBEY them. Deploying 3 first
+   locks out clients whose flags nobody has set yet. Deploying 1 and 2 alone
+   is the state the console ships in — the flags are written and inert, and
+   the console says so.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ── Shared predicates ───────────────────────────────────────────────────
+       isOmegaStaff() already exists in your rules. Repeated here only so this
+       fragment reads on its own; delete the duplicate when you merge. */
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function callerEmail() {
+      return request.auth.token.email.lower();
+    }
+    function callerDomain() {
+      return callerEmail().split('@')[1];
+    }
+    function isStaff() {
+      return signedIn()
+        && callerDomain() in ['clearsky-usa.com', 'csebuilders.com'];
+    }
+    function isOmegaStaff() {
+      return isStaff() || (
+        signedIn()
+        && exists(/databases/$(database)/documents/omega_staff/$(request.auth.uid))
+        && get(/databases/$(database)/documents/omega_staff/$(request.auth.uid)).data.active != false
+      );
+    }
+    function isOmegaAdmin() {
+      return isStaff() || (
+        signedIn()
+        && exists(/databases/$(database)/documents/omega_staff/$(request.auth.uid))
+        && get(/databases/$(database)/documents/omega_staff/$(request.auth.uid)).data.role == 'admin'
+        && get(/databases/$(database)/documents/omega_staff/$(request.auth.uid)).data.active != false
+      );
+    }
+
+
+    /* ─────────────────────────────────────────────────────────────────────────
+       1 · team_members — tenant user directory, doc id "<orgId>__<email>"
+       ─────────────────────────────────────────────────────────────────────────
+       The tenant writes their own profile; the ops console writes the access
+       flag. Those must not be the same permission, or a suspended user's next
+       profile save would quietly un-suspend them.
+
+       So: a member may write their own doc EXCEPT the access fields. Only an
+       Omega administrator may touch those. This is the same shape as the
+       quote-pinning pattern already used on intake_projects.                 */
+    match /team_members/{memberId} {
+
+      function ownDoc() {
+        return signedIn() && memberId == (
+          resource == null
+            ? request.resource.data.orgId + '__' + callerEmail()
+            : resource.data.orgId + '__' + callerEmail()
+        );
+      }
+
+      /* The fields only an administrator may write. `active` is in here on
+         purpose: it is the field the enforcement in section 3 reads, and a
+         member who can set their own `active` can undo their own suspension
+         with one profile save. */
+      function accessFields() {
+        return ['active', 'access', 'suspendedAt', 'suspendedBy',
+                'suspendedReason', 'passwordResetSentAt', 'passwordResetSentBy'];
+      }
+      function touchesAccess() {
+        return request.resource.data.diff(
+          resource == null ? {} : resource.data
+        ).affectedKeys().hasAny(accessFields());
+      }
+
+      allow read: if isOmegaStaff() || ownDoc();
+
+      allow create, update: if isOmegaAdmin()
+        || (ownDoc() && !touchesAccess());
+
+      allow delete: if isOmegaAdmin();
+    }
+
+
+    /* ─────────────────────────────────────────────────────────────────────────
+       2 · omega_orgs — tenant registry
+       ─────────────────────────────────────────────────────────────────────────
+       Readable by any signed-in staff member (the console resolves display
+       names from it); writable only by administrators, because `suspended`
+       here locks an entire customer out.
+
+       Note `active` and `suspended` are DIFFERENT FIELDS and both are real.
+       active:false de-registers a tenant — the console stops listing them at
+       all. suspended:true locks them while keeping them visible. Merging the
+       two would make a suspended customer disappear from the console at
+       exactly the moment somebody needs to find them.                        */
+    match /omega_orgs/{orgId} {
+      allow read:  if isOmegaStaff();
+      allow write: if isOmegaAdmin();
+    }
+
+
+    /* ─────────────────────────────────────────────────────────────────────────
+       3 · ENFORCEMENT — the part that makes suspension mean something
+       ─────────────────────────────────────────────────────────────────────────
+       Everything above just stores a flag. These two predicates are what turn
+       it into a lock, and they belong in the rules for whatever the TENANT
+       portals read: projects, intake_projects, and anything else scoped by
+       orgId.
+
+       COST, STATED PLAINLY. Each get() is a billed document read and they run
+       on every rule evaluation, so a listing of 200 projects pays for them
+       200 times. That is the price of enforcement in rules rather than in a
+       server, and it is why this section is separate: deploy it when you want
+       the lock, knowing what it costs.
+
+       If that cost bites, the alternative is a custom claim
+       (auth.token.suspended) set by the Cloud Function, checked for free.
+       The catch is that claims only refresh when the client's ID token does —
+       up to an hour — so suspension stops being immediate. Revoking refresh
+       tokens, which omegaSetUserAccess already does, closes most of that gap.
+
+       ONLY WIRE THESE UP ONCE ops.accessControl.enforced IS SET TO true IN
+       config.js. Not because the code checks it — nothing does — but because
+       that flag is what the ops console shows operators, and an operator
+       being told "this does not lock them out" while it silently does is the
+       same failure as the reverse.                                          */
+
+    function memberActive(orgId) {
+      return exists(/databases/$(database)/documents/team_members/$(orgId + '__' + callerEmail()))
+        ? get(/databases/$(database)/documents/team_members/$(orgId + '__' + callerEmail())).data.active != false
+        /* No profile yet is NOT suspended. A client who has never opened the
+           portal has no team_members doc, and defaulting to denied would lock
+           out every new user on their first sign-in. */
+        : true;
+    }
+
+    function orgActive(orgId) {
+      return exists(/databases/$(database)/documents/omega_orgs/$(orgId))
+        ? get(/databases/$(database)/documents/omega_orgs/$(orgId)).data.suspended != true
+        /* Discovered tenants have no registry doc. Same reasoning. */
+        : true;
+    }
+
+    /* Staff are never gated by tenant suspension — they have to be able to
+       read a suspended customer's records, which is usually the whole reason
+       the customer got suspended. */
+    function tenantAccessOk(orgId) {
+      return isOmegaStaff() || (orgActive(orgId) && memberActive(orgId));
+    }
+
+    /* Apply it like this in your existing tenant-scoped blocks:
+
+       match /projects/{projectId} {
+         allow read, write: if isOmegaStaff()
+           || (belongsToCallersOrg() && tenantAccessOk(resource.data.orgId));
+       }
+
+       match /intake_projects/{intakeId} {
+         allow read: if isOmegaStaff()
+           || (belongsToCallersOrg() && tenantAccessOk(resource.data.orgId));
+         ... your existing clientStatus() write rules, plus tenantAccessOk() ...
+       }
+    */
+
+
+    /* ─────────────────────────────────────────────────────────────────────────
+       4 · omega_access_log — audit trail written by the Cloud Functions
+       ─────────────────────────────────────────────────────────────────────────
+       Append-only from the Admin SDK, which bypasses rules entirely, so no
+       write rule is needed or wanted here. Denying writes outright means a
+       compromised browser session cannot forge or erase an entry.
+
+       Read access is admin-only: it names who suspended whom and why.        */
+    match /omega_access_log/{entryId} {
+      allow read:  if isOmegaAdmin();
+      allow write: if false;
+    }
+  }
+}

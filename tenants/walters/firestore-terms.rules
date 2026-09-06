@@ -1,0 +1,40 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Terms acceptance rule
+   Paste inside the existing `match /databases/{database}/documents { ... }`
+   block in firestore.rules, then DEPLOY.
+
+     firebase deploy --only firestore:rules
+
+   ⚠ Deploying is the step that gets missed. Until this rule is live in
+   Firebase the acceptance write returns permission-denied, the gate fails
+   closed, and NOBODY can sign in to any tenant — the modal will sit there
+   saying the rule is missing. Verify in Firebase Console → Firestore →
+   Rules that `termsAcceptances` actually appears in the deployed text before
+   you call it done.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+match /termsAcceptances/{uid} {
+
+  // A user may read only their own acceptance.
+  allow read: if request.auth != null && request.auth.uid == uid;
+
+  // First acceptance. Locked to the caller's own uid and email, and to a
+  // server timestamp, so acceptance can't be forged or backdated client-side.
+  allow create: if request.auth != null
+                && request.auth.uid == uid
+                && request.resource.data.uid == uid
+                && request.resource.data.email == request.auth.token.email
+                && request.resource.data.version is string
+                && request.resource.data.acceptedAt == request.time;
+
+  // Version bump only. The version string must actually change, so an
+  // existing acceptance can't be silently rewritten with a fresh timestamp.
+  allow update: if request.auth != null
+                && request.auth.uid == uid
+                && request.resource.data.uid == uid
+                && request.resource.data.version != resource.data.version
+                && request.resource.data.acceptedAt == request.time;
+
+  // Acceptance records are evidence. They are never deleted from the client.
+  allow delete: if false;
+}

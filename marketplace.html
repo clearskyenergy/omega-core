@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="omega-build" content="marketplace-standalone-2026-07-13">
+<title>ClearSky-OMEGA · App Marketplace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cs-navy:#08384F;--cs-dark:#052A3D;--cs-blue:#006F9A;--cs-sky:#00A9A4;
+  --cs-accent:#00A9A4;--cs-gold:#00C4BC;--cs-text:#0F2733;--cs-sub:#5A7180;
+  --cs-bg:#F4F1EC;--cs-surface:#FAFAF8;--cs-border:#DDD8D0;
+  --cs-green:#1DB954;--cs-red:#E53935;
+  --sap-blue:#0070F2;--sap-blue-hi:#1B90FF;--sap-page:#EDEFF1;--sap-card-border:#E4E8EC;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* Repoint the page chrome onto SAP tokens, exactly like the portal index. */
+body{--cs-bg:var(--sap-page);--cs-border:var(--sap-card-border)}
+body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-text);min-height:100vh}
+
+/* ══ AUTH GATE ══ */
+#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:linear-gradient(135deg,#0B1E35 0%,#1B4F8A 50%,#0D2440 100%);position:relative;overflow:hidden}
+#auth-screen::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 800px 600px at 60% 40%, rgba(0,196,188,.12) 0%, transparent 70%);pointer-events:none}
+.auth-card{background:rgba(255,255,255,.96);border-radius:20px;padding:48px 44px;width:420px;max-width:92vw;text-align:center;
+  box-shadow:0 40px 80px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.2);position:relative}
+.auth-omega{height:64px;width:auto;display:block;margin:0 auto 6px}
+.auth-company{font-size:22px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px;margin-top:8px}
+.auth-sub{font-size:13px;color:var(--cs-sub);margin-top:4px;margin-bottom:28px}
+.auth-fields{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;text-align:left}
+.auth-field label{display:block;font-size:11px;font-weight:600;color:var(--cs-sub);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.auth-field input{width:100%;padding:12px 14px;border:1.5px solid var(--cs-border);border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--cs-text);background:#fff;outline:none;transition:border-color .15s}
+.auth-field input:focus{border-color:var(--cs-sky)}
+.btn-email{width:100%;padding:13px 20px;border:none;border-radius:10px;background:var(--cs-navy);color:#fff;cursor:pointer;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;transition:background .15s}
+.btn-email:hover{background:var(--cs-blue)}
+.auth-divider{height:1px;background:var(--cs-border);margin:18px 0;position:relative}
+.auth-divider span{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#fff;padding:0 10px;font-size:11px;color:var(--cs-sub);font-weight:500}
+.btn-google{width:100%;padding:13px 20px;border:1.5px solid var(--cs-border);border-radius:10px;background:#fff;cursor:pointer;font-size:14px;font-weight:600;color:var(--cs-text);display:flex;align-items:center;justify-content:center;gap:10px;font-family:'DM Sans',sans-serif;transition:all .15s}
+.btn-google:hover{border-color:var(--cs-sky);background:#F8FBFF;box-shadow:0 4px 12px rgba(0,169,164,.15)}
+.auth-err{color:var(--cs-red);font-size:12px;margin-top:12px;min-height:16px}
+
+/* ══ APP CHROME ══ */
+#app{display:none}
+#topbar{display:flex;align-items:center;gap:0;background:#fff;color:var(--sap-ink);padding:0 24px;height:60px;position:sticky;top:0;z-index:40;border-bottom:1px solid var(--sap-card-border);box-shadow:0 1px 2px rgba(20,40,60,.04)}
+.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.tb-omega{height:22px;width:auto;display:block;background:var(--sap-blue);border-radius:5px;padding:5px 7px}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--sap-blue)}
+.tb-sep{width:1px;height:22px;background:var(--sap-card-border);margin:0 16px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-client{display:flex;align-items:center;gap:9px;margin-left:16px}
+.tb-client-chip{background:#fff;border:1px solid var(--sap-card-border);border-radius:7px;padding:4px 8px;display:flex;align-items:center;height:32px}
+.tb-client-chip img{height:22px;width:auto;display:block}
+.tb-client-txt{font-size:13px;font-weight:700;color:var(--cs-navy);letter-spacing:-.2px;white-space:nowrap}
+.tb-ent-badge{font-size:11px;font-weight:500;letter-spacing:.01em;color:var(--sap-ink-2);background:transparent;border:none;padding:0;white-space:nowrap}
+.tb-nav{display:flex;align-items:center;gap:2px;margin-left:20px;height:56px}
+.tb-tab{display:flex;align-items:center;gap:6px;text-decoration:none;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--sap-ink);border-radius:0;padding:0 14px;height:56px;cursor:pointer;font:500 13.5px/1 'DM Sans',sans-serif;white-space:nowrap;transition:color .12s,border-color .12s}
+.tb-tab svg{width:15px;height:15px;flex:none;opacity:.7}
+.tb-tab:hover{color:var(--sap-blue)}
+.tb-tab.active{color:var(--sap-blue);border-bottom-color:var(--sap-blue-hi);font-weight:600}
+.tb-tab.active svg{opacity:1}
+.tb-spacer{flex:1}
+.tb-user{display:flex;align-items:center;gap:10px}
+.tb-avatar{width:32px;height:32px;border-radius:50%;background:var(--sap-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.tb-name{color:var(--sap-ink);font-size:13px;font-weight:500}
+.btn-signout{background:#fff;border:1px solid var(--sap-card-border);color:var(--sap-ink-2);border-radius:6px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif;transition:all .12s}
+.btn-signout:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+
+/* ══ MARKETPLACE PAGE (SAP Business-Data-Cloud inspired) ══ */
+#main{padding:0 0 72px}
+#main-inner{max-width:1280px;margin:0 auto;padding:0 28px}
+
+/* ── Full-bleed gradient hero with centered search ── */
+.mkt-banner{position:relative;overflow:hidden;
+  background:linear-gradient(120deg,#08384F 0%,#006F9A 48%,#00A9A4 100%);
+  padding:56px 28px 64px;margin-bottom:0}
+.mkt-banner::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 900px 520px at 82% 26%, rgba(0,196,188,.35) 0%, transparent 62%),
+             radial-gradient(circle 260px at 90% 78%, rgba(255,255,255,.10) 0%, transparent 70%);
+  pointer-events:none}
+.mkt-banner::after{content:'';position:absolute;right:-40px;top:-60px;width:340px;height:340px;
+  border:38px solid rgba(255,255,255,.06);border-radius:50%;pointer-events:none}
+.mkt-banner-inner{position:relative;max-width:1280px;margin:0 auto;text-align:center}
+.mkt-banner h1{font-size:38px;font-weight:800;color:#fff;letter-spacing:-.9px;line-height:1.05}
+.mkt-banner p{font-size:15px;color:rgba(255,255,255,.85);margin-top:12px;max-width:640px;margin-left:auto;margin-right:auto;line-height:1.55}
+.mkt-search-wrap{position:relative;max-width:720px;margin:30px auto 0}
+.mkt-search-ico{position:absolute;left:22px;top:50%;transform:translateY(-50%);pointer-events:none}
+#mkt-search{width:100%;padding:17px 56px 17px 52px;border:1px solid rgba(255,255,255,.5);border-radius:40px;
+  font:400 16px/1.2 'DM Sans',sans-serif;color:var(--cs-text);background:rgba(255,255,255,.98);outline:none;
+  box-shadow:0 18px 40px rgba(3,42,61,.28);transition:box-shadow .15s,border-color .15s}
+#mkt-search::placeholder{color:#8A93A0}
+#mkt-search:focus{border-color:#fff;box-shadow:0 18px 44px rgba(3,42,61,.34)}
+.mkt-search-go{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;
+  border:1.5px solid var(--cs-blue);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+/* ── Filter / tab strip under the banner ── */
+.mkt-tabbar{position:sticky;top:60px;z-index:30;background:var(--cs-surface);border-bottom:1px solid var(--cs-border)}
+.mkt-tabbar-inner{max-width:1280px;margin:0 auto;padding:0 28px;display:flex;align-items:center;gap:4px;overflow-x:auto}
+.mkt-chip{position:relative;background:transparent;border:none;color:var(--cs-sub);
+  padding:16px 16px 14px;font:600 13.5px/1 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;transition:color .12s}
+.mkt-chip:hover{color:var(--cs-navy)}
+.mkt-chip.on{color:var(--cs-navy)}
+.mkt-chip.on::after{content:'';position:absolute;left:12px;right:12px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--cs-blue)}
+.mkt-chip .cnt{display:inline-block;margin-left:7px;background:var(--cs-border);color:var(--cs-sub);border-radius:20px;font-size:11px;font-weight:700;padding:1px 8px}
+.mkt-chip.on .cnt{background:#E1F0EF;color:var(--cs-blue)}
+
+/* ── Category section ── */
+.mkt-section{padding-top:34px}
+.mkt-cat-head{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;color:var(--cs-navy);letter-spacing:-.2px;margin:0 0 18px}
+.mkt-cat-head .cnt{color:var(--cs-sub);font-weight:600;font-size:14px}
+.mkt-cat-head .rule{flex:1;height:1px;background:var(--cs-border)}
+
+/* ── Cards: image/gradient cover + body (SAP style) ── */
+.mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:20px}
+.mkt-card{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;
+  transition:box-shadow .16s,border-color .16s,transform .16s}
+.mkt-card:hover{box-shadow:0 14px 34px rgba(8,56,79,.13);border-color:#BFD6D5;transform:translateY(-3px)}
+.mkt-cover{position:relative;height:118px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.mkt-cover::after{content:'';position:absolute;inset:0;background:
+  radial-gradient(circle 120px at 78% 30%, rgba(255,255,255,.18) 0%, transparent 70%);pointer-events:none}
+.mkt-cover svg{width:44px;height:44px;position:relative;z-index:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.25))}
+.mkt-cover-badge{position:absolute;top:12px;right:12px;z-index:2}
+.mkt-card-body{padding:16px 18px 18px;display:flex;flex-direction:column;flex:1}
+.mkt-card-cat{font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--cs-accent);margin-bottom:6px}
+.mkt-card-name{font-size:16.5px;font-weight:700;color:var(--cs-navy);letter-spacing:-.2px;line-height:1.25}
+.mkt-card-desc{font-size:12.5px;line-height:1.5;color:var(--cs-sub);margin-top:8px;flex:1}
+.mkt-card-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--cs-border);
+  font-size:11px;color:var(--cs-sub)}
+.mkt-card-meta b{color:var(--cs-text);font-weight:600}
+.mkt-actions{display:flex;gap:8px;margin-top:14px}
+.mkt-act{flex:1;text-align:center;padding:10px 12px;border-radius:9px;font:600 13px/1.1 'DM Sans',sans-serif;cursor:pointer;border:1.5px solid;transition:all .12s;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.mkt-act.primary{background:var(--cs-navy);border-color:var(--cs-navy);color:#fff}
+.mkt-act.primary:hover{background:#0A2C3E}
+.mkt-act.ghost{flex:0 0 auto;background:#fff;border-color:var(--cs-border);color:var(--cs-sub)}
+.mkt-act.ghost:hover{border-color:var(--cs-red);color:#B71C1C}
+.mkt-act.disabled{background:#F6F6F4;border-color:var(--cs-border);color:#9AA6B4;cursor:default}
+.mkt-pill{font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:20px;border:1px solid;white-space:nowrap;backdrop-filter:blur(4px)}
+.mkt-pill.inc{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
+.mkt-pill.added{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
+.mkt-pill.invest{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
+.mkt-pill.new{color:#006F9A;background:rgba(234,244,248,.92);border-color:#B9DBE8}
+.mkt-pill.soon{color:#8A6D1F;background:rgba(251,246,230,.92);border-color:#E6D9AE}
+.mkt-empty{padding:60px 24px;text-align:center;color:var(--cs-sub);font-size:14px}
+.mkt-loading{padding:60px 24px;text-align:center;color:var(--cs-sub)}
+.spin{display:inline-block;width:22px;height:22px;border:3px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cs-navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:all .25s;z-index:80}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.footer{border-top:1px solid var(--cs-border);margin-top:50px;padding-top:22px;font-size:11px;color:var(--cs-sub);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+@media(max-width:640px){.mkt-banner h1{font-size:30px}.mkt-banner{padding:44px 20px 52px}#mkt-search{padding:15px 50px 15px 46px}}
+/* ══════════════════════ MOBILE ══════════════════════ */
+html{-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
+
+/* Drawer-only controls hidden on desktop; shown in the mobile drawer below. */
+.tb-drawer-who,.tb-drawer-actions{display:none}
+
+.tb-burger{display:none;background:#fff;border:1px solid var(--sap-card-border,#E4E8EC);border-radius:8px;
+  width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0}
+.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink,#1D2D3E);stroke-width:2;fill:none;stroke-linecap:round}
+.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;
+  transition:opacity .2s}
+.tb-scrim.open{opacity:1;pointer-events:auto}
+
+@media (max-width:900px){
+  #topbar{height:54px;padding:0 12px;gap:8px}
+  .tb-burger{display:flex}
+  .tb-sep,.tb-portal,.tb-ent-badge{display:none}
+  .tb-client{margin-left:0;min-width:0}
+  .tb-client-chip{height:30px;padding:3px 7px;max-width:150px;overflow:hidden}
+  .tb-client-chip img{height:20px}
+  .tb-client-txt{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .tb-name{display:none}
+
+  .tb-nav{position:fixed !important;top:0 !important;right:0;bottom:0;left:auto;
+    width:270px;max-width:82vw;height:100vh;height:100dvh;
+    background:#ffffff !important;background-color:#ffffff !important;
+    flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;
+    box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;
+    z-index:1000 !important;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    opacity:1 !important;backdrop-filter:none}
+  .tb-nav.open{transform:translateX(0)}
+  .tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border,#E4E8EC);
+    border-left:3px solid transparent;font-size:15px;justify-content:flex-start;gap:12px}
+  .tb-tab.active{border-bottom-color:var(--sap-card-border,#E4E8EC);border-left-color:var(--sap-blue,#0070F2);
+    background:rgba(0,112,242,.06)}
+  .tb-tab svg{width:18px;height:18px}
+  .tb-nav .tb-drawer-actions{padding:16px 22px;display:flex;flex-direction:column;gap:10px}
+  .tb-nav .tb-drawer-actions button{width:100%;padding:12px;font-size:14px;border-radius:9px}
+  .tb-nav .tb-drawer-who{display:block;padding:0 22px 12px;font-size:12px;color:var(--sap-ink-2,#556B82);
+    word-break:break-all;border-bottom:1px solid var(--sap-card-border,#E4E8EC);margin-bottom:14px}
+  .tb-user .btn-signout{display:none}
+  .tb-spacer{flex:1}
+}
+
+@media (max-width:900px){
+  #main-inner{padding:0 14px}
+  .mkt-banner{padding:40px 16px 46px}
+  .mkt-banner h1{font-size:27px;letter-spacing:-.5px}
+  .mkt-banner p{font-size:13.5px;margin-top:10px}
+  .mkt-search-wrap{margin-top:22px}
+  #mkt-search{font-size:16px;padding:14px 48px 14px 46px}
+  .mkt-tabbar{top:54px}
+  .mkt-tabbar-inner{padding:0 14px;-webkit-overflow-scrolling:touch}
+  .mkt-chip{padding:14px 12px 12px;font-size:13px}
+  .mkt-section{padding-top:26px}
+  .mkt-cat-head{font-size:15px;margin-bottom:14px}
+  .mkt-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+}
+@media (max-width:600px){
+  .mkt-banner h1{font-size:23px}
+  .mkt-banner p{font-size:12.5px}
+  .mkt-grid{grid-template-columns:1fr;gap:12px}
+  .mkt-cover{height:96px}
+}
+
+
+/* ═══════════════════ DASHBOARD POLISH v2 — tighter · brighter · crisp ═══════════════════ */
+:root{
+  --pol-border:#E1E6EC;
+  --pol-border-strong:#CFD7E0;
+  --pol-shadow:0 1px 2px rgba(16,40,64,.04), 0 3px 10px rgba(16,40,64,.05);
+  --pol-shadow-hover:0 2px 6px rgba(16,40,64,.06), 0 12px 26px rgba(16,40,64,.12);
+  --pol-blue:#0070F2;
+  --pol-teal:#00A9A4;
+}
+
+/* Brighter page — a cleaner near-white instead of flat gray */
+body{background:#F4F6F8}
+
+/* ── Section rhythm & headers ── */
+#developer-view .block-head,#developer-view .widgets-head,#developer-view .sec-head{margin-top:32px}
+#developer-view > .block-head:first-of-type{margin-top:22px}
+.block-title{letter-spacing:-.2px;position:relative;padding-left:12px}
+.block-title::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:4px;height:15px;border-radius:3px;background:linear-gradient(180deg,var(--pol-blue),var(--pol-teal))}
+.block-sub{color:var(--sap-ink-2)}
+.block-head .view-all{align-self:center;white-space:nowrap;font-weight:600}
+.dash-welcome{letter-spacing:-.6px}
+
+/* ── Applications: grouped card, tighter ── */
+#developer-view .platform-map{margin-top:12px}
+.pm-col.wide{background:#fff;border:1px solid var(--pol-border);border-radius:16px;padding:18px;
+  box-shadow:var(--pol-shadow)}
+.pm-col.wide .pm-grid{margin:0;gap:14px}
+
+/* ── Overview strip (Sites Under Control row): tighter, brighter numbers ── */
+.ov-strip{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;
+  border-radius:16px !important;padding:20px 8px !important}
+.ov-val{font-size:34px !important;font-weight:600 !important;letter-spacing:-1.2px;
+  background:linear-gradient(180deg,#0F2733,#33475B);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent}
+.ov-label{font-size:12px;margin-top:6px}
+
+/* ── KPI cards: tighter, crisper, subtle color accent, hover lift ── */
+.kpi-grid{gap:14px}
+.kpi{border:1px solid var(--pol-border) !important;border-radius:14px !important;
+  padding:15px 16px !important;box-shadow:var(--pol-shadow) !important;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.kpi:hover{transform:translateY(-2px);box-shadow:var(--pol-shadow-hover) !important;
+  border-color:var(--pol-border-strong) !important}
+.kpi::before{width:3px !important;opacity:1 !important;border-radius:14px 0 0 14px}
+.kpi-label{font-size:10.5px !important;letter-spacing:.5px;min-height:24px !important;color:var(--sap-ink-2) !important}
+.kpi-val{font-size:23px !important;letter-spacing:-.6px;margin-top:4px !important}
+
+/* ── Widget cards + pipeline + tables: unified soft depth + hover ── */
+.wg-card,.pipeline,.table-wrap,.th-card,.pp-dev-card,.actions-panel{
+  border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important}
+.wg-card,.pp-dev-card{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.wg-card:hover,.pp-dev-card:hover{transform:translateY(-2px);
+  box-shadow:var(--pol-shadow-hover) !important;border-color:var(--pol-border-strong) !important}
+.wg-card{min-height:280px !important}
+
+/* Pipeline: a touch tighter */
+.pipeline{padding:20px !important}
+.pipe-stage.filled .pipe-dot,.pipe-stage.submitted .pipe-dot,.pipe-stage.online .pipe-dot{
+  box-shadow:0 0 0 4px rgba(0,112,242,.12),0 1px 3px rgba(16,40,64,.18)}
+
+/* ── Quick Access tiles: brighter, crisp, hover ── */
+.quick-link{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.quick-link:hover{transform:translateY(-2px);box-shadow:var(--pol-shadow-hover) !important;
+  border-color:var(--pol-blue) !important}
+.ql-icon{color:var(--pol-blue)}
+
+/* ── Portfolio table: cleaner rows ── */
+.ptable thead th{background:#F6F8FA !important;letter-spacing:.4px;color:var(--sap-ink-2) !important}
+.ptable tbody tr{transition:background .12s ease}
+.ptable tbody tr:hover{background:#F2F7FF !important}
+.ptable tbody td{border-bottom:1px solid #EDF0F4 !important}
+
+/* Application tiles inside the dashboard grid: crisp + hover lift */
+.pm-tile{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.pm-tile:hover{transform:translateY(-2px);box-shadow:var(--pol-shadow-hover) !important}
+
+/* Ownership banner ("5 projects have no owner"): softer, brighter */
+.owner-banner,.assign-banner{border-radius:12px !important}
+
+/* Toggle buttons crisper */
+.block-toggle{box-shadow:var(--pol-shadow) !important;border-color:var(--pol-border) !important}
+.block-toggle:hover{border-color:var(--pol-blue) !important}
+/* ══════════════════════ MOBILE ══════════════════════ */
+html{-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
+
+/* ── AUTH SCREEN ── */
+@media (max-width:520px){
+  #auth-screen{align-items:flex-start;padding:24px 14px 40px;min-height:100vh;min-height:100dvh;overflow-y:auto}
+  .auth-card{width:100%;max-width:none;padding:34px 22px;border-radius:16px}
+  .auth-logo img{height:44px !important}
+  .auth-company{font-size:19px}
+  .auth-sub{font-size:12.5px;margin-bottom:24px}
+  .auth-field input{font-size:16px;padding:13px 14px}
+  .btn-email,.btn-google{padding:15px 18px;font-size:15px}
+  .auth-note{font-size:10.5px}
+}
+
+/* Drawer-only controls (name + Account/Sign-out) hidden on desktop; shown inside the mobile drawer via the max-width:900px block below. */
+.tb-drawer-who,.tb-drawer-actions{display:none}
+
+/* ── TOPBAR + HAMBURGER ── */
+.tb-burger{display:none;background:#fff;border:1px solid var(--sap-bar-border);border-radius:8px;
+  width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0}
+.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink);stroke-width:2;fill:none;stroke-linecap:round}
+.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;
+  transition:opacity .2s}
+.tb-scrim.open{opacity:1;pointer-events:auto}
+
+@media (max-width:900px){
+  #topbar{height:54px;padding:0 12px;gap:8px}
+  .tb-burger{display:flex}
+  .tb-sep,.tb-portal,.tb-ent-badge{display:none}
+  .tb-client{margin-left:0;min-width:0}
+  .tb-client-chip{height:30px;padding:3px 7px;max-width:150px;overflow:hidden}
+  .tb-client-chip img{height:20px}
+  .tb-client-txt{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .tb-logo img[alt="SUN Energy Solutions"]{display:none}
+  .tb-name{display:none}
+
+  .tb-nav{position:fixed !important;top:0 !important;right:0;bottom:0;left:auto;
+    width:270px;max-width:82vw;height:100vh;height:100dvh;
+    background:#ffffff !important;background-color:#ffffff !important;
+    flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;
+    box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;
+    z-index:1000 !important;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    opacity:1 !important;backdrop-filter:none}
+  .tb-nav.open{transform:translateX(0)}
+  .tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-bar-border);
+    border-left:3px solid transparent;font-size:15px;justify-content:flex-start;gap:12px}
+  .tb-tab.active{border-bottom-color:var(--sap-bar-border);border-left-color:var(--sap-blue);
+    background:rgba(0,112,242,.06)}
+  .tb-tab svg{width:18px;height:18px}
+  .tb-nav .tb-drawer-actions{padding:16px 22px;display:flex;flex-direction:column;gap:10px}
+  .tb-nav .tb-drawer-actions button{width:100%;padding:12px;font-size:14px;border-radius:9px}
+  .tb-nav .tb-drawer-who{display:block;padding:0 22px 12px;font-size:12px;color:var(--sap-ink-2);
+    word-break:break-all;border-bottom:1px solid var(--sap-bar-border);margin-bottom:14px}
+  .tb-user .btn-signout{display:none}
+  .tb-spacer{flex:1}
+}
+
+/* ── LAYOUT / CONTENT ── */
+@media (max-width:900px){
+  #main{padding:22px 14px 56px}
+  .dash-welcome{font-size:24px}
+  .dash-sub{font-size:13.5px}
+  .dash-positioning{font-size:12px}
+  .block-head{flex-direction:column;align-items:flex-start;gap:10px;margin:26px 0 12px}
+  .widgets-head .block-title{font-size:19px}
+  .wg-row{grid-template-columns:1fr}
+  .dash-cols{grid-template-columns:1fr}
+  .platform-map{grid-template-columns:1fr;gap:20px}
+  .pm-col.wide .pm-grid{grid-template-columns:repeat(2,1fr)}
+  .quick-row{grid-template-columns:repeat(2,1fr)}
+  .team-grid{grid-template-columns:1fr}
+  .pp-dev-grid{grid-template-columns:1fr}
+  .convo-wrap{flex-direction:column}
+  .convo-list{width:auto;border-right:none;border-bottom:1px solid var(--cs-border);max-height:220px}
+  .convo-thread{max-height:260px}
+  .th-body{max-height:300px}
+}
+
+@media (max-width:600px){
+  #main{padding:18px 12px 48px}
+  .dash-welcome{font-size:21px}
+  .dash-banner{height:112px}
+  .dash-banner-txt{max-width:80%;left:16px}
+  .dash-banner-txt h2{font-size:15px}
+  .dash-banner-txt p{font-size:11px}
+
+  .ov-strip{display:grid;grid-template-columns:1fr 1fr;gap:18px 0;padding:20px 4px}
+  .ov-cell{flex:none;padding:0 10px}
+  .ov-cell::before{display:none !important}
+  .ov-val{font-size:28px}
+  .ov-label{font-size:12px;margin-top:8px}
+
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi{padding:13px 14px}
+  .kpi-label{font-size:10px;min-height:26px}
+  .kpi-val{font-size:21px}
+
+  .pipeline{padding:16px 12px}
+  .pipe-track{grid-template-columns:1fr 1fr;gap:14px}
+  .pipe-num{font-size:19px}
+
+  .quick-row{grid-template-columns:1fr}
+  .pm-col.wide .pm-grid,.pm-grid{grid-template-columns:1fr}
+
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .ptable{min-width:820px}
+  .imp-table{min-width:760px}
+
+  .th-compose-row{flex-wrap:wrap}
+  .th-select,.th-date{flex:1 1 100%}
+  .th-send{width:100%}
+  .th-input{font-size:16px}
+
+  .modal,.acct-modal,.convo-modal{width:100% !important;max-width:100%;border-radius:16px 16px 0 0;
+    max-height:92vh;max-height:92dvh;padding:22px 18px}
+  .modal-bg,.acct-overlay,.convo-modal-overlay{align-items:flex-end;padding:0}
+  .mrow input,.mrow select,.acct-field input,.modal textarea{font-size:16px}
+  .mrow[style*="flex"]{flex-direction:column !important;gap:0 !important}
+  .mbtns{flex-direction:column-reverse}
+  .mbtns button{width:100%;padding:13px}
+  #video-modal .modal{border-radius:14px;margin:0 10px}
+
+  .imp-filters{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .fpill{flex:none}
+  .claim-row{flex-wrap:wrap}
+  .claim-nm{flex:1 1 100%}
+}
+
+@media (max-width:400px){
+  .ov-strip{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:1fr}
+  .pipe-track{grid-template-columns:1fr}
+}
+
+/* -- DRAWER: reparented to document body, escapes #topbar stacking context -- */
+@media (max-width:900px){
+  body > .tb-nav{
+    position:fixed;top:0;right:0;bottom:0;left:auto;
+    width:270px;max-width:82vw;height:100vh;height:100dvh;
+    background:#fff;
+    display:flex;flex-direction:column;align-items:stretch;
+    margin:0;padding:64px 0 20px;
+    box-shadow:-8px 0 30px rgba(0,0,0,.28);
+    transform:translateX(100%);transition:transform .24s ease;
+    z-index:100000 !important;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  body > .tb-nav.open{transform:translateX(0)}
+  body > .tb-scrim{z-index:99999}
+  /* Opaque fill painted inside the drawer, behind its own content.
+     Immune to whatever was making the element background composite oddly. */
+  body > .tb-nav::before{
+    content:'';position:absolute;inset:0;
+    background:#fff;z-index:0;pointer-events:none}
+  body > .tb-nav > *{position:relative;z-index:1}
+}
+
+/* ═══════════ MY APPLICATIONS — uniform grid (cap 6) ═══════════ */
+/* Fixed 3-across grid; equal-height rows so pinned & removable cards align. */
+.pm-col.wide .pm-grid{grid-template-columns:repeat(3,1fr);grid-auto-rows:1fr;gap:16px}
+@media (max-width:1100px){ .pm-col.wide .pm-grid{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:620px){ .pm-col.wide .pm-grid{grid-template-columns:1fr} }
+
+/* Every app tile is the same height; content top-aligned, action pinned to bottom. */
+.pm-col.wide .pm-tile{
+  height:100%;min-height:210px;display:flex;flex-direction:column;
+  border:1px solid var(--pol-border,#E1E6EC);border-radius:14px;padding:18px;
+  box-shadow:var(--pol-shadow);background:#fff}
+.pm-col.wide .pm-tile .pm-open{flex:1 1 auto;display:flex;flex-direction:column}
+.pm-col.wide .pm-tile .pm-desc{flex:1 1 auto}          /* description absorbs slack */
+.pm-col.wide .pm-tile .pin-btn{margin-top:14px}        /* button always at the bottom edge */
+
+/* Cap toast (reuses pm-toast) */
+.pm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px);
+  background:#0F2733;color:#fff;padding:11px 18px;border-radius:10px;font:600 13px/1.3 'DM Sans',sans-serif;
+  box-shadow:0 10px 30px rgba(16,40,64,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:600;max-width:90vw}
+.pm-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ═══════════════ TEAM & MESSAGES LEFT RAIL ═══════════════ */
+/* Two-column shell: narrow sticky rail on the left, dashboard fills the right. */
+#developer-view{display:grid;grid-template-columns:minmax(420px,520px) minmax(0,1fr);gap:28px;align-items:start}
+#developer-view > .sw{grid-column:1;grid-row:1}
+#dev-main{grid-column:2;grid-row:1;min-width:0}
+
+.tm-rail{position:sticky;top:78px;align-self:start}
+.tm-panel{background:#fff;border:1px solid var(--pol-border,#E1E6EC);border-radius:16px;
+  box-shadow:var(--pol-shadow);overflow:hidden;display:flex;flex-direction:column;
+  max-height:calc(100vh - 100px)}
+.tm-panel-head{padding:14px 16px 10px;border-bottom:1px solid var(--pol-border,#E1E6EC)}
+.tm-panel-title{font:700 14px/1 'DM Sans',sans-serif;color:var(--cs-navy,#08384F);letter-spacing:-.2px}
+.tm-tabs{display:flex;gap:2px;padding:8px 8px 0;background:#FAFBFC;border-bottom:1px solid var(--pol-border,#E1E6EC)}
+.tm-tab{flex:1;padding:9px 6px;border:none;background:none;cursor:pointer;
+  font:600 12px/1 'DM Sans',sans-serif;color:var(--sap-ink-2,#556B82);border-radius:8px 8px 0 0;
+  border-bottom:2px solid transparent;transition:color .12s,border-color .12s}
+.tm-tab:hover{color:var(--cs-navy,#08384F)}
+.tm-tab.active{color:var(--sap-blue,#0070F2);border-bottom-color:var(--sap-blue,#0070F2);background:#fff}
+.tm-body{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+.tm-pane{display:none}
+.tm-pane.active{display:block}
+
+/* Panes: strip the inner card chrome since the rail IS the card now */
+.tm-pane .th-card{border:none !important;box-shadow:none !important;padding:0 !important;background:none !important;min-height:0 !important}
+.tm-pane .th-head{padding:0 0 10px !important}
+.tm-pane .th-body{max-height:none !important}
+.tm-pane .convo-card .convo-wrap{flex-direction:column}
+.tm-pane .convo-list{width:auto !important;border-right:none !important;border-bottom:1px solid var(--cs-border,#DDD8D0);max-height:200px}
+.tm-pane .convo-thread{min-height:220px}
+.tm-pane .th-users .th-body{max-height:none}
+
+/* Messages pane: stack the two panes vertically inside the narrow rail */
+.tm-pane[data-tm-pane="msgs"] .convo-wrap{display:flex;flex-direction:column;gap:12px}
+
+/* On narrower screens, drop the rail below the content (full width) */
+@media (max-width:1080px){
+  #developer-view{grid-template-columns:1fr}
+  #developer-view > .sw{grid-column:1;grid-row:2}
+  #dev-main{grid-column:1;grid-row:1}
+  .tm-panel{max-height:none}
+  .tm-body{max-height:560px}
+}
+#app{display:flex !important;align-items:stretch;min-height:100vh}
+#side-nav{width:212px;flex:none;background:#0B2A3D;color:#C9D6E2;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;overflow:hidden;z-index:60}
+#app-body{flex:1;min-width:0;display:flex;flex-direction:column}
+/* topbar no longer needs the horizontal nav tabs on desktop */
+#app-body #topbar{position:sticky;top:0;z-index:50}
+@media (min-width:901px){ #app-body .tb-nav{display:none !important} }  /* nav moved to sidebar */
+
+.sn-head{padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sn-logo-txt{display:block;font:700 16px/1.1 'DM Sans',sans-serif;color:#fff}
+.sn-sub{display:block;font-size:11px;color:#7E93A6;margin-top:3px;letter-spacing:.3px}
+.sn-scroll{flex:1;overflow-y:auto;padding:10px 8px 20px}
+.sn-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:none;background:none;cursor:pointer;
+  color:#C9D6E2;font:500 13.5px/1 'DM Sans',sans-serif;border-radius:8px;text-align:left;text-decoration:none;
+  transition:background .1s,color .1s;margin-bottom:2px}
+.sn-item svg{width:17px;height:17px;flex:none;opacity:.85}
+.sn-item span{flex:1}
+.sn-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.sn-item.active{background:#1264A3;color:#fff}
+.sn-item.active svg{opacity:1}
+.sn-caret{width:14px !important;height:14px !important;transition:transform .18s}
+.sn-toggle[aria-expanded="true"] .sn-caret{transform:rotate(180deg)}
+.sn-subnav{max-height:0;overflow:hidden;transition:max-height .22s ease;padding-left:8px}
+.sn-subnav.open{max-height:420px}
+.sn-app{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 26px;color:#A9BCCC;text-decoration:none;
+  font:500 12.5px/1.2 'DM Sans',sans-serif;border-radius:7px;transition:background .1s,color .1s}
+.sn-app:hover{background:rgba(255,255,255,.07);color:#fff}
+.sn-app .sn-app-dot{width:6px;height:6px;border-radius:50%;background:#00A9A4;flex:none}
+.sn-divider{height:1px;background:rgba(255,255,255,.08);margin:12px 8px}
+.sn-section-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:rgba(201,214,226,.5);padding:2px 12px 8px}
+
+/* Kill wasted space: developer-view no longer a 2-col grid with a floating rail */
+#developer-view{display:block !important}
+#developer-view > .sw{margin-top:20px}
+#dev-main{width:auto}
+
+/* Dense content: tighten main padding */
+#app-body #main{max-width:none;padding:28px 32px 56px}
+
+/* Mobile: sidebar collapses; the existing hamburger drawer handles nav */
+@media (max-width:900px){
+  #app{flex-direction:column}
+  #side-nav{display:none}   /* mobile uses the top hamburger drawer instead */
+  #app-body #main{padding:20px 14px 48px}
+}
+@media (min-width:901px){ #app-body .tb-nav{display:none !important} }
+#app-body #main{max-width:none}
+</style>
+</head>
+<body>
+<!-- ══ BOOT LOADER (prevents auth flash on navigation) ══ -->
+<style>
+#omega-boot{position:fixed;inset:0;z-index:2147483000;background:#0B1E35;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  transition:opacity .28s ease}
+#omega-boot.hide{opacity:0;pointer-events:none}
+#omega-boot .ob-mark{width:60px;height:60px;border-radius:16px;
+  background:linear-gradient(135deg,#006F9A,#00A9A4);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font:700 30px/1 'DM Sans',sans-serif;
+  box-shadow:0 12px 30px rgba(0,169,164,.35)}
+#omega-boot .ob-spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.25);
+  border-top-color:#00C4BC;border-radius:50%;animation:ob-spin .7s linear infinite}
+#omega-boot .ob-txt{color:#8CA3BE;font:500 13px/1 'DM Sans',sans-serif;letter-spacing:.3px}
+@keyframes ob-spin{to{transform:rotate(360deg)}}
+/* Failsafe: never let the loader trap the user if JS fails to dismiss it. */
+#omega-boot{animation:ob-failsafe 0s linear 8s forwards}
+@keyframes ob-failsafe{to{opacity:0;pointer-events:none;visibility:hidden}}
+</style>
+<div id="omega-boot" role="status" aria-label="Loading">
+  <div class="ob-mark">&Omega;</div>
+  <div class="ob-spin"></div>
+  <div class="ob-txt">Loading your workspace…</div>
+</div>
+<script>
+/* Dismiss the boot loader. Called once auth state is known (from the first
+   onAuthStateChanged callback), so the screen underneath is already the
+   correct one — app, login, or a pending redirect — and never flashes. */
+window._omegaReady = function(){
+  var el = document.getElementById('omega-boot');
+  if (!el || el.classList.contains('hide')) return;
+  el.classList.add('hide');
+  setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 320);
+};
+</script>
+
+<!-- ══════════════════ AUTH SCREEN ══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <img src="/clearsky-omega-mark-navy.png" alt="OMEGA" class="auth-omega" onerror="this.style.display='none'">
+    <div class="auth-company">ClearSky-OMEGA</div>
+    <div class="auth-sub">App Marketplace · sign in to browse and add tools</div>
+    <div class="auth-fields">
+      <div class="auth-field"><label>Email</label><input id="auth-email" type="email" autocomplete="username" placeholder="you@yourcompany.com"></div>
+      <div class="auth-field"><label>Password</label><input id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    </div>
+    <button class="btn-email" id="email-signin-btn" onclick="signInEmail()">Sign In</button>
+    <div class="auth-divider"><span>or</span></div>
+    <button class="btn-google" id="google-signin-btn" onclick="signInGoogle()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.09a6.6 6.6 0 0 1 0-4.18V7.07H2.18a11 11 0 0 0 0 9.86l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Continue with Google
+    </button>
+    <div class="auth-err" id="auth-err"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app">
+  <nav id="side-nav">
+    <div class="sn-head">
+      <span class="sn-logo-txt">NextNRG</span>
+      <span class="sn-sub">EnergyOS</span>
+    </div>
+    <div class="sn-scroll">
+      <a class="sn-item" data-sn="dashboard" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a class="sn-item " data-sn="projects" href="/projects.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Projects</span>
+      </a>
+      <a class="sn-item active" data-sn="marketplace" href="/marketplace.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
+        <span>Marketplace</span>
+      </a>
+    </div>
+  </nav>
+
+  <div id="app-body">
+  <div id="topbar">
+    <a href="/" class="tb-logo">
+      <img src="/clearsky-omega-mark-white.png" alt="OMEGA" class="tb-omega" onerror="this.style.display='none'">
+      <span class="tb-logo-txt">Clear<span>Sky</span> OMEGA</span>
+    </a>
+    <div class="tb-sep"></div>
+    <span class="tb-portal">EnergyOS</span>
+    <div class="tb-client">
+      <span class="tb-client-chip" id="tb-client-chip"></span>
+      <span class="tb-ent-badge" id="tb-ent-badge">Account</span>
+    </div>
+    <div class="tb-nav">
+      <a class="tb-tab" href="/" id="tab-portal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Portal
+      </a>
+      <a class="tb-tab active" href="/marketplace.html" id="tab-marketplace">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
+        Marketplace
+      </a>
+      <a class="tb-tab" href="/projects.html" id="tab-projects">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Projects
+      </a>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-user">
+      <div class="tb-avatar" id="tb-avatar">–</div>
+      <span class="tb-name" id="tb-name"></span>
+      <button class="btn-signout" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <div id="main">
+
+    <!-- Full-bleed gradient hero -->
+    <div class="mkt-banner">
+      <div class="mkt-banner-inner">
+        <h1>App Marketplace</h1>
+        <p id="mkt-sub">Your energy platform at your fingertips — a central hub of BESS, EV, and financial tools you can add to your dashboard.</p>
+        <div class="mkt-search-wrap">
+          <svg class="mkt-search-ico" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8A93A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="mkt-search" type="text" placeholder="Search applications…" oninput="paintMarket()" autocomplete="off">
+          <span class="mkt-search-go" onclick="paintMarket()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#006F9A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky category tab bar -->
+    <div class="mkt-tabbar">
+      <div class="mkt-tabbar-inner" id="mkt-filters"></div>
+    </div>
+
+    <div id="main-inner">
+      <div id="market-grid">
+        <div class="mkt-loading"><span class="spin"></span> Loading applications…</div>
+      </div>
+
+      <div class="footer">
+        <span>ClearSky-OMEGA · App Marketplace</span>
+        <span>© 2025 ClearSky Energy Solutions LLC · Proprietary</span>
+      </div>
+    </div>
+  </div>
+  </div><!-- /#app-body -->
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase + shared config + catalog (same sources as the portal) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-tools.js?v=9"></script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA — standalone App Marketplace (ES5, no build step).
+   Same catalog (OMEGATools), same workspace resolution, same Firebase as the
+   portal. This page renders ONLY the marketplace — nothing else can appear.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Workspace map (mirror of the portal). Keep in sync when adding tenants. ── */
+/* omega-core: the registry comes from config.js (or omega-tenant.js). The
+   literal that used to live here was NextNRG's sales-demo map; it is kept
+   below as LEGACY_WORKSPACES only so the demo keeps working until its
+   tenants are seeded into tenant_public/omega_orgs. Do not add tenants here. */
+var WORKSPACES = (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.workspaces) || null;
+var LEGACY_WORKSPACES = {
+  'clearsky-usa.com':{ type:'developer', orgId:'clearsky-usa.com',clientName:'OMEGA',                    accountTier:'Enterprise', tierLevel:3, allowedDomain:'clearsky-usa.com', requiredTools:['editor','investment'], logo:'/omega-logo.png' },
+  'sunesol.com':   { type:'developer', orgId:'sunesol.com',   clientName:'SUN Energy Solutions',     accountTier:'Enterprise', tierLevel:3, allowedDomain:'sunesol.com', requiredTools:['editor','investment'], logo:'/sunesol-logo-color.png' },
+  'nextnrg.com':   { type:'developer', orgId:'nextnrg.com',   clientName:'NextNRG',                  accountTier:'Enterprise', tierLevel:3, allowedDomain:'nextnrg.com', requiredTools:['editor','sandbox','investment','sales'], logo:'/nextnrg-logo.png' },
+  'spatco.com':    { type:'developer', orgId:'spatco.com',    clientName:'SPATCO Energy Solutions',  accountTier:'Enterprise', tierLevel:3, allowedDomain:'spatco.com',  requiredTools:['editor','spatco_ev'], logo:'/spatco-logo.jpg' },
+  'chileasing.com':{ type:'developer', orgId:'chileasing.com',clientName:'Solela LLC',              accountTier:'Enterprise', tierLevel:3, allowedDomain:'chileasing.com', requiredTools:['editor','investment'] },
+  'csebuilders.com':{type:'developer', orgId:'csebuilders.com',clientName:'ClearSky Energy Solutions',accountTier:'Internal',  tierLevel:3, allowedDomain:'csebuilders.com', logo:'/clearsky-logo.png' },
+  'amperagecapital.com':{ type:'partner', orgId:'amperagecapital.com', clientName:'Amperage Capital', accountTier:'Partner', allowedDomain:'amperagecapital.com', portfolioOrgs:['nextnrg.com'] },
+  'voltus.co':     { type:'partner', orgId:'voltus.co', clientName:'Voltus', accountTier:'Partner', allowedDomain:'voltus.co', portfolioOrgs:['nextnrg.com'] }
+};
+if (!WORKSPACES) WORKSPACES = (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant && window.CLEARSKY_CONFIG.tenant.orgId) ? {} : LEGACY_WORKSPACES;
+function domainOf(email){ return (email||'').split('@')[1] ? email.split('@')[1].toLowerCase() : ''; }
+function resolveWorkspace(email){ var d=domainOf(email); return (d && WORKSPACES.hasOwnProperty(d)) ? WORKSPACES[d] : null; }
+
+var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null;
+var _PINNED=[];
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function el(id){ return document.getElementById(id); }
+function setHTML(id,h){ var e=el(id); if(e) e.innerHTML=h; }
+function setText(id,t){ var e=el(id); if(e) e.textContent=t; }
+function toast(msg){ var t=el('toast'); if(!t) return; t.innerHTML=msg; t.className='toast show'; setTimeout(function(){ t.className='toast'; },2200); }
+
+/* ── Firebase init (waits for compat SDK + config.js) ── */
+function initFirebase(){
+  if (typeof firebase==='undefined' || !window.CLEARSKY_CONFIG){ setTimeout(initFirebase,120); return; }
+  CFG = window.CLEARSKY_CONFIG;
+  try{ firebase.initializeApp(CFG.firebase); }catch(e){ if(!/already exists/.test(e.message)) console.error('FB init',e); }
+  auth = firebase.auth();
+  db = firebase.firestore();
+  auth.onAuthStateChanged(onAuth);
+}
+initFirebase();
+
+function onAuth(user){
+  if (window._omegaReady) window._omegaReady();
+  if (!user){ el('auth-screen').style.display='flex'; el('app').style.display='none'; return; }
+  var ws = resolveWorkspace(user.email);
+  if (!ws){
+    // unknown domain — reject
+    setText('auth-err','This account domain is not provisioned. Contact dev@clearsky-usa.com.');
+    auth.signOut(); return;
+  }
+  currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
+  window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;
+  el('auth-screen').style.display='none'; el('app').style.display='flex';
+  applyChrome(ws, user);
+  loadCatalog(ws);
+}
+
+function applyChrome(ws, user){
+  var chip = el('tb-client-chip');
+  if (chip){ chip.innerHTML = ws.logo ? '<img src="'+esc(ws.logo)+'" alt="" onerror="this.style.display=\'none\'">' : '<span class="tb-client-txt">'+esc(ws.clientName||'')+'</span>'; }
+  setText('tb-ent-badge', (ws.accountTier||'Account')+' Account');
+  // Show displayName/email immediately, then upgrade to the saved profile name.
+  setText('tb-name', (user.displayName||user.email||''));
+  var av = el('tb-avatar'); if(av) av.textContent = (user.email||'?').charAt(0).toUpperCase();
+  setText('mkt-sub', 'Browse the ClearSky-OMEGA catalog and add tools to your '+(ws.clientName||'')+' dashboard.');
+  _resolveDisplayName(ws, user);
+}
+
+/* Look up the display name saved in the team_members profile
+   (doc id = "<orgId>__<email>"), matching how the portal index resolves it.
+   Falls back to Firebase displayName, then email. */
+function _resolveDisplayName(ws, user){
+  if (!user || !db) return;
+  try {
+    var id = ws.orgId + '__' + (user.email||'').toLowerCase();
+    db.collection('team_members').doc(id).get().then(function(doc){
+      var nm = (doc && doc.exists && doc.data() && doc.data().name) ? doc.data().name : '';
+      if (!nm) nm = user.displayName || user.email || '';
+      setText('tb-name', nm);
+      var av = el('tb-avatar'); if (av && nm) av.textContent = nm.charAt(0).toUpperCase();
+    })['catch'](function(){ /* keep the email fallback */ });
+  } catch(e){ /* ignore */ }
+}
+
+/* ── Catalog: hydrate the shared OMEGATools registry, load pins, render. ── */
+function loadCatalog(ws){
+  var tries=0;
+  (function wait(){
+    if (typeof OMEGATools==='undefined'){ if(++tries<60){ setTimeout(wait,100); } else { setHTML('market-grid','<div class="mkt-empty">Catalog unavailable. Check omega-tools.js.</div>'); } return; }
+    var afterHydrate = function(){
+      loadPins(ws.orgId, function(keys){ _PINNED = keys||[]; paintFilters(); paintMarket(); });
+    };
+    if (typeof OMEGATools.hydrate==='function'){ OMEGATools.hydrate(db, afterHydrate); }
+    else { afterHydrate(); }
+  })();
+}
+function loadPins(org, cb){
+  if (OMEGATools && typeof OMEGATools.loadPinned==='function'){
+    OMEGATools.loadPinned(db, org).then(function(keys){ cb(keys); })['catch'](function(){ cb([]); });
+  } else { cb([]); }
+}
+
+/* ── Which tools this tenant may see (workspace unlock gate). ── */
+function qualifying(){
+  var all = OMEGATools.all(), out=[];
+  for (var i=0;i<all.length;i++){
+    var t = all[i];
+    if (OMEGATools && typeof OMEGATools.isUnlocked==='function'){ if (OMEGATools.isUnlocked(t, WORKSPACE)) out.push(t); }
+    else out.push(t);
+  }
+  return out;
+}
+function isPinned(k){ return _PINNED.indexOf(k)>=0; }
+function isRequired(t){
+  if (WORKSPACE && WORKSPACE.requiredTools && WORKSPACE.requiredTools.indexOf(t.key)>=0) return true;
+  if (OMEGATools && typeof OMEGATools.isRequired==='function') return OMEGATools.isRequired(t, WORKSPACE);
+  return false;
+}
+function catLabel(key){
+  if (OMEGATools && OMEGATools.CATEGORIES){
+    for (var i=0;i<OMEGATools.CATEGORIES.length;i++){ if(OMEGATools.CATEGORIES[i].key===key) return OMEGATools.CATEGORIES[i].label; }
+  }
+  var fb={design:'Design & Engineering',finance:'Finance & Modeling',sales:'Sales & Proposals',permitting:'Permitting & AHJ',marketplace:'Infrastructure'};
+  return fb[key]||key;
+}
+function hrefFor(t){
+  if (OMEGATools && typeof OMEGATools.hrefFor==='function') return OMEGATools.hrefFor(t, WORKSPACE);
+  return t.file || t.href || '#';
+}
+
+/* ── Category filter chips ── */
+var MKT_CAT='all';
+function activeCategories(){
+  var order=['design','finance','sales','permitting','marketplace'];
+  var tools=qualifying(), present={}, out=[];
+  for (var i=0;i<tools.length;i++){ present[tools[i].category]=true; }
+  for (var c=0;c<order.length;c++){ if(present[order[c]]) out.push(order[c]); }
+  for (var j=0;j<tools.length;j++){ if(order.indexOf(tools[j].category)<0 && out.indexOf(tools[j].category)<0) out.push(tools[j].category); }
+  return out;
+}
+function countInCat(cat){
+  var tools=qualifying(), n=0;
+  for (var i=0;i<tools.length;i++){ if(tools[i].category===cat) n++; }
+  return n;
+}
+function paintFilters(){
+  var box=el('mkt-filters'); if(!box) return;
+  var cats=activeCategories(), total=qualifying().length;
+  var h='<button class="mkt-chip'+(MKT_CAT==='all'?' on':'')+'" onclick="setCat(&quot;all&quot;)">All<span class="cnt">'+total+'</span></button>';
+  for (var i=0;i<cats.length;i++){
+    h+='<button class="mkt-chip'+(MKT_CAT===cats[i]?' on':'')+'" onclick="setCat(&quot;'+esc(cats[i])+'&quot;)">'
+      +esc(catLabel(cats[i]))+'<span class="cnt">'+countInCat(cats[i])+'</span></button>';
+  }
+  box.innerHTML=h;
+}
+function setCat(c){ MKT_CAT=c; paintFilters(); paintMarket(); }
+
+/* ── Render the marketplace (Autodesk-style product cards) ── */
+function paintMarket(){
+  var grid=el('market-grid'); if(!grid) return;
+  var tools=qualifying();
+  var q=''; var sb=el('mkt-search'); if(sb&&sb.value) q=sb.value.toLowerCase();
+  function match(t){ if(!q) return true;
+    return (t.name&&t.name.toLowerCase().indexOf(q)>=0) || (t.desc&&t.desc.toLowerCase().indexOf(q)>=0) || (catLabel(t.category).toLowerCase().indexOf(q)>=0); }
+  var order=activeCategories(), html='', any=false;
+  for (var c=0;c<order.length;c++){
+    var cat=order[c];
+    if (MKT_CAT!=='all' && MKT_CAT!==cat) continue;
+    var cards='', n=0;
+    for (var i=0;i<tools.length;i++){ var t=tools[i]; if(t.category!==cat) continue; if(!match(t)) continue; cards+=card(t); n++; }
+    if (cards){ any=true;
+      html+='<div class="mkt-section"><div class="mkt-cat-head">'+esc(catLabel(cat))
+          +'<span class="cnt">('+n+')</span><span class="rule"></span></div>'
+          +'<div class="mkt-grid">'+cards+'</div></div>';
+    }
+  }
+  grid.innerHTML = any ? html : '<div class="mkt-empty">No applications match your search.</div>';
+}
+
+/* Per-category cover gradients — gives each card a branded "photo" band. */
+function coverGradient(cat){
+  var g={
+    design:     'linear-gradient(135deg,#08384F 0%,#006F9A 100%)',
+    finance:    'linear-gradient(135deg,#053A45 0%,#00A9A4 100%)',
+    sales:      'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)',
+    permitting: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)',
+    marketplace:'linear-gradient(135deg,#08384F 0%,#00807C 100%)'
+  };
+  return g[cat] || 'linear-gradient(135deg,#08384F 0%,#006F9A 100%)';
+}
+function card(t){
+  var req=isRequired(t), pinned=isPinned(t.key);
+  var open;
+  if (t.soon) open='onclick="pmSoon(&quot;'+esc(t.name)+'&quot;)"';
+  else if (t.action) open='href="/"';   // action tools live on the portal
+  else open='href="'+esc(hrefFor(t))+'"';
+
+  var pill='';
+  if (t.soon) pill='<span class="mkt-pill soon">Soon</span>';
+  else if (req) pill='<span class="mkt-pill inc">Included</span>';
+  else if (pinned) pill='<span class="mkt-pill added">Added</span>';
+  else if (t.badge==='invest') pill='<span class="mkt-pill invest">Investors</span>';
+  else if (t.badge==='new') pill='<span class="mkt-pill new">New</span>';
+
+  var action;
+  if (t.soon){ action='<div class="mkt-actions"><div class="mkt-act disabled">Coming soon</div></div>'; }
+  else if (req || pinned){
+    var openBtn='<a class="mkt-act primary" '+open+'>Open</a>';
+    var rm = req ? '' : '<button class="mkt-act ghost" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">Remove</button>';
+    action='<div class="mkt-actions">'+openBtn+rm+'</div>';
+  } else {
+    action='<div class="mkt-actions"><button class="mkt-act primary" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">+ Add to dashboard</button></div>';
+  }
+
+  var stroke = t.soon ? 'rgba(255,255,255,.55)' : '#ffffff';
+  var cover = t.soon ? 'linear-gradient(135deg,#5A7180 0%,#8A93A0 100%)' : coverGradient(t.category);
+  var ver = t.version || '1.0.0';
+  var status = req ? 'Included' : (pinned ? 'On dashboard' : 'Available');
+
+  return '<div class="mkt-card">'
+    + '<div class="mkt-cover" style="background:'+cover+'">'
+    +   (pill?'<span class="mkt-cover-badge">'+pill+'</span>':'')
+    +   '<svg viewBox="0 0 24 24" fill="none" stroke="'+stroke+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'+t.icon+'"/></svg>'
+    + '</div>'
+    + '<div class="mkt-card-body">'
+    +   '<div class="mkt-card-cat">'+esc(catLabel(t.category))+'</div>'
+    +   '<div class="mkt-card-name">'+esc(t.name)+'</div>'
+    +   '<div class="mkt-card-desc">'+esc(t.desc||'')+'</div>'
+    +   '<div class="mkt-card-meta"><span>Version: <b>'+esc(ver)+'</b></span><span>'+esc(status)+'</span></div>'
+    +   action
+    + '</div></div>';
+}
+
+function pmSoon(name){ toast('<b>'+esc(name)+'</b> is coming online soon.'); }
+
+/* ── Add / remove from dashboard (shared pin store) ── */
+function toggle(key){
+  if (!currentOrg || !db){ toast('Sign in first.'); return; }
+  var op;
+  if (isPinned(key)){
+    op = (OMEGATools.unpinTool) ? OMEGATools.unpinTool(db, firebase, currentOrg, key) : Promise.resolve(_PINNED);
+  } else {
+    op = (OMEGATools.pinTool) ? OMEGATools.pinTool(db, firebase, currentOrg, key) : Promise.resolve(_PINNED.concat([key]));
+  }
+  op.then(function(keys){ _PINNED = keys||_PINNED; paintMarket(); toast(isPinned(key)?'Added to your dashboard':'Removed from dashboard'); })
+    ['catch'](function(){ toast('Could not update. Try again.'); });
+}
+
+/* ── Auth actions ── */
+function signInEmail(){
+  var e=(el('auth-email').value||'').trim(), p=el('auth-pass').value||'';
+  if(!e||!p){ setText('auth-err','Enter your email and password.'); return; }
+  setText('auth-err','');
+  el('email-signin-btn').disabled=true; el('email-signin-btn').textContent='Signing in…';
+  auth.signInWithEmailAndPassword(e,p)['catch'](function(err){
+    setText('auth-err', err.message||'Sign-in failed.');
+    el('email-signin-btn').disabled=false; el('email-signin-btn').textContent='Sign In';
+  });
+}
+function signInGoogle(){
+  var provider=new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)['catch'](function(err){ setText('auth-err', err.message||'Sign-in failed.'); });
+}
+function signOut(){ auth.signOut(); }
+</script>
+<script>
+/* ══ MOBILE NAV DRAWER ══ */
+(function(){
+  function build(){
+    var bar = document.getElementById('topbar'),
+        nav = document.querySelector('.tb-nav');
+    if(!bar || !nav || document.getElementById('tb-burger')) return;
+
+    var b = document.createElement('button');
+    b.id = 'tb-burger'; b.className = 'tb-burger';
+    b.setAttribute('aria-label','Menu'); b.setAttribute('aria-expanded','false');
+    b.innerHTML = '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/>'+
+                  '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+    bar.appendChild(b);
+
+    var s = document.createElement('div');
+    s.className = 'tb-scrim'; s.id = 'tb-scrim';
+    document.body.appendChild(s);
+
+    // Remember the nav's original home + position inside #topbar so we can
+    // restore it exactly on desktop. On mobile we move it onto document.body so its
+    // position:fixed isn't trapped by the sticky topbar's stacking context.
+    var navHome = nav.parentNode, navNext = nav.nextSibling;
+
+    // Reparent + inline background depending on viewport width.
+    //  ≤900px  → drawer: fixed, on document.body, solid white
+    //  >900px  → inline nav row: back in #topbar, in its original slot
+    function place(){
+      var mobile = window.innerWidth <= 900;
+      if (mobile){
+        if (nav.parentNode !== document.body) document.body.appendChild(nav);
+        nav.style.backgroundColor = '#ffffff';
+        nav.style.opacity = '1';
+      } else {
+        closeNav();
+        if (nav.parentNode !== navHome){
+          if (navNext && navNext.parentNode === navHome) navHome.insertBefore(nav, navNext);
+          else navHome.appendChild(nav);
+        }
+        nav.style.backgroundColor = '';
+        nav.style.opacity = '';
+      }
+    }
+    place();
+    window.addEventListener('resize', place);
+
+    var who = document.createElement('div');
+    who.className = 'tb-drawer-who'; who.id = 'tb-drawer-who';
+    var acts = document.createElement('div');
+    acts.className = 'tb-drawer-actions';
+    var html = '';
+    if (typeof openAccount === 'function'){
+      html += '<button class="btn-signout" onclick="closeNav();openAccount()">Account settings</button>';
+    }
+    html += '<button class="btn-signout" onclick="closeNav();signOut()">Sign out</button>';
+    acts.innerHTML = html;
+    nav.insertBefore(who, nav.firstChild);
+    nav.appendChild(acts);
+
+    b.addEventListener('click', toggleNav);
+    s.addEventListener('click', closeNav);
+    nav.addEventListener('click', function(e){
+      if(e.target.closest && e.target.closest('.tb-tab')) closeNav();
+    });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeNav(); });
+  }
+
+  window.toggleNav = function(){
+    var n=document.querySelector('.tb-nav'), s=document.getElementById('tb-scrim'),
+        b=document.getElementById('tb-burger');
+    if(!n) return;
+    var open = n.classList.toggle('open');
+    if(s) s.classList.toggle('open', open);
+    if(b) b.setAttribute('aria-expanded', open?'true':'false');
+    document.body.style.overflow = open ? 'hidden' : '';
+    var who=document.getElementById('tb-drawer-who'), tn=document.getElementById('tb-name');
+    if(who && tn) who.textContent = tn.textContent || '';
+  };
+  window.closeNav = function(){
+    var n=document.querySelector('.tb-nav'), s=document.getElementById('tb-scrim'),
+        b=document.getElementById('tb-burger');
+    if(n) n.classList.remove('open');
+    if(s) s.classList.remove('open');
+    if(b) b.setAttribute('aria-expanded','false');
+    document.body.style.overflow='';
+  };
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', build);
+  else build();
+})();
+</script>
+</body>
+</html>

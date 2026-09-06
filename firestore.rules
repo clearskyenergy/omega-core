@@ -1,0 +1,2673 @@
+rules_version = '2';
+/* ============================================================================
+   ClearSky-OMEGA · Firestore rules for the clearsky-portal database
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   THIS FILE IS THE SOURCE OF TRUTH. Deploy FROM the repo; never edit the
+   console copy directly. Prior history (the duplicated-file incident, the
+   capacityAllocations addition, admin filing-on-behalf, legal_acceptances,
+   referrals) lives in git history and in the inline comments on each block.
+
+   ── CONTROL PLANE (omega-core) ─────────────────────────────────────────────
+   Three additions, marked ← CONTROL PLANE below:
+     A. tenant helpers after canActInOrg(): tenantExists/tenantDoc/
+        tenantActive, tHasMember/tMember/tRole/tMemberEnabled,
+        isTenantAdmin, isTenantOwner
+     B. /omega_orgs/{orgId} extended with a tenant-admin branding write and
+        three subcollections: billing, members, layouts
+     C. new collections: tenant_public, widgets, verticals, opportunities
+        (+ private), rfqs (+ recipients)
+   Every new helper defaults OPEN when the document is absent, because no
+   live tenant has an omega_orgs or members doc until seed-omega-orgs runs.
+   tenantActive() is NOT yet consulted by /projects — that is a separate
+   deploy after seeding.
+
+   ── AFTER DEPLOYING ─────────────────────────────────────────────────────────
+   Search the LIVE rules text in the console for `capacityAllocations`,
+   `legal_acceptances`, `referrals`, `isTenantAdmin` and `opportunities`
+   before calling it done. A rules file that fails to deploy leaves the
+   previous version running and says nothing.
+   ============================================================================ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    /* ------------------------------------------------------------
+       ORGANISATION RESOLUTION
+
+       An org is normally just the email domain. orgAlias() folds the
+       extra domains a single company signs in from onto the one org
+       they actually share, so a colleague on a regional address lands
+       in the same workspace instead of an empty one of their own.
+
+       FENECON is the first tenant that needed this: staff sign in from
+       fenecon.com, fenecon.de and fenecon.us, but the deployment seeds
+       every record with orgId 'fenecon.com'. Without the fold, a .de
+       login resolves to org 'fenecon.de', fails the orgId comparison on
+       create, and cannot file anything.
+
+       This applies to EVERY collection that calls userOrg() — projects,
+       referrals, sites, capacityAllocations, team_*, slc_*, om_*,
+       equipment, intake_projects. That is the point: one company, one
+       workspace, whichever domain they typed.
+
+       Adding a tenant: add its alternate domains here, and only here.
+
+       CAUTION when adding an alias to a tenant that is already live —
+       records written under the old domain keep orgId 'fenecon.de' and
+       become unreachable once .de folds to .com. Backfill those docs
+       before deploying, or add the alias before the tenant's first
+       real login.
+
+       ⚠ THREE CLIENTS MIRROR THIS LIST. omega-capacity-ledger.js,
+       clearsky-sitefinder.html and omega-referrals.js resolve the org from
+       the signed-in email domain with the same fold, and api/_lib/admin.js
+       carries ORG_ALIAS server-side. If any of them drift from this
+       function, that tenant is locked out and nothing says why.
+       ------------------------------------------------------------ */
+    function orgAlias(domain) {
+      return domain == 'fenecon.de' ? 'fenecon.com'
+           : domain == 'fenecon.us' ? 'fenecon.com'
+           : domain;
+    }
+    function userOrg() {
+      /* .lower() matters. Firebase usually normalises emails, but a token
+         that arrives as Menachem@ConcordEnergyUSA.com would otherwise make
+         userOrg() return 'ConcordEnergyUSA.com', which fails every
+         case-sensitive comparison against the record's lowercase orgId —
+         so ONE user in a tenant is refused while the rest work. The storage
+         rules already fold case; this was the missing half. */
+      return orgAlias(request.auth.token.email.split('@')[1].lower());
+    }
+
+    /* ── ACTING IN A TENANT ──────────────────────────────────────────────
+       userOrg() is the caller's HOME org (their email domain). Right for
+       almost everything — your data lives in your own org. But three kinds
+       of caller legitimately write INTO a tenant that isn't their home:
+
+         1. ClearSky staff (isOmegaStaff): ANY org. Your reps work all seven
+            customers and every one you add next; that is the omega_staff
+            role's whole purpose. No per-tenant, per-rep grant to maintain.
+         2. Their own home org, or a demo bucket they own — the normal case.
+         3. A named cross-org grant, for an OUTSIDE partner who is not
+            ClearSky staff but works one specific tenant (e.g.
+            rhenry@iqgen.energy on a concordenergyusa.com job). One
+            org_members doc per such person. The narrow exception, not the
+            path the seven customers use.
+
+       org_members/{emailLower} = { orgId: 'concordenergyusa.com', active: true }
+       ClearSky admins write these; nobody can grant themselves one.
+
+       canActInOrg(o) is used for cross-org WRITES. Read scoping stays on
+       userOrg() alone — a grant lets you contribute to a tenant, not browse
+       everything in it. */
+    function memberDoc() {
+      return get(/databases/$(database)/documents/org_members/$(request.auth.token.email.lower())).data;
+    }
+    function hasMemberGrant() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/org_members/$(request.auth.token.email.lower()));
+    }
+    function grantActive() {
+      return hasMemberGrant() && memberDoc().get('active', true) == true;
+    }
+    function canActInOrg(o) {
+      return isOmegaStaff()
+          || o == userOrg()
+          || ownsDemoBucket(o)
+          || (grantActive() && o == memberDoc().get('orgId', ''));
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       TENANT HELPERS                                          ← CONTROL PLANE
+       ═══════════════════════════════════════════════════════════════════════
+       The tenant record is omega_orgs/{orgId} (it already existed with
+       own-org read and admin write); the control plane hangs off it rather
+       than inventing a parallel `tenants` collection. Every name is prefixed
+       `t` because isAdmin(), myRole(), isPartner(), pRole() already exist
+       with other meanings. Do not tidy the prefixes away. */
+    function tenantExists(o) {
+      return exists(/databases/$(database)/documents/omega_orgs/$(o));
+    }
+    function tenantDoc(o) {
+      return get(/databases/$(database)/documents/omega_orgs/$(o)).data;
+    }
+    /* ABSENT COUNTS AS ACTIVE. Every tenant live today has no omega_orgs doc
+       until seed-omega-orgs runs. A helper that failed closed on a missing
+       doc would lock out all seven customers the moment it was consulted.
+       Only an explicit 'suspended' or 'cancelled' holds anyone back. */
+    function tenantActive(o) {
+      return !tenantExists(o)
+          || !(tenantDoc(o).get('status', 'active') in ['suspended', 'cancelled']);
+    }
+    /* In-org role, omega_orgs/{orgId}/members/{uid}.
+         owner  — stood the tenant up; cannot be demoted by another admin
+         admin  — branding, members, org-level dashboard defaults
+         member — normal user (the default for anyone with no doc)
+         viewer — read-only; tools honour it, /projects rules do not yet
+       ABSENT COUNTS AS MEMBER, for the same reason as tenantActive(). */
+    function tHasMember(o) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/omega_orgs/$(o)/members/$(request.auth.uid));
+    }
+    function tMember(o) {
+      return get(/databases/$(database)/documents/omega_orgs/$(o)/members/$(request.auth.uid)).data;
+    }
+    function tRole(o) {
+      return tHasMember(o) ? tMember(o).get('role', 'member') : 'member';
+    }
+    function tMemberEnabled(o) {
+      return !tHasMember(o) || tMember(o).get('status', 'active') == 'active';
+    }
+    /* Tenant admin of org `o`. Home org or demo bucket only — NOT
+       canActInOrg(), because a cross-org grant lets an outsider contribute
+       work, not administer the tenant. ClearSky staff are handled by
+       isAdmin() at each clause so it is visible where they are included. */
+    function isTenantAdmin(o) {
+      return signedIn()
+        && (o == userOrg() || ownsDemoBucket(o))
+        && tMemberEnabled(o)
+        && tRole(o) in ['owner', 'admin'];
+    }
+    function isTenantOwner(o) {
+      return signedIn()
+        && (o == userOrg() || ownsDemoBucket(o))
+        && tMemberEnabled(o)
+        && tRole(o) == 'owner';
+    }
+
+    function demoBucketOrg() {
+      return userOrg() == 'clearsky-usa.com' ? 'demo-clearsky'
+           : userOrg() == 'sunesol.com'      ? 'demo-sunesol'
+           : userOrg() == 'ogisolar.com'     ? 'demo-ogisolar'
+           : '';
+    }
+    function ownsDemoBucket(org) {
+      return signedIn() && demoBucketOrg() != '' && org == demoBucketOrg();
+    }
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.email.matches('.*@clearsky-usa[.]com')
+        || request.auth.token.email.matches('.*@csebuilders[.]com')
+      );
+    }
+
+    /* ------------------------------------------------------------
+       OMEGA STAFF ROLES  —  omega_staff/{uid}
+
+       isAdmin() is domain-only, which is fine for ClearSky's own people but
+       cannot express "this person is a rep" or "this contractor works our
+       queue". Roles do that, on the same shape as fin_profiles: a person
+       signs in and self-creates a PENDING doc; an administrator promotes it.
+       Nobody can grant themselves a role.
+
+       role:  'admin'  — full console, can assign roles and price work
+              'rep'    — Omega Rep: see and work submitted jobs, open them in
+                         the editor, post progress. Cannot assign roles.
+              'none'   — signed in, awaiting assignment. Sees nothing.
+       active: an administrator can switch someone off without deleting them.
+       ------------------------------------------------------------ */
+    function staffDoc() {
+      return get(/databases/$(database)/documents/omega_staff/$(request.auth.uid)).data;
+    }
+    function hasStaffDoc() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/omega_staff/$(request.auth.uid));
+    }
+    function staffRole() {
+      return hasStaffDoc() ? staffDoc().get('role', 'none') : 'none';
+    }
+    function staffActive() {
+      return hasStaffDoc() && staffDoc().get('active', true) == true;
+    }
+    /* Anyone who may work the intake queue: a ClearSky address, or an
+       explicitly assigned rep/admin on any domain. */
+    function isOmegaStaff() {
+      return isAdmin() || (staffActive() && staffRole() in ['admin', 'rep']);
+    }
+    /* Who may assign roles and price work. Deliberately NOT rep. */
+    function isOmegaAdmin() {
+      return isAdmin() || (staffActive() && staffRole() == 'admin');
+    }
+
+    /* ⚠ REVIEW BEFORE OGI SOLAR'S TRIAL OPENS.
+       isConsoleViewer() is used on /projects read, and grants a CROSS-ORG
+       read of every tenant's projects. ogisolar.com and sunesol.com are in
+       it from an earlier arrangement. If OGI Solar is now a restricted
+       five-tool trial tenant, this line hands them read access to FENECON's,
+       Concord's and iQGen's project data — far past what that trial is meant
+       to include.
+
+       STILL UNRESOLVED. It has NOT been widened — the partner portal's
+       collections, /sites, /referrals, and the two capacity collections added
+       below all deliberately decline to consult it — but the database now
+       holds more parties than it did when this was written.
+
+       ⚠ ALSO AFFECTS SOLELA. sunesol.com and ogisolar.com can read Solela's
+       /projects — every site map built off the ComEd pipeline. The prospect
+       list itself (/sites) and the capacity ledger stay private; the projects
+       built from them do not.
+
+       ⚠ omega-core: DECISION PENDING (Tommy). Remove the two domains below
+       unless a live agreement requires them. See MERGE.md → Decisions. */
+    function isConsoleViewer() {
+      return signedIn() && (
+        isAdmin()
+        || request.auth.token.email.matches('.*@sunesol[.]com')
+        || request.auth.token.email.matches('.*@ogisolar[.]com')
+      );
+    }
+    function myProfile() {
+      return get(/databases/$(database)/documents/fin_profiles/$(request.auth.uid)).data;
+    }
+    function myRole() {
+      return myProfile().role;
+    }
+    function isDeveloper() {
+      return signedIn() && myRole() == 'developer';
+    }
+    function isPartner() {
+      return signedIn() && myRole() == 'partner';
+    }
+    function isOriginator() {
+      return signedIn() && myRole() == 'originator';
+    }
+    function isSubmitter() {
+      return signedIn() && myRole() in ['developer', 'originator'];
+    }
+    function isFinAdmin() {
+      return signedIn() && myRole() == 'admin';
+    }
+    function mktProfile() {
+      return get(/databases/$(database)/documents/mkt_profiles/$(request.auth.uid)).data;
+    }
+    function mktRole() {
+      return mktProfile().role;
+    }
+    function isMktDeveloper() {
+      return signedIn() && mktRole() == 'developer';
+    }
+    function isMktDistributor() {
+      return signedIn() && mktRole() == 'distributor';
+    }
+    function myDistId() {
+      return mktProfile().distributorId;
+    }
+    function isDistributorDomain() {
+      return signedIn() && (
+        request.auth.token.email.matches('.*@clearsky-usa[.]com')
+        || request.auth.token.email.matches('.*@rexelusa[.]com')
+      );
+    }
+    function isVdcOperatorDomain() {
+      return signedIn() && (
+        request.auth.token.email.matches('.*@clearsky-usa[.]com')
+        || request.auth.token.email.matches('.*@csebuilders[.]com')
+        || request.auth.token.email.matches('.*@moleculesystems[.]com')
+        || request.auth.token.email.matches('.*@molecule[.]io')
+        || request.auth.token.email.matches('.*@lightsmithenergy[.]com')
+        || request.auth.token.email.matches('.*@lightsmith[.]energy')
+      );
+    }
+    function vdcOperatorOrg() {
+      return (request.auth.token.email.matches('.*@clearsky-usa[.]com')
+              || request.auth.token.email.matches('.*@csebuilders[.]com')) ? 'clearsky'
+           : (request.auth.token.email.matches('.*@moleculesystems[.]com')
+              || request.auth.token.email.matches('.*@molecule[.]io')) ? 'molecule'
+           : (request.auth.token.email.matches('.*@lightsmithenergy[.]com')
+              || request.auth.token.email.matches('.*@lightsmith[.]energy')) ? 'lightsmith'
+           : '';
+    }
+
+    /* ── FINANCING ENTITLEMENTS: shared helpers ────────────────────
+       hasFinProfile() guards the rest: myProfile() is a bare get().data and
+       errors when the document is absent, which fails the whole rule
+       evaluation rather than returning false. */
+    function hasFinProfile() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/fin_profiles/$(request.auth.uid));
+    }
+    /* A suspended or not-yet-approved account keeps its sign-in and reaches
+       nothing. Absent counts as approved, so accounts created before those
+       fields existed keep working — only an explicit false holds someone
+       back. */
+    function finBlocked() {
+      return hasFinProfile()
+        && (myProfile().get('suspended', false) == true
+            || myProfile().get('approved', true) == false);
+    }
+    function finOrgKey() {
+      return hasFinProfile() ? myProfile().get('orgKey', '') : '';
+    }
+    /* Has the caller's FIRM opened this deal? Keyed by deal id under the
+       organisation, so one unlock serves every colleague and opening the
+       same deal twice cannot charge twice. */
+    function hasUnlocked(dealId) {
+      return finOrgKey() != ''
+        && exists(/databases/$(database)/documents/fin_orgs/$(finOrgKey())/unlocks/$(dealId));
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PARTNER PORTAL: shared helpers
+       ══════════════════════════════════════════════════════════════════
+       signedIn(), isAdmin(), isOwner(), myRole() and isPartner() all already
+       exist above with different meanings — isPartner() gates the financing
+       portal's deal flow. Every helper here is prefixed for that reason and
+       only that reason. Do not "tidy" the prefixes away.
+
+       pActive() is THE GATE: it appears on every read of every portal
+       collection below, and it is the only thing standing between a stranger
+       who signed in and the deal book. */
+    function portalSignedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    /* Lowercased because omega_invites document ids are the invited email
+       lowercased, and because every other email comparison in this file
+       folds case the same way. */
+    function callerEmail() {
+      return request.auth.token.email.lower();
+    }
+    /* ⚠ MUST MATCH access.owner IN THE PORTAL'S /config.js.
+       Hardcoded rather than read from a document, because the entire point
+       of the owner is that it survives a bad write to Firestore. */
+    function portalOwnerEmail() { return 'tom@clearsky-usa.com'; }
+    function isPortalOwner() {
+      return portalSignedIn() && request.auth.token.email.lower() == portalOwnerEmail();
+    }
+    function pUserExists() {
+      return portalSignedIn()
+        && exists(/databases/$(database)/documents/omega_users/$(request.auth.uid));
+    }
+    function pUserDoc() {
+      return get(/databases/$(database)/documents/omega_users/$(request.auth.uid)).data;
+    }
+    /* Every .get(field, default) below is deliberate: a bare field reference
+       on a document written before that field existed fails the WHOLE rule
+       evaluation, which reads to the user as a total outage rather than as
+       one missing value. */
+    function pActive() {
+      return isPortalOwner()
+          || (pUserExists() && pUserDoc().get('status', 'pending') == 'active');
+    }
+    function pRole()  { return pUserExists() ? pUserDoc().get('role', 'viewer') : 'none'; }
+    function pOrg()   { return pUserExists() ? pUserDoc().get('orgId', '') : ''; }
+    function pScope() { return pUserExists() ? pUserDoc().get('manageOrgs', []) : []; }
+    /* isAdmin() is folded in so a ClearSky address is a portal administrator
+       from its very first sign-in, before any omega_users document exists.
+       Without it, the first person to open the portal on a fresh database
+       has nobody who can approve them — including themselves. */
+    function isPortalAdmin() {
+      return isPortalOwner() || isAdmin()
+          || (pActive() && pRole() in ['owner', 'admin']);
+    }
+    function isPortalLimitedAdmin() { return pActive() && pRole() == 'limited_admin'; }
+    function isPortalPartnerAdmin() { return pActive() && pRole() == 'partner_admin'; }
+    function canWritePortalDeals()  { return isPortalAdmin() || isPortalLimitedAdmin(); }
+
+    /* ── Invitations ─────────────────────────────────────────────────────
+       An administrator can decide IN ADVANCE what role somebody gets, without
+       being able to create an account for them. omega_users create is pinned
+       to isSelf(), so a person's account is only ever created by that person
+       signing in. An invite only pre-answers "what role, when they arrive".
+       Doc id is the invited EMAIL, lowercased, so the invitee can read their
+       own invite on first sign-in without being able to enumerate others. */
+    function inviteExists() {
+      return portalSignedIn()
+        && exists(/databases/$(database)/documents/omega_invites/$(callerEmail()));
+    }
+    function inviteDoc() {
+      return get(/databases/$(database)/documents/omega_invites/$(callerEmail())).data;
+    }
+
+    match /partnerAllowlist/{email} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /admin/improvements {
+      allow read:  if signedIn();
+      allow write: if signedIn();
+    }
+    match /admin/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /tools/{toolId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+    match /meta/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    /* ============================================================
+       PUBLIC TENANT BRANDING  —  tenant_public/{hostname}   ← CONTROL PLANE
+       What omega-tenant.js reads BEFORE anyone signs in, keyed by the
+       hostname the page was served on: orgId, name, logoUrl, colors, tier
+       label, vertical, shell, domains[]. Nothing else — no emails, no
+       billing, no member list. World-readable because the sign-in page
+       paints the tenant's logo before there is a user. Written only by
+       ClearSky (the master console) and /api/tenant-branding.js on the
+       tenant admin's behalf, which mirrors omega_orgs → every host.
+       ============================================================ */
+    match /tenant_public/{host} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    /* ============================================================
+       WIDGET & VERTICAL CATALOGS  —  widgets/{id}, verticals/{v}
+       ← CONTROL PLANE. Same shape as /tools. Readable by everyone signed
+       in because the palette needs the list; written only from the master
+       console.
+       ============================================================ */
+    match /widgets/{widgetId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+    match /verticals/{verticalId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /toolData/{orgId}/tools/{toolKey} {
+      allow read:  if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId) || isAdmin());
+      allow write: if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId));
+    }
+    match /toolData/{orgId}/prefs/{prefId} {
+      allow read:  if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId) || isAdmin());
+      allow write: if signedIn() && (userOrg() == orgId || ownsDemoBucket(orgId));
+    }
+
+    /* ============================================================
+       PER-USER DASHBOARD LAYOUTS  —  dashboard_layouts
+       Doc id = "<orgId>__<uid>". Each user may read/write ONLY their
+       own layout doc. ClearSky admins may read any, not write.
+       ============================================================ */
+    match /dashboard_layouts/{docId} {
+      allow read:  if signedIn()
+                   && (docId.matches('.*__' + request.auth.uid + '$') || isAdmin());
+      allow write: if signedIn()
+                   && docId.matches('.*__' + request.auth.uid + '$');
+    }
+
+    /* ============================================================
+       TERMS OF SERVICE ACCEPTANCE  —  termsAcceptances/{uid}
+
+       APPEND-ONLY.
+         create — pinned to the caller's own uid AND their own token email,
+                  with a server timestamp, so acceptance cannot be forged for
+                  someone else or backdated from a patched client.
+         update — permitted ONLY when the version string actually changes.
+                  That is the re-accept after amended terms; it is not a way
+                  to refresh an old acceptance with today's date.
+         delete — refused, for everyone. Evidence you can erase from the
+                  client is not evidence.
+
+       ⚠ FAILS CLOSED. Without this block deployed, the write returns
+       permission-denied, the modal will not clear, and nobody signs in to ANY
+       tenant. Safe direction, but indistinguishable from an outage — check
+       the live rules text for `termsAcceptances` after deploying.
+
+       ⚠ SEE ALSO legal_acceptances, IMMEDIATELY BELOW. That is a SECOND
+       terms collection, written by the sales demo's signing gate. The two
+       are not merged. Decide which one you are keeping before both are
+       live in front of customers.
+       ============================================================ */
+    match /termsAcceptances/{uid} {
+      allow read:   if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.uid == uid
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.version is string
+                    && request.resource.data.version.size() > 0
+                    && request.resource.data.acceptedAt == request.time;
+      allow update: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.uid == uid
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.version is string
+                    && request.resource.data.version.size() > 0
+                    && request.resource.data.version != resource.data.version
+                    && request.resource.data.acceptedAt == request.time;
+      allow delete: if false;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       SIGNED AGREEMENTS  —  legal_acceptances/{uid}__{docVersion}
+       ════════════════════════════════════════════════════════════════════════
+       Written by omega-legal.js, the signing gate on the sales demo portal. A
+       new account cannot reach the workspace until a record lands here.
+
+       DIFFERENT IN KIND FROM termsAcceptances ABOVE, which is why it is a
+       separate collection rather than a wider rule on that one:
+
+         · the doc id carries the VERSION, so amending the agreements writes a
+           NEW record instead of updating the old one. Every version a person
+           ever signed survives, with its own timestamp. termsAcceptances
+           keeps one row per user and overwrites it on re-accept.
+         · the body stores the FULL TEXT of both agreements exactly as they
+           were rendered on screen, plus a hash of each. A version string alone
+           proves somebody clicked something; it does not prove what they read.
+         · there is no update path at all, not even for a version change.
+
+       Doc body written by the gate:
+         uid, email          the account, pinned to the caller's own token
+         orgId, tenant       the workspace they signed under
+         docVersion          matches OMEGA_LEGAL_DOCS.version
+         signerName          typed legal name
+         entityName          the company they are binding
+         signerTitle         their role in it
+         documents[]         { id, title, hash, text } per agreement
+         bundleHash          hash across both, for a single integrity check
+         acceptedAt          SERVER time
+         clientTime, tzOffsetMin, userAgent, language, screen, href, method
+
+       ── WHY THE DOC ID IS CONSTRAINED ──
+       recordId must equal '<caller's uid>__<docVersion in the payload>'. That
+       one clause is what stops any signed-in account writing an acceptance
+       record on somebody else's behalf: you cannot name a document after a uid
+       that is not yours. Without it, the uid field could be pinned and a
+       malicious client would still be free to scatter records under arbitrary
+       ids that a later query would pick up.
+
+       ── WHY acceptedAt MUST BE request.time ──
+       A client that supplies its own timestamp can backdate a signature to
+       before the dispute started. request.time is the server's clock and
+       cannot be moved from the browser.
+
+       ── EMAIL COMPARISON IS CASE-FOLDED ──
+       .lower() on both sides, for the same reason userOrg() folds case: a
+       token arriving as Menachem@ConcordEnergyUSA.com would otherwise be
+       refused with permission-denied, and ONE person in a tenant would be
+       unable to sign while everyone else could. The gate fails closed, so
+       that person would simply never get in and nothing would say why.
+
+       ── IMMUTABLE, FOR EVERYONE ──
+       No update. No delete. Not by the signer, not by an administrator, not
+       by a stolen token. An acceptance record a customer can revise is not
+       evidence; one an administrator can quietly correct is worth even less,
+       because the correction is invisible. If a record genuinely has to go,
+       remove it from the Firebase console with admin credentials, and expect
+       to account for it.
+
+       ⚠ FAILS CLOSED, LIKE termsAcceptances. Without this block deployed the
+       write is rejected, the gate refuses to release the portal, and nobody
+       signs in to the sales demo at all — including you. Search the live
+       rules text for `legal_acceptances` after deploying.
+
+       ⚠ TWO TERMS GATES ARE NOW LIVE ON THIS DATABASE. If the existing
+       termsAcceptances modal also runs on the sales demo deployment, a new
+       account signs twice, in two different dialogs, and neither record
+       references the other. Pick one:
+         · keep this one — point the existing modal at legal_acceptances and
+           retire termsAcceptances once no portal writes to it; or
+         · keep that one — change COLLECTION in omega-legal.js and rework the
+           doc id, accepting that you lose per-version history and the stored
+           document text.
+       Whichever you choose, do it as its own deploy. termsAcceptances stands
+       between every user and every tenant, and a mistake there is an outage
+       for all seven customers, not just the demo.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /legal_acceptances/{recordId} {
+
+      /* The signer reads back their own record — that is how the gate knows
+         not to ask again. ClearSky staff read all of them, which is how you
+         produce a signature when you need one. Nobody else, ever: these
+         records name the signer, their employer and their title. */
+      allow read: if signedIn()
+                  && (resource.data.uid == request.auth.uid || isAdmin());
+
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.email.lower()
+                         == request.auth.token.email.lower()
+                    && recordId == request.auth.uid + '__' + request.resource.data.docVersion
+                    && request.resource.data.docVersion is string
+                    && request.resource.data.docVersion.size() > 0
+                    && request.resource.data.acceptedAt == request.time
+                    /* A signature needs a person behind it. Two characters is
+                       not a name and one is not an entity — thin, but enough
+                       to refuse an empty submit from a patched client. The
+                       gate itself asks for more. */
+                    && request.resource.data.signerName is string
+                    && request.resource.data.signerName.size() >= 3
+                    && request.resource.data.entityName is string
+                    && request.resource.data.entityName.size() >= 2
+                    /* Both agreements, or it is not the bundle we presented.
+                       >= rather than == so adding a third document later does
+                       not require a rules deploy in the same breath. */
+                    && request.resource.data.documents is list
+                    && request.resource.data.documents.size() >= 2;
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* ============================================================
+       CONTRACT & PRICING ROLL-UP  —  omega_contracts
+       ClearSky's OWN commercial data, not tenant data: isAdmin() only.
+       Deliberately NOT isConsoleViewer() and NOT isPortalAdmin() — what
+       ClearSky charges its own customers is not an outside company's to read.
+       ============================================================ */
+    match /omega_contracts/{clientKey} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /team_todos/{docId} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId));
+    }
+
+    match /team_messages/{docId} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
+                    && request.resource.data.authorEmail == request.auth.token.email;
+      allow update: if false;
+      allow delete: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && resource.data.authorEmail == request.auth.token.email;
+    }
+
+    match /team_members/{memberId} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
+                    && request.resource.data.email == request.auth.token.email
+                    && memberId == request.resource.data.orgId + '__' + request.auth.token.email;
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && resource.data.email == request.auth.token.email
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.email == resource.data.email;
+      allow delete: if false;
+    }
+
+    match /team_conversations/{convoId} {
+      allow read:   if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && request.auth.token.email in resource.data.members;
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
+                    && request.auth.token.email in request.resource.data.members;
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && request.auth.token.email in resource.data.members
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.kind == resource.data.kind;
+      allow delete: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && resource.data.createdBy == request.auth.token.email;
+    }
+
+    match /team_convo_messages/{msgId} {
+      function convoNew() {
+        return get(/databases/$(database)/documents/team_conversations/$(request.resource.data.convoId)).data;
+      }
+      function convoCur() {
+        return get(/databases/$(database)/documents/team_conversations/$(resource.data.convoId)).data;
+      }
+      allow read:   if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId))
+                    && request.auth.token.email in convoCur().members;
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
+                    && request.auth.token.email in convoNew().members;
+      allow update, delete: if false;
+    }
+
+    /* ============================================================
+       FINANCING PROFILES  —  fin_profiles
+       Doc id = uid. A person may fix their own name and organisation. They
+       may NOT grant themselves a role, approval or reinstatement — those are
+       administrator decisions, and administrators are identified by email
+       domain, not by a field anyone can write.
+
+       orgKey may be set ONCE, which lets profiles written before the field
+       existed fill it in; after that only an administrator can move someone
+       to a different organisation.
+       ============================================================ */
+    match /fin_profiles/{uid} {
+      function isSelf() {
+        return signedIn() && request.auth.uid == uid;
+      }
+      function roleUnchanged() {
+        return request.resource.data.role == resource.data.role;
+      }
+      /* approved and suspended decide what this account can reach, so neither
+         may be self-assigned. */
+      function privilegeFlagsUnchanged() {
+        return request.resource.data.get('approved', true) == resource.data.get('approved', true)
+            && request.resource.data.get('suspended', false) == resource.data.get('suspended', false);
+      }
+      function orgKeySettable() {
+        return resource.data.get('orgKey', '') == ''
+            || request.resource.data.get('orgKey', '') == resource.data.get('orgKey', '');
+      }
+      allow read: if isSelf() || isAdmin();
+      allow create: if isSelf()
+        && (
+             request.resource.data.role in ['developer', 'originator', 'partner']
+             || (
+                  request.resource.data.role == 'admin'
+                  && (
+                       isAdmin()
+                       || (
+                            exists(/databases/$(database)/documents/partnerAllowlist/$(request.resource.data.emailLower))
+                            && get(/databases/$(database)/documents/partnerAllowlist/$(request.resource.data.emailLower)).data.active == true
+                            && get(/databases/$(database)/documents/partnerAllowlist/$(request.resource.data.emailLower)).data.role == 'admin'
+                          )
+                     )
+                )
+           )
+        /* Nobody may sign themselves up pre-approved. */
+        && (isAdmin() || request.resource.data.get('approved', false) == false)
+        && request.resource.data.get('suspended', false) == false;
+      allow update: if isAdmin()
+                    || (isSelf() && roleUnchanged() && privilegeFlagsUnchanged() && orgKeySettable());
+      allow delete: if isAdmin();
+    }
+
+    /* ============================================================
+       FINANCING INTAKE SETTINGS  —  fin_settings/{docId}
+       One document, 'intake'. Readable by every signed-in user because each
+       client needs it to decide what a newly filed deal becomes. Writable
+       only by the marketplace operator: these settings decide whose deals are
+       gated and who gets first refusal, which is not a tenant's call.
+       ============================================================ */
+    match /fin_settings/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin() || (hasFinProfile() && isFinAdmin());
+    }
+
+    match /fin_projects/{projectId} {
+      function isOwner() {
+        return signedIn() && resource.data.developerUid == request.auth.uid;
+      }
+      function isAwardee() {
+        return signedIn() && resource.data.awardedTo == request.auth.uid;
+      }
+      function isBrowsable() {
+        /* Partners browse only OPEN projects. 'draft', 'review', 'exclusive',
+           'closed' and 'awarded' are all excluded. */
+        return resource.data.status == 'open';
+      }
+      /* ── FIRST-LOOK HOLDS ─────────────────────────────────────
+         Membership is an array on the document, not a profile lookup: it
+         resolves without a second read, and a partner's array-contains query
+         returns only documents this same test will pass. Firestore refuses an
+         ENTIRE query the moment one returned document fails the rules, so
+         query and rule have to agree exactly.
+
+         Every access uses data.get(field, default) because deals filed before
+         this feature existed have none of these fields, and a bare reference
+         to a missing field fails the whole rule. */
+      function isFirstLook() {
+        return isPartner()
+               && request.auth.uid in resource.data.get('firstLookUids', []);
+      }
+      /* Compared against the SERVER clock, so a partner cannot buy themselves
+         more time by moving their laptop's clock forward. */
+      function holdIsLive() {
+        return resource.data.get('firstLookUntil', 0) is number
+               && request.time.toMillis() < resource.data.get('firstLookUntil', 0);
+      }
+      function hasProfile() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/fin_profiles/$(request.auth.uid));
+      }
+      function isSuspended() {
+        return hasProfile() && myProfile().get('suspended', false) == true;
+      }
+      function notApproved() {
+        return hasProfile() && myProfile().get('approved', true) == false;
+      }
+      function blocked() {
+        return isSuspended() || notApproved();
+      }
+      /* Colleagues share a workspace matched on orgKey. Deliberately NOT the
+         email domain: that would place every gmail.com account into a single
+         shared organisation. Both sides must be non-empty. */
+      function myOrgKey() {
+        return myProfile().get('orgKey', '');
+      }
+      function isOrgMate() {
+        return signedIn()
+          && resource.data.get('orgKey', '') != ''
+          && resource.data.get('orgKey', '') == myOrgKey();
+      }
+      allow read: if !blocked()
+                  && (isOwner()
+                  || isOrgMate()
+                  || isAdmin()
+                  || isFinAdmin()
+                  || (isPartner() && isBrowsable())
+                  || isFirstLook()
+                  || (isPartner() && isAwardee()));
+      /* ⚠ WITHOUT 'review' IN THIS LIST EVERY GATED SUBMISSION IS REFUSED
+         with permission-denied, and the intake gate cannot work at all.
+         'exclusive' is deliberately absent: a hold is applied by the operator
+         on update, never filed into by a sponsor.
+
+         ── ADMINISTRATOR FILING ON BEHALF ──
+         A sponsor may only ever file onto themselves: developerUid must be
+         the caller and orgKey must be their own. That is unchanged, and is
+         still the rule for everyone who is not an administrator.
+
+         A platform administrator may file onto ANOTHER account and into
+         ANOTHER organisation. This is what makes the portal's bulk import
+         assignable: data arriving from a spreadsheet belongs to whoever
+         originated it, not to whichever administrator ran the import — and it
+         cannot be corrected later, because every update clause below pins
+         developerUid to its existing value.
+
+         The two relaxations are deliberately narrow. Everything else still
+         holds for everyone: no pre-awarded deal, no pre-held deal, and still
+         only the three filable statuses. Reassigning an EXISTING deal remains
+         impossible for every role, administrators included.
+
+         Delete the two marked disjuncts to return to self-filing only; the
+         portal degrades cleanly and reports that this clause is missing. */
+      allow create: if !blocked()
+                    && (isSubmitter() || isAdmin())
+                    && (request.resource.data.developerUid == request.auth.uid
+                        || isAdmin() || isFinAdmin())                     /* ← ADDED */
+                    && request.resource.data.status in ['open', 'draft', 'review']
+                    && request.resource.data.awardedTo == null
+                    && request.resource.data.get('firstLookUids', []).size() == 0
+                    && (!('orgKey' in request.resource.data)
+                        || request.resource.data.orgKey == myOrgKey()
+                        || isAdmin() || isFinAdmin());                    /* ← ADDED */
+
+      /* Owners may correct their own deals, including awarding and closing.
+         A sponsor may NOT put their own deal on a first-look hold, so the
+         hold fields are pinned. The one exception is clearing a hold whose
+         window has already run out. */
+      allow update: if !blocked()
+                    && isOwner()
+                    && request.resource.data.developerUid == resource.data.developerUid
+                    && request.resource.data.get('firstLookUids', [])
+                       == resource.data.get('firstLookUids', [])
+                    && (
+                         request.resource.data.get('firstLookUntil', 0)
+                           == resource.data.get('firstLookUntil', 0)
+                         || (resource.data.status == 'exclusive'
+                             && !holdIsLive()
+                             && request.resource.data.status == 'open')
+                       );
+
+      /* The marketplace operator. isFinAdmin() alongside isAdmin() because the
+         console runs approvals as role=='admin' OR ClearSky domain. It cannot
+         award: awardedTo is pinned. */
+      allow update: if !blocked()
+                    && (isAdmin() || isFinAdmin())
+                    && request.resource.data.developerUid == resource.data.developerUid
+                    && request.resource.data.get('awardedTo', null)
+                       == resource.data.get('awardedTo', null);
+
+      /* The first-look partner PASSING. hasOnly() pins every other field, so
+         this cannot touch the numbers, the owner, or the award. */
+      allow update: if !blocked()
+                    && isFirstLook()
+                    && resource.data.status == 'exclusive'
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'firstLookUids', 'firstLookPastUids',
+                                   'firstLookDecision', 'firstLookDecidedAt',
+                                   'firstLookDecidedBy', 'firstLookUntil'])
+                    && request.resource.data.status == 'open'
+                    && request.resource.data.get('firstLookUids', []).size() == 0;
+
+      /* The first-look partner TAKING it. Live window only — an expired hold
+         cannot be accepted retrospectively. */
+      allow update: if !blocked()
+                    && isFirstLook()
+                    && resource.data.status == 'exclusive'
+                    && holdIsLive()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['firstLookDecision', 'firstLookDecidedAt', 'firstLookDecidedBy'])
+                    && request.resource.data.firstLookDecision == 'accepted';
+
+      allow delete: if !blocked()
+                    && ((isOwner() && resource.data.status != 'awarded')
+                        || isAdmin());
+
+      /* ============================================================
+         PER-FIRM VIEW RECORDS  —  fin_views/{orgKey}
+         Recorded by FIRM, never by individual. "Amperage Capital opened this
+         twice" is deal intelligence; "Ada opened it at 11pm on Sunday" is
+         surveillance of a person and tells the sponsor nothing more useful.
+
+         The document id IS the writer's organisation key, so a firm can only
+         ever write its own record.
+         ============================================================ */
+      match /fin_views/{orgKey} {
+        function parent() {
+          return get(/databases/$(database)/documents/fin_projects/$(projectId)).data;
+        }
+        function isMyFirm() {
+          return isPartner() && !finBlocked() && finOrgKey() != '' && orgKey == finOrgKey();
+        }
+        /* A capital partner reads only their OWN firm's record, never a
+           rival's — which firms are circling a deal is exactly what this
+           collection contains, and exactly what must not leak sideways. */
+        allow read: if isAdmin()
+                    || (hasFinProfile() && isFinAdmin())
+                    || parent().developerUid == request.auth.uid
+                    || (finOrgKey() != '' && parent().get('orgKey', '\u0000') == finOrgKey())
+                    || isMyFirm();
+        allow create, update: if isMyFirm()
+                    && request.resource.data.orgKey == orgKey
+                    && request.resource.data.sponsorOrgKey == parent().get('orgKey', '')
+                    && (
+                         parent().status == 'open'
+                         || parent().get('awardedTo', '') == request.auth.uid
+                         || request.auth.uid in parent().get('firstLookUids', [])
+                       );
+        allow delete: if isAdmin() || (hasFinProfile() && isFinAdmin());
+      }
+
+      match /offers/{offerId} {
+        function parent() {
+          return get(/databases/$(database)/documents/fin_projects/$(projectId)).data;
+        }
+        function parentOwner() {
+          return parent().developerUid == request.auth.uid;
+        }
+        function parentOrgMate() {
+          return signedIn()
+            && parent().get('orgKey', '') != ''
+            && parent().get('orgKey', '') == myProfile().get('orgKey', '');
+        }
+        function parentHeldForMeNow() {
+          return parent().status == 'exclusive'
+                 && request.auth.uid in parent().get('firstLookUids', [])
+                 && request.time.toMillis() < parent().get('firstLookUntil', 0);
+        }
+        allow read: if signedIn() && (
+                       parentOwner() ||
+                       parentOrgMate() ||
+                       isAdmin() ||
+                       isFinAdmin() ||
+                       (isPartner() && offerId == request.auth.uid)
+                    );
+        /* THE FIRST-LOOK EXEMPTION. A deal held exclusively for a partner does
+           not cost them a token in the portal: the hold IS the invitation, and
+           a partner out of allowance who could not open their own exclusive
+           would let the window lapse unread. To meter held deals like any
+           other, delete the marked clause — AND remove the exemption in
+           needsToken() in index.html, or the portal will keep offering a
+           button this rule refuses. */
+        allow create: if isPartner()
+                    && offerId == request.auth.uid
+                    && request.resource.data.partnerUid == request.auth.uid
+                    && parent().status != 'awarded'
+                    && (
+                         hasUnlocked(projectId)                  /* ← UNLOCK GATE */
+                         || parentHeldForMeNow()                 /* ← FIRST-LOOK EXEMPTION */
+                       );
+        allow update: if isPartner()
+                    && offerId == request.auth.uid
+                    && request.resource.data.partnerUid == request.auth.uid
+                    && parent().status != 'awarded';
+        allow update: if parentOwner()
+                    || parentOrgMate()
+                    || (isPartner() && offerId == request.auth.uid);
+        allow delete: if false;
+      }
+      match /inquiries/{msgId} {
+        function parent() {
+          return get(/databases/$(database)/documents/fin_projects/$(projectId)).data;
+        }
+        function parentOwner() {
+          return parent().developerUid == request.auth.uid;
+        }
+        function parentAwardee() {
+          return parent().awardedTo == request.auth.uid;
+        }
+        function parentBrowsable() {
+          return parent().status == 'open';
+        }
+        function parentHeldForMe() {
+          return parent().status == 'exclusive'
+                 && request.auth.uid in parent().get('firstLookUids', []);
+        }
+        allow read: if signedIn() && (
+                       parentOwner() ||
+                       isAdmin() ||
+                       isFinAdmin() ||
+                       (isPartner() && (parentBrowsable() || parentHeldForMe() || parentAwardee()))
+                    );
+        allow create: if signedIn()
+                    && request.resource.data.authorUid == request.auth.uid
+                    && (
+                        parentOwner() ||
+                        (isPartner() && (parentBrowsable() || parentHeldForMe() || parentAwardee()))
+                       );
+        allow update, delete: if false;
+      }
+    }
+
+    /* ============================================================
+       VIEW RECORDS, COLLECTION-GROUP SCOPE
+       A collection-group query is NOT authorised by the nested rule above —
+       it needs a rule matched at the GROUP path, which is why this exists
+       separately. Named fin_views rather than views precisely because this
+       wildcard reaches across the whole shared database.
+       ============================================================ */
+    match /{path=**}/fin_views/{orgKey} {
+      allow read: if isAdmin()
+                  || (hasFinProfile() && isFinAdmin())
+                  || (finOrgKey() != ''
+                      && resource.data.get('sponsorOrgKey', '\u0000') == finOrgKey())
+                  || (isPartner() && finOrgKey() != '' && orgKey == finOrgKey());
+      allow write: if false;
+    }
+
+    /* ============================================================
+       FINANCING ENTITLEMENTS  —  fin_orgs/{orgKey}
+           tier1 5   ·   tier2 10   ·   tier3 20   ·   enterprise unlimited
+
+       THE ALLOWANCE IS ENFORCED HERE, not in the browser. A client edited to
+       display a bigger number still cannot write one.
+
+       The month rolls itself — there is no scheduled job. The period string is
+       the client's (YYYY-MM); the worst a forged period achieves is resetting
+       an allowance early, which is why a period change is only accepted
+       alongside used == 1, and why every unlock is stamped with its period in
+       the ledger below where an early reset is plainly visible.
+
+       KEEP allowance() IN STEP WITH `TIERS` IN index.html.
+       ============================================================ */
+    match /fin_orgs/{orgKey} {
+      function mine() {
+        return signedIn()
+          && !finBlocked()
+          && finOrgKey() != ''
+          && finOrgKey() == orgKey;
+      }
+      function allowance(d) {
+        return d.get('unlocksOverride', null) != null
+          ? d.unlocksOverride
+          : (d.get('tier', 'tier1') == 'enterprise' ? 1000000
+            : d.get('tier', 'tier1') == 'tier3' ? 20
+            : d.get('tier', 'tier1') == 'tier2' ? 10 : 5);
+      }
+      /* The client writes tier back on every unlock because it merges the
+         value it just read — so this compares rather than forbids. */
+      function tierHeld() {
+        return request.resource.data.get('tier', 'tier1') == resource.data.get('tier', 'tier1')
+            && request.resource.data.get('unlocksOverride', null) == resource.data.get('unlocksOverride', null);
+      }
+      function spendsOne() {
+        return (request.resource.data.used == resource.data.get('used', 0) + 1
+                && request.resource.data.get('period', '') == resource.data.get('period', '')
+                && resource.data.get('used', 0) < allowance(resource.data))
+            || (request.resource.data.get('period', '') != resource.data.get('period', '')
+                && request.resource.data.used == 1);
+      }
+      allow read: if isAdmin() || (hasFinProfile() && isFinAdmin()) || mine();
+      allow create: if isAdmin()
+                    || (hasFinProfile() && isFinAdmin())
+                    || (mine()
+                        && request.resource.data.get('tier', 'tier1') == 'tier1'
+                        && request.resource.data.get('unlocksOverride', null) == null
+                        && request.resource.data.used == 1);
+      allow update: if isAdmin()
+                    || (hasFinProfile() && isFinAdmin())
+                    || (mine() && tierHeld() && spendsOne());
+      allow delete: if isAdmin();
+
+      /* ── THE UNLOCK LEDGER ──
+         Doc id = deal id, so a colleague opens the same deal free and a
+         double-click cannot charge twice. WRITE-ONCE BY DESIGN: a record of an
+         acceptance that can be revised afterwards is not much of a record. */
+      match /unlocks/{dealId} {
+        function mineHere() {
+          return signedIn() && !finBlocked() && finOrgKey() != '' && finOrgKey() == orgKey;
+        }
+        allow read: if isAdmin()
+                    || (hasFinProfile() && isFinAdmin())
+                    || mineHere()
+                    || (hasFinProfile()
+                        && finOrgKey() != ''
+                        && resource.data.get('sponsorOrgKey', '') == finOrgKey());
+        allow create: if isAdmin()
+                    || (isPartner()
+                        && mineHere()
+                        && request.resource.data.uid == request.auth.uid
+                        && request.resource.data.orgKey == orgKey
+                        && request.resource.data.dealId == dealId
+                        && request.resource.data.ndaVersion is string
+                        && request.resource.data.ncVersion is string
+                        && request.resource.data.acceptedName is string
+                        && request.resource.data.acceptedName.size() > 1);
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /mkt_profiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+        && (
+            request.resource.data.role == 'developer'
+            || isAdmin()
+            || (request.resource.data.role == 'distributor' && isDistributorDomain())
+           );
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.distributorId == resource.data.distributorId;
+      allow delete: if false;
+    }
+    match /mkt_distributors/{distId} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+                    || (isMktDistributor() && myDistId() == distId);
+      allow delete: if isAdmin();
+      match /catalog/{productId} {
+        allow read: if signedIn();
+        allow create, update, delete: if isAdmin()
+                    || (isMktDistributor() && myDistId() == distId);
+      }
+    }
+    match /mkt_projects/{projectId} {
+      function isProjDev() {
+        return signedIn() && resource.data.developerUid == request.auth.uid;
+      }
+      function isTargetDistributor() {
+        return isMktDistributor() && resource.data.targetDistId == myDistId();
+      }
+      allow read: if isProjDev() || isTargetDistributor() || isAdmin();
+      allow create: if isMktDeveloper()
+                    && request.resource.data.developerUid == request.auth.uid
+                    && request.resource.data.status == 'submitted';
+      allow update: if (isProjDev()
+                        && request.resource.data.developerUid == resource.data.developerUid
+                        && request.resource.data.targetDistId == resource.data.targetDistId)
+                    || isTargetDistributor()
+                    || isAdmin();
+      allow delete: if (isProjDev() && resource.data.status == 'submitted') || isAdmin();
+      function pParent() {
+        return get(/databases/$(database)/documents/mkt_projects/$(projectId)).data;
+      }
+      function pIsDev() {
+        return signedIn() && pParent().developerUid == request.auth.uid;
+      }
+      function pIsDist() {
+        return isMktDistributor() && pParent().targetDistId == myDistId();
+      }
+      match /quote/{quoteId} {
+        allow read: if pIsDev() || pIsDist() || isAdmin();
+        allow create, update: if pIsDist() || isAdmin();
+        allow delete: if isAdmin();
+      }
+      match /invoice/{invoiceId} {
+        allow read: if pIsDev() || pIsDist() || isAdmin();
+        allow create, update: if pIsDist() || isAdmin()
+                    || (pIsDev()
+                        && request.resource.data.provider == resource.data.provider
+                        && request.resource.data.amount == resource.data.amount);
+        allow delete: if isAdmin();
+      }
+      match /messages/{msgId} {
+        allow read: if pIsDev() || pIsDist() || isAdmin();
+        allow create: if signedIn()
+                    && request.resource.data.authorUid == request.auth.uid
+                    && (pIsDev() || pIsDist() || isAdmin());
+        allow update, delete: if false;
+      }
+    }
+
+    match /vdc_profiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isVdcOperatorDomain());
+      allow create: if signedIn() && request.auth.uid == uid
+        && (
+            request.resource.data.role == 'buyer'
+            || (request.resource.data.role == 'operator' && isVdcOperatorDomain())
+           );
+      allow update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+    match /vdc_assets/{id} {
+      allow read: if signedIn() && (
+                    resource.data.ownerUid == request.auth.uid
+                    || isVdcOperatorDomain()
+                    || resource.data.status == 'live'
+                    || resource.data.status == 'matched'
+                  );
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && (
+                      resource.data.ownerUid == request.auth.uid
+                      || isVdcOperatorDomain()
+                    );
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+    match /vdc_rfqs/{id} {
+      allow read: if signedIn() && (
+                    resource.data.buyerUid == request.auth.uid
+                    || isVdcOperatorDomain()
+                  );
+      allow create: if signedIn()
+                    && request.resource.data.buyerUid == request.auth.uid;
+      allow update: if signedIn() && (
+                      resource.data.buyerUid == request.auth.uid
+                      || isVdcOperatorDomain()
+                    );
+      allow delete: if signedIn() && resource.data.buyerUid == request.auth.uid;
+    }
+    match /vdc_quotes/{id} {
+      allow read: if signedIn() && (
+                    isVdcOperatorDomain()
+                    || get(/databases/$(database)/documents/vdc_rfqs/$(resource.data.rfqId)).data.buyerUid == request.auth.uid
+                  );
+      allow create: if isVdcOperatorDomain()
+                    && request.resource.data.providerUid == request.auth.uid;
+      allow update: if isVdcOperatorDomain()
+                    && resource.data.providerUid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    match /vdc_connectors/{key} {
+      allow read: if isVdcOperatorDomain();
+      allow write: if isVdcOperatorDomain() && (
+                     vdcOperatorOrg() == 'clearsky'
+                     || vdcOperatorOrg() == resource.data.owner
+                     || vdcOperatorOrg() == request.resource.data.owner
+                   );
+    }
+    match /vdc_events/{id} {
+      allow read: if isVdcOperatorDomain();
+      allow create: if signedIn()
+                    && request.resource.data.byUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    /* ============================================================
+       PROJECTS  —  the OMEGA workspace
+
+       isOmegaStaff() on read/create/update so a rep on a non-ClearSky domain
+       can build a job into the client's own org.
+
+       DELETE is deliberately left at isAdmin(). A rep who can delete any
+       tenant's project across every org is a much bigger blast radius than one
+       who can create one, and nothing in the console needs it.
+
+       DELIBERATELY NOT isPortalAdmin(). A verification or referral partner has
+       no business reading tenants' drawings; the partner portal gets a frozen
+       packet copied onto the assignment instead.
+
+       ⚠ isConsoleViewer() ON READ grants a cross-org read of EVERY tenant's
+       projects to sunesol.com and ogisolar.com. See the note above.
+
+       ⚠ omega-core: tenantActive(userOrg()) is NOT yet on this read. Add it
+       as its own deploy once omega_orgs is seeded for every live tenant.
+       ============================================================ */
+    match /projects/{projectId} {
+      allow read: if request.auth != null
+                  && (
+                    resource.data.orgId == userOrg()
+                    || resource.data.uid == request.auth.uid
+                    || ownsDemoBucket(resource.data.orgId)
+                    || isConsoleViewer()
+                    || isOmegaStaff()
+                  );
+      allow create: if request.auth != null
+                    && (
+                      request.resource.data.orgId == userOrg()
+                      || ownsDemoBucket(request.resource.data.orgId)
+                      || isAdmin()
+                      || isOmegaStaff()
+                    );
+      allow update: if request.auth != null
+                    && (
+                      (
+                        (
+                          resource.data.orgId == userOrg()
+                          || resource.data.uid == request.auth.uid
+                        )
+                        && request.resource.data.orgId == userOrg()
+                      )
+                      || (
+                        ownsDemoBucket(resource.data.orgId)
+                        && request.resource.data.orgId == resource.data.orgId
+                      )
+                      || isAdmin()
+                      || isOmegaStaff()
+                    );
+      allow delete: if request.auth != null
+                    && (
+                      resource.data.orgId == userOrg()
+                      || resource.data.uid == request.auth.uid
+                      || ownsDemoBucket(resource.data.orgId)
+                      || isAdmin()
+                    );
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       REFERRAL INBOX  —  referrals
+       ════════════════════════════════════════════════════════════════════════
+       Quote requests. Somebody on the platform has a site and wants a price on
+       storage for it; the request lands in the receiving tenant's dashboard
+       with the site, the ask, and whatever documents came with it. Written and
+       read by omega-referrals.js on index.html.
+
+       ── THE HUMAN-INITIATED CROSS-TENANT OBJECT ──
+       Every other tenant collection here is scoped to ONE org and can be
+       checked against the caller's own. A referral deliberately spans two: it
+       is addressed by toOrgId and sent by fromOrgId, and both sides must be
+       able to see it or the loop does not close. That makes this rule the
+       whole security story rather than a formality. (omega-core adds
+       /opportunities and /rfqs below, which are the EDITOR-generated
+       cross-tenant objects; they are created only server-side.)
+
+       Doc body written by the module:
+         toOrgId        the tenant it is addressed to   — required
+         fromOrgId      the sender's OWN org            — required, pinned
+         fromEmail      the sender, pinned to their token
+         fromName, fromUid
+         siteName, address, ask
+         powerKw, energyKwh, product, stage, neededBy
+         gridScore, bankableScore   0-99 or null, place it on the matrix
+         status         new | reviewing | quoting | quoted | won | lost | declined
+         docs[]         { kind, name, url, source, size, path, addedBy… }
+         activity[]     append-only trail
+         createdAt, updatedAt
+
+       ── fromOrgId IS THE SENDER'S ORG, NOT THE TENANT'S ──
+       ⚠ THIS BIT US ONCE ALREADY. The module first stamped fromOrgId from
+       config.js, which on FENECON's portal reads 'fenecon.com' for EVERY
+       signed-in user including ClearSky staff previewing it. userOrg() for a
+       ClearSky address is 'clearsky-usa.com', the create clause below refused
+       the write, and the only symptom was a dialog saying the rule was
+       missing — when the rule was fine and the client was lying about who it
+       was. omega-referrals.js now derives it from the signed-in email domain.
+
+       ── AND IT MIRRORS orgAlias() ──
+       The module carries its own ORG_ALIAS map folding fenecon.de and
+       fenecon.us onto fenecon.com, because a .de user stamping fromOrgId
+       'fenecon.de' fails this clause outright. Same mirroring the Site Finder
+       already does, and the same way it breaks: add a tenant alias to BOTH
+       orgAlias() above and ORG_ALIAS in the module, or that tenant can read
+       referrals and cannot send one.
+
+       ── WHY isOmegaStaff() AND NOT isConsoleViewer() ──
+       isOmegaStaff() is here because ClearSky reps work every customer's queue
+       and passing a site to a manufacturer on a client's behalf is the job.
+       isConsoleViewer() is deliberately absent: it grants sunesol.com and
+       ogisolar.com a cross-org read, and a referral carries a site address,
+       what the sponsor wants priced, and the sponsor's own contact — a live
+       prospect, not a drawing. Same reasoning as /sites.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /referrals/{referralId} {
+
+      /* Is org `o` one the caller may act as? Own org, or a demo bucket they
+         own. Deliberately does NOT fold in isOmegaStaff() — the two are ORed
+         separately below so it is visible at each clause whether staff are
+         included, rather than hidden inside a helper. */
+      function refMine(o) {
+        return o != '' && (o == userOrg() || ownsDemoBucket(o));
+      }
+
+      /* The recipient and the sender. Nobody else, including other tenants in
+         this same Firebase project.
+
+         THIS IS ALSO WHAT MAKES THE MODULE'S QUERY LEGAL. It asks
+         .where('toOrgId','==',ORG), and Firestore refuses a LIST query the
+         moment one returned document fails — so the queried org and userOrg()
+         must be the same string. They are, because the module queries the
+         tenant orgId and userOrg() folds the aliases onto it. */
+      allow read: if signedIn()
+                  && (refMine(resource.data.get('toOrgId', ''))
+                   || refMine(resource.data.get('fromOrgId', ''))
+                   || isOmegaStaff());
+
+      /* Anyone signed in may send one, but only truthfully.
+
+         Without the fromEmail check a user could file referrals in a
+         colleague's name; without the status pin they could file one already
+         marked 'won' in somebody else's pipeline; without the empty-docs check
+         they could attach a URL to a document nobody uploaded.
+
+         .lower() ON BOTH SIDES. A token arriving as Menachem@ConcordEnergyUSA
+         .com would otherwise be refused with permission-denied while everyone
+         else in the same tenant worked — the single-user failure this file has
+         already had to fix twice. */
+      allow create: if signedIn()
+                    && request.resource.data.fromEmail is string
+                    && request.resource.data.fromEmail.lower()
+                         == request.auth.token.email.lower()
+                    && (request.resource.data.fromOrgId == userOrg()
+                        || ownsDemoBucket(request.resource.data.fromOrgId)
+                        || isOmegaStaff())
+                    && request.resource.data.toOrgId is string
+                    && request.resource.data.toOrgId.size() > 0
+                    && request.resource.data.status == 'new'
+                    && request.resource.data.get('docs', []).size() == 0;
+
+      /* 1 · THE RECIPIENT works the referral: status, documents, activity,
+             scores. It may not rewrite who the request is from or who it is
+             to — that would let a recipient quietly reassign a live enquiry to
+             another vendor, or claim one addressed to somebody else. */
+      allow update: if signedIn()
+                    && (refMine(resource.data.get('toOrgId', '')) || isOmegaStaff())
+                    && request.resource.data.toOrgId   == resource.data.toOrgId
+                    && request.resource.data.fromOrgId == resource.data.fromOrgId
+                    && request.resource.data.fromEmail == resource.data.fromEmail;
+
+      /* 2 · THE SENDER may keep attaching. The site map routinely arrives a
+             day after the referral does, and making them re-send the whole
+             request to add one PDF is how requests get duplicated.
+
+             hasOnly() pins everything else, which is what stops a sender
+             marking their own request 'won' in the recipient's pipeline, or
+             quietly revising the ask after a price was given against it. */
+      allow update: if signedIn()
+                    && refMine(resource.data.get('fromOrgId', ''))
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['docs', 'activity', 'updatedAt']);
+
+      /* A referral is the record of who asked for what and when. Close it as
+         'declined' or 'lost'; the module has no delete path and neither does
+         this. If one genuinely has to go, remove it from the Firebase console
+         with admin credentials and expect to account for it. */
+      allow delete: if false;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       EDITOR-GENERATED OPPORTUNITIES  —  opportunities/{id}     ← CONTROL PLANE
+       ════════════════════════════════════════════════════════════════════════
+       Created by /api/opportunity.js (Admin SDK) when a project places a SKU
+       whose equipment record carries vendorOrgId. NEVER created from the
+       browser: the parent doc carries no identity by construction, and a
+       client that could write it could also write one that does.
+
+       PARENT  (what the VENDOR sees — anonymous)
+         vendorOrgId, category, sku, qty, projectKey
+         public: { state, utility, sizeKw, sizeKwh, stage }
+         status: open | quoted | declined | revealed | closed
+         quote:  { amount, currency, terms, validUntil, quotedBy, quotedAt }
+       PRIVATE  opportunities/{id}/private/contact  (identity)
+         sourceOrgId, projectId, projectName, contactEmail, contactName, siteAddress
+
+       Firestore cannot hide fields on a document, so the identity lives in a
+       subdocument with its own rule. The vendor reads the parent from day one
+       and the private doc only once the customer has accepted a quote
+       (parent.status == 'revealed'). The customer finds their own
+       opportunities through the collection-group rule on `private`.
+
+       DELIBERATELY NOT isConsoleViewer(): an opportunity IS a live prospect.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /opportunities/{oppId} {
+      function privateDoc() {
+        return get(/databases/$(database)/documents/opportunities/$(oppId)/private/contact).data;
+      }
+      function isVendorHere() {
+        return signedIn() && canActInOrg(resource.data.get('vendorOrgId', '\u0000'));
+      }
+      function isSourceHere() {
+        return signedIn() && canActInOrg(privateDoc().get('sourceOrgId', '\u0000'));
+      }
+      function vendorQuoteFields() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'quote', 'updatedAt']);
+      }
+
+      allow read: if isOmegaStaff() || isVendorHere() || isSourceHere();
+
+      allow create: if false;      /* /api/opportunity.js only */
+
+      /* The vendor answers: quote it or decline it. Nothing else — not the
+         ask, not who it is addressed to. */
+      allow update: if isVendorHere()
+                    && resource.data.status in ['open', 'quoted']
+                    && vendorQuoteFields()
+                    && request.resource.data.status in ['quoted', 'declined'];
+
+      /* The customer decides: reveal (accept) or close. Reveal is the one act
+         that hands the vendor their identity, and only the customer can
+         perform it (the api does the same server-side and adds revealedAt). */
+      allow update: if isSourceHere()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt'])
+                    && request.resource.data.status in ['revealed', 'closed'];
+
+      allow update: if isOmegaAdmin();
+      allow delete: if false;
+
+      match /private/{docId} {
+        function parentStatus() {
+          return get(/databases/$(database)/documents/opportunities/$(oppId)).data.get('status', '');
+        }
+        function parentVendor() {
+          return get(/databases/$(database)/documents/opportunities/$(oppId)).data.get('vendorOrgId', '\u0000');
+        }
+        allow read: if isOmegaStaff()
+                    || (signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000')))
+                    || (signedIn()
+                        && canActInOrg(parentVendor())
+                        && parentStatus() == 'revealed');
+        allow write: if false;     /* /api/opportunity.js only */
+      }
+    }
+    /* Customer inbox: "show me every opportunity my projects have generated".
+       Vendors never match this rule — a vendor's org is never a sourceOrgId
+       on a doc addressed to them. */
+    match /{path=**}/private/{docId} {
+      allow read: if isOmegaStaff()
+                  || (signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000')));
+      allow write: if false;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       REQUEST FOR QUOTE  —  rfqs/{id}                              ← CONTROL PLANE
+       ════════════════════════════════════════════════════════════════════════
+       Created by /api/rfq.js when a customer hits "Request for Quote" in the
+       BOM tool. The function computes recipients: every vendor with a SKU in
+       the BOM gets their lines; every tenant with receivesFullBom gets the
+       whole thing. Each recipient sees ONLY their subdocument.
+
+       PARENT  rfqs/{id}   (the CUSTOMER's record — full BOM)
+         sourceOrgId, projectId, projectName, bom[], status, recipientOrgIds[]
+       RECIPIENT  rfqs/{id}/recipients/{vendorOrgId}
+         vendorOrgId, scope: full-bom | line-items, lines[], anon{}
+         status: sent | viewed | quoted | declined | accepted
+         quote: { amount, currency, terms, validUntil, quotedBy, quotedAt }
+         revealed: bool — set by the customer on accept
+         contact: { ... } — written by /api/rfq.js on reveal, absent before
+
+       A recipient doc is keyed by the vendor's orgId so the inbox query is a
+       collection-group .where('vendorOrgId','==',ORG) that this rule can
+       prove passes for every returned doc.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /rfqs/{rfqId} {
+      function isSourceHere() {
+        return signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000'));
+      }
+      allow read:   if isOmegaStaff() || isSourceHere();
+      allow create: if false;      /* /api/rfq.js only */
+      allow update: if isOmegaAdmin()
+                    || (isSourceHere()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status', 'updatedAt'])
+                        && request.resource.data.status in ['closed', 'cancelled']);
+      allow delete: if false;
+
+      match /recipients/{vendorOrgId} {
+        function parentSource() {
+          return get(/databases/$(database)/documents/rfqs/$(rfqId)).data.get('sourceOrgId', '\u0000');
+        }
+        function isVendorHere() {
+          return signedIn() && canActInOrg(vendorOrgId);
+        }
+        function isSourceHere() {
+          return signedIn() && canActInOrg(parentSource());
+        }
+        allow read: if isOmegaStaff() || isVendorHere() || isSourceHere();
+        allow create: if false;    /* /api/rfq.js only */
+        /* Vendor: quote or decline, own fields only. */
+        allow update: if isVendorHere()
+                      && resource.data.get('status', '') in ['sent', 'viewed', 'quoted']
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status', 'quote', 'updatedAt'])
+                      && request.resource.data.status in ['viewed', 'quoted', 'declined'];
+        /* Customer: accept → reveal. The contact block itself is written by
+           /api/rfq.js after this flag flips, so a client cannot forge one. */
+        allow update: if isSourceHere()
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['revealed', 'updatedAt'])
+                      && request.resource.data.revealed == true;
+        allow update: if isOmegaAdmin();
+        allow delete: if false;
+      }
+    }
+    match /{path=**}/recipients/{vendorOrgId} {
+      allow read: if isOmegaStaff() || (signedIn() && canActInOrg(vendorOrgId));
+      allow write: if false;
+    }
+
+    /* ============================================================
+       COMED CAPACITY PIPELINE  —  sites
+       ------------------------------------------------------------
+       One document per site a rep has identified on the ComEd
+       hosting-capacity layer. Written by the ComEd Capacity map tool; read by
+       the Solela portal's dashboard, which derives the funnel and the
+       sales-rep board from nothing but these rows.
+
+       Scoped own-org + demo bucket + isAdmin(), same shape as /equipment.
+
+       Deliberately NOT isConsoleViewer(): these rows carry site addresses and
+       property-owner contact details — a prospect list. Deliberately NOT
+       isOmegaStaff() or isPortalAdmin() either.
+
+       repEmail is deliberately left writable by any member of the org, because
+       handing a site to a colleague is ordinary sales-ops work. The cost is
+       that the rep board is soft. Fine while these are visibility numbers; not
+       fine the day they drive commission — see ← LOCK ATTRIBUTION.
+       ============================================================ */
+    match /sites/{siteId} {
+
+      /* ⚠ STATUS IS REQUIRED BUT ITS VALUE IS NOT ENUMERATED, DELIBERATELY.
+         Any value outside a fixed list would be refused with
+         permission-denied — indistinguishable from a missing rule, and only
+         for SOME saves, which is the worst kind of bug to chase. The
+         dashboard's normalize() falls back to 'identified' for anything it
+         does not recognise. Enumerate it here once the tool's stage list is
+         known. */
+      function hasStatus(d) {
+        return d.get('status', '') is string && d.get('status', '') != '';
+      }
+      function mineHere() {
+        return signedIn()
+          && (resource.data.orgId == userOrg()
+              || ownsDemoBucket(resource.data.orgId)
+              || isAdmin());
+      }
+      /* On CREATE the claim must be the caller's own address or nothing at all
+         — you may claim a site for yourself, and you may leave it open for the
+         floor, but you may not file one pre-assigned to a colleague.
+         .lower() on both sides, or a token arriving as Thomas@Chileasing.com
+         blocks ONE rep while the rest work. */
+      function claimIsOwnOrOpen() {
+        return request.resource.data.get('repEmail', '') == ''
+            || request.resource.data.get('repEmail', '').lower()
+                 == request.auth.token.email.lower();
+      }
+
+      allow read: if mineHere();
+
+      /* ⚠ ONLY orgId AND status ARE REQUIRED. An earlier draft also demanded a
+         non-empty siteName, which the tool does not write on first save — a
+         site identified from the map has a parcel and a feeder before anyone
+         has typed a name. That would have refused every create. */
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg()
+                        || ownsDemoBucket(request.resource.data.orgId)
+                        || isAdmin())
+                    && request.resource.data.orgId is string
+                    && request.resource.data.orgId.size() > 0
+                    && hasStatus(request.resource.data)
+                    && (claimIsOwnOrOpen() || isAdmin());
+
+      allow update: if mineHere()
+                    && request.resource.data.orgId == resource.data.orgId
+                    && hasStatus(request.resource.data)
+                    /* ← LOCK ATTRIBUTION — uncomment the next three lines the
+                       day this board drives commission. A rep may then claim
+                       an OPEN site but never take one off a colleague; only an
+                       administrator can reassign.
+                    && (isAdmin()
+                        || resource.data.get('repEmail', '') == ''
+                        || request.resource.data.get('repEmail', '') == resource.data.get('repEmail', ''))
+                    */
+                    ;
+
+      allow delete: if mineHere();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       CAPACITY LEDGER  —  capacityAllocations
+       ════════════════════════════════════════════════════════════════════════
+       One document per claim a rep has made against a ComEd circuit. Written
+       and read by both the Site Finder and the ComEd Capacity Finder. THIS IS
+       WHAT STOPS TWO REPS SELLING THE SAME WIRE.
+
+       Doc body:
+         orgId        tenant scope — required, enforced below
+         id           the allocation id, matching the document id
+         feederId     the ComEd circuit (e.g. 'D5017')
+         siteId       the site the claim is against
+         kw           capacity held, in kilowatts
+         status       reserved | filed | energised | released | lost
+         rep, uid     who made the claim
+         address      the site, for the "who holds this" line on a card
+         createdAt, expiresAt, updatedAt
+
+       Scoped exactly like /sites: own org, demo bucket, isAdmin(). Not
+       isConsoleViewer() — a claim carries a site address and names the rep
+       working it, which is the same prospect-list reasoning.
+
+       EVERYONE IN THE ORG READS EVERY CLAIM. That is the entire point; a claim
+       nobody else can see prevents no duplicated work at all. It is also what
+       makes the client's query legal: the tool asks
+       .where('orgId','==',ORG), and Firestore permits a LIST query only when
+       it can prove every returned document passes — so the queried org and
+       userOrg() must be the same string.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /capacityAllocations/{allocId} {
+
+      function mineHere() {
+        return signedIn()
+          && (resource.data.orgId == userOrg()
+              || ownsDemoBucket(resource.data.orgId)
+              || isAdmin());
+      }
+
+      /* kW is the number the whole ledger arithmetic rests on. A NEGATIVE
+         value would ADD capacity to a circuit that does not have it, and the
+         next rep to look would be told there is room where there is none —
+         which is worse than the tool not existing. */
+      function saneKw(d) {
+        return d.get('kw', -1) is number
+            && d.get('kw', -1) > 0
+            && d.get('kw', -1) < 100000;
+      }
+
+      /* A claim must name a circuit, or it holds capacity on nothing and is
+         invisible to every other rep looking at that wire. */
+      function hasFeeder(d) {
+        return d.get('feederId', '') is string
+            && d.get('feederId', '') != ''
+            && d.get('feederId', '').size() < 40;
+      }
+
+      allow read: if mineHere();
+
+      /* ── WHO MADE THE CLAIM ───────────────────────────────────────
+         `rep` is a DISPLAY NAME — whatever the person typed into "Set your
+         name" in the tool. It is what a colleague reads on a card, and it is
+         deliberately NOT pinned: two people can type the same thing, names
+         change, and refusing a claim because somebody wrote "Tommy" instead
+         of their email address helps nobody.
+
+         ⚠ AN EARLIER VERSION OF THIS RULE COMPARED `rep` TO THE TOKEN EMAIL
+         AND REFUSED EVERY CLAIM. "Tommy" is not "tommy@example.com", so the
+         write failed with permission-denied while reads worked perfectly —
+         the ledger attached, the chip went green, and only the Hold button
+         was broken. Do not reinstate that comparison.
+
+         Identity is pinned on `uid` and `repEmail`, which the ledger stamps
+         from the signed-in user rather than accepting from the caller. Both
+         are optional so a claim written by an older build still validates,
+         but present-and-wrong is refused: a hold filed in a colleague's name
+         is worse than no attribution, because the board then lies with
+         confidence. */
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg()
+                        || ownsDemoBucket(request.resource.data.orgId)
+                        || isAdmin())
+                    && request.resource.data.orgId is string
+                    && request.resource.data.orgId.size() > 0
+                    && hasFeeder(request.resource.data)
+                    && saneKw(request.resource.data)
+                    && (!('uid' in request.resource.data)
+                        || request.resource.data.uid == request.auth.uid
+                        || isAdmin())
+                    && (!('repEmail' in request.resource.data)
+                        || request.resource.data.repEmail == ''
+                        || request.resource.data.repEmail.lower()
+                             == request.auth.token.email.lower()
+                        || isAdmin());
+
+      /* orgId is immutable: a claim cannot be moved between tenants, which
+         would take the capacity with it and silently free a circuit in one org
+         while occupying one in another.
+
+         The rep is NOT pinned on update, matching the decision on /sites.
+         Handing a hold to a colleague, and releasing one you cannot progress,
+         are ordinary floor moves. Honest by visibility rather than by
+         enforcement. Lock it the day these numbers drive commission. */
+      allow update: if mineHere()
+                    && request.resource.data.orgId == resource.data.orgId
+                    && saneKw(request.resource.data)
+                    && hasFeeder(request.resource.data);
+
+      /* Releasing a hold is deliberately open to the org, not just its author.
+         Capacity held by someone on holiday, or who has left, must be
+         releasable or the circuit stays locked forever. */
+      allow delete: if mineHere();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       CIRCUIT CAPACITY CACHE  —  circuitCapacity
+       ════════════════════════════════════════════════════════════════════════
+       What ComEd publishes for a circuit: nameplate, queue, substation, and
+       when it was read. Doc id = '<orgId>__<feederId>'.
+
+       NOT SENSITIVE. This is ComEd's own published hosting capacity, readable
+       off their public map by anyone. It is shared so a rep who has looked up
+       D5017 saves every colleague the request, and so the circuit ledger
+       survives a page reload.
+
+       ⚠ REQUIRED once the ledger is connected. omega-capacity-ledger.js writes
+       here on every setFeeder and subscribes on attach. Without this block
+       those writes are rejected and each rep re-reads every circuit alone —
+       and the failure is QUIET: claims still work, the map still draws, and
+       the only symptom is the ledger emptying on reload.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /circuitCapacity/{docId} {
+
+      allow read: if signedIn()
+                  && (resource.data.orgId == userOrg()
+                      || ownsDemoBucket(resource.data.orgId)
+                      || isAdmin());
+
+      allow create, update: if signedIn()
+           && (request.resource.data.orgId == userOrg()
+               || ownsDemoBucket(request.resource.data.orgId)
+               || isAdmin())
+           && request.resource.data.feederId is string
+           && request.resource.data.feederId.size() > 0
+           && request.resource.data.feederId.size() < 40
+           /* ComEd's numbers. A negative nameplate would make the ledger show
+              a circuit as oversubscribed when it is empty; an absurd one would
+              make every site on it look like a data centre. */
+           && request.resource.data.nameplate is number
+           && request.resource.data.nameplate >= 0
+           && request.resource.data.nameplate < 100000
+           && request.resource.data.get('queue', 0) is number
+           && request.resource.data.get('queue', 0) >= 0
+           && request.resource.data.get('queue', 0) < 100000
+           /* readAt decides which of two copies wins. ComEd revises capacity
+              quarterly, so without it a stale June figure could overwrite
+              September's — and a rep would sell capacity that is gone. */
+           && request.resource.data.readAt is number;
+
+      /* Nobody deletes a capacity reading. It records what ComEd said at a
+         point in time; it is superseded by a newer read, never removed. A rep
+         who could delete one would silently un-learn a circuit for the whole
+         team. */
+      allow delete: if false;
+    }
+
+    /* ============================================================
+       TENANT RECORD  —  omega_orgs/{orgId}                    ← CONTROL PLANE
+       (replaces the two-line block: read own-org/demo/admin, write admin)
+
+       Doc body (control plane):
+         name, slug, domains[], logoUrl, colors{}, exportBrand{}
+         vertical        oem | developer | epc | installer
+         shell           default | <vertical> | <tenantSlug>
+         status          pending | active | suspended | cancelled
+         receivesFullBom bool — distributors get the whole BOM on an RFQ
+         defaultLayout   org-level starter dashboard, set by tenant admin
+         createdAt, approvedAt, approvedBy
+
+       TWO KINDS OF FIELD, TWO WRITERS.
+         Branding (name, logoUrl, colors, exportBrand, defaultLayout) is the
+         tenant's to change — that is the whole point of self-service.
+         Everything else (status, vertical, shell, domains, receivesFullBom)
+         decides what the tenant IS on the platform and what they can reach,
+         and stays ClearSky-only. hasOnly() below is the line between them.
+       ============================================================ */
+    match /omega_orgs/{orgId} {
+      function brandingOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['name', 'logoUrl', 'colors', 'exportBrand',
+                           'defaultLayout', 'updatedAt']);
+      }
+      /* Unchanged from before. */
+      allow read:   if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+                    || (isTenantAdmin(orgId) && brandingOnly());
+      /* A tenant is never deleted; set status 'cancelled'. Projects,
+         acceptances and billing history all key on this orgId. */
+      allow delete: if false;
+
+      /* ── BILLING ──  omega_orgs/{orgId}/billing/current
+         tier, addons[], toolOverrides{}, trialEndsAt, subscriptionDue,
+         amountDue, lastPaidAt, paymentProvider, stripeCustomerId,
+         paymentLink, autopay.
+         The tenant READS this — it is how the portal knows what to unlock
+         and what to show on the account page. Only ClearSky writes it, and
+         in practice only /api/stripe-webhook.js and the master console.
+         A tenant admin who could edit `tier` would be pricing their own
+         subscription. */
+      match /billing/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin();
+      }
+
+      /* ── MEMBERS ──  omega_orgs/{orgId}/members/{uid}
+         email, name, role, status, toolAccess[], invitedBy, createdAt.
+
+         Self-create is allowed so a person appears in the tenant admin's
+         list on first sign-in — but ONLY as role 'member', status 'active',
+         with email pinned to the token. Same shape as omega_staff: showing
+         up is automatic, promotion is an administrator act (or /api/set-role).
+
+         A tenant admin may set role in ['admin','member','viewer'] — never
+         'owner', and never on the owner's own doc. Without that clamp two
+         admins can demote each other, which is an argument that should not
+         be settled in software. Only the owner (or ClearSky) transfers
+         ownership. */
+      match /members/{uid} {
+        function isSelfHere() { return signedIn() && request.auth.uid == uid; }
+        function inThisOrg()  { return orgId == userOrg() || ownsDemoBucket(orgId); }
+        function targetIsOwner() {
+          return resource != null && resource.data.get('role', 'member') == 'owner';
+        }
+        function selfSafeFields() {
+          return request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['name', 'updatedAt']);
+        }
+        allow read: if isAdmin()
+                    || (signedIn() && inThisOrg())
+                    || isSelfHere();
+        allow create: if isAdmin()
+                    || (isTenantAdmin(orgId)
+                        && request.resource.data.get('role', 'member') in ['admin', 'member', 'viewer'])
+                    || (isSelfHere()
+                        && inThisOrg()
+                        && request.resource.data.get('email', '').lower()
+                             == request.auth.token.email.lower()
+                        && request.resource.data.get('role', 'member') == 'member'
+                        && request.resource.data.get('status', 'active') == 'active');
+        allow update: if isAdmin()
+                    || (isTenantOwner(orgId)
+                        && request.resource.data.get('role', 'member')
+                             in ['owner', 'admin', 'member', 'viewer'])
+                    || (isTenantAdmin(orgId)
+                        && !targetIsOwner()
+                        && request.resource.data.get('role', 'member')
+                             in ['admin', 'member', 'viewer'])
+                    || (isSelfHere() && selfSafeFields());
+        /* Disable, don't delete — who had access and when is what you need
+           after an incident. */
+        allow delete: if false;
+      }
+
+      /* ── ORG-LEVEL DASHBOARD DEFAULT ──  omega_orgs/{orgId}/layouts/{docId}
+         'default' is what a NEW user in this org starts with; per-user
+         layouts stay in /dashboard_layouts. */
+      match /layouts/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin() || isTenantAdmin(orgId);
+      }
+
+      /* ── NOTIFICATIONS ──  omega_orgs/{orgId}/notifications/{id}
+         Written server-side by /api/opportunity.js and /api/rfq.js; the
+         dashboard inbox widget reads and marks them read. */
+      match /notifications/{noteId} {
+        allow read:   if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow update: if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId))
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+        allow create, delete: if isAdmin();
+      }
+    }
+
+    /* ============================================================
+       ORG MEMBERS  —  org_members/{emailLower}
+       A cross-org grant: this person, who is NOT ClearSky staff, may act in
+       one specific tenant that is not their email domain.
+
+       Written only by ClearSky admins — a self-writable grant is just an org
+       escape hatch. Keep it small; every doc here is a person who can write
+       into someone else's workspace.
+
+       NOT the same thing as omega_users. An org_members grant lets an outsider
+       write into a TENANT's workspace; an omega_users record admits somebody
+       to the PARTNER PORTAL. Do not merge them: one is about the customer's
+       data, the other about ours. (And NOT the same as omega_orgs/*/members,
+       which is a tenant's own in-org role list.)
+       ============================================================ */
+    match /org_members/{emailLower} {
+      allow read:   if isOmegaAdmin()
+                    || (signedIn() && request.auth.token.email.lower() == emailLower);
+      allow create, update, delete: if isOmegaAdmin();
+    }
+
+    /* ============================================================
+       OMEGA STAFF  —  omega_staff/{uid}
+       Self-create is allowed so a new person appears in the admin list the
+       first time they open the console — but ONLY as role 'none'. Promotion is
+       an administrator action, enforced here rather than in the UI so it
+       cannot be clicked past.
+       ============================================================ */
+    match /omega_staff/{uid} {
+      allow read:   if isOmegaStaff() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.get('role', 'none') == 'none';
+      /* Self-service is name-only. affectedKeys pins the edit to the two
+         harmless fields, so the Settings page works for everyone while
+         promotion stays an administrator act. */
+      allow update: if isOmegaAdmin()
+                    || (signedIn()
+                        && request.auth.uid == uid
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys().hasOnly(['name', 'updatedAt']));
+      allow delete: if isOmegaAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PARTNER PORTAL  —  omega_users/{uid}
+       Doc id is the Auth uid, NOT the email. An email can be reassigned inside
+       a company; a uid cannot. Keying on email would let a departing
+       employee's successor inherit their approvals along with their mailbox.
+
+       ⚠ THIS IS THE GATE FOR THE WHOLE PORTAL. A pending account can read
+       exactly one document in this database: its own row here.
+       ══════════════════════════════════════════════════════════════════ */
+    match /omega_users/{uid} {
+
+      function isSelf() { return portalSignedIn() && uid == request.auth.uid; }
+      function targetIsOwner() {
+        return resource != null
+          && resource.data.get('email', '') == portalOwnerEmail();
+      }
+      function changedAccess(fields) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+      }
+      function accessFields() {
+        return ['role', 'status', 'manageOrgs', 'orgId', 'email', 'uid',
+                'approvedAt', 'approvedBy', 'suspendedAt', 'accessLog'];
+      }
+
+      allow read: if isSelf()
+        || isPortalAdmin()
+        || (isPortalLimitedAdmin() && resource.data.get('orgId', '') in pScope())
+        || (isPortalPartnerAdmin() && resource.data.get('orgId', '') == pOrg());
+
+      /* THE STATUS PIN IS WHAT STOPS SELF-REGISTRATION FROM BEING
+         SELF-APPROVAL. Without it a patched client seeds status:'active' and
+         the whole approval model is decoration on a public site.
+
+         ClearSky's own domains may seed themselves active — making staff wait
+         for approval from staff is a loop with no exit. */
+      allow create: if isSelf()
+        && request.resource.data.get('uid', '') == request.auth.uid
+        && request.resource.data.get('email', '') == request.auth.token.email.lower()
+        && (
+             (isAdmin()
+               && request.resource.data.get('status', '') == 'active'
+               && request.resource.data.get('role', '') in ['admin', 'owner'])
+             ||
+             (!isAdmin() && request.resource.data.get('status', '') == 'pending')
+             ||
+             /* Invited in advance. Every field is checked against the invite
+                rather than trusted from the client, so an invite for 'viewer'
+                cannot be redeemed as 'admin' by a patched browser. */
+             (inviteExists()
+               && request.resource.data.get('status', '') == 'active'
+               && request.resource.data.get('role', '') == inviteDoc().get('role', 'viewer')
+               && request.resource.data.get('orgId', '') == inviteDoc().get('orgId', ''))
+           );
+
+      /* Four grants that share a verb and must not share a rule. */
+      allow update: if
+        /* 1 · Yourself, on profile fields only. Lets a pending user fill in
+              their name while they wait, and stops them approving themselves
+              in the same write. */
+        (isSelf() && !changedAccess(accessFields()))
+        ||
+        /* 2 · An administrator, on anyone except the owner. */
+        (isPortalAdmin() && !targetIsOwner())
+        ||
+        /* 3 · A limited administrator, inside their named scope, never minting
+              anyone at or above their own level. */
+        (isPortalLimitedAdmin() && !targetIsOwner()
+          && resource.data.get('orgId', '') in pScope()
+          && request.resource.data.get('role', '') in ['partner_admin', 'member', 'viewer'])
+        ||
+        /* 4 · A partner administrator, inside their own organisation only, and
+              only below their own rank. Without the role clamp the first
+              partner admin mints a second, and the two can suspend each other
+              — an argument that should never be settled in software. */
+        (isPortalPartnerAdmin() && !targetIsOwner()
+          && resource.data.get('orgId', '') == pOrg()
+          && request.resource.data.get('orgId', '') == pOrg()
+          && request.resource.data.get('role', '') in ['member', 'viewer']);
+
+      /* Nobody. Suspending keeps the audit trail; deleting destroys the record
+         of what somebody had access to and when, which is the one thing you
+         need after an incident. */
+      allow delete: if false;
+    }
+
+    /* ═════════════════════════════════════════════════════════════════════
+       omega_invites/{emailLower} — a role decided before arrival
+       The invite is a promise about a role, not a grant of one — it does
+       nothing until the invited person signs in and creates their own record.
+       ═════════════════════════════════════════════════════════════════════ */
+    match /omega_invites/{emailLower} {
+      allow read:   if isPortalAdmin()
+                    || (portalSignedIn() && callerEmail() == emailLower);
+      allow create, update, delete: if isPortalAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PARTNER PORTAL  —  omega_partner_orgs/{orgId}
+       NOT A GATE. Sign-in depends on approval in omega_users, not on being
+       listed here. Readable by every ACTIVE portal user because an
+       organisation's display name appears on rows they can already see.
+       ══════════════════════════════════════════════════════════════════ */
+    match /omega_partner_orgs/{orgId} {
+      allow read:   if pActive();
+
+      /* SPLIT FROM `write` DELIBERATELY. `allow write` is shorthand for
+         create + update + delete, and separate allow statements OR together —
+         so the previous `allow write: if isPortalAdmin(); allow delete: if
+         false;` did NOT block deletion. It granted it, and the second line was
+         dead code that read like a restriction.
+
+         DELETE IS ALLOWED HERE, unlike every other collection in this file,
+         because an organisation registry row is a LABEL, not evidence.
+         Deleting it destroys no history — deals keep their orgId either way
+         and render as the bare domain. What deletion does NOT do is fix
+         attribution: the console merges first and deletes second. */
+      allow create: if isPortalAdmin();
+      allow update: if isPortalAdmin();
+      allow delete: if isPortalAdmin();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PARTNER PORTAL  —  deals/{dealId}
+       Two fields are different in kind from the rest and both are carved out:
+         origination.*  decides WHO GETS PAID a referral fee
+         funding.*      decides what the company believes it has closed
+       They are the two things people are tempted to adjust quietly.
+       ══════════════════════════════════════════════════════════════════ */
+    match /deals/{dealId} {
+
+      /* orgsInvolved is a flat array the client maintains on every write. It
+         exists so this is ONE array-contains rule rather than six ORed field
+         comparisons, each needing its own composite index and silently
+         refusing queries the day somebody adds a seventh role. */
+      function involvedHere() {
+        return pActive()
+          && pOrg() != ''
+          && pOrg() in resource.data.get('orgsInvolved', []);
+      }
+      function originatedInScope() {
+        return resource.data.get('origination', {}).get('partnerOrg', '') in pScope();
+      }
+      function touchesAttribution() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['origination', 'originationHistory']);
+      }
+      function touchesFunding() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['funding']);
+      }
+
+      allow read: if isPortalAdmin()
+        || (isPortalLimitedAdmin() && originatedInScope())
+        || involvedHere();
+
+      /* A partner cannot create a deal and name themselves as its originator,
+         which would be the easiest referral fee anyone ever earned. Pinning
+         stage to 'referred' means every deal starts at the top of the ladder. */
+      allow create: if canWritePortalDeals()
+        && request.resource.data.get('origination', {}).get('partnerOrg', '') is string
+        && request.resource.data.get('stage', '') == 'referred';
+
+      /* A limited administrator can run a region's pipeline without being able
+         to reassign the referral fee or declare a financial close. That
+         separation is the entire reason the role exists. */
+      allow update: if isPortalAdmin()
+        || (isPortalLimitedAdmin() && originatedInScope()
+            && !touchesAttribution() && !touchesFunding());
+
+      /* A deal that happened and failed must stay in the denominator forever —
+         deleting it flatters exactly the partner whose deals keep dying. But a
+         test row or a duplicate was never a deal, and counting it as "referred
+         but never funded" is a false statement we invented ourselves.
+
+           dead       it happened and failed. Permanent, never deletable.
+           discarded  it was never a deal. Excluded from counts, reversible.
+           deleted    owner only, and only once already discarded.
+
+         Deletion is therefore a deliberate second act after a reversible
+         first one; a patched client cannot delete a live deal in one call. */
+      allow delete: if isPortalOwner()
+        && resource.data.get('stage', '') == 'discarded';
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       PARTNER PORTAL  —  verifications/{vid}
+       ⚠ NOTHING IN THIS FILE GRANTS A VERIFICATION PARTNER ANY READ ON
+       intake_projects OR projects. That is why an assignment carries a FROZEN
+       PACKET rather than a reference. Adding a cross-collection read here to
+       avoid duplicating some JSON would hand an outside company the client's
+       entire queue, every fee and every contact.
+       ══════════════════════════════════════════════════════════════════ */
+    match /verifications/{vid} {
+
+      function assignedToCaller() {
+        return pActive()
+          && pOrg() != ''
+          && resource.data.get('partnerOrg', '') == pOrg();
+      }
+      function isOpenStatus() {
+        return resource.data.get('status', '')
+                 in ['assigned', 'accepted', 'in_review', 'info_requested'];
+      }
+      /* `packet` is locked because it is the frozen record of what the
+         reviewer was given: a reviewer who can edit the brief can make their
+         opinion agree with something nobody sent them, and the signed document
+         stops being evidence of anything. partnerOrg is locked because writing
+         it reassigns the job to somebody else's queue — including nobody's. */
+      function partnerLockedFields() {
+        return ['partnerOrg', 'orgId', 'packet', 'source', 'sourceId',
+                'scopeRequested', 'priority', 'assignedBy', 'assignedAt', 'dueAt',
+                'verdictHistory', 'closedAt'];
+      }
+      function touchesLocked(fields) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+      }
+      function touchesVerdict() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['verdict', 'verdictHistory']);
+      }
+
+      allow read: if isPortalAdmin() || assignedToCaller();
+
+      /* Assignment is a ClearSky act. A partner cannot create work for
+         themselves, which would be the easiest way to get paid for an opinion
+         nobody asked for. */
+      allow create: if isPortalAdmin()
+        && request.resource.data.get('partnerOrg', '') is string
+        && request.resource.data.get('partnerOrg', '')
+             == request.resource.data.get('partnerOrg', '').lower()
+        && request.resource.data.get('status', '') == 'assigned'
+        && request.resource.data.get('packet', null) is map;
+
+      allow update: if
+        /* Staff: reassign, withdraw, answer questions, close. NEVER the
+           verdict. The value of an independent opinion is entirely in its
+           being independent, and one party able to both commission and author
+           it collapses that to nothing. */
+        (isPortalAdmin() && !touchesVerdict())
+        ||
+        /* The assigned partner, on an open record, on their own fields. */
+        (assignedToCaller() && isOpenStatus() && !touchesLocked(partnerLockedFields()));
+
+      allow delete: if false;
+    }
+
+    /* ============================================================
+       PROJECT INTAKE  —  intake_projects
+
+       TWO PATHS, ONE RECORD. purpose:'build' is a customer intaking their own
+       documents to open a project and do the work themselves — no fee, never
+       quoted. purpose:'service' is the same intake with ClearSky producing the
+       deliverables for a fee. That fee is why 'quote' is pinned alongside
+       'admin': the customer is the party being charged.
+
+       ONE COLLECTION, ALL TENANTS. The ClearSky queue reads the whole
+       collection; orgId plus these rules do the isolation. That makes the read
+       rule the load-bearing one.
+
+       DELIBERATELY NOT isConsoleViewer() and NOT isPortalAdmin().
+       ============================================================ */
+    match /intake_projects/{intakeId} {
+      /* Mirrors CLIENT_STATUS in omega-intake.js. Keep the two in step. */
+      function clientStatus(s) {
+        return s in ['draft', 'saved', 'submitted', 'accepted', 'declined'];
+      }
+      function myOrgRecord() {
+        return canActInOrg(resource.data.orgId);
+      }
+      function isCreator() {
+        return signedIn()
+            && resource.data.get('createdBy', {}).get('uid', '') == request.auth.uid;
+      }
+
+      /* ── THE DOMAIN IS THE GATE ──
+         myOrgRecord() compares against the record's orgId, which is stamped
+         from the PORTAL the intake was filed through. File a Concord job from
+         tools.csebuilders.com, or a demo bucket, and the record says one thing
+         while the customer is plainly another. The person's own address is the
+         more reliable signal.
+
+         DELIBERATELY createdBy.email, NOT customer.email. The customer map is
+         free text typed into a form — gating on it would mean anyone who types
+         "@concordenergyusa.com" into a contact field gets Concord's records. */
+      function creatorEmail() {
+        return resource.data.get('createdBy', {}).get('email', '').lower();
+      }
+      function creatorOrg() {
+        return creatorEmail().matches('.+@.+')
+             ? orgAlias(creatorEmail().split('@')[1])
+             : '';
+      }
+      function sameCompanyAsCreator() {
+        return signedIn() && creatorOrg() != '' && creatorOrg() == userOrg();
+      }
+      /* One definition of "this record is mine to work", used by read, update
+         and delete alike, so the three cannot drift apart — which is how you
+         get a record someone can see and cannot answer. */
+      function mineToWork() {
+        return myOrgRecord() || isCreator() || sameCompanyAsCreator();
+      }
+
+      function answeringAQuote() {
+        return request.resource.data.status in ['accepted', 'declined']
+            && resource.data.status == 'quoted';
+      }
+      function clientStatusMove() {
+        return request.resource.data.status == resource.data.status
+            || answeringAQuote()
+            || (request.resource.data.status in ['draft', 'saved', 'submitted']
+                && !(resource.data.status in ['quoted', 'accepted', 'in_production', 'delivered']));
+      }
+      /* The fee. Priced by ClearSky, never by the customer being charged it. */
+      function quoteUnchanged() {
+        return request.resource.data.get('quote', {}) == resource.data.get('quote', {});
+      }
+      function adminUnchanged() {
+        return request.resource.data.get('admin', {}) == resource.data.get('admin', {});
+      }
+      function commissionUnchanged() {
+        return request.resource.data.get('commissionRate', null) == resource.data.get('commissionRate', null)
+            && request.resource.data.get('commissionPaidAt', null) == resource.data.get('commissionPaidAt', null);
+      }
+      function responseUnchanged() {
+        return request.resource.data.get('firstResponseAt', null) == resource.data.get('firstResponseAt', null);
+      }
+      function responseStampOnce() {
+        return resource.data.get('firstResponseAt', null) == null || responseUnchanged();
+      }
+
+      /* ── MESSAGING IS NOT A STATE CHANGE ──
+         clientStatus() is evaluated against the status ON THE WRITE. Posting a
+         message doesn't touch status, so the write carries whatever the record
+         already has — and a record in 'in_review', 'quoted', 'in_production'
+         or 'delivered' failed that check on EVERY client write. The customer
+         could be asked a question and had no way to answer it.
+
+         This branch drops the status gate and replaces it with a tighter one:
+         three keys and nothing else. */
+      function onlyMessaging() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['messages', 'notify', 'updatedAt']);
+      }
+      function appendsOneMessage() {
+        return request.resource.data.get('messages', []).size()
+             == resource.data.get('messages', []).size() + 1;
+      }
+      /* The new entry must be marked as the client's, so nobody can forge a
+         message that renders as staff in their own portal. */
+      function newMessageIsClients() {
+        return request.resource.data.messages[resource.data.get('messages', []).size()]
+                 .get('side', '') == 'client';
+      }
+
+      allow read:   if signedIn() && (mineToWork() || isOmegaStaff());
+
+      /* createdBy.email pinned to the caller's own token. Without it a patched
+         client could file a record stamped with someone else's domain and hand
+         a stranger's colleagues access to it.
+         .lower() ON BOTH SIDES — a token arriving as
+         Mitch@ConcordEnergyUSA.com would otherwise be refused outright with
+         "Missing or insufficient permissions" and no indication that
+         capitalisation was the problem. */
+      allow create: if isOmegaStaff()
+                    || (signedIn()
+                        && request.resource.data.orgId is string
+                        && request.resource.data.orgId.size() > 0
+                        && request.resource.data.intakeId == intakeId
+                        && request.resource.data.createdBy.uid == request.auth.uid
+                        && request.resource.data.createdBy.get('email', request.auth.token.email).lower()
+                             == request.auth.token.email.lower()
+                        && request.resource.data.status in ['draft', 'saved', 'submitted']
+                        && request.resource.data.get('quote', {}).get('total', null) == null);
+
+      allow update: if isOmegaAdmin()
+                    || (isOmegaStaff()
+                        && quoteUnchanged()
+                        && commissionUnchanged()
+                        && responseStampOnce())
+                    || (signedIn()
+                        && mineToWork()
+                        && request.resource.data.orgId == resource.data.orgId
+                        && adminUnchanged()
+                        && quoteUnchanged()
+                        && commissionUnchanged()
+                        && responseUnchanged()
+                        && clientStatus(request.resource.data.status)
+                        && clientStatusMove())
+                    /* post a message, in any state */
+                    || (signedIn()
+                        && mineToWork()
+                        && onlyMessaging()
+                        && appendsOneMessage()
+                        && newMessageIsClients());
+
+      /* Once it is priced or in production it is ClearSky's work product too. */
+      allow delete: if isOmegaAdmin()
+                    || (signedIn()
+                        && mineToWork()
+                        && resource.data.status in ['draft', 'saved']);
+    }
+
+    /* ============================================================
+       OPS CONSOLE QUEUE  —  intake_requests        ⚠ DEPRECATED
+       KEPT SO NOTHING IS LOST, NOT BECAUSE IT IS USED.
+
+       v1 of the ops console read this collection. The real intake writes to
+       intake_projects, so a client could submit work the console never saw.
+       Nothing writes here now.
+
+       Confirm the collection is empty in the Firestore console, then delete
+       this whole block — dead rules are a liability, because the next person
+       to read this file has to work out which of two intake collections is
+       real. (omega-core: DECISION PENDING — see MERGE.md.)
+       ============================================================ */
+    match /intake_requests/{id} {
+      function myOrgRecord() {
+        return resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId);
+      }
+      function moneyUnchanged() {
+        return request.resource.data.get('value', 0) == resource.data.get('value', 0)
+            && request.resource.data.get('commissionRate', null) == resource.data.get('commissionRate', null)
+            && request.resource.data.get('paidAt', null) == resource.data.get('paidAt', null);
+      }
+      allow read: if signedIn() && (myOrgRecord() || isOmegaStaff());
+      allow create: if isOmegaStaff()
+                    || (signedIn()
+                        && (request.resource.data.orgId == userOrg()
+                            || ownsDemoBucket(request.resource.data.orgId))
+                        && request.resource.data.status == 'new'
+                        && request.resource.data.get('value', 0) == 0
+                        && request.resource.data.get('paidAt', null) == null);
+      allow update: if isOmegaAdmin()
+                    || (isOmegaStaff() && moneyUnchanged());
+      allow delete: if false;
+    }
+
+    /* ============================================================
+       EQUIPMENT REGISTRY  —  equipment
+       The per-org OVERLAY merged on top of the seed catalogs in editor.html.
+
+       DELIBERATELY NOT isConsoleViewer(): a vendor's SKU list and its pricing
+       are commercially sensitive. DELIBERATELY NOT isPortalAdmin() either — a
+       manufacturer in the partner portal must not read a rival's SKU list.
+
+       DELETE is admin-only on purpose. Saved projects store a catalogKey;
+       deleting the equipment behind one leaves a dangling reference that
+       renders as blanks in an old project. Tenants archive instead.
+
+       omega-core: vendorOrgId and category on an equipment doc are what
+       /api/opportunity.js and /api/rfq.js route on. A tenant may set
+       vendorOrgId on its OWN catalog rows (that is how an OEM lists itself);
+       ClearSky sets it on the shared seed catalog.
+       ============================================================ */
+    match /equipment/{docId} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn()
+                    && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId))
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.key is string
+                    && request.resource.data.key.size() > 0
+                    && request.resource.data.manufacturer is string
+                    && request.resource.data.model is string;
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.uid == resource.data.uid;
+      allow delete: if isAdmin();
+    }
+
+    match /slc_candidates/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /slc_leases/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /slc_assets/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /slc_permits/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /slc_projects/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /slc_crm_config/{orgId} {
+      allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+      allow write: if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+    }
+
+    match /om_sites/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /om_tickets/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /om_techs/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /om_integrations/{orgId} {
+      allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+      allow write: if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+    }
+    match /sla_contracts/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /sla_events/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /sla_breaches/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /fs_calls/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /fs_crews/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /fs_signals/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /rpt_owners/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /rpt_reports/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /fc_assets/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+    match /fc_sources/{id} {
+      allow read:   if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+      allow create: if signedIn() && (request.resource.data.orgId == userOrg() || ownsDemoBucket(request.resource.data.orgId));
+      allow update: if signedIn()
+                    && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin())
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
+    }
+  }
+}

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service queue · ClearSky-OMEGA</title>
+<link rel="icon" href="/omega-logo.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SERVICE QUEUE — what is in the queue, per service line.
+
+     Reads the tenant's own referral collection (delivery.collection). Not
+     `intake_projects`, not ClearSky's ops console. See omega-delivery.js.
+
+     Tenant-neutral: service lines, labels, targets and the collection name
+     all come from /config.js.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#EDEFF1; --sap-card-border:#E4E8EC; --cs-navy:#08384F; --cs-accent:#00A9A4;
+  --cs-sub:#5A7180; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+  --shadow:0 1px 2px rgba(20,40,60,.05);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--sap-ink);
+  min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}
+a{color:var(--sap-blue)}
+:focus-visible{outline:2px solid var(--sap-blue-hi);outline-offset:2px;border-radius:4px}
+
+#topbar{height:56px;background:#fff;display:flex;align-items:center;padding:0 18px;
+  border-bottom:1px solid #E5E9ED;box-shadow:var(--shadow);position:sticky;top:0;z-index:20}
+.tb-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.tb-omega{height:28px;border-radius:6px;display:block}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-sep{width:1px;height:22px;background:#E5E9ED;margin:0 14px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-client-chip{background:#fff;border:1px solid #E5E9ED;border-radius:7px;padding:4px 8px;
+  display:flex;align-items:center;height:32px;margin-right:10px}
+.tb-client-chip img{height:22px;width:auto;display:block}
+.btn-sm{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:500 12px 'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.btn-sm:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+.btn-sm.pri{background:var(--sap-blue);border-color:var(--sap-blue);color:#fff}
+
+#wrap{max-width:1280px;margin:0 auto;padding:26px 20px 80px}
+.ph-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8FA0AE}
+h1{font-size:25px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;margin-top:4px}
+.lede{font-size:13.5px;color:var(--cs-sub);margin-top:7px;line-height:1.6;max-width:76ch}
+
+.ribbon{display:flex;align-items:center;gap:9px;margin:16px 0 0;padding:9px 13px;
+  border:1px solid #E3C77A;background:#FDF6E3;border-radius:10px;font-size:12.5px;color:#6B551C}
+.ribbon .tag{background:#8A6D1F;color:#fff;border-radius:5px;padding:2px 7px;
+  font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:18px}
+.kpi{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;padding:13px 15px}
+.kpi .l{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--sap-ink-2)}
+.kpi .v{font-size:24px;font-weight:700;color:var(--cs-navy);margin-top:5px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.kpi .s{font-size:11px;color:var(--sap-ink-2);margin-top:3px;line-height:1.45}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)}
+
+/* service line tabs */
+.lines{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px}
+.line{border:1.5px solid #DDE3E9;background:#fff;border-radius:9px;padding:9px 13px;cursor:pointer;
+  font-family:'DM Sans',sans-serif;text-align:left;display:flex;align-items:center;gap:9px}
+.line.on{border-color:var(--sap-blue);background:#F4F9FF}
+.line b{font-size:12.5px;font-weight:600;color:var(--sap-ink)}
+.line .ct{font-size:11px;font-weight:700;background:#EDF1F5;color:#5C6B7A;border-radius:20px;padding:2px 8px;
+  font-variant-numeric:tabular-nums}
+.line.on .ct{background:var(--sap-blue);color:#fff}
+.line .warn-dot{width:7px;height:7px;border-radius:50%;background:var(--bad);flex:0 0 auto}
+
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;
+  box-shadow:var(--shadow);margin-top:18px}
+.card-h{padding:14px 20px;border-bottom:1px solid var(--sap-card-border);display:flex;
+  align-items:center;gap:12px;flex-wrap:wrap}
+.card-h h2{font-size:14.5px;font-weight:700;color:var(--cs-navy);flex:1}
+.card-h .sub{font-size:11.5px;color:var(--sap-ink-2);margin-top:2px;line-height:1.5;
+  flex-basis:100%;order:9}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--sap-ink-2);padding:12px 14px;white-space:nowrap;border-bottom:1px solid var(--sap-card-border)}
+td{padding:12px 14px;border-top:1px solid #EDF1F5;vertical-align:top;color:var(--sap-ink)}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.nm{font-weight:600;color:var(--cs-navy)}
+td.nm small{display:block;font-weight:400;color:var(--sap-ink-2);font-size:11.5px;margin-top:3px}
+tr.row:hover td{background:#F7FAFC}
+.scroll{overflow-x:auto}
+@media(max-width:900px){table{min-width:820px}}
+
+.chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:600;
+  background:#EDF1F5;color:#5C6B7A;margin:0 4px 4px 0}
+.pill.unknown{background:#FDECEA;color:#8C1D18}
+.clock{font-weight:700;font-variant-numeric:tabular-nums}
+.clock.ok{color:var(--ok)} .clock.warn{color:var(--warn)} .clock.bad{color:var(--bad)}
+.clock.none{color:#8FA0AE;font-weight:400}
+.late{color:var(--bad);font-weight:700}
+.att-n{font-size:11px;color:var(--sap-ink-2)}
+
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts button,.acts a{border:1px solid #DDE3E9;background:#fff;border-radius:7px;padding:5px 10px;
+  cursor:pointer;font:500 11.5px 'DM Sans',sans-serif;color:var(--sap-ink-2);text-decoration:none;
+  white-space:nowrap}
+.acts button:hover,.acts a:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+.acts button:disabled{opacity:.45;cursor:not-allowed}
+.acts select{border:1px solid #DDE3E9;border-radius:7px;padding:5px 8px;
+  font:500 11.5px 'DM Sans',sans-serif;color:var(--sap-ink-2);background:#fff}
+
+.empty{padding:44px 24px;text-align:center;color:var(--sap-ink-2);font-size:13.5px;line-height:1.7}
+.empty b{color:var(--cs-navy)}
+.foot{font-size:11.5px;color:var(--sap-ink-2);line-height:1.6;padding:14px 20px;
+  border-top:1px solid var(--sap-card-border)}
+
+#gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid var(--sap-card-border);
+  border-radius:14px;padding:34px;text-align:center;box-shadow:var(--shadow)}
+#gate h2{font-size:18px;color:var(--cs-navy);margin-bottom:8px}
+#gate p{font-size:13.5px;color:var(--cs-sub);line-height:1.6}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="tb-logo" href="/index.html">
+    <img class="tb-omega" src="/omega-logo.png" alt="">
+    <span class="tb-logo-txt">ClearSky<span style="color:var(--sap-blue)">-OMEGA</span></span>
+  </a>
+  <span class="tb-sep"></span>
+  <span class="tb-portal">Service queue</span>
+  <span class="tb-spacer"></span>
+  <span class="tb-client-chip" id="tb-client-chip" style="display:none">
+    <img src="" alt="" id="tb-client-logo">
+  </span>
+  <a class="btn-sm pri" href="/intake.html">+ Log a referral</a>
+  &nbsp;
+  <a class="btn-sm" href="/index.html">Dashboard</a>
+</div>
+
+<div id="gate" style="display:none">
+  <h2>Sign in first</h2>
+  <p>The queue is scoped to your workspace, so this page needs a signed-in account.</p>
+  <p style="margin-top:16px"><a class="btn-sm" href="/index.html">Go to the dashboard</a></p>
+</div>
+
+<div id="wrap" style="display:none">
+  <div class="ph-eyebrow">Service queue</div>
+  <h1 id="q-title">What's in the queue</h1>
+  <p class="lede" id="q-lede">
+    Every referral your customers have sent you, grouped by the service lines
+    they asked for. Pick a line to see only its work.
+  </p>
+  <div id="ribbon"></div>
+  <div id="kpis"></div>
+  <div class="lines" id="lines"></div>
+  <div id="board"></div>
+</div>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-delivery.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var D = null, ME = null, ROWS = [], SAMPLE = false, FILTER = '__all';
+
+  firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+  var auth = firebase.auth();
+  window.db = firebase.firestore();
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return D ? D.esc(s) : String(s == null ? '' : s); }
+
+  auth.onAuthStateChanged(function (user) {
+    if (!user) { el('gate').style.display = 'block'; el('wrap').style.display = 'none'; return; }
+    ME = { email: String(user.email || '').toLowerCase(), name: user.displayName || user.email };
+    el('gate').style.display = 'none';
+    el('wrap').style.display = 'block';
+    D = window.OmegaDelivery;
+    try {
+      var ws = OmegaBrand.resolve ? OmegaBrand.resolve(ME.email) : null;
+      var logo = ws && OmegaBrand.logoOf ? OmegaBrand.logoOf(ws) : null;
+      if (logo) { el('tb-client-logo').src = logo; el('tb-client-chip').style.display = 'flex'; }
+    } catch (e) {}
+    load();
+  });
+
+  function load() {
+    var C = D.cfg();
+    return D.fetchAll().then(function (rows) {
+      SAMPLE = false;
+      if (!rows.length && C.sampleData) { rows = D.sampleRows(); SAMPLE = true; }
+      ROWS = rows;
+      paint();
+    });
+  }
+
+  /* ── Painting ─────────────────────────────────────────────────────── */
+
+  function paint() {
+    var C = D.cfg();
+    var a = D.analyse(ROWS);
+
+    el('ribbon').innerHTML = SAMPLE
+      ? '<div class="ribbon"><span class="tag">Sample</span><span>Illustrative ' +
+        'referrals, shown only while your queue is empty. Nothing here is saved, ' +
+        'and the first real referral replaces it permanently.</span></div>'
+      : '';
+
+    /* KPIs */
+    var k = a.kpi;
+    var cards = [
+      { l:'Open jobs', v:k.open, s:'Referred through in production' },
+      { l:'Awaiting reply', v:k.waiting,
+        s:k.breached ? k.breached + ' past target' : 'All inside target',
+        cls:k.breached ? 'bad' : (k.waiting ? 'warn' : '') },
+      { l:'Median reply', v:D.fmtHours(k.medianReply),
+        s:k.unmeasured ? k.unmeasured + ' answered, unmeasured' : 'First response' },
+      { l:'Late', v:k.late, s:'Past due date', cls:k.late ? 'bad' : '' },
+      { l:'In production', v:k.inProduction, s:k.linked + ' linked to the editor' },
+      { l:'MW in the book', v:k.mw ? (Math.round(k.mw * 10) / 10) : '\u2014',
+        s:'Across open jobs that stated a size' }
+    ];
+    el('kpis').innerHTML = '<div class="kpis">' + cards.map(function (c) {
+      return '<div class="kpi ' + (c.cls || '') + '"><div class="l">' + esc(c.l) + '</div>' +
+        '<div class="v">' + esc(String(c.v)) + '</div>' +
+        '<div class="s">' + esc(c.s) + '</div></div>';
+    }).join('') + '</div>';
+
+    /* Service-line filter. "Needs scoping" is a first-class tab, not a
+       footnote: a referral with no service line is an unanswered question
+       about what was asked for, and it belongs on a list somebody works. */
+    var tabs = [{ key:'__all', label:'All work', n:a.live.filter(open_).length, late:k.late }];
+    a.byService.forEach(function (s) {
+      tabs.push({ key:s.key, label:s.label, n:s.open.length, late:s.late });
+    });
+    if (a.untagged.length) {
+      tabs.push({ key:'__untagged', label:'Needs scoping',
+                  n:a.untagged.filter(open_).length, late:0 });
+    }
+    el('lines').innerHTML = tabs.map(function (t) {
+      return '<button class="line' + (FILTER === t.key ? ' on' : '') + '" data-k="' + esc(t.key) + '">' +
+        (t.late ? '<span class="warn-dot" title="' + t.late + ' late"></span>' : '') +
+        '<b>' + esc(t.label) + '</b><span class="ct">' + t.n + '</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(el('lines').querySelectorAll('.line'), function (b) {
+      b.onclick = function () { FILTER = b.dataset.k; paint(); };
+    });
+
+    el('board').innerHTML = boardHtml(a);
+    wireActions();
+  }
+
+  function open_(r) { return r.status !== 'delivered' && r.status !== 'declined'; }
+
+  function filtered(a) {
+    if (FILTER === '__all') return a.live;
+    if (FILTER === '__untagged') return a.untagged;
+    return a.live.filter(function (r) { return r.scopes.indexOf(FILTER) >= 0; });
+  }
+
+  function boardHtml(a) {
+    var C = D.cfg();
+    var rows = filtered(a).slice().sort(function (x, y) {
+      /* Unanswered first, then by how far into the target they are. Delivered
+         and declined sink to the bottom rather than being hidden — a queue
+         that hides finished work makes it impossible to check what shipped. */
+      var xo = open_(x), yo = open_(y);
+      if (xo !== yo) return xo ? -1 : 1;
+      if (x.sla.answered !== y.sla.answered) return x.sla.answered ? 1 : -1;
+      return (y.sla.pct || 0) - (x.sla.pct || 0);
+    });
+
+    if (!rows.length) {
+      return '<div class="card"><div class="empty">' +
+        (FILTER === '__all'
+          ? '<b>Nothing in the queue yet.</b><br>Log the first referral and it ' +
+            'appears here with a reply clock running against its priority.' +
+            '<br><br><a class="btn-sm pri" href="/intake.html">+ Log a referral</a>'
+          : '<b>Nothing on this service line.</b><br>Every other line still has work \u2014 ' +
+            'switch tabs, or pick <i>All work</i>.') +
+        '</div></div>';
+    }
+
+    var label = FILTER === '__all' ? 'All work'
+              : FILTER === '__untagged' ? 'Needs scoping'
+              : D.serviceOf(FILTER).label;
+
+    var sub = FILTER === '__untagged'
+      ? 'These referrals name no service line. That is an unanswered question ' +
+        'about what the customer asked for, not a job of no size \u2014 scope them ' +
+        'and they move onto the right line.'
+      : 'Longest wait first. Delivered and declined sink to the bottom rather ' +
+        'than disappearing.';
+
+    return '<div class="card">' +
+      '<div class="card-h"><h2>' + esc(label) + '</h2>' +
+      '<span class="btn-sm" style="cursor:default">' + rows.length + ' record' +
+      (rows.length === 1 ? '' : 's') + '</span>' +
+      '<div class="sub">' + esc(sub) + '</div></div>' +
+      '<div class="scroll"><table><thead><tr>' +
+      '<th>Project</th><th>Service lines</th><th>Status</th>' +
+      '<th class="n">Reply</th><th class="n">Due</th><th>Files</th><th>Move it on</th>' +
+      '</tr></thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table></div>' +
+      '<div class="foot">' + footNote(a) + '</div></div>';
+  }
+
+  function rowHtml(r) {
+    var st = D.statusOf(r.status);
+    var svc = r.scopes.length
+      ? r.scopes.map(function (k) {
+          var s = D.serviceOf(k);
+          return '<span class="pill' + (s.unknown ? ' unknown' : '') + '"' +
+            (s.unknown ? ' title="This service line is not in /config.js. The referral is still real \u2014 add the line back, or re-scope it."' : '') +
+            '>' + esc(s.label) + '</span>';
+        }).join('')
+      : '<span class="pill unknown">needs scoping</span>';
+
+    var clock = r.sla.measured
+      ? '<span class="clock ' + r.sla.state + '">' + D.fmtHours(r.sla.responseH) + '</span>'
+      : r.sla.unmeasured
+        ? '<span class="clock none" title="Answered before the clock existed, or answered without a stamp. Counting it as zero would flatter the median.">\u2014</span>'
+        : '<span class="clock ' + r.sla.state + '">' + D.fmtHours(r.sla.elapsedH) + '</span>';
+
+    var due = r.due
+      ? '<span class="' + (r.due.late ? 'late' : '') + '">' + D.fmtDate(r.due.at) +
+        (r.due.derived ? '*' : '') + '</span>'
+      : '\u2014';
+
+    var files = (r.attachments || []).length
+      ? '<span class="att-n">' + r.attachments.length + ' attached</span>'
+      : '<span class="att-n" style="color:#B8C4CE">none</span>';
+
+    return '<tr class="row" data-id="' + esc(r.id) + '">' +
+      '<td class="nm">' + esc(r.projectName) +
+        '<small>' + esc(r.clientName || 'No customer named') +
+        (r.address ? ' \u00b7 ' + esc(r.address) : '') +
+        (r.capacityMw ? ' \u00b7 ' + r.capacityMw + ' MW' : '') +
+        (r.referredBy ? ' \u00b7 via ' + esc(r.referredBy) : '') + '</small></td>' +
+      '<td>' + svc + '</td>' +
+      '<td><span class="chip" style="background:' + st.color + '1A;color:' + st.color + '" ' +
+        'title="' + esc(st.hint) + '">' + esc(st.label) + '</span></td>' +
+      '<td class="n">' + clock + '</td>' +
+      '<td class="n">' + due + '</td>' +
+      '<td>' + files + '</td>' +
+      '<td>' + actionsHtml(r) + '</td></tr>';
+  }
+
+  function actionsHtml(r) {
+    var opts = D.STATUS.filter(function (s) { return !s.pre; }).map(function (s) {
+      return '<option value="' + s.key + '"' + (s.key === r.status ? ' selected' : '') + '>' +
+        esc(s.label) + '</option>';
+    }).join('');
+
+    var editor = r.editorProjectId
+      ? '<a href="/editor.html?id=' + encodeURIComponent(r.editorProjectId) + '">Open in editor</a>'
+      : '<button class="mk-editor" data-id="' + esc(r.id) + '">Start in editor</button>';
+
+    return '<div class="acts">' +
+      '<select class="mv" data-id="' + esc(r.id) + '"' + (SAMPLE ? ' disabled' : '') + '>' +
+      opts + '</select>' + (SAMPLE ? '' : editor) + '</div>';
+  }
+
+  function footNote(a) {
+    var bits = [];
+    bits.push('Dates marked <b>*</b> are derived from priority, not set by the ' +
+      'customer \u2014 they are a working target, not a commitment anyone made.');
+    bits.push('Reply time is <b>first response</b>, not delivery, and it is not ' +
+      'retroactive: referrals logged before this shipped read \u2014 forever.');
+    if (a.kpi.unmeasured) {
+      bits.push('<b>' + a.kpi.unmeasured + '</b> record' +
+        (a.kpi.unmeasured === 1 ? ' is' : 's are') + ' clearly answered but carry ' +
+        'no stamp. They read \u2014 rather than zero, because counting them as zero ' +
+        'would flatter the median with work nobody measured.');
+    }
+    if (SAMPLE) {
+      bits.push('<b>Sample mode:</b> status changes and editor handoff are ' +
+        'disabled, because there is nothing real to write to.');
+    }
+    return bits.join(' ');
+  }
+
+  /* ── Actions ──────────────────────────────────────────────────────── */
+
+  function wireActions() {
+    Array.prototype.forEach.call(document.querySelectorAll('select.mv'), function (s) {
+      s.onchange = function () { moveTo(s.dataset.id, s.value, s); };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button.mk-editor'), function (b) {
+      b.onclick = function () { startInEditor(b.dataset.id, b); };
+    });
+  }
+
+  function find(id) {
+    for (var i = 0; i < ROWS.length; i++) if (ROWS[i].id === id) return ROWS[i];
+    return null;
+  }
+
+  function moveTo(id, status, ctl) {
+    var r = find(id);
+    if (!r || r.status === status) return;
+    ctl.disabled = true;
+
+    var body = { status: status };
+    if (status === 'delivered') {
+      body.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+
+    /* Moving a referral off `submitted` IS the first response. Stamping it
+       here rather than asking for a separate click is the only way the metric
+       gets recorded at all in practice — and it is write-once, so the person
+       being measured cannot move the number that measures them by touching
+       the record again later. */
+    var stampFirst = !r.firstResponseAt && r.status === 'submitted' && status !== 'submitted';
+    if (stampFirst) {
+      body.firstResponseAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+
+    D.patch(id, body).then(function () {
+      return load();
+    })['catch'](function (e) {
+      console.error('[queue] status change refused', e);
+      ctl.disabled = false;
+      alert('That change was refused.\n\n' +
+        (e && e.code === 'permission-denied'
+          ? 'Firestore rejected the write. Check that firestore-delivery.rules is ' +
+            'deployed and that "' + status + '" is in its allowed status list.'
+          : (e && e.message) || 'Unknown error \u2014 the console has the detail.'));
+    });
+  }
+
+  function startInEditor(id, btn) {
+    var r = find(id);
+    if (!r) return;
+    btn.disabled = true; btn.textContent = 'Creating\u2026';
+    D.createLinkedProject(r).then(function (ref) {
+      window.location.href = '/editor.html?id=' + encodeURIComponent(ref.id);
+    })['catch'](function (e) {
+      console.error('[queue] editor handoff failed', e);
+      btn.disabled = false; btn.textContent = 'Start in editor';
+      alert('Could not create the editor project.\n\n' +
+        (e && e.message) || 'The console has the detail.');
+    });
+  }
+})();
+</script>
+</body>
+</html>

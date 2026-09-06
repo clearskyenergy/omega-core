@@ -1,0 +1,102 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Service delivery referrals rule
+   Paste inside the existing `match /databases/{database}/documents { ... }`
+   block in firestore.rules, then DEPLOY.
+
+     firebase deploy --only firestore:rules
+
+   Backs omega-delivery.js, /intake.html and /queue.html — a tenant's OWN book
+   of work, referred to them by their own customers.
+
+   ─────────────────────────────────────────────────────────────────────────
+   ⚠ THIS COLLECTION IS NOT `intake_projects`
+   ─────────────────────────────────────────────────────────────────────────
+   The collection name below must match `tenant.delivery.collection` in that
+   deployment's /config.js, and it must NOT be `intake_projects`.
+
+   `intake_projects` is ClearSky's own delivery queue: the ops console reads
+   it, staff are measured on its SLA, and it carries commission and quoting.
+   Pointing a tenant's referrals at it does not "unify the queues" — it drops
+   that tenant's customers into ClearSky's worklist, starts a ClearSky
+   response clock on jobs nobody at ClearSky owes a reply to, and corrupts
+   every SLA average on the ops console. A trial tenant especially has no
+   business writing there.
+
+   The rule below is written for ONE collection name. If a second tenant runs
+   the module under a different name, add a second block rather than widening
+   this one to a wildcard — a wildcard here would let any tenant create any
+   collection they liked and have it pass tenant scoping.
+
+   ─────────────────────────────────────────────────────────────────────────
+   FAILURE MODE
+   ─────────────────────────────────────────────────────────────────────────
+   Missing rule ⇒ reads are denied and the queue paints empty, which looks
+   exactly like "no referrals yet". The module logs which collection was
+   refused, so check the browser console before assuming it's a data problem.
+   Writes fail loudly with a message naming this file, so the intake form is
+   the honest half.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+match /referrals/{referralId} {
+
+  /* The statuses omega-delivery.js knows about. A write carrying anything
+     else is refused rather than stored: an unrecognised status renders as an
+     unknown chip on the queue and silently drops the record out of every
+     count that filters on the pipeline. Keep this list in step with STATUS[]
+     in omega-delivery.js — they are the same vocabulary in two places, and
+     that is the one thing to check when a status change "does nothing". */
+  function knownStatus(s) {
+    return s in ['draft', 'submitted', 'in_review', 'quoted', 'changes_requested',
+                 'accepted', 'in_production', 'delivered', 'declined'];
+  }
+
+  function callerOrg() { return userOrg(); }
+  function ownedByCaller() { return resource.data.orgId == callerOrg(); }
+  function incomingOwnedByCaller() { return request.resource.data.orgId == callerOrg(); }
+
+  /* Everyone in the tenant reads the whole tenant's queue. A services firm's
+     queue is a shared worklist — scoping reads to the person who logged the
+     referral would mean a job stops existing the moment its author is on
+     leave, which is the opposite of what a queue is for. */
+  allow read: if request.auth != null && ownedByCaller();
+
+  /* Logging a referral. Pinned to the caller's own org and to a project name,
+     because a nameless row in a worklist is noise somebody has to open to
+     identify. Everything else on the document is optional on purpose — a
+     referral with a name and nothing else is still a referral, and refusing
+     it would push people back to logging work in email. */
+  allow create: if request.auth != null
+                && incomingOwnedByCaller()
+                && request.resource.data.projectName is string
+                && request.resource.data.projectName.size() > 0
+                && knownStatus(request.resource.data.status);
+
+  /* Moving a referral along. The org never changes hands.
+
+     firstResponseAt is WRITE-ONCE. Without that, the person whose response
+     time is being measured can move the number that measures them by
+     touching the record again — and on a single-tenant book of work there is
+     no second party to notice. An administrator correcting a bad stamp does
+     it from the console, not from this page. */
+  allow update: if request.auth != null
+                && ownedByCaller()
+                && incomingOwnedByCaller()
+                && request.resource.data.orgId == resource.data.orgId
+                && knownStatus(request.resource.data.status)
+                && (
+                     !('firstResponseAt' in resource.data)
+                     || resource.data.firstResponseAt == null
+                     || request.resource.data.firstResponseAt == resource.data.firstResponseAt
+                   );
+
+  /* A referral that was logged is a fact about the book of work. Withdraw it
+     by moving it to `declined` rather than deleting the row, so the reply-time
+     median and the win rate stay honest — and so a job nobody wants to own
+     cannot be made to disappear.
+
+     This differs from capacityAllocations, where releasing a hold is a real
+     operation and delete is allowed. Here the equivalent operation is a
+     status change, so there is nothing delete would express that `declined`
+     does not. */
+  allow delete: if false;
+}

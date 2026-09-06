@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Create your workspace · ClearSky-OMEGA</title>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<style>
+  :root{--bg:#0A1628;--card:#0F1F38;--line:#22354F;--txt:#E5EEF7;--sub:#8BA3C4;--teal:#00A9A4;--blue:#006F9A;--gold:#F5B942;--red:#F87171}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:520px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:32px}
+  .eyebrow{font-size:11px;letter-spacing:.22em;color:var(--teal);font-weight:700;margin-bottom:10px}
+  h1{font-size:24px;margin:0 0 8px}
+  p{color:var(--sub);margin:0 0 18px}
+  label{display:block;font-size:12px;color:var(--sub);margin:14px 0 6px;font-weight:600;letter-spacing:.04em}
+  input,select,textarea{width:100%;background:#0A1628;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:11px 12px;font:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal)}
+  .btn{display:block;width:100%;margin-top:22px;background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;border:0;border-radius:10px;padding:13px;font-weight:700;font-size:15px;cursor:pointer}
+  .btn[disabled]{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--sub);font-weight:500}
+  .err{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);color:#FCA5A5;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:14px;display:none}
+  .ok{background:rgba(0,169,164,.1);border:1px solid rgba(0,169,164,.4);border-radius:8px;padding:14px;margin-top:14px;display:none}
+  .who{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+  .who b{color:var(--txt)}
+  .who a{margin-left:auto;color:var(--teal);cursor:pointer;font-size:12px}
+  .host{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--gold)}
+  .hide{display:none}
+  .hint{font-size:12px;color:var(--sub);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="eyebrow">CLEARSKY-OMEGA</div>
+
+  <!-- STEP 1: sign in -->
+  <div id="step-auth">
+    <h1>Create your workspace</h1>
+    <p>Site development tools for storage, EV charging, solar and data-center projects. Sign in with your <b>work</b> email to get started — your company gets its own workspace at <span class="host" id="host-preview">yourcompany.clearskyomega.com</span>.</p>
+    <button class="btn" onclick="signInGoogle()">Continue with Google</button>
+    <button class="btn ghost" onclick="toggleEmail()">Use email &amp; password instead</button>
+    <div id="email-box" class="hide">
+      <label>Work email</label><input id="em" type="email" autocomplete="email" placeholder="you@yourcompany.com">
+      <label>Password</label><input id="pw" type="password" autocomplete="new-password">
+      <button class="btn" onclick="signInEmail()">Continue</button>
+      <div class="hint">New here? The same button creates your account.</div>
+    </div>
+    <div class="err" id="auth-err"></div>
+  </div>
+
+  <!-- STEP 2: company details -->
+  <div id="step-form" class="hide">
+    <div class="who">Signed in as <b id="who-email"></b><a onclick="signOut()">Not you?</a></div>
+    <h1>Tell us about your company</h1>
+    <p>Your workspace is created for everyone at <b id="who-domain"></b>. Colleagues who sign in with the same email domain join automatically.</p>
+    <label>Company name</label><input id="f-name" placeholder="Acme Energy Partners" maxlength="80">
+    <label>What best describes you?</label>
+    <select id="f-vertical">
+      <option value="developer">Project developer / owner</option>
+      <option value="epc">EPC / general contractor</option>
+      <option value="installer">Installer / electrical contractor</option>
+      <option value="oem">Equipment manufacturer (OEM)</option>
+    </select>
+    <label>Workspace address</label>
+    <div style="display:flex;align-items:center;gap:6px"><input id="f-slug" maxlength="40" style="flex:1" placeholder="acme"><span class="host">.clearskyomega.com</span></div>
+    <label>Phone <span style="font-weight:400">(optional)</span></label><input id="f-phone" type="tel" autocomplete="tel">
+    <label>What are you working on? <span style="font-weight:400">(optional)</span></label><textarea id="f-note" rows="2" placeholder="e.g. 3 BESS sites in ComEd territory, need interconnection screening"></textarea>
+    <button class="btn" id="f-submit" onclick="submitWorkspace()">Request my workspace</button>
+    <div class="hint">Workspaces are reviewed by the ClearSky team, usually within one business day. You start on a free 30-day trial.</div>
+    <div class="err" id="form-err"></div>
+  </div>
+
+  <!-- STEP 3: done -->
+  <div id="step-done" class="hide">
+    <h1>Request received</h1>
+    <div class="ok" style="display:block">
+      <div style="font-weight:700;margin-bottom:6px" id="done-name"></div>
+      <div style="color:var(--sub);font-size:14px">Your workspace will live at <span class="host" id="done-host"></span>. We'll email <b id="done-email" style="color:var(--txt)"></b> when it's approved.</div>
+    </div>
+    <button class="btn ghost" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<script>
+/* ES5. The hub page: omega-tenant.js (hub mode) already routes anyone whose
+   domain HAS a tenant to that tenant's hostname; this page only handles the
+   "no tenant yet" case, via /api/tenant-signup. */
+(function(){
+  var CFG = window.CLEARSKY_CONFIG;
+  if (!firebase.apps.length) firebase.initializeApp(CFG.firebase);
+  var auth = firebase.auth();
+  var $ = function(id){ return document.getElementById(id); };
+  function show(id){ ['step-auth','step-form','step-done'].forEach(function(s){ $(s).className = s===id ? '' : 'hide'; }); }
+  function err(id,msg){ var e=$(id); e.style.display = msg ? 'block' : 'none'; e.textContent = msg||''; }
+  function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
+  function slugOf(d){ return String(d||'').split('.')[0].replace(/[^a-z0-9-]/g,''); }
+
+  window.toggleEmail = function(){ var b=$('email-box'); b.className = b.className ? '' : 'hide'; };
+  window.signInGoogle = function(){
+    var p = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(p)['catch'](function(e){ err('auth-err', e.message); });
+  };
+  window.signInEmail = function(){
+    var em=$('em').value.trim(), pw=$('pw').value;
+    if(!em||!pw){ err('auth-err','Email and password are required.'); return; }
+    auth.signInWithEmailAndPassword(em,pw)['catch'](function(e){
+      if (e.code==='auth/user-not-found') return auth.createUserWithEmailAndPassword(em,pw).then(function(c){ return c.user.sendEmailVerification(); })['catch'](function(e2){ err('auth-err', e2.message); });
+      err('auth-err', e.message);
+    });
+  };
+  window.signOut = function(){ auth.signOut().then(function(){ location.reload(); }); };
+
+  window.addEventListener('omega:hub', function(ev){
+    var d = ev.detail || {};
+    if (d.exists) return;                               /* omega-tenant.js redirects */
+    var u = auth.currentUser; if(!u) return;
+    $('who-email').textContent = u.email; $('who-domain').textContent = domainOf(u.email);
+    if(!$('f-slug').value) $('f-slug').value = slugOf(domainOf(u.email));
+    show('step-form');
+  });
+  auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
+  $('f-slug').addEventListener('input', function(){ $('host-preview').textContent = ($('f-slug').value||'yourcompany') + '.clearskyomega.com'; });
+
+  window.submitWorkspace = function(){
+    var u = auth.currentUser; if(!u) return;
+    var name=$('f-name').value.trim(); if(name.length<2){ err('form-err','Company name is required.'); return; }
+    var btn=$('f-submit'); btn.disabled=true; btn.textContent='Creating…'; err('form-err','');
+    u.getIdToken().then(function(tok){
+      return fetch('/api/tenant-signup',{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+        body: JSON.stringify({ companyName:name, vertical:$('f-vertical').value, slug:$('f-slug').value.trim(), phone:$('f-phone').value.trim(), note:$('f-note').value.trim() }) });
+    }).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); })
+    .then(function(j){
+      if (j.exists && j.host && j.status==='active'){ location.href='https://'+j.host+'/'; return; }
+      $('done-name').textContent = name; $('done-host').textContent = j.host; $('done-email').textContent = u.email; show('step-done');
+    })['catch'](function(e){ err('form-err', e.message); btn.disabled=false; btn.textContent='Request my workspace'; });
+  };
+})();
+</script>
+</body>
+</html>

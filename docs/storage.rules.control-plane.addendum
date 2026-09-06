@@ -1,0 +1,38 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · CONTROL PLANE ADDENDUM to storage.rules
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   Paste the block below BEFORE the closing `match /{allPaths=**}` deny-all.
+   Uses only helpers already in the file: signedIn(), userOrg(),
+   isAdminDomain().
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+    /* ============================================================
+       TENANT BRANDING ASSETS  —  tenants/{orgId}/{fileName}
+       Logo (light + dark), favicon, report header. Read is PUBLIC because
+       these render on the sign-in page before anyone is authenticated, and
+       in exported PDFs opened by people with no account.
+
+       WRITE IS ANY MEMBER OF THE ORG, NOT JUST A TENANT ADMIN. Storage rules
+       cannot read Firestore, so omega_orgs/{orgId}/members is invisible
+       here. The choice was: (a) any org member may upload a logo, or (b)
+       mint a custom claim from a Cloud Function and check it. (a) for now —
+       the blast radius is "a colleague changed our logo", which the tenant
+       admin can change back. Move to (b) when set-role.js lands and every
+       admin carries a `role` claim; then this becomes
+         request.auth.token.get('role','') in ['owner','admin']
+         && request.auth.token.get('orgId','') == orgId
+
+       2 MB, images only. A logo that needs more than that is a photo. The
+       URL is written to omega_orgs/{orgId}.logoUrl by the account page;
+       omega-brand.js reads that field, never this path directly.
+       ============================================================ */
+    function okLogo() {
+      return request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    match /tenants/{orgId}/{fileName} {
+      allow read:   if true;
+      allow write:  if signedIn() && (orgId == userOrg() || isAdminDomain()) && okLogo();
+      allow delete: if signedIn() && (orgId == userOrg() || isAdminDomain());
+    }

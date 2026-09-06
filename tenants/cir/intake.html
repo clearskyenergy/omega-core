@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log a referral · ClearSky-OMEGA</title>
+<link rel="icon" href="/omega-logo.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════════════════════
+     REFERRAL INTAKE — tenant-side.
+
+     ⚠ This is NOT the Omega project intake. It writes to this tenant's OWN
+     referral collection (delivery.collection in /config.js), never to
+     `intake_projects`. Nothing logged here reaches ClearSky's ops console,
+     starts a ClearSky SLA clock, or puts this tenant's customers in front of
+     ClearSky staff. That separation is the point — see omega-delivery.js.
+
+     Page is tenant-neutral: every label, service line and collection name
+     comes from /config.js through OmegaDelivery.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#EDEFF1; --sap-card-border:#E4E8EC; --cs-navy:#08384F; --cs-accent:#00A9A4;
+  --cs-sub:#5A7180; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+  --shadow:0 1px 2px rgba(20,40,60,.05);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--sap-ink);
+  min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}
+a{color:var(--sap-blue)}
+:focus-visible{outline:2px solid var(--sap-blue-hi);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+#topbar{height:56px;background:#fff;display:flex;align-items:center;padding:0 18px;
+  border-bottom:1px solid #E5E9ED;box-shadow:var(--shadow);position:sticky;top:0;z-index:20}
+.tb-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.tb-omega{height:28px;border-radius:6px;display:block}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-sep{width:1px;height:22px;background:#E5E9ED;margin:0 14px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-client-chip{background:#fff;border:1px solid #E5E9ED;border-radius:7px;padding:4px 8px;
+  display:flex;align-items:center;height:32px;margin-right:10px}
+.tb-client-chip img{height:22px;width:auto;display:block}
+.btn-sm{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:500 12px 'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.btn-sm:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+
+#wrap{max-width:780px;margin:0 auto;padding:30px 20px 80px}
+.ph-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8FA0AE}
+h1{font-size:26px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;margin-top:4px}
+.lede{font-size:14px;color:var(--cs-sub);margin-top:8px;line-height:1.6;max-width:64ch}
+
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:10px;
+  box-shadow:var(--shadow);margin-top:20px}
+.card-h{padding:14px 20px;border-bottom:1px solid var(--sap-card-border)}
+.card-h h2{font-size:14.5px;font-weight:700;color:var(--cs-navy)}
+.card-h .sub{font-size:11.5px;color:var(--sap-ink-2);margin-top:2px;line-height:1.5}
+.card-b{padding:18px 20px}
+
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row.three{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:640px){.row,.row.three{grid-template-columns:1fr}}
+.fld{margin-bottom:14px}
+.fld:last-child{margin-bottom:0}
+.fld label{display:block;font-size:11px;font-weight:600;color:var(--sap-ink-2);
+  text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.fld .hint{font-size:11.5px;color:#8FA0AE;margin-top:5px;line-height:1.5}
+.fld input,.fld select,.fld textarea{width:100%;border:1.5px solid #DDE3E9;border-radius:8px;
+  padding:10px 12px;font:400 14px 'DM Sans',sans-serif;color:var(--sap-ink);background:#fff;outline:none}
+.fld textarea{min-height:96px;resize:vertical;line-height:1.55}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--sap-blue)}
+.fld input.bad,.fld select.bad{border-color:var(--bad);background:#FFF7F7}
+
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:640px){.checks{grid-template-columns:1fr}}
+.check{display:flex;gap:10px;align-items:flex-start;border:1.5px solid #DDE3E9;border-radius:9px;
+  padding:11px 13px;cursor:pointer;background:#fff}
+.check:hover{border-color:#BFD4E8}
+.check.on{border-color:var(--sap-blue);background:#F4F9FF}
+.check input{margin-top:2px;flex:0 0 auto;width:auto}
+.check b{display:block;font-size:13px;font-weight:600;color:var(--sap-ink)}
+.check span small{display:block;font-size:11.5px;color:var(--sap-ink-2);margin-top:2px;line-height:1.45}
+
+#prio-list{display:flex;gap:9px;flex-wrap:wrap}
+#prio-list button{flex:1;min-width:130px;border:1.5px solid #DDE3E9;background:#fff;border-radius:9px;
+  padding:11px 13px;cursor:pointer;text-align:left;font-family:'DM Sans',sans-serif}
+#prio-list button.on{border-color:var(--sap-blue);background:#F4F9FF}
+#prio-list button b{display:block;font-size:13px;font-weight:600;color:var(--sap-ink)}
+#prio-list button span{display:block;font-size:11.5px;color:var(--sap-ink-2);margin-top:2px}
+
+/* attachments */
+.att{border:1.5px dashed #CBD6E0;border-radius:10px;padding:16px;text-align:center;background:#FAFCFE}
+.att.drag{border-color:var(--sap-blue);background:#F4F9FF}
+.att p{font-size:12.5px;color:var(--sap-ink-2);line-height:1.55}
+.att .or{font-size:11px;color:#8FA0AE;margin:9px 0}
+.att-list{margin-top:12px;display:flex;flex-direction:column;gap:7px}
+.att-item{display:flex;align-items:center;gap:10px;border:1px solid #E4E8EC;border-radius:8px;
+  padding:9px 12px;background:#fff;font-size:12.5px}
+.att-item .an{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.att-item .ak{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:2px 7px;border-radius:20px;background:#EDF1F5;color:#5C6B7A}
+.att-item .ak.file{background:#E7F0FD;color:#0B4FA8}
+.att-item .as{color:#8FA0AE;font-size:11.5px;white-space:nowrap}
+.att-item button{border:0;background:none;color:#B3261E;cursor:pointer;font-size:16px;line-height:1;padding:0 2px}
+.linkrow{display:flex;gap:9px}
+.linkrow input{flex:1}
+
+.actions{display:flex;gap:11px;align-items:center;margin-top:22px;flex-wrap:wrap}
+.btn{border:0;border-radius:9px;padding:12px 22px;font:600 14px 'DM Sans',sans-serif;cursor:pointer}
+.btn.pri{background:var(--sap-blue);color:#fff}
+.btn.pri:disabled{opacity:.55;cursor:not-allowed}
+.btn.sec{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2)}
+
+.msg{display:none;margin-top:16px;border-radius:9px;padding:13px 16px;font-size:13px;line-height:1.6}
+.msg.err{display:block;background:#FDECEA;border:1px solid #F5C2BC;color:#8C1D18}
+.msg.ok{display:block;background:#E8F5EC;border:1px solid #BBE0C7;color:#14532D}
+.msg b{display:block;margin-bottom:3px}
+
+#gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid var(--sap-card-border);
+  border-radius:14px;padding:34px;text-align:center;box-shadow:var(--shadow)}
+#gate h2{font-size:18px;color:var(--cs-navy);margin-bottom:8px}
+#gate p{font-size:13.5px;color:var(--cs-sub);line-height:1.6}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="tb-logo" href="/index.html">
+    <img class="tb-omega" src="/omega-logo.png" alt="">
+    <span class="tb-logo-txt">ClearSky<span style="color:var(--sap-blue)">-OMEGA</span></span>
+  </a>
+  <span class="tb-sep"></span>
+  <span class="tb-portal" id="tb-portal">Referral intake</span>
+  <span class="tb-spacer"></span>
+  <span class="tb-client-chip" id="tb-client-chip" style="display:none">
+    <img src="" alt="" id="tb-client-logo">
+  </span>
+  <a class="btn-sm" href="/queue.html">Queue</a>
+  &nbsp;
+  <a class="btn-sm" href="/index.html">Dashboard</a>
+</div>
+
+<div id="gate" style="display:none">
+  <h2>Sign in first</h2>
+  <p>Referrals are written to your workspace, so this page needs a signed-in
+     account. Open the dashboard, sign in, and come back.</p>
+  <p style="margin-top:16px"><a class="btn-sm" href="/index.html">Go to the dashboard</a></p>
+</div>
+
+<div id="wrap" style="display:none">
+  <div class="ph-eyebrow">Referral intake</div>
+  <h1 id="page-title">Log a referral</h1>
+  <p class="lede" id="page-lede">
+    A project one of your customers has asked you to work on. Record it here and
+    it enters your service queue, where it can be scoped, priced, and pushed
+    into the editor to be drawn.
+  </p>
+
+  <!-- ── Customer ────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h">
+      <h2>Who it's for</h2>
+      <div class="sub">Your customer, not you. This is the name the job is
+        tracked and delivered under.</div>
+    </div>
+    <div class="card-b">
+      <div class="row">
+        <div class="fld">
+          <label for="f-client">Customer</label>
+          <input id="f-client" list="known-clients" placeholder="Developer, owner or EPC">
+          <datalist id="known-clients"></datalist>
+          <div class="hint">Type freely. Names already in your queue autocomplete,
+            so the same customer doesn't end up spelled three ways.</div>
+        </div>
+        <div class="fld">
+          <label for="f-referred">Referral source</label>
+          <input id="f-referred" placeholder="Repeat client, inbound, partner…">
+          <div class="hint">Optional. Where the work came from, if it's worth knowing.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="fld">
+          <label for="f-contact">Contact name</label>
+          <input id="f-contact" placeholder="Who you'll be dealing with">
+        </div>
+        <div class="fld">
+          <label for="f-email">Contact email</label>
+          <input id="f-email" type="email" placeholder="name@example.com">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Project ─────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h">
+      <h2>The project</h2>
+      <div class="sub">Only the name is required. Everything else can follow —
+        a referral with a name and nothing else is still a referral, and
+        blocking on detail you don't have yet is how work goes unlogged.</div>
+    </div>
+    <div class="card-b">
+      <div class="fld">
+        <label for="f-name">Project name</label>
+        <input id="f-name" placeholder="e.g. Buckland Solar 4.9 MW">
+      </div>
+      <div class="row">
+        <div class="fld">
+          <label for="f-type">Technology</label>
+          <select id="f-type"></select>
+        </div>
+        <div class="fld">
+          <label for="f-addr">Site address or county</label>
+          <input id="f-addr" placeholder="County, ST is enough at this stage">
+        </div>
+      </div>
+      <div class="row">
+        <div class="fld">
+          <label for="f-mw">Capacity (MW)</label>
+          <input id="f-mw" type="number" step="0.1" min="0" placeholder="Leave blank if unknown">
+          <div class="hint">Blank reads as <i>not stated</i>, which is honest.
+            Zero would read as a project with no size, which isn't.</div>
+        </div>
+        <div class="fld">
+          <label for="f-hrs">Storage duration (hours)</label>
+          <input id="f-hrs" type="number" step="0.5" min="0" placeholder="Storage only">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Services ────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h">
+      <h2>What they've asked you to do</h2>
+      <div class="sub">Your service lines. Pick every one this job touches —
+        the queue counts a referral once per line, which is how the load per
+        service becomes readable.</div>
+    </div>
+    <div class="card-b">
+      <div class="checks" id="scope-list"></div>
+      <div class="hint" style="margin-top:11px;font-size:11.5px;color:#8FA0AE;line-height:1.5">
+        Not sure yet? Leave them all unticked. The referral lands under
+        <b>Needs scoping</b> on the queue rather than being filed as a job of
+        no size.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Priority & timing ───────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h">
+      <h2>Priority and timing</h2>
+      <div class="sub">Priority sets the reply target the queue measures you
+        against, and the derived due date when no date is given.</div>
+    </div>
+    <div class="card-b">
+      <div class="fld">
+        <label>Priority</label>
+        <div id="prio-list"></div>
+      </div>
+      <div class="fld">
+        <label for="f-due">Due date</label>
+        <input id="f-due" type="date">
+        <div class="hint">Optional. Left blank, the queue derives one from
+          priority and marks it with an asterisk so nobody mistakes it for a
+          commitment the customer made.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Files ───────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h">
+      <h2>Files</h2>
+      <div class="sub" id="att-sub">Site plans, one-lines, utility
+        correspondence, an interconnection letter — anything the job starts from.</div>
+    </div>
+    <div class="card-b">
+      <div class="att" id="dropzone">
+        <p><b>Drop files here</b> or <a href="#" id="pick-file">choose from your computer</a></p>
+        <input type="file" id="f-file" multiple style="display:none">
+        <div class="or">— or link a file that lives somewhere else —</div>
+        <div class="linkrow">
+          <input id="f-link" placeholder="https://drive.google.com/…">
+          <button type="button" class="btn-sm" id="add-link">Add link</button>
+        </div>
+      </div>
+      <div class="att-list" id="att-list"></div>
+      <div class="hint" style="margin-top:11px;font-size:11.5px;color:#8FA0AE;line-height:1.55"
+           id="att-note"></div>
+    </div>
+  </div>
+
+  <!-- ── Notes ───────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-h"><h2>Notes</h2></div>
+    <div class="card-b">
+      <div class="fld">
+        <textarea id="f-notes" placeholder="Scope, constraints, deadlines, what the customer actually said…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn pri" id="submit-btn">Log referral</button>
+    <a class="btn sec" href="/queue.html" style="text-decoration:none;line-height:1.4">Cancel</a>
+    <span style="font-size:11.5px;color:#8FA0AE" id="dest-note"></span>
+  </div>
+
+  <div class="msg" id="msg"></div>
+</div>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- Storage is loaded HERE and not in index.html. Only this page uploads, and
+     the portal shouldn't carry an SDK it never calls. If uploads are disabled
+     (delivery.uploads:false) this script still loads but is never used. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-delivery.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   The page is ES5 to match every other file in this repo.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var D = null, ME = null, ATTACH = [], PRIORITY = 'standard', UPLOADS = false;
+
+  firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+  var auth = firebase.auth();
+  window.db = firebase.firestore();
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return D ? D.esc(s) : String(s == null ? '' : s); }
+
+  auth.onAuthStateChanged(function (user) {
+    if (!user) {
+      el('gate').style.display = 'block';
+      el('wrap').style.display = 'none';
+      return;
+    }
+    ME = { email: String(user.email || '').toLowerCase(), name: user.displayName || user.email };
+    el('gate').style.display = 'none';
+    el('wrap').style.display = 'block';
+    start();
+  });
+
+  function start() {
+    D = window.OmegaDelivery;
+    if (!D) {
+      el('msg').className = 'msg err';
+      el('msg').innerHTML = '<b>omega-delivery.js did not load</b>This page reads its ' +
+        'service lines and its collection name from that module. Check the script tag.';
+      return;
+    }
+
+    var C = D.cfg();
+
+    /* Tenant chrome, via the same branding layer every other page uses. */
+    try {
+      var ws = OmegaBrand.resolve ? OmegaBrand.resolve(ME.email) : null;
+      var logo = ws && OmegaBrand.logoOf ? OmegaBrand.logoOf(ws) : null;
+      if (logo) {
+        el('tb-client-logo').src = logo;
+        el('tb-client-chip').style.display = 'flex';
+      }
+    } catch (e) { /* branding is decoration; never block the form on it */ }
+
+    UPLOADS = (C.uploads !== false) && !!(firebase.storage);
+
+    /* Technology */
+    el('f-type').innerHTML = D.TYPES.map(function (t) {
+      return '<option value="' + t.key + '">' + esc(t.label) + '</option>';
+    }).join('');
+
+    /* Service lines, straight from config */
+    el('scope-list').innerHTML = C.services.map(function (s) {
+      return '<label class="check" data-scope="' + esc(s.key) + '">' +
+        '<input type="checkbox" value="' + esc(s.key) + '" ' +
+        'onchange="this.closest(\'.check\').classList.toggle(\'on\', this.checked)">' +
+        '<span><b>' + esc(s.label) + '</b>' +
+        (s.desc ? '<small>' + esc(s.desc) + '</small>' : '') + '</span></label>';
+    }).join('');
+
+    /* Priority, labelled with the real target so the choice means something */
+    el('prio-list').innerHTML = D.PRIORITY.slice().reverse().map(function (p) {
+      return '<button type="button" data-p="' + p.key + '"' +
+        (p.key === 'standard' ? ' class="on"' : '') + '>' +
+        '<b>' + esc(p.label) + '</b><span>reply target ' + (C.sla[p.key]) + 'h</span></button>';
+    }).join('');
+    Array.prototype.forEach.call(el('prio-list').querySelectorAll('button'), function (b) {
+      b.onclick = function () {
+        PRIORITY = b.dataset.p;
+        Array.prototype.forEach.call(el('prio-list').querySelectorAll('button'), function (x) {
+          x.classList.toggle('on', x.dataset.p === PRIORITY);
+        });
+      };
+    });
+
+    el('dest-note').textContent = 'Writes to ' + C.collection + ' \u00b7 ' + D.orgId();
+
+    el('att-note').innerHTML = UPLOADS
+      ? 'Uploads go to Firebase Storage under <span class="mono">' +
+        esc(C.collection) + '/' + esc(D.orgId()) + '/</span>, scoped to your workspace. ' +
+        'Links are stored as URLs and are only as private as the link itself \u2014 ' +
+        'a shared Drive link in here is readable by anyone who can open it.'
+      : 'File upload is off for this deployment, so files are recorded as links. ' +
+        'A link is only as private as the link itself.';
+
+    /* Autocomplete customer names from the existing queue, so the same
+       customer doesn't end up spelled three ways across a quarter. */
+    D.fetchAll().then(function (rows) {
+      var seen = {}, out = [];
+      rows.forEach(function (r) {
+        if (r.clientName && !seen[r.clientName]) { seen[r.clientName] = 1; out.push(r.clientName); }
+      });
+      el('known-clients').innerHTML = out.sort().map(function (n) {
+        return '<option value="' + esc(n) + '"></option>';
+      }).join('');
+    })['catch'](function () { /* autocomplete is a nicety, not a dependency */ });
+
+    wireFiles();
+    el('submit-btn').onclick = submit;
+  }
+
+  /* ── Attachments ──────────────────────────────────────────────────────
+     Files are held in memory until submit. Uploading before the referral
+     exists would orphan the object in Storage every time somebody opens the
+     form and closes it, and there would be no document to clean up from. */
+
+  function wireFiles() {
+    var dz = el('dropzone'), input = el('f-file');
+
+    el('pick-file').onclick = function (e) { e.preventDefault(); input.click(); };
+    input.onchange = function () { addFiles(input.files); input.value = ''; };
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation(); dz.classList.add('drag');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) {
+        e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
+      });
+    });
+    dz.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+
+    el('add-link').onclick = function () {
+      var v = el('f-link').value.trim();
+      if (!v) return;
+      if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+      ATTACH.push({ kind: 'link', name: shortUrl(v), url: v });
+      el('f-link').value = '';
+      paintFiles();
+    };
+  }
+
+  function addFiles(list) {
+    if (!UPLOADS) {
+      flash('err', 'Uploads are off for this deployment',
+        'Files can still be attached as links. Turn uploads on with ' +
+        'delivery.uploads:true in /config.js, and deploy storage.rules first.');
+      return;
+    }
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      /* 25 MB is a browser-upload limit, not a Storage one. Past that the
+         upload works but stalls long enough on a site connection that people
+         assume it hung and reload, losing the whole form. */
+      if (f.size > 25 * 1024 * 1024) {
+        flash('err', f.name + ' is too large to attach here',
+          'Files over 25 MB upload slowly enough from a field connection that ' +
+          'the form usually gets reloaded before they finish. Put it in Drive ' +
+          'or Dropbox and add the link instead.');
+        continue;
+      }
+      ATTACH.push({ kind: 'file', name: f.name, size: f.size, _file: f });
+    }
+    paintFiles();
+  }
+
+  function shortUrl(u) {
+    try {
+      var a = document.createElement('a'); a.href = u;
+      var last = (a.pathname || '').split('/').filter(Boolean).pop();
+      return (a.hostname || u) + (last ? ' / ' + decodeURIComponent(last).slice(0, 40) : '');
+    } catch (e) { return u; }
+  }
+
+  function fmtSize(n) {
+    if (!n) return '';
+    if (n > 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    return Math.max(1, Math.round(n / 1024)) + ' KB';
+  }
+
+  function paintFiles() {
+    el('att-list').innerHTML = ATTACH.map(function (a, i) {
+      return '<div class="att-item">' +
+        '<span class="ak ' + a.kind + '">' + a.kind + '</span>' +
+        '<span class="an">' + esc(a.name) + '</span>' +
+        '<span class="as">' + esc(fmtSize(a.size)) + '</span>' +
+        '<button type="button" data-i="' + i + '" title="Remove">\u00d7</button></div>';
+    }).join('');
+    Array.prototype.forEach.call(el('att-list').querySelectorAll('button'), function (b) {
+      b.onclick = function () { ATTACH.splice(Number(b.dataset.i), 1); paintFiles(); };
+    });
+  }
+
+  /* Upload after the document exists, so every object has a referral to
+     belong to and a path that can be found again from the record. */
+  function uploadAll(refId) {
+    var files = ATTACH.filter(function (a) { return a.kind === 'file' && a._file; });
+    var links = ATTACH.filter(function (a) { return a.kind === 'link'; })
+      .map(function (a) {
+        return { kind: 'link', name: a.name, url: a.url,
+                 addedBy: ME.email, addedAt: new Date().toISOString() };
+      });
+    if (!files.length) return Promise.resolve(links);
+
+    var C = D.cfg(), store = firebase.storage();
+    return Promise.all(files.map(function (a) {
+      var path = C.collection + '/' + D.orgId() + '/' + refId + '/' + a.name;
+      var ref = store.ref(path);
+      return ref.put(a._file).then(function () {
+        return ref.getDownloadURL().then(function (url) {
+          return { kind: 'file', name: a.name, size: a.size, path: path, url: url,
+                   addedBy: ME.email, addedAt: new Date().toISOString() };
+        });
+      });
+    })).then(function (uploaded) { return links.concat(uploaded); });
+  }
+
+  /* ── Submit ───────────────────────────────────────────────────────── */
+
+  function flash(kind, title, body) {
+    var m = el('msg');
+    m.className = 'msg ' + kind;
+    m.innerHTML = '<b>' + esc(title) + '</b>' + esc(body);
+    m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function submit() {
+    var bad = [];
+    function mark(id, ok) {
+      var e = el(id); e.classList.toggle('bad', !ok); if (!ok) bad.push(e);
+    }
+    var name = el('f-name').value.trim();
+    var email = el('f-email').value.trim();
+
+    mark('f-name', !!name);
+    /* Email is optional, but a malformed one is worse than none: it looks
+       like a working address until somebody tries to reply to it. */
+    mark('f-email', !email || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email));
+
+    if (bad.length) {
+      flash('err', 'A couple of things need fixing',
+        'A project name is the only hard requirement. If you filled in an email, ' +
+        'it needs to be a valid one.');
+      bad[0].focus();
+      return;
+    }
+
+    var scopes = [];
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#scope-list input:checked'),
+      function (b) { scopes.push(b.value); });
+
+    var doc = {
+      clientName:   el('f-client').value.trim(),
+      contactName:  el('f-contact').value.trim(),
+      contactEmail: email,
+      referredBy:   el('f-referred').value.trim(),
+      projectName:  name,
+      projectType:  el('f-type').value,
+      address:      el('f-addr').value.trim(),
+      capacityMw:   parseFloat(el('f-mw').value) || null,
+      durationHrs:  parseFloat(el('f-hrs').value) || null,
+      scopes:       scopes,
+      priority:     PRIORITY,
+      dueDate:      el('f-due').value || '',
+      notes:        el('f-notes').value.trim(),
+      attachments:  [],
+      status:       'submitted'
+    };
+
+    var btn = el('submit-btn');
+    btn.disabled = true; btn.textContent = 'Saving\u2026';
+
+    D.create(doc).then(function (ref) {
+      btn.textContent = ATTACH.length ? 'Uploading files\u2026' : 'Saving\u2026';
+      return uploadAll(ref.id).then(function (att) {
+        if (!att.length) return ref;
+        /* A failed upload must not lose the referral. The document is already
+           written; attachments are patched on after, and a failure here leaves
+           a referral with no files rather than no referral. */
+        return D.patch(ref.id, { attachments: att })
+          .then(function () { return ref; })
+          ['catch'](function (e) {
+            console.warn('[intake] attachments not saved', e);
+            return ref;
+          });
+      })['catch'](function (e) {
+        console.warn('[intake] upload failed', e);
+        return ref;
+      });
+    }).then(function (ref) {
+      done(doc, ref.id);
+    })['catch'](function (err) {
+      console.error('[intake] submit failed', err);
+      btn.disabled = false; btn.textContent = 'Log referral';
+      var perm = err && (err.code === 'permission-denied' ||
+                         /permission/i.test(err.message || ''));
+      flash('err',
+        perm ? 'Firestore refused the write' : 'That didn\u2019t save',
+        perm
+          ? 'The rules don\u2019t allow this account to create a document in ' +
+            D.cfg().collection + '. Deploy firestore-delivery.rules, and check ' +
+            'that userOrg() resolves your address to ' + D.orgId() + '.'
+          : (err && err.message) || 'Unknown error. The console has the detail.');
+    });
+  }
+
+  function done(doc, id) {
+    el('wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (c) {
+      c.style.display = 'none';
+    });
+    document.querySelector('.actions').style.display = 'none';
+    el('page-title').textContent = 'Referral logged';
+    el('page-lede').innerHTML =
+      '<b>' + esc(doc.projectName) + '</b>' +
+      (doc.clientName ? ' for ' + esc(doc.clientName) : '') +
+      ' is in the queue. The reply clock started when you saved it \u2014 the ' +
+      'target for a ' + esc(doc.priority) + ' referral is ' +
+      D.cfg().sla[doc.priority] + ' hours.';
+    var m = el('msg');
+    m.className = 'msg ok';
+    m.innerHTML = '<b>What happens next</b>' +
+      'Open the queue to scope it, or push it straight into the editor to start ' +
+      'drawing. <a href="/queue.html">Go to the queue</a> \u00b7 ' +
+      '<a href="/intake.html">Log another</a>';
+  }
+})();
+</script>
+</body>
+</html>

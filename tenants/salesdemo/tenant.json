@@ -1,0 +1,14 @@
+{
+  "orgId": "demo-clearsky",
+  "name": "ClearSky-OMEGA Demo",
+  "domains": [
+    "demo.clearskyomega.com"
+  ],
+  "vertical": "developer",
+  "tier": "enterprise",
+  "logoUrl": "/clearsky-omega-mark-white.png",
+  "shell": "default",
+  "status": "active",
+  "receivesFullBom": false,
+  "_note": "Seeded from the legacy repo config.js. VERIFY domains, tier and orgId before running scripts/seed-omega-orgs.js --apply. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on."
+}

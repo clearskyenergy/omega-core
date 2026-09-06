@@ -1,0 +1,7 @@
+node_modules/
+.vercel/
+.env*
+sa.json
+*.serviceaccount.json
+audit-*.json
+.DS_Store

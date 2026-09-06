@@ -1,0 +1,3118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script type="module" src="https://clearskyomega.com/omega-sso.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClearSky-OMEGA · Ops Console</title>
+<link rel="icon" href="/omega-logo.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   OMEGA OPS CONSOLE
+   Same token system as the tenant portal — staff move between this page, the
+   editor and projects.html constantly, and a second visual language would
+   just cost them a beat on every switch.
+
+   One deliberate departure: every duration, countdown and payout is set in
+   DM Mono. Response time is the product here. Typesetting it like an
+   instrument readout instead of body copy is the whole point of the page.
+   ═══════════════════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#EDEFF1; --sap-card:#FFFFFF; --sap-card-border:#E4E8EC; --sap-num:#223548;
+  --cs-navy:#08384F; --cs-accent:#00A9A4; --cs-sub:#5A7180;
+  --ok:#16A34A; --warn:#D97706; --bad:#DC2626; --hold:#6B7280;
+  --shadow:0 1px 2px rgba(20,40,60,.05); --shadow-lg:0 8px 28px rgba(15,39,51,.14);
+  --r:10px;
+}
+html,body{height:100%}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--sap-ink);
+  -webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+a{color:var(--sap-blue)}
+button{font-family:inherit}
+:focus-visible{outline:2px solid var(--sap-blue-hi);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
+#omega-boot{position:fixed;inset:0;background:var(--sap-page);z-index:9000;display:flex;
+  align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity .3s}
+#omega-boot.hide{opacity:0;pointer-events:none}
+.spin{width:26px;height:26px;border:2.5px solid #D8DEE4;border-top-color:var(--sap-blue);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.boot-txt{font-size:12px;color:var(--sap-ink-2);letter-spacing:.4px}
+
+/* ── Auth ─────────────────────────────────────────────────────────────── */
+#auth-screen{min-height:100vh;display:none;align-items:center;justify-content:center;padding:24px;
+  background:linear-gradient(160deg,#08384F 0%,#0B2A3A 55%,#061A25 100%)}
+.auth-card{background:#fff;border-radius:16px;padding:34px 32px;width:100%;max-width:400px;
+  box-shadow:0 24px 60px rgba(0,0,0,.36)}
+.auth-logo{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+.auth-logo img{height:44px;width:auto;border-radius:9px}
+.auth-logo b{font-size:17px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px;display:block}
+.auth-logo b span{color:var(--sap-blue)}
+.auth-logo small{font-size:11px;color:var(--sap-ink-2);letter-spacing:.5px;text-transform:uppercase;font-weight:600}
+.auth-h{font-size:19px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px}
+.auth-sub{font-size:13px;color:var(--cs-sub);margin-top:5px;line-height:1.5}
+.fld{margin-top:14px}
+.fld label{display:block;font-size:11px;font-weight:600;color:var(--sap-ink-2);
+  text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.fld input,.fld select,.fld textarea{width:100%;border:1.5px solid #DDE3E9;border-radius:8px;
+  padding:10px 12px;font:400 14px 'DM Sans',sans-serif;color:var(--sap-ink);background:#fff;outline:none}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--sap-blue)}
+.btn{border:none;border-radius:8px;padding:11px 16px;font:600 13.5px 'DM Sans',sans-serif;
+  cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.btn-p{background:var(--sap-blue);color:#fff;width:100%;margin-top:16px}
+.btn-p:hover:not(:disabled){background:var(--sap-blue-hi)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-g{background:#fff;color:var(--sap-ink);border:1.5px solid #DDE3E9;width:100%;margin-top:10px;
+  display:flex;align-items:center;justify-content:center;gap:9px}
+.btn-g:hover{border-color:var(--sap-blue)}
+.auth-or{display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:#98A6B3;font-size:11px}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:#E6EAEE}
+.auth-msg{display:none;margin-top:14px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5}
+#auth-err{background:#FDECEC;color:#8A1F1F}
+#auth-ok{background:#EAF6EC;color:#1B5E20}
+.auth-foot{margin-top:18px;font-size:11.5px;color:#94A3AF;text-align:center;line-height:1.6}
+
+/* ── Shell ────────────────────────────────────────────────────────────── */
+#app{display:none;min-height:100vh}
+#topbar{position:sticky;top:0;z-index:120;height:56px;background:#fff;display:flex;align-items:center;
+  gap:0;padding:0 18px;border-bottom:1px solid #E5E9ED;box-shadow:var(--shadow)}
+.tb-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.tb-omega{height:28px;width:auto;border-radius:6px;display:block}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--sap-blue)}
+.tb-sep{width:1px;height:22px;background:#E5E9ED;margin:0 14px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-badge{margin-left:10px;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:#7A4E00;background:#FFF3DC;border:1px solid #F0DCB4;border-radius:5px;padding:3px 7px}
+.tb-spacer{flex:1}
+.tb-user{display:flex;align-items:center;gap:10px}
+.tb-avatar{width:30px;height:30px;border-radius:50%;background:var(--sap-blue);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;overflow:hidden}
+.tb-avatar img{width:100%;height:100%;object-fit:cover}
+.tb-name{font-size:13px;font-weight:500;color:var(--sap-ink)}
+.btn-sm{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:500 12px 'DM Sans',sans-serif}
+.btn-sm:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+.btn-sm.pri{background:var(--sap-blue);border-color:var(--sap-blue);color:#fff}
+.btn-sm.pri:hover{background:var(--sap-blue-hi);color:#fff}
+
+#shell{display:flex;min-height:calc(100vh - 56px)}
+#side{width:216px;flex:0 0 216px;background:#fff;border-right:1px solid #E5E9ED;padding:16px 10px;
+  position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
+.sn-group{font-size:10px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;
+  color:#9AA9B6;padding:12px 12px 6px}
+.sn-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  text-decoration:none;color:var(--sap-ink);font-size:13.5px;font-weight:500;cursor:pointer;
+  border:none;background:none;width:100%;text-align:left;transition:background .1s,color .1s}
+.sn-item svg{width:16px;height:16px;flex:none;opacity:.62}
+.sn-item:hover{background:#F2F5F8}
+.sn-item.active{background:#E8F1FE;color:var(--sap-blue);font-weight:600}
+.sn-item.active svg{opacity:1}
+.sn-count{margin-left:auto;font:500 11px 'DM Mono',monospace;color:var(--sap-ink-2);
+  background:#F0F3F6;border-radius:20px;padding:2px 7px;min-width:22px;text-align:center}
+.sn-item.active .sn-count{background:#fff;color:var(--sap-blue)}
+.sn-count.hot{background:#FDE7E7;color:var(--bad)}
+/* .hot is red because it means a missed reply. A qualified deal is the
+   opposite kind of number and must not borrow the alarm colour. */
+.sn-count.good{background:#E7F6EC;color:#116B36}
+
+#main{flex:1;min-width:0;padding:26px 30px 60px}
+.view{display:none}
+.view.on{display:block}
+
+/* ── Page head ────────────────────────────────────────────────────────── */
+.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:20px}
+.ph-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8FA0AE}
+.ph h1{font-size:25px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;margin-top:3px}
+.ph p{font-size:13.5px;color:var(--cs-sub);margin-top:5px;max-width:74ch;line-height:1.55}
+.ph-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── Cards / KPIs ─────────────────────────────────────────────────────── */
+.card{background:var(--sap-card);border:1px solid var(--sap-card-border);border-radius:var(--r);
+  box-shadow:var(--shadow)}
+.card-h{padding:14px 18px;border-bottom:1px solid var(--sap-card-border);display:flex;
+  align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-h h2{font-size:14.5px;font-weight:700;color:var(--cs-navy);letter-spacing:-.15px}
+.card-h .sub{font-size:11.5px;color:var(--sap-ink-2);margin-top:2px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:#fff;border:1px solid var(--sap-card-border);border-radius:var(--r);padding:14px 16px;
+  box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--k,#D6DDE4)}
+.kpi-l{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8FA0AE}
+.kpi-v{font:500 27px/1.1 'DM Mono',monospace;color:var(--sap-num);margin-top:8px;letter-spacing:-1px}
+.kpi-v.sm{font-size:21px}
+.kpi-s{font-size:11.5px;color:var(--sap-ink-2);margin-top:5px;line-height:1.4}
+.kpi.alert{--k:var(--bad)}
+.kpi.alert .kpi-v{color:var(--bad)}
+.kpi.good{--k:var(--ok)}
+.kpi.money{--k:var(--cs-accent)}
+.kpi.money .kpi-v{color:#0B7C78}
+
+/* ── Response desk: the signature element ─────────────────────────────
+   A live depleting bar per unanswered request. It keeps running past zero
+   into overtime rather than parking at 100%, because a 20-minute miss and a
+   2-day miss are not the same thing and should never look the same.      */
+.desk{display:flex;flex-direction:column}
+.desk-row{display:grid;grid-template-columns:1fr 190px 108px;gap:14px;align-items:center;
+  padding:13px 18px;border-bottom:1px solid #F0F3F6;cursor:pointer;transition:background .1s}
+.desk-row:last-child{border-bottom:none}
+.desk-row:hover{background:#F8FAFC}
+.desk-who{font-size:11.5px;font-weight:600;color:var(--sap-ink-2);letter-spacing:.2px}
+.desk-what{font-size:14px;font-weight:600;color:var(--cs-navy);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desk-meta{font-size:11.5px;color:#8FA0AE;margin-top:3px}
+.desk-bar{height:6px;border-radius:4px;background:#EAEEF2;overflow:hidden;position:relative}
+.desk-fill{height:100%;border-radius:4px;transition:width 1s linear;background:var(--ok)}
+.desk-cap{display:flex;justify-content:space-between;font-size:10.5px;color:#8FA0AE;margin-top:5px;
+  letter-spacing:.3px}
+.desk-clock{font:500 17px/1 'DM Mono',monospace;text-align:right;letter-spacing:-.5px;color:var(--ok)}
+.desk-clock small{display:block;font:400 10px/1.3 'DM Sans',sans-serif;color:#8FA0AE;
+  margin-top:4px;letter-spacing:.3px;text-transform:uppercase}
+.s-warn .desk-fill{background:var(--warn)} .s-warn .desk-clock{color:var(--warn)}
+.s-breach .desk-fill{background:var(--bad)} .s-breach .desk-clock{color:var(--bad)}
+.s-breach .desk-bar{background:#FADCDC}
+.pulse{animation:pl 2s ease-in-out infinite}
+@keyframes pl{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* ── Tables ───────────────────────────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  color:#8FA0AE;padding:11px 14px;border-bottom:1px solid var(--sap-card-border);white-space:nowrap;
+  background:#FAFBFC;position:sticky;top:0;z-index:2}
+.tbl td{padding:12px 14px;border-bottom:1px solid #F1F4F7;font-size:13px;vertical-align:middle}
+.tbl tbody tr{cursor:pointer;transition:background .1s}
+.tbl tbody tr:hover{background:#F8FAFC}
+.tbl tbody tr:last-child td{border-bottom:none}
+.t-name{font-weight:600;color:var(--cs-navy);font-size:13.5px}
+.t-sub{font-size:11.5px;color:#8FA0AE;margin-top:2px}
+.t-num{font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums;font-size:12.5px}
+.t-right{text-align:right}
+.scroll-x{overflow-x:auto}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;letter-spacing:.2px;
+  border-radius:20px;padding:3px 9px;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;flex:none}
+.pri{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+  border-radius:4px;padding:2px 6px;white-space:nowrap}
+.chip{display:inline-block;font-size:11px;font-weight:500;color:var(--sap-ink-2);background:#F0F3F6;
+  border-radius:5px;padding:3px 7px;margin:0 4px 4px 0}
+.owner{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sap-ink)}
+.owner .av{width:20px;height:20px;border-radius:50%;background:#DCE6F0;color:#3E5C77;
+  display:flex;align-items:center;justify-content:center;font:700 9.5px 'DM Sans',sans-serif}
+.owner.none{color:#A6B3BF;font-style:italic}
+
+/* ── Filters ──────────────────────────────────────────────────────────── */
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.bar input[type=search],.bar select{border:1px solid #DDE3E9;border-radius:8px;padding:8px 11px;
+  font:400 13px 'DM Sans',sans-serif;background:#fff;color:var(--sap-ink);outline:none}
+.bar input[type=search]{flex:1;min-width:180px}
+.bar input:focus,.bar select:focus{border-color:var(--sap-blue)}
+.seg{display:flex;background:#E7ECF1;border-radius:8px;padding:2px}
+.seg button{border:none;background:none;padding:6px 12px;border-radius:6px;font:600 12px 'DM Sans',sans-serif;
+  color:var(--sap-ink-2);cursor:pointer}
+.seg button.on{background:#fff;color:var(--sap-blue);box-shadow:var(--shadow)}
+
+/* ── Accounts ─────────────────────────────────────────────────────────────
+   The qualification badge carries the whole point of the screening table, so
+   it gets colour the rest of the page doesn't spend: green clears the bar,
+   amber is the unanswered question, grey genuinely missed. Amber is
+   deliberately louder than grey — "we never asked how big it is" is work,
+   and it should not read like a reject.                                    */
+.qb{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.3px;
+  border-radius:5px;padding:3px 8px;white-space:nowrap}
+.qb.q{background:#E7F6EC;color:#116B36;border:1px solid #BFE4CD}
+.qb.u{background:#FEF3E2;color:#8A5209;border:1px solid #F3DBB4}
+.qb.b{background:#F0F3F6;color:#6B7A88;border:1px solid #E1E7EC}
+.qb.n{background:#F7F9FB;color:#93A2AE;border:1px solid #E9EEF2}
+
+.acc-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media (max-width:1040px){.acc-grid{grid-template-columns:1fr}}
+
+.acc-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 18px;
+  border-bottom:1px solid var(--sap-card-border)}
+.acc-hd h2{font-size:17px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px}
+.acc-hd .sub{font-size:12px;color:var(--sap-ink-2);margin-top:3px}
+.acc-hd .sp{flex:1}
+
+.mix{display:flex;flex-wrap:wrap;gap:10px;padding:16px 18px}
+.mix-c{border:1px solid var(--sap-card-border);border-radius:9px;padding:11px 14px;min-width:132px;flex:1}
+.mix-c .l{font-size:10.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#8FA0AE}
+.mix-c .v{font:500 20px/1.15 'DM Mono',monospace;color:var(--sap-num);margin-top:6px;letter-spacing:-.6px}
+.mix-c .s{font-size:11.5px;color:var(--sap-ink-2);margin-top:4px;line-height:1.4}
+
+.urow{display:flex;align-items:center;gap:11px;padding:11px 18px;border-bottom:1px solid #F1F4F7;flex-wrap:wrap}
+.urow:last-child{border-bottom:none}
+.urow .who{flex:1;min-width:190px}
+.urow .who b{font-size:13.5px;font-weight:600;color:var(--cs-navy)}
+.urow .who div{font-size:11.5px;color:#8FA0AE;margin-top:2px}
+.urow .acts{display:flex;gap:6px;flex-wrap:wrap}
+.urow.off{background:#FDF7F7}
+.urow.off .who b{color:#9A6B6B;text-decoration:line-through}
+.btn-sm.warn{border-color:#E7C3C3;color:#A33A3A}
+.btn-sm.warn:hover{border-color:var(--bad);color:var(--bad)}
+
+.note{font-size:12.5px;line-height:1.6;color:#5A7180;padding:13px 18px;background:#FBFCFD;
+  border-top:1px solid var(--sap-card-border)}
+.note b{color:var(--cs-navy)}
+.note code{font-family:'DM Mono',monospace;font-size:11.5px;background:#EDF1F5;padding:1px 5px;border-radius:4px}
+
+/* ── Board ────────────────────────────────────────────────────────────── */
+.board{display:grid;grid-template-columns:repeat(5,minmax(212px,1fr));gap:12px;align-items:start;
+  overflow-x:auto;padding-bottom:8px}
+.col{background:#E9EDF1;border-radius:var(--r);padding:10px;min-height:180px}
+.col.over{background:#DBE7F8;outline:2px dashed var(--sap-blue);outline-offset:-3px}
+.col-h{display:flex;align-items:center;gap:7px;padding:2px 4px 10px}
+.col-h b{font-size:12px;font-weight:700;color:var(--cs-navy);letter-spacing:-.1px}
+.col-h .n{margin-left:auto;font:500 11px 'DM Mono',monospace;color:var(--sap-ink-2)}
+.pcard{background:#fff;border:1px solid var(--sap-card-border);border-radius:8px;padding:11px;
+  margin-bottom:8px;cursor:grab;box-shadow:var(--shadow);transition:box-shadow .12s,transform .12s}
+.pcard:hover{box-shadow:0 3px 10px rgba(20,40,60,.12)}
+.pcard.drag{opacity:.4}
+.pcard-c{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8FA0AE}
+.pcard-n{font-size:13px;font-weight:600;color:var(--cs-navy);margin-top:3px;line-height:1.35}
+.pcard-f{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
+.pcard-v{font:500 11.5px 'DM Mono',monospace;color:var(--sap-ink-2);margin-left:auto}
+.col-empty{font-size:11.5px;color:#98A6B3;text-align:center;padding:16px 8px;line-height:1.5}
+
+/* ── Drawer ───────────────────────────────────────────────────────────── */
+#scrim{position:fixed;inset:0;background:rgba(8,24,36,.42);z-index:300;display:none;opacity:0;
+  transition:opacity .2s}
+#scrim.on{display:block;opacity:1}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:#fff;z-index:310;
+  transform:translateX(100%);transition:transform .24s cubic-bezier(.4,0,.2,1);display:flex;
+  flex-direction:column;box-shadow:var(--shadow-lg)}
+#drawer.on{transform:none}
+.dr-h{padding:18px 22px;border-bottom:1px solid var(--sap-card-border);flex:none}
+.dr-close{position:absolute;top:14px;right:16px;background:#F0F3F6;border:none;width:30px;height:30px;
+  border-radius:8px;cursor:pointer;color:var(--sap-ink-2);font-size:16px;line-height:1}
+.dr-close:hover{background:#E3E9EE}
+.dr-b{flex:1;overflow-y:auto;padding:18px 22px 28px}
+.dr-f{flex:none;border-top:1px solid var(--sap-card-border);padding:12px 22px;display:flex;gap:8px;
+  flex-wrap:wrap;background:#FAFBFC}
+.sec{margin-top:20px}
+.sec-t{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#8FA0AE;
+  margin-bottom:9px}
+.kv{display:grid;grid-template-columns:118px 1fr;gap:7px 12px;font-size:13px}
+.kv dt{color:#8FA0AE;font-size:12px}
+.kv dd{color:var(--sap-ink)}
+.note{background:#F7F9FB;border:1px solid #E7ECF1;border-radius:8px;padding:11px 13px;font-size:13px;
+  line-height:1.6;color:var(--sap-ink);white-space:pre-wrap}
+.log{list-style:none}
+.log li{display:grid;grid-template-columns:8px 1fr;gap:11px;padding:0 0 14px;position:relative}
+.log li::before{content:'';width:8px;height:8px;border-radius:50%;background:#C8D3DD;margin-top:5px}
+.log li:not(:last-child)::after{content:'';position:absolute;left:3.5px;top:15px;bottom:0;width:1px;
+  background:#E3E9EE}
+.log b{font-size:12.5px;font-weight:600;color:var(--sap-ink);display:block}
+.log span{font-size:11.5px;color:#8FA0AE}
+.money-edit{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tiers{display:flex;gap:6px;flex-wrap:wrap}
+.dels{display:flex;flex-direction:column;gap:9px}
+.del{border:1px solid var(--sap-card-border);border-radius:9px;padding:10px 11px;background:#FAFBFC}
+.del.done{background:#F3FBF6;border-color:#CDEBD8}
+.del-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.del-n{font-size:12.5px;font-weight:600;color:var(--cs-navy)}
+.del-open{font-size:11.5px;font-weight:600;color:var(--ok);text-decoration:none}
+.del-open:hover{text-decoration:underline}
+.del-p{font-size:11px;color:#A6B3BF}
+.del input{width:100%;border:1px solid #DDE3E9;border-radius:7px;padding:7px 9px;
+  font:400 12.5px 'DM Sans',sans-serif;color:var(--sap-ink);background:#fff;outline:none}
+.del input:focus{border-color:var(--sap-blue)}
+.del .del-note{margin-top:6px}
+.del-ok{font-size:11.5px;font-weight:600;color:var(--ok)}
+.fl{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+.frow{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #E4E8EC;
+  border-radius:7px;padding:6px 9px;font-size:12.5px}
+.frow .fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--sap-blue);cursor:pointer;text-decoration:none}
+.frow .fn:hover{text-decoration:underline}
+.frow .fs{font:400 11px 'DM Mono',monospace;color:#8FA0AE;flex:none}
+.frow .fx{border:none;background:none;color:#B9C4CE;cursor:pointer;font-size:15px;line-height:1;
+  padding:0 2px;flex:none}
+.frow .fx:hover{color:var(--bad)}
+.up{display:inline-flex;align-items:center;gap:7px;border:1.5px dashed #C4D3E2;border-radius:8px;
+  padding:8px 12px;cursor:pointer;font:600 12px 'DM Sans',sans-serif;color:var(--sap-blue);
+  background:#fff;margin-bottom:7px}
+.up:hover{border-color:var(--sap-blue);background:#F3F8FF}
+.up input{display:none}
+.upbar{height:3px;border-radius:2px;background:#E4E8EC;overflow:hidden;margin:6px 0}
+.upbar i{display:block;height:100%;background:var(--sap-blue);width:0;transition:width .2s}
+.tier{border:1.5px solid #E4E8EC;background:#fff;border-radius:8px;padding:8px 13px;cursor:pointer;
+  font:600 13px/1 'DM Mono',monospace;color:var(--sap-ink);transition:all .12s}
+.tier:hover{border-color:#C4D3E2}
+.tier.on{border-color:var(--sap-blue);background:#F3F8FF;color:var(--sap-blue)}
+.thread{max-height:260px;overflow-y:auto;border:1px solid var(--sap-card-border);border-radius:9px;
+  padding:11px;background:#FAFBFC;margin-bottom:10px}
+.msg{margin-bottom:11px;max-width:88%}
+.msg:last-child{margin-bottom:0}
+.msg .who{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8FA0AE;
+  margin-bottom:3px}
+.msg .bub{font-size:13px;line-height:1.5;padding:8px 11px;border-radius:9px;white-space:pre-wrap;
+  word-break:break-word}
+.msg.staff{margin-left:auto}
+.msg.staff .who{text-align:right}
+.msg.staff .bub{background:#E8F1FE;color:#123A66}
+.msg.client .bub{background:#fff;border:1px solid var(--sap-card-border);color:var(--sap-ink)}
+.msg .when{font-size:10.5px;color:#A6B3BF;margin-top:3px}
+.msg.staff .when{text-align:right}
+.thread-empty{font-size:12.5px;color:#8FA0AE;text-align:center;padding:14px 6px;line-height:1.5}
+#drawer textarea{width:100%;border:1.5px solid #DDE3E9;border-radius:8px;padding:10px 12px;
+  font:400 13.5px/1.5 'DM Sans',sans-serif;color:var(--sap-ink);outline:none;resize:vertical}
+#drawer textarea:focus{border-color:var(--sap-blue)}
+.payout-line{margin-top:10px;padding:10px 12px;background:#EDFAF8;border:1px solid #C9EDE9;
+  border-radius:8px;font-size:12.5px;color:#0B6B67;display:flex;justify-content:space-between;align-items:center}
+.payout-line b{font:500 15px 'DM Mono',monospace}
+
+/* ── Banners / empties ────────────────────────────────────────────────── */
+.banner{border-radius:var(--r);padding:13px 16px;font-size:13px;line-height:1.55;margin-bottom:16px;
+  display:flex;gap:12px;align-items:flex-start}
+.banner b{display:block;margin-bottom:2px}
+.banner.err{background:#FDECEC;color:#7F1D1D;border:1px solid #F3C9C9}
+.banner.info{background:#EAF2FB;color:#1B4A7A;border:1px solid #CBDDF0}
+.banner .x{margin-left:auto;background:none;border:none;cursor:pointer;color:inherit;opacity:.6;font-size:15px}
+.empty{padding:44px 20px;text-align:center;color:#8FA0AE}
+.empty h3{font-size:15px;color:var(--cs-navy);margin-bottom:6px}
+.empty p{font-size:13px;line-height:1.6;max-width:44ch;margin:0 auto 14px}
+
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#0F2733;
+  color:#fff;font-size:13px;padding:11px 18px;border-radius:9px;z-index:400;opacity:0;
+  transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:var(--shadow-lg)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+@media(max-width:1080px){.board{grid-template-columns:repeat(5,232px)}}
+@media(max-width:860px){
+  #side{position:fixed;left:0;top:56px;bottom:0;z-index:130;transform:translateX(-100%);
+    transition:transform .2s;box-shadow:var(--shadow-lg)}
+  #side.on{transform:none}
+  #main{padding:18px 16px 50px}
+  .desk-row{grid-template-columns:1fr 96px}
+  .desk-row .desk-bar-wrap{display:none}
+  .menu-btn{display:flex!important}
+  .ph h1{font-size:21px}
+}
+.menu-btn{display:none;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;
+  border:1px solid #DDE3E9;background:#fff;margin-right:10px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div id="omega-boot"><div class="spin"></div><div class="boot-txt">Loading ops console…</div></div>
+
+<!-- ══════════════════ SIGN IN ══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="/omega-logo.png" alt="ClearSky-OMEGA" onerror="this.style.display='none'">
+      <div>
+        <b>Clear<span>Sky</span> OMEGA</b>
+        <small>Ops Console</small>
+      </div>
+    </div>
+    <div class="auth-h">Staff sign-in</div>
+    <div class="auth-sub">The intake queue, delivery pipeline and commission ledger for
+      ClearSky project delivery.</div>
+
+    <div class="fld">
+      <label for="auth-email">Work email</label>
+      <input id="auth-email" type="email" autocomplete="username" placeholder="you@clearsky-usa.com">
+    </div>
+    <div class="fld">
+      <label for="auth-pass">Password</label>
+      <input id="auth-pass" type="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-p" id="email-auth-btn" onclick="emailAuth()">Sign in</button>
+
+    <div class="auth-or">or</div>
+    <button class="btn btn-g" id="google-signin-btn" onclick="signInWithGoogle()">
+      <svg width="17" height="17" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Sign in with Google
+    </button>
+
+    <div class="auth-msg" id="auth-err"></div>
+    <div class="auth-msg" id="auth-ok"></div>
+    <div class="auth-foot">
+      Restricted to ClearSky staff accounts.<br>
+      Clients use their own tenant portal, not this console.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app">
+
+<div id="topbar">
+  <button class="menu-btn" onclick="document.getElementById('side').classList.toggle('on')" aria-label="Menu">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <a href="/" class="tb-logo">
+    <img src="/omega-logo.png" alt="ClearSky-OMEGA" class="tb-omega" onerror="this.style.display='none'">
+    <span class="tb-logo-txt">Clear<span>Sky</span> OMEGA</span>
+  </a>
+  <div class="tb-sep"></div>
+  <span class="tb-portal">Ops Console</span>
+  <span class="tb-badge" id="tb-badge">Internal</span>
+  <div class="tb-spacer"></div>
+  <div class="tb-user">
+    <button class="btn-sm pri" onclick="openIntake()">+ New intake</button>
+    <button class="btn-sm" onclick="refresh(true)" id="btn-refresh">Refresh</button>
+    <div class="tb-avatar" id="tb-avatar">–</div>
+    <span class="tb-name" id="tb-name"></span>
+    <button class="btn-sm" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div id="shell">
+  <nav id="side">
+    <div class="sn-group">Delivery</div>
+    <button class="sn-item active" data-view="dashboard" onclick="go('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span></button>
+    <button class="sn-item" data-view="queue" onclick="go('queue')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span>Intake queue</span><span class="sn-count" id="c-queue">0</span></button>
+    <button class="sn-item" data-view="board" onclick="go('board')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
+      <span>Pipeline</span><span class="sn-count" id="c-board">0</span></button>
+
+    <div class="sn-group">Accounts</div>
+    <button class="sn-item" data-view="accounts" onclick="go('accounts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <span>Account control</span><span class="sn-count" id="c-accounts">0</span></button>
+    <button class="sn-item" data-view="clients" onclick="go('clients')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      <span>Clients</span><span class="sn-count" id="c-clients">0</span></button>
+    <button class="sn-item" data-view="earnings" onclick="go('earnings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span>Earnings</span></button>
+    <button class="sn-item" data-view="team" onclick="go('team')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Team</span></button>
+    <button class="sn-item" data-view="settings" onclick="go('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span></button>
+
+    <div class="sn-group">Tools</div>
+    <a class="sn-item" href="#" onclick="openIntake();return false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15h6"/></svg>
+      <span>Project intake</span></a>
+    <a class="sn-item" href="/editor.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      <span>Site editor</span></a>
+    <a class="sn-item" href="/projects.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span>My projects</span></a>
+    <a class="sn-item" href="#" onclick="openWorkbook();return false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h3l-1 3h3"/></svg>
+      <span>EV cost workbook</span></a>
+  </nav>
+
+  <main id="main">
+    <div id="banners"></div>
+
+    <!-- ── DASHBOARD ── -->
+    <section class="view on" id="v-dashboard">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow" id="dash-date">—</div>
+          <h1 id="dash-hi">Welcome back</h1>
+          <p>Everything clients have asked for, how fast we answered, and what's payable.
+             The response clock below is live — it counts down against the target for each
+             intake's priority and keeps counting once it's blown.</p>
+        </div>
+        <div class="ph-actions">
+          <div class="seg">
+            <button class="on" id="sc-all" onclick="setScope('all')">Whole team</button>
+            <button id="sc-mine" onclick="setScope('mine')">Just mine</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-h">
+          <div>
+            <h2>Response desk</h2>
+            <div class="sub" id="desk-sub">Requests nobody has replied to yet</div>
+          </div>
+          <button class="btn-sm" onclick="go('queue')">Open the queue</button>
+        </div>
+        <div class="desk" id="desk"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+        <div class="card">
+          <div class="card-h"><div><h2>Response time by client</h2>
+            <div class="sub">First reply, averaged across answered requests</div></div></div>
+          <div class="scroll-x"><table class="tbl" id="tbl-resp"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><div><h2>Recent activity</h2>
+            <div class="sub">Latest movement across the queue</div></div></div>
+          <div class="scroll-x"><table class="tbl" id="tbl-recent"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── QUEUE ── -->
+    <section class="view" id="v-queue">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Intake</div>
+          <h1>Intake queue</h1>
+          <p>Every intake submitted through the project intake tool, newest first.
+             Open one to reply, price it, build it in the editor and deliver it back.</p>
+        </div>
+        <div class="ph-actions">
+          <button class="btn-sm pri" onclick="openIntake()">+ New intake</button>
+        </div>
+      </div>
+      <div class="bar">
+        <input type="search" id="q-search" placeholder="Search client, project, contact, address…" oninput="renderQueue()">
+        <select id="q-status" onchange="renderQueue()"></select>
+        <select id="q-priority" onchange="renderQueue()">
+          <option value="">Any priority</option>
+          <option value="critical">Critical</option>
+          <option value="rush">Rush</option>
+          <option value="standard">Standard</option>
+        </select>
+        <select id="q-client" onchange="renderQueue()"></select>
+        <div class="seg">
+          <button class="on" id="qa-all" onclick="setQueueOwner('all')">Everyone</button>
+          <button id="qa-mine" onclick="setQueueOwner('mine')">Mine</button>
+          <button id="qa-none" onclick="setQueueOwner('none')">Unassigned</button>
+        </div>
+      </div>
+      <div class="card scroll-x"><table class="tbl" id="tbl-queue"></table></div>
+    </section>
+
+    <!-- ── BOARD ── -->
+    <section class="view" id="v-board">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Delivery</div>
+          <h1>Pipeline</h1>
+          <p>Drag a card to move it. Moving into <b>In production</b> links an editor project;
+             moving into <b>Delivered</b> makes its commission payable.</p>
+        </div>
+        <div class="ph-actions">
+          <div class="seg">
+            <button class="on" id="ba-all" onclick="setBoardOwner('all')">Everyone</button>
+            <button id="ba-mine" onclick="setBoardOwner('mine')">Mine</button>
+          </div>
+        </div>
+      </div>
+      <div class="board" id="board"></div>
+    </section>
+
+    <!-- ── ACCOUNTS ──
+         Two jobs on one page, joined by the client dropdown: who can get into
+         a tenant's account, and what that tenant is building. They belong
+         together because they're the same conversation — you look up an
+         account to help them, and helping them starts with knowing what
+         they've got.                                                        -->
+    <section class="view" id="v-accounts">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Accounts</div>
+          <h1>Account control</h1>
+          <p>Pick a client to see who is on their account, reset a password, or lock
+             access — and to see what they're building, how big it is, and which of it
+             clears the bar for the finance marketplace. Leave it on
+             <b>All clients</b> for the portfolio across every tenant.</p>
+        </div>
+        <div class="ph-actions">
+          <button class="btn-sm" onclick="refreshAccounts()">Reload</button>
+        </div>
+      </div>
+
+      <div class="bar">
+        <select id="ac-client" onchange="setAccountClient(this.value)"></select>
+        <select id="ac-state" onchange="renderAccounts()">
+          <option value="">Every project</option>
+          <option value="qualified">Clears the bar</option>
+          <option value="unsized">Needs sizing</option>
+          <option value="below">Below the bar</option>
+        </select>
+        <input type="search" id="ac-search" placeholder="Search project, site, contact…" oninput="renderAccounts()">
+      </div>
+
+      <div id="ac-body"></div>
+    </section>
+
+    <!-- ── CLIENTS ── -->
+    <section class="view" id="v-clients">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Accounts</div>
+          <h1>Clients</h1>
+          <p>Each tenant on the platform, what they've asked for, how fast they get answered
+             and what they're worth. Click a row for their full request history.</p>
+        </div>
+      </div>
+      <div class="card scroll-x"><table class="tbl" id="tbl-clients"></table></div>
+      <div class="card" id="client-detail" style="margin-top:18px;display:none"></div>
+    </section>
+
+    <!-- ── EARNINGS ── -->
+    <!-- ── SETTINGS ── -->
+    <section class="view" id="v-settings">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Account</div>
+          <h1>Settings</h1>
+          <p>Your name and sign-in. Changes apply everywhere immediately \u2014 the Team
+             page, Assign dropdowns, and activity lines \u2014 no deploy involved.</p>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:560px;padding:20px 22px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#8FA0AE;margin-bottom:12px">Profile</div>
+        <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:5px" for="set-name">Display name</label>
+        <input id="set-name" class="btn-sm" style="width:100%;text-align:left" placeholder="Your name">
+        <div style="font-size:12px;color:#8FA0AE;margin:8px 0 12px">
+          Signed in as <b id="set-email"></b></div>
+        <button class="btn-sm pri" onclick="saveProfile()">Save name</button>
+      </div>
+
+      <div class="card" style="max-width:560px;padding:20px 22px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#8FA0AE;margin-bottom:12px">Password</div>
+        <div id="set-pw-google" style="display:none;font-size:13px;color:#5A7180;line-height:1.5">
+          This account signs in with Google, so its password is managed by Google \u2014
+          there\u2019s nothing to change here.</div>
+        <div id="set-pw-form">
+          <label style="display:block;font-size:12.5px;font-weight:600;margin-bottom:5px" for="set-pw-cur">Current password</label>
+          <input id="set-pw-cur" type="password" class="btn-sm" style="width:100%;text-align:left" autocomplete="current-password">
+          <label style="display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px" for="set-pw-new">New password</label>
+          <input id="set-pw-new" type="password" class="btn-sm" style="width:100%;text-align:left" autocomplete="new-password">
+          <label style="display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px" for="set-pw-conf">Confirm new password</label>
+          <input id="set-pw-conf" type="password" class="btn-sm" style="width:100%;text-align:left" autocomplete="new-password">
+          <div style="margin-top:14px"><button class="btn-sm pri" onclick="changePassword()">Change password</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TEAM ── -->
+    <section class="view" id="v-team">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Accounts</div>
+          <h1>Team</h1>
+          <p>Everyone who has signed into the console. New ClearSky sign-ins appear here
+             automatically and in every <b>Assign</b> dropdown; roles are set here by an
+             administrator. A @clearsky-usa.com address is an administrator by domain
+             regardless of the role shown.</p>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="tbl" style="width:100%">
+          <thead><tr><th style="text-align:left;padding:12px 18px">Person</th>
+            <th style="text-align:left;padding:12px 18px">Role</th>
+            <th style="text-align:left;padding:12px 18px">Active</th>
+            <th style="text-align:left;padding:12px 18px"></th></tr></thead>
+          <tbody id="teamRows"><tr><td style="padding:18px" colspan="4">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="v-earnings">
+      <div class="ph">
+        <div>
+          <div class="ph-eyebrow">Commission</div>
+          <h1>Earnings</h1>
+          <p>Commission is earned when the package is delivered. <b>Pending</b> means
+             earned and not yet paid; payroll marks it paid.</p>
+        </div>
+        <div class="ph-actions">
+          <div class="seg">
+            <button class="on" id="ea-mine" onclick="setEarnScope('mine')">Mine</button>
+            <button id="ea-all" onclick="setEarnScope('all')">Whole team</button>
+          </div>
+        </div>
+      </div>
+      <div class="kpis" id="earn-kpis"></div>
+      <div class="card scroll-x" style="margin-bottom:18px">
+        <div class="card-h"><div><h2>Completed work</h2>
+          <div class="sub">Every delivered package and what it pays</div></div></div>
+        <table class="tbl" id="tbl-earn"></table>
+      </div>
+      <div class="card scroll-x">
+        <div class="card-h"><div><h2>By person</h2>
+          <div class="sub">Team totals, highest earned first</div></div></div>
+        <table class="tbl" id="tbl-staff"></table>
+      </div>
+    </section>
+  </main>
+</div>
+</div>
+
+<div id="scrim" onclick="closeDrawer()"></div>
+<aside id="drawer" aria-label="Request detail">
+  <div class="dr-h" style="position:relative">
+    <button class="dr-close" onclick="closeDrawer()" aria-label="Close">×</button>
+    <div id="dr-head"></div>
+  </div>
+  <div class="dr-b" id="dr-body"></div>
+  <div class="dr-f" id="dr-foot"></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<!-- Only used by the Account control page, and only when
+     ops.accessControl.functions.enabled is true. Loading it unconditionally
+     costs one cached script; making it conditional would mean a dynamic
+     import that fails at the moment somebody clicks Suspend. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<!-- Versioned because both changed in this release and neither carried a
+     query before: without it the browser serves yesterday's cached copy and
+     the new page runs against the old data layer, which fails as "Accounts is
+     blank" rather than as a load error. Bump on every change to either. -->
+<script src="/config.js?v=4"></script>
+<script src="/omega-brand.js"></script>
+<script src="/ops-data.js?v=4"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   OMEGA OPS CONSOLE  (v2)
+
+   Reads `intake_projects` — the same queue the tenant portals write to and
+   intake-admin.html works from. Auth gates who gets in (staff only, via
+   OmegaBrand.resolve); the query itself is deliberately unscoped across orgs,
+   which the Firestore rules permit via isOmegaStaff().
+
+   Tenants are DISCOVERED, never hardcoded. See ops-data.js § v2.
+   ══════════════════════════════════════════════════════════════════════════ */
+var D = OpsData;
+var WORKSPACES = {};
+var auth, db, ME = { email:'', name:'', uid:'' };
+var STATE = {
+  reqs: [], loaded:false, demo:false, view:'dashboard',
+  scope:'all', queueOwner:'all', boardOwner:'all', earnScope:'mine',
+  openId:null, clientOpen:null, staff:[],
+  /* Account control. acUsers is null (not []) until the per-org fetch
+     resolves, so "loading" and "genuinely nobody" render differently. */
+  acClient:'', acUsers:null, acUsersLoading:false, acUsersErr:'',
+  /* Editor projects, kept OUT of STATE.reqs on purpose: they are not
+     intakes, carry no status, and would corrupt every delivery metric
+     and SLA average on the rest of the console. Screening opts in. */
+  projects:[], acDiag:false
+};
+
+/* ── Boot ─────────────────────────────────────────────────────────────── */
+window._omegaReady = function(){
+  var el = document.getElementById('omega-boot');
+  if (!el || el.classList.contains('hide')) return;
+  el.classList.add('hide');
+  setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+};
+
+(function boot(){
+  if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG){ setTimeout(boot, 120); return; }
+  try { firebase.initializeApp(window.CLEARSKY_CONFIG.firebase); }
+  catch(e){ if(!/already exists/.test(e.message)) console.error('Firebase init:', e); }
+  auth = firebase.auth();
+  db   = firebase.firestore();
+
+  OmegaBrand.paintAuth(WORKSPACES);
+  document.title = 'ClearSky-OMEGA · Ops Console';
+
+  auth.onAuthStateChanged(function(user){
+    window._omegaReady();
+    if (!user) { showLogin(); return; }
+    var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
+    if (!ws) {
+      showAuthErr('This console is for ClearSky staff. ' +
+        OmegaBrand.accessMessage(user.email, WORKSPACES));
+      auth.signOut();
+      return;
+    }
+    ME.email = (user.email || '').toLowerCase();
+    ME.uid   = user.uid;
+    ME.name  = user.displayName || ME.email.split('@')[0];
+    D.init(db, ME);
+    /* Self-registration: first sign-in creates this person's omega_staff doc
+       (role 'none'), which is what makes them appear on the Team page and in
+       the Assign dropdowns without anyone typing them in. */
+    D.ensureSelfStaff(user);
+    showApp(user);
+  });
+})();
+
+function showLogin(){
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function showAuthErr(m){
+  var el = document.getElementById('auth-err');
+  el.textContent = m; el.style.display = 'block';
+  var b = document.getElementById('email-auth-btn');
+  if (b){ b.disabled = false; b.textContent = 'Sign in'; }
+  var g = document.getElementById('google-signin-btn');
+  if (g) g.disabled = false;
+}
+function clearAuthMsg(){
+  ['auth-err','auth-ok'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+}
+
+function showApp(user){
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  document.getElementById('tb-name').textContent = ME.name;
+  var av = document.getElementById('tb-avatar');
+  if (user.photoURL) av.innerHTML = '<img src="'+user.photoURL+'" alt="" onerror="this.remove()">';
+  else av.textContent = (ME.name[0] || '?').toUpperCase();
+
+  document.getElementById('dash-hi').textContent = 'Welcome back, ' + ME.name.split(' ')[0];
+  document.getElementById('dash-date').textContent =
+    new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  buildFilters();
+  go(location.hash.replace('#/','') || 'dashboard', true);
+  refresh();
+  setInterval(tick, 1000);
+}
+
+/* The real intake tool lives on tools.csebuilders.com and is shared by every
+   tenant portal. This console does NOT ship its own — a second intake form is
+   exactly how the queue got split in the first place. */
+function intakeUrl(orgId){
+  var base = (window.CLEARSKY_CONFIG.ops || {}).intakeUrl
+          || 'https://tools.csebuilders.com/intake.html';
+  var url = base;
+  if (orgId) url += (base.indexOf('?') >= 0 ? '&' : '?') + 'org=' + encodeURIComponent(orgId);
+  return url;
+}
+function openIntake(orgId){ window.open(intakeUrl(orgId), '_blank'); }
+
+/* Same arrangement as intake: the workbook lives on tools.csebuilders.com
+   with every other OMEGA tool, and this console links to it rather than
+   shipping a copy. Two copies of a pricing tool is how two versions of a
+   number reach a customer.
+
+   The tool gates itself on a signed-in clearsky-usa.com / csebuilders.com
+   account, so this link is a convenience, not the access control. */
+function workbookUrl(orgId){
+  var base = (window.CLEARSKY_CONFIG.ops || {}).workbookUrl
+          || 'https://tools.csebuilders.com/ev-cost-workbook.html';
+  var url = base;
+  if (orgId) url += (base.indexOf('?') >= 0 ? '&' : '?') + 'org=' + encodeURIComponent(orgId);
+  return url;
+}
+function openWorkbook(orgId){ window.open(workbookUrl(orgId), '_blank'); }
+
+/* ── Auth actions ─────────────────────────────────────────────────────── */
+function signInWithGoogle(){
+  clearAuthMsg();
+  var btn = document.getElementById('google-signin-btn');
+  btn.disabled = true;
+  var p = new firebase.auth.GoogleAuthProvider();
+  var params = { prompt:'select_account' };
+  var hint = OmegaBrand.googleHint(WORKSPACES);
+  if (hint) params.hd = hint;
+  p.setCustomParameters(params);
+  auth.signInWithPopup(p)['catch'](function(err){ showAuthErr(err.message); });
+}
+function emailAuth(){
+  clearAuthMsg();
+  var email = document.getElementById('auth-email').value.trim();
+  var pass  = document.getElementById('auth-pass').value;
+  if (!email || !pass){ showAuthErr('Enter your email and password.'); return; }
+  if (!OmegaBrand.resolve(email, WORKSPACES)){
+    showAuthErr('This console is for ClearSky staff accounts only.');
+    return;
+  }
+  var btn = document.getElementById('email-auth-btn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  auth.signInWithEmailAndPassword(email, pass)['catch'](function(err){
+    var c = (err && err.code) || '';
+    if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found')
+      showAuthErr('That email and password don\u2019t match an account.');
+    else if (c === 'auth/too-many-requests')
+      showAuthErr('Too many attempts. Wait a few minutes and try again.');
+    else showAuthErr((err && err.message) || 'Sign-in failed.');
+  });
+}
+function signOut(){ auth.signOut(); }
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && document.getElementById('auth-screen').style.display === 'flex') emailAuth();
+  if (e.key === 'Escape') closeDrawer();
+});
+
+/* ── Data ─────────────────────────────────────────────────────────────── */
+function refresh(manual){
+  var btn = document.getElementById('btn-refresh');
+  if (btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
+
+  /* Load the org registry alongside the queue. It's allowed to fail — the
+     tenant list falls back to orgIds observed on records — so it never
+     blocks the queue itself. */
+  return D.loadOrgs()['catch'](function(){ return []; }).then(function(){
+    /* Roster rides along with every refresh; allowed to fail so a rules
+       hiccup on omega_staff never blocks the queue itself. */
+    return D.loadStaff().then(function(staff){ STATE.staff = staff; })['catch'](function(){});
+  }).then(function(){
+    /* Rides along, allowed to fail: the intake queue is this console's job
+       and must not go dark because the editor collection is unreadable. */
+    /* Equipment first: a project's capacity often lives in the registry, not
+       in the project document, so sizing a project before the catalog is
+       loaded would read every placed battery as zero. */
+    return D.loadEquipment()['catch'](function(){}).then(function(){
+      return D.loadProjects().then(function(p){ STATE.projects = p; })['catch'](function(){});
+    });
+  }).then(function(){
+    return D.loadRequests();
+  }).then(function(rows){
+    STATE.reqs = rows; STATE.loaded = true; STATE.demo = false;
+    clearBanner('load-error'); clearBanner('empty');
+    if (!rows.length) showEmptyQueueBanner();
+    renderAll();
+    if (manual) toast('Queue refreshed · ' + rows.length + ' intake(s)');
+  })['catch'](function(err){
+    console.error('[ops] load failed', err);
+    STATE.loaded = true;
+    showLoadError(err);
+    renderAll();
+  })['finally'](function(){
+    if (btn){ btn.disabled = false; btn.textContent = 'Refresh'; }
+  });
+}
+
+function showLoadError(err){
+  var perm = err && (err.code === 'permission-denied' || /permission/i.test(err.message||''));
+  banner('load-error','err',
+    perm ? 'Firestore refused the query' : 'Couldn\u2019t load the queue',
+    perm
+      ? 'This console reads <code>' + D.esc(D.collectionName()) + '</code> across every tenant. '
+        + 'Your rules already allow that via <code>isOmegaStaff()</code> — if you\u2019re seeing this, '
+        + 'either the merged rules aren\u2019t deployed yet or this account has no active '
+        + '<code>omega_staff</code> role. Check both, then refresh.'
+      : D.esc(err && err.message || 'Unknown error.'),
+    { label:'Load sample data', fn:'loadSample()' });
+}
+
+function showEmptyQueueBanner(){
+  banner('empty','info','Nothing in the queue',
+    'No intakes found in <code>' + D.esc(D.collectionName()) + '</code>. If you know there '
+    + 'should be, check that the collection name in <code>config.js</code> matches what the '
+    + 'intake tool writes to.',
+    { label:'Load sample data', fn:'loadSample()' });
+}
+
+function loadSample(){
+  STATE.reqs = D.sample(); STATE.demo = true; STATE.loaded = true;
+  clearBanner('load-error'); clearBanner('empty');
+  banner('demo','info','Showing sample data',
+    'Nothing here is real and nothing is saved. Use Refresh to go back to live data.',
+    { label:'Back to live data', fn:'refresh(true)' });
+  renderAll();
+}
+
+/* ── Banners ──────────────────────────────────────────────────────────── */
+function banner(id, kind, title, body, action){
+  clearBanner(id);
+  var wrap = document.getElementById('banners');
+  var el = document.createElement('div');
+  el.className = 'banner ' + kind;
+  el.dataset.bid = id;
+  el.innerHTML = '<div style="flex:1"><b>'+D.esc(title)+'</b>'+body
+    + (action ? ' <a href="#" onclick="'+action.fn+';return false" style="font-weight:600">'
+        + D.esc(action.label) + '</a>' : '')
+    + '</div><button class="x" onclick="clearBanner(\''+id+'\')" aria-label="Dismiss">×</button>';
+  wrap.appendChild(el);
+}
+function clearBanner(id){
+  var el = document.querySelector('[data-bid="'+id+'"]');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('on'); }, 2600);
+}
+
+/* ── Routing ──────────────────────────────────────────────────────────── */
+function go(view, silent){
+  if (!document.getElementById('v-' + view)) view = 'dashboard';
+  STATE.view = view;
+  var i, s = document.querySelectorAll('.view');
+  for (i = 0; i < s.length; i++) s[i].classList.remove('on');
+  document.getElementById('v-' + view).classList.add('on');
+  var n = document.querySelectorAll('.sn-item[data-view]');
+  for (i = 0; i < n.length; i++) n[i].classList.toggle('active', n[i].dataset.view === view);
+  if (!silent) location.hash = '#/' + view;
+  document.getElementById('side').classList.remove('on');
+  window.scrollTo(0, 0);
+  renderView();
+}
+window.addEventListener('hashchange', function(){
+  var v = location.hash.replace('#/','');
+  if (v && v !== STATE.view) go(v, true);
+});
+
+/* ── Filters ──────────────────────────────────────────────────────────── */
+function buildFilters(){
+  var st = document.getElementById('q-status');
+  st.innerHTML = '<option value="open">Open (not delivered)</option>'
+    + '<option value="">Any status</option>'
+    + D.STATUS.map(function(s){ return '<option value="'+s.key+'">'+D.esc(s.label)+'</option>'; }).join('');
+  st.value = 'open';
+}
+function buildClientFilter(){
+  var sel = document.getElementById('q-client'), cur = sel.value;
+  var tenants = D.byTenant(STATE.reqs);
+  sel.innerHTML = '<option value="">All clients</option>'
+    + tenants.map(function(t){
+        return '<option value="'+D.esc(t.orgId)+'">'+D.esc(t.name)+'</option>';
+      }).join('');
+  if (cur) sel.value = cur;
+}
+function setScope(s){
+  STATE.scope = s;
+  document.getElementById('sc-all').classList.toggle('on', s==='all');
+  document.getElementById('sc-mine').classList.toggle('on', s==='mine');
+  renderDashboard();
+}
+function setQueueOwner(s){
+  STATE.queueOwner = s;
+  ['all','mine','none'].forEach(function(k){
+    document.getElementById('qa-'+k).classList.toggle('on', k===s);
+  });
+  renderQueue();
+}
+function setBoardOwner(s){
+  STATE.boardOwner = s;
+  document.getElementById('ba-all').classList.toggle('on', s==='all');
+  document.getElementById('ba-mine').classList.toggle('on', s==='mine');
+  renderBoard();
+}
+function setEarnScope(s){
+  STATE.earnScope = s;
+  document.getElementById('ea-mine').classList.toggle('on', s==='mine');
+  document.getElementById('ea-all').classList.toggle('on', s==='all');
+  renderEarnings();
+}
+
+/* ── Render ───────────────────────────────────────────────────────────── */
+function renderAll(){ buildClientFilter(); renderCounts(); renderView(); }
+function renderView(){
+  if (STATE.view === 'dashboard') renderDashboard();
+  else if (STATE.view === 'queue') renderQueue();
+  else if (STATE.view === 'board') renderBoard();
+  else if (STATE.view === 'accounts') renderAccounts();
+  else if (STATE.view === 'clients') renderClients();
+  else if (STATE.view === 'earnings') renderEarnings();
+  else if (STATE.view === 'team') renderTeam();
+  else if (STATE.view === 'settings') renderSettings();
+}
+
+function renderCounts(){
+  var pay = D.payableStatus();
+  var open = STATE.reqs.filter(function(r){ return D.inQueue(r) && r.status !== pay; });
+  var unanswered = STATE.reqs.filter(function(r){ return D.inQueue(r) && !D.answered(r); });
+  var q = document.getElementById('c-queue');
+  q.textContent = open.length;
+  q.classList.toggle('hot', unanswered.length > 0);
+  document.getElementById('c-board').textContent = open.length;
+  document.getElementById('c-clients').textContent = D.byTenant(STATE.reqs).length;
+  /* The Accounts badge counts screening candidates, not accounts — the
+     accounts number is already next to Clients, and a second copy of it
+     would say nothing. Deals worth a call is the number worth a badge. */
+  var ext = STATE.reqs.filter(function(r){ return !D.isInternalOrg(r.orgId); });
+  var qual = D.opportunities(ext, { state:'qualified' }).length;
+  var ac = document.getElementById('c-accounts');
+  ac.textContent = qual;
+  ac.classList.toggle('good', qual > 0);
+}
+
+/* ── Dashboard ────────────────────────────────────────────────────────── */
+function scoped(){
+  if (STATE.scope === 'mine') return STATE.reqs.filter(function(r){ return r.assignedTo === ME.email; });
+  return STATE.reqs;
+}
+
+function renderDashboard(){
+  var reqs = scoped();
+  var s = D.summarize(reqs);
+
+  function kpi(cls, label, value, sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-l">'+label+'</div>'
+      + '<div class="kpi-v'+(String(value).length>7?' sm':'')+'">'+value+'</div>'
+      + '<div class="kpi-s">'+sub+'</div></div>';
+  }
+
+  var slaTxt = (s.slaHitRate == null) ? 'nothing measured yet'
+    : Math.round(s.slaHitRate*100) + '% inside target';
+
+  document.getElementById('kpis').innerHTML =
+      kpi(s.awaitingResponse ? 'alert' : 'good', 'Awaiting first reply', s.awaitingResponse,
+          s.breached ? '<b style="color:var(--bad)">'+s.breached+' past target</b>'
+                     : 'all inside target')
+    + kpi('', 'Median first reply', s.respAvg7d != null ? D.fmtDur(s.respAvg7d) : '—',
+          s.respAvg7d != null ? 'last 7 days · ' + slaTxt
+            : (s.unmeasured ? s.unmeasured + ' answered before tracking began' : 'no data yet'))
+    + kpi('', 'Quoted / accepted', s.quoted + s.accepted,
+          s.quoted + ' awaiting a decision · ' + s.accepted + ' ready to build')
+    + kpi('', 'In production', s.working,
+          s.working ? 'being built now' : 'nothing on the bench')
+    + kpi('good', 'Delivered this month', s.completedThisMonth,
+          s.completed + ' delivered all time')
+    + kpi('money', 'Earned this month', D.fmtMoney(s.earnedThisMonth, {compact:true}),
+          D.fmtMoney(s.earnedPending, {compact:true}) + ' pending payout');
+
+  renderDesk(reqs);
+
+  var tenants = D.byTenant(reqs).filter(function(t){ return t.requests.length; });
+  tenants.sort(function(a,b){
+    var x = a.stats.respAvg == null ? Infinity : a.stats.respAvg;
+    var y = b.stats.respAvg == null ? Infinity : b.stats.respAvg;
+    return x - y;
+  });
+  document.getElementById('tbl-resp').innerHTML = tenants.length
+    ? '<thead><tr><th>Client</th><th>Intakes</th><th>Avg first reply</th><th class="t-right">Open</th></tr></thead><tbody>'
+      + tenants.map(function(t){
+          var v = t.stats.respAvg;
+          var col = v == null ? '#8FA0AE' : (v <= 4*3600000 ? 'var(--ok)' : v <= 24*3600000 ? 'var(--warn)' : 'var(--bad)');
+          return '<tr onclick="openClient(\''+D.esc(t.orgId)+'\')">'
+            + '<td><div class="t-name">'+D.esc(t.name)+'</div><div class="t-sub">'+D.esc(t.orgId)+'</div></td>'
+            + '<td class="t-num">'+t.requests.length+'</td>'
+            + '<td class="t-num" style="color:'+col+'">'+(v==null?'—':D.fmtDur(v))+'</td>'
+            + '<td class="t-num t-right">'+t.stats.open+'</td></tr>';
+        }).join('') + '</tbody>'
+    : emptyRow(4, 'No client intakes yet.');
+
+  var recent = reqs.filter(D.inQueue).slice().sort(function(a,b){
+    return lastTouch(b) - lastTouch(a);
+  }).slice(0, 8);
+  document.getElementById('tbl-recent').innerHTML = recent.length
+    ? '<thead><tr><th>Intake</th><th>Status</th><th class="t-right">When</th></tr></thead><tbody>'
+      + recent.map(function(r){
+          return '<tr onclick="openRequest(\''+r.id+'\')">'
+            + '<td><div class="t-name">'+D.esc(r.projectName)+'</div>'
+            + '<div class="t-sub">'+D.esc(D.tenantName(r.orgId, STATE.reqs))+'</div></td>'
+            + '<td>'+statusPill(r.status)+'</td>'
+            + '<td class="t-num t-right">'+D.fmtAgo(lastTouch(r))+'</td></tr>';
+        }).join('') + '</tbody>'
+    : emptyRow(3, 'Nothing has moved yet.');
+}
+
+function lastTouch(r){
+  return Math.max(D.ms(r.submittedAt), D.ms(r.firstResponseAt), D.ms(r.startedAt), D.ms(r.deliveredAt));
+}
+
+/* The response desk. Anything unanswered, worst first. */
+function renderDesk(reqs){
+  var open = reqs.filter(function(r){ return D.inQueue(r) && !D.answered(r); });
+  open.sort(function(a,b){ return D.clock(b).frac - D.clock(a).frac; });
+
+  var sub = document.getElementById('desk-sub');
+  var el = document.getElementById('desk');
+
+  if (!open.length){
+    sub.textContent = 'Nothing waiting on a first reply';
+    el.innerHTML = '<div class="empty"><h3>Desk is clear</h3>'
+      + '<p>Every intake has had a human reply. New submissions land here the moment '
+      + 'they arrive.</p></div>';
+    return;
+  }
+  sub.textContent = open.length + ' waiting on a first reply · target ' + slaSummary();
+
+  el.innerHTML = open.map(function(r){
+    var c = D.clock(r);
+    return '<div class="desk-row s-'+c.state+'" data-tick="'+r.id+'" onclick="openRequest(\''+r.id+'\')">'
+      + '<div style="min-width:0">'
+        + '<div class="desk-who">'+D.esc(D.tenantName(r.orgId, STATE.reqs))
+          + ' · ' + priBadge(r.priority) + '</div>'
+        + '<div class="desk-what">'+D.esc(r.projectName)+'</div>'
+        + '<div class="desk-meta">submitted '+D.fmtAgo(r.submittedAt)
+          + (r.contactName ? ' by ' + D.esc(r.contactName) : '') + '</div>'
+      + '</div>'
+      + '<div class="desk-bar-wrap">'
+        + '<div class="desk-bar"><div class="desk-fill" style="width:'+c.pct+'%"></div></div>'
+        + '<div class="desk-cap"><span>'+D.fmtDur(c.elapsed)+' elapsed</span>'
+          + '<span>'+D.fmtDur(c.target)+' target</span></div>'
+      + '</div>'
+      + '<div class="desk-clock'+(c.state==='breach'?' pulse':'')+'">'
+        + clockText(c) + '<small>'+(c.state==='breach'?'over target':'left to reply')+'</small></div>'
+      + '</div>';
+  }).join('');
+}
+
+function clockText(c){
+  return (c.remaining >= 0) ? D.fmtDur(c.remaining) : '+' + D.fmtDur(-c.remaining);
+}
+function slaSummary(){
+  var s = (window.CLEARSKY_CONFIG.ops || {}).sla || {};
+  return s.critical + 'h critical · ' + s.rush + 'h rush · ' + s.standard + 'h standard';
+}
+
+/* Per-second update of just the live clocks — re-rendering the whole desk
+   every second would fight with hover and scroll. */
+function tick(){
+  var rows = document.querySelectorAll('[data-tick]');
+  if (!rows.length) return;
+  for (var i = 0; i < rows.length; i++){
+    var row = rows[i];
+    var r = byId(row.dataset.tick);
+    if (!r) continue;
+    var c = D.clock(r);
+    if (c.settled || c.unmeasured) continue;
+    row.className = row.className.replace(/s-(ok|warn|breach)/, 's-' + c.state);
+    var fill = row.querySelector('.desk-fill'); if (fill) fill.style.width = c.pct + '%';
+    var cap  = row.querySelector('.desk-cap span'); if (cap) cap.textContent = D.fmtDur(c.elapsed) + ' elapsed';
+    var clk  = row.querySelector('.desk-clock');
+    if (clk && clk.firstChild){
+      clk.classList.toggle('pulse', c.state === 'breach');
+      clk.firstChild.nodeValue = clockText(c);
+      var sm = clk.querySelector('small');
+      if (sm) sm.textContent = (c.state === 'breach') ? 'over target' : 'left to reply';
+    }
+    var mini = row.querySelector('[data-miniclock]');
+    if (mini){
+      mini.textContent = clockText(c);
+      mini.style.color = c.state === 'breach' ? 'var(--bad)'
+                       : c.state === 'warn'   ? 'var(--warn)' : 'var(--ok)';
+    }
+  }
+}
+
+function byId(id){
+  for (var i = 0; i < STATE.reqs.length; i++) if (STATE.reqs[i].id === id) return STATE.reqs[i];
+  return null;
+}
+
+/* ── Cell renderers ───────────────────────────────────────────────────── */
+function statusPill(key){
+  var s = D.statusOf(key);
+  return '<span class="pill" style="background:'+hexA(s.color,.10)+';color:'+s.color+'">'
+    + '<span class="dot" style="background:'+s.color+'"></span>'+D.esc(s.label)+'</span>';
+}
+function priBadge(key){
+  var p = D.priorityOf(key);
+  return '<span class="pri" style="background:'+hexA(p.color,.12)+';color:'+p.color+'">'+p.label+'</span>';
+}
+function purposeBadge(r){
+  if (r.billable) return '';
+  return '<span class="pri" style="background:#EEF1F4;color:#6B7280">Self-serve</span>';
+}
+function hexA(hex, a){
+  var h = String(hex).replace('#','');
+  var r = parseInt(h.substr(0,2),16), g = parseInt(h.substr(2,2),16), b = parseInt(h.substr(4,2),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+function ownerCell(r){
+  if (!r.assignedTo) return '<span class="owner none">Unassigned</span>';
+  var nm = r.assignedName || r.assignedTo.split('@')[0];
+  var me = r.assignedTo === ME.email;
+  return '<span class="owner"><span class="av">'+D.esc((nm[0]||'?').toUpperCase())+'</span>'
+    + D.esc(nm) + (me ? ' <span style="color:#8FA0AE">(you)</span>' : '') + '</span>';
+}
+function respCell(r){
+  var c = D.clock(r);
+  if (c.unmeasured){
+    return '<span class="t-num" style="color:#A6B3BF" title="Answered before response tracking '
+      + 'started, so the time is unknown rather than zero.">—</span>';
+  }
+  if (c.settled){
+    var ok = c.frac <= 1;
+    return '<span class="t-num" style="color:'+(ok?'var(--ok)':'var(--bad)')+'" title="'
+      + (ok ? 'Inside target' : 'Missed the '+D.fmtDur(c.target)+' target') + '">'
+      + D.fmtDur(c.elapsed) + '</span>';
+  }
+  return '<span class="t-num" data-miniclock="1" style="color:'
+    + (c.state==='breach'?'var(--bad)':c.state==='warn'?'var(--warn)':'var(--ok)') + '">'
+    + clockText(c) + '</span>';
+}
+function emptyRow(cols, msg){
+  return '<tbody><tr><td colspan="'+cols+'" style="text-align:center;padding:34px;color:#8FA0AE">'
+    + D.esc(msg) + '</td></tr></tbody>';
+}
+
+/* ── Queue ────────────────────────────────────────────────────────────── */
+function queueRows(){
+  var q  = (document.getElementById('q-search').value || '').toLowerCase();
+  var st = document.getElementById('q-status').value;
+  var pr = document.getElementById('q-priority').value;
+  var cl = document.getElementById('q-client').value;
+  var pay = D.payableStatus();
+
+  return STATE.reqs.filter(function(r){
+    if (st === 'open'){ if (!D.inQueue(r) || r.status === pay) return false; }
+    else if (st){ if (r.status !== st) return false; }
+    else if (!D.inQueue(r) && !D.statusOf(r.status).pre) { /* keep */ }
+
+    if (pr && r.priority !== pr) return false;
+    if (cl && r.orgId !== cl) return false;
+    if (STATE.queueOwner === 'mine' && r.assignedTo !== ME.email) return false;
+    if (STATE.queueOwner === 'none' && r.assignedTo) return false;
+    if (q){
+      var hay = [r.projectName, r.clientName, r.orgId, r.contactName, r.contactEmail,
+                 r.address, r.assignedName].join(' ').toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function renderQueue(){
+  var rows = queueRows();
+  var t = document.getElementById('tbl-queue');
+  if (!rows.length){
+    t.innerHTML = '<thead><tr><th>Intake</th></tr></thead>'
+      + emptyRow(1, STATE.reqs.length ? 'No intakes match those filters.' : 'The queue is empty.');
+    return;
+  }
+  t.innerHTML =
+    '<thead><tr><th>Intake</th><th>Client</th><th>Priority</th><th>Submitted</th>'
+    + '<th>First reply</th><th>Status</th><th>Owner</th><th class="t-right">Fee</th></tr></thead><tbody>'
+    + rows.map(function(r){
+        var v = D.value(r);
+        return '<tr data-tick="'+r.id+'" onclick="openRequest(\''+r.id+'\')">'
+          + '<td><div class="t-name">'+D.esc(r.projectName)+' '+purposeBadge(r)+'</div>'
+            + '<div class="t-sub">'+D.esc(D.labelFor(D.TYPES, r.projectType))
+            + (r.address ? ' · ' + D.esc(r.address) : '') + '</div></td>'
+          + '<td>'+D.esc(D.tenantName(r.orgId, STATE.reqs))+'</td>'
+          + '<td>'+priBadge(r.priority)+'</td>'
+          + '<td class="t-num">'+D.fmtAgo(r.submittedAt)+'</td>'
+          + '<td>'+respCell(r)+'</td>'
+          + '<td>'+statusPill(r.status)+'</td>'
+          + '<td>'+ownerCell(r)+'</td>'
+          + '<td class="t-num t-right">'+(v ? D.fmtMoney(v,{compact:true}) : '—')+'</td>'
+          + '</tr>';
+      }).join('') + '</tbody>';
+}
+
+/* ── Board ────────────────────────────────────────────────────────────── */
+function renderBoard(){
+  /* 'Needs client input' is not a pipeline stage, so those cards have no
+     column. Surfacing them above the board keeps them from being quietly
+     forgotten — chasing a client is a different job from building. */
+  var blocked = STATE.reqs.filter(function(r){
+    if (!D.isBlocked(r) || !D.inQueue(r)) return false;
+    return STATE.boardOwner !== 'mine' || r.assignedTo === ME.email;
+  });
+  clearBanner('blocked');
+  if (blocked.length){
+    banner('blocked','info', blocked.length + ' waiting on the client',
+      'Off the board until they reply. '
+      + blocked.map(function(r){
+          return '<a href="#" onclick="openRequest(\''+r.id+'\');return false">'
+            + D.esc(r.projectName) + '</a>';
+        }).join(', ') + '.');
+  }
+  var cols = D.STATUS.filter(function(s){ return s.pipeline; });
+  var reqs = STATE.reqs.filter(function(r){
+    if (!D.inQueue(r)) return false;
+    if (STATE.boardOwner === 'mine' && r.assignedTo !== ME.email) return false;
+    return true;
+  });
+
+  document.getElementById('board').innerHTML = cols.map(function(col){
+    var inCol = reqs.filter(function(r){ return r.status === col.key; });
+    return '<div class="col" data-col="'+col.key+'" ondragover="colOver(event)" '
+      + 'ondragleave="colLeave(event)" ondrop="colDrop(event)">'
+      + '<div class="col-h"><span class="dot" style="background:'+col.color+'"></span>'
+        + '<b>'+D.esc(col.label)+'</b><span class="n">'+inCol.length+'</span></div>'
+      + (inCol.length ? inCol.map(pcard).join('')
+          : '<div class="col-empty">'+D.esc(col.hint)+'</div>')
+      + '</div>';
+  }).join('');
+}
+
+function pcard(r){
+  var due = D.dueMs(r), late = due && Date.now() > due && r.status !== D.payableStatus();
+  var v = D.value(r);
+  return '<div class="pcard" draggable="true" data-id="'+r.id+'" '
+    + 'ondragstart="cardDrag(event)" ondragend="cardDrop(event)" onclick="openRequest(\''+r.id+'\')">'
+    + '<div class="pcard-c">'+D.esc(D.tenantName(r.orgId, STATE.reqs))+'</div>'
+    + '<div class="pcard-n">'+D.esc(r.projectName)+'</div>'
+    + '<div class="pcard-f">'+priBadge(r.priority)
+      + (late ? '<span class="pri" style="background:#FDE7E7;color:var(--bad)">Late</span>' : '')
+      + '<span class="pcard-v">'+(v ? D.fmtMoney(v,{compact:true}) : '—')+'</span></div>'
+    + '</div>';
+}
+
+var _dragId = null;
+function cardDrag(e){
+  _dragId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('drag');
+  try { e.dataTransfer.setData('text/plain', _dragId); e.dataTransfer.effectAllowed = 'move'; } catch(x){}
+}
+function cardDrop(e){ e.currentTarget.classList.remove('drag'); }
+function colOver(e){ e.preventDefault(); e.currentTarget.classList.add('over'); }
+function colLeave(e){ e.currentTarget.classList.remove('over'); }
+function colDrop(e){
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  var to = e.currentTarget.dataset.col;
+  var id = _dragId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
+  _dragId = null;
+  if (!id || !to) return;
+  var r = byId(id);
+  if (!r || r.status === to) return;
+  setStatus(id, to);
+}
+
+/* ── Clients ──────────────────────────────────────────────────────────── */
+function renderClients(){
+  var tenants = D.byTenant(STATE.reqs);
+  var t = document.getElementById('tbl-clients');
+  if (!tenants.length){ t.innerHTML = emptyRow(1, 'No clients discovered yet.'); return; }
+
+  t.innerHTML = '<thead><tr><th>Client</th><th>Intakes</th><th>Open</th><th>Avg first reply</th>'
+    + '<th>Delivered</th><th class="t-right">Delivered value</th>'
+    + '<th class="t-right">Last activity</th></tr></thead><tbody>'
+    + tenants.map(function(c){
+        var s = c.stats;
+        return '<tr onclick="openClient(\''+D.esc(c.orgId)+'\')">'
+          + '<td><div class="t-name">'+D.esc(c.name)+'</div><div class="t-sub">'+D.esc(c.orgId)
+            + (c.source === 'observed' ? ' · <span style="color:#0EA5E9">discovered</span>' : '')
+            + '</div></td>'
+          + '<td class="t-num">'+c.requests.length+'</td>'
+          + '<td class="t-num">'+s.open+'</td>'
+          + '<td class="t-num">'+(s.respAvg==null?'—':D.fmtDur(s.respAvg))+'</td>'
+          + '<td class="t-num">'+s.completed+'</td>'
+          + '<td class="t-num t-right">'+D.fmtMoney(s.valueCompleted,{compact:true})+'</td>'
+          + '<td class="t-num t-right">'+(c.lastActivity?D.fmtAgo(c.lastActivity):'—')+'</td></tr>';
+      }).join('') + '</tbody>';
+
+  if (STATE.clientOpen) openClient(STATE.clientOpen, true);
+}
+
+function openClient(orgId, keep){
+  STATE.clientOpen = orgId;
+  if (STATE.view !== 'clients') go('clients');
+  var rows = STATE.reqs.filter(function(r){ return r.orgId === orgId; });
+  var name = D.tenantName(orgId, STATE.reqs);
+  var s = D.summarize(rows);
+  var box = document.getElementById('client-detail');
+  box.style.display = 'block';
+  box.innerHTML =
+    '<div class="card-h"><div><h2>'+D.esc(name)+'</h2>'
+      + '<div class="sub">'+D.esc(orgId)+' · '+rows.length+' intake(s) · '
+      + D.fmtMoney(s.valueCompleted + s.valueOpen, {compact:true}) + ' lifetime value</div></div>'
+      + '<button class="btn-sm" onclick="closeClient()">Close</button></div>'
+    + (rows.length
+      ? '<div class="scroll-x"><table class="tbl"><thead><tr><th>Intake</th><th>Submitted</th>'
+        + '<th>First reply</th><th>Status</th><th>Owner</th><th class="t-right">Fee</th></tr></thead><tbody>'
+        + rows.map(function(r){
+            var v = D.value(r);
+            return '<tr onclick="openRequest(\''+r.id+'\')">'
+              + '<td><div class="t-name">'+D.esc(r.projectName)+' '+purposeBadge(r)+'</div>'
+              + '<div class="t-sub">'+D.esc(D.labelFor(D.TYPES, r.projectType))+'</div></td>'
+              + '<td class="t-num">'+D.fmtDate(r.submittedAt)+'</td>'
+              + '<td>'+respCell(r)+'</td>'
+              + '<td>'+statusPill(r.status)+'</td>'
+              + '<td>'+ownerCell(r)+'</td>'
+              + '<td class="t-num t-right">'+(v?D.fmtMoney(v,{compact:true}):'—')+'</td></tr>';
+          }).join('') + '</tbody></table></div>'
+      : '<div class="empty"><h3>Nothing submitted yet</h3><p>'+D.esc(name)
+        + ' is on the platform but hasn\u2019t sent an intake.</p>'
+        + '<button class="btn-sm pri" onclick="openIntake(\''+D.esc(orgId)+'\')">'
+        + 'Open their intake form</button></div>');
+  if (!keep) box.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function closeClient(){
+  STATE.clientOpen = null;
+  document.getElementById('client-detail').style.display = 'none';
+}
+
+/* ── Account control ──────────────────────────────────────────────────────
+   Two panels, one dropdown. Picking a client shows who can get into their
+   account and what they're building; leaving it on All shows the portfolio.
+
+   Everything about ACCESS on this page is deliberately understated, because
+   the browser's powers here are genuinely narrow: it can mail somebody a
+   reset link and it can write a flag. It cannot set a password, disable a
+   Firebase Auth account, or end a live session. The UI says so on the panel
+   rather than in a doc nobody opens — an operator who thinks they locked an
+   account that is still open is worse off than one who knows they didn't. */
+
+function acClientFilter(){
+  var sel = document.getElementById('ac-client'), cur = STATE.acClient || '';
+  var tenants = D.byTenant(STATE.reqs);
+  sel.innerHTML = '<option value="">All clients</option>'
+    + tenants.map(function(t){
+        return '<option value="'+D.esc(t.orgId)+'"'+(t.orgId===cur?' selected':'')+'>'
+          + D.esc(t.name) + (t.suspended ? ' \u00b7 suspended' : '') + '</option>';
+      }).join('');
+  sel.value = cur;
+}
+
+function setAccountClient(orgId){
+  STATE.acClient = orgId || '';
+  STATE.acUsers  = null;
+  renderAccounts();
+  if (orgId) loadAccountUsers(orgId);
+}
+
+/* Users are fetched per-org, not for the whole platform at once. One range
+   query per client keeps the read inside rules that scope by tenant, and
+   avoids N queries firing the moment the page opens. */
+function loadAccountUsers(orgId){
+  STATE.acUsersLoading = true;
+  D.loadOrgUsers(orgId, STATE.reqs).then(function(users){
+    if (STATE.acClient !== orgId) return;
+    STATE.acUsers = users;
+    STATE.acUsersLoading = false;
+    renderAccounts();
+  })['catch'](function(e){
+    if (STATE.acClient !== orgId) return;
+    STATE.acUsers = [];
+    STATE.acUsersLoading = false;
+    STATE.acUsersErr = (e && e.message) || 'Unknown error';
+    renderAccounts();
+  });
+}
+
+function refreshAccounts(){
+  refresh(true).then(function(){
+    if (STATE.acClient) loadAccountUsers(STATE.acClient);
+  });
+}
+
+function qualBadge(q){
+  if (q.state === 'qualified') return '<span class="qb q" title="'+D.esc(q.headline)+'">Clears the bar</span>';
+  if (q.state === 'unsized')   return '<span class="qb u" title="No sizing captured on the intake">Needs sizing</span>';
+  if (q.state === 'below')     return '<span class="qb b" title="'+D.esc(q.headline)+'">Below</span>';
+  return '<span class="qb n" title="No screening rule for this scope">Not screened</span>';
+}
+
+function acSearchHit(r, term){
+  if (!term) return true;
+  return [r.projectName, r.clientName, r.siteName, r.address, r.contactName,
+          r.contactEmail, D.sizeText(r)].join(' ').toLowerCase().indexOf(term) >= 0;
+}
+
+function renderAccounts(){
+  acClientFilter();
+  var host  = document.getElementById('ac-body');
+  var term  = (document.getElementById('ac-search').value || '').trim().toLowerCase();
+  var state = document.getElementById('ac-state').value;
+  host.innerHTML = STATE.acClient
+    ? acOneClient(STATE.acClient, term, state)
+    : acAllClients(term, state);
+}
+
+/* Everything screenable for one client (or all): intakes AND the sites they
+   have drawn in the editor. A project linked to an intake (intakeId) is
+   dropped so the same site is not screened twice under two names — the
+   intake wins, because it carries the status, the fee and the contact. */
+function screenable(orgId){
+  var reqs = STATE.reqs.filter(function(r){
+    return (!orgId || r.orgId === orgId) && !D.isInternalOrg(r.orgId);
+  });
+  var seen = {};
+  reqs.forEach(function(r){ if (r.projectId) seen[r.projectId] = true; });
+  var projs = (STATE.projects || []).filter(function(p){
+    if (orgId && p.orgId !== orgId) return false;
+    if (!orgId && D.isInternalOrg(p.orgId)) return false;
+    return !seen[p.id] && !p.intakeId;
+  });
+  return reqs.concat(projs);
+}
+
+/* ── Sizing diagnostic ───────────────────────────────────────────────────
+   The panel that answers "why is this empty", which is a question the
+   screening table cannot answer about itself. It shows, per record, what the
+   extractor recognised and which numeric fields it walked past — so a field
+   we have not mapped yet surfaces as a name somebody can act on rather than
+   as a zero nobody questions.
+
+   Collapsed by default. It is a tool for the first week of a new data shape,
+   not something to read every day. */
+function toggleDiag(){ STATE.acDiag = !STATE.acDiag; renderAccounts(); }
+
+function acDiagnostic(rows, name){
+  var blind = rows.filter(function(r){ return !D.sizeMw(r) && !D.scopeSizes(r).length; });
+  var head = '<div class="card" style="margin-top:18px">'
+    + '<div class="card-h"><div><h2>Sizing diagnostic</h2>'
+    + '<div class="sub">' + (blind.length
+        ? blind.length + ' of ' + rows.length + ' record(s) produced no sizing at all'
+        : 'Every record produced sizing')
+    + '</div></div>'
+    + '<button class="btn-sm" onclick="toggleDiag()">'
+      + (STATE.acDiag ? 'Hide' : 'Show what the extractor saw') + '</button></div>';
+
+  if (!STATE.acDiag){
+    return head + '<div class="note">'
+      + (blind.length
+          ? 'Open this when a project you know is large reads as <b>Needs sizing</b>. It lists '
+            + 'the numeric fields inside the record that the extractor did not recognise, which '
+            + 'is what a missing field mapping looks like from the outside.'
+          : 'Nothing to investigate for ' + D.esc(name) + ' right now.')
+      + '</div></div>';
+  }
+
+  /* Sample rather than dump: twelve records is enough to see a pattern, and
+     an editor document tree rendered in full would bury it. */
+  var sample = (blind.length ? blind : rows).slice(0, 12);
+  var body = sample.map(function(r){
+    var rep = D.sizingReport(r);
+    return '<div style="padding:13px 18px;border-bottom:1px solid #F1F4F7">'
+      + '<div class="t-name">'+D.esc(r.projectName)
+        + ' <span class="qb n">'+(r.source === 'editor' ? 'Editor' : 'Intake')+'</span></div>'
+      + '<div class="t-sub" style="margin-top:3px">'
+        + (rep.sizes.length
+            ? 'Recognised: ' + D.esc(rep.sizes.map(function(x){ return x.short+' '+x.text; }).join(' · '))
+            : (r.source === 'editor'
+                ? 'Recognised nothing.'
+                : 'Recognised nothing. ' + (rep.hasScopeMap
+                    ? 'The record has a <code>scope</code> map but no enabled entries.'
+                    : 'The record has <b>no <code>scope</code> field at all</b> \u2014 this intake '
+                      + 'was filed without the site section, or the intake tool writes it elsewhere.')))
+      + '</div>'
+      + (rep.unresolved && rep.unresolved.length
+          ? '<div class="t-sub" style="margin-top:5px;color:#8A5209">'
+            + rep.unresolved.length + ' catalog key(s) this console could not resolve: '
+            + rep.unresolved.slice(0,8).map(function(u){
+                return '<code>'+D.esc(u.path)+'</code>'+(u.n>1?' \u00d7'+u.n:''); }).join(', ')
+            + ' \u2014 seed catalog entries live in editor.html, not in /equipment.</div>'
+          : '')
+      + (rep.unknown.length
+          ? '<div class="t-sub" style="margin-top:5px">Unmapped numeric fields: '
+            + rep.unknown.slice(0,10).map(function(u){
+                return '<code>'+D.esc(u.path)+'</code>'; }).join(', ')
+            + (rep.unknown.length > 10 ? ' and ' + (rep.unknown.length-10) + ' more' : '')
+            + '</div>'
+          : '')
+      + '<div class="t-sub" style="margin-top:5px;opacity:.75">Top-level keys: '
+        + D.esc(rep.topKeys.join(', ') || '(empty document)') + '</div>'
+      + '</div>';
+  }).join('');
+
+  return head + body + '<div class="note">'
+    + 'Anything listed as an unmapped numeric field is a candidate to add to '
+    + '<code>METRIC_KEYS</code> in <code>ops-data.js</code>. The extractor recognises field '
+    + '<i>names</i> rather than reading a known schema, because <code>editor.html</code> is not '
+    + 'in this repo \u2014 send it over and the guessing stops.</div></div>';
+}
+
+/* ── All clients ─────────────────────────────────────────────────────── */
+function acAllClients(term, state){
+  var tenants = D.byTenant(STATE.reqs);
+  var external = screenable(null);
+  var opps = D.opportunities(external, { state:state })
+               .filter(function(o){ return acSearchHit(o.req, term); });
+  var qualified = D.opportunities(external, { state:'qualified' }).length;
+  var unsized   = D.opportunities(external, { state:'unsized' }).length;
+  var mw = 0;
+  external.forEach(function(r){ var m = D.sizeMw(r); if (m) mw += m; });
+
+  function kpi(cls,label,value,sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-l">'+label+'</div>'
+      + '<div class="kpi-v'+(String(value).length>7?' sm':'')+'">'+value+'</div>'
+      + '<div class="kpi-s">'+sub+'</div></div>';
+  }
+
+  var head = '<div class="kpis">'
+    /* Customers only. ClearSky's own orgs still appear in the table below,
+       flagged internal — visible so a misrouted intake isn't invisible, but
+       not counted as a customer of ourselves. */
+    + kpi('', 'Client accounts', tenants.filter(function(t){ return !t.internal; }).length,
+          'From the registry and from who has submitted \u00b7 internal orgs listed but not counted')
+    + kpi('good', 'Clears the bar', qualified,
+          'Projects big enough for the ' + D.esc(D.financeCfg().label.toLowerCase()))
+    + kpi(unsized ? 'alert' : '', 'Needs sizing', unsized,
+          unsized ? 'Scope switched on, no numbers \u2014 go ask' : 'Every scope has numbers on it')
+    + kpi('money', 'Screened capacity', (mw ? D.fmtNum(mw) + ' MW' : '\u2014'),
+          'Sum of the largest scope on each intake')
+    + '</div>';
+
+  var accounts = '<div class="card scroll-x" style="margin-bottom:18px">'
+    + '<div class="card-h"><div><h2>Accounts</h2>'
+    + '<div class="sub">Pick one to manage its users and see its portfolio</div></div></div>'
+    + (tenants.length
+      ? '<table class="tbl"><thead><tr><th>Client</th><th>Access</th><th>Intakes</th>'
+        + '<th>Clears the bar</th><th>Needs sizing</th><th class="t-right">Largest</th>'
+        + '<th class="t-right">Lifetime value</th></tr></thead><tbody>'
+        + tenants.map(function(t){
+            var all = screenable(t.orgId);
+            var q = D.opportunities(all, { state:'qualified' }).length;
+            var u = D.opportunities(all, { state:'unsized' }).length;
+            var big = 0;
+            all.forEach(function(r){ var m = D.sizeMw(r); if (m > big) big = m; });
+            return '<tr onclick="setAccountClient(\''+D.esc(t.orgId)+'\')">'
+              + '<td><div class="t-name">'+D.esc(t.name)+'</div>'
+                + '<div class="t-sub">'+D.esc(t.orgId)
+                + (t.source === 'observed' ? ' \u00b7 <span style="color:#0EA5E9">discovered</span>' : '')
+                + '</div></td>'
+              + '<td>'+(t.suspended
+                  ? '<span class="qb b">Suspended</span>'
+                  : '<span class="qb q">Open</span>')+'</td>'
+              + '<td class="t-num">'+t.requests.length+'</td>'
+              + '<td class="t-num">'+(q||'\u2014')+'</td>'
+              + '<td class="t-num">'+(u||'\u2014')+'</td>'
+              + '<td class="t-num t-right">'+(big ? D.fmtNum(big)+' MW' : '\u2014')+'</td>'
+              + '<td class="t-num t-right">'
+                + D.fmtMoney(t.stats.valueCompleted + t.stats.valueOpen, {compact:true})+'</td></tr>';
+          }).join('') + '</tbody></table>'
+      : '<div class="empty"><h3>No accounts yet</h3><p>Tenants appear here as soon as they '
+        + 'are in <code>omega_orgs</code> or have submitted an intake.</p></div>')
+    + '</div>';
+
+  return head + accounts + acOppTable(opps, state, true);
+}
+
+/* ── One client ──────────────────────────────────────────────────────── */
+function acOneClient(orgId, term, state){
+  var rows = STATE.reqs.filter(function(r){ return r.orgId === orgId; });
+  var all  = screenable(orgId);
+  var name = D.tenantName(orgId, STATE.reqs);
+  var org  = D.orgRecord(orgId);
+  var s    = D.summarize(rows);
+  var susp = D.isOrgSuspended(orgId);
+  var opps = D.opportunities(all, { state:state })
+               .filter(function(o){ return acSearchHit(o.req, term); });
+
+  var header = '<div class="card" style="margin-bottom:16px">'
+    + '<div class="acc-hd">'
+      + '<div><h2>'+D.esc(name)+'</h2>'
+        + '<div class="sub">'+D.esc(orgId)
+        + (org ? '' : ' \u00b7 not in omega_orgs \u2014 discovered from intake records')
+        + (org && org.tier ? ' \u00b7 ' + D.esc(org.tier) : '')
+        + ' \u00b7 ' + rows.length + ' intake(s) \u00b7 '
+        + (all.length - rows.length) + ' editor project(s) \u00b7 '
+        + D.fmtMoney(s.valueCompleted + s.valueOpen, {compact:true}) + ' lifetime</div></div>'
+      + '<div class="sp"></div>'
+      + (susp ? '<span class="qb b">Account suspended</span>' : '<span class="qb q">Account open</span>')
+      + '<button class="btn-sm" onclick="openClient(\''+D.esc(orgId)+'\')">Delivery history</button>'
+      + '<button class="btn-sm" onclick="openIntake(\''+D.esc(orgId)+'\')">Open their intake form</button>'
+      + '<button class="btn-sm '+(susp?'':'warn')+'" onclick="toggleOrgAccess(\''+D.esc(orgId)+'\','+(susp?'false':'true')+')">'
+        + (susp ? 'Restore account' : 'Suspend account') + '</button>'
+    + '</div>'
+    + (susp && org && org.suspendedBy
+        ? '<div class="note">Suspended by <b>'+D.esc(org.suspendedBy)+'</b> '
+          + (org.suspendedAt ? 'on ' + D.fmtDate(org.suspendedAt) : '')
+          + (org.suspendedReason ? ' \u2014 ' + D.esc(org.suspendedReason) : '') + '</div>'
+        : '')
+    + '</div>';
+
+  return header + acUsersCard(orgId, name) + acPortfolio(all)
+       + acOppTable(opps, state, false) + acDiagnostic(all, name);
+}
+
+/* ── Users and access ────────────────────────────────────────────────── */
+function acUsersCard(orgId, name){
+  var body;
+
+  if (STATE.acUsersLoading || STATE.acUsers === null){
+    body = '<div class="note">Loading the account\u2019s people\u2026</div>';
+  } else if (!STATE.acUsers.length){
+    body = '<div class="empty"><h3>Nobody found</h3><p>No <code>team_members</code> profile for '
+      + D.esc(name) + ' and no contact on any of their intakes. They appear here the first '
+      + 'time somebody signs into their portal or submits a request.</p></div>';
+  } else {
+    body = STATE.acUsers.map(function(u){
+      var off = !u.active;
+      var facts = [];
+      if (u.role) facts.push(D.esc(u.role));
+      if (!u.inDirectory) facts.push('<span style="color:#0EA5E9">seen on an intake, no portal profile</span>');
+      /* Only claim these when a server actually told us. Without one the
+         console knows an address exists on a record, and nothing else. */
+      if (u.authKnown && !u.exists) facts.push('<span style="color:#8A5209">no sign-in account yet</span>');
+      if (u.authKnown && u.exists && !u.hasPassword)
+        facts.push('signs in with ' + D.esc((u.providers||[]).join(', ').replace('google.com','Google')));
+      if (u.intakes) facts.push(u.intakes + ' intake(s)');
+      if (u.authKnown && u.lastSignInAt) facts.push('last sign-in ' + D.fmtAgo(u.lastSignInAt));
+      else if (u.lastSeen) facts.push('last activity ' + D.fmtAgo(u.lastSeen));
+      if (u.resetSentAt) facts.push('reset sent ' + D.fmtAgo(u.resetSentAt));
+
+      /* Flag set, account still open. This is the exact state the pre-server
+         console leaves behind, and it should be visible rather than inferred
+         — somebody suspended this person and it never took. */
+      var drift = u.flagOnly
+        ? '<div style="font-size:11.5px;color:#A33A3A;margin-top:3px">'
+          + 'Flagged suspended but the sign-in account is still open \u2014 suspend again to enforce it.'
+          + '</div>' : '';
+
+      return '<div class="urow'+(off?' off':'')+'">'
+        + '<div class="who"><b>'+D.esc(u.name || u.email.split('@')[0])+'</b>'
+          + '<div>'+D.esc(u.email)+(facts.length ? ' \u00b7 ' + facts.join(' \u00b7 ') : '')+'</div>'
+          + drift + '</div>'
+        + '<div class="acts">'
+          + '<button class="btn-sm" onclick="resetClientPassword(\''+D.esc(orgId)+'\',\''+D.esc(u.email)+'\')">'
+            + 'Email password reset</button>'
+          + (D.adminAvailable()
+              ? '<button class="btn-sm" title="Mint the link instead of mailing it \u2014 for a client whose inbox is broken" '
+                + 'onclick="copyResetLink(\''+D.esc(orgId)+'\',\''+D.esc(u.email)+'\')">Get link</button>'
+              : '')
+          + '<button class="btn-sm '+(off?'':'warn')+'" onclick="toggleUserAccess(\''+D.esc(orgId)+'\',\''
+            + D.esc(u.email)+'\','+(off?'false':'true')+')">'
+            + (off ? 'Restore' : 'Suspend') + '</button>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  /* The honest part, and it has three states rather than two now. What an
+     operator needs at the moment they click is not "is this feature on" but
+     "will this person actually be locked out", and the three routes answer
+     that differently enough to be worth spelling out. */
+  var mode = D.enforcementMode();
+  var caveat = '<div class="note">'
+    + '<b>What these buttons actually do.</b> '
+    + '<b>Email password reset</b> sends a Firebase reset link to that address. '
+    + 'Nobody here can read or set somebody else\u2019s password \u2014 not from the browser '
+    + 'and not from the server, deliberately. If they sign in with Google there is no '
+    + 'password to reset and you\u2019ll be told so.<br>'
+    + '<b>Suspend</b> '
+    + (mode === 'server'
+        ? 'disables their Firebase sign-in and revokes live sessions, so they are '
+          + 'signed out now rather than on their next page load. Every change is '
+          + 'recorded in <code>omega_access_log</code> against your name.'
+      : mode === 'rules'
+        ? 'writes <code>access:\u2019suspended\u2019</code> to their <code>team_members</code> '
+          + 'profile, which your tenant rules enforce on their next read. A session '
+          + 'already open stays usable until then \u2014 deploy <code>/functions</code> if '
+          + 'you need them out immediately.'
+        : '<b style="color:#A33A3A">does not lock them out yet.</b> It writes '
+          + '<code>access:\u2019suspended\u2019</code> and nothing enforces it. Disabling a '
+          + 'sign-in account needs the Admin SDK on a server: deploy <code>/functions</code> '
+          + 'and set <code>ops.accessControl.functions.enabled</code>, or wire section 3 of '
+          + '<code>firestore.rules.additions</code> into your rules. Until then treat this '
+          + 'as a note to yourselves.')
+    + '</div>';
+
+  return '<div class="card" style="margin-bottom:16px">'
+    + '<div class="card-h"><div><h2>People on this account</h2>'
+    + '<div class="sub">From their portal profiles, plus anyone who has submitted an intake</div></div>'
+    + (STATE.acUsersErr ? '<span class="qb u">Directory unreadable \u2014 showing intake contacts</span>' : '')
+    + '</div>' + body + caveat + '</div>';
+}
+
+/* ── Portfolio mix ───────────────────────────────────────────────────── */
+function acPortfolio(rows){
+  var mix = D.portfolio(rows);
+  if (!mix.length){
+    return '<div class="card" style="margin-bottom:16px"><div class="card-h"><div>'
+      + '<h2>What they\u2019re building</h2><div class="sub">Across every intake, including drafts</div>'
+      + '</div></div><div class="empty"><h3>No scopes switched on</h3>'
+      + '<p>Nothing on their intakes says what kind of site this is, so there is nothing to size.</p>'
+      + '</div></div>';
+  }
+  return '<div class="card" style="margin-bottom:16px">'
+    + '<div class="card-h"><div><h2>What they\u2019re building</h2>'
+    + '<div class="sub">Across their intakes and every site in their editor, drafts '
+    + 'included \u2014 a battery they sketched and never sent is still a battery they\u2019re '
+    + 'thinking about</div></div></div>'
+    + '<div class="mix">' + mix.map(function(t){
+        var big = t.mw ? D.fmtNum(t.mw) + ' MW'
+                : t.units ? D.fmtNum(t.units) + ' ports'
+                : '\u2014';
+        var bits = [];
+        if (t.mwh) bits.push(D.fmtNum(t.mwh) + ' MWh');
+        if (t.qualified) bits.push(t.qualified + ' clears the bar');
+        if (t.count - t.sized) bits.push((t.count - t.sized) + ' unsized');
+        return '<div class="mix-c"><div class="l">'+D.esc(t.label)+'</div>'
+          + '<div class="v">'+big+'</div>'
+          + '<div class="s">'+t.count+' project(s)'
+          + (bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '') + '</div></div>';
+      }).join('') + '</div></div>';
+}
+
+/* ── Screening table ─────────────────────────────────────────────────── */
+function acOppTable(opps, state, showClient){
+  var f = D.financeCfg();
+  var bar = [];
+  for (var k in f.qualify){
+    if (!f.qualify.hasOwnProperty(k)) continue;
+    var parts = [];
+    for (var m in f.qualify[k]){
+      if (!f.qualify[k].hasOwnProperty(m)) continue;
+      parts.push(D.fmtNum(f.qualify[k][m]) + ' ' + (D.SIZE[k] ? unitOfMetric(k,m) : ''));
+    }
+    bar.push(D.labelFor(D.TYPES,k) + ' \u2265 ' + parts.join(' or '));
+  }
+
+  return '<div class="card scroll-x">'
+    + '<div class="card-h"><div><h2>'+D.esc(f.label)+' screening</h2>'
+    + '<div class="sub">'
+      + (state === 'qualified' ? 'Only the projects that clear the bar'
+       : state === 'unsized'   ? 'Scope switched on, no numbers captured'
+       : state === 'below'     ? 'Sized, and under the threshold'
+       : 'Intakes and sites drawn in the editor, biggest first')
+    + '</div></div></div>'
+    + (opps.length
+      ? '<table class="tbl"><thead><tr>'
+        + (showClient ? '<th>Client</th>' : '')
+        + '<th>Project</th><th>Scope &amp; size</th><th>Screening</th><th>Source</th>'
+        + '<th class="t-right">Fee</th></tr></thead><tbody>'
+        + opps.map(function(o){
+            var r = o.req, q = o.q, ed = r.source === 'editor';
+            /* An editor row has no intake to open, so it goes straight to the
+               site it was drawn in. Sending it to openRequest() would look
+               like a dead click. */
+            var click = ed ? 'openEditorById(\''+D.esc(r.id)+'\',\''+D.esc(r.orgId)+'\')'
+                           : 'openRequest(\''+r.id+'\')';
+            return '<tr onclick="'+click+'">'
+              + (showClient ? '<td><div class="t-name">'+D.esc(r.clientName || D.tenantName(r.orgId, STATE.reqs))
+                  + '</div><div class="t-sub">'+D.esc(r.orgId)+'</div></td>' : '')
+              + '<td><div class="t-name">'+D.esc(r.projectName)+'</div>'
+                + '<div class="t-sub">'+D.esc(r.address || r.siteName || '\u2014')+'</div></td>'
+              + '<td><div class="t-num">'+D.esc(D.sizeText(r))+'</div>'
+                + (q.mw ? '<div class="t-sub">'+D.fmtNum(q.mw)+' MW largest scope</div>' : '')+'</td>'
+              + '<td>'+qualBadge(q)
+                + '<div class="t-sub" style="margin-top:4px">'+D.esc(q.headline)+'</div></td>'
+              + '<td>'+(ed
+                  ? '<span class="qb n" title="Drawn in the site editor, no intake filed">Editor</span>'
+                  : statusPill(r.status))+'</td>'
+              + '<td class="t-num t-right">'+(!ed && D.value(r) ? D.fmtMoney(D.value(r),{compact:true}) : '\u2014')+'</td>'
+              + '</tr>';
+          }).join('') + '</tbody></table>'
+      : '<div class="empty"><h3>Nothing matches</h3><p>No project here fits that filter.</p></div>')
+    + '<div class="note"><b>The bar:</b> ' + D.esc(bar.join(' \u00b7 '))
+      + '. A scope clears it on any one of its numbers, not all of them. '
+      + 'Edit <code>ops.finance.qualify</code> in <code>config.js</code> to move it. '
+      + (f.note ? D.esc(f.note) : '') + '</div>'
+    + '</div>';
+}
+
+function unitOfMetric(type, metric){
+  var rules = D.SIZE[type] || [];
+  for (var i = 0; i < rules.length; i++) if (rules[i].key === metric) return rules[i].unit;
+  return '';
+}
+
+/* ── Access actions ──────────────────────────────────────────────────── */
+
+/* Firebase will mail the link from a browser; it will not tell us a password
+   and it will not set one. auth/user-not-found here almost always means the
+   person signs in with Google rather than that they don't exist, so say that
+   instead of the raw code. */
+function resetClientPassword(orgId, email){
+  if (!confirm('Send a password-reset link to ' + email + '?\n\n'
+      + 'They get an email with a link to set a new password. Nobody here sees '
+      + 'the old one or the new one.')) return;
+  auth.sendPasswordResetEmail(email).then(function(){
+    toast('Reset link sent to ' + email);
+    return D.noteResetSent(orgId, email);
+  }).then(function(){
+    if (STATE.acClient === orgId) loadAccountUsers(orgId);
+  })['catch'](function(e){
+    var code = (e && e.code) || '';
+    toast(code === 'auth/user-not-found'
+        ? 'No password account for ' + email + ' \u2014 they most likely sign in with Google.'
+      : code === 'auth/invalid-email'
+        ? 'That address isn\u2019t a valid email.'
+      : code === 'auth/too-many-requests'
+        ? 'Too many resets from here recently \u2014 wait a few minutes.'
+        : 'Couldn\u2019t send: ' + ((e && e.message) || 'error'));
+  });
+}
+
+function toggleUserAccess(orgId, email, suspend){
+  var mode = D.enforcementMode();
+  var reason = '';
+  if (suspend){
+    reason = prompt('Suspend ' + email + '?\n\n'
+      + (mode === 'server'
+          ? 'They are signed out immediately and cannot sign back in.'
+        : mode === 'rules'
+          ? 'They lose access on their next read. A session already open stays '
+            + 'usable until then.'
+          : 'HEADS UP: this writes a flag only. It does NOT sign them out or stop '
+            + 'them signing in \u2014 nothing is enforcing it yet.')
+      + '\n\nReason (kept on the record):', '');
+    if (reason === null) return;
+  } else if (!confirm('Restore access for ' + email + '?')) return;
+
+  D.setUserAccess(orgId, email, suspend, reason).then(function(r){
+    /* The server tells us whether it found an Auth account to disable. A
+       contact who has never registered gets a flag and no lock, and saying
+       "Suspended." there would be a straight lie. */
+    toast(!suspend ? 'Access restored.'
+        : r && r.message ? r.message
+        : (r && r.enforced) ? 'Suspended \u2014 signed out.'
+        : 'Flagged suspended \u2014 not enforced yet.');
+    loadAccountUsers(orgId);
+  })['catch'](function(e){ accessError(e); });
+}
+
+/* Mints the reset link instead of mailing it, for a client whose inbox is
+   the actual problem. Copied to the clipboard rather than shown in a toast:
+   it is a working credential for the next hour and does not belong in a
+   screenshot of the page. */
+function copyResetLink(orgId, email){
+  if (!confirm('Generate a password-reset link for ' + email + '?\n\n'
+      + 'The link lets whoever holds it set that account\u2019s password. Treat it '
+      + 'like a password \u2014 send it to them directly, not to a shared channel.')) return;
+  D.passwordResetLink(orgId, email).then(function(r){
+    var link = r && r.link;
+    if (!link) throw new Error('No link returned.');
+    function done(){ toast('Reset link copied \u2014 valid about an hour.'); loadAccountUsers(orgId); }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(done)['catch'](function(){ prompt('Copy this link:', link); done(); });
+    } else { prompt('Copy this link:', link); done(); }
+  })['catch'](function(e){ accessError(e); });
+}
+
+function toggleOrgAccess(orgId, suspend){
+  var mode = D.enforcementMode();
+  var name = D.tenantName(orgId, STATE.reqs);
+  var reason = '';
+  if (suspend){
+    reason = prompt('Suspend the whole ' + name + ' account.\n\n'
+      + (mode === 'server'
+          ? 'Everyone on it is signed out immediately and cannot sign back in.'
+        : mode === 'rules'
+          ? 'Everyone on it loses access on their next read.'
+          : 'HEADS UP: this writes a flag only \u2014 it does not lock anyone out.')
+      + '\n\nReason (kept on the record):', '');
+    if (reason === null) return;
+  } else if (!confirm('Restore the ' + name + ' account?')) return;
+
+  D.setOrgAccess(orgId, suspend, reason).then(function(r){
+    /* Partial failure is the outcome worth shouting about: some of the
+       account locked and some of it still open is worse than either, and a
+       green tick over it would be the console lying about a door it left
+       open. Name the addresses so somebody can go finish the job. */
+    if (r && r.failed && r.failed.length){
+      banner('org-access','err','Only part of that account changed',
+        r.failed.length + ' of ' + (r.failed.length + (r.applied||[]).length)
+        + ' sign-in accounts could not be updated: '
+        + D.esc(r.failed.map(function(f){ return f.email; }).join(', '))
+        + '. The rest were ' + (suspend ? 'suspended' : 'restored')
+        + ' \u2014 they are still ' + (suspend ? 'open' : 'locked') + '.');
+    } else {
+      clearBanner('org-access');
+      toast(r && r.message ? r.message
+          : suspend ? (r && r.enforced ? 'Account suspended.' : 'Account flagged \u2014 not enforced yet.')
+                    : 'Account restored.');
+    }
+    return D.loadOrgs();
+  }).then(function(){
+    renderAll();
+    if (STATE.acClient === orgId) loadAccountUsers(orgId);
+  })['catch'](function(e){ accessError(e); });
+}
+
+/* One place for the three ways these calls fail, because the fix is
+   different each time and "Couldn't save" sends somebody to the wrong one. */
+function accessError(e){
+  var code = (e && e.code) || '';
+  var msg  = (e && e.message) || 'error';
+  if (code === 'permission-denied' || /permission/i.test(msg)){
+    /* Almost always one specific thing: the deployed team_members rule pins
+       every write to the caller's OWN email, so nobody can write anyone
+       else's profile. Naming it beats a generic refusal that sends people
+       to check their role for an hour. */
+    toast('Firestore refused that write \u2014 team_members currently only lets a person '
+        + 'write their own profile. Deploy firestore.rules.team-members-patch.');
+  } else if (code === 'failed-precondition'){
+    toast(msg);            // the server's own explanation: staff address, self, etc.
+  } else if (code === 'functions/not-found' || /not enabled|did not load/i.test(msg)){
+    toast('The access-control server isn\u2019t reachable \u2014 check ops.accessControl.functions in config.js.');
+  } else {
+    toast('Couldn\u2019t save: ' + msg);
+  }
+}
+
+/* ── Earnings ─────────────────────────────────────────────────────────── */
+function renderEarnings(){
+  var mine = STATE.earnScope === 'mine';
+  var rows = STATE.reqs.filter(function(r){ return !mine || r.assignedTo === ME.email; });
+  var s = D.summarize(rows);
+
+  function kpi(cls,label,value,sub){
+    return '<div class="kpi '+cls+'"><div class="kpi-l">'+label+'</div>'
+      + '<div class="kpi-v'+(String(value).length>7?' sm':'')+'">'+value+'</div>'
+      + '<div class="kpi-s">'+sub+'</div></div>';
+  }
+  document.getElementById('earn-kpis').innerHTML =
+      kpi('money','Earned this month', D.fmtMoney(s.earnedThisMonth,{compact:true}),
+          s.completedThisMonth + ' package(s) delivered')
+    + kpi('money','Pending payout', D.fmtMoney(s.earnedPending,{compact:true}),
+          'earned, not yet marked paid')
+    + kpi('good','Paid to date', D.fmtMoney(s.earnedPaid,{compact:true}), 'all time')
+    + kpi('','Delivered value', D.fmtMoney(s.valueCompleted,{compact:true}),
+          s.completed + ' delivered package(s)')
+    + kpi('','In flight', D.fmtMoney(s.valueOpen,{compact:true}),
+          s.open + ' open intake(s), not yet earned');
+
+  var done = rows.filter(function(r){ return D.isEarned(r); })
+                 .sort(function(a,b){ return D.ms(b.deliveredAt) - D.ms(a.deliveredAt); });
+
+  document.getElementById('tbl-earn').innerHTML = done.length
+    ? '<thead><tr><th>Project</th><th>Client</th><th>Delivered</th><th>Cycle time</th>'
+      + '<th class="t-right">Fee</th><th class="t-right">Rate</th>'
+      + '<th class="t-right">Commission</th><th>Payout</th></tr></thead><tbody>'
+      + done.map(function(r){
+          var cyc = D.cycleMs(r);
+          return '<tr onclick="openRequest(\''+r.id+'\')">'
+            + '<td><div class="t-name">'+D.esc(r.projectName)+'</div>'
+              + (mine?'':'<div class="t-sub">'+D.esc(r.assignedName||r.assignedTo||'—')+'</div>')+'</td>'
+            + '<td>'+D.esc(D.tenantName(r.orgId, STATE.reqs))+'</td>'
+            + '<td class="t-num">'+D.fmtDate(r.deliveredAt)+'</td>'
+            + '<td class="t-num">'+(cyc==null?'—':D.fmtDur(cyc))+'</td>'
+            + '<td class="t-num t-right">'+D.fmtMoney(D.value(r))+'</td>'
+            + '<td class="t-num t-right">'+(D.rate(r)*100).toFixed(1)+'%</td>'
+            + '<td class="t-num t-right" style="font-weight:500;color:#0B7C78">'+D.fmtMoney(D.payout(r))+'</td>'
+            + '<td>'+(D.isPaid(r)
+                ? '<span class="pill" style="background:rgba(22,163,74,.10);color:var(--ok)">'
+                  + '<span class="dot" style="background:var(--ok)"></span>Paid '+D.fmtDate(r.paidAt)+'</span>'
+                : '<span class="pill" style="background:rgba(217,119,6,.10);color:var(--warn)">'
+                  + '<span class="dot" style="background:var(--warn)"></span>Pending</span>')+'</td></tr>';
+        }).join('') + '</tbody>'
+    : emptyRow(8, mine ? 'You haven\u2019t delivered anything yet.' : 'Nothing has been delivered yet.');
+
+  var staff = D.byStaff(STATE.reqs);
+  document.getElementById('tbl-staff').innerHTML = staff.length
+    ? '<thead><tr><th>Person</th><th>Open</th><th>Delivered</th><th>Avg first reply</th>'
+      + '<th class="t-right">Delivered value</th><th class="t-right">Pending</th>'
+      + '<th class="t-right">Earned all time</th></tr></thead><tbody>'
+      + staff.map(function(p){
+          var s2 = p.stats;
+          return '<tr>'
+            + '<td><div class="t-name">'+D.esc(p.name)
+              + (p.email===ME.email?' <span style="color:#8FA0AE;font-weight:400">(you)</span>':'')
+              + '</div><div class="t-sub">'+D.esc(p.email)+'</div></td>'
+            + '<td class="t-num">'+s2.open+'</td>'
+            + '<td class="t-num">'+s2.completed+'</td>'
+            + '<td class="t-num">'+(s2.respAvg==null?'—':D.fmtDur(s2.respAvg))+'</td>'
+            + '<td class="t-num t-right">'+D.fmtMoney(s2.valueCompleted,{compact:true})+'</td>'
+            + '<td class="t-num t-right">'+D.fmtMoney(s2.earnedPending,{compact:true})+'</td>'
+            + '<td class="t-num t-right" style="font-weight:500;color:#0B7C78">'
+              + D.fmtMoney(s2.earnedAll,{compact:true})+'</td></tr>';
+        }).join('') + '</tbody>'
+    : emptyRow(7, 'No intakes are assigned to anyone yet.');
+}
+
+/* ── Drawer ───────────────────────────────────────────────────────────── */
+function openRequest(id){
+  var r = byId(id);
+  if (!r) return;
+  STATE.openId = id;
+
+  var c = D.clock(r);
+  var due = D.dueMs(r);
+  var name = D.tenantName(r.orgId, STATE.reqs);
+  var v = D.value(r);
+
+  document.getElementById('dr-head').innerHTML =
+    '<div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#8FA0AE">'
+      + D.esc(name) + '</div>'
+    + '<div style="font-size:19px;font-weight:700;color:var(--cs-navy);margin:4px 40px 8px 0;'
+      + 'letter-spacing:-.3px;line-height:1.25">' + D.esc(r.projectName) + '</div>'
+    + '<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
+      + statusPill(r.status) + priBadge(r.priority) + purposeBadge(r)
+      + '<span class="chip">'+D.esc(D.labelFor(D.TYPES, r.projectType))+'</span>'
+      + (r.projectId
+          ? '<span class="chip" style="background:#E4F5F3;color:#0B6B67" title="Filed under orgId '
+            + D.esc(r.orgId) + ' \u00B7 doc ' + D.esc(r.projectId)
+            + '. If it isn\u2019t in the client\u2019s project list, that orgId doesn\u2019t match '
+            + 'the one in their repo\u2019s config.js.">Editor project linked</span>'
+          : '')
+      + '</div>';
+
+  var scopeChips = r.scope.length
+    ? r.scope.map(function(k){ return '<span class="chip">'+D.esc(D.labelFor(D.SCOPE,k))+'</span>'; }).join('')
+    : '<span style="color:#A6B3BF;font-size:12.5px">Not specified</span>';
+
+  var respLine;
+  if (c.unmeasured){
+    respLine = '<span style="color:#8FA0AE">Answered before response tracking started, so the '
+      + 'time is unknown. New intakes are measured from now on.</span>';
+  } else if (c.settled){
+    respLine = '<b class="mono" style="color:'+(c.frac<=1?'var(--ok)':'var(--bad)')+'">'+D.fmtDur(c.elapsed)+'</b>'
+      + ' <span style="color:#8FA0AE">against a '+D.fmtDur(c.target)+' target</span>';
+  } else {
+    respLine = '<b class="mono" style="color:'
+      + (c.state==='breach'?'var(--bad)':c.state==='warn'?'var(--warn)':'var(--ok)')+'">'
+      + clockText(c) + '</b> <span style="color:#8FA0AE">'
+      + (c.state==='breach' ? 'past the ' : 'left of the ') + D.fmtDur(c.target)+' target</span>';
+  }
+
+  var extra = D.unmapped(r);
+
+  document.getElementById('dr-body').innerHTML =
+      '<div class="sec" style="margin-top:0"><div class="sec-t">Response</div><div style="font-size:13.5px">'
+        + respLine + '</div></div>'
+
+    + '<div class="sec"><div class="sec-t">Intake</div><dl class="kv">'
+      + kv('Contact', r.contactName
+          ? D.esc(r.contactName) + (r.contactEmail
+              ? ' · <a href="mailto:'+D.esc(r.contactEmail)+'">'+D.esc(r.contactEmail)+'</a>' : '')
+          : (r.contactEmail ? '<a href="mailto:'+D.esc(r.contactEmail)+'">'+D.esc(r.contactEmail)+'</a>' : '—'))
+      + (r.contactRole ? kv('Role', D.esc(r.contactRole)) : '')
+      + (r.contactPhone ? kv('Phone', D.esc(r.contactPhone)) : '')
+      + kv('Site', r.address ? D.esc(r.address) : '—')
+      + kv('Size', (r.capacityMw ? D.esc(r.capacityMw)+' MW' : '—')
+          + (r.durationHrs ? ' · ' + D.esc(r.durationHrs) + ' h' : ''))
+      + kv('Path', D.esc((D.PURPOSE[r.purpose] || {}).label || r.purpose))
+      + kv('Submitted', D.fmtDateTime(r.submittedAt))
+      + kv('Due', due ? (D.fmtDate(due) + ' <span style="color:#8FA0AE">('
+            + (r.dueDate ? 'client\u2019s date' : 'from priority') + ')</span>') : '—')
+      + kv('Owner', ownerCell(r))
+      + kv('Filed under', '<span class="mono" style="font-size:12px">'+D.esc(r.orgId)+'</span>'
+          + ' <span style="color:#8FA0AE">\u2014 must match orgId in their repo\u2019s config.js</span>')
+      + (r.projectId
+          ? kv('Editor project', '<span class="mono" style="font-size:12px">'+D.esc(r.projectId)+'</span>'
+              + (r.projectLabel ? ' \u00B7 ' + D.esc(r.projectLabel) : ''))
+          : '')
+      + '</dl></div>'
+
+    + (r.scopes && r.scopes.length
+        ? '<div class="sec"><div class="sec-t">Site scope</div><div>'
+          + r.scopes.map(function(s){
+              return '<span class="chip">'+D.esc(s.label)
+                + (s.detail ? ' <span style="color:#8FA0AE">'+D.esc(s.detail)+'</span>' : '')
+                + '</span>';
+            }).join('') + '</div></div>'
+        : '')
+
+    + '<div class="sec"><div class="sec-t">Deliverables'
+      + (r.progress.requested
+          ? ' <span style="color:#8FA0AE;font-weight:500;letter-spacing:0;text-transform:none">\u2014 '
+            + r.progress.done + ' of ' + r.progress.requested + ' delivered</span>'
+          : '')
+      + '</div>'
+      + (r.deliverables.length
+          ? '<div class="dels">' + r.deliverables.map(function(d){
+              var fs = D.filesFor(r, d.key);
+              var done = !!d.outputUrl || fs.length > 0;
+              return '<div class="del'+(done?' done':'')+'">'
+                + '<div class="del-h"><span class="del-n">'+D.esc(d.label || d.key)+'</span>'
+                  + (done ? '<span class="del-ok">Ready</span>'
+                          : '<span class="del-p">Not sent</span>')
+                + '</div>'
+                + (fs.length ? '<div class="fl">' + fs.map(fileRow).join('') + '</div>' : '')
+                + '<label class="up"><input type="file" multiple '
+                  + 'onchange="uploadTo(\'' + r.id + '\',\'' + D.esc(d.key) + '\',this)">'
+                  + '<span>Upload files</span></label>'
+                + '<input class="del-url" data-dkey="'+D.esc(d.key)+'" '
+                  + 'placeholder="\u2026or paste a link (Drive, Dropbox)" '
+                  + 'value="'+D.esc(d.outputUrl || '')+'">'
+                + '<input class="del-note" data-dnote="'+D.esc(d.key)+'" '
+                  + 'placeholder="Note (optional)" value="'+D.esc(d.note || '')+'">'
+                + '</div>';
+            }).join('') + '</div>'
+            + '<button class="btn-sm" style="margin-top:9px" onclick="saveDeliverables(\'' + r.id + '\')">'
+            + 'Save links &amp; notes</button>'
+            + '<div class="kpi-s" style="margin-top:6px">Uploads save immediately; links and notes '
+            + 'need the button. Both render as \u201cYour files\u201d on the client\u2019s project.</div>'
+          : '<div>'+scopeChips+'</div>')
+
+      + '<div style="margin-top:14px"><div class="sec-t">Other files</div>'
+        + (D.filesFor(r,'other').length
+            ? '<div class="fl">' + D.filesFor(r,'other').map(fileRow).join('') + '</div>' : '')
+        + '<label class="up"><input type="file" multiple '
+          + 'onchange="uploadTo(\'' + r.id + '\',\'other\',this)">'
+          + '<span>Upload anything else</span></label>'
+        + '<div class="kpi-s" style="margin-top:6px">Export from the editor to your machine, then '
+          + 'drop the files here \u2014 proposal, one-line, plot plan, cost estimate, permit set. '
+          + 'Cap is ' + D.MAX_FILE_MB + ' MB per file.</div>'
+      + '</div>'
+      + '</div>'
+
+    + (r.links && r.links.length
+        ? '<div class="sec"><div class="sec-t">Files the client linked</div><div>'
+          + r.links.map(function(l){
+              var u = (l && (l.url || l)) || '';
+              if (!u) return '';
+              return '<div style="margin-bottom:5px"><a href="'+D.esc(u)+'" target="_blank" '
+                + 'rel="noopener">'+D.esc((l && l.label) || u)+'</a>'
+                + ((l && l.category) ? ' <span class="chip">'+D.esc(l.category)+'</span>' : '')
+                + '</div>';
+            }).join('') + '</div></div>'
+        : '')
+
+    + (r.notes ? '<div class="sec"><div class="sec-t">Notes from the client</div>'
+        + '<div class="note">'+D.esc(r.notes)+'</div></div>' : '')
+
+    + '<div class="sec"><div class="sec-t">Internal notes</div>'
+      + (r.internalNotes ? '<div class="note">'+D.esc(r.internalNotes)+'</div>'
+                        : '<div class="kpi-s">Nothing yet. Staff only \u2014 the client never sees these.</div>')
+      + '<button class="btn-sm" style="margin-top:9px" onclick="addInternalNote(\''+r.id+'\')">'
+      + 'Add internal note</button></div>'
+
+    + '<div class="sec"><div class="sec-t">Quote</div>'
+      + (v ? '<div class="payout-line" style="margin-bottom:10px"><span>Sent '
+              + (r.quoteSentAt ? D.fmtDate(r.quoteSentAt) : '') + '</span><b>'
+              + D.fmtMoney(v) + '</b></div>'
+           : '<div class="kpi-s" style="margin-bottom:9px">No fee set yet. Until there is one the '
+             + 'client sees \u201cQuote sent\u201d with nothing to accept.</div>')
+      + '<div class="tiers">'
+        + D.QUOTE_TIERS.map(function(t){
+            return '<button type="button" class="tier'+(v===t?' on':'')+'" '
+              + 'onclick="pickTier('+t+')">'+D.fmtMoney(t)+'</button>';
+          }).join('')
+        + '<button type="button" class="tier'+((v && D.QUOTE_TIERS.indexOf(v)<0)?' on':'')+'" '
+          + 'onclick="pickTier(null)">Custom</button>'
+      + '</div>'
+      + '<div class="money-edit" style="margin-top:10px">'
+        + '<div class="fld" style="margin:0"><label for="dr-value">Fee (USD)</label>'
+          + '<input id="dr-value" type="number" min="0" step="50" value="'+(v||'')+'"></div>'
+        + '<div class="fld" style="margin:0"><label for="dr-rate">Commission rate (%)</label>'
+          + '<input id="dr-rate" type="number" min="0" max="100" step="0.5" value="'
+          + (D.rate(r)*100) + '"></div>'
+      + '</div>'
+      + '<div class="fld" style="margin-top:10px"><label for="dr-qnote">Note to the client (optional)</label>'
+        + '<input id="dr-qnote" placeholder="What the fee covers" value="'+D.esc(r.quoteNote)+'"></div>'
+      + '<div class="payout-line"><span>Your commission on delivery</span>'
+        + '<b id="dr-payout">'+D.fmtMoney(D.payout(r))+'</b></div>'
+      + '<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap">'
+        + '<button class="btn-sm pri" onclick="sendQuote(\'' + r.id + '\')">'
+          + (r.status === 'quoted' ? 'Re-send quote' : 'Send quote to client') + '</button>'
+        + '<button class="btn-sm" onclick="saveMoney()">Save without sending</button>'
+      + '</div>'
+      + '<div class="kpi-s" style="margin-top:7px">Writes <code>quote.total</code>, which your '
+        + 'rules restrict to administrators \u2014 a rep gets a permission error here, which is '
+        + 'intended. Re-sending clears any acceptance already given.</div>'
+      + '</div>'
+
+    + '<div class="sec"><div class="sec-t">Payment</div>'
+      + '<div class="fld" style="margin:0"><label for="dr-payurl">Payment link</label>'
+        + '<input id="dr-payurl" placeholder="https://buy.stripe.com/\u2026" value="'
+        + D.esc(r.paymentUrl)+'"></div>'
+      + '<button class="btn-sm" style="margin-top:9px" onclick="savePayLink()">Post link to client</button>'
+      + (r.paymentClaimedAt
+          ? '<div class="note" style="margin-top:10px">Client says they paid '
+            + D.fmtDateTime(r.paymentClaimedAt)
+            + (r.paymentRef ? ' \u00B7 ref ' + D.esc(r.paymentRef) : '')
+            + '. Confirm only once the money has actually landed.</div>'
+          : '')
+      + '<div class="kpi-s" style="margin-top:8px">Invoice: <b>'
+        + D.esc(r.paymentStatus || 'unpaid') + '</b>'
+        + (r.clientPaidAt ? ' \u00B7 ' + D.fmtDate(r.clientPaidAt) : '')
+        + ' \u2014 the client\u2019s invoice, not your commission.</div>'
+      + (r.paymentStatus === 'paid' ? ''
+          : '<button class="btn-sm" style="margin-top:9px" onclick="confirmPaid(\'' + r.id + '\')">'
+            + 'Confirm payment received</button>')
+      + '</div>'
+
+    + '<div class="sec"><div class="sec-t">Messages with the client</div>'
+      + '<div class="thread">' + thread(r) + '</div>'
+      + '<textarea id="dr-msg" rows="3" placeholder="Write to '
+        + D.esc(r.contactName || 'the client') + '\u2026"></textarea>'
+      + '<button class="btn-sm pri" style="margin-top:8px" onclick="sendMessage(\'' + r.id + '\')">'
+        + 'Send message</button>'
+      + '<div class="kpi-s" style="margin-top:6px">They see this on this project in their own '
+        + 'portal, and it flags as an unread update.</div>'
+      + '</div>'
+
+    + '<div class="sec"><div class="sec-t">History</div><ul class="log">'
+      + timeline(r) + '</ul></div>'
+
+    + (extra
+        ? '<div class="sec"><div class="sec-t">Fields the console didn\u2019t recognise</div>'
+          + '<div class="note" style="font-family:\'DM Mono\',monospace;font-size:11.5px">'
+          + D.esc(JSON.stringify(extra, null, 2)) + '</div>'
+          + '<div class="kpi-s" style="margin-top:6px">These exist on the record but aren\u2019t '
+          + 'mapped yet. Tell me the field names and they\u2019ll render properly.</div></div>'
+        : '');
+
+  ['dr-value','dr-rate'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', previewPayout);
+  });
+
+  document.getElementById('dr-foot').innerHTML = actions(r);
+  document.getElementById('scrim').classList.add('on');
+  document.getElementById('drawer').classList.add('on');
+}
+
+function kv(k, v){ return '<dt>'+k+'</dt><dd>'+v+'</dd>'; }
+
+function previewPayout(){
+  var v = parseFloat(document.getElementById('dr-value').value) || 0;
+  var rt = (parseFloat(document.getElementById('dr-rate').value) || 0) / 100;
+  document.getElementById('dr-payout').textContent = D.fmtMoney(v * rt);
+}
+
+function timeline(r){
+  var items = [];
+  function add(when, label, who){
+    if (!D.ms(when)) return;
+    items.push({ t:D.ms(when), label:label, who:who || '' });
+  }
+  add(r.submittedAt, 'Submitted', r.contactName || r.contactEmail);
+  add(r.firstResponseAt, 'First reply sent');
+  add(r.startedAt, 'Build started', r.assignedName);
+  add(r.deliveredAt, 'Delivered to client', r.assignedName);
+  add(r.clientPaidAt, 'Client paid the invoice');
+  add(r.paidAt, 'Commission paid to rep');
+
+  /* omega-intake.js writes activity as {ts, type, message, actor} — newest
+     first, since it unshifts. Different shape from what this console used to
+     write, so read theirs rather than inventing a parallel log. */
+  (r.activity || []).forEach(function(a){
+    if (!a) return;
+    var when = D.ms(a.ts || a.at);
+    var msg  = a.message || a.text;
+    if (!when || !msg) return;
+    items.push({ t:when, label:msg, who:a.actor || a.byName || '' });
+  });
+
+  items.sort(function(a,b){ return a.t - b.t; });
+  if (!items.length) return '<li><div><b>No history yet</b><span>—</span></div></li>';
+  return items.map(function(i){
+    return '<li><div><b>'+D.esc(i.label)+'</b><span>'+D.fmtDateTime(i.t)
+      + (i.who ? ' · ' + D.esc(i.who) : '') + '</span></div></li>';
+  }).join('');
+}
+
+/* Buttons follow the state. Showing every action always and letting people
+   pick a wrong one is how an intake ends up delivered before it was built. */
+function actions(r){
+  var b = [], id = r.id, st = r.status, pay = D.payableStatus();
+  function btn(label, fn, pri){
+    b.push('<button class="btn-sm'+(pri?' pri':'')+'" onclick="'+fn+'">'+label+'</button>');
+  }
+  var team = D.assignableStaff(STATE.staff || []);
+  if (team.length){
+    b.push('<select class="btn-sm" style="max-width:180px" '
+      + 'onchange="assignTo(\''+id+'\', this.value)" title="Assign this intake">'
+      + '<option value=""'+(r.assignedTo?'':' selected')+'>Assign\u2026</option>'
+      + team.map(function(s){
+          return '<option value="'+D.esc(s.email)+'"'
+            + (r.assignedTo === s.email ? ' selected' : '') + '>'
+            + D.esc(s.name || s.email) + '</option>';
+        }).join('')
+      + '</select>');
+  }
+  if (!r.assignedTo || r.assignedTo !== ME.email) btn('Assign to me', 'assignMe(\''+id+'\')');
+  if (!D.answered(r)) btn('Reply &amp; acknowledge', 'acknowledge(\''+id+'\')', true);
+
+  if (st === 'submitted' || st === 'in_review')
+    btn('Start review', 'setStatus(\''+id+'\',\'in_review\')', false);
+  if (st === 'quoted'){
+    btn('Client accepted', 'setStatus(\''+id+'\',\'accepted\')', true);
+    btn('Client declined', 'setStatus(\''+id+'\',\'declined\')');
+  }
+  if (st === 'accepted' || st === 'changes_requested')
+    btn('Start build', 'startBuild(\''+id+'\')', st === 'accepted');
+  if (r.projectId) btn('Open in editor', 'openEditor(\''+id+'\')');
+  if (st === 'in_production'){
+    btn('Deliver to client', 'deliver(\''+id+'\')', true);
+    btn('Need something from them', 'setStatus(\''+id+'\',\'changes_requested\')');
+  }
+  if (st === 'changes_requested') btn('Unblock', 'setStatus(\''+id+'\',\'in_production\')');
+  if (st === pay && !D.ms(r.paidAt)) btn('Mark commission paid', 'markPaid(\''+id+'\')');
+
+  btn('Add note', 'addNote(\''+id+'\')');
+  return b.join('');
+}
+
+function closeDrawer(){
+  STATE.openId = null;
+  document.getElementById('scrim').classList.remove('on');
+  document.getElementById('drawer').classList.remove('on');
+}
+
+/* ── Mutations ────────────────────────────────────────────────────────── */
+
+/* Every mutation goes through here so the local copy, the Firestore write and
+   the re-render stay in step — and so demo data never hits the network. */
+function apply(id, fields, note, msg){
+  var r = byId(id);
+  if (!r) return Promise.resolve();
+
+  for (var k in fields){
+    if (!fields.hasOwnProperty(k)) continue;
+    var val = (fields[k] && fields[k].isEqual && !(fields[k] instanceof Date)) ? new Date() : fields[k];
+    if (k.indexOf('.') > 0){
+      /* dot-path writes (quote.total) — mirror into _raw so the local view
+         matches what Firestore will hold */
+      var parts = k.split('.'), cur = r._raw;
+      for (var i = 0; i < parts.length - 1; i++){
+        if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = val;
+    } else {
+      r[k] = val;
+      r._raw[k] = val;
+    }
+  }
+  /* Push the note into _raw, not the flattened copy — the re-normalise below
+     rebuilds every field from _raw and would otherwise erase it immediately.
+
+     omega-intake.js unshifts (newest first); the Firestore write uses
+     arrayUnion, which appends. Order in the stored array therefore isn't
+     strictly chronological. Harmless here because the timeline sorts on ts,
+     but worth knowing if intake-admin.html renders the array as-is. */
+  if (note){
+    if (!Array.isArray(r._raw.activity)) r._raw.activity = [];
+    r._raw.activity.unshift({ ts:new Date().toISOString(), type:note.type,
+                              message:note.text, actor:ME.name || ME.email });
+  }
+
+  /* Dot-path writes (admin.assignee, quote.total) land in _raw only, so the
+     flattened view has to be rebuilt or the drawer shows the old value until
+     someone hits Refresh. */
+  var fresh = D.normalize(r.id, r._raw);
+  for (var f in fresh){
+    if (fresh.hasOwnProperty(f) && f !== '_raw' && f !== '_demo') r[f] = fresh[f];
+  }
+  renderAll();
+  if (STATE.openId === id) openRequest(id);
+
+  if (STATE.demo || r._demo){ toast(msg + ' (sample data — not saved)'); return Promise.resolve(); }
+
+  return D.patch(id, fields, note).then(function(){
+    if (msg) toast(msg);
+  })['catch'](function(err){
+    console.error('[ops] write failed', err);
+    var perm = err && (err.code === 'permission-denied' || /permission/i.test(err.message||''));
+    toast(perm ? 'Blocked by Firestore rules — this action needs an admin role'
+               : 'Couldn\u2019t save: ' + (err.message || 'unknown error'));
+    refresh();   // pull the truth back rather than leaving a lie on screen
+  });
+}
+
+/* ISO strings, matching omega-intake.js. A Firestore Timestamp written here
+   renders as "Invalid Date" in the tenant's project list — see ops-data.js. */
+function ts(){ return new Date().toISOString(); }
+
+/* Assign to any active teammate. Same field assignMe writes, so both paths
+   read back identically everywhere — queue, drawer, earnings. */
+function assignTo(id, email){
+  if (!email){ return; }
+  var s = (STATE.staff || []).filter(function(x){ return x.email === email; })[0];
+  if (!s) return;
+  apply(id, { 'admin.assignee': s.email, 'admin.assigneeName': s.name || s.email },
+        { type:'assign', text:'Assigned to ' + (s.name || s.email) },
+        'Assigned to ' + (s.name || s.email));
+}
+
+function renderSettings(){
+  document.getElementById('set-name').value = ME.name || '';
+  document.getElementById('set-email').textContent = ME.email;
+  /* Password change only makes sense for email/password accounts. A Google
+     sign-in has no password here, and offering the form anyway just produces
+     a confusing auth error at the last step. */
+  var u = auth.currentUser;
+  var hasPw = !!(u && u.providerData && u.providerData.some(function(p){ return p.providerId === 'password'; }));
+  document.getElementById('set-pw-form').style.display  = hasPw ? '' : 'none';
+  document.getElementById('set-pw-google').style.display = hasPw ? 'none' : '';
+}
+
+/* Name lives in TWO places and both must move together: the Firebase Auth
+   profile (what greets you, what new activity lines use) and the omega_staff
+   doc (what the Team page and Assign dropdowns read). */
+function saveProfile(){
+  var name = (document.getElementById('set-name').value || '').trim();
+  if (!name){ toast('Enter a name first.'); return; }
+  var u = auth.currentUser;
+  if (!u){ toast('Not signed in.'); return; }
+  u.updateProfile({ displayName: name }).then(function(){
+    return D.setStaffRole(u.uid, { name: name });
+  }).then(function(){
+    ME.name = name;
+    document.getElementById('tb-name').textContent = name;
+    toast('Name updated everywhere.');
+    return D.loadStaff().then(function(s){ STATE.staff = s; });
+  })['catch'](function(e){
+    toast('Couldn\u2019t save name: ' + ((e && e.message) || 'error'));
+  });
+}
+
+function changePassword(){
+  var cur  = document.getElementById('set-pw-cur').value;
+  var next = document.getElementById('set-pw-new').value;
+  var conf = document.getElementById('set-pw-conf').value;
+  if (!cur){ toast('Enter your current password.'); return; }
+  if (next.length < 6){ toast('New password must be at least 6 characters.'); return; }
+  if (next !== conf){ toast('New passwords don\u2019t match.'); return; }
+  var u = auth.currentUser;
+  /* Firebase requires a recent sign-in to change a password. Re-authenticate
+     with the current password first, every time — it doubles as proof the
+     person at the keyboard actually knows it. */
+  var cred = firebase.auth.EmailAuthProvider.credential(u.email, cur);
+  u.reauthenticateWithCredential(cred).then(function(){
+    return u.updatePassword(next);
+  }).then(function(){
+    document.getElementById('set-pw-cur').value = '';
+    document.getElementById('set-pw-new').value = '';
+    document.getElementById('set-pw-conf').value = '';
+    toast('Password changed.');
+  })['catch'](function(e){
+    var code = (e && e.code) || '';
+    toast(code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+      ? 'Current password is incorrect.'
+      : code === 'auth/weak-password'
+        ? 'That password is too weak \u2014 pick a longer one.'
+        : 'Couldn\u2019t change password: ' + ((e && e.message) || 'error'));
+  });
+}
+
+function renderTeam(){
+  var host = document.getElementById('teamRows');
+  var team = STATE.staff || [];
+  if (!team.length){
+    host.innerHTML = '<tr><td style="padding:18px" colspan="4">Nobody yet \u2014 the roster '
+      + 'fills itself as people sign in.</td></tr>';
+    return;
+  }
+  host.innerHTML = team.map(function(s){
+    var domainAdmin = /@(clearsky-usa|csebuilders)\.com$/.test(s.email);
+    return '<tr style="border-top:1px solid var(--sap-card-border)">'
+      + '<td style="padding:12px 18px"><b>'+D.esc(s.name || s.email)+'</b>'
+        + '<div style="font-size:12px;color:#8FA0AE">'+D.esc(s.email)
+        + (domainAdmin ? ' \u00b7 admin by domain' : '') + '</div></td>'
+      + '<td style="padding:12px 18px"><select id="tr-role-'+D.esc(s.uid)+'" class="btn-sm">'
+        + ['admin','rep','none'].map(function(rr){
+            return '<option value="'+rr+'"'+(s.role===rr?' selected':'')+'>'+rr+'</option>';
+          }).join('') + '</select></td>'
+      + '<td style="padding:12px 18px"><input type="checkbox" id="tr-act-'+D.esc(s.uid)+'"'
+        + (s.active ? ' checked' : '') + '></td>'
+      + '<td style="padding:12px 18px"><button class="btn-sm" '
+        + 'onclick="saveStaff(\''+D.esc(s.uid)+'\')">Save</button></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function saveStaff(uid){
+  var role = document.getElementById('tr-role-'+uid).value;
+  var act  = document.getElementById('tr-act-'+uid).checked;
+  D.setStaffRole(uid, { role: role, active: act }).then(function(){
+    toast('Saved \u2014 role ' + role + (act ? '' : ' \u00b7 deactivated'));
+    return D.loadStaff().then(function(staff){ STATE.staff = staff; renderTeam(); });
+  })['catch'](function(e){
+    var perm = e && (e.code === 'permission-denied' || /permission/i.test(e.message||''));
+    toast(perm ? 'Only administrators can change roles.' : ('Couldn\u2019t save: ' + (e.message||'error')));
+  });
+}
+
+/* The assignee lives in the admin map, which is where intake-admin.html
+   reads it from. Writing a top-level assignedTo would assign it here and
+   nowhere else. */
+function assignMe(id){
+  apply(id, { 'admin.assignee': ME.email, 'admin.assigneeName': ME.name },
+        { type:'note', text:'Assigned to ' + ME.name }, 'Assigned to you');
+}
+
+/* Acknowledging stops the response clock and opens a pre-addressed reply.
+   Both at once, deliberately: the stamp and the actual email should never
+   drift apart. */
+function acknowledge(id){
+  var r = byId(id);
+  if (!r) return;
+  var fields = { firstResponseAt: ts() };
+  if (r.status === 'submitted') fields.status = 'in_review';
+  if (!r.assignedTo){ fields['admin.assignee'] = ME.email; fields['admin.assigneeName'] = ME.name; }
+  apply(id, fields, { type:'note', text:'First reply sent' }, 'Response logged');
+
+  var body = 'Hi ' + (r.contactName || 'there') + ',\n\n'
+    + 'Thanks for sending over "' + r.projectName + '". We\u2019ve picked it up and '
+    + (r.assignedName || ME.name) + ' is on it.\n\n'
+    + 'We\u2019ll come back to you shortly with the scope and pricing. If anything has '
+    + 'changed, just reply here.\n\nBest,\n' + ME.name + '\nClearSky Energy Solutions';
+  openMail(r, 'Re: ' + r.projectName, body);
+}
+
+/* Start the build: create the editor project under the CLIENT's org so the
+   finished work lands in their own portal, then open it. */
+function startBuild(id){
+  var r = byId(id);
+  if (!r) return;
+  if (r.projectId){ openEditor(id); return; }
+
+  if (STATE.demo || r._demo){
+    apply(id, { status:'in_production', startedAt: ts() }, null, 'Moved to in production');
+    return;
+  }
+
+  toast('Creating the project…');
+  D.createLinkedProject(r).then(function(ref){
+    return apply(id, {
+      editorProjectId: ref.id, editorProjectName: r.projectName || '',
+      status:'in_production', startedAt: ts(),
+      'admin.assignee': r.assignedTo || ME.email,
+      'admin.assigneeName': r.assignedName || ME.name
+    }, { type:'note', text:'Editor project created' }, 'Project created').then(function(){
+      openEditorById(ref.id, r.orgId);
+    });
+  })['catch'](function(err){
+    console.error('[ops] project create failed', err);
+    toast('Couldn\u2019t create the project: ' + (err.message || 'permission denied'));
+  });
+}
+
+/* The intake form doesn't validate the contact address, so records arrive
+   with "test" or a bare name in the email field. Opening a mailto: on that
+   produces a draft addressed to nothing, which looks like the console
+   misfired. Check before opening and say what's wrong instead. */
+function mailable(r){
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(r && r.contactEmail || '').trim());
+}
+function openMail(r, subject, body){
+  if (!mailable(r)){
+    toast('No usable email on this intake (' + (r.contactEmail || 'blank') + ') — copy the '
+      + 'message from the thread instead.');
+    return;
+  }
+  window.open('mailto:' + encodeURIComponent(r.contactEmail)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body), '_blank');
+}
+
+function openEditor(id){
+  var r = byId(id);
+  if (!r || !r.projectId) return;
+  /* Carry the intake's project type through so the editor opens configured,
+     the same as the tenant dashboards do. */
+  openEditorById(r.projectId, r.orgId, _adminEditorTypes(r));
+}
+
+/* Map an intake record onto the editor's build vocabulary.
+
+   Exact, from D.TYPES in /ops-data.js — no guessed aliases:
+
+     l2       -> l2          dcfc     -> dcfc
+     bess     -> bess        der      -> der
+     solar    -> der         compute  -> datacenter
+     powergen -> der         charging -> l2 + dcfc
+
+   'solar' and 'powergen' both collapse to der because the editor has one
+   generation build, not three. 'charging' is the generic tag with no level
+   attached, so it opens both charging builds rather than picking one and
+   being wrong half the time.
+
+   D.SCOPE is deliberately NOT consulted. Its keys are DELIVERABLES —
+   siteplan, sitemap, costs, loadstudy, utility, interconnect, ahj — not
+   disciplines, so unioning it in would open build tools based on which
+   documents were ordered. */
+var ADMIN_TYPE_MAP = {
+  l2:       ['l2'],
+  dcfc:     ['dcfc'],
+  bess:     ['bess'],
+  der:      ['der'],
+  solar:    ['der'],
+  compute:  ['datacenter'],
+  powergen: ['der'],
+  charging: ['l2', 'dcfc']
+};
+
+function _adminEditorTypes(r){
+  if (!r) return null;
+  if (r.types && r.types.length) return r.types.slice();   /* already the editor's own */
+  var hit = ADMIN_TYPE_MAP[String(r.projectType || r.type || '').toLowerCase().trim()];
+  return hit ? hit.slice() : null;
+}
+
+function openEditorById(projectId, orgId, types){
+  var slug = orgId ? String(orgId).split('.')[0] : '';
+  var url = '/editor.html?id=' + encodeURIComponent(projectId);
+  if (slug) url += '&org=' + encodeURIComponent(slug);
+  if (types && types.length) url += '&types=' + encodeURIComponent(types.join(','));
+  window.open(url, '_blank');
+}
+
+function setStatus(id, to){
+  var r = byId(id) || {};
+  var fields = { status: to };
+  if (to === 'in_production' && !D.ms(r.startedAt))     fields.startedAt   = ts();
+  /* omega-intake.js stamps completedAt on delivery — there is no deliveredAt
+     field. Writing one would leave the admin console showing no delivery date. */
+  if (to === D.payableStatus() && !D.ms(r.deliveredAt)) fields.completedAt = ts();
+  if (to !== 'submitted' && !D.answered(r))            fields.firstResponseAt = ts();
+  apply(id, fields, { type:'note', text:'Moved to ' + D.statusOf(to).label },
+        'Moved to ' + D.statusOf(to).label);
+}
+
+/* ── Files ────────────────────────────────────────────────────────────────
+   Uploads save the moment they finish, unlike links and notes which wait for
+   the button. A file that uploaded but silently didn't attach is the worst of
+   both worlds — the rep saw a progress bar and assumes it's done. */
+function fileRow(f){
+  return '<div class="frow">'
+    + '<a class="fn" onclick="openFile(\'' + f.id + '\')">' + D.esc(f.name) + '</a>'
+    + '<span class="fs">' + D.esc(D.fmtBytes(f.size)) + '</span>'
+    + '<button class="fx" title="Remove" onclick="dropFile(\'' + f.id + '\')">\u00d7</button>'
+    + '</div>';
+}
+
+/* Download URLs are resolved on click, not stored — see ops-data.js. */
+function openFile(fileId){
+  var r = byId(STATE.openId);
+  if (!r) return;
+  var f = (r.files || []).filter(function(x){ return x.id === fileId; })[0];
+  if (!f) return;
+  toast('Opening ' + f.name + '\u2026');
+  D.fileUrl(f).then(function(url){ window.open(url, '_blank'); })
+    ['catch'](function(e){ toast('Couldn\u2019t open it: ' + (e.message || 'storage error')); });
+}
+
+function dropFile(fileId){
+  var id = STATE.openId, r = byId(id);
+  if (!r) return;
+  var f = (r.files || []).filter(function(x){ return x.id === fileId; })[0];
+  if (!f || !confirm('Remove ' + f.name + '? The client loses access to it.')) return;
+  D.removeFile(r, fileId).then(function(fields){
+    apply(id, fields, { type:'file', text:'Removed ' + f.name }, 'File removed');
+  })['catch'](function(e){ toast('Couldn\u2019t remove it: ' + (e.message || 'error')); });
+}
+
+function uploadTo(id, key, input){
+  var r = byId(id);
+  if (!r || !input.files || !input.files.length) return;
+  var files = Array.prototype.slice.call(input.files);
+  input.value = '';
+
+  var wrap = input.closest('.up');
+  var bar = document.createElement('div');
+  bar.className = 'upbar';
+  bar.innerHTML = '<i></i>';
+  if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(bar, wrap.nextSibling);
+  var fill = bar.querySelector('i');
+
+  var done = [], i = 0;
+  function next(){
+    if (i >= files.length){
+      if (bar.parentNode) bar.parentNode.removeChild(bar);
+      if (!done.length) return;
+      var fields = {};
+      try { fields.files = firebase.firestore.FieldValue.arrayUnion.apply(null, done); }
+      catch(e){ fields.files = ((r._raw.files) || []).concat(done); }
+      if (!Array.isArray(r._raw.files)) r._raw.files = [];
+      r._raw.files = r._raw.files.concat(done);
+      apply(id, fields,
+            { type:'file', text:'Uploaded ' + done.map(function(f){ return f.name; }).join(', ') },
+            done.length + ' file(s) uploaded');
+      return;
+    }
+    var f = files[i++];
+    toast('Uploading ' + f.name + '\u2026');
+    D.uploadFile(r, f, key, function(pct){ if (fill) fill.style.width = pct + '%'; })
+      .then(function(meta){ done.push(meta); next(); })
+      ['catch'](function(e){
+        if (bar.parentNode) bar.parentNode.removeChild(bar);
+        toast(e.message || ('Upload failed for ' + f.name));
+      });
+  }
+  next();
+}
+
+/* Save the output links. This IS the handover: the tenant portal renders
+   exactly these as "Your files". */
+function saveDeliverables(id){
+  var r = byId(id);
+  if (!r) return;
+  var edits = {}, i, k;
+  var urls = document.querySelectorAll('[data-dkey]');
+  for (i = 0; i < urls.length; i++) edits[urls[i].dataset.dkey] = { outputUrl: urls[i].value };
+  var notes = document.querySelectorAll('[data-dnote]');
+  for (i = 0; i < notes.length; i++){
+    k = notes[i].dataset.dnote;
+    edits[k] = edits[k] || {};
+    edits[k].note = notes[i].value;
+  }
+  var n = 0;
+  for (var key in edits) if (edits[key].outputUrl) n++;
+  apply(id, D.deliverablesPayload(r, edits),
+        { type:'deliverable', text:'File links updated (' + n + ' attached)' },
+        n + ' file link(s) saved');
+}
+
+function deliver(id){
+  var r = byId(id);
+  if (!r) return;
+  /* Delivering with nothing attached is the exact failure the section above
+     exists to prevent, so say so rather than letting it through quietly. */
+  var attached = r.progress.done + (r.files || []).length;
+  if (r.progress.requested && !attached){
+    if (!confirm('None of the ' + r.progress.requested + ' requested deliverables has a file '
+      + 'file or link yet.\n\nThe client will see "Delivered" with nothing to open. '
+      + 'Send anyway?')) return;
+  }
+  var note = prompt('What are you sending them? This goes on the record and into the email.',
+                    'Package issued.');
+  if (note === null) return;
+  var fields = { status: D.payableStatus(), completedAt: ts() };
+  apply(id, fields, { type:'note', text:'Delivered: ' + note },
+        'Delivered · ' + D.fmtMoney(D.payout(r)) + ' commission earned');
+
+  var body = 'Hi ' + (r.contactName || 'there') + ',\n\n'
+    + '"' + r.projectName + '" is ready.\n\n' + note + '\n\n'
+    + 'It\u2019s in your ClearSky-OMEGA portal now — sign in and it will be in your project '
+    + 'list. Let us know if you\u2019d like anything changed.\n\nBest,\n'
+    + ME.name + '\nClearSky Energy Solutions';
+  openMail(r, r.projectName + ' — ready for you', body);
+}
+
+/* commissionPaidAt, NOT paidAt. quote.paidAt already means the CLIENT settled
+   their invoice; reusing it would have the earnings ledger call a rep paid the
+   moment the customer paid Omega. */
+function markPaid(id){
+  if (!confirm('Mark this commission as paid to the rep?\n\nThis is payroll, not the '
+    + 'client invoice — do it only once the money has actually gone out.')) return;
+  apply(id, { commissionPaidAt: ts() }, { type:'note', text:'Commission paid to rep' }, 'Marked paid');
+}
+
+function addNote(id){
+  var txt = prompt('Add a note to this intake:', '');
+  if (!txt) return;
+  apply(id, {}, { type:'note', text: txt }, 'Note added');
+}
+
+/* Internal notes are a single field the admin console also edits, so append
+   rather than replace — two people typing on the same job shouldn't overwrite
+   each other's context. */
+function addInternalNote(id){
+  var r = byId(id);
+  if (!r) return;
+  var txt = prompt('Internal note (staff only — the client never sees this):', '');
+  if (!txt) return;
+  var stampLine = '[' + new Date().toISOString().slice(0,10) + ' ' + ME.name + '] ' + txt;
+  var merged = r.internalNotes ? (r.internalNotes + '\n' + stampLine) : stampLine;
+  apply(id, { 'admin.internalNotes': merged }, null, 'Internal note added');
+}
+
+/* Writes quote.total by dot path rather than replacing the whole quote map —
+   otherwise anything else the intake tool stores in there (line items, tax,
+   who priced it) would be silently wiped by a save from this console. */
+/* ── Quoting ──────────────────────────────────────────────────────────────
+   Fixed rungs so two reps quoting the same job land on the same number. The
+   ladder writes into the same field the custom box does, so nothing downstream
+   has to know which one was used. */
+function pickTier(amount){
+  var box = document.getElementById('dr-value');
+  if (!box) return;
+  if (amount === null){ box.focus(); box.select(); }
+  else box.value = amount;
+  var btns = document.querySelectorAll('.tier');
+  for (var i = 0; i < btns.length; i++){
+    btns[i].classList.toggle('on', amount !== null && btns[i].textContent === D.fmtMoney(amount));
+  }
+  if (amount === null){
+    var last = btns[btns.length - 1];
+    if (last) last.classList.add('on');
+  }
+  previewPayout();
+}
+
+/* Sending a quote is not a status flip. It writes the amount, the line, the
+   currency and who sent it — the shape omega-intake.js's own sendQuote()
+   produces — so the client's portal has something to accept.
+
+   The old build moved the status to 'quoted' on its own, which is why the
+   tenant saw "Quote sent" against a blank fee. */
+function sendQuote(id){
+  var r = byId(id);
+  if (!r) return;
+  var amount = parseFloat(document.getElementById('dr-value').value);
+  if (!amount || amount <= 0){
+    toast('Set a fee first — a quote with no amount gives the client nothing to accept.');
+    document.getElementById('dr-value').focus();
+    return;
+  }
+  if (r.status === 'quoted' && (r.acceptance && r.acceptance.state === 'accepted')){
+    if (!confirm('They already accepted ' + D.fmtMoney(D.value(r)) + '.\n\n'
+      + 'Re-sending at ' + D.fmtMoney(amount) + ' clears that acceptance and they must '
+      + 'accept again. Continue?')) return;
+  }
+  var note = (document.getElementById('dr-qnote') || {}).value || '';
+  var rate = (parseFloat(document.getElementById('dr-rate').value) || 0) / 100;
+
+  var fields = D.quotePayload(r, amount, note);
+  fields.commissionRate = rate;
+  if (!D.answered(r)) fields.firstResponseAt = ts();
+
+  apply(id, fields, { type:'quote', text:'Quote sent: ' + D.fmtMoney(amount) },
+        'Quote sent · ' + D.fmtMoney(amount));
+
+  var body = 'Hi ' + (r.contactName || 'there') + ',\n\n'
+    + 'Quote for "' + r.projectName + '": ' + D.fmtMoney(amount) + '.\n'
+    + (note ? '\n' + note + '\n' : '')
+    + '\nIt\u2019s in your ClearSky-OMEGA portal — open the project and you can accept it '
+    + 'there. Once accepted we\u2019ll post the payment link on the same screen.\n\nBest,\n'
+    + ME.name + '\nClearSky Energy Solutions';
+  openMail(r, 'Quote — ' + r.projectName, body);
+}
+
+/* ── Payment ──────────────────────────────────────────────────────────────
+   The link lives on the quote map, where the client can already read it.
+   Confirming receipt is deliberately a separate, staff-only action: the
+   person paying should not be the one who records the money as arrived. */
+function savePayLink(){
+  var id = STATE.openId;
+  if (!id) return;
+  var url = (document.getElementById('dr-payurl').value || '').trim();
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  var fields = { 'quote.paymentUrl': url };
+  var r = byId(id);
+  if (url && !(r && r.paymentStatus)) fields['quote.paymentStatus'] = 'unpaid';
+  apply(id, fields, { type:'payment', text: url ? 'Payment link posted' : 'Payment link removed' },
+        url ? 'Link posted to the client' : 'Link removed');
+}
+
+function confirmPaid(id){
+  var r = byId(id);
+  if (!r) return;
+  if (!confirm('Confirm the client has paid ' + D.fmtMoney(D.value(r)) + '?\n\n'
+    + 'This records their invoice as settled. It is not your commission — that stays '
+    + 'pending until payroll marks it.')) return;
+  apply(id, { 'quote.paymentStatus':'paid', 'quote.paidAt': ts() },
+        { type:'payment', text:'Payment received' }, 'Invoice marked paid');
+}
+
+/* ── Messages ─────────────────────────────────────────────────────────────
+   arrayUnion so two people typing at once can't clobber each other. `notify`
+   is set alongside so the client's portal flags an unread update rather than
+   relying on them opening the thread. */
+function thread(r){
+  var msgs = (r.messages || []).slice().sort(function(a,b){ return D.ms(a.at) - D.ms(b.at); });
+  if (!msgs.length){
+    return '<div class="thread-empty">No messages yet. Anything you send here appears on '
+      + 'their project in their own portal.</div>';
+  }
+  return msgs.map(function(m){
+    var side = (m.side === 'client') ? 'client' : 'staff';
+    return '<div class="msg '+side+'">'
+      + '<div class="who">'+D.esc(m.byName || m.by || (side === 'client' ? 'Client' : 'Omega'))+'</div>'
+      + '<div class="bub">'+D.esc(m.text || '')+'</div>'
+      + '<div class="when">'+D.fmtAgo(m.at)+'</div></div>';
+  }).join('');
+}
+
+function sendMessage(id){
+  var box = document.getElementById('dr-msg');
+  var text = (box && box.value || '').trim();
+  if (!text) return;
+  var r = byId(id);
+  if (!r) return;
+
+  var msg = D.messagePayload(text, 'staff');
+  var fields = {
+    'notify.unreadForClient': true,
+    'notify.lastNotifiedAt':  ts(),
+    'notify.lastMessage':     text.slice(0, 240)
+  };
+  try { fields.messages = firebase.firestore.FieldValue.arrayUnion(msg); }
+  catch(e){ fields.messages = (r._raw.messages || []).concat([msg]); }
+
+  if (box) box.value = '';
+  /* Mirror locally too — arrayUnion is opaque to the optimistic update. */
+  if (!Array.isArray(r._raw.messages)) r._raw.messages = [];
+  r._raw.messages.push(msg);
+
+  apply(id, fields, null, 'Message sent');
+}
+
+function saveMoney(){
+  var id = STATE.openId;
+  if (!id) return;
+  var v  = parseFloat(document.getElementById('dr-value').value) || 0;
+  var rt = (parseFloat(document.getElementById('dr-rate').value) || 0) / 100;
+  if (rt < 0 || rt > 1){ toast('Commission rate should be between 0 and 100%.'); return; }
+  var note = (document.getElementById('dr-qnote') || {}).value || '';
+  /* Deliberately does NOT touch status — saving a number is not sending a
+     quote, and a client should never see a price change without being told. */
+  apply(id, { 'quote.total': v, 'quote.note': note, commissionRate: rt }, null,
+        'Saved · ' + D.fmtMoney(v * rt) + ' commission on delivery');
+}
+</script>
+</body>
+</html>

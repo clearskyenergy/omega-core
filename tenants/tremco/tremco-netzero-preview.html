@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<!--
+  tremco-netzero-preview.html — OFFLINE PREVIEW, not part of the deployment.
+
+  Renders the Client & Asset Analysis panel against sample data so the layout
+  and the KPI set can be reviewed without Firebase, a login, or a deploy. Open
+  it directly in a browser (file:// is fine).
+
+  Two states are shown, because they look very different and both will happen:
+
+    TOP     BEFORE the editor persists results. Geometry and LL97 applicability
+            are live; every energy and carbon tile reads "—", not "0".
+    BOTTOM  AFTER the upstream editor change. Every tile populated.
+
+  Delete this file before deploying, or leave it — it is inert and loads
+  nothing from the portal.
+-->
+<meta charset="utf-8">
+<title>Tremco · Client &amp; Asset Analysis — preview</title>
+<style>
+  body{margin:0;padding:28px;background:#EEF1F5;
+       font:400 13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto}
+  .state{background:#fff;border-radius:12px;padding:22px 24px;margin-bottom:26px;
+         box-shadow:0 1px 3px rgba(15,27,42,.08)}
+  .state h2{margin:0 0 2px;font-size:13px;color:#00806E;text-transform:uppercase;letter-spacing:.06em}
+  .state p{margin:0 0 6px;font-size:12px;color:#64748B}
+  #kpi-grid{display:none}
+</style>
+<div class="wrap">
+  <div class="state">
+    <h2>State 1 — today</h2>
+    <p>The editor is not yet persisting energy results. Coverage and LL97
+       applicability are real; energy and carbon tiles stay blank rather than
+       reporting zero.</p>
+    <div id="kpi-grid"></div>
+    <div id="tnz-panel"></div>
+  </div>
+
+  <div class="state">
+    <h2>State 2 — after the editor writes a netZero summary</h2>
+    <p>Same buildings, same drawings. The only change is that each analysed zone
+       now carries its modelled EUI and annual tCO<sub>2</sub>e.</p>
+    <div id="tnz-panel-2"></div>
+  </div>
+</div>
+
+<script>
+/* Firebase is absent here; stub just enough that the module loads without its
+   auth path firing. The preview drives render() directly. */
+window.firebase = { apps: [], firestore: function(){ throw new Error('preview'); } };
+</script>
+<script src="./tremco-netzero.js"></script>
+<script>
+(function(){
+  var T = window.TremcoNetZero;
+  if (!T){ document.body.insertAdjacentHTML('afterbegin',
+    '<p style="color:#B91C1C">Could not load tremco-netzero.js — keep this file next to it.</p>'); return; }
+
+  var box = function(id,w,h,bnz){ return {id:id,kind:'zonebox',pts:[{x:0,y:0},{x:w,y:h}],bnz:bnz}; };
+
+  /* Representative of Tremco's actual book: healthcare, K-12, federal, retail —
+     a mix of retrofit and new build, one project drawn without a scale set. */
+  function docs(withEnergy){
+    var d = [
+      { name:'Cleveland Clinic — Main Campus', pxPerFt:10,
+        brand:{companyName:'Cleveland Clinic'},
+        shapes:[
+          box('a',1000,2000,{name:'Main Hospital',propertyType:'hospital',delivery:'retrofit',
+                             stories:4,f2f:14,parapet:3,roofOn:true,
+                             layers:{roof:'tpo_60',wall:'none',glazing:'none',slab:'none',hvac:'none'}}),
+          box('b',600,800,{name:'Ambulatory Annex',propertyType:'office',delivery:'retrofit',
+                           stories:3,f2f:12,parapet:2,roofOn:true}),
+          {id:'x',kind:'zonebox',pts:[{x:0,y:0},{x:200,y:200}]}   /* drawn, never analysed */
+        ]},
+      { name:'NYC SCA — Staten Island', pxPerFt:8,
+        brand:{companyName:'NYC School Construction Authority'},
+        shapes:[
+          box('c',900,1100,{name:'P.S. 62',propertyType:'school',delivery:'new_build',
+                            stories:2,f2f:13,parapet:3,roofOn:true}),
+          box('d',700,700,{name:'Gymnasium',propertyType:'school',delivery:'retrofit',
+                           stories:1,f2f:24,parapet:3,roofOn:true})
+        ]},
+      { name:'Federal Courthouse Envelope', pxPerFt:12,
+        brand:{companyName:'GSA Region 2'},
+        shapes:[
+          box('e',1400,1600,{name:'Courthouse',propertyType:'office',delivery:'retrofit',
+                             stories:6,f2f:14,parapet:4,roofOn:true,altPathway:'good_faith_plan'})
+        ]},
+      { name:'Retail portfolio — walkthrough',      /* no pxPerFt: never scaled */
+        brand:{companyName:'Regional Retail Group'},
+        shapes:[ box('f',500,500,{name:'Store 114',propertyType:'retail',delivery:'retrofit',
+                                  stories:1,f2f:16,roofOn:true}) ]}
+    ];
+    if (withEnergy){
+      d[0].netZero = { zones:{ a:{proposedEui:148,benchmarkEui:210,tco2ePerYr:2400},
+                               b:{proposedEui:41,benchmarkEui:62,netEui:-1.4,tco2ePerYr:60} } };
+      d[1].netZero = { zones:{ c:{proposedEui:31.8,benchmarkEui:70,netEui:-2.9,tco2ePerYr:8},
+                               d:{proposedEui:58,benchmarkEui:70,tco2ePerYr:30} } };
+      d[2].netZero = { zones:{ e:{proposedEui:96,benchmarkEui:105,tco2ePerYr:1750} } };
+    }
+    return d;
+  }
+
+  var year = new Date().getFullYear();
+  T.styles();
+
+  T.render(T.rollup(docs(false), year), year);
+
+  /* Second state: render() writes into #tnz-panel, so capture that output,
+     copy it into the second host, then restore the first. */
+  var live  = document.getElementById('tnz-panel');
+  var first = live.innerHTML;
+  T.render(T.rollup(docs(true), year), year);
+  document.getElementById('tnz-panel-2').innerHTML = live.innerHTML;
+  live.innerHTML = first;
+})();
+</script>

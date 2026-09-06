@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · EnergyOS Platform
+  Grid Atlas  ·  Interconnection & grid-proximity site intelligence
+
+  © 2025 ClearSky Energy Solutions LLC. All rights reserved.
+  Proprietary and Confidential. Author: Tommy Gilmer.
+
+  Full-screen grid explorer + pin-drop interconnect scoring over public data:
+  HIFLD/ArcGIS substations·transmission·plants, OSM power network (Overpass) with
+  OpenInfraMap voltage styling, and EIA-860M operable generators (MW bubbles +
+  national technology breakdown). Served from tools.csebuilders.com, shared across
+  tenants; brand/tier from window.OMEGA_WORKSPACE, EIA key from config.js. ES5 only.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="author" content="Tommy Gilmer · ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025 ClearSky Energy Solutions LLC. Proprietary.">
+<title>Grid Atlas · ClearSky-OMEGA</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{
+    /* SAP-style light theme */
+    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f0f2f5; --line:#dfe3e8;
+    --ink:#1a2733; --muted:#5b6b7b; --dim:#9aa7b4;
+    --amp:#0a6ed1;        /* signature accent — SAP-style blue-grey, calm not gold */
+    --accent:#0a6ed1;
+    --tx:#e0533d;         /* transmission */
+    --sub:#c98a2b;        /* substations */
+    --plant:#1aa39a;      /* generation */
+    --dc:#8a5cd1;         /* data centers */
+    --ev:#3d7fd6;         /* ev chargers */
+    --bess:#2ea043;       /* storage */
+    --ok:#2ea043; --warn:#c98a2b; --bad:#e0533d;
+    --topbar:#ffffff; --topbar-ink:#1a2733;
+    --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
+  #map{position:absolute;top:60px;left:0;right:0;bottom:0;background:#e8ebef}
+  .leaflet-container{background:#e8ebef;font-family:var(--sans)}
+
+  /* OMEGA topbar — clean white (SAP style) */
+  #topbar{position:absolute;top:0;left:0;right:0;height:60px;z-index:1200;
+    display:flex;align-items:center;gap:16px;padding:0 20px;
+    background:var(--topbar);border-bottom:1px solid var(--line);box-shadow:0 1px 3px rgba(26,39,51,.06)}
+  .tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+  .tb-omega{height:30px;width:auto;display:block;border-radius:7px}
+  .tb-logo-txt{color:var(--ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+  .tb-logo-txt span{color:var(--accent)}
+  .tb-sep{width:1px;height:24px;background:var(--line)}
+  .tb-portal{color:var(--muted);font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+  .tb-badge{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1a7f37;
+    background:rgba(46,160,67,.10);border:1px solid rgba(46,160,67,.28);padding:4px 10px;border-radius:20px}
+  .tb-title{color:var(--ink);font-size:13px;font-weight:600;letter-spacing:.02em;padding-left:4px}
+  .tb-spacer{flex:1}
+  .tb-back{background:var(--panel2);border:1px solid var(--line);color:var(--muted);
+    border-radius:7px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:600;text-decoration:none}
+  .tb-back:hover{background:#e6e9ee;color:var(--ink)}
+  #search{position:relative;width:min(300px,32vw)}
+  #search input{width:100%;height:32px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--ink);border-radius:7px;padding:0 30px 0 11px;font-size:13px;font-family:var(--sans);outline:none}
+  #search input::placeholder{color:var(--dim)}
+  #search input:focus{border-color:var(--accent)}
+  #search .ic{position:absolute;right:9px;top:8px;color:var(--dim);font-size:13px}
+  .modechip{font-family:var(--mono);font-size:10px;color:var(--accent);border:1px solid var(--accent);
+    border-radius:20px;padding:6px 12px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;user-select:none;white-space:nowrap}
+  .modechip.on{background:rgba(255,176,32,.16);border-color:var(--amp)}
+
+  /* Left layer rail */
+  #rail{position:absolute;left:12px;top:72px;z-index:1150;width:216px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.5);max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+  #layers{overflow-y:auto;flex:1 1 auto}
+  .rail-h{padding:10px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex:0 0 auto}
+  .rail-h .cnt{color:var(--dim)}
+  #presets{flex:0 0 auto;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .preset-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+  #presetChips{display:flex;flex-wrap:wrap;gap:5px}
+  .pchip{font-size:11px;padding:5px 9px;border-radius:14px;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);cursor:pointer;user-select:none;white-space:nowrap;display:flex;align-items:center;gap:5px}
+  .pchip:hover{border-color:var(--amp)}
+  .pchip.on{background:var(--amp);border-color:var(--amp);color:#fff;font-weight:700}
+  .pchip .pi{font-size:11px}
+  #railFilter{position:relative;flex:0 0 auto;border-bottom:1px solid var(--line)}
+  #railFilter input{width:100%;height:30px;border:0;background:var(--panel2);color:var(--ink);
+    padding:0 26px 0 12px;font-size:12px;font-family:var(--sans);outline:none}
+  #railFilter input::placeholder{color:var(--dim)}
+  #railFilter .fx{position:absolute;right:9px;top:7px;color:var(--dim);font-size:11px;cursor:pointer}
+  /* category header (collapsible) */
+  .cat-h{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;
+    background:var(--panel2);border-bottom:1px solid var(--line);user-select:none}
+  .cat-h:hover{background:var(--line)}
+  .cat-h .car{font-size:9px;color:var(--muted);transition:transform .15s;width:8px}
+  .cat-h.collapsed .car{transform:rotate(-90deg)}
+  .cat-h .cnm{flex:1;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+  .cat-h .con{font-family:var(--mono);font-size:9px;color:var(--amp)}
+  .cat-body.collapsed{display:none}
+  .lyr{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 20px;cursor:pointer;border-bottom:1px solid rgba(30,43,58,.5)}
+  .lyr:last-child{border-bottom:0}
+  .lyr:hover{background:var(--panel2)}
+  .lyr.hidden{display:none}
+  .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto;box-shadow:0 0 0 3px rgba(26,39,51,.05)}
+  .lyr .nm{font-size:12px;flex:1}
+  .lyr .st{font-family:var(--mono);font-size:9px;color:var(--dim)}
+  .lyr.off{opacity:.4}
+  .lyr.off .st{color:var(--dim)}
+  .tick{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--line);flex:0 0 auto;position:relative}
+  .lyr:not(.off) .tick{background:var(--amp);border-color:var(--amp)}
+  .lyr:not(.off) .tick:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+
+  /* Analysis panel (right) */
+  #panel{position:absolute;right:12px;top:72px;bottom:12px;z-index:1150;width:326px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(0,0,0,.5);transform:translateX(360px);
+    transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  #panel.open{transform:none}
+  .p-h{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .p-h .dot{width:8px;height:8px;border-radius:50%;background:var(--amp);box-shadow:0 0 10px var(--amp)}
+  .p-h .ti{font-weight:700;font-size:13px}
+  .p-h .x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
+  .p-b{padding:6px 14px 16px;overflow:auto;flex:1}
+  .coord{font-family:var(--mono);font-size:11px;color:var(--muted);margin:8px 0 14px;padding:8px 10px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:7px}
+  .sec{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:16px 0 8px}
+  .row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(30,43,58,.55)}
+  .row:last-child{border-bottom:0}
+  .row .ic{width:9px;height:9px;border-radius:2px;margin-top:4px;flex:0 0 auto}
+  .row .main{flex:1;min-width:0}
+  .row .nm{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .meta{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+  .row .dist{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--amp);white-space:nowrap}
+  .score{display:flex;align-items:baseline;gap:8px;margin:4px 0 2px}
+  .score .n{font-size:34px;font-weight:800;line-height:1;font-family:var(--mono)}
+  .score .lab{font-size:11px;color:var(--muted)}
+  .bar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden;margin:9px 0 2px}
+  .bar>span{display:block;height:100%;border-radius:3px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5}
+  .empty{text-align:center;color:var(--dim);padding:40px 16px}
+  .empty .big{font-size:26px;margin-bottom:10px}
+  .empty .t{font-size:13px;color:var(--muted);line-height:1.5}
+
+  /* legend / status bottom-left */
+  #status{position:absolute;left:12px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
+    color:var(--muted);background:rgba(15,22,32,.88);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
+    display:flex;gap:12px;align-items:center;max-width:calc(100vw - 24px);overflow:hidden}
+  #status .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  #status.load .d{background:var(--warn);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  /* zoom bottom-right; basemap switcher sits just above it, both clear of panel */
+  .leaflet-bottom.leaflet-left .leaflet-control-zoom{margin-left:12px;margin-bottom:48px}
+  .leaflet-bottom.leaflet-right .leaflet-control-zoom{margin-right:12px;margin-bottom:12px}
+
+  /* Basemap switcher */
+  #baseSwitch{position:absolute;right:12px;bottom:14px;z-index:1100;display:flex;gap:4px;
+    background:rgba(15,22,32,.9);border:1px solid var(--line);border-radius:8px;padding:4px;backdrop-filter:blur(8px)}
+  #baseSwitch .bchip{font-family:var(--mono);font-size:10px;color:var(--muted);padding:5px 9px;border-radius:5px;
+    cursor:pointer;user-select:none;letter-spacing:.04em;white-space:nowrap}
+  #baseSwitch .bchip:hover{background:var(--panel2);color:var(--ink)}
+  #baseSwitch .bchip.on{background:var(--amp);color:#fff;font-weight:700}
+  #baseSwitch .bsep{width:1px;align-self:stretch;background:var(--line);margin:2px 2px}
+  #baseSwitch .invtoggle{color:var(--amp)}
+  #baseSwitch .invtoggle.on{background:rgba(255,176,32,.16);color:var(--amp);font-weight:700}
+  @media(max-width:720px){ #baseSwitch{bottom:52px;left:12px;right:auto;flex-wrap:wrap;max-width:60vw} }
+
+  .leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:9px}
+  .leaflet-popup-tip{background:var(--panel);border:1px solid var(--line)}
+  .leaflet-popup-content{margin:11px 13px;font-size:12.5px}
+  .pp-t{font-weight:700;margin-bottom:5px}
+  .pp-r{font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.7}
+  .pp-r b{color:var(--ink);font-weight:600}
+  .leaflet-bar a{background:var(--panel2);color:var(--ink);border-color:var(--line)}
+  .leaflet-bar a:hover{background:var(--line)}
+
+  @media(max-width:720px){
+    #rail{width:170px;top:60px;left:8px}
+    #panel{width:calc(100vw - 16px);right:8px;top:auto;bottom:8px;height:52vh}
+    #panel.open{transform:none}
+    #search{width:38vw}
+    .brand .sub{display:none}
+  }
+  .pin-drop{cursor:crosshair!important}
+  #eiaPanel{position:absolute;left:12px;bottom:52px;z-index:1150;width:236px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.5);max-height:56vh;overflow-y:auto}
+  .eia-h{padding:12px 13px 8px}
+  .eia-h .big{font-size:22px;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
+  .eia-h .sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.06em}
+  .eia-t{display:flex;align-items:center;gap:9px;padding:6px 13px;font-size:12px}
+  .eia-t .sw{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+  .eia-t .nm{flex:1}
+  .eia-t .val{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:right}
+  .eia-t .val b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="topbar">
+  <a href="/" id="tb-logo-link" class="tb-logo">
+    <img src="/omega-logo.png" alt="OMEGA" class="tb-omega" onerror="this.style.display='none'">
+    <span class="tb-logo-txt">ClearSky<span>-OMEGA</span></span>
+  </a>
+  <div class="tb-sep"></div>
+  <div class="tb-portal">EnergyOS</div>
+  <span class="tb-badge" id="tb-badge">Enterprise</span>
+  <div class="tb-title">Grid Atlas</div>
+  <div class="tb-spacer"></div>
+  <div class="modechip on" id="pinBtn" title="Drop a site pin to analyze grid proximity">◎ Pin&nbsp;Site</div>
+  <div id="search"><input id="q" placeholder="Search address or place…" autocomplete="off"><span class="ic">⌕</span></div>
+  <a href="/" id="tb-back-link" class="tb-back">← Platform</a>
+</div>
+
+<div id="rail">
+  <div class="rail-h"><span>Grid Layers</span><span class="cnt" id="railCnt">—</span></div>
+  <div id="presets">
+    <div class="preset-lbl">Quick views</div>
+    <div id="presetChips"></div>
+  </div>
+  <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
+  <div id="layers"></div>
+  <div class="rail-h" style="border-top:1px solid var(--line)"><span>Voltage</span></div>
+  <div id="voltLegend"></div>
+</div>
+
+<div id="eiaPanel" style="display:none"></div>
+
+<div id="panel">
+  <div class="p-h"><span class="dot"></span><span class="ti">Site Analysis</span><span class="x" id="pClose">✕</span></div>
+  <div class="p-b" id="pBody">
+    <div class="empty">
+      <div class="big">◎</div>
+      <div class="t">Drop a pin anywhere on the map to score interconnection proximity — nearest substation, transmission voltage, generation, data-center clusters, and EV/BESS context.</div>
+    </div>
+  </div>
+</div>
+
+<div id="status"><span class="d"></span><span id="stTxt">Ready · public grid data</span></div>
+
+<div id="baseSwitch">
+  <span class="bchip" data-b="dark" onclick="__setBase('dark')">Dark</span>
+  <span class="bchip on" data-b="light" onclick="__setBase('light')">Light</span>
+  <span class="bchip" data-b="streets" onclick="__setBase('streets')">Streets</span>
+  <span class="bchip" data-b="satellite" onclick="__setBase('satellite')">Satellite</span>
+  <span class="bchip" data-b="hybrid" onclick="__setBase('hybrid')">Hybrid</span>
+  <span class="bsep"></span>
+  <span class="bchip invtoggle" data-b="invert" onclick="__toggleInvert()" title="Brighten / invert the basemap">◐ Invert</span>
+</div>
+
+<!-- Firebase compat v8 + shared platform config/registry (OMEGA standard order) -->
+<!-- config.js should provide (browser-visible; free-tier keys only, NEVER paid backend keys):
+       window.CLEARSKY_CONFIG.eiaApiKey   = "...";  // EIA plants layer  (free)
+       window.CLEARSKY_CONFIG.fccBbKey    = "...";  // live fiber-at-point (broadbandmap.com free demo)
+     Paid fiber route data (GeoTel/FiberLocator/LandGate) needs a serverless proxy — do NOT
+     put those keys here; wire them behind a Vercel function and point the tool at that. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+function fail(msg){
+  var s=document.getElementById("stTxt"), b=document.getElementById("status");
+  if(s){ s.textContent=msg; } if(b){ b.className=""; b.querySelector(".d").style.background="#ff5c3a"; }
+}
+if(typeof L==="undefined"||!L.map){
+  fail("Map library failed to load — check network/CDN access");
+  return;
+}
+window.onerror=function(m){ fail("Error: "+m); };
+
+/* ---------- OMEGA workspace badge + tenant platform nav (matches other tools) ---------- */
+(function applyWorkspace(){
+  try{
+    if(window.OMEGA_WORKSPACE){
+      var b=document.getElementById("tb-badge");
+      if(b) b.textContent=window.OMEGA_WORKSPACE.accountTier||"Enterprise";
+      var t=document.getElementById("tb-title");
+      if(t&&window.OMEGA_WORKSPACE.name) t.textContent=window.OMEGA_WORKSPACE.name+" · Grid Atlas";
+    }
+  }catch(e){}
+})();
+/* Rewrite logo + "← Platform" to the tenant portal/repo the user actually came from.
+   Grid Atlas is served from tools.csebuilders.com and shared across tenants, so a bare
+   href="/" lands on the tool host.
+
+   Key rule: send the user BACK TO THE EXACT URL THEY ARRIVED FROM. Each tenant portal is
+   its own repo/deployment and may live on any host and any path, so we never rebuild a
+   URL from a naming convention — an earlier attempt folded custom domains onto
+   "<slug>.csebuilders.com" and collapsed every portal to its root, which lands you on a
+   different site than the one you left. We capture the arrival URL verbatim on first
+   load, persist it, and only fall back to convention when we have nothing literal. */
+var GA_TOOL_HOSTS = {"tools.csebuilders.com":1,"www.csebuilders.com":1,"csebuilders.com":1,
+                     "localhost":1,"127.0.0.1":1,"":1};
+/* Convention fallback only — used when no literal return URL exists. */
+var GA_BRAND      = {"nextnrg.com":"nextnrg","solela.com":"solela","chileasing.com":"chileasing",
+                     "spatco.com":"spatco","ogisolar.com":"ogisolar"};
+var GA_URL_KEY    = "omega.tenant.portalUrl";   /* the literal page we came from */
+var GA_SLUG_KEY   = "omega.tenant.slug";        /* convention fallback */
+var GA_FALLBACK   = "https://tools.csebuilders.com/";
+
+function gaStoreGet(k){
+  var v="";
+  try{ if(window.sessionStorage) v=window.sessionStorage.getItem(k)||""; }catch(e){}
+  if(!v){ try{ if(window.localStorage) v=window.localStorage.getItem(k)||""; }catch(e2){} }
+  return v;
+}
+function gaStoreSet(k,v){
+  if(!v) return;
+  try{ if(window.sessionStorage) window.sessionStorage.setItem(k,v); }catch(e){}
+  try{ if(window.localStorage)  window.localStorage.setItem(k,v);  }catch(e2){}
+}
+/* Hostname without URL() (absent in old browsers, throws on relative refs). */
+function gaHostOf(u){
+  var m=String(u||"").match(/^https?:\/\/([^\/?#]+)/i);
+  return m?m[1].toLowerCase().replace(/:\d+$/,""):"";
+}
+/* True when a URL points somewhere that is genuinely a tenant, not this tool host. */
+function gaIsTenantUrl(u){
+  var h=gaHostOf(u);
+  return !!h && !GA_TOOL_HOSTS[h] && !GA_TOOL_HOSTS[h.replace(/^www\./,"")];
+}
+/* Keep the URL essentially verbatim; just drop a trailing "#" and any auth noise. */
+function gaCleanUrl(u){
+  u=String(u||"").trim();
+  if(!/^https?:\/\//i.test(u)) return "";
+  return u.replace(/#$/,"");
+}
+function gaParam(name){
+  var s=String(location.search||"")+"&"+String(location.hash||"").replace(/^#\/?/,"&");
+  var m=new RegExp("[?&]"+name+"=([^&#]*)","i").exec(s);
+  if(!m) return "";
+  try{ return decodeURIComponent(m[1].replace(/\+/g," ")); }catch(e){ return m[1]; }
+}
+function gaTry(fn,args,ctx){
+  try{ if(typeof fn!=="function") return fn; return fn.apply(ctx||null,args||[]); }catch(e){ return ""; }
+}
+
+/* ---- Pass 1: a literal URL back to the portal/repo we came from ---- */
+function gaLiteralReturnUrl(){
+  var i,v;
+
+  /* Explicit hand-off: ?return=<encoded url> / ?portal= / ?from= */
+  var P=["return","returnUrl","returnTo","portal","portalUrl","from","ref"];
+  for(i=0;i<P.length;i++){
+    v=gaCleanUrl(gaParam(P[i]));
+    if(v&&gaIsTenantUrl(v)) return {url:v,src:"param"};
+  }
+
+  /* The portal told us where home is. */
+  var w=window.OMEGA_WORKSPACE;
+  if(w&&typeof w==="object"){
+    var W=["portalUrl","portalURL","platformUrl","returnUrl","homeUrl","baseUrl","url","origin","site"];
+    for(i=0;i<W.length;i++){
+      v=gaCleanUrl(w[W[i]]);
+      if(v&&gaIsTenantUrl(v)) return {url:v,src:"workspace"};
+    }
+    /* host/domain given without a scheme */
+    var H=["host","hostname","domain"];
+    for(i=0;i<H.length;i++){
+      if(w[H[i]]){
+        v=gaCleanUrl("https://"+String(w[H[i]]).replace(/^https?:\/\//,""));
+        if(v&&gaIsTenantUrl(v)) return {url:v,src:"workspace"};
+      }
+    }
+  }
+
+  /* OMEGATools may expose the portal URL directly. */
+  var T=window.OMEGATools;
+  if(T){
+    var c=[gaTry(T.portalUrl,[],T),gaTry(T.orgUrl,[],T),gaTry(T.homeUrl,[],T),gaTry(T.baseUrl,[],T)];
+    for(i=0;i<c.length;i++){ v=gaCleanUrl(c[i]); if(v&&gaIsTenantUrl(v)) return {url:v,src:"omegatools"}; }
+  }
+
+  /* The page we arrived from — available on first load only, so we persist it below. */
+  v=gaCleanUrl(document.referrer);
+  if(v&&gaIsTenantUrl(v)) return {url:v,src:"referrer"};
+
+  /* Anything captured earlier this session. */
+  v=gaCleanUrl(gaStoreGet(GA_URL_KEY));
+  if(v&&gaIsTenantUrl(v)) return {url:v,src:"stored"};
+
+  return null;
+}
+
+/* ---- Pass 2: convention fallback, only when no literal URL exists ---- */
+function gaNormalizeSlug(v){
+  v=String(v==null?"":v).trim().toLowerCase();
+  if(!v||v==="null"||v==="undefined") return "";
+  v=v.replace(/^https?:\/\//,"").replace(/[\/?#].*$/,"").replace(/:\d+$/,"").replace(/^www\./,"");
+  if(!v) return "";
+  if(v.indexOf(".")>-1){
+    if(GA_TOOL_HOSTS[v]) return "";
+    if(GA_BRAND[v]) return GA_BRAND[v];
+    var m=v.match(/^([a-z0-9][a-z0-9-]*)\.csebuilders\.com$/);
+    if(m&&m[1]!=="tools"&&m[1]!=="www") return m[1];
+    return v;
+  }
+  if(v==="tools"||v==="www") return "";
+  return /^[a-z0-9][a-z0-9-]*$/.test(v)?v:"";
+}
+function gaFallbackSlug(){
+  var i,v,P=["org","tenant","tenantId","t","workspace","ws","brand","account"];
+  for(i=0;i<P.length;i++){ v=gaNormalizeSlug(gaParam(P[i])); if(v) return v; }
+  var w=window.OMEGA_WORKSPACE;
+  if(w&&typeof w==="object"){
+    var W=["slug","org","orgId","tenant","tenantId","key","id"];
+    for(i=0;i<W.length;i++){ if(w[W[i]]){ v=gaNormalizeSlug(w[W[i]]); if(v) return v; } }
+  }
+  var T=window.OMEGATools;
+  if(T){
+    var c=[];
+    if(T.orgFromUrl){ c.push(gaTry(T.orgFromUrl,[],T),gaTry(T.orgFromUrl,[location.href],T),gaTry(T.orgFromUrl,[document.referrer||""],T)); }
+    c.push(gaTry(T.currentOrg,[],T),gaTry(T.org,[],T),gaTry(T.tenant,[],T));
+    for(i=0;i<c.length;i++){ v=gaNormalizeSlug(c[i]); if(v) return v; }
+  }
+  return gaNormalizeSlug(gaStoreGet(GA_SLUG_KEY));
+}
+
+function gaTenantPortalUrl(){
+  var lit=gaLiteralReturnUrl();
+  if(lit){
+    if(lit.src!=="stored") gaStoreSet(GA_URL_KEY,lit.url);
+    var s=gaNormalizeSlug(gaHostOf(lit.url));
+    if(s) gaStoreSet(GA_SLUG_KEY,s);
+    window.__gaTenant={url:lit.url,source:lit.src,slug:s};
+    return lit.url;
+  }
+  var slug=gaFallbackSlug();
+  window.__gaTenant={url:"",source:slug?"slug":"none",slug:slug};
+  if(!slug) return GA_FALLBACK;
+  gaStoreSet(GA_SLUG_KEY,slug);
+  return slug.indexOf(".")>-1 ? "https://"+slug+"/" : "https://"+slug+".csebuilders.com/";
+}
+
+/* Carry the return URL on our own address bar so refresh/bookmark keeps the tenant. */
+function gaStampUrl(){
+  try{
+    if(!window.history||!history.replaceState) return;
+    var t=window.__gaTenant;
+    if(!t) return;
+    if(t.url){
+      if(gaParam("return")) return;
+      var q1=location.search||"";
+      history.replaceState(null,"",location.pathname+(q1?q1+"&":"?")+"return="+encodeURIComponent(t.url)+(location.hash||""));
+    }else if(t.slug){
+      if(gaParam("org")) return;
+      var q2=location.search||"";
+      history.replaceState(null,"",location.pathname+(q2?q2+"&":"?")+"org="+encodeURIComponent(t.slug)+(location.hash||""));
+    }
+  }catch(e){}
+}
+
+function gaWireNav(){
+  var url=gaTenantPortalUrl(), ids=["tb-back-link","tb-logo-link"], i, el;
+  gaStampUrl();
+  for(i=0;i<ids.length;i++){
+    el=document.getElementById(ids[i]);
+    if(!el) continue;
+    el.setAttribute("href",url);
+    if(!el.__gaWired){
+      el.__gaWired=1;
+      /* Re-resolve on click: OMEGA_WORKSPACE can land after first paint. */
+      el.onclick=function(ev){
+        ev=ev||window.event;
+        var u=gaTenantPortalUrl();
+        this.setAttribute("href",u);
+        var mod=ev&&(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||(ev.button&&ev.button!==0));
+        if(mod) return true;                                  /* let new-tab clicks through */
+        if(ev&&ev.preventDefault) ev.preventDefault(); else if(ev) ev.returnValue=false;
+        window.location.href=u;
+        return false;
+      };
+    }
+  }
+  return url;
+}
+gaWireNav();                                                  /* capture referrer immediately */
+if(document.addEventListener){
+  document.addEventListener("DOMContentLoaded",gaWireNav,false);
+  window.addEventListener("load",gaWireNav,false);
+  window.addEventListener("pageshow",gaWireNav,false);        /* bfcache restore */
+}
+setTimeout(gaWireNav,300); setTimeout(gaWireNav,1200);
+
+/* ---------- Layer registry: real public ArcGIS/HIFLD + open endpoints ---------- */
+/* Each layer queries live in the user's browser (no key needed for HIFLD/OSM). */
+var LAYERS = {
+  substations: {
+    name:"Substations", color:"#ffb020", on:true, geom:"point", role:"interconnect",
+    url:"https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0",
+    urls:[
+      // 1) EIA U.S. Energy Atlas — federally maintained (EIA), WGS84-native, actively updated
+      "https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0",
+      // 2) HIFLD mirror (program decommissioned 8/25/2025, but service still responds)
+      "https://services.arcgis.com/G4S1dGvn7PIgYd6Y/ArcGIS/rest/services/HIFLD_electric_power_substations/FeatureServer/0",
+      // 3) FEMA IEM_Support energy MapServer (federal, live)
+      "https://disasters.geoplatform.gov/arcgis/rest/services/IEM_Support/r00_energy/MapServer/2"
+    ],
+    label:function(a){return a.NAME||a.name||a.SUBSTATION||"Substation";},
+    meta:function(a){var v=a.MAX_VOLT||a.VOLTAGE||a.max_volt||a.MAX_VOLTAG;return (v&&v>0?v+" kV · ":"")+(a.STATUS||a.TYPE||a.LINES?(a.LINES+" lines"):"");}
+  },
+  transmission: {
+    name:"Transmission", color:"#ff5c3a", on:true, geom:"line", role:"interconnect",
+    url:"https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/US_Electric_Power_Transmission_Lines/FeatureServer/0",
+    urls:[
+      // EIA Atlas / fedmaps (Aug-2025 edit, WGS84) then HIFLD mirrors
+      "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/US_Electric_Power_Transmission_Lines/FeatureServer/0",
+      "https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0",
+      "https://services.arcgis.com/G4S1dGvn7PIgYd6Y/ArcGIS/rest/services/Electric_Power_Transmission_Lines/FeatureServer/0"
+    ],
+    label:function(a){return a.OWNER||a.SUB_1||"Transmission line";},
+    meta:function(a){var v=+(a.VOLTAGE||0);return (v>0?v+" kV":(a.VOLT_CLASS||"HV"));}
+  },
+  plants: {
+    name:"Power Plants", color:"#38d9c4", on:true, geom:"point", role:"generation",
+    url:"https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Power_Plants_in_the_US/FeatureServer/0",
+    urls:[
+      "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Power_Plants_in_the_US/FeatureServer/0",
+      "https://services.arcgis.com/G4S1dGvn7PIgYd6Y/ArcGIS/rest/services/Power_Plants/FeatureServer/0"
+    ],
+    label:function(a){return a.Plant_Name||a.NAME||a.PLANT_NAME||"Power plant";},
+    meta:function(a){var mw=a.Total_MW||a.TOTAL_MW||a.MW||a.OP_CAP;return (mw?Math.round(mw)+" MW · ":"")+(a.PrimSource||a.PRIM_FUEL||a.PRIMSOURCE||a.FUEL||"");}
+  },
+  datacenters: {
+    name:"Data Centers", color:"#a78bfa", on:false, geom:"point", role:"load",
+    url:"__OSM__", osmTag:'["telecom"="data_center"]',
+    osmTagAlt:'["office"="telecommunication"]["telecom"="data_center"]',
+    label:function(a){return a.name||a.operator||a["operator:wikidata"]||"Data center";},
+    meta:function(a){
+      var op=a.operator||a.brand||a.owner||"";
+      var big=/microsoft|google|amazon|aws|meta|facebook|apple|oracle|equinix|digital realty|coresite|qts|switch|vantage|cyrusone/i.test((a.name||"")+" "+op);
+      return (op?op+" · ":"")+(big?"hyperscale/colo":"data center");
+    }
+  },
+  ev: {
+    name:"EV Chargers", color:"#4ea3ff", on:false, geom:"point", role:"load",
+    url:"__OSM__", osmTag:'["amenity"="charging_station"]',
+    label:function(a){return a.name||a.operator||"Charging station";},
+    meta:function(a){return (a.socket_type2||a.socket_ccs2?"CCS/L2":"")||(a.capacity?a.capacity+" ports":"EV")}
+  },
+  bess: {
+    name:"Storage / BESS", color:"#6ee76e", on:false, geom:"point", role:"generation",
+    url:"__OSM__", osmTag:'["power"="plant"]["plant:source"="battery"]',
+    label:function(a){return a.name||"Battery storage";},
+    meta:function(a){return a["plant:output:electricity"]||a.operator||"BESS";}
+  },
+  osm_lines: {
+    name:"OSM Power Lines", color:"#B55D00", on:false, geom:"line", role:"interconnect",
+    url:"__OSMGEOM__", osmTag:'["power"="line"]', voltColor:true,
+    label:function(a){return a.operator||a.name||"Power line";},
+    meta:function(a){var kv=osmKv(a);return (kv?kv+" kV":"line")+(a.cables?" · "+a.cables+"c":"");}
+  },
+  osm_subs: {
+    name:"OSM Substations", color:"#ffb020", on:false, geom:"point", role:"interconnect",
+    url:"__OSM__", osmTag:'["power"="substation"]', voltColor:true,
+    label:function(a){return a.name||"Substation";},
+    meta:function(a){var kv=osmKv(a);return (kv?kv+" kV":"")+(a.substation?" · "+a.substation:"");}
+  },
+  osm_plants: {
+    name:"OSM Plants", color:"#38d9c4", on:false, geom:"point", role:"generation",
+    url:"__OSM__", osmTag:'["power"="plant"]', plantColor:true,
+    label:function(a){return a.name||"Power plant";},
+    meta:function(a){return (a["plant:source"]||"")+(a["plant:output:electricity"]?" · "+a["plant:output:electricity"]:"");}
+  },
+  eia_plants: {
+    name:"EIA Plants (MW)", color:"#E5B93C", on:false, geom:"bubble", role:"generation",
+    url:"__EIA__", eia:true,
+    label:function(a){return a.plantName||"Plant";},
+    meta:function(a){return (a.mw?Math.round(a.mw)+" MW · ":"")+(a.techLabel||a.tech||"");}
+  },
+  fiber: {
+    name:"Fiber Routes", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
+    url:"__OSMGEOM__", osmTag:'["communication"="line"]',
+    label:function(a){return a.operator||a.name||"Fiber route";},
+    meta:function(a){return (a["telecom:medium"]==="fibre"?"fibre":(a["telecom:medium"]||"comm line"))+(a.submarine==="yes"?" · submarine":"");}
+  },
+  fiber_cls: {
+    name:"Cable Landings", color:"#00E0C6", on:false, geom:"point", role:"connectivity",
+    url:"__OSM__", osmTag:'["telecom"="cable_landing_station"]',
+    label:function(a){return a.name||"Cable landing station";},
+    meta:function(a){return a.operator||"submarine cable landing";}
+  },
+  backbone: {
+    name:"LH Backbone (InterTubes)", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/intertubes-backbone.geojson",
+    label:function(a){return a.name||a.link||"Long-haul conduit";},
+    meta:function(a){return (a.owner||a.carriers||"backbone conduit");}
+  },
+  /* ── STATE / REGIONAL OPEN FIBER (add one entry per jurisdiction) ──
+     Each is a public ArcGIS FeatureServer of real fiber-route geometry, queried
+     within the map view via the standard ArcGIS path. To add a state: copy this
+     entry, change name/url/label/meta to that state's service. No national open
+     fiber API exists — this is how you aggregate coverage jurisdiction by jurisdiction. */
+  fiber_ca: {
+    name:"CA Middle-Mile", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
+    url:"https://gis.cdt.ca.gov/arcgis/rest/services/CDT/Middle_Mile_Network/FeatureServer/0",
+    urlAlt:"https://services3.arcgis.com/nJ7f7lPa4gwCsdVA/arcgis/rest/services/Statewide_Middle_Mile_Network/FeatureServer/0",
+    label:function(a){return a.SegmentName||a.RouteName||a.Name||"CA middle-mile route";},
+    meta:function(a){return (a.Status||a.PhaseStatus||"middle-mile fiber")+(a.Miles?" · "+Math.round(a.Miles)+" mi":"");}
+  },
+  subsea: {
+    name:"Submarine Cables", color:"#3DA5FF", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"https://map.kmcd.dev/data/all_cables.json",
+    label:function(a){return a.name||"Submarine cable";},
+    meta:function(a){return (a.owners?(""+a.owners).split(",")[0]:"subsea")+(a.rfs_year?" · RFS "+a.rfs_year:"")+(a.length?" · "+a.length:"");}
+  },
+  /* ── GeoDataViewer hosted terrestrial fiber (open GeoJSON, no key) ──
+     NOTE: aggregator data with vague provenance — treat as INDICATIVE corridors
+     for screening, not authoritative route geometry. */
+  ll_backbone: {
+    name:"LH Backbone (GDV)", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"https://static.geodataviewer.com/datasets/backbone.geojson",
+    label:function(a){return a.name||a.operator||"Backbone segment";},
+    meta:function(a){return a.operator||a.network||"terrestrial backbone";}
+  },
+  fiber_verified: {
+    name:"Fiber Routes (verified)", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"https://static.geodataviewer.com/datasets/fiber-routes-verified.geojson",
+    label:function(a){return a.name||a.operator||"Fiber route";},
+    meta:function(a){return (a.operator||a.carrier||"terrestrial fiber")+" · verified";}
+  },
+  fiber_estimated: {
+    name:"Fiber Routes (est.)", color:"#0E8C82", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"https://static.geodataviewer.com/datasets/fiber-routes-estimated.geojson",
+    label:function(a){return a.name||a.operator||"Fiber corridor";},
+    meta:function(a){return (a.operator||a.carrier||"estimated corridor")+" · est.";}
+  },
+  /* ── LICENSED fiber (FiberLocator/GeoTel) via serverless proxy ──
+     Inert until CLEARSKY_CONFIG.fiberProxyUrl is set to your Vercel proxy path.
+     The proxy holds the vendor key server-side and returns GeoJSON for the map view.
+     This is the ONE layer that gives carrier-complete US routes — and it's licensed,
+     so it's yours to show tenants. Never put the vendor key in the browser. */
+  fiber_licensed: {
+    name:"Fiber (licensed)", color:"#FF9F1C", on:false, geom:"line", role:"connectivity",
+    url:"__PROXY__", proxyKey:"fiber",
+    label:function(a){return a.carrier||a.operator||a.name||"Licensed fiber route";},
+    meta:function(a){return (a.carrier||a.network||"carrier fiber")+(a.type?" · "+a.type:"");}
+  },
+  /* ── PeeringDB (free, community, anonymous read) — interconnection points for DC siting ── */
+  ixp: {
+    name:"Internet Exchanges", color:"#E24A6B", on:false, geom:"point", role:"connectivity",
+    url:"__PEERINGDB__", pdbType:"ix",
+    label:function(a){return a.name||"IXP";},
+    meta:function(a){return (a.city||"")+(a.net_count?" · "+a.net_count+" networks":"");}
+  },
+  colo: {
+    name:"Colo Facilities", color:"#B07ED6", on:false, geom:"point", role:"connectivity",
+    url:"__PEERINGDB__", pdbType:"fac",
+    label:function(a){return a.name||"Colo facility";},
+    meta:function(a){return (a.city||"")+(a.net_count?" · "+a.net_count+" networks":"");}
+  },
+  carrierhotels: {
+    name:"Carrier Hotels (1.6k)", color:"#8a5cd1", on:false, geom:"bubble", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/peeringdb-facilities.geojson",
+    label:function(a){return a.name||"Facility";},
+    meta:function(a){return (a.operator?a.operator+" · ":"")+(a.city||"")+(a.state?", "+a.state:"")+(a.networks?" · "+a.networks+" networks":"");}
+  },
+  /* ── FCC fiber-SERVICE coverage (the govt "fiber like water" layer) ──
+     ISPs must report fiber availability to the FCC by law (Broadband DATA Act).
+     Utah SGID republishes the FCC BDC API monthly as per-provider fiber hexes.
+     This is coverage geography (where fiber SERVICE exists), not conduit routes. */
+  fcc_fiber: {
+    name:"FCC Fiber Coverage", color:"#FFB020", on:false, geom:"poly", role:"connectivity",
+    url:"https://services.arcgis.com/j195B8Fn38z3xQw8/arcgis/rest/services/all_record_hexes_dissolved/FeatureServer/0",
+    where:"Technology IN (50)", // 50 = Fiber to the Premises in FCC BDC coding
+    label:function(a){return (a.Provider||a.provider||a.brand_name||"Fiber provider");},
+    meta:function(a){var d=a.max_advertised_download_speed||a.MaxDown;return "Fiber"+(d?" · "+d+" Mbps":"")+(a.state?" · "+a.state:"");}
+  },
+  zayo: {
+    name:"Zayo Backbone (ref)", color:"#F5822A", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/zayo-backbone.geojson",
+    label:function(a){return a.name||"Zayo node";},
+    meta:function(a){return a.role==="long_haul"?"long-haul corridor":(a.role==="core_pop"?"core PoP":"Zayo")+" · published ref";}
+  },
+  /* ── MARKET / UTILITY CONTEXT (polygons) — NASA-hosted HIFLD energy mirror ──
+     Federal, stable, WGS84, GeoJSON. Pin-drop reports which territory a site falls in. */
+  utility_terr: {
+    name:"Utility Territory", color:"#C99BFF", on:false, geom:"poly", role:"market",
+    url:"https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/energy/FeatureServer/26",
+    label:function(a){return a.NAME||a.name||"Utility territory";},
+    meta:function(a){return (a.TYPE||a.REGULATED||"retail service territory");}
+  },
+  iso_rto: {
+    name:"ISO / RTO", color:"#7FB2FF", on:false, geom:"poly", role:"market",
+    url:"https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/energy/FeatureServer/28",
+    label:function(a){return a.NAME||a.name||"ISO/RTO";},
+    meta:function(a){return "independent system operator";}
+  },
+  ba_area: {
+    name:"Balancing Authority", color:"#5FD0C4", on:false, geom:"poly", role:"market",
+    url:"https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/energy/FeatureServer/23",
+    label:function(a){return a.NAME||a.name||"Balancing authority";},
+    meta:function(a){return "control area / BA";}
+  },
+  /* ── SITE SUITABILITY (data-center analysis) — federal, public, GeoJSON ── */
+  flood: {
+    name:"Flood Zones (FEMA)", color:"#4FA8FF", on:false, geom:"poly", role:"site",
+    url:"https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28",
+    label:function(a){return "Flood zone "+(a.FLD_ZONE||a.fld_zone||"");},
+    meta:function(a){return (a.ZONE_SUBTY||a.zone_subty||"FEMA NFHL");}
+  },
+  water: {
+    name:"Water (USGS)", color:"#2FD0E0", on:false, geom:"line", role:"site",
+    url:"https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/6",
+    label:function(a){return a.GNIS_NAME||a.gnis_name||"Waterway";},
+    meta:function(a){return (a.FTYPE||a.ftype||"stream/river");}
+  },
+  gas: {
+    name:"Gas Pipelines (EIA)", color:"#E08A4A", on:false, geom:"line", role:"site",
+    url:"https://geo.dot.gov/server/rest/services/Hosted/Natural_Gas_Pipelines_US_EIA/FeatureServer/0",
+    label:function(a){return a.Operator||a.operator||"Gas pipeline";},
+    meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
+  }
+};
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_cls","backbone","fiber_ca","subsea","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+
+/* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
+var EIA_TECH={
+  "solar":{c:"#E5B93C",label:"Solar"}, "SUN":{c:"#E5B93C",label:"Solar"},
+  "wind":{c:"#4EA3FF",label:"Wind"}, "WND":{c:"#4EA3FF",label:"Wind"},
+  "batteries":{c:"#E24A6B",label:"Storage"}, "MWH":{c:"#E24A6B",label:"Storage"},
+  "hydroelectric":{c:"#5F9BD6",label:"Hydro"}, "WAT":{c:"#5FBF8E",label:"Hydro"},
+  "nuclear":{c:"#5FBF8E",label:"Nuclear"}, "NUC":{c:"#5FBF8E",label:"Nuclear"},
+  "natural gas":{c:"#B07ED6",label:"Gas"}, "NG":{c:"#B07ED6",label:"Gas"},
+  "coal":{c:"#8A8A8A",label:"Coal"}, "BIT":{c:"#8A8A8A",label:"Coal"}, "SUB":{c:"#8A8A8A",label:"Coal"},
+  "petroleum":{c:"#E27A4A",label:"Oil"}, "DFO":{c:"#E27A4A",label:"Oil"},
+  "geothermal":{c:"#B54EB2",label:"Geothermal"}, "GEO":{c:"#B54EB2",label:"Geothermal"},
+  "biomass":{c:"#9BCF4A",label:"Biomass"}, "WDS":{c:"#9BCF4A",label:"Biomass"}
+};
+function eiaTech(row){
+  var t=(row.technology||row["energy_source_code"]||row.energy_source_code||"").toString();
+  var key=t.toLowerCase();
+  return EIA_TECH[key]||EIA_TECH[t]||{c:"#7d8fa3",label:t||"Other"};
+}
+
+/* ---------- Voltage → color (ported from OpenInfraMap style_oim_power.ts, BSD-3) ----------
+   Stepwise color ramp keyed on kV. HVDC and traction get special colors. */
+var VOLT_SCALE=[[0,"#7A7A85"],[10,"#6E97B8"],[25,"#55B555"],[52,"#B59F10"],
+                [132,"#B55D00"],[220,"#C73030"],[310,"#B54EB2"],[550,"#00C1CF"]];
+function voltColor(kv){
+  var v=+kv||0, c=VOLT_SCALE[0][1];
+  for(var i=0;i<VOLT_SCALE.length;i++){ if(v>=VOLT_SCALE[i][0]) c=VOLT_SCALE[i][1]; }
+  return c;
+}
+/* Parse an OSM voltage tag like "138000" or "115000;69000" → highest kV */
+function osmKv(props){
+  var raw=props.voltage||props.voltage_1||""; if(!raw) return 0;
+  var parts=(""+raw).split(";"), max=0;
+  for(var i=0;i<parts.length;i++){ var n=parseFloat(parts[i]); if(n>max) max=n; }
+  return max>1000?max/1000:max; // volts→kV if needed
+}
+/* OSM plant/generator source → label color */
+var PLANT_COLORS={coal:"#555",gas:"#B06A2E",oil:"#B06A2E",diesel:"#B06A2E",
+  nuclear:"#C73030",hydro:"#4E86C7",solar:"#E5B93C",wind:"#5FBF8E",
+  biomass:"#7FA05F",waste:"#8A7A5F",battery:"#6ee76e",geothermal:"#B54EB2"};
+function plantColor(props){
+  var s=(props["plant:source"]||props["generator:source"]||"").toLowerCase();
+  return PLANT_COLORS[s]||"#38d9c4";
+}
+
+/* ---------- Map ---------- */
+var map=L.map("map",{zoomControl:false,minZoom:3,maxZoom:18,worldCopyJump:true}).setView([41.84,-90.19],6); // Clinton, IA
+L.control.zoom({position:"bottomleft"}).addTo(map);
+
+/* Dedicated basemap pane, kept BELOW all overlays regardless of add order */
+map.createPane("basePane");
+map.getPane("basePane").style.zIndex=200; // overlayPane is 400, markerPane 600
+map.getPane("basePane").style.pointerEvents="none";
+
+/* Basemaps — switchable for readability. Satellite for site context, light for labels. */
+var ATTR='© OpenStreetMap · © CARTO/Esri · HIFLD/EIA/EPA/OSM';
+function baseTile(url,opts){ opts=opts||{}; opts.pane="basePane"; opts.attribution=ATTR; if(!opts.maxZoom)opts.maxZoom=19; return L.tileLayer(url,opts); }
+var BASEMAPS={
+  dark:{ name:"Dark", layer:baseTile("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd"}) },
+  light:{ name:"Light", layer:baseTile("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd"}) },
+  streets:{ name:"Streets", layer:baseTile("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:"abc"}) },
+  satellite:{ name:"Satellite", layer:baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{}) },
+  hybrid:{ name:"Hybrid", layer:L.layerGroup([
+     baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{}),
+     baseTile("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",{subdomains:"abcd"})
+  ]) }
+};
+var currentBase="light";
+BASEMAPS.light.layer.addTo(map);
+function setBasemap(key){
+  if(!BASEMAPS[key]||key===currentBase) return;
+  map.removeLayer(BASEMAPS[currentBase].layer);
+  BASEMAPS[key].layer.addTo(map);
+  currentBase=key;
+  var chips=document.querySelectorAll("#baseSwitch .bchip");
+  for(var i=0;i<chips.length;i++){
+    var b=chips[i].getAttribute("data-b");
+    if(b==="invert") continue; // invert toggle managed separately
+    chips[i].className="bchip"+(b===key?" on":"");
+  }
+}
+window.__setBase=setBasemap;
+
+/* Invert / high-contrast toggle — brightens a dark basemap via CSS filter on the pane.
+   Great when Dark is too muddy but you still want the dark UI aesthetic. */
+var baseInverted=false;
+function toggleInvert(){
+  baseInverted=!baseInverted;
+  var pane=map.getPane("basePane");
+  pane.style.filter=baseInverted?"invert(1) hue-rotate(180deg) brightness(1.05) contrast(.9)":"";
+  var inv=document.querySelector('#baseSwitch [data-b="invert"]');
+  if(inv) inv.className="bchip invtoggle"+(baseInverted?" on":"");
+}
+window.__toggleInvert=toggleInvert;
+
+var groups={}, cache={}, drawnBounds={};
+ORDER.forEach(function(k){ groups[k]=L.layerGroup(); if(LAYERS[k].on) groups[k].addTo(map); });
+
+/* ---------- Status ---------- */
+var stEl=document.getElementById("status"), stTxt=document.getElementById("stTxt");
+function status(msg,loading){ stTxt.textContent=msg; stEl.className=loading?"load":""; }
+
+/* ---------- Fetch: ArcGIS FeatureServer query within current view ----------
+   Walks a fallback chain of endpoints (L2.urls[]), so a dead mirror auto-recovers
+   to the next. This is the reliability layer: HIFLD's official portal was
+   decommissioned 8/25/2025, so grid layers rely on redundant public mirrors. */
+function fetchArc(key,cb){
+  var L2=LAYERS[key], b=map.getBounds();
+  var env=b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth();
+  var where=L2.where?encodeURIComponent(L2.where):"1%3D1";
+  var qs="/query?f=geojson&where="+where+"&outFields=*&returnGeometry=true"+
+    "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
+    "&resultRecordCount=1000&geometry="+encodeURIComponent(env);
+  // Build the ordered list of endpoints to try
+  var chain=[];
+  if(L2.urls&&L2.urls.length){ chain=L2.urls.slice(); }
+  else { if(L2.url)chain.push(L2.url); if(L2.urlAlt)chain.push(L2.urlAlt); }
+  var i=0;
+  function attempt(){
+    if(i>=chain.length){ cb([]); return; }
+    var base=chain[i++];
+    ajax(base+qs,function(err,json){
+      if(err||!json||!json.features||!json.features.length){ attempt(); return; }
+      var feats=json.features.map(function(f){ return {props:f.properties||{}, geom:f.geometry}; });
+      if(L2.urls&&i>1) status("Loaded "+L2.name+" via backup mirror ("+i+"/"+chain.length+")",false);
+      cb(feats);
+    });
+  }
+  attempt();
+}
+
+/* ---------- Fetch: OSM Overpass within view (points or line geometry) ---------- */
+function fetchOSM(key,cb){
+  var L2=LAYERS[key], b=map.getBounds();
+  var bbox=b.getSouth()+","+b.getWest()+","+b.getNorth()+","+b.getEast();
+  var wantGeom=(L2.url==="__OSMGEOM__");
+  var q;
+  if(wantGeom){
+    q="[out:json][timeout:25];(way"+L2.osmTag+"("+bbox+"););out geom 800;";
+  } else {
+    q="[out:json][timeout:25];(node"+L2.osmTag+"("+bbox+");way"+L2.osmTag+"("+bbox+"););out center 600;";
+  }
+  ajax("https://overpass-api.de/api/interpreter?data="+encodeURIComponent(q),function(err,json){
+    if(err||!json){ cb([]); return; }
+    var feats=(json.elements||[]).map(function(e){
+      if(wantGeom&&e.geometry){
+        var coords=e.geometry.map(function(p){return [p.lon,p.lat];});
+        return {props:e.tags||{}, geom:{type:"LineString",coordinates:coords}};
+      }
+      var lat=e.lat||(e.center&&e.center.lat), lon=e.lon||(e.center&&e.center.lon);
+      if(lat==null) return null;
+      return {props:e.tags||{}, geom:{type:"Point",coordinates:[lon,lat]}};
+    }).filter(Boolean);
+    cb(feats);
+  });
+}
+
+/* ---------- Fetch: EIA operating-generator-capacity (Inventory of Operable Generators) ----------
+   Returns generator rows with nameplate MW, technology, lat/lon (when present).
+   Also drives the national technology-breakdown panel. */
+var EIA_STATS=null; // {total_mw, total_count, byTech:{label:{mw,count,color}}}
+function fetchEIA(key,cb){
+  var cfg=window.CLEARSKY_CONFIG||{};
+  var apiKey=cfg.eiaApiKey||(cfg.apiKeys&&cfg.apiKeys.eia)||(window.CS_CONFIG&&window.CS_CONFIG.EIA_API_KEY)||"";
+  if(!apiKey){ status("EIA layer needs an API key (set eiaApiKey in config.js)",false); cb([]); return; }
+  // Pull operable generators nationally; EIA caps rows per call, so request a large page.
+  var base="https://api.eia.gov/v2/electricity/operating-generator-capacity/data/";
+  var params="?api_key="+encodeURIComponent(apiKey)+
+    "&frequency=monthly&data[0]=nameplate-capacity-mw&data[1]=net-summer-capacity-mw"+
+    "&sort[0][column]=period&sort[0][direction]=desc"+
+    "&facets[status][]=OP"+  // operating only
+    "&length=5000";
+  ajax(base+params,function(err,json){
+    if(err||!json||!json.response){ status("EIA request failed",false); cb([]); return; }
+    var rows=json.response.data||[];
+    // Deduplicate to latest period per plant+generator
+    var seen={}, uniq=[];
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], id=(r.plantid||r.plantId||r.plantCode||"")+"|"+(r.generatorid||r.generatorId||"");
+      if(seen[id]) continue; seen[id]=1; uniq.push(r);
+    }
+    // Build stats + bubble features
+    var stats={total_mw:0,total_count:0,byTech:{}};
+    var feats=[];
+    for(var j=0;j<uniq.length;j++){
+      var row=uniq[j];
+      var mw=parseFloat(row["nameplate-capacity-mw"]||row.nameplateCapacityMw||0)||0;
+      var tech=eiaTech(row);
+      stats.total_mw+=mw; stats.total_count++;
+      if(!stats.byTech[tech.label]) stats.byTech[tech.label]={mw:0,count:0,color:tech.c};
+      stats.byTech[tech.label].mw+=mw; stats.byTech[tech.label].count++;
+      var lat=parseFloat(row.latitude||row.lat), lon=parseFloat(row.longitude||row.lon);
+      if(!isNaN(lat)&&!isNaN(lon)){
+        feats.push({props:{plantName:row.plantName||row.plantid,mw:mw,tech:tech.label,
+          techLabel:tech.label,techColor:tech.c},
+          geom:{type:"Point",coordinates:[lon,lat]}, bubbleMw:mw, bubbleColor:tech.c});
+      }
+    }
+    EIA_STATS=stats;
+    renderEIAPanel(stats);
+    cb(feats);
+  });
+}
+
+/* ---------- PeeringDB (free, anonymous read) — IXPs and colo facilities ----------
+   Returns global records; filtered to the current map view client-side. */
+function fetchPeeringDB(key,cb){
+  var L2=LAYERS[key], b=map.getBounds();
+  ajax("https://www.peeringdb.com/api/"+(L2.pdbType||"ix"),function(err,json){
+    if(err||!json||!json.data){ status(L2.name+": PeeringDB unavailable",false); cb([]); return; }
+    var rows=json.data, feats=[];
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i], lat=parseFloat(r.latitude), lon=parseFloat(r.longitude);
+      if(isNaN(lat)||isNaN(lon)) continue;
+      if(lat<b.getSouth()||lat>b.getNorth()||lon<b.getWest()||lon>b.getEast()) continue;
+      feats.push({props:r, geom:{type:"Point",coordinates:[lon,lat]}});
+    }
+    cb(feats);
+  });
+}
+
+/* ---------- Licensed vendor data via serverless proxy (FiberLocator/GeoTel) ----------
+   The proxy holds the vendor API key server-side. Inert until CLEARSKY_CONFIG.fiberProxyUrl set. */
+function fetchProxy(key,cb){
+  var L2=LAYERS[key], cfg=window.CLEARSKY_CONFIG||{};
+  var base=cfg.fiberProxyUrl||"";
+  if(!base){ status(L2.name+": needs a license — set fiberProxyUrl in config.js",false); cb([]); return; }
+  var b=map.getBounds();
+  var bbox=b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth();
+  var url=base+(base.indexOf("?")>=0?"&":"?")+"layer="+encodeURIComponent(L2.proxyKey||"fiber")+"&bbox="+encodeURIComponent(bbox);
+  ajax(url,function(err,json){
+    if(err||!json){ status(L2.name+": proxy unavailable",false); cb([]); return; }
+    var raw=json.features?json.features:(json.length!=null?json:[]);
+    var feats=[];
+    for(var i=0;i<raw.length;i++){ var f=raw[i]; if(!f||!f.geometry) continue;
+      feats.push({props:f.properties||{}, geom:f.geometry}); }
+    cb(feats);
+  });
+}
+
+/* ---------- Static GeoJSON loader (InterTubes backbone, or any bundled geo) ----------
+   Loads a GeoJSON bundled on the tools host. National — ignores map extent. */
+function fetchStatic(key,cb){
+  var L2=LAYERS[key];
+  ajax(L2.staticFile,function(err,json){
+    if(err||!json){ status(L2.name+": no data available for this source",false); cb([]); return; }
+    var raw = json.features ? json.features : (json.length!=null ? json : []);
+    var feats=[];
+    for(var i=0;i<raw.length;i++){ var f=raw[i]; if(!f||!f.geometry) continue;
+      var ft={props:f.properties||{}, geom:f.geometry};
+      if(L2.geom==="bubble"){ // size by 'networks' (carrier-hotel density)
+        var n=+(f.properties&&f.properties.networks)||0;
+        ft.bubbleMw=n; ft.bubbleColor=L2.color; // reuse bubble renderer (sqrt scale)
+      }
+      feats.push(ft); }
+    if(!feats.length){ status(L2.name+": source returned no US features",false); }
+    cb(feats);
+  });
+}
+
+function ajax(url,cb){
+  var x=new XMLHttpRequest();
+  x.open("GET",url,true); x.timeout=28000;
+  x.onreadystatechange=function(){
+    if(x.readyState!==4) return;
+    if(x.status>=200&&x.status<300){
+      try{ cb(null,JSON.parse(x.responseText)); }catch(e){ cb(e); }
+    } else cb(new Error("HTTP "+x.status));
+  };
+  x.ontimeout=function(){ cb(new Error("timeout")); };
+  x.onerror=function(){ cb(new Error("network")); };
+  x.send();
+}
+
+/* ---------- Render ---------- */
+function featColor(L2,props){
+  if(L2.voltColor){ var kv=osmKv(props); if(kv>0) return voltColor(kv); }
+  if(L2.plantColor){ return plantColor(props); }
+  return L2.color;
+}
+function renderLayer(key,feats){
+  var L2=LAYERS[key], g=groups[key]; g.clearLayers();
+  cache[key]=feats;
+  for(var i=0;i<feats.length;i++){
+    var f=feats[i], gm=f.geom; if(!gm) continue;
+    var col=featColor(L2,f.props);
+    if(gm.type==="Point"){
+      var c=gm.coordinates;
+      if(f.bubbleMw!=null){
+        // MW-scaled bubble (sqrt scale so area ~ capacity), like OpenGridWorks
+        var mw=f.bubbleMw, r=Math.max(3,Math.min(26,Math.sqrt(mw)*0.55));
+        var bc=f.bubbleColor||col;
+        L.circleMarker([c[1],c[0]],{radius:r,color:bc,weight:1,fillColor:bc,fillOpacity:.4})
+          .bindPopup(popup(L2,f.props,bc)).addTo(g);
+      } else {
+        L.circleMarker([c[1],c[0]],{radius:L2.geom==="point"?5:4,color:col,weight:1.5,
+          fillColor:col,fillOpacity:.65}).bindPopup(popup(L2,f.props,col)).addTo(g);
+      }
+    } else if(gm.type==="LineString"||gm.type==="MultiLineString"){
+      var lines=gm.type==="LineString"?[gm.coordinates]:gm.coordinates;
+      // weight scales with voltage for the OIM look
+      var kv=osmKv(f.props), w=kv>=220?2.6:kv>=110?2.0:1.6;
+      for(var j=0;j<lines.length;j++){
+        var latlngs=lines[j].map(function(p){return [p[1],p[0]];});
+        L.polyline(latlngs,{color:col,weight:w,opacity:.75}).bindPopup(popup(L2,f.props,col)).addTo(g);
+      }
+    } else if(gm.type==="Polygon"||gm.type==="MultiPolygon"){
+      var polys=gm.type==="Polygon"?[gm.coordinates]:gm.coordinates;
+      for(var p=0;p<polys.length;p++){
+        var rings=polys[p].map(function(ring){return ring.map(function(pt){return [pt[1],pt[0]];});});
+        L.polygon(rings,{color:col,weight:1.2,opacity:.6,fillColor:col,fillOpacity:.08})
+          .bindPopup(popup(L2,f.props,col)).addTo(g);
+      }
+    }
+  }
+}
+function popup(L2,a,col){
+  col=col||L2.color;
+  return '<div class="pp-t" style="color:'+col+'">'+esc(L2.label(a))+'</div>'+
+         '<div class="pp-r">'+esc(L2.meta(a)||"")+'</div>';
+}
+
+/* ---------- EIA national technology-breakdown panel (image-2 style) ---------- */
+function renderEIAPanel(stats){
+  var el=document.getElementById("eiaPanel");
+  if(!stats||!stats.total_count){ el.style.display="none"; return; }
+  // sort techs by capacity desc
+  var techs=[];
+  for(var k in stats.byTech){ if(stats.byTech.hasOwnProperty(k)) techs.push([k,stats.byTech[k]]); }
+  techs.sort(function(a,b){return b[1].mw-a[1].mw;});
+  var gw=(stats.total_mw/1000).toFixed(1);
+  var h='<div class="eia-h"><div class="big">'+gw+' GW</div>'+
+        '<div class="sub">'+stats.total_count.toLocaleString()+' operable generators · EIA-860M</div></div>';
+  for(var i=0;i<techs.length;i++){
+    var name=techs[i][0], d=techs[i][1];
+    h+='<div class="eia-t"><span class="sw" style="background:'+d.color+'"></span>'+
+       '<span class="nm">'+esc(name)+'</span>'+
+       '<span class="val"><b>'+d.count.toLocaleString()+'</b> · '+(d.mw/1000).toFixed(1)+' GW</span></div>';
+  }
+  el.innerHTML=h; el.style.display="block";
+}
+function esc(s){ s=(s==null?"":""+s); return s.replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+
+/* ---------- Load visible layers on move ---------- */
+var loadTimer;
+function loadVisible(){
+  if(map.getZoom()<5){ status("Zoom in to load grid features",false); return; }
+  var todo=ORDER.filter(function(k){return LAYERS[k].on;});
+  if(!todo.length){ status("No layers active",false); return; }
+  var pending=todo.length, any=false;
+  status("Loading "+todo.length+" layer"+(todo.length>1?"s":"")+"…",true);
+  todo.forEach(function(k){
+    var isOSM=(LAYERS[k].url==="__OSM__"||LAYERS[k].url==="__OSMGEOM__");
+    var fn=LAYERS[k].url==="__PEERINGDB__"?fetchPeeringDB:
+           (LAYERS[k].url==="__PROXY__"?fetchProxy:
+           (LAYERS[k].url==="__STATIC__"?fetchStatic:
+           (LAYERS[k].url==="__EIA__"?fetchEIA:(isOSM?fetchOSM:fetchArc))));
+    fn(k,function(feats){
+      renderLayer(k,feats); if(feats.length) any=true;
+      updateRailCounts();
+      if(--pending===0){
+        status(any?"Loaded · "+countAll()+" features in view":"No features in this view (data coverage varies)",false);
+        if(pinLatLng) analyze(pinLatLng);
+      }
+    });
+  });
+}
+function debounceLoad(){ clearTimeout(loadTimer); loadTimer=setTimeout(loadVisible,550); }
+map.on("moveend",debounceLoad);
+
+function countAll(){ var n=0; ORDER.forEach(function(k){ if(cache[k])n+=cache[k].length;}); return n; }
+
+/* ---------- Layer rail UI ---------- */
+var layersEl=document.getElementById("layers");
+/* Category grouping by layer role */
+var CATS=[
+  {key:"interconnect", name:"Grid · Interconnect"},
+  {key:"generation",   name:"Generation"},
+  {key:"connectivity", name:"Fiber · Connectivity"},
+  {key:"market",       name:"Market · Utility"},
+  {key:"site",         name:"Site Suitability"},
+  {key:"load",         name:"Load · Demand"}
+];
+var catCollapsed={generation:true, connectivity:true, market:true, site:true, load:true}; // interconnect open by default
+
+/* ---------- Quick-view PRESETS: one click selects the right layer set ----------
+   Each preset lists the layer keys to turn ON (all others turn OFF). */
+var PRESETS=[
+  {key:"bess", name:"BESS", icon:"▮", layers:["substations","transmission","osm_subs","utility_terr","iso_rto"]},
+  {key:"solar", name:"Solar", icon:"☀", layers:["substations","transmission","plants","eia_plants","utility_terr"]},
+  {key:"solarbess", name:"Solar+BESS", icon:"⌁", layers:["substations","transmission","plants","eia_plants","osm_subs","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_verified","ll_backbone","subsea","water","flood","utility_terr","iso_rto"]},
+  {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
+  {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
+  {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]}
+];
+var activePreset=null;
+function applyPreset(p){
+  var want={}; for(var i=0;i<p.layers.length;i++) want[p.layers[i]]=1;
+  ORDER.forEach(function(k){
+    var shouldOn=!!want[k], L2=LAYERS[k];
+    if(L2.on!==shouldOn){
+      L2.on=shouldOn;
+      if(shouldOn) groups[k].addTo(map); else map.removeLayer(groups[k]);
+    }
+  });
+  // expand categories that now have active layers so the user sees what's on
+  CATS.forEach(function(cat){
+    var anyOn=ORDER.some(function(k){return (LAYERS[k].role||"other")===cat.key && LAYERS[k].on;});
+    if(anyOn) catCollapsed[cat.key]=false;
+  });
+  activePreset=p.key;
+  buildRail(); updateRailCounts(); renderPresetChips();
+  loadVisible();
+  status("Preset: "+p.name+" — "+p.layers.length+" layers on",false);
+}
+function renderPresetChips(){
+  var el=document.getElementById("presetChips"); if(!el) return;
+  var h="";
+  for(var i=0;i<PRESETS.length;i++){
+    var p=PRESETS[i];
+    h+='<span class="pchip'+(activePreset===p.key?" on":"")+'" data-p="'+p.key+'">'+
+       '<span class="pi">'+p.icon+'</span>'+p.name+'</span>';
+  }
+  el.innerHTML=h;
+  var chips=el.querySelectorAll(".pchip");
+  for(var j=0;j<chips.length;j++){
+    (function(chip){
+      chip.onclick=function(){
+        var key=chip.getAttribute("data-p");
+        var p=null; for(var k=0;k<PRESETS.length;k++){ if(PRESETS[k].key===key) p=PRESETS[k]; }
+        if(p) applyPreset(p);
+      };
+    })(chips[j]);
+  }
+}
+function buildPresets(){ renderPresetChips(); }
+
+function buildRail(){
+  layersEl.innerHTML="";
+  CATS.forEach(function(cat){
+    var keys=ORDER.filter(function(k){return (LAYERS[k].role||"other")===cat.key;});
+    if(!keys.length) return;
+    var hdr=document.createElement("div");
+    hdr.className="cat-h"+(catCollapsed[cat.key]?" collapsed":"");
+    hdr.innerHTML='<span class="car">▼</span><span class="cnm">'+cat.name+'</span>'+
+                  '<span class="con" data-con="'+cat.key+'"></span>';
+    var body=document.createElement("div");
+    body.className="cat-body"+(catCollapsed[cat.key]?" collapsed":"");
+    body.setAttribute("data-body",cat.key);
+    hdr.onclick=function(){
+      catCollapsed[cat.key]=!catCollapsed[cat.key];
+      hdr.className="cat-h"+(catCollapsed[cat.key]?" collapsed":"");
+      body.className="cat-body"+(catCollapsed[cat.key]?" collapsed":"");
+    };
+    layersEl.appendChild(hdr);
+    keys.forEach(function(k){
+      var L2=LAYERS[k];
+      var el=document.createElement("div");
+      el.className="lyr"+(L2.on?"":" off");
+      el.setAttribute("data-lyr",k);
+      el.innerHTML='<span class="sw" style="background:'+L2.color+'"></span>'+
+        '<span class="nm">'+L2.name+'</span><span class="st" data-c="'+k+'">—</span>'+
+        '<span class="tick"></span>';
+      el.onclick=function(){
+        L2.on=!L2.on;
+        el.className="lyr"+(L2.on?"":" off");
+        if(L2.on){ groups[k].addTo(map); loadVisible(); }
+        else { map.removeLayer(groups[k]); }
+        if(activePreset){ activePreset=null; renderPresetChips(); } // manual edit breaks preset match
+        updateRailCounts();
+      };
+      body.appendChild(el);
+    });
+    layersEl.appendChild(body);
+  });
+  updateRailCounts();
+}
+/* Filter layers by name */
+(function wireFilter(){
+  var inp=document.getElementById("lyrFilter"), clr=document.getElementById("lyrFilterClear");
+  if(!inp) return;
+  function apply(){
+    var q=(inp.value||"").toLowerCase().trim();
+    clr.style.display=q?"block":"none";
+    CATS.forEach(function(cat){
+      var body=layersEl.querySelector('[data-body="'+cat.key+'"]');
+      var hdr=body&&body.previousSibling;
+      if(!body) return;
+      var rows=body.querySelectorAll(".lyr"), anyShown=false;
+      for(var i=0;i<rows.length;i++){
+        var nm=rows[i].querySelector(".nm").textContent.toLowerCase();
+        var show=!q||nm.indexOf(q)>=0;
+        rows[i].className=rows[i].className.replace(" hidden","")+(show?"":" hidden");
+        if(show) anyShown=true;
+      }
+      // while filtering, force-expand matching categories; hide empty ones
+      if(q){
+        body.className="cat-body"+(anyShown?"":" collapsed");
+        if(hdr&&hdr.className) hdr.style.display=anyShown?"":"none";
+      } else {
+        body.className="cat-body"+(catCollapsed[cat.key]?" collapsed":"");
+        if(hdr) hdr.style.display="";
+      }
+    });
+  }
+  inp.addEventListener("input",apply);
+  clr.onclick=function(){ inp.value=""; apply(); inp.focus(); };
+})();
+function updateRailCounts(){
+  var active=0, byCat={};
+  ORDER.forEach(function(k){
+    var s=layersEl.querySelector('[data-c="'+k+'"]');
+    if(s) s.textContent=cache[k]?cache[k].length:(LAYERS[k].on?"…":"off");
+    if(LAYERS[k].on){ active++; var r=LAYERS[k].role||"other"; byCat[r]=(byCat[r]||0)+1; }
+  });
+  CATS.forEach(function(cat){
+    var c=layersEl.querySelector('[data-con="'+cat.key+'"]');
+    if(c) c.textContent=byCat[cat.key]?byCat[cat.key]+" on":"";
+  });
+  var rc=document.getElementById("railCnt"); if(rc) rc.textContent=active+"/"+ORDER.length;
+}
+
+/* ---------- Pin + proximity analysis ---------- */
+var pinLatLng=null, pinMarker=null, pinMode=true;
+var pinBtn=document.getElementById("pinBtn");
+pinBtn.onclick=function(){ pinMode=!pinMode; pinBtn.className="modechip"+(pinMode?" on":"");
+  document.getElementById("map").className=pinMode?"pin-drop":""; };
+document.getElementById("map").className="pin-drop";
+
+map.on("click",function(e){ if(pinMode) dropPin(e.latlng); });
+
+function dropPin(ll){
+  pinLatLng=ll;
+  if(pinMarker) map.removeLayer(pinMarker);
+  pinMarker=L.marker(ll,{icon:L.divIcon({className:"",html:
+    '<div style="width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;'+
+    'background:rgba(255,176,32,.18);border:2px solid #ffb020;box-shadow:0 0 0 6px rgba(255,176,32,.08)">'+
+    '<div style="width:6px;height:6px;border-radius:50%;background:#ffb020;margin:6px auto"></div></div>',
+    iconSize:[0,0]})}).addTo(map);
+  openPanel(); analyze(ll);
+}
+
+function haversine(a,b,c,d){
+  var R=6371,dLat=(c-a)*Math.PI/180,dLon=(d-b)*Math.PI/180;
+  var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function ptToSeg(p,v,w){ // km distance point→segment, all [lat,lng]
+  var toXY=function(ll){return [ll[1]*Math.cos(p[0]*Math.PI/180)*111.32, ll[0]*110.57];};
+  var P=toXY(p),A=toXY(v),B=toXY(w);
+  var dx=B[0]-A[0],dy=B[1]-A[1], l2=dx*dx+dy*dy;
+  var t= l2? ((P[0]-A[0])*dx+(P[1]-A[1])*dy)/l2 : 0; t=Math.max(0,Math.min(1,t));
+  var cx=A[0]+t*dx, cy=A[1]+t*dy;
+  return Math.sqrt((P[0]-cx)*(P[0]-cx)+(P[1]-cy)*(P[1]-cy));
+}
+function nearestPoint(ll,feats,L2){
+  var best=null,bd=1e9;
+  (feats||[]).forEach(function(f){
+    if(!f.geom||f.geom.type!=="Point")return;
+    var c=f.geom.coordinates, d=haversine(ll.lat,ll.lng,c[1],c[0]);
+    if(d<bd){bd=d;best=f;}
+  });
+  return best?{f:best,km:bd}:null;
+}
+function nearestLine(ll,feats){
+  var bd=1e9, bestProps=null;
+  (feats||[]).forEach(function(f){
+    if(!f.geom)return;
+    var lines=f.geom.type==="LineString"?[f.geom.coordinates]:
+              (f.geom.type==="MultiLineString"?f.geom.coordinates:null);
+    if(!lines)return;
+    for(var j=0;j<lines.length;j++){var pts=lines[j];
+      for(var k=1;k<pts.length;k++){
+        var d=ptToSeg([ll.lat,ll.lng],[pts[k-1][1],pts[k-1][0]],[pts[k][1],pts[k][0]]);
+        if(d<bd){bd=d;bestProps=f.props;}
+      }}
+  });
+  return bestProps?{km:bd,props:bestProps}:null;
+}
+function within(ll,feats,km){
+  var n=0; (feats||[]).forEach(function(f){ if(f.geom&&f.geom.type==="Point"){
+    var c=f.geom.coordinates; if(haversine(ll.lat,ll.lng,c[1],c[0])<=km)n++; }}); return n;
+}
+/* ray-casting point-in-ring; lng=x, lat=y */
+function pointInRing(x,y,ring){
+  var inside=false;
+  for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+    var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function containingFeature(ll,feats){
+  var x=ll.lng,y=ll.lat;
+  var arr=feats||[];
+  for(var i=0;i<arr.length;i++){
+    var gm=arr[i].geom; if(!gm) continue;
+    var polys=gm.type==="Polygon"?[gm.coordinates]:(gm.type==="MultiPolygon"?gm.coordinates:null);
+    if(!polys) continue;
+    for(var p=0;p<polys.length;p++){
+      var outer=polys[p][0]; if(outer&&pointInRing(x,y,outer)) return arr[i];
+    }
+  }
+  return null;
+}
+
+function analyze(ll){
+  var sub=nearestPoint(ll,cache.substations,LAYERS.substations);
+  if(sub) sub.src="substations";
+  var subOsm=nearestPoint(ll,cache.osm_subs,LAYERS.osm_subs);
+  if(subOsm&&(!sub||subOsm.km<sub.km)){ sub=subOsm; sub.src="osm_subs"; } // OSM independent fallback/refiner
+  var tx=nearestLine(ll,cache.transmission);
+  var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
+  var dcN=within(ll,cache.datacenters,40);
+  var evN=within(ll,cache.ev,15);
+  var fiberSets=[cache.fiber_verified,cache.ll_backbone,cache.fiber_ca,cache.fiber,cache.fiber_estimated,cache.subsea];
+  var fiber=null;
+  for(var fi=0;fi<fiberSets.length;fi++){
+    var cand=nearestLine(ll,fiberSets[fi]);
+    if(cand&&(!fiber||cand.km<fiber.km)) fiber=cand;
+  }
+
+  // interconnect score: closer substation + higher-voltage nearby line = better
+  var subKm=sub?sub.km:99;
+  var txKm=tx?tx.km:99;
+  var txV=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
+  var s1=Math.max(0,100-subKm*14);         // <7km strong
+  var s2=Math.max(0,100-txKm*20);          // <5km strong
+  var s3=txV>=230?100:txV>=115?78:txV>=69?55:txV>0?35:45;
+  var score=Math.round(s1*0.42+s2*0.33+s3*0.25);
+  score=Math.max(1,Math.min(100,score));
+  var band=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
+  var verdict=score>=70?"Strong interconnect proximity":score>=45?"Workable — verify hosting capacity":"Constrained — distance to grid is a cost driver";
+
+  var h='';
+  h+='<div class="coord">'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+
+     '  ·  <span style="color:var(--amp);cursor:pointer" id="copyc">copy</span></div>';
+
+  h+='<div class="sec">Interconnect Score</div>';
+  h+='<div class="score"><span class="n" style="color:'+band+'">'+score+'</span><span class="lab">/ 100</span></div>';
+  h+='<div class="bar"><span style="width:'+score+'%;background:'+band+'"></span></div>';
+  h+='<div class="hint" style="margin:6px 0 2px;color:'+band+'">'+verdict+'</div>';
+
+  h+='<div class="sec">Nearest Infrastructure</div>';
+  var subL=sub?LAYERS[sub.src||"substations"]:LAYERS.substations;
+  h+=infoRow(LAYERS.substations.color, sub?subL.label(sub.f.props):"No substation in view",
+        sub?(subL.meta(sub.f.props)||"")+(sub.src==="osm_subs"?" · OSM":""):"widen the map / enable layer", sub?fmtKm(sub.km):"—");
+  h+=infoRow(LAYERS.transmission.color, tx?"Transmission line":"No line in view",
+        tx?((txV?txV+" kV":(tx.props.VOLT_CLASS||"HV"))):"enable transmission layer", tx?fmtKm(tx.km):"—");
+  h+=infoRow(LAYERS.plants.color, plant?LAYERS.plants.label(plant.f.props):"No plant in view",
+        plant?LAYERS.plants.meta(plant.f.props):"", plant?fmtKm(plant.km):"—");
+
+  h+='<div class="sec">Load Context</div>';
+  h+=infoRow(LAYERS.datacenters.color,"Data centers","within 40 km"+(LAYERS.datacenters.on?"":" · layer off"),String(dcN));
+  h+=infoRow(LAYERS.ev.color,"EV charging sites","within 15 km"+(LAYERS.ev.on?"":" · layer off"),String(evN));
+
+  h+='<div class="sec">Connectivity</div>';
+  // ── Fiber Confidence — blends every free signal into one screening read ──
+  var fcRoute=fiber?Math.max(0,100-fiber.km*7):0;
+  var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
+  var fcInterconnect=Math.min(100,(ixpN*20)+(coloN*12)); // peering/colo nearby = strong
+  var fccCov=containingFeature(ll,cache.fcc_fiber);
+  var fcCoverage=fccCov?90:0;
+  // weight: route 45%, interconnect points 30%, FCC coverage 25% (live check adds in bbRow)
+  var haveAny=(fiber||ixpN||coloN||fccCov);
+  var fcScore=Math.round(fcRoute*0.45+fcInterconnect*0.30+fcCoverage*0.25);
+  fcScore=Math.max(haveAny?1:0,Math.min(100,fcScore));
+  var fcBand=fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
+  var fcWord=fcScore>=65?"High — multiple fiber signals present":fcScore>=35?"Moderate — some signal, verify":haveAny?"Low — thin fiber signal here":"No fiber layers loaded";
+  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+fcScore+'</span><span class="lab">/ 100 fiber confidence</span></div>';
+  h+='<div class="bar"><span style="width:'+fcScore+'%;background:'+fcBand+'"></span></div>';
+  h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
+  h+=infoRow(LAYERS.fiber.color, fiber?"Nearest fiber route":"No route in view",
+        fiber?"across all route layers":"enable fiber layers",
+        fiber?fmtKm(fiber.km):"—");
+  h+=infoRow(LAYERS.ixp.color,"Internet exchanges","within 60 km"+(LAYERS.ixp.on?"":" · layer off"),String(ixpN));
+  h+=infoRow(LAYERS.colo.color,"Colo facilities","within 60 km"+(LAYERS.colo.on?"":" · layer off"),String(coloN));
+  h+=infoRow(LAYERS.fcc_fiber.color,"FCC fiber service",fccCov?"reported at this point":(LAYERS.fcc_fiber.on?"none mapped here":"enable FCC Fiber Coverage"),fccCov?"✓":"—");
+  h+='<div id="bbRow"></div>'; // live FCC broadband-at-point, filled async
+  if(fiber){
+    var fv=fiber.km<=2?"On-net — minimal lateral build":fiber.km<=8?"Near backbone — modest lateral":"Fiber build is a cost driver";
+    h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. Confidence blends routes, peering/colo, and FCC service coverage — screening only; no free source maps every carrier conduit.</div>';
+  }
+
+  // Market / utility context via point-in-polygon
+  var terr=containingFeature(ll,cache.utility_terr);
+  var iso=containingFeature(ll,cache.iso_rto);
+  var ba=containingFeature(ll,cache.ba_area);
+  if(terr||iso||ba||LAYERS.utility_terr.on||LAYERS.iso_rto.on||LAYERS.ba_area.on){
+    h+='<div class="sec">Market / Utility</div>';
+    h+=infoRow(LAYERS.utility_terr.color,"Serving utility",
+          terr?LAYERS.utility_terr.label(terr.props):(LAYERS.utility_terr.on?"none at this point":"enable Utility Territory"),
+          terr?"↳":"—");
+    h+=infoRow(LAYERS.iso_rto.color,"ISO / RTO",
+          iso?LAYERS.iso_rto.label(iso.props):(LAYERS.iso_rto.on?"outside ISO (bilateral)":"enable ISO / RTO"),
+          iso?"↳":"—");
+    h+=infoRow(LAYERS.ba_area.color,"Balancing authority",
+          ba?LAYERS.ba_area.label(ba.props):(LAYERS.ba_area.on?"—":"enable Balancing Authority"),
+          ba?"↳":"—");
+  }
+
+  // ── Data Center Site Report — composite suitability ──
+  var water=nearestLine(ll,cache.water);
+  var floodF=containingFeature(ll,cache.flood);
+  var inFlood=floodF&&/^(A|AE|AO|AH|AR|A99|V|VE)$/i.test((floodF.props.FLD_ZONE||floodF.props.fld_zone||"").replace(/\s/g,""));
+  var pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
+  var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
+  if(txV2>=230) pPower=Math.min(100,pPower+12);
+  var pFiber=fiber?Math.max(0,100-fiber.km*8):15;
+  var pWater=water?Math.max(0,100-water.km*10):30;
+  var pFlood=floodF?(inFlood?12:58):85;
+  var pMarket=containingFeature(ll,cache.iso_rto)?100:70;
+  var dcScore=Math.round(pPower*0.42+pFiber*0.24+pWater*0.14+pFlood*0.12+pMarket*0.08);
+  dcScore=Math.max(1,Math.min(100,dcScore));
+  var dcBand=dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
+  var dcVerdict=dcScore>=72?"Strong data-center candidate":dcScore>=50?"Viable — diligence the constraints":"Challenged for DC scale";
+  h+='<div class="sec">◆ Data Center Site Report</div>';
+  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+dcScore+'</span><span class="lab">/ 100 DC suitability</span></div>';
+  h+='<div class="bar"><span style="width:'+dcScore+'%;background:'+dcBand+'"></span></div>';
+  h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
+  h+=dcFactor("Power access", pPower, sub?fmtKm(subKm)+" to substation":"no substation loaded");
+  h+=dcFactor("Fiber / connectivity", pFiber, fiber?fmtKm(fiber.km)+" to route":"enable a fiber layer");
+  h+=dcFactor("Cooling water", pWater, water?fmtKm(water.km)+" to water":"enable Water layer");
+  h+=dcFactor("Flood risk", pFlood, floodF?(inFlood?"in FEMA zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"mapped low-risk zone"):"no mapped flood zone");
+  h+=dcFactor("Market liquidity", pMarket, containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market");
+  h+='<div class="hint" style="margin:4px 0 0;color:var(--muted)">Weights: power 42%, fiber 24%, water 14%, flood 12%, market 8%. Enable Site Suitability + Fiber + Market layers for a full read. Screening only — confirm utility capacity, water rights & Phase I before acquisition.</div>';
+
+  // ── Available Power Estimate — the DC-critical question ──
+  // Public data cannot give true feeder headroom, but it bounds the likely capacity
+  // and routes to the utility's authoritative hosting-capacity / interconnection portal.
+  var subV=sub?(+(sub.f.props.MAX_VOLT||sub.f.props.VOLTAGE||sub.f.props.max_volt||sub.f.props.MAX_VOLTAG||0)):0;
+  var lineV=Math.max(txV2,subV);
+  // rough deliverable-capacity band by highest nearby voltage class (screening only)
+  var mwBand = lineV>=500?"1,000+ MW":lineV>=345?"500–1,000 MW":lineV>=230?"200–600 MW":
+               lineV>=115?"50–200 MW":lineV>=69?"10–60 MW":lineV>0?"<10 MW (distribution)":"unknown";
+  var subCount=within(ll,cache.substations,40)+within(ll,cache.osm_subs,40);
+  var plantMW=0,plantN=0;
+  (cache.eia_plants||[]).forEach(function(f){ if(f.geom&&f.geom.type==="Point"){
+    var c=f.geom.coordinates; if(haversine(ll.lat,ll.lng,c[1],c[0])<=40){ plantN++; plantMW+=(f.bubbleMw||0);} }});
+  var gasNear=nearestLine(ll,cache.gas);
+
+  h+='<div class="sec">⚡ Available Power Estimate</div>';
+  h+='<div class="score" style="margin-top:2px"><span class="n" style="font-size:22px;color:var(--amp)">'+esc(mwBand)+'</span></div>';
+  h+='<div class="hint" style="margin:3px 0 8px;color:var(--muted)">Screening band from highest nearby voltage ('+(lineV||"?")+' kV). NOT confirmed capacity.</div>';
+  h+=infoRow(LAYERS.substations.color,"Highest voltage nearby",sub?(subV?subV+" kV substation":"voltage not published"):"no substation",lineV?lineV+" kV":"—");
+  h+=infoRow(LAYERS.substations.color,"Substations within 40 km","interconnect options",String(subCount));
+  h+=infoRow(LAYERS.eia_plants.color,"Generation within 40 km",plantN?(Math.round(plantMW).toLocaleString()+" MW nameplate"):"enable EIA Plants",plantN?String(plantN):"—");
+  h+=infoRow(LAYERS.gas.color,"Gas pipeline (microgrid)",gasNear?"for on-site generation":(LAYERS.gas.on?"none in view":"enable Gas Pipelines"),gasNear?fmtKm(gasNear.km):"—");
+
+  // Serving utility → authoritative hosting-capacity / interconnection portal
+  var uName=terr?LAYERS.utility_terr.label(terr.props):"";
+  var portal=utilityPortal(uName, ll);
+  h+='<div class="hint" style="margin:8px 0 2px"><b style="color:var(--ink)">The real MW number comes from the utility.</b> '+
+     'No public API returns feeder headroom — it comes from the serving utility\'s hosting-capacity map or an interconnection study.</div>';
+  if(uName){
+    h+='<div class="hint" style="margin:2px 0">Serving utility: <b style="color:var(--ink)">'+esc(uName)+'</b></div>';
+  } else {
+    h+='<div class="hint" style="margin:2px 0;color:var(--muted)">Enable Utility Territory to resolve the serving utility at this point.</div>';
+  }
+  if(portal){
+    h+='<div style="margin:6px 0 2px"><a href="'+esc(portal.url)+'" target="_blank" rel="noopener" '+
+       'style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(portal.label)+'</a></div>';
+  }
+
+  h+='<div class="sec">Notes</div>';
+  h+='<div class="hint">Interconnect score weights substation distance (42%), transmission distance (33%), and voltage class (25%). '+
+     'Coverage depends on active layers and map extent — enable a layer and it feeds the score automatically. '+
+     'Public data (HIFLD / EIA / OSM); confirm hosting capacity with the utility before siting.</div>';
+
+  document.getElementById("pBody").innerHTML=h;
+  var cc=document.getElementById("copyc");
+  if(cc) cc.onclick=function(){ copy(ll.lat.toFixed(6)+","+ll.lng.toFixed(6)); cc.textContent="copied"; };
+  fetchBroadbandAtPoint(ll); // live FCC service check, fills #bbRow async
+}
+
+/* ---------- Live broadband-at-point (broadbandmap.com, FCC-sourced) ----------
+   Free demo key required (June 2026+). Set fccBbKey in config.js. Fills #bbRow. */
+function fetchBroadbandAtPoint(ll){
+  var row=document.getElementById("bbRow"); if(!row) return;
+  var cfg=window.CLEARSKY_CONFIG||{};
+  var key=cfg.fccBbKey||(cfg.apiKeys&&cfg.apiKeys.broadband)||"";
+  if(!key){
+    row.innerHTML=infoRow("#00E0C6","Live fiber service","set fccBbKey in config.js for live check","—");
+    return;
+  }
+  row.innerHTML=infoRow("#00E0C6","Live fiber service","checking FCC data…","…");
+  var url="https://broadbandmap.com/api/v1/location/internet?service_type=business&lat="+
+    encodeURIComponent(ll.lat.toFixed(5))+"&lng="+encodeURIComponent(ll.lng.toFixed(5));
+  var x=new XMLHttpRequest();
+  x.open("GET",url,true); x.timeout=15000;
+  x.setRequestHeader("Authorization","Bearer "+key);
+  x.onreadystatechange=function(){
+    if(x.readyState!==4) return;
+    if(x.status>=200&&x.status<300){
+      try{
+        var d=JSON.parse(x.responseText), provs=d.providers||[];
+        var fiberP=[]; for(var i=0;i<provs.length;i++){ if((provs[i].technology||"")==="Fiber") fiberP.push(provs[i]); }
+        if(fiberP.length){
+          var best=fiberP[0];
+          for(var j=1;j<fiberP.length;j++){ if((fiberP[j].max_download_mbps||0)>(best.max_download_mbps||0)) best=fiberP[j]; }
+          var spd=best.max_download_mbps?(best.max_download_mbps>=1000?(best.max_download_mbps/1000)+"G":best.max_download_mbps+"M"):"";
+          row.innerHTML=infoRow("#00E0C6","Live fiber service",
+            fiberP.length+" fiber ISP"+(fiberP.length>1?"s":"")+" · "+esc(best.name)+(spd?" "+spd:""),"✓ FIBER");
+        } else if(provs.length){
+          row.innerHTML=infoRow("#7d8fa3","Live fiber service",provs.length+" ISP(s), no fiber at this cell","—");
+        } else {
+          row.innerHTML=infoRow("#7d8fa3","Live fiber service","no reported service at this cell","—");
+        }
+      }catch(e){ row.innerHTML=infoRow("#7d8fa3","Live fiber service","parse error","—"); }
+    } else if(x.status===401){ row.innerHTML=infoRow("#ff5c3a","Live fiber service","invalid FCC API key","—"); }
+    else if(x.status===429){ row.innerHTML=infoRow("#ffb020","Live fiber service","rate limit reached — try later","—"); }
+    else { row.innerHTML=infoRow("#7d8fa3","Live fiber service","lookup unavailable","—"); }
+  };
+  x.ontimeout=function(){ row.innerHTML=infoRow("#7d8fa3","Live fiber service","timeout","—"); };
+  x.onerror=function(){ row.innerHTML=infoRow("#7d8fa3","Live fiber service","network error","—"); };
+  x.send();
+}
+function infoRow(color,nm,meta,dist){
+  return '<div class="row"><span class="ic" style="background:'+color+'"></span>'+
+    '<div class="main"><div class="nm">'+esc(nm)+'</div><div class="meta">'+esc(meta)+'</div></div>'+
+    '<div class="dist">'+esc(dist)+'</div></div>';
+}
+function utilityPortal(name, ll){
+  var n=(name||"").toLowerCase();
+  var P=[
+    [/comed|commonwealth edison/, "ComEd hosting capacity map", "https://www.comed.com/smart-energy/innovation/hosting-capacity-map"],
+    [/eversource/, "Eversource system data portal", "https://www.eversource.com/content/residential/save-money-energy/interconnections/system-data-portal"],
+    [/national grid/, "National Grid capacity map", "https://www.nationalgrid.com/us/hosting-capacity-maps"],
+    [/pg&e|pacific gas/, "PG&E interconnection portal", "https://www.pge.com/en_US/for-our-business-partners/interconnection-renewables/distribution-resource-planning-data-portal.page"],
+    [/southern california edison|sce\b/, "SCE ICA map", "https://www.sce.com/regulatory/hosting-capacity-online-map"],
+    [/san diego gas|sdg&e/, "SDG&E capacity map", "https://www.sdge.com/more-information/customer-generation/interconnection"],
+    [/duke energy/, "Duke hosting capacity", "https://www.duke-energy.com/business/products/renewables/generation-capacity-map"],
+    [/dominion/, "Dominion hosting capacity", "https://www.dominionenergy.com/projects-and-facilities/electric-projects/hosting-capacity"],
+    [/xcel/, "Xcel hosting capacity", "https://www.xcelenergy.com/working_with_us/hosting_capacity_maps"],
+    [/pacific power|pacificorp/, "PacifiCorp interconnection", "https://www.pacificorp.com/energy/interconnections.html"],
+    [/georgia power/, "Georgia Power interconnection", "https://www.georgiapower.com/business/save-money-and-energy/generating-your-own-power.html"],
+    [/ameren/, "Ameren hosting capacity", "https://www.ameren.com/company/environment-and-sustainability/hosting-capacity"],
+    [/pseg|public service/, "PSE&G interconnection", "https://nj.pseg.com/saveenergyandmoney/gogreen/solarandrenewableenergy"],
+    [/con ?ed|consolidated edison/, "Con Edison hosting capacity", "https://www.coned.com/en/business-partners/hosting-capacity"],
+    [/midamerican/, "MidAmerican interconnection", "https://www.midamericanenergy.com/generation-interconnection"],
+    [/alliant/, "Alliant Energy interconnection", "https://www.alliantenergy.com/accountandbilling/generatingyourownenergy"]
+  ];
+  for(var i=0;i<P.length;i++){ if(P[i][0].test(n)) return {label:P[i][1], url:P[i][2]}; }
+  if(name){
+    return {label:"Find "+name+" hosting-capacity map",
+            url:"https://www.google.com/search?q="+encodeURIComponent(name+" hosting capacity map interconnection queue")};
+  }
+  return null;
+}
+
+function dcFactor(name,score,detail){
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  var c=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
+  return '<div style="padding:5px 0">'+
+    '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'+
+    '<span>'+esc(name)+'</span><span style="font-family:var(--mono);font-size:10px;color:'+c+'">'+score+'</span></div>'+
+    '<div class="bar" style="height:4px"><span style="width:'+score+'%;background:'+c+'"></span></div>'+
+    '<div class="meta" style="font-size:10px;margin-top:2px">'+esc(detail)+'</div></div>';
+}
+function fmtKm(km){ return km<1?Math.round(km*1000)+" m":km.toFixed(1)+" km"; }
+function copy(t){ try{var i=document.createElement("textarea");i.value=t;document.body.appendChild(i);i.select();document.execCommand("copy");document.body.removeChild(i);}catch(e){} }
+
+/* ---------- Panel ---------- */
+var panel=document.getElementById("panel");
+function openPanel(){ panel.className="open"; }
+document.getElementById("pClose").onclick=function(){ panel.className=""; };
+
+/* ---------- Geocode search (OSM Nominatim) with fallback chain ----------
+   Full street addresses often miss in OSM (new industrial streets aren't mapped).
+   Try the full query, then progressively simpler versions, so we always land close. */
+var q=document.getElementById("q");
+function geocodeChain(raw){
+  var t=raw.trim(); if(!t) return;
+  // Build progressively looser queries
+  var attempts=[t];
+  var parts=t.split(",").map(function(s){return s.trim();}).filter(Boolean);
+  if(parts.length>1){
+    // drop leading street number from first part (e.g. "6561 North Lone Wolf Drive" -> "North Lone Wolf Drive")
+    var p0=parts[0].replace(/^\s*\d+\s+/,"");
+    if(p0!==parts[0]){ attempts.push([p0].concat(parts.slice(1)).join(", ")); }
+    // city, state, zip only (drop the street entirely)
+    attempts.push(parts.slice(1).join(", "));
+    // last resort: just the last two tokens (city+state or state+zip)
+    if(parts.length>=2) attempts.push(parts.slice(-2).join(", "));
+  }
+  // also try a US-biased structured version if a 5-digit zip is present
+  var zip=(t.match(/\b\d{5}\b/)||[])[0];
+  if(zip) attempts.push(zip+", USA");
+
+  status("Searching…",true);
+  var i=0;
+  function tryNext(){
+    if(i>=attempts.length){ status("No match — try just the city & state, or ZIP",false); return; }
+    var qy=attempts[i++];
+    var url="https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=us&limit=1&q="+encodeURIComponent(qy);
+    ajax(url,function(err,res){
+      if(err||!res||!res.length){ tryNext(); return; }
+      var r=res[0], lat=+r.lat, lon=+r.lon;
+      var exact=(i===1); // first attempt was the full address
+      map.setView([lat,lon], exact?16:13);
+      // auto-drop a pin so the site analysis runs at the searched address
+      if(typeof dropPin==="function"){ dropPin(L.latLng(lat,lon)); }
+      var where=(r.display_name||qy).split(",").slice(0,3).join(", ");
+      status((exact?"Found: ":"Nearest match: ")+where,false);
+    });
+  }
+  tryNext();
+}
+q.addEventListener("keydown",function(e){
+  if(e.key!=="Enter")return;
+  geocodeChain(q.value);
+});
+
+/* ---------- Boot ---------- */
+(function buildLegend(){
+  var labels=["<10","10","25","52","132","220","310","550+"];
+  var el=document.getElementById("voltLegend"), h="";
+  for(var i=0;i<VOLT_SCALE.length;i++){
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:4px 12px">'+
+       '<span style="width:16px;height:4px;border-radius:2px;background:'+VOLT_SCALE[i][1]+'"></span>'+
+       '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">'+labels[i]+' kV</span></div>';
+  }
+  h+='<div style="display:flex;align-items:center;gap:8px;padding:4px 12px 10px">'+
+     '<span style="width:16px;height:4px;border-radius:2px;background:#4E01B5"></span>'+
+     '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">HVDC</span></div>';
+  el.innerHTML=h;
+})();
+
+buildRail(); updateRailCounts();
+buildPresets();
+map.whenReady(function(){
+  setTimeout(function(){ map.invalidateSize(); },200);
+  setTimeout(loadVisible,400);
+});
+window.addEventListener("resize",function(){ map.invalidateSize(); });
+
+})();
+</script>
+</body>
+</html>

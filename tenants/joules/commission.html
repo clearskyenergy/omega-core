@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add a site · ClearSky-OMEGA</title>
+<link rel="icon" href="/omega-logo.png">
+<!-- Boot veil. SYNCHRONOUS and above the stylesheet on purpose: it has to be
+     up before the first paint, and this page hides both #gate and #wrap until
+     auth resolves, so without it the page shows a bare topbar over nothing.
+     Lifts on ready() below, and on a timeout / error / bfcache restore
+     regardless. Shared platform file. -->
+<script src="/omega-boot.js" data-wait="auth"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ADD A SITE — register a facility into the managed fleet.
+
+     Writes to the tenant's own fleet collection (fleet.collection). Tenant-
+     neutral: facility types, the unit label and the collection name all come
+     from /config.js.
+
+     ONLY THE SITE NAME IS REQUIRED. A site somebody knows exists before its
+     capacity, tariff or utility is confirmed is still a site, and a form
+     that refuses it is a form people work around in a spreadsheet. Every
+     other field degrades to "not stated" and the fleet block reports the
+     gaps rather than guessing past them.
+
+     ⚠ NO FILE UPLOADS. Unlike the CIR deployment's /intake.html, this form
+     attaches nothing: the fleet register is a commercial record, not a
+     document store, and Storage rules are a SEPARATE deploy that this repo
+     does not otherwise need. If one-lines or load profiles have to live
+     here, add the upload block AND deploy storage.rules with a matching
+     folder — half of that pair is worse than neither.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#EDEFF1; --sap-card-border:#E4E8EC; --cs-navy:#08384F;
+  --cs-sub:#5A7180; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+  --shadow:0 1px 2px rgba(20,40,60,.05);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--sap-ink);
+  min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:var(--sap-blue)}
+:focus-visible{outline:2px solid var(--sap-blue-hi);outline-offset:2px;border-radius:4px}
+
+#topbar{height:56px;background:#fff;display:flex;align-items:center;padding:0 18px;
+  border-bottom:1px solid #E5E9ED;box-shadow:var(--shadow);position:sticky;top:0;z-index:20}
+.tb-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.tb-omega{height:28px;border-radius:6px;display:block}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-sep{width:1px;height:22px;background:#E5E9ED;margin:0 14px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-client-chip{background:#fff;border:1px solid #E5E9ED;border-radius:7px;padding:4px 8px;
+  display:flex;align-items:center;height:32px;margin-right:10px}
+.tb-client-chip img{height:22px;width:auto;display:block}
+.btn-sm{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:500 12px 'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.btn-sm:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+
+#gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid var(--sap-card-border);
+  border-radius:14px;padding:32px 34px;box-shadow:var(--shadow)}
+#gate h2{font-size:19px;color:var(--cs-navy);margin-bottom:10px}
+#gate p{font-size:13.5px;color:var(--cs-sub);line-height:1.6}
+
+#wrap{max-width:940px;margin:0 auto;padding:26px 20px 90px}
+.ph-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8FA0AE}
+h1{font-size:25px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;margin-top:4px}
+.lede{font-size:13.5px;color:var(--cs-sub);margin-top:7px;line-height:1.6;max-width:78ch}
+
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;
+  box-shadow:var(--shadow);margin-top:18px;padding:22px 24px}
+.sec{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--sap-ink-2);margin:26px 0 4px;padding-top:18px;border-top:1px solid #EDF1F5}
+.sec:first-of-type{margin-top:0;padding-top:0;border-top:0}
+.sec-s{font-size:12px;color:var(--sap-ink-2);line-height:1.6;margin-bottom:14px;max-width:80ch}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid.g3{grid-template-columns:1fr 1fr 1fr}
+.f{display:flex;flex-direction:column;gap:5px}
+.f.wide{grid-column:1/-1}
+label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--sap-ink-2)}
+label .req{color:var(--bad)}
+label .opt{font-weight:400;text-transform:none;letter-spacing:0;color:#9AA8B5;font-size:11px}
+input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid #DDE3E9;border-radius:9px;
+  font:500 13.5px 'DM Sans',sans-serif;color:var(--sap-ink);background:#fff;outline:none;
+  transition:border-color .12s}
+input:focus,select:focus,textarea:focus{border-color:var(--sap-blue)}
+textarea{min-height:80px;resize:vertical;font-weight:400}
+.hint{font-size:11px;color:#8A96A2;line-height:1.5}
+.hint.warn{color:#8A5A00}
+
+.unit{display:flex;gap:8px}
+.unit input{flex:1}
+.unit select{width:88px;flex:0 0 auto;padding:10px 8px}
+
+.note{font-size:12px;color:#6B551C;background:#FDF8EC;border:1px solid #EFDFB8;
+  border-radius:9px;padding:11px 13px;margin-top:14px;line-height:1.6}
+.note b{color:#5A4715}
+
+.actions{display:flex;gap:10px;align-items:center;margin-top:26px;padding-top:20px;
+  border-top:1px solid #EDF1F5;flex-wrap:wrap}
+.btn{border-radius:9px;padding:11px 20px;font:600 13.5px 'DM Sans',sans-serif;cursor:pointer;
+  border:1.5px solid #DDE3E9;background:#fff;color:var(--sap-ink);text-decoration:none;display:inline-block}
+.btn.pri{background:var(--sap-blue);border-color:var(--sap-blue);color:#fff}
+.btn:disabled{opacity:.55;cursor:default}
+.msg{font-size:13px;font-weight:600;margin-left:4px}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+
+.summary{background:#F7FBFF;border:1px solid #BBD9F5;border-radius:10px;padding:13px 15px;
+  margin-top:16px;font-size:12.5px;color:#0B4FA8;line-height:1.6}
+.summary b{font-variant-numeric:tabular-nums}
+@media(max-width:760px){.grid,.grid.g3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="tb-logo" href="/index.html">
+    <img class="tb-omega" src="/omega-logo.png" alt="">
+    <span class="tb-logo-txt">ClearSky<span style="color:var(--sap-blue)">-OMEGA</span></span>
+  </a>
+  <span class="tb-sep"></span>
+  <span class="tb-portal">Add a site</span>
+  <span class="tb-spacer"></span>
+  <span class="tb-client-chip" id="tb-client-chip" style="display:none">
+    <img src="" alt="" id="tb-client-logo">
+  </span>
+  <a class="btn-sm" href="/fleet.html">Fleet register</a>
+  &nbsp;
+  <a class="btn-sm" href="/index.html">Dashboard</a>
+</div>
+
+<div id="gate" style="display:none">
+  <h2>Sign in first</h2>
+  <p>Sites are written into your workspace, so this page needs a signed-in account.</p>
+  <p style="margin-top:16px"><a class="btn-sm" href="/index.html">Go to the dashboard</a></p>
+</div>
+
+<div id="wrap" style="display:none">
+  <div class="ph-eyebrow">Fleet register</div>
+  <h1>Add a site</h1>
+  <p class="lede">
+    Register a facility into the managed fleet. Only the site name is required &mdash;
+    everything else can be filled in as it is confirmed, and the fleet board reports
+    what is missing rather than guessing past it.
+  </p>
+
+  <div class="card">
+    <div class="sec">The site</div>
+    <div class="grid">
+      <div class="f wide">
+        <label for="siteName">Site name <span class="req">*</span></label>
+        <input id="siteName" placeholder="e.g. Cold storage distribution centre" autocomplete="off">
+        <span class="hint">The facility, not the customer. This is what appears in the register.</span>
+      </div>
+      <div class="f">
+        <label for="customerName">Customer <span class="opt">optional</span></label>
+        <input id="customerName" list="customers" placeholder="Who owns the facility" autocomplete="off">
+        <datalist id="customers"></datalist>
+      </div>
+      <div class="f">
+        <label for="segment">Facility type</label>
+        <select id="segment"></select>
+      </div>
+    </div>
+
+    <div class="sec">Where it is</div>
+    <div class="sec-s">
+      Geography drives the "where" reporting on the dashboard. The wholesale market
+      matters separately from the state: a DER in an organized market can be aggregated
+      and bid in, one in a bilateral utility territory cannot, whatever the software does.
+    </div>
+    <div class="grid g3">
+      <div class="f">
+        <label for="city">City <span class="opt">optional</span></label>
+        <input id="city" autocomplete="off">
+      </div>
+      <div class="f">
+        <label for="state">State <span class="opt">optional</span></label>
+        <input id="state" maxlength="2" placeholder="SC" autocomplete="off"
+               style="text-transform:uppercase">
+        <span class="hint">Two-letter code. The state rollup groups on this exactly.</span>
+      </div>
+      <div class="f">
+        <label for="iso">Wholesale market</label>
+        <select id="iso"></select>
+      </div>
+      <div class="f">
+        <label for="utility">Utility <span class="opt">optional</span></label>
+        <input id="utility" placeholder="e.g. Duke Energy Progress" autocomplete="off">
+      </div>
+      <div class="f">
+        <label for="tariff">Tariff structure</label>
+        <select id="tariff"></select>
+      </div>
+    </div>
+
+    <div class="sec">What is on site</div>
+    <div class="sec-s">
+      The first three are <b>dispatchable</b> &mdash; the platform commands them, and they are
+      what counts toward power under management. Solar and facility load are
+      <b>observed</b>: carried, reported, and deliberately excluded from managed capacity.
+      Counting a facility's peak load as capacity you manage is the easiest tenfold
+      overstatement in this business.
+    </div>
+    <div class="grid g3">
+      <div class="f">
+        <label for="bessKw">Battery inverter power</label>
+        <div class="unit">
+          <input id="bessKw" type="number" min="0" step="any" placeholder="0">
+          <select id="bessKwUnit"><option value="kw">kW</option><option value="mw" selected>MW</option></select>
+        </div>
+      </div>
+      <div class="f">
+        <label for="bessKwh">Battery energy</label>
+        <div class="unit">
+          <input id="bessKwh" type="number" min="0" step="any" placeholder="0">
+          <select id="bessKwhUnit"><option value="kw">kWh</option><option value="mw" selected>MWh</option></select>
+        </div>
+        <span class="hint">Energy, not power. These two are never added together.</span>
+      </div>
+      <div class="f">
+        <label for="genKw">Generator</label>
+        <div class="unit">
+          <input id="genKw" type="number" min="0" step="any" placeholder="0">
+          <select id="genKwUnit"><option value="kw" selected>kW</option><option value="mw">MW</option></select>
+        </div>
+      </div>
+      <div class="f">
+        <label for="flexKw">Controllable load</label>
+        <div class="unit">
+          <input id="flexKw" type="number" min="0" step="any" placeholder="0">
+          <select id="flexKwUnit"><option value="kw" selected>kW</option><option value="mw">MW</option></select>
+        </div>
+        <span class="hint">HVAC, chillers, EV charging &mdash; load you can actually shift.</span>
+      </div>
+      <div class="f">
+        <label for="solarKwAc">Solar PV (AC) <span class="opt">observed</span></label>
+        <div class="unit">
+          <input id="solarKwAc" type="number" min="0" step="any" placeholder="0">
+          <select id="solarKwAcUnit"><option value="kw">kW</option><option value="mw" selected>MW</option></select>
+        </div>
+      </div>
+      <div class="f">
+        <label for="peakLoadKw">Facility peak load <span class="opt">observed</span></label>
+        <div class="unit">
+          <input id="peakLoadKw" type="number" min="0" step="any" placeholder="0">
+          <select id="peakLoadKwUnit"><option value="kw">kW</option><option value="mw" selected>MW</option></select>
+        </div>
+      </div>
+    </div>
+    <div id="capSummary" class="summary" style="display:none"></div>
+
+    <div class="sec">What was sold</div>
+    <div class="grid g3">
+      <div class="f">
+        <label for="units" id="unitsLabel">Units sold</label>
+        <input id="units" type="number" min="0" step="1" placeholder="0">
+      </div>
+      <div class="f">
+        <label for="unitsLive">Of those, commissioned</label>
+        <input id="unitsLive" type="number" min="0" step="1" placeholder="0">
+        <span class="hint">The gap between these two is the commissioning backlog.</span>
+      </div>
+      <div class="f">
+        <label for="meterChannels">Metering channels <span class="opt">optional</span></label>
+        <input id="meterChannels" type="number" min="0" step="1" placeholder="0">
+      </div>
+      <div class="f">
+        <label for="contractType">Contract</label>
+        <select id="contractType"></select>
+      </div>
+      <div class="f">
+        <label for="arr">Recurring revenue <span class="opt">$/yr</span></label>
+        <input id="arr" type="number" min="0" step="any" placeholder="0">
+      </div>
+      <div class="f">
+        <label for="soldAt">Date sold <span class="opt">optional</span></label>
+        <input id="soldAt" type="date">
+      </div>
+    </div>
+
+    <div class="sec">Stage and performance</div>
+    <div class="grid">
+      <div class="f">
+        <label for="status">Deployment stage</label>
+        <select id="status"></select>
+        <span class="hint" id="statusHint"></span>
+      </div>
+      <div class="f">
+        <label for="savingsBasis">Savings basis</label>
+        <select id="savingsBasis">
+          <option value="modeled" selected>Modelled &mdash; simulation or study</option>
+          <option value="metered">Metered &mdash; from settled bills</option>
+        </select>
+        <span class="hint warn">Modelled and metered savings are totalled separately and
+          never added. An unlabelled figure is treated as modelled.</span>
+      </div>
+      <div class="f">
+        <label for="annualSavings">Annual savings <span class="opt">$/yr</span></label>
+        <input id="annualSavings" type="number" min="0" step="any" placeholder="0">
+      </div>
+      <div class="f">
+        <label for="carbonKgYr">Carbon avoided <span class="opt">kg CO&#8322;e/yr</span></label>
+        <input id="carbonKgYr" type="number" min="0" step="any" placeholder="0">
+      </div>
+      <div class="f wide">
+        <label for="optimaUrl">Live operations link <span class="opt">optional</span></label>
+        <input id="optimaUrl" type="url" placeholder="https://..." autocomplete="off">
+        <span class="hint" id="opsHint"></span>
+      </div>
+      <div class="f wide">
+        <label for="notes">Notes <span class="opt">optional</span></label>
+        <textarea id="notes" placeholder="Anything the register should carry about this site."></textarea>
+      </div>
+    </div>
+
+    <div id="stampNote" class="note" style="display:none"></div>
+
+    <div class="actions">
+      <button class="btn pri" id="save">Add site</button>
+      <a class="btn" href="/fleet.html">Cancel</a>
+      <span class="msg" id="msg"></span>
+    </div>
+  </div>
+</div>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-fleet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var F = null, ME = null, SAVING = false;
+
+  firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+  var auth = firebase.auth();
+  window.db = firebase.firestore();
+
+  function el(id) { return document.getElementById(id); }
+  function val(id) { var e = el(id); return e ? String(e.value || '').trim() : ''; }
+
+  /* kW is the canonical stored unit. The form offers MW because that is what
+     a spec sheet quotes, and defaults each field to the unit that field is
+     usually quoted in — batteries in MW/MWh, generators and flexible load in
+     kW. Storing what was typed without the multiplier is how a fleet ends up
+     reading 4.5 kW for a 4.5 MWh battery. */
+  function cap(id) {
+    var raw = val(id);
+    if (raw === '') return null;
+    var n = Number(raw);
+    if (isNaN(n) || n < 0) return null;
+    var unit = el(id + 'Unit');
+    return (unit && unit.value === 'mw') ? n * 1000 : n;
+  }
+
+  function intOf(id) {
+    var raw = val(id);
+    if (raw === '') return null;
+    var n = parseInt(raw, 10);
+    return isNaN(n) || n < 0 ? null : n;
+  }
+
+  function numOf(id) {
+    var raw = val(id);
+    if (raw === '') return null;
+    var n = Number(raw);
+    return isNaN(n) || n < 0 ? null : n;
+  }
+
+  auth.onAuthStateChanged(function (user) {
+    if (!user) {
+      el('gate').style.display = 'block';
+      el('wrap').style.display = 'none';
+      try { OmegaBoot.ready(); } catch (e) {}   // signed out is still an answer
+      return;
+    }
+    ME = { email: String(user.email || '').toLowerCase() };
+    el('gate').style.display = 'none';
+    el('wrap').style.display = 'block';
+    F = window.OmegaFleet;
+
+    try {
+      var ws = OmegaBrand.resolve ? OmegaBrand.resolve(ME.email) : null;
+      var logo = ws && OmegaBrand.logoOf ? OmegaBrand.logoOf(ws) : null;
+      if (logo) { el('tb-client-logo').src = logo; el('tb-client-chip').style.display = 'flex'; }
+    } catch (e) {}
+
+    build();
+    /* Reveal as soon as the form exists. prefill() only fills the customer
+       autocomplete and is not worth holding a veil for — nobody is blocked
+       by a datalist that populates a moment later. */
+    try { OmegaBoot.ready(); } catch (e) {}
+    prefill();
+  });
+
+  function opts(list, sel) {
+    return list.map(function (o) {
+      return '<option value="' + F.esc(o.key) + '"' + (o.key === sel ? ' selected' : '') + '>' +
+             F.esc(o.label) + '</option>';
+    }).join('');
+  }
+
+  function build() {
+    var C = F.cfg();
+
+    el('segment').innerHTML = opts(C.segments, C.segments[0] && C.segments[0].key);
+    el('iso').innerHTML     = opts(F.MARKETS, 'other');
+    el('tariff').innerHTML  = opts(F.TARIFFS, 'other');
+    el('contractType').innerHTML = opts(F.CONTRACTS, 'subscription');
+
+    /* Prospect and churned are omitted from the create form on purpose. A
+       site is not registered into a fleet in order to record that it has
+       already ended, and a prospect with no contract is a CRM record rather
+       than a fleet one. Both remain valid on an existing record — the
+       register can move a site to either — so the rules still allow them. */
+    var creatable = F.STATUS.filter(function (s) {
+      return s.key !== 'prospect' && s.key !== 'churned';
+    });
+    el('status').innerHTML = opts(creatable, 'contracted');
+
+    el('unitsLabel').textContent = C.unitLabel + ' sold';
+    el('opsHint').textContent = C.opsUrlBase
+      ? 'Leave blank to fall back to the workspace default for ' + C.opsName + '.'
+      : 'This register carries no telemetry by design. Paste the ' + C.opsName +
+        ' link for this facility so the row can hand off to the live view.';
+
+    el('status').addEventListener('change', onStatus);
+    ['bessKw','bessKwh','genKw','flexKw','solarKwAc','peakLoadKw'].forEach(function (id) {
+      el(id).addEventListener('input', onCapacity);
+      if (el(id + 'Unit')) el(id + 'Unit').addEventListener('change', onCapacity);
+    });
+    el('units').addEventListener('input', onCapacity);
+    el('unitsLive').addEventListener('input', onCapacity);
+    el('save').addEventListener('click', save);
+
+    onStatus();
+    onCapacity();
+  }
+
+  /* Customer autocomplete off the existing register, so the same customer
+     doesn't end up spelled three ways across a quarter. */
+  function prefill() {
+    F.fetchAll().then(function (rows) {
+      var seen = {}, out = [];
+      rows.forEach(function (r) {
+        var c = (r.customerName || '').trim();
+        if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = true; out.push(c); }
+      });
+      el('customers').innerHTML = out.map(function (c) {
+        return '<option value="' + F.esc(c) + '"></option>';
+      }).join('');
+    })['catch'](function () {});
+  }
+
+  function onStatus() {
+    var s = F.statusOf(val('status'));
+    el('statusHint').textContent = s.hint || '';
+
+    /* Say plainly, at the moment of choosing, whether this site will count
+       toward managed capacity. That question is the one thing about this
+       form somebody will get wrong, and answering it after the save is too
+       late to be useful. */
+    var note = el('stampNote');
+    if (s.group === 'dispatch') {
+      note.style.display = 'block';
+      note.innerHTML = '<b>This site will count toward power under management.</b> Saving it ' +
+        'at this stage also stamps the date it went live, and that stamp is write-once \u2014 ' +
+        'it is what any question about time-to-commission is measured from. If the agent is ' +
+        'not actually dispatching yet, choose Learning or Commissioning instead.';
+    } else if (s.group === 'pipeline') {
+      note.style.display = 'block';
+      note.innerHTML = '<b>This site will not count toward power under management.</b> Its ' +
+        'capacity is reported separately as contracted, next to the managed figure, until ' +
+        'the agent is dispatching. That gap is deliberate.';
+    } else if (s.group === 'pre') {
+      note.style.display = 'block';
+      note.innerHTML = '<b>Nothing here is counted as sold or managed.</b> A virtual pilot ' +
+        'carries a real modelled result and belongs on the board, but its capacity and its ' +
+        'savings stay outside every realised total.';
+    } else {
+      note.style.display = 'block';
+      note.innerHTML = '<b>Connected, but not in control.</b> Capacity at this stage is ' +
+        'reported as connected rather than managed \u2014 the agent is observing or paused, ' +
+        'not dispatching.';
+    }
+  }
+
+  function onCapacity() {
+    var disp = (cap('bessKw') || 0) + (cap('genKw') || 0) + (cap('flexKw') || 0);
+    var obs  = (cap('solarKwAc') || 0) + (cap('peakLoadKw') || 0);
+    var kwh  = cap('bessKwh') || 0;
+    var u = intOf('units') || 0, ul = intOf('unitsLive') || 0;
+
+    var box = el('capSummary');
+    if (!disp && !obs && !kwh) { box.style.display = 'none'; return; }
+
+    var bits = [];
+    bits.push('<b>' + F.kw(disp) + '</b> dispatchable');
+    if (kwh) bits.push('<b>' + F.kwh(kwh) + '</b> storage');
+    if (obs) bits.push('<b>' + F.kw(obs) + '</b> observed but not controlled');
+
+    var warn = '';
+    if (obs > disp * 3 && disp > 0) {
+      warn = ' Most of what this site presents is observed rather than controlled, which is ' +
+             'normal for a large facility with a modest battery \u2014 only the dispatchable ' +
+             'figure reaches the fleet total.';
+    }
+    if (ul > u) {
+      warn += ' <span style="color:#B3261E">More units commissioned than sold \u2014 check both ' +
+              'numbers before saving.</span>';
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = bits.join(' &middot; ') + '.' + warn;
+  }
+
+  function save() {
+    if (SAVING) return;
+    var name = val('siteName');
+    var msg = el('msg');
+
+    if (!name) {
+      msg.className = 'msg bad';
+      msg.textContent = 'A site needs a name.';
+      el('siteName').focus();
+      return;
+    }
+
+    var units = intOf('units'), unitsLive = intOf('unitsLive');
+    if (units != null && unitsLive != null && unitsLive > units) {
+      msg.className = 'msg bad';
+      msg.textContent = 'Commissioned units cannot exceed units sold.';
+      return;
+    }
+
+    var status = val('status') || 'contracted';
+    var doc = {
+      siteName:      name,
+      customerName:  val('customerName') || null,
+      segment:       val('segment') || null,
+      status:        status,
+      city:          val('city') || null,
+      state:         val('state').toUpperCase() || null,
+      country:       'US',
+      iso:           val('iso') || 'other',
+      utility:       val('utility') || null,
+      tariff:        val('tariff') || 'other',
+
+      bessKw:        cap('bessKw'),
+      bessKwh:       cap('bessKwh'),
+      genKw:         cap('genKw'),
+      flexKw:        cap('flexKw'),
+      solarKwAc:     cap('solarKwAc'),
+      peakLoadKw:    cap('peakLoadKw'),
+
+      units:         units,
+      unitsLive:     unitsLive,
+      meterChannels: intOf('meterChannels'),
+      contractType:  val('contractType') || 'subscription',
+      arr:           numOf('arr'),
+      soldAt:        val('soldAt') || null,
+
+      savingsBasis:  val('savingsBasis') || 'modeled',
+      annualSavings: numOf('annualSavings'),
+      carbonKgYr:    numOf('carbonKgYr'),
+      optimaUrl:     val('optimaUrl') || null,
+      notes:         val('notes') || null
+    };
+
+    /* liveAt is stamped here rather than asked for, the same way the delivery
+       console stamps a first response: a date that needs a separate click is
+       a date that ends up never recorded. Write-once in the rules. */
+    if (F.statusOf(status).group === 'dispatch') {
+      doc.liveAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+
+    /* Drop nulls rather than writing them. A stored null and an absent field
+       both read as "not stated" through normalize(), but only the absent one
+       stays out of the way of a later import that does know the answer. */
+    Object.keys(doc).forEach(function (k) { if (doc[k] == null) delete doc[k]; });
+
+    SAVING = true;
+    el('save').disabled = true;
+    msg.className = 'msg';
+    msg.textContent = 'Saving\u2026';
+
+    F.create(doc).then(function () {
+      msg.className = 'msg ok';
+      msg.textContent = 'Site added.';
+      setTimeout(function () { location.href = '/fleet.html'; }, 700);
+    })['catch'](function (e) {
+      SAVING = false;
+      el('save').disabled = false;
+      msg.className = 'msg bad';
+      /* Name the file. A bare permissions string sends people to the wrong
+         rules block. */
+      msg.textContent = 'Could not save \u2014 ' + (e && e.message ? e.message : 'unknown error') +
+        '. If this is a permissions error, deploy firestore-fleet.rules.';
+      console.error('[commission] create failed', e);
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,389 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · CONTROL PLANE ADDENDUM to firestore.rules
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   HOW TO APPLY
+   ─────────────
+   This is NOT a complete rules file. Three edits to the live firestore.rules:
+
+     A. HELPERS — paste the "A" block directly after canActInOrg(), before
+        demoBucketOrg(). Every name is prefixed `t` (tenant) because
+        isAdmin(), myRole(), isPartner(), pRole() etc. already exist with
+        other meanings. Do not tidy the prefixes away.
+
+     B. REPLACE the existing /omega_orgs/{orgId} block (two lines today)
+        with the "B" block. It keeps today's grants exactly and adds the
+        tenant-admin branding write plus three subcollections.
+
+     C. NEW COLLECTIONS — paste the "C" block anywhere inside
+        `match /databases/{database}/documents`. Nothing in it touches an
+        existing collection.
+
+   Then search the LIVE rules text for `isTenantAdmin` and `opportunities`
+   before calling it deployed — same discipline as capacityAllocations.
+
+   WHAT THIS DOES NOT DO — deliberately
+   ─────────────────────────────────────
+   · It does NOT wire tenant suspension into /projects or any existing
+     collection. tenantActive() is defined here but consumed only by
+     omega-sso.js on boot for now. Gating the load-bearing /projects read on
+     a document that most tenants do not have yet is an outage waiting to
+     happen. Backfill omega_orgs for every live tenant first (scripts/
+     seed-omega-orgs.js), verify, then add `&& tenantActive(userOrg())` to
+     /projects read as its own deploy.
+   · It does NOT let a browser CREATE an opportunity or an rfq. Those are
+     written by /api/opportunity.js and /api/rfq.js with the Admin SDK,
+     because the routing logic (which vendor gets which lines) is IP and
+     runs server-side per CLAUDE.md. Rules here govern who may READ them
+     and the narrow updates each party may make.
+   · It does NOT touch referrals. That collection stays as the
+     human-initiated quote request; opportunities is the editor-generated
+     one. They may converge later; not in this deploy.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   A · TENANT HELPERS   (paste after canActInOrg(), before demoBucketOrg())
+   ─────────────────────────────────────────────────────────────────────────── */
+
+    /* The tenant record. omega_orgs/{orgId} already exists with own-org read
+       and admin write; the control plane hangs off it rather than inventing a
+       parallel `tenants` collection. */
+    function tenantExists(o) {
+      return exists(/databases/$(database)/documents/omega_orgs/$(o));
+    }
+    function tenantDoc(o) {
+      return get(/databases/$(database)/documents/omega_orgs/$(o)).data;
+    }
+    /* ABSENT COUNTS AS ACTIVE. Every tenant live today has no omega_orgs doc
+       yet. A helper that failed closed on a missing doc would lock out all
+       seven customers the moment it was consulted. Only an explicit
+       'suspended' or 'cancelled' holds anyone back. */
+    function tenantActive(o) {
+      return !tenantExists(o)
+          || !(tenantDoc(o).get('status', 'active') in ['suspended', 'cancelled']);
+    }
+
+    /* In-org role. omega_orgs/{orgId}/members/{uid}.
+         owner   — the account that stood the tenant up; cannot be demoted
+                   by another admin
+         admin   — branding, members, org-level dashboard defaults
+         member  — normal user (the default for anyone with no doc)
+         viewer  — read-only; tools honour it, rules on /projects do not yet
+
+       ABSENT COUNTS AS MEMBER, for the same reason as tenantActive():
+       nobody has a members doc today. */
+    function tHasMember(o) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/omega_orgs/$(o)/members/$(request.auth.uid));
+    }
+    function tMember(o) {
+      return get(/databases/$(database)/documents/omega_orgs/$(o)/members/$(request.auth.uid)).data;
+    }
+    function tRole(o) {
+      return tHasMember(o) ? tMember(o).get('role', 'member') : 'member';
+    }
+    function tMemberEnabled(o) {
+      return !tHasMember(o) || tMember(o).get('status', 'active') == 'active';
+    }
+    /* Tenant admin of org `o`. Home org or demo bucket only — NOT
+       canActInOrg(), because a cross-org grant lets an outsider contribute
+       work, not administer the tenant. ClearSky staff are handled by
+       isAdmin() at each clause so it is visible where they are included. */
+    function isTenantAdmin(o) {
+      return signedIn()
+        && (o == userOrg() || ownsDemoBucket(o))
+        && tMemberEnabled(o)
+        && tRole(o) in ['owner', 'admin'];
+    }
+    function isTenantOwner(o) {
+      return signedIn()
+        && (o == userOrg() || ownsDemoBucket(o))
+        && tMemberEnabled(o)
+        && tRole(o) == 'owner';
+    }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   B · TENANT RECORD   (REPLACES the existing /omega_orgs/{orgId} block)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+    /* ============================================================
+       TENANT RECORD  —  omega_orgs/{orgId}
+
+       Doc body (control plane):
+         name, slug, domains[], logoUrl, colors{}, exportBrand{}
+         vertical        oem | developer | epc | installer
+         shell           default | <vertical> | <tenantSlug>
+         status          pending | active | suspended | cancelled
+         receivesFullBom bool — distributors get the whole BOM on an RFQ
+         defaultLayout   org-level starter dashboard, set by tenant admin
+         createdAt, approvedAt, approvedBy
+
+       TWO KINDS OF FIELD, TWO WRITERS.
+         Branding (name, logoUrl, colors, exportBrand, defaultLayout) is the
+         tenant's to change — that is the whole point of self-service.
+         Everything else (status, vertical, shell, domains, receivesFullBom)
+         decides what the tenant IS on the platform and what they can reach,
+         and stays ClearSky-only. hasOnly() below is the line between them.
+       ============================================================ */
+    match /omega_orgs/{orgId} {
+      function brandingOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['name', 'logoUrl', 'colors', 'exportBrand',
+                           'defaultLayout', 'updatedAt']);
+      }
+      /* Unchanged from today. */
+      allow read:   if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+                    || (isTenantAdmin(orgId) && brandingOnly());
+      /* A tenant is never deleted; set status 'cancelled'. Projects,
+         acceptances and billing history all key on this orgId. */
+      allow delete: if false;
+
+      /* ── BILLING ──  omega_orgs/{orgId}/billing/current
+         tier, addons[], toolOverrides{}, trialEndsAt, subscriptionDue,
+         amountDue, lastPaidAt, paymentProvider, stripeCustomerId,
+         paymentLink, autopay.
+         The tenant READS this — it is how the portal knows what to unlock
+         and what to show on the account page. Only ClearSky writes it, and
+         in practice only /api/stripe-webhook.js and the master console.
+         A tenant admin who could edit `tier` would be pricing their own
+         subscription. */
+      match /billing/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin();
+      }
+
+      /* ── MEMBERS ──  omega_orgs/{orgId}/members/{uid}
+         email, name, role, status, toolAccess[], invitedBy, createdAt.
+
+         Self-create is allowed so a person appears in the tenant admin's
+         list on first sign-in — but ONLY as role 'member', status 'active',
+         with email pinned to the token. Same shape as omega_staff: showing
+         up is automatic, promotion is an administrator act.
+
+         A tenant admin may set role in ['admin','member','viewer'] — never
+         'owner', and never on the owner's own doc. Without that clamp two
+         admins can demote each other, which is an argument that should not
+         be settled in software. Only the owner (or ClearSky) transfers
+         ownership. */
+      match /members/{uid} {
+        function isSelfHere() { return signedIn() && request.auth.uid == uid; }
+        function inThisOrg()  { return orgId == userOrg() || ownsDemoBucket(orgId); }
+        function targetIsOwner() {
+          return resource != null && resource.data.get('role', 'member') == 'owner';
+        }
+        function selfSafeFields() {
+          return request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['name', 'updatedAt']);
+        }
+        allow read: if isAdmin()
+                    || (signedIn() && inThisOrg())
+                    || isSelfHere();
+        allow create: if isAdmin()
+                    || (isTenantAdmin(orgId)
+                        && request.resource.data.get('role', 'member') in ['admin', 'member', 'viewer'])
+                    || (isSelfHere()
+                        && inThisOrg()
+                        && request.resource.data.get('email', '').lower()
+                             == request.auth.token.email.lower()
+                        && request.resource.data.get('role', 'member') == 'member'
+                        && request.resource.data.get('status', 'active') == 'active');
+        allow update: if isAdmin()
+                    || (isTenantOwner(orgId)
+                        && request.resource.data.get('role', 'member')
+                             in ['owner', 'admin', 'member', 'viewer'])
+                    || (isTenantAdmin(orgId)
+                        && !targetIsOwner()
+                        && request.resource.data.get('role', 'member')
+                             in ['admin', 'member', 'viewer'])
+                    || (isSelfHere() && selfSafeFields());
+        /* Disable, don't delete — who had access and when is what you need
+           after an incident. */
+        allow delete: if false;
+      }
+
+      /* ── ORG-LEVEL DASHBOARD DEFAULT ──  omega_orgs/{orgId}/layouts/{docId}
+         Optional. 'default' is what a NEW user in this org starts with;
+         per-user layouts stay in /dashboard_layouts. */
+      match /layouts/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin() || isTenantAdmin(orgId);
+      }
+    }
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   C · NEW COLLECTIONS   (paste anywhere inside the documents match)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+    /* ============================================================
+       WIDGET & VERTICAL CATALOGS  —  widgets/{id}, verticals/{v}
+       Same shape as /tools. Readable by everyone signed in because the
+       palette needs the list; written only from the master console.
+       ============================================================ */
+    match /widgets/{widgetId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+    match /verticals/{verticalId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    /* ============================================================
+       EDITOR-GENERATED OPPORTUNITIES  —  opportunities/{id}
+
+       Created by /api/opportunity.js (Admin SDK) when a project places a
+       SKU whose equipment record carries vendorOrgId. NEVER created from
+       the browser: the parent doc carries no identity by construction, and
+       a client that could write it could also write one that does.
+
+       PARENT  (what the VENDOR sees — anonymous)
+         vendorOrgId, category, sku, qty
+         public: { state, utility, sizeKw, sizeKwh, stage }
+         status: open | quoted | declined | revealed | closed
+         quote:  { amount, currency, terms, validUntil, quotedBy, quotedAt }
+         createdAt, updatedAt
+
+       PRIVATE  opportunities/{id}/private/contact  (identity)
+         sourceOrgId, projectId, contactEmail, contactName, siteAddress
+
+       Firestore cannot hide fields on a document, so the identity lives in
+       a subdocument with its own rule. The vendor reads the parent from
+       day one and the private doc only once the customer has accepted a
+       quote (parent.status == 'revealed'). The customer finds their own
+       opportunities through the collection-group rule on `private`.
+
+       DELIBERATELY NOT isConsoleViewer(): an opportunity IS a live
+       prospect. Same reasoning as /sites and /referrals.
+       ============================================================ */
+    match /opportunities/{oppId} {
+      function privateDoc() {
+        return get(/databases/$(database)/documents/opportunities/$(oppId)/private/contact).data;
+      }
+      function isVendorHere() {
+        return signedIn() && canActInOrg(resource.data.get('vendorOrgId', '\u0000'));
+      }
+      function isSourceHere() {
+        return signedIn() && canActInOrg(privateDoc().get('sourceOrgId', '\u0000'));
+      }
+      function vendorQuoteFields() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'quote', 'updatedAt']);
+      }
+
+      allow read: if isOmegaStaff() || isVendorHere() || isSourceHere();
+
+      allow create: if false;      /* /api/opportunity.js only */
+
+      /* The vendor answers: quote it or decline it. Nothing else — not the
+         ask, not who it is addressed to. */
+      allow update: if isVendorHere()
+                    && resource.data.status in ['open', 'quoted']
+                    && vendorQuoteFields()
+                    && request.resource.data.status in ['quoted', 'declined'];
+
+      /* The customer decides: reveal (accept) or close. Reveal is the one
+         act that hands the vendor their identity, and only the customer
+         can perform it. */
+      allow update: if isSourceHere()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt'])
+                    && request.resource.data.status in ['revealed', 'closed'];
+
+      allow update: if isOmegaAdmin();
+      allow delete: if false;
+
+      match /private/{docId} {
+        function parentStatus() {
+          return get(/databases/$(database)/documents/opportunities/$(oppId)).data.get('status', '');
+        }
+        function parentVendor() {
+          return get(/databases/$(database)/documents/opportunities/$(oppId)).data.get('vendorOrgId', '\u0000');
+        }
+        allow read: if isOmegaStaff()
+                    || (signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000')))
+                    || (signedIn()
+                        && canActInOrg(parentVendor())
+                        && parentStatus() == 'revealed');
+        allow write: if false;     /* /api/opportunity.js only */
+      }
+    }
+    /* Customer inbox: "show me every opportunity my projects have generated".
+       Vendors never match this rule — a vendor's org is never a sourceOrgId
+       on a doc addressed to them. */
+    match /{path=**}/private/{docId} {
+      allow read: if isOmegaStaff()
+                  || (signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000')));
+      allow write: if false;
+    }
+
+    /* ============================================================
+       REQUEST FOR QUOTE  —  rfqs/{id}
+
+       Created by /api/rfq.js when a customer hits "Request for Quote" in
+       the BOM tool. The function computes recipients: every vendor with a
+       SKU in the BOM gets their lines; every tenant with receivesFullBom
+       gets the whole thing. Each recipient sees ONLY their subdocument.
+
+       PARENT  rfqs/{id}   (the CUSTOMER's record — full BOM)
+         sourceOrgId, projectId, projectName, bom[], status, createdAt
+       RECIPIENT  rfqs/{id}/recipients/{vendorOrgId}
+         vendorOrgId, scope: full-bom | line-items, lines[], anon{}
+         status: sent | viewed | quoted | declined
+         quote: { amount, currency, terms, validUntil, quotedBy, quotedAt }
+         revealed: bool   — set by the customer on accept
+         contact: { ... } — written by /api/rfq.js on reveal, absent before
+
+       A recipient doc is keyed by the vendor's orgId so the inbox query is
+       a collection-group .where('vendorOrgId','==',ORG) that this rule can
+       prove passes for every returned doc.
+       ============================================================ */
+    match /rfqs/{rfqId} {
+      function isSourceHere() {
+        return signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000'));
+      }
+      allow read:   if isOmegaStaff() || isSourceHere();
+      allow create: if false;      /* /api/rfq.js only */
+      allow update: if isOmegaAdmin()
+                    || (isSourceHere()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status', 'updatedAt'])
+                        && request.resource.data.status in ['closed', 'cancelled']);
+      allow delete: if false;
+
+      match /recipients/{vendorOrgId} {
+        function parentSource() {
+          return get(/databases/$(database)/documents/rfqs/$(rfqId)).data.get('sourceOrgId', '\u0000');
+        }
+        function isVendorHere() {
+          return signedIn() && canActInOrg(vendorOrgId);
+        }
+        function isSourceHere() {
+          return signedIn() && canActInOrg(parentSource());
+        }
+        allow read: if isOmegaStaff() || isVendorHere() || isSourceHere();
+        allow create: if false;    /* /api/rfq.js only */
+        /* Vendor: quote or decline, own fields only. */
+        allow update: if isVendorHere()
+                      && resource.data.get('status', '') in ['sent', 'viewed', 'quoted']
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status', 'quote', 'updatedAt'])
+                      && request.resource.data.status in ['viewed', 'quoted', 'declined'];
+        /* Customer: accept → reveal. The contact block itself is written by
+           /api/rfq.js after this flag flips, so a client cannot forge one. */
+        allow update: if isSourceHere()
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['revealed', 'updatedAt'])
+                      && request.resource.data.revealed == true;
+        allow update: if isOmegaAdmin();
+        allow delete: if false;
+      }
+    }
+    match /{path=**}/recipients/{vendorOrgId} {
+      allow read: if isOmegaStaff() || (signedIn() && canActInOrg(vendorOrgId));
+      allow write: if false;
+    }

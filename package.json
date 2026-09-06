@@ -1,0 +1,20 @@
+{
+  "name": "omega-core",
+  "private": true,
+  "version": "5.0.0",
+  "description": "ClearSky-OMEGA \u2014 one codebase, every tenant",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "stripe": "^16.0.0",
+    "nodemailer": "^6.9.0"
+  },
+  "scripts": {
+    "audit": "node scripts/audit-counts.js",
+    "seed:dry": "node scripts/seed-omega-orgs.js",
+    "seed:apply": "node scripts/seed-omega-orgs.js --apply",
+    "rules:check": "node scripts/check-rules.js"
+  }
+}

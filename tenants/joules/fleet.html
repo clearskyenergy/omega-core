@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet register · ClearSky-OMEGA</title>
+<link rel="icon" href="/omega-logo.png">
+<!-- Boot veil. SYNCHRONOUS and above the stylesheet on purpose: it has to be
+     up before the first paint, and this page hides both #gate and #wrap until
+     auth resolves, so without it the page shows a bare topbar over nothing.
+     Lifts on ready() below, and on a timeout / error / bfcache restore
+     regardless. Shared platform file. -->
+<script src="/omega-boot.js" data-wait="auth"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════════════════════
+     FLEET REGISTER — every site under management, and every one sold that
+     isn't yet.
+
+     Reads the tenant's own fleet collection (fleet.collection). Tenant-
+     neutral: facility types, the unit label, the collection name and the
+     link out to the operations product all come from /config.js.
+
+     ⚠ This page is NOT a live operations view. It carries no telemetry, no
+     state of charge, no dispatch decision and no agent rationale. Those
+     belong in the tenant's own operations product, which each row deep-links
+     to. See the header of omega-fleet.js for why that line is worth holding.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#EDEFF1; --sap-card-border:#E4E8EC; --cs-navy:#08384F; --cs-accent:#00A9A4;
+  --cs-sub:#5A7180; --ok:#16A34A; --warn:#D97706; --bad:#DC2626;
+  --shadow:0 1px 2px rgba(20,40,60,.05);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--sap-ink);
+  min-height:100vh;-webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',monospace;font-variant-numeric:tabular-nums}
+a{color:var(--sap-blue)}
+:focus-visible{outline:2px solid var(--sap-blue-hi);outline-offset:2px;border-radius:4px}
+
+#topbar{height:56px;background:#fff;display:flex;align-items:center;padding:0 18px;
+  border-bottom:1px solid #E5E9ED;box-shadow:var(--shadow);position:sticky;top:0;z-index:20}
+.tb-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.tb-omega{height:28px;border-radius:6px;display:block}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-sep{width:1px;height:22px;background:#E5E9ED;margin:0 14px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-client-chip{background:#fff;border:1px solid #E5E9ED;border-radius:7px;padding:4px 8px;
+  display:flex;align-items:center;height:32px;margin-right:10px}
+.tb-client-chip img{height:22px;width:auto;display:block}
+.btn-sm{background:#fff;border:1px solid #DDE3E9;color:var(--sap-ink-2);border-radius:7px;
+  padding:6px 12px;cursor:pointer;font:500 12px 'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.btn-sm:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+.btn-sm.pri{background:var(--sap-blue);border-color:var(--sap-blue);color:#fff}
+
+#gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid var(--sap-card-border);
+  border-radius:14px;padding:32px 34px;box-shadow:var(--shadow)}
+#gate h2{font-size:19px;color:var(--cs-navy);margin-bottom:10px}
+#gate p{font-size:13.5px;color:var(--cs-sub);line-height:1.6}
+
+#wrap{max-width:1400px;margin:0 auto;padding:26px 20px 80px}
+.ph-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#8FA0AE}
+h1{font-size:25px;font-weight:700;color:var(--cs-navy);letter-spacing:-.5px;margin-top:4px}
+.lede{font-size:13.5px;color:var(--cs-sub);margin-top:7px;line-height:1.6;max-width:80ch}
+
+.ribbon{display:flex;align-items:center;gap:9px;margin:16px 0 0;padding:9px 13px;
+  border:1px solid #E3C77A;background:#FDF6E3;border-radius:10px;font-size:12.5px;color:#6B551C}
+.ribbon .tag{background:#8A6D1F;color:#fff;border-radius:5px;padding:2px 7px;
+  font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:18px}
+.kpi{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;padding:13px 15px}
+.kpi.hero{border-color:#BBD9F5;background:linear-gradient(180deg,#F7FBFF,#fff)}
+.kpi .l{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--sap-ink-2)}
+.kpi .v{font-size:24px;font-weight:700;color:var(--cs-navy);margin-top:5px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.kpi .s{font-size:11px;color:var(--sap-ink-2);margin-top:3px;line-height:1.45}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)} .kpi.good .v{color:var(--ok)}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px;align-items:center}
+.fgrp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fgrp>.flabel{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:#8FA0AE;margin-right:2px}
+.pill{border:1.5px solid #DDE3E9;background:#fff;border-radius:20px;padding:6px 12px;cursor:pointer;
+  font:600 12px 'DM Sans',sans-serif;color:var(--sap-ink);display:flex;align-items:center;gap:7px}
+.pill.on{border-color:var(--sap-blue);background:#F4F9FF;color:var(--sap-blue)}
+.pill .ct{font-size:10.5px;font-weight:700;background:#EDF1F5;color:#5C6B7A;border-radius:20px;
+  padding:1px 7px;font-variant-numeric:tabular-nums}
+.pill.on .ct{background:var(--sap-blue);color:#fff}
+.fsep{width:1px;height:22px;background:#DDE3E9;margin:0 4px}
+
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;
+  box-shadow:var(--shadow);margin-top:18px}
+.card-h{padding:14px 20px;border-bottom:1px solid var(--sap-card-border);display:flex;
+  align-items:center;gap:12px;flex-wrap:wrap}
+.card-h b{font-size:13.5px;color:var(--cs-navy)}
+.card-h .sub{font-size:11.5px;color:var(--sap-ink-2)}
+.card-b{padding:6px 20px 18px}
+
+.scroll{overflow-x:auto}
+table.reg{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1080px}
+table.reg th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--sap-ink-2);padding:12px 12px 10px 0;white-space:nowrap;border-bottom:1px solid #E4E8EC}
+table.reg td{padding:11px 12px 11px 0;border-top:1px solid #EDF1F5;color:var(--sap-ink);vertical-align:top}
+table.reg td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.reg th.n{text-align:right}
+table.reg td.nm{font-weight:600;color:var(--cs-navy)}
+table.reg td small{display:block;font-weight:400;color:var(--sap-ink-2);font-size:11px;margin-top:2px}
+table.reg tr:hover td{background:#F8FBFD}
+.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.chip.mod{background:#F3EEFB;color:#6D28D9}
+.chip.met{background:#E7F6EC;color:#15803D}
+.chip.org{background:#E7F0FD;color:#0B4FA8}
+.chip.noorg{background:#F0F2F5;color:#5C6B7A}
+.pending{color:var(--bad);font-weight:600}
+.muted{color:#8A96A2}
+.sel{border:1.5px solid #DDE3E9;border-radius:8px;padding:6px 10px;font:500 12px 'DM Sans',sans-serif;
+  background:#fff;color:var(--sap-ink)}
+.note{font-size:11.5px;color:#6B551C;background:#FDF8EC;border:1px solid #EFDFB8;
+  border-radius:8px;padding:9px 12px;margin:14px 0 0;line-height:1.55}
+.empty{padding:34px 20px;text-align:center;color:var(--sap-ink-2);font-size:13px;line-height:1.65}
+.foot{font-size:11.5px;color:var(--sap-ink-2);margin-top:14px;line-height:1.6;max-width:90ch}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="tb-logo" href="/index.html">
+    <img class="tb-omega" src="/omega-logo.png" alt="">
+    <span class="tb-logo-txt">ClearSky<span style="color:var(--sap-blue)">-OMEGA</span></span>
+  </a>
+  <span class="tb-sep"></span>
+  <span class="tb-portal">Fleet register</span>
+  <span class="tb-spacer"></span>
+  <span class="tb-client-chip" id="tb-client-chip" style="display:none">
+    <img src="" alt="" id="tb-client-logo">
+  </span>
+  <a class="btn-sm pri" href="/commission.html">+ Add a site</a>
+  &nbsp;
+  <a class="btn-sm" href="/index.html">Dashboard</a>
+</div>
+
+<div id="gate" style="display:none">
+  <h2>Sign in first</h2>
+  <p>The fleet register is scoped to your workspace, so this page needs a signed-in account.</p>
+  <p style="margin-top:16px"><a class="btn-sm" href="/index.html">Go to the dashboard</a></p>
+</div>
+
+<div id="wrap" style="display:none">
+  <div class="ph-eyebrow">Fleet register</div>
+  <h1 id="f-title">Every site, and what it is doing</h1>
+  <p class="lede">
+    The whole book: sites the agent is dispatching, sites connected but not yet
+    in control, and sites sold that haven't been commissioned. Capacity under
+    management counts only the first group &mdash; the rest are shown next to it,
+    never inside it.
+  </p>
+  <div id="ribbon"></div>
+  <div id="kpis"></div>
+  <div id="filters"></div>
+  <div id="board"></div>
+</div>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-fleet.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var F = null, ME = null, ROWS = [], SAMPLE = false;
+  var FILTER = { group: '__all', segment: '__all', market: '__all' };
+  var SORT = 'kw';
+
+  firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+  var auth = firebase.auth();
+  window.db = firebase.firestore();
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return F ? F.esc(s) : String(s == null ? '' : s); }
+
+  /* The veil is lifted once there is something worth looking at, not merely
+     once auth answered — otherwise it uncovers an empty #wrap and the pop-in
+     it was meant to hide happens anyway, half a second later. OmegaBoot
+     enforces its own ceiling, so a slow or failed read still reveals the
+     page; these calls only decide how much earlier than that it happens. */
+  function done() { try { OmegaBoot.ready(); } catch (e) {} }
+
+  auth.onAuthStateChanged(function (user) {
+    if (!user) {
+      el('gate').style.display = 'block';
+      el('wrap').style.display = 'none';
+      done();                                  // signed out is still an answer
+      return;
+    }
+    ME = { email: String(user.email || '').toLowerCase() };
+    el('gate').style.display = 'none';
+    el('wrap').style.display = 'block';
+    F = window.OmegaFleet;
+
+    try {
+      var ws = OmegaBrand.resolve ? OmegaBrand.resolve(ME.email) : null;
+      var logo = ws && OmegaBrand.logoOf ? OmegaBrand.logoOf(ws) : null;
+      if (logo) { el('tb-client-logo').src = logo; el('tb-client-chip').style.display = 'flex'; }
+    } catch (e) {}
+
+    load().then(done, done);                   // reveal on success OR failure
+  });
+
+  function load() {
+    var C = F.cfg();
+    return F.fetchAll().then(function (rows) {
+      SAMPLE = false;
+      if (!rows.length && C.sampleData) { rows = F.sampleRows(); SAMPLE = true; }
+      ROWS = rows;
+      paint();
+    });
+  }
+
+  /* ── Grouping ───────────────────────────────────────────────────────────
+     The four buckets the whole page turns on. They mirror STATUS[].group in
+     omega-fleet.js rather than re-deriving the lifecycle here, so adding a
+     status in one place doesn't silently create a fifth bucket in the
+     other. */
+  var GROUPS = [
+    { key:'__all',    label:'All sites',    test: function () { return true; } },
+    { key:'dispatch', label:'Dispatching',  test: function (r) { return F.isDispatching(r); } },
+    { key:'live',     label:'Connected',    test: function (r) { return F.isConnected(r); } },
+    { key:'pipeline', label:'Awaiting commissioning',
+                                            test: function (r) { return F.isPipeline(r); } },
+    { key:'pre',      label:'Pilot & prospect', test: function (r) { return F.isPre(r); } },
+    { key:'ended',    label:'Ended',        test: function (r) { return F.isEnded(r); } }
+  ];
+
+  function groupTest(key) {
+    for (var i = 0; i < GROUPS.length; i++) if (GROUPS[i].key === key) return GROUPS[i].test;
+    return function () { return true; };
+  }
+
+  function visible() {
+    var test = groupTest(FILTER.group);
+    return ROWS.filter(function (r) {
+      if (!test(r)) return false;
+      if (FILTER.segment !== '__all' && r.segment !== FILTER.segment) return false;
+      if (FILTER.market !== '__all' && F.marketOf(r.iso).key !== FILTER.market) return false;
+      return true;
+    });
+  }
+
+  /* ── Painting ─────────────────────────────────────────────────────────── */
+
+  function paint() {
+    var C = F.cfg();
+    var a = F.analyse(ROWS);
+    var k = a.kpi;
+
+    el('ribbon').innerHTML = SAMPLE
+      ? '<div class="ribbon"><span class="tag">Sample</span><span>An illustrative fleet, ' +
+        'shown only while your register is empty. Nothing here is saved, and the first real ' +
+        'site replaces it permanently.</span></div>'
+      : '';
+
+    /* KPI strip. Same figures as the dashboard block, and deliberately the
+       same wording — a number that changes its name between two screens is a
+       number people stop trusting. */
+    var cards = [
+      { l:'Power under management', v: k.managedKw ? F.kw(k.managedKw) : '\u2014',
+        s: k.sitesLive + ' of ' + k.sitesTotal + ' sites dispatching', cls:'hero' },
+      { l:'Storage under management', v: k.managedKwh ? F.kwh(k.managedKwh) : '\u2014',
+        s:'Battery energy, not power', cls:'hero' },
+      { l:'Connected, not in control', v: k.connectedKw ? F.kw(k.connectedKw) : '\u2014',
+        s: k.sitesConnected + ' site' + (k.sitesConnected === 1 ? '' : 's') +
+           ' learning or paused' },
+      { l:'Contracted, not live', v: k.contractedKw ? F.kw(k.contractedKw) : '\u2014',
+        s: k.sitesPipeline + ' site' + (k.sitesPipeline === 1 ? '' : 's') + ' awaiting commissioning',
+        cls: k.sitesPipeline ? 'warn' : '' },
+      { l: C.unitLabel + ' sold', v: k.unitsSold || '\u2014',
+        s: k.unitsLive + ' reporting \u00B7 ' + k.unitsPending + ' pending',
+        cls: k.unitsPending ? 'warn' : 'good' },
+      { l:'Realised savings', v: k.savingsMetered ? F.money(k.savingsMetered) + '/yr' : '\u2014',
+        s: k.meteredSites + ' metered site' + (k.meteredSites === 1 ? '' : 's') +
+           (k.awaitingMeter ? ' \u00B7 ' + k.awaitingMeter + ' not yet billed' : '') },
+      { l:'Modelled savings', v: k.savingsModeled ? F.money(k.savingsModeled) + '/yr' : '\u2014',
+        s: k.modeledSites + ' site' + (k.modeledSites === 1 ? '' : 's') + ' \u00B7 held apart' },
+      { l:'Recurring revenue', v: k.arr ? F.money(k.arr) + '/yr' : '\u2014',
+        s:'Active contracts, excluding ended' }
+    ];
+    el('kpis').innerHTML = '<div class="kpis">' + cards.map(function (c) {
+      return '<div class="kpi ' + (c.cls || '') + '"><div class="l">' + esc(c.l) + '</div>' +
+        '<div class="v">' + esc(String(c.v)) + '</div>' +
+        '<div class="s">' + esc(c.s) + '</div></div>';
+    }).join('') + '</div>';
+
+    paintFilters(a);
+    paintTable(a);
+  }
+
+  function paintFilters(a) {
+    var C = F.cfg();
+
+    var groups = GROUPS.map(function (g) {
+      var n = ROWS.filter(g.test).length;
+      return '<button class="pill' + (FILTER.group === g.key ? ' on' : '') +
+        '" data-f="group" data-v="' + esc(g.key) + '">' + esc(g.label) +
+        '<span class="ct">' + n + '</span></button>';
+    }).join('');
+
+    /* Facility type and market are <select>s rather than more pills: with
+       nine segments and up to nine markets, three rows of pills would push
+       the table below the fold on a laptop, which is the thing people
+       actually came here to read. */
+    var segOpts = ['<option value="__all">All facility types</option>'].concat(
+      C.segments.map(function (s) {
+        var n = ROWS.filter(function (r) { return r.segment === s.key; }).length;
+        return '<option value="' + esc(s.key) + '"' +
+          (FILTER.segment === s.key ? ' selected' : '') + '>' +
+          esc(s.label) + ' (' + n + ')</option>';
+      })).join('');
+
+    var seen = {};
+    ROWS.forEach(function (r) { seen[F.marketOf(r.iso).key] = true; });
+    var mktOpts = ['<option value="__all">All markets</option>'].concat(
+      F.MARKETS.filter(function (m) { return seen[m.key]; }).map(function (m) {
+        var n = ROWS.filter(function (r) { return F.marketOf(r.iso).key === m.key; }).length;
+        return '<option value="' + esc(m.key) + '"' +
+          (FILTER.market === m.key ? ' selected' : '') + '>' +
+          esc(m.label) + ' (' + n + ')</option>';
+      })).join('');
+
+    el('filters').innerHTML =
+      '<div class="filters">' + groups + '<span class="fsep"></span>' +
+      '<select class="sel" id="f-seg">' + segOpts + '</select>' +
+      '<select class="sel" id="f-mkt">' + mktOpts + '</select>' +
+      '<span class="fsep"></span>' +
+      '<select class="sel" id="f-sort">' +
+        '<option value="kw"' + (SORT === 'kw' ? ' selected' : '') + '>Sort: dispatchable power</option>' +
+        '<option value="kwh"' + (SORT === 'kwh' ? ' selected' : '') + '>Sort: storage energy</option>' +
+        '<option value="name"' + (SORT === 'name' ? ' selected' : '') + '>Sort: site name</option>' +
+        '<option value="units"' + (SORT === 'units' ? ' selected' : '') + '>Sort: units sold</option>' +
+        '<option value="pending"' + (SORT === 'pending' ? ' selected' : '') + '>Sort: units pending</option>' +
+      '</select>' +
+      '</div>';
+
+    Array.prototype.forEach.call(el('filters').querySelectorAll('.pill'), function (b) {
+      b.addEventListener('click', function () {
+        FILTER.group = b.getAttribute('data-v');
+        paint();
+      });
+    });
+    el('f-seg').addEventListener('change', function () { FILTER.segment = this.value; paint(); });
+    el('f-mkt').addEventListener('change', function () { FILTER.market = this.value; paint(); });
+    el('f-sort').addEventListener('change', function () { SORT = this.value; paint(); });
+  }
+
+  function sortRows(rows) {
+    var by = {
+      kw:      function (r) { return -F.dispatchKw(r); },
+      kwh:     function (r) { return -(r.bessKwh || 0); },
+      units:   function (r) { return -(r.units || 0); },
+      pending: function (r) { return -Math.max(0, (r.units || 0) - (r.unitsLive || 0)); }
+    }[SORT];
+    if (!by) {
+      return rows.slice().sort(function (x, y) {
+        return String(x.siteName).localeCompare(String(y.siteName));
+      });
+    }
+    return rows.slice().sort(function (x, y) { return by(x) - by(y); });
+  }
+
+  function liveLink(r) {
+    var C = F.cfg();
+    var url = r.optimaUrl || (C.opsUrlBase ? C.opsUrlBase + encodeURIComponent(r.id) : '');
+    if (!url) return '';
+    return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' +
+           esc(C.opsName) + ' \u2197</a>';
+  }
+
+  function paintTable(a) {
+    var C = F.cfg();
+    var rows = sortRows(visible());
+
+    if (!rows.length) {
+      el('board').innerHTML = '<div class="card"><div class="empty">' +
+        'No sites match this filter.' +
+        (ROWS.length ? '' : ' <a href="/commission.html">Add the first one</a>.') +
+        '</div></div>';
+      return;
+    }
+
+    /* Subtotals for the CURRENT filter, not the whole fleet. A filtered view
+       whose totals silently describe the unfiltered set is how somebody
+       quotes a number for one market that is actually the number for all of
+       them. */
+    var subKw = 0, subKwh = 0, subUnits = 0, subPending = 0, dispatchOnly = 0;
+    rows.forEach(function (r) {
+      if (F.isDispatching(r)) { subKw += F.dispatchKw(r); subKwh += (r.bessKwh || 0); dispatchOnly++; }
+      subUnits += (r.units || 0);
+      subPending += Math.max(0, (r.units || 0) - (r.unitsLive || 0));
+    });
+
+    var body = rows.map(function (r) {
+      var st = F.statusOf(r.status);
+      var seg = F.segmentOf(r.segment);
+      var mkt = F.marketOf(r.iso);
+      var where = [r.city, r.state].filter(Boolean).join(', ');
+      var pending = Math.max(0, (r.units || 0) - (r.unitsLive || 0));
+
+      var savings = r.annualSavings
+        ? F.money(r.annualSavings) + '/yr <span class="chip ' +
+          (r.savingsBasis === 'metered' ? 'met">metered' : 'mod">modelled') + '</span>'
+        : '<span class="muted">\u2014</span>';
+
+      /* Dispatchable power is blank, not zero, for a site that isn't
+         dispatching. A pipeline site with a 3 MW battery on order has
+         capacity coming; printing 3 MW in a column headed "dispatchable"
+         would put it in a total it does not belong in. */
+      var disp = F.isDispatching(r)
+        ? F.kw(F.dispatchKw(r))
+        : '<span class="muted">' +
+          (F.dispatchKw(r) ? F.kw(F.dispatchKw(r)) + ' when live' : '\u2014') + '</span>';
+
+      return '<tr>' +
+        '<td class="nm">' + esc(r.siteName) +
+          '<small>' + esc(r.customerName || 'Customer not stated') + '</small></td>' +
+        '<td>' + esc(where || '\u2014') +
+          '<small>' + esc(r.utility || 'Utility not stated') + '</small></td>' +
+        '<td><span class="chip ' + (mkt.organized ? 'org' : 'noorg') + '">' +
+          esc(mkt.label) + '</span>' +
+          '<small>' + esc(F.tariffOf(r.tariff).label) + '</small></td>' +
+        '<td>' + esc(seg.label) +
+          (seg.unknown ? '<small class="pending">not in this workspace\u2019s list</small>' : '') +
+          '</td>' +
+        '<td class="n">' + disp + '</td>' +
+        '<td class="n">' + (r.bessKwh
+            ? (F.isDispatching(r) ? esc(F.kwh(r.bessKwh))
+                                  : '<span class="muted">' + esc(F.kwh(r.bessKwh)) + '</span>')
+            : '<span class="muted">\u2014</span>') +
+          (r.bessKw ? '<small>' + esc(F.kw(r.bessKw)) + ' inverter</small>' : '') + '</td>' +
+        '<td class="n">' + (r.units || '<span class="muted">\u2014</span>') +
+          (pending ? '<small class="pending">' + pending + ' pending</small>' : '') + '</td>' +
+        '<td><span class="chip" style="background:' + st.color + '1A;color:' + st.color + '">' +
+          esc(st.label) + '</span>' +
+          (r.liveAt ? '<small>live ' + esc(F.fmtDate(r.liveAt)) + '</small>'
+                    : (r.soldAt ? '<small>sold ' + esc(F.fmtDate(r.soldAt)) + '</small>' : '')) +
+          '</td>' +
+        '<td class="n">' + savings + '</td>' +
+        '<td class="n">' + (liveLink(r) || '<span class="muted">\u2014</span>') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var subtitle = [
+      GROUPS.filter(function (g) { return g.key === FILTER.group; })[0].label,
+      FILTER.segment === '__all' ? null : F.segmentOf(FILTER.segment).label,
+      FILTER.market === '__all' ? null : F.marketOf(FILTER.market).label
+    ].filter(Boolean).join(' \u00B7 ');
+
+    var noLink = rows.filter(function (r) {
+      return F.isDispatching(r) && !liveLink(r);
+    }).length;
+
+    var linkNote = noLink
+      ? '<div class="note"><b>' + noLink + '</b> dispatching site' + (noLink === 1 ? '' : 's') +
+        ' have no link into ' + esc(C.opsName) + '. This register is the commercial view of ' +
+        'the fleet and deliberately carries no telemetry \u2014 set <code>fleet.opsUrlBase</code> ' +
+        'in /config.js, or an <code>optimaUrl</code> on the record, so each row can hand off ' +
+        'to the live view rather than inviting anyone to rebuild it here.</div>'
+      : '';
+
+    el('board').innerHTML =
+      '<div class="card">' +
+      '<div class="card-h"><b>' + rows.length + ' site' + (rows.length === 1 ? '' : 's') +
+        '</b><span class="sub">' + esc(subtitle) + '</span></div>' +
+      '<div class="card-b"><div class="scroll"><table class="reg"><thead><tr>' +
+      '<th>Site</th><th>Where</th><th>Market</th><th>Facility type</th>' +
+      '<th class="n">Dispatchable</th><th class="n">Storage</th>' +
+      '<th class="n">' + esc(C.unitLabel) + '</th><th>Stage</th>' +
+      '<th class="n">Savings</th><th class="n">Live view</th>' +
+      '</tr></thead><tbody>' + body + '</tbody>' +
+      '<tfoot><tr>' +
+      '<td class="nm" colspan="4">Totals for this filter</td>' +
+      '<td class="n"><b>' + (subKw ? esc(F.kw(subKw)) : '\u2014') + '</b>' +
+        '<small>' + dispatchOnly + ' dispatching</small></td>' +
+      '<td class="n"><b>' + (subKwh ? esc(F.kwh(subKwh)) : '\u2014') + '</b></td>' +
+      '<td class="n"><b>' + (subUnits || '\u2014') + '</b>' +
+        (subPending ? '<small class="pending">' + subPending + ' pending</small>' : '') + '</td>' +
+      '<td colspan="3"></td>' +
+      '</tr></tfoot></table></div>' +
+      linkNote +
+      '<div class="foot">Dispatchable power counts battery inverters, generators and ' +
+      'controllable load at sites the agent is actually dispatching. Solar is observed and ' +
+      'at most curtailed, and facility peak load is context &mdash; neither is counted as ' +
+      'capacity under management. Power and storage energy are separate columns and are ' +
+      'never added together.</div>' +
+      '</div></div>';
+  }
+})();
+</script>
+</body>
+</html>

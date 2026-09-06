@@ -1,0 +1,109 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Site Finder circuit-claim ledger rule
+   Paste inside the existing `match /databases/{database}/documents { ... }`
+   block in firestore.rules, then DEPLOY.
+
+     firebase deploy --only firestore:rules
+
+   This backs the `sitefinder` tool. It is the FIRST tenant repo to ship it,
+   because CIR is the first trial that unlocks Site Finder.
+
+   ─────────────────────────────────────────────────────────────────────────
+   WHY THIS ONE IS EASY TO MISS
+   ─────────────────────────────────────────────────────────────────────────
+   Site Finder degrades honestly without Firestore — the chip in the corner
+   reads "Local only" and claims are held in the browser. That is the failure
+   mode to worry about: a missing rule does not look broken. It looks like a
+   working tool that quietly is not sharing claims between reps, which is the
+   single thing the tool exists to do. Two reps will each hold the same
+   circuit, both will size a battery against it, and nobody finds out until a
+   site host agreement is already moving.
+
+   So: after deploying, sign in as two different users in the same org, claim
+   a circuit as one, and confirm it disappears from the other's inventory.
+   The chip must NOT say "Local only". Run check-rules.js first.
+
+   ─────────────────────────────────────────────────────────────────────────
+   DOC SHAPE
+   ─────────────────────────────────────────────────────────────────────────
+   Claims live at  capacityAllocations/{orgId}__{allocId}  and carry an orgId
+   FIELD as well, deliberately. This DEVIATES from the toolData contract that
+   sitefinder's `savesData: true` would otherwise imply, for the same reason
+   `intake` does: toolData/{orgId}/tools/{key} is a single document and cannot
+   be queried per-circuit, and the ledger has to be readable org-wide by every
+   rep.
+
+   ⚠ FIELD VALIDATION IS DELIBERATELY LOOSE.
+   The authoritative claim schema lives in omega-capacity-ledger.js on
+   TOOL_HOST, which is not in this repo. Rules below validate the tenant
+   boundary — which is the part that actually matters for security — and only
+   those fields the ledger is known to write. They do NOT enumerate the whole
+   document. Tighten this once you have the ledger open in front of you;
+   guessing a required field here fails writes closed and sends Site Finder
+   back to "Local only" for the whole org.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+match /capacityAllocations/{allocId} {
+
+  /* The org boundary, asserted two ways.
+
+     ownedByCaller() checks the orgId FIELD — that is the one the query
+     filters on and the one that governs reads.
+
+     idScopedToCaller() checks the doc-ID PREFIX. Defense in depth: a client
+     that wrote a correct orgId field into a doc named under another tenant's
+     prefix would otherwise sit in that tenant's ID space. split() takes a
+     regex; '__' is literal in RE2 and no org domain contains it. */
+  function ownedByCaller() {
+    return resource.data.orgId == userOrg();
+  }
+  function incomingOwnedByCaller() {
+    return request.resource.data.orgId == userOrg();
+  }
+  function idScopedToCaller() {
+    return allocId.split('__')[0] == userOrg();
+  }
+
+  /* Every rep in the org reads every claim in the org. That is the whole
+     point — one rep's hold has to leave every other rep's inventory.
+
+     NOTE: scope is per-TENANT, not platform-wide. Two different tenants can
+     each hold the same ComEd circuit and neither will see the other. That is
+     the correct default for a multi-tenant platform (CIR must not be able to
+     enumerate another customer's pipeline), but it means the anti-double-sell
+     guarantee is an INTERNAL one. Say so if a customer asks what the hold
+     actually reserves — it reserves nothing with ComEd. */
+  allow read: if request.auth != null && ownedByCaller();
+
+  /* Claiming a circuit. Pinned to the caller's own org on both the field and
+     the doc ID, and to the caller's own identity as the claimant, so a hold
+     can't be planted under a colleague's name. */
+  allow create: if request.auth != null
+                && incomingOwnedByCaller()
+                && idScopedToCaller()
+                && request.resource.data.claimedBy == request.auth.token.email;
+
+  /* Editing a live claim — resizing the hold, moving it through the funnel,
+     releasing it. The org never changes hands and the doc never migrates to
+     another tenant's ID space.
+
+     Any rep in the org may edit any claim in the org, on purpose: reps cover
+     for each other and a hold stranded on someone who left is worse than a
+     hold someone else can release. If that turns out to be too open for a
+     bigger tenant, add
+         && resource.data.claimedBy == request.auth.token.email
+     here and give admins their own path. */
+  allow update: if request.auth != null
+                && ownedByCaller()
+                && incomingOwnedByCaller()
+                && request.resource.data.orgId == resource.data.orgId
+                && idScopedToCaller();
+
+  /* Releasing a hold is a real operation, so unlike financeOffers this one is
+     genuinely deletable. Prefer a status change where the ledger supports it
+     — a deleted claim takes its history with it, and "who held this circuit
+     in March and let it go" is a question that gets asked. */
+  allow delete: if request.auth != null
+                && ownedByCaller()
+                && idScopedToCaller();
+}

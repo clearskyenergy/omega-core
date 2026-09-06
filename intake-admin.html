@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intake queue · ClearSky Omega</title>
+<style>
+:root{
+  --paper:#EDF0F3; --surface:#FFFFFF; --sunken:#F6F8FA;
+  --chrome:#131A22; --chrome-2:#1E2831;
+  --ink:#0F151C; --ink-2:#39434E; --muted:#6B7783; --faint:#9AA5AF;
+  --rule:#DCE3E9; --rule-2:#EAEFF3;
+  --accent:#0E5FA8; --accent-soft:#E7F0F9;
+  --good:#1B7A4B; --good-soft:#E6F4EC;
+  --warn:#9A5A08; --warn-soft:#FBF0DF;
+  --hot:#B33A32; --hot-soft:#FBECEA;
+  --r:8px; --r-lg:12px;
+  --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+.chrome{background:var(--chrome);color:#E6ECF2;padding:10px 18px;display:flex;
+  align-items:center;gap:14px;position:sticky;top:0;z-index:50}
+.chrome .mark{font-weight:700;letter-spacing:-.01em}
+.chrome .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:#8FA3B5;border-left:1px solid #33414F;padding-left:14px}
+.chrome .sp{flex:1}
+.chrome .who{font-size:12px;color:#8FA3B5}
+
+.counters{display:flex;gap:8px;padding:12px 18px;background:var(--surface);
+  border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.counters::-webkit-scrollbar{display:none}
+.counter{border:1px solid var(--rule);border-radius:var(--r);padding:8px 12px;min-width:104px;
+  background:var(--sunken);cursor:pointer;text-align:left;flex:none}
+.counter[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.counter .n{font-family:var(--mono);font-size:19px;font-weight:600;line-height:1}
+.counter .l{font-size:11px;color:var(--muted);margin-top:3px}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px 18px;background:var(--surface);
+  border-bottom:1px solid var(--rule);align-items:center}
+.filters input,.filters select{border:1px solid var(--rule);border-radius:var(--r);
+  padding:7px 9px;background:var(--surface);outline:none}
+.filters input:focus,.filters select:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+.filters input[type=search]{min-width:230px;flex:1}
+
+.shell{display:grid;grid-template-columns:minmax(0,1fr) 0;transition:grid-template-columns .2s}
+.shell.open{grid-template-columns:minmax(0,1fr) 470px}
+@media(max-width:1080px){.shell.open{grid-template-columns:1fr}
+  .shell.open .queue{display:none}}
+
+.queue{padding:0 0 60px}
+table{width:100%;border-collapse:collapse;background:var(--surface)}
+thead th{position:sticky;top:0;background:var(--sunken);text-align:left;font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-family:var(--mono);
+  font-weight:500;padding:9px 12px;border-bottom:1px solid var(--rule);z-index:10}
+tbody td{padding:11px 12px;border-bottom:1px solid var(--rule-2);vertical-align:top}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--sunken)}
+tbody tr.sel{background:var(--accent-soft)}
+td .pn{font-weight:600}
+td .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.scopechips{display:flex;gap:4px;flex-wrap:wrap}
+.sc{font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:2px 6px;border-radius:4px;
+  background:var(--sunken);border:1px solid var(--rule);color:var(--ink-2)}
+.badge{display:inline-flex;align-items:center;font-family:var(--mono);font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:999px;
+  border:1px solid var(--rule);color:var(--muted);background:var(--sunken);white-space:nowrap}
+.badge.info{color:var(--accent);background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 25%,white)}
+.badge.good{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 25%,white)}
+.badge.warn{color:var(--warn);background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 30%,white)}
+.badge.hot{color:var(--hot);background:var(--hot-soft);border-color:color-mix(in srgb,var(--hot) 25%,white)}
+.dcount{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.dcount i{color:var(--faint);font-style:normal}
+
+/* ---- detail ---- */
+.detail{border-left:1px solid var(--rule);background:var(--surface);overflow-y:auto;
+  height:calc(100vh - 45px);position:sticky;top:45px}
+.detail .dhead{padding:14px 16px;border-bottom:1px solid var(--rule);position:sticky;top:0;
+  background:var(--surface);z-index:5}
+.detail .dhead h2{margin:0 0 4px;font-size:16px;letter-spacing:-.01em}
+.detail .dhead .m{font-size:12px;color:var(--muted)}
+.detail .close{position:absolute;top:12px;right:12px;background:none;border:1px solid var(--rule);
+  border-radius:6px;width:28px;height:28px;cursor:pointer;color:var(--muted)}
+.sect{padding:14px 16px;border-bottom:1px solid var(--rule-2)}
+.sect > h3{margin:0 0 10px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);font-weight:500}
+.kv{display:grid;grid-template-columns:130px minmax(0,1fr);gap:5px 10px;font-size:12.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;word-break:break-word}
+.specs{font-size:12.5px}
+.specs .sg{padding:8px 0;border-bottom:1px dashed var(--rule-2)}
+.specs .sg:last-child{border-bottom:0}
+.specs .sg b{display:block;margin-bottom:3px}
+.specs .sg span{color:var(--muted)}
+
+.lrow{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;
+  border-bottom:1px dashed var(--rule-2);align-items:center}
+.lrow:last-child{border-bottom:0}
+.lrow select{border:1px solid var(--rule);border-radius:6px;padding:3px 6px;font-size:11.5px}
+.lrow .ll{font-size:12.5px;font-weight:550}
+.lrow .lu{font-size:11.5px;color:var(--muted);word-break:break-all}
+
+.prod{padding:9px 0;border-bottom:1px dashed var(--rule-2)}
+.prod:last-child{border-bottom:0}
+.prod .ph{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.prod .ph b{font-size:12.5px;font-weight:600;flex:1}
+.prod select,.prod input{border:1px solid var(--rule);border-radius:6px;padding:5px 7px;
+  font-size:12px;width:100%;background:var(--surface)}
+.prod select{width:auto;font-size:11.5px}
+.prod .pf{display:grid;grid-template-columns:1fr;gap:5px}
+.prod.off{opacity:.42}
+
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:var(--r);
+  padding:7px 12px;font-size:12.5px;font-weight:550;cursor:pointer}
+.btn:hover{background:var(--sunken);border-color:var(--faint)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.go{background:var(--good);border-color:var(--good);color:#fff}
+.btn.go:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+textarea{width:100%;border:1px solid var(--rule);border-radius:var(--r);padding:8px 10px;
+  min-height:64px;resize:vertical;outline:none;background:var(--surface)}
+textarea:focus,input:focus{border-color:var(--accent)}
+/* ---- messages ---- */
+.thread{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
+  margin-bottom:11px;padding:2px}
+.msg{max-width:86%;display:flex;flex-direction:column;gap:3px}
+.msg.them{align-self:flex-start}          /* the client */
+.msg.me{align-self:flex-end;align-items:flex-end}  /* us */
+.msg .mw{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint)}
+.msg .bub{padding:8px 11px;border-radius:12px;font-size:12.5px;line-height:1.5;
+  white-space:pre-wrap;word-break:break-word}
+.msg.them .bub{background:var(--sunken);border:1px solid var(--rule);border-bottom-left-radius:4px}
+.msg.me .bub{background:var(--accent);color:#fff;border:1px solid var(--accent);
+  border-bottom-right-radius:4px}
+.msg .mt{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+.msg.unread .bub{border-color:var(--hot);box-shadow:0 0 0 2px var(--hot-soft)}
+.send{display:flex;gap:8px;align-items:flex-end}
+.send textarea{min-height:52px}
+.mempty{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:11px}
+.log{list-style:none;margin:0;padding:0;font-size:12px}
+.log li{padding:7px 0;border-bottom:1px dashed var(--rule-2)}
+.log li:last-child{border-bottom:0}
+.log .lt{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.empty{padding:60px 20px;text-align:center;color:var(--muted);background:var(--surface)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--chrome);
+  color:#E6ECF2;padding:10px 16px;border-radius:var(--r);font-size:12.5px;z-index:80;
+  box-shadow:0 6px 24px rgba(0,0,0,.2)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <span class="mark">ClearSky Omega</span>
+  <span class="tag">Intake queue</span>
+  <button class="btn sm" id="navQueue" type="button"
+     style="margin-left:18px;background:#1E2831;border-color:#33414F;color:#E6ECF2">Queue</button>
+  <button class="btn sm" id="navTeam" type="button" hidden
+     style="margin-left:6px;background:transparent;border-color:#33414F;color:#8FA3B5">Team</button>
+  <span class="sp"></span>
+  <span class="who" id="who"></span>
+</div>
+
+<div class="counters" id="counters"></div>
+
+<div class="filters">
+  <input type="search" id="q" placeholder="Search project, customer, city, utility, AHJ">
+  <select id="fTenant"><option value="">All tenants</option></select>
+  <select id="fScope"><option value="">All scopes</option></select>
+  <select id="fRouting">
+    <option value="">Omega + self-serve</option>
+    <option value="omega">Submitted to Omega</option>
+    <option value="self">Self-serve records</option>
+  </select>
+  <select id="fSort">
+    <option value="updated">Newest activity</option>
+    <option value="submitted">Newest submission</option>
+    <option value="name">Project name</option>
+  </select>
+  <button class="btn" id="reload" type="button">Reload</button>
+</div>
+
+<!-- ══ TEAM ══ Who may work the queue. Administrators only. -->
+<div id="teamView" hidden style="max-width:900px;margin:0 auto;padding:26px 18px 60px">
+  <h2 style="font-size:17px;margin:0 0 4px;letter-spacing:-.01em">Team &amp; access</h2>
+  <p style="font-size:12.5px;color:var(--muted);margin:0 0 18px;line-height:1.55">
+    Anyone who opens this console appears here as <b>Pending</b> with no access.
+    Assign <b>Omega Rep</b> and they can see and work submitted jobs, post progress
+    and open them in the editor \u2014 but not price work. <b>Administrator</b> adds
+    pricing and role assignment. A ClearSky address is an administrator without a
+    row here, matching the Firestore rules.</p>
+  <div style="background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);overflow:hidden">
+    <table><thead><tr>
+      <th style="width:34%">Person</th><th style="width:22%">Role</th>
+      <th style="width:16%">Status</th><th style="width:28%">Last change</th>
+    </tr></thead><tbody id="teamRows"></tbody></table>
+    <div id="teamEmpty" class="empty" hidden><h3>Nobody has signed in yet</h3>
+      <p>Send a rep to this page and they will appear here as Pending.</p></div>
+  </div>
+</div>
+
+<div class="shell" id="shell">
+  <div class="queue">
+    <table>
+      <thead><tr>
+        <th style="width:26%">Project</th><th style="width:16%">Customer</th>
+        <th style="width:13%">Scope</th><th style="width:13%">Deliverables</th>
+        <th style="width:13%">Status</th><th style="width:11%">Tenant</th><th style="width:8%">Updated</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="emptyState" hidden><h3>No projects match these filters</h3></div>
+  </div>
+  <aside class="detail" id="detail" hidden></aside>
+</div>
+
+<!-- Firebase compat v8 + shared platform config/registry (OMEGA standard order) -->
+<!-- Firebase compat v8 + shared platform config/registry (OMEGA standard order) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="/omega-intake.js"></script>
+<script>
+(function () {
+  'use strict';
+  var OI = window.OmegaIntake;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var el = function (t, c, x) { var n = document.createElement(t);
+    if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+
+  /* ------------------------------------------------------------------------
+   * HOST GUARD
+   * This console belongs to the ClearSky sales-rep app only. It is excluded
+   * from tenant packages by tools/verify-tenant-package.sh, but if a copy ever
+   * lands on a tenant domain it refuses to run rather than exposing every
+   * tenant's queue. Server-side, Firestore rules are the real boundary — this
+   * is the second lock, not the first.
+   * ---------------------------------------------------------------------- */
+  var ADMIN_HOSTS = [
+    'clearsky-usa.com', 'www.clearsky-usa.com',
+    'csebuilders.com', 'tools.csebuilders.com',
+    'localhost', '127.0.0.1', ''
+  ];
+  (function hostGuard() {
+    var h = location.hostname;
+    var ok = ADMIN_HOSTS.indexOf(h) > -1 ||
+             /\.clearsky-usa\.com$/.test(h) ||
+             /\.csebuilders\.com$/.test(h) ||
+             /^clearsky-[a-z0-9-]+\.vercel\.app$/.test(h);   // preview builds
+    if (ok) return;
+    document.body.innerHTML =
+      '<div style="max-width:520px;margin:14vh auto;padding:0 24px;font-family:system-ui">' +
+      '<div style="font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.14em;' +
+      'text-transform:uppercase;color:#6B7783">Wrong deployment</div>' +
+      '<h1 style="font-size:20px;margin:8px 0 10px">This console does not belong on ' + h + '</h1>' +
+      '<p style="color:#39434E;line-height:1.6;font-size:14px">The intake queue runs only in the ' +
+      'ClearSky sales app. Remove <code>intake-admin.html</code> from this deployment and ' +
+      'redeploy — a tenant build should never contain it.</p>' +
+      '<p style="color:#6B7783;font-size:13px">Customers submit through ' +
+      '<code>intake.html</code>, which is the file that ships to tenants.</p></div>';
+    throw new Error('intake-admin.html loaded on a non-admin host: ' + h);
+  })();
+
+  var admin = (OI.cfg().user) || window.OMEGA_USER || { email: 'admin@clearsky-usa.com' };
+  $('#who').textContent = admin.email || '';
+
+  var all = [], view = [], sel = null, statusFilter = '';
+
+  function fmtDate(s) {
+    if (!s) return '—';
+    var d = new Date(s);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  function toast(msg) {
+    var t = el('div', 'toast', msg); document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2600);
+  }
+
+  /* ------------------------------------------------------------ messages
+     The client half of this conversation shipped in intake.html; this half
+     did not, so every question a customer typed went into rec.messages and
+     sat there unread. Read state is tracked here with notify.staffReadAt
+     rather than a boolean flag, because a flag can only answer "is there
+     anything new" and loses the answer the moment a second message lands
+     while the first is being read. A timestamp survives that. */
+  function nowIso() { return OI.nowIso ? OI.nowIso() : new Date().toISOString(); }
+
+  function messages(r) {
+    return (r.messages || []).slice().sort(function (a, b) {
+      return Date.parse(a.at || 0) - Date.parse(b.at || 0);
+    });
+  }
+  function staffReadAt(r) {
+    return (r.notify && r.notify.staffReadAt) ? Date.parse(r.notify.staffReadAt) : 0;
+  }
+  function isUnread(r, m) {
+    return m.side === 'client' && Date.parse(m.at || 0) > staffReadAt(r);
+  }
+  function unreadCount(r) {
+    var n = 0;
+    (r.messages || []).forEach(function (m) { if (isUnread(r, m)) n++; });
+    return n;
+  }
+
+  /* Prefer the shared library so admin and client write identical shapes.
+     The fallback exists because omega-intake.js is versioned separately and
+     an older copy on a slow CDN would otherwise silently swallow the reply. */
+  function postStaffMessage(r, text) {
+    if (typeof OI.postMessage === 'function') {
+      return Promise.resolve(OI.postMessage(r, text, 'staff', admin.email));
+    }
+    r.messages = r.messages || [];
+    r.messages.push({
+      id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      side: 'staff', text: text, at: nowIso(), by: admin.email
+    });
+    r.notify = r.notify || {};
+    r.notify.unreadForClient = true;
+    if (typeof OI.logActivity === 'function') {
+      OI.logActivity(r, 'message', 'Replied to the client.', admin.email);
+    }
+    r.updatedAt = nowIso();
+    return OI.store().save(r);
+  }
+
+  /* One write, and only when something is actually unread — opening a record
+     to check a phone number should not cost a Firestore write. */
+  function markRead(r) {
+    if (!unreadCount(r)) return Promise.resolve(false);
+    r.notify = r.notify || {};
+    r.notify.staffReadAt = nowIso();
+    r.notify.unreadForStaff = false;
+    return OI.store().save(r).then(function () { return true; });
+  }
+
+  /* ------------------------------------------------------------- load */
+  function load() {
+    return OI.store().listAll().then(function (list) {
+      all = list || [];
+      buildFilterOptions();
+      apply();
+    }).catch(function (e) { toast('Load failed: ' + e.message); });
+  }
+  $('#reload').addEventListener('click', load);
+
+  function buildFilterOptions() {
+    var t = $('#fTenant'), cur = t.value;
+    var seen = {};
+    all.forEach(function (r) { if (r.tenantKey) seen[r.tenantKey] = r.tenantName || r.tenantKey; });
+    t.innerHTML = '<option value="">All tenants</option>';
+    Object.keys(seen).sort().forEach(function (k) { t.appendChild(new Option(seen[k], k)); });
+    t.value = cur;
+
+    var s = $('#fScope');
+    if (s.options.length <= 1) {
+      OI.SCOPES.forEach(function (sc) { s.appendChild(new Option(sc.label, sc.key)); });
+    }
+  }
+
+  /* ---------------------------------------------------------- counters */
+  var COUNTER_DEFS = [
+    { key: '', label: 'All' },
+    { key: 'submitted', label: 'New' },
+    { key: 'in_review', label: 'In review' },
+    { key: 'changes_requested', label: 'Blocked' },
+    { key: 'in_production', label: 'In production' },
+    { key: 'delivered', label: 'Delivered' },
+    { key: 'self', label: 'Self-serve' },
+    { key: 'unread', label: 'Client replies' }
+  ];
+  function renderCounters() {
+    var c = $('#counters'); c.innerHTML = '';
+    COUNTER_DEFS.forEach(function (d) {
+      var n = d.key === '' ? all.length
+        : d.key === 'self' ? all.filter(function (r) { return r.routing === 'self'; }).length
+        : d.key === 'unread' ? all.filter(function (r) { return unreadCount(r) > 0; }).length
+        : all.filter(function (r) { return r.status === d.key; }).length;
+      var b = el('button', 'counter'); b.type = 'button';
+      b.setAttribute('aria-pressed', statusFilter === d.key ? 'true' : 'false');
+      b.appendChild(el('div', 'n', String(n)));
+      b.appendChild(el('div', 'l', d.label));
+      b.addEventListener('click', function () {
+        statusFilter = statusFilter === d.key ? '' : d.key; apply();
+      });
+      c.appendChild(b);
+    });
+  }
+
+  /* ------------------------------------------------------------ filter */
+  function apply() {
+    var q = $('#q').value.trim().toLowerCase();
+    var tn = $('#fTenant').value, sc = $('#fScope').value, rt = $('#fRouting').value;
+    view = all.filter(function (r) {
+      if (tn && r.tenantKey !== tn) return false;
+      if (rt && r.routing !== rt) return false;
+      if (sc && !(r.scope && r.scope[sc] && r.scope[sc].enabled)) return false;
+      if (statusFilter === 'self') { if (r.routing !== 'self') return false; }
+      else if (statusFilter === 'unread') { if (!unreadCount(r)) return false; }
+      else if (statusFilter && r.status !== statusFilter) return false;
+      if (q) {
+        var hay = [r.project.name, r.project.siteName, r.project.city, r.project.state,
+          r.project.utility, r.project.ahj, r.customer.company, r.customer.contactName,
+          r.customer.email, r.tenantName].join(' ').toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+    var sort = $('#fSort').value;
+    view.sort(function (a, b) {
+      if (sort === 'name') return String(a.project.name).localeCompare(String(b.project.name));
+      var ka = sort === 'submitted' ? a.submittedAt : a.updatedAt;
+      var kb = sort === 'submitted' ? b.submittedAt : b.updatedAt;
+      return String(kb || '').localeCompare(String(ka || ''));
+    });
+    renderCounters(); renderRows();
+  }
+  ['q', 'fTenant', 'fScope', 'fRouting', 'fSort'].forEach(function (id) {
+    $('#' + id).addEventListener('input', apply);
+    $('#' + id).addEventListener('change', apply);
+  });
+
+  /* -------------------------------------------------------------- rows */
+  function renderRows() {
+    var tb = $('#rows'); tb.innerHTML = '';
+    $('#emptyState').hidden = view.length > 0;
+    view.forEach(function (r) {
+      var st = OI.STATUS[r.status] || { label: r.status, tone: 'muted' };
+      var tr = el('tr');
+      if (sel && sel.intakeId === r.intakeId) tr.className = 'sel';
+
+      var c1 = el('td');
+      c1.appendChild(el('div', 'pn', r.project.name || 'Untitled'));
+      c1.appendChild(el('div', 'sub', [r.project.city, r.project.state].filter(Boolean).join(', ') +
+        (r.project.utility ? ' · ' + r.project.utility : '')));
+      tr.appendChild(c1);
+
+      var c2 = el('td');
+      c2.appendChild(el('div', null, r.customer.company || '—'));
+      c2.appendChild(el('div', 'sub', r.customer.contactName || ''));
+      tr.appendChild(c2);
+
+      var c3 = el('td');
+      var chips = el('div', 'scopechips');
+      OI.activeScopes(r).forEach(function (s) { chips.appendChild(el('span', 'sc', s.short)); });
+      c3.appendChild(chips); tr.appendChild(c3);
+
+      var req = OI.requestedDeliverables(r);
+      var done = req.filter(function (d) { return d.status === 'complete'; }).length;
+      var c4 = el('td');
+      var dc = el('div', 'dcount');
+      dc.innerHTML = req.length ? done + '<i> / ' + req.length + '</i>' : '<i>—</i>';
+      c4.appendChild(dc); tr.appendChild(c4);
+
+      var c5 = el('td');
+      c5.appendChild(el('span', 'badge ' + st.tone, st.label));
+      var un = unreadCount(r);
+      if (un) {
+        var mb = el('div'); mb.style.marginTop = '4px';
+        mb.appendChild(el('span', 'badge hot', un + ' reply' + (un === 1 ? '' : 's')));
+        c5.appendChild(mb);
+      }
+      if (r.notify && r.notify.unreadForClient) {
+        var nb = el('div'); nb.style.marginTop = '4px';
+        nb.appendChild(el('span', 'badge good', 'Notified'));
+        c5.appendChild(nb);
+      }
+      tr.appendChild(c5);
+
+      tr.appendChild(el('td', null, r.tenantName || r.tenantKey || '—'));
+      var c7 = el('td'); c7.appendChild(el('span', 'mono', fmtDate(r.updatedAt)));
+      c7.style.cssText = 'font-size:11.5px;color:var(--muted)';
+      tr.appendChild(c7);
+
+      tr.addEventListener('click', function () { openDetail(r); });
+      tb.appendChild(tr);
+    });
+  }
+
+  /* ------------------------------------------------------------ detail */
+  function openDetail(r) {
+    sel = r;
+    $('#shell').classList.add('open');
+    $('#detail').hidden = false;
+    renderDetail();
+    renderRows();
+    /* Deliberately after the render: the panel still shows what was new while
+       it is being read, and only the queue row behind it goes quiet. */
+    markRead(r).then(function (changed) {
+      if (changed) { renderCounters(); renderRows(); }
+    })['catch'](function () { /* read state is not worth a toast */ });
+  }
+  function closeDetail() {
+    sel = null; $('#shell').classList.remove('open'); $('#detail').hidden = true; renderRows();
+  }
+
+  function persist(msg) {
+    return OI.store().save(sel).then(function () {
+      if (msg) toast(msg);
+      apply(); renderDetail();
+    }).catch(function (e) { toast('Save failed: ' + e.message); });
+  }
+
+  function renderDetail() {
+    var d = $('#detail'); d.innerHTML = '';
+    var r = sel; if (!r) return;
+    var st = OI.STATUS[r.status] || { label: r.status, tone: 'muted' };
+
+    /* head */
+    var head = el('div', 'dhead');
+    head.appendChild(el('h2', null, r.project.name || 'Untitled project'));
+    var m = el('div', 'm');
+    m.textContent = (r.customer.company || '—') + ' · ' + (r.tenantName || r.tenantKey);
+    head.appendChild(m);
+    var bl = el('div'); bl.style.marginTop = '8px';
+    bl.appendChild(el('span', 'badge ' + st.tone, st.label));
+    if (r.routing === 'self') {
+      var sb = el('span', 'badge', 'Self-serve'); sb.style.marginLeft = '6px'; bl.appendChild(sb);
+    }
+    head.appendChild(bl);
+    var x = el('button', 'close', '×'); x.type = 'button';
+    x.setAttribute('aria-label', 'Close'); x.addEventListener('click', closeDetail);
+    head.appendChild(x);
+    d.appendChild(head);
+
+    /* ---------- messages ----------
+       Above the intake data on purpose. A customer question is the only thing
+       in this panel with someone waiting on the other end of it; parcel numbers
+       and utility names are not going anywhere. */
+    var sm = el('div', 'sect');
+    var mh = el('h3', null, 'Messages');
+    var un = unreadCount(r);
+    if (un) {
+      var ub = el('span', 'badge hot', un + ' new');
+      ub.style.marginLeft = '8px';
+      mh.appendChild(ub);
+    }
+    sm.appendChild(mh);
+
+    var thread = messages(r);
+    if (!thread.length) {
+      sm.appendChild(el('div', 'mempty',
+        'No messages yet. Anything sent here appears in the client\u2019s project portal.'));
+    } else {
+      var tw = el('div', 'thread');
+      thread.forEach(function (m) {
+        var mine = m.side !== 'client';
+        var row = el('div', 'msg ' + (mine ? 'me' : 'them') + (isUnread(r, m) ? ' unread' : ''));
+        row.appendChild(el('div', 'mw', mine
+          ? (m.by || admin.email || 'You')
+          : (r.customer.contactName || r.customer.email || 'Client')));
+        row.appendChild(el('div', 'bub', m.text || ''));
+        row.appendChild(el('div', 'mt', m.at ? new Date(m.at).toLocaleString() : ''));
+        tw.appendChild(row);
+      });
+      sm.appendChild(tw);
+      /* newest at the bottom, so scroll there — otherwise a long history opens
+         on a question answered three weeks ago */
+      setTimeout(function () { tw.scrollTop = tw.scrollHeight; }, 0);
+    }
+
+    var sendRow = el('div', 'send');
+    var box = document.createElement('textarea');
+    box.placeholder = 'Reply to the client\u2026';
+    box.setAttribute('aria-label', 'Reply to the client');
+    var sendBtn = el('button', 'btn primary', 'Send');
+    sendBtn.type = 'button';
+
+    function doSend() {
+      var text = (box.value || '').trim();
+      if (!text) return;
+      sendBtn.disabled = true;
+      postStaffMessage(r, text).then(function () {
+        box.value = '';
+        toast('Reply sent \u2014 the client sees it in their portal.');
+        apply(); renderDetail();
+      })['catch'](function (e) {
+        sendBtn.disabled = false;
+        toast('Could not send: ' + ((e && e.message) || 'write rejected'));
+      });
+    }
+    sendBtn.addEventListener('click', doSend);
+    box.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doSend(); }
+    });
+    sendRow.appendChild(box); sendRow.appendChild(sendBtn);
+    sm.appendChild(sendRow);
+    d.appendChild(sm);
+
+    /* customer + site */
+    var s1 = el('div', 'sect'); s1.appendChild(el('h3', null, 'Customer & site'));
+    var dl = el('dl', 'kv');
+    [
+      ['Contact', [r.customer.contactName, r.customer.role].filter(Boolean).join(' · ')],
+      ['Email', r.customer.email], ['Phone', r.customer.phone],
+      ['Site', [r.project.street, r.project.city, r.project.state, r.project.zip].filter(Boolean).join(', ')],
+      ['Parcel / APN', r.project.apn],
+      ['Coordinates', (r.project.lat && r.project.lng) ? r.project.lat + ', ' + r.project.lng : ''],
+      ['Utility', r.project.utility], ['AHJ', r.project.ahj],
+      ['Existing service', [r.project.serviceVoltage, r.project.existingServiceA && r.project.existingServiceA + 'A'].filter(Boolean).join(' · ')],
+      ['Stage', r.project.stage], ['Site control', r.project.siteControl],
+      ['Target energization', r.project.targetDate],
+      ['Submitted', r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '—']
+    ].forEach(function (p) {
+      if (!p[1]) return;
+      dl.appendChild(el('dt', null, p[0]));
+      dl.appendChild(el('dd', null, p[1]));
+    });
+    s1.appendChild(dl);
+    if (r.project.notes) {
+      var pn = el('div'); pn.style.cssText = 'margin-top:10px;font-size:12.5px;color:var(--ink-2)';
+      pn.textContent = r.project.notes; s1.appendChild(pn);
+    }
+    d.appendChild(s1);
+
+    /* scope */
+    var s2 = el('div', 'sect'); s2.appendChild(el('h3', null, 'Scope'));
+    var sp = el('div', 'specs');
+    var act = OI.activeScopes(r);
+    if (!act.length) sp.appendChild(el('div', null, 'No scope selected.'));
+    act.forEach(function (sc) {
+      var data = r.scope[sc.key];
+      var g = el('div', 'sg');
+      g.appendChild(el('b', null, sc.label + ' — ' + sc.summary(data)));
+      var parts = sc.fields.filter(function (f) {
+        return f.k !== 'notes' && data[f.k] !== '' && data[f.k] != null && data[f.k] !== false;
+      }).map(function (f) {
+        return f.l + ': ' + (data[f.k] === true ? 'yes' : data[f.k]);
+      });
+      g.appendChild(el('span', null, parts.join(' · ')));
+      if (data.notes) {
+        var nn = el('div'); nn.style.cssText = 'margin-top:4px;color:var(--ink-2)';
+        nn.textContent = data.notes; g.appendChild(nn);
+      }
+      sp.appendChild(g);
+    });
+    s2.appendChild(sp); d.appendChild(s2);
+
+    /* links */
+    var s3 = el('div', 'sect');
+    var h3 = el('h3', null, 'Documents (' + (r.links || []).length + ')');
+    s3.appendChild(h3);
+    (r.links || []).forEach(function (ln) {
+      var row = el('div', 'lrow');
+      var left = el('div');
+      var a = el('a', 'll', ln.label || 'Link');
+      a.href = ln.url || '#'; a.target = '_blank'; a.rel = 'noopener';
+      left.appendChild(a);
+      left.appendChild(el('div', 'lu', (ln.url ? OI.linkProvider(ln.url) + ' · ' : '') + (ln.url || 'no url')));
+      row.appendChild(left);
+      var selc = document.createElement('select');
+      (r.categories || OI.DEFAULT_CATEGORIES).forEach(function (c) { selc.appendChild(new Option(c, c)); });
+      if ((r.categories || []).indexOf(ln.category) === -1) selc.appendChild(new Option(ln.category, ln.category));
+      selc.value = ln.category;
+      selc.setAttribute('aria-label', 'Category for ' + (ln.label || 'link'));
+      selc.addEventListener('change', function () {
+        OI.updateLink(r, ln.id, { category: selc.value }, admin.email);
+        persist('Category updated.');
+      });
+      row.appendChild(selc);
+      s3.appendChild(row);
+    });
+    var la = el('div', 'acts'); la.style.marginTop = '10px';
+    var addL = el('button', 'btn', 'Add link'); addL.type = 'button';
+    addL.addEventListener('click', function () {
+      var url = prompt('Share URL'); if (!url) return;
+      var label = prompt('Label', OI.linkProvider(url) + ' folder') || 'Link';
+      var cat = prompt('Category (' + (r.categories || []).join(', ') + ')', 'Other') || 'Other';
+      OI.addCategory(r, cat);
+      OI.addLink(r, { url: url, label: label, category: cat, addedByRole: 'omega' }, admin.email);
+      persist('Link added.');
+    });
+    var addC = el('button', 'btn', 'Add category'); addC.type = 'button';
+    addC.addEventListener('click', function () {
+      var n = prompt('New category name'); if (!n) return;
+      if (OI.addCategory(r, n)) persist('Category added.'); else toast('Already exists.');
+    });
+    la.appendChild(addL); la.appendChild(addC); s3.appendChild(la);
+    d.appendChild(s3);
+
+    /* production */
+    var s4 = el('div', 'sect'); s4.appendChild(el('h3', null, 'Production'));
+    OI.DELIVERABLES.forEach(function (def) {
+      var slot = (r.deliverables || []).filter(function (z) { return z.key === def.key; })[0];
+      if (!slot) { slot = { key: def.key, label: def.label, requested: false,
+        status: 'not_started', outputUrl: '', note: '' };
+        r.deliverables = r.deliverables || []; r.deliverables.push(slot); }
+      var box = el('div', 'prod' + (slot.requested ? '' : ' off'));
+      var ph = el('div', 'ph');
+      ph.appendChild(el('b', null, def.label));
+      var ss = document.createElement('select');
+      [['not_started', 'Not started'], ['in_progress', 'In progress'],
+       ['blocked', 'Blocked'], ['complete', 'Complete']].forEach(function (o) {
+        ss.appendChild(new Option(o[1], o[0]));
+      });
+      ss.value = slot.status || 'not_started';
+      ss.setAttribute('aria-label', def.label + ' status');
+      ss.addEventListener('change', function () {
+        slot.status = ss.value; slot.updatedAt = OI.nowIso();
+        OI.logActivity(r, 'deliverable', def.label + ' → ' + ss.options[ss.selectedIndex].text, admin.email);
+        persist();
+      });
+      ph.appendChild(ss);
+      box.appendChild(ph);
+
+      var pf = el('div', 'pf');
+      var ou = document.createElement('input'); ou.type = 'url';
+      ou.placeholder = 'Output link (Drive / Dropbox / PDF)';
+      ou.value = slot.outputUrl || '';
+      ou.setAttribute('aria-label', def.label + ' output link');
+      ou.addEventListener('change', function () {
+        slot.outputUrl = OI.normalizeUrl(ou.value); persist('Output link saved.');
+      });
+      var on = document.createElement('input'); on.type = 'text';
+      on.placeholder = 'Note to the client'; on.value = slot.note || '';
+      on.setAttribute('aria-label', def.label + ' note');
+      on.addEventListener('change', function () { slot.note = on.value; persist(); });
+      pf.appendChild(ou); pf.appendChild(on);
+      box.appendChild(pf);
+      s4.appendChild(box);
+    });
+    d.appendChild(s4);
+
+    /* assignment */
+    var s5 = el('div', 'sect'); s5.appendChild(el('h3', null, 'Assignment & notes'));
+    r.admin = r.admin || {};
+    var ai = document.createElement('input'); ai.type = 'text';
+    ai.placeholder = 'Assignee'; ai.value = r.admin.assignee || '';
+    ai.style.cssText = 'width:100%;border:1px solid var(--rule);border-radius:8px;padding:7px 9px;margin-bottom:8px';
+    ai.addEventListener('change', function () { r.admin.assignee = ai.value; persist(); });
+    s5.appendChild(ai);
+    var dd = document.createElement('input'); dd.type = 'date'; dd.value = r.admin.dueDate || '';
+    dd.style.cssText = ai.style.cssText;
+    dd.addEventListener('change', function () { r.admin.dueDate = dd.value; persist(); });
+    s5.appendChild(dd);
+    var ta = document.createElement('textarea');
+    ta.placeholder = 'Internal notes — never shown to the client';
+    ta.value = r.admin.internalNotes || '';
+    ta.addEventListener('change', function () { r.admin.internalNotes = ta.value; persist(); });
+    s5.appendChild(ta);
+    d.appendChild(s5);
+
+    /* payment — administrators only; reps can see it but not set it */
+    if (r.quote && r.quote.total != null) {
+      var sp = el('div', 'sect');
+      sp.appendChild(el('h3', null, 'Payment'));
+      var line = el('div');
+      line.style.cssText = 'font-size:13px;margin-bottom:10px';
+      var paid = r.quote.paymentStatus === 'paid';
+      line.innerHTML = '<b>' + OI.money(r.quote.total, r.quote.currency) + '</b> \u00b7 ' +
+        '<span class="badge ' + (paid ? 'good' : 'warn') + '">' + (paid ? 'Paid' : 'Unpaid') + '</span>';
+      sp.appendChild(line);
+
+      if (isAdminUser) {
+        var pu = document.createElement('input');
+        pu.type = 'url';
+        pu.placeholder = 'Payment link (Stripe, invoice, PO portal\u2026)';
+        pu.value = r.quote.paymentUrl || '';
+        pu.style.cssText = 'width:100%;border:1px solid var(--rule);border-radius:8px;padding:7px 9px;margin-bottom:8px';
+        pu.addEventListener('change', function () {
+          OI.setPaymentLink(r, pu.value, admin.email).then(function () {
+            toast('Payment link posted \u2014 the client can see it.'); apply(); renderDetail();
+          });
+        });
+        sp.appendChild(pu);
+        if (!paid) {
+          var mp = el('button', 'btn sm', 'Mark paid');
+          mp.type = 'button';
+          mp.addEventListener('click', function () {
+            var note = prompt('Reference (PO, invoice, transaction id)') || '';
+            OI.markPaid(r, admin.email, note).then(function () { apply(); renderDetail(); });
+          });
+          sp.appendChild(mp);
+        }
+      } else if (r.quote.paymentUrl) {
+        var pl = el('a', null, 'Open payment link');
+        pl.href = r.quote.paymentUrl; pl.target = '_blank'; pl.rel = 'noopener';
+        pl.style.fontSize = '12.5px';
+        sp.appendChild(pl);
+      }
+      d.appendChild(sp);
+    }
+
+    /* actions */
+    var s6 = el('div', 'sect'); s6.appendChild(el('h3', null, 'Actions'));
+    var stSel = document.createElement('select');
+    stSel.style.cssText = 'width:100%;border:1px solid var(--rule);border-radius:8px;padding:7px 9px;margin-bottom:10px';
+    Object.keys(OI.STATUS).forEach(function (k) {
+      stSel.appendChild(new Option(OI.STATUS[k].label, k));
+    });
+    stSel.value = r.status;
+    stSel.addEventListener('change', function () {
+      OI.setStatus(r, stSel.value, admin.email).then(function () {
+        toast('Status set to ' + OI.STATUS[stSel.value].label + '.'); apply(); renderDetail();
+      });
+    });
+    s6.appendChild(stSel);
+
+    var acts = el('div', 'acts');
+
+    var notify = el('button', 'btn go', 'Notify client');
+    notify.type = 'button';
+    notify.addEventListener('click', function () {
+      var deflt = r.status === 'delivered'
+        ? 'Your package is complete and ready to download.'
+        : 'There is an update on your project.';
+      var msg = prompt('Message to the client', deflt);
+      if (msg === null) return;
+      OI.notifyClient(r, msg, admin.email).then(function () {
+        toast('Client notified.'); apply(); renderDetail();
+      });
+    });
+    acts.appendChild(notify);
+
+    var complete = el('button', 'btn primary', 'Mark delivered & notify');
+    complete.type = 'button';
+    complete.addEventListener('click', function () {
+      var req = OI.requestedDeliverables(r);
+      var open = req.filter(function (x) { return x.status !== 'complete'; });
+      if (open.length && !confirm(open.length + ' deliverable(s) are not marked complete. Deliver anyway?')) return;
+      OI.setStatus(r, 'delivered', admin.email)
+        .then(function () { return OI.notifyClient(r,
+          'Your package is complete and ready to download.', admin.email); })
+        .then(function () { toast('Delivered and client notified.'); apply(); renderDetail(); });
+    });
+    acts.appendChild(complete);
+
+    var needs = el('button', 'btn', 'Request info');
+    needs.type = 'button';
+    needs.addEventListener('click', function () {
+      var msg = prompt('What do you need from the client?');
+      if (!msg) return;
+      OI.setStatus(r, 'changes_requested', admin.email, msg)
+        .then(function () { return OI.notifyClient(r, msg, admin.email); })
+        .then(function () { toast('Client asked for more information.'); apply(); renderDetail(); });
+    });
+    acts.appendChild(needs);
+
+    if (r.editorProjectId) {
+      var ed = el('a', 'btn', 'Open in editor');
+      ed.href = OI.editorUrl(r.editorProjectId); ed.target = '_blank'; ed.rel = 'noopener';
+      acts.appendChild(ed);
+    }
+    var cp = el('button', 'btn', 'Copy intake ID'); cp.type = 'button';
+    cp.addEventListener('click', function () {
+      navigator.clipboard.writeText(r.intakeId).then(function () { toast('Intake ID copied.'); });
+    });
+    acts.appendChild(cp);
+    s6.appendChild(acts);
+    d.appendChild(s6);
+
+    /* log */
+    var s7 = el('div', 'sect'); s7.appendChild(el('h3', null, 'Activity'));
+    var ul = el('ul', 'log');
+    (r.activity || []).slice(0, 30).forEach(function (a) {
+      var li = el('li');
+      li.appendChild(el('div', 'lt', new Date(a.ts).toLocaleString() + ' · ' + (a.actor || 'system')));
+      li.appendChild(el('div', null, a.message));
+      ul.appendChild(li);
+    });
+    if (!(r.activity || []).length) ul.appendChild(el('li', null, 'No activity yet.'));
+    s7.appendChild(ul); d.appendChild(s7);
+  }
+
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sel) closeDetail(); });
+
+  /* ---------- authentication & staff gate ----------
+     The Firestore rules are the real boundary: isAdmin() matches
+     @clearsky-usa.com and @csebuilders.com, and listAll() is an unfiltered
+     query, which Firestore rejects outright for anyone else — a tenant who
+     found this URL gets a permission error and an empty table, not a peek at
+     other customers.
+
+     The check below is not that boundary. It exists so a person who signs in
+     with the wrong account sees WHY the queue is empty instead of an
+     unexplained blank screen and a console error. */
+  /* ---------- TEAM & ACCESS ---------- */
+  var isAdminUser = false;
+
+  function db() {
+    try { return (window.firebase && firebase.apps.length) ? firebase.firestore() : null; }
+    catch (e) { return null; }
+  }
+
+  function showView(v) {
+    document.getElementById('teamView').hidden = (v !== 'team');
+    $('#shell').style.display = (v === 'team') ? 'none' : '';
+    Array.prototype.forEach.call(document.querySelectorAll('.counters, .filters'), function (n) {
+      n.style.display = (v === 'team') ? 'none' : '';
+    });
+    var q = $('#navQueue'), t = $('#navTeam');
+    q.style.background = v === 'queue' ? '#1E2831' : 'transparent';
+    q.style.color = v === 'queue' ? '#E6ECF2' : '#8FA3B5';
+    t.style.background = v === 'team' ? '#1E2831' : 'transparent';
+    t.style.color = v === 'team' ? '#E6ECF2' : '#8FA3B5';
+    if (v === 'team') renderTeam();
+  }
+
+  function renderTeam() {
+    var body = $('#teamRows');
+    body.innerHTML = '<tr><td colspan="4" style="padding:18px;color:var(--muted)">Loading\u2026</td></tr>';
+    OI.listStaff(db()).then(function (people) {
+      body.innerHTML = '';
+      $('#teamEmpty').hidden = people.length > 0;
+      people.forEach(function (p) {
+        var tr = el('tr');
+        var c1 = el('td');
+        c1.appendChild(el('div', null, p.name || p.email));
+        if (p.name) c1.appendChild(el('div', 'sub', p.email));
+        tr.appendChild(c1);
+
+        var c2 = el('td');
+        var sel = document.createElement('select');
+        sel.style.cssText = 'border:1px solid var(--rule);border-radius:6px;padding:5px 8px;font-size:12px';
+        OI.STAFF_ROLES.forEach(function (r) { sel.appendChild(new Option(r.label, r.key)); });
+        sel.value = p.role || 'none';
+        sel.addEventListener('change', function () {
+          OI.setStaffRole(db(), p.uid, sel.value, admin.email)
+            .then(function () { toast(p.email + ' \u2192 ' + OI.roleLabel(sel.value)); renderTeam(); })
+            ['catch'](function (e) { toast('Could not save: ' + e.message); });
+        });
+        c2.appendChild(sel); tr.appendChild(c2);
+
+        var c3 = el('td');
+        var on = p.active !== false;
+        var b = el('button', 'btn sm', on ? 'Active' : 'Suspended');
+        b.type = 'button';
+        if (!on) b.style.color = 'var(--hot)';
+        b.addEventListener('click', function () {
+          OI.setStaffActive(db(), p.uid, !on, admin.email)
+            .then(renderTeam)['catch'](function (e) { toast('Could not save: ' + e.message); });
+        });
+        c3.appendChild(b); tr.appendChild(c3);
+
+        var c4 = el('td');
+        c4.style.cssText = 'font-size:11.5px;color:var(--muted)';
+        c4.textContent = p.updatedAt
+          ? new Date(p.updatedAt).toLocaleString() + (p.updatedBy ? ' \u00b7 ' + p.updatedBy : '')
+          : (p.addedAt ? 'Joined ' + new Date(p.addedAt).toLocaleDateString() : '\u2014');
+        tr.appendChild(c4);
+        body.appendChild(tr);
+      });
+    });
+  }
+
+  $('#navQueue').addEventListener('click', function () { showView('queue'); });
+  $('#navTeam').addEventListener('click', function () { showView('team'); });
+
+  var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+  function isStaff(email) {
+    var d = String(email || '').split('@')[1];
+    return !!d && STAFF_DOMAINS.indexOf(d.toLowerCase()) >= 0;
+  }
+
+  /* Overlay, not a body rewrite — a successful sign-in has to have a page
+     left to render the queue into. */
+  function panel(html) {
+    var box = document.getElementById('ix-gate');
+    if (!box) {
+      box = el('div');
+      box.id = 'ix-gate';
+      box.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--paper);' +
+        'display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto';
+      document.body.appendChild(box);
+    }
+    box.innerHTML = '<div style="width:400px;max-width:100%;background:var(--surface);' +
+      'border:1px solid var(--rule);border-radius:var(--r-lg);padding:30px 28px;' +
+      'box-shadow:0 1px 2px rgba(16,26,38,.06),0 6px 20px rgba(16,26,38,.05)">' + html + '</div>';
+    return box;
+  }
+  function closePanel() {
+    var b = document.getElementById('ix-gate');
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+
+  function signInPanel() {
+    panel(
+      '<div class="eyebrow">ClearSky Omega \u00b7 Intake queue</div>' +
+      '<h1 style="font-size:19px;margin:8px 0 6px;letter-spacing:-.01em">Sign in</h1>' +
+      '<p style="font-size:12.5px;color:var(--muted);line-height:1.55;margin:0 0 18px">' +
+        'Use your ClearSky staff account. This console keeps its own sign-in.</p>' +
+      '<div style="margin-bottom:10px"><label style="font-size:12px;font-weight:550;color:var(--ink-2)">Work email</label>' +
+        '<input id="gEmail" type="email" autocomplete="username" style="width:100%;margin-top:5px;' +
+        'border:1px solid var(--rule);border-radius:8px;padding:8px 10px"></div>' +
+      '<div style="margin-bottom:14px"><label style="font-size:12px;font-weight:550;color:var(--ink-2)">Password</label>' +
+        '<input id="gPass" type="password" autocomplete="current-password" style="width:100%;margin-top:5px;' +
+        'border:1px solid var(--rule);border-radius:8px;padding:8px 10px"></div>' +
+      '<button class="btn primary" id="gGo" type="button" style="width:100%">Sign in</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 14px;font-size:11px;color:var(--faint)">' +
+        '<span style="flex:1;height:1px;background:var(--rule)"></span>or' +
+        '<span style="flex:1;height:1px;background:var(--rule)"></span></div>' +
+      '<button class="btn" id="gGoogle" type="button" style="width:100%">Continue with Google</button>' +
+      '<p id="gErr" style="color:#B4302A;font-size:12.5px;margin:14px 0 0;min-height:16px"></p>'
+    );
+    function err(m){ document.getElementById('gErr').textContent = m || ''; }
+    document.getElementById('gGo').addEventListener('click', function () {
+      var e = (document.getElementById('gEmail').value || '').trim();
+      var p = document.getElementById('gPass').value || '';
+      if (!e || !p) { err('Enter your email and password.'); return; }
+      err('');
+      firebase.auth().signInWithEmailAndPassword(e, p)['catch'](function (x) {
+        var c = x && x.code;
+        err(c === 'auth/wrong-password' || c === 'auth/invalid-credential' || c === 'auth/user-not-found'
+          ? 'Incorrect email or password.' : ((x && x.message) || 'Sign-in failed.'));
+      });
+    });
+    document.getElementById('gPass').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') document.getElementById('gGo').click();
+    });
+    document.getElementById('gGoogle').addEventListener('click', function () {
+      err('');
+      var auth = firebase.auth();
+      var provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      auth.signInWithPopup(provider)['catch'](function (x) {
+        if (x && (x.code === 'auth/popup-blocked' || x.code === 'auth/cancelled-popup-request')) {
+          return auth.signInWithRedirect(provider);
+        }
+        err((x && x.message) || 'Sign-in failed.');
+      });
+    });
+  }
+
+  function pendingPanel(email) {
+    panel(
+      '<div class="eyebrow">ClearSky Omega \u00b7 Intake queue</div>' +
+      '<h1 style="font-size:19px;margin:8px 0 6px">Waiting on access</h1>' +
+      '<p style="font-size:12.5px;color:var(--muted);line-height:1.55">Signed in as ' +
+        email + '. The queue reads submissions across every tenant, so it is limited to ' +
+        'ClearSky staff and people assigned an Omega Rep role. Your account has been ' +
+        'recorded \u2014 ask an administrator to assign it under Team &amp; access.</p>' +
+      '<button class="btn" id="gOut" type="button" style="width:100%;margin-top:16px">Sign out</button>'
+    );
+    document.getElementById('gOut').addEventListener('click', function () {
+      firebase.auth().signOut().then(function () { location.reload(); });
+    });
+  }
+
+  /* Same shape as the portal's _initFirebase(): wait for the SDK and for
+     config.js to publish CLEARSKY_CONFIG, then initialise once. */
+  var booted = false;
+  function bootFirebase(tries) {
+    tries = tries || 0;
+    if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG) {
+      if (tries > 80) {
+        if (typeof firebase === 'undefined') { load(); return; }
+        panel('<h1 style="font-size:19px;margin:0 0 10px">Configuration not loaded</h1>' +
+              '<p style="font-size:13px;color:var(--ink-2);line-height:1.6">config.js did not publish ' +
+              'CLEARSKY_CONFIG on this host.</p>');
+        return;
+      }
+      setTimeout(function () { bootFirebase(tries + 1); }, 120);
+      return;
+    }
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+    } catch (e) {
+      if (!/already exists/.test(e.message)) console.error('[intake-admin] firebase init', e);
+    }
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)['catch'](function () {})
+      .then(function () { return firebase.auth().getRedirectResult()['catch'](function () {}); })
+      .then(function () {
+        firebase.auth().onAuthStateChanged(function (u) {
+          if (!u) { signInPanel(); return; }
+          admin = { uid: u.uid, email: u.email, displayName: u.displayName };
+
+          /* Role first, then access. A ClearSky address is an administrator
+             without a staff row; anyone else needs an assigned role — which
+             is exactly what the Firestore rules enforce, so the UI and the
+             rules cannot disagree. */
+          OI.loadMyStaff(db(), u).then(function () {
+            if (!OI.canWorkQueue(admin)) { pendingPanel(u.email); return; }
+            closePanel();
+            isAdminUser = OI.canAdminister(admin);
+            $('#navTeam').hidden = !isAdminUser;
+            $('#who').textContent = u.email +
+              (OI.isDomainStaff(u.email) ? '' : ' \u00b7 ' + OI.roleLabel((OI.myStaff() || {}).role));
+            if (booted) return;
+            booted = true;
+            showView('queue');
+            load();
+          });
+        });
+      });
+  }
+
+  bootFirebase();
+})();
+</script>
+</body>
+</html>

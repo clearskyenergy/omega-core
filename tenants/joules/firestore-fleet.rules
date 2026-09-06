@@ -1,0 +1,114 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Managed fleet rule
+   Paste inside the existing `match /databases/{database}/documents { ... }`
+   block in firestore.rules, then DEPLOY.
+
+     firebase deploy --only firestore:rules
+
+   Backs omega-fleet.js, /fleet.html and /commission.html — a tenant's own
+   register of third-party facilities it operates under contract.
+
+   ─────────────────────────────────────────────────────────────────────────
+   ⚠ THIS COLLECTION IS NOT `projects`
+   ─────────────────────────────────────────────────────────────────────────
+   `projects` holds sites being DESIGNED — the editor writes there, the
+   dashboard's stage funnel and storage rollups read it, and every tenant on
+   the platform has one. A managed site is a different object with a
+   different lifecycle: it is already built, it belongs to somebody else,
+   and it is under a live software contract that outlives any drawing.
+
+   Putting managed sites in `projects` would put third-party facilities into
+   every stage rollup on the stock dashboard, where a commissioned building
+   would read as a development project stuck at 'online' forever. It would
+   also widen the blast radius of the cross-org `/projects` read flagged in
+   the README — see pre-launch item 7 — from designs to a customer list.
+
+   The link between the two is `editorProjectId` on the site record, which is
+   how a fleet site that was also drawn in the editor finds its drawing. One
+   field, one direction, no shared collection.
+
+   The collection name below must match `tenant.fleet.collection` in that
+   deployment's /config.js.
+
+   ─────────────────────────────────────────────────────────────────────────
+   FAILURE MODE
+   ─────────────────────────────────────────────────────────────────────────
+   Missing rule ⇒ reads are denied and the fleet block paints its empty
+   state, which looks exactly like "no sites yet". The module logs the
+   refused collection name to the console, so check there before assuming
+   the data is missing. Writes fail loudly and name this file.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+match /managedSites/{siteId} {
+
+  /* The lifecycle omega-fleet.js knows about. A write carrying anything else
+     is refused rather than stored: an unrecognised status has no `group`, so
+     the site would silently fall out of managed capacity, contracted
+     capacity and the funnel all at once while still appearing in the
+     register. Keep this list in step with STATUS[] in omega-fleet.js —
+     check-fleet.js asserts the two match. */
+  function knownStatus(s) {
+    return s in ['prospect', 'pilot', 'contracted', 'shipped', 'commissioning',
+                 'learning', 'autonomous', 'paused', 'churned'];
+  }
+
+  /* Only two bases exist, and an absent one is read as 'modeled' by the
+     module. Refusing anything else here stops a third spelling ('measured',
+     'actual', 'real') from creating a class of savings that is counted in
+     neither total. */
+  function knownBasis(b) {
+    return !('savingsBasis' in b) || b.savingsBasis in ['metered', 'modeled'];
+  }
+
+  function callerOrg() { return userOrg(); }
+  function ownedByCaller() { return resource.data.orgId == callerOrg(); }
+  function incomingOwnedByCaller() { return request.resource.data.orgId == callerOrg(); }
+
+  /* Everyone in the tenant reads the whole register. A fleet is a shared
+     operational picture — scoping reads to whoever created the row would
+     mean a site stops existing when its account manager leaves, which is
+     the opposite of what a register is for. */
+  allow read: if request.auth != null && ownedByCaller();
+
+  /* Adding a site. Pinned to the caller's own org and to a site name,
+     because an unnamed row in a fleet register is something somebody has to
+     open to identify. Everything else is optional on purpose — a site that
+     is known to exist before its capacity is confirmed is still a site, and
+     refusing it pushes the fleet back into a spreadsheet. */
+  allow create: if request.auth != null
+                && incomingOwnedByCaller()
+                && request.resource.data.siteName is string
+                && request.resource.data.siteName.size() > 0
+                && knownStatus(request.resource.data.status)
+                && knownBasis(request.resource.data);
+
+  /* Moving a site along. The org never changes hands.
+
+     liveAt is WRITE-ONCE. It is the date the fleet started earning on a
+     site, so it feeds any question about time-to-value and about how long
+     capacity has actually been under management. Left writable, the number
+     that measures a commissioning delay can be moved by the people whose
+     commissioning it measures, and on a single-tenant register there is no
+     second party to notice. Correct a bad stamp from the console. */
+  allow update: if request.auth != null
+                && ownedByCaller()
+                && incomingOwnedByCaller()
+                && request.resource.data.orgId == resource.data.orgId
+                && knownStatus(request.resource.data.status)
+                && knownBasis(request.resource.data)
+                && (
+                     !('liveAt' in resource.data)
+                     || resource.data.liveAt == null
+                     || request.resource.data.liveAt == resource.data.liveAt
+                   );
+
+  /* A site that was sold is a fact about the book of business. End it by
+     moving it to `churned` rather than deleting the row, so units sold,
+     time-to-commission and the churn rate stay honest — and so a site that
+     went badly cannot be made to disappear from the history it belongs in.
+
+     `churned` keeps its units in the sold total and drops its capacity from
+     the managed total, which is the correct treatment of both and the whole
+     reason the status exists. */
+  allow delete: if false;
+}

@@ -1,0 +1,8 @@
+# Default: core team reviews everything.
+*                         @clearskyenergy/core
+# Rules and server code: require a core reviewer AND cannot be changed by partners.
+/firestore.rules          @clearskyenergy/core
+/storage.rules            @clearskyenergy/core
+/api/                     @clearskyenergy/core
+# JV partner territory — only the OSA team and core may touch it.
+/tenants/osa/             @clearskyenergy/jv-osa @clearskyenergy/core

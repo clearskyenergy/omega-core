@@ -1,0 +1,14 @@
+{
+  "orgId": "iqgen.energy",
+  "name": "iQGen Technologies",
+  "domains": [
+    "iqgen.clearskyomega.com"
+  ],
+  "vertical": "oem",
+  "tier": "trial",
+  "logoUrl": "/tenants/iqgen/qgen-logo.png",
+  "shell": "default",
+  "status": "active",
+  "receivesFullBom": false,
+  "_note": "Seeded from the legacy repo config.js. VERIFY domains, tier and orgId before running scripts/seed-omega-orgs.js --apply. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on."
+}

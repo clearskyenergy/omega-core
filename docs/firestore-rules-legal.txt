@@ -1,0 +1,73 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// Firestore rules for /legal_acceptances — MERGE these into the existing
+// clearsky-portal ruleset. Do not replace your rules file with this.
+//
+// The point of these rules: a signature record can be CREATED once by the
+// person signing, and after that nobody — not the signer, not a tenant admin,
+// not a client with a stolen token — can change or delete it. An audit record
+// a customer can edit is not an audit record.
+//
+// Deploy:  firebase deploy --only firestore:rules
+// ═══════════════════════════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── put this block inside your existing `match /databases/.../documents` ──
+
+    function isClearSkyStaff() {
+      return request.auth != null
+          && request.auth.token.email_verified == true
+          && (request.auth.token.email.matches('.*@csebuilders[.]com')
+           || request.auth.token.email.matches('.*@clearsky-usa[.]com'));
+    }
+
+    match /legal_acceptances/{recordId} {
+
+      // A signer may read back their own record. ClearSky staff may read all
+      // of them — that is how you produce the signature when you need it.
+      allow read: if request.auth != null
+                  && (resource.data.uid == request.auth.uid || isClearSkyStaff());
+
+      // Create once, by the person it is about, with a server-set timestamp
+      // and a document id that is derived from the uid and version. The id
+      // constraint is what stops one account writing records for another.
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.email == request.auth.token.email
+                    && recordId == request.auth.uid + '__' + request.resource.data.docVersion
+                    && request.resource.data.acceptedAt == request.time
+                    && request.resource.data.signerName is string
+                    && request.resource.data.signerName.size() >= 3
+                    && request.resource.data.entityName is string
+                    && request.resource.data.entityName.size() >= 2
+                    && request.resource.data.documents is list
+                    && request.resource.data.documents.size() >= 2;
+
+      // Immutable. No edits, no deletions, by anyone, ever.
+      allow update, delete: if false;
+    }
+
+    // ── OPTIONAL BUT RECOMMENDED ─────────────────────────────────────────────
+    // Right now this deployment lets any email domain self-provision a
+    // workspace. If you want signed agreements to be a precondition for
+    // touching data — not just for seeing the UI — gate your existing
+    // collections on a signature existing. Example, applied to projects:
+    //
+    //   function hasSigned() {
+    //     return exists(/databases/$(database)/documents/legal_acceptances/
+    //                   $(request.auth.uid + '__' + 'PASTE_CURRENT_VERSION'));
+    //   }
+    //
+    //   match /projects/{id} {
+    //     allow read, write: if request.auth != null
+    //                        && hasSigned()
+    //                        && resource.data.orgId == userOrg();
+    //   }
+    //
+    // Costs one extra document read per request, and you must update the
+    // pasted version string whenever you bump omega-legal-docs.js. Worth it
+    // for paying tenants; probably overkill for the sales demo.
+  }
+}

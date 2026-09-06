@@ -1,0 +1,8 @@
+scripts/
+docs/
+workers/
+tenants/*/config.js
+tenants/*/*.rules
+tenants/*/*.md
+*.md
+!tenants/osa/*.md

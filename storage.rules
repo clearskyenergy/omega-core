@@ -1,0 +1,204 @@
+rules_version = '2';
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Cloud Storage rules
+   Bucket: clearsky-portal.firebasestorage.app
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   SOURCE OF TRUTH IS THIS FILE. Deploy from the repo.
+
+   omega-core adds ONE block, marked ← CONTROL PLANE: /tenants/{orgId}/…
+   for logos and branding assets. Everything else is the live ruleset,
+   verbatim, including the two DECISION PENDING notes (legacy fin_projects
+   write; mkt_projects write) — see MERGE.md.
+   ═══════════════════════════════════════════════════════════════════════════ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+
+    function okFile() {
+      return request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('application/pdf')
+          || request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('application/vnd.*')
+          || request.resource.contentType.matches('text/.*')
+          || request.resource.contentType.matches('application/octet-stream')
+        );
+    }
+
+    /* Deliverables run bigger than deal documents. A permit set or a
+       rendered plot plan is routinely 30–40 MB, and okFile()'s 25 MB ceiling
+       would reject exactly the files this feature exists to move.
+
+       Kept as a SEPARATE function rather than raising okFile(), because
+       okFile() also guards /fin_projects and /mkt_projects — portals with
+       their own upload paths and their own reasons for a tighter limit.
+
+       Type list mirrors okFile() plus zip: the editor exports permit sets as
+       archives, and a bare .zip is application/zip, which okFile() rejects.
+       DWG and DXF arrive as application/octet-stream because browsers don't
+       recognise them, and that is already covered.
+
+       50 MB matches MAX_FILE_MB in ops-data.js. If you change one, change
+       the other — the client-side check is a courtesy so the rep gets a
+       readable message; THIS is the control.                              */
+    function okDeliverable() {
+      return request.resource.size < 50 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('application/pdf')
+          || request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('application/vnd.*')
+          || request.resource.contentType.matches('text/.*')
+          || request.resource.contentType.matches('application/zip')
+          || request.resource.contentType.matches('application/x-zip-compressed')
+          || request.resource.contentType.matches('application/octet-stream')
+        );
+    }
+
+    /* orgAlias() folds the extra domains one company signs in from onto the
+       org they actually share. Copied from firestore.rules, where the same
+       fold already applies to every collection.
+
+       ⚠ TWO COPIES OF ONE MAPPING (three, with api/_lib/admin.js). Storage
+       rules cannot import from Firestore rules. Adding a tenant alias means
+       editing all of them. */
+    function orgAlias(domain) {
+      return domain == 'fenecon.de' ? 'fenecon.com'
+           : domain == 'fenecon.us' ? 'fenecon.com'
+           : domain;
+    }
+    function userOrg() {
+      return request.auth != null
+        ? orgAlias(request.auth.token.email.split('@')[1].lower())
+        : '';
+    }
+
+    function isAdminDomain() {
+      return userOrg() == 'clearsky-usa.com' || userOrg() == 'csebuilders.com';
+    }
+
+    function okImage() {
+      return request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    /* -------- SiteMap Designer exports (unchanged) -------- */
+    match /mapimg/{orgId}/{projectId}/{fileName} {
+      allow read:  if signedIn() && (orgId == userOrg() || isAdminDomain());
+      allow write: if signedIn() && (orgId == userOrg() || isAdminDomain()) && okImage();
+    }
+
+    /* ============================================================
+       INTAKE DELIVERABLES
+       Files handed to a customer against an intake_projects record:
+       proposal, cost estimate, one-line, plot plan, permit set. Uploaded
+       from the ops console at alpha.clearskyomega.com; rendered as
+       "Your files" on the client's own project.
+
+           intake/{orgId}/{intakeId}/{fileId}-{name}
+
+       WHY THE ORG IS IN THE PATH. Storage rules cannot read Firestore.
+       There is no get() here and no way to ask which tenant owns intake
+       ix_abc123. The path is the only thing these rules can scope on, so
+       the orgId segment IS the isolation: one customer cannot read
+       another's permit set because they cannot construct a path inside
+       another org's folder.
+
+       Consequence: MOVING A FILE BETWEEN ORGS MEANS RE-UPLOADING IT.
+       Storage has no rename.
+
+       WRITE IS STAFF-ONLY, AND THAT IS A REAL LIMIT. isAdminDomain() is
+       email-domain, because Storage rules cannot read omega_staff. So a
+       rep on an outside domain can work the queue in Firestore but cannot
+       upload. Deliberate anyway: the alternative is a hardcoded uid list
+       that goes stale silently. If contractors need to deliver, mint a
+       custom claim (api/set-role.js does this) and check it here.
+
+       The client never writes into this folder.
+       ============================================================ */
+    match /intake/{orgId}/{intakeId}/{fileName} {
+      allow read:   if isAdminDomain() || (signedIn() && orgId == userOrg());
+      allow write:  if isAdminDomain() && okDeliverable();
+      allow delete: if isAdminDomain();
+    }
+
+    /* ============================================================
+       TENANT BRANDING ASSETS  —  tenants/{orgId}/{fileName}   ← CONTROL PLANE
+       Logo (light + dark), favicon, report header. Read is PUBLIC because
+       these render on the sign-in page before anyone is authenticated, and
+       in exported PDFs opened by people with no account.
+
+       WRITE: tenant owner/admin via custom claim (set by /api/set-role.js),
+       OR — until every admin carries a claim — any member of the org.
+       The blast radius of the fallback is "a colleague changed our logo",
+       which the tenant admin can change back. Remove the `|| orgId ==
+       userOrg()` disjunct once claims are rolled out.
+
+       2 MB, images only. A logo that needs more than that is a photo. The
+       URL is written to omega_orgs/{orgId}.logoUrl by the account page;
+       omega-brand.js reads that field, never this path directly.
+       ============================================================ */
+    function okLogo() {
+      return request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    function isTenantAdminClaim(orgId) {
+      return signedIn()
+        && request.auth.token.get('orgId', '') == orgId
+        && request.auth.token.get('role', '') in ['owner', 'admin'];
+    }
+    match /tenants/{orgId}/{fileName} {
+      allow read:   if true;
+      allow write:  if okLogo() && (isAdminDomain() || isTenantAdminClaim(orgId) || (signedIn() && orgId == userOrg()));
+      allow delete: if isAdminDomain() || isTenantAdminClaim(orgId);
+    }
+
+    /* ============================================================
+       FINANCING PORTAL UPLOADS
+       ------------------------------------------------------------
+       Two paths, deliberately. Storage rules cannot read Firestore, so
+       "is this person the deal's owner?" is unanswerable here — unless
+       the owner's uid is IN the path. It now is.
+
+         NEW (3 segments):  fin_projects/{ownerUid}/{projectId}/{file}
+         LEGACY (2 segments): fin_projects/{projectId}/{file}
+
+       The two match different path depths, so they never collide.
+       app.js now writes only to the NEW path. The LEGACY block stays
+       readable so every file uploaded before this change keeps working
+       — nothing is orphaned.
+
+       ONCE the new app.js is live and you've confirmed uploads work,
+       change the legacy block's write line to `if false` (marked below).
+       That closes the hole: today any signed-in user can write anywhere
+       under fin_projects/, and originator signup is self-serve.
+       ============================================================ */
+
+    /* NEW — owner-scoped. Only the owner may write; any signed-in user
+       may read, so partners can open docs on deals they're underwriting. */
+    match /fin_projects/{ownerUid}/{projectId}/{fileName} {
+      allow read:  if signedIn();
+      allow write: if signedIn() && request.auth.uid == ownerUid && okFile();
+    }
+
+    /* LEGACY — files uploaded before the owner-scoped path existed.
+       Keep read. Flip write to `if false` after app.js is deployed.
+       omega-core: DECISION PENDING (Tommy) — see MERGE.md. */
+    match /fin_projects/{projectId}/{fileName} {
+      allow read:  if signedIn();
+      allow write: if signedIn() && okFile();   // <-- STEP 3: change to `if false`
+    }
+
+    /* -------- Distribution Marketplace --------
+       NOTE: this has the same open-write shape the financing portal just
+       moved away from. omega-core: DECISION PENDING (Tommy) — see MERGE.md. */
+    match /mkt_projects/{projectId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn() && okFile();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
