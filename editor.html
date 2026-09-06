@@ -117,6 +117,10 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
+<!-- Turns a hand-drawn site KMZ into classified features and a grid score.
+     Optional: the GIS importer works without it, just without the site
+     readout and with everything one colour. -->
+<script src="/omega-site-intel.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -105181,6 +105185,21 @@ table.e3-tbl td{ white-space:normal }
 
   function isFiniteNum(n) { return typeof n === 'number' && isFinite(n); }
 
+  /* Optional. The GIS module has always stood on its own and still must —
+     site-intel adds classification and scoring when present and changes
+     nothing when it is not. */
+  function global_SI() {
+    return (typeof window !== 'undefined' && window.OmegaSiteIntel) ? window.OmegaSiteIntel : null;
+  }
+
+  /* Closed within about a metre. Google Earth repeats the first vertex
+     exactly; a ring round-tripped through another tool can drift, and a
+     parcel that misses closure by half a metre is still a parcel. */
+  function isClosedRing(c) {
+    if (!c || c.length < 4) return false;
+    return haversineM(c[0], c[c.length - 1]) < 1.0;
+  }
+
   /* A coordinate that is not on Earth is a format error, not data. */
   function validLngLat(p) {
     return Array.isArray(p) && isFiniteNum(+p[0]) && isFiniteNum(+p[1]) &&
@@ -105490,14 +105509,45 @@ table.e3-tbl td{ white-space:normal }
     return '#9FC7A8';
   }
 
+  /* ONE KIND PER FEATURE, NOT PER FILE.
+
+     guessKind() answers for a whole layer, which is right for a county
+     parcel export and wrong for every site file the team actually produces.
+     A site KMZ holds the parcel AND the transmission line AND the substation
+     AND the pipelines, so a single kind painted all of it one colour and
+     threw away the distinctions the drawing exists to show.
+
+     Measured on 18 live site files: 16 of them classified as "other" — the
+     whole set rendered grey. Two causes, both here. The \bkv\b rule cannot
+     match "345kV", because there is no word boundary between the 5 and the
+     k; and the team names parcels "layout" and "aerial", which matched
+     nothing at all.
+
+     OmegaSiteIntel.classify() knows that vocabulary because it was read off
+     those files. The layer keeps guessKind() for its own label and colour,
+     so nothing that relied on layer.kind changes. */
+  var SI_KIND = {
+    parcel:'parcel', transmission:'utility', gentie:'utility', substation:'substation',
+    pipeline_gas:'utility', pipeline_hazard:'environ', fiber:'fiber', rail:'easement',
+    water:'environ', road:'easement', generation:'substation',
+    acreage_label:'parcel', marker:'other', other:'other'
+  };
   function makeLayer(name, parsed, filename) {
     var kind = guessKind(filename || name, parsed.features);
+    var SI = global_SI();
     var feats = parsed.features.map(function (f, i) {
       var coords = f.coords;
       if (f.type !== 'point' && coords.length > 400) coords = simplify(coords);
+      var si = null;
+      if (SI) { try { si = SI.classify(f); } catch (e) { si = null; } }
+      var fk = si ? (SI_KIND[si.kind] || 'other') : null;
       return {
         id: 'f' + i + '_' + Math.random().toString(36).slice(2, 6),
         type: f.type, coords: coords, props: f.props || {},
+        siKind: si ? si.kind : null,
+        siAttrs: si ? si.attrs : null,
+        kind: fk || kind,
+        color: fk ? colorOf(fk) : null,
         simplified: coords.length !== f.coords.length,
         rawVertices: f.coords.length
       };
@@ -105514,12 +105564,19 @@ table.e3-tbl td{ white-space:normal }
   }
 
   function layerStats(layer) {
-    var s = { points: 0, lines: 0, polygons: 0, acres: 0, lengthFt: 0, vertices: 0, simplified: 0 };
+    var s = { points: 0, lines: 0, polygons: 0, rings: 0, acres: 0, lengthFt: 0, vertices: 0, simplified: 0 };
     (layer.features || []).forEach(function (f) {
       s.vertices += f.coords.length;
       if (f.simplified) s.simplified++;
       if (f.type === 'point') s.points++;
-      else if (f.type === 'line') { s.lines++; s.lengthFt += lengthFt(f.coords); }
+      else if (f.type === 'line') {
+        s.lines++; s.lengthFt += lengthFt(f.coords);
+        /* A PARCEL DRAWN IN GOOGLE EARTH IS A CLOSED LineString, NOT A
+           Polygon. Seventeen of eighteen live site files store the boundary
+           that way, so counting acreage only on <Polygon> reported zero
+           acres on almost every real import. A ring is a ring. */
+        if (isClosedRing(f.coords)) { s.rings++; s.acres += areaAcres(f.coords); }
+      }
       else if (f.type === 'polygon') { s.polygons++; s.acres += areaAcres(f.coords); }
     });
     return s;
@@ -105567,7 +105624,7 @@ table.e3-tbl td{ white-space:normal }
     parseGeoJSON: parseGeoJSON, parseKML: parseKML, parseCSV: parseCSV, parseAny: parseAny,
     haversineM: haversineM, lengthFt: lengthFt,
     areaM2: areaM2, areaAcres: areaAcres, areaSf: areaSf,
-    bboxOf: bboxOf, simplify: simplify,
+    bboxOf: bboxOf, simplify: simplify, isClosedRing: isClosedRing,
     makeLayer: makeLayer, layerStats: layerStats, guessKind: guessKind,
     colorOf: colorOf, toGeoJSON: toGeoJSON, footprintFt: footprintFt,
     validLngLat: validLngLat
@@ -105661,7 +105718,7 @@ table.e3-tbl td{ white-space:normal }
       el.setAttribute('cx', pts[0].x);
       el.setAttribute('cy', pts[0].y);
       el.setAttribute('r', 5);
-      el.setAttribute('fill', L.color);
+      el.setAttribute('fill', f.color || L.color);
       el.setAttribute('stroke', '#14171A');
       el.setAttribute('stroke-width', 1.2);
     } else {
@@ -105669,9 +105726,9 @@ table.e3-tbl td{ white-space:normal }
       if (f.type === 'polygon') d += ' Z';
       el = ns('path');
       el.setAttribute('d', d);
-      el.setAttribute('fill', f.type === 'polygon' ? L.color : 'none');
+      el.setAttribute('fill', f.type === 'polygon' ? (f.color || L.color) : 'none');
       el.setAttribute('fill-opacity', f.type === 'polygon' ? 0.16 : 0);
-      el.setAttribute('stroke', L.color);
+      el.setAttribute('stroke', f.color || L.color);
       el.setAttribute('stroke-width', f.type === 'polygon' ? 2 : 1.8);
       if (L.kind === 'fiber') el.setAttribute('stroke-dasharray', '7 4');
     }
@@ -105735,6 +105792,19 @@ table.e3-tbl td{ white-space:normal }
     }
     var name = String(filename || 'Layer').replace(/\.[^.]+$/, '');
     var L = E.makeLayer(name, parsed, filename);
+    /* Screen the site while the file is open. Everything needed is already in
+       the geometry — voltage, the distance to the substation, the acreage the
+       team wrote on the pin against the acreage their own polygon measures —
+       and it was being thrown away on every import. Never fatal: a file that
+       is not a site KMZ simply gets no readout. */
+    try {
+      var SI = window.OmegaSiteIntel;
+      if (SI) {
+        var intake = SI.intake(parsed.features, name);
+        if (intake.parcelRings.length || intake.transmission.length || intake.substations.length)
+          L.site = { intake: intake, grid: SI.gridScore(intake) };
+      }
+    } catch (e) { L.site = null; }
     LAYERS.push(L);
     repaint();
     return { ok: true, layer: L, errors: parsed.errors };
@@ -105772,14 +105842,15 @@ table.e3-tbl td{ white-space:normal }
 
   function body() {
     var h = '';
-    h += '<div class="e3-note info">Drop a <b>GeoJSON</b>, <b>KML</b> or <b>CSV</b> with lat/lon ' +
+    h += '<div class="e3-note info">Drop a <b>GeoJSON</b>, <b>KML</b>, <b>KMZ</b> or <b>CSV</b> with lat/lon ' +
       'columns. Coordinates are drawn through the map\u2019s own projection, so imported geometry ' +
       'sits where it belongs at any zoom.</div>';
     h += '<div id="gis-drop" style="border:2px dashed var(--border);border-radius:var(--radius-md);' +
       'padding:18px;text-align:center;font-size:11.5px;color:var(--sub);cursor:pointer;' +
       'background:var(--surface);margin-bottom:10px">' +
-      'Drop a file here, or click to choose \u2014 parcels, easements, circuits, fiber, wetlands' +
-      '<input type="file" id="gis-file" accept=".geojson,.json,.kml,.csv,.tsv,.txt" ' +
+      'Drop a file here, or click to choose \u2014 parcels, easements, circuits, fiber, wetlands. ' +
+      'A site .kmz straight out of Google Earth works as it is.' +
+      '<input type="file" id="gis-file" accept=".geojson,.json,.kml,.kmz,.csv,.tsv,.txt" ' +
       'multiple style="display:none"></div>';
 
     if (!LAYERS.length) {
@@ -105813,6 +105884,48 @@ table.e3-tbl td{ white-space:normal }
     h += '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr>' +
       '<th></th><th>Layer</th><th>Kind</th><th>Contents</th><th>Vertices</th><th></th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+    /* ── SITE SCREENING ──────────────────────────────────────────────────
+       The number is a RANK, not a clearance, and the panel has to say so
+       every time it shows one. Everything here comes off lines somebody drew
+       by eye over imagery: it cannot see queue position, thermal ratings,
+       ATC or curtailment history, so a 345 kV line on the fence with a full
+       queue behind it scores well and is undevelopable. Confidence and the
+       component breakdown are shown alongside the score for that reason —
+       so a reader can see which component earned it and how thin the file
+       behind it is. */
+    LAYERS.forEach(function (L) {
+      if (!L.site) return;
+      var g = L.site.grid, k = L.site.intake;
+      var band = g.score >= 70 ? '#2E9E6B' : g.score >= 50 ? '#C9A24E' : '#C97A72';
+      h += '<div class="e3-note" style="margin-top:10px;border-left:3px solid ' + band + '">' +
+        '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">' +
+          '<b style="font-size:14px">' + esc(L.name) + '</b>' +
+          '<span style="font-size:19px;font-weight:700;color:' + band + '">' + g.score + '<span style="font-size:11px;font-weight:400;color:var(--sub)">/100 grid</span></span>' +
+          '<span style="font-size:10px;color:var(--sub)">' + esc(g.confidence) + ' confidence' +
+            (g.missing.length ? ' \u2014 missing ' + esc(g.missing.join(', ')) : '') + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--sub);margin-top:5px">' +
+          (k.grossAcres ? n0(Math.round(k.grossAcres)) + ' ac' : 'acreage unknown') +
+          (g.kv ? ' \u00b7 ' + g.kv + ' kV' : '') +
+          (g.poiMi != null ? ' \u00b7 ' + g.poiMi.toFixed(2) + ' mi to ' + esc(g.poiVia) : '') +
+          (g.mwHostable ? ' \u00b7 ~' + n0(g.mwHostable) + ' MW hostable' : '') +
+        '</div>' +
+        '<table class="e3-tbl" style="margin-top:7px;font-size:10.5px"><tbody>' +
+        g.components.map(function (c) {
+          return '<tr><td style="width:78px;color:var(--sub)">' + esc(c.key) + '</td>' +
+            '<td style="width:58px" class="e3-num">' + c.points + (c.max ? ' / ' + c.max : '') + '</td>' +
+            '<td style="color:var(--sub)">' + esc(c.note) + '</td></tr>';
+        }).join('') + '</tbody></table>' +
+        k.flags.map(function (f) {
+          var col = f.level === 'error' ? '#C97A72' : f.level === 'warn' ? '#C9A24E' : 'var(--sub)';
+          return '<div style="font-size:10.5px;color:' + col + ';margin-top:5px">' + esc(f.msg) + '</div>';
+        }).join('') +
+        '<div style="font-size:10px;color:var(--sub);margin-top:7px;opacity:.85">' +
+          'Screening rank from the drawn geometry \u2014 it puts sites in order, it does not clear one. ' +
+          'It cannot see queue position, thermal ratings, ATC or curtailment. Confirm with the utility.' +
+        '</div></div>';
+    });
 
     var simp = LAYERS.reduce(function (n, L) { return n + E.layerStats(L).simplified; }, 0);
     if (simp) {
@@ -105907,20 +106020,72 @@ table.e3-tbl td{ white-space:normal }
     }
   }
 
+  /* .kmz IS THE FORMAT THE FILES ARRIVE IN. Google Earth saves KMZ by
+     default — a zip with the .kml inside — and this importer could only read
+     text, so every single site file the team produced had to be unzipped by
+     hand first, or simply failed. JSZip is already loaded on demand elsewhere
+     in this file for the deliverables export; the same loader is reused. */
+  var ZIP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+  function ensureZip() {
+    if (typeof JSZip !== 'undefined') return Promise.resolve();
+    return new Promise(function (res, rej) {
+      var t = document.querySelector('script[data-omega-jszip]');
+      if (!t) {
+        t = document.createElement('script');
+        t.src = ZIP_CDN; t.setAttribute('data-omega-jszip', '1');
+        document.head.appendChild(t);
+      }
+      t.addEventListener('load', function () { res(); });
+      t.addEventListener('error', function () {
+        rej(new Error('could not load the zip reader, so .kmz cannot be opened offline — unzip it and import the .kml'));
+      });
+      if (typeof JSZip !== 'undefined') res();
+    });
+  }
+
   function readFiles(files) {
     if (!files || !files.length) return;
     var pending = files.length, problems = [];
+    function done() { if (--pending === 0) finish(problems); }
+
     Array.prototype.forEach.call(files, function (f) {
+      var isKmz = /\.kmz$/i.test(f.name || '');
+
+      if (isKmz) {
+        ensureZip().then(function () {
+          var rd = new FileReader();
+          rd.onload = function () {
+            JSZip.loadAsync(rd.result).then(function (zip) {
+              /* The entry is doc.kml by convention but not by rule, so the
+                 first .kml anywhere in the archive is taken. */
+              var entry = (zip.file(/\.kml$/i) || [])[0];
+              if (!entry) throw new Error('no .kml inside the .kmz');
+              return entry.async('string');
+            }).then(function (text) {
+              var res = importText(text, String(f.name).replace(/\.kmz$/i, '.kml'));
+              if (!res.ok) problems.push(f.name + ': ' + res.errors.join('; '));
+              done();
+            })['catch'](function (e) {
+              problems.push(f.name + ': ' + ((e && e.message) || 'could not be opened'));
+              done();
+            });
+          };
+          rd.onerror = function () { problems.push(f.name + ': could not be read'); done(); };
+          rd.readAsArrayBuffer(f);
+        })['catch'](function (e) {
+          problems.push(f.name + ': ' + ((e && e.message) || 'zip reader unavailable'));
+          done();
+        });
+        return;
+      }
+
       var rd = new FileReader();
       rd.onload = function () {
         var res = importText(String(rd.result || ''), f.name);
         if (!res.ok) problems.push(f.name + ': ' + res.errors.join('; '));
-        if (--pending === 0) finish(problems);
+        done();
       };
-      rd.onerror = function () {
-        problems.push(f.name + ': could not be read');
-        if (--pending === 0) finish(problems);
-      };
+      rd.onerror = function () { problems.push(f.name + ': could not be read'); done(); };
       rd.readAsText(f);
     });
   }
