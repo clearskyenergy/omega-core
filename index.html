@@ -1518,6 +1518,19 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
         Marketplace
       </a>
+      <!-- STAFF ONLY. Hidden by default and revealed in onAuthStateChanged for
+           ClearSky domains — isAdmin() in both rules files is the real gate, so
+           this is an affordance, not a control. It exists because /admin/ and
+           /console/ were reachable only by typing their host: a ClearSky user
+           signed in here HAD the permission and no door. -->
+      <a class="tb-tab" id="tb-tab-admin" href="/admin/" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        Admin
+      </a>
+      <a class="tb-tab" id="tb-tab-ops" href="/console/" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>
+        Ops
+      </a>
       <a class="tb-tab" href="/projects.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         Projects
@@ -2421,6 +2434,27 @@ function _initFirebase() {
 
 // ══════════ AUTH STATE (multi-tenant: resolve workspace by domain) ══════════
 function _wireAuth() {
+/* ── STAFF ENTRY POINTS ───────────────────────────────────────────────────
+   /admin/ (master index — applications, tenants, user accounts) and /console/
+   (ops) were only ever reachable by typing tools.csebuilders.com or
+   alpha.clearskyomega.com. Both are served from this same deployment at every
+   host, so a ClearSky address signed in here already had the permission and
+   simply no link. Mirrors isAdmin() in firestore.rules and storage.rules —
+   keep the three in step. Showing the tab grants nothing: the rules and the
+   pages themselves still gate. */
+const STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+function isStaffEmail(email){
+  var d = String(email || '').toLowerCase().split('@')[1] || '';
+  return STAFF_DOMAINS.indexOf(d) >= 0;
+}
+function revealStaffNav(email){
+  if (!isStaffEmail(email)) return;
+  ['tb-tab-admin','tb-tab-ops'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+}
+
 auth.onAuthStateChanged(user => {
   if (window._omegaReady) window._omegaReady();
   if (user) {
@@ -2441,6 +2475,7 @@ auth.onAuthStateChanged(user => {
 
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
+    revealStaffNav(email);
 
     // Route by tenant type:
     //  • developer → their own project portfolio (single-org roll-up)
