@@ -2110,7 +2110,7 @@ service cloud.firestore {
        NOT the same thing as omega_users. An org_members grant lets an outsider
        write into a TENANT's workspace; an omega_users record admits somebody
        to the PARTNER PORTAL. Do not merge them: one is about the customer's
-       data, the other about ours. (And NOT the same as omega_orgs/*/members,
+       data, the other about ours. (And NOT the same as omega_orgs/{org}/members,
        which is a tenant's own in-org role list.)
        ============================================================ */
     match /org_members/{emailLower} {

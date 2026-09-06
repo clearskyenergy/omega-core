@@ -43,6 +43,35 @@ var inserts = files.slice(1).map(function (f) {
 /* Strip comments so a function name mentioned in prose is not read as code.
    This file is heavily commented by design, and every helper name appears in
    the notes as well as the rules. */
+
+// ---- COMMENT TERMINATION -------------------------------------------------
+// These rules files carry more prose than rule, and prose about paths is how
+// a comment ends up containing the two characters that close it -- e.g. an
+// org path written with a wildcard segment. The comment then ends dozens of
+// characters early, the rest of the sentence is parsed as code, and the only
+// place it surfaces is `firebase deploy`, i.e. in front of production, after
+// this script has already reported the file fine.
+// Line comments are used throughout this function on purpose.
+function checkCommentTermination(src) {
+  var TERM = String.fromCharCode(42, 47);
+  var OPEN = String.fromCharCode(47, 42);
+  var bad = [], inBlock = false, line = 1, i;
+  for (i = 0; i < src.length; i++) {
+    if (src.charAt(i) === "\n") { line++; continue; }
+    if (!inBlock && src.substr(i, 2) === OPEN) { inBlock = true; i++; continue; }
+    if (inBlock && src.substr(i, 2) === TERM) {
+      var after = src.charAt(i + 2);
+      // A real terminator is followed by whitespace or end of file. One with a
+      // word character hard against it is a path segment, not an ending.
+      if (after && /[A-Za-z0-9_{]/.test(after)) {
+        bad.push({ line: line, text: src.slice(Math.max(0, i - 50), i + 12).split("\n").pop().trim() });
+      }
+      inBlock = false; i++; continue;
+    }
+  }
+  return bad;
+}
+
 function decomment(s) {
   return s.replace(/\/\*[\s\S]*?\*\//g, " ")   /* block comments */
           .replace(/\/\/[^\n]*/g, " ")            /* line comments  */
@@ -203,6 +232,14 @@ if (problems.length) {
 }
 warnings.forEach(function (w) { console.log("  note     " + w); });
 
-if (!problems.length) console.log("  No structural problems found.");
+var commentBad = checkCommentTermination(base);
+if (commentBad.length) {
+  console.log("");
+  console.log("  COMMENT TERMINATION PROBLEMS (this file will NOT compile):");
+  commentBad.forEach(function (b) { console.log("    line " + b.line + ":  ..." + b.text); });
+  console.log("    A comment-closing pair INSIDE a block comment ends it early.");
+  console.log("    Rewrite the path, e.g. use {org} instead of a bare wildcard.");
+}
+if (!problems.length && !commentBad.length) console.log("  No structural problems found.");
 console.log("");
 process.exit(problems.length ? 1 : 0);

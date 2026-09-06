@@ -5159,9 +5159,17 @@ var DASH = (function(){
       if(state.hidden.indexOf(k)>=0) b.classList.add('db-hidden'); else b.classList.remove('db-hidden');
       if(b.querySelector(':scope > .db-bar')) return;
       var bar=document.createElement('div'); bar.className='db-bar';
+      /* HIDE IS NOT REMOVE, AND ADDED WIDGETS NEED REMOVE.
+         A built-in block is part of the page — hiding it is the whole verb.
+         A widget you added from the palette is different: hiding left it in
+         state.added forever, which also left it disabled-with-a-tick in the
+         palette, so it could be neither removed NOR re-added. state.added only
+         ever grew. Added blocks get a real Remove; built-ins keep Hide. */
+      var isAdded = b.getAttribute('data-added')==='1';
       bar.innerHTML='<span class="db-handle" title="Drag to reorder">⠿</span>'+
         '<span class="db-key">'+k+'</span>'+
-        '<button class="db-hide" title="Hide/show">'+(state.hidden.indexOf(k)>=0?'Show':'Hide')+'</button>';
+        '<button class="db-hide" title="Hide/show">'+(state.hidden.indexOf(k)>=0?'Show':'Hide')+'</button>'+
+        (isAdded?'<button class="db-remove" title="Remove this widget">Remove</button>':'');
       b.insertBefore(bar, b.firstChild);
       b.setAttribute('draggable','true');
       bar.querySelector('.db-hide').addEventListener('click', function(e){
@@ -5171,8 +5179,28 @@ var DASH = (function(){
         else { state.hidden.push(kk); b.classList.add('db-hidden'); this.textContent='Show'; }
         scheduleSave();
       });
+      var rm = bar.querySelector('.db-remove');
+      if (rm) rm.addEventListener('click', function(e){
+        e.stopPropagation();
+        removeWidget(b.getAttribute('data-block'));
+      });
     });
     _wireDrag();
+  }
+  /* Clears the widget out of every piece of state that references it — added,
+     order and hidden. Leaving a stale key in order or hidden is harmless today
+     (apply() looks each one up and skips misses) but it accumulates in the
+     saved document forever, and a layout doc that only grows is how this bug
+     started. */
+  function removeWidget(key){
+    var i;
+    for (i=state.added.length-1; i>=0; i--) if (state.added[i].key===key) state.added.splice(i,1);
+    i=state.order.indexOf(key);  if(i>=0) state.order.splice(i,1);
+    i=state.hidden.indexOf(key); if(i>=0) state.hidden.splice(i,1);
+    var b=byKey(key);
+    if(b){ var c=b.querySelector('canvas'); if(c&&_dch[c.id]){ try{_dch[c.id].destroy();}catch(e){} delete _dch[c.id]; } b.remove(); }
+    _commitOrder();
+    scheduleSave();
   }
   function _undecorate(){
     blocks().forEach(function(b){
