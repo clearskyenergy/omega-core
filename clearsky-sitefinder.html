@@ -343,12 +343,20 @@
   #setSrc{width:100%;height:32px;border:1px solid var(--line);border-radius:7px;
     background:#fff;padding:0 9px;font:400 13px var(--sans);outline:none}
   #setSrcNote{margin-top:9px}
+/* Basemap switch — two chips, the active one filled. Deliberately plain: it
+   sits over a live map and must not compete with the data on it. */
+.baseSwitch{display:flex;gap:4px}
+.baseSwitch button{flex:1;font:inherit;font-size:11px;padding:4px 8px;cursor:pointer;
+  border:1px solid var(--line,#d9dee3);background:#fff;color:#334;border-radius:5px}
+.baseSwitch button.on{background:#0b3d63;border-color:#0b3d63;color:#fff;font-weight:600}
+.baseSwitch button:focus-visible{outline:2px solid #0b3d63;outline-offset:1px}
+
 </style>
 </head>
 <body class="v-split">
 
 <div id="top">
-  <a href="/" class="logo"><img src="/omega-logo.png" alt="" onerror="this.style.display='none'">
+  <a href="/" id="backPortal" class="logo"><img src="/omega-logo.png" alt="" onerror="this.style.display='none'">
     <span class="t">ClearSky<span>-OMEGA</span></span></a>
   <div class="seprt"></div>
   <div id="search">
@@ -432,7 +440,10 @@
 <div id="ledgerPane"></div>
 
 <div id="legend">
-  <div class="lgH">On the map</div>
+  <!-- Basemap first: it changes what the whole panel below is drawn over. -->
+  <div class="lgH">Basemap</div>
+  <div id="baseSwitch" class="baseSwitch"></div>
+  <div class="lgH" style="margin-top:9px">On the map</div>
   <label><input type="checkbox" id="lyHost" checked><span>Hosting capacity <b id="cHost">–</b></span></label>
   <div class="lgKey" id="hostKey">
     <span><i style="background:#E8590C"></i>1001 kW +</span>
@@ -711,18 +722,69 @@
   var TILE_KEY = window.CS_TILE_KEY ||
                  (location.search.match(/[?&]tilekey=([^&]+)/) || [])[1] ||
                  savedTileKey() || CS_TILE_KEY_DEFAULT;
+  /* ── STREET OR SATELLITE ──────────────────────────────────────────────
+     Grid Atlas has had a satellite base for a while and this tool did not,
+     which made a rep flip between two tools to answer one question: the
+     hosting-capacity colours say the circuit is worth chasing, and the
+     imagery says whether there is a roof, a yard, a substation next door,
+     or a retention pond where the pad would go.
+
+     Same Esri World Imagery source Grid Atlas uses, so the two tools show
+     the same picture. It needs no key; the CARTO key only covers the street
+     basemap, so satellite is unwatermarked either way.
+
+     The choice is remembered. A rep who works in imagery works in imagery
+     all day, and re-picking it on every load is the kind of small friction
+     that gets a tool abandoned. */
+  var BASES = {
+    street: {
+      label: "Street",
+      url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      opts: { maxZoom: 19, subdomains: "abcd",
+              attribution: "&copy; OpenStreetMap &copy; CARTO" },
+      keyed: true
+    },
+    satellite: {
+      label: "Satellite",
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      opts: { maxZoom: 19,
+              attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" },
+      keyed: false
+    }
+  };
+  function savedBase() {
+    try { var v = localStorage.getItem("cs-sf-base"); return BASES[v] ? v : "street"; }
+    catch (e) { return "street"; }
+  }
+  var BASE = savedBase();
   var tiles = null;
   function drawTiles() {
     if (tiles) { map.removeLayer(tiles); tiles = null; }
+    var b = BASES[BASE] || BASES.street;
     tiles = window.L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" +
-        (TILE_KEY ? "?key=" + encodeURIComponent(TILE_KEY) : ""),
-      { maxZoom: 19, subdomains: "abcd",
-        attribution: "&copy; OpenStreetMap &copy; CARTO" }
+      b.url + (b.keyed && TILE_KEY ? "?key=" + encodeURIComponent(TILE_KEY) : ""),
+      b.opts
     );
     tiles.addTo(map);
     tiles.bringToBack();
+    var host = document.getElementById("baseSwitch");
+    if (host) {
+      host.innerHTML = Object.keys(BASES).map(function (k) {
+        return '<button type="button" data-base="' + k + '"' +
+          (k === BASE ? ' class="on"' : '') + '>' + BASES[k].label + '</button>';
+      }).join("");
+    }
   }
+  function setBase(k) {
+    if (!BASES[k] || k === BASE) return;
+    BASE = k;
+    try { localStorage.setItem("cs-sf-base", k); } catch (e) {}
+    drawTiles();
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-base]");
+    if (b) { e.preventDefault(); setBase(b.getAttribute("data-base")); }
+  });
   drawTiles();
   if (!TILE_KEY && window.console) {
     console.warn("clearsky-sitefinder: no CARTO basemap key. Tiles will be " +
@@ -2878,6 +2940,28 @@
   }
 
   /* ---------------------------------------------------------------- card */
+  /* ── BACK TO THE TENANT'S OWN PORTAL ──────────────────────────────────
+     The portal appends ?return=<its own url> to every tool link and this
+     tool ignored it, so the logo went to "/" — the tool host's root, not the
+     workspace the person came from. On a tenant portal that is a dead end:
+     they land somewhere that is not their account and have to use Back.
+
+     Only same-scheme http(s) URLs are honoured, and the value is parsed
+     rather than trusted as a string, so a crafted ?return= cannot turn the
+     logo into a javascript: link or a redirect off to anywhere it likes. */
+  (function () {
+    var raw = null;
+    try { raw = new URLSearchParams(location.search).get("return"); } catch (e) {}
+    if (!raw) return;
+    var u = null;
+    try { u = new URL(raw, location.href); } catch (e) { return; }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return;
+    var a = document.getElementById("backPortal");
+    if (!a) return;
+    a.href = u.href;
+    a.title = "Back to " + u.host;
+  })();
+
   function cardHtml(r) {
     var blockedBy = liveClaims(r);
     var warn = "";
@@ -3005,6 +3089,21 @@
               (r.grainFactor < 1 ? ' \u00b7 capped, block-grain' : '') : '') + '</div>'
           : '') +
         warn +
+        /* PRICE IT FROM THE CARD. The estimator handoff was only in the detail
+           panel, which is two clicks and a scroll from the list a rep is
+           actually scanning. Marked data-noselect so it prices the site
+           instead of opening the card underneath it. */
+        '<div class="mt" style="margin-top:9px">' +
+          '<button class="cardCost" data-noselect="1" data-cost-id="' + esc(r.id) + '" ' +
+            'title="Send this site to the cost estimator \u2014 installed cost, schedule and a printable report">' +
+            'Price this site' +
+          '</button>' +
+          (_estimates[r.id]
+            ? '<span class="cardCostVal" title="' + esc(_estimates[r.id].estimateClass) + '">'
+              + '$' + Math.round(_estimates[r.id].total.base / 1000).toLocaleString() + 'k'
+              + '<small> est.</small></span>'
+            : '') +
+        '</div>' +
       '</div></article>';
   }
 
@@ -4874,6 +4973,13 @@
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
        not the card behind it. */
+    var cb = e.target.closest && e.target.closest("[data-cost-id]");
+    if (cb) {
+      e.preventDefault(); e.stopPropagation();
+      var cr = ST.byId[cb.getAttribute("data-cost-id")];
+      if (cr) costThisSite(cr);
+      return;
+    }
     if (e.target.closest && e.target.closest("[data-noselect]")) {
       e.stopPropagation();
       return;
