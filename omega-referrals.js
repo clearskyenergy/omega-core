@@ -142,13 +142,31 @@
      A tenant whose vertical is not set yet gets it, because that is how it
      behaved before this gate existed and nobody should lose an inbox they
      are already working out of. */
-  var RECEIVING_VERTICALS = { oem: 1, epc: 1, installer: 1, '': 1 };
+  var RECEIVING_VERTICALS = { oem: 1, epc: 1, installer: 1 };
+
+  /* THREE ANSWERS, NOT TWO. "Not this tenant's block" and "the workspace has
+     not resolved yet" are different, and collapsing them mounted this on
+     every tenant.
+
+     mount() runs on a poll from first paint, and OMEGA_WORKSPACE does not
+     exist until auth resolves. The first version treated a missing workspace
+     as a blank vertical and a blank vertical as "show it" — so the block
+     mounted on the very first tick, before anything knew who this was, and a
+     developer tenant got a referral inbox. Caught on Chileasing.
+
+     'unknown' keeps the caller polling instead of deciding. */
   function enabledHere(c) {
     if (c.enabled === true) return true;
     if (c.enabled === false) return false;
     var ws = global.OMEGA_WORKSPACE ||
-             (global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant) || {};
-    return RECEIVING_VERTICALS[String(ws.vertical || '').toLowerCase()] === 1;
+             (global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant);
+    if (!ws) return 'unknown';                       /* not resolved yet */
+    var v = String(ws.vertical || '').toLowerCase();
+    /* Resolved, but no vertical recorded. Show it — that is how this behaved
+       before the gate existed, and nobody should lose an inbox they are
+       already working out of because a field was never backfilled. */
+    if (!v) return true;
+    return RECEIVING_VERTICALS[v] === 1;
   }
 
   function ws() {
@@ -1877,7 +1895,9 @@
 
   function mount() {
     if ($('or-block')) return true;
-    if (!cfg().enabled) return true;   /* not this tenant's block — stop polling */
+    var on = cfg().enabled;
+    if (on === 'unknown') return false;  /* keep polling until we know who this is */
+    if (!on) return true;                /* not this tenant's block — stop polling */
     var host = $('dev-fixed'); if (!host) return false;
 
     injectStyles();

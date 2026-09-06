@@ -105,10 +105,24 @@
        AN EXPLICIT SETTING STILL WINS IN BOTH DIRECTIONS. assets.enabled
        true turns it on for any vertical — an OEM that does own a fleet says
        so once in config — and false turns it off for a developer. Only the
-       DEFAULT moved. */
-    var vertical = String(ws.vertical || '').toLowerCase();
-    var OWNER_VERTICALS = { developer: 1, '': 1 };   /* '' = vertical not set yet */
-    var byVertical = OWNER_VERTICALS[vertical] === 1;
+       DEFAULT moved.
+
+       THREE ANSWERS, NOT TWO. A missing workspace and a blank vertical are
+       different things. mount() polls from first paint and OMEGA_WORKSPACE
+       does not exist until auth resolves, so treating "not resolved yet" as
+       "no vertical, show it" mounts this on an OEM before anything knows who
+       they are. 'unknown' keeps the caller polling instead of deciding. */
+    var OWNER_VERTICALS = { developer: 1 };
+    var byVertical;
+    if (!global.OMEGA_WORKSPACE &&
+        !(global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant)) {
+      byVertical = 'unknown';
+    } else {
+      var vertical = String(ws.vertical || '').toLowerCase();
+      /* Resolved with no vertical recorded: show it, which is how this
+         behaved before the gate and keeps un-backfilled tenants whole. */
+      byVertical = !vertical ? true : (OWNER_VERTICALS[vertical] === 1);
+    }
 
     return {
       enabled:      a.enabled === true ? true
@@ -832,7 +846,10 @@
 
   function mount() {
     var C = cfg();
-    if (!C.enabled || MOUNTED) return false;
+    /* 'unknown' and false both return false here, which keeps the existing
+       poll running. The difference only matters to the caller's patience,
+       and this one already gives up on its own timer. */
+    if (C.enabled !== true || MOUNTED) return false;
     var hostRoot = document.getElementById('dev-fixed');
     if (!hostRoot) return false;
 
