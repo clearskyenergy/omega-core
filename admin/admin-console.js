@@ -800,13 +800,14 @@ function renderCrm(){
       + '<td class="site-nm">'+esc(c.name)+'<div class="sub-txt">'+esc(c._key||'')+'</div></td>'
       + '<td><span class="chip '+esc(c.tier)+'">'+esc(tierShort(c.tier))+'</span></td>'
       + '<td>'+crmSourceChip(c)+'</td>'
+      + '<td>'+tierSyncCell(c)+'</td>'
       + '<td class="sub-txt">'+esc(c.owner||'—')+'</td>'
       + '<td>'+healthChip(c)+'</td>'
       + '<td class="num">'+(ot>0?'<b style="color:var(--cs-accent)">'+ot+'</b>':'0')+'</td>'
       + '<td class="sub-txt">'+(ls?esc(truncate(ls.text,52)):'<span class="mut">none yet</span>')+'</td>'
       + '<td class="sub-txt">'+timeAgo(c.updatedAt)+'</td></tr>';
   }
-  document.getElementById('crm-body').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--cs-sub)">No clients match.</td></tr>';
+  document.getElementById('crm-body').innerHTML = rows || '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--cs-sub)">No clients match.</td></tr>';
 }
 function setCrmFilter(f){ crmFilter=f; renderCrm(); }
 function truncate(s,n){ s=String(s); return s.length>n ? s.slice(0,n-1)+'…' : s; }
@@ -1140,6 +1141,61 @@ function loadTenants(){
    vanishing — the sales history is the reason that list exists. Materialising
    a tenant into the CRM is an explicit click, so the roster only grows when
    somebody means it to. */
+/* ── ONE TIER, TWO VOCABULARIES ───────────────────────────────────────────
+   The roster says tier1/2/3 and labels them Core / Performance / Enterprise.
+   billing/current.tier says trial | standard | deluxe | enterprise, and THAT
+   is the string omega-tools.js gates every tool on. They describe the same
+   commercial fact and nothing kept them in step, which is why NextNRG reads
+   "Performance" here and "not yet priced" on its own account page.
+
+   TIER.DELUXE === 2 in omega-tools.js, so Performance (tier2) is deluxe.
+   That mapping is the whole reason this table exists rather than a guess at
+   the call site.
+
+   tier4 is deliberately absent. It is in the data (CIR) and it is not in
+   tierLabel(), TIERS, or the tool gate — so it maps to nothing and pushing it
+   would silently pick a default. It is reported as unmapped instead. */
+var TIER_CRM_TO_BILLING = {
+  tier1: 'standard',      // Core
+  tier2: 'deluxe',        // Performance
+  tier3: 'enterprise',    // Enterprise
+  internal: 'internal',
+  partner: 'partner'
+};
+function billingTierFor(crmTier){ return TIER_CRM_TO_BILLING[String(crmTier||'')] || null; }
+
+/* Pushes the roster's tier onto the tenant's billing document — the record the
+   tool gate and the customer's own account page read. Writes billing/current
+   directly, which the rules permit for isAdmin(), and appends the same history
+   row saveTenantBilling() does so the change is not invisible. */
+function pushTierToBilling(orgId, crmTier){
+  var target = billingTierFor(crmTier);
+  if (!target){
+    window.alert('"' + crmTier + '" has no billing equivalent.\n\nKnown: ' +
+      Object.keys(TIER_CRM_TO_BILLING).join(', ') +
+      '.\nDecide what it maps to before pushing it, or the tool gate falls back to a default.');
+    return;
+  }
+  if (!window.confirm('Set ' + orgId + ' to "' + target + '" (' + tierLabel(crmTier) + ')?\n\n' +
+      'This is the tier the tool gate reads and the customer sees on their account page.')) return;
+
+  var FV = firebase.firestore.FieldValue;
+  var ref = db.collection('omega_orgs').doc(orgId).collection('billing').doc('current');
+  ref.get().then(function(snap){
+    var before = snap.exists ? snap.data() : {};
+    return ref.set({ tier: target, updatedAt: FV.serverTimestamp(),
+                     updatedBy: (currentUser && currentUser.email) || 'console' }, { merge:true })
+      .then(function(){
+        return ref.collection('history').add({
+          at: FV.serverTimestamp(), by: (currentUser && currentUser.email) || 'console',
+          changed: { tier: target }, was: { tier: before.tier === undefined ? null : before.tier },
+          note: 'pushed from client roster (' + crmTier + ')'
+        });
+      });
+  }).then(function(){ loadTenants(); })
+   .catch(function(e){ window.alert('Could not set the tier:\n\n' + (e.message||e)); });
+}
+
 function crmKeyOf(c){
   return String((c && (c.domain || c.orgId)) || '').toLowerCase().trim();
 }
@@ -1161,7 +1217,15 @@ function reconciledClients(){
   orgs.forEach(function(o){
     var k = String(o._id || '').toLowerCase();
     var hit = byKey[k];
-    if (hit){ hit._org = o; return; }
+    if (hit){
+      hit._org = o;
+      hit._billingTier = (o._bill && o._bill.tier) || null;
+      /* Mismatch means the roster and the customer's account disagree about
+         what they are paying for. That is worth a badge, not a silent win for
+         whichever list you happened to open. */
+      hit._tierPushable = !!billingTierFor(hit.tier) && hit._billingTier !== billingTierFor(hit.tier);
+      return;
+    }
     /* A tenant nobody has a CRM row for — a self-serve signup, or an org
        seeded after the roster was last touched. Shown, not written. */
     out.push({
@@ -1179,6 +1243,20 @@ function reconciledClients(){
 
 /* One badge, used by both tabs, so "is this real" is answered the same way
    wherever you are looking. */
+/* What the CUSTOMER's account says, next to what the roster says. The two
+   were never shown together, so a disagreement could stand indefinitely — and
+   the customer's copy is the one that gates their tools. */
+function tierSyncCell(r){
+  if (!r._org) return '<span class="sub-txt">\u2014</span>';
+  var live = r._billingTier;
+  var want = billingTierFor(r.tier);
+  if (!want) return '<span class="chip neutral" title="No billing equivalent for &quot;'+esc(r.tier)+'&quot;">unmapped</span>';
+  if (live === want) return '<span class="chip good">'+esc(live)+'</span>';
+  return '<span class="chip warn">'+esc(live || 'not priced')+'</span>'
+       + ' <button style="margin-left:6px" onclick="event.stopPropagation();pushTierToBilling(&quot;'
+       + esc(r._key)+'&quot;,&quot;'+esc(r.tier)+'&quot;)">Set '+esc(want)+'</button>';
+}
+
 function crmSourceChip(r){
   if (r._org && r._crm)  return '<span class="chip good">tenant</span>';
   if (r._org && !r._crm) return '<span class="chip warn">new tenant</span>';
