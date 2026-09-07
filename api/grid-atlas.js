@@ -388,16 +388,23 @@ const HIFLD_LAYERS = {
 };
 /* ── MIRROR ORDER IS NOT ARBITRARY, IT IS MEASURED ──────────────────────
    Tested against one bbox in Frio County, TX on 2026-09-07:
-     kumi.systems   16 elements   the only mirror with the data
-     overpass-api.de  non-JSON    rate-limited, returns an error page
-     overpass.osm.ch   0 elements a well-formed, WRONG, empty 200
+     kumi.systems     16 elements from a laptop, HTTP 429 from Vercel
+     overpass-api.de  has the data; refused us 406 until the client
+                      identified itself, then needed more than 6 s
+     overpass.osm.ch   0 elements — a well-formed, WRONG, empty 200
+
    osm.ch answering an authoritative-looking zero is what made this layer
-   silently report "no substations" for real sites. It stays in the list as a
-   last resort but it must never be reached while a mirror with data is
-   answering, so kumi goes first and gets most of the time budget. */
+   silently report "no substations" for real sites, so it must never be
+   reached while a mirror with data is still answering.
+
+   ORDER IS FROM THE FUNCTION'S OWN EGRESS, NOT FROM A LAPTOP. kumi has the
+   data and is fastest by hand, and is rate-limited to nothing from shared
+   cloud addresses — testing mirrors locally is how it ended up first. The
+   first entry gets 20 s and the rest get 6 s, so this list decides which
+   mirror can afford to be slow; overpass-api.de answers but needs the time. */
 const OVERPASS = [
-  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.osm.ch/api/interpreter'
 ];
 
