@@ -121,6 +121,12 @@ function openFinancingApply(){
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
 <script src="/omega-site-intel.js"></script>
+<!-- The register renders a table; this turns the same rows into the screening
+     report — masthead, caveat, ranked records with per-component bars, method and
+     the kV capacity table. It recomputes nothing: every figure is read off the
+     engine output above, and the weights and capacity ladder come from the engine
+     rather than being restated, so the document cannot drift from the score. -->
+<script src="/omega-parcel-report.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -106628,7 +106634,9 @@ table.e3-tbl td{ white-space:normal }
           body +
         '</div>' +
         '<div class="e3-foot">' +
-          (REG.length ? '<button class="e3-btn" data-psr-csv="1">Export CSV</button> ' +
+          (REG.length ? '<button class="e3-btn" data-psr-report="1">Open report</button> ' +
+                        '<button class="e3-btn" data-psr-pdf="1">Report \u2192 PDF</button> ' +
+                        '<button class="e3-btn" data-psr-csv="1">Export CSV</button> ' +
                         '<button class="e3-btn" data-psr-clear="1">Clear</button>' : '') +
         '</div>' +
       '</div>';
@@ -106658,6 +106666,19 @@ table.e3-tbl td{ white-space:normal }
     if (c) c.onclick = function () { REG.length = 0; regRender(); };
     var cs = h.querySelector('[data-psr-csv]');
     if (cs) cs.onclick = regCsv;
+    /* The report is a separate module so the same rows can be rendered from
+       any tool that screens parcels, not only from inside the editor. If it
+       did not load, say which file is missing rather than doing nothing. */
+    function report(andPrint) {
+      var R = window.OmegaParcelReport;
+      if (!R) { alert('The report module (omega-parcel-report.js) did not load. Reload the page.'); return; }
+      try { (andPrint ? R.print : R.open)(REG); }
+      catch (e) { alert((e && e.message) || 'Could not open the report.'); }
+    }
+    var rp = h.querySelector('[data-psr-report]');
+    if (rp) rp.onclick = function () { report(false); };
+    var pd = h.querySelector('[data-psr-pdf]');
+    if (pd) pd.onclick = function () { report(true); };
     var dets = h.querySelectorAll('[data-psr-open]');
     for (var i = 0; i < dets.length; i++) {
       dets[i].onclick = function () { regDetail(+this.getAttribute('data-psr-open')); };
