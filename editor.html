@@ -110196,6 +110196,98 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     return out;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     DISPATCH — the only thing that knows whether a battery can do the job
+
+     Everything above this line sizes ANALYTICALLY: measure the energy above
+     a line, divide by the derate, check the gap between events against a
+     recharge time. It is fast, it is readable, and on a real load shape it
+     is wrong in the direction that costs the customer money.
+
+     Measured on a 1,150 kW two-peak profile: the analytic sizer recommended
+     537 kW / 1,927 kWh and promised $107,069 a year. Dispatching that exact
+     system hour by hour against the same load, it failed to hold the target
+     in 591 of 8,760 hours and delivered $41,424 — a 61% overstatement.
+
+     The reason is a constraint the analytic form cannot express. The
+     threshold in every month had landed on that month's average, which is
+     what the "you cannot shave into the baseline" cap allows. But the cap is
+     about the wrong quantity: what matters is not whether the threshold sits
+     above the baseline, it is whether the energy discharged in a day can be
+     PUT BACK in that day's off-peak hours at the headroom that is left. At a
+     threshold equal to the average there was 52-213 kW of charge room
+     against a 100-537 kW shave. No arrangement of the analytic terms sees
+     that; a simulation sees it immediately.
+
+     So the simulation is now the sizer, not a checker. It runs a greedy
+     peak-shaving policy with a real state of charge:
+       discharge to hold the month's threshold, limited by power and by what
+       is in the battery;
+       charge whenever the load is under the threshold, limited by power, by
+       the headroom UNDER the threshold — a charge that creates a new peak is
+       not shaving — and by what the pack still has room for;
+       round-trip losses are taken on the way in.
+
+     It reports the peak the meter ACTUALLY sees each month. That number, not
+     the target, is what the utility bills, so that number is what the
+     savings are computed from. A battery that misses its target still gets
+     credit for what it did achieve, and never for what it did not.
+     ══════════════════════════════════════════════════════════════════════ */
+  function dispatchYear(vals, blocks, thresholds, powerKw, usableKwh, hrs, rte) {
+    var soc = usableKwh, chargeEff = Math.sqrt(rte > 0 ? rte : 0.88);
+    var billed = [], breaches = 0, shortfallKwh = 0, worstBreachKw = 0, dischargeKwh = 0;
+    for (var b = 0; b < blocks.length; b++) {
+      var sp = blocks[b], thr = thresholds[b], metered = 0;
+      for (var i = sp.a; i < sp.b; i++) {
+        var load = vals[i], net = load;
+        if (load > thr) {
+          var give = Math.min(load - thr, powerKw, soc / hrs);
+          if (give > 0) { soc -= give * hrs; dischargeKwh += give * hrs; net = load - give; }
+          if (net > thr + 1e-6) {
+            breaches++;
+            shortfallKwh += (net - thr) * hrs;
+            if (net - thr > worstBreachKw) worstBreachKw = net - thr;
+          }
+        } else {
+          var room = Math.min(powerKw, thr - load, (usableKwh - soc) / hrs);
+          if (room > 0) soc = Math.min(usableKwh, soc + room * hrs * chargeEff);
+        }
+        if (net > metered) metered = net;
+      }
+      billed.push(metered);
+    }
+    return { billedPeaks: billed, breaches: breaches, shortfallKwh: shortfallKwh,
+             worstBreachKw: worstBreachKw, dischargeKwh: dischargeKwh };
+  }
+
+  /* The smallest usable energy that lets the dispatch hold every threshold.
+     Doubling to find a working size, then bisecting for the edge — a search
+     rather than a formula, because the feasible point depends on where the
+     off-peak hours fall relative to the peaks, which is exactly the thing a
+     formula cannot carry. Bounded: past a day of storage at full power the
+     answer is "this shave is not reachable", not a bigger battery. */
+  function solveEnergy(vals, blocks, thresholds, powerKw, hrs, rte, seedKwh) {
+    var ceiling = powerKw * 24;
+    var lo = 0, hi = Math.max(1, Math.min(ceiling, seedKwh || powerKw * 2));
+    var res = dispatchYear(vals, blocks, thresholds, powerKw, hi, hrs, rte);
+    var guard = 0;
+    while (res.breaches > 0 && hi < ceiling && ++guard < 20) {
+      lo = hi; hi = Math.min(ceiling, hi * 2);
+      res = dispatchYear(vals, blocks, thresholds, powerKw, hi, hrs, rte);
+    }
+    if (res.breaches > 0) {
+      /* Not reachable at this power. Return the ceiling and the damage, so
+         the caller can still price what it DOES achieve. */
+      return { usableKwh: hi, feasible: false, sim: res };
+    }
+    for (var k = 0; k < 18 && hi - lo > Math.max(1, hi * 0.01); k++) {
+      var mid = (lo + hi) / 2;
+      var r = dispatchYear(vals, blocks, thresholds, powerKw, mid, hrs, rte);
+      if (r.breaches > 0) lo = mid; else { hi = mid; res = r; }
+    }
+    return { usableKwh: hi, feasible: true, sim: res };
+  }
+
   function sizeFromInterval(vals, opts) {
     /* The 24-value floor lived only in the dialog, so a direct call —
        which the console API openly invites — would size a battery from
@@ -110212,6 +110304,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     var spans = monthSpans(vals.length, intervalMin, opts.startMonth);
     var blocks = spans || [{ a: 0, b: vals.length, month: null }];
     var D = derate();
+    var RTE = (typeof window.BESS_RTE === 'number') ? window.BESS_RTE : 0.88;
 
     var peaks = blocks.map(function (sp) {
       var p = 0, sum = 0;
@@ -110240,36 +110333,24 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     }
 
     function evaluate(shaveKw) {
-      var needKwh = 0, worstHours = 0, events = 0, throughput = 0;
-      var minGapH = Infinity, months = [], dayBound = 0, capped = 0;
+      var worstHours = 0, events = 0, months = [], thresholds = [], analytic = 0;
+      var minGapH = Infinity;
+
       peaks.forEach(function (m) {
-        /* ── YOU CANNOT SHAVE INTO THE BASELINE ──────────────────────────
-           The monthly-bills path has always capped the shave at peak minus
-           average, because a battery that holds the meter below the site's
-           own baseline has nothing to recharge from — it is a generator, not
-           a battery. The interval path had no such cap, and the sweep walks
-           to 60% of the ANNUAL peak, which on a seasonal load is deeper than
-           a shoulder month's entire peak-to-baseline range.
-
-           When the threshold drops under the baseline the load never comes
-           back below the line, eventsAbove returns ONE event spanning the
-           whole month, and the sizer asks for a megawatt-hour battery the
-           size of a small city. The sweep table showed it plainly: 144 kW
-           wanted 1,522 kWh, and 173 kW wanted 1,366,666 kWh and $546 million.
-
-           This was always here. It was invisible because every candidate was
-           being disqualified as recharge-tight and the fallback quietly
-           picked the smallest one. Fixing the disqualification surfaced it. */
+        /* The threshold is still capped at peak-minus-average: below the
+           month's own average the meter can never come back under the line,
+           so there is no off-peak at all and nothing to recharge from. That
+           cap is necessary and it is NOT sufficient — see dispatchYear. */
         var applied = Math.min(shaveKw, Math.max(0, m.peakKw - m.avgKw));
-        if (applied < shaveKw) capped++;
         var thr = Math.max(0, m.peakKw - applied);
+        thresholds.push(thr);
+
         var ev = eventsAbove(vals, hrs, thr, Math.max(1, Math.round(0.5 / hrs)));
         ev = ev.filter(function (e) { return e.a >= m.a && e.a < m.b; });
         var worst = 0, prevEnd = null;
         ev.forEach(function (e) {
           if (e.energyKwh > worst) worst = e.energyKwh;
           if (e.hours > worstHours) worstHours = e.hours;
-          throughput += e.energyKwh;
           if (prevEnd != null) {
             var gap = (e.a - prevEnd) * hrs;
             if (gap < minGapH) minGapH = gap;
@@ -110277,51 +110358,54 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
           prevEnd = e.b;
         });
         events += ev.length;
-        if (worst > needKwh) needKwh = worst;
-        var wd = worstDayKwh(m.a, m.b, thr);
-        if (wd > dayBound) dayBound = wd;
+        if (worst > analytic) analytic = worst;
         months.push({ month: m.month, peakKw: m.peakKw, thresholdKw: thr,
                       shaveKw: applied, capped: applied < shaveKw,
-                      eventKwh: worst, worstDayKwh: wd, events: ev.length });
+                      eventKwh: worst, events: ev.length });
       });
 
-      /* ── THE DAY IS THE BINDING CONSTRAINT WHEN IT CANNOT RECHARGE ────
-         This used to size on the worst single EVENT and then DISQUALIFY the
-         candidate when the gap between two events was shorter than a full
-         recharge. On any site with a morning and an afternoon peak that
-         disqualified every candidate in the sweep, the eligible list came
-         back empty, and the fallback — "best return per dollar" — is the
-         smallest battery on a linear tariff. The tool recommended 29 kW on a
-         1,150 kW site and the code's own comment says that is the failure it
-         exists to avoid.
+      var powerKw = months.length
+        ? months.reduce(function (mx, m) { return Math.max(mx, m.shaveKw); }, 0)
+        : shaveKw;
+      if (!(powerKw > 0)) return null;
 
-         Being unable to recharge between two events is not a reason to
-         refuse to size; it is the reason the battery has to be bigger. So
-         the day's energy becomes the requirement, and the flag goes back to
-         being what it should always have been — a note that the duty cycle
-         is tight, not a veto.
+      /* SIZED BY SIMULATION. The analytic worst-event figure is kept only as
+         the search seed and as something to report against — it is what the
+         old sizer would have answered, and on the test profile it was 61%
+         optimistic. */
+      var sol = solveEnergy(vals, blocks, thresholds, powerKw, hrs, RTE,
+                            (analytic / D) || powerKw * 2);
+      var sim = sol.sim;
 
-         Recharge is checked against the shave power because that is the
-         inverter rating being bought; a tariff that allows faster charging
-         off-peak would only improve this. */
-      var usable = needKwh;
-      var rechargeH = shaveKw > 0 ? (needKwh / D) / shaveKw : 0;
-      var tight = isFinite(minGapH) && minGapH < rechargeH;
-      if (tight && dayBound > usable) usable = dayBound;
+      /* The meter's own peaks, which is what the utility bills. A battery
+         that misses its target is credited with what it did achieve. */
+      var achieved = months.map(function (m, k) {
+        return Math.max(0, m.peakKw - (sim.billedPeaks[k] != null ? sim.billedPeaks[k] : m.peakKw));
+      });
+      months.forEach(function (m, k) {
+        m.billedKw = sim.billedPeaks[k];
+        m.achievedKw = achieved[k];
+        m.heldTarget = sim.billedPeaks[k] <= m.thresholdKw + 1e-6;
+      });
 
-      var nameplateKwh = usable / D;
-      var rechargeH2 = shaveKw > 0 ? nameplateKwh / shaveKw : 0;
-
+      var nameplateKwh = sol.usableKwh / D;
       return {
-        shaveKw: shaveKw, usableKwh: usable, nameplateKwh: nameplateKwh,
-        worstEventKwh: needKwh, worstDayKwh: dayBound,
-        sizedOnDay: usable > needKwh,
-        durationH: shaveKw > 0 ? usable / shaveKw : 0,
+        shaveKw: shaveKw, powerKw: powerKw,
+        usableKwh: sol.usableKwh, nameplateKwh: nameplateKwh,
+        analyticKwh: analytic / D,
+        achievedShave: achieved,
+        durationH: powerKw > 0 ? sol.usableKwh / powerKw : 0,
         events: events, worstEventH: worstHours,
-        throughputKwh: throughput, cyclesYr: nameplateKwh > 0 ? throughput / (nameplateKwh * D) : 0,
-        rechargeH: rechargeH2, minGapH: isFinite(minGapH) ? minGapH : null,
-        rechargeTight: tight, monthsCapped: capped,
-        months: months, basis: spans ? 'interval-12mo' : 'interval-partial'
+        throughputKwh: sim.dischargeKwh,
+        cyclesYr: sol.usableKwh > 0 ? sim.dischargeKwh / sol.usableKwh : 0,
+        breaches: sim.breaches, shortfallKwh: sim.shortfallKwh,
+        worstBreachKw: sim.worstBreachKw,
+        feasible: sol.feasible,
+        rechargeH: powerKw > 0 ? sol.usableKwh / powerKw : 0,
+        minGapH: isFinite(minGapH) ? minGapH : null,
+        rechargeTight: !sol.feasible,
+        monthsCapped: months.filter(function (m) { return m.capped; }).length,
+        months: months, basis: spans ? 'interval-12mo-dispatch' : 'interval-partial-dispatch'
       };
     }
 
@@ -110460,24 +110544,25 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
       if (!shaveKw) continue;
       if (candidates.length && candidates[candidates.length - 1].shaveKw === shaveKw) continue;
       var c = evaluate(shaveKw);
-
-      /* WHAT IS ACTUALLY BEING BOUGHT. The sweep asks for shaveKw; the
-         months may only be able to use part of it. The inverter is sized to
-         the deepest shave any month actually takes, and that is the figure
-         the C-rate, the capex and the savings all have to agree on — the
-         previous version priced and credited the swept number. */
-      var applied = (c.months || []).map(function (m) { return +m.shaveKw || 0; });
-      c.powerKw = applied.length ? Math.max.apply(null, applied) : shaveKw;
+      if (!c) continue;
 
       /* C-rate limit: a battery cannot deliver more power than its energy
          and chemistry allow. If the sweep asks for it, grow the energy. */
       var minKwhForPower = c.powerKw / tariff.maxC;
       if (c.nameplateKwh < minKwhForPower) {
         c.nameplateKwh = minKwhForPower;
+        c.usableKwh = c.nameplateKwh * D;
         c.cRateLimited = true;
       }
 
-      var after = billedDemand(peaks, applied.length ? applied : shaveKw, tariff.ratchetPct);
+      /* ── SAVINGS COME OFF THE METER, NOT OFF THE TARGET ───────────────
+         This used to bill against the shave the sweep ASKED for. The
+         dispatch reports the peak the meter actually saw in each month, and
+         that is what the utility charges on — so a system that misses its
+         target is credited with what it achieved and never with what it
+         intended. On the profile that exposed this, the difference between
+         those two readings was $107,069 promised against $41,424 real. */
+      var after = billedDemand(peaks, c.achievedShave, tariff.ratchetPct);
       var afterCost = after.reduce(function (s, kw) { return s + kw * tariff.demandChargePerKw; }, 0);
       c.demandSavingsYr = baseDemandCost - afterCost;
 
@@ -110623,11 +110708,24 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
   function summarize(res) {
     if (!res || !res.ok) return null;
     var r = res.recommended;
-    var p = roundProduct(r.shaveKw, r.nameplateKwh);
+    /* powerKw, not shaveKw. The sweep ASKS for shaveKw; powerKw is the
+       deepest shave any month can actually take, and it is what the capex,
+       the C-rate limit and the savings were all computed against. Handing
+       Config the swept number would install an inverter the analysis never
+       priced. */
+    var p = roundProduct(r.powerKw != null ? r.powerKw : r.shaveKw, r.nameplateKwh);
     return {
       kw: p.kw, kwh: p.kwh,
       durationH: p.kw > 0 ? +(p.kwh * res.derate / p.kw).toFixed(2) : 0,
-      shaveKw: r.shaveKw, calcKwh: Math.round(r.nameplateKwh),
+      shaveKw: r.powerKw != null ? r.powerKw : r.shaveKw, calcKwh: Math.round(r.nameplateKwh),
+      /* What the hour-by-hour dispatch found. A size with breaches is a size
+         that misses its target in that many intervals of the year; savings
+         are already credited off the metered peak, but the count is the
+         thing that says whether the system does what it was drawn to do. */
+      breaches: r.breaches != null ? r.breaches : null,
+      worstBreachKw: r.worstBreachKw != null ? Math.round(r.worstBreachKw) : null,
+      feasible: r.feasible !== false,
+      analyticKwh: r.analyticKwh != null ? Math.round(r.analyticKwh) : null,
       savingsYr: Math.round(r.savingsYr), capex: Math.round(r.capex),
       paybackYr: r.paybackYr != null ? +r.paybackYr.toFixed(1) : null,
       cyclesYr: Math.round(r.cyclesYr || 0),
@@ -110644,7 +110742,12 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     sizeFromInterval: sizeFromInterval, sizeFromMonthly: sizeFromMonthly,
     billedDemand: billedDemand, defaultPeakHours: defaultPeakHours,
     parseInterval: parseInterval, splitRow: splitRow, detectInterval: detectInterval,
-    roundProduct: roundProduct, summarize: summarize
+    roundProduct: roundProduct, summarize: summarize,
+    /* Exported so the sizing can be checked from outside the thing that did
+       it — the regression suite re-dispatches the recommendation through a
+       separately written loop, which is the only test that would catch the
+       engine agreeing with itself. */
+    dispatchYear: dispatchYear, solveEnergy: solveEnergy
   };
 })();
 /* ====================================================================== *

@@ -112,24 +112,46 @@ var strong = E.sizeFromInterval(vals, { intervalMin: 60,
   tariff: tariff({ demandChargePerKw: 35, capexPerKwh: 250, capexPerKw: 150 }) });
 ok(strong.ok && strong.recommended, 'recommends on a tariff that pays', strong.error);
 ok(strong.metTarget === true, 'meets the payback target when the tariff supports it');
-ok(strong.recommended.powerKw > annualPeak * 0.2,
-   'does not collapse to a token battery on a two-peak site',
-   'got ' + Math.round(strong.recommended.powerKw) + ' kW on a ' + annualPeak + ' kW site');
+/* The old test asserted "not a token battery" with a 20%-of-peak floor. That
+   was calibrated against the buggy behaviour: with the dispatch doing the
+   sizing, a deep shave on this profile genuinely needs an absurd amount of
+   energy because the midday recharge window is only two hours, so the right
+   answer IS a modest system. The invariant that actually matters is not how
+   big the battery is — it is that the one recommended can do the job, and
+   that a better tariff buys more of it. */
+ok(strong.recommended.breaches === 0 && strong.recommended.feasible !== false,
+   'the recommended system holds its target in every interval of the year',
+   strong.recommended.breaches + ' breaches, worst ' +
+   Math.round(strong.recommended.worstBreachKw || 0) + ' kW over');
+
+var weak = E.sizeFromInterval(vals, { intervalMin: 60, tariff: tariff() });
+ok(strong.recommended.powerKw >= weak.recommended.powerKw,
+   'a tariff worth more buys at least as much battery',
+   Math.round(weak.recommended.powerKw) + ' kW at $18 vs ' +
+   Math.round(strong.recommended.powerKw) + ' kW at $35');
+
+/* The whole reason the dispatch exists: the analytic answer was optimistic,
+   and it must never quietly be the one reported. */
+ok(strong.recommended.nameplateKwh >= strong.recommended.analyticKwh - 1,
+   'the sized energy is never below what the analytic method asked for',
+   'sized ' + Math.round(strong.recommended.nameplateKwh) +
+   ' kWh vs analytic ' + Math.round(strong.recommended.analyticKwh) + ' kWh');
 
 /* ── 4. per-month capping is reflected in the savings, not just the size ─ */
 var deep = (base.candidates || []).filter(function (c) { return c.monthsCapped > 0; })[0];
 ok(!!deep, 'the sweep reaches depths some months cannot take');
 if (deep) {
   var flat = E.billedDemand(base.meta.peaks, deep.shaveKw, 0);
-  var perMonth = E.billedDemand(base.meta.peaks,
-    deep.months.map(function (m) { return m.shaveKw; }), 0);
+  var achieved = E.billedDemand(base.meta.peaks, deep.achievedShave, 0);
   var flatCost = flat.reduce(function (s, kw) { return s + kw * 18; }, 0);
-  var realCost = perMonth.reduce(function (s, kw) { return s + kw * 18; }, 0);
+  var realCost = achieved.reduce(function (s, kw) { return s + kw * 18; }, 0);
   ok(realCost > flatCost,
      'a capped month is billed more than the swept shave would imply',
      'flat $' + Math.round(flatCost).toLocaleString() + ' vs real $' + Math.round(realCost).toLocaleString());
   ok(Math.abs(deep.demandSavingsYr - (base.baseDemandCostYr - realCost)) < 1,
-     'reported savings use the per-month shave, not the swept one');
+     'reported savings come off the metered peak, not off the target');
+  ok(deep.achievedShave.every(function (kw, i) { return kw <= deep.months[i].shaveKw + 1e-6; }),
+     'no month is credited with more shave than it was asked to deliver');
 }
 
 /* ── 5. the ratchet costs money, it does not make it ─────────────────── */
@@ -150,6 +172,39 @@ ok(inconsistent.length === 0,
 
 /* ── 7. the guard the engine already promised ────────────────────────── */
 ok(E.sizeFromInterval([1, 2, 3], {}).ok === false, 'refuses to size from three readings');
+
+/* ── THE RECOMMENDATION SURVIVES AN INDEPENDENT DISPATCH ──────────────
+   The engine sizes with its own simulator, so "it says it holds" proves
+   nothing on its own. This re-runs the recommended system through a second,
+   separately written dispatch and checks the savings agree. It is the only
+   check here that would catch the engine agreeing with itself. */
+(function () {
+  var c = strong.recommended, D2 = E.derate(), hrs = 1, rte = 0.88;
+  var spans = E.monthSpans(vals.length, 60, 0);
+  var soc = c.nameplateKwh * D2, eff = Math.sqrt(rte), billed = [];
+  spans.forEach(function (sp, k) {
+    var thr = c.months[k].thresholdKw, metered = 0;
+    for (var i = sp.a; i < sp.b; i++) {
+      var load = vals[i], net = load;
+      if (load > thr) {
+        var give = Math.min(load - thr, c.powerKw, soc / hrs);
+        soc -= give * hrs; net = load - give;
+      } else {
+        var room = Math.min(c.powerKw, thr - load, (c.nameplateKwh * D2 - soc) / hrs);
+        if (room > 0) soc = Math.min(c.nameplateKwh * D2, soc + room * hrs * eff);
+      }
+      if (net > metered) metered = net;
+    }
+    billed.push(metered);
+  });
+  var indep = billed.reduce(function (s, kw, k) {
+    return s + Math.max(0, c.months[k].peakKw - kw);
+  }, 0) * 35;
+  ok(Math.abs(indep - c.demandSavingsYr) < Math.max(50, c.demandSavingsYr * 0.02),
+     'an independently written dispatch agrees with the reported savings',
+     'independent $' + Math.round(indep).toLocaleString() +
+     ' vs engine $' + Math.round(c.demandSavingsYr).toLocaleString());
+})();
 
 /* ══════════════════════════════════════════════════════════════════════
    THE 8760 IMPORT PATH
