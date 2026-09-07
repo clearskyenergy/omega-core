@@ -58,7 +58,7 @@
           "value": "silmarillion.clearskyomega.com"
         }
       ],
-      "destination": "/start.html"
+      "destination": "/login.html"
     },
     {
       "source": "/",

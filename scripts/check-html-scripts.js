@@ -27,6 +27,20 @@
    Exit 0 clean, 1 on any finding. Wire it into CI or a pre-push hook.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
+
+
+/* ── ES MODULES NEED A FLAG, SO ASK FOR IT AND START AGAIN ──────────────────
+   `<script type="module">` can only be compiled through vm.SourceTextModule,
+   which Node exposes only under --experimental-vm-modules. Rather than making
+   every caller remember that, the checker re-runs itself once with the flag.
+   Guarded by an env var so a refused re-exec cannot loop. */
+if (typeof require('vm').SourceTextModule !== 'function' && !process.env.OMEGA_CHECK_REEXEC) {
+  const { spawnSync } = require('child_process');
+  const r = spawnSync(process.execPath,
+    ['--experimental-vm-modules', '--no-warnings', __filename].concat(process.argv.slice(2)),
+    { stdio: 'inherit', env: Object.assign({}, process.env, { OMEGA_CHECK_REEXEC: '1' }) });
+  process.exit(r.status == null ? 1 : r.status);
+}
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -92,7 +106,21 @@ function checkFile(file) {
     try {
       /* Compiling is the authoritative answer — it is the same parser the
          browser uses. Nothing is executed. */
-      if (isModule(attrs)) new vm.SourceTextModule(body, { identifier: rel });
+      if (isModule(attrs)) {
+        /* vm.SourceTextModule only exists under --experimental-vm-modules.
+           Without it this threw "not a constructor" and reported every ES
+           module as unparseable — a false failure on working code, which is
+           worse than no check at all because it trains you to ignore the
+           checker. The process re-execs itself with the flag (see the top of
+           this file), so reaching here without it means the re-exec was
+           refused and the honest answer is "not checked". */
+        if (typeof vm.SourceTextModule !== 'function') {
+          findings.push({ file: rel, line, kind: 'skip',
+            msg: 'inline module #' + idx + ' not checked (node lacks --experimental-vm-modules)' });
+          continue;
+        }
+        new vm.SourceTextModule(body, { identifier: rel });
+      }
       else new vm.Script(body, { filename: rel });
     } catch (err) {
       parseErr = String(err.message).split('\n')[0];

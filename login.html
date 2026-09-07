@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  login.html — the OMEGA front door, served from the platform's own origin
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  This is the marketing site's login page, moved here on purpose. SSO-HANDOFF.md
+  calls it Option A and it is the right one: a Firebase session belongs to the
+  ORIGIN that created it, so signing in on clearskyomega.com was never going to
+  be a session on the platform, and the page shipped with HANDOFF='prefill' —
+  sign in here, then sign in again on arrival.
+
+  Serving the same page from the platform deletes that problem rather than
+  solving it. The marketing site keeps the button; the button points here.
+
+  ⚠ THE MARKETING SITE HAS THE OTHER COPY. clearsky-site/login.html is still
+  the same file. If the design changes there it does not change here, and the
+  two will drift. The one that must stay authoritative is THIS one, because it
+  is the one that can actually sign anybody in.
+
+  Nav links leave for clearskyomega.com; the assets it needs are in
+  /site-assets/ so the page renders identically on either origin.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/omega-logo.png">
+  <link rel="apple-touch-icon" href="/omega-logo.png">
+  <meta name="description" content="Log in to OMEGA — the ClearSky Energy Solutions operating platform.">
+  <meta property="og:title" content="Log in · ClearSky OMEGA">
+  <meta name="robots" content="noindex">
+  <title>Log in · ClearSky OMEGA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site-assets/omega.css">
+  <style>
+    .login-wrap { min-height: calc(100vh - 104px); display: flex; align-items: center; justify-content: center; padding: 40px 20px;
+      background: radial-gradient(1000px 500px at 50% -10%, rgba(0,174,239,0.14), transparent 60%), var(--cs-navy); }
+    .login-card { width: 100%; max-width: 440px; background: rgba(255,255,255,0.04); border: 0.5px solid var(--cs-border-blue);
+      border-radius: 18px; padding: 44px 40px 34px; text-align: center; box-shadow: var(--shadow-lg); }
+    .login-card img.omega { height: 58px; width: auto; display: block; margin: 0 auto 22px; }
+    .login-card h1 { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #fff; margin-bottom: 8px; }
+    .login-card .tag { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 28px; }
+    .login-card .tag b { color: var(--cs-blue-bright); font-weight: 600; }
+    .login-card .btn-primary { width: 100%; justify-content: center; }
+    .login-div { display: flex; align-items: center; gap: 12px; margin: 22px 0; }
+    .login-div::before, .login-div::after { content: ''; flex: 1; height: 0.5px; background: rgba(255,255,255,0.14); }
+    .login-div span { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+    .login-card .note { margin-top: 24px; font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.6; }
+    .login-card .note a { color: var(--cs-blue-bright); text-decoration: none; }
+    .redirect-msg { margin-top: 16px; font-size: 12.5px; color: rgba(255,255,255,0.6); min-height: 0; }
+
+    /* --- Sign-in form --- */
+    .field { text-align: left; margin-bottom: 16px; }
+    .field label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+      color: rgba(255,255,255,0.55); margin-bottom: 7px; }
+    .field input {
+      width: 100%; font-family: inherit; font-size: 14.5px; color: #fff;
+      background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.18);
+      border-radius: 10px; padding: 13px 14px; transition: border-color 0.15s, background 0.15s;
+    }
+    .field input::placeholder { color: rgba(255,255,255,0.3); }
+    .field input:hover { border-color: rgba(255,255,255,0.3); }
+    .field input:focus { outline: none; border-color: var(--cs-blue-bright); background: rgba(255,255,255,0.07);
+      box-shadow: 0 0 0 3px rgba(0,174,239,0.16); }
+    .field-row { display: flex; align-items: baseline; justify-content: space-between; }
+    .link-quiet { background: none; border: 0; padding: 0; font-family: inherit; font-size: 11.5px; color: var(--cs-blue-bright);
+      cursor: pointer; text-decoration: none; }
+    .link-quiet:hover { text-decoration: underline; }
+
+    .btn-google {
+      width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      font-family: inherit; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
+      background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.22);
+      border-radius: 10px; padding: 13px 16px; transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-google:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.34); }
+    button.btn-primary { font-family: inherit; cursor: pointer; border: 0; }
+    button:disabled { opacity: 0.55; pointer-events: none; }
+
+    .form-msg { margin-top: 14px; font-size: 12.5px; line-height: 1.55; text-align: left; min-height: 16px; }
+    .form-msg.error { color: #FF9C8A; }
+    .form-msg.info { color: rgba(255,255,255,0.62); }
+
+    /* --- Workspace chooser (only when one account reaches more than one) --- */
+    .choose { text-align: left; }
+    .choose h2 { font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .choose p.sub { font-size: 13px; color: rgba(255,255,255,0.55); margin-bottom: 20px; line-height: 1.55; }
+    .choice {
+      display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; cursor: pointer;
+      background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.16); border-radius: 12px;
+      padding: 14px 15px; margin-bottom: 10px; font-family: inherit; transition: border-color 0.15s, background 0.15s;
+    }
+    .choice:hover { background: rgba(0,174,239,0.09); border-color: var(--cs-blue-bright); }
+    .choice:focus-visible { outline: 2px solid var(--cs-blue-bright); outline-offset: 2px; }
+    .choice .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cs-blue-bright); flex-shrink: 0; }
+    .choice .txt { flex: 1; }
+    .choice .name { display: block; font-size: 14px; font-weight: 600; color: #fff; }
+    .choice .desc { display: block; font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+
+    /* --- The OMEGA loading screen --- */
+    .omega-loading {
+      position: fixed; inset: 0; z-index: 900; display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+      background: radial-gradient(900px 500px at 50% 40%, rgba(0,174,239,0.16), transparent 65%), var(--cs-navy);
+    }
+    .omega-loading.on { display: flex; }
+    .omega-loading .mark { position: relative; display: grid; place-items: center; width: 152px; height: 152px; }
+    .omega-loading .mark img { height: 58px; width: auto; position: relative; z-index: 2; }
+    .omega-loading .ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(0,174,239,0.5); border-top-color: transparent; border-left-color: transparent;
+      animation: omega-spin 1.15s linear infinite;
+    }
+    .omega-loading .ring.two { inset: 17px; border-color: rgba(0,174,239,0.22); border-bottom-color: transparent;
+      animation-duration: 1.9s; animation-direction: reverse; }
+    @keyframes omega-spin { to { transform: rotate(360deg); } }
+    .omega-loading .status { font-size: 14px; color: rgba(255,255,255,0.72); min-height: 20px; text-align: center; padding: 0 24px; }
+    .omega-loading .status b { color: #fff; font-weight: 600; }
+    .omega-loading .sub { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+    @media (prefers-reduced-motion: reduce) {
+      .omega-loading .ring { animation: none; border-color: rgba(0,174,239,0.3); border-top-color: rgba(0,174,239,0.3); border-left-color: rgba(0,174,239,0.3); }
+    }
+    @media (max-width: 520px) { .login-card { padding: 34px 24px 28px; } }
+  </style>
+</head>
+<body>
+  <div id="top"></div>
+  <header class="omega-banner">
+    <div class="util-bar">
+      <a href="#" onclick="return false;"><span class="util-flag"></span>United States</a>
+      <span class="util-sep"></span>
+      <a class="util-login" href="/">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Log in to OMEGA
+      </a>
+    </div>
+    <nav class="main-nav">
+      <a href="https://clearskyomega.com/" class="brand" aria-label="ClearSky OMEGA — home">
+        <img src="/site-assets/clearsky-logo-light.png" alt="ClearSky OMEGA">
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a href="https://clearskyomega.com/platform.html" class="nav-link">Platform</a>
+        <a href="https://clearskyomega.com/data.html" class="nav-link">Data &amp; AI</a>
+        <a href="https://clearskyomega.com/marketplace.html" class="nav-link">Marketplace</a>
+        <a href="https://clearskyomega.com/energy.html" class="nav-link">Energy Projects</a>
+        <a href="https://clearskyomega.com/enterprise.html" class="nav-link">Enterprise</a>
+        <a href="https://clearskyomega.com/contact.html" class="nav-link">Contact</a>
+      </div>
+      <button class="nav-toggle" aria-label="Menu" onclick="toggleNav()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="nav-right">
+        <a href="https://clearskyomega.com/contact.html" class="btn-demo">Request a demo</a>
+      </div>
+    </nav>
+  </header>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <img src="/site-assets/clearsky-omega-white.png" alt="OMEGA" class="omega">
+
+      <!-- STATE 1 · sign in -->
+      <div id="paneSignIn">
+        <h1>Log in to OMEGA</h1>
+        <p class="tag">The operating platform of <b>ClearSky Energy Solutions</b>. Sign in and we'll take you to your workspace.</p>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" name="email" type="email" autocomplete="username" spellcheck="false"
+                   placeholder="you@yourcompany.com" required>
+          </div>
+          <div class="field">
+            <div class="field-row">
+              <label for="password">Password</label>
+              <button type="button" class="link-quiet" id="forgotBtn">Forgot password?</button>
+            </div>
+            <input id="password" name="password" type="password" autocomplete="current-password"
+                   placeholder="••••••••" required>
+          </div>
+          <button type="submit" class="btn-primary" id="submitBtn">
+            Log in
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </form>
+
+        <div class="login-div"><span>or</span></div>
+        <button type="button" class="btn-google" id="googleBtn">
+          <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.1z"/><path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.7-3.9-12.4-9.1H4.3v5.7C7.9 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.6 28.1c-.4-1.3-.7-2.7-.7-4.1s.3-2.8.7-4.1v-5.7H4.3C2.8 17.1 2 20.4 2 24s.8 6.9 2.3 9.8l7.3-5.7z"/><path fill="#EA4335" d="M24 10.8c3.3 0 6.2 1.1 8.5 3.3l6.3-6.3C35 4.2 30 2 24 2 15.4 2 7.9 6.9 4.3 14.2l7.3 5.7c1.7-5.2 6.6-9.1 12.4-9.1z"/></svg>
+          Continue with Google
+        </button>
+
+        <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
+
+        <div class="login-div"><span>New to ClearSky?</span></div>
+        <a href="https://clearskyomega.com/contact.html" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Request access</a>
+        <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:info@csebuilders.com">info@csebuilders.com</a>.</p>
+      </div>
+
+      <!-- STATE 2 · this account reaches more than one workspace -->
+      <div id="paneChoose" class="choose" style="display:none;">
+        <h2>Where to?</h2>
+        <p class="sub">Your account reaches more than one OMEGA workspace. We'll remember the one you pick.</p>
+        <div id="choiceList"></div>
+        <p class="note" style="text-align:left;">Signed in as <span id="chooseEmail"></span> · <button type="button" class="link-quiet" id="signOutBtn">Use a different account</button></p>
+      </div>
+
+      <!-- STATE 3 · signed in, but nothing to open yet -->
+      <div id="paneBlocked" class="choose" style="display:none;">
+        <h2 id="blockedTitle">Access pending</h2>
+        <p class="sub" id="blockedBody"></p>
+        <a href="mailto:info@csebuilders.com" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Email ClearSky</a>
+        <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="signOutBtn2">Use a different account</button></p>
+      </div>
+
+      <p class="redirect-msg" id="redirectMsg"></p>
+    </div>
+  </div>
+
+  <!-- The OMEGA loading screen: shown while we work out where this account belongs -->
+  <div class="omega-loading" id="omegaLoading" role="status" aria-live="polite">
+    <div class="mark">
+      <div class="ring"></div>
+      <div class="ring two"></div>
+      <img src="/site-assets/clearsky-omega-white.png" alt="">
+    </div>
+    <div class="status" id="loadStatus">Signing you in</div>
+    <div class="sub">ClearSky OMEGA</div>
+  </div>
+
+  <script src="/site-assets/omega.js"></script>
+
+  <script type="module">
+  /* ==========================================================================
+     OMEGA GATEWAY — one door, every tenant.
+
+     This page used to be a link to the admin console, so anyone who wasn't
+     ClearSky staff hit a wall that read "admin access only". Now it signs the
+     person in, works out which workspace their account actually reaches, and
+     sends them there. The OMEGA loading screen covers that lookup.
+
+     Tenant resolution mirrors firestore.rules deliberately — the same alias
+     fold, the same role collections, the same reading of suspended/approved —
+     so this page can never promise a door the database will refuse to open.
+     ========================================================================== */
+
+  /* ---------- 1 · FIREBASE CONFIG  ← PASTE YOURS HERE ----------------------
+     Copy it straight out of the portal's own source; it is the public web
+     config and is meant to ship in the browser. Until it's filled in, this
+     page falls back to the old "Continue to OMEGA" button rather than showing
+     a login form that cannot work. */
+  /* Read from /config.js when it is on the page — this file now ships inside
+     omega-core, so there is a single copy of the web config and no second
+     place to update when it changes. The literal is the fallback for the page
+     being opened without config.js, and it is the same public web config that
+     already ships in every tool. */
+  const FIREBASE_CONFIG = (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.firebase) || {
+    apiKey:            "AIzaSyABoM1lgOYUnd5ZadaoTMhYmA9cHa8Tyo0",
+    authDomain:        "clearsky-portal.firebaseapp.com",
+    projectId:         "clearsky-portal",
+    storageBucket:     "clearsky-portal.firebasestorage.app",
+    messagingSenderId: "742134484347",
+    appId:             "1:742134484347:web:ab0f95fd221536158481de"
+  };
+  /* The database these rules belong to. Leave as-is unless the portal opens a
+     NAMED database — the rules header calls it clearsky-portal, so if that is
+     a named database rather than the default one, put that name here. */
+  const DATABASE_ID = "(default)";
+
+  /* ---------- 2 · WHERE EACH KIND OF ACCOUNT LANDS ------------------------ */
+  /* ── THIS PAGE NOW LIVES INSIDE THE PORTAL ────────────────────────────
+     SSO-HANDOFF.md calls this Option A and it is the right one. A Firebase
+     session belongs to the origin that created it, so a sign-in on the
+     marketing site was never going to BE a session on the platform — the
+     credentials live in that origin's IndexedDB and no client code shares
+     them across domains. The page was shipping with HANDOFF='prefill', which
+     means the person signs in here and then signs in AGAIN on arrival.
+
+     Serving the same page from the platform's own origin deletes the whole
+     problem rather than solving it. The marketing site keeps the button; the
+     button points here. */
+  const PORTAL = window.location.origin;
+  const ROUTES = {
+    workspace:   PORTAL,                            // a tenant's own OMEGA workspace
+    admin:       PORTAL + "/admin/",                // ClearSky admin console
+    ops:         "https://alpha.clearskyomega.com", // ops console (reps)
+    financing:   PORTAL + "/portals/finance/",
+    marketplace: PORTAL + "/marketplace.html",
+    vdc:         PORTAL + "/vdc.html"
+  };
+  /* A tenant on its own deployment goes here; everyone else uses ROUTES.workspace. */
+  const TENANT_PORTALS = {
+    // 'fenecon.com': 'https://fenecon.clearskyomega.com'
+  };
+
+  /* ---------- 3 · HANDOFF --------------------------------------------------
+     A Firebase session belongs to the origin that created it, so signing in
+     here is not automatically a signed-in session on the portal. Pick one:
+
+       'token'   — pass a one-time token the portal exchanges for a session.
+                   Genuinely seamless: no second login. Needs the two small
+                   files in SSO-HANDOFF.md deployed to the portal first.
+       'prefill' — send the email through so the portal's own form arrives
+                   half-filled. Works today with no portal changes.
+       'same'    — this page is being served FROM the portal's own origin, so
+                   the session is already valid and nothing needs passing.
+     ------------------------------------------------------------------------ */
+  /* 'same': this page is served FROM the platform's origin, so the session it
+     creates is already the one the workspace will read. Nothing to pass, no
+     token to mint, no second login. See the note on PORTAL above. */
+  const HANDOFF = "same";
+
+  /* ---------- 4 · TENANTS -------------------------------------------------- */
+  /* The same fold as orgAlias() in firestore.rules. Add a tenant's extra
+     domains in BOTH places, or the two drift apart. */
+  const ORG_ALIAS = {
+    "fenecon.de": "fenecon.com",
+    "fenecon.us": "fenecon.com"
+  };
+  const TENANT_NAMES = {
+    "clearsky-usa.com":     "ClearSky Energy Solutions",
+    "csebuilders.com":      "ClearSky Energy Solutions",
+    "fenecon.com":          "FENECON",
+    "concordenergyusa.com": "Concord Energy USA",
+    "sunesol.com":          "SunEsol",
+    "ogisolar.com":         "OGI Solar",
+    "rexelusa.com":         "Rexel USA",
+    "moleculesystems.com":  "Molecule Systems",
+    "molecule.io":          "Molecule Systems",
+    "lightsmithenergy.com": "Lightsmith Energy",
+    "lightsmith.energy":    "Lightsmith Energy",
+    "iqgen.energy":         "IQGen"
+  };
+  const ADMIN_DOMAINS = ["clearsky-usa.com", "csebuilders.com"];
+
+  /* ====================== nothing below needs editing ====================== */
+
+  const $ = (id) => document.getElementById(id);
+  const configured = !FIREBASE_CONFIG.apiKey.startsWith("PASTE_");
+
+  const ui = {
+    signIn:  $("paneSignIn"),
+    choose:  $("paneChoose"),
+    blocked: $("paneBlocked"),
+    loading: $("omegaLoading"),
+    status:  $("loadStatus"),
+    msg:     $("formMsg"),
+    form:    $("loginForm"),
+    email:   $("email"),
+    pass:    $("password"),
+    submit:  $("submitBtn")
+  };
+
+  function showPane(name) {
+    ui.signIn.style.display  = name === "signIn"  ? "" : "none";
+    ui.choose.style.display  = name === "choose"  ? "" : "none";
+    ui.blocked.style.display = name === "blocked" ? "" : "none";
+  }
+  function loading(on, text) {
+    ui.loading.classList.toggle("on", !!on);
+    if (text) ui.status.innerHTML = text;
+    document.body.style.overflow = on ? "hidden" : "";
+  }
+  function say(text, kind) {
+    ui.msg.textContent = text || "";
+    ui.msg.className = "form-msg " + (kind || "info");
+  }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function domainOf(email) {
+    const d = String(email || "").toLowerCase().split("@")[1] || "";
+    return ORG_ALIAS[d] || d;
+  }
+  function tenantName(org) {
+    if (TENANT_NAMES[org]) return TENANT_NAMES[org];
+    const head = String(org || "").split(".")[0].replace(/[-_]+/g, " ");
+    return head ? head.replace(/\b\w/g, (c) => c.toUpperCase()) : "Your";
+  }
+  function portalFor(org) {
+    return TENANT_PORTALS[org] || ROUTES.workspace;
+  }
+
+  /* No Firebase config yet — keep the old door working rather than shipping a
+     form that fails on submit. */
+  if (!configured) {
+    ui.form.style.display = "none";
+    $("googleBtn").style.display = "none";
+    const a = document.createElement("a");
+    a.className = "btn-primary";
+    a.href = PORTAL;
+    a.innerHTML = 'Continue to OMEGA <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+    ui.form.parentNode.insertBefore(a, ui.form);
+    say("Paste the Firebase web config at the top of login.html to turn on tenant sign-in.", "info");
+  } else {
+    startGateway();
+  }
+
+  async function startGateway() {
+    const V = "https://www.gstatic.com/firebasejs/10.12.5/";
+    const [{ initializeApp }, auth, fs] = await Promise.all([
+      import(V + "firebase-app.js"),
+      import(V + "firebase-auth.js"),
+      import(V + "firebase-firestore.js")
+    ]);
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const A = auth.getAuth(app);
+    A.useDeviceLanguage();
+    const db = DATABASE_ID === "(default)"
+      ? fs.getFirestore(app)
+      : fs.getFirestore(app, DATABASE_ID);
+
+    await auth.setPersistence(A, auth.browserLocalPersistence).catch(() => {});
+
+    /* A denied or missing document is an answer, not a failure. The rules let
+       every account read its OWN role docs and nothing else, so "couldn't read
+       it" reliably means "not one of those". */
+    async function readDoc(segments) {
+      try {
+        const snap = await fs.getDoc(fs.doc(db, ...segments));
+        return snap.exists() ? snap.data() : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /* ---- Which workspaces does this account actually reach? ---------------
+       Order and conditions follow firestore.rules: omega_staff roles, the
+       isAdmin() domains, an org_members cross-org grant, then each portal that
+       keeps its own profile collection. */
+    async function resolve(user) {
+      const email = (user.email || "").toLowerCase();
+      const org = domainOf(email);
+      const uid = user.uid;
+
+      const [staff, member, fin, mkt, vdc] = await Promise.all([
+        readDoc(["omega_staff", uid]),
+        readDoc(["org_members", email]),
+        readDoc(["fin_profiles", uid]),
+        readDoc(["mkt_profiles", uid]),
+        readDoc(["vdc_profiles", uid])
+      ]);
+
+      const dests = [];
+      const isAdminDomain = ADMIN_DOMAINS.indexOf(org) !== -1;
+      const staffActive = !!staff && staff.active !== false;
+      const staffRole = staffActive ? (staff.role || "none") : "none";
+
+      if (isAdminDomain || staffRole === "admin") {
+        dests.push({ key: "admin", url: ROUTES.admin, name: "Admin console",
+                     desc: "Platform operations and client management" });
+      }
+      if (staffRole === "rep" || staffRole === "admin") {
+        dests.push({ key: "ops", url: ROUTES.ops, name: "Ops console",
+                     desc: "The intake queue and the jobs assigned to you" });
+      }
+
+      if (fin) {
+        if (fin.suspended === true) return { blocked: "suspended" };
+        if (fin.approved === false) return { blocked: "unapproved", role: fin.role };
+        dests.push({ key: "financing", url: ROUTES.financing, name: "Project Financing",
+                     desc: fin.role === "partner" ? "Deal flow and the offers you've made"
+                                                  : "Your deals and the offers on them" });
+      }
+      if (mkt) {
+        dests.push({ key: "marketplace", url: ROUTES.marketplace, name: "Distribution Marketplace",
+                     desc: mkt.role === "distributor" ? "Your catalog and incoming projects"
+                                                      : "Quotes from your distributors" });
+      }
+      if (vdc) {
+        dests.push({ key: "vdc", url: ROUTES.vdc, name: "VDC Exchange",
+                     desc: vdc.role === "operator" ? "Assets, RFQs and your quotes"
+                                                   : "Your RFQs and the quotes on them" });
+      }
+
+      /* A cross-org grant puts someone in that tenant rather than their own
+         email domain — that is exactly what org_members is for. */
+      const grantOrg = (member && member.active !== false && member.orgId) ? member.orgId : "";
+      const homeOrg = grantOrg || org;
+
+      if (homeOrg) {
+        dests.push({ key: "workspace", url: portalFor(homeOrg), org: homeOrg,
+                     name: tenantName(homeOrg) + " workspace",
+                     desc: "Projects, tools and dashboards" });
+      }
+
+      if (staffActive && staffRole === "none" && !dests.length) return { blocked: "pending-role" };
+      if (!dests.length) return { blocked: "no-workspace" };
+
+      return { dests: dests, org: homeOrg };
+    }
+
+    /* ---- Hand the session to the destination ------------------------------ */
+    async function go(dest, user) {
+      const org = dest.org || domainOf(user.email);
+      let url = dest.url + (dest.url.indexOf("?") === -1 ? "?" : "&") +
+                "tenant=" + encodeURIComponent(org) + "&via=omega-gateway";
+
+      if (HANDOFF === "prefill") {
+        url += "&email=" + encodeURIComponent(user.email || "");
+      } else if (HANDOFF === "token") {
+        try {
+          const t = await user.getIdToken(true);
+          /* Fragment, not query string: it never reaches a server log or a
+             Referer header, and the portal clears it on arrival. */
+          url += "#omega_sso=" + encodeURIComponent(t);
+        } catch (_) {
+          url += "&email=" + encodeURIComponent(user.email || "");
+        }
+      }
+      try { localStorage.setItem("omega:lastDest", dest.key); } catch (_) {}
+      window.location.replace(url);
+    }
+
+    function blockedPane(reason, role) {
+      const copy = {
+        "suspended": ["Account paused",
+          "This OMEGA account has been paused. ClearSky can lift it — email info@csebuilders.com and we'll sort it out."],
+        "unapproved": ["Waiting on approval",
+          "Your account is registered" + (role ? " as a " + role : "") +
+          ", and a ClearSky administrator approves each one before deal data opens up. You'll get an email the moment it's through."],
+        "pending-role": ["Waiting on a role",
+          "You're signed in, but your role hasn't been assigned yet. A ClearSky administrator does that from the admin console — ask whoever invited you, or email info@csebuilders.com."],
+        "no-workspace": ["No workspace yet",
+          "This email isn't attached to an OMEGA workspace. If your company is already a ClearSky customer, ask your administrator to add you."]
+      }[reason];
+      $("blockedTitle").textContent = copy[0];
+      $("blockedBody").textContent = copy[1];
+      loading(false);
+      showPane("blocked");
+    }
+
+    /* ---- The whole flow, once a user exists ------------------------------- */
+    let routing = false;
+    async function route(user, opts) {
+      if (routing) return;
+      routing = true;
+      const quick = !!(opts && opts.quick);
+      try {
+        loading(true, "Signing you in");
+        await wait(quick ? 150 : 420);
+        loading(true, "Locating your workspace");
+
+        const found = await resolve(user);
+        if (found.blocked) { routing = false; return blockedPane(found.blocked, found.role); }
+
+        /* One destination: go. Several: let them pick — unless they've already
+           picked before and are just coming back. */
+        let dest = found.dests[0];
+        if (found.dests.length > 1) {
+          let remembered = null;
+          try { remembered = localStorage.getItem("omega:lastDest"); } catch (_) {}
+          const match = found.dests.filter((d) => d.key === remembered)[0];
+          if (match) {
+            dest = match;
+          } else {
+            routing = false;
+            loading(false);
+            return chooser(found, user);
+          }
+        }
+
+        loading(true, "Opening <b>" + dest.name + "</b>");
+        await wait(340);
+        await go(dest, user);
+      } catch (err) {
+        routing = false;
+        loading(false);
+        showPane("signIn");
+        ui.submit.disabled = false;
+        say("You're signed in, but we couldn't work out which workspace to open. Try again, or email info@csebuilders.com.", "error");
+        console.error("[omega-gateway]", err);
+      }
+    }
+
+    function chooser(found, user) {
+      const list = $("choiceList");
+      list.innerHTML = "";
+      found.dests.forEach((d) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "choice";
+        b.innerHTML = '<span class="dot"></span><span class="txt">' +
+          '<span class="name"></span><span class="desc"></span></span>' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.45)"><polyline points="9 18 15 12 9 6"/></svg>';
+        b.querySelector(".name").textContent = d.name;
+        b.querySelector(".desc").textContent = d.desc;
+        b.addEventListener("click", async () => {
+          loading(true, "Opening <b>" + d.name + "</b>");
+          await wait(300);
+          await go(d, user);
+        });
+        list.appendChild(b);
+      });
+      $("chooseEmail").textContent = user.email || "";
+      showPane("choose");
+    }
+
+    /* ---- Errors, in words rather than codes ------------------------------- */
+    function friendly(err) {
+      const c = (err && err.code) || "";
+      if (c.indexOf("wrong-password") > -1 || c.indexOf("user-not-found") > -1 || c.indexOf("invalid-credential") > -1)
+        return "That email and password don't match an OMEGA account.";
+      if (c.indexOf("invalid-email") > -1)          return "Check the email address — that one isn't valid.";
+      if (c.indexOf("user-disabled") > -1)          return "This account has been disabled. Email info@csebuilders.com.";
+      if (c.indexOf("too-many-requests") > -1)      return "Too many attempts. Wait a few minutes, or reset your password.";
+      if (c.indexOf("network-request-failed") > -1) return "Can't reach OMEGA. Check your connection and try again.";
+      if (c.indexOf("popup-closed") > -1 || c.indexOf("cancelled-popup") > -1) return "";
+      if (c.indexOf("popup-blocked") > -1)          return "Your browser blocked the Google window. Allow pop-ups, or use your email and password.";
+      return "Something went wrong signing in. Try again, or email info@csebuilders.com.";
+    }
+
+    /* ---- Wiring ----------------------------------------------------------- */
+    ui.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = ui.email.value.trim();
+      const pass = ui.pass.value;
+      if (!email || !pass) { say("Enter your work email and password.", "error"); return; }
+      say("");
+      ui.submit.disabled = true;
+      loading(true, "Signing you in");
+      try {
+        const cred = await auth.signInWithEmailAndPassword(A, email, pass);
+        await route(cred.user, { quick: true });
+      } catch (err) {
+        loading(false);
+        ui.submit.disabled = false;
+        say(friendly(err), "error");
+      }
+    });
+
+    $("googleBtn").addEventListener("click", async () => {
+      say("");
+      const provider = new auth.GoogleAuthProvider();
+      const hint = ui.email.value.trim();
+      if (hint) provider.setCustomParameters({ login_hint: hint });
+      loading(true, "Signing you in");
+      try {
+        const cred = await auth.signInWithPopup(A, provider);
+        await route(cred.user, { quick: true });
+      } catch (err) {
+        loading(false);
+        const m = friendly(err);
+        if (m) say(m, "error");
+      }
+    });
+
+    $("forgotBtn").addEventListener("click", async () => {
+      const email = ui.email.value.trim();
+      if (!email) { say("Enter your work email first, then choose Forgot password.", "error"); ui.email.focus(); return; }
+      try {
+        await auth.sendPasswordResetEmail(A, email);
+        say("Reset link sent to " + email + ". It's good for one hour.", "info");
+      } catch (err) {
+        say(friendly(err), "error");
+      }
+    });
+
+    function signOut() {
+      auth.signOut(A).then(() => {
+        try { localStorage.removeItem("omega:lastDest"); } catch (_) {}
+        routing = false;
+        showPane("signIn");
+        say("");
+        ui.submit.disabled = false;
+        ui.pass.value = "";
+        ui.email.focus();
+      });
+    }
+    $("signOutBtn").addEventListener("click", signOut);
+    $("signOutBtn2").addEventListener("click", signOut);
+
+    /* Already signed in on this device: resolve and go without asking again.
+       ?stay=1 holds the page so somebody can switch accounts.
+       ?email= prefills. ?go=1 is kept from the old page and now means
+       "don't pause on the chooser if we already know the answer". */
+    const params = new URLSearchParams(location.search);
+    if (params.get("email")) ui.email.value = params.get("email");
+    if (params.get("stay") === "1") {
+      say("Signed out. Enter your work email to continue.", "info");
+    } else {
+      auth.onAuthStateChanged(A, (user) => {
+        if (user) route(user, { quick: params.get("go") === "1" });
+      });
+    }
+  }
+  </script>
+</body>
+</html>
