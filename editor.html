@@ -32062,6 +32062,8 @@ function _o2VerbsClass(key){
   h += _o2Btn('+ Add', 'o2Add()', true, 'Open the placement flow for this class');
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
+  h += _o2Btn('\u21bb Rotate', 'o2Rotate()', !!one,
+              'Turn the selection about its own centre \u2014 the parcel line and anything locked stay put');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2,
               'Space this class evenly along its dominant axis');
   h += _o2Btn('\u2699 Edit group', 'o2EditGroup()', n>0, 'Open the editor for this class');
@@ -32098,6 +32100,8 @@ function _o2VerbsMulti(){
      +   '<span>'+n+' selected</span></div>';
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
+  h += _o2Btn('\u21bb Rotate', 'o2Rotate()', n>0,
+              'Turn every picked item about the centre of the set');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2, 'Space the picked items evenly');
   h += _o2Btn('\u2715 Delete', 'o2MultiDelete()', n>0, 'Delete every picked item', true);
   h += _o2Btn('\u21BA Clear', 'o2MultiClear()', n>0, 'Drop the selection');
@@ -32300,6 +32304,125 @@ function _o2Nudge(dxPx, dyPx){
   _o2Repaint();
   _o2Commit();
 }
+
+/* ── ROTATE THE WHOLE CLASS, OR THE PICKED SET ────────────────────────
+   Tom: "we had another tool that we used for like moving cluster
+   placements, look into maybe using that logic or engine."
+
+   That tool is this one. o2 already owns cluster placement — the layer
+   chips along the canvas ARE its classes, o2MoveTo nudges the selection,
+   o2Align spaces it, and _o2Nudge already gets the fiddly parts right:
+   conduits move as well as shapes, everything is re-anchored so it does not
+   spring back on the next pan, and attached runs are re-welded afterwards.
+   It had no rotate. Adding one here rather than in a parallel tool means
+   there is ONE selection model to learn instead of two.
+
+   ROTATION IS ABOUT THE SELECTION'S OWN CENTROID, so a cluster turns where
+   it stands. Three things turn: the POSITION of every member, the BODY of
+   each one (a pod rotated about a point but drawn axis-aligned is in the
+   right place facing the wrong way), and solar table angles, because a
+   table array rotated only by position keeps its rows pointing the old way.
+
+   Anything locked or marked as the property line is refused outright — the
+   parcel is not equipment, and OmegaLock exists so a person can say the
+   same about an exclusion they traced. */
+function o2Targets(){
+  return S.o2Multi ? (S.o2Picked||[]).slice()
+                   : (function(){ var s=_o2SoleSelection(); return s?[s]:[]; })();
+}
+
+function _o2Resolve(t){
+  var arr = (t.kind==='element') ? S.elements
+          : (t.kind==='conduit') ? S.conduits : S.shapes;
+  return (arr||[]).filter(function(x){ return x.id===t.id; })[0] || null;
+}
+
+function _o2Centroid(objs){
+  var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,got=false;
+  function eat(x,y){ if(!isFinite(x)||!isFinite(y))return; if(x<x1)x1=x; if(y<y1)y1=y; if(x>x2)x2=x; if(y>y2)y2=y; got=true; }
+  objs.forEach(function(o){
+    if(!o) return;
+    if(o.pts) o.pts.forEach(function(p){ eat(p.x,p.y); });
+    if(typeof o.x==='number'){ var w=+o.w||0, h=+o.h||(w*0.35); eat(o.x,o.y); eat(o.x+w,o.y+h); }
+  });
+  return got ? { cx:(x1+x2)/2, cy:(y1+y2)/2 } : null;
+}
+
+function _o2Spin(deg){
+  var targets = o2Targets();
+  if(!targets.length || !deg) return 0;
+
+  var objs = targets.map(_o2Resolve).filter(Boolean).filter(function(o){
+    return !(o.locked || o.isSiteBoundary);
+  });
+  if(!objs.length) return 0;
+
+  var c = _o2Centroid(objs); if(!c) return 0;
+  var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r);
+  function turn(x,y){ var dx=x-c.cx, dy=y-c.cy; return { x:c.cx+dx*cos-dy*sin, y:c.cy+dx*sin+dy*cos }; }
+  function bump(o){
+    var a=((+o.rot||0)+deg)%360; if(a>180)a-=360; if(a<-180)a+=360;
+    o.rot=Math.round(a*10)/10;
+    if(typeof o._geoRot==='number') o._geoRot=o.rot;
+  }
+
+  objs.forEach(function(o){
+    if(o.pts) o.pts = o.pts.map(function(p){
+      var q=turn(p.x,p.y); for(var k in p) if(k!=='x'&&k!=='y') q[k]=p[k]; return q;
+    });
+    if(typeof o.cx==='number'){ var cc=turn(o.cx,o.cy); o.cx=cc.x; o.cy=cc.y; }
+    if(o.boundary) o.boundary = o.boundary.map(function(p){ return turn(p.x,p.y); });
+    if(o.exclusions) o.exclusions = o.exclusions.map(function(z){
+      return z.map(function(p){ return turn(p.x,p.y); });
+    });
+    if(o.tables) o.tables = o.tables.map(function(q){
+      var cpy=JSON.parse(JSON.stringify(q)), t2=turn(q.x,q.y); cpy.x=t2.x; cpy.y=t2.y; bump(cpy); return cpy;
+    });
+    /* An element is positioned by its top-left, so it turns about its own
+       centre or a rotated block also drifts by half its size. */
+    if(typeof o.x==='number' && !o.pts){
+      var w=+o.w||0, h=+o.h||(w*0.35);
+      var cc2=turn(o.x+w/2, o.y+h/2);
+      o.x=cc2.x-w/2; o.y=cc2.y-h/2;
+    }
+    /* An axis-aligned trench lane describes nothing once the run is off
+       axis; the re-weld below rebuilds from the geometry that exists now. */
+    if(o.laneY!==undefined) delete o.laneY;
+    if(o.spineMinX!==undefined) delete o.spineMinX;
+    bump(o);
+  });
+
+  /* Same tail as _o2Nudge: re-anchor exactly what moved, re-weld attached
+     runs, repaint, commit. An object moved in pixels but still carrying its
+     old lat/lng is what makes things snap back on the next pan. */
+  try{
+    objs.forEach(function(o){
+      if(typeof _geoRestampOne==='function') _geoRestampOne(o);
+      try{ if(window.OmegaReanchor) OmegaReanchor(o.id); }catch(e){}
+    });
+    try{ if(typeof rerouteTrenchConduits==='function') rerouteTrenchConduits(); }catch(e){}
+  }catch(e){}
+  _o2Repaint();
+  _o2Commit();
+  return objs.length;
+}
+
+function o2Rotate(){
+  var targets = o2Targets();
+  if(!targets.length){ alert('Pick something first — a class, or items in Manage multiple.'); return; }
+  var raw = prompt('Rotate the selection by how many degrees?  '
+                 + '(90 for a quarter turn, -90 the other way)', '90');
+  if(raw===null) return;
+  var deg = parseFloat(raw);
+  if(!isFinite(deg)){ alert('Enter a number of degrees.'); return; }
+  var n = _o2Spin(deg);
+  if(!n){ alert('Nothing in the selection can be rotated — locked items and the property line are held.'); return; }
+  if(typeof showBanner==='function'){
+    showBanner('cal', 'Turned ' + n + ' item' + (n===1?'':'s') + ' by ' + deg + '\u00b0 about the selection centre.');
+  }
+}
+window.o2Rotate = o2Rotate;
+window._o2Spin = _o2Spin;
 
 /* Even spacing along whichever axis the group is longer in. */
 function o2Align(){
