@@ -4434,6 +4434,94 @@
     wireDrawer(r);
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     GRID ATLAS, THE SAME WAY THE EDITOR DOES IT
+
+     The circuit block answers "how many kW will this feeder still take",
+     from ComEd's hosting-capacity layer. That layer is Illinois-only and
+     only resolves above zoom 14, so a site outside it — or one the layer
+     simply has nothing for — reads "no circuit attributed" and the panel has
+     nothing further to say. It said nothing further.
+
+     /api/grid-atlas answers a DIFFERENT question from national data: what
+     transmission and substations are near this point, and how far. That is
+     available for every site in the country, including every one the
+     hosting-capacity layer cannot see.
+
+     THE TWO ARE NOT INTERCHANGEABLE AND THIS MUST NOT IMPLY THEY ARE. A
+     345 kV line four miles away is not deliverable kW on a distribution
+     feeder. Presenting the first as the second is how a site gets sized
+     against a wire it is not connected to — so this block carries its own
+     heading, its own units, and a sentence saying which question it
+     answered.
+
+     Same service the editor and the console call, through the shared client,
+     so there is one endpoint contract rather than three. Coordinates go
+     straight across: the site is already on a map, so the service's
+     geocoding step — most of its complexity and the source of its "location
+     is approximate" findings — is skipped entirely. */
+  var _ga = {};
+
+  function gridAtlasHtml(r) {
+    var st = _ga[r.id];
+    var head = '<div class="sec"><h4>Grid Atlas \u00b7 transmission near this point</h4>';
+    if (!st) {
+      return head +
+        '<button id="gaRun" data-noselect="1" data-ga-id="' + esc(r.id) + '">Look up the grid here</button>' +
+        '<p class="note">Nearest substations and transmission from national data \u2014 available ' +
+        'everywhere, including where the hosting-capacity layer has nothing. ' +
+        '<b>This is not circuit capacity.</b> It says what the grid looks like around this ' +
+        'point, not how many kW the feeder will take.</p></div>';
+    }
+    if (st.busy) return head + '<p class="note">Asking Grid Atlas\u2026</p></div>';
+    if (st.err)  return head + '<p class="note bad">' + esc(st.err) + '</p>' +
+      '<button id="gaRun" data-noselect="1" data-ga-id="' + esc(r.id) + '">Try again</button></div>';
+
+    var g = st.sum;
+    return head +
+      '<div class="grid2">' +
+        g("Nearest substation", g.nearestSubKm == null ? "\u2014"
+            : (g.nearestSubKm < 10 ? g.nearestSubKm.toFixed(1) : Math.round(g.nearestSubKm)) + " km") +
+        g("Highest voltage nearby", g.maxKv ? fmt(g.maxKv) + " kV" : "not published") +
+        g("Substations found", String(g.substations)) +
+        g("Transmission lines", String(g.lines)) +
+      '</div>' +
+      (g.nearestSubName ? '<p class="note">Nearest is <b>' + esc(g.nearestSubName) + '</b>.</p>' : '') +
+      (g.findings && g.findings.length
+        ? '<div style="margin-top:8px">' + g.findings.slice(0, 4).map(function (f) {
+            return '<div class="note' + (f.severity === 'blocker' ? ' bad' : '') + '">' +
+                   esc(f.text || '') + '</div>'; }).join('') + '</div>'
+        : '') +
+      '<p class="note"><b>Transmission proximity, not feeder capacity.</b> It does not say how ' +
+      'many kW this circuit will accept \u2014 that is the circuit block above, and where that ' +
+      'is blank it is still blank.</p></div>';
+  }
+
+  function runGridAtlas(r) {
+    if (!root_OmegaGridAtlas()) {
+      _ga[r.id] = { err: 'The Grid Atlas client did not load on this page.' };
+      redrawDrawer(r); return;
+    }
+    if (r.lat == null || r.lon == null) {
+      _ga[r.id] = { err: 'This site has no coordinates to look up.' };
+      redrawDrawer(r); return;
+    }
+    _ga[r.id] = { busy: true };
+    redrawDrawer(r);
+    var pick = sizePick(r);
+    window.OmegaGridAtlas.run({
+      lat: r.lat, lng: r.lon, address: r.addr || '',
+      sizeMw: pick.kw ? pick.kw / 1000 : 0
+    }).then(function (res) {
+      _ga[r.id] = { sum: window.OmegaGridAtlas.summarise(res), raw: res };
+      redrawDrawer(r);
+    })['catch'](function (e) {
+      _ga[r.id] = { err: (e && e.message) || 'Grid Atlas could not be reached.' };
+      redrawDrawer(r);
+    });
+  }
+  function root_OmegaGridAtlas(){ return typeof window.OmegaGridAtlas !== 'undefined'; }
+
   function sizerHtml(r, pick) {
     if (pick.cap == null) return '';
     return '<div class="sizer" data-noselect="1">' +
@@ -4747,6 +4835,7 @@
     /* The report card leads, then the save control, then the detail. A rep
        opening a card wants the verdict first and the paperwork after. */
     h.push(reportCardForRecord(r));
+    h.push(gridAtlasHtml(r));
     h.push(phaseBlockHtml(r));
     h.push(packetBlockHtml(r));
     h.push(mapsLinksHtml(r));
@@ -5273,6 +5362,13 @@
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
        not the card behind it. */
+    var ga = e.target.closest && e.target.closest("[data-ga-id]");
+    if (ga) {
+      e.preventDefault(); e.stopPropagation();
+      var gr = ST.byId[ga.getAttribute("data-ga-id")];
+      if (gr) runGridAtlas(gr);
+      return;
+    }
     var hb = e.target.closest && e.target.closest("[data-hrs]");
     if (hb) {
       e.preventDefault(); e.stopPropagation();
@@ -5843,5 +5939,6 @@
   setTimeout(function () { run(true); }, 200);
 })();
 </script>
+<script src="/omega-grid-atlas-client.js"></script>
 </body>
 </html>
