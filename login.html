@@ -35,134 +35,182 @@
   <title>Log in · ClearSky OMEGA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/site-assets/omega.css">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site-assets/omega-sheet.css">
   <style>
-    .login-wrap { min-height: calc(100vh - 104px); display: flex; align-items: center; justify-content: center; padding: 40px 20px;
-      background: radial-gradient(1000px 500px at 50% -10%, rgba(0,174,239,0.14), transparent 60%), var(--cs-navy); }
-    .login-card { width: 100%; max-width: 440px; background: rgba(255,255,255,0.04); border: 0.5px solid var(--cs-border-blue);
-      border-radius: 18px; padding: 44px 40px 34px; text-align: center; box-shadow: var(--shadow-lg); }
-    .login-card img.omega { height: 58px; width: auto; display: block; margin: 0 auto 22px; }
-    .login-card h1 { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #fff; margin-bottom: 8px; }
-    .login-card .tag { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 28px; }
-    .login-card .tag b { color: var(--cs-blue-bright); font-weight: 600; }
-    .login-card .btn-primary { width: 100%; justify-content: center; }
-    .login-div { display: flex; align-items: center; gap: 12px; margin: 22px 0; }
-    .login-div::before, .login-div::after { content: ''; flex: 1; height: 0.5px; background: rgba(255,255,255,0.14); }
-    .login-div span { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
-    .login-card .note { margin-top: 24px; font-size: 12px; color: rgba(255,255,255,0.4); line-height: 1.6; }
-    .login-card .note a { color: var(--cs-blue-bright); text-decoration: none; }
-    .redirect-msg { margin-top: 16px; font-size: 12.5px; color: rgba(255,255,255,0.6); min-height: 0; }
+    /* ── THE FRONT DOOR, ON THE SAME PAPER AS THE SITE ─────────────────
+       clearskyomega.com is a drawing set now. This page is the first thing
+       a customer sees after clicking Log in on it, so it is the one page
+       where a change of identity is most obviously a seam. Same paper, same
+       grid, same hairlines, same red — the card is a sheet with a title
+       block, and the workspace chooser is a schedule of destinations.
 
-    /* --- Sign-in form --- */
-    .field { text-align: left; margin-bottom: 16px; }
-    .field label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
-      color: rgba(255,255,255,0.55); margin-bottom: 7px; }
-    .field input {
-      width: 100%; font-family: inherit; font-size: 14.5px; color: #fff;
-      background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.18);
-      border-radius: 10px; padding: 13px 14px; transition: border-color 0.15s, background 0.15s;
+       Every class name here is one the markup or the sign-in script already
+       uses. Nothing was renamed: this is a change of appearance on a page
+       whose only job is to work. */
+
+    .login-wrap { min-height: calc(100vh - 62px); display: flex; align-items: center;
+                  justify-content: center; padding: 48px 20px; }
+    .login-card { width: 100%; max-width: 470px; background: var(--pa-2);
+                  border: 1px solid var(--rule); box-shadow: var(--sh);
+                  padding: 40px 38px 30px; text-align: center; }
+
+    /* The wordmark, drawn rather than loaded — see the note in the markup. */
+    .login-card .brand.omega { display: inline-flex; font-size: 19px; margin-bottom: 22px; }
+    .login-card .brand.omega .dot { width: 17px; height: 17px; border-width: 2.6px; }
+
+    .login-card h1 { font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800;
+                     letter-spacing: -0.028em; margin-bottom: 9px; }
+    .login-card .tag { font-size: 14px; color: var(--ink-2); line-height: 1.6; margin-bottom: 26px; }
+    .login-card .tag b { color: var(--blue); font-weight: 600; }
+
+    .btn-primary {
+      width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+      background: var(--red); color: #fff; border: 1px solid transparent; padding: 13px 20px;
+      text-decoration: none; transition: background .16s;
     }
-    .field input::placeholder { color: rgba(255,255,255,0.3); }
-    .field input:hover { border-color: rgba(255,255,255,0.3); }
-    .field input:focus { outline: none; border-color: var(--cs-blue-bright); background: rgba(255,255,255,0.07);
-      box-shadow: 0 0 0 3px rgba(0,174,239,0.16); }
+    .btn-primary:hover { background: #C13D22; }
+    button:disabled { opacity: .5; pointer-events: none; }
+
+    .login-div { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+    .login-div::before, .login-div::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+    .login-div span { font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+                      letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+
+    .login-card .note { margin-top: 22px; font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+    .login-card .note a { color: var(--blue); text-decoration: none; }
+    .redirect-msg { margin-top: 16px; font-size: 12.5px; color: var(--ink-2); }
+
+    /* ── sign-in form ─────────────────────────────────────────────── */
+    .field { text-align: left; margin-bottom: 15px; }
+    .field label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px;
+                   font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+                   color: var(--ink-3); margin-bottom: 7px; }
+    .field input { width: 100%; font-family: inherit; font-size: 14.5px; color: var(--ink);
+                   background: var(--pa); border: 1px solid var(--rule); padding: 12px 13px;
+                   transition: border-color .15s, background .15s; }
+    .field input::placeholder { color: var(--ink-3); }
+    .field input:hover { border-color: rgba(20,23,26,0.3); }
+    .field input:focus { outline: none; border-color: var(--blue); background: var(--pa-2);
+                         box-shadow: 0 0 0 3px rgba(43,95,168,0.13); }
     .field-row { display: flex; align-items: baseline; justify-content: space-between; }
-    .link-quiet { background: none; border: 0; padding: 0; font-family: inherit; font-size: 11.5px; color: var(--cs-blue-bright);
-      cursor: pointer; text-decoration: none; }
+    .link-quiet { background: none; border: 0; padding: 0; font-family: inherit; font-size: 11.5px;
+                  color: var(--blue); cursor: pointer; text-decoration: none; }
     .link-quiet:hover { text-decoration: underline; }
 
-    .btn-google {
-      width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-      font-family: inherit; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
-      background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.22);
-      border-radius: 10px; padding: 13px 16px; transition: background 0.15s, border-color 0.15s;
-    }
-    .btn-google:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.34); }
-    button.btn-primary { font-family: inherit; cursor: pointer; border: 0; }
-    button:disabled { opacity: 0.55; pointer-events: none; }
+    .btn-google { width: 100%; display: inline-flex; align-items: center; justify-content: center;
+                  gap: 10px; font-family: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+                  cursor: pointer; background: var(--pa-2); border: 1px solid var(--rule);
+                  padding: 12px 16px; transition: border-color .15s; }
+    .btn-google:hover { border-color: var(--ink); }
 
-    .form-msg { margin-top: 14px; font-size: 12.5px; line-height: 1.55; text-align: left; min-height: 16px; }
-    .form-msg.error { color: #FF9C8A; }
-    .form-msg.info { color: rgba(255,255,255,0.62); }
+    /* Both ghost buttons carried inline color:#fff for the old navy card.
+       Inline wins over any rule here, so on paper they were white text on
+       white and the "Request access" action simply was not there. The
+       overrides are gone from the markup; this is the rule that replaces
+       them, and it works on either ground because it names a token. */
+    .btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+                 font-family: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+                 background: var(--pa-2); border: 1px solid var(--rule); padding: 12px 18px;
+                 text-decoration: none; cursor: pointer; transition: border-color .15s; }
+    .btn-ghost:hover { border-color: var(--ink); }
 
-    /* --- Workspace chooser (only when one account reaches more than one) --- */
+    .form-msg { margin-top: 13px; font-size: 12.5px; line-height: 1.55; text-align: left; min-height: 16px; }
+    .form-msg.error { color: var(--red); }
+    .form-msg.info  { color: var(--ink-2); }
+
+    /* ── the chooser, as a schedule of destinations ───────────────── */
     .choose { text-align: left; }
-    .choose h2 { font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 6px; }
-    .choose p.sub { font-size: 13px; color: rgba(255,255,255,0.55); margin-bottom: 20px; line-height: 1.55; }
-    .choice {
-      display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; cursor: pointer;
-      background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.16); border-radius: 12px;
-      padding: 14px 15px; margin-bottom: 10px; font-family: inherit; transition: border-color 0.15s, background 0.15s;
-    }
-    .choice:hover { background: rgba(0,174,239,0.09); border-color: var(--cs-blue-bright); }
-    .choice:focus-visible { outline: 2px solid var(--cs-blue-bright); outline-offset: 2px; }
-    .choice .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cs-blue-bright); flex-shrink: 0; }
+    .choose h2 { font-family: 'Archivo', sans-serif; font-size: 21px; font-weight: 800;
+                 letter-spacing: -0.024em; margin-bottom: 7px; }
+    .choose p.sub { font-size: 13.5px; color: var(--ink-2); margin-bottom: 18px; line-height: 1.55; }
+    /* One shared border down the list rather than a stack of separate cards:
+       these are rows in a schedule, and they should read as one object. */
+    #choiceList { border: 1px solid var(--rule); }
+    .choice { display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+              cursor: pointer; background: var(--pa-2); border: 0;
+              border-bottom: 1px solid var(--rule-soft); padding: 14px 15px;
+              font-family: inherit; transition: background .14s; }
+    #choiceList .choice:last-child { border-bottom: 0; }
+    .choice:hover { background: rgba(43,95,168,0.05); }
+    .choice:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+    .choice .dot { width: 7px; height: 7px; background: var(--blue); flex-shrink: 0; }
     .choice .txt { flex: 1; }
-    .choice .name { display: block; font-size: 14px; font-weight: 600; color: #fff; }
-    .choice .desc { display: block; font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .choice .name { display: block; font-size: 14px; font-weight: 700; color: var(--ink); }
+    .choice .desc { display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+    .choice .chev { color: var(--ink-3); flex-shrink: 0; }
 
-    /* --- The OMEGA loading screen --- */
-    .omega-loading {
-      position: fixed; inset: 0; z-index: 900; display: none;
+    /* NOT SWITCHED ON YET, AND IT SHOULD LOOK LIKE IT.
+       The script adds .soon to a surface nobody can open, and clicking one
+       returns a note instead of going anywhere. Nothing styled that class,
+       so it sat in the list looking exactly as available as the workspace
+       above it — the only clue was wording buried in the description. */
+    .choice.soon { background: repeating-linear-gradient(45deg,
+        var(--pa-2), var(--pa-2) 7px, rgba(20,23,26,0.022) 7px, rgba(20,23,26,0.022) 14px); }
+    .choice.soon .dot { background: var(--ink-3); }
+    .choice.soon .name { color: var(--ink-2); }
+    .choice.soon .chev { opacity: .4; }
+
+    /* ── the loading takeover ─────────────────────────────────────────
+       Left dark on purpose. It covers the screen while the account is
+       resolved, and a hand-off from paper to a working screen reads as the
+       system doing something — it is also the one place the white mark is
+       the right asset. */
+    .omega-loading { position: fixed; inset: 0; z-index: 900; display: none;
       flex-direction: column; align-items: center; justify-content: center; gap: 26px;
-      background: radial-gradient(900px 500px at 50% 40%, rgba(0,174,239,0.16), transparent 65%), var(--cs-navy);
-    }
+      background: radial-gradient(900px 500px at 50% 40%, rgba(43,95,168,0.22), transparent 65%), var(--navy); }
     .omega-loading.on { display: flex; }
     .omega-loading .mark { position: relative; display: grid; place-items: center; width: 152px; height: 152px; }
     .omega-loading .mark img { height: 58px; width: auto; position: relative; z-index: 2; }
-    .omega-loading .ring {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 1px solid rgba(0,174,239,0.5); border-top-color: transparent; border-left-color: transparent;
-      animation: omega-spin 1.15s linear infinite;
-    }
-    .omega-loading .ring.two { inset: 17px; border-color: rgba(0,174,239,0.22); border-bottom-color: transparent;
-      animation-duration: 1.9s; animation-direction: reverse; }
+    .omega-loading .ring { position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(111,168,232,0.55); border-top-color: transparent;
+      border-left-color: transparent; animation: omega-spin 1.15s linear infinite; }
+    .omega-loading .ring.two { inset: 17px; border-color: rgba(111,168,232,0.24);
+      border-bottom-color: transparent; animation-duration: 1.9s; animation-direction: reverse; }
     @keyframes omega-spin { to { transform: rotate(360deg); } }
-    .omega-loading .status { font-size: 14px; color: rgba(255,255,255,0.72); min-height: 20px; text-align: center; padding: 0 24px; }
+    .omega-loading .status { font-size: 14px; color: rgba(230,236,242,0.78); min-height: 20px;
+                             text-align: center; padding: 0 24px; }
     .omega-loading .status b { color: #fff; font-weight: 600; }
-    .omega-loading .sub { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.3); }
+    .omega-loading .sub { font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+                          letter-spacing: .16em; text-transform: uppercase; color: rgba(230,236,242,0.42); }
+
     @media (prefers-reduced-motion: reduce) {
-      .omega-loading .ring { animation: none; border-color: rgba(0,174,239,0.3); border-top-color: rgba(0,174,239,0.3); border-left-color: rgba(0,174,239,0.3); }
+      .omega-loading .ring { animation: none; border-color: rgba(111,168,232,0.32); }
     }
-    @media (max-width: 520px) { .login-card { padding: 34px 24px 28px; } }
+    @media (max-width: 520px) { .login-card { padding: 30px 22px 26px; } }
   </style>
 </head>
-<body>
+<body class="sheet">
   <div id="top"></div>
-  <header class="omega-banner">
-    <div class="util-bar">
-      <a href="#" onclick="return false;"><span class="util-flag"></span>United States</a>
-      <span class="util-sep"></span>
-      <a class="util-login" href="/">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Log in to OMEGA
-      </a>
+  <!-- The marketing site's header, in the identity the marketing site now
+       uses. The old banner leaned on /site-assets/omega.css, which this page
+       no longer loads; it also called toggleNav(), a function that has never
+       been defined anywhere in this file — the menu button did nothing on
+       every screen size it appeared at. Gone rather than reimplemented: the
+       six links fit without it. -->
+  <header class="hd">
+    <div class="wrap hd-in">
+      <a class="brand" href="https://clearskyomega.com/"><span class="dot"></span>ClearSky&nbsp;<em>OMEGA</em></a>
+      <nav>
+        <a href="https://clearskyomega.com/platform.html">Platform</a>
+        <a href="https://clearskyomega.com/data.html">Data &amp; AI</a>
+        <a href="https://clearskyomega.com/marketplace.html">Marketplace</a>
+        <a href="https://clearskyomega.com/energy.html">Energy projects</a>
+        <a href="https://clearskyomega.com/enterprise.html">Enterprise</a>
+      </nav>
+      <div class="hd-r">
+        <a class="btn btn-r" href="https://clearskyomega.com/contact.html">Request a demo</a>
+      </div>
     </div>
-    <nav class="main-nav">
-      <a href="https://clearskyomega.com/" class="brand" aria-label="ClearSky OMEGA — home">
-        <img src="/site-assets/clearsky-logo-light.png" alt="ClearSky OMEGA">
-      </a>
-      <div class="nav-links" id="navLinks">
-        <a href="https://clearskyomega.com/platform.html" class="nav-link">Platform</a>
-        <a href="https://clearskyomega.com/data.html" class="nav-link">Data &amp; AI</a>
-        <a href="https://clearskyomega.com/marketplace.html" class="nav-link">Marketplace</a>
-        <a href="https://clearskyomega.com/energy.html" class="nav-link">Energy Projects</a>
-        <a href="https://clearskyomega.com/enterprise.html" class="nav-link">Enterprise</a>
-        <a href="https://clearskyomega.com/contact.html" class="nav-link">Contact</a>
-      </div>
-      <button class="nav-toggle" aria-label="Menu" onclick="toggleNav()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <div class="nav-right">
-        <a href="https://clearskyomega.com/contact.html" class="btn-demo">Request a demo</a>
-      </div>
-    </nav>
   </header>
 
   <div class="login-wrap">
     <div class="login-card">
-      <img src="/site-assets/clearsky-omega-white.png" alt="OMEGA" class="omega">
+      <!-- clearsky-omega-white.png is white on transparent: on the navy
+           card it read, on paper it is invisible. The wordmark is drawn in
+           CSS instead, so it cannot be wrong on either ground. -->
+      <a class="brand omega" href="https://clearskyomega.com/"><span class="dot"></span>ClearSky&nbsp;<em>OMEGA</em></a>
 
       <!-- STATE 1 · sign in -->
       <div id="paneSignIn">
@@ -198,7 +246,7 @@
         <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
 
         <div class="login-div"><span>New to ClearSky?</span></div>
-        <a href="https://clearskyomega.com/contact.html" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Request access</a>
+        <a href="https://clearskyomega.com/contact.html" class="btn-ghost" style="width:100%;justify-content:center">Request access</a>
         <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</p>
       </div>
 
@@ -217,7 +265,7 @@
       <div id="paneBlocked" class="choose" style="display:none;">
         <h2 id="blockedTitle">Access pending</h2>
         <p class="sub" id="blockedBody"></p>
-        <a href="mailto:dev@clearsky-usa.com" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Email ClearSky</a>
+        <a href="mailto:dev@clearsky-usa.com" class="btn-ghost" style="width:100%;justify-content:center">Email ClearSky</a>
         <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="signOutBtn2">Use a different account</button></p>
       </div>
 
@@ -790,7 +838,7 @@
         b.className = "choice";
         b.innerHTML = '<span class="dot"></span><span class="txt">' +
           '<span class="name"></span><span class="desc"></span></span>' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.45)"><polyline points="9 18 15 12 9 6"/></svg>';
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chev"><polyline points="9 18 15 12 9 6"/></svg>';
         b.querySelector(".name").textContent = d.name;
         b.querySelector(".desc").textContent =
           (d.comingSoon ? "Not switched on yet \u00b7 " : "") + d.desc;

@@ -1,0 +1,329 @@
+/* ============================================================
+   ClearSky OMEGA — the drawing-set identity
+   © 2025–2026 ClearSky Energy Solutions LLC.
+
+   The site used to look like every other dark enterprise SaaS
+   page. This looks like the thing the product actually makes: a
+   drawing sheet. Drafting paper, a blue grid, hairline rules,
+   sheet numbers, a title block, and one red accent used sparingly
+   enough that it still means something when it appears.
+
+   The conceit earns its keep because it is TRUE — OMEGA's output
+   is a drawing set, and the claim of the page is that the set is
+   live. A visitor reading a sheet index is already being told how
+   the product is organised.
+   ============================================================ */
+
+:root {
+  --pa: #F5F4F0;          /* paper */
+  --pa-2: #FFFFFF;        /* a sheet laid on the paper */
+  --ink: #14171A;         /* pencil, near-black but never pure */
+  --ink-2: #5B6672;       /* secondary text */
+  --ink-3: #8A94A0;       /* captions, title-block labels */
+  --blue: #2B5FA8;        /* drafting blue: rules, sheet numbers, links */
+  --blue-2: #1E4680;
+  --blue-tint: rgba(43,95,168,0.07);
+  --red: #D9482B;         /* the ONE accent: primary action, live state */
+  --navy: #16202B;        /* the dark band */
+  --green: #2E7D5B;       /* approved / permit-ready */
+  --rule: rgba(20,23,26,0.16);
+  --rule-soft: rgba(20,23,26,0.09);
+  --sh: 0 1px 0 rgba(20,23,26,0.04), 0 14px 34px rgba(20,23,26,0.07);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body.sheet {
+  background: var(--pa);
+  /* The drafting grid. Two scales, like real paper: a fine 8 mm and a
+     heavier 40 mm, so the eye reads a sheet rather than graph paper. */
+  background-image:
+    linear-gradient(var(--blue-tint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--blue-tint) 1px, transparent 1px),
+    linear-gradient(rgba(43,95,168,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43,95,168,0.035) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+.sheet a { color: inherit; }
+.sheet img { max-width: 100%; }
+.wrap { width: min(1180px, 100% - 48px); margin-inline: auto; }
+
+/* ── type ─────────────────────────────────────────────────── */
+.sheet h1, .sheet h2, .sheet h3, .dsp {
+  font-family: 'Archivo', 'Inter', system-ui, sans-serif;
+  font-weight: 800; letter-spacing: -0.028em; line-height: 1.03;
+  text-wrap: balance;
+}
+.sheet h1 { font-size: clamp(38px, 5.6vw, 68px); }
+.sheet h2 { font-size: clamp(27px, 3.5vw, 42px); }
+.sheet h3 { font-size: clamp(19px, 2vw, 25px); letter-spacing: -0.018em; }
+.lede { font-size: clamp(15px, 1.35vw, 17.5px); color: var(--ink-2); max-width: 56ch; }
+
+/* Mono is the drafting voice: sheet numbers, title-block labels, tags. */
+.mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace; }
+.tblabel {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 9.5px; font-weight: 500; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+/* ── the paper devices ────────────────────────────────────── */
+.panel { background: var(--pa-2); border: 1px solid var(--rule); box-shadow: var(--sh); }
+
+/* A revision chip, as it appears in a title block. */
+.rev {
+  display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid var(--rule); background: var(--pa-2);
+  padding: 7px 14px; font-size: 11.5px; font-weight: 500; color: var(--ink-2);
+}
+.rev i { width: 6px; height: 6px; border-radius: 50%; background: var(--red); font-style: normal;
+         box-shadow: 0 0 0 3px rgba(217,72,43,0.16); }
+
+/* A sheet number badge — the blue tag that opens each section. */
+.sheetno {
+  display: inline-block; background: var(--blue); color: #fff;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em;
+  padding: 5px 11px; margin-bottom: 18px;
+}
+
+/* A ruled divider carrying a label, the way a drawing separates zones. */
+.divider { display: flex; align-items: center; gap: 18px; margin: 74px 0 60px; }
+.divider::before, .divider::after { content: ''; height: 1px; background: var(--blue); opacity: .38; flex: 1; }
+.divider span {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--blue);
+}
+
+/* ── buttons ──────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 13px 22px; font-size: 14px; font-weight: 600;
+  text-decoration: none; border: 1px solid transparent; cursor: pointer;
+  transition: background .16s, color .16s, border-color .16s;
+}
+.btn-r { background: var(--red); color: #fff; }
+.btn-r:hover { background: #C13D22; }
+.btn-o { background: var(--pa-2); color: var(--ink); border-color: var(--rule); }
+.btn-o:hover { border-color: var(--ink); }
+.btn-b { background: var(--blue); color: #fff; }
+.btn-b:hover { background: var(--blue-2); }
+.btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+/* ── header ───────────────────────────────────────────────── */
+.hd { border-bottom: 1px solid var(--rule); background: rgba(245,244,240,0.92);
+      backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 40; }
+.hd-in { display: flex; align-items: center; gap: 30px; height: 62px; }
+.brand { display: flex; align-items: center; gap: 9px; font-family: 'Archivo', sans-serif;
+         font-weight: 800; font-size: 16.5px; letter-spacing: -0.02em; text-decoration: none; }
+.brand em { font-style: normal; color: var(--blue); }
+.brand .dot { width: 15px; height: 15px; border: 2.4px solid var(--ink); border-radius: 50%;
+              display: grid; place-items: center; }
+.brand .dot::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--blue); }
+.hd nav { display: flex; gap: 24px; margin-left: 8px; }
+.hd nav a { font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.hd nav a:hover { color: var(--ink); }
+.hd-r { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.hd-r a.lg { font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.hd-r .btn { padding: 9px 18px; font-size: 13px; }
+
+/* ── hero ─────────────────────────────────────────────────── */
+.hero { padding: 62px 0 20px; }
+.hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 54px; align-items: start; }
+.hero h1 { margin: 22px 0 20px; }
+.hero-cta { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+
+/* Three cells sharing one border, like a schedule on a sheet. */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--rule);
+         background: var(--pa-2); margin-top: 40px; max-width: 560px; }
+.stats div { padding: 15px 17px; border-right: 1px solid var(--rule-soft); }
+.stats div:last-child { border-right: 0; }
+.stats b { display: block; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 21px;
+           color: var(--blue); letter-spacing: -0.02em; }
+.stats span { display: block; font-size: 11.5px; color: var(--ink-2); line-height: 1.45; margin-top: 4px; }
+
+/* The drawing itself, with a real title block under it. */
+.dwg { position: relative; }
+.dwg-body { padding: 20px; border-bottom: 1px solid var(--rule); }
+.dwg svg { display: block; width: 100%; height: auto; }
+.tblock { display: grid; grid-template-columns: repeat(4, 1fr); }
+.tblock div { padding: 9px 13px; border-right: 1px solid var(--rule-soft); }
+.tblock div:last-child { border-right: 0; }
+.tblock b { display: block; font-size: 12px; font-weight: 600; margin-top: 3px; }
+.tblock .live { color: var(--red); }
+
+/* ── the four verticals, as tabs on a sheet ───────────────── */
+.vt { border: 1px solid var(--rule); background: var(--pa-2); }
+.vt-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--rule); }
+.vt-tab { text-align: left; padding: 14px 17px; background: none; border: 0;
+          border-right: 1px solid var(--rule-soft); cursor: pointer; font: inherit; color: var(--ink); }
+.vt-tab:last-child { border-right: 0; }
+.vt-tab strong { display: block; font-size: 13.5px; font-weight: 700; }
+.vt-tab span { display: block; font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+.vt-tab[aria-selected="true"] { background: var(--blue); color: #fff; }
+.vt-tab[aria-selected="true"] span { color: rgba(255,255,255,0.72); }
+.vt-tab:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+.vt-panel { display: none; padding: 30px; gap: 34px; grid-template-columns: 1fr 1fr; align-items: start; }
+.vt-panel.on { display: grid; }
+.vt-panel p { color: var(--ink-2); margin: 14px 0 22px; font-size: 14.5px; }
+
+/* The project record — the one dark object on the paper, so it reads as
+   a screen sitting on a drawing rather than another panel. */
+.rec { background: var(--navy); color: #E6ECF2; }
+.rec-h { display: flex; justify-content: space-between; align-items: center;
+         padding: 11px 15px; border-bottom: 1px solid rgba(255,255,255,0.11); }
+.rec-h b { font-size: 13px; font-weight: 700; }
+.rec-h span { font-size: 10px; color: rgba(255,255,255,0.5); }
+.rec-r { display: flex; justify-content: space-between; gap: 16px; padding: 11px 15px;
+         border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 12.5px; }
+.rec-r:last-child { border-bottom: 0; }
+.rec-r i { font-style: normal; color: rgba(255,255,255,0.62); }
+.rec-r b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rec-r b.ok { color: #5FD9A0; }
+.rec-r b.go { color: #FF8A66; }
+
+/* ── the sheet index ──────────────────────────────────────── */
+.idx { border: 1px solid var(--rule); background: var(--pa-2); }
+.idx a { display: grid; grid-template-columns: 92px 1.1fr 2fr 104px; gap: 18px; align-items: center;
+         padding: 16px 20px; border-bottom: 1px solid var(--rule-soft); text-decoration: none;
+         transition: background .14s; }
+.idx a:last-child { border-bottom: 0; }
+.idx a:hover { background: rgba(43,95,168,0.045); }
+.idx .no { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--blue); }
+.idx .nm { font-weight: 700; font-size: 15px; }
+.idx .ds { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.idx .op { font-size: 12.5px; font-weight: 600; color: var(--red); text-align: right; }
+
+/* ── dark metric band ─────────────────────────────────────── */
+.band { background: var(--navy); color: #E6ECF2; margin-top: 76px; }
+.band-in { display: grid; grid-template-columns: repeat(4, 1fr); gap: 34px; padding: 46px 0; }
+.band b { display: block; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 30px;
+          letter-spacing: -0.028em; }
+.band b em { font-style: normal; color: #6FA8E8; }
+.band span { display: block; font-size: 12.5px; color: rgba(230,236,242,0.62); margin-top: 8px; line-height: 1.5; }
+
+/* ── closing card, with the stamp ─────────────────────────── */
+.close { position: relative; text-align: center; padding: 56px 30px; margin: 76px 0; overflow: hidden; }
+.close p { color: var(--ink-2); margin: 14px auto 26px; max-width: 52ch; }
+.close .acts { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+/* An approval stamp, rotated and knocked back the way an inked one is. */
+.stamp {
+  position: absolute; top: 24px; right: 26px; transform: rotate(-11deg);
+  border: 2.5px solid var(--green); color: var(--green);
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.13em; padding: 7px 16px; opacity: .5; pointer-events: none;
+}
+
+/* ── footer ───────────────────────────────────────────────── */
+.ft { border-top: 1px solid var(--rule); padding: 50px 0 0; }
+.ft-in { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr; gap: 40px; padding-bottom: 40px; }
+.ft-in p { font-size: 13px; color: var(--ink-2); margin-top: 14px; max-width: 42ch; }
+.ft h4 { font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3);
+         font-family: 'IBM Plex Mono', monospace; font-weight: 500; margin-bottom: 14px; }
+.ft-in a { display: block; font-size: 13.5px; color: var(--ink-2); text-decoration: none; margin-bottom: 9px; }
+.ft-in a:hover { color: var(--blue); }
+.ft-bar { border-top: 1px solid var(--rule-soft); padding: 17px 0; display: flex;
+          justify-content: space-between; font-size: 12px; color: var(--ink-3); gap: 16px; flex-wrap: wrap; }
+
+/* ── narrow ───────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .hero-grid, .vt-panel.on, .ft-in { grid-template-columns: 1fr; }
+  .band-in { grid-template-columns: 1fr 1fr; }
+  .vt-tabs { grid-template-columns: 1fr 1fr; }
+  .vt-tab { border-bottom: 1px solid var(--rule-soft); }
+  .idx a { grid-template-columns: 70px 1fr; gap: 6px 14px; }
+  .idx .ds { grid-column: 2; }
+  .idx .op { grid-column: 2; text-align: left; }
+  .hd nav { display: none; }
+}
+@media (max-width: 620px) {
+  .stats, .band-in { grid-template-columns: 1fr; }
+  .stats div { border-right: 0; border-bottom: 1px solid var(--rule-soft); }
+  .vt-tabs { grid-template-columns: 1fr; }
+  .stamp { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ── the showcase modal ───────────────────────────────────────────────
+   This page does not load omega.css, so it carries the modal shell
+   itself. Without these the dialog is not hidden — it renders inline at
+   the foot of the page as loose text, which is exactly how it looked.
+   Kept to the shell only; /omega-reel.css styles everything inside. */
+.video-modal {
+  position: fixed; inset: 0; z-index: 500; display: none;
+  flex-direction: column; background: var(--pa);
+  opacity: 0; transition: opacity .28s ease;
+}
+.video-modal.open { opacity: 1; }
+.video-topbar {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  padding: clamp(20px,3vw,40px) clamp(20px,4vw,56px) clamp(16px,2vw,28px);
+  border-bottom: 1px solid var(--rule); flex-shrink: 0;
+}
+.video-topbar h3 { font-family: 'Archivo', sans-serif; font-size: clamp(20px,2.4vw,30px);
+                   font-weight: 800; letter-spacing: -0.028em; }
+.video-topbar .vt-sub { font-size: 14.5px; color: var(--ink-2); margin-top: 8px; max-width: 60ch; }
+.video-close {
+  width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--rule);
+  background: var(--pa-2); color: var(--ink); cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.video-close:hover { border-color: var(--ink); }
+.video-stage {
+  flex: 1; margin: 0 clamp(20px,4vw,56px) clamp(20px,4vw,56px);
+  background: #05090d; border: 1px solid var(--rule); overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.video-placeholder { position: relative; z-index: 2; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px; }
+.video-placeholder .vp-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+  letter-spacing: .14em; text-transform: uppercase; color: #6FA8E8;
+  border: 1px solid rgba(111,168,232,.4); padding: 6px 14px; }
+.video-placeholder p { color: rgba(255,255,255,.8); font-size: 14.5px; max-width: 46ch; }
+
+/* ── components the inner pages need ──────────────────────────────────
+   A grid of cells that reads as a schedule rather than a row of floating
+   cards: one shared border, drawn by giving the container two edges and
+   every cell the other two, so it stays a clean table at any count. */
+.grid { display: grid; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
+.grid.c2 { grid-template-columns: repeat(2, 1fr); }
+.grid.c3 { grid-template-columns: repeat(3, 1fr); }
+.cell { padding: 24px 22px; background: var(--pa-2);
+        border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.cell h3 { font-size: 16.5px; margin-bottom: 9px; }
+.cell p  { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+.cell .no { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--blue);
+            display: block; margin-bottom: 9px; }
+
+/* A light schedule, for the hero panel on an inner page — the drawing's
+   voice without repeating the one-line, which belongs to the home page. */
+.sched { background: var(--pa-2); border: 1px solid var(--rule); box-shadow: var(--sh); }
+.sched-h { display: flex; justify-content: space-between; align-items: center; gap: 14px;
+           padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+.sched-h b { font-size: 13px; font-weight: 700; }
+.sched-r { display: flex; justify-content: space-between; gap: 18px; padding: 11px 16px;
+           border-bottom: 1px solid var(--rule-soft); font-size: 13px; }
+.sched-r:last-of-type { border-bottom: 0; }
+.sched-r i { font-style: normal; color: var(--ink-2); }
+.sched-r b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.sched-r b.hl { color: var(--red); }
+.sched-r b.ok { color: var(--green); }
+
+/* Prose inside a section, kept to a readable measure. */
+.prose { max-width: 62ch; }
+.prose p { color: var(--ink-2); margin-top: 14px; }
+.prose ul { margin: 16px 0 0 0; list-style: none; }
+.prose li { position: relative; padding-left: 20px; margin-bottom: 9px; color: var(--ink-2); font-size: 14px; }
+.prose li::before { content: ''; position: absolute; left: 3px; top: 9px; width: 7px; height: 7px;
+                    border: 1.5px solid var(--blue); }
+
+.page-hero { padding: 54px 0 8px; }
+.page-hero .lede { margin-top: 18px; }
+.sec { margin-top: 66px; }
+.hd nav a.on { color: var(--ink); font-weight: 600; }
