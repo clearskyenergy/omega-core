@@ -293,11 +293,18 @@
        them in, which offered the chooser… a loop, and exactly the
        "I click on workspace and it just keeps glitching" that reported it.
 
-       Naming /index.html does NOT dodge it: cleanUrls strips index.html
-       back to "/", so it lands on the same redirect one hop later. The
-       portal needs an address of its own, so /workspace rewrites to the
-       shell. It is also a better thing to bookmark than "/". */
-    workspace:   PORTAL + "/workspace",             // a tenant's own OMEGA workspace
+       Naming /index.html does not dodge it either: cleanUrls strips
+       index.html back to "/", so it lands on the same redirect one hop
+       later. And a /workspace REWRITE cannot help, because rewrites are not
+       being applied on this deployment at all — /finance has been in
+       vercel.json for months and 404s too. Only redirects take effect.
+
+       So the redirect itself carries the exception: it fires only when the
+       `via` query parameter is MISSING. go() always appends
+       via=omega-gateway, so a handoff from the chooser passes straight
+       through to the portal while somebody arriving cold at the bare domain
+       still gets the branded login. */
+    workspace:   PORTAL + "/",                      // a tenant's own OMEGA workspace
     admin:       PORTAL + "/admin/",                // ClearSky admin console
     ops:         "https://alpha.clearskyomega.com", // ops console (reps)
     financing:   PORTAL + "/portals/finance/",
@@ -600,23 +607,20 @@
       const grantOrg = (member && member.active !== false && member.orgId) ? member.orgId : "";
       const homeOrg = grantOrg || org;
 
-      /* The tenant's OWN hostname, from the record the platform already keeps.
-         A per-tenant deployment is the point of omega_orgs.domains, and
-         sending somebody there rather than to the hub also means the hub's
-         "/ redirects to login" rule can never come back and bite this. */
-      let homeHost = null;
-      if (homeOrg) {
-        const orgDoc = await readDoc(["omega_orgs", homeOrg]);
-        const doms = (orgDoc && orgDoc.domains) || [];
-        /* Skip a hostname that is known not to answer — a confident link to
-           nothing is worse than the hub, which at least loads. */
-        const DEAD = ["app.clearskyomega.com", "sunesol.csebuilders.com", "ogisolar.clearskyomega.com"];
-        for (let i = 0; i < doms.length; i++) {
-          const h = String(doms[i] || "").toLowerCase().trim();
-          if (!h || DEAD.indexOf(h) >= 0 || h === location.host) continue;
-          homeHost = h; break;
-        }
-      }
+      /* ── STAY ON THIS ORIGIN ─────────────────────────────────────────
+         This looked up omega_orgs.domains and sent people to the tenant's
+         own hostname. That is the correct destination in principle and the
+         wrong one today: those hostnames are on the OLD deployment, so
+         clicking Workspace left omega-core, landed on csebuilders.com, and
+         asked for a password again — a Firebase session belongs to the
+         origin that made it, and that was a different origin.
+
+         The goal is to run everything out of omega-core, so the gateway
+         keeps people here. The portal resolves the tenant from the
+         signed-in email, which is what makes one origin serve every
+         workspace. TENANT_PORTALS stays as the deliberate override for a
+         tenant that genuinely has its own omega-core-backed host. */
+      const homeHost = null;
 
       if (homeOrg) {
         dests.push({ key: "workspace", url: portalFor(homeOrg, homeHost), org: homeOrg,

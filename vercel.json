@@ -41,10 +41,6 @@
   ],
   "rewrites": [
     {
-      "source": "/workspace",
-      "destination": "/index.html"
-    },
-    {
       "source": "/",
       "has": [
         {
@@ -147,7 +143,13 @@
         }
       ],
       "destination": "/login.html",
-      "permanent": false
+      "permanent": false,
+      "missing": [
+        {
+          "type": "query",
+          "key": "via"
+        }
+      ]
     }
   ]
 }
