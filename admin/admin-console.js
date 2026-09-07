@@ -1159,6 +1159,13 @@ function loadTenants(){
        look authoritative while being incomplete. */
     if (typeof renderClients === 'function') renderClients();
     if (typeof renderCrm === 'function') renderCrm();
+    /* THE PRICING TABLE TOO. Its "On platform" column reads STATE.tenants,
+       and loadTenants() is async while that table renders at boot — so the
+       column showed a dash on every row, always, and the tenant data it was
+       waiting for arrived to nobody. Same shape as the dashboard blocks that
+       mounted before the workspace resolved: the render happened once, at the
+       moment the answer was not available yet. */
+    if (typeof window.ctRefresh === 'function') window.ctRefresh();
     renderTabs();
     _tnBusy(false, 'Updated ' + new Date().toLocaleTimeString() +
                    ' \u00b7 ' + (rows || []).length + ' tenants');

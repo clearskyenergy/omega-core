@@ -1274,6 +1274,18 @@ function preview(){
 
 /* ── 6. public actions ────────────────────────────────────────────────────── */
 window.ctPreview = preview;
+
+/* THE PRICING TABLE HAS TO BE REDRAWABLE FROM OUTSIDE THIS SCOPE.
+
+   Its "On platform" column reads STATE.tenants, which loadTenants() fills
+   asynchronously — and this table renders at boot, before that read returns.
+   So the column showed a dash on every row, permanently, and the tenant data
+   it was waiting for arrived to nobody.
+
+   Everything in this block is inside the IIFE, so admin-console.js could not
+   reach renderDash() to ask for a redraw. Exported the same way ctOpenClient
+   is, and called from loadTenants() when the records land. */
+window.ctRefresh = function(){ try { renderDash(); } catch (e) {} };
 window.ctClear = function(){
   if(!confirm('Clear the contract & pricing on this client? The client stays in the CRM.')) return;
   if(curKey && DATA[curKey]){
