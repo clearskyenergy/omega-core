@@ -188,7 +188,16 @@ button{ -webkit-appearance:none; appearance:none; }
   --blue:#2A3A49;        /* mid chrome / hover                  */
   --sky:#4A8FD8;         /* neutral action fill -> NextNRG green */
   --accent:#4A8FD8;      /* the single highlight -- NextNRG green */
-  --green:#4A8FD8;--amber:#B0B0B0;--red:#C86A6A;--purple:#7A7A7A;
+  --green:#3AAE63;   /* SUCCESS, NOT THE ACCENT.
+     The white-label theme set --green to the same value as --accent, so when
+     the accent moved to drafting blue this moved with it — and var(--green)
+     drives things that genuinely mean "good": .rr-pos paired against .rr-neg,
+     a completed wizard step, a checkmark, a cost total, and the "OK Saved"
+     indicator in the title bar. Blue against red is not a positive/negative
+     pair. Restored to a green of about the old brightness, so contrast on the
+     dark chrome and under white button text is unchanged. The accent stays
+     blue; only the token whose name says green is green. */
+  --amber:#B0B0B0;--red:#C86A6A;--purple:#7A7A7A;
   --bg:#1B2632;          /* canvas chrome background            */
   --surface:#22303D;     /* inset fields / cards                */
   --panel:#16202B;       /* side + top panels                   */
