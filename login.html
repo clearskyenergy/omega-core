@@ -207,6 +207,9 @@
         <h2>Where to?</h2>
         <p class="sub">Your account reaches more than one OMEGA workspace. Pick one &mdash; you can come back here any time.</p>
         <div id="choiceList"></div>
+        <!-- Says who can switch on a surface the account reaches but that is
+             not live yet. Hidden until there is something to say. -->
+        <p class="form-msg info" id="chooseMsg" style="display:none;margin-top:12px"></p>
         <p class="note" style="text-align:left;">Signed in as <span id="chooseEmail"></span> · <button type="button" class="link-quiet" id="signOutBtn">Use a different account</button></p>
       </div>
 
@@ -472,24 +475,37 @@
          order     lower sorts first; ties keep table order
     */
     const SURFACES = [
-      { key: "admin", order: 10, name: "Admin console", url: ROUTES.admin,
-        desc: () => "Platform operations and client management",
-        requires: (c) => c.isAdminDomain || c.staffRole === "admin" },
-      { key: "ops", order: 20, name: "Ops console", url: ROUTES.ops,
-        desc: () => "The intake queue and the jobs assigned to you",
-        requires: (c) => c.staffRole === "rep" || c.staffRole === "admin" },
-      { key: "financing", order: 30, name: "Project Financing", url: ROUTES.financing,
+      /* ORDER IS FIXED, NOT LEARNED. The workspace is where nearly everyone
+         is going, so it sits at the top every time — a list that reshuffles
+         to put yesterday's choice first means the thing you want is in a
+         different place each visit. */
+      { key: "financing", order: 20, name: "Finance Marketplace", url: ROUTES.financing,
         desc: (c) => c.fin && c.fin.role === "partner"
           ? "Deal flow and the offers you've made" : "Your deals and the offers on them",
         requires: (c) => !!c.fin },
-      { key: "marketplace", order: 40, name: "Distribution Marketplace", url: ROUTES.marketplace,
+      /* NOT LIVE YET. These two are listed because the account reaches them
+         on paper, and hiding them would leave somebody wondering where the
+         product they were sold went. Clicking says who to ask rather than
+         opening a door onto nothing — an empty console is a worse answer
+         than a sentence. */
+      { key: "marketplace", order: 30, name: "Distribution Marketplace", url: ROUTES.marketplace,
         desc: (c) => c.mkt && c.mkt.role === "distributor"
           ? "Your catalog and incoming projects" : "Quotes from your distributors",
+        comingSoon: true,
         requires: (c) => !!c.mkt },
-      { key: "vdc", order: 50, name: "VDC Exchange", url: ROUTES.vdc,
+      { key: "vdc", order: 40, name: "VDC Exchange", url: ROUTES.vdc,
         desc: (c) => c.vdc && c.vdc.role === "operator"
           ? "Assets, RFQs and your quotes" : "Your RFQs and the quotes on them",
-        requires: (c) => !!c.vdc }
+        comingSoon: true,
+        requires: (c) => !!c.vdc },
+      /* Staff surfaces last: they are a small number of people, and they
+         know where they are going. */
+      { key: "admin", order: 80, name: "Admin console", url: ROUTES.admin,
+        desc: () => "Platform operations and client management",
+        requires: (c) => c.isAdminDomain || c.staffRole === "admin" },
+      { key: "ops", order: 90, name: "Ops console", url: ROUTES.ops,
+        desc: () => "The intake queue and the jobs assigned to you",
+        requires: (c) => c.staffRole === "rep" || c.staffRole === "admin" }
     ];
 
     /* A Firestore surface's `requires` is a STRING, because a rule that has
@@ -588,6 +604,8 @@
           name: sd.name || String(sd.key),
           url: /^https?:/i.test(sd.url || "") ? sd.url : (PORTAL + (sd.url || "/")),
           desc: () => sd.desc || "",
+          comingSoon: sd.comingSoon === true,
+          note: sd.note || "",
           requires: ruleFor(sd.requires)
         };
         const at = table.findIndex((x) => x.key === entry.key);
@@ -599,7 +617,8 @@
         .sort((a, b) => (a.order || 0) - (b.order || 0))
         .map((sf) => ({
           key: sf.key, url: sf.url, name: sf.name,
-          desc: (typeof sf.desc === "function" ? sf.desc(ctx) : sf.desc) || ""
+          desc: (typeof sf.desc === "function" ? sf.desc(ctx) : sf.desc) || "",
+          comingSoon: !!sf.comingSoon, note: sf.note || ""
         }));
 
       /* A cross-org grant puts someone in that tenant rather than their own
@@ -623,9 +642,13 @@
       const homeHost = null;
 
       if (homeOrg) {
-        dests.push({ key: "workspace", url: portalFor(homeOrg, homeHost), org: homeOrg,
-                     name: tenantName(homeOrg) + " workspace",
-                     desc: "Projects, tools and dashboards" });
+        /* FIRST, ALWAYS. unshift rather than an order value, because the
+           workspace is built from homeOrg out here and not from the table —
+           and because "the thing nearly everyone wants" is a position, not
+           a preference to be sorted against the others. */
+        dests.unshift({ key: "workspace", url: portalFor(homeOrg, homeHost), org: homeOrg,
+                        name: tenantName(homeOrg) + " workspace",
+                        desc: "Projects, tools and dashboards" });
       }
 
       if (staffActive && staffRole === "none" && !dests.length) return { blocked: "pending-role" };
@@ -722,14 +745,11 @@
     function chooser(found, user) {
       const list = $("choiceList");
       list.innerHTML = "";
-      /* Last one used first, and labelled. Not preselected — the point of
-         showing this is that the choice is the person's to make each time;
-         ordering is a convenience, a default would be the old trap again. */
-      let remembered = null;
-      try { remembered = localStorage.getItem("omega:lastDest"); } catch (_) {}
-      const dests = found.dests.slice().sort((a, b) =>
-        (b.key === remembered ? 1 : 0) - (a.key === remembered ? 1 : 0));
-      dests.forEach((d) => {
+      /* The order resolve() built, kept. It sorted the last-used entry to the
+         top for a while, which meant the list was in a different order on
+         every visit — the workspace is where nearly everyone is going and it
+         belongs in the same place each time. */
+      found.dests.forEach((d) => {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "choice";
@@ -738,8 +758,22 @@
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.45)"><polyline points="9 18 15 12 9 6"/></svg>';
         b.querySelector(".name").textContent = d.name;
         b.querySelector(".desc").textContent =
-          (d.key === remembered ? "Last used \u00b7 " : "") + d.desc;
+          (d.comingSoon ? "Not switched on yet \u00b7 " : "") + d.desc;
+        if (d.comingSoon) b.classList.add("soon");
         b.addEventListener("click", async () => {
+          /* A surface that is not switched on says who can switch it on.
+             Opening it anyway would land somebody in an empty console and
+             leave them to work out whether that is the product or a fault. */
+          if (d.comingSoon) {
+            const msg = $("chooseMsg");
+            if (msg) {
+              msg.textContent = d.note
+                || (d.name + " is not switched on for this account yet \u2014 "
+                    + "please contact your account administrator.");
+              msg.style.display = "";
+            }
+            return;
+          }
           loading(true, "Opening <b>" + d.name + "</b>");
           await wait(300);
           await go(d, user);

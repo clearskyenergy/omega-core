@@ -2935,7 +2935,25 @@ function signInWithGoogle() {
 }
 
 function signOut() {
-  auth.signOut();
+  /* ── BACK TO THE FRONT DOOR, NOT TO THIS PAGE'S OWN FORM ─────────────
+     Signing out left the person on whatever URL they were on, which on the
+     hub is /?tenant=…&via=omega-gateway — and that URL suppresses the
+     redirect to the branded login, so they got the shell's plain
+     "Workspace" card instead. Two different sign-in screens for one
+     product, and the one they landed on is not the one the website links
+     to.
+
+     The query string goes with the session it belonged to; /login.html is
+     the door everybody comes in through. It ships alongside this file, so
+     it exists on every host that serves this page. */
+  var go = function () {
+    try { location.replace('/login.html'); }
+    catch (e) { location.href = '/login.html'; }
+  };
+  try {
+    var p = auth.signOut();
+    if (p && typeof p.then === 'function') p.then(go, go); else go();
+  } catch (e) { go(); }
 }
 
 // ══════════ EMAIL / PASSWORD AUTH (enterprise clients) ══════════
