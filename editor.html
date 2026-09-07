@@ -10906,33 +10906,59 @@ function _renderAssembly(g, sh){
      the map view entirely; they always draw in permit exports. */
   var MIN_SP_PX=7;                 /* min on-screen px between bollards to draw */
   var showBoll = !window._hideBollards;
-  var br=Math.max(1.2, Math.min(3, spx*0.28));   /* radius scales with spacing */
-  if(showBoll){
-    for(var bi=0;bi<sideKeys.length;bi++){
-      if(_sideHasBoll(sides[sideKeys[bi]])){
-        var seg=bollEdges[sideKeys[bi]];
-        var a=seg[0], b=seg[1];
-        var ddx=b.x-a.x, ddy=b.y-a.y;
-        var len=Math.sqrt(ddx*ddx+ddy*ddy);
-        var steps=Math.max(1,Math.round(len/spx));
-        /* thin out if the on-screen spacing would be under MIN_SP_PX */
-        var onScreenSp=len/steps;
-        var thin=1;
-        if(onScreenSp<MIN_SP_PX){ thin=Math.ceil(MIN_SP_PX/Math.max(1,onScreenSp)); }
-        for(var s=0;s<=steps;s++){
-          if(thin>1 && (s%thin!==0) && s!==steps) continue;  /* keep endpoints */
-          var tt=s/steps;
-          var bc=_mkNS('circle');
-          bc.setAttribute('cx',a.x+ddx*tt); bc.setAttribute('cy',a.y+ddy*tt);
-          bc.setAttribute('r',br); bc.setAttribute('fill','#E0E0E0');
-          bc.setAttribute('stroke',_shapeInk(sh)); bc.setAttribute('stroke-width','1');
-          bc.setAttribute('pointer-events','none');
-          g.appendChild(bc); bollCount++;
-        }
-      }
+  /* ── THE COUNT IS NOT THE NUMBER OF DOTS ON SCREEN ──────────────────
+     bollCount used to increment inside the draw loop, so it fell with the
+     thinning applied when zoomed out and went to zero when the bollards
+     were toggled off. That is a drawing artefact standing in for a
+     quantity: the same pad reported a different number of bollards at
+     different zooms, and none at all with the layer hidden.
+
+     trueCount is computed from the geometry alone — every side flagged for
+     bollards, at the real spacing, whatever the view is doing. That is the
+     number that goes to the legend and the estimate. bollCount stays as
+     what was actually painted, which is only ever a rendering detail. */
+  var trueCount=0;
+  var br=Math.max(1.6, Math.min(3.4, spx*0.30));   /* radius scales with spacing */
+  for(var bi=0;bi<sideKeys.length;bi++){
+    if(!_sideHasBoll(sides[sideKeys[bi]])) continue;
+    var seg=bollEdges[sideKeys[bi]];
+    var a=seg[0], b=seg[1];
+    var ddx=b.x-a.x, ddy=b.y-a.y;
+    var len=Math.sqrt(ddx*ddx+ddy*ddy);
+    var steps=Math.max(1,Math.round(len/spx));
+    trueCount += steps+1;
+    if(!showBoll) continue;
+    /* thin out if the on-screen spacing would be under MIN_SP_PX */
+    var onScreenSp=len/steps;
+    var thin=1;
+    if(onScreenSp<MIN_SP_PX){ thin=Math.ceil(MIN_SP_PX/Math.max(1,onScreenSp)); }
+    for(var s=0;s<=steps;s++){
+      if(thin>1 && (s%thin!==0) && s!==steps) continue;  /* keep endpoints */
+      var tt=s/steps;
+      /* SAFETY YELLOW, NOT PALE GREY. A bollard is a 6" Sch 80 pipe,
+         concrete filled and painted yellow (CFC 1207.11.7) — the same
+         object the EV side of this drawing already draws that way. Grey
+         dots on a grey pad read as survey marks or as noise, which is why
+         nobody could see them. The dark ring keeps them legible over the
+         pale concrete AND over dark imagery. */
+      var bc=_mkNS('circle');
+      bc.setAttribute('cx',a.x+ddx*tt); bc.setAttribute('cy',a.y+ddy*tt);
+      bc.setAttribute('r',br); bc.setAttribute('fill','#F5C542');
+      bc.setAttribute('stroke','#7A5A00'); bc.setAttribute('stroke-width','1.1');
+      bc.setAttribute('pointer-events','none');
+      g.appendChild(bc); bollCount++;
     }
   }
-  sh._bollardCount=bollCount;
+  sh._bollardCount=bollCount;      /* painted */
+  /* The quantity, and the flag the take-off reads. hasBollards/bollardCount
+     were being read by the AACE take-off while the renderer only ever wrote
+     _bollardCount, so that path never saw a drawn bollard and fell back to a
+     hardcoded 8 on any shape someone had flagged by hand. */
+  sh.bollardCount = trueCount;
+  /* hasBollards is NOT written here. The properties panel derives it from
+     the per-side settings (sh.hasFence/hasBollards, set together), and the
+     fence-clearance geometry reads it back. Recomputing an equivalent value
+     from a second source is how the two quietly stop agreeing. */
 
   /* --- each part, individually selectable. Draw order = array order, so the
      concrete pad (index 0) sits behind the equipment on top of it. --- */
@@ -17289,6 +17315,20 @@ function renderLegend(){
                        future:/__future$/.test(id) };
         }
       });
+    /* ── PAD BOLLARDS BELONG IN THIS INVENTORY TOO ────────────────────
+       The ring round a BESS pad is drawn by the assembly renderer as part
+       of the shape, not as an element, so this loop — which walks
+       S.elements — never saw it. The legend read "Bollard x3" for the
+       three somebody placed by hand while ignoring the twenty-odd around
+       the battery, and the same blind spot ran on into the cost sheet.
+
+       Merged into the existing bollard key rather than given a row of its
+       own: a reviewer counting posts on the plan wants ONE number to check
+       against, not two that have to be added up. */
+    try {
+      var _padB = (typeof _padBollardCount==='function') ? _padBollardCount() : 0;
+      if(_padB > 0) counts['bollard'] = (counts['bollard']||0) + _padB;
+    } catch(_e){}
     Object.keys(counts).forEach(function(id){
       var eq=(typeof EQ!=='undefined')?EQ.find(x=>x.id===id):null;
       /* Data-center units live in DC_CATALOG, not EQ, so they fell through
@@ -27321,7 +27361,12 @@ function updateCostEst() {
   const _padN  = _n('pad');
   const _discoN= _n('disco');
   const _meterN= _n('meter');
-  const _bollN = _n('bollard');
+  /* Bollards come from two places and the cost sheet only ever saw one.
+     A bollard placed from the palette is an element with eqId 'bollard'.
+     The ring round a BESS pad is drawn by the assembly renderer as part of
+     the shape, so it is not an element and never reached this line — the
+     protection was on the drawing and in the legend, and free. */
+  const _bollN = _n('bollard') + (typeof _padBollardCount==='function' ? _padBollardCount() : 0);
   const _jboxN = _n('jbox');
   const _panelN= _n('panel');
 
@@ -34557,9 +34602,10 @@ function buildBOM() {
   var _hasShapes  = (S.shapes||[]).length > 0;
   var _hasAny = _hasBess || _hasEV || _hasConduit || _hasShapes;
 
-  // Count bollards ONLY from shapes explicitly flagged for them (no default).
-  var _bollardN = 0;
-  (S.shapes||[]).forEach(function(s){ if(s.hasBollards) _bollardN += (s.bollardCount||8); });
+  /* Bollards, from the drawing. The renderer now writes the real count onto
+     the shape, so this no longer falls back to a hardcoded 8 — a number that
+     was wrong on every pad whose ring was not exactly eight posts. */
+  var _bollardN = (typeof _padBollardCount==='function') ? _padBollardCount() : 0;
 
   // --- Interconnection package: only when a system needs to tie to the grid ---
   if (_hasBess || _hasEV) {
@@ -36139,6 +36185,29 @@ function _geoApplyShape(sh, toPx, ppf){
    drag-end handler has always called. Shapes never had an equivalent, so a
    dragged shape kept its old anchor and jumped back at the next map idle.
    Call this from any handler that moves geometry in canvas space. */
+/* ── BOLLARDS DRAWN AS PART OF A PAD ───────────────────────────────────
+   A bollard reaches this drawing two ways. From the Insert palette it is a
+   real element with eqId 'bollard', and everything that counts elements
+   already sees it. Round a BESS pad it is drawn by the assembly renderer as
+   part of the shape — real protection, on the plan, priced by nobody,
+   because it is not an element and every consumer counted elements.
+
+   This is the one place that answers "how many pad bollards are on this
+   drawing", so the legend, the EV cost sheet and the AACE take-off cannot
+   drift apart again. It reads the quantity the renderer computes from the
+   geometry, never the number of dots it painted — those thin out with zoom
+   and vanish with the layer toggle. */
+function _padBollardCount(){
+  var n = 0;
+  try {
+    (S.shapes||[]).forEach(function(sh){
+      if (sh && isFinite(+sh.bollardCount) && +sh.bollardCount > 0) n += +sh.bollardCount;
+    });
+  } catch(e){}
+  return n;
+}
+window._padBollardCount = _padBollardCount;
+
 function _geoRestampOne(o){
   if(!o) return;
   if(window._geoReprojecting) return;      /* never restamp mid-reproject */
