@@ -55,9 +55,16 @@
                   border: 1px solid var(--rule); box-shadow: var(--sh);
                   padding: 40px 38px 30px; text-align: center; }
 
-    /* The wordmark, drawn rather than loaded — see the note in the markup. */
-    .login-card .brand.omega { display: inline-flex; font-size: 19px; margin-bottom: 22px; }
-    .login-card .brand.omega .dot { width: 17px; height: 17px; border-width: 2.6px; }
+    /* The mark on its own ground — see the note in the markup.
+       A PANEL, NOT A MEDALLION. The asset is a lockup: the symbol with
+       CLEARSKY-OMEGA set underneath it. A circle crops a rectangle badly and
+       squeezes that wordmark into mush at any size that still fits. A navy
+       panel takes the lockup at its own proportions, and on a drawing sheet
+       it reads as a stamp rather than a badge — which is the language this
+       page is already speaking. */
+    .omega-disc { display: inline-grid; place-items: center; background: var(--navy);
+                  padding: 15px 24px; margin: 0 auto 22px; text-decoration: none; }
+    .omega-disc img { height: 42px; width: auto; display: block; }
 
     .login-card h1 { font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800;
                      letter-spacing: -0.028em; margin-bottom: 9px; }
@@ -152,31 +159,48 @@
     .choice.soon .name { color: var(--ink-2); }
     .choice.soon .chev { opacity: .4; }
 
-    /* ── the loading takeover ─────────────────────────────────────────
-       Left dark on purpose. It covers the screen while the account is
-       resolved, and a hand-off from paper to a working screen reads as the
-       system doing something — it is also the one place the white mark is
-       the right asset. */
-    .omega-loading { position: fixed; inset: 0; z-index: 900; display: none;
-      flex-direction: column; align-items: center; justify-content: center; gap: 26px;
-      background: radial-gradient(900px 500px at 50% 40%, rgba(43,95,168,0.22), transparent 65%), var(--navy); }
+    /* ── the loading takeover, on the same paper ──────────────────────
+       This was dark navy, which made the one moment the platform is
+       actually working the one moment it stopped looking like itself. It
+       is a sheet now: the same ground, the same grid, hairline rings drawn
+       in drafting blue, and the destination named in the title-block voice.
+
+       The rings are the only motion on the site, which is the right place
+       for it — something is genuinely happening behind them. */
+    .omega-loading {
+      position: fixed; inset: 0; z-index: 900; display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 30px;
+      background-color: var(--pa);
+      background-image:
+        linear-gradient(var(--blue-tint) 1px, transparent 1px),
+        linear-gradient(90deg, var(--blue-tint) 1px, transparent 1px),
+        linear-gradient(rgba(43,95,168,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(43,95,168,0.035) 1px, transparent 1px);
+      background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    }
     .omega-loading.on { display: flex; }
-    .omega-loading .mark { position: relative; display: grid; place-items: center; width: 152px; height: 152px; }
-    .omega-loading .mark img { height: 58px; width: auto; position: relative; z-index: 2; }
-    .omega-loading .ring { position: absolute; inset: 0; border-radius: 50%;
-      border: 1px solid rgba(111,168,232,0.55); border-top-color: transparent;
-      border-left-color: transparent; animation: omega-spin 1.15s linear infinite; }
-    .omega-loading .ring.two { inset: 17px; border-color: rgba(111,168,232,0.24);
+    .omega-loading .mark { position: relative; display: grid; place-items: center;
+                           width: 210px; height: 210px; }
+    .omega-loading .mark .omega-disc { position: relative; z-index: 2; margin: 0;
+                                       padding: 17px 26px; }
+    .omega-loading .mark .omega-disc img { height: 46px; }
+    .omega-loading .ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 1px solid rgba(43,95,168,0.55);
+      border-top-color: transparent; border-left-color: transparent;
+      animation: omega-spin 1.15s linear infinite;
+    }
+    .omega-loading .ring.two { inset: 18px; border-color: rgba(43,95,168,0.22);
       border-bottom-color: transparent; animation-duration: 1.9s; animation-direction: reverse; }
     @keyframes omega-spin { to { transform: rotate(360deg); } }
-    .omega-loading .status { font-size: 14px; color: rgba(230,236,242,0.78); min-height: 20px;
+    .omega-loading .status { font-size: 14.5px; color: var(--ink-2); min-height: 20px;
                              text-align: center; padding: 0 24px; }
-    .omega-loading .status b { color: #fff; font-weight: 600; }
+    .omega-loading .status b { color: var(--ink); font-weight: 700; }
     .omega-loading .sub { font-family: 'IBM Plex Mono', monospace; font-size: 10px;
-                          letter-spacing: .16em; text-transform: uppercase; color: rgba(230,236,242,0.42); }
+                          letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
 
     @media (prefers-reduced-motion: reduce) {
-      .omega-loading .ring { animation: none; border-color: rgba(111,168,232,0.32); }
+      .omega-loading .ring { animation: none; border-color: rgba(43,95,168,0.3); }
     }
     @media (max-width: 520px) { .login-card { padding: 30px 22px 26px; } }
   </style>
@@ -207,10 +231,8 @@
 
   <div class="login-wrap">
     <div class="login-card">
-      <!-- clearsky-omega-white.png is white on transparent: on the navy
-           card it read, on paper it is invisible. The wordmark is drawn in
-           CSS instead, so it cannot be wrong on either ground. -->
-      <a class="brand omega" href="https://clearskyomega.com/"><span class="dot"></span>ClearSky&nbsp;<em>OMEGA</em></a>
+      <a href="https://clearskyomega.com/" aria-label="ClearSky OMEGA — home"
+         class="omega-disc"><img src="/site-assets/clearsky-omega-white.png" alt="OMEGA"></a>
 
       <!-- STATE 1 · sign in -->
       <div id="paneSignIn">
@@ -278,7 +300,12 @@
     <div class="mark">
       <div class="ring"></div>
       <div class="ring two"></div>
-      <img src="/site-assets/clearsky-omega-white.png" alt="">
+      <!-- THE MARK KEEPS ITS OWN GROUND. clearsky-omega-white.png is
+           white on transparent, so on paper it disappears — and there is no
+           dark version of it in site-assets. Rather than filter the artwork
+           or swap it for type, it sits on the navy disc it was drawn for,
+           which on a drawing reads as a stamp. The asset is untouched. -->
+      <span class="omega-disc"><img src="/site-assets/clearsky-omega-white.png" alt=""></span>
     </div>
     <div class="status" id="loadStatus">Signing you in</div>
     <div class="sub">ClearSky OMEGA</div>
