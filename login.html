@@ -199,7 +199,7 @@
 
         <div class="login-div"><span>New to ClearSky?</span></div>
         <a href="https://clearskyomega.com/contact.html" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Request access</a>
-        <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:info@csebuilders.com">info@csebuilders.com</a>.</p>
+        <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</p>
       </div>
 
       <!-- STATE 2 · this account reaches more than one workspace -->
@@ -217,7 +217,7 @@
       <div id="paneBlocked" class="choose" style="display:none;">
         <h2 id="blockedTitle">Access pending</h2>
         <p class="sub" id="blockedBody"></p>
-        <a href="mailto:info@csebuilders.com" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Email ClearSky</a>
+        <a href="mailto:dev@clearsky-usa.com" class="btn-ghost" style="width:100%;justify-content:center;color:#fff;border-color:rgba(255,255,255,0.28);">Email ClearSky</a>
         <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="signOutBtn2">Use a different account</button></p>
       </div>
 
@@ -717,12 +717,12 @@
     function blockedPane(reason, role) {
       const copy = {
         "suspended": ["Account paused",
-          "This OMEGA account has been paused. ClearSky can lift it — email info@csebuilders.com and we'll sort it out."],
+          "This OMEGA account has been paused. ClearSky can lift it — email dev@clearsky-usa.com and we'll sort it out."],
         "unapproved": ["Waiting on approval",
           "Your account is registered" + (role ? " as a " + role : "") +
           ", and a ClearSky administrator approves each one before deal data opens up. You'll get an email the moment it's through."],
         "pending-role": ["Waiting on a role",
-          "You're signed in, but your role hasn't been assigned yet. A ClearSky administrator does that from the admin console — ask whoever invited you, or email info@csebuilders.com."],
+          "You're signed in, but your role hasn't been assigned yet. A ClearSky administrator does that from the admin console — ask whoever invited you, or email dev@clearsky-usa.com."],
         "no-workspace": ["No workspace yet",
           "This email isn't attached to an OMEGA workspace. If your company is already a ClearSky customer, ask your administrator to add you."]
       }[reason];
@@ -772,7 +772,7 @@
         loading(false);
         showPane("signIn");
         ui.submit.disabled = false;
-        say("You're signed in, but we couldn't work out which workspace to open. Try again, or email info@csebuilders.com.", "error");
+        say("You're signed in, but we couldn't work out which workspace to open. Try again, or email dev@clearsky-usa.com.", "error");
         console.error("[omega-gateway]", err);
       }
     }
@@ -825,12 +825,12 @@
       if (c.indexOf("wrong-password") > -1 || c.indexOf("user-not-found") > -1 || c.indexOf("invalid-credential") > -1)
         return "That email and password don't match an OMEGA account.";
       if (c.indexOf("invalid-email") > -1)          return "Check the email address — that one isn't valid.";
-      if (c.indexOf("user-disabled") > -1)          return "This account has been disabled. Email info@csebuilders.com.";
+      if (c.indexOf("user-disabled") > -1)          return "This account has been disabled. Email dev@clearsky-usa.com.";
       if (c.indexOf("too-many-requests") > -1)      return "Too many attempts. Wait a few minutes, or reset your password.";
       if (c.indexOf("network-request-failed") > -1) return "Can't reach OMEGA. Check your connection and try again.";
       if (c.indexOf("popup-closed") > -1 || c.indexOf("cancelled-popup") > -1) return "";
       if (c.indexOf("popup-blocked") > -1)          return "Your browser blocked the Google window. Allow pop-ups, or use your email and password.";
-      return "Something went wrong signing in. Try again, or email info@csebuilders.com.";
+      return "Something went wrong signing in. Try again, or email dev@clearsky-usa.com.";
     }
 
     /* ---- Wiring ----------------------------------------------------------- */
