@@ -78745,37 +78745,6 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       } catch (e) {}
     };
   
-    /* ── THE ROTATE GRIP ────────────────────────────────────────────────
-       [ and ] work and nobody wants to learn them. A block you can see is
-       a block you should be able to take hold of, so the outline gets a
-       handle above it and you turn it by dragging — the same gesture the
-       element rotate handle already uses elsewhere in the editor, which is
-       the point: one way to turn a thing, not two.
-
-       Its position is remembered rather than hit-tested through the DOM,
-       because this overlay is pointer-events:none so that dragging
-       anywhere inside the box still moves the block. */
-    var ab = M ? bounds(M) : null;
-    if (ab) {
-      var gy = ab.y1 - pad - 34 * ppf() / (ppf() || 1) - 26;
-      GRIP = { x: ab.cx, y: ab.y1 - pad - 30, r: 13 };
-      var stem = ns('line');
-      stem.setAttribute('x1', GRIP.x); stem.setAttribute('y1', ab.y1 - pad);
-      stem.setAttribute('x2', GRIP.x); stem.setAttribute('y2', GRIP.y + GRIP.r);
-      stem.setAttribute('stroke', '#F4A020'); stem.setAttribute('stroke-width', 1.4);
-      g.appendChild(stem);
-      var c = ns('circle');
-      c.setAttribute('cx', GRIP.x); c.setAttribute('cy', GRIP.y); c.setAttribute('r', GRIP.r);
-      c.setAttribute('fill', '#F4A020'); c.setAttribute('stroke', '#0B1626'); c.setAttribute('stroke-width', 2);
-      g.appendChild(c);
-      var ar = ns('text');
-      ar.setAttribute('x', GRIP.x); ar.setAttribute('y', GRIP.y + 5);
-      ar.setAttribute('text-anchor', 'middle');
-      ar.setAttribute('font-size', '15'); ar.setAttribute('fill', '#0B1626');
-      ar.setAttribute('font-family', 'system-ui, sans-serif');
-      ar.textContent = '\u21bb';
-      g.appendChild(ar);
-    }
   }
 
   function num(id, dflt) {
@@ -166205,6 +166174,38 @@ if (root.console && console.info) {
     }
     var b = bounds(M); if (!b) return;
     box(b, '#38BDF8', 1.6, 'rgba(56,189,248,.07)');
+  
+    /* ── THE ROTATE GRIP ────────────────────────────────────────────────
+       [ and ] work and nobody wants to learn them. A block you can see is a
+       block you should be able to take hold of, so the outline gets a handle
+       above it and you turn it by dragging — the same gesture the element
+       rotate handle uses elsewhere in the editor. One way to turn a thing,
+       not two.
+
+       Its position is REMEMBERED rather than hit-tested through the DOM,
+       because this overlay is pointer-events:none so that dragging anywhere
+       inside the box still moves the block. */
+    var ab = bounds(M);
+    if (ab) {
+      GRIP = { x: ab.cx, y: ab.y1 - pad - 30, r: 13 };
+      var stem = ns('line');
+      stem.setAttribute('x1', GRIP.x); stem.setAttribute('y1', ab.y1 - pad);
+      stem.setAttribute('x2', GRIP.x); stem.setAttribute('y2', GRIP.y + GRIP.r);
+      stem.setAttribute('stroke', '#F4A020'); stem.setAttribute('stroke-width', 1.4);
+      g.appendChild(stem);
+      var gc = ns('circle');
+      gc.setAttribute('cx', GRIP.x); gc.setAttribute('cy', GRIP.y); gc.setAttribute('r', GRIP.r);
+      gc.setAttribute('fill', '#F4A020'); gc.setAttribute('stroke', '#0B1626');
+      gc.setAttribute('stroke-width', 2);
+      g.appendChild(gc);
+      var ga = ns('text');
+      ga.setAttribute('x', GRIP.x); ga.setAttribute('y', GRIP.y + 5);
+      ga.setAttribute('text-anchor', 'middle');
+      ga.setAttribute('font-size', '15'); ga.setAttribute('fill', '#0B1626');
+      ga.setAttribute('font-family', 'system-ui, sans-serif');
+      ga.textContent = '\u21bb';
+      g.appendChild(ga);
+    }
   }
 
   function showHud() {
