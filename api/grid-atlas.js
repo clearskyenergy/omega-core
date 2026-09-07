@@ -634,10 +634,29 @@ async function findSubstations(lat, lng, radiusKm) {
    asked for four times. It is also simply better manners toward a service
    run on donations.
    ═══════════════════════════════════════════════════════════════════════════ */
-let BUNDLE = null;   /* per-request; reset alongside SOURCES */
+/* ⚠ THE CACHE HOLDS THE PROMISE, NOT THE RESULT.
 
-async function osmBundle(lat, lng, radiusKm) {
+   Caching the resolved bundle looks right and does nothing: the four
+   callers run inside one Promise.all, so all four reach `if (BUNDLE)` before
+   any of them has finished setting it, and all four fire the query. The
+   trace after the first attempt showed it plainly — four ok(200) entries
+   where there should have been one, which is the same four concurrent
+   requests that caused the 504, now each carrying four times the payload.
+
+   Caching the promise makes the first caller start the request and the
+   other three await the same one. */
+let BUNDLE = null;   /* a Promise, per request; reset alongside SOURCES */
+
+function osmBundle(lat, lng, radiusKm) {
   if (BUNDLE) return BUNDLE;
+  BUNDLE = fetchBundle(lat, lng, radiusKm).catch(function (e) {
+    BUNDLE = null;          /* a failure must not be cached as an answer */
+    throw e;
+  });
+  return BUNDLE;
+}
+
+async function fetchBundle(lat, lng, radiusKm) {
   const bbox = bboxFor(lat, lng, radiusKm);
   const els = await overpass(
     `[out:json][timeout:45];(`
@@ -654,7 +673,6 @@ async function osmBundle(lat, lng, radiusKm) {
     else if (t.power === 'line') out.lines.push(el);
     else if (t.power === 'plant') out.plants.push(el);
   }
-  BUNDLE = out;
   return out;
 }
 
