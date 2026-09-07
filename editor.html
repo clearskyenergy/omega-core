@@ -78744,6 +78744,38 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         msg('Preset loaded \u2014 press Apply to refill the outline.', '#60A5FA');
       } catch (e) {}
     };
+  
+    /* ── THE ROTATE GRIP ────────────────────────────────────────────────
+       [ and ] work and nobody wants to learn them. A block you can see is
+       a block you should be able to take hold of, so the outline gets a
+       handle above it and you turn it by dragging — the same gesture the
+       element rotate handle already uses elsewhere in the editor, which is
+       the point: one way to turn a thing, not two.
+
+       Its position is remembered rather than hit-tested through the DOM,
+       because this overlay is pointer-events:none so that dragging
+       anywhere inside the box still moves the block. */
+    var ab = M ? bounds(M) : null;
+    if (ab) {
+      var gy = ab.y1 - pad - 34 * ppf() / (ppf() || 1) - 26;
+      GRIP = { x: ab.cx, y: ab.y1 - pad - 30, r: 13 };
+      var stem = ns('line');
+      stem.setAttribute('x1', GRIP.x); stem.setAttribute('y1', ab.y1 - pad);
+      stem.setAttribute('x2', GRIP.x); stem.setAttribute('y2', GRIP.y + GRIP.r);
+      stem.setAttribute('stroke', '#F4A020'); stem.setAttribute('stroke-width', 1.4);
+      g.appendChild(stem);
+      var c = ns('circle');
+      c.setAttribute('cx', GRIP.x); c.setAttribute('cy', GRIP.y); c.setAttribute('r', GRIP.r);
+      c.setAttribute('fill', '#F4A020'); c.setAttribute('stroke', '#0B1626'); c.setAttribute('stroke-width', 2);
+      g.appendChild(c);
+      var ar = ns('text');
+      ar.setAttribute('x', GRIP.x); ar.setAttribute('y', GRIP.y + 5);
+      ar.setAttribute('text-anchor', 'middle');
+      ar.setAttribute('font-size', '15'); ar.setAttribute('fill', '#0B1626');
+      ar.setAttribute('font-family', 'system-ui, sans-serif');
+      ar.textContent = '\u21bb';
+      g.appendChild(ar);
+    }
   }
 
   function num(id, dflt) {
@@ -165646,8 +165678,18 @@ if (root.console && console.info) {
     { key: 'control',   label: 'Control',   color: '#38BDF8' }
   ];
 
+  /* Fences already know which compartment they enclose: the compound
+     builder writes omegaCampus with the SAME keys this module uses —
+     compute, generation, storage, solar, control, and 'yard' for the
+     interconnection yard. So a fence has always been able to travel with
+     what it fences; nothing was reading the tag. Without this the block
+     moves and the fence stays behind, which is worse than not moving it. */
+  var CAMPUS_TO_GROUP = { yard: 'intercon' };
   function groupOfShape(x) {
     if (!x) return null;
+    if (x.omegaCampus && x.omegaCampus !== 'feeder') {
+      return CAMPUS_TO_GROUP[x.omegaCampus] || x.omegaCampus;
+    }
     if (x.kind === 'derdc') return 'compute';
     if (x.kind === 'deralt' || x.kind === 'derwind') return 'generation';
     if (x.kind === 'dersolar' || x.kind === 'solar') return 'solar';
@@ -165881,6 +165923,7 @@ if (root.console && console.info) {
 
   /* ── session state ──────────────────────────────────────────────────── */
   var M = null, total = { dx: 0, dy: 0, rot: 0 }, drag = null, hud = null, KEY = 'all';
+  var GRIP = null, spinDrag = null;
 
   function ppf() { try { return (S_().pxPerFt > 0) ? S_().pxPerFt : 1; } catch (e) { return 1; } }
   function ft(px) { return px / ppf(); }
@@ -165905,7 +165948,8 @@ if (root.console && console.info) {
     showHud();
     if (typeof root.showBanner === 'function') {
       root.showBanner('cal', 'Moving ' + labelOf(KEY) + ' \u2014 drag it, or arrow keys (shift = 10 ft). '
-        + '[ and ] turn it (shift = 15\u00b0), R for a quarter turn. '
+        + 'Drag the \u21bb handle above it to turn it \u2014 hold shift to snap to 15\u00b0. '
+        + '([ and ] or R also work.) '
         + 'Pick another compartment from the bar. Enter to keep, Escape to put back.');
     }
     paint();
@@ -166038,20 +166082,55 @@ if (root.console && console.info) {
     try { if (typeof root._plotUnproject === 'function') return root._plotUnproject(p); } catch (er) {}
     return p;
   }
+  function angleTo(cx, cy, x, y) { return Math.atan2(y - cy, x - cx) * 180 / Math.PI; }
+
   function onDown(e) {
     if (!on()) return;
     var p = toCanvas(e); if (!p) return;
     e.preventDefault(); e.stopPropagation();
+    /* Grip first. Its radius is generous on purpose — this is a thing you
+       grab while looking at the drawing, not at the cursor. */
+    if (GRIP && Math.hypot(p.x - GRIP.x, p.y - GRIP.y) <= GRIP.r * 2.2) {
+      var b = bounds(M);
+      if (b) { spinDrag = { cx: b.cx, cy: b.cy, from: angleTo(b.cx, b.cy, p.x, p.y) }; return; }
+    }
     drag = { x: p.x, y: p.y };
   }
+
   function onMove(e) {
-    if (!on() || !drag) return;
+    if (!on()) return;
     var p = toCanvas(e); if (!p) return;
+
+    if (spinDrag) {
+      e.preventDefault(); e.stopPropagation();
+      var now = angleTo(spinDrag.cx, spinDrag.cy, p.x, p.y);
+      var d = now - spinDrag.from;
+      /* Across the -180/180 seam the raw difference jumps a full turn.
+         Without this the block flips right round the moment the cursor
+         crosses due west of the centre. */
+      if (d > 180) d -= 360; if (d < -180) d += 360;
+      /* Shift snaps to 15 degrees — the increment somebody squaring a block
+         to a road reaches for, and the one that makes a straight edge
+         actually straight rather than nearly. */
+      if (e.shiftKey) {
+        var target = Math.round((total.rot + d) / 15) * 15;
+        d = target - total.rot;
+      }
+      if (Math.abs(d) >= 0.05) { spin(d); spinDrag.from = now; }
+      return;
+    }
+
+    if (!drag) return;
     e.preventDefault(); e.stopPropagation();
     nudge(p.x - drag.x, p.y - drag.y);
     drag = { x: p.x, y: p.y };
   }
-  function onUp(e) { if (!on()) return; if (drag) { e.preventDefault(); e.stopPropagation(); } drag = null; }
+
+  function onUp(e) {
+    if (!on()) return;
+    if (drag || spinDrag) { e.preventDefault(); e.stopPropagation(); }
+    drag = null; spinDrag = null;
+  }
   function onKey(e) {
     if (!on()) return;
     var step = (e.shiftKey ? 10 : 1) * ppf();
@@ -166090,6 +166169,7 @@ if (root.console && console.info) {
     while (g.firstChild) g.removeChild(g.firstChild);
     if (!on() || !M) return;
     var pad = 8 * ppf();
+    GRIP = null;
     var box = function (b, col, w, fill) {
       var r = ns('rect');
       r.setAttribute('x', b.x1 - pad); r.setAttribute('y', b.y1 - pad);
@@ -166165,7 +166245,7 @@ if (root.console && console.info) {
          thing to read past on every move that never needed it. */
       + (total.rot ? '<span style="color:#FBBF24;font-weight:700">'
           + (total.rot > 0 ? '\u21bb ' : '\u21ba ') + Math.abs(total.rot) + '\u00b0</span>' : '')
-      + '<span style="color:#5B6B7C;font-size:10px">[ ] turn \u00b7 R quarter</span>'
+      + '<span style="color:#5B6B7C;font-size:10px">drag \u21bb to turn \u00b7 shift snaps 15\u00b0</span>'
       + (bad.length
           ? '<span style="color:#F87171">' + bad.map(function (c) {
               return (c.overlap ? 'overlaps ' : Math.round(c.gapFt) + ' ft to ') + c.label.toLowerCase()
