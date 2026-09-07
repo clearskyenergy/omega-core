@@ -913,7 +913,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
    Ghosted plus a dashed amber outline, not opacity alone: a faint icon on
    its own reads as a render glitch or a deselected item. The dash is the
    drawing convention for "planned, not built", and amber matches the
-   FUTURE PROOFING (INELIGIBLE) block in the legend, so the map and the
+   FUTURE PROOFING block in the legend, so the map and the
    legend say the same thing in the same colour.
 
    Pointer events stay on — a ghost you cannot click is a ghost you cannot
@@ -17453,8 +17453,15 @@ function renderLegend(){
      Positions built out but not energised. They are drawn like chargers
      and would otherwise read as live ports on the legend, which is
      exactly the confusion a reviewer must not have: the utilities pay
-     make-ready on a live port and book future proofing as ineligible.
-     Given its own block so the sheet says which is which. */
+     make-ready on a live port and treat future proofing differently.
+     Given its own block so the sheet says which is which.
+
+     THE BLOCK NO LONGER SAYS "(INELIGIBLE)". That is a utility incentive
+     term and it is only true of one programme at a time — it says nothing
+     about the work, and on a legend the customer and the AHJ both read it
+     lands as a verdict on the design rather than a note about a rebate.
+     What the reader needs from a heading here is what the thing IS, and
+     the rows underneath already say it: conduit + panel position, no EVSE. */
   try{
     var _fp=(S.elements||[]).filter(function(e){ return e && e.futureProof; });
     if(_fp.length){
@@ -17466,13 +17473,13 @@ function renderLegend(){
       });
       Object.keys(_byLbl).forEach(function(k){
         _fpRows+='<div style="display:flex;align-items:center;gap:6px;margin:2px 0">'
-          +'<span style="width:10px;height:10px;border:1.5px dashed #d9a441;border-radius:2px;'
+          +'<span style="width:10px;height:10px;border:1.5px dashed #A855F7;border-radius:2px;'
           +'display:inline-block;flex:0 0 auto"></span>'
           +'<span style="font-size:9px"><b>'+k+' \u00d7'+_byLbl[k]+'</b>'
           +'<span style="opacity:.7"> \u2014 conduit + panel position, no EVSE</span></span></div>';
       });
       h+='<div style="font-size:8px;font-weight:800;letter-spacing:.8px;opacity:.6;'
-        +'margin:8px 0 4px;color:#d9a441">FUTURE PROOFING (INELIGIBLE)</div>'+_fpRows;
+        +'margin:8px 0 4px;color:#A855F7">FUTURE PROOFING</div>'+_fpRows;
     }
   }catch(e){}
 
@@ -22036,8 +22043,8 @@ const WIZ_STEPS_L2 = [
     id:'l2_evse_fp', icon:'\u26A1',
     title:'Place Future-Proofing Position (optional)',
     desc:'A stall built out now but not energised: conduit, trench and a panel position carried '
-        +'to the pad, with no charger and no port. Utilities book this as INELIGIBLE future '
-        +'proofing, never as make-ready, so it is drawn separately from a live port and priced '
+        +'to the pad, with no charger and no port. Utilities treat this as future '
+        +'proofing, not as make-ready, so it is drawn separately from a live port and priced '
         +'separately. Adding capacity while the trench is open costs a fraction of returning to it.',
     action:'click-place',
     eqId:'charger', label:'FP Position', spec:'Future proofing \u2014 conduit + panel position, no EVSE',
