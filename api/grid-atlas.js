@@ -484,9 +484,23 @@ async function overpass(query, ms) {
          30 s ceiling between them. */
       const budget = ms || (first ? 20000 : 6000);
       first = false;
+      /* ── WHY THERE IS A USER-AGENT HERE ──────────────────────────────
+         The trace said overpass-api.de was returning HTTP 406 on every
+         request. 406 is not rate limiting — it is the mirror refusing a
+         client it cannot identify. Node's fetch sends no User-Agent, and
+         the OSM foundation's usage policy asks every automated client to
+         identify itself and give a contact. So this is both the fix and the
+         thing we were supposed to be doing anyway.
+
+         kumi.systems returns 429 to this function's egress IPs, which is a
+         shared-cloud-address problem no header will solve. */
       const j = await getJson(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'ClearSky-OMEGA GridAtlas/1.0 (+https://clearskyomega.com; dev@clearsky-usa.com)',
+          'Accept': 'application/json'
+        },
         body: 'data=' + encodeURIComponent(query)
       }, budget);
       if (j && Array.isArray(j.elements)) {
