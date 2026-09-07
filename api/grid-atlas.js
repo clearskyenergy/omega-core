@@ -582,9 +582,9 @@ async function findSubstations(lat, lng, radiusKm) {
   try {
     /* nwr, not node+way: a large substation is often mapped as a multipolygon
        relation, and Moore Substation next to the Lattice site is a way that
-       the node-only half of the old query could never have matched. */
-    const els = await overpass(
-      `[out:json][timeout:25];nwr["power"="substation"](${bboxFor(lat, lng, radiusKm)});out center tags;`);
+       the node-only half of the old query could never have matched. It now
+       comes out of the shared bundle — see osmBundle. */
+    const els = (await osmBundle(lat, lng, radiusKm)).subs;
     const out = [];
     for (const el of els) {
       const p = osmPoint(el); if (!p) continue;
@@ -608,6 +608,69 @@ async function findSubstations(lat, lng, radiusKm) {
     SOURCES.substations = (SOURCES.substations || '') + ' -> osm-failed:' + (e.message || 'error');
     return null;                     /* nobody answered: NOT measured */
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ONE OVERPASS QUERY, NOT FOUR
+
+   Substations, pipelines, power lines and plants were each fetched with
+   their own Overpass call, in parallel. Adding the pipeline layer took that
+   from three concurrent requests to four against the same mirror, and the
+   trace told the story immediately:
+
+     overpass-api.de:ok(69)     pipelines
+     overpass-api.de:HTTP 504   substations — the mirror gave up
+     overpass-api.de:ok(16)     plants
+     overpass.kumi.systems:timeout
+     overpass.osm.ch:empty      <- substations fell through to the mirror
+                                   with no data, and reported zero
+
+   Substations had been working an hour earlier. Hammering one public mirror
+   with four concurrent queries is what broke them, and the failure mode is
+   the worst kind: a confident zero from the one mirror that answers.
+
+   Overpass is built for union queries. One request, one rate-limit slot, one
+   timeout to reason about — and the elements are sorted here rather than
+   asked for four times. It is also simply better manners toward a service
+   run on donations.
+   ═══════════════════════════════════════════════════════════════════════════ */
+let BUNDLE = null;   /* per-request; reset alongside SOURCES */
+
+async function osmBundle(lat, lng, radiusKm) {
+  if (BUNDLE) return BUNDLE;
+  const bbox = bboxFor(lat, lng, radiusKm);
+  const els = await overpass(
+    `[out:json][timeout:45];(`
+    + `nwr["power"="substation"](${bbox});`
+    + `nwr["man_made"="pipeline"](${bbox});`
+    + `nwr["power"="line"](${bbox});`
+    + `nwr["power"="plant"](${bbox});`
+    + `);out geom tags;`, 40000);
+  const out = { subs: [], pipes: [], lines: [], plants: [] };
+  for (const el of els) {
+    const t = el.tags || {};
+    if (t.power === 'substation') out.subs.push(el);
+    else if (t.man_made === 'pipeline') out.pipes.push(el);
+    else if (t.power === 'line') out.lines.push(el);
+    else if (t.power === 'plant') out.plants.push(el);
+  }
+  BUNDLE = out;
+  return out;
+}
+
+/* Nearest point ON a way, not its midpoint: a 40 km corridor whose midpoint
+   is far away can still run along the fence. */
+function nearestOnWay(el, lat, lng) {
+  let best = null;
+  for (const g of (el.geometry || [])) {
+    const d = distanceKm(lat, lng, g.lat, g.lon);
+    if (best == null || d < best) best = d;
+  }
+  if (best == null) {
+    const p = osmPoint(el);
+    if (p) best = distanceKm(lat, lng, p.lat, p.lng);
+  }
+  return best;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -658,22 +721,12 @@ const GAS_SUBSTANCE = /^(gas|natural_gas|natural gas|cng|biogas|methane)$/i;
 
 async function findPipelines(lat, lng, radiusKm) {
   try {
-    const els = await overpass(
-      `[out:json][timeout:25];nwr["man_made"="pipeline"](${bboxFor(lat, lng, radiusKm)});out geom tags;`);
+    const bundle = await osmBundle(lat, lng, radiusKm);
+    const els = bundle.pipes;
     const out = [];
     for (const el of els) {
       const t = el.tags || {};
-      /* Nearest point ON the pipeline, not its midpoint — a corridor whose
-         midpoint is 20 km away can still cross the parcel. */
-      let best = null;
-      for (const g of (el.geometry || [])) {
-        const d = distanceKm(lat, lng, g.lat, g.lon);
-        if (best == null || d < best) best = d;
-      }
-      if (best == null) {
-        const p = osmPoint(el);
-        if (p) best = distanceKm(lat, lng, p.lat, p.lng);
-      }
+      const best = nearestOnWay(el, lat, lng);
       if (best == null) continue;
       const sub = String(t.substance || t.type || '').trim();
       out.push({
@@ -715,23 +768,51 @@ async function findLines(lat, lng, radiusKm) {
         voltageKv: num(a.VOLTAGE)
       });
     }
-    SOURCES.lines = 'hifld';
+    /* ── HIFLD HAS NO CIRCUIT COUNT, OSM DOES ────────────────────────
+       HIFLD answers for lines and has the better voltage data, so it wins —
+       and it carries nothing about how many circuits share a corridor. That
+       left the redundancy component scoring zero on every screened site
+       whatever was actually strung up there. OSM tags `circuits` on some
+       ways and `cables` on most, so the count is lifted across by voltage:
+       for each kV class, the most circuits seen on any line of that class
+       within the radius.
+
+       BY CLASS, NOT BY LINE. The two datasets do not share identifiers and
+       matching a HIFLD polyline to an OSM way by proximity would be a guess
+       dressed as a join. "Two circuits exist at 345 kV near this parcel" is
+       what the redundancy component actually asks, and it is a claim the
+       class-level number can support. */
+    try {
+      const osm = (await osmBundle(lat, lng, radiusKm)).lines;
+      const byKv = {};
+      for (const el of osm) {
+        const t = el.tags || {};
+        const kv = osmKv(t.voltage);
+        if (!kv) continue;
+        const c = num(t.circuits) ||
+          (num(t.cables) ? Math.max(1, Math.floor(num(t.cables) / 3)) : null);
+        if (!c) continue;
+        const key = Math.round(kv);
+        if (!byKv[key] || c > byKv[key]) byKv[key] = c;
+      }
+      for (const L of out) {
+        if (L.voltageKv == null) continue;
+        const c = byKv[Math.round(L.voltageKv)];
+        if (c) L.circuits = c;
+      }
+      SOURCES.lines = 'hifld + osm circuits';
+    } catch (e) {
+      SOURCES.lines = 'hifld (no circuit data: ' + (e.message || 'osm failed') + ')';
+    }
     return within(out, radiusKm);
   } catch (e) { SOURCES.lines = 'hifld-failed:' + (e.message || 'error'); }
 
   try {
-    const els = await overpass(
-      `[out:json][timeout:20];way["power"="line"](${bboxFor(lat, lng, radiusKm)});out geom tags;`);
+    const els = (await osmBundle(lat, lng, radiusKm)).lines;
     const out = [];
     for (const el of els) {
       const t = el.tags || {};
-      /* Nearest POINT ON the line, not its midpoint. A 40 km circuit whose
-         midpoint is far away can still run along the fence. */
-      let best = null;
-      for (const g of (el.geometry || [])) {
-        const d = distanceKm(lat, lng, g.lat, g.lon);
-        if (best == null || d < best) best = d;
-      }
+      const best = nearestOnWay(el, lat, lng);
       if (best == null) continue;
       /* CIRCUITS, WHICH A POINT LOOKUP COULD NOT ANSWER BEFORE. The
          redundancy component wants "two circuits at the top voltage" and had
@@ -780,9 +861,7 @@ async function findPlants(lat, lng, radiusKm) {
   } catch (e) { SOURCES.plants = 'hifld-failed:' + (e.message || 'error'); }
 
   try {
-    const bb = bboxFor(lat, lng, radiusKm);
-    const els = await overpass(
-      `[out:json][timeout:20];(way["power"="plant"](${bb});relation["power"="plant"](${bb}););out center tags;`);
+    const els = (await osmBundle(lat, lng, radiusKm)).plants;
     const out = [];
     for (const el of els) {
       const p = osmPoint(el); if (!p) continue;
@@ -913,6 +992,7 @@ module.exports = async function handler(req, res) {
   }
 
   SOURCES.substations = SOURCES.lines = SOURCES.plants = SOURCES.pipelines = null;
+  BUNDLE = null;
   TRACE.length = 0;
   const body = (req.body && typeof req.body === 'object') ? req.body : {};
   const { address, sizeMw } = body;
