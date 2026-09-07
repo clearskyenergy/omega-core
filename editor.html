@@ -106769,7 +106769,31 @@ table.e3-tbl td{ white-space:normal }
 
   function addRegButton() {
     if (document.getElementById('rb-parcel-screen')) return true;
-    var host = document.getElementById('rb-gis-layers');
+    /* ── ANALYZE > ASSESSMENT, NOT NEXT TO GIS LAYERS ────────────────────
+       These two sat side by side because this button anchored off that one —
+       convenience of injection, not a judgement about where it belongs. They
+       are different verbs. GIS Layers imports parcels, easements, circuits
+       and wetlands and DRAWS THEM ON THE MAP: content arrives, so Insert is
+       right. The register draws nothing. It reads a folder of candidate KMZs
+       and ranks them against each other on grid position, which is the same
+       question Site Score and Site Pre-Qual ask one site at a time — and they
+       are all in Assessment.
+
+       It also runs at a different moment: screening picks which parcel you
+       are going to draw, so it is upstream of every Insert tool by a whole
+       step of the job.
+
+       Anchored in preference order within the Analyze page only, so a
+       same-named button on another tab cannot claim it. */
+    var page = document.querySelector('#ribbon .ribbon-page[data-page="analyze"]');
+    if (!page) return false;
+    var WANT = [/openScorePanel/, /openSitePreQual/, /openComedPreQual/, /openViabilityWorkflow/];
+    var all = page.querySelectorAll('button.rbtn'), host = null;
+    for (var w = 0; w < WANT.length && !host; w++) {
+      for (var i = 0; i < all.length; i++) {
+        if (WANT[w].test(all[i].getAttribute('onclick') || '')) { host = all[i]; break; }
+      }
+    }
     if (!host || !host.parentNode) return false;
     var b = document.createElement('button');
     b.className = 'rbtn';
@@ -106779,7 +106803,10 @@ table.e3-tbl td{ white-space:normal }
               'grid position. Ranks parcels; does not clear one.';
     b.innerHTML = '<span class="rb-ico">\u2637</span><span class="rb-lbl">Parcel<br>Screen</span>';
     b.onclick = function () { try { regOpen(); } catch (e) { console.error(TAG, e); } };
-    host.parentNode.insertBefore(b, host.nextSibling);
+    /* After the whole wrapper, never inside it \u2014 a wrapped button shares its
+       parent with a caret and an absolutely positioned flyout. */
+    var anchor = (host.closest && host.closest('.rbtn-wrap')) || host;
+    anchor.parentNode.insertBefore(b, anchor.nextSibling);
     return true;
   }
 
@@ -106797,16 +106824,21 @@ table.e3-tbl td{ white-space:normal }
   };
 
   watchMap();
-  var n = 0, iv = setInterval(function () {
-    /* Parcel Screen anchors off the GIS button, so it is installed in the
-       same poll and only once that one exists. */
-    var ok = addButton();
-    if (ok) addRegButton();
+  var n = 0, okGis = false, okReg = false;
+  var iv = setInterval(function () {
+    /* Two independent installs on one poll. They used to be chained — the
+       register was only attempted when the GIS button had just landed —
+       which made a missing anchor on one tab silently cost the other. */
+    if (!okGis) okGis = addButton();
+    if (!okReg) okReg = addRegButton();
+    var ok = okGis && okReg;
     if (ok || ++n > 60) {
       clearInterval(iv);
-      if (window.console) console.info(TAG + ' ready \u2014 Insert \u203a Site & Safety \u203a GIS Layers / Parcel Screen'
-        + (document.getElementById('rb-parcel-screen') ? '' : ' (NOT INSTALLED \u2014 no anchor button found)')
-        + ', or OmegaGIS.open() / OmegaParcelScreen.open()');
+      if (window.console) console.info(TAG + ' ready \u2014 GIS Layers: Insert \u203a Site & Safety'
+        + (okGis ? '' : ' (NOT INSTALLED \u2014 no anchor found)')
+        + '; Parcel Screen: Analyze \u203a Assessment'
+        + (okReg ? '' : ' (NOT INSTALLED \u2014 no anchor found)')
+        + '. Or OmegaGIS.open() / OmegaParcelScreen.open()');
     }
   }, 500);
 })();
