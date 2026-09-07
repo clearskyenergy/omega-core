@@ -78,9 +78,9 @@ window.addEventListener('unhandledrejection', function(e) {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ClearSky OMEGA">
 <meta name="application-name" content="ClearSky OMEGA">
-<meta name="theme-color" content="#0A1628">
+<meta name="theme-color" content="#16202B">
 <meta name="description" content="ClearSky OMEGA -- BESS & EV Charging Site Map Designer & Energy Analysis Tool">
-<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;ClearSky OMEGA Site Map Designer Pro&quot;,&quot;short_name&quot;:&quot;OMEGA&quot;,&quot;description&quot;:&quot;BESS &amp; EV Charging Site Map Designer &amp; Energy Analysis -- ClearSky OMEGA&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;#0A1628&quot;,&quot;theme_color&quot;:&quot;#0A1628&quot;,&quot;orientation&quot;:&quot;any&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%2780%27%20fill%3D%27%230A1628%27%2F%3E%3Crect%20x%3D%2760%27%20y%3D%2760%27%20width%3D%27392%27%20height%3D%27392%27%20rx%3D%2750%27%20fill%3D%27%23111%27%20stroke%3D%27%232Fb54a%27%20stroke-width%3D%276%27%2F%3E%3Cpath%20d%3D%27M270%20120%20L180%20300%20L245%20300%20L215%20400%20L340%20240%20L270%20240%20Z%27%20fill%3D%27%232FB54A%27%2F%3E%3C%2Fsvg%3E&quot;,&quot;sizes&quot;:&quot;512x512&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;,&quot;purpose&quot;:&quot;any maskable&quot;}]}">
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;ClearSky OMEGA Site Map Designer Pro&quot;,&quot;short_name&quot;:&quot;OMEGA&quot;,&quot;description&quot;:&quot;BESS &amp; EV Charging Site Map Designer &amp; Energy Analysis -- ClearSky OMEGA&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;#16202B&quot;,&quot;theme_color&quot;:&quot;#16202B&quot;,&quot;orientation&quot;:&quot;any&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%2780%27%20fill%3D%27%230A1628%27%2F%3E%3Crect%20x%3D%2760%27%20y%3D%2760%27%20width%3D%27392%27%20height%3D%27392%27%20rx%3D%2750%27%20fill%3D%27%23111%27%20stroke%3D%27%232Fb54a%27%20stroke-width%3D%276%27%2F%3E%3Cpath%20d%3D%27M270%20120%20L180%20300%20L245%20300%20L215%20400%20L340%20240%20L270%20240%20Z%27%20fill%3D%27%232FB54A%27%2F%3E%3C%2Fsvg%3E&quot;,&quot;sizes&quot;:&quot;512x512&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;,&quot;purpose&quot;:&quot;any maskable&quot;}]}">
 <!-- Apple touch icon -- inline SVG as data URI -->
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20512%20512%27%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20rx%3D%2780%27%20fill%3D%27%230A1628%27%2F%3E%3Crect%20x%3D%2740%27%20y%3D%2740%27%20width%3D%27432%27%20height%3D%27432%27%20rx%3D%2760%27%20fill%3D%27%23111%27%20stroke%3D%27%232FB54A%27%20stroke-width%3D%277%27%2F%3E%3Cpath%20d%3D%27M270%20110%20L175%20305%20L245%20305%20L212%20410%20L345%20235%20L272%20235%20Z%27%20fill%3D%27%232FB54A%27%2F%3E%3C%2Fsvg%3E">
 <title>ClearSky OMEGA -- Site Map Designer Pro</title>
@@ -182,27 +182,27 @@ button{ -webkit-appearance:none; appearance:none; }
      Variable names kept identical to the legacy theme so every existing
      var(--accent), var(--gold), var(--sky) reference keeps resolving. The
      dark architectural chrome is retained; the single "active" highlight and
-     the section-header "gold" accent are now NextNRG green (#2FB54A). Status
+     the section-header "gold" accent are now NextNRG green (#4A8FD8). Status
      colors (red/amber/green) preserved so warnings still read. */
-  --navy:#1E1E1E;        /* darkest chrome (AutoCAD titlebar)   */
-  --blue:#3C3C3C;        /* mid chrome / hover                  */
-  --sky:#2FB54A;         /* neutral action fill -> NextNRG green */
-  --accent:#2FB54A;      /* the single highlight -- NextNRG green */
-  --green:#2FB54A;--amber:#B0B0B0;--red:#C86A6A;--purple:#7A7A7A;
-  --bg:#252526;          /* canvas chrome background            */
-  --surface:#2D2D2D;     /* inset fields / cards                */
-  --panel:#1E1E1E;       /* side + top panels                   */
-  --border:#3A3A3A;      /* hairline rules                      */
+  --navy:#16202B;        /* darkest chrome (AutoCAD titlebar)   */
+  --blue:#2A3A49;        /* mid chrome / hover                  */
+  --sky:#4A8FD8;         /* neutral action fill -> NextNRG green */
+  --accent:#4A8FD8;      /* the single highlight -- NextNRG green */
+  --green:#4A8FD8;--amber:#B0B0B0;--red:#C86A6A;--purple:#7A7A7A;
+  --bg:#1B2632;          /* canvas chrome background            */
+  --surface:#22303D;     /* inset fields / cards                */
+  --panel:#16202B;       /* side + top panels                   */
+  --border:#30404F;      /* hairline rules                      */
   --text:#E0E0E0;        /* primary type                        */
   --sub:#9A9A9A;         /* secondary / captions                */
   --lw:270px;--th:30px;--ribbon-h:68px;
   /* "gold" section-header accent -> NextNRG green */
-  --gold:#2FB54A;--gold-dark:#1F8A37;--gold-pale:#8FE0A3;--gold-faint:rgba(47,181,74,.08);
-  --shadow-gold:0 0 0 2px rgba(47,181,74,.30);
+  --gold:#4A8FD8;--gold-dark:#2B5FA8;--gold-pale:#A8CBF0;--gold-faint:rgba(74,143,216,.08);
+  --shadow-gold:0 0 0 2px rgba(74,143,216,.30);
   --radius-sm:2px;--radius-md:3px;   /* AutoCAD-tight corners */
   --font-mono:'IBM Plex Mono',monospace;
   /* status accents used by the new grouped menu + guided build */
-  --hl:#2FB54A;--hl-dim:rgba(47,181,74,.14);--ink:#141414;
+  --hl:#4A8FD8;--hl-dim:rgba(74,143,216,.14);--ink:#141414;
 }
 body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
@@ -254,7 +254,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
   background:rgba(255,255,255,.05); border-bottom:1px solid var(--border);
   cursor:move; user-select:none;
 }
-.op-bar.op-dragging{ background:rgba(47,181,74,.18) }
+.op-bar.op-dragging{ background:rgba(74,143,216,.18) }
 .op-bar .op-title{
   flex:1; font-family:'IBM Plex Sans',sans-serif; font-size:8.5px;
   font-weight:700; letter-spacing:.08em; color:var(--sub); white-space:nowrap;
@@ -441,7 +441,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
   cursor:pointer; color:var(--sub); font-size:10.5px; font-weight:600;
 }
 .e3-sub div:hover{ color:var(--text) }
-.e3-sub div.on{ color:var(--text); border-color:var(--accent); background:rgba(47,181,74,.10) }
+.e3-sub div.on{ color:var(--text); border-color:var(--accent); background:rgba(74,143,216,.10) }
 .e3-facets{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center }
 .e3-facet{ position:relative }
 .e3-fbtn{
@@ -488,7 +488,7 @@ table.e3-tbl td{
 }
 table.e3-tbl tr{ cursor:pointer }
 table.e3-tbl tr:hover td{ background:rgba(255,255,255,.04) }
-table.e3-tbl tr.e3-cur td{ background:rgba(47,181,74,.11) }
+table.e3-tbl tr.e3-cur td{ background:rgba(74,143,216,.11) }
 table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .e3-num{ font-family:var(--font-mono); text-align:right }
 .e3-pill{
@@ -500,7 +500,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .e3-p-central{ color:#F0ABFC; border-color:rgba(240,171,252,.42); background:rgba(240,171,252,.10) }
 .e3-p-string{ color:#22D3EE; border-color:rgba(34,211,238,.45); background:rgba(34,211,238,.10) }
 .e3-p-skid{ color:#FBBF24; border-color:rgba(251,191,36,.45); background:rgba(251,191,36,.10) }
-.e3-p-mine{ color:var(--accent); border-color:rgba(47,181,74,.5); background:rgba(47,181,74,.12) }
+.e3-p-mine{ color:var(--accent); border-color:rgba(74,143,216,.5); background:rgba(74,143,216,.12) }
 .e3-p-site{ color:#9A9A9A; border-color:rgba(154,154,154,.45); background:rgba(154,154,154,.10) }
 .e3-p-dcm{ color:#C084FC; border-color:rgba(192,132,252,.45); background:rgba(192,132,252,.10) }
 .e3-note{
@@ -565,7 +565,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
   border-top:2px solid transparent;
 }
 .o2-cls:hover{ color:var(--text); background:rgba(255,255,255,.03) }
-.o2-cls.on{ color:var(--text); border-top-color:var(--accent); background:rgba(47,181,74,.07) }
+.o2-cls.on{ color:var(--text); border-top-color:var(--accent); background:rgba(74,143,216,.07) }
 .o2-cls .o2-sw{ width:9px; height:9px; border-radius:2px; flex:0 0 9px }
 .o2-cls .o2-n{ opacity:.55; font-family:var(--font-mono); font-size:9.5px }
 .o2-spacer{ flex:1 }
@@ -931,7 +931,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 
 /* Resize/rotate/delete handles */
 .h-del{position:absolute;top:-11px;right:-11px;width:20px;height:20px;background:var(--red);border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;z-index:22;pointer-events:auto}
-.h-rot{position:absolute;top:-52px;left:50%;transform:translateX(-50%);width:26px;height:26px;background:var(--amber);border-radius:50%;cursor:grab;display:none;align-items:center;justify-content:center;color:#0A1628;z-index:22;pointer-events:auto;box-shadow:0 0 0 3px rgba(244,160,32,.35),0 2px 8px rgba(0,0,0,.5);user-select:none}.h-rot::after{content:"";position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);width:1px;height:26px;background:rgba(244,160,32,.4);pointer-events:none}
+.h-rot{position:absolute;top:-52px;left:50%;transform:translateX(-50%);width:26px;height:26px;background:var(--amber);border-radius:50%;cursor:grab;display:none;align-items:center;justify-content:center;color:#16202B;z-index:22;pointer-events:auto;box-shadow:0 0 0 3px rgba(244,160,32,.35),0 2px 8px rgba(0,0,0,.5);user-select:none}.h-rot::after{content:"";position:absolute;bottom:-26px;left:50%;transform:translateX(-50%);width:1px;height:26px;background:rgba(244,160,32,.4);pointer-events:none}
 .h-se{position:absolute;bottom:-6px;right:-6px;width:12px;height:12px;background:var(--sky);border-radius:2px;cursor:se-resize;display:none;z-index:22;pointer-events:auto}
 .h-sw{position:absolute;bottom:-6px;left:-6px;width:12px;height:12px;background:var(--sky);border-radius:2px;cursor:sw-resize;display:none;z-index:22;pointer-events:auto}
 .h-ne{position:absolute;top:-6px;right:-6px;width:12px;height:12px;background:var(--sky);border-radius:2px;cursor:ne-resize;display:none;z-index:22;pointer-events:auto}
@@ -1504,7 +1504,7 @@ body.ribbon-collapsed #ribbon-collapse-btn{ transform:rotate(180deg); }
 #viewcube svg{ display:block;width:100%;height:100%;overflow:visible; }
 #viewcube .vc-face{ fill:var(--surface);stroke:var(--sub);stroke-width:1;cursor:pointer;transition:fill .1s; }
 #viewcube .vc-face:hover{ fill:var(--blue); }
-#viewcube .vc-top{ fill:#3a3a3a; }
+#viewcube .vc-top{ fill:#30404F; }
 #viewcube .vc-txt{ fill:var(--text);font-family:var(--font-mono);font-size:9px;text-anchor:middle;dominant-baseline:middle;pointer-events:none; }
 #viewcube .vc-n{ fill:var(--sub);font-family:var(--font-mono);font-size:8px;text-anchor:middle; }
 #nav-bar{
@@ -2156,7 +2156,7 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" id="btn-dtwin" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development. The one-line handoff is built and callable now: omegaOneLineExport() / omegaTwinPush(siteId)." style="position:relative;opacity:.55"><span class="rb-ico" style="color:#38BDF8">◈</span><span class="rb-lbl">Digital<br>Twin</span><span id="btn-dtwin-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#0A1628;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
+        <button class="rbtn" id="btn-dtwin" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development. The one-line handoff is built and callable now: omegaOneLineExport() / omegaTwinPush(siteId)." style="position:relative;opacity:.55"><span class="rb-ico" style="color:#38BDF8">◈</span><span class="rb-lbl">Digital<br>Twin</span><span id="btn-dtwin-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#16202B;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
       </div>
       <div class="rpanel-cap">Operations</div>
     </div>
@@ -2205,7 +2205,7 @@ window.onerror = function(msg, src, line, col, err) {
      <button class="rbtn" id="rb-clearplot" onclick="clearPlot()" title="Clear the committed plot and return to the live interactive map"><span class="rb-ico">✕</span><span class="rb-lbl">Clear<br>Plot</span></button> -->
         <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
         <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Solar view — cycle individual modules → row bands → outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:#60A5FA">☷</span><span class="rb-lbl">Solar<br>Panels</span></button>
-        <button class="rbtn" id="btn-3d" onclick="omega3dSoon()" title="3D site view &mdash; tilt and orbit to inspect the site. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>View</span><span id="btn-3d-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#0A1628;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
+        <button class="rbtn" id="btn-3d" onclick="omega3dSoon()" title="3D site view &mdash; tilt and orbit to inspect the site. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>View</span><span id="btn-3d-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#16202B;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
         <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
       </div>
       <div class="rpanel-cap">Canvas</div>
@@ -2216,7 +2216,7 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="openRpPanel('summary')" title="Site map summary — BESS, conduit, equipment, DER"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
         <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:#F59E0B">Ⓜ</span><span class="rb-lbl">Meters</span></button>
         <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:#00D4FF">▦</span><span class="rb-lbl">Site<br>Map</span></button>
-        <button class="rbtn" id="rb-native" aria-pressed="false" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:#2FB54A">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
+        <button class="rbtn" id="rb-native" aria-pressed="false" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:#4A8FD8">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
         <button class="rbtn" id="rb-dock-left" aria-pressed="false" onclick="rbRun(toggleDockLeft)" title="Dock the tool panel to the left of the screen as a vertical column"><span class="rb-ico">◧</span><span class="rb-lbl">Dock Left</span></button>
         <button class="rbtn" onclick="rbRun(toggleDiagPanel)" title="Anchor diagnostics — why equipment is or is not locked to the ground"><span class="rb-ico">⚠</span><span class="rb-lbl">Diagnose</span></button>
         <button class="rbtn" onclick="rbRun(toggleCompassPanel)" title="Compass — pan the view north / south / east / west, and frame the drawing"><span class="rb-ico">⊕</span><span class="rb-lbl">Compass</span></button>
@@ -2915,7 +2915,7 @@ if(document.readyState==='loading'){
         <button onclick="mondayDisconnect()" title="Forget token" style="background:rgba(229,57,53,.14);border:1px solid rgba(229,57,53,.3);color:var(--red);border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;font-size:10px">Forget</button>
       </div>
       <select id="monday-board" style="display:none;width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:6px;font-size:11px;font-family:inherit;outline:none"></select>
-      <button id="monday-push-btn" onclick="mondayPush()" style="display:none;width:100%;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:11px;border:none;border-radius:6px;padding:8px;cursor:pointer;font-family:inherit">▦ Push project tasks to board</button>
+      <button id="monday-push-btn" onclick="mondayPush()" style="display:none;width:100%;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:11px;border:none;border-radius:6px;padding:8px;cursor:pointer;font-family:inherit">▦ Push project tasks to board</button>
       <div id="monday-status" style="font-size:10px;color:var(--sub);min-height:14px;line-height:1.4"></div>
     </div>
     <div style="font-size:8px;color:var(--sub);margin-top:8px;opacity:.75;line-height:1.4">Get a token in Monday → avatar → Developers → My Access Tokens. No token? Use "Export to Monday" for a CSV instead.</div>
@@ -3196,11 +3196,11 @@ if(document.readyState==='loading'){
         <!-- AI-generated SVG overlay -->
         <svg id="schematic-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible" xmlns="http://www.w3.org/2000/svg"></svg>
         <!-- Drag handle / reposition mode indicator -->
-        <div id="schem-handle" style="display:none;position:absolute;top:6px;left:6px;background:rgba(0,212,255,.85);color:#0A1628;border-radius:4px;padding:3px 8px;font-size:9px;font-weight:700;font-family:'IBM Plex Mono',monospace;pointer-events:none;z-index:10">✥ DRAG TO REPOSITION</div>
+        <div id="schem-handle" style="display:none;position:absolute;top:6px;left:6px;background:rgba(0,212,255,.85);color:#16202B;border-radius:4px;padding:3px 8px;font-size:9px;font-weight:700;font-family:'IBM Plex Mono',monospace;pointer-events:none;z-index:10">✥ DRAG TO REPOSITION</div>
         <!-- Resize corner handle -->
         <div id="schem-resize" style="display:none;position:absolute;bottom:0;right:0;width:18px;height:18px;background:var(--accent);border-radius:3px 0 0 0;cursor:se-resize;z-index:11"
           onmousedown="schemStartResize(event)">
-          <svg width="18" height="18" viewBox="0 0 18 18"><path d="M5 13L13 5M9 13L13 9M13 13L13 13" stroke="#0A1628" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg width="18" height="18" viewBox="0 0 18 18"><path d="M5 13L13 5M9 13L13 9M13 13L13 13" stroke="#16202B" stroke-width="1.5" stroke-linecap="round"/></svg>
         </div>
       </div>
     </div>
@@ -3221,7 +3221,7 @@ if(document.readyState==='loading'){
       <button onclick="zoomBg(-0.15)">−</button>
       <button onclick="resetBgZoom()" style="font-size:9px">RST</button>
       <button id="zc-unlock" onclick="setMapInteractive(true)" title="Map is locked — tap to unlock panning"
-        style="display:none;font-size:14px;background:rgba(244,160,32,.9);border-color:#F4A020;color:#0A1628">🔓</button>
+        style="display:none;font-size:14px;background:rgba(244,160,32,.9);border-color:#F4A020;color:#16202B">🔓</button>
       <div id="zpct">100%</div>
     </div>
 
@@ -3602,7 +3602,7 @@ if(document.readyState==='loading'){
       <!-- Flow readout -->
       <div id="ce-thru-flow" style="display:none;font-size:9.5px;line-height:1.7;background:rgba(0,0,0,.18);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px"></div>
 
-      <button onclick="ceThruSizerApply()" style="width:100%;padding:7px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#0A1628;font-weight:800;font-size:9.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply size → BESS config & estimate</button>
+      <button onclick="ceThruSizerApply()" style="width:100%;padding:7px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#16202B;font-weight:800;font-size:9.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply size → BESS config & estimate</button>
     </div>
 
     <!-- BESS Equipment -->
@@ -4214,7 +4214,7 @@ if(document.readyState==='loading'){
           <!-- Recommendation readout -->
           <div id="bm-solar-reco" style="display:none;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.28);border-radius:6px;padding:9px;font-size:10px;line-height:1.7;margin-bottom:8px"></div>
 
-          <button onclick="bmApplySolarSizing()" style="width:100%;padding:8px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#0A1628;font-weight:800;font-size:10px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply recommended size to specs ↓</button>
+          <button onclick="bmApplySolarSizing()" style="width:100%;padding:8px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#16202B;font-weight:800;font-size:10px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply recommended size to specs ↓</button>
         </div>
 
         <!-- Specs grid -->
@@ -4325,7 +4325,7 @@ if(document.readyState==='loading'){
       </button>
       <button id="bm-save-btn" class="mb-s" onclick="saveBess()" style="position:relative;margin-left:auto">
         💾 Save & Place ✓
-        <span id="bm-save-prequal-badge" style="display:none;position:absolute;top:-8px;right:-8px;background:var(--green);color:#0A1628;border-radius:10px;font-size:8px;font-weight:800;padding:2px 6px"></span>
+        <span id="bm-save-prequal-badge" style="display:none;position:absolute;top:-8px;right:-8px;background:var(--green);color:#16202B;border-radius:10px;font-size:8px;font-weight:800;padding:2px 6px"></span>
       </button>
     </div>
   </div>
@@ -5506,7 +5506,7 @@ async function _captureFullCanvas() {
     if (typeof html2canvas !== 'undefined') {
       const cvs = await _captureCanvasWithSVG(sc, {
         useCORS: true, allowTaint: true, scale: 1.5,
-        backgroundColor: '#0A1628', logging: false
+        backgroundColor: '#16202B', logging: false
       });
       canvasImg = cvs.toDataURL('image/jpeg', 0.9);
     }
@@ -6747,7 +6747,7 @@ function startRenameDocTab(ev, i){
   var input = document.createElement('input');
   input.type = 'text';
   input.value = current;
-  input.style.cssText = 'width:110px;background:#0A1628;border:1px solid var(--gold);color:var(--text);border-radius:4px;padding:2px 6px;font-family:inherit;font-size:11px;font-weight:600;outline:none';
+  input.style.cssText = 'width:110px;background:#16202B;border:1px solid var(--gold);color:var(--text);border-radius:4px;padding:2px 6px;font-family:inherit;font-size:11px;font-weight:600;outline:none';
   var commit = function(){
     var v = (input.value||'').trim();
     if(v) _docTabs[i].name = v;
@@ -9948,7 +9948,7 @@ function _shapeInk(sh){ return (sh && sh.color) ? sh.color : SHAPE_STROKE; }
    code, not this default. */
 var PARK_TYPES = {
   standard: { label:'Standard',        wft:9.0,  lft:18, ink:null,      fill:'none' },
-  ev:       { label:'EV Charging',     wft:9.0,  lft:18, ink:'#2FB54A', fill:'rgba(120,200,140,0.10)' },
+  ev:       { label:'EV Charging',     wft:9.0,  lft:18, ink:'#4A8FD8', fill:'rgba(120,200,140,0.10)' },
   ada:      { label:'ADA Accessible',  wft:11.0, lft:18, ink:'#2E6FE6', fill:'rgba(46,111,230,0.12)' },
   adaev:    { label:'ADA + EV',        wft:11.0, lft:18, ink:'#2E6FE6', fill:'rgba(46,111,230,0.12)' }
 };
@@ -13278,7 +13278,7 @@ async function buildMosaic(opts){
   var cv=document.createElement('canvas');
   cv.width=tilePx*grid; cv.height=tilePx*grid;
   var ctx=cv.getContext('2d');
-  ctx.fillStyle='#0A1628'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#16202B'; ctx.fillRect(0,0,cv.width,cv.height);
 
   /* Tile centres are offset from the site centre in GROUND pixels. For a
      grid of N, centres run from -(N-1)/2 to +(N-1)/2 tile widths. */
@@ -13413,7 +13413,7 @@ function openSiteCapture(){
     +     'style="flex:0 0 90px;padding:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);'
     +     'color:#8BA3C4;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11px">Cancel</button>'
     +   '<button id="sc-go" onclick="scCapRun()" '+(lat==null?'disabled':'')+' '
-    +     'style="flex:1;padding:10px;background:linear-gradient(135deg,#00D4FF,#22C55E);color:#0A1628;'
+    +     'style="flex:1;padding:10px;background:linear-gradient(135deg,#00D4FF,#22C55E);color:#16202B;'
     +     'font-weight:800;font-size:11px;border:none;border-radius:7px;cursor:pointer;font-family:inherit'
     +     +(lat==null?';opacity:.4;cursor:not-allowed':'')+'">Capture Site</button>'
     + '</div></div>';
@@ -13630,7 +13630,7 @@ function openSiteQuickBuild(){
     + '</div>'
     + '<div style="padding:12px 19px;border-top:1px solid #26364d">'
     +   '<button id="sqb-go" onclick="sqbRun()" '+(haveLoc?'':'disabled')+' '
-    +     'style="width:100%;padding:12px;background:'+(haveLoc?'#22C55E':'#2A3A4D')+';color:'+(haveLoc?'#0A1628':'#64748B')+';'
+    +     'style="width:100%;padding:12px;background:'+(haveLoc?'#22C55E':'#2A3A4D')+';color:'+(haveLoc?'#16202B':'#64748B')+';'
     +     'font-weight:800;font-size:13px;border:none;border-radius:8px;cursor:'+(haveLoc?'pointer':'not-allowed')+';font-family:inherit">'
     +     '\u25b6 Capture Site</button>'
     + '</div></div>';
@@ -14093,7 +14093,7 @@ function _alSetGo(enabled){
   go.style.opacity='';
   if(enabled){
     go.style.background='linear-gradient(135deg,#FBBF24,#22C55E)';
-    go.style.color='#0A1628';
+    go.style.color='#16202B';
     go.style.border='none';
     go.style.cursor='pointer';
     go.style.boxShadow='0 2px 10px rgba(251,191,36,.35)';
@@ -15133,7 +15133,7 @@ function openBillImport(){
     + '</div>'
     + '<div id="bill-actions" style="padding:12px 18px;border-top:1px solid #26364d;display:none;gap:8px">'
     +   '<button onclick="document.getElementById(\'bill-import-modal\').remove()" style="flex:0 0 84px;padding:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#8FA3B8;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11px">Close</button>'
-    +   '<button id="bill-apply" onclick="billApply()" style="flex:1;padding:10px;background:linear-gradient(135deg,#4ADE80,#00D4FF);color:#0A1628;font-weight:800;font-size:11px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Use these values</button>'
+    +   '<button id="bill-apply" onclick="billApply()" style="flex:1;padding:10px;background:linear-gradient(135deg,#4ADE80,#00D4FF);color:#16202B;font-weight:800;font-size:11px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Use these values</button>'
     + '</div></div>';
   billMode(window._billMode);
 }
@@ -18162,7 +18162,7 @@ function openSolarBessSizer(){
     +   '<div id="sbs-flow" style="display:none;font-size:11.5px;line-height:1.8;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:11px 13px;margin-bottom:12px"></div>'
     + '</div>'
     + '<div style="padding:12px 18px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:8px">'
-    +   '<button onclick="sbsApply()" style="flex:1;padding:10px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#0A1628;font-weight:800;font-size:11px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Apply to BESS &amp; Estimate</button>'
+    +   '<button onclick="sbsApply()" style="flex:1;padding:10px;background:linear-gradient(135deg,#FBBF24,#22C55E);color:#16202B;font-weight:800;font-size:11px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Apply to BESS &amp; Estimate</button>'
     + '</div>'
     + '</div>';
 
@@ -20060,7 +20060,7 @@ function bmExportAnalysis() {
 <meta charset="utf-8">
 <title>${_bn} BESS Analysis -- ${addr}</title>
 <style>
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background:#0A1628; color:#E2EAF4; margin:0; padding:0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background:#16202B; color:#E2EAF4; margin:0; padding:0; }
   .page { max-width:860px; margin:0 auto; padding:40px 32px; }
   .header { border-bottom:2px solid rgba(197,165,90,.4); padding-bottom:18px; margin-bottom:28px; }
   .logo { font-size:11px; font-weight:700; color:rgba(197,165,90,.8); text-transform:uppercase; letter-spacing:2px; margin-bottom:6px; }
@@ -25141,7 +25141,7 @@ async function openGpsPlacement(){
   if(!host){
     host=document.createElement('div');
     host.id='gps-modal';
-    host.style.cssText='position:fixed;inset:0;background:#0A1628;z-index:100005;display:flex;flex-direction:column';
+    host.style.cssText='position:fixed;inset:0;background:#16202B;z-index:100005;display:flex;flex-direction:column';
     document.body.appendChild(host);
   }
   host.style.display='flex';
@@ -26439,7 +26439,7 @@ async function generateAndExportProposal() {
         // _captureCanvasWithSVG handles all SVG pre-rasterization correctly
         const canvas = await _captureCanvasWithSVG(sc, {
           scale: 1.5, useCORS: true, allowTaint: true,
-          backgroundColor: '#0A1628', logging: false,
+          backgroundColor: '#16202B', logging: false,
           ignoreElements: function(el) { return el.id === 'cal-ov' || el.id === 'snapring' || el.id === 'cov'; }
         });
         sitemapDataUrl = canvas.toDataURL('image/jpeg', 0.9);
@@ -26622,7 +26622,7 @@ function _proposalTypeAutoselect(){
 
 function buildProposalHTML({proj,addr,client,utility,rep,propNum,today,c,bessRows,condRows,sitemapDataUrl}) {
   var _pt=_proposalType();
-  const GREEN='#1DB95A', DARK='#0A1628', NAVY='#0F2040', ACCENT='#00D4FF';
+  const GREEN='#1DB95A', DARK='#16202B', NAVY='#0F2040', ACCENT='#00D4FF';
   /* The two figures below were a rough estimate and a literal string.
      yr1Rev = total x 0.18 makes payback total/(total x 0.18) = 1/0.18 —
      5.6 years on every proposal ever generated, whatever the project cost.
@@ -26666,18 +26666,18 @@ function buildProposalHTML({proj,addr,client,utility,rep,propNum,today,c,bessRow
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:#d8e0e8;color:#0A1628}
+body{font-family:'DM Sans',sans-serif;background:#d8e0e8;color:#16202B}
 .page{width:816px;min-width:816px;background:#fff;margin:0 auto 20px;box-shadow:0 4px 24px rgba(0,0,0,.15);page-break-after:always;position:relative;overflow:hidden}
 .page-inner{padding:52px 64px}
-.cover-page{background:#ffffff;color:#0A1628}
+.cover-page{background:#ffffff;color:#16202B}
 .cover-page .page-inner{padding:72px 64px;min-height:1056px;display:flex;flex-direction:column}
-.cover-title{font-size:42px;font-weight:700;color:#0A1628;line-height:1.15;margin-bottom:16px;font-family:'DM Sans',sans-serif}
+.cover-title{font-size:42px;font-weight:700;color:#16202B;line-height:1.15;margin-bottom:16px;font-family:'DM Sans',sans-serif}
 .cover-sub{font-size:16px;color:#5A7088;margin-bottom:40px;font-weight:300}
 .cover-divider{width:60px;height:3px;background:${GREEN};border-radius:2px;margin:30px 0}
 .cover-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(29,185,90,.12);border:1px solid rgba(29,185,90,.3);border-radius:20px;padding:6px 14px;font-size:11px;color:${GREEN};font-weight:600;margin-bottom:30px}
 .cover-meta{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:30px}
 .cover-meta label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#5A7088;display:block;margin-bottom:4px}
-.cover-meta p{font-size:13px;color:#0A1628;font-weight:500}
+.cover-meta p{font-size:13px;color:#16202B;font-weight:500}
 .ph{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;margin-bottom:28px;border-bottom:2px solid #EBF0F5}
 .ph-brand{font-size:18px;font-weight:700;color:${DARK}}
 .ph-brand span{color:${GREEN}}
@@ -26697,7 +26697,7 @@ p.body{font-size:12px;color:#3A5068;line-height:1.7;margin-bottom:12px}
 .spec-card{background:#F7FAFB;border:1px solid #E0EAF2;border-radius:8px;padding:14px}
 .spec-card h4{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#4A6080;margin-bottom:10px}
 .spec-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;font-size:11px}
-.spec-row .sk{color:#4A6080}.spec-row .sv{font-weight:600;color:#0A1628;font-family:'DM Mono',monospace}
+.spec-row .sk{color:#4A6080}.spec-row .sv{font-weight:600;color:#16202B;font-family:'DM Mono',monospace}
 .fin-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
 .fin-card{border-radius:10px;padding:18px;text-align:center}
 .fin-green{background:linear-gradient(135deg,#0A3020,#0F4A2F);color:#fff}
@@ -26721,7 +26721,7 @@ p.body{font-size:12px;color:#3A5068;line-height:1.7;margin-bottom:12px}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:60px">
       ${_coverLogo}
       <div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:22px;color:#0A1628;font-weight:700;line-height:1">${_bn}</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:22px;color:#16202B;font-weight:700;line-height:1">${_bn}</div>
         <div style="font-size:11px;color:#5A7088;font-weight:500;letter-spacing:.5px;display:block;margin-top:2px">${_btag}</div>
       </div>
     </div>
@@ -26801,7 +26801,7 @@ ${sitemapDataUrl ? `
     <span class="section-label">Section 2 -- Site Layout</span>
     <h2 class="section-title">Site Map</h2>
     <p class="body" style="margin-bottom:16px">The site map below shows the proposed BESS installation layout including equipment placement, conduit routing, and site infrastructure.</p>
-    <div style="border:1px solid #EBF0F5;border-radius:8px;overflow:hidden;background:#0A1628;text-align:center;padding:4px">
+    <div style="border:1px solid #EBF0F5;border-radius:8px;overflow:hidden;background:#16202B;text-align:center;padding:4px">
       <img src="${sitemapDataUrl}" style="max-width:100%;height:auto;display:block;border-radius:4px" alt="Site Map">
     </div>
     <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap">
@@ -26927,14 +26927,14 @@ ${sitemapDataUrl ? `
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px">
       <div>
-        <div style="height:50px;border-bottom:1px solid #0A1628;margin-bottom:8px"></div>
-        <div style="font-size:13px;font-weight:700;color:#0A1628">${client}</div>
+        <div style="height:50px;border-bottom:1px solid #16202B;margin-bottom:8px"></div>
+        <div style="font-size:13px;font-weight:700;color:#16202B">${client}</div>
         <div style="font-size:10px;color:#4A6080;margin-top:2px">Site Owner / Authorized Representative</div>
         <div style="font-size:10px;color:#4A6080;margin-top:8px;display:flex;justify-content:space-between"><span>Date:</span><span style="flex:1;border-bottom:1px solid #8BA0B4;margin-left:8px"></span></div>
       </div>
       <div>
-        <div style="height:50px;border-bottom:1px solid #0A1628;margin-bottom:8px"></div>
-        <div style="font-size:13px;font-weight:700;color:#0A1628">${rep}</div>
+        <div style="height:50px;border-bottom:1px solid #16202B;margin-bottom:8px"></div>
+        <div style="font-size:13px;font-weight:700;color:#16202B">${rep}</div>
         <div style="font-size:10px;color:#4A6080;margin-top:2px">${brandName()} Representative</div>
         <div style="font-size:10px;color:#4A6080;margin-top:8px;display:flex;justify-content:space-between"><span>Date:</span><span style="flex:1;border-bottom:1px solid #8BA0B4;margin-left:8px"></span></div>
       </div>
@@ -28623,7 +28623,7 @@ function runValueStackEstimate() {
           ? _vsRow('PJM Freq. Regulation'+(window._VS_ESTIMATE.isGridForming?' (grid-forming)':'')+' — '+window._VS_ESTIMATE.regMW.toFixed(2)+' MW @ $'+window._VS_ESTIMATE.regPrice+'/MW-hr', window._VS_ESTIMATE.reg_pjm, fmt)
           : '<div style="font-size:8.5px;color:var(--sub);padding:2px 0">PJM Freq. Regulation: n/a — site is outside PJM</div>')
       + '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:5px;margin-top:5px;font-weight:700"><span style="color:var(--text);font-size:11px">Est. Yr-1 Value Stack</span><span style="color:var(--green);font-family:\'IBM Plex Mono\',monospace;font-size:12px">'+fmt(total)+'</span></div>'
-      + '<button onclick="applyValueStackEstimate()" style="width:100%;margin-top:8px;padding:7px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:10px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply to Revenue Streams ↓</button>'
+      + '<button onclick="applyValueStackEstimate()" style="width:100%;margin-top:8px;padding:7px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:10px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Apply to Revenue Streams ↓</button>'
       + '<div style="font-size:8.5px;color:var(--sub);margin-top:7px;line-height:1.5;border-top:1px dashed var(--border);padding-top:6px">'
       + '⚠ Preliminary estimate from utility tariff + ISO capacity bands. '
       + '<strong style="color:#60A5FA">Not third-party certified.</strong> '
@@ -34928,7 +34928,7 @@ function openBomSourcing() {
     +     '<span style="font-size:11px;color:#E8F0FE;font-weight:600">Mark this site map complete — I have verified every field-run wire, conduit size, and component above.</span>'
     +   '</label>'
     +   '<div style="display:flex;gap:8px">'
-    +     '<button onclick="exportBomCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Sourcing CSV</button>'
+    +     '<button onclick="exportBomCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Sourcing CSV</button>'
     +   '</div>'
     +   '<div id="bom-rfq" style="margin-top:12px"></div>'
     +   '<div style="font-size:8.5px;color:#6B8299;margin-top:9px;line-height:1.5">Takeoffs are generated from the drawing. Distributor SKUs &amp; live pricing are resolved in the marketplace sourcing portal (Rexel Energy Solutions / City Electric Supply) at order time. Container-internal wiring is excluded — only field runs to the facility connection point are listed.</div>'
@@ -35304,7 +35304,7 @@ function _showMondayHelp(taskCount){
     +   '4. Start import — tasks land in a new group'
     + '</div>'
     + '<div style="font-size:9.5px;color:#6B8299;margin-top:10px;line-height:1.5">Dates are set relative to today as a starting schedule — adjust on the board. Status uses Not Started / In Progress / Blocked / Done so Monday auto-detects it.</div>'
-    + '<button onclick="document.getElementById(\'monday-help\').remove()" style="width:100%;margin-top:14px;padding:9px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Got it</button>'
+    + '<button onclick="document.getElementById(\'monday-help\').remove()" style="width:100%;margin-top:14px;padding:9px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Got it</button>'
     + '</div>';
 }
 
@@ -41906,7 +41906,7 @@ async function generateBlueprint() {
     if(typeof html2canvas !== 'undefined') {
       const cvs = await _captureCanvasWithSVG(sc, {
         useCORS: true, allowTaint: true, scale: 3,
-        backgroundColor: '#0A1628', logging: false,
+        backgroundColor: '#16202B', logging: false,
         width: sc.offsetWidth, height: sc.offsetHeight
       });
       /* Patch 113: the sheet gets the capture LOSSLESS. JPEG at 0.85 put
@@ -45906,8 +45906,8 @@ async function exportPermitPDF() {
 
     <!-- Action buttons -->
     <div style="display:flex;gap:8px">
-      <button onclick="copyExportJson()" id="copy-btn" style="flex:1;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Copy JSON</button>
-      <button onclick="downloadExportJson()" style="flex:1;background:#0A1628;border:1px solid #1DB95A;color:#1DB95A;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⬇ Download .json</button>
+      <button onclick="copyExportJson()" id="copy-btn" style="flex:1;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Copy JSON</button>
+      <button onclick="downloadExportJson()" style="flex:1;background:#16202B;border:1px solid #1DB95A;color:#1DB95A;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⬇ Download .json</button>
     </div>
   </div>
 </div>
@@ -45916,7 +45916,7 @@ async function exportPermitPDF() {
 <div id="proposal-modal" style="display:none;position:fixed;inset:0;background:rgba(10,22,40,.92);z-index:9999;overflow-y:auto;padding:20px">
   <div style="max-width:520px;margin:40px auto;background:#0F2040;border:1px solid #1E3A5F;border-radius:12px;overflow:hidden">
     <!-- Header -->
-    <div style="background:#0A1628;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E3A5F">
+    <div style="background:#16202B;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E3A5F">
       <div>
         <div id="prop-modal-brand" style="font-size:10px;color:#1DB95A;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px"></div>
         <div style="font-size:16px;font-weight:700;color:#E2EEF9">Export Proposal</div>
@@ -46054,7 +46054,7 @@ async function exportPermitPDF() {
     </div>
     <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
       <button onclick="document.getElementById('new-proj-modal').style.display='none'" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer">Cancel</button>
-      <button onclick="createNewProject()" style="background:var(--green);border:none;color:#0A1628;border-radius:6px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer">Create Project -></button>
+      <button onclick="createNewProject()" style="background:var(--green);border:none;color:#16202B;border-radius:6px;padding:8px 20px;font-size:12px;font-weight:700;cursor:pointer">Create Project -></button>
     </div>
   </div>
 </div>
@@ -47540,7 +47540,7 @@ function _renderPreQualResults(r, totalKW, totalKWh, el, isHeuristic) {
 
     <!-- Verdict -->
     <div style="background:${bgColor};border:1.5px solid ${color};border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px">
-      <div style="width:46px;height:46px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;font-weight:700;color:#0A1628">
+      <div style="width:46px;height:46px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;font-weight:700;color:#16202B">
         ${r.verdict_color==='green'?'OK':r.verdict_color==='yellow'?'!':r.verdict_color==='blue'?'?':' '}
       </div>
       <div style="flex:1;min-width:0">
@@ -49712,7 +49712,7 @@ function P0(){
         {v:'other',l:'Other'}
       ]}))
     +'<div style="padding:2px 10px 8px">'
-    +  '<button onclick="vwAutoFillFromAddress()" style="width:100%;padding:8px;background:linear-gradient(135deg,#00D4FF,#4ADE80);color:#0A1628;font-weight:800;font-size:10.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">\u2728 Auto-fill from address (AI)</button>'
+    +  '<button onclick="vwAutoFillFromAddress()" style="width:100%;padding:8px;background:linear-gradient(135deg,#00D4FF,#4ADE80);color:#16202B;font-weight:800;font-size:10.5px;border:none;border-radius:6px;cursor:pointer;font-family:inherit">\u2728 Auto-fill from address (AI)</button>'
     +  '<div style="font-size:8px;color:#6B7280;margin-top:4px;line-height:1.4">Researches utility, FEMA flood zone, jurisdiction and zoning context. Verify before relying on the values.</div>'
     +  '<div id="vw-autofill-status" style="font-size:9px;margin-top:5px;min-height:12px"></div>'
     +'</div>'
@@ -53611,7 +53611,7 @@ function renderTrenchSpine(){
     var hx=end==='a'?t.ax:t.bx, hy=end==='a'?t.ay:t.by;
     var h=document.createElementNS('http://www.w3.org/2000/svg','circle');
     h.setAttribute('cx',hx); h.setAttribute('cy',hy); h.setAttribute('r','6');
-    h.setAttribute('fill','#F59E0B'); h.setAttribute('stroke','#0A1628'); h.setAttribute('stroke-width','1.5');
+    h.setAttribute('fill','#F59E0B'); h.setAttribute('stroke','#16202B'); h.setAttribute('stroke-width','1.5');
     h.style.cursor='move'; h.dataset.trenchEnd=end;
     h.addEventListener('mousedown', _trenchHandleDown); g.appendChild(h);
   });
@@ -55907,19 +55907,19 @@ function openDcfcBuild(){
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Site Type</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'+stOpts+'</div>'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Charger Model</div>'
-      +'<select id="dcfc-model" onchange="_dcfcSyncPorts()" style="width:100%;background:#0A1628;border:1px solid #F5A623;color:#E2EEF9;padding:8px 10px;border-radius:7px;font-size:12px;margin-bottom:14px">'+mOpts+'</select>'
+      +'<select id="dcfc-model" onchange="_dcfcSyncPorts()" style="width:100%;background:#16202B;border:1px solid #F5A623;color:#E2EEF9;padding:8px 10px;border-radius:7px;font-size:12px;margin-bottom:14px">'+mOpts+'</select>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">How many chargers</div>'
-          +'<input id="dcfc-count" type="number" min="1" max="40" value="'+DCFC.chargers+'" oninput="_dcfcSyncPorts()" style="width:100%;background:#0A1628;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
+          +'<input id="dcfc-count" type="number" min="1" max="40" value="'+DCFC.chargers+'" oninput="_dcfcSyncPorts()" style="width:100%;background:#16202B;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">Ports / charger</div>'
-          +'<input id="dcfc-ports" type="number" min="1" max="4" value="'+DCFC.ports+'" oninput="_dcfcSyncPorts()" style="width:100%;background:#0A1628;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
+          +'<input id="dcfc-ports" type="number" min="1" max="4" value="'+DCFC.ports+'" oninput="_dcfcSyncPorts()" style="width:100%;background:#16202B;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">Spare conduits</div>'
-          +'<input id="dcfc-spare" type="number" min="0" max="10" value="'+DCFC.spare+'" style="width:100%;background:#0A1628;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
+          +'<input id="dcfc-spare" type="number" min="0" max="10" value="'+DCFC.spare+'" style="width:100%;background:#16202B;border:1px solid #26364d;color:#E2EEF9;padding:7px 8px;border-radius:6px;font-size:13px;font-family:monospace;box-sizing:border-box"></div>'
       +'</div>'
       +'<div id="dcfc-summary" style="font-size:10px;color:#8FA3B8;background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:7px;padding:9px 11px;margin-bottom:14px;line-height:1.6"></div>'
       +'<div style="margin-bottom:12px">'
         +'<label style="display:block;font-size:9px;color:#8FA3B8;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px">Service</label>'
-        +'<select id="dcfc-tie" onchange="_dcfcTieNote()" style="width:100%;padding:9px;background:#0A1628;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#E8F0FE;font-size:12px">'
+        +'<select id="dcfc-tie" onchange="_dcfcTieNote()" style="width:100%;padding:9px;background:#16202B;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#E8F0FE;font-size:12px">'
         + (window.OmegaTieIn ? OmegaTieIn.optionsHtml('Utility POI \u2014 draw a new service and transformer') : '<option value="">Utility POI</option>')
         +'</select></div>'
       +'<div id="dcfc-tie-note" style="font-size:9px;color:#8FA3B8;background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;line-height:1.5;margin-bottom:14px">'
@@ -55927,7 +55927,7 @@ function openDcfcBuild(){
         +'<span style="color:#F59E0B">\u2b24 Utility Service</span> \u2192 <span style="color:#F59E0B">\u2b24 Transformer</span> \u2192 '
         +'<span style="color:#EF4444">\u2b24 Switchgear/Panel</span> \u2192 then each <span style="color:#2563EB">\u2b24 charger stall</span>. '
         +'Conduit auto-routes through one shared trench (main/feeder/branch/spare, color-coded & length-labeled).</div>'
-      +'<button onclick="_dcfcStartPlacing()" style="width:100%;padding:12px;background:#F5A623 !important;color:#0A1628 !important;font-weight:800;font-size:14px;border:2px solid #FBBF24;border-radius:8px;cursor:pointer;font-family:inherit;text-shadow:none;box-shadow:0 2px 8px rgba(245,166,35,.4)">\u25b6 Start Placing</button>'
+      +'<button onclick="_dcfcStartPlacing()" style="width:100%;padding:12px;background:#F5A623 !important;color:#16202B !important;font-weight:800;font-size:14px;border:2px solid #FBBF24;border-radius:8px;cursor:pointer;font-family:inherit;text-shadow:none;box-shadow:0 2px 8px rgba(245,166,35,.4)">\u25b6 Start Placing</button>'
     +'</div>'
     +'</div></div>';
   var d=document.createElement('div'); d.innerHTML=html; document.body.appendChild(d.firstChild);
@@ -61982,7 +61982,7 @@ function _dcfcGuideRender(){
   var rows=lines.map(function(s,ix){
     var ic = s.state==='done' ? '\u2713' : (s.state==='active' ? '\u25b6' : (ix+1));
     var icBg = s.state==='done' ? '#22C55E' : (s.state==='active' ? s.color : 'rgba(255,255,255,.12)');
-    var icCol = s.state==='todo' ? '#8FA3B8' : '#0A1628';
+    var icCol = s.state==='todo' ? '#8FA3B8' : '#16202B';
     var txtCol = s.state==='active' ? '#E2EEF9' : (s.state==='done' ? '#8FA3B8' : '#64748B');
     var wt = s.state==='active' ? '800' : '600';
     return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0">'
@@ -61994,7 +61994,7 @@ function _dcfcGuideRender(){
   if(phase==='poi'){ hint='Click the map to drop the <strong style="color:#F5A623">Utility Service (POI)</strong>. A trench will be suggested from it.'; }
   else if(phase==='trench'){
     hint='Drag the trench end handle to route it, then confirm. Everything places along this run.';
-    actions='<button onclick="_dcfcConfirmTrench()" style="width:100%;padding:9px;background:#F5A623;color:#0A1628;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Confirm Trench</button>'
+    actions='<button onclick="_dcfcConfirmTrench()" style="width:100%;padding:9px;background:#F5A623;color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Confirm Trench</button>'
       +'<button onclick="_dcfcToggleTrenchSurface()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Toggle paved / unpaved</button>';
   } else if(phase==='place'){
     if(DCFC.stepIx < DCFC.seq.length){ var kk=DCFC.seq[DCFC.stepIx]; hint='Click <strong>along the trench</strong> to place the <strong style="color:'+(nodeColors[kk]||'#F5A623')+'">'+(nodeLabels[kk]||kk)+'</strong>. It snaps to the run.'; }
@@ -62621,14 +62621,14 @@ function openLevel2Build(){
     +'</div>'
     +'<div style="padding:16px 20px">'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Charger Model</div>'
-      +'<select id="l2-model" onchange="_l2ModelChanged()" style="width:100%;background:#0A1628;border:1px solid #22D3EE;color:#E2EEF9;padding:9px;border-radius:7px;font-size:12px;margin-bottom:12px">'+lmOpts+'</select>'
+      +'<select id="l2-model" onchange="_l2ModelChanged()" style="width:100%;background:#16202B;border:1px solid #22D3EE;color:#E2EEF9;padding:9px;border-radius:7px;font-size:12px;margin-bottom:12px">'+lmOpts+'</select>'
       +'<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-bottom:14px">'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">Nameplate</div>'
-          +'<select id="l2-amps" onchange="_l2Sync()" style="width:100%;background:#0A1628;border:1px solid #22D3EE;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px">'+ampOpts+'</select></div>'
+          +'<select id="l2-amps" onchange="_l2Sync()" style="width:100%;background:#16202B;border:1px solid #22D3EE;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px">'+ampOpts+'</select></div>'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">How many</div>'
-          +'<input id="dcfc-count" type="number" min="1" value="1" oninput="_l2Sync()" style="width:100%;background:#0A1628;border:1px solid #26364d;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px"></div>'
+          +'<input id="dcfc-count" type="number" min="1" value="1" oninput="_l2Sync()" style="width:100%;background:#16202B;border:1px solid #26364d;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px"></div>'
         +'<div><div style="font-size:9px;color:#8FA3B8;margin-bottom:3px">Spare conduit</div>'
-          +'<input id="dcfc-spare" type="number" min="0" value="0" oninput="_l2Sync()" style="width:100%;background:#0A1628;border:1px solid #26364d;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px"></div>'
+          +'<input id="dcfc-spare" type="number" min="0" value="0" oninput="_l2Sync()" style="width:100%;background:#16202B;border:1px solid #26364d;color:#E2EEF9;padding:8px;border-radius:7px;font-size:12px"></div>'
       +'</div>'
       +'<input type="hidden" id="dcfc-ports" value="1">'
       +'<label style="display:flex;align-items:center;gap:7px;font-size:10px;color:#8FA3B8;margin-bottom:12px;cursor:pointer">'
@@ -62639,7 +62639,7 @@ function openLevel2Build(){
       +'<div id="l2-summary" style="font-size:10px;color:#8FA3B8;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.22);border-radius:7px;padding:9px 11px;line-height:1.6;margin-bottom:14px"></div>'
       +'<div style="margin-bottom:12px">'
         +'<label style="display:block;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Start from</label>'
-        +'<select id="l2-svc" onchange="_l2TieNote()" style="width:100%;padding:9px;background:#0A1628;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#E8F0FE;font-size:12px">'
+        +'<select id="l2-svc" onchange="_l2TieNote()" style="width:100%;padding:9px;background:#16202B;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#E8F0FE;font-size:12px">'
         + ['existing','upgrade','new'].map(function(k){
             return '<option value="'+k+'"'+(DCFC.l2Service===k?' selected':'')+'>'+L2_SERVICE[k].label+'</option>';
           }).join('')
@@ -62650,7 +62650,7 @@ function openLevel2Build(){
         +'<span style="color:#EF4444">\u2b24 Outdoor Panel</span> \u2192 '
         +'<span style="color:#22D3EE">\u2b24 EVSE</span>'
         +'<br>Conduit auto-routes: interior feed in yellow, trenched branch in cyan. Set the trench to asphalt after it draws if it crosses pavement.</div>'
-      +'<button onclick="_l2StartPlacing()" style="width:100%;padding:12px;background:#22D3EE !important;color:#0A1628 !important;font-weight:800;font-size:13px;border:none;border-radius:9px;cursor:pointer">\u26a1 Start Placing \u25b8</button>'
+      +'<button onclick="_l2StartPlacing()" style="width:100%;padding:12px;background:#22D3EE !important;color:#16202B !important;font-weight:800;font-size:13px;border:none;border-radius:9px;cursor:pointer">\u26a1 Start Placing \u25b8</button>'
     +'</div>'
     +'</div></div>';
   var d=document.createElement('div'); d.innerHTML=html; document.body.appendChild(d.firstChild);
@@ -62826,7 +62826,7 @@ function _dcfcRenderTrenches(){
     for(var j=0;j<_dcfcDraw.pts.length;j++){
       var c=document.createElementNS(NS,'circle');
       c.setAttribute('cx',_dcfcDraw.pts[j].x); c.setAttribute('cy',_dcfcDraw.pts[j].y);
-      c.setAttribute('r','3.5'); c.setAttribute('fill','#0A1628'); c.setAttribute('stroke',col);
+      c.setAttribute('r','3.5'); c.setAttribute('fill','#16202B'); c.setAttribute('stroke',col);
       c.setAttribute('stroke-width','2'); g.appendChild(c);
     }
   }
@@ -63097,7 +63097,7 @@ _dcfcGuideRender=function(){
   var rows=lines.map(function(s,ix){
     var ic = s.state==='done' ? '\u2713' : (s.state==='active' ? '\u25b6' : (ix+1));
     var icBg = s.state==='done' ? '#22C55E' : (s.state==='active' ? s.color : 'rgba(255,255,255,.12)');
-    var icCol = s.state==='todo' ? '#8FA3B8' : '#0A1628';
+    var icCol = s.state==='todo' ? '#8FA3B8' : '#16202B';
     var txtCol = s.state==='active' ? '#E2EEF9' : (s.state==='done' ? '#8FA3B8' : '#64748B');
     var wt = s.state==='active' ? '800' : '600';
     return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0">'
@@ -63113,7 +63113,7 @@ _dcfcGuideRender=function(){
   } else if(phase==='drawtrench'){
     var np=_dcfcDraw?_dcfcDraw.pts.length:0;
     hint='<strong style="color:'+legCol+'">Draw the '+legName+' trench:</strong> click points across the map to route it ('+np+' pt'+(np===1?'':'s')+'), then press <strong>Enter</strong> to finish. <strong>Backspace</strong> removes the last point.';
-    actions='<button onclick="_dcfcFinishRun()" style="width:100%;padding:9px;background:'+legCol+';color:#0A1628;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Run (Enter)</button>'
+    actions='<button onclick="_dcfcFinishRun()" style="width:100%;padding:9px;background:'+legCol+';color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Run (Enter)</button>'
       +'<button onclick="_dcfcDrawUndoPt()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px">\u232b Undo Point (Backspace)</button>'
       +'<button onclick="_dcfcToggleSurface2()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((DCFC._surface==='concrete')?'sawcut concrete':'in-ground')+'</button>';
   } else if(phase==='placeon'){
@@ -63127,7 +63127,7 @@ _dcfcGuideRender=function(){
       +'<button onclick="_dcfcRotateLast()" title="Rotate last part (R)" style="flex:1;padding:7px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">\u21bb Rotate (R)</button>'
       +'</div>';
     if(kind==='charger' && placedCh>0){
-      actions+='<button onclick="_dcfcFinish()" style="width:100%;padding:9px;background:#22C55E;color:#0A1628;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Build (Enter)</button>';
+      actions+='<button onclick="_dcfcFinish()" style="width:100%;padding:9px;background:#22C55E;color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Build (Enter)</button>';
     }
   }
 
@@ -63493,7 +63493,7 @@ function openBessGuidedBuild(){
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">3 \u00b7 Placement Plan</div>'
       +'<div id="bgb-summary" style="font-size:10px;color:#8FA3B8;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:7px;padding:9px 11px;margin-bottom:10px;line-height:1.6"></div>'
       +'<div id="bgb-seqline" style="font-size:9px;color:#8FA3B8;background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;line-height:1.5;margin-bottom:14px"></div>'
-      +'<button onclick="_bgbStartPlacing()" style="width:100%;padding:12px;background:#22C55E !important;color:#0A1628 !important;font-weight:800;font-size:14px;border:2px solid #4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(34,197,94,.4)">\u25b6 Place Configured System</button>'
+      +'<button onclick="_bgbStartPlacing()" style="width:100%;padding:12px;background:#22C55E !important;color:#16202B !important;font-weight:800;font-size:14px;border:2px solid #4ADE80;border-radius:8px;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(34,197,94,.4)">\u25b6 Place Configured System</button>'
     +'</div>'
     +'</div></div>';
   var d=document.createElement('div'); d.innerHTML=html; document.body.appendChild(d.firstChild);
@@ -63542,7 +63542,7 @@ function _bgbSync(){
       cfgEl.innerHTML=''
         +'<div style="background:rgba(0,0,0,.2);border:1px dashed #26364d;border-radius:7px;padding:11px;text-align:center">'
           +'<div style="font-size:10px;color:#8FA3B8;margin-bottom:8px">No BESS configured yet. Size the battery in the configuration/analyzer tool \u2014 the guide will place exactly what you configure.</div>'
-          +'<button onclick="_bgbOpenConfig()" style="background:#22C55E;border:none;color:#0A1628;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit">\u2699 Configure BESS System</button>'
+          +'<button onclick="_bgbOpenConfig()" style="background:#22C55E;border:none;color:#16202B;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit">\u2699 Configure BESS System</button>'
         +'</div>';
     }
   }
@@ -63603,7 +63603,7 @@ function _bgbGuideRender(){
     var active=(phase==='drawtrench'||phase==='placeon') && kind===k;
     var ic = placed?'\u2713':(active?'\u25b6':(ix+1));
     var icBg = placed?'#22C55E':(active?(BGB_NODES[k].color||'#22C55E'):'rgba(255,255,255,.12)');
-    var icCol = (!placed && !active)?'#8FA3B8':'#0A1628';
+    var icCol = (!placed && !active)?'#8FA3B8':'#16202B';
     var txtCol = active?'#E2EEF9':(placed?'#8FA3B8':'#64748B');
     return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0">'
       +'<div style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:'+icBg+';color:'+icCol+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">'+ic+'</div>'
@@ -63618,7 +63618,7 @@ function _bgbGuideRender(){
     if(BGB.tieEl){
       rows = '<div style="display:flex;align-items:center;gap:9px;padding:6px 0;opacity:.85">'
         +'<div style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:#22C55E;'
-        +'color:#0A1628;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">\u2713</div>'
+        +'color:#16202B;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">\u2713</div>'
         +'<div><div style="font-size:11px;font-weight:600;color:#8FA3B8">'
         + String(BGB.tieEl.label||'Existing equipment').replace(/[<>&]/g,'') + '</div>'
         +'<div style="font-size:9px;color:#64748B">already on the drawing \u2014 tying in here</div></div></div>'
@@ -63633,7 +63633,7 @@ function _bgbGuideRender(){
   } else if(phase==='drawtrench'){
     var np=(typeof _dcfcDraw!=='undefined'&&_dcfcDraw)?_dcfcDraw.pts.length:0;
     hint='<strong style="color:'+legCol+'">Draw the '+legName+' trench:</strong> click points to route it ('+np+' pt'+(np===1?'':'s')+'), then <strong>Enter</strong> to finish. <strong>Backspace</strong> undoes a point.';
-    actions='<button onclick="_bgbFinishRun()" style="width:100%;padding:9px;background:'+legCol+';color:#0A1628;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Run (Enter)</button>'
+    actions='<button onclick="_bgbFinishRun()" style="width:100%;padding:9px;background:'+legCol+';color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">\u2713 Finish Run (Enter)</button>'
       +'<button onclick="_bgbDrawUndoPt()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px">\u232b Undo Point (Backspace)</button>'
       +'<button onclick="_bgbToggleSurface()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((BGB._surface==='concrete')?'sawcut concrete':'in-ground')+'</button>';
   } else if(phase==='placeon'){
@@ -65968,8 +65968,8 @@ function _chEnsure(){
   c.id='nn-crosshair';
   c.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:70;display:none';
   c.innerHTML=''
-    +'<div id="nn-ch-v" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(47,181,74,.55)"></div>'
-    +'<div id="nn-ch-h" style="position:absolute;left:0;right:0;height:1px;background:rgba(47,181,74,.55)"></div>';
+    +'<div id="nn-ch-v" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(74,143,216,.55)"></div>'
+    +'<div id="nn-ch-h" style="position:absolute;left:0;right:0;height:1px;background:rgba(74,143,216,.55)"></div>';
   sc.appendChild(c);
   _chEl=c; return c;
 }
@@ -67147,7 +67147,7 @@ function _renderEstimate(host){
           +   'oninput="window._elecLineOv('+idx+',\''+kind+'\',this.value)" '
           +   'onblur="window._elecLineCommit('+idx+',\''+kind+'\')" onfocus="this.select()" '
           +   'title="'+titleTxt+'" '
-          +   'style="width:64px;padding:3px 6px;text-align:right;background:'+(ovr?'rgba(245,166,35,.12)':'#0A1628')+';'
+          +   'style="width:64px;padding:3px 6px;text-align:right;background:'+(ovr?'rgba(245,166,35,.12)':'#16202B')+';'
           +   'border:1px solid '+(ovr?'rgba(245,166,35,.5)':'rgba(255,255,255,.12)')+';border-radius:4px;'
           +   'color:'+(ovr?'#F5C56A':'#8BA3C4')+';font-family:monospace;font-size:10px"></span>';
       };
@@ -67167,7 +67167,7 @@ function _renderEstimate(host){
       + '<span style="font-size:10px;color:#8BA3C4">'+label+'</span>'
       + '<span><input id="'+id+'" type="text" inputmode="decimal" autocomplete="off" value="'+val+'" '
       + 'oninput="window._elecKnob()" onblur="window._elecKnobCommit()" onfocus="this.select()" '
-      + 'style="width:74px;padding:3px 6px;text-align:right;background:#0A1628;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">'
+      + 'style="width:74px;padding:3px 6px;text-align:right;background:#16202B;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">'
       + '<span style="font-size:10px;color:#6B8299;margin-left:3px">'+(suf||'')+'</span></span></div>';
   };
 
@@ -67206,7 +67206,7 @@ function _renderEstimate(host){
     + '</div>'
     /* footer */
     + '<div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2);border-radius:0 0 12px 12px;display:flex;gap:8px">'
-    +   '<button onclick="window._elecExportCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Estimate CSV</button>'
+    +   '<button onclick="window._elecExportCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Estimate CSV</button>'
     +   '<button onclick="window._elecPrint()" style="padding:10px 16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#E8F0FE;font-weight:600;font-size:12px;border-radius:7px;cursor:pointer;font-family:inherit">🖨 Bid Sheet</button>'
     +   (window._elecWorkbookHost()
           ? '<button onclick="window._elecOpenWorkbook()" title="Build the utility program form and the customer proposal from this estimate" style="padding:10px 16px;background:rgba(197,165,90,.16);border:1px solid rgba(197,165,90,.42);color:#C5A55A;font-weight:700;font-size:12px;border-radius:7px;cursor:pointer;font-family:inherit">EV Cost Workbook</button>'
@@ -67325,7 +67325,7 @@ function _elecStyleCell(idx,kind,ovr){
   var inp=document.getElementById('elec-in-'+idx+'-'+kind);
   var rv =document.getElementById('elec-rv-'+idx+'-'+kind);
   if(inp){
-    inp.style.background = ovr?'rgba(245,166,35,.12)':'#0A1628';
+    inp.style.background = ovr?'rgba(245,166,35,.12)':'#16202B';
     inp.style.borderColor= ovr?'rgba(245,166,35,.5)':'rgba(255,255,255,.12)';
     inp.style.color      = ovr?'#F5C56A':'#8BA3C4';
   }
@@ -68284,9 +68284,9 @@ window.openAiKeys=function(){
       + '<div style="font-size:9px;color:#8BA3C4;margin-bottom:6px">'+_aiEsc(p.hint)+'</div>'
       + '<div style="display:flex;gap:6px">'
       +   '<input id="aik-'+i+'" type="password" autocomplete="new-password" placeholder="'+_aiEsc(p.ph)+'" value="'+_aiEsc(cur)+'" '
-      +     'style="flex:1;min-width:0;padding:6px 8px;background:#0A1628;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">'
+      +     'style="flex:1;min-width:0;padding:6px 8px;background:#16202B;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">'
       +   '<button onclick="window._aiToggleVis('+i+')" title="Show/hide" style="padding:6px 9px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#8BA3C4;cursor:pointer;font-size:11px">👁</button>'
-      +   '<button onclick="window._aiSave('+i+')" style="padding:6px 12px;background:'+p.color+';border:none;border-radius:5px;color:#0A1628;font-weight:700;cursor:pointer;font-size:11px">Save</button>'
+      +   '<button onclick="window._aiSave('+i+')" style="padding:6px 12px;background:'+p.color+';border:none;border-radius:5px;color:#16202B;font-weight:700;cursor:pointer;font-size:11px">Save</button>'
       +   (cur?'<button onclick="window._aiClear('+i+')" style="padding:6px 10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:5px;color:#F87171;cursor:pointer;font-size:11px">Clear</button>':'')
       + '</div></div>';
   });
@@ -68452,11 +68452,11 @@ function _crmRow(label, inputHTML, hint){
 function _crmInput(id, val, ph, isSecret){
   return '<input id="'+id+'"'+(isSecret?' type="password" autocomplete="new-password"':' type="text"')
     +(ph?' placeholder="'+_cEsc(ph)+'"':'')+' value="'+_cEsc(val||'')+'" '
-    +'style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0A1628;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">';
+    +'style="width:100%;box-sizing:border-box;padding:6px 8px;background:#16202B;border:1px solid rgba(255,255,255,.15);border-radius:5px;color:#E8F0FE;font-family:monospace;font-size:11px">';
 }
 function _crmBtn(label, onclick, kind){
   var base='padding:8px 14px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;font-family:inherit;border:1px solid;';
-  var styles = kind==='pri' ? 'background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#0A1628;border-color:transparent'
+  var styles = kind==='pri' ? 'background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;border-color:transparent'
              : kind==='danger' ? 'background:rgba(239,68,68,.12);color:#F87171;border-color:rgba(239,68,68,.4)'
              : 'background:rgba(255,255,255,.08);color:#E8F0FE;border-color:rgba(255,255,255,.15)';
   return '<button onclick="'+onclick+'" style="'+base+styles+'">'+_cEsc(label)+'</button>';
@@ -68477,7 +68477,7 @@ function _crmRenderSettings(cfg, activeType){
    + '<div><div style="font-size:15px;font-weight:700;color:#fff">⇄ CRM Integration</div>'
    + '<div style="font-size:10px;color:#8BA3C4;margin-top:2px">Connect your CRM and map how OMEGA project data flows into it · org: '+_cEsc(_cOrg())+'</div></div>'
    + (_crmReady(cfg)
-       ? '<span style="font-size:10px;font-weight:700;color:#0A1628;background:#1DB95A;padding:3px 9px;border-radius:20px">Connected: '+_cEsc(CRM_PROVIDERS[prov]?CRM_PROVIDERS[prov].label:prov)+'</span>'
+       ? '<span style="font-size:10px;font-weight:700;color:#16202B;background:#1DB95A;padding:3px 9px;border-radius:20px">Connected: '+_cEsc(CRM_PROVIDERS[prov]?CRM_PROVIDERS[prov].label:prov)+'</span>'
        : '<span style="font-size:10px;font-weight:700;color:#8BA3C4;background:rgba(255,255,255,.08);padding:3px 9px;border-radius:20px">Not connected</span>')
    + '</div>';
 
@@ -70292,7 +70292,7 @@ window._crmToastModal=_crmToastModal;
   /* North tick on the ring - makes it read as an orientation device. */
   #oc-rose::before{
     content:''; position:absolute; top:-1px; left:50%;
-    width:1px; height:6px; background:#2FB54A; transform:translateX(-50%);
+    width:1px; height:6px; background:#4A8FD8; transform:translateX(-50%);
   }
   #oc-rose > button{
     /* explicit resets rather than `all:unset`, which reset too much */
@@ -70308,10 +70308,10 @@ window._crmToastModal=_crmToastModal;
   #oc-rose > button:focus-visible{ outline:2px solid #00D4FF; outline-offset:-2px; }
   #oc-rose > span{ display:block; }            /* empty grid cells */
   #oc-rose > #oc-fit{
-    color:#2FB54A; font-size:8.5px; letter-spacing:.06em;
-    border:1px solid rgba(47,181,74,.35);
+    color:#4A8FD8; font-size:8.5px; letter-spacing:.06em;
+    border:1px solid rgba(74,143,216,.35);
   }
-  #oc-rose > #oc-fit:hover{ background:rgba(47,181,74,.18); color:#2FB54A; }
+  #oc-rose > #oc-fit:hover{ background:rgba(74,143,216,.18); color:#4A8FD8; }
   #omega-compass.locked #oc-rose > button{ color:#3A4C63; cursor:not-allowed; }
   #omega-compass.locked #oc-rose > button:hover{ background:none; color:#3A4C63; }
 </style>
@@ -70542,12 +70542,12 @@ window._crmToastModal=_crmToastModal;
   .od-row:last-of-type{ border-bottom:0; }
   .od-k{ color:#7D95B4; white-space:nowrap; }
   .od-v{ font-weight:600; text-align:right; word-break:break-word; }
-  .od-ok{ color:#2FB54A; } .od-warn{ color:#F59E0B; } .od-bad{ color:#FF6B6B; }
+  .od-ok{ color:#4A8FD8; } .od-warn{ color:#F59E0B; } .od-bad{ color:#FF6B6B; }
   #od-verdict{
     margin-top:9px; padding:8px; border-radius:4px; font-size:10.5px; line-height:1.5;
     background:rgba(245,158,11,.10); border-left:2px solid #F59E0B; color:#E8C89A;
   }
-  #od-verdict.good{ background:rgba(47,181,74,.10); border-left-color:#2FB54A; color:#A6DDB4; }
+  #od-verdict.good{ background:rgba(74,143,216,.10); border-left-color:#4A8FD8; color:#A6DDB4; }
   #od-act{ margin-top:8px; display:flex; gap:5px; }
   #od-act button{
     all:unset; flex:1; text-align:center; padding:6px 4px; border-radius:4px;
@@ -71219,7 +71219,7 @@ window._crmToastModal=_crmToastModal;
   .omega-beta{ position:relative; }
   .omega-beta-tag{
     position:absolute; top:1px; right:1px; font:700 6.5px/1 'IBM Plex Mono',monospace;
-    letter-spacing:.08em; color:#0A1628; background:#F59E0B;
+    letter-spacing:.08em; color:#16202B; background:#F59E0B;
     border-radius:2px; padding:2px 3px; pointer-events:none;
   }
   body.omega-dock-left .omega-beta-tag{ top:50%; right:6px; transform:translateY(-50%); }
@@ -71252,7 +71252,7 @@ window._crmToastModal=_crmToastModal;
   .omega-pick small{ display:block; font-weight:400; font-size:10px; color:#7D95B4; margin-top:2px; }
   .omega-field{ display:flex; gap:6px; margin-bottom:9px; }
   .omega-field input{
-    flex:1; min-width:0; padding:8px 10px; background:#0A1628; border:1px solid rgba(255,255,255,.15);
+    flex:1; min-width:0; padding:8px 10px; background:#16202B; border:1px solid rgba(255,255,255,.15);
     border-radius:5px; color:#E8F0FE; font-family:'IBM Plex Mono',monospace; font-size:11px; outline:none;
   }
   .omega-field input:focus{ border-color:#00D4FF; }
@@ -71264,7 +71264,7 @@ window._crmToastModal=_crmToastModal;
   .omega-lab{ font-size:10px; color:#8BA3C4; margin:0 0 4px; font-weight:600; letter-spacing:.03em; }
   .omega-note{ font-size:10.5px; line-height:1.5; margin-top:10px; padding:9px 11px;
                border-radius:6px; background:rgba(245,158,11,.10); border-left:2px solid #F59E0B; color:#E8C89A; }
-  .omega-note.ok{ background:rgba(47,181,74,.10); border-left-color:#2FB54A; color:#A6DDB4; }
+  .omega-note.ok{ background:rgba(74,143,216,.10); border-left-color:#4A8FD8; color:#A6DDB4; }
   .omega-note.bad{ background:rgba(255,107,107,.10); border-left-color:#FF6B6B; color:#FFB3B3; }
 </style>
 <script>
@@ -71330,7 +71330,7 @@ window._crmToastModal=_crmToastModal;
   /* ---------------- PERMIT CREATOR (beta gate) ---------------- */
   window.omegaPermitBeta=function(){
     modal('&#128203; Permit Creator <span style="font:700 8px/1 monospace;letter-spacing:.08em;'
-        + 'color:#0A1628;background:#F59E0B;border-radius:2px;padding:2px 4px;margin-left:6px">BETA</span>',
+        + 'color:#16202B;background:#F59E0B;border-radius:2px;padding:2px 4px;margin-left:6px">BETA</span>',
       /* Just the customer-facing line. The previous version appended an
          internal note explaining that the feature was "still installed,
          only gated" - accurate, but that is a message to a developer, not
@@ -71365,7 +71365,7 @@ window._crmToastModal=_crmToastModal;
       + '</div>'
       + '<div class="omega-field" style="margin-top:12px">'
       +   '<button type="button" onclick="omegaMapsKeySave()" '
-      +     'style="flex:1;text-align:center;background:#2FB54A;border-color:#2FB54A;color:#0A1628">Save</button>'
+      +     'style="flex:1;text-align:center;background:#4A8FD8;border-color:#4A8FD8;color:#16202B">Save</button>'
       +   '<button type="button" onclick="omegaMapsKeyTest()" style="flex:1;text-align:center">Test</button>'
       +   '<button type="button" onclick="omegaMapsKeyReset()" style="flex:1;text-align:center">Default</button>'
       + '</div>'
@@ -71425,7 +71425,7 @@ window._crmToastModal=_crmToastModal;
      Objects that belong to the map instead of chasing it.
      ==================================================== -->
 <style>
-  #rb-native[aria-pressed="true"]{ background:rgba(47,181,74,.18); border-color:#2FB54A; color:#2FB54A; }
+  #rb-native[aria-pressed="true"]{ background:rgba(74,143,216,.18); border-color:#4A8FD8; color:#4A8FD8; }
 </style>
 <script>
 (function(){
@@ -71436,7 +71436,7 @@ window._crmToastModal=_crmToastModal;
   function MAP(){ try{ if(typeof _gmap!=='undefined'&&_gmap) return _gmap; }catch(e){} return window._gmap||null; }
   function sph(){ return (window.google&&google.maps&&google.maps.geometry&&google.maps.geometry.spherical)||null; }
 
-  var COLORS={ evstencil:'#2FB54A', adastencil:'#00D4FF', bess:'#2FB54A',
+  var COLORS={ evstencil:'#4A8FD8', adastencil:'#00D4FF', bess:'#4A8FD8',
                charger:'#00D4FF', xfmr:'#F59E0B', panel:'#A78BFA', _default:'#00D4FF' };
   function colorOf(o){ return COLORS[o.kind||o.type] || o.color || COLORS._default; }
 
@@ -72538,7 +72538,7 @@ window._crmToastModal=_crmToastModal;
   #pp-ptype-wrap{ margin-bottom:12px; }
   #pp-ptype-wrap label.pp-lbl{ font-size:10px; color:var(--sub); display:block; margin-bottom:4px; }
   #pp-ptype{
-    width:100%; padding:8px 10px; border-radius:6px; background:var(--surface,#0A1628);
+    width:100%; padding:8px 10px; border-radius:6px; background:var(--surface,#16202B);
     border:1px solid var(--border); color:var(--text);
     font-family:var(--font-sans,inherit); font-size:12.5px; outline:none;
   }
@@ -72859,7 +72859,7 @@ window._crmToastModal=_crmToastModal;
     background:rgba(0,0,0,.22); border:1px solid var(--border,#1C3350);
     border-radius:6px; padding:6px 8px; margin-top:2px;
   }
-  .os-proof .os-fix{ color:var(--ok,#2FB54A); }
+  .os-proof .os-fix{ color:var(--ok,#4A8FD8); }
   .os-proof .os-px{ color:var(--hl,#00D4FF); }
   .os-btns{ display:flex; flex-direction:column; gap:4px; margin-top:9px; }
   .os-btns button{
@@ -74042,7 +74042,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
    the running version checkable in one line. */
 (function(){
   window.OMEGA_BUILD = { id:'97af1850', built:'2026-07-27 09:45 UTC' };
-  console.info('%cOMEGA build 97af1850  (2026-07-27 09:45 UTC)', 'color:#2FB54A;font-weight:bold');
+  console.info('%cOMEGA build 97af1850  (2026-07-27 09:45 UTC)', 'color:#4A8FD8;font-weight:bold');
   window.OmegaVersion=function(){
     var have=[];
     [['OmegaFrozen','stale snapshot fix'],
@@ -80388,7 +80388,7 @@ if (_omPrevOmegaAnchor) { Object.keys(_omPrevOmegaAnchor).forEach(function (k) {
       go.title = 'Nothing fits this boundary yet — see the note above.';
     } else {
       go.style.background = 'linear-gradient(135deg,#FBBF24,#22C55E)';
-      go.style.color = '#0A1628';
+      go.style.color = '#16202B';
       go.style.border = 'none';
       go.style.cursor = 'pointer';
       go.title = 'Place the array on the drawing';
@@ -83389,7 +83389,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     knob.setAttribute('cx', b.cx); knob.setAttribute('cy', gy);
     knob.setAttribute('r', 10);
     knob.setAttribute('fill', '#FBBF24');
-    knob.setAttribute('stroke', '#0A1628');
+    knob.setAttribute('stroke', '#16202B');
     knob.setAttribute('stroke-width', '2');
     knob.setAttribute('cursor', 'grab');
     g.appendChild(knob);
@@ -83397,7 +83397,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var arc = document.createElementNS(NS, 'path');
     arc.setAttribute('d', 'M' + (b.cx - 5) + ',' + (gy + 1) + ' A5,5 0 1,1 ' + (b.cx + 4) + ',' + (gy + 3));
     arc.setAttribute('fill', 'none');
-    arc.setAttribute('stroke', '#0A1628');
+    arc.setAttribute('stroke', '#16202B');
     arc.setAttribute('stroke-width', '1.6');
     arc.setAttribute('pointer-events', 'none');
     g.appendChild(arc);
@@ -85494,8 +85494,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
    -----------------------------------------------------------------------
    The crosshair is two 1px divs in one colour:
 
-       <div id="nn-ch-v" style="width:1px;  background:rgba(47,181,74,.55)">
-       <div id="nn-ch-h" style="height:1px; background:rgba(47,181,74,.55)">
+       <div id="nn-ch-v" style="width:1px;  background:rgba(74,143,216,.55)">
+       <div id="nn-ch-h" style="height:1px; background:rgba(74,143,216,.55)">
 
    A 55% opaque GREEN hairline. Over a green field it is very nearly
    invisible, which is the whole problem — it has no way to contrast with
@@ -93020,7 +93020,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         if (perp > 25) return;
         var xx = X(t * D), yy = Y(p.topFt);
         if (!isFinite(xx) || !isFinite(yy)) return;
-        var col = p.status === 'ok' ? '#2FB54A' : (p.status === 'fill' ? '#D9A441' : '#C86A6A');
+        var col = p.status === 'ok' ? '#4A8FD8' : (p.status === 'fill' ? '#D9A441' : '#C86A6A');
         marks += '<line x1="' + xx.toFixed(1) + '" y1="' + yy.toFixed(1)
               + '" x2="' + xx.toFixed(1) + '" y2="' + Y(p.groundFt).toFixed(1)
               + '" stroke="' + col + '" stroke-width="1.6"/>'
@@ -93048,15 +93048,15 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       box = document.createElement('div');
       box.id = 'omega-sec';
       box.style.cssText = 'position:fixed;left:14px;bottom:14px;width:min(660px,92vw);'
-        + 'background:#1b1b1c;border:1px solid #3C3C3C;border-radius:10px;padding:10px;'
+        + 'background:#1b1b1c;border:1px solid #2A3A49;border-radius:10px;padding:10px;'
         + 'z-index:99999;box-shadow:0 12px 40px rgba(0,0,0,.6);'
         + 'font-family:"IBM Plex Mono",ui-monospace,monospace;color:#E2EEF9;font-size:10px';
       document.body.appendChild(box);
     }
     box.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;'
-      + 'font-size:9.5px;letter-spacing:.07em;color:#2FB54A;font-weight:700">CROSS-SECTION'
+      + 'font-size:9.5px;letter-spacing:.07em;color:#4A8FD8;font-weight:700">CROSS-SECTION'
       + '<span style="flex:1"></span>'
-      + '<button id="omega-sec-again" style="background:#252526;border:1px solid #3C3C3C;color:#E2EEF9;'
+      + '<button id="omega-sec-again" style="background:#1B2632;border:1px solid #2A3A49;color:#E2EEF9;'
       + 'border-radius:4px;padding:3px 8px;font:inherit;cursor:pointer">New line</button>'
       + '<button id="omega-sec-x" style="background:none;border:0;color:#8FA3B8;cursor:pointer;'
       + 'font-size:14px;padding:0 3px">\u00d7</button></div>' + svg
@@ -93282,7 +93282,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var _paintMode = 'status';
 
   var PAINT_COLORS = {
-    ok:        { fill: 'rgba(47,181,74,.55)',  stroke: '#1F7A33', label: 'buildable' },
+    ok:        { fill: 'rgba(74,143,216,.55)',  stroke: '#1F7A33', label: 'buildable' },
     along:     { fill: 'rgba(229,83,75,.62)',  stroke: '#A5342E', label: 'axis slope' },
     cross:     { fill: 'rgba(217,164,65,.62)', stroke: '#8A6520', label: 'cross slope' },
     warp:      { fill: 'rgba(176,131,240,.62)',stroke: '#6B44A8', label: 'twist' },
@@ -94376,7 +94376,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     d.id = 'omega-geo';
     d.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
       + 'width:min(520px,94vw);max-height:82vh;overflow:auto;background:#1b1b1c;'
-      + 'border:1px solid #3C3C3C;border-radius:10px;padding:14px;z-index:100000;'
+      + 'border:1px solid #2A3A49;border-radius:10px;padding:14px;z-index:100000;'
       + 'box-shadow:0 20px 60px rgba(0,0,0,.7);'
       + 'font-family:"IBM Plex Mono",ui-monospace,monospace;color:#E2EEF9;font-size:11px';
 
@@ -94385,8 +94385,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         + 'Geometry arrives as latitude and longitude and has to land on real pixels \u2014 '
         + 'that needs either a live unlocked map, or an existing array whose boundary '
         + 'carries a geo anchor. Unlock the map, or draw one array first, then import again.</div>'
-        + '<button id="geo-x" style="width:100%;margin-top:11px;padding:7px;background:#252526;'
-        + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
+        + '<button id="geo-x" style="width:100%;margin-top:11px;padding:7px;background:#1B2632;'
+        + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
       document.body.appendChild(d);
       document.getElementById('geo-x').onclick = function () { d.remove(); };
       return;
@@ -94409,15 +94409,15 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     if (!items.length) {
       d.innerHTML = '<div style="color:#C86A6A">None of the ' + geoRings.length
         + ' ring(s) could be placed on the canvas.</div>'
-        + '<button id="geo-x" style="width:100%;margin-top:11px;padding:7px;background:#252526;'
-        + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
+        + '<button id="geo-x" style="width:100%;margin-top:11px;padding:7px;background:#1B2632;'
+        + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
       document.body.appendChild(d);
       document.getElementById('geo-x').onclick = function () { d.remove(); };
       return;
     }
 
     var arrays_ = arrays();
-    var h = '<div style="font-size:9.5px;letter-spacing:.07em;color:#2FB54A;font-weight:700;'
+    var h = '<div style="font-size:9.5px;letter-spacing:.07em;color:#4A8FD8;font-weight:700;'
       + 'margin-bottom:9px">PLACE IMPORTED GEOMETRY \u2014 ' + esc(source) + '</div>'
       + '<div style="color:#8FA3B8;line-height:1.6;margin-bottom:10px">'
       + items.length + ' ring(s) placed via the <b>' + g2p.mode + '</b> anchor. '
@@ -94430,8 +94430,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         + 'border-bottom:1px solid #232325">'
         + '<span style="flex:1"><b>' + esc(it.label) + '</b>'
         + '<span style="color:#7d8a97"> \u00b7 ' + it.acres + ' ac \u00b7 ' + it.verts + ' verts</span></span>'
-        + '<select data-ring="' + k + '" style="padding:4px;background:#252526;'
-        + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:4px;font:inherit;font-size:10px">'
+        + '<select data-ring="' + k + '" style="padding:4px;background:#1B2632;'
+        + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:4px;font:inherit;font-size:10px">'
         + '<option value="ignore"' + (def === 'ignore' ? ' selected' : '') + '>ignore</option>'
         + '<option value="boundary"' + (def === 'boundary' ? ' selected' : '') + '>new array boundary</option>'
         + '<option value="exclusion"' + (def === 'exclusion' ? ' selected' : '') + '>exclusion</option>'
@@ -94442,7 +94442,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     if (arrays_.length) {
       h += '<div style="margin-top:9px"><label style="color:#8FA3B8;display:block;margin-bottom:3px">'
         + 'Add exclusions to</label><select id="geo-target" style="width:100%;padding:6px;'
-        + 'background:#252526;border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit">';
+        + 'background:#1B2632;border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit">';
       arrays_.forEach(function (a) {
         h += '<option value="' + a.id + '">' + (a.tableCount || 0) + ' tables \u00b7 '
           + (a.kw || 0).toLocaleString() + ' kW \u00b7 ' + a.id + '</option>';
@@ -94452,10 +94452,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
     h += '<div id="geo-out" style="margin-top:10px"></div>'
       + '<div style="display:flex;gap:7px;margin-top:11px">'
-      + '<button id="geo-go" style="flex:1;padding:8px;background:rgba(47,181,74,.16);'
-      + 'border:1px solid rgba(47,181,74,.45);color:#2FB54A;border-radius:5px;font:inherit;'
+      + '<button id="geo-go" style="flex:1;padding:8px;background:rgba(74,143,216,.16);'
+      + 'border:1px solid rgba(74,143,216,.45);color:#4A8FD8;border-radius:5px;font:inherit;'
       + 'font-weight:700;cursor:pointer">Place</button>'
-      + '<button id="geo-x" style="padding:8px 14px;background:#252526;border:1px solid #3C3C3C;'
+      + '<button id="geo-x" style="padding:8px 14px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Cancel</button></div>';
 
     d.innerHTML = h;
@@ -95148,7 +95148,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     grip.title = 'Drag to resize';
     grip.style.cssText = 'position:absolute;left:0;bottom:0;width:16px;height:16px;'
       + 'cursor:nesw-resize;touch-action:none;'
-      + 'background:linear-gradient(45deg,transparent 40%,#3C3C3C 40%,#3C3C3C 60%,transparent 60%)';
+      + 'background:linear-gradient(45deg,transparent 40%,#2A3A49 40%,#2A3A49 60%,transparent 60%)';
     el.appendChild(grip);
     var rz = false, sx = 0, sy = 0, sw = 0, shh = 0, sl = 0;
     grip.addEventListener('pointerdown', function (ev) {
@@ -95244,13 +95244,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     rd.steps.forEach(function (s, i) {
       h += '<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;'
         + 'border-bottom:1px solid #242426">'
-        + '<span style="width:14px;color:' + (s.done ? '#2FB54A' : '#8FA3B8') + ';font-weight:700">'
+        + '<span style="width:14px;color:' + (s.done ? '#4A8FD8' : '#8FA3B8') + ';font-weight:700">'
         + (s.done ? '\u2713' : (i + 1)) + '</span>'
         + '<span style="flex:1"><b style="color:' + (s.done ? '#7d8a97' : '#E2EEF9') + '">'
         + s.label + '</b><br><span class="note" style="margin:0">' + s.why + '</span></span>';
       if (s.action) {
-        h += '<button data-ready="' + s.key + '" style="padding:5px 8px;background:#252526;'
-          + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font-size:9px;'
+        h += '<button data-ready="' + s.key + '" style="padding:5px 8px;background:#1B2632;'
+          + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font-size:9px;'
           + 'cursor:pointer;font-family:inherit;white-space:nowrap">' + s.action.label + '</button>';
       }
       h += '</div>';
@@ -95264,13 +95264,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   var CSS = ''
     + '#omega-terr{position:fixed;right:14px;top:70px;width:360px;max-height:78vh;overflow:auto;'
-    + 'background:#1b1b1c;border:1px solid #3C3C3C;border-radius:10px;z-index:99999;'
+    + 'background:#1b1b1c;border:1px solid #2A3A49;border-radius:10px;z-index:99999;'
     + 'font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:#E2EEF9;'
     + 'box-shadow:0 12px 40px rgba(0,0,0,.6);display:none}'
     + '#omega-terr.on{display:block}'
     + '#omega-terr .tb{display:flex;align-items:center;gap:8px;padding:9px 11px;'
-    + 'background:#252526;border-bottom:1px solid #3C3C3C;border-radius:10px 10px 0 0;'
-    + 'font-weight:700;letter-spacing:.06em;font-size:10px;color:#2FB54A;position:sticky;top:0;z-index:2}'
+    + 'background:#1B2632;border-bottom:1px solid #2A3A49;border-radius:10px 10px 0 0;'
+    + 'font-weight:700;letter-spacing:.06em;font-size:10px;color:#4A8FD8;position:sticky;top:0;z-index:2}'
     + '#omega-terr .tb .sp{flex:1}'
     + '#omega-terr .tb button{background:none;border:0;color:#8FA3B8;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px}'
     + '#omega-terr .tb button:hover{color:#E2EEF9}'
@@ -95281,22 +95281,22 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     + '#omega-terr .r{display:flex;justify-content:space-between;gap:10px;padding:2.5px 0;line-height:1.45}'
     + '#omega-terr .r span{color:#8FA3B8}'
     + '#omega-terr .r b{color:#E2EEF9;font-weight:600;text-align:right}'
-    + '#omega-terr .g b{color:#2FB54A}#omega-terr .a b{color:#D9A441}#omega-terr .x b{color:#C86A6A}'
+    + '#omega-terr .g b{color:#4A8FD8}#omega-terr .a b{color:#D9A441}#omega-terr .x b{color:#C86A6A}'
     + '#omega-terr .note{color:#7d8a97;line-height:1.5;font-size:9.5px;margin:6px 0 2px}'
     + '#omega-terr .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:11px}'
-    + '#omega-terr .btns button{padding:7px 6px;background:#252526;border:1px solid #3C3C3C;'
+    + '#omega-terr .btns button{padding:7px 6px;background:#1B2632;border:1px solid #2A3A49;'
     + 'color:#E2EEF9;border-radius:5px;font-size:9.5px;cursor:pointer;font-family:inherit;font-weight:600}'
-    + '#omega-terr .btns button:hover{border-color:#2FB54A;color:#2FB54A}'
+    + '#omega-terr .btns button:hover{border-color:#4A8FD8;color:#4A8FD8}'
     + '#omega-terr .btns button.wide{grid-column:1/-1}'
-    + '#omega-terr .run{width:100%;padding:9px;background:rgba(47,181,74,.16);border:1px solid rgba(47,181,74,.45);'
-    + 'color:#2FB54A;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:4px}'
+    + '#omega-terr .run{width:100%;padding:9px;background:rgba(74,143,216,.16);border:1px solid rgba(74,143,216,.45);'
+    + 'color:#4A8FD8;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:4px}'
     + '#omega-terr .warn{background:rgba(200,106,106,.1);border:1px solid rgba(200,106,106,.35);'
     + 'color:#E0A9A9;padding:7px 8px;border-radius:5px;line-height:1.5;margin:8px 0;font-size:9.5px}'
     + '#omega-terr .modes{display:flex;gap:3px;margin:2px 0 0}'
-    + '#omega-terr .modes button{flex:1;padding:5px 2px;background:#252526;border:1px solid #3C3C3C;'
+    + '#omega-terr .modes button{flex:1;padding:5px 2px;background:#1B2632;border:1px solid #2A3A49;'
     + 'color:#8FA3B8;border-radius:4px;font-size:8.5px;cursor:pointer;font-family:inherit;font-weight:600}'
     + '#omega-terr .modes button:hover{color:#E2EEF9}'
-    + '#omega-terr .modes button.on{background:rgba(47,181,74,.16);border-color:rgba(47,181,74,.45);color:#2FB54A}';
+    + '#omega-terr .modes button.on{background:rgba(74,143,216,.16);border-color:rgba(74,143,216,.45);color:#4A8FD8}';
 
   function ensurePanel() {
     var el = document.getElementById('omega-terr');
@@ -95643,11 +95643,11 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     d = document.createElement('div');
     d.id = 'omega-cap';
     d.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
-      + 'width:min(420px,92vw);background:#1b1b1c;border:1px solid #3C3C3C;border-radius:10px;'
+      + 'width:min(420px,92vw);background:#1b1b1c;border:1px solid #2A3A49;border-radius:10px;'
       + 'padding:14px;z-index:100000;box-shadow:0 20px 60px rgba(0,0,0,.7);'
       + 'font-family:"IBM Plex Mono",ui-monospace,monospace;color:#E2EEF9;font-size:11px';
     d.innerHTML =
-      '<div style="font-size:9.5px;letter-spacing:.07em;color:#2FB54A;font-weight:700;'
+      '<div style="font-size:9.5px;letter-spacing:.07em;color:#4A8FD8;font-weight:700;'
       + 'margin-bottom:9px">SIZE TO A TARGET</div>'
       + '<div style="color:#8FA3B8;line-height:1.55;margin-bottom:10px">'
       + 'Current layout is about <b style="color:#E2EEF9">' + (cur / 1000).toFixed(1)
@@ -95655,14 +95655,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       + 'loosest ground-coverage ratio that still reaches it on the real surface.</div>'
       + '<label style="display:block;color:#8FA3B8;margin-bottom:4px">Target MW-DC</label>'
       + '<input id="omega-cap-mw" type="number" step="0.1" value="' + Math.max(1, (cur / 1000 * 1.2)).toFixed(1)
-      + '" style="width:100%;padding:7px;background:#252526;border:1px solid #3C3C3C;'
+      + '" style="width:100%;padding:7px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;margin-bottom:11px">'
       + '<div id="omega-cap-out" style="max-height:230px;overflow:auto"></div>'
       + '<div style="display:flex;gap:7px;margin-top:11px">'
-      + '<button id="omega-cap-go" style="flex:1;padding:8px;background:rgba(47,181,74,.16);'
-      + 'border:1px solid rgba(47,181,74,.45);color:#2FB54A;border-radius:5px;font:inherit;'
+      + '<button id="omega-cap-go" style="flex:1;padding:8px;background:rgba(74,143,216,.16);'
+      + 'border:1px solid rgba(74,143,216,.45);color:#4A8FD8;border-radius:5px;font:inherit;'
       + 'font-weight:700;cursor:pointer">Search</button>'
-      + '<button id="omega-cap-x" style="padding:8px 14px;background:#252526;border:1px solid #3C3C3C;'
+      + '<button id="omega-cap-x" style="padding:8px 14px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button></div>';
     document.body.appendChild(d);
     document.getElementById('omega-cap-x').onclick = function () { d.remove(); };
@@ -95681,7 +95681,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           + '<th style="text-align:right;padding:2px 5px">MW</th></tr>';
         r.rows.forEach(function (x) {
           var hit = r.best && x.gcr === r.best.gcr;
-          h += '<tr style="border-top:1px solid #2a2a2c' + (hit ? ';color:#2FB54A;font-weight:700' : '') + '">'
+          h += '<tr style="border-top:1px solid #2a2a2c' + (hit ? ';color:#4A8FD8;font-weight:700' : '') + '">'
             + '<td style="text-align:right;padding:2px 5px">' + x.gcr.toFixed(3) + '</td>'
             + '<td style="text-align:right;padding:2px 5px">' + x.pitchFt + '</td>'
             + '<td style="text-align:right;padding:2px 5px">' + x.tables + '</td>'
@@ -95691,7 +95691,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         h += '</table>';
         h += '<div style="color:#8FA3B8;margin-top:9px;line-height:1.55">'
           + (r.feasible
-              ? 'Reaches <b style="color:#2FB54A">' + r.best.mw.toFixed(2) + ' MW</b> at GCR '
+              ? 'Reaches <b style="color:#4A8FD8">' + r.best.mw.toFixed(2) + ' MW</b> at GCR '
                 + r.best.gcr.toFixed(3) + ' (pitch ' + r.best.pitchFt + ' ft).'
               : 'Does not reach ' + r.targetMW + ' MW on this boundary. Best is '
                 + '<b style="color:#D9A441">' + r.achievedMW.toFixed(2) + ' MW</b> at GCR '
@@ -95702,7 +95702,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           + '</div>';
         if (r.feasible) {
           h += '<button id="omega-cap-apply" style="width:100%;margin-top:9px;padding:7px;'
-            + 'background:rgba(47,181,74,.16);border:1px solid rgba(47,181,74,.45);color:#2FB54A;'
+            + 'background:rgba(74,143,216,.16);border:1px solid rgba(74,143,216,.45);color:#4A8FD8;'
             + 'border-radius:5px;font:inherit;font-weight:700;cursor:pointer">Apply GCR '
             + r.best.gcr.toFixed(3) + ' to this project</button>';
         }
@@ -95757,21 +95757,21 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     d.id = 'omega-dxf';
     d.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
       + 'width:min(560px,94vw);max-height:84vh;overflow:auto;background:#1b1b1c;'
-      + 'border:1px solid #3C3C3C;border-radius:10px;padding:14px;z-index:100000;'
+      + 'border:1px solid #2A3A49;border-radius:10px;padding:14px;z-index:100000;'
       + 'box-shadow:0 20px 60px rgba(0,0,0,.7);'
       + 'font-family:"IBM Plex Mono",ui-monospace,monospace;color:#E2EEF9;font-size:11px';
 
     if (!inv.layers.length || !inv.bbox) {
       d.innerHTML = '<div style="color:#C86A6A">No usable geometry found in ' + esc(name)
         + '. Expected LWPOLYLINE, POLYLINE, LINE, POINT or 3DFACE inside an ENTITIES section.</div>'
-        + '<button id="dxf-x" style="width:100%;margin-top:11px;padding:7px;background:#252526;'
-        + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
+        + '<button id="dxf-x" style="width:100%;margin-top:11px;padding:7px;background:#1B2632;'
+        + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button>';
       document.body.appendChild(d);
       document.getElementById('dxf-x').onclick = function () { d.remove(); };
       return;
     }
 
-    var h = '<div style="font-size:9.5px;letter-spacing:.07em;color:#2FB54A;font-weight:700;'
+    var h = '<div style="font-size:9.5px;letter-spacing:.07em;color:#4A8FD8;font-weight:700;'
       + 'margin-bottom:9px">IMPORT SURVEY \u2014 ' + esc(name) + '</div>';
 
     h += '<div style="color:#8FA3B8;line-height:1.6;margin-bottom:10px">'
@@ -95805,26 +95805,26 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
     h += '<div style="display:flex;gap:9px;margin-top:10px">'
       + '<div style="flex:1"><label style="color:#8FA3B8;display:block;margin-bottom:3px">Grid resolution</label>'
-      + '<select id="dxf-grid" style="width:100%;padding:6px;background:#252526;border:1px solid #3C3C3C;'
+      + '<select id="dxf-grid" style="width:100%;padding:6px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit">'
       + '<option value="64">64 \u00d7 64 (fast)</option>'
       + '<option value="96" selected>96 \u00d7 96</option>'
       + '<option value="144">144 \u00d7 144</option>'
       + '<option value="200">200 \u00d7 200 (slow)</option></select></div>'
       + '<div style="flex:1"><label style="color:#8FA3B8;display:block;margin-bottom:3px">Drawing units</label>'
-      + '<select id="dxf-unit" style="width:100%;padding:6px;background:#252526;border:1px solid #3C3C3C;'
+      + '<select id="dxf-unit" style="width:100%;padding:6px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit">'
       + '<option value="1" selected>feet</option>'
       + '<option value="3.280839895">metres</option></select></div></div>';
 
     h += '<div id="dxf-out" style="margin-top:10px"></div>'
       + '<div style="display:flex;gap:7px;margin-top:11px">'
-      + '<button id="dxf-prev" style="flex:1;padding:8px;background:#252526;border:1px solid #3C3C3C;'
+      + '<button id="dxf-prev" style="flex:1;padding:8px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;font-weight:700;cursor:pointer">Preview grid</button>'
-      + '<button id="dxf-go" style="flex:1;padding:8px;background:rgba(47,181,74,.16);'
-      + 'border:1px solid rgba(47,181,74,.45);color:#2FB54A;border-radius:5px;font:inherit;'
+      + '<button id="dxf-go" style="flex:1;padding:8px;background:rgba(74,143,216,.16);'
+      + 'border:1px solid rgba(74,143,216,.45);color:#4A8FD8;border-radius:5px;font:inherit;'
       + 'font-weight:700;cursor:pointer">Replace site terrain</button>'
-      + '<button id="dxf-x" style="padding:8px 12px;background:#252526;border:1px solid #3C3C3C;'
+      + '<button id="dxf-x" style="padding:8px 12px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Cancel</button></div>';
 
     d.innerHTML = h;
@@ -95899,7 +95899,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     d.id = 'omega-pvw';
     d.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
       + 'width:min(480px,94vw);max-height:84vh;overflow:auto;background:#1b1b1c;'
-      + 'border:1px solid #3C3C3C;border-radius:10px;padding:14px;z-index:100000;'
+      + 'border:1px solid #2A3A49;border-radius:10px;padding:14px;z-index:100000;'
       + 'box-shadow:0 20px 60px rgba(0,0,0,.7);'
       + 'font-family:"IBM Plex Mono",ui-monospace,monospace;color:#E2EEF9;font-size:11px';
 
@@ -95908,7 +95908,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var shade = pvwShadeLoss(res);
 
     d.innerHTML =
-      '<div style="font-size:9.5px;letter-spacing:.07em;color:#2FB54A;font-weight:700;'
+      '<div style="font-size:9.5px;letter-spacing:.07em;color:#4A8FD8;font-weight:700;'
       + 'margin-bottom:9px">ENERGY YIELD \u2014 PVWATTS v8</div>'
       + '<div style="color:#8FA3B8;line-height:1.6;margin-bottom:10px">'
       + 'Free TMY-weather yield from the NLR developer network, replacing the flat '
@@ -95916,16 +95916,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       + '(free, one minute to get).</div>'
       + '<label style="display:block;color:#8FA3B8;margin-bottom:3px">API key</label>'
       + '<input id="pvw-key" type="password" placeholder="paste your NLR key" value="'
-      + esc(pvwKey()) + '" style="width:100%;padding:7px;background:#252526;'
-      + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit;margin-bottom:9px">'
+      + esc(pvwKey()) + '" style="width:100%;padding:7px;background:#1B2632;'
+      + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit;margin-bottom:9px">'
       + '<div style="display:flex;gap:9px;margin-bottom:9px">'
       + '<div style="flex:1"><label style="color:#8FA3B8;display:block;margin-bottom:3px">System kW-DC</label>'
       + '<input id="pvw-kw" type="number" step="1" value="' + (kw || '')
-      + '" placeholder="from the array" style="width:100%;padding:6px;background:#252526;'
-      + 'border:1px solid #3C3C3C;color:#E2EEF9;border-radius:5px;font:inherit"></div>'
+      + '" placeholder="from the array" style="width:100%;padding:6px;background:#1B2632;'
+      + 'border:1px solid #2A3A49;color:#E2EEF9;border-radius:5px;font:inherit"></div>'
       + '<div style="flex:1"><label style="color:#8FA3B8;display:block;margin-bottom:3px">Base losses %</label>'
       + '<input id="pvw-loss" type="number" step="0.5" value="14" '
-      + 'style="width:100%;padding:6px;background:#252526;border:1px solid #3C3C3C;'
+      + 'style="width:100%;padding:6px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit"></div></div>'
       + (kw ? ('<div style="color:#7d8a97;line-height:1.55;margin-bottom:9px">Size defaults to the '
           + '<b style="color:#E2EEF9">buildable</b> ' + kw.toLocaleString() + ' kW after terrain '
@@ -95935,10 +95935,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           + 'Run the terrain analysis first, or type a size.</div>')
       + '<div id="pvw-out"></div>'
       + '<div style="display:flex;gap:7px;margin-top:11px">'
-      + '<button id="pvw-go" style="flex:1;padding:8px;background:rgba(47,181,74,.16);'
-      + 'border:1px solid rgba(47,181,74,.45);color:#2FB54A;border-radius:5px;font:inherit;'
+      + '<button id="pvw-go" style="flex:1;padding:8px;background:rgba(74,143,216,.16);'
+      + 'border:1px solid rgba(74,143,216,.45);color:#4A8FD8;border-radius:5px;font:inherit;'
       + 'font-weight:700;cursor:pointer">Run PVWatts</button>'
-      + '<button id="pvw-x" style="padding:8px 14px;background:#252526;border:1px solid #3C3C3C;'
+      + '<button id="pvw-x" style="padding:8px 14px;background:#1B2632;border:1px solid #2A3A49;'
       + 'color:#E2EEF9;border-radius:5px;font:inherit;cursor:pointer">Close</button></div>'
       + '<div style="color:#5d6874;margin-top:9px;line-height:1.5;font-size:9px">'
       + 'PVWatts is a monthly model with a stated accuracy near \u00b110% annually. It replaces '
@@ -95965,15 +95965,15 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           var pc = peak > 0 ? (v / peak * 100) : 0;
           bars += '<div style="display:flex;align-items:center;gap:5px;font-size:9px">'
             + '<span style="width:22px;color:#7d8a97">' + MO[i] + '</span>'
-            + '<span style="flex:1;background:#252526;border-radius:2px;height:8px;overflow:hidden">'
-            + '<span style="display:block;height:8px;width:' + pc.toFixed(0) + '%;background:#2FB54A"></span></span>'
+            + '<span style="flex:1;background:#1B2632;border-radius:2px;height:8px;overflow:hidden">'
+            + '<span style="display:block;height:8px;width:' + pc.toFixed(0) + '%;background:#4A8FD8"></span></span>'
             + '<span style="width:62px;text-align:right;color:#8FA3B8">'
             + (v / 1000).toFixed(0) + ' MWh</span></div>';
         });
         out.innerHTML =
           '<div style="border-top:1px solid #2e2e30;padding-top:9px">'
           + '<div style="display:flex;justify-content:space-between;padding:2px 0">'
-          + '<span style="color:#8FA3B8">Annual AC</span><b style="color:#2FB54A">'
+          + '<span style="color:#8FA3B8">Annual AC</span><b style="color:#4A8FD8">'
           + (r.acAnnualKwh / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' MWh</b></div>'
           + '<div style="display:flex;justify-content:space-between;padding:2px 0">'
           + '<span style="color:#8FA3B8">Specific yield</span><b>' + r.specificYield
@@ -98133,7 +98133,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var bdone=!!CGB.bldg, bact=(CGB.phase==='building');
       bldgRow='<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
         +'<div style="flex-shrink:0;width:17px;height:17px;border-radius:50%;background:'
-        +(bdone?'#22C55E':(bact?'#94A3B8':'rgba(255,255,255,.12)'))+';color:'+((!bdone&&!bact)?'#8FA3B8':'#0A1628')
+        +(bdone?'#22C55E':(bact?'#94A3B8':'rgba(255,255,255,.12)'))+';color:'+((!bdone&&!bact)?'#8FA3B8':'#16202B')
         +';font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center">'
         +(bdone?'\u2713':(bact?'\u25b6':'\u25a1'))+'</div>'
         +'<div style="width:36px;flex-shrink:0;display:flex;align-items:center;opacity:'+((bdone||bact)?'1':'.38')+'">'
@@ -98145,7 +98145,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var active=(CGB.phase==='place'&&ix===CGB.stepIx);
       var N=CGB_NODES[k];
       var bg=done?'#22C55E':(active?N.color:'rgba(255,255,255,.12)');
-      var bc=(!done&&!active)?'#8FA3B8':'#0A1628';
+      var bc=(!done&&!active)?'#8FA3B8':'#16202B';
       var tc=active?'#E2EEF9':(done?'#8FA3B8':'#64748B');
       return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">'
         +'<div style="flex-shrink:0;width:17px;height:17px;border-radius:50%;background:'+bg+';color:'+bc
@@ -99179,7 +99179,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     /* greens */
     '#22c55e': '#5ea97b', '#4ade80': '#7fbf98', '#16a34a': '#4e9c63',
     '#10b981': '#5ea97b', '#34d399': '#7fbf98', '#6ee7b7': '#9CCFB4',
-    '#1db954': '#5ea97b', '#1db95a': '#5ea97b', '#2fb54a': '#5ea97b',
+    '#1db954': '#5ea97b', '#1db95a': '#5ea97b', '#4A8FD8': '#5ea97b',
     '#00ff00': '#5ea97b', '#00e676': '#5ea97b', '#86efac': '#9CCFB4',
     '#15803d': '#3f7d55', '#166534': '#35664a', '#bbf7d0': '#B9D8C4',
     /* ambers / oranges / yellows */
@@ -99203,7 +99203,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     '#c084fc': '#b49fd0', '#f0abfc': '#c9a8d4', '#e879f9': '#bb92c8',
     '#8b5cf6': '#8578b8', '#d8b4fe': '#c3b3d8',
     /* the old brand green used as chrome */
-    '#8fe0a3': '#a9cfb6', '#1f8a37': '#3f7d55',
+    '#A8CBF0': '#a9cfb6', '#2B5FA8': '#3f7d55',
 
     /* ---- THE LEGACY NAVY/GOLD DIALOGS -------------------------------
        The Bill of Materials, the Electrical Estimate, the Solar->BESS
@@ -99213,7 +99213,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
        top of this one. Mapping their palette onto the theme's greys is the
        whole restyle — no dialog has to be rewritten, and any dialog added
        later in the same house style is carried along with them. */
-    '#0a1628': '#1f2124', '#0b1626': '#212427', '#0b1e35': '#22262a',
+    '#16202B': '#1f2124', '#0b1626': '#212427', '#0b1e35': '#22262a',
     '#0d1b2e': '#25282b', '#0f1d30': '#26292d', '#122036': '#282b2f',
     '#1e3a5f': '#33373c', '#26364d': '#33373c', '#1b4f8a': '#3a4249',
     '#4a6080': '#43474d', '#0c1a2b': '#25282b',
@@ -139065,39 +139065,39 @@ var CSS = ''
 + '#ovis{position:fixed;inset:0;z-index:9000;background:#141416;display:none;'
 +   'flex-direction:column;font-family:"IBM Plex Sans",sans-serif;color:#E0E0E0}'
 + '#ovis.on{display:flex}'
-+ '#ovis .ov-bar{height:44px;flex-shrink:0;background:#1E1E1E;border-bottom:1px solid #3A3A3A;'
++ '#ovis .ov-bar{height:44px;flex-shrink:0;background:#16202B;border-bottom:1px solid #30404F;'
 +   'display:flex;align-items:center;gap:10px;padding:0 12px}'
 + '#ovis .ov-ttl{font-size:13px;font-weight:700;letter-spacing:.3px}'
-+ '#ovis .ov-ttl span{color:#2FB54A}'
++ '#ovis .ov-ttl span{color:#4A8FD8}'
 + '#ovis .ov-sub{font-size:10.5px;color:#9A9A9A;font-family:"IBM Plex Mono",monospace}'
 + '#ovis .ov-beta{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:2px;'
 +   'background:#E0A83C;color:#141416;font-size:8.5px;font-weight:800;letter-spacing:.8px;'
 +   'vertical-align:2px;font-family:"IBM Plex Mono",monospace}'
 + '#ov-ribbon-btn{position:relative}'
 + '#ovis .ov-sp{flex:1}'
-+ '#ovis .ov-b{background:#2D2D2D;border:1px solid #3A3A3A;color:#E0E0E0;border-radius:3px;'
++ '#ovis .ov-b{background:#22303D;border:1px solid #30404F;color:#E0E0E0;border-radius:3px;'
 +   'padding:5px 11px;font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap}'
-+ '#ovis .ov-b:hover{background:#3C3C3C;border-color:#4d4d4d}'
-+ '#ovis .ov-b.on{background:#2FB54A;border-color:#2FB54A;color:#0d0d0d;font-weight:600}'
-+ '#ovis .ov-b.pri{background:#2FB54A;border-color:#2FB54A;color:#0d0d0d;font-weight:600}'
++ '#ovis .ov-b:hover{background:#2A3A49;border-color:#4d4d4d}'
++ '#ovis .ov-b.on{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
++ '#ovis .ov-b.pri{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
 + '#ovis .ov-x{font-size:17px;line-height:1;padding:4px 11px}'
 + '#ovis .ov-body{flex:1;display:flex;min-height:0}'
 + '#ovis .ov-stage{flex:1;position:relative;min-width:0;background:#0f1013}'
 + '#ovis canvas{width:100%;height:100%;display:block;outline:none;touch-action:none}'
-+ '#ovis .ov-side{width:322px;flex-shrink:0;background:#1B1B1D;border-left:1px solid #3A3A3A;'
++ '#ovis .ov-side{width:322px;flex-shrink:0;background:#1B1B1D;border-left:1px solid #30404F;'
 +   'overflow-y:auto;padding:12px}'
 + '#ovis .ov-h{font-size:9.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;'
-+   'color:#2FB54A;margin:15px 0 7px;padding-bottom:4px;border-bottom:1px solid #303030}'
++   'color:#4A8FD8;margin:15px 0 7px;padding-bottom:4px;border-bottom:1px solid #303030}'
 + '#ovis .ov-h:first-child{margin-top:0}'
 + '#ovis .ov-row{display:flex;align-items:center;gap:7px;padding:4px 0;font-size:11.5px}'
 + '#ovis .ov-row label{flex:1;cursor:pointer;color:#CFCFCF}'
-+ '#ovis .ov-undo{background:#2D2D2D;border:1px solid #3A3A3A;color:#9FB8DE;'
++ '#ovis .ov-undo{background:#22303D;border:1px solid #30404F;color:#9FB8DE;'
 +   'border-radius:2px;padding:0 5px;font-size:9px;line-height:15px;cursor:pointer;'
 +   'font-family:"IBM Plex Mono",monospace}'
-+ '#ovis .ov-undo:hover{background:#3C3C3C;color:#CFE0F5}'
++ '#ovis .ov-undo:hover{background:#2A3A49;color:#CFE0F5}'
 + '#ovis .ov-chip{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;'
 +   'border-radius:2px;letter-spacing:.4px;font-family:"IBM Plex Mono",monospace}'
-+ '#ovis .c-explicit{background:rgba(47,181,74,.18);color:#7FDE9A}'
++ '#ovis .c-explicit{background:rgba(74,143,216,.18);color:#7FDE9A}'
 + '#ovis .c-authored{background:rgba(120,150,200,.16);color:#9FB8DE}'
 + '#ovis .c-inferred{background:rgba(224,168,60,.16);color:#E0B45C}'
 + '#ovis .ov-item{border:1px solid #2C2C2E;border-radius:4px;padding:7px 8px;margin-bottom:6px;'
@@ -139107,9 +139107,9 @@ var CSS = ''
 + '#ovis .ov-in{flex:1;font-size:11px;font-weight:600;color:#E4E4E4;overflow:hidden;'
 +   'text-overflow:ellipsis;white-space:nowrap}'
 + '#ovis .ov-im{font-size:9.5px;color:#8A8A8A;font-family:"IBM Plex Mono",monospace}'
-+ '#ovis select{width:100%;background:#2A2A2C;border:1px solid #3A3A3A;color:#E0E0E0;'
++ '#ovis select{width:100%;background:#2A2A2C;border:1px solid #30404F;color:#E0E0E0;'
 +   'border-radius:3px;padding:4px 6px;font-size:10.5px;font-family:inherit;cursor:pointer}'
-+ '#ovis input[type=range]{width:100%;accent-color:#2FB54A;cursor:pointer}'
++ '#ovis input[type=range]{width:100%;accent-color:#4A8FD8;cursor:pointer}'
 + '#ovis .ov-warn{background:rgba(224,168,60,.10);border:1px solid rgba(224,168,60,.34);'
 +   'border-radius:4px;padding:8px 9px;font-size:10.5px;color:#E0B45C;margin-bottom:10px;line-height:1.5}'
 + '#ovis .ov-kpi{display:flex;gap:6px;margin-bottom:9px}'
@@ -139120,7 +139120,7 @@ var CSS = ''
 + '#ovis .ov-vb .ov-b{flex:1;text-align:center;padding:5px 4px;font-size:10px}'
 + '#ovis .ov-card{position:absolute;top:18px;left:18px;z-index:4;pointer-events:none;'
 +   'background:rgba(16,18,22,.86);border:1px solid rgba(255,255,255,.09);'
-+   'border-left:3px solid #2FB54A;border-radius:7px;padding:13px 16px;max-width:330px;'
++   'border-left:3px solid #4A8FD8;border-radius:7px;padding:13px 16px;max-width:330px;'
 +   'opacity:0;transition:opacity .25s ease}'
 + '#ovis.present .ov-card{opacity:1}'
 + '#ovis .ov-card h1{margin:0 0 2px;font-size:16px;font-weight:700;letter-spacing:-.2px;color:#F2F2F2}'
@@ -139129,7 +139129,7 @@ var CSS = ''
 + '#ovis .ov-cs{background:rgba(255,255,255,.045);border-radius:4px;padding:6px 8px}'
 + '#ovis .ov-cs i{display:block;font-style:normal;font-size:8.5px;letter-spacing:.5px;'
 +   'text-transform:uppercase;color:#8A8A8A;margin-bottom:2px}'
-+ '#ovis .ov-cs b{font-size:13px;font-family:"IBM Plex Mono",monospace;color:#2FB54A}'
++ '#ovis .ov-cs b{font-size:13px;font-family:"IBM Plex Mono",monospace;color:#4A8FD8}'
 + '#ovis .ov-compass{position:absolute;top:18px;right:18px;z-index:4;pointer-events:none;'
 +   'width:46px;height:46px;border-radius:50%;background:rgba(16,18,22,.86);'
 +   'border:1px solid rgba(255,255,255,.09);display:flex;flex-direction:column;'
@@ -139141,12 +139141,12 @@ var CSS = ''
 + '#ovis.present .ov-bar:hover{opacity:1}'
 + '#ovis .ov-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;'
 +   'flex-direction:column;gap:9px;background:#0f1013;color:#9A9A9A;font-size:12px}'
-+ '#ovis .ov-spin{width:26px;height:26px;border:2.5px solid #2C2C2E;border-top-color:#2FB54A;'
++ '#ovis .ov-spin{width:26px;height:26px;border:2.5px solid #2C2C2E;border-top-color:#4A8FD8;'
 +   'border-radius:50%;animation:ovspin .8s linear infinite}'
 + '@keyframes ovspin{to{transform:rotate(360deg)}}'
 + '#ovis .ov-hint{font-size:9.5px;color:#7A7A7A;line-height:1.55;margin-top:6px}'
 + '@media(max-width:900px){#ovis .ov-body{flex-direction:column}'
-+   '#ovis .ov-side{width:auto;max-height:44%;border-left:none;border-top:1px solid #3A3A3A}}';
++   '#ovis .ov-side{width:auto;max-height:44%;border-left:none;border-top:1px solid #30404F}}';
 
 function ensureCSS(){
   if(document.getElementById(CSS_ID)) return;
@@ -139724,7 +139724,7 @@ function drawOverlay(g, W, H, dpr){
   g.fillStyle = 'rgba(16,18,22,.86)';
   roundRect(g, P, P, cw, ch, 7*dpr); g.fill();
   g.strokeStyle = 'rgba(255,255,255,.09)'; g.lineWidth = 1*dpr; g.stroke();
-  g.fillStyle = '#2FB54A';
+  g.fillStyle = '#4A8FD8';
   g.fillRect(P, P+3*dpr, 3*dpr, ch-6*dpr);
 
   g.textBaseline = 'top';
@@ -139748,7 +139748,7 @@ function drawOverlay(g, W, H, dpr){
     g.fillStyle = '#8A8A8A';
     g.font = '600 ' + (8.5*dpr) + 'px "IBM Plex Mono",monospace';
     g.fillText(c[0], x+8*dpr, y+6*dpr);
-    g.fillStyle = '#2FB54A';
+    g.fillStyle = '#4A8FD8';
     g.font = '700 ' + (13*dpr) + 'px "IBM Plex Mono",monospace';
     g.fillText(c[1], x+8*dpr, y+17*dpr);
   });
@@ -139918,7 +139918,7 @@ function injectButton(){
        different colour and size, so it read as a broken button next to
        the Permitting Matrix and Bill Analysis tags beside it. */
     b.className = 'rbtn omega-beta';
-    b.innerHTML = '<span class="rb-ico" style="color:#2FB54A">\u25E9</span>'
+    b.innerHTML = '<span class="rb-ico" style="color:#4A8FD8">\u25E9</span>'
                 + '<span class="rb-lbl">3D Site<br>Visualizer</span>'
                 + '<span class="omega-beta-tag">BETA</span>';
     b.onclick = function(){
@@ -151013,8 +151013,8 @@ if (root.console && console.info) {
       var cur = mode();
       Array.prototype.forEach.call(box.querySelectorAll('button'), function (b) {
         var on = b.getAttribute('data-m') === cur;
-        b.style.background = on ? 'rgba(47,181,74,.16)' : 'rgba(255,255,255,.04)';
-        b.style.border = '1px solid ' + (on ? '#2FB54A' : '#3A3A3A');
+        b.style.background = on ? 'rgba(74,143,216,.16)' : 'rgba(255,255,255,.04)';
+        b.style.border = '1px solid ' + (on ? '#4A8FD8' : '#30404F');
         b.style.color = on ? '#E0E0E0' : '#9A9A9A';
       });
       var run = document.getElementById('sqb-go');
@@ -151515,7 +151515,7 @@ if (root.console && console.info) {
       + 'display:flex;align-items:center;justify-content:center';
     var rows = TYPES.map(function (t) {
       return '<button data-t="' + t.id + '" style="display:flex;align-items:center;gap:11px;'
-        + 'width:100%;text-align:left;background:rgba(255,255,255,.03);border:1px solid #3A3A3A;'
+        + 'width:100%;text-align:left;background:rgba(255,255,255,.03);border:1px solid #30404F;'
         + 'border-radius:7px;padding:10px 12px;margin-bottom:7px;cursor:pointer;'
         + 'font-family:inherit;color:#E0E0E0">'
         + '<span style="width:11px;height:11px;border-radius:3px;flex:none;background:'
@@ -151524,7 +151524,7 @@ if (root.console && console.info) {
         + '<span style="display:block;font-size:10px;color:#9A9A9A;margin-top:2px">'
         + t.doc + '</span></span></button>';
     }).join('');
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:11px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:11px;'
       + 'padding:18px;max-width:430px;width:100%;font-family:inherit">'
       + '<div style="font-size:15px;font-weight:700;color:#E0E0E0;margin-bottom:3px">'
       + 'What makes this area unbuildable?</div>'
@@ -154156,7 +154156,7 @@ if (root.console && console.info) {
     w.id = 'omega-sitebuild';
     w.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.55);'
       + 'display:flex;align-items:center;justify-content:center';
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:11px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:11px;'
       + 'padding:20px;max-width:400px;width:100%;font-family:inherit">'
       + '<div style="font-size:15px;font-weight:700;color:#E0E0E0;margin-bottom:3px">'
       + 'Lay out the site</div>'
@@ -154166,14 +154166,14 @@ if (root.console && console.info) {
       + '<label style="font-size:10px;color:#9A9A9A;text-transform:uppercase;'
       + 'letter-spacing:.6px">IT load (MW)</label>'
       + '<input id="osb-it" type="number" value="40" min="1" max="200" step="1" '
-      + 'style="width:100%;background:#0B1626;border:1px solid #3A3A3A;color:#E0E0E0;'
+      + 'style="width:100%;background:#0B1626;border:1px solid #30404F;color:#E0E0E0;'
       + 'border-radius:6px;padding:9px;font-size:16px;font-family:inherit;'
       + 'box-sizing:border-box;margin:5px 0 14px">'
       + '<div style="display:flex;gap:8px">'
-      + '<button data-a="go" style="flex:1;padding:11px;background:#2FB54A;color:#0A1628;'
+      + '<button data-a="go" style="flex:1;padding:11px;background:#4A8FD8;color:#16202B;'
       + 'border:none;border-radius:7px;font-weight:800;cursor:pointer;font-family:inherit;'
       + 'font-size:12px">Build it</button>'
-      + '<button data-a="x" style="padding:11px 16px;background:none;border:1px solid #3A3A3A;'
+      + '<button data-a="x" style="padding:11px 16px;background:none;border:1px solid #30404F;'
       + 'color:#9A9A9A;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">'
       + 'Cancel</button></div></div>';
     w.addEventListener('click', function (e) {
@@ -154203,7 +154203,7 @@ if (root.console && console.info) {
     b.title = 'Lay Out Site \u2014 pods, fuel cells, storage and the substation for a load '
       + 'you name, drawn inside the parcel. Replaces any previous layout.';
     b.onclick = prompt;
-    b.innerHTML = '<span class="rb-ico" style="color:#2FB54A">\u25A6</span>'
+    b.innerHTML = '<span class="rb-ico" style="color:#4A8FD8">\u25A6</span>'
       + '<span class="rb-lbl">Lay Out<br>Site</span>';
     host.parentNode.insertBefore(b, host);
     try {
@@ -155123,7 +155123,7 @@ if (root.console && console.info) {
 
     var chk = function (id, on, label, note) {
       return '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;'
-        + 'background:rgba(255,255,255,.03);border:1px solid ' + (on ? '#2FB54A' : '#3A3A3A')
+        + 'background:rgba(255,255,255,.03);border:1px solid ' + (on ? '#4A8FD8' : '#30404F')
         + ';border-radius:7px;margin-bottom:7px;cursor:pointer">'
         + '<input type="checkbox" id="' + id + '"' + (on ? ' checked' : '')
         + ' style="margin-top:2px">'
@@ -155131,7 +155131,7 @@ if (root.console && console.info) {
         + '</span><span style="display:block;font-size:10px;color:#9A9A9A;margin-top:2px">'
         + note + '</span></span></label>';
     };
-    var inp = 'width:100%;background:#0B1626;border:1px solid #3A3A3A;color:#E0E0E0;'
+    var inp = 'width:100%;background:#0B1626;border:1px solid #30404F;color:#E0E0E0;'
       + 'border-radius:6px;padding:8px;font-size:13px;font-family:inherit;box-sizing:border-box';
     var lbl = 'font-size:10px;color:#9A9A9A;text-transform:uppercase;letter-spacing:.6px;'
       + 'display:block;margin-bottom:4px';
@@ -155140,7 +155140,7 @@ if (root.console && console.info) {
     w.id = 'omega-design';
     w.style.cssText = 'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.6);'
       + 'display:flex;align-items:center;justify-content:center;padding:20px';
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:12px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:12px;'
       + 'padding:22px;max-width:520px;width:100%;max-height:88vh;overflow:auto;font-family:inherit">'
 
       + '<div style="font-size:17px;font-weight:700;color:#E0E0E0">Design the site</div>'
@@ -155178,11 +155178,11 @@ if (root.console && console.info) {
       + 'color:#8B7BD8;margin:16px 0 8px">Load</div>'
       + '<div style="display:flex;gap:8px;margin-bottom:6px">'
       + '<button data-m="fixed" style="flex:1;padding:9px;border-radius:7px;cursor:pointer;'
-      + 'font-family:inherit;font-size:11.5px;font-weight:700;background:rgba(47,181,74,.16);'
-      + 'border:1px solid #2FB54A;color:#E0E0E0">Size to a load</button>'
+      + 'font-family:inherit;font-size:11.5px;font-weight:700;background:rgba(74,143,216,.16);'
+      + 'border:1px solid #4A8FD8;color:#E0E0E0">Size to a load</button>'
       + '<button data-m="max" style="flex:1;padding:9px;border-radius:7px;cursor:pointer;'
       + 'font-family:inherit;font-size:11.5px;font-weight:700;background:rgba(255,255,255,.04);'
-      + 'border:1px solid #3A3A3A;color:#9A9A9A">Find the maximum</button></div>'
+      + 'border:1px solid #30404F;color:#9A9A9A">Find the maximum</button></div>'
       + '<div id="od-fixed"><label style="' + lbl + '">IT load (MW)</label>'
       + '<input id="od-it" type="number" min="1" step="1" value="40" style="' + inp + '"></div>'
       + '<div id="od-maxnote" style="display:none;font-size:10px;color:#9A9A9A;line-height:1.5">'
@@ -155190,10 +155190,10 @@ if (root.console && console.info) {
       + 'packing the layout at every candidate. Takes a few seconds.</div>'
 
       + '<div style="display:flex;gap:8px;margin-top:20px">'
-      + '<button data-a="go" style="flex:1;padding:12px;background:#2FB54A;color:#0A1628;'
+      + '<button data-a="go" style="flex:1;padding:12px;background:#4A8FD8;color:#16202B;'
       + 'border:none;border-radius:8px;font-weight:800;cursor:pointer;font-family:inherit;'
       + 'font-size:12.5px">Design it</button>'
-      + '<button data-a="x" style="padding:12px 18px;background:none;border:1px solid #3A3A3A;'
+      + '<button data-a="x" style="padding:12px 18px;background:none;border:1px solid #30404F;'
       + 'color:#9A9A9A;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px">'
       + 'Cancel</button></div></div>';
 
@@ -155204,8 +155204,8 @@ if (root.console && console.info) {
         mode = m.getAttribute('data-m');
         Array.prototype.forEach.call(w.querySelectorAll('[data-m]'), function (b) {
           var on = b.getAttribute('data-m') === mode;
-          b.style.background = on ? 'rgba(47,181,74,.16)' : 'rgba(255,255,255,.04)';
-          b.style.border = '1px solid ' + (on ? '#2FB54A' : '#3A3A3A');
+          b.style.background = on ? 'rgba(74,143,216,.16)' : 'rgba(255,255,255,.04)';
+          b.style.border = '1px solid ' + (on ? '#4A8FD8' : '#30404F');
           b.style.color = on ? '#E0E0E0' : '#9A9A9A';
         });
         var f = document.getElementById('od-fixed');
@@ -155258,7 +155258,7 @@ if (root.console && console.info) {
       b.title = 'Design Site \u2014 will-serve capacity, which DER to build, and the load. '
         + 'Replaces Lay Out Site, What Fits, Optimise Layout and Max Load.';
       b.onclick = open;
-      b.innerHTML = '<span class="rb-ico" style="color:#2FB54A">\u25C8</span>'
+      b.innerHTML = '<span class="rb-ico" style="color:#4A8FD8">\u25C8</span>'
         + '<span class="rb-lbl">Design<br>Site</span>';
       host.parentNode.insertBefore(b, host.nextSibling);
       try {
@@ -155528,7 +155528,7 @@ if (root.console && console.info) {
     wrap.style.cssText = 'margin:-2px 0 9px 30px';
     var sel = '<label style="font-size:10px;color:#9A9A9A;text-transform:uppercase;'
       + 'letter-spacing:.6px;display:block;margin-bottom:4px">Prime mover</label>'
-      + '<select id="od-genclass" style="width:100%;background:#0B1626;border:1px solid #3A3A3A;'
+      + '<select id="od-genclass" style="width:100%;background:#0B1626;border:1px solid #30404F;'
       + 'color:#E0E0E0;border-radius:6px;padding:7px;font-size:12px;font-family:inherit">';
     classOptions().forEach(function (o) {
       sel += '<option value="' + o.id + '"' + (o.id === (chosen || '') ? ' selected' : '')
@@ -156106,7 +156106,7 @@ if (root.console && console.info) {
     var hatch = 'repeating-linear-gradient(45deg,#B91C1C,#B91C1C 6px,#7F1D1D 6px,#7F1D1D 12px)';
     var bar = '<div style="display:flex;height:42px;border-radius:5px;overflow:hidden;'
       + 'border:1px solid var(--border)">'
-      + seg(served, '#4ADE80', '', '#0A1628')
+      + seg(served, '#4ADE80', '', '#16202B')
       + seg(covered, '#7C3AED',
             covered > 0 ? n1(gen / 1000) + ' MW on site closes a ' + n1(gap / 1000) + ' MW gap' : '')
       + seg(shortfall, hatch, 'GAP ' + n1(shortfall / 1000) + ' MW')
@@ -158066,10 +158066,10 @@ if (root.console && console.info) {
      has no :root to inherit from, so every var() in the report markup
      would collapse to nothing and render black-on-black. */
   var PALETTE = {
-    '--text': '#E0E0E0', '--sub': '#9A9A9A', '--border': '#3A3A3A',
-    '--panel': '#1E1E1E', '--surface': '#2D2D2D', '--bg': '#252526',
-    '--accent': '#2FB54A', '--green': '#2FB54A', '--amber': '#B0B0B0',
-    '--red': '#C86A6A', '--navy': '#1E1E1E'
+    '--text': '#E0E0E0', '--sub': '#9A9A9A', '--border': '#30404F',
+    '--panel': '#16202B', '--surface': '#22303D', '--bg': '#1B2632',
+    '--accent': '#4A8FD8', '--green': '#4A8FD8', '--amber': '#B0B0B0',
+    '--red': '#C86A6A', '--navy': '#16202B'
   };
 
   function paletteCss() {
@@ -158141,7 +158141,7 @@ if (root.console && console.info) {
           + '.doc [style*="#4ADE80"]{color:#1B8A4B!important}'
           + '.doc [style*="#F59E0B"],.doc [style*="#F5C871"]{color:#B45309!important}'
           + '.doc [style*="#8B7BD8"],.doc [style*="#A78BFA"]{color:#5B3FD8!important}'
-          + '.doc [style*="rgba(47,181,74"]{background:#EFFAF3!important;'
+          + '.doc [style*="rgba(74,143,216"]{background:#EFFAF3!important;'
           + 'border-color:#BBE7CC!important}'
           + '.doc [style*="rgba(245,158,11"]{background:#FFF8EC!important;'
           + 'border-color:#F2D9A8!important}'
@@ -158875,7 +158875,7 @@ if (root.console && console.info) {
       ? 'Compute mode is on \u2014 a curated ribbon. Click here, or Designer / Pro, to restore the full one.'
       : 'Compute mode \u2014 curate the ribbon for siting a large load on energised land.';
     b.style.background = on ? 'rgba(124,58,237,.22)' : 'rgba(255,255,255,.04)';
-    b.style.border = '1px solid ' + (on ? '#7C3AED' : '#3A3A3A');
+    b.style.border = '1px solid ' + (on ? '#7C3AED' : '#30404F');
     b.style.color = on ? '#C4B5FD' : '#9A9A9A';
   }
 
@@ -161086,7 +161086,7 @@ if (root.console && console.info) {
     } else {
       /* One sentence first. Somebody who reads nothing else should still
          come away with the number they came for. */
-      body = '<div style="background:rgba(47,181,74,.10);border:1px solid rgba(47,181,74,.4);'
+      body = '<div style="background:rgba(74,143,216,.10);border:1px solid rgba(74,143,216,.4);'
         + 'border-radius:9px;padding:13px 14px;line-height:1.6;margin-bottom:6px">'
         + '<div style="font-size:13.5px;font-weight:700;color:#4ADE80">'
         + n1(m.buildableAc) + ' buildable acres of ' + n1(m.grossAc) + '</div>'
@@ -161116,7 +161116,7 @@ if (root.console && console.info) {
         + 'This is a planning measurement of the drawing, not a survey.</div>';
     }
 
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:12px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:12px;'
       + 'padding:22px;max-width:560px;width:100%;max-height:88vh;overflow:auto;font-family:inherit">'
       + '<div style="display:flex;justify-content:space-between;align-items:center">'
       + '<div style="font-size:17px;font-weight:700;color:#E0E0E0">Buildable area</div>'
@@ -161127,9 +161127,9 @@ if (root.console && console.info) {
       + body
       + '<div style="display:flex;gap:8px;margin-top:18px">'
       + '<button data-a="copy" style="flex:1;padding:10px;background:rgba(255,255,255,.05);'
-      + 'border:1px solid #3A3A3A;color:#E0E0E0;border-radius:8px;cursor:pointer;'
+      + 'border:1px solid #30404F;color:#E0E0E0;border-radius:8px;cursor:pointer;'
       + 'font-family:inherit;font-size:12px">Copy as text</button>'
-      + '<button data-a="x" style="padding:10px 18px;background:#2FB54A;color:#0A1628;border:none;'
+      + '<button data-a="x" style="padding:10px 18px;background:#4A8FD8;color:#16202B;border:none;'
       + 'border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;font-size:12px">'
       + 'Close</button></div></div>';
 
@@ -161688,7 +161688,7 @@ if (root.console && console.info) {
 
   /* ── panel ──────────────────────────────────────────────────────────── */
 
-  var IN = 'width:100%;background:#0B1626;border:1px solid #3A3A3A;color:#E0E0E0;'
+  var IN = 'width:100%;background:#0B1626;border:1px solid #30404F;color:#E0E0E0;'
     + 'border-radius:6px;padding:7px;font-size:12px;font-family:inherit;box-sizing:border-box';
   var LB = 'font-size:9.5px;color:#9A9A9A;text-transform:uppercase;letter-spacing:.5px;'
     + 'display:block;margin-bottom:3px';
@@ -161722,7 +161722,7 @@ if (root.console && console.info) {
        keeps the equipment datasheet folded away until somebody actually
        wants it. When it cannot answer, it asks for exactly the two
        numbers it is missing and nothing else. */
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:12px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:12px;'
       + 'padding:22px;max-width:600px;width:100%;max-height:90vh;overflow:auto;font-family:inherit">'
       + '<div style="display:flex;justify-content:space-between;align-items:center">'
       + '<div style="font-size:17px;font-weight:700;color:#E0E0E0">Electrical sizing</div>'
@@ -161778,9 +161778,9 @@ if (root.console && console.info) {
 
       + '<div style="display:flex;gap:8px;margin-top:18px">'
       + '<button data-a="copy" style="flex:1;padding:11px;background:rgba(255,255,255,.05);'
-      + 'border:1px solid #3A3A3A;color:#E0E0E0;border-radius:8px;cursor:pointer;'
+      + 'border:1px solid #30404F;color:#E0E0E0;border-radius:8px;cursor:pointer;'
       + 'font-family:inherit;font-size:12px">Copy the numbers</button>'
-      + '<button data-a="x" style="padding:11px 18px;background:#2FB54A;color:#0A1628;'
+      + '<button data-a="x" style="padding:11px 18px;background:#4A8FD8;color:#16202B;'
       + 'border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;'
       + 'font-size:12px">Done</button></div></div>';
 
@@ -161842,7 +161842,7 @@ if (root.console && console.info) {
         s.blocked.forEach(function (b) { lines.push('BLOCKED: ' + b); });
       } else if (s.n && s.strings) {
         var pfOk = !(s.qShortfall > 0);
-        h += '<div style="background:rgba(47,181,74,.10);border:1px solid rgba(47,181,74,.4);'
+        h += '<div style="background:rgba(74,143,216,.10);border:1px solid rgba(74,143,216,.4);'
           + 'border-radius:9px;padding:13px 14px;line-height:1.6">'
           + '<div style="font-size:13.5px;font-weight:700;color:#4ADE80">'
           + s.n + ' modules per string \u00b7 ' + n0(s.strings) + ' strings \u00b7 '
@@ -162580,7 +162580,7 @@ if (root.console && console.info) {
 
   /* ── the picker, injected into the Design Site dialog ───────────────── */
 
-  var IN = 'width:100%;background:#0B1626;border:1px solid #3A3A3A;color:#E0E0E0;'
+  var IN = 'width:100%;background:#0B1626;border:1px solid #30404F;color:#E0E0E0;'
     + 'border-radius:6px;padding:8px;font-size:12.5px;font-family:inherit;box-sizing:border-box';
   var LB = 'font-size:10px;color:#9A9A9A;text-transform:uppercase;letter-spacing:.6px;'
     + 'display:block;margin-bottom:4px';
@@ -163039,7 +163039,7 @@ if (root.console && console.info) {
     };
   }
 
-  var IN = 'width:100%;background:#0B1626;border:1px solid #3A3A3A;color:#E0E0E0;'
+  var IN = 'width:100%;background:#0B1626;border:1px solid #30404F;color:#E0E0E0;'
     + 'border-radius:6px;padding:8px;font-size:12.5px;font-family:inherit;box-sizing:border-box';
   var LB = 'font-size:10px;color:#9A9A9A;text-transform:uppercase;letter-spacing:.6px;'
     + 'display:block;margin-bottom:4px';
@@ -163053,7 +163053,7 @@ if (root.console && console.info) {
     w.style.cssText = 'position:fixed;inset:0;z-index:9200;background:rgba(0,0,0,.6);'
       + 'display:flex;align-items:center;justify-content:center;padding:20px';
 
-    w.innerHTML = '<div style="background:#1E1E1E;border:1px solid #3A3A3A;border-radius:12px;'
+    w.innerHTML = '<div style="background:#16202B;border:1px solid #30404F;border-radius:12px;'
       + 'padding:22px;max-width:560px;width:100%;max-height:88vh;overflow:auto;font-family:inherit">'
       + '<div style="display:flex;justify-content:space-between;align-items:center">'
       + '<div style="font-size:17px;font-weight:700;color:#E0E0E0">Compute cost</div>'
@@ -163089,9 +163089,9 @@ if (root.console && console.info) {
       + 'accelerators; if you have the split, put it in the right boxes.</div>'
       + '<div style="display:flex;gap:8px;margin-top:18px">'
       + '<button data-a="copy" style="flex:1;padding:11px;background:rgba(255,255,255,.05);'
-      + 'border:1px solid #3A3A3A;color:#E0E0E0;border-radius:8px;cursor:pointer;'
+      + 'border:1px solid #30404F;color:#E0E0E0;border-radius:8px;cursor:pointer;'
       + 'font-family:inherit;font-size:12px">Copy</button>'
-      + '<button data-a="x" style="padding:11px 18px;background:#2FB54A;color:#0A1628;'
+      + '<button data-a="x" style="padding:11px 18px;background:#4A8FD8;color:#16202B;'
       + 'border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;'
       + 'font-size:12px">Done</button></div></div>';
 
