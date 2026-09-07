@@ -491,5 +491,10 @@ code { background:#eef2f6; padding:1px 5px; border-radius:4px; font-size:12px; }
   boot();
 })();
 </script>
+
+<!-- The drawing-set identity, applied last on purpose: several pages open a
+     <style> inside <body>, so a <link> in <head> would be overridden by them.
+     See the note at the top of omega-theme.css. -->
+<link rel="stylesheet" href="/omega-theme.css">
 </body>
 </html>

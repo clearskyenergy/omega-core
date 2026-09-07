@@ -20,9 +20,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --sap-blue:#0070F2; --sap-blue-hi:#1B90FF; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
-  --sap-page:#EDEFF1; --sap-card:#FFFFFF; --sap-card-border:#E4E8EC; --sap-num:#223548;
-  --cs-navy:#08384F; --cs-accent:#00A9A4; --cs-sub:#5A7180;
+  --sap-blue:#2B5FA8; --sap-blue-hi:#3F76C4; --sap-ink:#1D2D3E; --sap-ink-2:#556B82;
+  --sap-page:#F5F4F0; --sap-card:#FFFFFF; --sap-card-border:#E4E8EC; --sap-num:#223548;
+  --cs-navy:#16202B; --cs-accent:#2B5FA8; --cs-sub:#5B6672;
   --ok:#16A34A; --warn:#D97706; --bad:#DC2626; --hold:#6B7280;
   --shadow:0 1px 2px rgba(20,40,60,.05); --shadow-lg:0 8px 28px rgba(15,39,51,.14);
   --r:10px;
@@ -47,7 +47,7 @@ button{font-family:inherit}
 
 /* ── Auth ─────────────────────────────────────────────────────────────── */
 #auth-screen{min-height:100vh;display:none;align-items:center;justify-content:center;padding:24px;
-  background:linear-gradient(160deg,#08384F 0%,#0B2A3A 55%,#061A25 100%)}
+  background:linear-gradient(160deg,#16202B 0%,#0B2A3A 55%,#061A25 100%)}
 .auth-card{background:#fff;border-radius:16px;padding:34px 32px;width:100%;max-width:400px;
   box-shadow:0 24px 60px rgba(0,0,0,.36)}
 .auth-logo{display:flex;align-items:center;gap:11px;margin-bottom:22px}
@@ -258,7 +258,7 @@ button{font-family:inherit}
 .btn-sm.warn{border-color:#E7C3C3;color:#A33A3A}
 .btn-sm.warn:hover{border-color:var(--bad);color:var(--bad)}
 
-.note{font-size:12.5px;line-height:1.6;color:#5A7180;padding:13px 18px;background:#FBFCFD;
+.note{font-size:12.5px;line-height:1.6;color:#5B6672;padding:13px 18px;background:#FBFCFD;
   border-top:1px solid var(--sap-card-border)}
 .note b{color:var(--cs-navy)}
 .note code{font-family:'DM Mono',monospace;font-size:11.5px;background:#EDF1F5;padding:1px 5px;border-radius:4px}
@@ -380,7 +380,7 @@ button{font-family:inherit}
 .empty h3{font-size:15px;color:var(--cs-navy);margin-bottom:6px}
 .empty p{font-size:13px;line-height:1.6;max-width:44ch;margin:0 auto 14px}
 
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#0F2733;
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#14171A;
   color:#fff;font-size:13px;padding:11px 18px;border-radius:9px;z-index:400;opacity:0;
   transition:opacity .2s,transform .2s;pointer-events:none;box-shadow:var(--shadow-lg)}
 .toast.on{opacity:1;transform:translateX(-50%)}
@@ -683,7 +683,7 @@ button{font-family:inherit}
 
       <div class="card" style="max-width:560px;padding:20px 22px">
         <div style="font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#8FA0AE;margin-bottom:12px">Password</div>
-        <div id="set-pw-google" style="display:none;font-size:13px;color:#5A7180;line-height:1.5">
+        <div id="set-pw-google" style="display:none;font-size:13px;color:#5B6672;line-height:1.5">
           This account signs in with Google, so its password is managed by Google \u2014
           there\u2019s nothing to change here.</div>
         <div id="set-pw-form">
@@ -3114,5 +3114,10 @@ function saveMoney(){
         'Saved · ' + D.fmtMoney(v * rt) + ' commission on delivery');
 }
 </script>
+
+<!-- The drawing-set identity, applied last on purpose: several pages open a
+     <style> inside <body>, so a <link> in <head> would be overridden by them.
+     See the note at the top of omega-theme.css. -->
+<link rel="stylesheet" href="/omega-theme.css">
 </body>
 </html>

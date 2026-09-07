@@ -10,11 +10,11 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --cs-navy:#08384F;--cs-dark:#052A3D;--cs-blue:#006F9A;--cs-sky:#00A9A4;
-  --cs-accent:#00A9A4;--cs-gold:#00C4BC;--cs-text:#0F2733;--cs-sub:#5A7180;
-  --cs-bg:#F4F1EC;--cs-surface:#FAFAF8;--cs-border:#DDD8D0;
-  --cs-green:#1DB954;--cs-red:#E53935;
-  --sap-blue:#0070F2;--sap-blue-hi:#1B90FF;--sap-page:#EDEFF1;--sap-card-border:#E4E8EC;
+  --cs-navy:#16202B;--cs-dark:#0F1720;--cs-blue:#2B5FA8;--cs-sky:#2B5FA8;
+  --cs-accent:#2B5FA8;--cs-gold:#3F76C4;--cs-text:#14171A;--cs-sub:#5B6672;
+  --cs-bg:#F5F4F0;--cs-surface:#FFFFFF;--cs-border:#DCD9D2;
+  --cs-green:#2E7D5B;--cs-red:#D9482B;
+  --sap-blue:#2B5FA8;--sap-blue-hi:#3F76C4;--sap-page:#F5F4F0;--sap-card-border:#E4E8EC;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* Repoint the page chrome onto SAP tokens, exactly like the portal index. */
@@ -76,7 +76,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 
 /* ── Full-bleed gradient hero with centered search ── */
 .mkt-banner{position:relative;overflow:hidden;
-  background:linear-gradient(120deg,#08384F 0%,#006F9A 48%,#00A9A4 100%);
+  background:linear-gradient(120deg,#16202B 0%,#2B5FA8 48%,#2B5FA8 100%);
   padding:56px 28px 64px;margin-bottom:0}
 .mkt-banner::before{content:'';position:absolute;inset:0;
   background:radial-gradient(ellipse 900px 520px at 82% 26%, rgba(0,196,188,.35) 0%, transparent 62%),
@@ -142,7 +142,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 .mkt-pill.inc{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
 .mkt-pill.added{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
 .mkt-pill.invest{color:#0E6E32;background:rgba(241,251,244,.92);border-color:#BCE7C9}
-.mkt-pill.new{color:#006F9A;background:rgba(234,244,248,.92);border-color:#B9DBE8}
+.mkt-pill.new{color:#2B5FA8;background:rgba(234,244,248,.92);border-color:#B9DBE8}
 .mkt-pill.soon{color:#8A6D1F;background:rgba(251,246,230,.92);border-color:#E6D9AE}
 .mkt-empty{padding:60px 24px;text-align:center;color:var(--cs-sub);font-size:14px}
 .mkt-loading{padding:60px 24px;text-align:center;color:var(--cs-sub)}
@@ -186,7 +186,7 @@ body{overflow-x:hidden}
   .tb-nav.open{transform:translateX(0)}
   .tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border,#E4E8EC);
     border-left:3px solid transparent;font-size:15px;justify-content:flex-start;gap:12px}
-  .tb-tab.active{border-bottom-color:var(--sap-card-border,#E4E8EC);border-left-color:var(--sap-blue,#0070F2);
+  .tb-tab.active{border-bottom-color:var(--sap-card-border,#E4E8EC);border-left-color:var(--sap-blue,#2B5FA8);
     background:rgba(0,112,242,.06)}
   .tb-tab svg{width:18px;height:18px}
   .tb-nav .tb-drawer-actions{padding:16px 22px;display:flex;flex-direction:column;gap:10px}
@@ -225,8 +225,8 @@ body{overflow-x:hidden}
   --pol-border-strong:#CFD7E0;
   --pol-shadow:0 1px 2px rgba(16,40,64,.04), 0 3px 10px rgba(16,40,64,.05);
   --pol-shadow-hover:0 2px 6px rgba(16,40,64,.06), 0 12px 26px rgba(16,40,64,.12);
-  --pol-blue:#0070F2;
-  --pol-teal:#00A9A4;
+  --pol-blue:#2B5FA8;
+  --pol-teal:#2B5FA8;
 }
 
 /* Brighter page — a cleaner near-white instead of flat gray */
@@ -252,7 +252,7 @@ body{background:#F4F6F8}
 .ov-strip{border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important;
   border-radius:16px !important;padding:20px 8px !important}
 .ov-val{font-size:34px !important;font-weight:600 !important;letter-spacing:-1.2px;
-  background:linear-gradient(180deg,#0F2733,#33475B);-webkit-background-clip:text;background-clip:text;
+  background:linear-gradient(180deg,#14171A,#33475B);-webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent}
 .ov-label{font-size:12px;margin-top:6px}
 
@@ -478,7 +478,7 @@ body{overflow-x:hidden}
 
 /* Cap toast (reuses pm-toast) */
 .pm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px);
-  background:#0F2733;color:#fff;padding:11px 18px;border-radius:10px;font:600 13px/1.3 'DM Sans',sans-serif;
+  background:#14171A;color:#fff;padding:11px 18px;border-radius:10px;font:600 13px/1.3 'DM Sans',sans-serif;
   box-shadow:0 10px 30px rgba(16,40,64,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:600;max-width:90vw}
 .pm-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -493,13 +493,13 @@ body{overflow-x:hidden}
   box-shadow:var(--pol-shadow);overflow:hidden;display:flex;flex-direction:column;
   max-height:calc(100vh - 100px)}
 .tm-panel-head{padding:14px 16px 10px;border-bottom:1px solid var(--pol-border,#E1E6EC)}
-.tm-panel-title{font:700 14px/1 'DM Sans',sans-serif;color:var(--cs-navy,#08384F);letter-spacing:-.2px}
+.tm-panel-title{font:700 14px/1 'DM Sans',sans-serif;color:var(--cs-navy,#16202B);letter-spacing:-.2px}
 .tm-tabs{display:flex;gap:2px;padding:8px 8px 0;background:#FAFBFC;border-bottom:1px solid var(--pol-border,#E1E6EC)}
 .tm-tab{flex:1;padding:9px 6px;border:none;background:none;cursor:pointer;
   font:600 12px/1 'DM Sans',sans-serif;color:var(--sap-ink-2,#556B82);border-radius:8px 8px 0 0;
   border-bottom:2px solid transparent;transition:color .12s,border-color .12s}
-.tm-tab:hover{color:var(--cs-navy,#08384F)}
-.tm-tab.active{color:var(--sap-blue,#0070F2);border-bottom-color:var(--sap-blue,#0070F2);background:#fff}
+.tm-tab:hover{color:var(--cs-navy,#16202B)}
+.tm-tab.active{color:var(--sap-blue,#2B5FA8);border-bottom-color:var(--sap-blue,#2B5FA8);background:#fff}
 .tm-body{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
 .tm-pane{display:none}
 .tm-pane.active{display:block}
@@ -509,7 +509,7 @@ body{overflow-x:hidden}
 .tm-pane .th-head{padding:0 0 10px !important}
 .tm-pane .th-body{max-height:none !important}
 .tm-pane .convo-card .convo-wrap{flex-direction:column}
-.tm-pane .convo-list{width:auto !important;border-right:none !important;border-bottom:1px solid var(--cs-border,#DDD8D0);max-height:200px}
+.tm-pane .convo-list{width:auto !important;border-right:none !important;border-bottom:1px solid var(--cs-border,#DCD9D2);max-height:200px}
 .tm-pane .convo-thread{min-height:220px}
 .tm-pane .th-users .th-body{max-height:none}
 
@@ -551,7 +551,7 @@ body{overflow-x:hidden}
 .sn-app{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 26px;color:#A9BCCC;text-decoration:none;
   font:500 12.5px/1.2 'DM Sans',sans-serif;border-radius:7px;transition:background .1s,color .1s}
 .sn-app:hover{background:rgba(255,255,255,.07);color:#fff}
-.sn-app .sn-app-dot{width:6px;height:6px;border-radius:50%;background:#00A9A4;flex:none}
+.sn-app .sn-app-dot{width:6px;height:6px;border-radius:50%;background:#2B5FA8;flex:none}
 .sn-divider{height:1px;background:rgba(255,255,255,.08);margin:12px 8px}
 .sn-section-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:rgba(201,214,226,.5);padding:2px 12px 8px}
 
@@ -581,12 +581,12 @@ body{overflow-x:hidden}
   transition:opacity .28s ease}
 #omega-boot.hide{opacity:0;pointer-events:none}
 #omega-boot .ob-mark{width:60px;height:60px;border-radius:16px;
-  background:linear-gradient(135deg,#006F9A,#00A9A4);
+  background:linear-gradient(135deg,#2B5FA8,#2B5FA8);
   display:flex;align-items:center;justify-content:center;
   color:#fff;font:700 30px/1 'DM Sans',sans-serif;
   box-shadow:0 12px 30px rgba(0,169,164,.35)}
 #omega-boot .ob-spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.25);
-  border-top-color:#00C4BC;border-radius:50%;animation:ob-spin .7s linear infinite}
+  border-top-color:#3F76C4;border-radius:50%;animation:ob-spin .7s linear infinite}
 #omega-boot .ob-txt{color:#8CA3BE;font:500 13px/1 'DM Sans',sans-serif;letter-spacing:.3px}
 @keyframes ob-spin{to{transform:rotate(360deg)}}
 /* Failsafe: never let the loader trap the user if JS fails to dismiss it. */
@@ -736,7 +736,7 @@ window._omegaReady = function(){
         <div class="mkt-search-wrap">
           <svg class="mkt-search-ico" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8A93A0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
           <input id="mkt-search" type="text" placeholder="Search applications…" oninput="paintMarket()" autocomplete="off">
-          <span class="mkt-search-go" onclick="paintMarket()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#006F9A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          <span class="mkt-search-go" onclick="paintMarket()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2B5FA8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
         </div>
       </div>
     </div>
@@ -959,13 +959,13 @@ function paintMarket(){
 /* Per-category cover gradients — gives each card a branded "photo" band. */
 function coverGradient(cat){
   var g={
-    design:     'linear-gradient(135deg,#08384F 0%,#006F9A 100%)',
-    finance:    'linear-gradient(135deg,#053A45 0%,#00A9A4 100%)',
+    design:     'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)',
+    finance:    'linear-gradient(135deg,#053A45 0%,#2B5FA8 100%)',
     sales:      'linear-gradient(135deg,#0B2F52 0%,#1B4F8A 100%)',
     permitting: 'linear-gradient(135deg,#243B53 0%,#3E6E8E 100%)',
-    marketplace:'linear-gradient(135deg,#08384F 0%,#00807C 100%)'
+    marketplace:'linear-gradient(135deg,#16202B 0%,#00807C 100%)'
   };
-  return g[cat] || 'linear-gradient(135deg,#08384F 0%,#006F9A 100%)';
+  return g[cat] || 'linear-gradient(135deg,#16202B 0%,#2B5FA8 100%)';
 }
 function card(t){
   var req=isRequired(t), pinned=isPinned(t.key);
@@ -992,7 +992,7 @@ function card(t){
   }
 
   var stroke = t.soon ? 'rgba(255,255,255,.55)' : '#ffffff';
-  var cover = t.soon ? 'linear-gradient(135deg,#5A7180 0%,#8A93A0 100%)' : coverGradient(t.category);
+  var cover = t.soon ? 'linear-gradient(135deg,#5B6672 0%,#8A93A0 100%)' : coverGradient(t.category);
   var ver = t.version || '1.0.0';
   var status = req ? 'Included' : (pinned ? 'On dashboard' : 'Available');
 
@@ -1220,5 +1220,10 @@ function signOut(){ auth.signOut(); }
   window.addEventListener('omega:tenant', paint);
 })();
 </script>
+
+<!-- The drawing-set identity, applied last on purpose: several pages open a
+     <style> inside <body>, so a <link> in <head> would be overridden by them.
+     See the note at the top of omega-theme.css. -->
+<link rel="stylesheet" href="/omega-theme.css">
 </body>
 </html>

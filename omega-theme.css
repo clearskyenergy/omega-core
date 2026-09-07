@@ -1,0 +1,114 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   omega-theme.css — the drawing-set identity, applied to the platform
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   clearskyomega.com and the sign-in gate are a drawing set. The workspace
+   a customer lands in afterwards was still teal-on-navy, so the ecosystem
+   changed character at the door.
+
+   WHY A THEME FILE AND NOT SEVEN REWRITES. Every shell page in this repo
+   carries its own inline <style> and none of them link a shared sheet —
+   but they DO share a token vocabulary (--cs-*, --sap-*, --pol-*). So the
+   whole estate can be re-skinned by redefining those tokens in one place,
+   which is reversible in one line per page and cannot break a layout the
+   way editing seven files by hand would.
+
+   LOAD IT LAST. Several pages open a <style> block inside <body>, so a
+   <link> in <head> would be overridden by them. This is injected
+   immediately before </body>; a stylesheet is valid anywhere in the
+   document and source order is what decides equal-specificity rules.
+
+   It deliberately changes COLOUR, TYPE and EDGES only. Nothing here moves
+   an element, changes a display mode or touches a width — those are the
+   changes that break a working tool, and none of them are needed to make
+   the ecosystem look like one thing.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── paper and ink ─────────────────────────────────────────────── */
+  --cs-bg:        #F5F4F0;
+  --cs-surface:   #FFFFFF;
+  --cs-text:      #14171A;
+  --cs-sub:       #5B6672;
+  --cs-border:    rgba(20,23,26,0.16);
+
+  /* ── the dark chrome: the sidebar and every dark band ──────────── */
+  --cs-navy:      #16202B;
+  --cs-dark:      #0F1720;
+
+  /* ── drafting blue replaces the teal throughout ────────────────── */
+  --cs-blue:      #2B5FA8;
+  --cs-sky:       #2B5FA8;
+  --cs-accent:    #2B5FA8;
+  --cs-gold:      #C77A00;
+
+  /* ── status keeps its meaning, in this palette's voice ─────────── */
+  --cs-green:     #2E7D5B;
+  --cs-red:       #D9482B;
+  --cs-amber:     #C77A00;
+  --cs-purple:    #6D5BD0;
+  --ok:           #2E7D5B;
+  --warn:         #C77A00;
+  --bad:          #D9482B;
+  --hold:         #8A94A0;
+
+  /* ── the SAP-derived set some shells use ───────────────────────── */
+  --sap-blue:        #2B5FA8;
+  --sap-blue-hi:     #3F76C4;
+  --sap-ink:         #14171A;
+  --sap-ink-2:       #5B6672;
+  --sap-page:        #F5F4F0;
+  --sap-bar:         #FFFFFF;
+  --sap-card:        #FFFFFF;
+  --sap-card-border: rgba(20,23,26,0.14);
+  --sap-num:         #14171A;
+  --pol-border:        rgba(20,23,26,0.14);
+  --pol-border-strong: rgba(20,23,26,0.26);
+
+  /* ── tier chips in the admin console ───────────────────────────── */
+  --tier-core: #8A94A0;
+  --tier-perf: #2B5FA8;
+  --tier-ent:  #16202B;
+
+  /* ── flatter edges: a drawing has corners ──────────────────────── */
+  --r: 3px;
+  --shadow:    0 1px 0 rgba(20,23,26,0.04);
+  --shadow-lg: 0 14px 34px rgba(20,23,26,0.09);
+}
+
+/* ── typography ──────────────────────────────────────────────────────
+   Inter for running text, Archivo for headings, IBM Plex Mono wherever a
+   page was already asking for a monospace — that mono is what makes the
+   numbers read as a schedule rather than as body copy. */
+body, button, input, select, textarea, .btn, .card, td, th {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+h1, h2, h3, h4, .h1, .h2, .h3 {
+  font-family: 'Archivo', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.022em;
+}
+code, pre, kbd, samp, .mono, [class*="mono"] {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Tabular figures wherever numbers are stacked. A column of digits that
+   does not line up is the fastest way to make a real number look casual. */
+td, th, .num, [class*="metric"], [class*="stat"], [class*="count"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the paper ground ────────────────────────────────────────────────
+   Only on <body>. Pages that paint their own content area cover it, which
+   is correct: the grid should show at the edges of the app, not through a
+   data table. */
+body {
+  background-color: var(--cs-bg);
+  background-image:
+    linear-gradient(rgba(43,95,168,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43,95,168,0.055) 1px, transparent 1px),
+    linear-gradient(rgba(43,95,168,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43,95,168,0.03) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+}
