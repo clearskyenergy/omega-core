@@ -359,6 +359,25 @@
   };
   const ADMIN_DOMAINS = ["clearsky-usa.com", "csebuilders.com"];
 
+  /* ── THE OSA JOINT VENTURE ────────────────────────────────────────────
+     Three firms co-develop on one workspace, so it is not reachable by the
+     usual "your email domain is your tenant" rule — Grant and Brad arrive
+     from SUN Energy Solutions, Terry from OGI Solar, and the workspace
+     belongs to none of their domains.
+
+     ⚠ THE SAME THREE DOMAINS AS OSA_ORGS IN index.html AND JV_ORGS IN
+     omega-caps.js. A literal list rather than a flag, and deliberately: an
+     earlier version honoured flags on omega_orgs as well and showed the JV
+     section to SPATCO, who have no JV relationship of any kind. Adding a
+     fourth partner means editing all three, which for a joint venture
+     agreement is the right amount of ceremony.
+
+     ⚠ AND THIS IS NAVIGATION, NOT AUTHORISATION. The OSA console gates on
+     omega_users and firestore.rules gates omega_users on jvOrClearSky().
+     Listing it here saves somebody typing a URL they were already entitled
+     to reach; removing it would hide the door, not lock it. */
+  const OSA_ORGS = ["clearsky-usa.com", "sunesol.com", "ogisolar.com"];
+
   /* ====================== nothing below needs editing ====================== */
 
   const $ = (id) => document.getElementById(id);
@@ -479,6 +498,15 @@
          is going, so it sits at the top every time — a list that reshuffles
          to put yesterday's choice first means the thing you want is in a
          different place each visit. */
+      /* A workspace, so it sits with the workspace rather than down among
+         the marketplaces. Served out of omega-core: the copy there is ahead
+         of what osa.clearskyomega.com still serves, and pointing at that
+         host would send a JV partner onto the old deployment and ask them
+         to sign in a second time. */
+      { key: "osa", order: 10, name: "OSA Workspace",
+        url: PORTAL + "/tenants/osa/portfolio.html",
+        desc: () => "The joint venture \u2014 pipeline, partners and verification",
+        requires: (c) => OSA_ORGS.indexOf(c.org) >= 0 },
       { key: "financing", order: 20, name: "Finance Marketplace", url: ROUTES.financing,
         desc: (c) => c.fin && c.fin.role === "partner"
           ? "Deal flow and the offers you've made" : "Your deals and the offers on them",
@@ -521,6 +549,13 @@
       if (r.indexOf("doc:") === 0) {
         const col = r.slice(4);
         return (c) => !!(c.extra && c.extra[col]);
+      }
+      /* org:a.com,b.com — the email domain, after the same alias fold the
+         rest of the platform uses, so fenecon.de and fenecon.com are one
+         tenant here as well. */
+      if (r.indexOf("org:") === 0) {
+        const list = r.slice(4).split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+        return (c) => list.indexOf(c.org) >= 0;
       }
       return () => false;
     }
