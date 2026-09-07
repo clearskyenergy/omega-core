@@ -918,12 +918,12 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 
    Pointer events stay on — a ghost you cannot click is a ghost you cannot
    un-ghost. */
-.cel.cel-future{opacity:.5}
-.cel.cel-future .elbody{outline:1.5px dashed #FBBF24;outline-offset:3px;border-radius:3px}
+.cel.cel-future{opacity:.62}
+.cel.cel-future .elbody{outline:1.5px dashed #A855F7;outline-offset:3px;border-radius:3px}
 .cel.cel-future::after{
   content:'FUTURE';position:absolute;left:50%;top:-9px;transform:translateX(-50%);
   font:700 7.5px/1 system-ui,-apple-system,sans-serif;letter-spacing:.09em;
-  color:#0A1628;background:#FBBF24;padding:2.5px 5px;border-radius:3px;
+  color:#fff;background:#A855F7;padding:2.5px 5px;border-radius:3px;
   pointer-events:none;white-space:nowrap;z-index:3}
 .cel.cel-future.sel{opacity:.9}
 .shape-g{touch-action:none}
@@ -8734,15 +8734,21 @@ function renderEl(el){
        and its footprint, not just the unit. Purely presentational: the
        bollards themselves are still real elements (eqId 'bollard') and
        are what the estimate counts. */
-    /* No bollards on a future stall, so no bollard island either. The
-       hatched pad draws the PROTECTION around a unit that is standing
-       there; on a position that holds only capped conduit it is an island
-       around nothing, and it reads on the plan as protection that has been
-       bought. syncBollards() already deletes the real bollard elements when
-       the stall is marked — this is the presentational half of the same
-       decision, which was left behind. */
     const _padOn = (el.eqId==='charger') && (el.bollardPad !== false)
-                   && (window.OMEGA_EV_PAD !== false) && !_elFuture;
+                   && (window.OMEGA_EV_PAD !== false);
+    /* THE ISLAND STAYS, THE COLOUR CARRIES THE PHASE.
+       The pad is the stall footprint, and a future-proofed position still
+       occupies one — the concrete, the trench and the conduit are going in
+       now, which is the whole point of marking it. Taking the island away
+       would hide the part that IS being built.
+
+       So the phase is said in colour instead: amber island = installing
+       now, purple island = future position. Purple because nothing else on
+       this drawing uses it, so it cannot be confused with the amber pads
+       beside it, the blue hatching inside them, or a selection outline. */
+    const _padK = _elFuture
+      ? { edge:'#A855F7', hatch:'#7C3AED' }
+      : { edge:'#F4A020', hatch:'#2F7FE0' };
     const _pad = _padOn ? (function(){
       // Clearance in FEET, defaulting to a real bollard setback. See the
       // note in the evgear branch: taking a fraction of the DRAWN size made
@@ -8759,15 +8765,15 @@ function renderEl(el){
         <defs>
           <pattern id="${uid}" width="9" height="9" patternUnits="userSpaceOnUse"
                    patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="9" stroke="#2F7FE0" stroke-width="2.4"/>
+            <line x1="0" y1="0" x2="0" y2="9" stroke="${_padK.hatch}" stroke-width="2.4"/>
           </pattern>
         </defs>
         <rect x="1.5" y="1.5" width="${W-3}" height="${W-3}" rx="3"
-              fill="#F4A020" fill-opacity=".30"/>
+              fill="${_padK.edge}" fill-opacity=".30"/>
         <rect x="1.5" y="1.5" width="${W-3}" height="${W-3}" rx="3"
               fill="url(#${uid})" fill-opacity=".85"/>
         <rect x="1.5" y="1.5" width="${W-3}" height="${W-3}" rx="3"
-              fill="none" stroke="#F4A020" stroke-width="3"/>
+              fill="none" stroke="${_padK.edge}" stroke-width="3"/>
       </svg>`;
     })() : '';
     inner=`${_pad}<div class="elbody eq-node" style="width:${sz}px;transform:rotate(${el.rot||0}deg);position:relative;z-index:1">
