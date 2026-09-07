@@ -1197,13 +1197,22 @@ function signOut(){ auth.signOut(); }
     }
     host.innerHTML = html || '<a class="sn-app" href="/marketplace.html"><span class="sn-app-dot"></span>Browse marketplace</a>';
   }
+  /* THE CSS COLLAPSES WITH max-height AND AN .open CLASS, not with display.
+     This toggled style.display instead, which does nothing to a div that is
+     already display:block — so the submenu never opened on either of these
+     pages, on any click, ever. The dashboard's own toggle has always used
+     classList.toggle('open'); these two were written separately and drifted.
+
+     Paint on first open as well as at boot, because at DOMContentLoaded the
+     workspace has not resolved and the catalog may not have hydrated — so
+     the first paint can legitimately produce an empty or over-long list. */
   window.snApps = function (e) {
     if (e) e.preventDefault();
     var btn = e && e.currentTarget, list = document.getElementById('sn-apps-list');
     if (!list) return;
-    var open = list.style.display === 'block';
-    list.style.display = open ? 'none' : 'block';
-    if (btn) btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    var open = list.classList.toggle('open');
+    if (open) { try { paint(); } catch (err) {} }
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
   function boot(){ paint(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
