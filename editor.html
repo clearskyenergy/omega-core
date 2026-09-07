@@ -106601,6 +106601,212 @@ table.e3-tbl td{ white-space:normal }
      ══════════════════════════════════════════════════════════════════════ */
   var REG = [];   /* screened files, this session */
 
+  /* ══════════════════════════════════════════════════════════════════════
+     SCREENING WHAT IS ALREADY ON THE MAP
+
+     The engine reads a KMZ because that is what the JV partners exchange.
+     But a KMZ is only a container for named geometry, and by the time you
+     are looking at this screen the editor already HAS named geometry: every
+     GIS layer you imported, and every shape you drew once the map is live
+     and the points are anchored. Making somebody produce a Google Earth file
+     out of a site they have open in front of them is a round trip through a
+     format nobody here writes by hand.
+
+     TWO SOURCES, AND THEY ARE NOT EQUAL.
+
+       GIS layers are the real one. They arrive as [lng,lat] with the labels
+       the utility or the site team wrote — "345kV Oncor", "69/138kV SUB",
+       "36in CRUDE OIL" — which is exactly the vocabulary classify() reads.
+       A layer import screens as well as the KMZ it came from, because it is
+       the same features.
+
+       Drawn shapes are the thin one. They carry _geoPts only when the
+       satellite view was live while they were drawn or anchored, and most
+       of them are equipment, not site context. A traced parcel boundary
+       screens; a row of BESS cabinets is not site intelligence and is left
+       out rather than fed in as noise.
+
+     WHAT IT WILL NOT DO IS PRETEND. If the map yields a parcel ring and
+     nothing else, the score is a land score on a thin file, and the register
+     already says exactly that through confidence and the missing list. The
+     readout below names what was found BEFORE anything is scored, so the
+     answer is never read without knowing how much was behind it.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Shape kinds that describe the SITE rather than the build. Everything
+     else on the canvas is equipment and is deliberately not screened. */
+  var SITE_KINDS = { poly: 1, polyline: 1, line: 1, area: 1, parcel: 1,
+                     boundary: 1, freeform: 1, shape: 1, rect: 1 };
+
+  /* Canvas pixels to ground, the same converter and the same canvas
+     measurement _anchorRepair uses — measuring the canvas differently here
+     would land the corners a few feet off, which is worse than skipping them. */
+  function toGeo(x, y) {
+    try {
+      var ms = (typeof _liveMapState === 'function') ? _liveMapState() : null;
+      var sz = (typeof _getCanvasSize === 'function') ? _getCanvasSize() : null;
+      if (!ms || !sz) return null;
+      var g = _pxToLatLng(x, y, ms, sz.w, sz.h);
+      return (g && g.lat != null && g.lng != null) ? [+g.lng, +g.lat] : null;
+    } catch (e) { return null; }
+  }
+
+  function geoFromShape(sh) {
+    /* A RECTANGLE IS STORED AS TWO CORNERS, NOT AS A RING. _commitTwoPoint
+       keeps the drag start and end, so its _geoPts is two points — which the
+       engine would read as a two-point line, fail isClosedRing on, and
+       measure at zero acres. A rectangle traced round a parcel is a parcel;
+       the other two corners are reconstructed in pixels and converted the
+       same way, so it measures like any other ring. */
+    if (sh && sh.kind === 'rect' && sh.pts && sh.pts.length === 2) {
+      var a = sh.pts[0], b = sh.pts[1];
+      var corners = [[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y], [a.x, a.y]];
+      var ring = [];
+      for (var c = 0; c < corners.length; c++) {
+        var gp = toGeo(corners[c][0], corners[c][1]);
+        if (!gp) return null;
+        ring.push(gp);
+      }
+      return ring;
+    }
+    if (!sh || !sh._geoPts || sh._geoPts.length < 2) return null;
+    var pts = [];
+    for (var i = 0; i < sh._geoPts.length; i++) {
+      var g = sh._geoPts[i];
+      if (!g || g.lat == null || g.lng == null) return null;   /* partial anchor is not an anchor */
+      pts.push([+g.lng, +g.lat]);
+    }
+    return pts;
+  }
+
+  /* Everything on the map that the engine can read, as the same feature
+     shape parseKML produces: { type, coords:[[lng,lat]…], props:{ name } }. */
+  function mapFeatures() {
+    var out = [], src = { layers: 0, layerFeatures: 0, shapes: 0, skipped: 0 };
+
+    try {
+      var G = window.OmegaGIS;
+      var layers = (G && G.layers) ? G.layers() : [];
+      layers.forEach(function (L) {
+        if (!L || !L.features || !L.features.length) return;
+        src.layers++;
+        L.features.forEach(function (f) {
+          if (!f.coords || !f.coords.length) return;
+          var nm = (f.props && (f.props.name || f.props.Name || f.props.NAME)) || L.name || '';
+          out.push({ type: f.type, coords: f.coords, props: { name: String(nm) } });
+          src.layerFeatures++;
+        });
+      });
+    } catch (e) {}
+
+    try {
+      var st = (typeof S !== 'undefined') ? S : null;
+      (st && st.shapes ? st.shapes : []).forEach(function (sh) {
+        var label = String(sh.label || sh.name || sh.text || sh.model || '').trim();
+        if (!SITE_KINDS[sh.kind]) return;
+        var pts = geoFromShape(sh);
+        if (!pts) { src.skipped++; return; }
+        var closed = pts.length > 3 &&
+          Math.abs(pts[0][0] - pts[pts.length - 1][0]) < 1e-9 &&
+          Math.abs(pts[0][1] - pts[pts.length - 1][1]) < 1e-9;
+        out.push({ type: closed ? 'polygon' : 'line', coords: pts,
+                   props: { name: label } });
+        src.shapes++;
+      });
+    } catch (e) {}
+
+    return { features: out, src: src };
+  }
+
+  /* The project's own name, so the row in the register matches the drawing
+     rather than being called "Untitled". */
+  function siteName() {
+    var n = '';
+    try { n = (typeof S !== 'undefined' && S && (S.projectName || S.name)) || ''; } catch (e) {}
+    if (!n) { try { n = (document.getElementById('proj-name') || {}).textContent || ''; } catch (e) {} }
+    return String(n).trim() || 'This site';
+  }
+
+  function screenCurrent() {
+    var SI = window.OmegaSiteIntel;
+    if (!SI) return { ok: false, msg: 'The site-intel engine did not load. Reload the page.' };
+    var m = mapFeatures();
+    if (!m.features.length) {
+      return { ok: false, msg: 'Nothing on this map can be screened yet. Import the parcel and ' +
+        'the utility layers through Insert \u203a GIS Layers, or trace the boundary with the ' +
+        'satellite view on so the points carry coordinates.' };
+    }
+    var name = siteName();
+    var st = SI.intake(m.features, name);
+    var g  = SI.gridScore(st);
+    for (var i = 0; i < REG.length; i++) {
+      if (REG[i].name === name) { REG.splice(i, 1); break; }
+    }
+    REG.push({ name: name, intake: st, grid: g, fromMap: true });
+    return { ok: true, src: m.src, name: name };
+  }
+
+  /* ── THE FILE THE PARTNERS EXCHANGE ──────────────────────────────────
+     The other half of the same problem: a KMZ arrives from OGI, and there
+     was no way to send one back. This writes the map out in the format the
+     JV already reads — a KML, zipped, which is all a KMZ is.
+
+     Names are written EXACTLY as they are on the map, because the name is
+     the data: classify() reads "345kV Oncor" and "69/138kV SUB" off the
+     label, so re-titling features on the way out would strip the meaning a
+     round trip is supposed to preserve. */
+  function kmlOf(features, docName) {
+    function x(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function coords(c) {
+      return c.map(function (p) { return (+p[0]) + ',' + (+p[1]) + ',0'; }).join(' ');
+    }
+    var body = features.map(function (f) {
+      var geom;
+      if (f.type === 'point') geom = '<Point><coordinates>' + coords(f.coords.slice(0, 1)) + '</coordinates></Point>';
+      else if (f.type === 'polygon') {
+        var ring = f.coords.slice();
+        var a = ring[0], b = ring[ring.length - 1];
+        if (a[0] !== b[0] || a[1] !== b[1]) ring.push(a);
+        geom = '<Polygon><outerBoundaryIs><LinearRing><coordinates>' +
+               coords(ring) + '</coordinates></LinearRing></outerBoundaryIs></Polygon>';
+      } else geom = '<LineString><tessellate>1</tessellate><coordinates>' +
+                    coords(f.coords) + '</coordinates></LineString>';
+      return '<Placemark><name>' + x(f.props && f.props.name) + '</name>' + geom + '</Placemark>';
+    }).join('');
+    return '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>' +
+      '<name>' + x(docName) + '</name>' + body +
+      '</Document></kml>';
+  }
+
+  function exportKmz() {
+    var m = mapFeatures();
+    if (!m.features.length) { alert('Nothing on this map to export yet.'); return; }
+    var name = siteName();
+    var kml = kmlOf(m.features, name);
+    var file = name.replace(/[^\w\-. ]+/g, '_') + '.kmz';
+    ensureZip().then(function () {
+      var z = new JSZip();
+      z.file('doc.kml', kml);
+      return z.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    }).then(function (blob) {
+      var u = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = u; a.download = file;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 400);
+    })['catch'](function (e) {
+      /* A .kml is a valid input to every tool that reads a .kmz, so a failed
+         zip is a worse file, not a lost one. */
+      download(name.replace(/[^\w\-. ]+/g, '_') + '.kml', kml,
+               'application/vnd.google-earth.kml+xml');
+      if (window.console) console.warn('[psr] kmz zip failed, wrote .kml instead:', e && e.message);
+    });
+  }
+
   function regHost() {
     var h = document.getElementById('psr-modal');
     if (h) return h;
@@ -106679,12 +106885,24 @@ table.e3-tbl td{ white-space:normal }
             'full interconnection queue behind it scores well here and is undevelopable. ' +
             'Read it as a work order: which parcels earn a utility conversation first.' +
           '</div>' +
-          '<div class="e3-drop" id="psr-drop">Drop KMZ or KML files here, or click to choose' +
+          /* THE MAP FIRST, THE FILE SECOND. A KMZ is how the JV exchanges a
+             site; it is not how you get one out of a site you already have
+             open. Somebody who has never made a Google Earth file should not
+             have to learn to, just to screen their own drawing. */
+          '<div class="e3-row" style="gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">' +
+            '<button class="e3-btn pri" data-psr-map="1">Screen the open site</button>' +
+            '<span class="e3-sub" style="flex:1;min-width:220px">Reads the parcel and utility ' +
+            'layers already on this map \u2014 no file needed. Imported GIS layers screen ' +
+            'best, because they carry the labels the engine reads.</span>' +
+          '</div>' +
+          '<div class="e3-note" id="psr-mapnote" style="display:none;margin-bottom:10px"></div>' +
+          '<div class="e3-drop" id="psr-drop">\u2026or drop KMZ / KML files here, one per parcel' +
             '<input type="file" id="psr-file" accept=".kmz,.kml" multiple style="display:none">' +
           '</div>' +
           body +
         '</div>' +
         '<div class="e3-foot">' +
+          '<button class="e3-btn" data-psr-kmz="1">Export this map as KMZ</button> ' +
           (REG.length ? '<button class="e3-btn" data-psr-report="1">Open report</button> ' +
                         '<button class="e3-btn" data-psr-pdf="1">Report \u2192 PDF</button> ' +
                         '<button class="e3-btn" data-psr-csv="1">Export CSV</button> ' +
@@ -106726,6 +106944,32 @@ table.e3-tbl td{ white-space:normal }
       try { (andPrint ? R.print : R.open)(REG); }
       catch (e) { alert((e && e.message) || 'Could not open the report.'); }
     }
+    var mp = h.querySelector('[data-psr-map]');
+    if (mp) mp.onclick = function () {
+      var r = screenCurrent();
+      if (!r.ok) {
+        var n = document.getElementById('psr-mapnote');
+        if (n) { n.className = 'e3-note warn'; n.style.display = ''; n.textContent = r.msg; }
+        return;
+      }
+      /* WHAT IT FOUND, BEFORE THE SCORE. A number off two features and a
+         number off forty look identical in the table; this is the only place
+         the difference is visible at the moment of screening. */
+      var d = r.src;
+      var parts = [];
+      if (d.layerFeatures) parts.push(d.layerFeatures + ' feature' + (d.layerFeatures === 1 ? '' : 's') +
+                                     ' from ' + d.layers + ' GIS layer' + (d.layers === 1 ? '' : 's'));
+      if (d.shapes) parts.push(d.shapes + ' drawn shape' + (d.shapes === 1 ? '' : 's'));
+      var msg = 'Screened ' + r.name + ' from ' + parts.join(' and ') + '.';
+      if (d.skipped) msg += ' ' + d.skipped + ' shape' + (d.skipped === 1 ? ' was' : 's were') +
+        ' left out because they carry no coordinates — they were drawn without the satellite ' +
+        'view on. Turn it on and run Anchor repair to include them.';
+      regRender();
+      var n2 = document.getElementById('psr-mapnote');
+      if (n2) { n2.className = 'e3-note info'; n2.style.display = ''; n2.textContent = msg; }
+    };
+    var kz = h.querySelector('[data-psr-kmz]');
+    if (kz) kz.onclick = exportKmz;
     var rp = h.querySelector('[data-psr-report]');
     if (rp) rp.onclick = function () { report(false); };
     var pd = h.querySelector('[data-psr-pdf]');
@@ -106885,7 +107129,13 @@ table.e3-tbl td{ white-space:normal }
   window.OmegaParcelScreen = {
     open: regOpen, close: regClose,
     rows: function () { return REG.slice(); },
-    add: regRead
+    add: regRead,
+    /* Callable without the modal, so a guided flow or another tool can screen
+       the open site and read the answer. */
+    screenMap: screenCurrent,
+    mapFeatures: mapFeatures,
+    exportKmz: exportKmz,
+    kml: function () { return kmlOf(mapFeatures().features, siteName()); }
   };
 
   window.OmegaGIS = {
