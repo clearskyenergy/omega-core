@@ -418,7 +418,11 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       <span>Completed</span><span class="sn-count" id="c-done">0</span></button>
 
     <div class="sn-group">Elsewhere</div>
-    <a class="sn-item" href="/portfolio.html">
+    <!-- /portfolio.html only resolves on osa.clearskyomega.com, where
+         vercel.json has a host-scoped redirect for it. Served from
+         silmarillion it is a 308 to /portfolio and then a 404. The real
+         path works on every host of this deployment. -->
+    <a class="sn-item" href="/tenants/osa/portfolio">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
       <span>Portfolio</span></a>
 
