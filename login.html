@@ -286,7 +286,14 @@
      button points here. */
   const PORTAL = window.location.origin;
   const ROUTES = {
-    workspace:   PORTAL,                            // a tenant's own OMEGA workspace
+    /* ── /index.html, NOT / ────────────────────────────────────────────
+       The hub host redirects / to /login.html so the front door is the
+       branded page. Pointing the workspace at / therefore sent somebody
+       from the chooser to /, which redirected to the login, which signed
+       them in, which offered the chooser… a loop, and exactly the
+       "I click on workspace and it just keeps glitching" that reported it.
+       Naming the page skips the redirect, which only matches "/". */
+    workspace:   PORTAL + "/index.html",            // a tenant's own OMEGA workspace
     admin:       PORTAL + "/admin/",                // ClearSky admin console
     ops:         "https://alpha.clearskyomega.com", // ops console (reps)
     financing:   PORTAL + "/portals/finance/",
@@ -381,8 +388,15 @@
     const head = String(org || "").split(".")[0].replace(/[-_]+/g, " ");
     return head ? head.replace(/\b\w/g, (c) => c.toUpperCase()) : "Your";
   }
-  function portalFor(org) {
-    return TENANT_PORTALS[org] || ROUTES.workspace;
+  /* A tenant with its own hostname goes there — that is the whole point of
+     a per-tenant deployment, and it is also the only version of this that
+     cannot loop, because the redirect lives on the hub. TENANT_PORTALS is
+     the hardcoded override; omega_orgs.domains[0] is the real answer and is
+     read during resolve(). */
+  function portalFor(org, host) {
+    if (TENANT_PORTALS[org]) return TENANT_PORTALS[org];
+    if (host) return "https://" + String(host).replace(/^https?:\/\//, "").replace(/\/+$/, "") + "/";
+    return ROUTES.workspace;
   }
 
   /* No Firebase config yet — keep the old door working rather than shipping a
@@ -582,8 +596,26 @@
       const grantOrg = (member && member.active !== false && member.orgId) ? member.orgId : "";
       const homeOrg = grantOrg || org;
 
+      /* The tenant's OWN hostname, from the record the platform already keeps.
+         A per-tenant deployment is the point of omega_orgs.domains, and
+         sending somebody there rather than to the hub also means the hub's
+         "/ redirects to login" rule can never come back and bite this. */
+      let homeHost = null;
       if (homeOrg) {
-        dests.push({ key: "workspace", url: portalFor(homeOrg), org: homeOrg,
+        const orgDoc = await readDoc(["omega_orgs", homeOrg]);
+        const doms = (orgDoc && orgDoc.domains) || [];
+        /* Skip a hostname that is known not to answer — a confident link to
+           nothing is worse than the hub, which at least loads. */
+        const DEAD = ["app.clearskyomega.com", "sunesol.csebuilders.com", "ogisolar.clearskyomega.com"];
+        for (let i = 0; i < doms.length; i++) {
+          const h = String(doms[i] || "").toLowerCase().trim();
+          if (!h || DEAD.indexOf(h) >= 0 || h === location.host) continue;
+          homeHost = h; break;
+        }
+      }
+
+      if (homeOrg) {
+        dests.push({ key: "workspace", url: portalFor(homeOrg, homeHost), org: homeOrg,
                      name: tenantName(homeOrg) + " workspace",
                      desc: "Projects, tools and dashboards" });
       }
