@@ -23646,6 +23646,13 @@ function _setSaved(s){
   const el=document.getElementById('pn-saved');
   if(!el)return;
   el.textContent=s==='saved'?'OK Saved':s==='saving'?'Saving...':'!! Save failed';
+  /* The banner explaining WHY disappears; this does not. Without it a person
+     who looked away has a red word and nothing else, and the usual next move
+     is to keep working on a project that is not being persisted. */
+  el.title = s==='err'
+    ? (window._lastSaveError || 'The last save was refused. Your work is still in this tab. See the console for the error.')
+    : (s==='saved' ? 'Saved to the project record.' : '');
+  el.style.cursor = s==='err' ? 'help' : '';
   el.style.color=s==='saved'?'var(--green)':s==='saving'?'var(--sub)':'var(--red)';
 }
 
@@ -23745,6 +23752,8 @@ async function saveProject(){
       si.textContent = '!! Sign In to Save';
       setTimeout(()=>{ si.style.background='rgba(66,133,244,.2)'; si.textContent='Sign In'; }, 3000);
     }
+    try { window._lastSaveError = 'Not signed in, so nothing has been saved. '
+      + 'Your work is still in this tab \u2014 sign in and save before closing it.'; } catch(_e){}
     _setSaved('err');
     showBanner('wiz','!! Sign in with Google to save your project -- click Sign In above');
     return;
@@ -23997,9 +24006,13 @@ async function saveProject(){
       if(_projectId && _BRAND && _BRAND.logoDataUrl) localStorage.setItem('cs_brand_logo_'+_projectId, _BRAND.logoDataUrl);
       else if(_projectId) localStorage.removeItem('cs_brand_logo_'+_projectId);
     }catch(e){}
+    try { window._lastSaveError = null; } catch(_e){}
     _setSaved('saved');
     window._workDirty = false;   // successfully persisted
   }catch(e){
+    /* Set BEFORE _setSaved, which reads it for the indicator's tooltip. */
+    try { window._lastSaveError = 'Save failed: ' + ((e && (e.code || e.message)) || 'unknown') +
+      '. Your work is still in this tab.'; } catch(_e){}
     _setSaved('err');
     console.error('Save error:',e);
     // Customer-facing: a silent failed save is a data-loss trap. Tell them.
@@ -24017,8 +24030,29 @@ async function saveProject(){
         _m = '!! Save refused by Firestore \u2014 this project\u2019s orgId doesn\u2019t match '
            + 'your account. Your work is still here. Send this to dev@clearsky-usa.com.';
       } else if (/exceeds the maximum|too large|invalid-argument/i.test((e && e.message) || '')) {
+        /* NAME THE OFFENDER. OmegaSaveDoctor.check() already weighs the
+           payload section by section and returns the heaviest objects — it
+           was only ever reachable by knowing to type it into a console.
+           "Remove terrain samples or imagery" is a guess at what is big;
+           "the PV field carries 285 tables, 612 KB" is the answer. */
+        var _big = '';
+        try {
+          var _d = (typeof OmegaSaveDoctor !== 'undefined') ? OmegaSaveDoctor.check() : null;
+          if (_d && _d.rows && _d.rows.length) {
+            var _r = _d.rows[0];
+            _big = ' The largest part is ' + _r.part + ' at '
+                 + Math.round(_r.bytes / 1024) + ' KB'
+                 + (_r.count != null ? ' (' + _r.count + ' items)' : '') + '.';
+            if (_d.heavy && _d.heavy.length) {
+              _big += ' Heaviest single object: ' + _d.heavy[0].name + ', '
+                    + Math.round(_d.heavy[0].b / 1024) + ' KB.';
+            }
+          }
+        } catch (_e) {}
         _m = '!! This project is too large for one document (1 MB limit). Your work is still '
-           + 'here \u2014 remove terrain samples or imagery, then save again.';
+           + 'here.' + _big + ' Terrain samples and per-table PV geometry can both be '
+           + 'recomputed from the design, so they are the safe things to drop. '
+           + 'Run OmegaSaveDoctor.check() in the console for the full breakdown.';
       } else {
         _m = '!! Couldn\u2019t save \u2014 check your connection. Your work is still here; it '
            + 'will retry automatically.';
