@@ -110961,8 +110961,15 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
      tool that moves without a reason is just a tool someone has to find
      again. */
   var MOVES = [
-    { match: /openSolarBessSizer/, tab: 'estimate', panel: 'Sizing',
-      why: 'sizes storage from drawn generation; it prices nothing' },
+    /* WITH THE BUILD TOOLS, NOT OFF IN ESTIMATE.
+       This used to send the sizer to Estimate > Sizing, on the reasoning that
+       it sizes rather than prices. True, and beside the point: you reach for
+       it in the middle of laying a site out, right after Solar + Storage and
+       the BESS Sizer, and putting it two tabs away meant leaving the flow to
+       find it. Build already has a panel for exactly this — "3 - Size &
+       Configure" — and the BESS Sizer it belongs next to never left. */
+    { match: /openSolarBessSizer/, tab: 'build', panel: '3 \u00b7 Size & Configure',
+      why: 'it is used while building, next to the BESS Sizer it pairs with' },
     { match: /OmegaValue\.open|openValueStack/, tab: 'estimate', panel: 'Cost & ROI',
       why: 'a revenue model belongs with the money, not with site screening' }
   ];
@@ -111001,7 +111008,39 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
         if (!page) return;
         var target = null, allPlaced = true;
 
+        /* ── ONE BUTTON SURVIVES THE MOVE ───────────────────────────────
+           findBtns deliberately returns every copy, because moving only one
+           leaves a duplicate under the heading the move was meant to
+           correct. Appending them all to the same panel just relocates the
+           duplication: "Solar BESS Sizer" and "Solar -> BESS" are two doors
+           onto openSolarBessSizer and would end up side by side, which reads
+           as two different tools.
+
+           The keeper is whichever copy is already on the destination page —
+           it is the one the tab was authored with, and keeping it means the
+           panel's own button order survives. The rest are removed. */
+        var keeper = null;
+        for (var ki = 0; ki < btns.length; ki++) {
+          if (btns[ki].closest('.ribbon-page') === page) { keeper = btns[ki]; break; }
+        }
+        if (!keeper) keeper = btns[0];
+
+        var dropEmptyPanel = function (from) {
+          if (from && from.classList && from.classList.contains('rpanel-body') &&
+              !from.querySelector('.rbtn, .rsbtn')) {
+            var empty = from.closest('.rpanel');
+            if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
+          }
+        };
+
         btns.forEach(function (btn) {
+          if (btn !== keeper) {
+            var dnode = (btn.parentNode && btn.parentNode.classList &&
+                         btn.parentNode.classList.contains('rbtn-wrap')) ? btn.parentNode : btn;
+            var dfrom = dnode.parentNode;
+            if (dfrom) { dfrom.removeChild(dnode); moved++; dropEmptyPanel(dfrom); }
+            return;
+          }
           var cur = btn.closest('.rpanel');
           var curCap = cur && cur.querySelector('.rpanel-cap');
           if (btn.closest('.ribbon-page') === page && curCap &&
@@ -111017,11 +111056,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
           body.appendChild(node);
           moved++;
           /* A panel emptied by the move is a caption with nothing under it. */
-          if (from && from.classList && from.classList.contains('rpanel-body') &&
-              !from.querySelector('.rbtn, .rsbtn')) {
-            var empty = from.closest('.rpanel');
-            if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
-          }
+          dropEmptyPanel(from);
         });
         if (allPlaced) m.done = true;
       } catch (e) { if (window.console) console.warn(TAG + ' move', e && e.message); }
