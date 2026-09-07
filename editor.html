@@ -106839,6 +106839,23 @@ table.e3-tbl td{ white-space:normal }
     if (!s || (s.maxKv == null && s.nearestSubKm == null)) return false;
 
     if (s.maxKv != null && s.maxKv > (st.maxKv || 0)) st.maxKv = s.maxKv;
+
+    /* THE NEAREST LINE COUNTS EVEN WITH NO SUBSTATION. summarise() only
+       surfaces the nearest substation, and where there is none — rural Texas,
+       or wherever the substation layer is having a bad day — that left the
+       distance component at zero and the whole score meaningless, on a parcel
+       with a 345 kV circuit two miles away. gridScore already models exactly
+       this as a line tap and already discounts it 30%, because tapping one
+       still means building a switchyard. */
+    var nl = null;
+    (at.lines || []).forEach(function (L) {
+      if (L && L.distanceKm != null && (nl == null || L.distanceKm < nl)) nl = L.distanceKm;
+    });
+    if (nl != null) {
+      var lm = nl * 1000;
+      if (st.nearestLineM == null || lm < st.nearestLineM) st.nearestLineM = lm;
+    }
+
     if (s.nearestSubKm != null) {
       var m = s.nearestSubKm * 1000;
       if (st.nearestSubM == null || m < st.nearestSubM) st.nearestSubM = m;
@@ -106854,7 +106871,9 @@ table.e3-tbl td{ white-space:normal }
     st.flags.push({ level: 'warn', code: 'grid_from_atlas',
       msg: 'No transmission or substation was drawn on this map, so the grid facts — ' +
            (s.maxKv != null ? s.maxKv + ' kV' : 'voltage') +
-           (s.nearestSubKm != null ? ' and ' + (s.nearestSubKm * 0.621371).toFixed(2) + ' mi to the nearest substation' : '') +
+           (s.nearestSubKm != null
+             ? ' and ' + (s.nearestSubKm * 0.621371).toFixed(2) + ' mi to the nearest substation'
+             : (nl != null ? ' and ' + (nl * 0.621371).toFixed(2) + ' mi to the nearest line (scored as a tap — no substation was found, which is itself worth checking)' : '')) +
            ' — come from Grid Atlas national data (' + s.substations + ' substations, ' + s.lines +
            ' lines nearby), not from anything anyone traced. Confirm with the utility before ' +
            'the number leaves the building.' });

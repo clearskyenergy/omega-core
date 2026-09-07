@@ -367,13 +367,30 @@ const SOURCES = { substations: null, lines: null, plants: null };  /* per-reques
 const HIFLD = process.env.HIFLD_BASE
   || 'https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services';
 const HIFLD_LAYERS = {
-  substations: process.env.HIFLD_SUBSTATIONS || 'Electric_Substations',
+  /* ⚠ THE SUBSTATION LAYER IS GONE FROM THIS HOST. Verified 2026-09-07:
+     Electric_Substations returns {"error":{"code":400,"message":"Invalid URL"}}
+     and the service is not in the host's own catalogue (527 services, the only
+     electric ones are Electric_Power_Transmission_Lines and
+     Planned_transmission_line_). Lines still answer, which is why the failure
+     looked partial and went unnoticed.
+
+     The cost was not cosmetic: with no substation the scorer emits "No
+     substation within 25 km" as a BLOCKER for every site in the country, the
+     distance component scores zero, and a real Texas parcel with a 345 kV
+     line 2 miles away screens at 15/100.
+
+     Empty by default so the dead round trip is not made at all and 'osm' is
+     the honest first source. Set HIFLD_SUBSTATIONS if a national layer is
+     found again and it will be preferred automatically. */
+  substations: process.env.HIFLD_SUBSTATIONS || '',
   lines:       process.env.HIFLD_LINES       || 'Electric_Power_Transmission_Lines',
   plants:      process.env.HIFLD_PLANTS      || 'Power_Plants'
 };
+/* overpass-api.de first: kumi.systems was timing out at 40s+ from here on
+   2026-09-07, and it was the mirror every lookup tried first. */
 const OVERPASS = [
-  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.osm.ch/api/interpreter'
 ];
 
@@ -429,19 +446,34 @@ function num(v) { const n = Number(v); return isFinite(n) && n > 0 ? n : null; }
    Same tool the site visualizer already uses for building footprints, so
    the query shape is known-good. Tried in mirror order; a mirror that
    accepts the connection and then sits on it is handled by the timeout. */
+/* Form-encoded `data=`, which is Overpass's documented interface. A raw
+   text/plain body works on some mirrors and returns a well-formed EMPTY
+   result on others — which is indistinguishable from "there is nothing
+   there", and is how this layer reported zero substations for Chicago
+   without ever recording a failure.
+
+   AN EMPTY ANSWER IS NOT ACCEPTED FROM THE FIRST MIRROR THAT GIVES ONE.
+   Zero is a legitimate result in open country, so it is returned — but only
+   after every mirror has been asked, because a mirror that answers 200 with
+   nothing is the exact shape of this bug. */
 async function overpass(query, ms) {
-  let lastErr = null;
+  let lastErr = null, emptyFrom = null;
   for (const url of OVERPASS) {
     try {
       const j = await getJson(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: query
-      }, ms || 12000);
-      if (j && Array.isArray(j.elements)) return j.elements;
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query)
+      }, ms || 20000);
+      if (j && Array.isArray(j.elements)) {
+        if (j.elements.length) return j.elements;
+        emptyFrom = url;                 /* keep looking before believing it */
+        continue;
+      }
       lastErr = new Error('unexpected Overpass response');
     } catch (e) { lastErr = e; }
   }
+  if (emptyFrom) return [];
   throw lastErr || new Error('no Overpass mirror answered');
 }
 
@@ -480,7 +512,8 @@ function within(list, radiusKm) {
    SUBSTATIONS
    ═══════════════════════════════════════════════════════════════════════════ */
 async function findSubstations(lat, lng, radiusKm) {
-  try {
+  if (!HIFLD_LAYERS.substations) { SOURCES.substations = 'hifld-skipped(no layer)'; }
+  else try {
     const f = await arcgis(HIFLD_LAYERS.substations, 0, lat, lng, radiusKm,
       'NAME,STATUS,MAX_VOLT,MIN_VOLT,TYPE,OWNER,COUNTY,STATE');
     const out = [];
@@ -500,9 +533,11 @@ async function findSubstations(lat, lng, radiusKm) {
   } catch (e) { SOURCES.substations = 'hifld-failed:' + (e.message || 'error'); }
 
   try {
+    /* nwr, not node+way: a large substation is often mapped as a multipolygon
+       relation, and Moore Substation next to the Lattice site is a way that
+       the node-only half of the old query could never have matched. */
     const els = await overpass(
-      `[out:json][timeout:20];(node["power"="substation"](${bboxFor(lat, lng, radiusKm)});`
-      + `way["power"="substation"](${bboxFor(lat, lng, radiusKm)}););out center tags;`);
+      `[out:json][timeout:25];nwr["power"="substation"](${bboxFor(lat, lng, radiusKm)});out center tags;`);
     const out = [];
     for (const el of els) {
       const p = osmPoint(el); if (!p) continue;
@@ -516,8 +551,11 @@ async function findSubstations(lat, lng, radiusKm) {
         owner: t.operator || ''
       });
     }
-    SOURCES.substations = SOURCES.substations
-      ? SOURCES.substations + ' -> osm' : 'osm';
+    /* The count is recorded, not just the source name. "osm" beside zero
+       substations reads as "checked and there are none"; "osm(0 raw)" says
+       the query came back empty, which is the thing worth noticing. */
+    SOURCES.substations = (SOURCES.substations ? SOURCES.substations + ' -> ' : '') +
+      'osm(' + els.length + ' raw, ' + within(out, radiusKm).length + ' within ' + radiusKm + 'km)';
     return within(out, radiusKm);
   } catch (e) {
     SOURCES.substations = (SOURCES.substations || '') + ' -> osm-failed:' + (e.message || 'error');
