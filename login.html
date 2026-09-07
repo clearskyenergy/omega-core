@@ -205,7 +205,7 @@
       <!-- STATE 2 · this account reaches more than one workspace -->
       <div id="paneChoose" class="choose" style="display:none;">
         <h2>Where to?</h2>
-        <p class="sub">Your account reaches more than one OMEGA workspace. We'll remember the one you pick.</p>
+        <p class="sub">Your account reaches more than one OMEGA workspace. Pick one &mdash; you can come back here any time.</p>
         <div id="choiceList"></div>
         <p class="note" style="text-align:left;">Signed in as <span id="chooseEmail"></span> · <button type="button" class="link-quiet" id="signOutBtn">Use a different account</button></p>
       </div>
@@ -420,6 +420,81 @@
     /* A denied or missing document is an answer, not a failure. The rules let
        every account read its OWN role docs and nothing else, so "couldn't read
        it" reliably means "not one of those". */
+    /* ── THE SURFACES ARE DATA, NOT CODE ────────────────────────────────
+       Tom: "clients should have the ability to choose these as we may add
+       to it."
+
+       Every destination on the chooser used to be an if-block in resolve()
+       with its name, its description and its URL written inline. Adding a
+       fifth product meant editing this file and shipping it, and there was
+       no way for a tenant to be offered one product and not another beyond
+       whether a profile document happened to exist.
+
+       A surface is now a record. The built-ins below are the ones that ship;
+       omega_surfaces/{key} in Firestore adds or overrides any of them, so a
+       new product is one document and no deploy. `requires` is the
+       entitlement and it is declarative on purpose — a rule written as data
+       can come from the database, and a predicate cannot.
+
+         key       stable id, also what "last used" remembers
+         name      what the button says
+         desc      the line under it — a function for the built-ins that
+                   need to read a role, a plain string from Firestore
+         url       absolute, or a path resolved against the portal
+         requires  'staff:admin' | 'staff:rep' | 'adminDomain'
+                   | 'doc:<collection>'  (a profile in that collection)
+                   | 'always'
+         order     lower sorts first; ties keep table order
+    */
+    const SURFACES = [
+      { key: "admin", order: 10, name: "Admin console", url: ROUTES.admin,
+        desc: () => "Platform operations and client management",
+        requires: (c) => c.isAdminDomain || c.staffRole === "admin" },
+      { key: "ops", order: 20, name: "Ops console", url: ROUTES.ops,
+        desc: () => "The intake queue and the jobs assigned to you",
+        requires: (c) => c.staffRole === "rep" || c.staffRole === "admin" },
+      { key: "financing", order: 30, name: "Project Financing", url: ROUTES.financing,
+        desc: (c) => c.fin && c.fin.role === "partner"
+          ? "Deal flow and the offers you've made" : "Your deals and the offers on them",
+        requires: (c) => !!c.fin },
+      { key: "marketplace", order: 40, name: "Distribution Marketplace", url: ROUTES.marketplace,
+        desc: (c) => c.mkt && c.mkt.role === "distributor"
+          ? "Your catalog and incoming projects" : "Quotes from your distributors",
+        requires: (c) => !!c.mkt },
+      { key: "vdc", order: 50, name: "VDC Exchange", url: ROUTES.vdc,
+        desc: (c) => c.vdc && c.vdc.role === "operator"
+          ? "Assets, RFQs and your quotes" : "Your RFQs and the quotes on them",
+        requires: (c) => !!c.vdc }
+    ];
+
+    /* A Firestore surface's `requires` is a STRING, because a rule that has
+       to travel through a database cannot be a function. Anything it does not
+       recognise is treated as "not entitled" rather than "entitled": a
+       misspelt rule must not open a door. */
+    function ruleFor(spec) {
+      const r = String(spec || "").trim();
+      if (r === "always") return () => true;
+      if (r === "adminDomain") return (c) => c.isAdminDomain;
+      if (r === "staff:admin") return (c) => c.staffRole === "admin";
+      if (r === "staff:rep") return (c) => c.staffRole === "rep" || c.staffRole === "admin";
+      if (r.indexOf("doc:") === 0) {
+        const col = r.slice(4);
+        return (c) => !!(c.extra && c.extra[col]);
+      }
+      return () => false;
+    }
+
+    async function readCol(name) {
+      try {
+        const snap = await fs.getDocs(fs.collection(db, name));
+        const out = [];
+        snap.forEach((d) => { const v = d.data() || {}; v.key = v.key || d.id; out.push(v); });
+        return out;
+      } catch (_) {
+        return [];
+      }
+    }
+
     async function readDoc(segments) {
       try {
         const snap = await fs.getDoc(fs.doc(db, ...segments));
@@ -438,45 +513,69 @@
       const org = domainOf(email);
       const uid = user.uid;
 
-      const [staff, member, fin, mkt, vdc] = await Promise.all([
+      const [staff, member, fin, mkt, vdc, added] = await Promise.all([
         readDoc(["omega_staff", uid]),
         readDoc(["org_members", email]),
         readDoc(["fin_profiles", uid]),
         readDoc(["mkt_profiles", uid]),
-        readDoc(["vdc_profiles", uid])
+        readDoc(["vdc_profiles", uid]),
+        /* Surfaces ClearSky has added since this file shipped. An empty read
+           — no collection, no permission — simply means the built-ins. */
+        readCol("omega_surfaces")
       ]);
 
-      const dests = [];
       const isAdminDomain = ADMIN_DOMAINS.indexOf(org) !== -1;
       const staffActive = !!staff && staff.active !== false;
       const staffRole = staffActive ? (staff.role || "none") : "none";
 
-      if (isAdminDomain || staffRole === "admin") {
-        dests.push({ key: "admin", url: ROUTES.admin, name: "Admin console",
-                     desc: "Platform operations and client management" });
-      }
-      if (staffRole === "rep" || staffRole === "admin") {
-        dests.push({ key: "ops", url: ROUTES.ops, name: "Ops console",
-                     desc: "The intake queue and the jobs assigned to you" });
-      }
-
+      /* Blocked states are decided before any destination is offered: a
+         suspended financing account must not be shown a door it will be
+         turned away from. */
       if (fin) {
         if (fin.suspended === true) return { blocked: "suspended" };
         if (fin.approved === false) return { blocked: "unapproved", role: fin.role };
-        dests.push({ key: "financing", url: ROUTES.financing, name: "Project Financing",
-                     desc: fin.role === "partner" ? "Deal flow and the offers you've made"
-                                                  : "Your deals and the offers on them" });
       }
-      if (mkt) {
-        dests.push({ key: "marketplace", url: ROUTES.marketplace, name: "Distribution Marketplace",
-                     desc: mkt.role === "distributor" ? "Your catalog and incoming projects"
-                                                      : "Quotes from your distributors" });
+
+      const ctx = { email, org, uid, isAdminDomain, staffRole, staff, member, fin, mkt, vdc, extra: {} };
+
+      /* A Firestore surface can require a profile document this file has
+         never heard of, so those collections are read on demand — once, and
+         only for surfaces that actually ask. */
+      const wanted = [];
+      (added || []).forEach((sd) => {
+        const r = String(sd.requires || "");
+        if (r.indexOf("doc:") === 0 && wanted.indexOf(r.slice(4)) < 0) wanted.push(r.slice(4));
+      });
+      if (wanted.length) {
+        const got = await Promise.all(wanted.map((col) => readDoc([col, uid])));
+        wanted.forEach((col, i) => { ctx.extra[col] = got[i]; });
       }
-      if (vdc) {
-        dests.push({ key: "vdc", url: ROUTES.vdc, name: "VDC Exchange",
-                     desc: vdc.role === "operator" ? "Assets, RFQs and your quotes"
-                                                   : "Your RFQs and the quotes on them" });
-      }
+
+      /* Built-ins, then anything from Firestore. A doc with the same key
+         REPLACES the built-in rather than adding a second button — that is
+         how a name or a URL gets corrected without a deploy. */
+      const table = SURFACES.slice();
+      (added || []).forEach((sd) => {
+        if (!sd || !sd.key || sd.enabled === false) return;
+        const entry = {
+          key: String(sd.key),
+          order: sd.order != null ? +sd.order : 60,
+          name: sd.name || String(sd.key),
+          url: /^https?:/i.test(sd.url || "") ? sd.url : (PORTAL + (sd.url || "/")),
+          desc: () => sd.desc || "",
+          requires: ruleFor(sd.requires)
+        };
+        const at = table.findIndex((x) => x.key === entry.key);
+        if (at >= 0) table[at] = entry; else table.push(entry);
+      });
+
+      const dests = table
+        .filter((sf) => { try { return !!sf.requires(ctx); } catch (_) { return false; } })
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((sf) => ({
+          key: sf.key, url: sf.url, name: sf.name,
+          desc: (typeof sf.desc === "function" ? sf.desc(ctx) : sf.desc) || ""
+        }));
 
       /* A cross-org grant puts someone in that tenant rather than their own
          email domain — that is exactly what org_members is for. */
@@ -549,20 +648,22 @@
         const found = await resolve(user);
         if (found.blocked) { routing = false; return blockedPane(found.blocked, found.role); }
 
-        /* One destination: go. Several: let them pick — unless they've already
-           picked before and are just coming back. */
+        /* ── ALWAYS ASK WHEN THERE IS MORE THAN ONE ────────────────────
+           This used to remember the last choice and go straight there,
+           which is convenient exactly once and then a trap: somebody with
+           several associations picks the admin console, and from that day
+           on there is no way back to the ops console or their own workspace
+           short of clearing site data. There was no UI to change it and no
+           sign that a choice was being made on their behalf.
+
+           The chooser now always shows when there is a real choice, with the
+           last one used marked and listed first. That costs one click and
+           the click is a click, not a decision — and nobody gets stuck. */
         let dest = found.dests[0];
         if (found.dests.length > 1) {
-          let remembered = null;
-          try { remembered = localStorage.getItem("omega:lastDest"); } catch (_) {}
-          const match = found.dests.filter((d) => d.key === remembered)[0];
-          if (match) {
-            dest = match;
-          } else {
-            routing = false;
-            loading(false);
-            return chooser(found, user);
-          }
+          routing = false;
+          loading(false);
+          return chooser(found, user);
         }
 
         loading(true, "Opening <b>" + dest.name + "</b>");
@@ -581,7 +682,14 @@
     function chooser(found, user) {
       const list = $("choiceList");
       list.innerHTML = "";
-      found.dests.forEach((d) => {
+      /* Last one used first, and labelled. Not preselected — the point of
+         showing this is that the choice is the person's to make each time;
+         ordering is a convenience, a default would be the old trap again. */
+      let remembered = null;
+      try { remembered = localStorage.getItem("omega:lastDest"); } catch (_) {}
+      const dests = found.dests.slice().sort((a, b) =>
+        (b.key === remembered ? 1 : 0) - (a.key === remembered ? 1 : 0));
+      dests.forEach((d) => {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "choice";
@@ -589,7 +697,8 @@
           '<span class="name"></span><span class="desc"></span></span>' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:rgba(255,255,255,0.45)"><polyline points="9 18 15 12 9 6"/></svg>';
         b.querySelector(".name").textContent = d.name;
-        b.querySelector(".desc").textContent = d.desc;
+        b.querySelector(".desc").textContent =
+          (d.key === remembered ? "Last used \u00b7 " : "") + d.desc;
         b.addEventListener("click", async () => {
           loading(true, "Opening <b>" + d.name + "</b>");
           await wait(300);
