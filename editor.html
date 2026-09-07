@@ -903,6 +903,29 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
    (gestureHandling:'greedy'); suppressing it on the container blocked map
    panning entirely on touch devices. */
 .cel{position:absolute;pointer-events:auto;z-index:10;touch-action:none}
+/* A FUTURE-PROOFED STALL HAS TO LOOK LIKE ONE.
+   Ticking "Future-proofed stall" already pulled the unit out of connected
+   load, out of the hardware cost and into its own legend block — but on the
+   drawing it stayed a solid charger identical to the four being installed
+   next week. The one place the difference matters most, the picture the
+   customer and the AHJ actually read, was the one place it did not show.
+
+   Ghosted plus a dashed amber outline, not opacity alone: a faint icon on
+   its own reads as a render glitch or a deselected item. The dash is the
+   drawing convention for "planned, not built", and amber matches the
+   FUTURE PROOFING (INELIGIBLE) block in the legend, so the map and the
+   legend say the same thing in the same colour.
+
+   Pointer events stay on — a ghost you cannot click is a ghost you cannot
+   un-ghost. */
+.cel.cel-future{opacity:.5}
+.cel.cel-future .elbody{outline:1.5px dashed #FBBF24;outline-offset:3px;border-radius:3px}
+.cel.cel-future::after{
+  content:'FUTURE';position:absolute;left:50%;top:-9px;transform:translateX(-50%);
+  font:700 7.5px/1 system-ui,-apple-system,sans-serif;letter-spacing:.09em;
+  color:#0A1628;background:#FBBF24;padding:2.5px 5px;border-radius:3px;
+  pointer-events:none;white-space:nowrap;z-index:3}
+.cel.cel-future.sel{opacity:.9}
 .shape-g{touch-action:none}
 .cel.sel .elbody{outline:2px solid var(--accent);outline-offset:2px}
 
@@ -8690,6 +8713,12 @@ function renderEl(el){
   }catch(e){}
   const wrap=document.createElement('div');
   wrap.className='cel';wrap.dataset.elid=el.id;
+  /* Read the flags directly rather than through OmegaEVFuture.isFuture:
+     renderEl runs on every repaint including before that module has
+     installed, and a renderer that throws takes the whole drawing with
+     it. setFuture writes both, so either one is enough. */
+  const _elFuture = !!(el.evFuture || el.futureProof);
+  if(_elFuture) wrap.classList.add('cel-future');
   wrap.style.cssText=`left:${el.x}px;top:${el.y}px;`;
 
   let inner='';
@@ -8705,8 +8734,15 @@ function renderEl(el){
        and its footprint, not just the unit. Purely presentational: the
        bollards themselves are still real elements (eqId 'bollard') and
        are what the estimate counts. */
+    /* No bollards on a future stall, so no bollard island either. The
+       hatched pad draws the PROTECTION around a unit that is standing
+       there; on a position that holds only capped conduit it is an island
+       around nothing, and it reads on the plan as protection that has been
+       bought. syncBollards() already deletes the real bollard elements when
+       the stall is marked — this is the presentational half of the same
+       decision, which was left behind. */
     const _padOn = (el.eqId==='charger') && (el.bollardPad !== false)
-                   && (window.OMEGA_EV_PAD !== false);
+                   && (window.OMEGA_EV_PAD !== false) && !_elFuture;
     const _pad = _padOn ? (function(){
       // Clearance in FEET, defaulting to a real bollard setback. See the
       // note in the evgear branch: taking a fraction of the DRAWN size made
@@ -146581,10 +146617,45 @@ function markAll(v){
   return n;
 }
 
+/* ── THE DRAWING WAS NEVER ACTUALLY REDRAWN ────────────────────────────
+   This called renderAll() and render(). There is no renderAll() in this
+   build, and the two render() functions that DO exist are a 3D scene
+   renderer and an export renderer with entirely different signatures —
+   calling either with no arguments does nothing useful and throws into
+   the catch. So the only thing that ever ran was renderLegend().
+
+   That is exactly the symptom: mark a stall future and the legend splits
+   it out correctly while the icon on the map stays a solid charger. The
+   flag was set, the cost was right, the load was right — the picture just
+   never got the message.
+
+   Re-render the elements that can carry the flag, by id, through the one
+   function that removes the old node before drawing the new one. Chargers
+   because they are what gets marked, bollards because syncBollards() adds
+   and removes them underneath and their absence has to show too. */
 function refresh(){
-  try { if (typeof renderAll === 'function') renderAll(); } catch (e) {}
+  try {
+    if (typeof _reRenderEl === 'function') {
+      (S.elements || []).forEach(function (e) {
+        if (e && (e.eqId === 'charger' || e.eqId === 'bollard')) {
+          try { _reRenderEl(e.id); } catch (err) {}
+        }
+      });
+    }
+    /* renderEl builds a fresh node with className 'cel' — the selection
+       class is applied by selEl(), not by the renderer. Re-rendering the
+       charger somebody has selected (which is ALWAYS the one being marked,
+       because the checkbox lives in its properties panel) therefore drops
+       the outline and the handles the instant they tick the box. Put it
+       back on the node that now exists. */
+    var _sel = (typeof S !== 'undefined') ? S.sel : null;
+    if (_sel) {
+      var _n = document.querySelector('[data-elid="' + _sel + '"]');
+      if (_n) _n.classList.add('sel');
+    }
+  } catch (e) {}
   try { if (typeof renderLegend === 'function') renderLegend(); } catch (e) {}
-  try { if (typeof render === 'function') render(); } catch (e) {}
+  try { if (typeof updateSummaryPanel === 'function') updateSummaryPanel(); } catch (e) {}
   try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
   try { if (typeof _setSaved === 'function') _setSaved('unsaved'); } catch (e) {}
 }
