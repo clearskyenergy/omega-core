@@ -55,16 +55,6 @@
       "has": [
         {
           "type": "host",
-          "value": "silmarillion.clearskyomega.com"
-        }
-      ],
-      "destination": "/login.html"
-    },
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
           "value": "alpha.clearskyomega.com"
         }
       ],
@@ -142,5 +132,18 @@
     "api/**/*.js": {
       "maxDuration": 30
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "silmarillion.clearskyomega.com"
+        }
+      ],
+      "destination": "/login.html",
+      "permanent": false
+    }
+  ]
 }
