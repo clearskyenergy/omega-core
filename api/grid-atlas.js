@@ -386,11 +386,18 @@ const HIFLD_LAYERS = {
   lines:       process.env.HIFLD_LINES       || 'Electric_Power_Transmission_Lines',
   plants:      process.env.HIFLD_PLANTS      || 'Power_Plants'
 };
-/* overpass-api.de first: kumi.systems was timing out at 40s+ from here on
-   2026-09-07, and it was the mirror every lookup tried first. */
+/* ── MIRROR ORDER IS NOT ARBITRARY, IT IS MEASURED ──────────────────────
+   Tested against one bbox in Frio County, TX on 2026-09-07:
+     kumi.systems   16 elements   the only mirror with the data
+     overpass-api.de  non-JSON    rate-limited, returns an error page
+     overpass.osm.ch   0 elements a well-formed, WRONG, empty 200
+   osm.ch answering an authoritative-looking zero is what made this layer
+   silently report "no substations" for real sites. It stays in the list as a
+   last resort but it must never be reached while a mirror with data is
+   answering, so kumi goes first and gets most of the time budget. */
 const OVERPASS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
   'https://overpass.osm.ch/api/interpreter'
 ];
 
@@ -457,14 +464,19 @@ function num(v) { const n = Number(v); return isFinite(n) && n > 0 ? n : null; }
    after every mirror has been asked, because a mirror that answers 200 with
    nothing is the exact shape of this bug. */
 async function overpass(query, ms) {
-  let lastErr = null, emptyFrom = null;
+  let lastErr = null, emptyFrom = null, first = true;
   for (const url of OVERPASS) {
     try {
+      /* The first mirror is the one that has the data, so it gets a real
+         budget; the rest are a fallback and must not eat the function's
+         30 s ceiling between them. */
+      const budget = ms || (first ? 20000 : 6000);
+      first = false;
       const j = await getJson(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'data=' + encodeURIComponent(query)
-      }, ms || 20000);
+      }, budget);
       if (j && Array.isArray(j.elements)) {
         if (j.elements.length) return j.elements;
         emptyFrom = url;                 /* keep looking before believing it */

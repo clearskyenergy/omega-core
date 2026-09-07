@@ -126,6 +126,9 @@
     }
   ],
   "functions": {
+    "api/grid-atlas.js": {
+      "maxDuration": 60
+    },
     "api/**/*.js": {
       "maxDuration": 30
     }
