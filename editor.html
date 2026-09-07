@@ -15434,6 +15434,81 @@ function _parse8760Values(text){
    extremely common from utility portals, and reading it as hourly
    overstates annual energy by 4x - which is exactly what "hourly kW == kWh"
    did before. */
+/* ── WHEN DOES THIS SERIES START? ──────────────────────────────────────
+   _monthSpans has always assumed the first row is 00:00 on 1 January, and
+   the importer says outright that "timestamps are ignored". For a file the
+   customer exported from their utility portal that assumption is often
+   wrong: the export usually starts at the BILLING CYCLE, so a file
+   beginning in July has every monthly peak attributed to a month six
+   places away. Demand charges are billed per month, so the sizing is then
+   wrong in a way nothing on screen reveals.
+
+   The values are still read positionally — that part was right, and a
+   timestamp column is not needed to know what a load column contains. This
+   only answers "which month is row zero in", from the first date-shaped
+   cell it can find. Returns null when there is nothing to read, and the
+   caller keeps the old assumption and says so.
+
+   Both orders are tried and the ambiguous ones are refused: 03/04 is the
+   fourth of March in the US and the third of April almost everywhere, and
+   guessing wrong moves the whole calendar by a month. A date that is
+   unambiguous in only one order settles it; one that is valid in both is
+   only used for the month when both orders agree on the month. */
+function _detect8760Start(text){
+  var lines=String(text||'').split(/[\r\n]+/);
+  var names=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var firstIso=null, firstName=null, pairs=[];
+  var LOOK=Math.min(lines.length, 3000);   /* a month of 15-min data is ~2,880 rows */
+
+  for(var i=0;i<LOOK;i++){
+    var ln=lines[i];
+    if(!ln) continue;
+    if(firstIso===null){
+      var iso=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(ln);
+      if(iso && +iso[2]>=1 && +iso[2]<=12){ firstIso=+iso[2]-1; break; }   /* unambiguous */
+    }
+    var sl=/\b(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})\b/.exec(ln);
+    if(sl){ pairs.push([+sl[1], +sl[2]]); continue; }
+    if(firstName===null){
+      var mon=/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i.exec(ln);
+      if(mon) firstName=names.indexOf(mon[1].toLowerCase());
+    }
+  }
+
+  if(firstIso!==null) return { month:firstIso, source:'ISO date' };
+
+  /* ── SETTLE THE ORDER FROM THE WHOLE FILE, NOT FROM ROW ONE ──────────
+     7/1/2025 is genuinely ambiguous: 1 July almost everywhere, 7 January in
+     the US. Refusing on that basis was correct and useless — it sent every
+     US export straight back to the January assumption this function exists
+     to remove.
+
+     A file covering more than twelve days settles it by itself. If any row
+     has a first component above 12 the order must be D/M; if any second
+     component is above 12 it must be M/D. Only a file where neither ever
+     happens stays ambiguous, and that means fewer than about a fortnight of
+     readings, which is not a sizing input anyway. US order is the tiebreak
+     because this is a US tariff tool, and the source string says it was
+     assumed so the screen can too. */
+  if(pairs.length){
+    var mustBeDM=false, mustBeMD=false;
+    for(var p=0;p<pairs.length;p++){
+      if(pairs[p][0]>12) mustBeDM=true;
+      if(pairs[p][1]>12) mustBeMD=true;
+    }
+    if(mustBeDM && mustBeMD) return null;            /* contradictory: read nothing */
+    var first=pairs[0];
+    if(mustBeDM) return { month:first[1]-1, source:'D/M/Y date' };
+    if(mustBeMD) return { month:first[0]-1, source:'M/D/Y date' };
+    if(first[0]===first[1]) return { month:first[0]-1, source:'date' };
+    if(first[0]>=1 && first[0]<=12)
+      return { month:first[0]-1, source:'M/D/Y date (order assumed)' };
+    return null;
+  }
+
+  if(firstName!==null && firstName>=0) return { month:firstName, source:'month name' };
+  return null;
+}
 function _detect8760Interval(n){
   var cands=[{min:5,per:12},{min:15,per:4},{min:30,per:2},{min:60,per:1}];
   var best=60, bestErr=Infinity;
@@ -15448,15 +15523,24 @@ function _detect8760Interval(n){
 /* Calendar-month spans over the series, assuming it starts Jan 1 and is
    contiguous. Returns null if the row count is not a clean year, in which
    case the caller falls back to whole-series analysis. */
-function _monthSpans(n, intervalMin){
+function _monthSpans(n, intervalMin, startMonth){
   var days=[31,28,31,30,31,30,31,31,30,31,30,31];
   var perHour=60/intervalMin;
   var total=0; for(var d=0;d<12;d++) total+=days[d]*24*perHour;
   if(!total || Math.abs(n-total)/total>0.05) return null;
+  var s0=(startMonth==null?0:((startMonth%12)+12)%12);
+  /* A LEAP YEAR IS 24 HOURS LONGER AND THOSE HOURS WERE BEING DROPPED.
+     8,784 rows pass the 5% tolerance above, then the spans only cover 8,760
+     and the last day never gets looked at — so December's peak, on a file
+     that ends on the 31st, could be the one interval nobody read. The final
+     span now runs to the end of the series whatever its length, which is
+     also what makes a slightly-short export behave. */
   var spans=[], at=0;
-  for(var m=0;m<12;m++){
+  for(var i=0;i<12;i++){
+    var m=(s0+i)%12;
     var len=Math.round(days[m]*24*perHour);
-    spans.push({ m:m, a:at, b:Math.min(n, at+len) });
+    var b=(i===11) ? n : Math.min(n, at+len);
+    spans.push({ m:m, a:at, b:b });
     at+=len;
   }
   return spans;
@@ -15509,7 +15593,8 @@ function analyze8760(text){
   var avg=sum/n;
   var energyKwh=sum*hrs;                            /* kW x interval hours */
   var loadFactor=peak>0?avg/peak:0;                 /* how "peaky" the load is */
-  var spans=_monthSpans(n, intervalMin);
+  var start=_detect8760Start(text);
+  var spans=_monthSpans(n, intervalMin, start ? start.month : 0);
   var dipTol=Math.max(1, Math.round(30/intervalMin));
 
   /* Demand-shaving analysis.
@@ -15561,11 +15646,14 @@ function analyze8760(text){
   /* Hours (not intervals) at or above 90% of peak. */
   var hoursNearPeak=Math.round(vals.filter(function(v){ return v>=peak*0.9; }).length*hrs);
 
+  /* Indexed by CALENDAR month (0 = January), not by position in the file,
+     so a series that starts in July still reports July's peak as July's. */
   var monthlyPeaks=null;
   if(spans){
-    monthlyPeaks=spans.map(function(sp){
+    monthlyPeaks=new Array(12);
+    spans.forEach(function(sp){
       var p=0; for(var j=sp.a;j<sp.b;j++) if(vals[j]>p) p=vals[j];
-      return Math.round(p);
+      monthlyPeaks[sp.m]=Math.round(p);
     });
   }
 
@@ -15578,6 +15666,13 @@ function analyze8760(text){
     hoursNearPeak:hoursNearPeak,
     isFullYear:(n*hrs>=8000),
     monthly:!!spans, monthlyPeaks:monthlyPeaks,
+    /* Reported, not buried: the difference between a file the engine could
+       date and one where January was assumed is the difference between
+       twelve right answers and twelve answers off by however many months
+       the export happened to start at. */
+    startMonth: spans ? spans[0].m : null,
+    startSource: start ? start.source : null,
+    startAssumed: !start,
     derate:BESS_DERATE,
     shave10:shaveAnalysis(0.9),   /* shave top 10% */
     shave20:shaveAnalysis(0.8),   /* shave top 20% */
@@ -110079,12 +110174,22 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
 
   /* Rough month boundaries for a full year of evenly spaced intervals.
      A partial series is evaluated as one block and says so. */
-  function monthSpans(n, intervalMin) {
+  /* startMonth is the calendar month row zero falls in. A utility export
+     usually begins at the BILLING CYCLE rather than on 1 January, and
+     demand charges are billed per month — so assuming January on a file
+     that starts in July attributes every peak to the wrong month and sizes
+     against the wrong one. The caller reads it off a timestamp column when
+     the file has one and passes 0 when it does not, saying so. */
+  function monthSpans(n, intervalMin, startMonth) {
     var perDay = Math.round(24 * 60 / intervalMin);
     if (Math.abs(n - perDay * 365) > perDay * 40) return null;
     var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], out = [], at = 0;
-    for (var m = 0; m < 12; m++) {
-      var b = Math.min(n, at + days[m] * perDay);
+    var s0 = (startMonth == null ? 0 : ((startMonth % 12) + 12) % 12);
+    for (var i = 0; i < 12; i++) {
+      var m = (s0 + i) % 12;
+      /* The last span runs to the end of the series: a leap year is 24 h
+         longer than the table and those hours were never examined. */
+      var b = (i === 11) ? n : Math.min(n, at + days[m] * perDay);
       out.push({ a: at, b: b, month: m });
       at = b;
     }
@@ -110104,7 +110209,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     var tariff = merge(defaultTariff(), opts.tariff);
     var intervalMin = +opts.intervalMin || 60;
     var hrs = intervalMin / 60;
-    var spans = monthSpans(vals.length, intervalMin);
+    var spans = monthSpans(vals.length, intervalMin, opts.startMonth);
     var blocks = spans || [{ a: 0, b: vals.length, month: null }];
     var D = derate();
 
@@ -110223,6 +110328,8 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     return sweep(evaluate, annualPeak, peaks, tariff, {
       basis: spans ? 'interval' : 'interval-partial',
       confidence: spans ? 'measured' : 'measured (partial year)',
+      startMonth: spans ? spans[0].month : null,
+      startAssumed: opts.startMonth == null,
       annualPeak: annualPeak, annualKwh: annualKwh, peaks: peaks,
       loadFactor: annualPeak > 0 ? (annualKwh / (annualPeak * 8760)) : 0,
       intervalMin: intervalMin
@@ -110873,9 +110980,17 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
           alert('Need at least 24 interval values. Paste a load column in kW.');
           return;
         }
+        /* Read the start month off the pasted text before the values are
+           reduced to a bare column. A file that begins at the billing cycle
+           rather than on 1 January would otherwise have every peak filed
+           under the wrong month, and demand charges are billed monthly. */
+        var start = (typeof _detect8760Start === 'function')
+          ? _detect8760Start(S.intervalText) : null;
         S.result = E.sizeFromInterval(vals, {
-          intervalMin: E.detectInterval(vals.length), tariff: S.tariff
+          intervalMin: E.detectInterval(vals.length), tariff: S.tariff,
+          startMonth: start ? start.month : null
         });
+        if (S.result && S.result.meta) S.result.meta.startSource = start ? start.source : null;
       } else {
         var rows = S.rows.filter(function (r) { return +r.demandKw > 0; });
         if (S.mode === 'single') rows = rows.slice(0, 1);

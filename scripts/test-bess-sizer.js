@@ -151,5 +151,61 @@ ok(inconsistent.length === 0,
 /* ── 7. the guard the engine already promised ────────────────────────── */
 ok(E.sizeFromInterval([1, 2, 3], {}).ok === false, 'refuses to size from three readings');
 
+/* ══════════════════════════════════════════════════════════════════════
+   THE 8760 IMPORT PATH
+
+   Two silent wrong-answers, both in code that read correctly:
+
+     _monthSpans assumed row zero is 00:00 on 1 January. A utility export
+     usually starts at the BILLING CYCLE, so a file beginning in July filed
+     every peak six months away — and demand charges are billed per month.
+
+     A leap year is 8,784 rows. That passed the 5% tolerance and then the
+     spans only covered 8,760, so the last day was never examined; on a file
+     ending 31 December, December's peak could be the interval nobody read.
+   ══════════════════════════════════════════════════════════════════════ */
+console.log('');
+var box = { console: console };
+box.window = box;
+vm.createContext(box);
+function lift(name) {
+  var a = src.indexOf('function ' + name + '(');
+  if (a < 0) throw new Error(name + ' is gone from editor.html');
+  var depth = 0, b = src.indexOf('{', a);
+  for (var q = b; q < src.length; q++) {
+    if (src[q] === '{') depth++;
+    else if (src[q] === '}') { depth--; if (!depth) return src.slice(a, q + 1); }
+  }
+  throw new Error(name + ' never closes');
+}
+vm.runInContext(lift('_detect8760Start') + '\n' + lift('_monthSpans'), box);
+
+[['ISO timestamp',            'Timestamp,kW\n2025-07-01T00:00:00,412\n2025-07-01T01:00:00,405', 6],
+ ['US M/D/Y, no day over 12', 'Date,Time,kW\n7/1/2025,00:00,412\n7/1/2025,01:00,405',            6],
+ ['US M/D/Y, a day over 12',  'Date,kW\n7/1/2025,412\n7/2/2025,405\n7/20/2025,398',             6],
+ ['EU D/M/Y, a day over 12',  'Date,kW\n25/07/2025,412\n26/07/2025,405',                        6],
+ ['month name',               'Reading for Jul 2025\n412\n405',                                 6],
+ ['contradictory orders',     'Date,kW\n25/07/2025,412\n7/20/2025,405',                      null],
+ ['no date anywhere',         '412\n405\n398',                                                null]
+].forEach(function (c) {
+  var r = box._detect8760Start(c[1]);
+  ok((r ? r.month : null) === c[2], 'start month — ' + c[0],
+     'got ' + (r ? r.month + ' via ' + r.source : 'null') + ', expected ' + c[2]);
+});
+
+var leap = box._monthSpans(8784, 60, 0);
+ok(!!leap && leap[11].b === 8784,
+   'a leap year is read to its last interval',
+   leap ? 'last span ends at ' + leap[11].b + ' of 8784' : 'no spans');
+
+var rot = box._monthSpans(8760, 60, 6);
+ok(!!rot && rot[0].m === 6 && rot[11].m === 5,
+   'a July start rotates the calendar rather than mislabelling it',
+   rot ? 'first ' + rot[0].m + ', last ' + rot[11].m : 'no spans');
+
+var jan = box._monthSpans(8760, 60, 0);
+ok(!!jan && jan[0].m === 0 && jan[0].b === 744,
+   'a January start still gives January 744 hours');
+
 console.log('\n' + (fails ? fails + ' of ' + checks + ' FAILED' : 'all ' + checks + ' checks passed') + '\n');
 process.exit(fails ? 1 : 0);
