@@ -110120,11 +110120,44 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
 
     /* Evaluate one candidate shave depth across every month. Each month
        bills its own peak, so each month gets its own threshold. */
+    /* Energy above the threshold in the worst single DAY of a span. Two
+       peaks in one day with an hour between them is the ordinary shape of a
+       facility with a shift change, and a battery that cannot get back up in
+       that hour has to carry both. */
+    function worstDayKwh(a, b, thr) {
+      var per = Math.max(1, Math.round(24 / hrs)), worst = 0;
+      for (var d = a; d < b; d += per) {
+        var e = 0, lim = Math.min(b, d + per);
+        for (var i = d; i < lim; i++) if (vals[i] > thr) e += (vals[i] - thr) * hrs;
+        if (e > worst) worst = e;
+      }
+      return worst;
+    }
+
     function evaluate(shaveKw) {
       var needKwh = 0, worstHours = 0, events = 0, throughput = 0;
-      var minGapH = Infinity, infeasible = 0, months = [];
+      var minGapH = Infinity, months = [], dayBound = 0, capped = 0;
       peaks.forEach(function (m) {
-        var thr = Math.max(0, m.peakKw - shaveKw);
+        /* ── YOU CANNOT SHAVE INTO THE BASELINE ──────────────────────────
+           The monthly-bills path has always capped the shave at peak minus
+           average, because a battery that holds the meter below the site's
+           own baseline has nothing to recharge from — it is a generator, not
+           a battery. The interval path had no such cap, and the sweep walks
+           to 60% of the ANNUAL peak, which on a seasonal load is deeper than
+           a shoulder month's entire peak-to-baseline range.
+
+           When the threshold drops under the baseline the load never comes
+           back below the line, eventsAbove returns ONE event spanning the
+           whole month, and the sizer asks for a megawatt-hour battery the
+           size of a small city. The sweep table showed it plainly: 144 kW
+           wanted 1,522 kWh, and 173 kW wanted 1,366,666 kWh and $546 million.
+
+           This was always here. It was invisible because every candidate was
+           being disqualified as recharge-tight and the fallback quietly
+           picked the smallest one. Fixing the disqualification surfaced it. */
+        var applied = Math.min(shaveKw, Math.max(0, m.peakKw - m.avgKw));
+        if (applied < shaveKw) capped++;
+        var thr = Math.max(0, m.peakKw - applied);
         var ev = eventsAbove(vals, hrs, thr, Math.max(1, Math.round(0.5 / hrs)));
         ev = ev.filter(function (e) { return e.a >= m.a && e.a < m.b; });
         var worst = 0, prevEnd = null;
@@ -110140,23 +110173,49 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
         });
         events += ev.length;
         if (worst > needKwh) needKwh = worst;
+        var wd = worstDayKwh(m.a, m.b, thr);
+        if (wd > dayBound) dayBound = wd;
         months.push({ month: m.month, peakKw: m.peakKw, thresholdKw: thr,
-                      eventKwh: worst, events: ev.length });
+                      shaveKw: applied, capped: applied < shaveKw,
+                      eventKwh: worst, worstDayKwh: wd, events: ev.length });
       });
 
-      var nameplateKwh = needKwh / D;
-      /* Can it get back up before the next event? Recharge is limited by
-         the same power rating unless the tariff says otherwise. */
-      var rechargeH = shaveKw > 0 ? nameplateKwh / shaveKw : 0;
-      if (isFinite(minGapH) && minGapH < rechargeH) infeasible++;
+      /* ── THE DAY IS THE BINDING CONSTRAINT WHEN IT CANNOT RECHARGE ────
+         This used to size on the worst single EVENT and then DISQUALIFY the
+         candidate when the gap between two events was shorter than a full
+         recharge. On any site with a morning and an afternoon peak that
+         disqualified every candidate in the sweep, the eligible list came
+         back empty, and the fallback — "best return per dollar" — is the
+         smallest battery on a linear tariff. The tool recommended 29 kW on a
+         1,150 kW site and the code's own comment says that is the failure it
+         exists to avoid.
+
+         Being unable to recharge between two events is not a reason to
+         refuse to size; it is the reason the battery has to be bigger. So
+         the day's energy becomes the requirement, and the flag goes back to
+         being what it should always have been — a note that the duty cycle
+         is tight, not a veto.
+
+         Recharge is checked against the shave power because that is the
+         inverter rating being bought; a tariff that allows faster charging
+         off-peak would only improve this. */
+      var usable = needKwh;
+      var rechargeH = shaveKw > 0 ? (needKwh / D) / shaveKw : 0;
+      var tight = isFinite(minGapH) && minGapH < rechargeH;
+      if (tight && dayBound > usable) usable = dayBound;
+
+      var nameplateKwh = usable / D;
+      var rechargeH2 = shaveKw > 0 ? nameplateKwh / shaveKw : 0;
 
       return {
-        shaveKw: shaveKw, usableKwh: needKwh, nameplateKwh: nameplateKwh,
-        durationH: shaveKw > 0 ? needKwh / shaveKw : 0,
+        shaveKw: shaveKw, usableKwh: usable, nameplateKwh: nameplateKwh,
+        worstEventKwh: needKwh, worstDayKwh: dayBound,
+        sizedOnDay: usable > needKwh,
+        durationH: shaveKw > 0 ? usable / shaveKw : 0,
         events: events, worstEventH: worstHours,
         throughputKwh: throughput, cyclesYr: nameplateKwh > 0 ? throughput / (nameplateKwh * D) : 0,
-        rechargeH: rechargeH, minGapH: isFinite(minGapH) ? minGapH : null,
-        rechargeTight: infeasible > 0,
+        rechargeH: rechargeH2, minGapH: isFinite(minGapH) ? minGapH : null,
+        rechargeTight: tight, monthsCapped: capped,
         months: months, basis: spans ? 'interval-12mo' : 'interval-partial'
       };
     }
@@ -110206,7 +110265,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
         var e = applied * assumedH;
         if (e > needKwh) needKwh = e;
         months.push({ month: m.month, peakKw: m.peakKw, thresholdKw: m.peakKw - applied,
-                      eventKwh: e, capped: applied < shaveKw });
+                      shaveKw: applied, eventKwh: e, capped: applied < shaveKw });
       });
       var nameplate = needKwh / D;
       return {
@@ -110254,12 +110313,24 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
    *  Rather than picking a shave fraction out of the air, walk the      *
    *  depth from shallow to deep and let the economics choose.           *
    * ================================================================== */
-  function billedDemand(peaks, shaveKw, ratchetPct) {
+  /* `shave` is either one kW figure or a per-month array.
+     PER-MONTH MATTERS. A sweep step asks for, say, 690 kW, but a shoulder
+     month can only give up peak-minus-baseline before the battery has
+     nothing to recharge from — so evaluate() caps each month separately.
+     Crediting the full 690 kW against EVERY month bills the customer's
+     savings for a shave that month physically cannot take, and on the test
+     profile twelve of twelve months were capped while the savings line
+     claimed the deep number for all of them. */
+  function billedDemand(peaks, shave, ratchetPct) {
+    var per = Array.isArray(shave);
     /* Ratchet: the billed demand is the greater of this month's peak and
        a percentage of the highest peak in the trailing months. Sizing that
        ignores a ratchet promises savings the tariff will not pay, because
        one un-shaved peak sets the floor for a year. */
-    var after = peaks.map(function (p) { return Math.max(0, p.peakKw - shaveKw); });
+    var after = peaks.map(function (p, i) {
+      var sh = per ? (+shave[i] || 0) : shave;
+      return Math.max(0, p.peakKw - sh);
+    });
     if (!ratchetPct) return after;
     var out = [];
     for (var i = 0; i < after.length; i++) {
@@ -110283,22 +110354,54 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
       if (candidates.length && candidates[candidates.length - 1].shaveKw === shaveKw) continue;
       var c = evaluate(shaveKw);
 
+      /* WHAT IS ACTUALLY BEING BOUGHT. The sweep asks for shaveKw; the
+         months may only be able to use part of it. The inverter is sized to
+         the deepest shave any month actually takes, and that is the figure
+         the C-rate, the capex and the savings all have to agree on — the
+         previous version priced and credited the swept number. */
+      var applied = (c.months || []).map(function (m) { return +m.shaveKw || 0; });
+      c.powerKw = applied.length ? Math.max.apply(null, applied) : shaveKw;
+
       /* C-rate limit: a battery cannot deliver more power than its energy
          and chemistry allow. If the sweep asks for it, grow the energy. */
-      var minKwhForPower = shaveKw / tariff.maxC;
+      var minKwhForPower = c.powerKw / tariff.maxC;
       if (c.nameplateKwh < minKwhForPower) {
         c.nameplateKwh = minKwhForPower;
         c.cRateLimited = true;
       }
 
-      var after = billedDemand(peaks, shaveKw, tariff.ratchetPct);
+      var after = billedDemand(peaks, applied.length ? applied : shaveKw, tariff.ratchetPct);
       var afterCost = after.reduce(function (s, kw) { return s + kw * tariff.demandChargePerKw; }, 0);
       c.demandSavingsYr = baseDemandCost - afterCost;
-      c.arbitrageYr = (tariff.touSpread > 0)
-        ? c.nameplateKwh * D * tariff.touSpread * (c.cyclesYr || 250)
+
+      /* ── ARBITRAGE CANNOT EXCEED ONE CYCLE A DAY, AND IT COMPETES ─────
+         This multiplied the battery's usable energy by cyclesYr — a number
+         derived from DEMAND-SHAVING throughput, which on a peaky site
+         legitimately exceeds 365 equivalent cycles because a battery sized
+         for the worst event discharges partially on many smaller ones.
+         Feeding that back in as an arbitrage cycle count credited 455
+         cycles a year: 1.25x the physical ceiling, and it moved payback
+         from 7.8 years to 4.4, which is the number a customer signs on.
+
+         Two things are true and neither was modelled. A battery cannot
+         deliver more than one full cycle a day without a second cycle's
+         degradation and a tariff that pays for it. And arbitrage COMPETES
+         with demand shaving for the same stored energy rather than adding
+         to it — a battery working hard on demand charges has less room to
+         trade, not more.
+
+         So: an annual discharge ceiling of one cycle a day, minus what
+         demand shaving has already committed, priced at the spread. It is
+         a simple model and it is bounded by physics, which the old one was
+         not. */
+      var annualCeilingKwh = c.nameplateKwh * D * 365;
+      c.arbitrageKwh = (tariff.touSpread > 0)
+        ? Math.max(0, annualCeilingKwh - (c.throughputKwh || 0))
         : 0;
+      c.arbitrageCycles = c.nameplateKwh > 0 ? c.arbitrageKwh / (c.nameplateKwh * D) : 0;
+      c.arbitrageYr = c.arbitrageKwh * tariff.touSpread;
       c.savingsYr = c.demandSavingsYr + c.arbitrageYr;
-      c.capex = c.nameplateKwh * tariff.capexPerKwh + shaveKw * tariff.capexPerKw;
+      c.capex = c.nameplateKwh * tariff.capexPerKwh + c.powerKw * tariff.capexPerKw;
       c.paybackYr = c.savingsYr > 0 ? c.capex / c.savingsYr : null;
       c.savingsPerCapex = c.capex > 0 ? c.savingsYr / c.capex : 0;
       candidates.push(c);
@@ -110313,8 +110416,14 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
        absolute savings, subject to the payback target and to the battery
        being able to recharge between events. Return per dollar is carried
        alongside so the trade is visible rather than hidden. */
+    /* rechargeTight is NOT a veto any more. evaluate() now grows the battery
+       to carry the whole day when it cannot get back up between two events,
+       so a tight duty cycle is a fact about the system that was sized, not a
+       reason there is no system. Leaving it in this filter is what emptied
+       the eligible list on every two-peak site and sent the recommendation
+       to the smallest candidate in the sweep. */
     var eligible = candidates.filter(function (c) {
-      return c.paybackYr != null && c.paybackYr <= tariff.targetPaybackYr && !c.rechargeTight;
+      return c.paybackYr != null && c.paybackYr <= tariff.targetPaybackYr;
     });
     var best = null;
     if (eligible.length) {
@@ -110322,8 +110431,15 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     } else {
       /* Nothing meets the target. Show the best return anyway and say so,
          rather than recommending nothing or pretending the target was met. */
+      /* BEST PAYBACK, NOT BEST RATIO. On a linear tariff "return per dollar"
+         is monotonically best at the smallest battery, so this branch used to
+         recommend a token system whenever the target was missed — the exact
+         degeneracy the eligible branch was written to avoid, reproduced in
+         its fallback. The honest answer when nothing hits the target is the
+         size that comes CLOSEST to hitting it. */
       candidates.forEach(function (c) {
-        if (!c.rechargeTight && (!best || c.savingsPerCapex > best.savingsPerCapex)) best = c;
+        if (c.paybackYr == null) return;
+        if (!best || c.paybackYr < best.paybackYr) best = c;
       });
       if (!best) candidates.forEach(function (c) {
         if (!best || c.savingsPerCapex > best.savingsPerCapex) best = c;
