@@ -106487,10 +106487,23 @@ table.e3-tbl td{ white-space:normal }
 
   function addButton() {
     if (document.getElementById('rb-gis-layers')) return true;
+    /* ── ANCHORS IN PREFERENCE ORDER, NOT DOCUMENT ORDER ─────────────────
+       This was one regex alternation scanned across every .rbtn, which takes
+       whichever candidate appears FIRST IN THE DOM rather than the one that
+       belongs. Utility Pole is in the Electrical panel and Camera is in Site
+       & Safety; pole is written first, so GIS Layers and Parcel Screen both
+       landed at the end of Electrical — a panel about conduit and meters —
+       while every hint, comment and doc said Site & Safety. A button nobody
+       can find is the same as a button that was never added.
+
+       Each pattern is now tried across the whole list before the next one, so
+       the order below is a real preference and the fallbacks stay fallbacks. */
+    var WANT = [/rbInsert\('camera'\)/, /openSitePreQual/, /ovUpload/, /rbInsert\('pole'\)/];
     var all = document.querySelectorAll('button.rbtn'), hostBtn = null;
-    for (var i = 0; i < all.length; i++) {
-      var oc = all[i].getAttribute('onclick') || '';
-      if (/rbInsert\('pole'\)|rbInsert\('camera'\)|ovUpload|openSitePreQual/.test(oc)) { hostBtn = all[i]; break; }
+    for (var w = 0; w < WANT.length && !hostBtn; w++) {
+      for (var i = 0; i < all.length; i++) {
+        if (WANT[w].test(all[i].getAttribute('onclick') || '')) { hostBtn = all[i]; break; }
+      }
     }
     if (!hostBtn || !hostBtn.parentNode) return false;
     var b = document.createElement('button');
@@ -106791,7 +106804,9 @@ table.e3-tbl td{ white-space:normal }
     if (ok) addRegButton();
     if (ok || ++n > 60) {
       clearInterval(iv);
-      if (window.console) console.info(TAG + ' ready \u2014 Insert \u203a Site & Safety \u203a GIS Layers / Parcel Screen, or OmegaGIS.open() / OmegaParcelScreen.open()');
+      if (window.console) console.info(TAG + ' ready \u2014 Insert \u203a Site & Safety \u203a GIS Layers / Parcel Screen'
+        + (document.getElementById('rb-parcel-screen') ? '' : ' (NOT INSTALLED \u2014 no anchor button found)')
+        + ', or OmegaGIS.open() / OmegaParcelScreen.open()');
     }
   }, 500);
 })();
