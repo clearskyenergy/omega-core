@@ -136717,10 +136717,38 @@ function buildGround(site, span){
 
      Falls back to the frozen capture when there is no key, so nothing
      gets worse for a deployment without Static Maps enabled. */
-  var wideSrc = null, wideSpanFt = 0;
+  var wideSrc = null, wideSpanFt = 0, _haveKey = false;
+
+  /* Says which of the two grounds is actually on screen, in the panel, in
+     plain words. Silence here is what made a documented fallback look like a
+     rendering bug. */
+  function _satNote(state){
+    try {
+      var n = document.getElementById('ov-satv');
+      if (!n) return;
+      if (state === 'clean') {
+        n.textContent = 'Server-rendered satellite image \u2014 one piece, no gaps.';
+        n.style.color = '';
+      } else if (state === 'refused') {
+        n.innerHTML = '<b>Using a viewport capture.</b> Static Maps refused the request '
+          + '\u2014 enable "Maps Static API" on the key. The bands of bare colour are map '
+          + 'tiles that had not finished loading when the capture was taken.';
+        n.style.color = '#F0A030';
+      } else {
+        n.innerHTML = '<b>Using a viewport capture.</b> No Google Static Maps key is set, so '
+          + 'the ground is a screenshot of the drawing viewport \u2014 the bands of bare '
+          + 'colour are map tiles that had not finished loading when it was taken, and the '
+          + 'attribution text is baked into the pixels. Add a key with the Maps Static API '
+          + 'enabled for one clean image.';
+        n.style.color = '#F0A030';
+      }
+    } catch(e){}
+  }
+
   try {
     var _key = '';
     try { _key = (window._CFG && _CFG.googleMapsKey) || localStorage.getItem('clearsky_maps_key') || ''; } catch(e){}
+    _haveKey = !!_key;
     /* WHERE IS THIS SITE?
 
        _liveMapState() is null whenever the map is not locked, and the panel
@@ -136783,6 +136811,7 @@ function buildGround(site, span){
       wg.receiveShadow = true;
       V.groundGrp.add(wg);
       V.__wideGroundOk = true;      /* the clean image is down; no screenshot */
+      _satNote('clean');
       V.needsRender = true;
     }, undefined, function(){
       if(window.console) console.warn('[ground] Static Maps refused \u2014 enable "Maps Static API" '
@@ -136853,6 +136882,7 @@ function buildGround(site, span){
   function addCapturePlane(){
     if (_capturePlaced || V.disposed) return;
     _capturePlaced = true;
+    _satNote(_haveKey ? 'refused' : 'nokey');
     _loadCapture();
   }
   window.__omegaAddCapturePlane = addCapturePlane;
@@ -137472,6 +137502,13 @@ function paintSide(){
     +  '<label for="ov-shadow">Cast shadows</label></div>'
     +  '<div class="ov-row"><input type="checkbox" id="ov-sat"' + (V.opts.sat?' checked':'') + '>'
     +  '<label for="ov-sat">Satellite ground</label></div>'
+    /* WHICH GROUND IS ON SCREEN. Two sources produce very different results
+       and the panel said nothing about either, so a striped, gap-ridden
+       ground read as a broken renderer rather than as the documented
+       fallback it is. The frozen capture is an html2canvas screenshot of the
+       drawing viewport: wherever a Google tile had not finished decoding it
+       captures nothing, and those holes are the bands of bare colour. */
+    +  '<div class="ov-im" id="ov-satv" style="margin:2px 0 6px;line-height:1.45"></div>'
     /* Surrounding buildings, pulled from OpenStreetMap footprints. Off by
        default because it is a network call, and because on a rural parcel
        there is nothing to fetch. */
