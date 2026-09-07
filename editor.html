@@ -153156,6 +153156,236 @@ if (root.console && console.info) {
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
+ *  SERVICE TIE-INS — YOU PLACE THEM, BECAUSE YOU ARE THE ONE WHO KNOWS
+ *  ---------------------------------------------------------------------
+ *  gasTieIn() drops its marker on whichever parcel edge faces the bearing
+ *  recorded by OmegaGas.setMain(). That is a reasonable first guess and it
+ *  is only ever a guess: the real tie-in is a specific point on a specific
+ *  frontage that somebody finds out from the operator, and until now there
+ *  was no way to say where.
+ *
+ *  Now the button arms a placement mode and the next click on the map sets
+ *  the point. Clicking it again moves the existing marker rather than
+ *  leaving two on the drawing — there is one gas tie-in per site, and a
+ *  second marker is a drawing that disagrees with itself. The auto guess is
+ *  still there on shift-click for a site nobody has surveyed yet.
+ *
+ *  ── AND FIBRE, WHICH WAS MISSING ────────────────────────────────────
+ *  Tom asked whether there should be a fibre tie-in as well. There should,
+ *  and for a compute site it is arguably the harder one: gas is a cost and
+ *  a schedule item, and fibre is a go/no-go — a data centre with no route
+ *  to a carrier is a building. Network Proximity already answers "how far
+ *  to a carrier hotel"; this marks where the duct actually lands.
+ *
+ *  Both markers are ordinary shapes, so they drag, rotate and export like
+ *  everything else, and both carry their distance as ENTERED rather than
+ *  surveyed — the same provenance rule the rest of the compute build uses.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[OmegaTieIn]';
+  if (root.OmegaTieIn) return;
+
+  var FIBER_KEY = 'fiberRoute';
+  function S_() { try { return (typeof S !== 'undefined') ? S : null; } catch (e) { return null; } }
+  function P() { try { return (S_() && S_().pxPerFt) || 1; } catch (e) { return 1; } }
+  function n1(v) { return (Math.round((+v || 0) * 10) / 10).toLocaleString(); }
+
+  /* ── OmegaFiber, the shape of OmegaGas ──────────────────────────────
+     Deliberately the same interface, because the two answer the same
+     question about different services and a second vocabulary for it would
+     be one more thing to remember at the moment somebody is trying to
+     record a fact. */
+  function fiber() { var s = S_(); return (s && s[FIBER_KEY]) || null; }
+  function setRoute(miles, bearing, provider, note) {
+    var s = S_(); if (!s) return null;
+    var mi = +miles;
+    if (!isFinite(mi) || mi < 0) { delete s[FIBER_KEY]; return null; }
+    s[FIBER_KEY] = {
+      miles: mi, bearing: (bearing || '').toUpperCase() || null,
+      provider: provider || null, note: note || null,
+      source: 'entered', at: Date.now()
+    };
+    try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
+    try { if (root.OmegaComputeHUD) root.OmegaComputeHUD.refresh(); } catch (e) {}
+    if (typeof showBanner === 'function') {
+      showBanner('cal', 'Fibre route recorded \u2014 ' + mi.toFixed(1) + ' mi'
+        + (bearing ? ' ' + bearing.toUpperCase() : '')
+        + (provider ? ' \u00b7 ' + provider : '') + '. Marked as entered, not surveyed.');
+    }
+    return s[FIBER_KEY];
+  }
+
+  /* ── the two markers ────────────────────────────────────────────────── */
+  var SPEC = {
+    gas: {
+      flag: 'omegaGasTie', colour: '#F59E0B', word: 'gas',
+      label: function () {
+        var g = null, dem = null;
+        try { g = root.OmegaGas && root.OmegaGas.main(); } catch (e) {}
+        try { dem = root.OmegaGas && root.OmegaGas.demand(); } catch (e) {}
+        return 'GAS TIE-IN'
+          + (dem ? ' \u00b7 ' + n1(dem.mmbtuHr) + ' MMBtu/hr' : '')
+          + (g ? ' \u00b7 ' + n1(g.miles) + ' mi ' + (g.bearing || '') : ' \u00b7 main not recorded');
+      }
+    },
+    fiber: {
+      flag: 'omegaFiberTie', colour: '#22D3EE', word: 'fibre',
+      label: function () {
+        var f = fiber();
+        return 'FIBRE TIE-IN'
+          + (f && f.provider ? ' \u00b7 ' + f.provider : '')
+          + (f ? ' \u00b7 ' + n1(f.miles) + ' mi ' + (f.bearing || '') : ' \u00b7 route not recorded');
+      }
+    }
+  };
+
+  function existing(kind) {
+    var s = S_(); if (!s || !s.shapes) return null;
+    for (var i = 0; i < s.shapes.length; i++) if (s.shapes[i][SPEC[kind].flag]) return s.shapes[i];
+    return null;
+  }
+
+  /* ONE PER SITE. Placing again MOVES the marker; it does not add a second.
+     Two gas tie-ins on one drawing is a drawing that disagrees with itself,
+     and the person reading it cannot tell which one the pipe goes to. */
+  function put(kind, pt) {
+    var s = S_(); if (!s) return null;
+    var spec = SPEC[kind];
+    var sh = existing(kind);
+    var text = spec.label();
+    if (sh) {
+      var dx = pt.x - sh.pts[0].x, dy = pt.y - sh.pts[0].y;
+      sh.pts = sh.pts.map(function (q) { return { x: q.x + dx, y: q.y + dy }; });
+      sh.text = text;
+      /* The anchor moved, so anything that stamped ground coordinates from
+         the old pixels is stale. Drop them and let the stamper re-anchor. */
+      try { delete sh._geoPts; } catch (e) {}
+    } else {
+      sh = {
+        id: (typeof uid === 'function' ? uid() : kind + Date.now()),
+        kind: 'callout',
+        pts: [{ x: pt.x, y: pt.y }, { x: pt.x + 90 * P(), y: pt.y - 40 * P() }],
+        text: text, color: spec.colour,
+        scaled: !!(s.pxPerFt > 0), omegaCompute: true
+      };
+      sh[spec.flag] = true;
+      s.shapes.push(sh);
+    }
+    try {
+      if (typeof renderShape === 'function') renderShape(sh);
+      if (typeof updShapeCount === 'function') updShapeCount();
+      if (typeof pushHist === 'function') pushHist();
+    } catch (e) {}
+    return sh;
+  }
+
+  /* ── arming a click ─────────────────────────────────────────────────
+     A one-shot capture listener rather than a new entry in the editor's
+     mode table: the mode dispatcher is wrapped by several patches already
+     and adding a fourth wrapper to it is how one of them stops running. */
+  var armed = null;
+  function arm(kind) {
+    disarm();
+    armed = kind;
+    var sc = document.getElementById('sc') || document.getElementById('cov');
+    if (!sc) return false;
+    document.body.style.cursor = 'crosshair';
+    if (typeof showBanner === 'function') {
+      showBanner('cal', 'Click where the ' + SPEC[kind].word + ' ties in \u00b7 ESC cancels');
+    }
+    sc.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKey, true);
+    return true;
+  }
+  function disarm() {
+    armed = null;
+    document.body.style.cursor = '';
+    var sc = document.getElementById('sc') || document.getElementById('cov');
+    if (sc) sc.removeEventListener('click', onClick, true);
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(e) {
+    if (e.key !== 'Escape') return;
+    disarm();
+    if (typeof showBanner === 'function') showBanner('cal', 'Tie-in placement cancelled.');
+  }
+  function onClick(e) {
+    if (!armed) return;
+    var kind = armed;
+    e.preventDefault(); e.stopPropagation();
+    var pt;
+    try { pt = _scPt(e); } catch (err) { disarm(); return; }
+    disarm();
+    var sh = put(kind, pt);
+    if (sh && typeof showBanner === 'function') {
+      showBanner('cal', SPEC[kind].word.charAt(0).toUpperCase() + SPEC[kind].word.slice(1)
+        + ' tie-in set. Drag it to fine-tune; the distance beside it is entered, not surveyed.');
+    }
+  }
+
+  root.OmegaTieIn = {
+    place: arm, put: put, cancel: disarm,
+    gas: function () { return arm('gas'); },
+    fiber: function () { return arm('fiber'); },
+    fiberRoute: fiber, setFiberRoute: setRoute
+  };
+  root.OmegaFiber = { route: fiber, setRoute: setRoute,
+    clear: function () { var s = S_(); if (s) delete s[FIBER_KEY]; return true; } };
+
+  /* ── buttons ────────────────────────────────────────────────────────── */
+  function btn(id, icon, colour, label, title, fn, after) {
+    if (document.getElementById(id)) return false;
+    var host = document.getElementById(after);
+    if (!host || !host.parentNode) return false;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = id; b.title = title; b.onclick = fn;
+    b.innerHTML = '<span class="rb-ico" style="color:' + colour + '">' + icon + '</span>'
+      + '<span class="rb-lbl">' + label + '</span>';
+    host.parentNode.insertBefore(b, host.nextSibling);
+    return true;
+  }
+
+  function inject() {
+    var made = false;
+    /* Take over the existing Gas Tie-In button rather than adding a second.
+       Plain click places by hand; shift-click keeps the edge guess for a
+       site nobody has been to yet. */
+    var g = document.getElementById('rb-gas-tie');
+    if (g && !g.__tieIn) {
+      g.__tieIn = true;
+      g.title = 'Gas Tie-In \u2014 click, then click the map where the service ties in. '
+              + 'Shift-click to drop it on the edge facing the recorded main instead.';
+      g.onclick = function (e) {
+        if (e && e.shiftKey) { try { return root.OmegaMaxFit && root.OmegaMaxFit.gasTieIn(); } catch (err) {} }
+        return arm('gas');
+      };
+      made = true;
+    }
+    made = btn('rb-fiber-tie', '\u2632', '#22D3EE', 'Fibre<br>Tie-In',
+      'Fibre Tie-In \u2014 click, then click the map where the duct lands. '
+      + 'Record the route with OmegaFiber.setRoute(miles, "S", "provider") so the '
+      + 'distance prints beside it. For a compute site this is a go/no-go, not a cost line.',
+      function () { return arm('fiber'); }, 'rb-gas-tie') || made;
+    return made;
+  }
+
+  function boot() {
+    var n = 0, iv = setInterval(function () {
+      if (inject() && document.getElementById('rb-fiber-tie')) { clearInterval(iv); }
+      if (++n > 60) clearInterval(iv);
+    }, 600);
+    if (root.console) {
+      console.info(TAG + ' ready \u2014 OmegaTieIn.gas() / .fiber(), OmegaFiber.setRoute(mi, bearing, provider)');
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
  *  OMEGA PATCH 63 — THE VIDEO 4 BUILD
  *  ---------------------------------------------------------------------
  *  What Fits answers "how much could this parcel carry", and on a large
