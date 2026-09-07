@@ -2526,6 +2526,10 @@ window._omegaReady = function(){
      Tenant-neutral; belongs upstream beside omega-assets.js. -->
 <script src="/omega-fleet.js"></script>
 <script src="/omega-tools.js?v=9"></script>
+<!-- ONE New Project dialog for every page that has one. There were two,
+     behind the same button and the same function names, and they wrote
+     different documents. -->
+<script src="/omega-newproject.js"></script>
 
 <script>
 // ══════════════════════════════════════════════════════════════════════
@@ -4602,163 +4606,37 @@ function pmSoon(name, el) {
 window.pmSoon = pmSoon;
 
 // ══════════ NEW PROJECT MODAL ══════════
-/* SITE SCOPES — what a project can contain. Order here is the render order
-   and, deliberately, also the precedence order used by primaryType(): the
-   thing that most defines a site sits first.
+/* The dialog, the scope table and the write live in /omega-newproject.js.
+   There used to be a full copy here and a DIFFERENT, older copy in
+   projects.html — same ids, same function names, one asking "pick everything
+   this site includes" and the other offering a single <select>. Which product
+   you got depended on which page you clicked from, and a project made on the
+   other page opened without the build its scopes would have chosen.
 
-   `key` is written into siteScopes and is permanent once projects carry it.
-   `legacy` is what that scope collapses to in the old single `type` field —
-   several map onto themselves, and DER/Solar maps to 'solar' because that is
-   the value already in every existing solar project and in the doughnut's
-   colour map. Changing it would orphan the chart, not improve it.
-
-   `opens` is the phrase used in the "Opens with …" line. It describes the
-   EDITOR, so if the editor's tooling changes these are the strings to fix. */
-var NP_SCOPES = [
-  { key:'der',       legacy:'solar',     label:'DER / Solar',
-    desc:'PV, wind, generation on site',        opens:'solar & DER layout' },
-  { key:'bess',      legacy:'bess',      label:'Storage / BESS',
-    desc:'Batteries, PCS, EMS',                 opens:'BESS build + sizer' },
-  { key:'compute',   legacy:'compute',   label:'Data centre / Compute',
-    desc:'Compute blocks, load profile',        opens:'compute blocks + load profile' },
-  { key:'dcfc',      legacy:'dcfc',      label:'DCFC',
-    desc:'480V 3\u00D8 fast charging',          opens:'DC fast-charging layout' },
-  { key:'l2',        legacy:'l2',        label:'Level 2 EV',
-    desc:'240V 1\u00D8 off an existing service',opens:'Level 2 charging layout' },
-  { key:'microgrid', legacy:'microgrid', label:'Microgrid',
-    desc:'Islanding, transfer, critical loads', opens:'microgrid one-line' }
-];
-
-var npSelected = {};
-
-/* The legacy single `type`, derived rather than asked for. First scope in
-   NP_SCOPES order wins, so a solar + storage + charging site reads as
-   'solar' — the same answer the old dropdown would have given for the same
-   site, which is what keeps historical charts comparable. */
-function npPrimaryType() {
-  for (var i = 0; i < NP_SCOPES.length; i++) {
-    if (npSelected[NP_SCOPES[i].key]) return NP_SCOPES[i].legacy;
-  }
-  return 'other';
-}
-
-function npSelectedKeys() {
-  var out = [];
-  for (var i = 0; i < NP_SCOPES.length; i++) {
-    if (npSelected[NP_SCOPES[i].key]) out.push(NP_SCOPES[i].key);
-  }
-  return out;
-}
-
-function npPaintOpens() {
-  var el = document.getElementById('np-opens');
-  if (!el) return;
-  var parts = [];
-  for (var i = 0; i < NP_SCOPES.length; i++) {
-    if (npSelected[NP_SCOPES[i].key]) parts.push(NP_SCOPES[i].opens);
-  }
-  if (!parts.length) {
-    el.className = 'np-opens none';
-    el.textContent = 'Pick at least one, so the editor knows which tools to open with.';
-    return;
-  }
-  el.className = 'np-opens';
-  var list = parts.length === 1 ? parts[0]
-           : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
-  el.textContent = 'Opens with ' + list + '.';
-}
-
-function npToggle(key) {
-  npSelected[key] = !npSelected[key];
-  var b = document.querySelector('.np-type[data-k="' + key + '"]');
-  if (b) {
-    b.classList.toggle('on', !!npSelected[key]);
-    b.setAttribute('aria-pressed', npSelected[key] ? 'true' : 'false');
-  }
-  npPaintOpens();
-}
-
-function npRenderTypes() {
-  var host = document.getElementById('np-types');
-  if (!host || host.getAttribute('data-built')) return;
-  var html = '';
-  for (var i = 0; i < NP_SCOPES.length; i++) {
-    var s = NP_SCOPES[i];
-    html += '<button type="button" class="np-type" data-k="' + s.key + '" aria-pressed="false">'
-          + '<b>' + escHtml(s.label) + '</b><span>' + escHtml(s.desc) + '</span></button>';
-  }
-  host.innerHTML = html;
-  var btns = host.querySelectorAll('.np-type');
-  for (var j = 0; j < btns.length; j++) {
-    (function (b) {
-      b.onclick = function () { npToggle(b.getAttribute('data-k')); };
-    })(btns[j]);
-  }
-  host.setAttribute('data-built', '1');
-}
-
-function openNewProjectModal(type) {
-  npRenderTypes();
-
-  /* Callers still pass a single seed type — the quick link passes 'bess',
-     the tool registry passes 'bess' or 'sandbox'. Seed the matching card and
-     let the user add to it. 'sandbox' matches nothing, which is correct: a
-     sandbox is deliberately undecided, and the "pick at least one" line asks
-     rather than assuming a battery. */
-  npSelected = {};
-  for (var i = 0; i < NP_SCOPES.length; i++) {
-    var s = NP_SCOPES[i];
-    if (s.key === type || s.legacy === type) npSelected[s.key] = true;
-  }
-  var btns = document.querySelectorAll('#np-types .np-type');
-  for (var j = 0; j < btns.length; j++) {
-    var on = !!npSelected[btns[j].getAttribute('data-k')];
-    btns[j].classList.toggle('on', on);
-    btns[j].setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-  npPaintOpens();
-
-  document.getElementById('new-proj-modal').classList.add('on');
-  setTimeout(function(){ document.getElementById('np-name').focus(); }, 100);
-}
-
-function closeNewProjectModal() {
-  document.getElementById('new-proj-modal').classList.remove('on');
-}
-
-async function createProject() {
-  const name = document.getElementById('np-name').value.trim();
-  const addr = document.getElementById('np-addr').value.trim();
-  const client = document.getElementById('np-client').value.trim();
-  const siteScopes = npSelectedKeys();
-  const type = npPrimaryType();
-  if (!name) { alert('Please enter a project name.'); return; }
-  if (!siteScopes.length) {
-    alert('Pick at least one project type, so the editor knows which tools to open with.');
-    return;
-  }
-
-  try {
-    const ref = await db.collection('projects').add({
-      uid: currentUser.uid,
-      orgId: currentOrg,   // tenant tag — enforced by Firestore security rules
-      ownerEmail: (currentUser.email||'').toLowerCase(),  // per-user scope key ("My Projects")
-      ownerName: _meName(),                                 // friendly owner label for tables
-      name, address: addr, type, client,
-      /* The full picture. `type` above is the one-word legacy summary that
-         existing rollups read; this is what the site actually contains. */
-      siteScopes: siteScopes,
-      stage: 'candidate', // seed pipeline stage so the dashboard can roll it up
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      elements: [], conduits: [], bessList: [], annotations: []
+   This supplies only what differs per page and must never be guessed: the
+   tenant the project belongs to, and the owner label. */
+(function () {
+  function boot() {
+    if (!window.OmegaNewProject) return false;
+    window.OmegaNewProject.configure({
+      db: window.db,
+      auth: window.auth,
+      orgId: function () { return window.currentOrg || ''; },
+      ownerName: function () {
+        var u = window.currentUser || ((window.auth && auth.currentUser) || null);
+        return (window._meName && _meName())
+            || (u && (u.displayName || String(u.email || '').split('@')[0])) || '';
+      },
+      afterCreate: function (id) { openProject(id); }
     });
-    closeNewProjectModal();
-    openProject(ref.id);
-  } catch(e) {
-    alert('Error creating project: ' + e.message);
+    return true;
   }
-}
+  if (!boot()) {
+    var n = 0, iv = setInterval(function () {
+      if (boot() || ++n > 40) clearInterval(iv);
+    }, 150);
+  }
+})();
 
 function openProject(id) {
   // Pass the resolved tenant slug so the editor brands correctly on a fresh

@@ -682,6 +682,10 @@ window._omegaReady = function(){
      had the populator and not the module, so that submenu could never have
      had anything in it. -->
 <script src="/omega-tools.js?v=9"></script>
+<!-- ONE New Project dialog for every page that has one. There were two,
+     behind the same button and the same function names, and they wrote
+     different documents. -->
+<script src="/omega-newproject.js"></script>
 <script>
 const CFG = window.CLEARSKY_CONFIG;
 firebase.initializeApp(CFG.firebase);
@@ -975,81 +979,49 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 })();
 </script>
 
-<!-- ══ NEW PROJECT MODAL (projects page → straight to editor) ══ -->
-<div class="modal-bg" id="new-proj-modal" onclick="if(event.target===this)closeNewProjectModal()">
-  <div class="modal">
-    <h3>New Project</h3>
-    <div class="mrow">
-      <label>Project / Site Name</label>
-      <input id="np-name" placeholder="e.g. Riverside BESS 5MWh" autofocus>
-    </div>
-    <div class="mrow">
-      <label>Site Address</label>
-      <input id="np-addr" placeholder="e.g. 1234 Main St, Clinton, IA 52732">
-    </div>
-    <div class="mrow">
-      <label>Project Type</label>
-      <select id="np-type">
-        <option value="bess">BESS – Battery Energy Storage System</option>
-        <option value="dcfc">DCFC – DC Fast Charging</option>
-        <option value="solar">Solar + Storage</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-    <div class="mrow">
-      <label>Client / Customer</label>
-      <input id="np-client" placeholder="e.g. City of Clinton">
-    </div>
-    <div class="mbtns">
-      <button class="mb-cancel" onclick="closeNewProjectModal()">Cancel</button>
-      <button class="mb-create" onclick="createProject()">Create &amp; Open Editor →</button>
-    </div>
-  </div>
-</div>
-
+<!-- ══ NEW PROJECT MODAL ══
+     Built by /omega-newproject.js. There used to be a copy of this markup
+     here with a single <select> for project type, while index.html carried a
+     multi-select that wrote siteScopes — same ids, same function names,
+     different product depending on which page you clicked from. A project
+     created here opened in the editor without the build its scopes would
+     have chosen. One dialog now, and this page no longer owns it. -->
 <script>
-/* ══ NEW PROJECT (projects page) — create doc, jump straight to the BESS SiteMap editor ══ */
-function openNewProjectModal(type){
-  var sel = document.getElementById('np-type');
-  if (sel && type) sel.value = type;
-  document.getElementById('new-proj-modal').classList.add('on');
-  setTimeout(function(){ var n=document.getElementById('np-name'); if(n) n.focus(); }, 80);
-}
-function closeNewProjectModal(){
-  document.getElementById('new-proj-modal').classList.remove('on');
-}
-async function createProject(){
-  var name = (document.getElementById('np-name').value||'').trim();
-  var addr = (document.getElementById('np-addr').value||'').trim();
-  var type = document.getElementById('np-type').value;
-  var client = (document.getElementById('np-client').value||'').trim();
-  if (!name){ alert('Please enter a project name.'); return; }
-  var user = (auth && auth.currentUser) || null;
-  if (!user){ alert('You need to be signed in.'); return; }
-  try {
-    var ownerName = (window._projMeName && _projMeName()) || (user.displayName || (user.email||'').split('@')[0]);
-    var ref = await db.collection('projects').add({
-      uid: user.uid,
-      orgId: WS.orgId,
-      ownerEmail: (user.email||'').toLowerCase(),
-      ownerName: ownerName,
-      name: name, address: addr, type: type, client: client,
-      stage: 'candidate',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      elements: [], conduits: [], bessList: [], annotations: []
+/* ══ NEW PROJECT ══
+   The dialog, the scope model and the write all live in
+   /omega-newproject.js. This supplies only the two things that differ per
+   page and that must never be guessed: which tenant the project belongs to,
+   and what to call the owner. Getting orgId wrong writes a project into
+   somebody else's list, and Firestore would accept it because the writer
+   really is signed in. */
+(function () {
+  function boot() {
+    if (!window.OmegaNewProject) return false;
+    window.OmegaNewProject.configure({
+      db: window.db,
+      auth: window.auth,
+      orgId: function () { return (window.WS && WS.orgId) || ''; },
+      ownerName: function () {
+        var u = (window.auth && auth.currentUser) || null;
+        return (window._projMeName && _projMeName())
+            || (u && (u.displayName || String(u.email || '').split('@')[0])) || '';
+      },
+      afterCreate: function (id) {
+        /* Straight into the editor, branded for this tenant. */
+        var slug = (window.WS && WS.allowedDomain) ? String(WS.allowedDomain).split('.')[0] : '';
+        var url = '/editor.html?id=' + encodeURIComponent(id);
+        if (slug) url += '&org=' + encodeURIComponent(slug);
+        window.location.href = url;
+      }
     });
-    closeNewProjectModal();
-    // Straight into the BESS SiteMap editor, branded for this tenant.
-    var slug = (WS.allowedDomain) ? String(WS.allowedDomain).split('.')[0] : '';
-    var url = '/editor.html?id=' + encodeURIComponent(ref.id);
-    if (slug) url += '&org=' + encodeURIComponent(slug);
-    window.location.href = url;
-  } catch(e){
-    alert('Error creating project: ' + e.message);
+    return true;
   }
-}
-
+  if (!boot()) {
+    var n = 0, iv = setInterval(function () {
+      if (boot() || ++n > 40) clearInterval(iv);
+    }, 150);
+  }
+})();
 </script>
 <script>
 /* Sidebar gates, mirroring index.html. Duplicated rather than shared because

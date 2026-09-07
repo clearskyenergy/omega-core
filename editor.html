@@ -153302,6 +153302,7 @@ if (root.console && console.info) {
       var dx = pt.x - sh.pts[0].x, dy = pt.y - sh.pts[0].y;
       sh.pts = sh.pts.map(function (q) { return { x: q.x + dx, y: q.y + dy }; });
       sh.text = text;
+      sh.manual = true;
       /* The anchor moved, so anything that stamped ground coordinates from
          the old pixels is stale. Drop them and let the stamper re-anchor. */
       try { delete sh._geoPts; } catch (e) {}
@@ -153314,6 +153315,9 @@ if (root.console && console.info) {
         scaled: !!(s.pxPerFt > 0), omegaCompute: true
       };
       sh[spec.flag] = true;
+      /* Placed by a person, so the engine's clearAll() leaves it alone on
+         the next rebuild — see the note there. */
+      sh.manual = true;
       s.shapes.push(sh);
     }
     try {
@@ -155121,7 +155125,12 @@ if (root.console && console.info) {
       var has = (S.shapes || []).some(function (x) { return x && x.kind === 'substation'; });
       if (!has && s.utilKw > 0 && root.OmegaComputePlace.placeSubstation) root.OmegaComputePlace.placeSubstation();
     } catch (e) {}
-    if (s.gen) { try { if (root.OmegaMaxFit) root.OmegaMaxFit.gasTieIn(); } catch (e) {} }
+    /* Only guess a gas tie-in if nobody has set one. */
+    if (s.gen) {
+      var hasGas = false;
+      try { hasGas = (S.shapes || []).some(function (x) { return x && x.omegaGasTie; }); } catch (e) {}
+      if (!hasGas) { try { if (root.OmegaMaxFit) root.OmegaMaxFit.gasTieIn(); } catch (e) {} }
+    }
 
     /* Hand the result to everything that draws from it. */
     root._omegaComputePlaced = {
@@ -155271,8 +155280,20 @@ if (root.console && console.info) {
   function clearAll() {
     var keep = [], removed = 0;
     (S.shapes || []).forEach(function (sh) {
+      /* ── A TIE-IN YOU PLACED SURVIVES A REBUILD ──────────────────────
+         omegaGasTie was in this list, so every Design Site run wiped the
+         gas marker and re-guessed it on a parcel edge. That is fine for the
+         auto guess and wrong for the whole point of placing one by hand:
+         the reason you set the point is that somebody found out where the
+         service actually ties in, and a re-run must not throw that away.
+
+         Anything flagged `manual` is a fact the person entered, not output
+         the engine owns. omegaFiberTie is listed too — it was missing
+         entirely, so an auto fibre marker would have outlived every
+         rebuild and quietly become a permanent fixture. */
       var mine = sh && (sh.omegaCompute || sh.autoLayout || sh.omegaYard
-        || sh.omegaSolarZone || sh.omegaGasTie);
+        || sh.omegaSolarZone || sh.omegaGasTie || sh.omegaFiberTie);
+      if (mine && sh.manual) mine = false;
       if (mine) {
         removed++;
         try {
