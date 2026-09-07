@@ -1063,8 +1063,36 @@ function ready(){ var e=document.getElementById('boot');
   if(!e||e.classList.contains('hide'))return; e.classList.add('hide');
   setTimeout(function(){ e.parentNode&&e.parentNode.removeChild(e); },320); }
 
+/* ── A SPINNER THAT NEVER STOPS IS THE WORST FAILURE MODE ────────────
+   This polled every 120 ms for the Firebase SDK and CLEARSKY_CONFIG and
+   retried forever if either never arrived. When /tenants/osa/config.js was
+   excluded from the deployment the page sat on "Loading portfolio..."
+   indefinitely — no error, no timeout, nothing in the console, and nothing
+   to tell a user that the problem was a missing file rather than their
+   account or their connection.
+
+   Ten seconds is far longer than a cold load needs and far shorter than
+   forever. After that it says which dependency is missing, which turns an
+   unreportable hang into something anyone can act on. */
+var _bootTries = 0;
 (function boot(){
-  if (typeof firebase==='undefined' || !window.CLEARSKY_CONFIG){ setTimeout(boot,120); return; }
+  if (typeof firebase==='undefined' || !window.CLEARSKY_CONFIG){
+    if (++_bootTries > 80) {
+      var miss = [];
+      if (typeof firebase==='undefined') miss.push('the Firebase SDK');
+      if (!window.CLEARSKY_CONFIG)       miss.push('/tenants/osa/config.js');
+      var t = document.querySelector('#boot .boot-txt');
+      if (t) {
+        t.innerHTML = 'Could not start \u2014 ' + miss.join(' and ') + ' failed to load.'
+          + '<br><span style="opacity:.72;font-size:12px">This is a deployment problem, '
+          + 'not a sign-in problem. Reloading will not help.</span>';
+      }
+      var sp = document.querySelector('#boot .spin'); if (sp) sp.style.display = 'none';
+      if (window.console) console.error('[portfolio] boot aborted; missing: ' + miss.join(', '));
+      return;
+    }
+    setTimeout(boot,120); return;
+  }
   try { firebase.initializeApp(window.CLEARSKY_CONFIG.firebase); }
   catch(e){ if(!/already exists/.test(e.message)) console.error('Firebase init:',e); }
   auth=firebase.auth(); db=firebase.firestore();

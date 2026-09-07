@@ -2,6 +2,15 @@ scripts/
 docs/
 workers/
 tenants/*/config.js
+# ...except OSA's, which is not a legacy fallback but the portal's only
+# source of CLEARSKY_CONFIG. tenants/osa/portfolio.html boots by polling
+# for that global and retrying every 120 ms until it appears, so with the
+# file excluded the page spins on "Loading portfolio..." forever — no
+# error, no timeout, nothing in the console. The blanket pattern came in
+# with the 16-repo consolidation and took this one with it by accident.
+# It carries no secrets: the Firebase web config is public by design, and
+# the commercial fields (defaultFeeBasis, closedUsdPerYear) are empty.
+!tenants/osa/config.js
 tenants/*/*.rules
 tenants/*/*.md
 *.md
