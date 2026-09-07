@@ -8719,6 +8719,21 @@ function renderEl(el){
      it. setFuture writes both, so either one is enough. */
   const _elFuture = !!(el.evFuture || el.futureProof);
   if(_elFuture) wrap.classList.add('cel-future');
+  /* ── ONE PALETTE, BOTH RENDERERS ───────────────────────────────────
+     A charger reaches this function down two entirely separate paths. One
+     placed from the Insert palette is type 'eq'; one placed by a guided
+     build is type 'evgear', and each branch draws its own bollard-island
+     SVG with its own hardcoded colours. Recolouring only the 'eq' branch
+     meant that on a guided-build job — which is most of them — ticking
+     "Future-proofed stall" changed the legend and left the pad exactly as
+     orange as the stalls going in next week. It looked like the click did
+     nothing.
+
+     Decided once, here, above the branch, so the next person to touch
+     either renderer cannot recolour half of it again. */
+  const _padK = _elFuture
+    ? { edge:'#A855F7', hatch:'#7C3AED' }
+    : { edge:'#F4A020', hatch:'#2F7FE0' };
   wrap.style.cssText=`left:${el.x}px;top:${el.y}px;`;
 
   let inner='';
@@ -8736,19 +8751,12 @@ function renderEl(el){
        are what the estimate counts. */
     const _padOn = (el.eqId==='charger') && (el.bollardPad !== false)
                    && (window.OMEGA_EV_PAD !== false);
-    /* THE ISLAND STAYS, THE COLOUR CARRIES THE PHASE.
-       The pad is the stall footprint, and a future-proofed position still
-       occupies one — the concrete, the trench and the conduit are going in
-       now, which is the whole point of marking it. Taking the island away
-       would hide the part that IS being built.
-
-       So the phase is said in colour instead: amber island = installing
-       now, purple island = future position. Purple because nothing else on
-       this drawing uses it, so it cannot be confused with the amber pads
-       beside it, the blue hatching inside them, or a selection outline. */
-    const _padK = _elFuture
-      ? { edge:'#A855F7', hatch:'#7C3AED' }
-      : { edge:'#F4A020', hatch:'#2F7FE0' };
+    /* THE ISLAND STAYS, THE COLOUR CARRIES THE PHASE. The pad is the stall
+       footprint, and a future-proofed position still occupies one — the
+       concrete, the trench and the conduit go in now, which is the whole
+       point of marking it. Taking the island away would hide the part that
+       IS being built, so amber = installing now, purple = future position.
+       _padK is decided once at the top of renderEl for both branches. */
     const _pad = _padOn ? (function(){
       // Clearance in FEET, defaulting to a real bollard setback. See the
       // note in the evgear branch: taking a fraction of the DRAWN size made
@@ -8835,10 +8843,10 @@ function renderEl(el){
         + ' style="position:absolute;left:'+(-_pg)+'px;top:'+(-_pg)+'px;transform:rotate('+(el.rot||0)+'deg);'
         + 'transform-origin:center;pointer-events:none;z-index:0" aria-hidden="true">'
         + '<defs><pattern id="'+_pid+'" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
-        + '<line x1="0" y1="0" x2="0" y2="9" stroke="#2F7FE0" stroke-width="2.4"/></pattern></defs>'
-        + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="#F4A020" fill-opacity=".30"/>'
+        + '<line x1="0" y1="0" x2="0" y2="9" stroke="'+_padK.hatch+'" stroke-width="2.4"/></pattern></defs>'
+        + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="'+_padK.edge+'" fill-opacity=".30"/>'
         + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="url(#'+_pid+')" fill-opacity=".85"/>'
-        + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="none" stroke="#F4A020" stroke-width="3"/>'
+        + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="none" stroke="'+_padK.edge+'" stroke-width="3"/>'
         + '</svg>';
     }
     inner=_evPad+'<div class="elbody evgear-node" style="position:relative;z-index:1;width:'+gw+'px;height:'+gh+'px;transform:rotate('+(el.rot||0)+'deg)'+flip+';transform-origin:center">'
@@ -146718,8 +146726,17 @@ function markAll(v){
 function refresh(){
   try {
     if (typeof _reRenderEl === 'function') {
+      /* isCharger(), not a hand-rolled eqId test. A charger placed by a
+         guided build is type 'evgear' and carries evKind, NOT eqId — so an
+         eqId-only filter re-rendered palette chargers and silently skipped
+         every guided-build one, which on an EV job is most of them. Ticking
+         the box updated the legend and left the drawing untouched, so it
+         read as the click doing nothing at all. This module already owns
+         the definition of what a charger is; use it rather than keeping a
+         second one here that can drift. */
       (S.elements || []).forEach(function (e) {
-        if (e && (e.eqId === 'charger' || e.eqId === 'bollard')) {
+        if (!e) return;
+        if (isCharger(e) || e.eqId === 'bollard') {
           try { _reRenderEl(e.id); } catch (err) {}
         }
       });
