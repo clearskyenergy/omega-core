@@ -153262,6 +153262,170 @@ if (root.console && console.info) {
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════
+ *  LOCK — DOUBLE-CLICK A SHAPE TO PIN IT DOWN
+ *  ---------------------------------------------------------------------
+ *  Tom: "the boundary we draw is being moved... we need to be able to layer
+ *  that properly at the bottom or allow it to be locked and have a way we
+ *  can double click to lock or unlock the boundary."
+ *
+ *  Right on both counts. The mover's KEEP_PUT list filters by KIND, and a
+ *  traced boundary is a polyline or a rect carrying isSiteBoundary — its
+ *  kind is never 'boundary'. So the one shape that must never move was the
+ *  one the filter could not see: rotating the site took the property line
+ *  with it, and everything then looked correct relative to itself and wrong
+ *  relative to the ground.
+ *
+ *  isSiteBoundary is now excluded outright, because a parcel is not
+ *  equipment and there is no version of "rearrange the build" that should
+ *  move it. `locked` is the general form of the same idea, for the exclusion
+ *  you traced round a wetland or the pad somebody surveyed: a fact about the
+ *  site rather than something to be packed.
+ *
+ *  AND IT GOES TO THE BOTTOM. Shapes paint in array order, so a locked shape
+ *  is moved to the front of the array — which puts it UNDER everything else,
+ *  where a parcel line belongs. Unlocking does not bring it back up; you
+ *  pinned it because it is background, and having it leap over the equipment
+ *  the moment you unpin it would be a surprise.
+ *
+ *  Console: OmegaLock.toggle(id) / .lock(id) / .unlock(id) / .list()
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[OmegaLock]';
+  if (root.OmegaLock) return;
+
+  function S_() { try { return (typeof S !== 'undefined') ? S : null; } catch (e) { return null; } }
+  function find(id) {
+    var s = S_(); if (!s) return null;
+    var i;
+    for (i = 0; i < (s.shapes || []).length; i++) if (String(s.shapes[i].id) === String(id)) return s.shapes[i];
+    for (i = 0; i < (s.elements || []).length; i++) if (String(s.elements[i].id) === String(id)) return s.elements[i];
+    return null;
+  }
+
+  function sink(sh) {
+    var s = S_(); if (!s || !s.shapes) return;
+    var i = s.shapes.indexOf(sh);
+    if (i > 0) { s.shapes.splice(i, 1); s.shapes.unshift(sh); }
+  }
+
+  /* The cue has to survive a re-render, so it is applied to the rendered
+     group rather than baked into the shape's own style — renderShape rebuilds
+     that group from scratch every time. */
+  function paintOne(sh) {
+    try {
+      if (typeof renderShape === 'function' && sh.pts) renderShape(sh);
+      var g = document.querySelector('#csvg [data-shid="' + sh.id + '"]');
+      if (!g) return;
+      if (sh.locked) {
+        g.setAttribute('data-locked', '1');
+        g.style.cursor = 'default';
+        /* Still hit-testable, because double-click is how you unlock it. */
+        g.style.opacity = '0.9';
+      } else {
+        g.removeAttribute('data-locked');
+        g.style.cursor = '';
+        g.style.opacity = '';
+      }
+    } catch (e) {}
+  }
+
+  function repaintAll() {
+    var s = S_(); if (!s) return;
+    (s.shapes || []).forEach(function (sh) { if (sh && sh.locked) paintOne(sh); });
+  }
+
+  function say(msg) {
+    try { if (typeof showBanner === 'function') showBanner('cal', msg); } catch (e) {}
+  }
+  function label(sh) {
+    if (sh.isSiteBoundary) return 'The property line';
+    return (sh.campusLabel || sh.label || sh.model || sh.kind || 'That shape');
+  }
+
+  function set(id, on) {
+    var sh = find(id); if (!sh) return null;
+    sh.locked = !!on;
+    if (sh.locked && sh.pts) sink(sh);
+    paintOne(sh);
+    try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
+    say(label(sh) + (sh.locked
+      ? ' is locked \u2014 it will not move when the site is rearranged. Double-click to unlock.'
+      : ' is unlocked \u2014 it moves with the compartment it belongs to again.'));
+    return sh.locked;
+  }
+  function toggle(id) { var sh = find(id); return sh ? set(id, !sh.locked) : null; }
+
+  /* ── the gesture ────────────────────────────────────────────────────
+     Bound on #csvg in the capture phase and only acted on when the target
+     is inside a rendered shape group. Anything else — a double-click on
+     open ground, on an element, on the map — falls through untouched, so
+     this cannot swallow a gesture another tool wants. */
+  function onDbl(e) {
+    var t = e.target;
+    var g = t && t.closest ? t.closest('[data-shid]') : null;
+    if (!g) return;
+    var id = g.getAttribute('data-shid');
+    var sh = find(id); if (!sh) return;
+    e.preventDefault(); e.stopPropagation();
+    toggle(id);
+  }
+
+  /* The boundary is locked the moment it is designated, because that is
+     what designating it means. Anyone who genuinely wants to move the
+     parcel can double-click it. */
+  function autoLockBoundary() {
+    var s = S_(); if (!s || !s.shapes) return 0;
+    var n = 0;
+    s.shapes.forEach(function (sh) {
+      if (sh && sh.isSiteBoundary && !sh.locked) { sh.locked = true; sink(sh); paintOne(sh); n++; }
+    });
+    return n;
+  }
+
+  function boot() {
+    var svg = document.getElementById('csvg');
+    if (svg && !svg.__omegaLock) {
+      svg.addEventListener('dblclick', onDbl, true);
+      svg.__omegaLock = true;
+    }
+    autoLockBoundary();
+    repaintAll();
+    if (root.console) {
+      console.info(TAG + ' ready \u2014 double-click a shape to lock it. OmegaLock.toggle(id)');
+    }
+  }
+
+  root.OmegaLock = {
+    toggle: toggle,
+    lock: function (id) { return set(id, true); },
+    unlock: function (id) { return set(id, false); },
+    lockBoundary: autoLockBoundary,
+    list: function () {
+      var s = S_(); if (!s) return [];
+      return (s.shapes || []).filter(function (x) { return x && x.locked; })
+        .map(function (x) { return { id: x.id, kind: x.kind, label: label(x) }; });
+    },
+    VERSION: 'lock/1.0'
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  /* The boundary can be traced long after boot, and a project loads later
+     still, so keep checking for a while. */
+  var n = 0, iv = setInterval(function () { boot(); if (++n > 60) clearInterval(iv); }, 1000);
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<style>
+/* A locked shape reads as pinned rather than merely selected: the dashes
+   stay, the stroke gains a soft halo. Not a padlock glyph — at parcel scale
+   an icon lands somewhere arbitrary on a 1,400 ft line. */
+#csvg [data-locked] { filter: drop-shadow(0 0 2px rgba(244,160,32,.75)); }
+</style>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
  *  SERVICE TIE-INS — YOU PLACE THEM, BECAUSE YOU ARE THE ONE WHO KNOWS
  *  ---------------------------------------------------------------------
  *  gasTieIn() drops its marker on whichever parcel edge faces the bearing
@@ -165764,12 +165928,25 @@ if (root.console && console.info) {
     try {
       (S_().shapes || []).forEach(function (x) {
         if (!x || KEEP_PUT[x.kind]) return;
+        /* ── THE PARCEL DOES NOT MOVE WHEN YOU REARRANGE THE SITE ────────
+           KEEP_PUT filters by KIND, and a traced boundary is a polyline or
+           a rect carrying isSiteBoundary — its kind is never 'boundary'. So
+           the one shape on the drawing that must never move was the one
+           thing the filter could not see, and rotating the whole site took
+           the property line with it. Everything then looked right relative
+           to itself and wrong relative to the ground.
+
+           `locked` is the general form of the same idea: anything a person
+           has pinned is a fact about the site, not equipment to be packed.
+           Double-click toggles it — see OmegaLock. */
+        if (x.isSiteBoundary || x.locked) return;
         var g = groupOfShape(x);
         if (!g) return;
         if (key && key !== 'all' && g !== key) return;
         sh.push(x);
       });
       (S_().elements || []).forEach(function (x) {
+        if (x && x.locked) return;
         var g = groupOfElement(x);
         if (!g) return;
         if (key && key !== 'all' && g !== key) return;
