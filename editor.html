@@ -32237,9 +32237,15 @@ function o2MoveTo(){
 }
 
 function _o2Nudge(dxPx, dyPx){
-  var targets = S.o2Multi ? (S.o2Picked||[]).slice() : (function(){
+  var targets = _o2WithFences(S.o2Multi ? (S.o2Picked||[]).slice() : (function(){
     var s=_o2SoleSelection(); return s?[s]:[];
-  })();
+  })());
+  if(!targets.length) return;
+  /* A locked shape or the property line is never dragged along. */
+  targets = targets.filter(function(t){
+    var o = _o2Resolve(t);
+    return o && !o.locked && !o.isSiteBoundary;
+  });
   if(!targets.length) return;
   targets.forEach(function(t){
     if(t.kind==='element'){
@@ -32331,6 +32337,39 @@ function o2Targets(){
                    : (function(){ var s=_o2SoleSelection(); return s?[s]:[]; })();
 }
 
+/* ── THE FENCE COMES WITH WHAT IT FENCES ──────────────────────────────
+   o2 keeps fences in their own class, which is right for the layer chips —
+   you want to count them and switch them off on their own. It is wrong the
+   moment you MOVE something: a compound moved out from under its fence
+   leaves a fence round empty grass, which is worse than not moving it.
+
+   So a move or a rotate expands the selection to include the fence tagged
+   with the campus the selection belongs to. The compound builder writes
+   omegaCampus using the same words, so this is a lookup and not a guess.
+   Class membership is untouched — the chips still count what they counted. */
+var _O2_CAMPUS_OF_KIND = { derdc:'compute', deralt:'generation', derwind:'generation',
+                           bespad:'storage', assembly:'storage',
+                           dersolar:'solar', solar:'solar' };
+
+function _o2WithFences(targets){
+  var tags = {}, seen = {};
+  targets.forEach(function(t){
+    seen[t.kind + ':' + t.id] = 1;
+    if (t.kind !== 'shape') return;
+    var sh = (S.shapes||[]).filter(function(x){ return x.id===t.id; })[0];
+    var tag = sh && _O2_CAMPUS_OF_KIND[sh.kind];
+    if (tag) tags[tag] = 1;
+  });
+  if (!Object.keys(tags).length) return targets;
+  var out = targets.slice();
+  (S.shapes||[]).forEach(function(sh){
+    if (!sh || !sh.omegaCampus || !tags[sh.omegaCampus]) return;
+    if (seen['shape:' + sh.id]) return;
+    out.push({ kind:'shape', id:sh.id });
+  });
+  return out;
+}
+
 function _o2Resolve(t){
   var arr = (t.kind==='element') ? S.elements
           : (t.kind==='conduit') ? S.conduits : S.shapes;
@@ -32349,7 +32388,7 @@ function _o2Centroid(objs){
 }
 
 function _o2Spin(deg){
-  var targets = o2Targets();
+  var targets = _o2WithFences(o2Targets());
   if(!targets.length || !deg) return 0;
 
   var objs = targets.map(_o2Resolve).filter(Boolean).filter(function(o){
