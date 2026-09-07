@@ -1549,10 +1549,22 @@ window._omegaReady = function(){
       </a>
 
       <!-- ══ JOINT DEVELOPMENT ══ Hidden by default, revealed in
-           onAuthStateChanged for the JV orgs. OSA is a separate deployment on
-           its own origin, so the workspace link leaves this app; the partners
-           page below lives here because the agreement, the roster and the
-           responsibilities are about projects in THIS database. -->
+           onAuthStateChanged for the JV orgs. The workspace link leaves this
+           app; the partners page below lives here because the agreement, the
+           roster and the responsibilities are about projects in THIS database.
+
+           ⚠ THE CODE IS HERE, THE DOMAIN IS NOT. tenants/osa/ in omega-core is
+           the canonical OSA console and is ahead of what osa.clearskyomega.com
+           serves — that hostname is still attached to the old Vercel project
+           (checked 2026-09-06: it 404s the whole /api tree, which this one
+           answers). vercel.json already rewrites the host's /, /portfolio and
+           /portfolio.html into tenants/osa/, so moving the domain onto
+           omega-core is a dashboard action with no code change and no dead URL.
+
+           The href stays on the branded host on purpose. Pointing it at
+           /tenants/osa/portfolio would put whoever clicks from here on a
+           different build from the colleague who used their bookmark, and the
+           invitation emails name the branded address. One address, or none. -->
       <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
       <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
       <a class="sn-item" data-sn="osa" id="sn-osa" href="https://osa.clearskyomega.com/" style="display:none">

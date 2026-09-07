@@ -1022,7 +1022,10 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <!-- Storage, for uploading final PDFs onto a deal. Loaded here because without
      it the upload button throws rather than failing gracefully. -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-<script src="/config.js?v=14"></script>
+<!-- THE OSA CONSOLE'S OWN CONFIG — see tenants/osa/index.html. The root
+     /config.js carries no `access` block, so loading it here left
+     ownerEmail() empty and unpinned the owner account. -->
+<script src="/tenants/osa/config.js?v=15"></script>
 <script src="/tenants/osa/forms.js?v=4"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
 <script src="/tenants/osa/portfolio-data.js?v=25"></script>
@@ -3264,13 +3267,97 @@ function doInvite(){
   }).then(function(v){
     if(!v) return;
     var org=v.orgId||A.domainOf(v.email);
-    A.invite(v.email,v.role,org,A.orgName(org)||'',v.manageOrgs,v.note)
-      .then(function(){
-        toast('Invited \u2014 send them the link');
-        return loadInvites();
-      })['catch'](function(e){ toast((e&&e.message)||'Could not invite',true); });
+    inviteThenMail(v.email, function(){
+      return A.invite(v.email,v.role,org,A.orgName(org)||'',v.manageOrgs,v.note);
+    })['catch'](function(e){ toast((e&&e.message)||'Could not invite',true); });
   });
 }
+
+/* ── EMAILING AN INVITATION ───────────────────────────────────
+   Recording an invitation and telling the person about it were two steps, and
+   the second one was a human copying a URL out of a blue banner. Anyone who
+   forgot left an invitation that works perfectly and that nobody knows exists
+   — which is exactly the state Brad, Grant and Terry were found in.
+
+   The browser does NOT send the mail. It asks /api/invite-send to, and that
+   function re-checks the caller's role and refuses unless the invitation
+   already exists in Firestore. So this button cannot grant anything; it can
+   only send an email about a decision that was already recorded.
+
+   ⚠ WHERE THE API ACTUALLY IS. Checked 2026-09-06: /api/* answers on
+   omega-core-alpha.vercel.app and NOWHERE else. osa.clearskyomega.com,
+   alpha.clearskyomega.com and tools.csebuilders.com are each on a different
+   Vercel project and 404 the whole /api tree, so a same-origin fetch from
+   this page cannot work while this console is served from the old
+   deployment. Same origin is tried FIRST anyway, because the day the domain
+   is repointed at omega-core that becomes the right answer with no edit here,
+   and the fallback below retires itself. */
+var _apiBase = null;
+
+function apiPost(path, body){
+  var u; try { u = firebase.auth().currentUser; } catch(e){ u = null; }
+  if(!u) return Promise.reject(new Error('Not signed in.'));
+  var bases = (_apiBase !== null) ? [_apiBase] : ['', 'https://omega-core-alpha.vercel.app'];
+  return u.getIdToken().then(function(tok){
+    return (function next(i){
+      if(i >= bases.length)
+        return Promise.reject(new Error('The mail service is not reachable from this deployment.'));
+      return fetch(bases[i]+path, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+tok },
+        body: JSON.stringify(body||{})
+      }).then(function(r){
+        /* A 404 means this origin does not carry the function at all — a
+           different question from the function refusing us, which is 401/403
+           and must NOT be retried elsewhere. */
+        if(r.status === 404 && i+1 < bases.length) return next(i+1);
+        _apiBase = bases[i];
+        return r.json()['catch'](function(){ return {}; }).then(function(j){
+          if(!r.ok) throw new Error((j && j.error) || ('HTTP '+r.status));
+          return j;
+        });
+      }, function(){ return next(i+1); });   /* network or CORS — try the next */
+    })(0);
+  });
+}
+
+function emailInvite(email){
+  return apiPost('/api/invite-send', { email:email, workspace:'osa' })
+    .then(function(j){
+      if(j && j.sent) return j;
+      throw new Error((j && j.error) || 'The email did not go out.');
+    });
+}
+
+/* Records first, mails second, and says which of the two happened. An invite
+   that saved but did not mail is a good outcome told honestly — the person
+   still lands active, the admin just has to send the link themselves. */
+function inviteThenMail(email, doRecord){
+  return doRecord().then(function(){
+    return emailInvite(email).then(function(j){
+      toast('Invited \u2014 emailed to '+email);
+      return j;
+    }, function(e){
+      toast('Invited, but the email did not send: '+((e&&e.message)||'unknown')
+            +' \u2014 send them the link yourself', true);
+      return null;
+    });
+  }).then(function(){ return loadInvites(); });
+}
+
+function doResendInvite(email){
+  toast('Sending\u2026');
+  emailInvite(email).then(function(){
+    toast('Emailed to '+email);
+    return loadInvites();
+  })['catch'](function(e){ toast((e&&e.message)||'Could not send', true); });
+}
+
+/* THE ADDRESS THIS CONSOLE ANSWERS ON, which is simply the page you are
+   looking at. It was hardcoded as origin+'/portfolio.html', correct only on
+   osa.clearskyomega.com; served from omega-core the same expression names a
+   URL that 404s, and it was going into invitations. */
+function osaUrl(){ return location.origin + location.pathname; }
 
 function doRevokeInvite(email){
   Forms.confirm({ title:'Withdraw the invitation?', intro:email,
@@ -3373,15 +3460,18 @@ function renderInvites(){
   if(!pending.length){ card.style.display='none'; return; }
   card.style.display='';
   document.getElementById('invite-note').innerHTML =
-      '<div class="banner info">Send them <span class="mono">'
-    + esc(location.origin+'/portfolio.html')+'</span>. They sign in with that address and '
-    + 'land active with the role below \u2014 no approval step.</div>';
+      '<div class="banner info">Each of these was emailed the link when it was '
+    + 'recorded. They sign in at <span class="mono">'+esc(osaUrl())+'</span> with that '
+    + 'address and land active with the role below \u2014 no approval step. '
+    + '<b>Email again</b> re-sends it.</div>';
   document.getElementById('invite-rows').innerHTML = pending.map(function(i){
     return '<tr><td class="mono" style="font-size:12.5px">'+esc(i.email)+'</td>'
       + '<td>'+esc(A.roleOf(i.role).label)+'</td>'
       + '<td>'+esc(i.orgName||A.orgName(i.orgId)||i.orgId)+'</td>'
       + '<td class="mono" style="font-size:12px">'+esc(F.fmtDate(i.invitedAt))+'</td>'
-      + '<td><button class="btn-x danger" onclick="doRevokeInvite(\''+esc(i.email)+'\')">'
+      + '<td><button class="btn-x" onclick="doResendInvite(\''+esc(i.email)+'\')">'
+      + 'Email again</button> '
+      + '<button class="btn-x danger" onclick="doRevokeInvite(\''+esc(i.email)+'\')">'
       + 'Withdraw</button></td></tr>'; }).join('');
 }
 
@@ -3405,9 +3495,9 @@ function doInviteStaff(email,name){
     submitLabel:'Record the invitation'
   }).then(function(v){
     if(!v) return;
-    A.invite(email,v.role,A.domainOf(email),'ClearSky','', '')
-      .then(function(){ toast('Invited \u2014 send them the link'); return loadInvites(); })
-      ['catch'](function(e){ toast((e&&e.message)||'Could not invite',true); });
+    inviteThenMail(email, function(){
+      return A.invite(email,v.role,A.domainOf(email),'ClearSky','', '');
+    })['catch'](function(e){ toast((e&&e.message)||'Could not invite',true); });
   });
 }
 
@@ -3423,7 +3513,7 @@ function renderStaff(){
     + 'opened this one, so they have no portal account yet. <b>They cannot be added for '
     + 'them</b> \u2014 an account is only ever created by the person signing in, which is what '
     + 'stops anybody being granted access they did not ask for. Send them '
-    + '<span class="mono">'+esc(location.origin+'/portfolio.html')+'</span> and approve the '
+    + '<span class="mono">'+esc(osaUrl())+'</span> and approve the '
     + 'request when it appears above.</div>';
   document.getElementById('staff-rows').innerHTML = missing.map(function(s){
     return '<tr><td><div class="t-name">'+esc(s.name)+'</div>'

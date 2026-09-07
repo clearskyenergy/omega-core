@@ -81,6 +81,36 @@
       "destination": "/tenants/osa/index.html"
     },
     {
+      "source": "/portfolio",
+      "has": [
+        {
+          "type": "host",
+          "value": "osa.clearskyomega.com"
+        }
+      ],
+      "destination": "/tenants/osa/portfolio.html"
+    },
+    {
+      "source": "/portfolio.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "osa.clearskyomega.com"
+        }
+      ],
+      "destination": "/tenants/osa/portfolio.html"
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "osa.clearskyomega.com"
+        }
+      ],
+      "destination": "/tenants/osa/index.html"
+    },
+    {
       "source": "/",
       "has": [
         {

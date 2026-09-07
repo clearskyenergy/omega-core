@@ -542,7 +542,12 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <!-- Versioned. Bump on every change to either, or the browser serves a cached
      copy and the new page runs against the old data layer — which fails as
      "the queue is blank" rather than as a load error. -->
-<script src="/config.js?v=6"></script>
+<!-- THE OSA CONSOLE'S OWN CONFIG, not the platform root one.
+     access.owner (tom@clearsky-usa.com) and portfolio.viability live in
+     tenants/osa/config.js and have no equivalent in the root config, so a
+     copy of this page served from omega-core loaded a file with no `access`
+     block at all: the owner pin silently evaporated. -->
+<script src="/tenants/osa/config.js?v=15"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
 <script src="/tenants/osa/partner-data.js?v=2"></script>
 <script>
