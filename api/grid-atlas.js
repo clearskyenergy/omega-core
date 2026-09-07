@@ -416,6 +416,18 @@ async function getJson(url, opts, ms) {
   } finally { g.done(); }
 }
 
+/* ── WHY THE MIRROR TRACE EXISTS ────────────────────────────────────────
+   This layer reported zero substations for Chicago and for a Texas parcel
+   with four in the box, and every diagnostic said "osm", which reads as
+   "asked and answered". It was not possible to tell from the outside whether
+   a mirror had refused, timed out, or genuinely answered empty — so the next
+   person would have had to reproduce the whole investigation. Each attempt
+   now records its host and outcome, and the record travels in the response. */
+const TRACE = [];
+function trace(url, outcome) {
+  TRACE.push(url.replace(/^https?:\/\//, '').split('/')[0] + ':' + outcome);
+}
+
 /* ── HIFLD ────────────────────────────────────────────────────────────────
    ArcGIS envelope query. A circle would be tighter, but an envelope is one
    parameter and the distance filter below trims the corners anyway. */
@@ -478,12 +490,14 @@ async function overpass(query, ms) {
         body: 'data=' + encodeURIComponent(query)
       }, budget);
       if (j && Array.isArray(j.elements)) {
+        trace(url, j.elements.length ? 'ok(' + j.elements.length + ')' : 'empty');
         if (j.elements.length) return j.elements;
         emptyFrom = url;                 /* keep looking before believing it */
         continue;
       }
+      trace(url, 'shape');
       lastErr = new Error('unexpected Overpass response');
-    } catch (e) { lastErr = e; }
+    } catch (e) { trace(url, (e && e.name === 'AbortError') ? 'timeout' : ((e && e.message) || 'err')); lastErr = e; }
   }
   if (emptyFrom) return [];
   throw lastErr || new Error('no Overpass mirror answered');
@@ -781,6 +795,7 @@ module.exports = async function handler(req, res) {
   }
 
   SOURCES.substations = SOURCES.lines = SOURCES.plants = null;
+  TRACE.length = 0;
   const body = (req.body && typeof req.body === 'object') ? req.body : {};
   const { address, sizeMw } = body;
   let { lat, lng } = body;
@@ -880,6 +895,7 @@ module.exports = async function handler(req, res) {
          shows up here as "hifld-failed:... -> osm" rather than as silence,
          so a degraded answer is visible instead of merely quieter. */
       sources: Object.assign({}, SOURCES),
+      overpassTrace: TRACE.slice(),
       findings
     });
   } catch (err) {
