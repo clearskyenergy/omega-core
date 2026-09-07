@@ -154,6 +154,19 @@
     }
     if (global.document && global.document.body) {
       global.document.body.setAttribute('data-tier', normalise(tier));
+      /* ── THE TIER LANDS LATE, SO SAY SO ──────────────────────────────
+         resolve() reads billing/current over the network, so everything
+         that boots synchronously — the editor's Designer/Pro default among
+         them — runs before the answer exists and has to assume trial. That
+         assumption is only safe if it can be revisited, which needs a
+         signal rather than a poll. Listeners get body[data-tier] as well,
+         so a late subscriber can read the current answer without waiting
+         for an event that has already fired. */
+      try {
+        global.document.dispatchEvent(new CustomEvent('omega:tier', {
+          detail: { tier: normalise(tier), removed: removed }
+        }));
+      } catch (e) {}
     }
     return { tier: normalise(tier), removed: removed };
   }

@@ -101139,7 +101139,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
 
   var mode = 'pro';
 
-  function set(m, quiet) {
+  function set(m, quiet, ephemeral) {
     /* Patch 117: Designer / Pro / Compute are one choice, not two
        settings. Compute mode hides six tabs and every Analyze panel that
        is not its own, so pressing Pro while it was on left a ribbon with
@@ -101158,7 +101158,11 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     if (mode === 'designer') safeTab();
     dropRail();
     paintSwitch();
-    try { localStorage.setItem(KEY, mode); } catch (e) {}
+    /* A DEFAULT IS NOT A CHOICE. This used to persist on every call, so the
+       very first boot wrote 'designer' and from then on the account looked
+       like somebody had chosen it — which meant a tier-derived default could
+       never apply again, on any machine that had opened the editor once. */
+    if (!ephemeral) { try { localStorage.setItem(KEY, mode); } catch (e) {} }
     if (!quiet && window.console) console.info(TAG + ' ' + mode + ' mode');
     return mode;
   }
@@ -101252,12 +101256,59 @@ button[style*="linear-gradient"][aria-disabled="true"]{
   /* ------------------------------------------------------------------ *
    *  6. BOOT                                                           *
    * ------------------------------------------------------------------ */
+  /* ── WHICH MODE AN ACCOUNT LANDS IN ─────────────────────────────────
+     Everybody used to land in Designer, whatever they had paid for. Designer
+     hides Insert, Draw, Annotate, Modify and ANALYZE, so a customer on
+     deluxe — "tier 2 / Performance" in conversation — held the parcelscreen
+     and engineering capabilities and still had no tab to reach them from.
+     The capability said yes and the mode said no, and the mode won silently.
+
+     The question "should this account land in Pro" has exactly the same
+     answer as "did they buy the surfaces Designer removes", and that is the
+     'engineering' capability: deluxe and up. So it is asked that way rather
+     than by listing tiers here, and a capTier ceiling narrows it for free.
+
+     An explicit choice still wins in both directions and forever. This only
+     decides where somebody starts. */
+  function defaultMode() {
+    var C = window.OmegaCaps;
+    var t = '';
+    try { t = document.body.getAttribute('data-tier') || ''; } catch (e) {}
+    if (t && C && C.can) {
+      try { return C.can(t, 'engineering') ? 'pro' : 'designer'; } catch (e) {}
+    }
+    return 'designer';
+  }
+
   function boot() {
     var saved = null;
     try { saved = localStorage.getItem(KEY); } catch (e) {}
     addSwitch();
-    set(saved === 'pro' ? 'pro' : 'designer', true);
-    if (!saved) firstRunNote();
+    if (saved) {
+      set(saved === 'pro' ? 'pro' : 'designer', true);
+    } else {
+      /* data-tier is not on the body yet — billing/current is a network read
+         — so this is the trial-shaped guess, revisited below rather than
+         trusted. Marked ephemeral so it is not mistaken for a choice. */
+      set(defaultMode(), true, true);
+      document.addEventListener('omega:tier', function () {
+        var again = null;
+        try { again = localStorage.getItem(KEY); } catch (e) {}
+        if (again) return;              /* they chose in the meantime */
+        var want = defaultMode();
+        if (want === mode) return;
+        set(want, true, true);
+        /* The first-run note was shown against the pre-tier guess. Once the
+           real tier moves us to Pro it is describing a mode nobody is in. */
+        if (want === 'pro') {
+          var n = document.getElementById('omg-firstrun');
+          if (n && n.parentNode) n.parentNode.removeChild(n);
+        }
+      });
+      /* The note offers "switch to Pro", so it only belongs in front of
+         somebody who is actually in Designer. */
+      if (defaultMode() === 'designer') firstRunNote();
+    }
 
     /* Patch scripts add ribbon buttons on timers well after load, so the
        keep-flags are re-applied for a while and then on any ribbon change. */
