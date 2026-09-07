@@ -193,14 +193,34 @@
     return ci < ti ? c : t;
   }
 
+  /* ── CLEARSKY IS NOT A CUSTOMER OF ITSELF ──────────────────────────────
+     resolve() reads billing/current and falls back to 'trial' when there is
+     no record — which is right for an unpriced tenant and wrong for the
+     company that builds the thing. clearsky-usa.com has no omega_orgs
+     document, so every ClearSky account was resolving to trial and the
+     gating was stripping their own ribbon: Apply for Financing, the
+     engineering suite, the export group, all removed from the people
+     demoing them.
+
+     These two domains are the same pair isAdmin() uses in firestore.rules
+     and adminDomains uses in the tenant configs. 'internal' is already in
+     UNGATED, so it grants everything without inventing a new tier.
+
+     A BILLING RECORD STILL WINS IF ONE EXISTS. This is a fallback for the
+     absent-record case, not an override — so if ClearSky is ever given a
+     real billing doc for testing, that is what applies. */
+  var INTERNAL_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+
   function resolve(db, email) {
     return new Promise(function (done) {
       try {
         var d = setOrg(email);
+        if (INTERNAL_DOMAINS.indexOf(d) >= 0 && !db) return done('internal');
         if (!d || !db) return done('trial');
         db.collection('omega_orgs').doc(d).collection('billing').doc('current').get()
           .then(function (s) {
             var b = s.exists ? (s.data() || {}) : {};
+            if (!s.exists && INTERNAL_DOMAINS.indexOf(d) >= 0) return done('internal');
             var eff = effectiveTier(b.tier || 'trial', b.capTier);
             if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
               console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
@@ -208,14 +228,18 @@
             }
             done(eff);
           })
-          .catch(function () { done('trial'); });
+          .catch(function () {
+            /* A failed read must not hand out the engineering suite to a
+               customer — but it must not lock ClearSky out either. */
+            done(INTERNAL_DOMAINS.indexOf(d) >= 0 ? 'internal' : 'trial');
+          });
       } catch (e) { done('trial'); }
     });
   }
 
   global.OmegaCaps = {
     LADDER: LADDER, GRANTS: GRANTS,
-    JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS,
+    JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,
     setOrg: setOrg, orgOf: orgOf, org: function () { return _org; },
     effectiveTier: effectiveTier

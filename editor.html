@@ -151268,7 +151268,11 @@ if (root.console && console.info) {
   function P() { try { return (S.pxPerFt > 0) ? S.pxPerFt : 6; } catch (e) { return 6; } }
   function CP() { return root.OmegaComputePlace; }
   function n0(v) { return Math.round(v).toLocaleString(); }
-  function n1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
+  /* GUARDED, unlike the twelve sibling copies of this helper. An undefined
+     value made Math.round(undefined * 10) NaN and .toFixed(1) rendered the
+     string "NaN" — which reached a customer-facing report as
+     "NaN MMBtu/hr". Only this copy feeds the report. */
+  function n1(v) { var n = +v; return isFinite(n) ? (Math.round(n * 10) / 10).toFixed(1) : null; }
 
   function boundary() {
     try { return CP() ? CP().boundary() : null; } catch (e) { return null; }
@@ -155354,7 +155358,16 @@ if (root.console && console.info) {
     if (r.fcBlocks > 0) {
       body += row('SOFC \u2014 ' + r.fcBlocks + ' \u00d7 '
         + n0(r.fcKw / r.fcBlocks) + ' kW', mw(r.fcKw));
-      body += row('Natural gas at full generation', n1(r.gasMmbtuHr) + ' MMBtu/hr');
+      /* NO NUMBER IS BETTER THAN A WRONG ONE. gasMmbtuHr is kW x heat rate, so
+         a unit with no heat rate on file yields NaN — and printing 0.0 would
+         be worse, because it asserts this plant burns no gas. Name the
+         missing input instead. */
+      var gasTxt = n1(r.gasMmbtuHr);
+      body += row('Natural gas at full generation',
+        (gasTxt !== null && r.gasMmbtuHr > 0)
+          ? gasTxt + ' MMBtu/hr'
+          : '<span style="color:#94A3B8">not calculated \u2014 no heat rate on file '
+            + 'for this generation unit</span>');
     }
     if (r.bessKwh > 0) {
       body += row('Ride-through on critical bus',
@@ -155776,6 +155789,86 @@ if (root.console && console.info) {
     });
   }
 
+  /* ── PDF ─────────────────────────────────────────────────────────────
+     Through the browser's own print engine, not a rasterising library.
+
+     jsPDF plus html2canvas would produce a "PDF" that is a screenshot: the
+     text is not selectable, not searchable, and goes soft the moment
+     somebody zooms or prints it. A report full of capacity figures and
+     dollar amounts is exactly the wrong document to flatten to pixels.
+
+     Printing keeps real vector text, real pagination, and the @media print
+     rules already written into buildHtml() — so the PDF is the report, not a
+     photograph of it.
+
+     WHAT THIS CANNOT DO is write the file to disk on its own. No browser
+     lets a page save a PDF without the user confirming, so this opens the
+     print dialog with the report loaded and Save as PDF is one click. Saying
+     "download" and then showing a dialog would be a small lie, so the button
+     says Save as PDF.
+
+     A HIDDEN IFRAME, NOT A NEW WINDOW. A popup blocker stops window.open on
+     a click that has been through a promise, and losing the report to a
+     blocked popup is a support ticket. The iframe is same-document and
+     removed once the dialog closes. */
+  function downloadPdf() {
+    return buildHtml().then(function (r) {
+      if (!r) {
+        if (typeof showBanner === 'function') showBanner('cal', 'Open the report first.');
+        return null;
+      }
+      var f = document.createElement('iframe');
+      f.setAttribute('aria-hidden', 'true');
+      f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      document.body.appendChild(f);
+
+      var cleaned = false;
+      function cleanup() {
+        if (cleaned) return; cleaned = true;
+        setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, 500);
+      }
+
+      try {
+        var d = f.contentWindow.document;
+        d.open();
+        /* The suggested filename in the print dialog comes from the document
+           title, so it is set to the project rather than left as the URL. */
+        d.write(r.html.replace('<head>', '<head><title>' + esc(r.name.replace(/\.html$/, '')) + '</title>'));
+        d.close();
+      } catch (e) {
+        cleanup();
+        if (typeof showBanner === 'function') showBanner('cal', 'Could not build the PDF \u2014 see console.');
+        if (root.console) root.console.error(TAG, e);
+        return null;
+      }
+
+      /* Wait for images. Printing before a site map has decoded produces a
+         report with a blank square where the drawing should be. */
+      var w = f.contentWindow;
+      function go() {
+        try {
+          w.focus();
+          w.onafterprint = cleanup;
+          w.print();
+          /* onafterprint is not fired by every browser; the timer is the
+             backstop so the iframe never accumulates. */
+          setTimeout(cleanup, 60000);
+        } catch (e) { cleanup(); }
+      }
+      if (w.document.readyState === 'complete') setTimeout(go, 120);
+      else w.addEventListener('load', function () { setTimeout(go, 120); });
+
+      if (typeof showBanner === 'function') {
+        showBanner('cal', 'Choose \u201cSave as PDF\u201d as the destination in the print dialog.');
+      }
+      return r.name.replace(/\.html$/, '.pdf');
+    }).catch(function (e) {
+      if (root.console) root.console.error(TAG, e);
+      if (typeof showBanner === 'function') showBanner('cal', 'PDF export failed \u2014 see console.');
+      return null;
+    });
+  }
+
   function openInTab() {
     return buildHtml().then(function (r) {
       if (!r) return null;
@@ -155799,7 +155892,7 @@ if (root.console && console.info) {
   function install() {
     if (typeof root._reportShareLink === 'function' && !root._reportShareLink.__export) {
       legacy = root._reportShareLink;
-      root._reportShareLink = function () { return download(); };
+      root._reportShareLink = function () { return downloadPdf(); };
       root._reportShareLink.__export = true;
     }
     relabel();
@@ -155809,9 +155902,10 @@ if (root.console && console.info) {
     var btns = document.querySelectorAll('button[onclick*="_reportShareLink"]');
     for (var i = 0; i < btns.length; i++) {
       if (btns[i].__export) continue;
-      btns[i].innerHTML = '\u2b07 Download report';
-      btns[i].title = 'Save the report as a single self-contained HTML file \u2014 '
-        + 'no portal, no login, opens anywhere. Send it as an attachment.';
+      btns[i].innerHTML = '\u2b07 Save as PDF';
+      btns[i].title = 'Prints the report to PDF through the browser \u2014 real '
+        + 'selectable text, not a screenshot. Choose "Save as PDF" as the '
+        + 'destination. OmegaReportExport.download() still saves the HTML.';
       btns[i].__export = true;
     }
   }
@@ -155823,7 +155917,8 @@ if (root.console && console.info) {
   }
 
   root.OmegaReportExport = {
-    download: download,
+    pdf: downloadPdf,
+    download: download,        /* still there: one self-contained HTML file */
     openInTab: openInTab,
     html: buildHtml,
     /* Restores the slug-copying behaviour for whenever the backend lands. */
