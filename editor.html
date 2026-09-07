@@ -100945,6 +100945,27 @@ button[style*="linear-gradient"][aria-disabled="true"]{
      salesperson quotes and the documents a customer receives live. */
   var KEEP_TABS = { home: 1, estimate: 1, output: 1, view: 1 };
 
+  /* PRO ONLY, DECLARED RATHER THAN INFERRED — the same argument matches()
+     already makes about injected buttons, applied to tabs.
+
+     KEEP_TABS is an allow-list, so anything absent is hidden by omission.
+     That is correct and it is also silent: Compute was showing in Designer
+     and nothing in the code said it should not, so there was no way to tell
+     a regression from the intended state. Naming it makes the intent
+     testable, and the assertion below fires if the two ever disagree.
+
+     Compute is a data-centre campus surface — load-first sizing against a
+     utility ceiling, fuel cells, ride-through storage. It does not belong in
+     front of somebody quoting a battery. */
+  var PRO_ONLY_TABS = { compute: 1, modify: 1, insert: 1, draw: 1, annotate: 1, analyze: 1 };
+  (function assertTabIntent(){
+    for (var k in PRO_ONLY_TABS) {
+      if (KEEP_TABS[k] && window.console) {
+        console.warn(TAG + ' tab "' + k + '" is in both KEEP_TABS and PRO_ONLY_TABS');
+      }
+    }
+  })();
+
   /* ------------------------------------------------------------------ *
    *  3. APPLY                                                          *
    * ------------------------------------------------------------------ */
@@ -100974,6 +100995,25 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     return false;
   }
 
+  /* RE-TAG WHEN THE RIBBON CHANGES. tagAll() ran on a mode switch and on a
+     200 ms debounce, so anything that re-rendered a tab afterwards left it
+     untagged and therefore visible. Buttons are injected into this ribbon by
+     a dozen later patches; assuming the DOM is final after boot is what put
+     Compute back on screen in Designer mode. Coalesced, and cheap because
+     tagAll is idempotent. */
+  var _ribbonObs = null, _ribbonT = null;
+  function watchRibbon(){
+    if (_ribbonObs || !window.MutationObserver) return;
+    var host = document.getElementById('ribbon');
+    if (!host) return;
+    _ribbonObs = new MutationObserver(function(){
+      if (mode !== 'designer') return;
+      if (_ribbonT) return;
+      _ribbonT = setTimeout(function(){ _ribbonT = null; if (mode === 'designer') tagAll(); }, 120);
+    });
+    _ribbonObs.observe(host, { childList: true, subtree: true });
+  }
+
   function tagAll() {
     var i, els;
     try {
@@ -100996,7 +101036,10 @@ button[style*="linear-gradient"][aria-disabled="true"]{
         var pg = tabs[i].getAttribute('data-page') ||
                  (/'([\w_]+)'/.exec(tabs[i].getAttribute('onclick') || '') || [])[1];
         if (!pg || pg === '__file') { tabs[i].classList.remove('omg-hide'); continue; }
-        tabs[i].classList.toggle('omg-hide', !KEEP_TABS[pg]);
+        /* PRO_ONLY_TABS wins outright. Belt and braces on purpose: a tab that
+           must not appear in Designer should not depend on remaining absent
+           from a list somewhere else. */
+        tabs[i].classList.toggle('omg-hide', !!PRO_ONLY_TABS[pg] || !KEEP_TABS[pg]);
       }
     } catch (e) { if (window.console) console.warn(TAG + ' tag', e && e.message); }
   }
@@ -101028,6 +101071,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     mode = (m === 'designer') ? 'designer' : 'pro';
     document.body.classList.toggle('omg-designer', mode === 'designer');
     tagAll();
+    watchRibbon();
     if (mode === 'designer') safeTab();
     dropRail();
     paintSwitch();
