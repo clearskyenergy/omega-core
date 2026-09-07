@@ -17,6 +17,8 @@
     "seed:apply": "node scripts/seed-omega-orgs.js --apply",
     "rules:check": "node scripts/check-rules.js",
     "test:sizer": "node scripts/test-bess-sizer.js",
-    "test:siteintel": "node scripts/test-site-intel.js"
+    "test:siteintel": "node scripts/test-site-intel.js",
+    "test:caps": "node scripts/test-caps.js",
+    "test": "node scripts/test-caps.js && node scripts/test-bess-sizer.js && node scripts/test-site-intel.js && node scripts/check-html-scripts.js"
   }
 }

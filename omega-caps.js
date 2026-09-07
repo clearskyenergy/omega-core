@@ -49,8 +49,17 @@
       'view'
     ],
     standard: [
-      'export.plotplan',   // E0 / E1.1
-      'export.oneline'     // E2.0
+      /* ── CORE PRINTS A BLUEPRINT, AND THAT IS ALL ────────────────────
+         This used to be the plot plan and the one-line, which are the two
+         drawings a customer takes to a utility or an AHJ — the deliverables
+         Performance is sold on. Giving them away at Core left nothing above
+         it to sell but the engineering suite.
+
+         Blueprint is the right thing to give: it is the drawing you print to
+         show someone the site, and it is worthless as a permit set. The plot
+         plan and the one-line move up; deluxe's blanket `export` already
+         covers them through the dotted fallback in can(). */
+      'export.blueprint'
     ],
     deluxe: [
       'schematic',         // schematic editor / overlay
@@ -95,6 +104,59 @@
     return JV_ORGS.indexOf(_org) >= 0 ? JV_GRANTS : [];
   }
 
+  /* ── ADD-ONS: A SERVICE SOLD SEPARATELY FROM THE PLAN ────────────────
+     billing/current.addons has existed and been editable in the master
+     console the whole time, and nothing in the EDITOR ever read it. It fed
+     the tool list through omega-tenant.js and stopped there — so "NextNRG
+     bought Compute" was a string in a field that unlocked nothing they could
+     see. This is the map that makes it mean something.
+
+     ONE ADD-ON MAY GRANT SEVERAL CAPABILITIES, because a customer buys a
+     product and not a data-cap attribute. Compute is the campus surface AND
+     the screening that feeds it: selling the tab without the screen would be
+     selling half a workflow.
+
+     THEY ONLY EVER WIDEN, and they are applied after the tier AND after
+     capTier. capTier exists to scope what the PLAN grants inside the editor;
+     an add-on is a separate purchase and a ceiling on the plan must not
+     quietly cancel it.
+
+     Keys are matched loosely — lowercased, and - _ and spaces folded —
+     because this is typed into a text field by a human. 'osa-jv' and
+     'grid-atlas' grant nothing here on purpose: they are handled by the JV
+     roster and the tool list respectively, and inventing editor caps for
+     them would be two places to change one answer. */
+  var ADDON_GRANTS = {
+    compute:        ['compute', 'parcelscreen'],
+    parcelscreen:   ['parcelscreen'],
+    sitescreening:  ['parcelscreen'],
+    engineering:    ['engineering'],
+    schematics:     ['schematic', 'riser'],
+    schematic:      ['schematic', 'riser'],
+    exports:        ['export'],
+    permitting:     ['permitting'],
+    osajv:          [],
+    gridatlas:      []
+  };
+
+  function addonKey(a) {
+    return String(a || '').toLowerCase().replace(/[\s_\-]+/g, '');
+  }
+
+  var _addons = [];
+  function setAddons(list) {
+    _addons = (list && list.length ? list : []).map(addonKey).filter(Boolean);
+    return _addons.slice();
+  }
+  function addonExtras() {
+    var out = [];
+    for (var i = 0; i < _addons.length; i++) {
+      var g = ADDON_GRANTS[_addons[i]];
+      if (g) for (var j = 0; j < g.length; j++) if (out.indexOf(g[j]) < 0) out.push(g[j]);
+    }
+    return out;
+  }
+
   /* partner and internal are not on the commercial ladder — they are how
      ClearSky and JV partners hold accounts, and gating them like a paying
      customer would lock the people who build the thing out of it. */
@@ -117,9 +179,11 @@
       g = GRANTS[LADDER[i]] || [];
       for (j = 0; j < g.length; j++) out[g[j]] = 1;
     }
-    /* Added last and never removes anything, so the carve-out can only ever
-       widen what a tier already grants. */
+    /* Added last and never removing anything, so a carve-out or a purchased
+       add-on can only ever widen what a tier already grants. */
     g = orgExtras();
+    for (j = 0; j < g.length; j++) out[g[j]] = 1;
+    g = addonExtras();
     for (j = 0; j < g.length; j++) out[g[j]] = 1;
     return out;
   }
@@ -234,6 +298,7 @@
           .then(function (s) {
             var b = s.exists ? (s.data() || {}) : {};
             if (!s.exists && INTERNAL_DOMAINS.indexOf(d) >= 0) return done('internal');
+            setAddons(b.addons || []);
             var eff = effectiveTier(b.tier || 'trial', b.capTier);
             if (b.capTier && eff !== normalise(b.tier || 'trial') && global.console) {
               console.info('[caps] billed ' + b.tier + ', editor capped to ' + eff +
@@ -251,6 +316,10 @@
   }
 
   global.OmegaCaps = {
+    /* Exported so a caller that never goes through resolve() — a preview, a
+       test, the master console showing what an add-on would unlock — can be
+       explicit rather than relying on module state it cannot see. */
+    ADDON_GRANTS: ADDON_GRANTS, setAddons: setAddons, addons: function () { return _addons.slice(); },
     LADDER: LADDER, GRANTS: GRANTS,
     JV_ORGS: JV_ORGS, JV_GRANTS: JV_GRANTS, INTERNAL_DOMAINS: INTERNAL_DOMAINS,
     normalise: normalise, setFor: setFor, can: can, apply: apply, resolve: resolve,

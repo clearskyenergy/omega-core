@@ -1595,6 +1595,20 @@ function openTenantDetail(orgId){
   });
 }
 
+/* The add-on vocabulary, read from the capability layer so this screen and
+   the editor cannot disagree about what a word buys. */
+function _addonHelp(){
+  var G = null;
+  try { G = window.OmegaCaps && window.OmegaCaps.ADDON_GRANTS; } catch(e){}
+  if (!G) return 'compute, parcelscreen, engineering, schematics, exports, permitting';
+  var out = [];
+  for (var k in G) {
+    if (!G.hasOwnProperty(k) || !G[k].length) continue;
+    out.push(k + ' \u2192 ' + G[k].join(' + '));
+  }
+  return out.join('   \u00b7   ');
+}
+
 function _tnField(label, id, val, type, ph){
   return '<label class="sub-txt" style="display:block;margin-bottom:10px">'+esc(label)
     + '<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':String(val))+'"'
@@ -1680,7 +1694,24 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
         + 'line-height:1.6;margin-top:4px">' + esc(_allKeys.join(', ')) + '</div></details>'
       : '')
    + '</label>';
-  h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','osa-jv, grid-atlas');
+  /* ── WHAT AN ADD-ON ACTUALLY UNLOCKS ─────────────────────────────────
+     This field has been editable since the console was built and, until
+     today, nothing in the EDITOR read it — it fed the tool list and stopped
+     there. So "NextNRG bought Compute" was a string that unlocked nothing
+     they could see, and there was no way to tell from this screen which
+     words did anything at all.
+
+     The list is printed rather than described because the only thing that
+     matters when typing into a free-text field is which words are real. It
+     is read from omega-caps.js when that file is loaded here, so it cannot
+     drift from what the editor honours; the hardcoded copy is a fallback for
+     the console being open without it. */
+  h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','compute, engineering');
+  h+='<div class="sub-txt" style="font-size:10.5px;margin:-6px 0 12px;line-height:1.55">'
+   +  'Unlocks in the editor on top of the plan, and a plan cap never cancels one. '
+   +  '<b>' + esc(_addonHelp()) + '</b>'
+   +  '<br>osa-jv and grid-atlas are handled by the JV roster and the tool list \u2014 they grant nothing in the editor.'
+   +  '</div>';
   h+=_tnField('Amount due (USD)','tb-amt-'+orgId,bill.amountDue==null?'':bill.amountDue,'number','0');
   h+=_tnField('Next payment (YYYY-MM-DD)','tb-due-'+orgId,bill.subscriptionDue||'','text','2026-11-21');
   /* Paid-upfront is the ordinary case here and there was nowhere to record it:

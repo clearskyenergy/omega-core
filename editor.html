@@ -2215,7 +2215,11 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openPlotPlanExport)" data-cap="export.plotplan" title="Plot plan cover + site sheets (E0 / E1.1)"><span class="rb-ico">▤</span><span class="rb-lbl">Plot Plan<br>E0 / E1.1</span></button>
         <button class="rbtn" onclick="rbRun(openOneLineExport)" data-cap="export.oneline" title="Single-line diagram (E2.0)"><span class="rb-ico">⚡</span><span class="rb-lbl">One-Line<br>E2.0</span></button>
-        <button class="rbtn" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
+        <!-- Core's ONLY export. It was ungated, which meant a trial could
+             print one and Core had nothing the trial did not — the tier had
+             no export to sell. Gated at export.blueprint, granted at
+             standard, inherited upward. -->
+        <button class="rbtn" data-cap="export.blueprint" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
         <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — in beta, access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-beta-tag">BETA</span></button>
         <!-- Original call preserved; re-enable by restoring this onclick:
              <button class="rbtn" onclick="rbRun(sendToPermitCreator)" data-cap="permitting" title="Assemble the full permit set"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span></button> -->
