@@ -796,7 +796,44 @@ var LEGACY_WORKSPACES = {
 };
 if (!WORKSPACES) WORKSPACES = (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant && window.CLEARSKY_CONFIG.tenant.orgId) ? {} : LEGACY_WORKSPACES;
 function domainOf(email){ return (email||'').split('@')[1] ? email.split('@')[1].toLowerCase() : ''; }
-function resolveWorkspace(email){ var d=domainOf(email); return (d && WORKSPACES.hasOwnProperty(d)) ? WORKSPACES[d] : null; }
+
+/* ── EVERY WORK ACCOUNT REACHES THE CATALOG ───────────────────────────
+   resolveWorkspace() used to return null for any domain missing from the
+   hardcoded map above — eight of them — and onAuth() responded by signing
+   the person out with "this account domain is not provisioned". A real
+   tenant, correctly signed in, holding a workspace on this very platform,
+   was bounced off the page that exists to let them add tools to it.
+
+   The map is the old single-tenant model. CLAUDE.md's resolution order
+   ends with email-domain derivation precisely so a new tenant needs no
+   client edit to work, and this page only ever reads four fields off a
+   workspace — orgId, clientName, accountTier and an optional logo — so
+   deriving them costs nothing.
+
+   THIS GRANTS NO DATA. The client was never the security boundary; the
+   Firestore rules are, and they scope every read and write by orgId. All
+   this check ever did was refuse to render a catalog. */
+var PUBLIC_MAIL = { 'gmail.com':1,'googlemail.com':1,'yahoo.com':1,'hotmail.com':1,
+  'outlook.com':1,'live.com':1,'msn.com':1,'icloud.com':1,'me.com':1,'mac.com':1,
+  'aol.com':1,'proton.me':1,'protonmail.com':1,'gmx.com':1,'mail.com':1,'yandex.com':1,
+  'zoho.com':1,'hey.com':1,'fastmail.com':1,'qq.com':1,'163.com':1 };
+
+function titleiseDomain(d){
+  var base = String(d||'').split('.')[0].replace(/[-_]+/g,' ');
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+function resolveWorkspace(email){
+  var d = domainOf(email);
+  if (!d) return null;
+  if (WORKSPACES.hasOwnProperty(d)) return WORKSPACES[d];
+  /* A personal mailbox is still refused. That is the one line of this
+     check worth keeping: it matches the signup policy, and an @gmail
+     account is not a tenant however genuinely it signed in. */
+  if (PUBLIC_MAIL[d]) return null;
+  return { type:'tenant', orgId:d, clientName:titleiseDomain(d),
+           accountTier:'Account', allowedDomain:d, derived:true };
+}
 
 var CFG, auth, db, currentUser=null, currentOrg=null, WORKSPACE=null;
 var _PINNED=[];
@@ -823,8 +860,9 @@ function onAuth(user){
   if (!user){ el('auth-screen').style.display='flex'; el('app').style.display='none'; return; }
   var ws = resolveWorkspace(user.email);
   if (!ws){
-    // unknown domain — reject
-    setText('auth-err','This account domain is not provisioned. Contact dev@clearsky-usa.com.');
+    /* Only a personal mailbox lands here now — see resolveWorkspace(). */
+    setText('auth-err','Please sign in with your work email. Personal mailboxes '
+      + 'cannot hold a workspace. Questions: dev@clearsky-usa.com.');
     auth.signOut(); return;
   }
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
@@ -843,6 +881,28 @@ function applyChrome(ws, user){
   var av = el('tb-avatar'); if(av) av.textContent = (user.email||'?').charAt(0).toUpperCase();
   setText('mkt-sub', 'Browse the ClearSky-OMEGA catalog and add tools to your '+(ws.clientName||'')+' dashboard.');
   _resolveDisplayName(ws, user);
+  _upgradeDerivedName(ws);
+}
+
+/* A workspace derived from the email domain carries a name made out of that
+   domain — "Concordenergyusa". omega_orgs holds the real one, so ask for it
+   and correct the chrome if it is there. Deliberately after the page is
+   already usable: this is a nicety, and a tenant whose org doc has not been
+   seeded yet must still get their catalog. */
+function _upgradeDerivedName(ws){
+  if (!ws || !ws.derived || !db) return;
+  try {
+    db.collection('omega_orgs').doc(ws.orgId).get().then(function(doc){
+      if (!doc || !doc.exists) return;
+      var d = doc.data() || {};
+      if (d.name){
+        ws.clientName = d.name;
+        var chip = el('tb-client-chip');
+        if (chip) chip.innerHTML = '<span class="tb-client-txt">'+esc(d.name)+'</span>';
+        setText('mkt-sub','Browse the ClearSky-OMEGA catalog and add tools to your '+d.name+' dashboard.');
+      }
+    })['catch'](function(){ /* the derived name is already on screen */ });
+  } catch(e){}
 }
 
 /* Look up the display name saved in the team_members profile

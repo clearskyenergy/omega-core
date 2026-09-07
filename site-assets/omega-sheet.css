@@ -123,9 +123,21 @@ body.sheet {
 .brand { display: flex; align-items: center; gap: 9px; font-family: 'Archivo', sans-serif;
          font-weight: 800; font-size: 16.5px; letter-spacing: -0.02em; text-decoration: none; }
 .brand em { font-style: normal; color: var(--blue); }
-.brand .dot { width: 15px; height: 15px; border: 2.4px solid var(--ink); border-radius: 50%;
-              display: grid; place-items: center; }
-.brand .dot::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--blue); }
+/* THE MARK IS AN OMEGA, NOT A DOT.
+   It was a ring with a dot in the middle — a generic device that said
+   nothing, sitting next to a wordmark that ends in OMEGA. Drawn as an
+   inline SVG rather than the character U+03A9 so the shape is identical
+   in every browser regardless of which font happens to resolve, and
+   rather than the PNG because that asset is white-on-transparent and
+   would vanish on paper. Kept on the .dot class so no page markup has to
+   change: the glyph is the element's background. */
+.brand .dot {
+  width: 19px; height: 19px; border: 0; border-radius: 0;
+  display: inline-block; flex-shrink: 0; align-self: center;
+  background-repeat: no-repeat; background-position: center; background-size: 100% 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232B5FA8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.2 20h4.6v-3.3a7.6 7.6 0 1 1 6.4 0V20h4.6'/%3E%3C/svg%3E");
+}
+.brand .dot::after { content: none; }
 .hd nav { display: flex; gap: 24px; margin-left: 8px; }
 .hd nav a { font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
 .hd nav a:hover { color: var(--ink); }
