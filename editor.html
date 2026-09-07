@@ -166104,7 +166104,22 @@ if (root.console && console.info) {
   }
 
   /* ── input ──────────────────────────────────────────────────────────── */
-  function surface() { return document.getElementById('cov') || document.getElementById('sc'); }
+  /* ── THE MOUSE HAD NOWHERE TO LAND ──────────────────────────────────
+     This bound to #cov first, and #cov is the DRAWING-MODE COVER: it is
+     display:none with pointer-events:none unless a shape tool is active.
+     Measured in a running editor it is a 0x0 box at the origin. So the
+     mousedown listener was attached to an element that cannot receive a
+     mouse event, no drag ever started, and the browser did what it does
+     with an unhandled drag — selected the page text. That is exactly the
+     "it doesn't really allow me to move or rotate anything" symptom, and
+     it was never about move or rotate; nothing was listening.
+
+     #sc is the canvas surface — 767x564 and pointer-events:auto — and #cov
+     is its CHILD, so binding here catches events over the cover too. The
+     listeners are already registered in the capture phase, which is what a
+     modal move session wants: it sees the event before any drawing tool
+     underneath it does. */
+  function surface() { return document.getElementById('sc') || document.getElementById('cov'); }
   function toCanvas(e) {
     var sc = document.getElementById('sc'); if (!sc) return null;
     var r = sc.getBoundingClientRect();
