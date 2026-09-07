@@ -4637,11 +4637,12 @@ window.pmSoon = pmSoon;
   function boot() {
     if (!window.OmegaNewProject) return false;
     window.OmegaNewProject.configure({
-      db: window.db,
-      auth: window.auth,
-      orgId: function () { return window.currentOrg || ''; },
+      db: function () { return db; },
+      auth: function () { return auth; },
+      orgId: function () { return window.currentOrg || currentOrg || ''; },
       ownerName: function () {
-        var u = window.currentUser || ((window.auth && auth.currentUser) || null);
+        var u = (typeof currentUser !== 'undefined' && currentUser)
+              || (auth && auth.currentUser) || null;
         return (window._meName && _meName())
             || (u && (u.displayName || String(u.email || '').split('@')[0])) || '';
       },

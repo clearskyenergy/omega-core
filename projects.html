@@ -998,11 +998,11 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
   function boot() {
     if (!window.OmegaNewProject) return false;
     window.OmegaNewProject.configure({
-      db: window.db,
-      auth: window.auth,
+      db: function () { return db; },
+      auth: function () { return auth; },
       orgId: function () { return (window.WS && WS.orgId) || ''; },
       ownerName: function () {
-        var u = (window.auth && auth.currentUser) || null;
+        var u = (auth && auth.currentUser) || null;
         return (window._projMeName && _projMeName())
             || (u && (u.displayName || String(u.email || '').split('@')[0])) || '';
       },

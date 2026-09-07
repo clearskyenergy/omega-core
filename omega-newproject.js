@@ -257,8 +257,21 @@
       return;
     }
 
-    var db = CFG.db || global.db;
-    var auth = CFG.auth || global.auth;
+    /* ── WHY THIS TAKES A GETTER AND NOT A HANDLE ──────────────────────
+       Both host pages declare their Firestore handle with `let db` / `const
+       db` at script top level. Those are LEXICAL bindings: unlike `var`,
+       they never become properties of window. So `configure({ db: window.db })`
+       handed this module `undefined`, `global.db` was `undefined` too, and
+       every Create & Open Editor ended at "Not connected." — a page that was
+       fully signed in and perfectly able to write, reporting no connection.
+
+       Reading it through a function also fixes the ORDERING half of the same
+       bug: configure() ran on a 150 ms retry that only waited for this module
+       to exist, not for firebase.firestore() to have been called, so even a
+       `var` handle could have been captured before it was assigned. A getter
+       is resolved at click time, when the answer is knowable. */
+    var db = pick(CFG.db) || global.db;
+    var auth = pick(CFG.auth) || global.auth;
     var user = (auth && auth.currentUser) || null;
     if (!db) { global.alert('Not connected.'); return; }
     if (!user) { global.alert('You need to be signed in.'); return; }
@@ -293,6 +306,14 @@
     })['catch'](function (e) {
       global.alert('Error creating project: ' + ((e && e.message) || e));
     });
+  }
+
+  /* A configured value may be the thing itself or a function returning it.
+     Anything that throws is treated as not ready rather than taking the
+     page down. */
+  function pick(v) {
+    if (typeof v !== 'function') return v;
+    try { return v(); } catch (e) { return null; }
   }
 
   function configure(o) {
