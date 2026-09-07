@@ -23997,6 +23997,7 @@ async function saveProject(){
       } catch(imgErr){ console.warn('Post-create image save failed:', imgErr && imgErr.message); }
     } else {
       payload.orgId = ((typeof _projOrgId==='function') ? _projOrgId() : null) || 'clearsky.com';
+      _shedIfOversize(payload);
       await _db.collection('projects').doc(_projectId).update(payload);
     }
     const t=document.getElementById('pn-title');if(t)t.textContent=name;
@@ -24068,6 +24069,82 @@ async function saveProject(){
       if(_currentUser && _projectId && _loadReady){ setTimeout(function(){ saveProject(); }, 300); }
     }
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SHED WHAT CAN BE RECOMPUTED, RATHER THAN LOSE THE SAVE
+
+   Firestore refuses a document over 1 MB, and a compute campus crosses it
+   easily: forty pods, eighty-five shapes, per-table PV geometry on every
+   array. The refusal costs the WHOLE save — everything the person did since
+   the last one — to keep data that the design regenerates on its own.
+
+   That is the wrong trade, so past a threshold the recomputable parts are
+   dropped and the save goes through. There is precedent: _pdStripForSave
+   already does exactly this for price decks, and for the same reason.
+
+   ONLY THINGS THAT REBUILD FROM THE DESIGN ARE ELIGIBLE.
+
+     terrain          sampled elevation. Re-sampled from the map on demand;
+                      the panel already offers "Sample the site".
+     shape.tables     per-table PV geometry. Recomputed by the layout
+                      engine from the array's own parameters — this is
+                      exactly what OmegaSaveDoctor names as the usual
+                      offender and calls safe to drop.
+
+   Nothing a person typed is ever shed. Prices, notes, overrides, equipment
+   choices and the shapes themselves stay, because losing those silently
+   would be worse than a failed save — a failed save at least tells you.
+
+   Ordered cheapest-first and stops as soon as it fits, so a project that is
+   barely over loses terrain and keeps its PV geometry.
+   ══════════════════════════════════════════════════════════════════════ */
+function _payloadBytes(o){
+  try { return new Blob([JSON.stringify(o)]).size; }
+  catch(e){ try { return JSON.stringify(o).length; } catch(e2){ return 0; } }
+}
+
+function _shedIfOversize(payload){
+  var LIMIT = 1048576, SAFE = 900 * 1024;   /* leave room for Firestore overhead */
+  var size = _payloadBytes(payload);
+  if (size <= SAFE) return null;
+
+  var dropped = [];
+
+  if (payload.terrain) {
+    payload.terrain = null;
+    dropped.push('terrain samples');
+    size = _payloadBytes(payload);
+  }
+
+  if (size > SAFE && Array.isArray(payload.shapes)) {
+    var n = 0;
+    payload.shapes = payload.shapes.map(function(sh){
+      if (sh && sh.tables && sh.tables.length) {
+        n += sh.tables.length;
+        var c = {}; for (var k in sh) if (sh.hasOwnProperty(k)) c[k] = sh[k];
+        c.tables = null;
+        c._tablesShed = true;      /* so the layout engine knows to rebuild */
+        return c;
+      }
+      return sh;
+    });
+    if (n) { dropped.push(n + ' PV table outlines'); size = _payloadBytes(payload); }
+  }
+
+  if (!dropped.length) return null;
+
+  if (typeof showBanner === 'function') {
+    showBanner('wiz', 'Saved \u2014 but this project was over the 1 MB document limit, so '
+      + dropped.join(' and ') + ' were left out. Both rebuild from the design: re-sample the '
+      + 'site for terrain, and the PV outlines redraw on the next layout. Nothing you typed '
+      + 'was touched.');
+  }
+  if (window.console) {
+    console.warn('[save] shed to fit 1 MB:', dropped.join(', '),
+                 '\u2014 now ' + Math.round(size/1024) + ' KB');
+  }
+  return dropped;
 }
 
 async function _loadProject(id){
@@ -145948,10 +146025,27 @@ root.OmegaGridPrescreen = {
     if (++n > 80) { clearInterval(iv); return; }
     try {
       if (document.getElementById('rb-gridatlas')) { clearInterval(iv); return; }
+      /* ── NEXT TO NETWORK PROXIMITY ──────────────────────────────────
+         Grid Atlas answers "what transmission and substations are near this
+         point". Network Proximity answers the same question for carrier
+         hotels and fibre. They are one question about a site asked of two
+         networks, and a data-centre screen reads them together — so they
+         belong in the same group rather than one of them sitting off beside
+         the substation tools.
+
+         The old anchors are kept as a fallback: this button is injected on a
+         poll and the ribbon is assembled by a dozen patches, so a hard
+         dependency on one neighbour existing is how an injected button ends
+         up nowhere at all. */
       var list = document.querySelectorAll('button.rbtn'), host = null;
       for (var i = 0; i < list.length; i++) {
-        var oc = list[i].getAttribute('onclick') || '';
-        if (/openGridPreQual|runComedPreQual|openSubstation|OmegaSubstation/.test(oc)) { host = list[i]; break; }
+        if (/openNetworkProximity/.test(list[i].getAttribute('onclick') || '')) { host = list[i]; break; }
+      }
+      if (!host) {
+        for (var j = 0; j < list.length; j++) {
+          var oc = list[j].getAttribute('onclick') || '';
+          if (/openGridPreQual|runComedPreQual|openSubstation|OmegaSubstation/.test(oc)) { host = list[j]; break; }
+        }
       }
       if (!host || !host.parentNode) return;
       var b = document.createElement('button');
