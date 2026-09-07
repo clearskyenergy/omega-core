@@ -32402,7 +32402,12 @@ function _o2Spin(deg){
   function bump(o){
     var a=((+o.rot||0)+deg)%360; if(a>180)a-=360; if(a<-180)a+=360;
     o.rot=Math.round(a*10)/10;
-    if(typeof o._geoRot==='number') o._geoRot=o.rot;
+    /* The stamped ground anchor described where this was BEFORE the turn.
+       Leaving it means the next map event reprojects the shape back there.
+       Dropped rather than rotated — lat/lng do not rotate uniformly — and
+       the restamp below re-derives it from the pixels that now exist. */
+    if(o._geoPts){ delete o._geoPts; o._geoShed=true; }
+    if(typeof o._geoRot==='number') delete o._geoRot;
   }
 
   objs.forEach(function(o){
@@ -166247,10 +166252,27 @@ if (root.console && console.info) {
         return c2;
       });
       bump(sh);
-      /* A ground rotation stamped earlier is now wrong by this much. The
-         reprojector reads _geoRot when it re-anchors, so it has to move
-         with the shape or the next pan puts it back where it was. */
-      if (typeof sh._geoRot === 'number') sh._geoRot = sh.rot;
+      /* ── THE GROUND ANCHOR IS NOW A LIE, SO IT GOES ─────────────────
+         Every anchored shape carries _geoPts: a lat/lng per vertex,
+         stamped so the drawing survives a pan. Rotating moved the PIXELS
+         and left those untouched, so the anchor still described where the
+         shape used to be — and the next map event reprojected it straight
+         back there. On a drawing where some shapes are anchored and some
+         are not, that reads as "half of it rotated and half did not",
+         which is exactly what it looked like.
+
+         shift() has the same gap and gets away with it because a drag does
+         not move the map. A rotation is applied in many small steps while
+         the cursor sweeps, and any one of them can coincide with an idle
+         or a resize.
+
+         Dropping the anchor is right rather than rotating it: latitude and
+         longitude do not rotate uniformly, and restamp() on commit
+         re-derives it exactly from the pixels that now exist. Between here
+         and there the shape has no anchor, which is the one state that
+         cannot put it back in the wrong place. */
+      if (sh._geoPts) { delete sh._geoPts; sh._geoShed = true; }
+      if (typeof sh._geoRot === 'number') delete sh._geoRot;
     });
 
     m.elements.forEach(function (el) {
@@ -166260,6 +166282,9 @@ if (root.console && console.info) {
       var c = turn((+el.x || 0) + w / 2, (+el.y || 0) + h / 2);
       el.x = c.x - w / 2; el.y = c.y - h / 2;
       bump(el);
+      if (el._geoPts) { delete el._geoPts; el._geoShed = true; }
+      if (el._geo) delete el._geo;
+      if (typeof el._geoRot === 'number') delete el._geoRot;
     });
 
     m.conduits.forEach(function (cd) {
@@ -166274,6 +166299,7 @@ if (root.console && console.info) {
          the runs again from the geometry that exists now. */
       if (typeof cd.laneY === 'number') delete cd.laneY;
       if (typeof cd.spineMinX === 'number') delete cd.spineMinX;
+      if (cd._geoPts) { delete cd._geoPts; cd._geoShed = true; }
     });
   }
 
