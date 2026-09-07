@@ -185,3 +185,20 @@ quietly, because each is a real move with a blocker attached.
       to delete is a data decision.
 - [ ] `capTier: 'trial'` still to be set on `chileasing.com` — Tenants & Users
       → Manage → Editor cap → "designer only", signed in as clearsky-usa.com.
+
+## The sidebar is written three times  (2026-09-06)
+
+- [ ] `index.html`, `marketplace.html` and `projects.html` each implement the
+      left nav separately. They have already drifted twice in ways that
+      shipped: the My Applications toggle fought `style.display` on two of the
+      three while the CSS collapsed with an `.open` class, and `projects.html`
+      carried the submenu populator without `omega-tools.js`, so that list
+      could never have had anything in it.
+
+      Both are fixed, and a third bug of the same shape is available whenever
+      somebody touches one page and not the others. The nav wants to be one
+      shared partial or one `omega-nav.js`, the way `omega-brand.js` and
+      `omega-tenant.js` already are — the marketplace copy's own comment
+      explains that it was written separately to avoid depending on five of
+      the dashboard's private internals, which is the right instinct and the
+      wrong conclusion: the fix is a public API, not a third copy.
