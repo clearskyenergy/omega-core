@@ -106868,6 +106868,19 @@ table.e3-tbl td{ white-space:normal }
     /* Circuit count is not something a point lookup can answer. Left alone
        rather than assumed, so redundancy stays honestly low. */
     st.evidence = 'map_drawn+grid_atlas';
+    /* no_grid was true of the DRAWING and is no longer true of the site. It
+       is an error-level flag, so leaving it would keep shouting a thing the
+       row now disproves — and would hold confidence at low for a reason that
+       has been answered. Superseded, not deleted: the fact that the drawing
+       carried no grid is exactly why the note below matters. */
+    for (var f = 0; f < st.flags.length; f++) {
+      if (st.flags[f].code === 'no_grid') {
+        st.flags[f] = { level: 'info', code: 'no_grid_drawn',
+          msg: 'Nothing on the drawing carried a voltage or a substation, so the grid ' +
+               'was looked up rather than read off the map.' };
+        break;
+      }
+    }
     st.flags.push({ level: 'warn', code: 'grid_from_atlas',
       msg: 'No transmission or substation was drawn on this map, so the grid facts — ' +
            (s.maxKv != null ? s.maxKv + ' kV' : 'voltage') +
@@ -106898,7 +106911,7 @@ table.e3-tbl td{ white-space:normal }
     var haveGrid = (st.transmission && st.transmission.length) || (st.substations && st.substations.length);
     var at = window.OmegaGridAtlas, loc = siteLatLng(m.features);
     var step = (!haveGrid && at && loc)
-      ? at.run({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 20000 })
+      ? at.run({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 35000 })
           .then(function (res) { return mergeAtlas(st, res) ? 'atlas' : 'atlas-empty'; })
           ['catch'](function (e) {
             st.flags.push({ level: 'warn', code: 'grid_lookup_failed',
@@ -106910,6 +106923,15 @@ table.e3-tbl td{ white-space:normal }
 
     return step.then(function (gridSrc) {
       var g = SI.gridScore(st);
+      /* ── CONFIDENCE IS ABOUT THE FILE, NOT THE SCORE ─────────────────
+         With the grid supplied, every gap gridScore counts is filled and it
+         would grade this 'good' — the same word a traced KMZ earns. It is
+         not the same thing. Nobody looked at that line; a national dataset
+         said it was there, and the same dataset had the substation layer
+         missing entirely until this morning. Capped at medium, which is
+         what "the numbers are defensible and the evidence behind them is
+         thin" is supposed to mean. */
+      if (gridSrc === 'atlas' && g.confidence === 'good') g.confidence = 'medium';
       for (var i = 0; i < REG.length; i++) {
         if (REG[i].name === name) { REG.splice(i, 1); break; }
       }
