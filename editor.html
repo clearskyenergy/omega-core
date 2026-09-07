@@ -106388,6 +106388,273 @@ table.e3-tbl td{ white-space:normal }
     return true;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     PARCEL SCREENING REGISTER
+
+     The GIS panel scores ONE file as you import it. That answers "is this
+     site any good" and not the question a developer with a folder of
+     eighteen KMZs is actually asking, which is "which of these do I work
+     first".
+
+     So: drop the whole folder, get them ranked. Same engine
+     (omega-site-intel.js), same numbers, same evidence tags — this only
+     changes how many at once and how they are ordered.
+
+     IT RANKS. IT DOES NOT CLEAR. Every figure is measured off a line
+     somebody drew by eye over imagery: no queue position, no thermal
+     ratings, no ATC, no curtailment history. A 345 kV line on the fence with
+     a full queue behind it scores well here and is undevelopable. The header
+     says so and the confidence grade is on every row, because a score
+     shown without the thinness of the file behind it is the failure this
+     whole engine was written to avoid.
+     ══════════════════════════════════════════════════════════════════════ */
+  var REG = [];   /* screened files, this session */
+
+  function regHost() {
+    var h = document.getElementById('psr-modal');
+    if (h) return h;
+    h = document.createElement('div');
+    h.id = 'psr-modal';
+    h.className = 'e3-modal';
+    h.addEventListener('mousedown', function (e) { if (e.target === h) regClose(); });
+    document.body.appendChild(h);
+    return h;
+  }
+  function regClose() {
+    var h = document.getElementById('psr-modal');
+    if (h) h.classList.remove('on');
+  }
+  function regOpen() { regHost().classList.add('on'); regRender(); }
+
+  function regBand(n) { return n >= 70 ? '#2E9E6B' : n >= 50 ? '#C9A24E' : '#C97A72'; }
+
+  function regRender() {
+    var h = regHost();
+    var SI = window.OmegaSiteIntel;
+    var rows = REG.slice().sort(function (a, b) { return b.grid.score - a.grid.score; });
+
+    var body = '';
+    if (!SI) {
+      body = '<div class="e3-note warn">The site-intel engine did not load, so nothing can ' +
+             'be screened. Reload the page.</div>';
+    } else if (!rows.length) {
+      body = '<div class="e3-note info">Drop the KMZ files for the parcels you are working. ' +
+             'Each one is measured and they are listed strongest first. Nothing is uploaded ' +
+             '\u2014 the files are read in this browser.</div>';
+    } else {
+      var tot = rows.reduce(function (a, r) { return a + (r.intake.grossAcres || 0); }, 0);
+      var mw  = rows.reduce(function (a, r) { return a + (r.grid.mwHostable || 0); }, 0);
+      var hi  = rows.filter(function (r) { return r.grid.score >= 70; }).length;
+      body =
+        '<div class="e3-row" style="gap:18px;margin-bottom:10px;flex-wrap:wrap">' +
+          '<div><b style="font-size:19px">' + rows.length + '</b><div class="e3-sub">screened</div></div>' +
+          '<div><b style="font-size:19px">' + hi + '</b><div class="e3-sub">scoring 70+</div></div>' +
+          '<div><b style="font-size:19px">' + n0(tot) + '</b><div class="e3-sub">gross acres</div></div>' +
+          '<div><b style="font-size:19px">' + (mw / 1000).toFixed(1) + ' GW</b><div class="e3-sub">hostable, grid-limited</div></div>' +
+        '</div>' +
+        '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr>' +
+          '<th></th><th>Parcel</th><th>Score</th><th>Confidence</th><th>kV</th>' +
+          '<th>POI</th><th>Acres</th><th>MW</th><th>Flags</th><th></th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (r, i) {
+          var g = r.grid, k = r.intake;
+          return '<tr>' +
+            '<td class="e3-num">' + (i + 1) + '</td>' +
+            '<td><b>' + esc(r.name) + '</b></td>' +
+            '<td class="e3-num"><b style="color:' + regBand(g.score) + '">' + g.score + '</b></td>' +
+            '<td>' + esc(g.confidence) + '</td>' +
+            '<td class="e3-num">' + (g.kv || '\u2014') + '</td>' +
+            '<td class="e3-num">' + (g.poiMi == null ? '\u2014' : g.poiMi.toFixed(2) + ' mi') + '</td>' +
+            '<td class="e3-num">' + n0(k.grossAcres || 0) + '</td>' +
+            '<td class="e3-num">' + (g.mwHostable == null ? '\u2014' : n0(g.mwHostable)) + '</td>' +
+            '<td style="font-size:10px;color:var(--sub)">' +
+              (k.flags.length ? esc(k.flags.map(function (f) { return f.code; }).join(', ')) : '\u2014') +
+            '</td>' +
+            '<td><button class="d4-chip" data-psr-open="' + i + '">detail</button></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+    }
+
+    h.innerHTML =
+      '<div class="e3-card" style="max-width:1080px">' +
+        '<div class="e3-head"><h3>Parcel Screening Register</h3>' +
+          '<button class="e3-x" data-psr-close="1">\u2715</button></div>' +
+        '<div class="e3-body">' +
+          '<div class="e3-note warn" style="margin-bottom:12px">' +
+            '<b>This ranks parcels. It does not clear one.</b> Every figure is measured off a ' +
+            'line drawn by eye over imagery. The engine cannot see queue position, thermal ' +
+            'ratings, ATC or curtailment history \u2014 so a 345 kV line on the fence with a ' +
+            'full interconnection queue behind it scores well here and is undevelopable. ' +
+            'Read it as a work order: which parcels earn a utility conversation first.' +
+          '</div>' +
+          '<div class="e3-drop" id="psr-drop">Drop KMZ or KML files here, or click to choose' +
+            '<input type="file" id="psr-file" accept=".kmz,.kml" multiple style="display:none">' +
+          '</div>' +
+          body +
+        '</div>' +
+        '<div class="e3-foot">' +
+          (REG.length ? '<button class="e3-btn" data-psr-csv="1">Export CSV</button> ' +
+                        '<button class="e3-btn" data-psr-clear="1">Clear</button>' : '') +
+        '</div>' +
+      '</div>';
+    regWire();
+  }
+
+  function regWire() {
+    var h = document.getElementById('psr-modal'); if (!h) return;
+    var x = h.querySelector('[data-psr-close]'); if (x) x.onclick = regClose;
+    var drop = h.querySelector('#psr-drop'), inp = h.querySelector('#psr-file');
+    if (drop && inp) {
+      drop.onclick = function () { inp.click(); };
+      inp.onchange = function () { regRead(inp.files); inp.value = ''; };
+      ['dragenter', 'dragover'].forEach(function (ev) {
+        drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation();
+          drop.style.borderColor = 'var(--accent)'; });
+      });
+      ['dragleave', 'drop'].forEach(function (ev) {
+        drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation();
+          drop.style.borderColor = 'var(--border)'; });
+      });
+      drop.addEventListener('drop', function (e) {
+        regRead(e.dataTransfer && e.dataTransfer.files);
+      });
+    }
+    var c = h.querySelector('[data-psr-clear]');
+    if (c) c.onclick = function () { REG.length = 0; regRender(); };
+    var cs = h.querySelector('[data-psr-csv]');
+    if (cs) cs.onclick = regCsv;
+    var dets = h.querySelectorAll('[data-psr-open]');
+    for (var i = 0; i < dets.length; i++) {
+      dets[i].onclick = function () { regDetail(+this.getAttribute('data-psr-open')); };
+    }
+  }
+
+  /* Files are read in the browser. Nothing is uploaded, which matters when
+     the folder is somebody's whole site-control position. */
+  function regRead(files) {
+    if (!files || !files.length) return;
+    var SI = window.OmegaSiteIntel; if (!SI) return;
+    var pending = files.length;
+    function done() { if (--pending === 0) regRender(); }
+
+    Array.prototype.forEach.call(files, function (f) {
+      var name = String(f.name || 'parcel').replace(/\.(kmz|kml)$/i, '');
+      var isKmz = /\.kmz$/i.test(f.name || '');
+      function take(text) {
+        try {
+          var r = SI.analyzeKML(text, name);
+          /* Re-screening the same file replaces its row rather than adding a
+             second — a folder dropped twice is one folder. */
+          for (var i = 0; i < REG.length; i++) {
+            if (REG[i].name === name) { REG.splice(i, 1); break; }
+          }
+          REG.push({ name: name, intake: r.intake, grid: r.grid });
+        } catch (e) { if (window.console) console.warn('[psr]', name, e); }
+        done();
+      }
+      if (!isKmz) {
+        var r1 = new FileReader();
+        r1.onload = function () { take(String(r1.result || '')); };
+        r1.onerror = done;
+        r1.readAsText(f);
+        return;
+      }
+      ensureZip().then(function () {
+        var r2 = new FileReader();
+        r2.onload = function () {
+          JSZip.loadAsync(r2.result).then(function (z) {
+            var e = (z.file(/\.kml$/i) || [])[0];
+            if (!e) throw new Error('no .kml inside');
+            return e.async('string');
+          }).then(take)['catch'](done);
+        };
+        r2.onerror = done;
+        r2.readAsArrayBuffer(f);
+      })['catch'](done);
+    });
+  }
+
+  function regDetail(i) {
+    var rows = REG.slice().sort(function (a, b) { return b.grid.score - a.grid.score; });
+    var r = rows[i]; if (!r) return;
+    var g = r.grid, k = r.intake;
+    var h = regHost();
+    h.innerHTML =
+      '<div class="e3-card" style="max-width:820px">' +
+        '<div class="e3-head"><h3>' + esc(r.name) + '</h3>' +
+          '<button class="e3-x" data-psr-back="1">\u2190 back</button></div>' +
+        '<div class="e3-body">' +
+          '<div style="font-size:26px;font-weight:700;color:' + regBand(g.score) + '">' +
+            g.score + '<span style="font-size:12px;color:var(--sub);font-weight:400">/100 grid \u00b7 ' +
+            esc(g.confidence) + ' confidence</span></div>' +
+          (g.missing && g.missing.length
+            ? '<div class="e3-sub">Missing: ' + esc(g.missing.join(', ')) + '</div>' : '') +
+          '<table class="e3-tbl" style="margin-top:10px"><tbody>' +
+          g.components.map(function (c) {
+            return '<tr><td style="width:90px;color:var(--sub)">' + esc(c.key) + '</td>' +
+              '<td class="e3-num" style="width:70px">' + c.points +
+                (c.max ? ' / ' + c.max : '') + '</td>' +
+              '<td style="color:var(--sub)">' + esc(c.note) + '</td></tr>';
+          }).join('') + '</tbody></table>' +
+          k.flags.map(function (f) {
+            return '<div class="e3-note ' + (f.level === 'error' ? 'warn' : f.level === 'warn' ? 'warn' : 'info') +
+                   '" style="margin-top:8px">' + esc(f.msg) + '</div>';
+          }).join('') +
+          '<div class="e3-sub" style="margin-top:10px">Screening rank from the drawn geometry. ' +
+          'It puts parcels in order; it does not clear one. Confirm with the utility.</div>' +
+        '</div></div>';
+    var b = h.querySelector('[data-psr-back]');
+    if (b) b.onclick = function () { regRender(); };
+  }
+
+  function regCsv() {
+    var rows = REG.slice().sort(function (a, b) { return b.grid.score - a.grid.score; });
+    var head = ['rank','parcel','score','confidence','kv','poi_mi','poi_via','gross_acres',
+                'buildable_ceiling_acres','mw_hostable','circuits','substations',
+                'gas_diameter_in','hazard_on_parcel','flags','evidence'];
+    var out = [head];
+    rows.forEach(function (r, i) {
+      var g = r.grid, k = r.intake;
+      out.push([i + 1, r.name, g.score, g.confidence, g.kv || '', g.poiMi == null ? '' : g.poiMi,
+        g.poiVia || '', Math.round(k.grossAcres || 0), g.buildableCeilingAcres == null ? '' : g.buildableCeilingAcres,
+        g.mwHostable == null ? '' : g.mwHostable, k.circuitsAtMaxKv || 0,
+        (k.substations || []).length, k.maxGasDiameterIn || '', k.hazardOnParcel || 0,
+        k.flags.map(function (f) { return f.code; }).join('; '), g.evidence]);
+    });
+    var csv = out.map(function (rr) {
+      return rr.map(function (c) {
+        c = c == null ? '' : String(c);
+        return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c;
+      }).join(',');
+    }).join('\n');
+    download('parcel-screening-register.csv', csv, 'text/csv');
+  }
+
+  function n0(v) { return (Math.round(+v || 0)).toLocaleString(); }
+
+  function addRegButton() {
+    if (document.getElementById('rb-parcel-screen')) return true;
+    var host = document.getElementById('rb-gis-layers');
+    if (!host || !host.parentNode) return false;
+    var b = document.createElement('button');
+    b.className = 'rbtn';
+    b.id = 'rb-parcel-screen';
+    b.setAttribute('data-cap', 'parcelscreen');
+    b.title = 'Parcel Screening Register \u2014 drop a folder of site KMZs and rank them on ' +
+              'grid position. Ranks parcels; does not clear one.';
+    b.innerHTML = '<span class="rb-ico">\u2637</span><span class="rb-lbl">Parcel<br>Screen</span>';
+    b.onclick = function () { try { regOpen(); } catch (e) { console.error(TAG, e); } };
+    host.parentNode.insertBefore(b, host.nextSibling);
+    return true;
+  }
+
+  window.OmegaParcelScreen = {
+    open: regOpen, close: regClose,
+    rows: function () { return REG.slice(); },
+    add: regRead
+  };
+
   window.OmegaGIS = {
     engine: E, open: open, close: close,
     layers: function () { return LAYERS; },
@@ -106397,9 +106664,13 @@ table.e3-tbl td{ white-space:normal }
 
   watchMap();
   var n = 0, iv = setInterval(function () {
-    if (addButton() || ++n > 60) {
+    /* Parcel Screen anchors off the GIS button, so it is installed in the
+       same poll and only once that one exists. */
+    var ok = addButton();
+    if (ok) addRegButton();
+    if (ok || ++n > 60) {
       clearInterval(iv);
-      if (window.console) console.info(TAG + ' ready \u2014 Insert \u203a Site & Safety \u203a GIS Layers, or OmegaGIS.open()');
+      if (window.console) console.info(TAG + ' ready \u2014 Insert \u203a Site & Safety \u203a GIS Layers / Parcel Screen, or OmegaGIS.open() / OmegaParcelScreen.open()');
     }
   }, 500);
 })();
@@ -136735,12 +137006,35 @@ function buildGround(site, span){
           + 'tiles that had not finished loading when the capture was taken.';
         n.style.color = '#F0A030';
       } else {
+        /* A field, not an instruction to open devtools. The key was only
+           settable by typing into localStorage, which is why none is set. */
         n.innerHTML = '<b>Using a viewport capture.</b> No Google Static Maps key is set, so '
           + 'the ground is a screenshot of the drawing viewport \u2014 the bands of bare '
           + 'colour are map tiles that had not finished loading when it was taken, and the '
-          + 'attribution text is baked into the pixels. Add a key with the Maps Static API '
-          + 'enabled for one clean image.';
+          + 'attribution text is baked into the pixels.'
+          + '<div style="margin-top:6px">'
+          +   '<input id="ov-mapskey" type="password" placeholder="Google Maps key (Static API enabled)" '
+          +     'style="width:100%;font:inherit;font-size:11px;padding:4px 6px;border-radius:4px;'
+          +     'border:1px solid var(--border);background:rgba(0,0,0,.25);color:inherit">'
+          +   '<button id="ov-mapskey-save" style="margin-top:4px;font:inherit;font-size:11px;'
+          +     'padding:3px 9px;border-radius:4px;border:1px solid var(--border);'
+          +     'background:rgba(255,255,255,.08);color:inherit;cursor:pointer">Save key and rebuild</button>'
+          +   '<div style="margin-top:4px;opacity:.8">Stored in this browser only. It goes out in '
+          +     'the tile URL either way, so restrict it by HTTP referrer in the Google console '
+          +     '\u2014 that is what protects it, not secrecy.</div>'
+          + '</div>';
         n.style.color = '#F0A030';
+        try {
+          var btn = document.getElementById('ov-mapskey-save');
+          if (btn) btn.onclick = function () {
+            var f = document.getElementById('ov-mapskey');
+            var v = f ? String(f.value || '').trim() : '';
+            if (!v) return;
+            try { localStorage.setItem('clearsky_maps_key', v); } catch (e) {}
+            n.textContent = 'Key saved \u2014 rebuilding the ground\u2026';
+            try { buildGround(site, span); V.needsRender = true; } catch (e) {}
+          };
+        } catch (e) {}
       }
     } catch(e){}
   }
