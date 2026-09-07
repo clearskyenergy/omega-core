@@ -235,6 +235,32 @@
     return '<h2 class="sec">How the number is built</h2><div class="mgrid">' + cells + '</div>';
   }
 
+  /* EVIDENCE IS NOT DECORATION AND IT IS NOT A CONSTANT.
+     This line was hardcoded to kmz_traced, which was true of every row when
+     the only way in was a dropped file. A site screened off the editor's own
+     drawing is 'map_drawn', and one whose grid facts were fetched rather than
+     traced is 'map_drawn+grid_atlas' — a materially weaker claim. Printing
+     the stronger tag over the weaker one is precisely the failure the tag
+     exists to prevent, so the document reports what the rows actually carry
+     and names every kind present when they differ. */
+  function evidenceOf(rows) {
+    var seen = {}, out = [];
+    rows.forEach(function (r) {
+      var e = (r.grid && r.grid.evidence) || (r.intake && r.intake.evidence) || 'unknown';
+      if (!seen[e]) { seen[e] = 1; out.push(e); }
+    });
+    return out.length ? out.join(' + ') : 'unknown';
+  }
+
+  function sourceOf(rows) {
+    var mapped = rows.filter(function (r) { return r.fromMap; }).length;
+    var files  = rows.length - mapped;
+    var bits = [];
+    if (files)  bits.push(files + ' KMZ, traced');
+    if (mapped) bits.push(mapped + ' from the site drawing');
+    return bits.join(' + ') || 'none';
+  }
+
   /* ── the document ────────────────────────────────────────────────────── */
   function html(rows, opts) {
     opts = opts || {};
@@ -289,8 +315,8 @@
         '<div class="meta">' +
           '<span>RUN <b>' + today() + '</b></span>' +
           '<span>ENGINE <b>' + esc((si && si.VERSION) || 'site-intel') + '</b></span>' +
-          '<span>SOURCE <b>' + n + ' KMZ, traced</b></span>' +
-          '<span>EVIDENCE <b>kmz_traced</b></span>' +
+          '<span>SOURCE <b>' + esc(sourceOf(rows)) + '</b></span>' +
+          '<span>EVIDENCE <b>' + esc(evidenceOf(rows)) + '</b></span>' +
         '</div>' +
       '</div>' +
       '<div class="caveat"><h3>This ranks sites. It does not clear one.</h3>' +

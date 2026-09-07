@@ -126,6 +126,9 @@ function openFinancingApply(){
      the kV capacity table. It recomputes nothing: every figure is read off the
      engine output above, and the weights and capacity ladder come from the engine
      rather than being restated, so the document cannot drift from the score. -->
+<!-- A build drawing never has the transmission line on it, so screening one
+     needs the grid fetched rather than read. Same client the site finder uses. -->
+<script src="/omega-grid-atlas-client.js"></script>
 <script src="/omega-parcel-report.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
@@ -106633,14 +106636,46 @@ table.e3-tbl td{ white-space:normal }
      answer is never read without knowing how much was behind it.
      ═══════════════════════════════════════════════════════════════════════ */
 
-  /* Shape kinds that describe the SITE rather than the build. Everything
-     else on the canvas is equipment and is deliberately not screened. */
-  var SITE_KINDS = { poly: 1, polyline: 1, line: 1, area: 1, parcel: 1,
-                     boundary: 1, freeform: 1, shape: 1, rect: 1 };
+  /* ── WHAT ON A BUILD DRAWING IS ACTUALLY SITE INTELLIGENCE ───────────
+     The first version took every polyline and rectangle on the canvas. On a
+     real project that is trenches, access roads, fences, equipment pads and
+     conduit runs — sixteen of them on Lattice — and the engine dutifully
+     read them as parcels: overlapping rings, 45 acres instead of the real
+     boundary, and no grid at all, for a score of 15 that meant nothing.
 
-  /* Canvas pixels to ground, the same converter and the same canvas
-     measurement _anchorRepair uses — measuring the canvas differently here
-     would land the corners a few feet off, which is worse than skipping them. */
+     A build drawing is not a screening file. It says where the batteries go,
+     not what the utility is. So the sources are now named one at a time and
+     everything else is left out:
+
+       THE PARCEL is _siteBoundaryInfo() — the shape marked as the property
+       line, or the largest closed shape if none was marked. ONE ring. That
+       function already exists for the sheets and already tells us whether it
+       was designated or guessed, which is a thing the screen must repeat
+       rather than hide.
+
+       A DRAWN SUBSTATION is a real point of interconnection: _placeSubstation
+       stores kind:'substation' with a voltage and a firm rating, which is
+       exactly what the engine wants.
+
+       ANY SHAPE LABELLED IN THE ENGINE'S OWN VOCABULARY — a kV, a
+       substation, a gas or hazardous-liquid line, an acreage — is read.
+       "MV feeder — solar field" is not: 'feeder' is deliberately NOT in the
+       pattern, because on a build drawing it names a conduit run and letting
+       it through is how a trench becomes a transmission circuit.
+
+       GIS LAYERS are unchanged and are still the best source.
+
+     WHAT IS STILL MISSING AFTER ALL THAT is the grid itself. Nobody draws
+     the 345 kV line on a site plan, so a build drawing screens with no_grid
+     forever — and that is the one thing the editor can go and find, because
+     Grid Atlas answers exactly "what transmission and substations are near
+     this point" and the site's coordinates are already on the page.
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Deliberately tight. Every word here appears in classify()'s own
+     patterns; nothing that merely sounds electrical is included. */
+  var SITE_LABEL = /(\d+(?:\.\d+)?\s*k\.?v|\bsub(?:station)?\b|\bgas\b|pipe\s?line|crude|\bhvl\b|\bacres?\b|transmission|switch\s?yard|wetland|easement)/i;
+
   function toGeo(x, y) {
     try {
       var ms = (typeof _liveMapState === 'function') ? _liveMapState() : null;
@@ -106653,12 +106688,11 @@ table.e3-tbl td{ white-space:normal }
 
   function geoFromShape(sh) {
     /* A RECTANGLE IS STORED AS TWO CORNERS, NOT AS A RING. _commitTwoPoint
-       keeps the drag start and end, so its _geoPts is two points — which the
-       engine would read as a two-point line, fail isClosedRing on, and
-       measure at zero acres. A rectangle traced round a parcel is a parcel;
-       the other two corners are reconstructed in pixels and converted the
-       same way, so it measures like any other ring. */
-    if (sh && sh.kind === 'rect' && sh.pts && sh.pts.length === 2) {
+       and _placeSubstation both keep only the drag start and end, so the
+       other two corners are reconstructed in pixels and converted with the
+       same converter and canvas measurement _anchorRepair uses. */
+    if (sh && sh.pts && sh.pts.length === 2 &&
+        (sh.kind === 'rect' || sh.kind === 'substation' || sh.kind === 'zonebox')) {
       var a = sh.pts[0], b = sh.pts[1];
       var corners = [[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y], [a.x, a.y]];
       var ring = [];
@@ -106679,11 +106713,86 @@ table.e3-tbl td{ white-space:normal }
     return pts;
   }
 
-  /* Everything on the map that the engine can read, as the same feature
-     shape parseKML produces: { type, coords:[[lng,lat]…], props:{ name } }. */
-  function mapFeatures() {
-    var out = [], src = { layers: 0, layerFeatures: 0, shapes: 0, skipped: 0 };
+  function centroidOf(ring) {
+    var x = 0, y = 0, n = 0;
+    for (var i = 0; i < ring.length; i++) { x += ring[i][0]; y += ring[i][1]; n++; }
+    return n ? { lng: x / n, lat: y / n } : null;
+  }
 
+  function siteLatLng(features) {
+    for (var i = 0; i < features.length; i++) {
+      if (features[i].type === 'polygon') { var c = centroidOf(features[i].coords); if (c) return c; }
+    }
+    try {
+      var g = (typeof omegaGeo === 'function') ? omegaGeo() : null;
+      if (g && g.lat != null && g.lng != null) return { lat: +g.lat, lng: +g.lng };
+    } catch (e) {}
+    return null;
+  }
+
+  function mapFeatures() {
+    var out = [], src = { layers: 0, layerFeatures: 0, boundary: null, boundaryAcres: null,
+                          substations: 0, labelled: 0, skipped: 0 };
+
+    /* 1. THE PARCEL — one ring, from the function that already owns the
+          question, rather than every closed shape on the canvas. */
+    var bi = null;
+    try { bi = (typeof _siteBoundaryInfo === 'function') ? _siteBoundaryInfo() : null; } catch (e) {}
+    if (bi && bi.present) {
+      src.boundaryAcres = bi.acres;
+      var ring = bi.ring && bi.anchored
+        ? bi.ring.map(function (g) { return [+g.lng, +g.lat]; })
+        : (bi.pts ? bi.pts.map(function (pt) { return toGeo(pt.x, pt.y); }) : null);
+      var ok = !!(ring && ring.length > 2);
+      for (var q = 0; ok && q < ring.length; q++) if (!ring[q]) ok = false;
+      if (ok) {
+        var a0 = ring[0], z0 = ring[ring.length - 1];
+        if (a0[0] !== z0[0] || a0[1] !== z0[1]) ring.push([a0[0], a0[1]]);
+        out.push({ type: 'polygon', coords: ring, props: { name: 'Parcel boundary' } });
+        src.boundary = bi.derived ? 'derived' : 'designated';
+        /* The acreage the drawing states, as a pin — the same input a KMZ
+           carries, so the >5% stated-vs-traced cross-check still runs. */
+        if (bi.acres) out.push({ type: 'point', coords: [[a0[0], a0[1]]],
+                                 props: { name: Math.round(bi.acres) + ' acres' } });
+      } else {
+        src.boundary = 'unanchored';
+      }
+    }
+
+    /* 2. DRAWN SUBSTATIONS — a real POI the site team placed. */
+    try {
+      var st0 = (typeof S !== 'undefined') ? S : null;
+      (st0 && st0.shapes ? st0.shapes : []).forEach(function (sh) {
+        if (sh.kind !== 'substation') return;
+        var r = geoFromShape(sh);
+        if (!r) { src.skipped++; return; }
+        var kvTxt = String(sh.voltage || '').trim();
+        var nm = (kvTxt ? kvTxt.replace(/\s+/g, '') + ' ' : '') + (sh.label || 'Substation');
+        out.push({ type: 'point', coords: [centroidOf(r) ? [centroidOf(r).lng, centroidOf(r).lat] : r[0]],
+                   props: { name: nm } });
+        src.substations++;
+      });
+    } catch (e) {}
+
+    /* 3. ANYTHING LABELLED IN THE ENGINE'S VOCABULARY. */
+    try {
+      var st1 = (typeof S !== 'undefined') ? S : null;
+      (st1 && st1.shapes ? st1.shapes : []).forEach(function (sh) {
+        if (sh.kind === 'substation') return;
+        if (bi && bi.shape && sh === bi.shape) return;
+        var label = String(sh.label || sh.name || sh.text || '').trim();
+        if (!label || !SITE_LABEL.test(label)) return;
+        var pts = geoFromShape(sh);
+        if (!pts) { src.skipped++; return; }
+        var closed = pts.length > 3 &&
+          Math.abs(pts[0][0] - pts[pts.length - 1][0]) < 1e-9 &&
+          Math.abs(pts[0][1] - pts[pts.length - 1][1]) < 1e-9;
+        out.push({ type: closed ? 'polygon' : 'line', coords: pts, props: { name: label } });
+        src.labelled++;
+      });
+    } catch (e) {}
+
+    /* 4. GIS LAYERS — the best source, unchanged. */
     try {
       var G = window.OmegaGIS;
       var layers = (G && G.layers) ? G.layers() : [];
@@ -106699,51 +106808,95 @@ table.e3-tbl td{ white-space:normal }
       });
     } catch (e) {}
 
-    try {
-      var st = (typeof S !== 'undefined') ? S : null;
-      (st && st.shapes ? st.shapes : []).forEach(function (sh) {
-        var label = String(sh.label || sh.name || sh.text || sh.model || '').trim();
-        if (!SITE_KINDS[sh.kind]) return;
-        var pts = geoFromShape(sh);
-        if (!pts) { src.skipped++; return; }
-        var closed = pts.length > 3 &&
-          Math.abs(pts[0][0] - pts[pts.length - 1][0]) < 1e-9 &&
-          Math.abs(pts[0][1] - pts[pts.length - 1][1]) < 1e-9;
-        out.push({ type: closed ? 'polygon' : 'line', coords: pts,
-                   props: { name: label } });
-        src.shapes++;
-      });
-    } catch (e) {}
-
     return { features: out, src: src };
   }
 
-  /* The project's own name, so the row in the register matches the drawing
-     rather than being called "Untitled". */
   function siteName() {
     var n = '';
-    try { n = (typeof S !== 'undefined' && S && (S.projectName || S.name)) || ''; } catch (e) {}
-    if (!n) { try { n = (document.getElementById('proj-name') || {}).textContent || ''; } catch (e) {} }
+    try { n = (document.getElementById('pname') || {}).value || ''; } catch (e) {}
+    if (!n) { try { n = (document.querySelector('.proj-name') || {}).textContent || ''; } catch (e) {} }
+    if (!n) { try { n = (typeof S !== 'undefined' && S && (S.projectName || S.name)) || ''; } catch (e) {} }
     return String(n).trim() || 'This site';
+  }
+
+  /* ── THE GRID NOBODY DRAWS ───────────────────────────────────────────
+     A build drawing has no transmission on it and never will, so without
+     this every site screens no_grid and the score is a land score wearing a
+     grid score's name. Grid Atlas answers the missing question from national
+     data for the site's own coordinates.
+
+     IT IS MERGED AS SCALARS, NOT AS GEOMETRY, because the service returns
+     distance and voltage per feature and no coordinates — so there is
+     nothing to measure and nothing is pretended to be measured.
+
+     AND IT IS A DIFFERENT KIND OF EVIDENCE. A traced KMZ is somebody looking
+     at the line; HIFLD and OSM are a national dataset that is wrong about
+     individual assets often enough to matter. The evidence tag changes, a
+     flag says where the grid facts came from, and the report prints the tag
+     it is given rather than the one it used to hardcode. */
+  function mergeAtlas(st, at) {
+    var s = at && window.OmegaGridAtlas ? window.OmegaGridAtlas.summarise(at) : null;
+    if (!s || (s.maxKv == null && s.nearestSubKm == null)) return false;
+
+    if (s.maxKv != null && s.maxKv > (st.maxKv || 0)) st.maxKv = s.maxKv;
+    if (s.nearestSubKm != null) {
+      var m = s.nearestSubKm * 1000;
+      if (st.nearestSubM == null || m < st.nearestSubM) st.nearestSubM = m;
+      if (!st.substations || !st.substations.length) {
+        st.substations = [{ name: s.nearestSubName || 'Substation',
+                            attrs: { kv: s.maxKv || null, kvUnknown: s.maxKv == null } }];
+      }
+      if (s.maxKv != null && !(st.maxSubKv > s.maxKv)) st.maxSubKv = s.maxKv;
+    }
+    /* Circuit count is not something a point lookup can answer. Left alone
+       rather than assumed, so redundancy stays honestly low. */
+    st.evidence = 'map_drawn+grid_atlas';
+    st.flags.push({ level: 'warn', code: 'grid_from_atlas',
+      msg: 'No transmission or substation was drawn on this map, so the grid facts — ' +
+           (s.maxKv != null ? s.maxKv + ' kV' : 'voltage') +
+           (s.nearestSubKm != null ? ' and ' + (s.nearestSubKm * 0.621371).toFixed(2) + ' mi to the nearest substation' : '') +
+           ' — come from Grid Atlas national data (' + s.substations + ' substations, ' + s.lines +
+           ' lines nearby), not from anything anyone traced. Confirm with the utility before ' +
+           'the number leaves the building.' });
+    return true;
   }
 
   function screenCurrent() {
     var SI = window.OmegaSiteIntel;
-    if (!SI) return { ok: false, msg: 'The site-intel engine did not load. Reload the page.' };
+    if (!SI) return Promise.resolve({ ok: false, msg: 'The site-intel engine did not load. Reload the page.' });
     var m = mapFeatures();
     if (!m.features.length) {
-      return { ok: false, msg: 'Nothing on this map can be screened yet. Import the parcel and ' +
-        'the utility layers through Insert \u203a GIS Layers, or trace the boundary with the ' +
-        'satellite view on so the points carry coordinates.' };
+      return Promise.resolve({ ok: false, msg: 'Nothing on this map can be screened yet. Mark the ' +
+        'property line (select the boundary shape \u2192 Site \u2192 Set as boundary), or import the ' +
+        'parcel and utility layers through Insert \u203a GIS Layers. The satellite view has to be on ' +
+        'so the points carry coordinates.' });
     }
+
     var name = siteName();
     var st = SI.intake(m.features, name);
-    var g  = SI.gridScore(st);
-    for (var i = 0; i < REG.length; i++) {
-      if (REG[i].name === name) { REG.splice(i, 1); break; }
-    }
-    REG.push({ name: name, intake: st, grid: g, fromMap: true });
-    return { ok: true, src: m.src, name: name };
+    st.evidence = 'map_drawn';
+
+    var haveGrid = (st.transmission && st.transmission.length) || (st.substations && st.substations.length);
+    var at = window.OmegaGridAtlas, loc = siteLatLng(m.features);
+    var step = (!haveGrid && at && loc)
+      ? at.run({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 20000 })
+          .then(function (res) { return mergeAtlas(st, res) ? 'atlas' : 'atlas-empty'; })
+          ['catch'](function (e) {
+            st.flags.push({ level: 'warn', code: 'grid_lookup_failed',
+              msg: 'No grid was drawn on this map and Grid Atlas could not be reached (' +
+                   ((e && e.message) || 'no answer') + '), so this is a land score only.' });
+            return 'atlas-failed';
+          })
+      : Promise.resolve(haveGrid ? 'drawn' : 'none');
+
+    return step.then(function (gridSrc) {
+      var g = SI.gridScore(st);
+      for (var i = 0; i < REG.length; i++) {
+        if (REG[i].name === name) { REG.splice(i, 1); break; }
+      }
+      REG.push({ name: name, intake: st, grid: g, fromMap: true });
+      return { ok: true, src: m.src, name: name, gridSrc: gridSrc, score: g.score };
+    });
   }
 
   /* ── THE FILE THE PARTNERS EXCHANGE ──────────────────────────────────
@@ -106946,27 +107099,42 @@ table.e3-tbl td{ white-space:normal }
     }
     var mp = h.querySelector('[data-psr-map]');
     if (mp) mp.onclick = function () {
-      var r = screenCurrent();
-      if (!r.ok) {
-        var n = document.getElementById('psr-mapnote');
-        if (n) { n.className = 'e3-note warn'; n.style.display = ''; n.textContent = r.msg; }
-        return;
+      var note = document.getElementById('psr-mapnote');
+      function say(cls, txt) {
+        if (!note) return;
+        note.className = 'e3-note ' + cls; note.style.display = ''; note.textContent = txt;
       }
-      /* WHAT IT FOUND, BEFORE THE SCORE. A number off two features and a
-         number off forty look identical in the table; this is the only place
-         the difference is visible at the moment of screening. */
-      var d = r.src;
-      var parts = [];
-      if (d.layerFeatures) parts.push(d.layerFeatures + ' feature' + (d.layerFeatures === 1 ? '' : 's') +
-                                     ' from ' + d.layers + ' GIS layer' + (d.layers === 1 ? '' : 's'));
-      if (d.shapes) parts.push(d.shapes + ' drawn shape' + (d.shapes === 1 ? '' : 's'));
-      var msg = 'Screened ' + r.name + ' from ' + parts.join(' and ') + '.';
-      if (d.skipped) msg += ' ' + d.skipped + ' shape' + (d.skipped === 1 ? ' was' : 's were') +
-        ' left out because they carry no coordinates — they were drawn without the satellite ' +
-        'view on. Turn it on and run Anchor repair to include them.';
-      regRender();
-      var n2 = document.getElementById('psr-mapnote');
-      if (n2) { n2.className = 'e3-note info'; n2.style.display = ''; n2.textContent = msg; }
+      mp.disabled = true;
+      say('info', 'Reading the map\u2026');
+      screenCurrent().then(function (r) {
+        mp.disabled = false;
+        if (!r.ok) { say('warn', r.msg); return; }
+        regRender();
+        /* WHAT IT READ, AND WHERE THE GRID CAME FROM. A score off a
+           designated boundary with drawn substations and a score off a
+           guessed ring with national data behind it look identical in the
+           table; this is the one place the difference is stated. */
+        var d = r.src, bits = [];
+        if (d.boundary === 'designated') bits.push('the boundary you marked');
+        else if (d.boundary === 'derived') bits.push('the largest closed shape as the boundary (nothing is marked as the property line \u2014 Site \u203a Set as boundary fixes that)');
+        else if (d.boundary === 'unanchored') bits.push('a boundary with no coordinates (turn the satellite view on and re-anchor)');
+        if (d.substations) bits.push(d.substations + ' drawn substation' + (d.substations === 1 ? '' : 's'));
+        if (d.labelled) bits.push(d.labelled + ' labelled site feature' + (d.labelled === 1 ? '' : 's'));
+        if (d.layerFeatures) bits.push(d.layerFeatures + ' feature' + (d.layerFeatures === 1 ? '' : 's') +
+                                       ' from ' + d.layers + ' GIS layer' + (d.layers === 1 ? '' : 's'));
+        var msg = 'Screened ' + r.name + ' (' + r.score + '/100) from ' +
+                  (bits.length ? bits.join(', ') : 'nothing usable') + '.';
+        if (r.gridSrc === 'atlas') msg += ' No grid was drawn, so the voltage and the distance to ' +
+          'the substation came from Grid Atlas national data \u2014 confirm with the utility.';
+        else if (r.gridSrc === 'atlas-empty' || r.gridSrc === 'atlas-failed')
+          msg += ' No grid was drawn and none could be looked up, so this is a land score only.';
+        if (d.skipped) msg += ' ' + d.skipped + ' shape' + (d.skipped === 1 ? ' was' : 's were') +
+          ' left out for having no coordinates.';
+        say(r.gridSrc === 'atlas' || d.boundary !== 'designated' ? 'warn' : 'info', msg);
+      })['catch'](function (e) {
+        mp.disabled = false;
+        say('warn', (e && e.message) || 'Could not screen this map.');
+      });
     };
     var kz = h.querySelector('[data-psr-kmz]');
     if (kz) kz.onclick = exportKmz;
