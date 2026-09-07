@@ -292,8 +292,12 @@
        from the chooser to /, which redirected to the login, which signed
        them in, which offered the chooser… a loop, and exactly the
        "I click on workspace and it just keeps glitching" that reported it.
-       Naming the page skips the redirect, which only matches "/". */
-    workspace:   PORTAL + "/index.html",            // a tenant's own OMEGA workspace
+
+       Naming /index.html does NOT dodge it: cleanUrls strips index.html
+       back to "/", so it lands on the same redirect one hop later. The
+       portal needs an address of its own, so /workspace rewrites to the
+       shell. It is also a better thing to bookmark than "/". */
+    workspace:   PORTAL + "/workspace",             // a tenant's own OMEGA workspace
     admin:       PORTAL + "/admin/",                // ClearSky admin console
     ops:         "https://alpha.clearskyomega.com", // ops console (reps)
     financing:   PORTAL + "/portals/finance/",
