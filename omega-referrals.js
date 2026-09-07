@@ -1569,17 +1569,15 @@
             + '<div class="or-f"><label for="or-c-need">Needed by</label>'
               + '<input id="or-c-need" type="date"></div>'
             + '<div class="or-f"><label for="or-c-to">Send to</label>'
-              + '<input id="or-c-to" type="text" list="or-c-to-list" value="' + esc(orgId()) + '">'
-              /* OSA offered by name rather than left to be typed. It is not an
-                 email domain, so nobody would guess "osa" — and a destination
-                 you have to know the spelling of is one nobody uses. */
-              + '<datalist id="or-c-to-list">'
-                + '<option value="' + esc(OSA_ORG) + '">OSA \u2014 the joint venture workspace</option>'
-                + (orgId() && orgId() !== OSA_ORG
-                    ? '<option value="' + esc(orgId()) + '">' + esc(orgId()) + '</option>' : '')
-              + '</datalist>'
-              + '<div class="hint">The receiving workspace. Type <b>' + esc(OSA_ORG)
-                + '</b> to file it into the OSA joint venture.</div></div>'
+              /* A LIST, NOT A TEXT BOX. This was an <input list> with a
+                 datalist, and a datalist is the wrong control here twice
+                 over: it shows nothing until you type, and it accepts
+                 anything you type. The destinations are a closed set of at
+                 most two, both known before the modal opens, so the control
+                 that fits is the one that shows both and permits neither a
+                 typo nor an invention. */
+              + '<select id="or-c-to">' + toOptions() + '</select>'
+              + '<div class="hint" id="or-c-to-hint">' + esc(toHint()) + '</div></div>'
           + '</div>'
           + '<div class="or-msg" id="or-cmsg"></div>'
         + '</div>'
@@ -1601,8 +1599,52 @@
     });
   }
 
+  /* ── WHERE A REFERRAL CAN GO ──────────────────────────────────────────
+     Two destinations, and the second one is not for everybody.
+
+     orgId() is the tenant this deployment serves — the normal case, and the
+     only one before OSA existed. OSA is offered ONLY to the joint venture's
+     own member firms: intake_projects gates its reads on canActInOrg(), so a
+     sender outside the JV who picks OSA gets permission-denied at write time
+     and reads it as the send having broken. Not offering it is the honest
+     shape; the rules refuse it either way.
+
+     ⚠ MIRRORS OSA_ORGS IN index.html. Same three domains, same reason it is
+     a literal list rather than a flag on omega_orgs: a joint venture is not
+     something that should become switchable by a mis-click in a console. Add
+     a fourth firm in both places or it half-works. */
+  var JV_ORGS = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+
+  function toDestinations() {
+    var out = [];
+    if (orgId()) out.push({ value: orgId(), label: clientName() + ' \u2014 for a quote' });
+    if (JV_ORGS.indexOf(myOrg()) >= 0)
+      out.push({ value: OSA_ORG, label: 'OSA \u2014 the joint venture workspace' });
+    return out;
+  }
+
+  function toOptions() {
+    return toDestinations().map(function (d) {
+      return '<option value="' + esc(d.value) + '">' + esc(d.label) + '</option>';
+    }).join('');
+  }
+
+  function toHint() {
+    var d = toDestinations();
+    if (d.length < 2) return 'The workspace this request is addressed to.';
+    return 'OSA files it into the joint venture inbox instead of sending a quote request.';
+  }
+
   function openCompose() {
     injectStyles(); ensureCompose();
+    /* Rebuilt on open, not only on first build. The modal is created once and
+       cached; the destination list depends on who is signed in, so a cached
+       modal built a moment before auth resolved would offer the wrong set for
+       the rest of the session. */
+    var sel = $('or-c-to');
+    if (sel) { sel.innerHTML = toOptions(); }
+    var hint = $('or-c-to-hint');
+    if (hint) { hint.textContent = toHint(); }
     $('or-compose').classList.add('on');
     setTimeout(function () { var i = $('or-c-site'); if (i) i.focus(); }, 60);
   }
