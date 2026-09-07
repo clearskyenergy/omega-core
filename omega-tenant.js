@@ -73,7 +73,16 @@
   var PREVIEW_SUFFIXES = ['.vercel.app', 'staging.clearskyomega.com', 'next.clearskyomega.com'];
   /* HUB HOSTS: no pinned tenant, no hostname lock. Where people sign up and
      get routed to their own workspace. /start.html lives here. */
-  var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com'];
+  /* silmarillion.clearskyomega.com is the front door the marketing site's
+     "Log in to OMEGA" points at. It has to be a HUB and not a tenant: a
+     tenant_public registration pins one orgId, and the whole job of a public
+     login link is to take anybody's work email and route them to whichever
+     workspace it belongs to. Without this the domain resolves, serves, and
+     then refuses with "is not a registered ClearSky-OMEGA portal address" —
+     which is the hostname lock doing exactly what it should to a host nobody
+     told it about. */
+  var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com',
+                   'silmarillion.clearskyomega.com'];
   var TIER_LEVEL = { trial: -1, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
   var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 

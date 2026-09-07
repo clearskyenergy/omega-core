@@ -55,6 +55,16 @@
       "has": [
         {
           "type": "host",
+          "value": "silmarillion.clearskyomega.com"
+        }
+      ],
+      "destination": "/start.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
           "value": "alpha.clearskyomega.com"
         }
       ],
