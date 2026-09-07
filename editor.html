@@ -152979,10 +152979,33 @@ if (root.console && console.info) {
      falls in an exclusion, so the placed equipment is handed to it as
      exclusions and PV flows around the buildings by the same rule that
      keeps it out of a wetland. */
+  /* ⚠ THIS IS THE FALLBACK PATH, NOT THE ONE THAT USUALLY RUNS. The unified
+     engine's takeOver() replaces OmegaMaxFit.fillSolar and OmegaDesign.run
+     with its own, so on a normal load Design Site goes through
+     OmegaEngine.design() and its solarPlan(), which already reports a reason
+     of its own. What follows still matters for the load where the engine
+     module does not come up, and it should be as honest as that one is.
+
+     ── WHY THIS RETURNS A REASON NOW ────────────────────────────────────
+     Every failure here used to be `return null`, and run() calls it inside
+     a try/catch that swallows everything — then prints "Solar, storage,
+     on-site generation" in the summary regardless. So electing solar and
+     getting no solar looked like the tool refusing to auto-fit, when it was
+     the tool failing quietly and then telling you it had succeeded. A
+     summary that contradicts the drawing is worse than no summary.
+
+     computeGroundLayout() needs no prior state — it reads _derScale() and
+     _solarAssume('ground'), both of which have defaults — so "you have to
+     draw solar first" was never the rule. Whatever is actually stopping it
+     now says so by name. */
   function fillSolar(opts) {
     opts = opts || {};
     var poly = boundary();
-    if (!poly || typeof computeGroundLayout !== 'function') return null;
+    if (!poly) return { ok: false, why: 'no parcel boundary is traced' };
+    if (typeof computeGroundLayout !== 'function') {
+      return { ok: false, why: 'the ground-layout engine did not load' };
+    }
+    try { if (!(+S.pxPerFt > 0)) return { ok: false, why: 'the drawing has no scale yet' }; } catch (e) {}
 
     var excl = [];
     try { excl = (root._alExclusions || []).slice(); } catch (e) {}
@@ -153014,16 +153037,37 @@ if (root.console && console.info) {
         gcr: +opts.gcr || 0.40,
         setbackFt: +opts.setbackFt || 25
       });
-    } catch (e) { if (root.console) console.warn(TAG + ' solar', e && e.message); }
-    if (!layout || !layout.tableCount) return null;
+    } catch (e) {
+      if (root.console) console.warn(TAG + ' solar', e && e.message);
+      return { ok: false, why: 'the ground layout threw: ' + ((e && e.message) || 'unknown') };
+    }
+    if (!layout) return { ok: false, why: 'the ground layout returned nothing' };
+    if (!layout.tableCount) {
+      /* THE COMMON CASE, AND IT IS WORTH NAMING PRECISELY. Every piece of
+         compute already on the drawing is an exclusion, so after a dense
+         build there can genuinely be nowhere left a table fits. That is a
+         real answer about the site, not a malfunction — but it has to be
+         said, because "no solar appeared" and "no solar fits" look the
+         same on screen and mean completely different things. */
+      return { ok: false, exclusions: excl.length,
+               why: excl.length
+                 ? 'no table fits between the ' + excl.length + ' things already placed — '
+                   + 'clear some of the build, widen the boundary, or place solar by hand'
+                 : 'no table fits inside the boundary at the current scale and setback' };
+    }
 
-    try { applyGroundLayout(poly, layout, excl); } catch (e) { return null; }
-    return { tables: layout.tableCount, kwDc: layout.kw, kwAc: layout.kwAc, gcr: layout.gcr };
+    try { applyGroundLayout(poly, layout, excl); }
+    catch (e) { return { ok: false, why: 'the layout could not be drawn: ' + ((e && e.message) || 'unknown') }; }
+    return { ok: true, tables: layout.tableCount, kwDc: layout.kw, kwAc: layout.kwAc, gcr: layout.gcr };
   }
 
   function report(o) {
     var bits = [o.pods + ' pods \u2014 ' + o.itMw + ' MW IT'];
-    if (o.solar) bits.push(n0(o.solar.kwDc) + ' kW-DC solar in ' + n0(o.solar.tables) + ' tables');
+    /* fillSolar returns a REASON on failure now, so `if (o.solar)` alone
+       would print "NaN kW-DC solar in NaN tables" on the run where none was
+       placed — the exact silent-failure-dressed-as-success this change
+       exists to remove. */
+    if (o.solar && o.solar.ok) bits.push(n0(o.solar.kwDc) + ' kW-DC solar in ' + n0(o.solar.tables) + ' tables');
     if (o.sizing && o.sizing.bessKwh) {
       bits.push(n0(o.sizing.bessKwh) + ' kWh ride-through');
     }
@@ -154385,7 +154429,15 @@ if (root.console && console.info) {
 
   /* ── DER election ───────────────────────────────────────────────────── */
 
-  var DER = { solar: false, storage: true, generation: true };
+  /* ── SOLAR DEFAULTS ON ────────────────────────────────────────────────
+     It defaulted off, and "off" is indistinguishable on screen from "the
+     tool would not do it" — which is exactly how it read: elect a compute
+     build, get no solar, conclude the auto-fit does not work. The engine
+     supports the mix properly (solarPlan ranks utility energy against
+     on-site fuel and displaces the dearer one first), so for a compute site
+     the mix is the sensible starting point rather than the thing you have
+     to know to ask for. Unticking it is one click and it is remembered. */
+  var DER = { solar: true, storage: true, generation: true };
   try {
     var saved = JSON.parse(localStorage.getItem('omega.der') || 'null');
     if (saved) DER = Object.assign(DER, saved);
@@ -154444,8 +154496,11 @@ if (root.console && console.info) {
     }
 
     /* Solar only if elected, and only into what is left. */
+    var solar = null;
     if (DER.solar) {
-      try { if (root.OmegaMaxFit) root.OmegaMaxFit.fillSolar(); } catch (e) {}
+      try { solar = root.OmegaMaxFit && root.OmegaMaxFit.fillSolar(); } catch (e) {
+        solar = { ok: false, why: (e && e.message) || 'it threw' };
+      }
     }
     /* Substation and gas markers, so the drawing answers "how does it
        connect" without three more clicks. */
@@ -154461,12 +154516,22 @@ if (root.console && console.info) {
     try { if (root.OmegaBuildLabels) root.OmegaBuildLabels.draw(); } catch (e) {}
     try { if (root.OmegaSited) root.OmegaSited.refresh(); } catch (e) {}
 
+    /* ── THE SUMMARY REPORTS WHAT IS ON THE DRAWING ──────────────────
+       It used to list whatever had been ELECTED in the dialog, so a run
+       where solar silently placed nothing still read "Solar, storage,
+       on-site generation". Electing a thing and getting it are different
+       facts and the line that goes on screen has to be the second one. */
+    var placedBits = [];
+    if (solar && solar.ok) placedBits.push('solar');
+    if (DER.storage) placedBits.push('storage');
+    placedBits.push(DER.generation ? 'on-site generation' : 'grid only');
+
     var c = ceiling();
-    var msg = 'Designed against ' + n1(c.kw / 1000) + ' MW from the '
-      + c.src + '. ' + (DER.solar ? 'Solar, ' : '')
-      + (DER.storage ? 'storage, ' : '') + (DER.generation ? 'on-site generation' : 'grid only')
-      + '.';
+    var msg = 'Designed against ' + n1(c.kw / 1000) + ' MW from the ' + c.src + '. '
+      + placedBits.join(', ') + '.';
+    if (solar && !solar.ok) msg += '  Solar was elected but none was placed \u2014 ' + solar.why + '.';
     if (typeof showBanner === 'function') showBanner('cal', msg);
+    if (out && typeof out === 'object') out.solar = solar;
     return out;
   }
 
