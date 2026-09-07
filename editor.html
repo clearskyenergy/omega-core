@@ -24120,8 +24120,20 @@ async function saveProject(){
     window._workDirty = false;   // successfully persisted
   }catch(e){
     /* Set BEFORE _setSaved, which reads it for the indicator's tooltip. */
-    try { window._lastSaveError = 'Save failed: ' + ((e && (e.code || e.message)) || 'unknown') +
-      '. Your work is still in this tab.'; } catch(_e){}
+    /* An over-size failure already wrote a message that names the size and
+       the culprit; a generic one on top of it would bury the useful half. */
+    try {
+      if (!window._lastSaveError || window._lastSaveError.indexOf('Firestore document') < 0) {
+        var code = (e && (e.code || e.message)) || 'unknown';
+        var hint = /permission|PERMISSION/.test(String(code))
+          ? ' Firestore refused the write \u2014 the project may belong to another workspace, '
+            + 'or your session has expired. Reload and sign in again.'
+          : /size|too large|INVALID_ARGUMENT/i.test(String(code))
+            ? ' The document is over the 1 MB Firestore limit.'
+            : '';
+        window._lastSaveError = 'Save failed: ' + code + '.' + hint + ' Your work is still in this tab.';
+      }
+    } catch(_e){}
     _setSaved('err');
     console.error('Save error:',e);
     // Customer-facing: a silent failed save is a data-loss trap. Tell them.
@@ -24240,7 +24252,56 @@ function _shedIfOversize(payload){
     if (n) { dropped.push(n + ' PV table outlines'); size = _payloadBytes(payload); }
   }
 
-  if (!dropped.length) return null;
+  /* ── GROUND ANCHORS ARE DERIVED, SO THEY GO NEXT ────────────────────
+     Every shape and conduit carries _geoPts — a lat/lng for each vertex,
+     stamped so the drawing survives a pan. On a 468-shape compute site with
+     traced boundaries and fences that is tens of thousands of numbers, and
+     it is the largest thing in the document after the geometry itself.
+
+     It is also entirely rebuildable: the stamper re-anchors from the live
+     map on the next interaction, which is what it does for a shape that has
+     just been moved. Shedding it costs a re-anchor, not a drawing. */
+  if (size > SAFE) {
+    var geo = 0;
+    var strip = function (arr) {
+      if (!Array.isArray(arr)) return arr;
+      return arr.map(function (o) {
+        if (!o || !o._geoPts) return o;
+        geo++;
+        var c = {}; for (var k in o) if (o.hasOwnProperty(k) && k !== '_geoPts') c[k] = o[k];
+        c._geoShed = true;
+        return c;
+      });
+    };
+    payload.shapes = strip(payload.shapes);
+    payload.conduits = strip(payload.conduits);
+    if (geo) { dropped.push('ground anchors on ' + geo + ' items'); size = _payloadBytes(payload); }
+  }
+
+  if (!dropped.length) {
+    /* NOTHING LEFT TO SHED, AND THE DOCUMENT IS STILL TOO BIG. Saying so is
+       the whole job here — "Save failed" with no size and no culprit sends
+       somebody to check their wifi while Firestore is refusing a 1.4 MB
+       write. Name the size and the biggest contributors so the next move is
+       obvious. */
+    try {
+      var parts = [];
+      for (var key in payload) {
+        if (!payload.hasOwnProperty(key)) continue;
+        parts.push({ k: key, b: _payloadBytes(payload[key]) });
+      }
+      parts.sort(function (a, b) { return b.b - a.b; });
+      var top = parts.slice(0, 3).map(function (x) {
+        return x.k + ' ' + Math.round(x.b / 1024) + ' KB';
+      }).join(', ');
+      window._lastSaveError = 'This project is ' + Math.round(size / 1024)
+        + ' KB and a Firestore document cannot exceed 1,024 KB. Biggest parts: '
+        + top + '. Nothing further can be dropped automatically — split the site '
+        + 'across two Site Map tabs, or delete what is no longer needed.';
+      if (window.console) console.warn('[save] over the limit and nothing left to shed:', parts);
+    } catch (e) {}
+    return null;
+  }
 
   if (typeof showBanner === 'function') {
     showBanner('wiz', 'Saved \u2014 but this project was over the 1 MB document limit, so '
