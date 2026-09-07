@@ -1569,8 +1569,17 @@
             + '<div class="or-f"><label for="or-c-need">Needed by</label>'
               + '<input id="or-c-need" type="date"></div>'
             + '<div class="or-f"><label for="or-c-to">Send to</label>'
-              + '<input id="or-c-to" type="text" value="' + esc(orgId()) + '">'
-              + '<div class="hint">The receiving workspace.</div></div>'
+              + '<input id="or-c-to" type="text" list="or-c-to-list" value="' + esc(orgId()) + '">'
+              /* OSA offered by name rather than left to be typed. It is not an
+                 email domain, so nobody would guess "osa" — and a destination
+                 you have to know the spelling of is one nobody uses. */
+              + '<datalist id="or-c-to-list">'
+                + '<option value="' + esc(OSA_ORG) + '">OSA \u2014 the joint venture workspace</option>'
+                + (orgId() && orgId() !== OSA_ORG
+                    ? '<option value="' + esc(orgId()) + '">' + esc(orgId()) + '</option>' : '')
+              + '</datalist>'
+              + '<div class="hint">The receiving workspace. Type <b>' + esc(OSA_ORG)
+                + '</b> to file it into the OSA joint venture.</div></div>'
           + '</div>'
           + '<div class="or-msg" id="or-cmsg"></div>'
         + '</div>'
@@ -1600,6 +1609,69 @@
 
   function closeCompose() {
     var m = $('or-compose'); if (m) m.classList.remove('on');
+  }
+
+  /* The JV's own org. Not an email domain and deliberately so — nobody signs
+     in as OSA; the three member firms sign in on their own domains and reach
+     OSA records through an org_members grant. demo-clearsky is the existing
+     precedent for a non-domain orgId. */
+  var OSA_ORG = 'osa';
+
+  /* intake_projects create rule, field for field: orgId non-empty, intakeId
+     equal to the document id, createdBy.uid the caller's own, createdBy.email
+     matching the token, status in draft/saved/submitted, and no quote total.
+     Written to match rather than hope, because a refusal here reads to the
+     sender as the send having silently failed. */
+  function sendAsIntake(rec, btn) {
+    var d = db();
+    var ref = d.collection('intake_projects').doc();
+    var doc = {
+      intakeId:    ref.id,
+      orgId:       OSA_ORG,
+      projectName: rec.siteName,
+      siteName:    rec.siteName,
+      address:     rec.address,
+      status:      'submitted',
+      createdBy:   { uid: rec.fromUid, email: (rec.fromEmail || '').toLowerCase(),
+                     name: rec.fromName || '' },
+      customer:    { name: rec.fromName || rec.fromEmail || '' },
+      /* Everything the referral form collected, kept together so the OSA
+         console has the whole ask rather than a name and an address. */
+      ask:         rec.ask,
+      powerKw:     rec.powerKw,
+      energyKwh:   rec.energyKwh,
+      neededBy:    rec.neededBy,
+      gridScore:     rec.gridScore,
+      bankableScore: rec.bankableScore,
+      /* Where it came from. filedByOrg in the console reads orgId, which is
+         now OSA for every one of these — so the sending firm has to be
+         recorded separately or the JV cannot tell who brought what. */
+      referredByOrg:   rec.fromOrgId,
+      referredByEmail: rec.fromEmail,
+      source:      'referral-form',
+      createdAt:   stamp(),
+      updatedAt:   stamp()
+    };
+
+    ref.set(doc).then(function () {
+      btn.disabled = false;
+      closeCompose();
+      ['or-c-site','or-c-addr','or-c-ask','or-c-kw','or-c-kwh','or-c-grid','or-c-bank','or-c-need']
+        .forEach(function (id) { var n = $(id); if (n) n.value = ''; });
+      msg('or-cmsg', '', '');
+      say('Filed to the OSA workspace \u2014 it appears in the OSA inbox for the JV to work.');
+    })['catch'](function (e) {
+      btn.disabled = false;
+      msg('or-cmsg', (e && e.code === 'permission-denied')
+        ? 'The OSA workspace refused that \u2014 your account needs an org_members grant for OSA. '
+          + 'Ask ClearSky to add it.'
+        : 'Could not file it: ' + ((e && (e.code || e.message)) || 'unknown'), 'bad');
+    });
+  }
+
+  function say(t) {
+    try { if (typeof toast === 'function') { toast(t); return; } } catch (e) {}
+    try { msg('or-cmsg', t, ''); } catch (e) {}
   }
 
   function send() {
@@ -1637,6 +1709,24 @@
       createdAt:  stamp(),
       updatedAt:  stamp()
     };
+
+    /* ── OSA IS AN INTAKE, NOT A REFERRAL ────────────────────────────────
+       A referral is addressed to ONE org by toOrgId, and the read rule
+       compares that against the reader's own email domain. OSA is three
+       organisations on three domains, so no single toOrgId is readable by
+       Grant, Terry and ClearSky at once — a joint venture cannot share a
+       referral inbox as that collection is built.
+
+       intake_projects can. Its read rule goes through canActInOrg(), which
+       honours the org_members cross-org grant, so one record stamped with
+       OSA's orgId is readable by everyone holding a grant for it. And the
+       OSA console already ingests that collection — "work requests filed
+       through a tenant portal" is exactly what this is — with an
+       adopt-into-pipeline flow already built.
+
+       So a send to OSA writes an intake and nothing else changes: same
+       modal, same fields, same button. */
+    if (to === OSA_ORG) { sendAsIntake(rec, btn); return; }
 
     db().collection('referrals').add(rec).then(function (ref) {
       btn.disabled = false;
