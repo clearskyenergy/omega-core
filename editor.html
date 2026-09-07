@@ -166184,19 +166184,58 @@ if (root.console && console.info) {
     return { x1: x1, y1: y1, x2: x2, y2: y2, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 };
   }
 
+  /* ── THE GROUND ANCHOR HAS TO GO WITH EVERY MOVE, NOT JUST A TURN ──
+     Anchored objects carry a lat/lng stamp so the drawing survives a pan.
+     Move something in PIXELS and leave that stamp alone and the object is
+     now described twice, in two places, and the next thing to consult the
+     stamp wins: _geoReprojectAll() runs on the map's own idle — which
+     fires on a resize, a tile settle or a programmatic recenter, with no
+     drag required — and puts every still-anchored member straight back
+     where it started. Members with no anchor stay where the drag put them.
+     Half the block moves, half snaps home. That is the bug, and on a
+     235-pod compute campus it looks like the move tool is simply broken.
+
+     rotate() already shed, but only sh._geoPts — and an ELEMENT is not
+     anchored by _geoPts at all. It is anchored by _geoLat/_geoLng, which
+     nothing here was clearing, so every transformer, switchgear, metering
+     set and master controller in the selection was reprojected home on the
+     next idle no matter which way the block was turned. shift() shed
+     nothing whatsoever; the comment claiming a drag "gets away with it
+     because a drag does not move the map" was wrong on the premise — the
+     map does not have to move for idle to fire.
+
+     So: one helper, every anchor field, used by BOTH paths. Shedding is
+     right rather than transforming the stamp — lat/lng does not translate
+     or rotate uniformly in pixel space — and restamp() on commit re-derives
+     all of it exactly from the pixels that then exist. In between, the
+     object has no anchor, which is the one state that cannot put it back
+     in the wrong place. */
+  var GEO_FIELDS = ['_geoPts', '_geoC', '_geoBoundary', '_geoExcl', '_geoBR',
+                    '_geoRot', '_geoTables', '_geoTarget', '_geoAnchorPt',
+                    '_geoLat', '_geoLng', '_geoD1', '_geoD2', '_geo'];
+  function shed(o) {
+    if (!o) return;
+    for (var i = 0; i < GEO_FIELDS.length; i++) {
+      if (o[GEO_FIELDS[i]] !== undefined) { try { delete o[GEO_FIELDS[i]]; } catch (e) {} }
+    }
+    o._geoShed = true;
+  }
+
   /* ── the translation itself ─────────────────────────────────────────── */
   function shift(m, dx, dy) {
     m.shapes.forEach(function (sh) {
       if (sh.pts) sh.pts = sh.pts.map(function (p) { var q = { x: p.x + dx, y: p.y + dy }; for (var k in p) if (k !== 'x' && k !== 'y') q[k] = p[k]; return q; });
       if (typeof sh.cx === 'number') { sh.cx += dx; sh.cy += dy; }
       if (sh.tables) sh.tables = sh.tables.map(function (t) { var c = JSON.parse(JSON.stringify(t)); c.x += dx; c.y += dy; return c; });
+      shed(sh);
     });
-    m.elements.forEach(function (el) { el.x = (+el.x || 0) + dx; el.y = (+el.y || 0) + dy; });
+    m.elements.forEach(function (el) { el.x = (+el.x || 0) + dx; el.y = (+el.y || 0) + dy; shed(el); });
     m.conduits.forEach(function (cd) {
       if (cd.pts) cd.pts = cd.pts.map(function (p) { var q = JSON.parse(JSON.stringify(p)); q.x = (q.x || 0) + dx; q.y = (q.y || 0) + dy; return q; });
       if (typeof cd.cx === 'number') { cd.cx += dx; cd.cy += dy; }
       if (typeof cd.laneY === 'number') cd.laneY += dy;
       if (typeof cd.spineMinX === 'number') cd.spineMinX += dx;
+      shed(cd);
     });
   }
 
@@ -166271,8 +166310,7 @@ if (root.console && console.info) {
          re-derives it exactly from the pixels that now exist. Between here
          and there the shape has no anchor, which is the one state that
          cannot put it back in the wrong place. */
-      if (sh._geoPts) { delete sh._geoPts; sh._geoShed = true; }
-      if (typeof sh._geoRot === 'number') delete sh._geoRot;
+      shed(sh);
     });
 
     m.elements.forEach(function (el) {
@@ -166282,9 +166320,7 @@ if (root.console && console.info) {
       var c = turn((+el.x || 0) + w / 2, (+el.y || 0) + h / 2);
       el.x = c.x - w / 2; el.y = c.y - h / 2;
       bump(el);
-      if (el._geoPts) { delete el._geoPts; el._geoShed = true; }
-      if (el._geo) delete el._geo;
-      if (typeof el._geoRot === 'number') delete el._geoRot;
+      shed(el);
     });
 
     m.conduits.forEach(function (cd) {
@@ -166299,7 +166335,7 @@ if (root.console && console.info) {
          the runs again from the geometry that exists now. */
       if (typeof cd.laneY === 'number') delete cd.laneY;
       if (typeof cd.spineMinX === 'number') delete cd.spineMinX;
-      if (cd._geoPts) { delete cd._geoPts; cd._geoShed = true; }
+      shed(cd);
     });
   }
 
@@ -166386,6 +166422,12 @@ if (root.console && console.info) {
       if (total.rot) { var b0 = bounds(M); if (b0) rotate(M, -total.rot, b0.cx, b0.cy); }
       shift(M, -total.dx, -total.dy);
       total = { dx: 0, dy: 0, rot: 0 };
+      /* The anchors were shed on the way out and putting the pixels back
+         does not put those back with them. Re-derive from the restored
+         pixels, or the block sits at the right place holding nothing to
+         the ground and stops tracking the map on the next pan — a quiet
+         way for "Put back" to leave the drawing worse than not moving it. */
+      restamp(M);
     }
     else commitInto();
     root._omegaMoveSys = false;
