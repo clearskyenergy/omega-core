@@ -153303,8 +153303,20 @@ if (root.console && console.info) {
     return null;
   }
 
+  /* ── ONLY GROUND SINKS ──────────────────────────────────────────────
+     "Layer it at the bottom" is right for a parcel line and wrong for a
+     battery. Locking a pod used to sink it too, which put a container
+     UNDER the boundary and pushed the boundary off the bottom — the exact
+     layering the lock exists to establish, undone by using the lock.
+
+     So sinking is for shapes that ARE ground: the property line, and a
+     traced exclusion or zone. Everything else locks where it sits. */
+  function isGround(sh) {
+    return !!(sh && (sh.isSiteBoundary || sh.kind === 'exclusion' || sh.kind === 'zone'
+                     || sh.omegaExclusion));
+  }
   function sink(sh) {
-    var s = S_(); if (!s || !s.shapes) return;
+    var s = S_(); if (!s || !s.shapes || !isGround(sh)) return;
     var i = s.shapes.indexOf(sh);
     if (i > 0) { s.shapes.splice(i, 1); s.shapes.unshift(sh); }
   }
