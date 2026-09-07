@@ -1700,6 +1700,35 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Identity &amp; usage</div>';
   h+=_tnField('Display name','tb-name-'+orgId,org.name||'','text','');
   h+=_tnField('Logo URL','tb-logo-'+orgId,org.logoUrl||'','text','/tenants/'+orgId+'/logo.png');
+
+  /* ── UPLOAD, NOT JUST A URL ────────────────────────────────────────────
+     The field alone meant hosting the file somewhere first — commit it to
+     tenants/<slug>/ and deploy, or upload to Storage by hand and paste the
+     download URL back. Neither is a thing to ask somebody to do thirteen
+     times.
+
+     storage.rules has permitted this the whole time: tenants/{orgId}/ is
+     writable by an admin domain under okLogo(), which caps it at 2 MB and
+     requires an image content type. The console simply had no upload, and
+     the Storage SDK was not even loaded on the page.
+
+     The same constraints are enforced here as well as there, so somebody
+     picking a 6 MB TIFF is told why before a request is made rather than
+     after it is refused. */
+  h+='<div class="sub-txt" style="margin:-4px 0 10px">'
+   + '<input type="file" id="tb-logof-'+esc(orgId)+'" accept="image/png,image/jpeg,image/svg+xml,image/webp" '
+   +   'style="font-size:11px;max-width:210px">'
+   + ' <button onclick="uploadTenantLogo(&quot;'+esc(orgId)+'&quot;)">Upload</button>'
+   + '<div style="margin-top:3px;font-size:11px">PNG, JPEG, SVG or WebP, under 2 MB. '
+   +   'Goes to Storage at <span class="mono">tenants/'+esc(orgId)+'/</span> and fills the URL above. '
+   +   'That path is world-readable by design \u2014 it is a logo on a sign-in page \u2014 '
+   +   'so put nothing else there.</div>'
+   + (org.logoUrl ? '<div style="margin-top:6px"><img src="'+esc(org.logoUrl)+'" alt="" '
+       + 'style="max-height:34px;max-width:150px;background:#fff;border:1px solid var(--cs-border,#E1E6EC);'
+       + 'border-radius:5px;padding:3px" onerror="this.style.display=\'none\';'
+       + 'this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;sub-txt&quot;>Logo URL is set but the '
+       + 'image did not load.</span>\')"></div>' : '')
+   + '</div>';
   h+='<button onclick="saveTenantBranding(&quot;'+esc(orgId)+'&quot;)">Save branding</button>';
   h+=' <span id="tbr-msg-'+esc(orgId)+'" class="sub-txt"></span>';
 
@@ -1793,6 +1822,46 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    here — the rule makes that row append-only, so the audit property survives
    either path. When the endpoint is live, switch this back and it behaves
    identically from the outside. */
+/* Uploads and writes the URL straight onto omega_orgs, because a logo that
+   uploads but does not get saved is a worse outcome than no upload at all —
+   the file is there, the tenant still has no logo, and nothing says why. */
+function uploadTenantLogo(orgId){
+  var msg = document.getElementById('tbr-msg-'+orgId);
+  function say(t){ if (msg) msg.textContent = t; }
+  var inp = document.getElementById('tb-logof-'+orgId);
+  var f = inp && inp.files && inp.files[0];
+  if (!f) { say('Choose an image first.'); return; }
+  if (!/^image\//.test(f.type)) { say('That is not an image.'); return; }
+  if (f.size > 2 * 1024 * 1024) {
+    say('That file is ' + Math.round(f.size/1024/1024*10)/10 + ' MB. The limit is 2 MB.');
+    return;
+  }
+  if (typeof firebase === 'undefined' || !firebase.storage) {
+    say('The Storage SDK did not load on this page.'); return;
+  }
+  var ext = (f.name.match(/\.([a-z0-9]+)$/i) || [,'png'])[1].toLowerCase();
+  var path = 'tenants/' + orgId + '/logo-' + Date.now() + '.' + ext;
+  say('Uploading\u2026');
+  firebase.storage().ref(path).put(f, { contentType: f.type })
+    .then(function(snap){ return snap.ref.getDownloadURL(); })
+    .then(function(url){
+      var fld = document.getElementById('tb-logo-'+orgId);
+      if (fld) fld.value = url;
+      return db.collection('omega_orgs').doc(orgId).set({ logoUrl: url }, { merge:true });
+    })
+    .then(function(){
+      say('Logo uploaded and saved.');
+      if (typeof loadTenants === 'function') loadTenants();
+    })
+    ['catch'](function(e){
+      /* Name the refusal. "Upload failed" sends somebody to check their wifi
+         while Storage is refusing the write. */
+      say(e && e.code === 'storage/unauthorized'
+        ? 'Storage refused the upload \u2014 that path allows an admin domain only.'
+        : 'Upload failed: ' + ((e && (e.code || e.message)) || 'unknown'));
+    });
+}
+
 function saveTenantBilling(orgId){
   var msg=document.getElementById('tb-msg-'+orgId);
   function v(id){ var el=document.getElementById(id+'-'+orgId); return el?String(el.value||'').trim():''; }

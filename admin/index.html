@@ -1006,6 +1006,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- For tenant logo uploads. storage.rules already permits writes to
+     tenants/{orgId}/ under okLogo(); the console just had no way to make one. -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="/config.js"></script>
 
 <script src="/omega-tools.js"></script>
