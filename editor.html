@@ -164578,8 +164578,55 @@ if (root.console && console.info) {
       if (root.OmegaMode && root.OmegaMode.retag) root.OmegaMode.retag();
     } catch (e) {}
   }
-  var pending = null;
-  function later() { clearTimeout(pending); pending = setTimeout(function () { try { place(); } catch (e) {} }, 120); }
+  /* ── THE RIBBON WAS FIGHTING ITSELF ─────────────────────────────────
+     later() was wired straight to a MutationObserver on the ribbon, and
+     place() re-parents ribbon buttons with insertBefore. So place() fed its
+     own observer: every pass that moved a node scheduled another pass 120 ms
+     later. On its own that settles as soon as a pass moves nothing — but a
+     dozen other patches inject and reposition buttons in this same ribbon,
+     and the moment one of them wants a button somewhere else the two trade
+     it back and forth every 120 ms for the life of the session. That is the
+     ribbon flashing, and it never stops on its own.
+
+     The comment inside place() already names this failure for Compute mode:
+     "otherwise the two fight every 500 ms". The guard was written for that
+     one known opponent; this is the general case.
+
+     Two changes. The observer is disconnected across place()'s own writes
+     and its queued records dropped, so the module can no longer trigger
+     itself. And if an observer-driven pass keeps finding work to do, pass
+     after pass, something else genuinely owns those nodes — so it stands
+     down rather than arguing forever. Losing the layout argument is a
+     cosmetic loss; flashing the ribbon at the user is not. */
+  var pending = null, obs = null, obsTarget = null, thrash = 0, stood_down = false;
+
+  function placeSafely(fromObserver) {
+    if (stood_down) return 0;
+    if (obs) { try { obs.disconnect(); } catch (e) {} }
+    var moved = 0;
+    try { moved = place(); }
+    catch (e) { moved = 0; }
+    if (obs && obsTarget) {
+      /* Drop what our own writes queued before listening again. */
+      try { obs.takeRecords(); obs.observe(obsTarget, { childList: true, subtree: true }); } catch (e) {}
+    }
+    if (fromObserver) {
+      if (moved > 0) {
+        if (++thrash >= 6) {
+          stood_down = true;
+          try { obs.disconnect(); } catch (e) {}
+          if (root.console) {
+            console.warn(TAG + ' another module keeps re-ordering these ribbon buttons; '
+              + 'standing down after ' + thrash + ' contested passes rather than flashing '
+              + 'the ribbon. OmegaComputeTab.place() re-applies the layout by hand.');
+          }
+        }
+      } else { thrash = 0; }
+    }
+    return moved;
+  }
+
+  function later() { clearTimeout(pending); pending = setTimeout(function () { placeSafely(true); }, 120); }
   function boot() {
     var rb = document.getElementById('ribbon');
     if (!rb || !panel('site')) { setTimeout(boot, 400); return; }
@@ -164589,10 +164636,12 @@ if (root.console && console.info) {
        Build page rather than running once. */
     var home = document.querySelector('#ribbon .ribbon-page[data-page="home"]');
     try {
-      new MutationObserver(later).observe(home || rb, { childList: true, subtree: true });
+      obsTarget = home || rb;
+      obs = new MutationObserver(later);
+      obs.observe(obsTarget, { childList: true, subtree: true });
     } catch (e) {}
     var n = 0, iv = setInterval(function () {
-      place();
+      placeSafely(false);
       /* The Shelf's one-shot sweep lands about 1.2 s in and Compute mode
          hides panels on purpose, so the repair runs on its own too. */
       try { if (!(root.OmegaComputeMode && root.OmegaComputeMode.isOn())) repair(); } catch (e) {}
