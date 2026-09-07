@@ -346,7 +346,7 @@ async function geocode(address) {
    marked it not viable.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const SOURCES = { substations: null, lines: null, plants: null };  /* per-request provenance */
+const SOURCES = { substations: null, lines: null, plants: null, pipelines: null };  /* per-request provenance */
 
 /* HIFLD's ArcGIS host and layer names, overridable by environment variable.
 
@@ -611,6 +611,93 @@ async function findSubstations(lat, lng, radiusKm) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   PIPELINES — gas, and the hazardous liquids that are not fuel
+
+   The parcel screen has always read these off a KMZ: "42in NATURAL GAS",
+   "36in CRUDE OIL WINK TO WEBSTER". That works when a JV partner hands you a
+   file somebody already traced, and it is the whole reason a site the team
+   drew themselves screened with no gas and no hazard — nobody draws a
+   pipeline on a site plan.
+
+   OpenStreetMap carries them, and carries them well: 71 within 25 km of the
+   Frio County site, tagged with substance, diameter in inches, operator and
+   usage. That is every field the gas and hazard components need.
+
+   SUBSTANCE IS THE WHOLE DISTINCTION AND IT IS NOT COSMETIC. Gas is fuel —
+   it carries a site to revenue while an interconnection queue runs, and it
+   scores POSITIVE. Crude, refined product and y-grade are a setback and a
+   construction risk and score NEGATIVE. Reading a liquids line as a gas
+   asset is the Apex/Static Point error the OGI spec calls out by name, so
+   anything that is not clearly gas is treated as a liquid.
+
+   Gathering lines are reported but marked: a 6" gathering line is not a
+   deliverability story, and sizing a fuel-cell farm against one is how a
+   site gets promised gas it cannot have.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* OSM writes diameter as 6.63", 16", 300 mm, or a bare number. Inches out. */
+function osmDiameterIn(tag) {
+  if (!tag) return null;
+  const t = String(tag).trim();
+  let m = /^([\d.]+)\s*(?:"|''|in\b|inch)/i.exec(t);
+  if (m) return num(m[1]);
+  m = /^([\d.]+)\s*mm\b/i.exec(t);
+  if (m) { const v = num(m[1]); return v ? Math.round(v / 25.4 * 100) / 100 : null; }
+  m = /^([\d.]+)\s*(?:m\b|meter)/i.exec(t);
+  if (m) { const v = num(m[1]); return v ? Math.round(v / 0.0254 * 100) / 100 : null; }
+  m = /^([\d.]+)$/.exec(t);
+  if (m) {
+    const v = num(m[1]);
+    /* A bare number over 100 is millimetres; nobody lays a 300-inch pipe. */
+    return v == null ? null : (v > 100 ? Math.round(v / 25.4 * 100) / 100 : v);
+  }
+  return null;
+}
+
+const GAS_SUBSTANCE = /^(gas|natural_gas|natural gas|cng|biogas|methane)$/i;
+
+async function findPipelines(lat, lng, radiusKm) {
+  try {
+    const els = await overpass(
+      `[out:json][timeout:25];nwr["man_made"="pipeline"](${bboxFor(lat, lng, radiusKm)});out geom tags;`);
+    const out = [];
+    for (const el of els) {
+      const t = el.tags || {};
+      /* Nearest point ON the pipeline, not its midpoint — a corridor whose
+         midpoint is 20 km away can still cross the parcel. */
+      let best = null;
+      for (const g of (el.geometry || [])) {
+        const d = distanceKm(lat, lng, g.lat, g.lon);
+        if (best == null || d < best) best = d;
+      }
+      if (best == null) {
+        const p = osmPoint(el);
+        if (p) best = distanceKm(lat, lng, p.lat, p.lng);
+      }
+      if (best == null) continue;
+      const sub = String(t.substance || t.type || '').trim();
+      out.push({
+        substance: sub || 'unknown',
+        gas: GAS_SUBSTANCE.test(sub),
+        /* Not gas and not blank means liquids until somebody says otherwise. */
+        hazardousLiquid: !!sub && !GAS_SUBSTANCE.test(sub),
+        diameterIn: osmDiameterIn(t.diameter),
+        operator: t.operator || '',
+        usage: t.usage || '',
+        gathering: /gathering/i.test(t.usage || ''),
+        distanceKm: best
+      });
+    }
+    SOURCES.pipelines = 'osm(' + els.length + ' raw, ' + within(out, radiusKm).length +
+                        ' within ' + radiusKm + 'km)';
+    return within(out, radiusKm);
+  } catch (e) {
+    SOURCES.pipelines = 'osm-failed:' + (e.message || 'error');
+    return null;                       /* nobody answered: NOT measured */
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    TRANSMISSION LINES
    ═══════════════════════════════════════════════════════════════════════════ */
 async function findLines(lat, lng, radiusKm) {
@@ -646,10 +733,20 @@ async function findLines(lat, lng, radiusKm) {
         if (best == null || d < best) best = d;
       }
       if (best == null) continue;
+      /* CIRCUITS, WHICH A POINT LOOKUP COULD NOT ANSWER BEFORE. The
+         redundancy component wants "two circuits at the top voltage" and had
+         no way to know — every screened-from-the-map site scored zero there.
+         OSM tags `circuits` directly on some ways and `cables` on most, and
+         a three-phase AC circuit is three cables, so cables/3 fills the gap.
+         Rounded down: two-and-a-bit cables is one circuit, not two. */
+      const circuits = num(t.circuits) ||
+        (num(t.cables) ? Math.max(1, Math.floor(num(t.cables) / 3)) : null);
       out.push({
         name: t.name || t.operator || 'Transmission line',
         distanceKm: best,
-        voltageKv: osmKv(t.voltage)
+        voltageKv: osmKv(t.voltage),
+        circuits: circuits,
+        operator: t.operator || ''
       });
     }
     SOURCES.lines = SOURCES.lines ? SOURCES.lines + ' -> osm' : 'osm';
@@ -815,7 +912,7 @@ module.exports = async function handler(req, res) {
     if (got !== want) return res.status(401).json({ error: 'Bad or missing key.' });
   }
 
-  SOURCES.substations = SOURCES.lines = SOURCES.plants = null;
+  SOURCES.substations = SOURCES.lines = SOURCES.plants = SOURCES.pipelines = null;
   TRACE.length = 0;
   const body = (req.body && typeof req.body === 'object') ? req.body : {};
   const { address, sizeMw } = body;
@@ -837,10 +934,11 @@ module.exports = async function handler(req, res) {
 
   try {
     /* In parallel: one slow layer should not serialise the others. */
-    const [substations, lines, plants] = await Promise.all([
+    const [substations, lines, plants, pipelines] = await Promise.all([
       findSubstations(lat, lng, radiusKm).catch(() => null),
       findLines(lat, lng, radiusKm).catch(() => null),
-      findPlants(lat, lng, radiusKm).catch(() => null)
+      findPlants(lat, lng, radiusKm).catch(() => null),
+      findPipelines(lat, lng, radiusKm).catch(() => null)
     ]);
 
     /* null means the layer failed; [] means it worked and found nothing. The
@@ -915,6 +1013,7 @@ module.exports = async function handler(req, res) {
       /* Which source produced each layer. A wrong or moved HIFLD endpoint
          shows up here as "hifld-failed:... -> osm" rather than as silence,
          so a degraded answer is visible instead of merely quieter. */
+      pipelines: pipelines,
       sources: Object.assign({}, SOURCES),
       overpassTrace: TRACE.slice(),
       findings

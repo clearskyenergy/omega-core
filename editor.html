@@ -106960,8 +106960,67 @@ table.e3-tbl td{ white-space:normal }
       }
       if (s.maxKv != null && !(st.maxSubKv > s.maxKv)) st.maxSubKv = s.maxKv;
     }
-    /* Circuit count is not something a point lookup can answer. Left alone
-       rather than assumed, so redundancy stays honestly low. */
+    /* Circuits, from the OSM `circuits` tag or from cables/3. Only counted at
+       the top voltage, which is what the redundancy component asks about —
+       a 345 sharing a corridor with a 69 is not a second source. */
+    var topKv = st.maxKv || 0, circuits = 0;
+    (at.lines || []).forEach(function (L) {
+      if (L && L.circuits && L.voltageKv && Math.abs(L.voltageKv - topKv) < 1) {
+        circuits += L.circuits;
+      }
+    });
+    if (circuits > 0 && !(st.circuitsAtMaxKv > 0)) st.circuitsAtMaxKv = circuits;
+
+    /* ── PIPELINES ────────────────────────────────────────────────────
+       The gas component and the hazard penalty both read these, and a site
+       drawn in the editor has neither because nobody draws a pipeline on a
+       site plan. Fed as SCALARS for the same reason as the grid: the service
+       returns a distance per pipeline and no geometry, so the on-parcel and
+       adjacent counts are derived from distance bands rather than from
+       anything measured against the ring.
+
+       Gathering lines are excluded from the gas figure. A 6" gathering line
+       is not a deliverability story, and sizing generation against one is
+       how a site gets promised gas it cannot have. */
+    var pipes = at.pipelines || [];
+    var gas = pipes.filter(function (P) { return P.gas && !P.gathering && P.diameterIn; });
+    if (gas.length) {
+      var biggest = null, nearestGas = null;
+      gas.forEach(function (P) {
+        if (!biggest || P.diameterIn > biggest.diameterIn) biggest = P;
+        if (nearestGas == null || P.distanceKm < nearestGas) nearestGas = P.distanceKm;
+      });
+      if (!st.maxGasDiameterIn) st.maxGasDiameterIn = biggest.diameterIn;
+      if (st.nearestGasM == null) st.nearestGasM = nearestGas * 1000;
+    }
+
+    var haz = pipes.filter(function (P) { return P.hazardousLiquid; });
+    if (haz.length && !(st.hazardOnParcel || st.hazardAdjacent)) {
+      /* ON_PARCEL_FT is 200 ft and ADJACENT_FT a quarter mile in the engine.
+         Distance here is to the parcel CENTROID, not to its boundary, so a
+         line that clips a corner of a 1,000-acre parcel reads as half a mile
+         away. Deliberately not corrected: inventing an offset would be
+         guessing at the parcel's shape. The flag says which it is. */
+      var on = haz.filter(function (P) { return P.distanceKm * 3280.84 <= 200; }).length;
+      var near = haz.filter(function (P) {
+        var ft = P.distanceKm * 3280.84; return ft > 200 && ft <= 1320;
+      }).length;
+      st.hazardOnParcel = on;
+      st.hazardAdjacent = near;
+      if (on || near) {
+        var big = haz.reduce(function (m, P) {
+          return (!m || (P.diameterIn || 0) > (m.diameterIn || 0)) ? P : m;
+        }, null);
+        st.flags.push({ level: 'warn', code: 'hazard_from_atlas',
+          msg: (on + near) + ' hazardous-liquid pipeline' + ((on + near) > 1 ? 's' : '') +
+               ' within a quarter mile' +
+               (big && big.diameterIn ? ' — largest is ' + big.diameterIn + '" ' +
+                 (big.substance || 'liquid') + (big.operator ? ' (' + big.operator + ')' : '') : '') +
+               '. Measured to the parcel centre from national mapping, not to the boundary, ' +
+               'so confirm the recorded easement before any layout is fixed.' });
+      }
+    }
+
     st.evidence = 'map_drawn+grid_atlas';
     /* no_grid was true of the DRAWING and is no longer true of the site. It
        is an error-level flag, so leaving it would keep shouting a thing the
