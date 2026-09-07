@@ -399,6 +399,39 @@ service cloud.firestore {
        from its very first sign-in, before any omega_users document exists.
        Without it, the first person to open the portal on a fresh database
        has nobody who can approve them — including themselves. */
+    /* ── OSA IS A JOINT VENTURE, NOT AN OPEN PORTAL ──────────────────────
+       Three organisations co-develop on it and nobody else belongs. Config
+       carries openRegistration:true, which was the right call while the
+       roster was being built — but it means anybody who signs in lands in
+       the approval queue, and a queue full of strangers is a queue somebody
+       eventually clicks Approve on by accident. Walters, who are a platform
+       tenant and not a JV partner, were sitting in it.
+
+       THE NAV GATE IS NOT THIS. index.html carries the same three domains to
+       decide who is SHOWN the OSA link from their own workspace. That hides
+       a door. This closes it — and CLAUDE.md is explicit that anything the
+       client hides must also be denied here, or it is decoration.
+
+       ClearSky's own domains pass because staff hold observer access across
+       every partner queue; that is what adminDomains is for in the OSA
+       config, and making staff wait for approval from staff is a loop with
+       no exit.
+
+       ⚠ ADDING A FOURTH JV PARTNER IS AN EDIT HERE *AND* IN index.html's
+       OSA_ORGS, then a rules deploy. That is deliberate friction: a joint
+       venture is not something that should be switchable from an admin
+       console by a mis-click. */
+    function jvOrgs() {
+      return ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+    }
+    function jvOrClearSky() {
+      /* userOrg() is the file's own derivation of the caller's home org —
+         it lowercases and folds aliases already. Re-deriving it here would
+         be a fourth copy of the same three lines and the one most likely to
+         drift, since it would sit far from the other three. */
+      return portalSignedIn() && (userOrg() in jvOrgs() || isAdmin());
+    }
+
     function isPortalAdmin() {
       return isPortalOwner() || isAdmin()
           || (pActive() && pRole() in ['owner', 'admin']);
@@ -2288,6 +2321,7 @@ service cloud.firestore {
          ClearSky's own domains may seed themselves active — making staff wait
          for approval from staff is a loop with no exit. */
       allow create: if isSelf()
+        && jvOrClearSky()
         && request.resource.data.get('uid', '') == request.auth.uid
         && request.resource.data.get('email', '') == request.auth.token.email.lower()
         && (

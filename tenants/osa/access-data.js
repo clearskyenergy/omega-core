@@ -186,7 +186,49 @@
     });
   }
 
+  /* ── OSA IS A JOINT VENTURE, NOT AN OPEN PORTAL ────────────────────────
+     Three organisations co-develop on this. openRegistration:true was the
+     right setting while the roster was being built, and it means anybody who
+     signs in lands in the approval queue — a queue full of strangers is one
+     somebody eventually clicks Approve on by accident.
+
+     THE RULES ARE WHAT ACTUALLY REFUSE THIS. firestore.rules gates
+     omega_users create on jvOrClearSky(), so a patched client gets a
+     permission error and nothing else. This exists so the person reads a
+     sentence that explains why, instead of a denial that looks like a broken
+     password.
+
+     ClearSky's own domains pass: staff hold observer access across every
+     partner queue, and making staff wait for approval from staff is a loop
+     with no exit.
+
+     ⚠ A FOURTH PARTNER IS AN EDIT IN THREE PLACES — here, OSA_ORGS in
+     index.html, and jvOrgs() in firestore.rules, then a rules deploy. The
+     duplication is deliberate friction; a joint venture should not be
+     switchable from an admin console. */
+  var JV_ORGS = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
+  function isJvDomain(email) {
+    return JV_ORGS.indexOf(domainOf(email)) >= 0 || isInternalDomain(email);
+  }
+  function jvRefusal(email) {
+    var e = new Error(
+      'The OSA workspace is a joint venture between ClearSky, SUN Energy ' +
+      'Solutions and OGI Solar, and it is limited to those organisations. ' +
+      'Your address (' + String(email || '').split('@')[1] + ') is not one of ' +
+      'them, so there is nothing to request here \u2014 this is not a pending ' +
+      'approval. If you believe you should have access, contact ClearSky ' +
+      'directly rather than waiting on this screen.');
+    e.code = 'osa/not-a-jv-member';
+    e.notAJvMember = true;
+    return e;
+  }
+
   function seedUser(db, ref, user, email, invite) {
+      /* Refused BEFORE the write, so the person gets the sentence above
+         rather than a permission error from the rules. Both refuse; only one
+         explains. */
+      if (!isJvDomain(email) && !invite) return Promise.reject(jvRefusal(email));
+
       var seed = {
         uid:       user.uid,
         email:     email,
