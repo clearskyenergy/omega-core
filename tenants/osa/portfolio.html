@@ -672,6 +672,9 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
     <button class="sn-item" data-view="partners" onclick="go('partners')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
       <span>Partners</span><span class="sn-count" id="c-partners">0</span></button>
+    <button class="sn-item" data-view="jd" onclick="go('jd')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M21 3 13.5 10.5"/><path d="M3 21l7.5-7.5"/><circle cx="9" cy="6" r="3"/><circle cx="15" cy="18" r="3"/></svg>
+      <span>JD partners</span><span class="sn-count" id="c-jd">0</span></button>
     <button class="sn-item" data-view="funding" onclick="go('funding')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
       <span>Funding</span><span class="sn-count" id="c-draws">0</span></button>
@@ -818,6 +821,30 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           <tbody id="partner-rows"></tbody></table></div>
       </div>
       <div id="partner-detail"></div>
+    </section>
+
+    <!-- ══ JOINT DEVELOPMENT ═══════════════════════════════════════════
+         Partners is the ledger — what an organisation brought and supplied.
+         This is the working surface: the partnerships we co-develop inside,
+         each with its own book, because a joint development is not one deal
+         with an extra name on it. It is a separate pipeline run to somebody
+         else's finish line.
+
+         WHAT "READY" MEANS IS PER PARTNER. Amperage takes projects
+         funded-ready — everything through pre-development, with the
+         documents, the costs and the designs. A developer partner would take
+         the same site three stages earlier and would not care about the pro
+         forma. So each partnership records the stage it hands off at, and a
+         project is ready for THAT partner when it has reached it. A site can
+         be ready for one and nowhere near ready for another, and both are
+         true at the same time. -->
+    <section class="view" id="v-jd">
+      <div class="ph"><h1>JD partners</h1>
+        <p>The partnerships we develop inside. Each one is its own book with its own finish
+           line — a project is ready when it reaches the stage that partner takes over at,
+           not when it reaches ours. These projects still count everywhere else on this
+           portfolio; this is the granular view.</p></div>
+      <div id="jd-body"><div class="empty"><b>Loading…</b></div></div>
     </section>
 
     <section class="view" id="v-funding">
@@ -1278,7 +1305,7 @@ function go(v,silent){
 /* ── Render ───────────────────────────────────────────────────────────── */
 function render(){
   if(!S.loaded) return;
-  renderBanners(); renderDash(); renderPipeline(); renderPartners();
+  renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
   renderMatrix(); renderBoard(); renderVerify(); renderDesign();
   renderSettings(); renderStaff(); renderInvites();
@@ -1542,6 +1569,126 @@ function renderPipeline(){
 function setPipe(k){ S.pipeFilter=k; render(); }
 
 /* ── Partners ─────────────────────────────────────────────────────────── */
+/* ── JOINT DEVELOPMENT ──────────────────────────────────────────────────
+   Each partnership is its own book. The finish line is the partner's, not
+   ours: `jd.handoff` is the stage they take a project over at, and readiness
+   is measured against that. Amperage takes them funded-ready — pre-development
+   complete, documents, costs and designs done — so their handoff is set there
+   and a project reaching it is ready to send to their deal room.
+
+   The programme is stored on the organisation record (omega_partner_orgs) via
+   A.saveOrg, which is administrator-only. That is deliberately the same place
+   the rest of the org's metadata lives rather than a second registry, and it
+   means a partner's terms travel with the partner. */
+function jdOrgs(){
+  var orgs = A.orgs() || {};
+  return F.allPartners(S.deals).map(function (st){
+    var o = orgs[st.orgId] || {};
+    return { stats: st, org: o, jd: o.jd || {},
+             deals: S.deals.filter(function (d){
+               return (F.orgsInvolved ? F.orgsInvolved(d) : (d.orgsInvolved||[]))
+                        .indexOf(st.orgId) !== -1; }) };
+  }).filter(function (r){ return r.deals.length || r.jd.handoff; });
+}
+
+function jdRank(key){
+  for (var i=0;i<F.STAGES.length;i++) if (F.STAGES[i].key===key) return F.STAGES[i].rank;
+  return 0;
+}
+
+function renderJD(){
+  var host = document.getElementById('jd-body'); if (!host) return;
+  var rows = jdOrgs();
+  var cnt = document.getElementById('c-jd'); if (cnt) cnt.textContent = rows.length;
+
+  if (!rows.length){
+    host.innerHTML = '<div class="card"><div class="card-b"><div class="empty">'
+      + '<b>No joint developments yet</b>'
+      + 'A partnership appears here as soon as an organisation is on a project’s roster. '
+      + 'Add them to a project and set the stage they take it over at.</div></div></div>';
+    return;
+  }
+
+  var admin = false; try { admin = A.can('approve_any'); } catch(e){}
+  host.innerHTML = rows.map(function (r){
+    var name = A.orgName(r.stats.orgId);
+    var kind = r.org.kind ? A.orgKindOf(r.org.kind).label : '';
+    var hand = r.jd.handoff || '';
+    var need = hand ? jdRank(hand) : 0;
+    /* stageOf and isExit take a stage KEY, not a deal. */
+    var ready = need ? r.deals.filter(function (d){
+      return jdRank(d.stage) >= need && !F.isExit(d.stage); }) : [];
+
+    var h = '<div class="card"><div class="card-h"><h2>' + esc(name) + '</h2>'
+      + '<span class="sub">' + esc(r.stats.orgId) + (kind ? ' · ' + esc(kind) : '') + '</span>'
+      + '<span class="tag" style="margin-left:auto">' + r.deals.length + ' project'
+      + (r.deals.length===1?'':'s') + '</span>'
+      + (hand ? '<span class="tag">' + ready.length + ' ready</span>'
+              : '<span class="tag">no handoff set</span>')
+      + '</div><div class="card-b">';
+
+    /* How the JD is structured — one line, because the thing that actually
+       differs between partners is where they pick it up. */
+    h += '<div class="stats" style="margin-bottom:12px">'
+      + stat('Hands off at', hand ? F.stageOf(hand).label : '—',
+             hand ? 'ready when a project reaches it' : 'set it below')
+      + stat('Ready now', ready.length, hand ? 'can go to them today' : '—')
+      + stat('Brought', r.stats.referred, r.stats.live + ' live')
+      + '</div>';
+
+    if (admin){
+      h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">'
+        + '<label class="sub">Hands off at '
+        + '<select id="jdh-' + esc(r.stats.orgId) + '">'
+        + '<option value="">— not set —</option>'
+        + F.STAGES.map(function (st){
+            return '<option value="' + esc(st.key) + '"' + (st.key===hand?' selected':'') + '>'
+                 + esc(st.label) + '</option>'; }).join('')
+        + '</select></label>'
+        + '<button class="btn-x" onclick="saveJD(\'' + esc(r.stats.orgId) + '\')">Save</button>'
+        + '<span class="sub" id="jdm-' + esc(r.stats.orgId) + '"></span></div>';
+    }
+
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th>'
+      + '<th>Ready for ' + esc(name) + '</th><th class="num">Size</th><th></th></tr></thead><tbody>';
+    r.deals.forEach(function (d){
+      var st = F.stageOf(d.stage);
+      var isReady = need && jdRank(d.stage) >= need && !F.isExit(d.stage);
+      h += '<tr class="row"><td><div class="t-name">' + esc(d.name || d.id) + '</div>'
+        + '<div class="t-sub">' + esc(d.address || '') + '</div></td>'
+        + '<td><span class="tag" style="background:' + esc(st.color||'#6B7280') + '22;color:'
+        + esc(st.color||'#6B7280') + '">' + esc(st.label) + '</span></td>'
+        + '<td>' + (!need ? '<span class="sub">—</span>'
+                   : isReady ? '<span class="tag" style="background:#12805C22;color:#12805C">Ready</span>'
+                             : '<span class="sub">not yet</span>') + '</td>'
+        + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
+        + '<td style="white-space:nowrap">'
+        + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\')">Open</button> '
+        + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\');go(\'board\')">Board</button>'
+        + (isReady && r.org.kind === 'investor'
+            ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
+              + 'href="https://financing.csebuilders.com/dealroom">Deal room</a>' : '')
+        + '</td></tr>';
+    });
+    h += '</tbody></table></div></div></div>';
+    return h;
+  }).join('');
+}
+
+function saveJD(orgId){
+  var sel = document.getElementById('jdh-' + orgId);
+  var msg = document.getElementById('jdm-' + orgId);
+  if (!sel) return;
+  if (msg) msg.textContent = 'Saving…';
+  A.saveOrg(orgId, { jd: { handoff: sel.value || '', updatedAt: F.stamp() } })
+    .then(function(){
+      var o = A.orgs()[orgId]; if (o) o.jd = { handoff: sel.value || '' };
+      if (msg) msg.textContent = 'Saved.';
+      renderJD();
+    })
+    .catch(function(e){ if (msg) msg.textContent = e.message || 'Could not save.'; });
+}
+
 function renderPartners(){
   var list=F.allPartners(S.deals);
   var host=document.getElementById('partner-rows');
