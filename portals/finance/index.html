@@ -9343,7 +9343,14 @@ function render() {
               : m ? `<span class="cnt alert">${m[2]}</span>` : '';
     return `<button class="navbtn ${S.tab === k ? 'on' : ''}" data-act="tab" data-val="${k}"
       aria-current="${S.tab === k ? 'page' : 'false'}">${svgIc(NAV_ICON[k] || 'grid', 15)}${label}${cnt}</button>`;
-  }).join('');
+  }).join('')
+  /* Deal rooms live on their own page rather than as a tab here: a room is a
+     different object from a marketplace listing — one partner, one data room,
+     one tracker — and giving it its own address means it can be linked to
+     from an email. A link, not a tab, because it navigates away. */
+  + `<a class="navbtn" href="./dealroom.html" style="text-decoration:none"
+       title="Projects packaged and delivered to one capital partner">
+       ${svgIc('lock', 15)}Deal rooms</a>`;
 
   const view = $('#view');
   if (S.tab === 'review') {

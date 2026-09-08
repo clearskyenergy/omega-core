@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deal rooms · ClearSky OMEGA Financing</title>
+<link rel="icon" href="/omega-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  DEAL ROOMS — a baked project, delivered to one capital partner.
+
+  A project that has cleared pre-development is packaged and handed to ONE
+  firm. It is not listed, it is not browsable, and nobody else on the
+  marketplace can see it. That exclusivity is not a new mechanism: fin_projects
+  already carries status:'exclusive' with firstLookUids + firstLookUntil, and
+  the live rules already let exactly four parties read such a document — the
+  owner, their org-mates, a platform administrator, and the named first-look
+  partner. This page uses those, which is why it needs NO rules deploy.
+
+  THE TRACKER
+  Five states, and the point of them is that everybody watching sees the same
+  one. It is the pizza tracker on purpose: a sponsor who can see the package
+  is being checked does not ring to ask, and a partner who can see it coming
+  clears the afternoon.
+
+    ordered   the sponsor has filed it, pre-development done
+    baking    ClearSky is assembling the file
+    checking  ClearSky is checking it is complete and honest
+    delivered it is in the partner's room and they have been emailed
+    funded    closed
+
+  WHO CAN DO WHAT
+    sponsor (owner or org-mate)  edits the submission and the data room link
+                                 while it is ordered or baking; read-only after
+                                 it goes for checking, because a file that
+                                 changes under a reviewer is not a file.
+    administrator (ClearSky)     everything, including delivery.
+    capital partner              reads their own delivered rooms.
+
+  Delivery goes through /api/dealroom-send, which is staff-only server-side —
+  the button being hidden here is a courtesy, not the control.
+-->
+<style>
+  :root{
+    --cs-bg:#F4F7FA; --cs-card:#FFFFFF; --cs-ink:#0E1A24; --cs-muted:#5A6B7B;
+    --cs-faint:#8A98A6; --cs-line:#E3E9EF; --cs-navy:#0E1A24; --cs-blue:#0089BD;
+    --cs-blue-bright:#00AEEF; --cs-green:#12805C; --cs-amber:#C77A00;
+    --cs-red:#B4322A; --cs-violet:#5B4BC4; --cs-panel:#F7F9FC;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cs-bg);color:var(--cs-ink);
+       font:400 15px/1.55 Inter,system-ui,-apple-system,sans-serif}
+  a{color:var(--cs-blue)}
+  .topbar{background:var(--cs-navy);color:#fff;display:flex;align-items:center;gap:14px;
+          padding:0 22px;height:58px;position:sticky;top:0;z-index:40}
+  .topbar img{height:24px;width:auto;display:block}
+  .brand{font:700 16px Syne,Inter,sans-serif;letter-spacing:-.2px}
+  .chip{font:600 10.5px Inter,sans-serif;letter-spacing:.14em;text-transform:uppercase;
+        border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:4px 9px;color:#B9CBDD}
+  .sp{flex:1}
+  .who{font:500 13px Inter,sans-serif;color:#B9CBDD}
+  .wrap{max-width:1180px;margin:0 auto;padding:26px 22px 80px}
+  h1{font:800 27px/1.15 Syne,Inter,sans-serif;letter-spacing:-.5px;margin:0 0 6px}
+  .lede{color:var(--cs-muted);margin:0 0 22px;max-width:70ch}
+  .card{background:var(--cs-card);border:1px solid var(--cs-line);border-radius:14px;
+        padding:18px 20px;margin-bottom:14px}
+  .card h2{font:700 15px Inter,sans-serif;margin:0 0 3px}
+  .card .sub{color:var(--cs-muted);font-size:13px;margin:0 0 14px}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .btn{border:0;border-radius:9px;padding:10px 16px;font:600 13.5px Inter,sans-serif;
+       cursor:pointer;background:var(--cs-navy);color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--cs-ink);border:1.5px solid var(--cs-line)}
+  .btn.go{background:linear-gradient(135deg,#006F9A,#00A9A4)}
+  input[type=text],input[type=url],textarea,select{
+    width:100%;padding:10px 12px;border:1.5px solid var(--cs-line);border-radius:9px;
+    font:400 14px Inter,sans-serif;color:var(--cs-ink);background:#fff;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--cs-blue)}
+  label{display:block;font:600 12px Inter,sans-serif;color:var(--cs-muted);
+        margin:0 0 5px;letter-spacing:.02em}
+  .fld{margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .muted{color:var(--cs-muted)}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+
+  /* ── the tracker ───────────────────────────────────────────────────── */
+  .trk{display:flex;gap:0;margin:6px 0 4px;align-items:flex-start}
+  .stp{flex:1;min-width:0;text-align:center;position:relative;padding-top:26px}
+  .stp::before{content:'';position:absolute;top:8px;left:0;right:0;height:3px;
+               background:var(--cs-line)}
+  .stp:first-child::before{left:50%}
+  .stp:last-child::before{right:50%}
+  .stp .dot{position:absolute;top:2px;left:50%;transform:translateX(-50%);
+            width:15px;height:15px;border-radius:50%;background:#fff;
+            border:3px solid var(--cs-line);z-index:1}
+  .stp.done::before{background:var(--cs-green)}
+  .stp.done .dot{border-color:var(--cs-green);background:var(--cs-green)}
+  .stp.now::before{background:linear-gradient(90deg,var(--cs-green) 50%,var(--cs-line) 50%)}
+  .stp.now .dot{border-color:var(--cs-green);background:#fff;
+                box-shadow:0 0 0 4px rgba(18,128,92,.16)}
+  .stp .lbl{font:600 12px Inter,sans-serif;color:var(--cs-faint)}
+  .stp.done .lbl,.stp.now .lbl{color:var(--cs-ink)}
+  .stp .when{font:400 11px Inter,sans-serif;color:var(--cs-faint);margin-top:2px}
+
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{background:var(--cs-card);border:1px solid var(--cs-line);border-radius:12px;
+        padding:14px 16px;display:flex;gap:14px;align-items:center;cursor:pointer}
+  .item:hover{border-color:var(--cs-blue)}
+  .item.on{border-color:var(--cs-blue);box-shadow:0 0 0 3px rgba(0,137,189,.10)}
+  .item .nm{font:600 14.5px Inter,sans-serif}
+  .item .mt{font-size:12.5px;color:var(--cs-muted)}
+  .pill{font:600 11px Inter,sans-serif;border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .pill.ordered{background:#EEF2F6;color:#5A6B7B}
+  .pill.baking{background:#FFF3E0;color:var(--cs-amber)}
+  .pill.checking{background:#EDE9FC;color:var(--cs-violet)}
+  .pill.delivered{background:#E4F4EE;color:var(--cs-green)}
+  .pill.funded{background:#E3F1F8;color:var(--cs-blue)}
+  .note{border-radius:10px;padding:12px 14px;font-size:13.5px;margin:12px 0}
+  .note.warn{background:#FFF6E6;border:1px solid #F0D9AE;color:#6B4B00}
+  .note.err{background:#FDEDEC;border:1px solid #F2C6C2;color:#7A2019}
+  .note.ok{background:#E9F6F0;border:1px solid #BFE3D3;color:#0B5B41}
+  .empty{color:var(--cs-muted);padding:26px 0;text-align:center}
+  @media(max-width:760px){ .trk{flex-wrap:wrap;gap:10px} .stp{flex:1 1 40%} }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <img src="/clearsky-omega-mark.svg" alt="" onerror="this.style.display='none'">
+  <span class="brand">ClearSky OMEGA</span>
+  <span class="chip">Deal rooms</span>
+  <span class="sp"></span>
+  <span class="who" id="who">…</span>
+  <a href="/" class="chip" style="text-decoration:none">← Portal</a>
+</div>
+
+<div class="wrap">
+  <h1>Deal rooms</h1>
+  <p class="lede" id="lede">Projects that have cleared pre-development, packaged and delivered to one
+     capital partner. Held exclusively — nobody else on the marketplace sees them.</p>
+
+  <div id="gate"></div>
+  <div id="main" style="display:none">
+    <div id="settings"></div>
+    <div class="grid" style="grid-template-columns:minmax(280px,360px) 1fr;align-items:start">
+      <div>
+        <div class="card" style="padding:14px 16px">
+          <h2 style="margin-bottom:10px">Rooms</h2>
+          <div class="list" id="list"><div class="empty">Loading…</div></div>
+        </div>
+      </div>
+      <div id="detail"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="./firebase-config.js"></script>
+<script>
+'use strict';
+
+/* ── the pipeline ───────────────────────────────────────────────────────
+   Order matters: index in this array IS progress, and every comparison in
+   the page is an index comparison rather than a string test, so a state
+   added later slots in without hunting for equality checks. */
+var FLOW = [
+  { key:'ordered',   label:'Ordered',       hint:'Filed by the sponsor, pre-development complete' },
+  { key:'baking',    label:'Being packaged', hint:'ClearSky is assembling the file' },
+  { key:'checking',  label:'Quality check',  hint:'Checked for completeness before it goes out' },
+  { key:'delivered', label:'Delivered',      hint:'In the partner’s room — they have been emailed' },
+  { key:'funded',    label:'Funded',         hint:'Closed' }
+];
+var IDX = {}; FLOW.forEach(function (s, i) { IDX[s.key] = i; });
+var ADMIN_DOMAINS = /@(clearsky-usa|csebuilders)\.com$/i;
+
+var S = { me:null, profile:null, rooms:[], openId:null, cfg:null, busy:false, msg:null };
+var db = firebase.firestore(), auth = firebase.auth();
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function isAdmin(){
+  return !!S.me && (ADMIN_DOMAINS.test(S.me.email||'')
+    || (S.profile && S.profile.role === 'admin'));
+}
+function room(d){ return (d && d.room) || {}; }
+function stateOf(d){ var k = room(d).state; return IDX[k] != null ? k : 'ordered'; }
+/* A sponsor owns it, or shares the organisation that filed it. */
+function isSponsorOf(d){
+  if (!S.me) return false;
+  if (d.developerUid === S.me.uid) return true;
+  var mine = (S.profile && S.profile.orgKey) || '';
+  return !!mine && d.orgKey === mine;
+}
+/* Editable by the sponsor only while it is still theirs to change. Once it
+   is with a reviewer, a file that moves under them is worse than a delay. */
+function sponsorCanEdit(d){ return isSponsorOf(d) && IDX[stateOf(d)] <= IDX.baking; }
+function fmt(ts){
+  try {
+    var t = ts && ts.toDate ? ts.toDate() : (typeof ts === 'number' ? new Date(ts) : null);
+    return t ? t.toLocaleDateString(undefined,{month:'short',day:'numeric'}) : '';
+  } catch(e){ return ''; }
+}
+function num(n, u){
+  return (typeof n === 'number' && isFinite(n) && n > 0)
+    ? n.toLocaleString(undefined,{maximumFractionDigits:1}) + (u ? ' ' + u : '') : '—';
+}
+
+/* ── tracker ─────────────────────────────────────────────────────────── */
+function trackerHtml(d){
+  var at = IDX[stateOf(d)], r = room(d);
+  var stampFor = { delivered: r.deliveredAt, funded: r.fundedAt };
+  return '<div class="trk">' + FLOW.map(function (s, i){
+    var cls = i < at ? 'done' : (i === at ? 'now' : '');
+    var when = stampFor[s.key] ? fmt(stampFor[s.key]) : '';
+    return '<div class="stp ' + cls + '"><span class="dot"></span>'
+      + '<div class="lbl">' + esc(s.label) + '</div>'
+      + (when ? '<div class="when">' + esc(when) + '</div>' : '')
+      + '</div>';
+  }).join('') + '</div>'
+  + '<p class="muted" style="font-size:13px;margin:8px 0 0">' + esc(FLOW[at].hint) + '</p>';
+}
+
+/* ── list ────────────────────────────────────────────────────────────── */
+function renderList(){
+  var el = $('list'); if (!el) return;
+  if (!S.rooms.length){
+    el.innerHTML = '<div class="empty">No deal rooms yet.' +
+      (isAdmin() ? '<br><span style="font-size:12.5px">Open a project in the portal and send it to a room.</span>' : '') +
+      '</div>';
+    return;
+  }
+  el.innerHTML = S.rooms.map(function (d){
+    var st = stateOf(d);
+    return '<div class="item' + (d.docId === S.openId ? ' on' : '') + '" data-id="' + esc(d.docId) + '">'
+      + '<div style="flex:1;min-width:0">'
+        + '<div class="nm">' + esc(d.name || 'Untitled project') + '</div>'
+        + '<div class="mt">' + esc([d.city, d.state].filter(Boolean).join(', ') || '—')
+        + ' · ' + esc(num(d.mw,'MW')) + (room(d).forOrg ? ' · ' + esc(room(d).forOrg) : '') + '</div>'
+      + '</div>'
+      + '<span class="pill ' + st + '">' + esc(FLOW[IDX[st]].label) + '</span>'
+      + '</div>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.item'), function (n){
+    n.onclick = function(){ S.openId = n.getAttribute('data-id'); renderList(); renderDetail(); };
+  });
+}
+
+/* ── detail ──────────────────────────────────────────────────────────── */
+function renderDetail(){
+  var el = $('detail'); if (!el) return;
+  var d = S.rooms.filter(function (x){ return x.docId === S.openId; })[0];
+  if (!d){ el.innerHTML = '<div class="card"><div class="empty">Pick a room on the left.</div></div>'; return; }
+
+  var r = room(d), st = stateOf(d), admin = isAdmin(), canEdit = sponsorCanEdit(d) || admin;
+  var h = '';
+
+  h += '<div class="card">'
+    + '<h2>' + esc(d.name || 'Untitled project') + '</h2>'
+    + '<p class="sub">' + esc([d.city, d.state].filter(Boolean).join(', ') || 'Location not set')
+    + ' · ' + esc(d.tech || 'technology not set')
+    + ' · ' + esc(num(d.mw,'MW')) + (d.mwh ? ' · ' + esc(num(d.mwh,'MWh')) : '') + '</p>'
+    + trackerHtml(d)
+    + '</div>';
+
+  /* The data room itself — the thing the partner actually came for. */
+  h += '<div class="card"><h2>Data room</h2>'
+    + '<p class="sub">Everything needed to fund the project. Held wherever you keep it — Drive, '
+    + 'SharePoint, a VDR — so access stays yours to withdraw.</p>';
+  if (r.dataRoomUrl){
+    h += '<div class="row"><a class="btn go" style="text-decoration:none" target="_blank" rel="noopener" href="'
+      + esc(r.dataRoomUrl) + '">Open the data room</a>'
+      + '<span class="mono muted" style="font-size:12px;word-break:break-all">' + esc(r.dataRoomUrl) + '</span></div>';
+  } else {
+    h += '<div class="note warn">No data room link yet. It cannot be delivered without one.</div>';
+  }
+  if (canEdit){
+    h += '<div class="fld" style="margin-top:14px"><label for="url">Data room link (https)</label>'
+      + '<input id="url" type="url" placeholder="https://drive.google.com/…" value="' + esc(r.dataRoomUrl||'') + '"></div>'
+      + '<div class="fld"><label for="note">Note for the partner</label>'
+      + '<textarea id="note" rows="2" placeholder="Anything they should read first">' + esc(r.note||'') + '</textarea></div>'
+      + '<button class="btn" id="saveRoom">Save</button>';
+  }
+  h += '</div>';
+
+  if (admin){
+    h += '<div class="card"><h2>Delivery</h2>'
+      + '<p class="sub">Move it along the tracker, and hand it to the partner when it is ready. '
+      + 'Delivering emails them and opens their room.</p>'
+      + '<div class="grid">'
+        + '<div class="fld"><label for="st">Stage</label><select id="st">'
+          + FLOW.map(function (s){ return '<option value="' + s.key + '"' + (s.key===st?' selected':'') + '>'
+              + esc(s.label) + '</option>'; }).join('')
+        + '</select></div>'
+        + '<div class="fld"><label for="org">Baked exclusively for</label>'
+          + '<input id="org" type="text" placeholder="Amperage Capital" value="' + esc(r.forOrg||'') + '"></div>'
+      + '</div>'
+      + '<div class="row" style="margin-top:4px">'
+        + '<button class="btn" id="saveStage">Save stage</button>'
+        + '<button class="btn go" id="deliver"' + (r.dataRoomUrl ? '' : ' disabled') + '>'
+        + (st === 'delivered' || st === 'funded' ? 'Deliver again' : 'Deliver to partner') + '</button>'
+      + '</div>';
+    if (r.notifiedTo && r.notifiedTo.length){
+      h += '<p class="muted" style="font-size:12.5px;margin:12px 0 0">Last delivered to '
+        + esc(r.notifiedTo.join(', ')) + (r.notifiedAt ? ' on ' + esc(fmt(r.notifiedAt)) : '') + '.</p>';
+    }
+    h += '</div>';
+  } else if (isSponsorOf(d) && !sponsorCanEdit(d)){
+    h += '<div class="note">This is with ClearSky for checking, so it is read-only until it is '
+      + 'delivered. Ask us if something needs to change.</div>';
+  }
+
+  if (Array.isArray(r.history) && r.history.length){
+    h += '<div class="card"><h2>History</h2><div class="list">'
+      + r.history.slice().reverse().map(function (e){
+          var k = IDX[e.state] != null ? FLOW[IDX[e.state]].label : e.state;
+          return '<div class="mt" style="display:flex;gap:10px"><span style="min-width:110px">'
+            + esc(k) + '</span><span class="muted">' + esc(fmt(e.at)) + ' · ' + esc(e.by||'') + '</span></div>';
+        }).join('')
+      + '</div></div>';
+  }
+
+  el.innerHTML = h;
+  if ($('saveRoom')) $('saveRoom').onclick = function(){ saveRoom(d); };
+  if ($('saveStage')) $('saveStage').onclick = function(){ saveStage(d); };
+  if ($('deliver')) $('deliver').onclick = function(){ deliver(d); };
+}
+
+function flash(kind, text){
+  S.msg = { kind:kind, text:text };
+  var el = $('detail');
+  if (el) el.insertAdjacentHTML('afterbegin', '<div class="note ' + kind + '">' + esc(text) + '</div>');
+}
+
+function saveRoom(d){
+  var url = ($('url')||{}).value || '', note = ($('note')||{}).value || '';
+  url = url.trim();
+  if (url && !/^https:\/\//i.test(url)){ flash('err','A data room link has to start with https://'); return; }
+  db.collection('fin_projects').doc(d.docId).update({
+    'room.dataRoomUrl': url, 'room.note': note.trim(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ flash('ok','Saved.'); })
+    .catch(function(e){ flash('err', permMsg(e)); });
+}
+
+function saveStage(d){
+  var next = ($('st')||{}).value || 'ordered';
+  var org  = (($('org')||{}).value || '').trim();
+  var hist = (room(d).history || []).slice(-40);
+  if (next !== stateOf(d)) hist.push({ state: next, at: Date.now(), by: (S.me&&S.me.email)||'' });
+  db.collection('fin_projects').doc(d.docId).update({
+    'room.state': next, 'room.forOrg': org, 'room.history': hist,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){ flash('ok','Stage saved.'); })
+    .catch(function(e){ flash('err', permMsg(e)); });
+}
+
+/* Delivery is the server's job: it is the only step that emails a third
+   party, and it must not be possible from a console in a browser. */
+function deliver(d){
+  if (S.busy) return;
+  S.busy = true;
+  var btn = $('deliver'); if (btn){ btn.disabled = true; btn.textContent = 'Delivering…'; }
+  auth.currentUser.getIdToken().then(function (tok){
+    return fetch('/api/dealroom-send', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + tok },
+      body: JSON.stringify({ projectId: d.docId, note: room(d).note || '' })
+    });
+  }).then(function (r){
+    return r.json().catch(function(){ return {}; }).then(function (j){
+      if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
+      return j;
+    });
+  }).then(function (j){
+    flash('ok', j.skipped
+      ? 'Marked delivered, but no mailbox is configured on this deployment so no email went out.'
+      : 'Delivered. ' + ((j.delivered||[]).join(', ') || 'The partner') + ' has been emailed.');
+  }).catch(function (e){
+    flash('err', 'Could not deliver: ' + (e.message || 'unknown error'));
+  }).then(function(){
+    S.busy = false; var b = $('deliver'); if (b){ b.disabled = false; b.textContent = 'Deliver to partner'; }
+  });
+}
+
+function permMsg(e){
+  return (e && e.code === 'permission-denied')
+    ? 'You do not have permission to change this room.'
+    : 'Could not save: ' + ((e && e.message) || 'unknown error');
+}
+
+/* ── settings (administrators) ───────────────────────────────────────── */
+function renderSettings(){
+  var el = $('settings'); if (!el) return;
+  if (!isAdmin()){ el.innerHTML = ''; return; }
+  var c = S.cfg || {};
+  el.innerHTML = '<div class="card"><h2>Who gets told</h2>'
+    + '<p class="sub">Where the “ready to fund” email goes. One address per line. '
+    + 'Configuration rather than code, because a partner changes analysts more often than we deploy.</p>'
+    + '<div class="grid">'
+      + '<div class="fld"><label for="cfgOrg">Default partner</label>'
+        + '<input id="cfgOrg" type="text" placeholder="Amperage Capital" value="' + esc(c.defaultOrg||'') + '"></div>'
+      + '<div class="fld"><label for="cfgTo">Recipients</label>'
+        + '<textarea id="cfgTo" rows="3" placeholder="deals@amperagecapital.com">'
+        + esc((c.recipients||[]).join('\n')) + '</textarea></div>'
+    + '</div>'
+    + '<button class="btn" id="saveCfg">Save recipients</button>'
+    + '<span class="muted" id="cfgMsg" style="margin-left:10px;font-size:13px"></span>'
+    + '</div>';
+  $('saveCfg').onclick = function(){
+    var list = (($('cfgTo')||{}).value||'').split(/[\n,;]+/)
+      .map(function(x){ return x.trim(); }).filter(function(x){ return /.+@.+\..+/.test(x); });
+    db.collection('fin_settings').doc('dealroom').set({
+      defaultOrg: (($('cfgOrg')||{}).value||'').trim(),
+      recipients: list,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge:true })
+      .then(function(){ $('cfgMsg').textContent = 'Saved — ' + list.length + ' recipient(s).'; })
+      .catch(function(e){ $('cfgMsg').textContent = permMsg(e); });
+  };
+}
+
+/* ── data ────────────────────────────────────────────────────────────── */
+function watch(){
+  /* Every audience reads the same collection; the rules decide what comes
+     back. An administrator gets everything with a room on it, a sponsor gets
+     their own, a partner gets the ones held for them. Rather than write three
+     queries that each need their own index, read what this account can see
+     and filter for rooms in the client — the rule has already done the
+     security part, and the volume here is a book of deals, not a feed. */
+  db.collection('fin_projects').onSnapshot(function (snap){
+    var out = [];
+    snap.forEach(function (doc){
+      var d = doc.data() || {}; d.docId = doc.id;
+      if (d.room && d.room.state) out.push(d);
+    });
+    out.sort(function (a,b){ return (IDX[stateOf(b)]||0) - (IDX[stateOf(a)]||0)
+      || String(a.name||'').localeCompare(String(b.name||'')); });
+    S.rooms = out;
+    if (!S.openId){
+      var want = new URLSearchParams(location.search).get('p');
+      if (want && out.some(function(x){ return x.docId === want; })) S.openId = want;
+      else if (out.length) S.openId = out[0].docId;
+    }
+    renderList(); renderDetail();
+  }, function (e){
+    $('list').innerHTML = '<div class="empty">' +
+      (e && e.code === 'permission-denied'
+        ? 'You do not have access to deal rooms on this account.'
+        : 'Could not load deal rooms.') + '</div>';
+    try { console.error('[dealroom]', e); } catch(_e){}
+  });
+
+  db.collection('fin_settings').doc('dealroom').onSnapshot(function (s){
+    S.cfg = (s.exists && s.data()) || {}; renderSettings();
+  }, function(){ /* a non-admin cannot read it; that is fine */ });
+}
+
+/* If firebase-config.js did not load, nothing below will ever run and the
+   page sits on an empty frame looking like it is still thinking. Say so. */
+if (!window.firebase || !firebase.apps || !firebase.apps.length){
+  document.getElementById('gate').innerHTML =
+    '<div class="note err">This page could not reach Firebase, so no rooms can load. '
+    + 'Reload, and if it persists tell ClearSky — it is at our end.</div>';
+}
+
+auth.onAuthStateChanged(function (u){
+  if (!u){
+    $('gate').innerHTML = '<div class="card"><h2>Sign in</h2>'
+      + '<p class="sub">Deal rooms are private to the sponsor, ClearSky and the capital partner '
+      + 'the project is held for.</p>'
+      + '<a class="btn" style="text-decoration:none" href="/">Go to the portal to sign in</a></div>';
+    return;
+  }
+  S.me = u;
+  $('who').textContent = u.email || '';
+  db.collection('fin_profiles').doc(u.uid).get()
+    .then(function (s){ S.profile = (s.exists && s.data()) || null; })
+    .catch(function(){ S.profile = null; })
+    .then(function(){
+      $('gate').innerHTML = '';
+      $('main').style.display = '';
+      if (isAdmin()){
+        $('lede').textContent = 'Every project packaged for a capital partner. You can move any room '
+          + 'along the tracker, set its data room link, and deliver it.';
+      } else if (S.profile && S.profile.role === 'partner'){
+        $('lede').textContent = 'Projects held exclusively for you. Each has been through '
+          + 'pre-development and carries a full data room.';
+      }
+      renderSettings();
+      watch();
+    });
+});
+</script>
+</body>
+</html>
