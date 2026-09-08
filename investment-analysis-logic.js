@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    Site Investment Analysis — engine (ES5)
-   © 2025 ClearSky Energy Solutions LLC · Author: Tommy Gilmer
+   © 2025–2026 ClearSky Energy Solutions LLC · Proprietary and Confidential
 
    Pipeline:
      1. Intake (address/ZIP + utility + archetype)

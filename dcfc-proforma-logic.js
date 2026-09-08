@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    DCFC BESS Pro Forma — calculation engine (ES5)
-   © 2025 ClearSky Energy Solutions LLC · Author: Tommy Gilmer
+   © 2025–2026 ClearSky Energy Solutions LLC · Proprietary and Confidential
    Utility rates seeded from real filed tariffs. TOU-EV-8 values are the
    Total Delivery + Generation (UG) energy charges from Cal. P.U.C.
    Sheet 91206-E (effective Jun 1, 2026), summer/winter blended.
