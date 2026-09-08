@@ -11927,6 +11927,142 @@ function _shapeWorldPts(sh){
 }
 window._shapeWorldPts = _shapeWorldPts;
 
+/* ══════════════════════════════════════════════════════════════════════
+   THE PARCEL'S OWN FRAME
+
+   Land is not square to the screen; the packers are. They take the parcel's
+   bounding box, inset it by the setback and lay tiles on a grid — which is
+   the right algorithm in the wrong coordinate system. Inside a turned
+   parcel that box is mostly not the parcel, so the plan wastes every corner
+   and then has to be spun afterwards to look like it belongs.
+
+   Turning the PARCEL costs one transform in and one out. Everything between
+   them runs completely unchanged, on a parcel that is square to the grid —
+   because in that frame it is. The design comes out square to the boundary
+   rather than square to the canvas, which is the whole point.
+
+   Solar is deliberately NOT in this frame. A parcel angle is an accident of
+   surveying; an array angle is a fact about the sun. Solar is handed back to
+   world space before it is laid out, and picks its own orientation.
+   ══════════════════════════════════════════════════════════════════════ */
+function _omegaFrame(){
+  var deg = null;
+  try { deg = _omegaLayoutAzimuth(); } catch(e){}
+  if (deg == null || !isFinite(deg)) return null;
+  var d = deg % 180; if (d < 0) d += 180;
+  /* A parcel already square to the grid gains nothing and risks everything. */
+  if (d < 0.5 || d > 179.5) return null;
+  var sb = null;
+  try { sb = _siteBoundaryShape(); } catch(e){}
+  var pw = sb ? _shapeWorldPts(sb) : null;
+  if (!pw || pw.length < 3) return null;
+  var cx = 0, cy = 0;
+  pw.forEach(function(q){ cx += q.x; cy += q.y; });
+  return { deg:d, cx:cx/pw.length, cy:cy/pw.length };
+}
+function _frameTo(fr, x, y){          /* world -> frame */
+  var r = -fr.deg*Math.PI/180, c = Math.cos(r), sn = Math.sin(r);
+  var dx = x-fr.cx, dy = y-fr.cy;
+  return { x: fr.cx+dx*c-dy*sn, y: fr.cy+dx*sn+dy*c };
+}
+function _frameFrom(fr, x, y){        /* frame -> world */
+  var r = fr.deg*Math.PI/180, c = Math.cos(r), sn = Math.sin(r);
+  var dx = x-fr.cx, dy = y-fr.cy;
+  return { x: fr.cx+dx*c-dy*sn, y: fr.cy+dx*sn+dy*c };
+}
+function _framePoly(fr, poly, back){
+  var f = back ? _frameFrom : _frameTo;
+  return (poly||[]).map(function(q){
+    var r = f(fr, q.x, q.y);
+    for (var k in q) if (k!=='x' && k!=='y') r[k] = q[k];
+    return r;
+  });
+}
+/* Put a shape planned in the frame back on the drawing.
+
+   A one-point shape is a BOX anchored at its top-left, and `rot` turns it
+   about its own centre — so the centre is what travels with the frame and
+   the corner is derived back from it. Rotating the corner instead places
+   every box off by the difference between the two, which on a 60 ft pad is
+   most of a pad. A two-point rect is the same story with the centre taken
+   from its diagonal. A real polygon just carries its points and keeps rot
+   at zero, because the points already describe the turn. */
+function _framePlace(fr, shape){
+  if (!fr || !shape || !shape.pts || !shape.pts.length) return shape;
+  var P = 0;
+  try { P = (typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 0; } catch(e){}
+  var pts = shape.pts, cx, cy, hw, hh;
+  if (pts.length === 1 && P > 0 && (shape.lf != null || shape.wf != null)) {
+    hw = ((+shape.lf||0)*P)/2; hh = ((+shape.wf||0)*P)/2;
+    cx = pts[0].x + hw; cy = pts[0].y + hh;
+  } else if (pts.length === 2 && shape.kind === 'rect') {
+    /* Only a RECT is two opposite corners. A two-point polyline is a line,
+       and rebuilding it from a bounding box would flip any line running
+       bottom-left to top-right. Lines fall through to the polygon path. */
+    hw = Math.abs(pts[1].x-pts[0].x)/2; hh = Math.abs(pts[1].y-pts[0].y)/2;
+    cx = Math.min(pts[0].x,pts[1].x)+hw; cy = Math.min(pts[0].y,pts[1].y)+hh;
+  } else {
+    shape.pts = _framePoly(fr, pts, true);
+    return shape;
+  }
+  var c = _frameFrom(fr, cx, cy);
+  shape.pts = (pts.length === 1)
+    ? [{ x:c.x-hw, y:c.y-hh }]
+    : [{ x:c.x-hw, y:c.y-hh }, { x:c.x+hw, y:c.y+hh }];
+  var a = ((+shape.rot||0) + fr.deg) % 360; if (a > 180) a -= 360;
+  shape.rot = Math.round(a*10)/10;
+  return shape;
+}
+window._omegaFrame=_omegaFrame; window._frameTo=_frameTo;
+window._frameFrom=_frameFrom; window._framePoly=_framePoly;
+window._framePlace=_framePlace;
+
+/* Sweep everything a framed build produced back onto the drawing.
+
+   Called once, after the build, with the ids that existed before it — so
+   whatever the build added is what gets turned, no matter which module
+   added it. Solar is skipped: it was handed back to world space before it
+   was laid out, because its angle answers to the sun and not to the lot. */
+function _sweepFrameToWorld(fr, seenS, seenC, seenE){
+  if (!fr) return 0;
+  var n = 0;
+  (S.shapes||[]).forEach(function(sh){
+    if (!sh || !sh.id || seenS[sh.id]) return;
+    if (sh.omegaSolarZone || sh.isSiteBoundary) return;
+    _framePlace(fr, sh);
+    if (sh.tables) sh.tables = sh.tables.map(function(t){
+      var c = JSON.parse(JSON.stringify(t)), q = _frameFrom(fr, t.x, t.y);
+      c.x = q.x; c.y = q.y;
+      var a = ((+t.rot||0) + fr.deg) % 360; if (a > 180) a -= 360;
+      c.rot = Math.round(a*10)/10;
+      return c;
+    });
+    _shedGeo(sh); n++;
+    try { if (typeof renderShape==='function') renderShape(sh); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(sh); } catch(e){}
+  });
+  (S.conduits||[]).forEach(function(c){
+    if (!c || !c.id || seenC[c.id] || !c.pts) return;
+    c.pts = _framePoly(fr, c.pts, true);
+    _shedGeo(c); n++;
+    try { if (typeof renderConduit==='function') renderConduit(c); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(c); } catch(e){}
+  });
+  (S.elements||[]).forEach(function(el){
+    if (!el || !el.id || seenE[el.id]) return;
+    var w = +el.w||0, h = +el.h||(w*0.35);
+    var q = _frameFrom(fr, (+el.x||0)+w/2, (+el.y||0)+h/2);
+    el.x = q.x-w/2; el.y = q.y-h/2;
+    var a = ((+el.rot||0) + fr.deg) % 360; if (a > 180) a -= 360;
+    el.rot = Math.round(a*10)/10;
+    _shedGeo(el); n++;
+    try { if (typeof _reRenderEl==='function') _reRenderEl(el.id); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(el); } catch(e){}
+  });
+  return n;
+}
+window._sweepFrameToWorld = _sweepFrameToWorld;
+
 function _shapeWorldCentroid(o){
   var p = (o && o.pts && o.pts.length>=3) ? _shapeWorldPts(o) : null;
   if (p && p.length){
@@ -33338,6 +33474,9 @@ function _omegaAxisLabel(deg){
   function applyAfterBuild(){
     try {
       if (typeof S === 'undefined') return;
+      /* A build laid out in the parcel's frame is already on that axis.
+         Turning it again would leave it at twice the angle. */
+      if (window.__omegaPlanFramed) { window.__omegaPlanFramed = false; return; }
       var _az = _omegaLayoutAzimuth();
       if (_az == null) return;
       var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
@@ -157243,6 +157382,19 @@ if (root.console && console.info) {
        boundary. That is exactly the overlap they reported. */
     if (plan.solar.built && plan.solar.polygon) {
       try {
+        /* ── SOLAR IS NOT IN THE PARCEL'S FRAME ────────────────────────
+           A parcel angle is an accident of surveying. An array angle is a
+           fact about the sun. So the solar ground is handed back to world
+           space here and laid out there, and the sweep afterwards leaves
+           its zone alone — the array picks its own orientation rather than
+           inheriting the shape of the lot. */
+        var _sfr = root.__omegaPlanFrame;
+        if (_sfr && typeof _framePoly === 'function') {
+          plan.solar.polygon = _framePoly(_sfr, plan.solar.polygon, true);
+          if (plan.solar.polys) plan.solar.polys = plan.solar.polys.map(function (q) {
+            return q && q.poly ? { poly: _framePoly(_sfr, q.poly, true), ac: q.ac } : q;
+          });
+        }
         var lay = computeGroundLayout({ boundary: plan.solar.polygon, exclusions: exclusions() });
         if (lay) {
           var sh = applyGroundLayout(plan.solar.polygon, lay, exclusions());
@@ -157327,8 +157479,33 @@ if (root.console && console.info) {
       genClass = root.OmegaSolarZone ? root.OmegaSolarZone.chosen() : null;
     } catch (e) {}
 
+    /* ── PLAN IN THE PARCEL'S FRAME ───────────────────────────────────
+       The packers lay tiles on a grid and inset a bounding box, which is
+       the right algorithm in the wrong coordinate system: inside a turned
+       parcel that box is mostly not the parcel. Turn the PARCEL instead and
+       every stage downstream runs completely unchanged, on ground that is
+       square to the grid — because in this frame it is.
+
+       Nothing is transformed on the way through. The whole build is swept
+       back to world in one pass afterwards, so shapes, conduits and roads
+       are all caught by one implementation rather than by a seam per
+       module, and anything added later is caught for free.
+
+       Does nothing on a parcel already square to the grid, and falls back
+       to today's behaviour on any failure. */
+    var _fr = null;
+    try { _fr = (typeof _omegaFrame === 'function') ? _omegaFrame() : null; } catch (e) { _fr = null; }
+    var _excl = exclusions();
+    if (_fr) {
+      try {
+        poly = _framePoly(_fr, poly);
+        _excl = (_excl || []).map(function (z) { return _framePoly(_fr, z); });
+      } catch (e) { _fr = null; poly = boundary(); _excl = exclusions(); }
+    }
+    root.__omegaPlanFrame = _fr;
+
     var input = {
-      polygon: poly, exclusions: exclusions(), pxPerFt: P,
+      polygon: poly, exclusions: _excl, pxPerFt: P,
       ceilingKw: c.kw, mode: opts.mode === 'max' ? 'max' : 'fixed',
       itMw: +opts.itMw || 40,
       generation: der.generation !== false, storage: der.storage !== false,
@@ -157342,7 +157519,27 @@ if (root.console && console.info) {
     var plan = root.OmegaEngine.design(input, over);
     if (!plan.ok) return fail('Could not design: ' + plan.errors.join('; '));
 
-    draw(plan);
+    var _seenS = {}, _seenC = {}, _seenE = {};
+    if (_fr) {
+      try {
+        (S.shapes || []).forEach(function (x) { if (x && x.id) _seenS[x.id] = 1; });
+        (S.conduits || []).forEach(function (x) { if (x && x.id) _seenC[x.id] = 1; });
+        (S.elements || []).forEach(function (x) { if (x && x.id) _seenE[x.id] = 1; });
+      } catch (e) {}
+    }
+    try {
+      draw(plan);
+    } finally {
+      root.__omegaPlanFrame = null;
+      if (_fr) {
+        try { _sweepFrameToWorld(_fr, _seenS, _seenC, _seenE); } catch (e) {
+          if (root.console) console.warn(TAG + ' frame sweep', e && e.message);
+        }
+      }
+      /* The build already came out on the parcel's axis; the post-build
+         turn must not turn it a second time. */
+      root.__omegaPlanFramed = !!_fr;
+    }
     root._omegaPlan = plan;
 
     var s = plan.sizing;
