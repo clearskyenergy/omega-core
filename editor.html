@@ -167803,6 +167803,14 @@ if (root.console && console.info) {
       +     ['N','NE','E','SE','S','SW','W','NW'].map(function(d){
              return '<option value="'+d+'">'+d+'</option>'; }).join('')
       +   '</select></label>'
+      + '<label style="display:inline-flex;align-items:center;gap:4px;color:#8FA3B8;font-size:10.5px">'
+      +   'Angle'
+      +   '<input type="number" min="0" max="179" step="1" placeholder="\u2014" '
+      +     'onchange="OmegaMoveSystem.faceDeg(this.value)" '
+      +     'onkeydown="if(event.key===\'Enter\'){OmegaMoveSystem.faceDeg(this.value);event.preventDefault();}" '
+      +     'style="width:46px;background:rgba(255,255,255,.08);color:#E2EEF9;'
+      +     'border:1px solid rgba(255,255,255,.16);border-radius:5px;padding:2px 4px;'
+      +     'font-family:inherit;font-size:10.5px">\u00b0</label>'
       + '<span style="color:#5B6B7C;font-size:10px">or drag \u21bb \u00b7 shift snaps 15\u00b0</span>'
       + (bad.length
           ? '<span style="color:#F87171">' + bad.map(function (c) {
@@ -167846,22 +167854,76 @@ if (root.console && console.info) {
      far this move has already turned it, so picking the same point twice
      does nothing rather than turning it twice — and picking a different one
      goes straight there instead of adding to the last. */
-  function face(dir){
-    if (!dir) return;
-    var deg = (root.OMEGA_COMPASS || {})[String(dir).toUpperCase()];
-    if (deg == null) return;
+  /* ── TURNING IT MUST NOT PUSH IT OFF THE LAND ────────────────────────
+     A packed block is a rectangle. Turn a rectangle inside a parcel and its
+     corners sweep outwards — which is how a build that fitted ends up lying
+     across the boundary, and it is the single thing that made the facing
+     control produce a worse drawing than not using it.
+
+     After a turn the block is slid back until it sits inside the parcel
+     again. Slid, not scaled and not clipped: nothing is resized and nothing
+     is thrown away, so the design is the design and only its position
+     changes. If it genuinely cannot fit at that angle the move is left
+     alone and it says so, because quietly leaving equipment over the line is
+     how a drawing gets issued that cannot be built. */
+  function _fitInsideParcel(){
+    var site = null;
+    try { site = (typeof _siteBoundaryShape === 'function') ? _siteBoundaryShape() : null; } catch(e){}
+    if (!site || !site.pts || site.pts.length < 3) return null;
+    var b = bounds(M); if (!b) return null;
+    var sx1=Infinity, sy1=Infinity, sx2=-Infinity, sy2=-Infinity;
+    site.pts.forEach(function(p){
+      if(p.x<sx1)sx1=p.x; if(p.y<sy1)sy1=p.y; if(p.x>sx2)sx2=p.x; if(p.y>sy2)sy2=p.y; });
+    var bw = b.x2-b.x1, bh = b.y2-b.y1;
+    if (bw > (sx2-sx1) || bh > (sy2-sy1)) return 'toobig';
+    var dx = 0, dy = 0;
+    if (b.x1 < sx1) dx = sx1 - b.x1; else if (b.x2 > sx2) dx = sx2 - b.x2;
+    if (b.y1 < sy1) dy = sy1 - b.y1; else if (b.y2 > sy2) dy = sy2 - b.y2;
+    if (!dx && !dy) return null;
+    nudge(dx, dy);
+    return { dx:dx, dy:dy };
+  }
+
+  function _turnTo(deg, label){
     var d = deg - (total.rot || 0);
     d %= 180; if (d > 90) d -= 180; if (d < -90) d += 180;
     if (Math.abs(d) < 0.05) return;
     spin(d);
-    if (typeof root.showBanner === 'function' && root.OMEGA_AXIS_NAME){
-      root.showBanner('cal', 'Facing ' + (root.OMEGA_AXIS_NAME[deg] || dir)
-        + '. Keep to accept, Put back to undo.');
+    var fit = _fitInsideParcel();
+    if (typeof root.showBanner === 'function'){
+      if (fit === 'toobig'){
+        root.showBanner('warn', 'Turned to ' + label + ', but the block is wider than the '
+          + 'parcel at that angle and now crosses the line. Put back, or make the compound '
+          + 'smaller before turning it.');
+      } else if (fit){
+        root.showBanner('cal', 'Facing ' + label + ' — slid '
+          + Math.abs(Math.round(ft(fit.dx))) + ' ft ' + (fit.dx<0?'west':'east') + ' and '
+          + Math.abs(Math.round(ft(fit.dy))) + ' ft ' + (fit.dy<0?'north':'south')
+          + ' to stay inside the parcel. Keep to accept, Put back to undo.');
+      } else {
+        root.showBanner('cal', 'Facing ' + label + '. Keep to accept, Put back to undo.');
+      }
     }
   }
 
+  function face(dir){
+    if (!dir) return;
+    var deg = (root.OMEGA_COMPASS || {})[String(dir).toUpperCase()];
+    if (deg == null) return;
+    _turnTo(deg, (root.OMEGA_AXIS_NAME && root.OMEGA_AXIS_NAME[deg]) || dir);
+  }
+
+  /* Any angle, for a site that runs along something no compass point
+     describes — a road, a ridge, a lot line surveyed off true north. */
+  function faceDeg(v){
+    var d = parseFloat(v);
+    if (!isFinite(d)) return;
+    d %= 180; if (d < 0) d += 180;
+    _turnTo(d, Math.round(d) + '\u00b0');
+  }
+
   root.OmegaMoveSystem = {
-    face: face,
+    face: face, faceDeg: faceDeg,
     start: start, stop: stop, nudge: nudge, spin: spin,
     rotate: function (deg) { return spin(+deg || 0); },
     members: members, bounds: bounds,
