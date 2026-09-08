@@ -928,6 +928,13 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
    Pointer events stay on — a ghost you cannot click is a ghost you cannot
    un-ghost. */
 .cel.cel-future{opacity:.62}
+/* ── BLOCK-OUT VIEW ──────────────────────────────────────────────────
+   Only the compounds and the parcel stay visible, so there is nothing in the
+   way of arranging them. Visibility only — everything hidden is still on
+   the drawing, in the schedule and in the cost. */
+body.omg-zones #els .cel{ display:none }
+body.omg-zones #csvg .shape-g:not([data-zone]){ opacity:.10 }
+body.omg-zones #csvg .shape-g[data-zone]{ opacity:1 }
 .cel.cel-future .elbody{outline:1.5px dashed #A855F7;outline-offset:3px;border-radius:3px}
 .cel.cel-future::after{
   content:'FUTURE';position:absolute;left:50%;top:-9px;
@@ -11268,6 +11275,8 @@ function renderShape(sh){
   var svg=document.getElementById('csvg');
   var old=svg.querySelector('[data-shid="'+sh.id+'"]'); if(old) old.parentNode.removeChild(old);
   var g=_mkNS('g'); g.setAttribute('data-shid',sh.id); g.setAttribute('class','shape-g');
+  /* A compound or the parcel: what Block out leaves you to arrange. */
+  if (sh.omegaCampus || sh.isSiteBoundary) g.setAttribute('data-zone','1');
   g.setAttribute('style','cursor:move;pointer-events:visiblePainted');
   var tf=_shapeTransform(sh); if(tf) g.setAttribute('transform',tf);
   if(sh.kind==='parking'){
@@ -32415,6 +32424,9 @@ function _o2VerbsClass(key){
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
   h += _o2FacingSelect();
+  h += _o2Btn('\u25a1 Block out', 'omegaBlockOut()', true,
+               'Size each compound to hold what goes in it and hide the equipment, so you '
+             + 'can arrange the areas against the land. Press again to bring it back.');
   h += _o2Btn('\u21ba Recalibrate', 'omegaRecalibrate()', true,
                'Re-flow the equipment to fit inside the compounds as they are now. '
              + 'Move or resize a fence, then press this.');
@@ -32457,6 +32469,9 @@ function _o2VerbsMulti(){
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
   h += _o2FacingSelect();
+  h += _o2Btn('\u25a1 Block out', 'omegaBlockOut()', true,
+               'Size each compound to hold what goes in it and hide the equipment, so you '
+             + 'can arrange the areas against the land. Press again to bring it back.');
   h += _o2Btn('\u21ba Recalibrate', 'omegaRecalibrate()', true,
                'Re-flow the equipment to fit inside the compounds as they are now. '
              + 'Move or resize a fence, then press this.');
@@ -32831,6 +32846,100 @@ function _o2Spin(deg){
    the count is named, so the answer is "your compound is four pods short"
    rather than a picture that looks fine and is not.
    ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════
+   BLOCK OUT — SHAPE THE AREAS BEFORE YOU FILL THEM
+
+   The order this tool had was backwards. It generated a finished system and
+   then asked you to correct it: turn the block, align it, drag it back
+   inside the line. That is editing an answer.
+
+   A site gets laid out the other way round — you block out where each thing
+   goes against the land first, argue with the shapes while they are cheap,
+   and only then fill them in. Block out is that step: each compound is sized
+   to exactly hold what it has to hold, the equipment steps off the screen so
+   nothing is in the way of arranging them, and the areas are what you drag,
+   turn and resize. Recalibrate then fills them.
+
+   NOTHING IS DELETED. The equipment is hidden, not removed — still on the
+   drawing, still in the schedule, still in the cost. A mode that quietly
+   destroyed a build to give you a tidier picture would be the worst trade in
+   this file. Press it again and it comes straight back.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* A compound that holds n cells, in roughly the proportion of the space it
+   sits in, rather than a stripe that happens to satisfy the arithmetic. */
+function _blockDims(n, cellW, cellH, inset){
+  if (n < 1) n = 1;
+  var cols = Math.max(1, Math.round(Math.sqrt(n * cellH / cellW)));
+  var rows = Math.ceil(n / cols);
+  return { w: cols*cellW + inset*2, h: rows*cellH + inset*2, cols:cols, rows:rows };
+}
+
+function omegaBlockOut(){
+  var on = !document.body.classList.contains('omg-zones');
+  var P = 6; try { if (S.pxPerFt > 0) P = S.pxPerFt; } catch(e){}
+  var gap = RECAL_GAP_FT * P, inset = RECAL_INSET_FT * P;
+  var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+
+  if (!on){
+    document.body.classList.remove('omg-zones');
+    if (typeof showBanner === 'function'){
+      showBanner('cal','Equipment back on the drawing. Press Recalibrate to flow it '
+        + 'into the compounds where they are now.');
+    }
+    return;
+  }
+
+  var fences = (S.shapes||[]).filter(function(x){
+    return x && x.omegaCampus && x.pts && x.pts.length > 2 && !x.isSiteBoundary; });
+  if (!fences.length){
+    alert('No compounds to block out yet.\n\nRun a build first \u2014 this sizes the '
+        + 'compounds it produced so you can arrange them, then Recalibrate fills them.');
+    return;
+  }
+
+  var sized = 0;
+  fences.forEach(function(fence){
+    var tag = fence.omegaCampus;
+    var members = (S.shapes||[]).filter(function(o){
+      if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
+      if (o.omegaCampus) return false;
+      var c = _shapeCentroid(o);
+      return (MAP[o.kind] === tag) || !!(c && _ptInPoly(c.x, c.y, fence.pts));
+    });
+    if (!members.length) return;
+
+    var cw = 0, ch = 0;
+    members.forEach(function(o){ var b=_ptsBBox(o.pts); if(b.w>cw)cw=b.w; if(b.h>ch)ch=b.h; });
+    var d = _blockDims(members.length, cw+gap, ch+gap, inset);
+
+    /* Resized about its own centre, so a compound stays where it was put and
+       only its extent changes. Growing it from a corner would walk the block
+       across the parcel every time it was re-sized. */
+    var c = _shapeCenter(fence);
+    fence.pts = [
+      { x:c.x-d.w/2, y:c.y-d.h/2 }, { x:c.x+d.w/2, y:c.y-d.h/2 },
+      { x:c.x+d.w/2, y:c.y+d.h/2 }, { x:c.x-d.w/2, y:c.y+d.h/2 }
+    ];
+    ['_geoPts','_geoC','_geoBoundary','_geoExcl','_geoBR'].forEach(function(k){
+      if(fence[k]!==undefined){ try{ delete fence[k]; }catch(e){} } });
+    try { if (typeof renderShape==='function') renderShape(fence); } catch(e){}
+    try { if (typeof _refreshShape==='function') _refreshShape(fence); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(fence); } catch(e){}
+    sized++;
+  });
+
+  document.body.classList.add('omg-zones');
+  try { if (typeof pushHist==='function') pushHist(); } catch(e){}
+  try { if (typeof _setSaved==='function') _setSaved('unsaved'); } catch(e){}
+  if (typeof showBanner === 'function'){
+    showBanner('cal', 'Blocked out \u2014 ' + sized + ' compound' + (sized===1?'':'s')
+      + ' sized to hold what goes in them. Drag, turn and resize the areas against the '
+      + 'land, then press Recalibrate to fill them. The equipment is hidden, not deleted.');
+  }
+}
+window.omegaBlockOut = omegaBlockOut;
 
 var RECAL_GAP_FT = 5;      /* between units */
 var RECAL_INSET_FT = 10;   /* clear of the fence line */
