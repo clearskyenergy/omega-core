@@ -11761,7 +11761,11 @@ function _shapeRotateStart(e, id){
   S.shRotCampus = null;
   try {
     if (sh.omegaCampus) {
-      S.shRotCampus = { tag: sh.omegaCampus, cx: c.x, cy: c.y, from: (sh.rot||0) };
+      S.shRotCampus = { tag: sh.omegaCampus, cx: c.x, cy: c.y, from: (sh.rot||0),
+        /* Copied, because the fence's own points are about to be the thing
+           that moves and containment has to be judged against where the
+           compound WAS when the drag started. */
+        foot: (sh.pts||[]).map(function(p){ return { x:p.x, y:p.y }; }) };
     }
   } catch (e) {}
 }
@@ -11772,7 +11776,38 @@ function _shapeRotateStart(e, id){
    OWN centre so it does not drift by half its size, and the ground anchor
    dropped because lat/lng does not rotate uniformly and restamp re-derives
    it from the pixels that then exist. */
-function _rotateCampusMembers(tag, deg, cx, cy, exceptId){
+/* Even-odd ray cast. A campus is defined by what sits INSIDE its compound,
+   not by what happens to carry a tag: the fence round the solar, the EMS,
+   the switchgear and the metering are all part of that block and all have to
+   travel with it. Tag matching alone moved the panels and left the fence and
+   the EMS behind, which is what made the conduit runs sprawl. */
+function _ptInPoly(x, y, pts){
+  if (!pts || pts.length < 3) return false;
+  var inside = false;
+  for (var i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    var xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+window._ptInPoly = _ptInPoly;
+
+function _shapeCentroid(o){
+  if (o.pts && o.pts.length){
+    var sx=0, sy=0; o.pts.forEach(function(p){ sx+=p.x; sy+=p.y; });
+    return { x:sx/o.pts.length, y:sy/o.pts.length };
+  }
+  if (typeof o.cx === 'number') return { x:o.cx, y:o.cy };
+  if (typeof o.x === 'number'){
+    var w=+o.w||0, h=+o.h||(w*0.35);
+    return { x:o.x + w/2, y:o.y + h/2 };
+  }
+  return null;
+}
+
+function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
   if (!tag || !deg) return 0;
   var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r), n=0;
   function turn(x,y){ var dx=x-cx, dy=y-cy; return { x:cx+dx*cos-dy*sin, y:cy+dx*sin+dy*cos }; }
@@ -11785,10 +11820,17 @@ function _rotateCampusMembers(tag, deg, cx, cy, exceptId){
     o.rot=Math.round(a*10)/10;
   }
   var MAP = (typeof _O2_CAMPUS_OF_KIND!=='undefined') ? _O2_CAMPUS_OF_KIND : {};
+  function belongs(o){
+    if (!o) return false;
+    if (o.omegaCampus === tag || MAP[o.kind] === tag) return true;
+    if (!footprint) return false;
+    var c = _shapeCentroid(o);
+    return !!(c && _ptInPoly(c.x, c.y, footprint));
+  }
+
   (S.shapes||[]).forEach(function(o){
     if (!o || o.id===exceptId || o.locked || o.isSiteBoundary) return;
-    var mine = (o.omegaCampus===tag) || (MAP[o.kind]===tag);
-    if (!mine) return;
+    if (!belongs(o)) return;
     if (o.pts) o.pts = o.pts.map(function(p){
       var q=turn(p.x,p.y); for(var k in p) if(k!=='x'&&k!=='y') q[k]=p[k]; return q; });
     if (typeof o.cx==='number'){ var cc=turn(o.cx,o.cy); o.cx=cc.x; o.cy=cc.y; }
@@ -11801,6 +11843,24 @@ function _rotateCampusMembers(tag, deg, cx, cy, exceptId){
     bump(o); shed(o); n++;
     try { if (typeof renderShape==='function') renderShape(o); } catch(e){}
     try { if (typeof _geoRestampOne==='function') _geoRestampOne(o); } catch(e){}
+  });
+
+  /* ── THE ELEMENTS WERE NEVER WALKED ──────────────────────────────────
+     This iterated S.shapes only. The EMS, the switchgear, the metering and
+     the master controller are ELEMENTS, so a rotation left every one of
+     them standing where it was while the block they serve turned away —
+     which is why the conduit came out long and disorganised. They are the
+     things the runs actually connect to; moving the panels without them
+     guarantees a mess. */
+  (S.elements||[]).forEach(function(el){
+    if (!el || el.locked) return;
+    if (!belongs(el)) return;
+    var w=+el.w||0, h=+el.h||(w*0.35);
+    var cc=turn((+el.x||0)+w/2, (+el.y||0)+h/2);
+    el.x=cc.x-w/2; el.y=cc.y-h/2;
+    bump(el); shed(el); n++;
+    try { if (typeof _reRenderEl==='function') _reRenderEl(el.id); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(el); } catch(e){}
   });
   return n;
 }
@@ -12089,7 +12149,8 @@ function _shapeInteractEnd(){
         var _f=(S.shapes||[]).filter(function(x){ return x.id===_movedId; })[0];
         var _d=((_f && _f.rot)||0) - _campus.from;
         if (Math.abs(_d) > 0.05) {
-          var _n=_rotateCampusMembers(_campus.tag, _d, _campus.cx, _campus.cy, _movedId);
+          var _n=_rotateCampusMembers(_campus.tag, _d, _campus.cx, _campus.cy,
+                                      _movedId, _campus.foot);
           if (_n && typeof showBanner==='function') {
             showBanner('cal','Turned the compound and the ' + _n + ' item'
               + (_n===1?'':'s') + ' inside it by ' + Math.round(_d) + '\u00b0.');
@@ -32702,7 +32763,9 @@ function omegaAlignCampus(tag, deg){
   var delta = deg - from;
   delta %= 180; if (delta > 90) delta -= 180; if (delta < -90) delta += 180;
   if (Math.abs(delta) < 0.05) return 0;      /* already along it */
-  var n = _rotateCampusMembers(tag, delta, c.x, c.y, fence ? fence.id : null);
+  var foot = (fence && fence.pts && fence.pts.length > 2)
+    ? fence.pts.map(function(p){ return { x:p.x, y:p.y }; }) : null;
+  var n = _rotateCampusMembers(tag, delta, c.x, c.y, fence ? fence.id : null, foot);
   if (fence){
     var a = ((+fence.rot||0) + delta) % 360; if(a>180)a-=360; if(a<-180)a+=360;
     fence.rot = Math.round(a*10)/10;
