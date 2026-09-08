@@ -32415,6 +32415,9 @@ function _o2VerbsClass(key){
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
   h += _o2FacingSelect();
+  h += _o2Btn('\u21ba Recalibrate', 'omegaRecalibrate()', true,
+               'Re-flow the equipment to fit inside the compounds as they are now. '
+             + 'Move or resize a fence, then press this.');
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', !!one,
               'Turn the selection about its own centre \u2014 the parcel line and anything locked stay put');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2,
@@ -32454,6 +32457,9 @@ function _o2VerbsMulti(){
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
   h += _o2FacingSelect();
+  h += _o2Btn('\u21ba Recalibrate', 'omegaRecalibrate()', true,
+               'Re-flow the equipment to fit inside the compounds as they are now. '
+             + 'Move or resize a fence, then press this.');
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', n>0,
               'Turn every picked item about the centre of the set');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2, 'Space the picked items evenly');
@@ -32804,6 +32810,147 @@ function _o2Spin(deg){
   _o2Commit();
   return objs.length;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   RECALIBRATE — THE FENCE IS THE CONTAINER
+
+   Everything up to here transformed a block that had already been packed:
+   turn it, align it, drag it. That is correcting a layout. This inverts it
+   — draw or move the compound where the land actually allows, press
+   Recalibrate, and the equipment re-flows to fit inside it.
+
+   It packs in the FENCE'S OWN FRAME. A shape's pts are stored unrotated and
+   its rot turns it about its own centre, so a compound at 30 degrees is a
+   plain rectangle once you are inside its frame: lay the grid out square
+   there, rotate each target back about the fence centre, and every piece
+   lands parallel to the fence with no trigonometry in the packing itself.
+
+   WHAT WILL NOT FIT IS REPORTED, NEVER DROPPED AND NEVER STACKED. A packer
+   that quietly overlaps two pods produces a drawing that prices and permits
+   something nobody can build. Anything with no cell keeps its position and
+   the count is named, so the answer is "your compound is four pods short"
+   rather than a picture that looks fine and is not.
+   ══════════════════════════════════════════════════════════════════════ */
+
+var RECAL_GAP_FT = 5;      /* between units */
+var RECAL_INSET_FT = 10;   /* clear of the fence line */
+
+function _ptsBBox(pts){
+  var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  pts.forEach(function(p){ if(p.x<x1)x1=p.x; if(p.y<y1)y1=p.y; if(p.x>x2)x2=p.x; if(p.y>y2)y2=p.y; });
+  return { x1:x1, y1:y1, x2:x2, y2:y2, w:x2-x1, h:y2-y1 };
+}
+
+function omegaRecalibrate(){
+  var P = 6; try { if (S.pxPerFt > 0) P = S.pxPerFt; } catch(e){}
+  var gap = RECAL_GAP_FT * P, inset = RECAL_INSET_FT * P;
+  var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+
+  var fences = (S.shapes||[]).filter(function(x){
+    return x && x.omegaCampus && x.pts && x.pts.length > 2 && !x.isSiteBoundary; });
+  if (!fences.length){
+    alert('No fenced compound to recalibrate into.\n\nDraw or place a compound first '
+        + '\u2014 Recalibrate flows the equipment into the fence, so there has to be one.');
+    return;
+  }
+
+  var placed = 0, leftOver = 0, comps = 0;
+
+  fences.forEach(function(fence){
+    var tag = fence.omegaCampus;
+    var fb = _ptsBBox(fence.pts);
+    var fc = _shapeCenter(fence);
+    var ang = (+fence.rot||0) * Math.PI/180;
+    var cos = Math.cos(ang), sin = Math.sin(ang);
+    function toWorld(x, y){
+      var dx=x-fc.x, dy=y-fc.y;
+      return { x: fc.x + dx*cos - dy*sin, y: fc.y + dx*sin + dy*cos };
+    }
+
+    /* Members: the repeating units of this campus, largest first so the
+       cell is sized by the biggest thing that has to fit in it. */
+    var members = (S.shapes||[]).filter(function(o){
+      if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
+      if (o.omegaCampus === tag) return false;             /* another fence */
+      return (MAP[o.kind] === tag) || _ptInPoly((_shapeCentroid(o)||{}).x,
+                                                (_shapeCentroid(o)||{}).y, fence.pts);
+    });
+    if (!members.length) return;
+    comps++;
+
+    var cw = 0, ch = 0;
+    members.forEach(function(o){ var b=_ptsBBox(o.pts); if(b.w>cw)cw=b.w; if(b.h>ch)ch=b.h; });
+    var cellW = cw + gap, cellH = ch + gap;
+    var availW = fb.w - inset*2, availH = fb.h - inset*2;
+    var cols = Math.max(0, Math.floor(availW / cellW));
+    var rows = Math.max(0, Math.floor(availH / cellH));
+    var capacity = cols * rows;
+
+    members.forEach(function(o, i){
+      if (i >= capacity){ leftOver++; return; }
+      var col = i % cols, row = Math.floor(i / cols);
+      /* Centre the block in the compound rather than jamming it into a
+         corner: a layout hard against one fence line reads as a mistake. */
+      var usedW = cols*cellW, usedH = Math.ceil(Math.min(members.length, capacity)/cols)*cellH;
+      var ox = fb.x1 + (fb.w - usedW)/2 + cellW/2;
+      var oy = fb.y1 + (fb.h - usedH)/2 + cellH/2;
+      var t = toWorld(ox + col*cellW, oy + row*cellH);
+      var c = _shapeCentroid(o) || { x:0, y:0 };
+      var dx = t.x - c.x, dy = t.y - c.y;
+      o.pts = o.pts.map(function(p){ return { x:p.x+dx, y:p.y+dy }; });
+      if (typeof o.cx === 'number'){ o.cx += dx; o.cy += dy; }
+      o.rot = +fence.rot || 0;
+      ['_geoPts','_geoC','_geoBoundary','_geoExcl','_geoBR','_geoRot','_geoTables']
+        .forEach(function(k){ if(o[k]!==undefined){ try{ delete o[k]; }catch(e){} } });
+      try { if (typeof renderShape==='function') renderShape(o); } catch(e){}
+      try { if (typeof _refreshShape==='function') _refreshShape(o); } catch(e){}
+      try { if (typeof _geoRestampOne==='function') _geoRestampOne(o); } catch(e){}
+      placed++;
+    });
+
+    /* The gear the runs connect to goes along the inside of one edge, which
+       is where a control yard actually sits — not scattered through the
+       field where every run has to thread past a pod to reach it. */
+    var els = (S.elements||[]).filter(function(el){
+      if (!el || el.locked) return false;
+      var c = _shapeCentroid(el);
+      return !!(c && _ptInPoly(c.x, c.y, fence.pts));
+    });
+    if (els.length){
+      var step = (fb.w - inset*2) / (els.length + 1);
+      els.forEach(function(el, i){
+        var t2 = toWorld(fb.x1 + inset + step*(i+1), fb.y2 - inset);
+        var w=+el.w||0, h=+el.h||(w*0.35);
+        el.x = t2.x - w/2; el.y = t2.y - h/2;
+        el.rot = +fence.rot || 0;
+        ['_geoLat','_geoLng','_geoPts','_geoRot'].forEach(function(k){
+          if(el[k]!==undefined){ try{ delete el[k]; }catch(e){} } });
+        try { if (typeof _reRenderEl==='function') _reRenderEl(el.id); } catch(e){}
+        try { if (typeof _geoRestampOne==='function') _geoRestampOne(el); } catch(e){}
+        placed++;
+      });
+    }
+  });
+
+  try { if (typeof rerouteTrenchConduits==='function') rerouteTrenchConduits(); } catch(e){}
+  try { if (typeof pushHist==='function') pushHist(); } catch(e){}
+  try { if (typeof _setSaved==='function') _setSaved('unsaved'); } catch(e){}
+  try { if (typeof omegaSetStale==='function') omegaSetStale(true); } catch(e){}
+
+  if (typeof showBanner === 'function'){
+    if (!comps){
+      showBanner('shape','Nothing inside those compounds to flow \u2014 place the equipment first.');
+    } else if (leftOver){
+      showBanner('warn', 'Recalibrated ' + comps + ' compound' + (comps===1?'':'s')
+        + ' \u2014 ' + placed + ' placed, ' + leftOver + ' would not fit and were left where '
+        + 'they are. Make the compound bigger or take ' + leftOver + ' out.');
+    } else {
+      showBanner('cal', 'Recalibrated ' + comps + ' compound' + (comps===1?'':'s')
+        + ' \u2014 ' + placed + ' piece' + (placed===1?'':'s') + ' re-flowed inside the fence.');
+    }
+  }
+}
+window.omegaRecalibrate = omegaRecalibrate;
 
 /* ══════════════════════════════════════════════════════════════════════
    WHICH WAY THE LAYOUT RUNS
