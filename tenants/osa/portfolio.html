@@ -811,6 +811,9 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
                   onclick="togglePartnerAdd()">Add an organisation</button></div>
       <div id="po-add" style="display:none;padding:14px 16px;border-bottom:1px solid var(--line,#E1E6EC)">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <label class="sub" style="display:flex;flex-direction:column;gap:4px">From the ecosystem
+            <select id="po-eco" onchange="pickEcoOrg(this.value)" style="min-width:220px">
+              <option value="">— or type a new one —</option></select></label>
           <label class="sub" style="display:flex;flex-direction:column;gap:4px">Domain
             <input id="po-id" placeholder="amperagecapital.com" style="min-width:200px"></label>
           <label class="sub" style="display:flex;flex-direction:column;gap:4px">Name
@@ -822,8 +825,11 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           <button class="btn-o" onclick="addPartnerOrg()">Add</button>
           <span class="sub" id="po-msg"></span>
         </div>
-        <p class="sub" style="margin:10px 0 0">The domain is what people sign in from and it is the
-          key everything else hangs off, so it cannot be changed afterwards — the name can.</p>
+        <p class="sub" style="margin:10px 0 0">Pick an organisation already on the platform and its
+          domain, name and vertical come with it — that is what keeps this registry and the wider
+          ecosystem describing the same company. Type one instead for a partner who is not on
+          OMEGA yet. Either way the domain is what people sign in from and the key everything
+          hangs off, so it cannot be changed afterwards; the name can.</p>
       </div>
       <div class="card-h" style="border-top:0;padding-top:0"><span class="sub"></span>
           <span class="sub">Sorted by capital closed on deals they originated. Set what each one
@@ -1735,6 +1741,53 @@ function setOrgJd(orgId, on){
     .catch(function(e){ pMsg(orgId, e.message || 'Could not save.', true); });
 }
 
+/* ── THE ECOSYSTEM IS THE SOURCE OF TRUTH FOR WHO EXISTS ────────────────
+   This workspace keeps its own registry (omega_partner_orgs) and the platform
+   keeps the real one (omega_orgs — the tenants actually on OMEGA). Typing a
+   domain into the local one creates a company that exists here and nowhere
+   else, and two registries describing the same partner under slightly
+   different names is how the numbers stop agreeing.
+
+   So the add form offers the ecosystem first: pick NextNRG and you get their
+   domain, their name and their vertical as the platform knows them. Free text
+   stays for a partner who is not on OMEGA yet — Amperage today — because
+   refusing to record a real agreement until somebody is onboarded would be
+   the tail wagging the dog.
+
+   Listing the tenant registry is a ClearSky-only read, so a partner admin
+   simply gets the free-text half and no error. */
+var VERTICAL_TO_KIND = { oem:'manufacturer', developer:'developer',
+                         epc:'developer', installer:'broker' };
+
+function loadEcoOrgs(){
+  if (S.ecoOrgs) return Promise.resolve(S.ecoOrgs);
+  if (typeof db === 'undefined' || !db) { S.ecoOrgs = []; return Promise.resolve([]); }
+  return db.collection('omega_orgs').get().then(function(sn){
+    var out=[];
+    sn.forEach(function(d){
+      var v=d.data()||{};
+      if (v.status === 'cancelled') return;
+      out.push({ id:d.id.toLowerCase(), name:v.name||d.id, vertical:v.vertical||'' });
+    });
+    out.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+    S.ecoOrgs = out;
+    return out;
+  })['catch'](function(){ S.ecoOrgs = []; return []; });
+}
+
+function pickEcoOrg(id){
+  if (!id) return;
+  var o = (S.ecoOrgs||[]).filter(function(x){ return x.id===id; })[0];
+  if (!o) return;
+  var i=document.getElementById('po-id');   if(i) i.value = o.id;
+  var n=document.getElementById('po-name'); if(n) n.value = o.name;
+  var k=document.getElementById('po-kind');
+  if(k && VERTICAL_TO_KIND[o.vertical]) k.value = VERTICAL_TO_KIND[o.vertical];
+  var m=document.getElementById('po-msg');
+  if(m){ m.style.color=''; m.textContent = o.vertical
+    ? 'From the ecosystem · ' + o.vertical : 'From the ecosystem'; }
+}
+
 function togglePartnerAdd(){
   var el=document.getElementById('po-add'); if(!el) return;
   var open = el.style.display === 'none';
@@ -1745,6 +1798,18 @@ function togglePartnerAdd(){
     if(k && !k.options.length) k.innerHTML = A.ORG_KINDS.map(function(x){
       return '<option value="'+esc(x.key)+'"'+(x.key==='investor'?' selected':'')+'>'
            + esc(x.label)+'</option>'; }).join('');
+    loadEcoOrgs().then(function(list){
+      var sel=document.getElementById('po-eco'); if(!sel) return;
+      var have=A.orgs()||{};
+      var free=list.filter(function(o){ return !have[o.id]; });
+      sel.innerHTML='<option value="">'
+        + (free.length ? '\u2014 pick one, or type a new one below \u2014'
+                       : '\u2014 type a new one below \u2014')
+        + '</option>'
+        + free.map(function(o){
+            return '<option value="'+esc(o.id)+'">'+esc(o.name)
+                 + (o.vertical?' \u00b7 '+esc(o.vertical):'')+'</option>'; }).join('');
+    });
     var i=document.getElementById('po-id'); if(i) i.focus();
   }
 }
