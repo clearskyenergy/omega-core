@@ -133,5 +133,21 @@
       "maxDuration": 30
     }
   },
-  "redirects": []
+  "redirects": [
+    {
+      "source": "/dealroom",
+      "destination": "/portals/finance/dealroom",
+      "permanent": false
+    },
+    {
+      "source": "/portals/dealroom",
+      "destination": "/portals/finance/dealroom",
+      "permanent": false
+    },
+    {
+      "source": "/dealroom/:path*",
+      "destination": "/portals/finance/dealroom",
+      "permanent": false
+    }
+  ]
 }
