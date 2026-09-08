@@ -167787,7 +167787,23 @@ if (root.console && console.info) {
          thing to read past on every move that never needed it. */
       + (total.rot ? '<span style="color:#FBBF24;font-weight:700">'
           + (total.rot > 0 ? '\u21bb ' : '\u21ba ') + Math.abs(total.rot) + '\u00b0</span>' : '')
-      + '<span style="color:#5B6B7C;font-size:10px">drag \u21bb to turn \u00b7 shift snaps 15\u00b0</span>'
+      /* ── SAY WHICH WAY IT SHOULD FACE, HERE ────────────────────────
+         The drag grip could turn the system but only by eye, and the
+         Layout picker in the selection bar is a different mode — so
+         somebody moving the whole build had no way to say "this should
+         run north-west" without leaving what they were doing and guessing
+         at the angle. Same eight points as the Layout control, applied to
+         whatever is in hand. */
+      + '<label style="display:inline-flex;align-items:center;gap:5px;color:#8FA3B8;font-size:10.5px">'
+      +   'Face'
+      +   '<select onchange="OmegaMoveSystem.face(this.value)" '
+      +     'style="background:rgba(255,255,255,.08);color:#E2EEF9;border:1px solid rgba(255,255,255,.16);'
+      +     'border-radius:5px;padding:2px 5px;font-family:inherit;font-size:10.5px;cursor:pointer">'
+      +     '<option value="">\u2014</option>'
+      +     ['N','NE','E','SE','S','SW','W','NW'].map(function(d){
+             return '<option value="'+d+'">'+d+'</option>'; }).join('')
+      +   '</select></label>'
+      + '<span style="color:#5B6B7C;font-size:10px">or drag \u21bb \u00b7 shift snaps 15\u00b0</span>'
       + (bad.length
           ? '<span style="color:#F87171">' + bad.map(function (c) {
               return (c.overlap ? 'overlaps ' : Math.round(c.gapFt) + ' ft to ') + c.label.toLowerCase()
@@ -167826,7 +167842,26 @@ if (root.console && console.info) {
     if (root.console) console.info(TAG + ' ready \u2014 OmegaMoveSystem.start()');
   }
 
+  /* Turn what is in hand to a compass axis. The delta is measured from how
+     far this move has already turned it, so picking the same point twice
+     does nothing rather than turning it twice — and picking a different one
+     goes straight there instead of adding to the last. */
+  function face(dir){
+    if (!dir) return;
+    var deg = (root.OMEGA_COMPASS || {})[String(dir).toUpperCase()];
+    if (deg == null) return;
+    var d = deg - (total.rot || 0);
+    d %= 180; if (d > 90) d -= 180; if (d < -90) d += 180;
+    if (Math.abs(d) < 0.05) return;
+    spin(d);
+    if (typeof root.showBanner === 'function' && root.OMEGA_AXIS_NAME){
+      root.showBanner('cal', 'Facing ' + (root.OMEGA_AXIS_NAME[deg] || dir)
+        + '. Keep to accept, Put back to undo.');
+    }
+  }
+
   root.OmegaMoveSystem = {
+    face: face,
     start: start, stop: stop, nudge: nudge, spin: spin,
     rotate: function (deg) { return spin(+deg || 0); },
     members: members, bounds: bounds,
