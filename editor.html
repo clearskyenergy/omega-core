@@ -79963,6 +79963,42 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return list;
   }
 
+  /* ── THE ARRAY ANSWERS TO THE SUN, NOT THE LOT ────────────────────────
+     Candidate angles were scored on module count alone, so an array took
+     whichever orientation packed the most tables. That is the shape of the
+     parcel — an accident of surveying — rather than the direction the sun
+     is in, and it is why a field could come out running along a road.
+
+     Both mount types are already defined so that ang = 0 is the right one.
+     A fixed-tilt table is 20 ft wide by 12 deep, so its long axis runs along
+     local x, which at ang = 0 is east–west with the modules facing the
+     equator. A tracker table is 6 by 180, so its long axis runs along local
+     y, which at ang = 0 is exactly the north–south torque tube it wants.
+     Nothing about the geometry needed changing — only which angle wins.
+
+     So the search is restricted to a window either side of optimal and the
+     best PACKING inside that window wins. A window rather than a hard lock
+     because two or three degrees off costs almost nothing and can buy a
+     whole row, while twenty degrees off costs real yield and should be a
+     decision somebody makes on purpose — which they still can, by passing
+     angleDeg. Ties go to the truer azimuth, because the list is sorted by
+     deviation and the comparison is strict. */
+  var PV_AZ_WINDOW_DEG = 20;
+  function _pvSunDev(a) {
+    var d = a % Math.PI; if (d < 0) d += Math.PI;
+    return Math.min(d, Math.PI - d);
+  }
+  function _pvPreferSun(angles, opts) {
+    if (opts && opts.freeAngle === true) return angles;
+    var win = (opts && isFinite(opts.azWindowDeg) ? +opts.azWindowDeg : PV_AZ_WINDOW_DEG)
+              * Math.PI / 180;
+    var keep = angles.filter(function (a) { return _pvSunDev(a) <= win + 1e-9; });
+    var hasZero = keep.some(function (a) { return _pvSunDev(a) < 1e-9; });
+    if (!hasZero) keep.unshift(0);
+    keep.sort(function (p, q) { return _pvSunDev(p) - _pvSunDev(q); });
+    return keep;
+  }
+
   /* ── the replacement layout engine ─────────────────────────────────── */
   function computeGroundLayoutV2(opts) {
     opts = opts || {};
@@ -80007,7 +80043,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     trials = Math.max(1, Math.min(64, trials));
 
     var angles = candidateAngles(bnd);
-    if (opts.angleDeg != null && isFinite(opts.angleDeg)) angles = [(+opts.angleDeg) * Math.PI / 180];
+    var azForced = (opts.angleDeg != null && isFinite(opts.angleDeg));
+    if (azForced) angles = [(+opts.angleDeg) * Math.PI / 180];
+    else angles = _pvPreferSun(angles, opts);
 
     var nAng = Math.max(1, Math.min(angles.length, trials));
     var nPh = Math.max(1, Math.min(4, Math.floor(trials / nAng)));
@@ -80025,6 +80063,20 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         combos[ci].oy, combos[ci].ox);
       if (!best || f.tables.length > best.tables.length) { best = f; bestAng = combos[ci].a; }
       if (best.tables.length >= CAP) break;
+    }
+    /* If nothing fits anywhere near the sun — a long thin strip running
+       the wrong way, most often — fall back to the free search rather than
+       drawing no array at all, and say so, because that field will
+       under-produce and somebody should know why. */
+    var azFallback = false;
+    if (!azForced && (!best || !best.tables.length)) {
+      var freeAngles = candidateAngles(bnd);
+      for (var fi = 0; fi < freeAngles.length; fi++) {
+        var ff = fitAtAngle(bnd, freeAngles[fi], tw, th, pitch, colGap, sb, excl, CAP, 0, 0);
+        if (ff.tables.length && (!best || ff.tables.length > best.tables.length)) {
+          best = ff; bestAng = freeAngles[fi]; azFallback = true;
+        }
+      }
     }
     if (!best) best = { tables: [], rows: 0, capped: false };
 
@@ -80044,6 +80096,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       kw: kw, presetKey: A.presetKey, gcr: gcr, setbackFt: A.setbackFt, wpsf: A.wpsf,
       tableWft: tableWft, tableHft: tableHft,
       angleDeg: ((Math.round(bestAng * 180 / Math.PI) % 180) + 180) % 180,
+      azDevDeg: Math.round(_pvSunDev(bestAng) * 180 / Math.PI),
+      azForced: azForced, azFallback: azFallback,
+      azWindowDeg: (opts && isFinite(opts.azWindowDeg)) ? +opts.azWindowDeg : PV_AZ_WINDOW_DEG,
       pitchFt: +(pitch / P).toFixed(1),
       rowGapFt: +((pitch - th) / P).toFixed(1),
       acres: +polyAcres.toFixed(3),
