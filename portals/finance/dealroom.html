@@ -179,6 +179,24 @@ var FLOW = [
 var IDX = {}; FLOW.forEach(function (s, i) { IDX[s.key] = i; });
 var ADMIN_DOMAINS = /@(clearsky-usa|csebuilders)\.com$/i;
 
+/* ── WHERE THE ENDPOINT ACTUALLY IS ──────────────────────────────────────
+   This portal is its own Vercel project, so `/api` here is NOT the omega-core
+   api directory — and dealroom-send lives in omega-core, with the mail library
+   and the Admin SDK. Same-origin is tried first so this keeps working if the
+   two are ever merged or the endpoint is copied across; the omega-core host is
+   the fallback. CORS on the shared handler already admits *.csebuilders.com,
+   so the cross-origin call is allowed rather than merely tolerated. */
+var API_FALLBACK = 'https://silmarillion.clearskyomega.com';
+function callApi(path, body, tok){
+  var opts = { method:'POST',
+    headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + tok },
+    body: JSON.stringify(body) };
+  return fetch(path, opts).then(function (r){
+    if (r.status !== 404) return r;
+    return fetch(API_FALLBACK + path, opts);
+  });
+}
+
 var S = { me:null, profile:null, rooms:[], openId:null, cfg:null, busy:false, msg:null };
 var db = firebase.firestore(), auth = firebase.auth();
 
@@ -368,11 +386,8 @@ function deliver(d){
   S.busy = true;
   var btn = $('deliver'); if (btn){ btn.disabled = true; btn.textContent = 'Delivering…'; }
   auth.currentUser.getIdToken().then(function (tok){
-    return fetch('/api/dealroom-send', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + tok },
-      body: JSON.stringify({ projectId: d.docId, note: room(d).note || '' })
-    });
+    return callApi('/api/dealroom-send',
+      { projectId: d.docId, note: room(d).note || '' }, tok);
   }).then(function (r){
     return r.json().catch(function(){ return {}; }).then(function (j){
       if (!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
