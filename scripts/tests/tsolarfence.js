@@ -18,9 +18,18 @@ function chk(l,ok,x=''){ console.log(`  ${ok?'PASS':'FAIL'}  ${l}${x?'  '+x:''}`
 let all = true;
 
 const CAMPUS = 22, SUN = 0;
-// campus pods at the parcel angle
-for (let i=0;i<6;i++) S.shapes.push({ id:'p'+i, kind:'derdc', lf:60, wf:30,
-  rot:CAMPUS, pts:[{x:2000+(i%3)*400, y:1200+Math.floor(i/3)*260}] });
+/* A framed build turns the whole block: the pods' POSITIONS are rotated as
+   well as the pods themselves. The first version of this test rotated each
+   pod on an axis-aligned grid, which no build produces, and then asserted
+   the fence should come out at 22 degrees — it should not, and the minimum-
+   area box was right to say so. */
+const cr = CAMPUS*Math.PI/180, cc = Math.cos(cr), cs = Math.sin(cr);
+const px0 = 2400, py0 = 1330;
+for (let i=0;i<6;i++) {
+  const lx = (i%3)*400 - 400, ly = Math.floor(i/3)*260 - 130;
+  S.shapes.push({ id:'p'+i, kind:'derdc', lf:60, wf:30, rot:CAMPUS,
+    pts:[{ x: px0 + lx*cc - ly*cs, y: py0 + lx*cs + ly*cc }] });
+}
 // a solar array at the SUN's angle, well clear of the campus
 const W=900*P_FT, H=600*P_FT, ox=2000, oy=2600;
 S.shapes.push({ id:'sol', kind:'dersolar', rot:SUN,
@@ -48,12 +57,16 @@ const iw=(Math.max(...corners.map(c=>c.x))-Math.min(...corners.map(c=>c.x)))/P_F
 const ih=(Math.max(...corners.map(c=>c.y))-Math.min(...corners.map(c=>c.y)))/P_FT;
 console.log(`\n  (in the campus frame the same array measures ${iw.toFixed(0)} x ${ih.toFixed(0)} ft` +
             ` — that was the loose fence)`);
+/* A rectangle at 22 deg and one at 112 deg with its sides swapped are the
+   SAME rectangle, so a fence angle only means anything mod 90. */
+const mod90 = d => ((d % 90) + 90) % 90;
+const near90 = (a,b) => { const d = Math.abs(mod90(a)-mod90(b)); return Math.min(d, 90-d) < 0.01; };
 all &= chk('the campus keeps the parcel angle',
-  !!cmp.fenceFr && Math.abs(cmp.fenceFr.deg-CAMPUS)<0.01,
-  cmp.fenceFr?`deg ${cmp.fenceFr.deg}`:'null');
+  !!cmp.fenceFr && near90(cmp.fenceFr.deg, CAMPUS),
+  cmp.fenceFr?`deg ${cmp.fenceFr.deg.toFixed(2)}`:'null');
 all &= chk('solar does not inherit the campus angle',
-  !sol.fenceFr || Math.abs(sol.fenceFr.deg-CAMPUS)>1,
-  sol.fenceFr?`deg ${sol.fenceFr.deg}`:'square (deg 0)');
+  !cmp.fenceFr || !sol.fenceFr || !near90(sol.fenceFr.deg, CAMPUS),
+  sol.fenceFr?`deg ${sol.fenceFr.deg.toFixed(2)}`:'square (deg 0)');
 
 console.log(all ? '\nALL PASS' : '\nFAILURES ABOVE');
 process.exit(all?0:1);

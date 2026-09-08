@@ -47,7 +47,7 @@ write('pv.js',    ['_pvSunDev','_pvPreferSun','candidateAngles'],
 
 /* FenceTie's own frame. equipFrame + boxOf are what decide whether a fence
    follows the equipment or the screen. */
-write('fence.js', ['equipFrame','boxOf','_boxOfRaw','isPoi','cluster#2','frameOf','boxIn','compounds#2'],
+write('fence.js', ['equipFrame','boxOf','_boxOfRaw','isPoi','cluster#2','cornersOf','hullOf','minAreaBox','compounds#2'],
                   'var FR=null, FRAME_AGREE=0.6;\nvar root=global;\n',
                   'module.exports.setFR=function(f){FR=f;};\n'+
                   'module.exports.getFR=function(){return FR;};\n');

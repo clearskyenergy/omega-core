@@ -11301,6 +11301,7 @@ function renderShape(sh){
   } else {
     var node=_shapeNode(sh.kind, sh.pts, sh.style, false, _shapeInk(sh));
     if(node) g.appendChild(node);
+    else _renderFootprint(g, sh);
   }
   /* mousedown starts select+drag; click alone selects */
   g.addEventListener('mousedown', function(ev){ _shapeMouseDown(ev, sh.id); });
@@ -11308,6 +11309,45 @@ function renderShape(sh){
   svg.appendChild(g);
   /* keep selection overlay in sync if this shape is selected */
   if(_selShapeId===sh.id) _drawShapeHandles(sh);
+}
+
+/* ── ANYTHING WITH A FOOTPRINT DRAWS SOMETHING ─────────────────────────
+   The interconnection yard is pushed with the engine's own equipment kinds
+   — xfmr, swgr, pcs, meter — and renderShape has no branch for any of them.
+   _shapeNode wants two points and these carry one plus lf/wf, so it returned
+   nothing and the yard was never drawn: the equipment existed in the model,
+   was counted in the legend, was measured by the fencing pass, and left a
+   dashed rectangle round apparently empty ground. That is the empty box.
+
+   A shape that knows its own footprint can always be drawn as that
+   footprint. Better a labelled box than a silent hole. */
+function _renderFootprint(g, sh){
+  if(!sh || !sh.pts || !sh.pts[0]) return;
+  var lf=+sh.lf||0, wf=+sh.wf||0;
+  if(!(lf>0 && wf>0)) return;
+  var ppf=(S.pxPerFt && S.pxPerFt>0) ? S.pxPerFt : 6;
+  var w=Math.max(4, lf*ppf), h=Math.max(3, wf*ppf);
+  var x=sh.pts[0].x, y=sh.pts[0].y;
+  var ink=_shapeInk(sh);
+  var r=_mkNS('rect');
+  r.setAttribute('x',x); r.setAttribute('y',y);
+  r.setAttribute('width',w); r.setAttribute('height',h);
+  r.setAttribute('fill','rgba(148,163,184,.16)');
+  r.setAttribute('stroke',ink); r.setAttribute('stroke-width','1.4');
+  r.setAttribute('rx','2');
+  g.appendChild(r);
+  /* Below about 34 px a label is a smudge, so the box carries it alone. */
+  var lbl=String(sh.label||sh.model||'').split('\n')[0];
+  if(lbl && w>34 && h>10){
+    var t=_mkNS('text');
+    t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+3);
+    t.setAttribute('text-anchor','middle');
+    t.setAttribute('font-family',"'IBM Plex Mono',monospace");
+    t.setAttribute('font-size',String(Math.max(7,Math.min(11,h*0.45))));
+    t.setAttribute('fill',ink);
+    t.textContent=lbl.length>18?lbl.slice(0,17)+'…':lbl;
+    g.appendChild(t);
+  }
 }
 
 /* draw a rows x cols grid of parking stalls anchored at pts[0] (top-left) */
@@ -164084,43 +164124,85 @@ if (root.console && console.info) {
     return { deg: best, cx: cx / n, cy: cy / n };
   }
 
-  /* The angle a particular set of equipment agrees on. The whole-site frame
-     is the right one for trenching between compounds, but it is the wrong
-     one for the SOLAR fence: solar is deliberately kept out of the parcel
-     frame because its angle answers to the sun, so measuring it in the
-     campus frame inflates its box and the fence comes out loose and
-     skewed. Each compound is therefore fenced in its own members' angle. */
-  function frameOf(shs) {
-    var p = P(); if (!(p > 0) || !shs || !shs.length) return null;
-    var tally = {}, best = null, bestN = 0, cx = 0, cy = 0, n = 0;
-    var was = FR; FR = null;                 /* measure raw while deciding */
+  /* ── THE FENCE THAT ACTUALLY FITS ────────────────────────────────────
+     Taking the angle off `rot` works for equipment that carries one and
+     fails for the thing that needed it most. applyGroundLayout writes the
+     solar field as a POLYGON whose points already carry the turn, so its
+     rot is 0 — the compound read as square while the array plainly is not,
+     fell back to the campus angle, and the fence came out loose and skewed.
+
+     So the angle is MEASURED from the geometry instead of read off a
+     property: the minimum-area rectangle enclosing the members. By the
+     rotating-calipers result that rectangle always shares an edge with the
+     convex hull, so testing every hull edge finds it exactly. That is the
+     definition of a fence that fits, it needs nothing to be tagged, and it
+     is right for a rotated polygon, a rotated pad and a square yard alike. */
+  function cornersOf(shs) {
+    var pts = [], was = FR; FR = null;
     shs.forEach(function (sh) {
       if (!sh) return;
+      if (sh.pts && sh.pts.length >= 3) {
+        var w = null;
+        try { w = root._shapeWorldPts ? root._shapeWorldPts(sh) : null; } catch (e) {}
+        (w || sh.pts).forEach(function (q) { pts.push({ x: q.x, y: q.y }); });
+        return;
+      }
       var b = boxOf(sh); if (!b) return;
-      var a = (((+sh.rot || 0) % 180) + 180) % 180;
-      var k = Math.round(a * 2) / 2;
-      tally[k] = (tally[k] || 0) + 1;
-      if (tally[k] > bestN) { bestN = tally[k]; best = k; }
-      cx += (b.x1 + b.x2) / 2; cy += (b.y1 + b.y2) / 2; n++;
+      /* A box carrying its own rotation contributes its TURNED corners. */
+      var a = (+sh.rot || 0) * Math.PI / 180;
+      var cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+      var hw = (b.x2 - b.x1) / 2, hh = (b.y2 - b.y1) / 2;
+      var ca = Math.cos(a), sa = Math.sin(a);
+      [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].forEach(function (d) {
+        pts.push({ x: cx + d[0]*ca - d[1]*sa, y: cy + d[0]*sa + d[1]*ca });
+      });
     });
     FR = was;
-    if (!n || best == null) return null;
-    if (best < 0.5 || best > 179.5) return null;
-    if (bestN < n * FRAME_AGREE) return null;
-    return { deg: best, cx: cx / n, cy: cy / n };
+    return pts;
   }
-
-  /* Box of a set of shapes measured in a given frame. */
-  function boxIn(shs, fr) {
-    var was = FR; FR = fr || null;
-    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, got = false;
-    shs.forEach(function (sh) {
-      var b = boxOf(sh); if (!b) return;
-      if (b.x1 < x1) x1 = b.x1; if (b.y1 < y1) y1 = b.y1;
-      if (b.x2 > x2) x2 = b.x2; if (b.y2 > y2) y2 = b.y2; got = true;
-    });
-    FR = was;
-    return got ? { x1: x1, y1: y1, x2: x2, y2: y2 } : null;
+  function hullOf(pts) {
+    if (!pts || pts.length < 3) return (pts || []).slice();
+    var q = pts.slice().sort(function (a, b) { return (a.x - b.x) || (a.y - b.y); });
+    function cross(o, a, b) { return (a.x-o.x)*(b.y-o.y) - (a.y-o.y)*(b.x-o.x); }
+    var lo = [], hi = [], i;
+    for (i = 0; i < q.length; i++) {
+      while (lo.length >= 2 && cross(lo[lo.length-2], lo[lo.length-1], q[i]) <= 0) lo.pop();
+      lo.push(q[i]);
+    }
+    for (i = q.length - 1; i >= 0; i--) {
+      while (hi.length >= 2 && cross(hi[hi.length-2], hi[hi.length-1], q[i]) <= 0) hi.pop();
+      hi.push(q[i]);
+    }
+    lo.pop(); hi.pop();
+    var h = lo.concat(hi);
+    return h.length >= 3 ? h : q;
+  }
+  function minAreaBox(shs) {
+    var pts = cornersOf(shs);
+    if (pts.length < 2) return null;
+    var h = hullOf(pts);
+    if (h.length < 2) h = pts;
+    var best = null;
+    for (var i = 0; i < h.length; i++) {
+      var a = h[i], b = h[(i + 1) % h.length];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) continue;
+      var ang = Math.atan2(dy, dx), c = Math.cos(-ang), sn = Math.sin(-ang);
+      var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      for (var k = 0; k < pts.length; k++) {
+        var rx = pts[k].x * c - pts[k].y * sn, ry = pts[k].x * sn + pts[k].y * c;
+        if (rx < x1) x1 = rx; if (ry < y1) y1 = ry;
+        if (rx > x2) x2 = rx; if (ry > y2) y2 = ry;
+      }
+      var area = (x2 - x1) * (y2 - y1);
+      if (!best || area < best.area) best = { area:area, ang:ang, x1:x1, y1:y1, x2:x2, y2:y2 };
+    }
+    if (!best) return null;
+    var cxr = (best.x1 + best.x2) / 2, cyr = (best.y1 + best.y2) / 2;
+    var cc = Math.cos(best.ang), ss = Math.sin(best.ang);
+    return { deg: (((best.ang * 180 / Math.PI) % 180) + 180) % 180,
+             cx: cxr * cc - cyr * ss, cy: cxr * ss + cyr * cc,
+             hw: (best.x2 - best.x1) / 2, hh: (best.y2 - best.y1) / 2 };
   }
 
   function compounds() {
@@ -164142,14 +164224,18 @@ if (root.console && console.info) {
            footprint is the empty rectangle people keep finding on the plan. */
         var areaPx = (h.x2 - h.x1) * (h.y2 - h.y1);
         if (!mem.length || !(areaPx > 1)) return;
-        var own = frameOf(mem);
-        var fb = own ? boxIn(mem, own) : null;
         var pad = CFG.standoffFt * p;
+        var ob = minAreaBox(mem);
+        /* The frame pivots on the box's own centre, so placing it back is a
+           pure rotation about that centre — the rect is drawn and turned
+           exactly where it was measured. */
+        var own = (ob && ob.deg >= 0.5 && ob.deg <= 179.5)
+          ? { deg: ob.deg, cx: ob.cx, cy: ob.cy } : null;
         out.push({ key: G.key, label: G.label + (i ? ' ' + (i + 1) : ''),
                    r: { x1: h.x1 - pad, y1: h.y1 - pad, x2: h.x2 + pad, y2: h.y2 + pad },
-                   fenceFr: own || null,
-                   fenceR: fb ? { x1: fb.x1 - pad, y1: fb.y1 - pad,
-                                  x2: fb.x2 + pad, y2: fb.y2 + pad } : null,
+                   fenceFr: own,
+                   fenceR: ob ? { x1: ob.cx - ob.hw - pad, y1: ob.cy - ob.hh - pad,
+                                  x2: ob.cx + ob.hw + pad, y2: ob.cy + ob.hh + pad } : null,
                    n: mem.length });
       });
     });
@@ -164366,7 +164452,7 @@ if (root.console && console.info) {
       var r = c.fenceR || c.r;
       var acres = ((r.x2 - r.x1) / p) * ((r.y2 - r.y1) / p) / 43560;
       fence(r, c.label, n1(acres) + ' ac fenced \u00b7 ' + CFG.standoffFt + ' ft stand-off',
-            c.key, c.fenceR ? c.fenceFr : undefined);
+            c.key, c.fenceR ? c.fenceFr : undefined);   /* null here means square, on purpose */
     });
     fence(ctrlFence, CFG.ctrlLabel, 'control yard \u00b7 every compound ties here', 'control');
 
