@@ -930,7 +930,8 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .cel.cel-future{opacity:.62}
 .cel.cel-future .elbody{outline:1.5px dashed #A855F7;outline-offset:3px;border-radius:3px}
 .cel.cel-future::after{
-  content:'FUTURE';position:absolute;left:50%;top:-9px;transform:translateX(-50%);
+  content:'FUTURE';position:absolute;left:50%;top:-9px;
+  transform:translateX(-50%) rotate(var(--lblrot,0deg));transform-origin:center;
   font:700 7.5px/1 system-ui,-apple-system,sans-serif;letter-spacing:.09em;
   color:#fff;background:#A855F7;padding:2.5px 5px;border-radius:3px;
   pointer-events:none;white-space:nowrap;z-index:3}
@@ -951,6 +952,10 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .evgear-node{display:block;cursor:move;line-height:0}
 .evgear-node svg{display:block;width:100%;height:100%}
 .eq-lbl-wrap{user-select:none;text-align:center;min-width:80px;max-width:160px;position:relative;touch-action:none;}
+/* Turn with the equipment. --lblrot is the element's angle folded into
+   the readable half, so a charger at 200 degrees gets a label at 20
+   rather than one standing on its head. Set in renderEl. */
+.cel .eq-lbl-wrap{transform:translate(-50%,0) rotate(var(--lblrot,0deg));transform-origin:center top}
 .eq-lbl-wrap:hover .lbl-hide-btn{display:flex!important}
 .eq-lbl-wrap:hover{opacity:.9}
 .nd-lbl{font-size:11px;font-weight:700;color:#fff;margin-top:4px;background:rgba(10,12,22,.88);border-radius:5px;padding:3px 8px;display:inline-block;max-width:160px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5);letter-spacing:.01em}
@@ -8728,6 +8733,20 @@ function renderEl(el){
      it. setFuture writes both, so either one is enough. */
   const _elFuture = !!(el.evFuture || el.futureProof);
   if(_elFuture) wrap.classList.add('cel-future');
+  /* ── A LABEL BELONGS TO THE THING IT NAMES ──────────────────────────
+     The body rotates via .elbody; the label and the FUTURE tag are
+     siblings of it, so they stayed square to the page while the charger
+     turned and read as though they belonged to something else.
+     UPRIGHT-NORMALISED, because a plan set never carries upside-down
+     text: past a quarter turn the label is flipped through 180 so it
+     still follows the equipment but stays readable — which is what a
+     draughtsman does by hand. */
+  (function(){
+    var a = (+el.rot || 0) % 360; if (a < 0) a += 360;
+    if (a > 90 && a <= 270) a -= 180;
+    wrap.style.setProperty('--elrot', (+el.rot || 0) + 'deg');
+    wrap.style.setProperty('--lblrot', a + 'deg');
+  })();
   /* ── ONE PALETTE, BOTH RENDERERS ───────────────────────────────────
      A charger reaches this function down two entirely separate paths. One
      placed from the Insert palette is type 'eq'; one placed by a guided
@@ -11766,8 +11785,74 @@ function _shapeRotateStart(e, id){
            that moves and containment has to be judged against where the
            compound WAS when the drag started. */
         foot: (sh.pts||[]).map(function(p){ return { x:p.x, y:p.y }; }) };
+      /* ── SO YOU CAN SEE IT WHILE YOU TURN IT ──────────────────────
+         Applying only on release meant the fence swung round on its own
+         and everything inside jumped at the end — you could not aim it.
+         Preview works from a SNAPSHOT of the starting geometry and
+         re-derives from that every frame, so a hundred small deltas can
+         never compound into drift the way applying them one after another
+         would. Big campuses stay on release: re-rendering a few hundred
+         pods per mousemove is slower than the feedback is worth, and a
+         laggy preview is worse than none. */
+      try { S.shRotCampus.snap = _snapshotCampus(S.shRotCampus); } catch(e){ S.shRotCampus.snap = null; }
     }
   } catch (e) {}
+}
+
+/* Copy just enough of every member to put it back exactly. Capped, because
+   past a few hundred pieces the redraw costs more than the preview is worth
+   and the drag starts to stutter — at which point the honest thing is to
+   turn on release and stay responsive. */
+var CAMPUS_PREVIEW_MAX = 120;
+function _snapshotCampus(info){
+  if (!info || !info.tag) return null;
+  var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+  function belongs(o){
+    if (!o) return false;
+    if (o.omegaCampus === info.tag || MAP[o.kind] === info.tag) return true;
+    if (!info.foot) return false;
+    var c = _shapeCentroid(o);
+    return !!(c && _ptInPoly(c.x, c.y, info.foot));
+  }
+  var shapes = [], els = [];
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.locked || o.isSiteBoundary) return;
+    if (o.omegaCampus === info.tag && o.pts && o.pts.length) return;   /* the fence */
+    if (!belongs(o)) return;
+    shapes.push({ o:o, pts:o.pts?o.pts.map(function(p){return {x:p.x,y:p.y};}):null,
+                  cx:o.cx, cy:o.cy, x:o.x, y:o.y, rot:+o.rot||0 });
+  });
+  (S.elements||[]).forEach(function(el){
+    if (!el || el.locked || !belongs(el)) return;
+    els.push({ o:el, x:el.x, y:el.y, rot:+el.rot||0 });
+  });
+  if (shapes.length + els.length > CAMPUS_PREVIEW_MAX) return null;
+  return { shapes:shapes, els:els };
+}
+
+/* Put every member back to its snapshot, then turn it by the TOTAL delta.
+   Never incremental — that is what keeps a long drag exact. */
+function _previewCampusRotation(snap, deg, cx, cy){
+  if (!snap) return;
+  var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r);
+  function turn(x,y){ var dx=x-cx, dy=y-cy; return { x:cx+dx*cos-dy*sin, y:cy+dx*sin+dy*cos }; }
+  snap.shapes.forEach(function(m){
+    var o=m.o;
+    if (m.pts) o.pts = m.pts.map(function(p){ var q=turn(p.x,p.y); return {x:q.x,y:q.y}; });
+    if (typeof m.cx==='number'){ var c=turn(m.cx,m.cy); o.cx=c.x; o.cy=c.y; }
+    if (typeof m.x==='number' && !m.pts){
+      var w=+o.w||0, h=+o.h||(w*0.35), c2=turn(m.x+w/2, m.y+h/2);
+      o.x=c2.x-w/2; o.y=c2.y-h/2;
+    }
+    o.rot = m.rot + deg;
+    try { if (typeof _refreshShape==='function') _refreshShape(o); } catch(e){}
+  });
+  snap.els.forEach(function(m){
+    var el=m.o, w=+el.w||0, h=+el.h||(w*0.35);
+    var c=turn(m.x+w/2, m.y+h/2);
+    el.x=c.x-w/2; el.y=c.y-h/2; el.rot = m.rot + deg;
+    try { if (typeof _reRenderEl==='function') _reRenderEl(el.id); } catch(e){}
+  });
 }
 
 /* Rotate everything belonging to a campus about a point, leaving the fence
@@ -11841,7 +11926,12 @@ function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
       o.x=cc2.x-w/2; o.y=cc2.y-h/2;
     }
     bump(o); shed(o); n++;
+    /* renderShape rebuilds the node; _refreshShape is what re-applies the
+       transform AND drags the conduit welded to this shape along with it.
+       Rebuilding alone left runs anchored to where the pad used to be,
+       which is half of why the trenching came out sprawling. */
     try { if (typeof renderShape==='function') renderShape(o); } catch(e){}
+    try { if (typeof _refreshShape==='function') _refreshShape(o); } catch(e){}
     try { if (typeof _geoRestampOne==='function') _geoRestampOne(o); } catch(e){}
   });
 
@@ -11927,6 +12017,11 @@ function _shapeInteractMove(e){
     sh3.rot=_rotSnap(_rawS, e && e.shiftKey);
     _rotReadout(sh3.rot, e && e.shiftKey);
     _refreshShape(sh3);
+    /* Turn the contents with the fence, live, from the snapshot. */
+    try {
+      var _c = S.shRotCampus;
+      if (_c && _c.snap) _previewCampusRotation(_c.snap, sh3.rot - _c.from, _c.cx, _c.cy);
+    } catch(e){}
     return true;
   }
   return false;
@@ -12149,8 +12244,22 @@ function _shapeInteractEnd(){
         var _f=(S.shapes||[]).filter(function(x){ return x.id===_movedId; })[0];
         var _d=((_f && _f.rot)||0) - _campus.from;
         if (Math.abs(_d) > 0.05) {
-          var _n=_rotateCampusMembers(_campus.tag, _d, _campus.cx, _campus.cy,
-                                      _movedId, _campus.foot);
+          /* The preview already placed them from the snapshot; re-running the
+             transform here would turn everything a second time. Settle it
+             instead: re-anchor and re-route what the preview moved. */
+          var _n = 0;
+          if (_campus.snap) {
+            _previewCampusRotation(_campus.snap, _d, _campus.cx, _campus.cy);
+            _campus.snap.shapes.forEach(function(m){
+              _n++; try { if (typeof _geoRestampOne==='function') _geoRestampOne(m.o); } catch(e){}
+            });
+            _campus.snap.els.forEach(function(m){
+              _n++; try { if (typeof _geoRestampOne==='function') _geoRestampOne(m.o); } catch(e){}
+            });
+          } else {
+            _n=_rotateCampusMembers(_campus.tag, _d, _campus.cx, _campus.cy,
+                                    _movedId, _campus.foot);
+          }
           if (_n && typeof showBanner==='function') {
             showBanner('cal','Turned the compound and the ' + _n + ' item'
               + (_n===1?'':'s') + ' inside it by ' + Math.round(_d) + '\u00b0.');
@@ -70350,7 +70459,23 @@ window._crmToastModal=_crmToastModal;
      ======================================================= -->
 <script>
 (function(){
-  var TICK=200, MIN_PX=6, scaling=false, wrapped=false, orig=null;
+  /* ── SMALL GEAR HAS TO STAY READABLE, NOT JUST VISIBLE ───────────────
+     MIN_PX was 6: enough that an icon is not a sub-pixel speck, nowhere
+     near enough to read or grab. A Level 2 pedestal is 2.5 ft, so at a
+     parking-lot scale it lands around seven pixels — which is why chargers
+     came out of a guided build too small to see and had to be resized by
+     hand, one at a time, before the drawing was usable.
+
+     22 px is the floor for equipment now. It is a floor, not a size: gear
+     bigger than that on the ground still draws to scale, and only the
+     things that would otherwise vanish get held up to where a person can
+     see what they are and click them. The rest of this file already treats
+     28 px as the minimum a symbol can carry meaning at.
+
+     Deliberately below that 28: a symbol is one glyph, whereas a row of
+     chargers held to 28 would start overlapping its neighbours at the
+     spacing a real parking bay gives them. */
+  var TICK=200, MIN_PX=22, scaling=false, wrapped=false, orig=null;
 
   function live(){ try{ return typeof _liveMapState==='function' ? _liveMapState() : null; }catch(e){ return null; } }
   /* S is declared `const S={...}` and _gmap is `let _gmap=null`. Top-level
