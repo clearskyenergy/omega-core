@@ -1609,6 +1609,82 @@ function _addonHelp(){
   return out.join('   \u00b7   ');
 }
 
+/* ── SELLING COMPUTE SHOULD BE A SWITCH, NOT A SPELLING TEST ──────────
+   Entitlements were a comma-separated text box. To sell Compute to a
+   tenant somebody had to know that the word is "compute", that it also
+   carries parcel screening, that "Compute Package" or "compute-addon"
+   silently grant nothing, and that a plan cap never cancels an add-on. A
+   typo looked exactly like a purchase and failed silently in the editor,
+   where nobody would connect the two.
+
+   These are the same values written to the same field the save already
+   reads, so nothing downstream changes — the boxes and the text stay in
+   step in both directions. The text field survives because osa-jv and
+   grid-atlas live there too, and because an add-on invented next month
+   should not need a console deploy to be typed in.
+
+   Each label says what it actually unlocks, taken from ADDON_GRANTS, so
+   the screen cannot drift from what the editor honours. */
+var ADDON_UI = [
+  ['compute',      'Compute',        'Data-centre campus builder \u2014 also grants parcel screening'],
+  ['parcelscreen', 'Parcel screening','Site pre-screening on grid position'],
+  ['engineering',  'Engineering',    'Circuits, GIS and the engineering surfaces'],
+  ['schematics',   'Schematics',     'Schematic editor and riser diagrams'],
+  ['exports',      'Exports',        'Georeferenced and plan-set exports'],
+  ['permitting',   'Permitting',     'Permit sets and the AHJ programme']
+];
+
+function _addonToggles(orgId, addons){
+  var have = {};
+  (addons||[]).forEach(function(a){
+    have[String(a||'').toLowerCase().replace(/[\s_\-]+/g,'')] = 1;
+  });
+  var h = '<div class="sub-txt" style="margin-bottom:6px">Add-ons</div>'
+        + '<div id="tb-addonbox-'+orgId+'" style="display:grid;grid-template-columns:1fr 1fr;'
+        + 'gap:6px 14px;margin-bottom:10px">';
+  ADDON_UI.forEach(function(a){
+    var on = !!have[a[0]];
+    h += '<label style="display:flex;gap:8px;align-items:flex-start;font:500 12px system-ui;cursor:pointer">'
+      +  '<input type="checkbox" data-addon="'+esc(a[0])+'"'+(on?' checked':'')
+      +  ' onchange="_addonsFromBoxes(&quot;'+esc(orgId)+'&quot;)" style="margin-top:2px">'
+      +  '<span><b>'+esc(a[1])+'</b>'
+      +  '<span style="display:block;font-weight:400;opacity:.7;font-size:11px;line-height:1.4">'
+      +  esc(a[2])+'</span></span></label>';
+  });
+  return h + '</div>';
+}
+
+/* Boxes -> field. Anything typed by hand that is not one of the six is kept,
+   so ticking a box never quietly deletes osa-jv or a newer key. */
+function _addonsFromBoxes(orgId){
+  var box = document.getElementById('tb-addonbox-'+orgId);
+  var fld = document.getElementById('tb-addons-'+orgId);
+  if (!box || !fld) return;
+  var known = {}; ADDON_UI.forEach(function(a){ known[a[0]] = 1; });
+  var extra = String(fld.value||'').split(',').map(function(x){ return x.trim(); })
+    .filter(function(x){ return x && !known[x.toLowerCase().replace(/[\s_\-]+/g,'')]; });
+  var picked = [];
+  Array.prototype.forEach.call(box.querySelectorAll('input[data-addon]'), function(i){
+    if (i.checked) picked.push(i.getAttribute('data-addon'));
+  });
+  fld.value = picked.concat(extra).join(', ');
+}
+
+/* Field -> boxes, so typing still drives the switches and the two can never
+   disagree about what this tenant has bought. */
+function _addonsToBoxes(orgId){
+  var box = document.getElementById('tb-addonbox-'+orgId);
+  var fld = document.getElementById('tb-addons-'+orgId);
+  if (!box || !fld) return;
+  var have = {};
+  String(fld.value||'').split(',').forEach(function(x){
+    var k = x.trim().toLowerCase().replace(/[\s_\-]+/g,''); if (k) have[k] = 1;
+  });
+  Array.prototype.forEach.call(box.querySelectorAll('input[data-addon]'), function(i){
+    i.checked = !!have[i.getAttribute('data-addon')];
+  });
+}
+
 function _tnField(label, id, val, type, ph){
   return '<label class="sub-txt" style="display:block;margin-bottom:10px">'+esc(label)
     + '<input id="'+id+'" type="'+(type||'text')+'" value="'+esc(val==null?'':String(val))+'"'
@@ -1706,7 +1782,16 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
      is read from omega-caps.js when that file is loaded here, so it cannot
      drift from what the editor honours; the hardcoded copy is a fallback for
      the console being open without it. */
-  h+=_tnField('Add-ons (comma separated)','tb-addons-'+orgId,(bill.addons||[]).join(', '),'text','compute, engineering');
+  h+=_addonToggles(orgId, bill.addons||[]);
+  /* The same field the save reads, with the switches above bound to it in
+     both directions — typing here re-ticks the boxes, so the two views can
+     never disagree about what a tenant has bought. */
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Add-ons (comma separated)'
+   + '<input id="tb-addons-'+orgId+'" type="text" value="'+esc((bill.addons||[]).join(', '))+'"'
+   + ' placeholder="compute, engineering"'
+   + ' oninput="_addonsToBoxes(&quot;'+esc(orgId)+'&quot;)"'
+   + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;'
+   + 'border:1px solid var(--cs-border,#E1E6EC);border-radius:7px;font:500 12.5px system-ui"></label>';
   h+='<div class="sub-txt" style="font-size:10.5px;margin:-6px 0 12px;line-height:1.55">'
    +  'Unlocks in the editor on top of the plan, and a plan cap never cancels one. '
    +  '<b>' + esc(_addonHelp()) + '</b>'
