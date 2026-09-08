@@ -26452,26 +26452,32 @@ function _loadMapsAPI(){
     if(_gmapLoading)return;
     _gmapLoading=true;
     window._gmapCB=()=>{_gmapLoaded=true;_gmapCBs.forEach(cb=>cb.res());};
-    /* ── SAY WHAT GOOGLE WILL NOT ─────────────────────────────────────
+    /* ── SAY WHAT GOOGLE WILL NOT, TO THE RIGHT AUDIENCE ─────────────
        When Maps auth fails, Google watermarks every tile "For development
-       purposes only" and puts up a dialog that asks "Do you own this
-       website?" — which tells you nothing and reads like the app is broken.
-       Google calls this hook on that failure, so the app can say what
-       actually happened. In practice it is one of three things and the
-       first is by far the commonest: billing is not enabled on the Cloud
-       project, the key's referrer restrictions do not include this
-       hostname, or the API is not enabled on the key. */
+       purposes only" and puts up a dialog asking "Do you own this website?" —
+       which tells a customer nothing and makes a working product look broken.
+
+       But the Maps key is OURS and shared across tenants, so the fix is ours
+       too. The first version of this told the customer to go and check
+       billing in the Google Cloud console, which is the same mistake in the
+       other direction: an instruction aimed at us, printed in their window.
+       The banner says what it means for them and what still works; the
+       diagnosis goes to the console for whoever can act on it. */
     window.gm_authFailure = function(){
-      var host = location.hostname || 'this host';
-      var msg = 'Google Maps refused the key, so the imagery is watermarked and '
-        + 'searching an address will fail. Almost always this is billing: '
-        + 'Google now gives 10,000 free calls per API per month and rejects '
-        + 'everything after that unless a billing account is attached. Check '
-        + 'console.cloud.google.com → Billing on the Maps project. The other '
-        + 'two causes are the key not listing ' + host + ' in its referrer '
-        + 'restrictions, or the API not being enabled on the key.';
-      try { if (typeof showBanner === 'function') showBanner('warn', msg); } catch(e){}
-      try { console.error('[maps] auth failure — ' + msg); } catch(e){}
+      try {
+        if (typeof showBanner === 'function') showBanner('warn',
+          'Satellite imagery is unavailable right now, so the map is watermarked '
+          + 'and address search will not return results. Everything you have drawn '
+          + 'is unaffected and the drawing tools work as normal. This is at our end '
+          + 'and we have been alerted.');
+      } catch(e){}
+      try {
+        console.error('[maps] Google refused the key on ' + (location.hostname || '?')
+          + '. In order of likelihood: billing on the Maps Cloud project (the free '
+          + 'allowance is 10,000 calls per API per month and everything past it is '
+          + 'rejected), the key not listing this hostname in its referrer '
+          + 'restrictions, or the API not enabled on the key.');
+      } catch(e){}
       try { window._mapsAuthFailed = true; } catch(e){}
     };
     const s=document.createElement('script');

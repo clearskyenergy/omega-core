@@ -576,11 +576,28 @@
         render();
       }, function (e) {
         S.ready = true;
-        S.err = (e && e.code === 'permission-denied')
-          ? 'Referrals are not readable yet. The Firestore rule for the '
-            + '<b>referrals</b> collection has not been deployed — see the note at the '
-            + 'foot of omega-referrals.js, then run <b>firebase deploy --only firestore:rules</b>.'
-          : 'Referrals could not load: ' + esc((e && e.message) || 'unknown error');
+        /* ── A CUSTOMER IS NOT THE PERSON WHO RUNS firebase deploy ────────
+           This printed a deploy command and a source-file reference into a
+           paying customer's dashboard. Permission-denied on this collection
+           is a configuration state on OUR side: the customer cannot act on
+           it, and showing them a red error for it makes a working product
+           look broken. So the block is HIDDEN when the rule is not there,
+           and the instruction goes to the console where the person who can
+           act on it will actually see it.
+
+           Any other failure is a real fault worth showing, said plainly and
+           without naming files or commands. */
+        if (e && e.code === 'permission-denied') {
+          S.hidden = true; S.err = null;
+          try {
+            console.warn('[referrals] hidden — the Firestore rule for the "referrals" '
+              + 'collection is not deployed. See the note at the foot of '
+              + 'omega-referrals.js, then: firebase deploy --only firestore:rules');
+          } catch (_e) {}
+        } else {
+          S.err = 'Referrals could not load. Try again in a moment.';
+          try { console.error('[referrals]', (e && e.message) || e); } catch (_e) {}
+        }
         render();
       });
   }
@@ -721,6 +738,11 @@
 
   function render() {
     var body = $('or-body'); if (!body) return;
+    /* Hidden means gone, not empty: an empty panel with a heading still reads
+       as a broken feature. Take the whole block off the page. */
+    if (S.hidden) { var blk = $('or-block') || (body.closest && body.closest('.or-block'));
+                    if (blk) blk.style.display = 'none'; else body.innerHTML = '';
+                    return; }
     paintHead();
 
     if (!S.ready) { body.innerHTML = '<div class="or-empty">Loading referrals\u2026</div>'; return; }
