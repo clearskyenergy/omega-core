@@ -42,6 +42,10 @@ yard.forEach(sh => {
   const g = r.mk('g'); r._renderFootprint(g, sh);
   const rc = g.kids.filter(k=>k.tag==='rect')[0], tx = g.kids.filter(k=>k.tag==='text')[0];
   if (!tx) return;
+  /* Only a label drawn INSIDE has to fit the box. One placed above it is a
+     leader and is allowed to be wider — that is the point of moving it. */
+  const inside = +tx.attrs.y > +rc.attrs.y;
+  if (!inside) return;
   const wPx = +rc.attrs.width, need = tx.textContent.length * (+tx.attrs['font-size']) * 0.62;
   if (need > wPx) overflow = `${sh.label} needs ${need.toFixed(0)}px in a ${wPx}px box`;
 });
@@ -56,8 +60,17 @@ all &= chk('no footprint, no invention', g2.kids.length === 0);
 /* A tiny item drops its label rather than drawing a smudge. */
 const g3 = r.mk('g');
 r._renderFootprint(g3, { kind:'meter', label:'M', lf:1, wf:0.5, pts:[{x:0,y:0}] });
-all &= chk('a tiny item draws its box but no label',
-  g3.kids.length === 1 && g3.kids[0].tag === 'rect');
+all &= chk('a tiny item keeps its label, placed above the box',
+  g3.kids.length === 2 && g3.kids[1].tag === 'text'
+  && +g3.kids[1].attrs.y < +g3.kids[0].attrs.y,
+  `y ${g3.kids[1] && g3.kids[1].attrs.y} vs box y ${g3.kids[0].attrs.y}`);
+
+/* Every component ends up named, one way or the other. */
+let unnamed = yard.concat([{ kind:'meter', label:'UTILITY METERING', lf:6, wf:4, pts:[{x:0,y:0}] }])
+  .filter(sh => { const g = r.mk('g'); r._renderFootprint(g, sh);
+                  return !g.kids.some(k => k.tag === 'text'); });
+all &= chk('no yard component is left unnamed', unnamed.length === 0,
+  unnamed.map(s=>s.label).join(', '));
 
 require('fs').writeFileSync('yard-preview.svg',
   `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="330" viewBox="60 60 360 260">`
