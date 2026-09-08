@@ -167104,11 +167104,39 @@ if (root.console && console.info) {
      what it fences; nothing was reading the tag. Without this the block
      moves and the fence stays behind, which is worse than not moving it. */
   var CAMPUS_TO_GROUP = { yard: 'intercon' };
+  /* ── A FENCE IS PART OF THE SYSTEM ───────────────────────────────────
+     This only recognised omegaCampus. A fence carries omegaFence and often
+     no campus at all — o2 has always tested for both — so groupOfShape
+     returned null for it, members() skips anything with no group, and Move
+     System quietly moved the whole build out from under its own fencing.
+
+     A fence belongs to whatever it encloses, so an untagged one is
+     attributed by containment and moves with that compartment. If it
+     encloses nothing recognisable it still gets a group of its own, because
+     the one answer that is certainly wrong is leaving it behind. */
+  function _fenceGroup(x) {
+    try {
+      var inPoly = root._ptInPoly, cen = root._shapeCentroid;
+      if (!inPoly || !cen || !x.pts || x.pts.length < 3) return 'fence';
+      var tally = {};
+      (S_().shapes || []).forEach(function (o) {
+        if (!o || o === x || o.omegaFence || o.isSiteBoundary) return;
+        var g = groupOfShape(o); if (!g) return;
+        var c = cen(o); if (!c || !inPoly(c.x, c.y, x.pts)) return;
+        tally[g] = (tally[g] || 0) + 1;
+      });
+      var best = null, n = 0;
+      Object.keys(tally).forEach(function (k) { if (tally[k] > n) { n = tally[k]; best = k; } });
+      return best || 'fence';
+    } catch (e) { return 'fence'; }
+  }
+
   function groupOfShape(x) {
     if (!x) return null;
     if (x.omegaCampus && x.omegaCampus !== 'feeder') {
       return CAMPUS_TO_GROUP[x.omegaCampus] || x.omegaCampus;
     }
+    if (x.omegaFence) return _fenceGroup(x);
     if (x.kind === 'derdc') return 'compute';
     if (x.kind === 'deralt' || x.kind === 'derwind') return 'generation';
     if (x.kind === 'dersolar' || x.kind === 'solar') return 'solar';
