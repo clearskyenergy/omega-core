@@ -139205,8 +139205,15 @@ function buildGround(site, span){
     V.groundGrp.remove(g0);
   }
 
+  /* ── THE GROUND HAS TO REACH AS FAR AS THE EYE ──────────────────────
+     span*14 is sized from the SITE, so orbiting out past it ran the camera
+     off the end of the world and the view fell away to nothing. The plane
+     now also tracks how far the camera has actually pulled back, so there
+     is never a void to zoom into. */
+  var _camR = 0; try { _camR = (V.sph && V.sph.r) || 0; } catch(e){}
+  var _baseSpan = Math.max(span*14, _camR*10, 4000);
   var base = new THREE.Mesh(
-    new THREE.PlaneGeometry(span*14, span*14),
+    new THREE.PlaneGeometry(_baseSpan, _baseSpan),
     MAT.ground);
   base.rotation.x = -Math.PI/2;
   base.position.y = -0.06;
@@ -139327,10 +139334,20 @@ function buildGround(site, span){
     if (_ms && _ms.lat == null) _ms = null;
 
     if (_key && _ms && _ms.lat != null) {
-      /* Cover roughly three times the site's long side, so the imagery
-         still reads at the edges of an orbit rather than cutting off. */
+      /* Cover roughly three times the site's long side, so the imagery still
+         reads at the edges of an orbit rather than cutting off.
+
+         AND AS FAR AS THE CAMERA HAS PULLED BACK. Three times the site is
+         plenty while you are looking at the site, and nothing at all once
+         you orbit out to see the surrounding buildings — the imagery simply
+         ended and the view went blank. The orbit radius says how much ground
+         is actually in shot, so the request follows it: Refresh at any zoom
+         and you get imagery for what is on screen, not for what the site
+         happens to measure. Roughly 2.2x the radius covers a 50-degree
+         field with margin for the corners of an orbit. */
       var _siteFt = Math.max(site.sizeFt ? site.sizeFt.w : 0, site.sizeFt ? site.sizeFt.h : 0, w, h);
-      var _wantFt = Math.max(600, _siteFt * 3);
+      var _camFt = 0; try { _camFt = ((V.sph && V.sph.r) || 0) * 2.2; } catch(e){}
+      var _wantFt = Math.max(600, _siteFt * 3, _camFt);
       var _wantM  = _wantFt * 0.3048;
       /* Static Maps is 640x640 (x2 scale). Pick the zoom whose span is
          closest to what we want without going under it. */
