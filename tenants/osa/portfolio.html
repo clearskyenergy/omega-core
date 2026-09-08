@@ -751,13 +751,6 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       <div id="mx-unscored"></div>
     </section>
 
-    <section class="view" id="v-matrix">
-      <div class="ph"><h1>Matrix</h1>
-        <p>Every live project as a square, placed by the two questions that decide it:
-           <b>can it be built here</b> and <b>would it be funded</b>. The box top-right is
-           the buyer's market — strong on both. Click a square to open what is in it.</p></div>
-      <div id="mx-host"></div>
-    </section>
 
     <section class="view" id="v-board">
       <div class="ph"><h1>Board</h1>
@@ -814,6 +807,25 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
            cells is doing both, and one combined number hides the second.</p></div>
       <div class="card">
         <div class="card-h"><h2>By organisation</h2>
+          <button class="btn-x" id="po-add-btn" style="margin-left:auto"
+                  onclick="togglePartnerAdd()">Add an organisation</button></div>
+      <div id="po-add" style="display:none;padding:14px 16px;border-bottom:1px solid var(--line,#E1E6EC)">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <label class="sub" style="display:flex;flex-direction:column;gap:4px">Domain
+            <input id="po-id" placeholder="amperagecapital.com" style="min-width:200px"></label>
+          <label class="sub" style="display:flex;flex-direction:column;gap:4px">Name
+            <input id="po-name" placeholder="Amperage Capital" style="min-width:200px"></label>
+          <label class="sub" style="display:flex;flex-direction:column;gap:4px">Role
+            <select id="po-kind"></select></label>
+          <label class="sub" style="display:flex;gap:7px;align-items:center;padding-bottom:6px">
+            <input type="checkbox" id="po-jd"> Joint development partner</label>
+          <button class="btn-o" onclick="addPartnerOrg()">Add</button>
+          <span class="sub" id="po-msg"></span>
+        </div>
+        <p class="sub" style="margin:10px 0 0">The domain is what people sign in from and it is the
+          key everything else hangs off, so it cannot be changed afterwards — the name can.</p>
+      </div>
+      <div class="card-h" style="border-top:0;padding-top:0"><span class="sub"></span>
           <span class="sub">Sorted by capital closed on deals they originated. Set what each one
             is to us and whether we co-develop with them — a joint development partner gets their
             own book on the JD partners tab.</span></div>
@@ -1587,7 +1599,7 @@ function setPipe(k){ S.pipeFilter=k; render(); }
    means a partner's terms travel with the partner. */
 function jdOrgs(){
   var orgs = A.orgs() || {};
-  return F.allPartners(S.deals).map(function (st){
+  return partnerRows().map(function (st){
     var o = orgs[st.orgId] || {};
     return { stats: st, org: o, jd: o.jd || {},
              deals: S.deals.filter(function (d){
@@ -1723,6 +1735,55 @@ function setOrgJd(orgId, on){
     .catch(function(e){ pMsg(orgId, e.message || 'Could not save.', true); });
 }
 
+function togglePartnerAdd(){
+  var el=document.getElementById('po-add'); if(!el) return;
+  var open = el.style.display === 'none';
+  el.style.display = open ? '' : 'none';
+  var b=document.getElementById('po-add-btn'); if(b) b.textContent = open ? 'Cancel' : 'Add an organisation';
+  if(open){
+    var k=document.getElementById('po-kind');
+    if(k && !k.options.length) k.innerHTML = A.ORG_KINDS.map(function(x){
+      return '<option value="'+esc(x.key)+'"'+(x.key==='investor'?' selected':'')+'>'
+           + esc(x.label)+'</option>'; }).join('');
+    var i=document.getElementById('po-id'); if(i) i.focus();
+  }
+}
+
+/* Added to the registry, not to a deal. The two are separate on purpose: an
+   agreement exists before there is anything under it, and a partner with no
+   projects yet is exactly the one you most need to be able to set up. */
+function addPartnerOrg(){
+  var id   = (document.getElementById('po-id')||{}).value || '';
+  var name = (document.getElementById('po-name')||{}).value || '';
+  var kind = (document.getElementById('po-kind')||{}).value || 'broker';
+  var jd   = !!(document.getElementById('po-jd')||{}).checked;
+  var msg  = document.getElementById('po-msg');
+  id = String(id).trim().toLowerCase();
+
+  var bad = A.validateDomain(id);
+  if (bad){ if(msg){ msg.textContent = bad; msg.style.color='var(--red,#B4322A)'; } return; }
+  if ((A.orgs()||{})[id]){
+    if(msg){ msg.textContent = id + ' is already in the registry.'; msg.style.color='var(--red,#B4322A)'; }
+    return;
+  }
+  if(msg){ msg.textContent='Adding…'; msg.style.color=''; }
+
+  var fields = { name: String(name).trim() || id, kind: kind, active: true };
+  if (jd) fields.jd = { active: true };
+  A.saveOrg(id, fields)
+    .then(function(){ return A.loadOrgs(); })
+    .then(function(){
+      ['po-id','po-name'].forEach(function(x){ var e=document.getElementById(x); if(e) e.value=''; });
+      var c=document.getElementById('po-jd'); if(c) c.checked=false;
+      if(msg){ msg.textContent = id + ' added.'; }
+      togglePartnerAdd();
+      render();
+    })
+    .catch(function(e){
+      if(msg){ msg.textContent = e.message || 'Could not add.'; msg.style.color='var(--red,#B4322A)'; }
+    });
+}
+
 function renameOrg(orgId){
   var cur = A.orgName(orgId);
   var next = prompt('Name for ' + orgId, cur);
@@ -1779,8 +1840,27 @@ function saveJD(orgId){
     .catch(function(e){ if (msg) msg.textContent = e.message || 'Could not save.'; });
 }
 
+/* ── A PARTNER YOU HAVE NOT WORKED WITH YET IS STILL A PARTNER ─────────
+   allPartners derives from the deals, so an organisation only existed here
+   once it appeared on one. That is backwards for a joint development: you
+   agree the partnership FIRST and bring projects into it afterwards — which
+   made Amperage impossible to add, because it is on nothing yet. The table is
+   now the union of both, with registry-only organisations carrying real zeroed
+   stats rather than a different shape. */
+function partnerRows(){
+  var rows = F.allPartners(S.deals), seen = {};
+  rows.forEach(function (r){ seen[r.orgId] = 1; });
+  var reg = A.orgs() || {};
+  Object.keys(reg).forEach(function (id){
+    if (seen[id]) return;
+    if (reg[id].kind === 'internal') return;      /* our own staff org */
+    rows.push(F.partnerStats(S.deals, id));
+  });
+  return rows;
+}
+
 function renderPartners(){
-  var list=F.allPartners(S.deals);
+  var list=partnerRows();
   var host=document.getElementById('partner-rows');
   if(!list.length){ host.innerHTML='<tr><td colspan="11"><div class="empty"><b>No partners yet</b>'
     +'Organisations appear here as soon as they appear on a deal.</div></td></tr>'; }
