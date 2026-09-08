@@ -11901,6 +11901,40 @@ function _shapeCentroid(o){
   return null;
 }
 
+/* ── WHERE A SHAPE ACTUALLY IS ────────────────────────────────────────
+   `pts` are stored unrotated and `rot` is applied by the render transform.
+   So every containment test written against `pts` was testing the shape's
+   ghost rather than the shape, and the moment a compound had been turned
+   once, the fence stopped catching the equipment standing inside it. That
+   is the whole reason aligning moved the solar and left the fence and the
+   EMS behind. Order matches _shapeTransform: scale about the centre, then
+   rotate about it, then translate. */
+function _shapeWorldPts(sh){
+  if (!sh) return null;
+  var p = (typeof _alShapePts==='function') ? _alShapePts(sh) : (sh.pts||null);
+  if (!p || p.length < 3) return null;
+  var rot=+sh.rot||0, tx=+sh.tx||0, ty=+sh.ty||0, sc=+sh.scale||1;
+  if (!rot && !tx && !ty && sc===1) return p;
+  var c=null;
+  try { c = (typeof _shapeCenter==='function') ? _shapeCenter(sh) : null; } catch(e){}
+  if (!c) return p;
+  var r=rot*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r);
+  return p.map(function(q){
+    var dx=(q.x-c.x)*sc, dy=(q.y-c.y)*sc;
+    return { x:c.x+dx*cos-dy*sin+tx, y:c.y+dx*sin+dy*cos+ty };
+  });
+}
+window._shapeWorldPts = _shapeWorldPts;
+
+function _shapeWorldCentroid(o){
+  var p = (o && o.pts && o.pts.length>=3) ? _shapeWorldPts(o) : null;
+  if (p && p.length){
+    var sx=0, sy=0; p.forEach(function(q){ sx+=q.x; sy+=q.y; });
+    return { x:sx/p.length, y:sy/p.length };
+  }
+  return _shapeCentroid(o);
+}
+
 function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
   if (!tag || !deg) return 0;
   var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r), n=0;
@@ -11914,12 +11948,57 @@ function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
     o.rot=Math.round(a*10)/10;
   }
   var MAP = (typeof _O2_CAMPUS_OF_KIND!=='undefined') ? _O2_CAMPUS_OF_KIND : {};
+
+  /* ── A FENCE IS A CONTAINER, NOT A DECORATION ─────────────────────────
+     A compound's fence is the line that says which equipment is inside it,
+     so turning the campus has to turn the fence AND everything the fence
+     holds — including the things nobody tagged, which is most of the
+     balance of plant. A fence counts as this campus's if it encloses any
+     tagged member of it, or if it sits inside the campus footprint. Then
+     anything standing inside such a fence belongs, tagged or not. */
+  var _fences = [];
+  (function(){
+    var seeds = [];
+    (S.shapes||[]).forEach(function(o){
+      if (!o || o.isSiteBoundary) return;
+      if (o.omegaCampus === tag || MAP[o.kind] === tag){
+        var c=_shapeWorldCentroid(o); if(c) seeds.push(c);
+      }
+    });
+    (S.shapes||[]).forEach(function(o){
+      if (!o || o.isSiteBoundary || !(o.omegaFence || o.omegaCampus === tag)) return;
+      var pw = _shapeWorldPts(o);
+      if (!pw || pw.length < 3) return;
+      var owns = false, i;
+      for (i=0; i<seeds.length && !owns; i++){
+        if (_ptInPoly(seeds[i].x, seeds[i].y, pw)) owns = true;
+      }
+      if (!owns && footprint){
+        var c2=_shapeWorldCentroid(o);
+        if (c2 && _ptInPoly(c2.x, c2.y, footprint)) owns = true;
+      }
+      if (owns) _fences.push({ sh:o, pts:pw });
+    });
+  })();
+  function inCampusFence(o){
+    if (!_fences.length) return false;
+    for (var i=0;i<_fences.length;i++) if (_fences[i].sh === o) return true;
+    var c = (o && o.pts) ? _shapeWorldCentroid(o) : _shapeCentroid(o);
+    if (!c) return false;
+    for (var j=0;j<_fences.length;j++){
+      if (_ptInPoly(c.x, c.y, _fences[j].pts)) return true;
+    }
+    return false;
+  }
+
   function belongs(o){
     if (!o) return false;
     if (o.omegaCampus === tag || MAP[o.kind] === tag) return true;
-    if (!footprint) return false;
-    var c = _shapeCentroid(o);
-    return !!(c && _ptInPoly(c.x, c.y, footprint));
+    if (footprint){
+      var c = (o.pts ? _shapeWorldCentroid(o) : _shapeCentroid(o));
+      if (c && _ptInPoly(c.x, c.y, footprint)) return true;
+    }
+    return inCampusFence(o);
   }
 
   (S.shapes||[]).forEach(function(o){
@@ -32424,6 +32503,7 @@ function _o2VerbsClass(key){
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
   h += _o2FacingSelect();
+  h += _o2PoiSelect();
   h += _o2Btn('\u25a1 Block out', 'omegaBlockOut()', true,
                'Size each compound to hold what goes in it and hide the equipment, so you '
              + 'can arrange the areas against the land. Press again to bring it back.');
@@ -32469,6 +32549,7 @@ function _o2VerbsMulti(){
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
   h += _o2FacingSelect();
+  h += _o2PoiSelect();
   h += _o2Btn('\u25a1 Block out', 'omegaBlockOut()', true,
                'Size each compound to hold what goes in it and hide the equipment, so you '
              + 'can arrange the areas against the land. Press again to bring it back.');
@@ -33202,6 +33283,215 @@ function _o2FacingSelect(){
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   WHERE THE POWER LEAVES — POINT OF INTERCONNECTION
+
+   Set before you generate, the same as facing. Three answers, and the
+   drawing changes for each:
+
+     Behind the meter   nothing is drawn. The existing service transformer
+                        already steps the site down and the plant never
+                        reaches primary voltage. A real and common answer.
+     Utility transformer a step-up is drawn on site, then the POI. This is
+                        what an exporting project on a distribution circuit
+                        actually builds.
+     Substation         same step-up, POI drawn as the substation. Only
+                        honest on a plant big enough to carry its own MV
+                        collection bus and a gen-tie.
+
+   Distance is the field that matters most and the one people leave blank.
+   Past 500 ft the POI is off site: the marker stays inside the fence, the
+   run is drawn as a stub, and the schedule carries the real length. That is
+   deliberate — a mile of gen-tie drawn to scale would put the whole site
+   plan at a scale where nothing else is readable.
+   ══════════════════════════════════════════════════════════════════════ */
+var OMEGA_POI_LABEL = {
+  'none':'Behind the meter',
+  'utility-xfmr':'Utility transformer',
+  'substation':'Substation'
+};
+
+/* ── NOTHING WE GENERATE MAY STAND OFF THE PARCEL ─────────────────────
+   Two different problems live here and they get two different answers.
+   Gear the build placed by itself — the controller, the meter set, the
+   step-up, the POI marker — is ours to move, so it is pulled back inside
+   without asking. Gear a person placed is a decision, so it is counted and
+   said out loud instead of being dragged somewhere they did not put it.
+   Quietly moving somebody's equipment is how a drawing stops matching what
+   was agreed on site. */
+function omegaKeepGeneratedInside(){
+  var out = { moved:0, outside:0, names:[] };
+  var poly=null;
+  try{
+    var sb=_siteBoundaryShape();
+    poly = sb ? _shapeWorldPts(sb) : null;
+  }catch(e){}
+  if(!poly || poly.length<3) return out;
+
+  var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,cx=0,cy=0;
+  poly.forEach(function(q){
+    if(q.x<x1)x1=q.x; if(q.y<y1)y1=q.y; if(q.x>x2)x2=q.x; if(q.y>y2)y2=q.y;
+    cx+=q.x; cy+=q.y;
+  });
+  cx/=poly.length; cy/=poly.length;
+  function pull(x,y,hw,hh){
+    var nx=Math.max(x1+hw, Math.min(x2-hw, x));
+    var ny=Math.max(y1+hh, Math.min(y2-hh, y));
+    for(var i=0;i<=24;i++){
+      var t=i/24, tx=nx+(cx-nx)*t, ty=ny+(cy-ny)*t;
+      if(_ptInPoly(tx,ty,poly)) return { x:tx, y:ty };
+    }
+    return { x:cx, y:cy };
+  }
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0)?S.pxPerFt:6;
+
+  (S.shapes||[]).forEach(function(sh){
+    if(!sh || sh.isSiteBoundary) return;
+    var ours = !!(sh.omegaPoi || sh.omegaMgc || sh.omegaGas);
+    var c = sh.pts && sh.pts.length>=3 ? _shapeWorldCentroid(sh)
+          : (sh.pts && sh.pts[0] ? { x:sh.pts[0].x, y:sh.pts[0].y }
+                                 : _shapeCentroid(sh));
+    if(!c) return;
+    if(_ptInPoly(c.x, c.y, poly)) return;
+    if(ours && sh.pts && sh.pts.length===1){
+      var np=pull(c.x, c.y, ((+sh.lf||3)*ppf)/2, ((+sh.wf||2)*ppf)/2);
+      sh.pts[0].x=np.x; sh.pts[0].y=np.y;
+      if(typeof sh.cx==='number'){ sh.cx=np.x; sh.cy=np.y; }
+      try{ if(typeof renderShape==='function') renderShape(sh); }catch(e){}
+      try{ if(typeof _geoRestampOne==='function') _geoRestampOne(sh); }catch(e){}
+      out.moved++;
+    } else {
+      out.outside++;
+      var nm=sh.label||sh.kind||'shape';
+      if(out.names.indexOf(nm)<0 && out.names.length<4) out.names.push(nm);
+    }
+  });
+
+  (S.elements||[]).forEach(function(el){
+    if(!el) return;
+    var w=+el.w||0, h=+el.h||(w*0.35);
+    var c={ x:(+el.x||0)+w/2, y:(+el.y||0)+h/2 };
+    if(_ptInPoly(c.x, c.y, poly)) return;
+    out.outside++;
+    var nm=el.label||el.eqId||'element';
+    if(out.names.indexOf(nm)<0 && out.names.length<4) out.names.push(nm);
+  });
+  return out;
+}
+window.omegaKeepGeneratedInside = omegaKeepGeneratedInside;
+
+/* Everything the interconnect drew, so setting it again does not stack a
+   second transformer on the first. */
+function _omegaClearPoi(){
+  try{
+    (S.conduits||[]).slice().forEach(function(c){
+      if(c && c.omegaPoi) removeConduit(c.id);
+    });
+  }catch(e){}
+  try{
+    var keep=[];
+    (S.shapes||[]).forEach(function(sh){
+      if(sh && sh.omegaPoi){
+        var svg=document.getElementById('csvg');
+        var g=svg && svg.querySelector('[data-shid="'+sh.id+'"]');
+        if(g && g.parentNode) g.parentNode.removeChild(g);
+      } else keep.push(sh);
+    });
+    S.shapes=keep;
+  }catch(e){}
+}
+
+/* Re-run the generated families only. Hand-drawn runs are never touched:
+   a conduit somebody placed themselves is a decision, not an output. */
+function _omegaRetrench(){
+  try{
+    if(!(window.OmegaConduit && OmegaConduit.runAll)) return;
+    S.conduits=(S.conduits||[]).filter(function(c){
+      return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc
+                     || c.omegaSolarRun || c.omegaPoi));
+    });
+    try{
+      var svg=document.getElementById('csvg');
+      if(svg) Array.prototype.slice.call(svg.querySelectorAll('[data-cid]')).forEach(function(n){
+        var id=n.getAttribute('data-cid');
+        var live=(S.conduits||[]).some(function(c){ return c && c.id===id; });
+        if(!live && n.parentNode) n.parentNode.removeChild(n);
+      });
+    }catch(e){}
+    OmegaConduit.runAll({ diverse:true });
+    var keep=omegaKeepGeneratedInside();
+    if(keep.outside){
+      try{ showBanner('warn', keep.outside + ' item' + (keep.outside===1?'':'s')
+        + ' sit outside the parcel line' + (keep.names.length ? ' (' + keep.names.join(', ') + ')' : '')
+        + '. Nothing was moved for you — bring them in, or move the boundary if it is wrong.'); }catch(e){}
+    }
+  }catch(e){}
+}
+
+function omegaSetPoi(kind){
+  if(typeof S==='undefined') return;
+  S.poi = OMEGA_POI_LABEL[kind] ? kind : 'none';
+  _omegaClearPoi();
+  _omegaRetrench();
+  var msg;
+  if(S.poi==='none'){
+    msg='Behind the meter — no interconnect drawn. The site stops at the controller.';
+  } else if(S.poi==='substation'){
+    msg='Substation POI. A step-up transformer is drawn on site: nothing here '
+      + 'generates at anything a substation would accept.';
+  } else {
+    msg='Utility transformer POI. Step-up on site, then the point of interconnect.';
+  }
+  var ft=+S.poiFt||0;
+  if(S.poi!=='none' && ft>500){
+    msg += ' At ' + Math.round(ft) + ' ft it is off site, so the gen-tie is drawn as a '
+         + 'stub and the schedule carries the real length.';
+  } else if(S.poi!=='none' && !ft){
+    msg += ' Set the distance if it is not on the parcel.';
+  }
+  try{ showBanner('shape', msg); }catch(e){}
+  try{ pushHist(); }catch(e){}
+  try{ if(typeof updateSummaryPanel==='function') updateSummaryPanel(); }catch(e){}
+  try{ if(typeof updateCostEst==='function') updateCostEst(); }catch(e){}
+  try{ window._workDirty=true; }catch(e){}
+}
+
+function omegaSetPoiFt(v){
+  if(typeof S==='undefined') return;
+  var n=parseFloat(v);
+  S.poiFt = (isFinite(n) && n>0) ? n : 0;
+  if(S.poi && S.poi!=='none'){ _omegaClearPoi(); _omegaRetrench(); }
+  try{ pushHist(); }catch(e){}
+  try{ window._workDirty=true; }catch(e){}
+}
+
+function _o2PoiSelect(){
+  var cur='none', ft=0;
+  try{ cur=S.poi||'none'; ft=+S.poiFt||0; }catch(e){}
+  var opts='';
+  ['none','utility-xfmr','substation'].forEach(function(k){
+    opts += '<option value="'+k+'"'+(cur===k?' selected':'')+'>'+OMEGA_POI_LABEL[k]+'</option>';
+  });
+  var h = '<label class="o2-verb" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer" '
+    + 'title="Where the plant meets the grid. Nothing on site generates at utility voltage, so '
+    + 'anything but Behind the meter draws a step-up transformer first. Set it before you '
+    + 'generate.">⚡ Grid'
+    + '<select onchange="omegaSetPoi(this.value)" '
+    + 'style="background:transparent;border:0;color:inherit;font:inherit;cursor:pointer">'
+    + opts + '</select></label>';
+  if(cur!=='none'){
+    h += '<label class="o2-verb" style="display:inline-flex;align-items:center;gap:4px" '
+      + 'title="Distance to the point of interconnect. Past 500 ft it is off site: the marker '
+      + 'stays inside the fence, the run draws as a stub, and the schedule carries the real '
+      + 'length.">POI'
+      + '<input type="number" min="0" step="10" value="'+(ft||'')+'" placeholder="ft" '
+      + 'onchange="omegaSetPoiFt(this.value)" '
+      + 'style="width:64px;background:transparent;border:0;border-bottom:1px solid currentColor;'
+      + 'color:inherit;font:inherit">ft</label>';
+  }
+  return h;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    ALIGN THE LAYOUT TO THE LAND
 
    A packed field comes out square to the screen. Land is not square to the
@@ -33265,7 +33555,8 @@ function omegaAlignCampus(tag, deg){
   delta %= 180; if (delta > 90) delta -= 180; if (delta < -90) delta += 180;
   if (Math.abs(delta) < 0.05) return 0;      /* already along it */
   var foot = (fence && fence.pts && fence.pts.length > 2)
-    ? fence.pts.map(function(p){ return { x:p.x, y:p.y }; }) : null;
+    ? (_shapeWorldPts(fence) || fence.pts.map(function(p){ return { x:p.x, y:p.y }; }))
+    : null;
   var n = _rotateCampusMembers(tag, delta, c.x, c.y, fence ? fence.id : null, foot);
   if (fence){
     var a = ((+fence.rot||0) + delta) % 360; if(a>180)a-=360; if(a<-180)a+=360;
@@ -98389,6 +98680,79 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     pts.push({x:endPt.x, y:endPt.y});
     return pts;
   }
+
+  /* The vertical twin of spineWithTaps. A main trench runs UP the yard and
+     every row lane it passes has to terminate on a node the trunk owns,
+     or the drawing shows lines crossing rather than a bank being joined. */
+  function trunkWithTaps(ys, x, d, endPt){
+    var s=ys.slice().sort(function(a,b){ return a-b; });
+    var pts=[{x:x+d, y:s[0]+d}];
+    s.forEach(function(y){
+      var vy=y+d;
+      if(Math.abs(vy-pts[pts.length-1].y)>0.4) pts.push({x:x+d, y:vy});
+    });
+    if(Math.abs(endPt.y-pts[pts.length-1].y)>0.4) pts.push({x:x+d, y:endPt.y});
+    pts.push({x:endPt.x, y:endPt.y});
+    return pts;
+  }
+
+  /* ── NOTHING THIS MODULE PLACES MAY LAND OFF THE PARCEL ───────────────
+     The gas meter, the MGC and the fallback EMS are all placed by offset
+     from something else, which is fine until the something else is near a
+     boundary. Then the offset walks the new asset over the line and the
+     drawing shows equipment on land the project does not control. Every
+     placement goes through clampToSite first. */
+  function sitePoly(){
+    try{
+      var sh=(typeof _siteBoundaryShape==='function') ? _siteBoundaryShape() : null;
+      if(!sh) return null;
+      var p=(typeof _alShapePts==='function') ? _alShapePts(sh) : sh.pts;
+      return (p && p.length>=3) ? p : null;
+    }catch(e){ return null; }
+  }
+  function inSite(x,y,poly){
+    var p=poly||sitePoly();
+    if(!p) return true;
+    try{ return _ptInPoly(x,y,p); }catch(e){ return true; }
+  }
+  /* Clamp to the parcel's bounding box inset by the asset's own half
+     extents, then — because a bbox is not the parcel on anything but a
+     rectangle — walk the point toward the centroid until it is genuinely
+     inside the polygon. Walking, not clipping: the asset keeps its size. */
+  function clampToSite(x, y, wPx, hPx){
+    var p=sitePoly();
+    if(!p) return { x:x, y:y };
+    var hw=(wPx||0)/2, hh=(hPx||0)/2;
+    var x1=Infinity, y1=Infinity, x2=-Infinity, y2=-Infinity, cx=0, cy=0;
+    p.forEach(function(q){
+      if(q.x<x1)x1=q.x; if(q.y<y1)y1=q.y; if(q.x>x2)x2=q.x; if(q.y>y2)y2=q.y;
+      cx+=q.x; cy+=q.y;
+    });
+    cx/=p.length; cy/=p.length;
+    var nx=Math.max(x1+hw, Math.min(x2-hw, x));
+    var ny=Math.max(y1+hh, Math.min(y2-hh, y));
+    if(x2-x1 < wPx || y2-y1 < hPx) return { x:nx, y:ny };
+    for(var i=0;i<=24;i++){
+      var t=i/24;
+      var tx=nx+(cx-nx)*t, ty=ny+(cy-ny)*t;
+      if(inSite(tx,ty,p)) return { x:tx, y:ty };
+    }
+    return { x:cx, y:cy };
+  }
+
+  /* ── THE MAIN TRENCH ──────────────────────────────────────────────────
+     A yard is not dug as a fan of individual runs from each machine to the
+     controller. Each machine takes a short lateral out of its own
+     footprint into the lane serving its row; each lane runs to ONE trunk;
+     the trunk carries the whole bank to the hub. That is both how it is
+     built and how it is priced, and it is why eight cabinets should read
+     as two lanes and a trench instead of eight diagonals. */
+  function trunkX(hp){
+    var x=hp.x-26*ppf();
+    var p=sitePoly();
+    if(p && !inSite(x, hp.y, p)) x=hp.x+26*ppf();
+    return snap(x);
+  }
   function seal(pts, from, to){
     var p=pts.map(function(q){ return {x:snap(q.x), y:snap(q.y)}; });
     if(from){ p[0]={x:snap(from.x), y:snap(from.y)}; }
@@ -98451,6 +98815,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var gx=nearX-(46*ppf());
     if(gx < 8) gx = Math.min(W-(lf*ppf())-8, nearX+(14*ppf()));
     var gy=Math.max(8, Math.min(H-(wf*ppf())-8, laneY-(wf*ppf())/2));
+    var gp=clampToSite(gx, gy, lf*ppf(), wf*ppf());
+    gx=gp.x; gy=gp.y;
     var sh={ id:(typeof uid==='function'?uid():'gm'+Date.now()),
              kind:'utility', utype:'gasmeter', label:'GAS METER SET',
              lf:lf, wf:wf, abbr:'GM', omegaGas:true, scaled:!!(S.pxPerFt>0),
@@ -98472,7 +98838,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var sh={ id:(typeof uid==='function'?uid():'mgc'+Date.now()),
              kind:'utility', utype:'mgc', label:'MICROGRID CONTROLLER',
              lf:3, wf:2.5, abbr:'MGC', omegaMgc:true, scaled:!!(S.pxPerFt>0),
-             pts:[{x:nearX+(10*ppf()), y:nearY+(10*ppf())}] };
+             pts:[clampToSite(nearX+(10*ppf()), nearY+(10*ppf()), 3*ppf(), 2.5*ppf())] };
     S.shapes.push(sh);
     try{ if(typeof renderShape==='function') renderShape(sh); }catch(e){}
     return sh;
@@ -98662,30 +99028,260 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return out;
   }
 
-  /* Power plus controls, from each battery to the hub. Storage is
-     bidirectional, so this is a feeder and not a tap: the same pair a
-     generator gets, because in an outage the battery IS the source. */
+  /* ── STORAGE: cabinet -> row lane -> MAIN TRENCH -> EMS ───────────────
+     Storage is bidirectional, so this is a feeder and not a tap: the same
+     pair a generator gets, because in an outage the battery IS the source.
+
+     What changed: every battery used to run its own two-elbow path to the
+     hub at its own mid-height, so a bank of eight drew sixteen diagonals
+     that crossed each other and crossed everything else. Now a cabinet
+     leaves its own footprint on a short lateral, drops into the lane
+     serving its row, the lane runs to one trunk, and the trunk carries the
+     bank to the EMS. Control stays out of the power trench throughout —
+     offset by 5 px the whole way, lateral, lane and trunk alike.
+
+     The chain the customer asked for reads on the drawing in that order:
+     BESS -> EMS -> microgrid controller. The last leg is drawn in runAll,
+     because the MGC serves generation and solar too. */
   function runStorage(list, h){
     if(!list||!list.length||!h) return 0;
-    var hp=hubXY(h), n=0;
+    var hp=hubXY(h), n=0, tx=trunkX(hp), lanes=[];
+    var big=false;
+    list.forEach(function(b){ if((+b.kw||0)>=1500) big=true; });
+    var pwr=big?'MV-UG':'RMC-AC';
+
+    /* Bucket by row. The bucket is a whole cabinet depth, so a row that is
+       not perfectly aligned still comes out as one lane. */
+    var m={}, keys=[];
     list.forEach(function(b){
-      var mid=(b.cy+hp.y)/2;
-      var big=(+b.kw||0)>=1500;
-      push({ condType:big?'MV-UG':'RMC-AC', cluster:true, spine:true, toId:h.id,
-             fromElId:b.id, omegaStore:true, emsEdgeOff:0, laneY:mid,
-             spineMinX:Math.min(b.cx,hp.x), labelDx:60, labelDy:-20,
-             pts:seal([{x:b.cx,y:b.cy},{x:b.cx,y:mid},{x:hp.x,y:mid},{x:hp.x,y:hp.y}],
-                      {x:b.cx,y:b.cy}, hp) });
-      n++;
-      /* The battery cannot be dispatched without a control path, and it
-         must not share the power trench. */
-      push({ condType:'EMT-BMS', cluster:true, spine:true, toId:h.id,
-             fromElId:b.id, omegaStore:true, emsEdgeOff:5, laneY:mid+5,
-             spineMinX:Math.min(b.cx,hp.x), labelHidden:true,
-             pts:seal([{x:b.cx+5,y:b.cy},{x:b.cx+5,y:mid+5},{x:hp.x+5,y:mid+5},{x:hp.x+5,y:hp.y+5}],
-                      {x:b.cx+5,y:b.cy}, hp) });
-      n++;
+      var k=Math.round(b.cy/Math.max(1,12*ppf()));
+      if(!m[k]){ m[k]=[]; keys.push(k); }
+      m[k].push(b);
     });
+    keys.sort(function(a,b){ return a-b; });
+
+    keys.forEach(function(k){
+      var units=m[k], cy=0, hh=0, minX=Infinity;
+      units.forEach(function(b){
+        cy+=b.cy;
+        if(b.hh>hh) hh=b.hh;
+        if(b.cx<minX) minX=b.cx;
+      });
+      cy/=units.length;
+      var laneY=snap(cy+hh+16);
+
+      units.forEach(function(b){
+        push({ condType:pwr, cluster:true, tap:true, labelHidden:true,
+               fromElId:b.id, omegaStore:true, laneY:laneY, emsEdgeOff:0,
+               halfW:b.hw, halfH:b.hh,
+               pts:seal([{x:b.cx,y:b.cy+b.hh},{x:b.cx,y:laneY}],
+                        {x:b.cx,y:b.cy+b.hh}, null) });
+        push({ condType:'EMT-BMS', cluster:true, tap:true, labelHidden:true,
+               fromElId:b.id, omegaStore:true, laneY:laneY+5, emsEdgeOff:5,
+               halfW:b.hw, halfH:b.hh,
+               pts:seal([{x:b.cx+5,y:b.cy+b.hh},{x:b.cx+5,y:laneY+5}],
+                        {x:b.cx+5,y:b.cy+b.hh}, null) });
+        n+=2;
+      });
+
+      var xs=units.map(function(b){ return b.cx; });
+      var startX=Math.min(minX, tx);
+      push({ condType:pwr, cluster:true, spine:true, omegaStore:true,
+             emsEdgeOff:0, laneY:laneY, spineMinX:startX, labelDx:60, labelDy:-20,
+             pts:seal(spineWithTaps(xs, laneY, 0, startX, {x:tx,y:laneY}),
+                      null, {x:tx,y:laneY}) });
+      push({ condType:'EMT-BMS', cluster:true, spine:true, omegaStore:true,
+             emsEdgeOff:5, laneY:laneY+5, spineMinX:startX, labelHidden:true,
+             pts:seal(spineWithTaps(xs, laneY, 5, startX, {x:tx,y:laneY}),
+                      null, {x:tx+5,y:laneY+5}) });
+      n+=2;
+      lanes.push(laneY);
+    });
+
+    if(lanes.length){
+      push({ condType:pwr, cluster:true, spine:true, toId:h.id, omegaStore:true,
+             omegaTrunk:true, emsEdgeOff:0, laneY:hp.y, spineMinX:tx,
+             labelDx:40, labelDy:-26,
+             pts:seal(trunkWithTaps(lanes, tx, 0, hp), null, hp) });
+      push({ condType:'EMT-BMS', cluster:true, spine:true, toId:h.id, omegaStore:true,
+             omegaTrunk:true, emsEdgeOff:5, laneY:hp.y+5, spineMinX:tx, labelHidden:true,
+             pts:seal(trunkWithTaps(lanes, tx, 5, {x:hp.x+5,y:hp.y+5}),
+                      null, {x:hp.x+5,y:hp.y+5}) });
+      n+=2;
+    }
+    return n;
+  }
+
+  /* ── SOLAR: inverter -> row lane -> MAIN TRENCH -> MGC ────────────────
+     A PV block's LV AC leaves each inverter and is collected the same way
+     the battery bank is. It terminates on the microgrid controller rather
+     than the EMS: the controller is what curtails and what opens the tie,
+     and on a hybrid site the PV has to answer to the same device the
+     battery does or the two fight each other during a ride-through. */
+  function solarInverters(){
+    var out=[];
+    try{
+      (S.elements||[]).forEach(function(el){
+        if(!el) return;
+        var lbl=String(el.label||'').toLowerCase();
+        var isInv = el.eqId==='inverter' || el.eqId==='inv-sld' ||
+                    el.evKind==='inverter' || el.bgbRole==='inverter' ||
+                    lbl.indexOf('inverter')>=0;
+        if(!isInv) return;
+        var w=+el.w||0, hgt=+el.h||(w*0.35);
+        out.push({ el:el, id:el.id, cx:(+el.x||0)+w/2, cy:(+el.y||0)+hgt/2,
+                   hw:w/2, hh:hgt/2, label:el.label||'INVERTER' });
+      });
+    }catch(e){}
+    return out;
+  }
+
+  function runSolar(list, target){
+    if(!list||!list.length||!target) return 0;
+    var tp=target.pts&&target.pts[0]
+      ? { x:target.pts[0].x+((target.lf||3)*ppf())/2, y:target.pts[0].y }
+      : hubXY(target);
+    var n=0, tx=trunkX(tp), lanes=[];
+    var m={}, keys=[];
+    list.forEach(function(u){
+      var k=Math.round(u.cy/Math.max(1,12*ppf()));
+      if(!m[k]){ m[k]=[]; keys.push(k); }
+      m[k].push(u);
+    });
+    keys.sort(function(a,b){ return a-b; });
+
+    keys.forEach(function(k){
+      var units=m[k], cy=0, hh=0, minX=Infinity;
+      units.forEach(function(u){
+        cy+=u.cy;
+        if(u.hh>hh) hh=u.hh;
+        if(u.cx<minX) minX=u.cx;
+      });
+      cy/=units.length;
+      var laneY=snap(cy+hh+16);
+      units.forEach(function(u){
+        push({ condType:'RMC-AC', cluster:true, tap:true, labelHidden:true,
+               fromElId:u.id, omegaSolarRun:true, laneY:laneY, emsEdgeOff:0,
+               halfW:u.hw, halfH:u.hh,
+               pts:seal([{x:u.cx,y:u.cy+u.hh},{x:u.cx,y:laneY}],
+                        {x:u.cx,y:u.cy+u.hh}, null) });
+        n++;
+      });
+      var startX=Math.min(minX, tx);
+      push({ condType:'RMC-AC', cluster:true, spine:true, omegaSolarRun:true,
+             emsEdgeOff:0, laneY:laneY, spineMinX:startX, labelDx:60, labelDy:-20,
+             pts:seal(spineWithTaps(units.map(function(u){return u.cx;}), laneY, 0,
+                                    startX, {x:tx,y:laneY}), null, {x:tx,y:laneY}) });
+      n++;
+      lanes.push(laneY);
+    });
+
+    if(lanes.length){
+      push({ condType:'RMC-AC', cluster:true, spine:true, toId:target.id,
+             omegaSolarRun:true, omegaTrunk:true, emsEdgeOff:0, laneY:tp.y,
+             spineMinX:tx, labelDx:40, labelDy:-26,
+             pts:seal(trunkWithTaps(lanes, tx, 0, tp), null, tp) });
+      n++;
+    }
+    return n;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     INTERCONNECTION — DOES THE AUTO BUILD NEED A TRANSFORMER?
+
+     Yes, on any build that touches the grid. Nothing on this site talks to
+     the utility at the voltage it generates at: a PCS and a PV inverter put
+     out 480 V three-phase (600 V on some blocks), and utility distribution
+     is 4.16–34.5 kV. A step-up is therefore not a modelling nicety, it is
+     the only way the plant reaches the POI. The real question is where it
+     sits and who owns it:
+
+       · Small, behind-the-meter, POI at the customer's own switchgear —
+         the existing service transformer already does the job and nothing
+         new is drawn. This is the 'none' case and it is a legitimate one.
+       · Exported to a distribution circuit — a customer-owned step-up to
+         primary voltage, then utility metering, a disconnect and an
+         interrupting device, with the POI at the utility's pad or riser.
+         This is the UTILITY XFMR case and it is by far the commonest.
+       · Its own substation — only where the plant carries an MV collection
+         bus and a gen-tie of its own, in practice tens of MW or an
+         interconnect at sub-transmission.
+
+     Distance is the second axis and it is the one that decides the first.
+     A POI a mile off is not drawn to scale on a site plan; it leaves the
+     fence as a gen-tie with its length called out. Running LV a mile is not
+     a design, it is a voltage-drop failure — so a remote POI forces the
+     step-up on site whatever the plant size, and what crosses the fence is
+     MV. That is why the distance field changes the drawing and not just the
+     schedule.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  function findUtil(ut){
+    var f=null;
+    (S.shapes||[]).forEach(function(sh){ if(sh && sh.kind==='utility' && sh.utype===ut) f=sh; });
+    return f;
+  }
+  function utilAsset(ut, label, lf, wf, x, y, flag){
+    var found=findUtil(ut);
+    if(found) return found;
+    var p=clampToSite(x, y, lf*ppf(), wf*ppf());
+    var sh={ id:(typeof uid==='function'?uid():ut+Date.now()),
+             kind:'utility', utype:ut, label:label, lf:lf, wf:wf,
+             abbr:(UTILITY_CATALOG[ut]&&UTILITY_CATALOG[ut].abbr)||'U',
+             scaled:!!(S.pxPerFt>0), pts:[p], cx:p.x, cy:p.y };
+    sh[flag]=true;
+    S.shapes.push(sh);
+    try{ if(typeof renderShape==='function') renderShape(sh); }catch(e){}
+    return sh;
+  }
+
+  /* opts.poi: 'none' | 'utility-xfmr' | 'substation'
+     opts.poiFt: how far the POI is, in feet. Beyond REMOTE_FT the run is
+     drawn as a gen-tie stub to the fence with the distance called out,
+     because a mile of line has no business being drawn to scale. */
+  var REMOTE_FT=500;
+  function runInterconnect(h, opts){
+    var kind=opts.poi;
+    if(!kind || kind==='none') return 0;
+    var hp=hubXY(h), n=0;
+    var ft=Math.max(0, +opts.poiFt||0);
+    var remote=ft>REMOTE_FT;
+
+    /* Step-up first. It is on site in every case that reaches this line:
+       either because the POI is on site, or because the run leaving the
+       fence has to be MV before it leaves. */
+    var xf=utilAsset('xfmr','STEP-UP XFMR',6,5, hp.x+40*ppf(), hp.y, 'omegaPoi');
+    var xp={ x:xf.pts[0].x, y:xf.pts[0].y };
+    push({ condType:'MV-UG', cluster:true, spine:true, toId:xf.id,
+           fromShapeId:h.id, omegaPoi:true, emsEdgeOff:0, laneY:hp.y,
+           spineMinX:Math.min(hp.x,xp.x), labelDx:40, labelDy:-18,
+           pts:seal([{x:hp.x,y:hp.y},{x:hp.x,y:xp.y},{x:xp.x,y:xp.y}], hp, xp) });
+    n++;
+
+    var isSub=(kind==='substation');
+    var poiLabel=isSub
+      ? ('SUBSTATION' + (remote?' — '+Math.round(ft)+' FT OFF SITE':''))
+      : ('UTILITY XFMR / POI' + (remote?' — '+Math.round(ft)+' FT OFF SITE':''));
+    /* Remote: the POI marker sits just inside the fence and the run is a
+       stub, labelled with the real distance. On site: it is placed and the
+       run is drawn to it. Either way the marker is inside the parcel — a
+       symbol standing on someone else's land is worse than no symbol. */
+    var px=remote ? (xp.x+30*ppf()) : (xp.x+Math.max(20, ft)*ppf()*0.25);
+    var poi=utilAsset('mpoi', poiLabel, 3, 2, px, xp.y, 'omegaPoi');
+    var pp={ x:poi.pts[0].x, y:poi.pts[0].y };
+    push({ condType:'MV-UG', cluster:true, spine:true, toId:poi.id,
+           fromShapeId:xf.id, omegaPoi:true, omegaGenTie:!!remote,
+           emsEdgeOff:0, laneY:xp.y, spineMinX:Math.min(xp.x,pp.x),
+           labelDx:30, labelDy:18,
+           ftOverride: remote ? ft : null,
+           pts:seal([{x:xp.x,y:xp.y},{x:pp.x,y:pp.y}], xp, pp) });
+    n++;
+    if(remote){
+      /* The schedule must price the real length, not the drawn one. */
+      var c=S.conduits[S.conduits.length-1];
+      c.ftLen=+ft.toFixed(1);
+      c.notToScale=true;
+    }
     return n;
   }
 
@@ -98702,6 +99298,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       else if(sh.kind==='derdc') pods.push(sh);
     });
     var bess=storageAssets();
+    var pv=solarInverters();
     var n=0;
     n+=runCompute(pods, h, opts.diverse!==false);
     n+=runGeneration(fc, h);
@@ -98716,9 +99313,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        needs the same arbitration -- more so, because it has to decide in
        milliseconds whether to ride through or open the tie. The gate is
        now ANY dispatchable source on site. */
-    if(fc.length || bess.length){
+    var mg=null, poiRuns=0;
+    var poi=(opts.poi!=null) ? opts.poi : (S.poi||'none');
+    var poiFt=(opts.poiFt!=null) ? +opts.poiFt : (+S.poiFt||0);
+    if(fc.length || bess.length || pv.length){
       var hp2=hubXY(h);
-      var mg=mgcAsset(hp2.x, hp2.y);
+      mg=mgcAsset(hp2.x, hp2.y);
       var mp={ x:mg.pts[0].x+((mg.lf||3)*ppf())/2, y:mg.pts[0].y };
       push({ condType:'EMT-BMS', cluster:true, spine:true, toId:h.id,
              fromShapeId:mg.id, omegaMgc:true, emsEdgeOff:0,
@@ -98726,17 +99326,26 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
              pts:seal([{x:mp.x,y:mp.y},{x:mp.x,y:hp2.y},{x:hp2.x,y:hp2.y}], mp, hp2) });
       n++;
     }
+    /* Solar terminates on the controller, not on the EMS. */
+    if(pv.length && mg) n+=runSolar(pv, mg);
+    /* Interconnection is a choice, never an assumption — an unset POI
+       draws nothing, the same way a bare solar draw gets no control yard. */
+    poiRuns=runInterconnect(h, { poi:poi, poiFt:poiFt });
+    n+=poiRuns;
     try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
     try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
     try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
     return { ok:true, runs:n, hub:h.id, pods:pods.length, fc:fc.length,
-             bess:bess.length, mgc:!!(fc.length||bess.length),
+             bess:bess.length, solar:pv.length, mgc:!!mg,
+             poi:poi, poiFt:poiFt, poiRuns:poiRuns,
              diverse:opts.diverse!==false };
   }
 
   window.OmegaConduit={
     runAll:runAll, runCompute:runCompute, runGeneration:runGeneration,
     runStorage:runStorage, storageAssets:storageAssets,
+    runSolar:runSolar, solarInverters:solarInverters,
+    runInterconnect:runInterconnect, clampToSite:clampToSite,
     tieTo:tieTo, generationTargets:generationTargets, hub:hub
   };
   if(window.console) console.info(TAG+' ready \u2014 OmegaConduit.runAll()');
@@ -167544,7 +168153,8 @@ if (root.console && console.info) {
       try {
         if (root.OmegaConduit && root.OmegaConduit.runAll) {
           var keepRuns = (S_().conduits || []).filter(function (c) {
-            return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc));
+            return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc
+                           || c.omegaSolarRun || c.omegaPoi));
           });
           S_().conduits = keepRuns;
           root.OmegaConduit.runAll({ diverse: true });
@@ -167587,7 +168197,8 @@ if (root.console && console.info) {
     try {
       if (root.OmegaConduit && root.OmegaConduit.runAll) {
         S_().conduits = (S_().conduits || []).filter(function (c) {
-          return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc));
+          return !(c && (c.omegaGen || c.omegaStore || c.omegaTie || c.omegaMgc
+                         || c.omegaSolarRun || c.omegaPoi));
         });
         root.OmegaConduit.runAll({ diverse: true });
       }
