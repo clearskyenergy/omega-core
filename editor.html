@@ -167361,11 +167361,34 @@ if (root.console && console.info) {
     }, 60);
   }
 
+  /* ── ONLY RE-APPLY WHEN A GATED NODE ACTUALLY ARRIVES ────────────────
+     This watched document.body, subtree, and re-applied on ANY added node.
+     In this editor that is a map tile, an SVG element, a toast, a re-render
+     — nodes arrive continuously — so the gate re-ran every 60 ms for the
+     life of the session, and every run re-announced the tier. The
+     Designer/Pro switch listens for that announcement to decide which mode
+     the tier implies, so an endless announcement is an endless re-decision,
+     and the ribbon flashed between the two.
+
+     apply() only ever touches elements carrying data-cap, so a mutation
+     that adds none of them cannot change its outcome. Checking that is far
+     cheaper than the pass it skips, and it turns a permanent 60 ms loop
+     into work that happens when a gated button is genuinely injected. */
+  function carriesCap(n){
+    if (!n || n.nodeType !== 1) return false;
+    if (n.hasAttribute && n.hasAttribute('data-cap')) return true;
+    return !!(n.querySelector && n.querySelector('[data-cap]'));
+  }
+
   function watch(){
     if (!window.MutationObserver || !document.body) return;
     new MutationObserver(function(muts){
       for (var i = 0; i < muts.length; i++){
-        if (muts[i].addedNodes && muts[i].addedNodes.length) { reapply(); return; }
+        var added = muts[i].addedNodes;
+        if (!added || !added.length) continue;
+        for (var j = 0; j < added.length; j++){
+          if (carriesCap(added[j])) { reapply(); return; }
+        }
       }
     }).observe(document.body, { childList: true, subtree: true });
   }

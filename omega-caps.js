@@ -217,7 +217,22 @@
       removed++;
     }
     if (global.document && global.document.body) {
-      global.document.body.setAttribute('data-tier', normalise(tier));
+      /* ── THE EVENT ANNOUNCES A CHANGE, NOT A PASS ────────────────────
+         This fired on every call. apply() is re-run by a DOM observer in
+         the editor, so in a page that is constantly adding nodes — map
+         tiles, renders, the ribbon injectors — omega:tier was dispatched
+         several times a second, forever.
+
+         That storm is what drove the Designer/Pro flashing: the editor
+         listens for this event to revisit which mode the tier implies, and
+         an announcement that "the tier arrived" repeated indefinitely is an
+         instruction to re-decide indefinitely. The event exists because
+         billing/current lands late and the first guess has to be revisited
+         ONCE. Only a real change is news. */
+      var _prev = global.document.body.getAttribute('data-tier');
+      var _next = normalise(tier);
+      var _changed = (_prev !== _next);
+      global.document.body.setAttribute('data-tier', _next);
       /* ── THE TIER LANDS LATE, SO SAY SO ──────────────────────────────
          resolve() reads billing/current over the network, so everything
          that boots synchronously — the editor's Designer/Pro default among
@@ -226,11 +241,13 @@
          signal rather than a poll. Listeners get body[data-tier] as well,
          so a late subscriber can read the current answer without waiting
          for an event that has already fired. */
-      try {
-        global.document.dispatchEvent(new CustomEvent('omega:tier', {
-          detail: { tier: normalise(tier), removed: removed }
-        }));
-      } catch (e) {}
+      if (_changed) {
+        try {
+          global.document.dispatchEvent(new CustomEvent('omega:tier', {
+            detail: { tier: _next, removed: removed }
+          }));
+        } catch (e) {}
+      }
     }
     return { tier: normalise(tier), removed: removed };
   }
