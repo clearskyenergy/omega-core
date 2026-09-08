@@ -553,6 +553,12 @@
           referralBasis: v.referralBasis || '',
           isShareholder: v.isShareholder === true,
           active:   v.active !== false,
+          /* Joint development: whether we co-develop with them, and the stage
+             they take a project over at. Mapped explicitly like everything
+             else here — this loader is a whitelist, so a field that is not
+             named simply never arrives, and the JD tab would have rendered
+             an empty list forever without telling anybody why. */
+          jd:       v.jd || null,
           note:     v.note || ''
         };
       });

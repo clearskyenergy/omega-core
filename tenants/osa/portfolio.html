@@ -771,6 +771,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           placeholder="Filter cards…" oninput="S.boardQ=this.value;renderBoard()">
         <select id="kb-org" class="fbar-i" onchange="S.boardOrg=this.value;renderBoard()"></select>
         <span class="fbar-n" id="kb-count"></span>
+        <span id="kb-jd" style="margin-left:8px"></span>
       </div>
       <div id="kb-host" class="kb-wrap"></div>
     </section>
@@ -813,9 +814,12 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
            cells is doing both, and one combined number hides the second.</p></div>
       <div class="card">
         <div class="card-h"><h2>By organisation</h2>
-          <span class="sub">Sorted by capital closed on deals they originated</span></div>
+          <span class="sub">Sorted by capital closed on deals they originated. Set what each one
+            is to us and whether we co-develop with them — a joint development partner gets their
+            own book on the JD partners tab.</span></div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>Organisation</th><th class="num">Referred</th><th class="num">Live</th>
+          <thead><tr><th>Organisation</th><th>Role in the ecosystem</th><th>Joint development</th>
+            <th class="num">Referred</th><th class="num">Live</th>
             <th class="num">Funded</th><th class="num">Conversion</th><th class="num">Closed $</th>
             <th class="num">Supplied $</th><th class="num">Median days to close</th></tr></thead>
           <tbody id="partner-rows"></tbody></table></div>
@@ -1588,7 +1592,10 @@ function jdOrgs(){
              deals: S.deals.filter(function (d){
                return (F.orgsInvolved ? F.orgsInvolved(d) : (d.orgsInvolved||[]))
                         .indexOf(st.orgId) !== -1; }) };
-  }).filter(function (r){ return r.deals.length || r.jd.handoff; });
+  /* Marked deliberately, not inferred. Every organisation that has ever
+     appeared on a roster is a partner; a JOINT DEVELOPMENT is a decision,
+     and it is made on the Partners screen. */
+  }).filter(function (r){ return r.jd.active === true; });
 }
 
 function jdRank(key){
@@ -1625,6 +1632,7 @@ function renderJD(){
       + (r.deals.length===1?'':'s') + '</span>'
       + (hand ? '<span class="tag">' + ready.length + ' ready</span>'
               : '<span class="tag">no handoff set</span>')
+      + '<button class="btn-x" onclick="jdBoard(\'' + esc(r.stats.orgId) + '\')">Open board</button>'
       + '</div><div class="card-b">';
 
     /* How the JD is structured — one line, because the thing that actually
@@ -1664,7 +1672,7 @@ function renderJD(){
         + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
         + '<td style="white-space:nowrap">'
         + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\')">Open</button> '
-        + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\');go(\'board\')">Board</button>'
+        + '<button class="btn-x" onclick="jdBoard(\'' + esc(r.stats.orgId) + '\')">Board</button>'
         + (isReady && r.org.kind === 'investor'
             ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
               + 'href="https://financing.csebuilders.com/dealroom">Deal room</a>' : '')
@@ -1673,6 +1681,33 @@ function renderJD(){
     h += '</tbody></table></div></div></div>';
     return h;
   }).join('');
+}
+
+/* What an organisation IS to us, and whether we co-develop with them. Two
+   separate questions: a manufacturer can be a JD partner and an investor can
+   be nothing more than a name on a cap table. Both write to the organisation
+   record, which is where the rest of its metadata already lives. */
+function setOrgKind(orgId, kind){
+  A.saveOrg(orgId, { kind: kind })
+    .then(function(){ var o=A.orgs()[orgId]; if(o) o.kind=kind; render(); })
+    .catch(function(e){ alert(e.message || 'Could not save.'); render(); });
+}
+function setOrgJd(orgId, on){
+  A.saveOrg(orgId, { jd: { active: !!on } })
+    .then(function(){
+      var o=A.orgs()[orgId];
+      if(o){ o.jd = o.jd || {}; o.jd.active = !!on; }
+      render();
+    })
+    .catch(function(e){ alert(e.message || 'Could not save.'); render(); });
+}
+
+/* Their board: every project on that partnership's roster, and nothing else. */
+function jdBoard(orgId){
+  S.boardJdOrg = orgId;
+  S.boardOrg = '';                 /* the two filters would fight */
+  var sel = document.getElementById('kb-org'); if (sel) sel.value = '';
+  go('board');
 }
 
 function saveJD(orgId){
@@ -1692,15 +1727,34 @@ function saveJD(orgId){
 function renderPartners(){
   var list=F.allPartners(S.deals);
   var host=document.getElementById('partner-rows');
-  if(!list.length){ host.innerHTML='<tr><td colspan="8"><div class="empty"><b>No partners yet</b>'
+  if(!list.length){ host.innerHTML='<tr><td colspan="10"><div class="empty"><b>No partners yet</b>'
     +'Organisations appear here as soon as they appear on a deal.</div></td></tr>'; }
   else host.innerHTML=list.map(function(s){
-    var org=A.orgs()[s.orgId];
+    var org=A.orgs()[s.orgId]||{};
+    var admin=false; try{ admin=A.can('approve_any'); }catch(e){}
+    /* The controls stop the row-click from opening the detail panel — a
+       select that also navigates is a select nobody can use. */
+    var kindCell = admin
+      ? '<select onclick="event.stopPropagation()" '
+        + 'onchange="setOrgKind(\''+esc(s.orgId)+'\',this.value)">'
+        + A.ORG_KINDS.map(function(k){
+            return '<option value="'+esc(k.key)+'"'+(org.kind===k.key?' selected':'')+'>'
+                 + esc(k.label)+'</option>'; }).join('')
+        + '</select>'
+      : '<span class="sub">'+esc(org.kind?A.orgKindOf(org.kind).label:'\u2014')+'</span>';
+    var jdOn = !!(org.jd && org.jd.active);
+    var jdCell = admin
+      ? '<label onclick="event.stopPropagation()" style="display:flex;gap:7px;align-items:center">'
+        + '<input type="checkbox"'+(jdOn?' checked':'')
+        + ' onchange="setOrgJd(\''+esc(s.orgId)+'\',this.checked)">'
+        + '<span class="sub">'+(jdOn?'On the JD tab':'Not a JD partner')+'</span></label>'
+      : (jdOn?'<span class="tag">JD partner</span>':'<span class="sub">\u2014</span>');
     return '<tr class="row" onclick="openPartner(\''+s.orgId+'\')">'
       + '<td><div class="t-name">'+esc(A.orgName(s.orgId))+'</div>'
       +   '<div class="t-sub">'+esc(s.orgId)
-      +   (org&&org.kind?' \u00b7 '+esc(A.orgKindOf(org.kind).label):'')
       +   (org&&org.isShareholder?' <span class="tag">shareholder</span>':'')+'</div></td>'
+      + '<td>'+kindCell+'</td>'
+      + '<td>'+jdCell+'</td>'
       + '<td class="num mono">'+s.referred+'</td>'
       + '<td class="num mono">'+s.live+'</td>'
       + '<td class="num mono">'+s.reached.funded+'</td>'
@@ -2218,6 +2272,14 @@ var PHASES = [
 function boardDeals(){
   var q=(S.boardQ||'').toLowerCase().trim();
   return S.deals.filter(function(d){
+    /* Brought-by and on-the-roster are different questions. The existing
+       filter answers the first; a joint development needs the second, because
+       the partner co-developing a site is very often not the one who
+       introduced it. */
+    if(S.boardJdOrg){
+      var roster = F.orgsInvolved ? F.orgsInvolved(d) : (d.orgsInvolved||[]);
+      if(roster.indexOf(S.boardJdOrg)===-1) return false;
+    }
     if(S.boardOrg && d.origination.partnerOrg!==S.boardOrg) return false;
     if(q && (d.name+' '+(d.address||'')+' '+(d.origination.partnerName||''))
         .toLowerCase().indexOf(q)<0) return false;
@@ -2236,6 +2298,17 @@ function renderBoard(){
   if(eb) eb.textContent = prefs.collapseEmpty?'Show empty stages':'Collapse empty stages';
   var cnt=document.getElementById('kb-count');
   if(cnt) cnt.textContent = list.length+(list.length===S.deals.length?'':' of '+S.deals.length)+' shown';
+
+  /* A filtered board that does not say it is filtered is how somebody
+     concludes half their pipeline has vanished. */
+  var chip=document.getElementById('kb-jd');
+  if(chip){
+    chip.innerHTML = S.boardJdOrg
+      ? '<span class="tag" style="background:#5B4BC422;color:#5B4BC4">Joint development · '
+        + esc(A.orgName(S.boardJdOrg)) + '</span> '
+        + '<button class="btn-x" onclick="S.boardJdOrg=\'\';render()">Show every project</button>'
+      : '';
+  }
 
   var sel=document.getElementById('kb-org');
   if(sel && !sel.dataset.built){
