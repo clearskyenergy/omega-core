@@ -14528,7 +14528,7 @@ function _alFindBoundary(){
     var best=null,bestArea=0;
     (S.shapes||[]).forEach(function(sh){
       if(sh.kind==='rect' || sh.kind==='polyline' || sh.kind==='poly'){
-        var pts=_alShapePts(sh);
+        var pts=(typeof _shapeWorldPts==='function' ? _shapeWorldPts(sh) : null) || _alShapePts(sh);
         if(pts && pts.length>=3){
           var a=Math.abs(_alPolyAreaPx(pts));
           if(a>bestArea){ bestArea=a; best=pts; }
@@ -14908,7 +14908,8 @@ function _siteBoundaryInfo(){
     shapes.forEach(function(x){
       if(!x) return;
       if(x.kind==='rect'||x.kind==='poly'||x.kind==='polyline'){
-        var p=(typeof _alShapePts==='function')?_alShapePts(x):x.pts;
+        var p=(typeof _shapeWorldPts==='function' ? _shapeWorldPts(x) : null)
+            || ((typeof _alShapePts==='function')?_alShapePts(x):x.pts);
         if(p && p.length>=3){
           var a=Math.abs((typeof _alPolyAreaPx==='function')?_alPolyAreaPx(p):0);
           if(a>bestA){ bestA=a; best=x; }
@@ -14919,7 +14920,8 @@ function _siteBoundaryInfo(){
     sh=best; derived=true;
   }
 
-  var pts=(typeof _alShapePts==='function')?_alShapePts(sh):sh.pts;
+  var pts=(typeof _shapeWorldPts==='function' ? _shapeWorldPts(sh) : null)
+        || ((typeof _alShapePts==='function')?_alShapePts(sh):sh.pts);
   if(!pts || pts.length<3) return { present:false, derived:derived, reason:'boundary has fewer than 3 points' };
 
   var ring=sh._geoPts && sh._geoPts.length===pts.length ? sh._geoPts : null;
@@ -98845,7 +98847,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{
       var sh=(typeof _siteBoundaryShape==='function') ? _siteBoundaryShape() : null;
       if(!sh) return null;
-      var p=(typeof _alShapePts==='function') ? _alShapePts(sh) : sh.pts;
+      var p=(typeof _shapeWorldPts==='function' ? _shapeWorldPts(sh) : null)
+          || ((typeof _alShapePts==='function') ? _alShapePts(sh) : sh.pts);
       return (p && p.length>=3) ? p : null;
     }catch(e){ return null; }
   }
@@ -152691,7 +152694,14 @@ if (root.console && console.info) {
     return shapes().filter(function (sh) { return sh && sh.omegaRole === role; });
   }
 
+  /* World space, always. `pts` are stored unrotated and `rot` is applied by
+     the render transform, so a rotated parcel read through the raw points is
+     the parcel's ghost — and every consumer of this accessor is asking where
+     the ground actually is. */
   function pts(sh) {
+    var w = null;
+    try { w = (typeof _shapeWorldPts === 'function') ? _shapeWorldPts(sh) : null; } catch (e) {}
+    if (w && w.length >= 3) return w;
     if (typeof _alShapePts === 'function') return _alShapePts(sh);
     return (sh && sh.pts && sh.pts.length >= 3) ? sh.pts.slice() : null;
   }
@@ -153044,7 +153054,8 @@ if (root.console && console.info) {
   }
   function acres(sh) {
     try {
-      var p = (typeof _alShapePts === 'function') ? _alShapePts(sh) : null;
+      var p = (typeof _shapeWorldPts === 'function' ? _shapeWorldPts(sh) : null)
+            || ((typeof _alShapePts === 'function') ? _alShapePts(sh) : null);
       if (!p) return null;
       var a = _alPolyAcres(p);
       return isFinite(a) && a > 0 ? a : null;
@@ -153766,8 +153777,14 @@ if (root.console && console.info) {
     try {
       if (root.OmegaSiteRoles && root.OmegaSiteRoles.boundary) {
         var b = root.OmegaSiteRoles.boundary();
-        if (b && typeof _alShapePts === 'function') {
-          var p = _alShapePts(b);
+        if (b) {
+          /* THE PARCEL AS DRAWN, NOT AS STORED. This read the raw points, so
+             on any turned boundary the whole plan — the setback band, the
+             usable mask, every quadrant — was computed against a polygon
+             sitting somewhere the parcel is not. That is how Design Site put
+             equipment outside a boundary it believed it was inside. */
+          var p = (typeof _shapeWorldPts === 'function' ? _shapeWorldPts(b) : null)
+                || ((typeof _alShapePts === 'function') ? _alShapePts(b) : null);
           if (p && p.length >= 3) return p;
         }
       }
