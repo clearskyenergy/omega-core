@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="ClearSky OMEGA">
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     App icon. Same tile, same glow and same reflection as the ring it replaces —
+     only the glyph changed, so the icon stays recognisable in a dock full of
+     other icons while finally being an omega. Source of truth for omega-logo.png;
+     re-render at 512 with headless Chrome if this changes. -->
+<defs>
+  <radialGradient id="tile" cx=".5" cy=".38" r=".78">
+    <stop offset="0" stop-color="#17293A"/>
+    <stop offset=".55" stop-color="#0C1824"/>
+    <stop offset="1" stop-color="#050A11"/>
+  </radialGradient>
+  <linearGradient id="neon" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#9BE870"/>
+    <stop offset=".32" stop-color="#2FE3C8"/>
+    <stop offset=".68" stop-color="#35C6F4"/>
+    <stop offset="1" stop-color="#3D9DF5"/>
+  </linearGradient>
+  <filter id="halo" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="11"/>
+  </filter>
+  <filter id="halo2" x="-90%" y="-90%" width="280%" height="280%">
+    <feGaussianBlur stdDeviation="24"/>
+  </filter>
+  <filter id="soft" x="-45%" y="-45%" width="190%" height="190%">
+    <feGaussianBlur stdDeviation="6"/>
+  </filter>
+  <!-- The reflection has to die out before it reaches the tile edge, or it
+       reads as a second glyph rather than as water. -->
+  <linearGradient id="fadeG" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
+    <stop offset=".42" stop-color="#fff" stop-opacity=".45"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <mask id="fade">
+    <rect x="0" y="352" width="512" height="160" fill="url(#fadeG)"/>
+  </mask>
+  <pattern id="ripple" width="8" height="7" patternUnits="userSpaceOnUse">
+    <rect width="8" height="4" fill="#000" opacity=".26"/>
+  </pattern>
+  <clipPath id="tileClip"><rect width="512" height="512" rx="112"/></clipPath>
+</defs>
+
+<g clip-path="url(#tileClip)">
+  <rect width="512" height="512" fill="url(#tile)"/>
+
+  <!-- reflection: the glyph mirrored about the waterline, blurred and faded -->
+  <g mask="url(#fade)">
+    <g transform="translate(0 704) scale(1 -1)">
+      <g transform="translate(86 60) scale(3.4)" fill="none"
+         stroke-linecap="round" stroke-linejoin="round" filter="url(#soft)">
+        <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+              stroke="url(#neon)" stroke-width="20" opacity=".7"/>
+        <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+              stroke="url(#neon)" stroke-width="9"/>
+        <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+              stroke="#EAFFFF" stroke-width="3.4" opacity=".8"/>
+      </g>
+    </g>
+    <rect x="0" y="352" width="512" height="160" fill="url(#ripple)"/>
+  </g>
+
+  <!-- waterline -->
+  <rect x="0" y="351" width="512" height="1.6" fill="#BFF4FF" opacity=".22"/>
+
+  <!-- the mark -->
+  <g transform="translate(86 60) scale(3.4)" fill="none"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+          stroke="url(#neon)" stroke-width="24" filter="url(#halo2)" opacity=".6"/>
+    <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+          stroke="url(#neon)" stroke-width="13" filter="url(#halo)" opacity=".95"/>
+    <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+          stroke="url(#neon)" stroke-width="7"/>
+    <path d="M10 80H26C33 79 34.8 71 33.4 63.3A27 27 0 1 1 66.6 63.3C65.2 71 67 79 74 80H90"
+          stroke="#F2FFFF" stroke-width="2.9"/>
+  </g>
+</g>
+</svg>
