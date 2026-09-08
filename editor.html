@@ -11752,7 +11752,59 @@ function _shapeRotateStart(e, id){
   S.shStartRot=sh.rot||0;
   var xy=_evtXY(e);
   S.shStartAng=Math.atan2(xy.y-S.shRotCy, xy.x-S.shRotCx)*(180/Math.PI);
+  /* ── A FENCE CARRIES WHAT IT FENCES ─────────────────────────────────
+     Turning a compound used to turn the fence and nothing else, so the
+     pods it encloses stayed where they were and the fence ended up round
+     empty ground — which is exactly how a compound ends up drawn with
+     nothing in it. Recorded on the way IN, because the campus has to be
+     read while the fence is still where it started. */
+  S.shRotCampus = null;
+  try {
+    if (sh.omegaCampus) {
+      S.shRotCampus = { tag: sh.omegaCampus, cx: c.x, cy: c.y, from: (sh.rot||0) };
+    }
+  } catch (e) {}
 }
+
+/* Rotate everything belonging to a campus about a point, leaving the fence
+   itself alone — its own .rot already turned it. Same transform the o2 and
+   Move System rotations use: points, centres, tables, an element about its
+   OWN centre so it does not drift by half its size, and the ground anchor
+   dropped because lat/lng does not rotate uniformly and restamp re-derives
+   it from the pixels that then exist. */
+function _rotateCampusMembers(tag, deg, cx, cy, exceptId){
+  if (!tag || !deg) return 0;
+  var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r), n=0;
+  function turn(x,y){ var dx=x-cx, dy=y-cy; return { x:cx+dx*cos-dy*sin, y:cy+dx*sin+dy*cos }; }
+  function shed(o){
+    ['_geoPts','_geoC','_geoBoundary','_geoExcl','_geoBR','_geoRot','_geoTables',
+     '_geoLat','_geoLng'].forEach(function(k){ if(o[k]!==undefined){ try{ delete o[k]; }catch(e){} } });
+  }
+  function bump(o){
+    var a=((+o.rot||0)+deg)%360; if(a>180)a-=360; if(a<-180)a+=360;
+    o.rot=Math.round(a*10)/10;
+  }
+  var MAP = (typeof _O2_CAMPUS_OF_KIND!=='undefined') ? _O2_CAMPUS_OF_KIND : {};
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.id===exceptId || o.locked || o.isSiteBoundary) return;
+    var mine = (o.omegaCampus===tag) || (MAP[o.kind]===tag);
+    if (!mine) return;
+    if (o.pts) o.pts = o.pts.map(function(p){
+      var q=turn(p.x,p.y); for(var k in p) if(k!=='x'&&k!=='y') q[k]=p[k]; return q; });
+    if (typeof o.cx==='number'){ var cc=turn(o.cx,o.cy); o.cx=cc.x; o.cy=cc.y; }
+    if (o.tables) o.tables = o.tables.map(function(t){
+      var c2=JSON.parse(JSON.stringify(t)), q2=turn(t.x,t.y); c2.x=q2.x; c2.y=q2.y; bump(c2); return c2; });
+    if (typeof o.x==='number' && !o.pts){
+      var w=+o.w||0, h=+o.h||(w*0.35), cc2=turn(o.x+w/2, o.y+h/2);
+      o.x=cc2.x-w/2; o.y=cc2.y-h/2;
+    }
+    bump(o); shed(o); n++;
+    try { if (typeof renderShape==='function') renderShape(o); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(o); } catch(e){}
+  });
+  return n;
+}
+window._rotateCampusMembers = _rotateCampusMembers;
 
 /* ---- LIVE UPDATE (called from globalMM) ---- */
 function _shapeInteractMove(e){
@@ -12026,7 +12078,26 @@ function _shapeInteractEnd(){
     /* Patch 8: capture which shape moved BEFORE the ids are cleared, then
        re-anchor just that one. Mirrors what element drag-end already did. */
     var _movedId = S.shapeDrag || S.shapeResize || S.shapeRotate;
+    var _wasRotate = !!S.shapeRotate, _campus = S.shRotCampus;
     S.shapeDrag=null; S.shapeResize=null; S.shapeRotate=null; S.groupDrag=null;
+    S.shRotCampus = null;
+    /* Applied once on release rather than per frame: the members move in real
+       pixels, and re-running that on every mousemove would compound rounding
+       and cost a full re-render per degree. */
+    if (_wasRotate && _campus) {
+      try {
+        var _f=(S.shapes||[]).filter(function(x){ return x.id===_movedId; })[0];
+        var _d=((_f && _f.rot)||0) - _campus.from;
+        if (Math.abs(_d) > 0.05) {
+          var _n=_rotateCampusMembers(_campus.tag, _d, _campus.cx, _campus.cy, _movedId);
+          if (_n && typeof showBanner==='function') {
+            showBanner('cal','Turned the compound and the ' + _n + ' item'
+              + (_n===1?'':'s') + ' inside it by ' + Math.round(_d) + '\u00b0.');
+          }
+          try { if (typeof rerouteTrenchConduits==='function') rerouteTrenchConduits(); } catch(e){}
+        }
+      } catch(e){}
+    }
     S.shTwoCorner=false;   /* clear the two-corner resize flag */
     try{
       var _sh=(S.shapes||[]).filter(function(x){ return x.id===_movedId; })[0];
