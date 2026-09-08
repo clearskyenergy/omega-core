@@ -108,6 +108,30 @@ select,input[type=text]{padding:6px 9px;border:1px solid var(--cs-border);border
     </div>
   </div>
 
+  <div class="card" id="progCard" style="display:none">
+    <h2>Partner programmes</h2>
+    <p class="sub">What each joint-development partner needs before a project is handed to them.
+      Amperage wants everything through pre-development — funded-ready, with the documents, the
+      costs and the designs — so their programme is ticked accordingly. Every partner gets their
+      own, because no two take a project at the same point.</p>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="progOrg" onchange="renderProgramme()"><option value="">Select a partner…</option></select>
+      <label class="ws">Hands off at:
+        <select id="progHandoff"><option value="">— not set —</option></select></label>
+      <button onclick="saveProgramme()" style="margin-left:auto">Save programme</button>
+      <span class="sub" id="progMsg"></span>
+    </div>
+    <div id="programme"><div class="empty">Pick a partner above.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Pipeline by partner</h2>
+    <p class="sub">Each partnership is its own book. A project counts as ready when every item on
+      that partner’s programme is done — not assigned, done — and only then is it worth their
+      time. The same projects still appear on the main pipeline; this is the granular view.</p>
+    <div id="pipeline"><div class="empty">Loading…</div></div>
+  </div>
+
   <div class="card">
     <h2>Responsibilities by project</h2>
     <p class="sub">Who runs what, per co-developed site — origination through operations. Written to the project beside its partner roster, because a JDA says the parties will co-develop; it does not say who runs interconnection on a given address. Every row starts unassigned, and the unassigned count is the point: on a joint development it is the unasked questions that surface at financial close.</p>
@@ -305,12 +329,18 @@ function loadPartners(){
            platform — this page is about the agreement, not the customer book. */
         if(v.osaMember===true || v.jdPartner===true) rows.push(v);
       });
+      PARTNERS = rows;
+      rows.forEach(function(r){ if (r.jd) PROGRAMMES[r._id] = r.jd; });
       paint(rows, false);
+      initProgramme();
     }).catch(function(e){ host.innerHTML='<div class="empty">Could not read organisations — '+esc(e.message)+'</div>'; });
   } else {
     db.collection('omega_orgs').doc(MYORG).get().then(function(d){
       var rows=[]; if(d.exists){ var v=d.data()||{}; v._id=d.id; rows.push(v); }
+      PARTNERS = rows;
+      rows.forEach(function(r){ if (r.jd) PROGRAMMES[r._id] = r.jd; });
       paint(rows, true);
+      initProgramme();
     }).catch(function(e){ host.innerHTML='<div class="empty">Could not read your organisation — '+esc(e.message)+'</div>'; });
   }
 }
@@ -343,6 +373,162 @@ function uploadAgreement(){
     .catch(function(e){ msg.textContent='Upload failed — '+e.message; });
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   PARTNER PROGRAMMES — what each partner takes, and when
+
+   A joint-development partner does not want "a project". They want a project
+   at a particular point, with a particular file behind it. Amperage takes
+   them funded-ready: everything through pre-development, with the documents,
+   the costs and the designs done. An EPC partner would take the same site
+   three phases earlier and would not care about the pro forma.
+
+   So the programme is per partner and it is data, not code — a set of keys
+   from the same PHASES taxonomy the responsibilities table already uses, so
+   there is one vocabulary on this page rather than two that drift.
+
+   Stored on omega_orgs/{orgId}.jd, which is the tenant record that already
+   carries `vertical` and the jdPartner flag. Only ClearSky writes it: the
+   partner reads their own row, and the programme is our side of the deal.
+   ══════════════════════════════════════════════════════════════════════ */
+var PROGRAMMES = {};                       /* orgId -> { requires:[], handoff } */
+
+function jdPartners(){
+  return PARTNERS.filter(function(p){ return p.jdPartner || p.osaMember; });
+}
+function programmeOf(orgId){
+  var p = PROGRAMMES[orgId] || {};
+  return { requires: Array.isArray(p.requires) ? p.requires : [],
+           handoff: p.handoff || '', note: p.note || '' };
+}
+
+function initProgramme(){
+  var card = document.getElementById('progCard');
+  if (!isStaff()) { if (card) card.style.display='none'; return; }
+  if (card) card.style.display='';
+  var sel = document.getElementById('progOrg');
+  var ho  = document.getElementById('progHandoff');
+  if (!sel || !ho) return;
+  sel.innerHTML = '<option value="">Select a partner…</option>'
+    + jdPartners().map(function(p){
+        return '<option value="'+esc(p._id)+'">'+esc(p.name||p._id)+'</option>'; }).join('');
+  ho.innerHTML = '<option value="">— not set —</option>'
+    + PHASES.map(function(ph){ return '<option value="'+esc(ph.key)+'">'+esc(ph.label)+'</option>'; }).join('');
+  renderPipeline();
+}
+
+function renderProgramme(){
+  var orgId = (document.getElementById('progOrg')||{}).value || '';
+  var host  = document.getElementById('programme');
+  var ho    = document.getElementById('progHandoff');
+  if (!orgId){ host.innerHTML='<div class="empty">Pick a partner above.</div>'; return; }
+  var prog = programmeOf(orgId), want = {};
+  prog.requires.forEach(function(k){ want[k]=1; });
+  if (ho) ho.value = prog.handoff || '';
+
+  var h = '';
+  PHASES.forEach(function(ph){
+    var n = ph.items.filter(function(it){ return want[it.key]; }).length;
+    h += '<div class="card" style="margin:0 0 12px;padding:12px">'
+       + '<h2 style="font-size:13px">'+esc(ph.label)
+       + ' <span class="chip '+(n===ph.items.length?'ok':n?'warn':'none')+'">'+n+'/'+ph.items.length+'</span>'
+       + ' <button type="button" style="float:right;font-size:11px;padding:3px 8px" '
+       + 'onclick="progAll(\''+esc(ph.key)+'\')">All</button></h2>'
+       + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:4px 14px">';
+    ph.items.forEach(function(it){
+      h += '<label class="ws" style="display:flex;gap:7px;align-items:center;font-weight:400">'
+         + '<input type="checkbox" data-req="'+esc(it.key)+'" data-phase="'+esc(ph.key)+'"'
+         + (want[it.key]?' checked':'')+'>'+esc(it.label)+'</label>';
+    });
+    h += '</div></div>';
+  });
+  host.innerHTML = h;
+}
+
+function progAll(phaseKey){
+  var ph = PHASES.filter(function(x){ return x.key===phaseKey; })[0]; if(!ph) return;
+  var boxes = ph.items.map(function(it){
+    return document.querySelector('input[data-req="'+it.key+'"]'); }).filter(Boolean);
+  var allOn = boxes.every(function(b){ return b.checked; });
+  boxes.forEach(function(b){ b.checked = !allOn; });
+}
+
+function saveProgramme(){
+  var orgId = (document.getElementById('progOrg')||{}).value || '';
+  var msg = document.getElementById('progMsg');
+  if (!orgId){ if(msg) msg.textContent='Pick a partner first.'; return; }
+  var reqs = [];
+  Array.prototype.forEach.call(document.querySelectorAll('input[data-req]'), function(b){
+    if (b.checked) reqs.push(b.getAttribute('data-req'));
+  });
+  var handoff = (document.getElementById('progHandoff')||{}).value || '';
+  msg.textContent = 'Saving…';
+  db.collection('omega_orgs').doc(orgId).set({
+    jd: { requires: reqs, handoff: handoff,
+          updatedAt: new Date().toISOString(), updatedBy: (ME&&ME.email)||'' }
+  }, { merge:true })
+    .then(function(){
+      PROGRAMMES[orgId] = { requires: reqs, handoff: handoff };
+      msg.textContent = 'Saved — ' + reqs.length + ' item(s) required.';
+      renderPipeline();
+    })
+    .catch(function(e){
+      msg.textContent = (e && e.code==='permission-denied')
+        ? 'Only ClearSky can set a partner programme.'
+        : 'Could not save — ' + e.message;
+    });
+}
+
+/* ── PIPELINE BY PARTNER ────────────────────────────────────────────────
+   One book per partnership. Readiness counts DONE against that partner's
+   programme, not against the whole taxonomy — a project can be ready for
+   Amperage and nowhere near ready for somebody who takes it earlier, and
+   both statements are true at once. */
+function renderPipeline(){
+  var host = document.getElementById('pipeline'); if(!host) return;
+  var partners = jdPartners();
+  if (!partners.length){
+    host.innerHTML = '<div class="empty">No joint-development partners yet.</div>'; return;
+  }
+  var h = '';
+  partners.forEach(function(pt){
+    var prog = programmeOf(pt._id);
+    var mine = PROJECTS.filter(function(p){
+      return (p.orgsInvolved||[]).indexOf(pt._id) !== -1; });
+    h += '<div class="card" style="margin:0 0 14px;padding:14px">'
+       + '<h2 style="font-size:13.5px">'+esc(pt.name||pt._id)
+       + ' <span class="chip '+(mine.length?'ok':'none')+'">'+mine.length+' project'
+       + (mine.length===1?'':'s')+'</span>'
+       + (prog.requires.length
+            ? ' <span class="chip">'+prog.requires.length+' required</span>'
+            : ' <span class="chip warn">no programme set</span>')
+       + '</h2>';
+    if (!mine.length){
+      h += '<p class="sub" style="margin:0">Nothing on the roster yet. Add '+esc(pt._id)
+         + ' to a project’s orgsInvolved and it appears here.</p></div>';
+      return;
+    }
+    h += '<table><thead><tr><th style="width:40%">Project</th><th>Ready</th>'
+       + '<th style="width:26%">Progress</th><th>Owner</th></tr></thead><tbody>';
+    mine.forEach(function(p){
+      var assign = (p.jdaRoles||{}).assignments || {};
+      var need = prog.requires.length, got = 0;
+      prog.requires.forEach(function(k){ if (assign[k] && assign[k].done) got++; });
+      var pct = need ? Math.round(got/need*100) : 0;
+      var ready = need > 0 && got === need;
+      h += '<tr><td><b>'+esc(p.name||p._id)+'</b></td>'
+         + '<td>'+(need===0 ? '<span class="chip none">—</span>'
+                            : ready ? '<span class="chip ok">Ready to hand off</span>'
+                                    : '<span class="chip warn">'+(need-got)+' outstanding</span>')+'</td>'
+         + '<td><div style="background:#E1E6EC;border-radius:99px;height:7px;overflow:hidden">'
+         + '<div style="width:'+pct+'%;height:100%;background:'+(ready?'#12805C':'#0070F2')+'"></div></div>'
+         + '<span class="sub">'+got+' of '+need+'</span></td>'
+         + '<td class="sub">'+esc(p.orgId||'')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  });
+  host.innerHTML = h;
+}
+
 /* Only co-developed projects appear. A project with an empty roster is an
    ordinary single-org project and has no responsibilities to divide. */
 function loadProjects(){
@@ -359,6 +545,7 @@ function loadProjects(){
       o.value=p._id; o.textContent=(p.name||p._id)+' — '+(p.orgId||'');
       sel.appendChild(o);
     });
+    try { renderPipeline(); } catch(e){}
     if(!out.length){
       document.getElementById('roles').innerHTML =
         '<div class="empty">No co-developed projects yet. Add a partner org to a project’s roster (orgsInvolved) and it appears here.</div>';
@@ -382,13 +569,15 @@ function renderRoles(){
   var orgs=[p.orgId].concat(p.orgsInvolved||[]).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
   var roles=p.jdaRoles||{}, assign=roles.assignments||{};
 
-  var total=0, done=0;
+  var total=0, done=0, complete=0;
   PHASES.forEach(function(ph){ ph.items.forEach(function(it){
-    total++; if(assign[it.key] && assign[it.key].org) done++;
+    total++;
+    if(assign[it.key] && assign[it.key].org) done++;
+    if(assign[it.key] && assign[it.key].done) complete++;
   }); });
 
-  var h='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">'
-      + '<div><b>'+done+' of '+total+'</b> assigned</div>'
+  var h='<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
+      + '<div><b>'+done+' of '+total+'</b> assigned · <b>'+complete+'</b> done</div>'
       + '<label class="ws">Overall lead: <select id="leadOrg">'
       + '<option value="">— none —</option>'
       + orgs.map(function(o){ return '<option value="'+esc(o)+'"'+(roles.leadOrg===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')
@@ -401,7 +590,8 @@ function renderRoles(){
      + '<h2 style="font-size:13.5px">'+esc(ph.label)
      + ' <span class="chip '+(pd===ph.items.length?'ok':pd?'warn':'none')+'">'+pd+'/'+ph.items.length+'</span></h2>'
      + '<p class="sub" style="margin-bottom:10px">'+esc(ph.hint)+'</p>'
-     + '<table><thead><tr><th style="width:44%">Item</th><th style="width:26%">Responsible</th><th>Note</th></tr></thead><tbody>';
+     + '<table><thead><tr><th style="width:40%">Item</th><th style="width:24%">Responsible</th>'
+     + '<th style="width:7%">Done</th><th>Note</th></tr></thead><tbody>';
     ph.items.forEach(function(it){
       var a=assign[it.key]||{};
       h+='<tr><td>'+esc(it.label)+'</td>'
@@ -409,6 +599,11 @@ function renderRoles(){
        + '<option value="">— unassigned —</option>'
        + orgs.map(function(o){ return '<option value="'+esc(o)+'"'+(a.org===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('')
        + '</select></td>'
+       /* Assigned and done are different questions. A JDA argument is almost
+          never about who was supposed to do it; it is about whether it is
+          finished, and only the second one gates a handoff. */
+       + '<td style="text-align:center"><input type="checkbox" data-done="'+it.key+'"'
+       + (a.done?' checked':'')+'></td>'
        + '<td><input type="text" data-note="'+it.key+'" value="'+esc(a.note||'')+'" placeholder="dates, caveats, who signs" style="width:100%"></td></tr>';
     });
     h+='</tbody></table></div>';
@@ -426,11 +621,12 @@ function saveRoles(){
   Array.prototype.forEach.call(document.querySelectorAll('select[data-item]'), function(sel){
     var key=sel.getAttribute('data-item');
     var note=document.querySelector('input[data-note="'+key+'"]');
-    var org=sel.value, n=note?String(note.value||'').trim():'';
-    /* An unassigned row with no note is not stored. Writing 68 empty objects
-       per project would make every document mostly padding and the diff on a
-       real change impossible to read. */
-    if(org || n) assignments[key]={ org:org||null, note:n };
+    var dn=document.querySelector('input[data-done="'+key+'"]');
+    var org=sel.value, n=note?String(note.value||'').trim():'', isDone=!!(dn&&dn.checked);
+    /* An unassigned row with no note and nothing done is not stored. Writing
+       68 empty objects per project would make every document mostly padding
+       and the diff on a real change impossible to read. */
+    if(org || n || isDone) assignments[key]={ org:org||null, note:n, done:isDone };
   });
 
   var lead=document.getElementById('leadOrg');
