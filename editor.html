@@ -11336,16 +11336,26 @@ function _renderFootprint(g, sh){
   r.setAttribute('stroke',ink); r.setAttribute('stroke-width','1.4');
   r.setAttribute('rx','2');
   g.appendChild(r);
-  /* Below about 34 px a label is a smudge, so the box carries it alone. */
-  var lbl=String(sh.label||sh.model||'').split('\n')[0];
-  if(lbl && w>34 && h>10){
+  /* A label has to FIT the box, not merely be shorter than eighteen
+     characters. 'UTILITY METERING' in a 6 ft meter's 36 px box overflowed it
+     three times over, which is worse than no label at all. Monospace at size
+     N runs about 0.62N per character, so the box itself says how many
+     characters it can hold; below three there is no useful label left and the
+     box carries the meaning on its own. */
+  var lbl=String(sh.label||sh.model||'').split('\n')[0].trim();
+  var fs=Math.max(7,Math.min(11,h*0.45));
+  var fits=Math.floor((w-6)/(fs*0.62));
+  /* A three-character stub reads as a bug rather than a label. Below five
+     the box says it on its own and the schedule carries the name. */
+  if(lbl && h>10 && fits>=5){
+    if(lbl.length>fits) lbl=lbl.slice(0,Math.max(1,fits-1))+'…';
     var t=_mkNS('text');
-    t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+3);
+    t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2+fs*0.35);
     t.setAttribute('text-anchor','middle');
     t.setAttribute('font-family',"'IBM Plex Mono',monospace");
-    t.setAttribute('font-size',String(Math.max(7,Math.min(11,h*0.45))));
+    t.setAttribute('font-size',String(fs));
     t.setAttribute('fill',ink);
-    t.textContent=lbl.length>18?lbl.slice(0,17)+'…':lbl;
+    t.textContent=lbl;
     g.appendChild(t);
   }
 }

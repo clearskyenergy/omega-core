@@ -42,6 +42,16 @@ write('sweep.js', ['_ptInPoly','_shapeCentroid','_alShapePts','_shapeWorldPts','
    harness has to hand it back after the functions are defined. */
 write('geo.js',   ['_hullOf','_ptSegD','_segCross','_polyDist','_ptInPoly'],
                   'var root={};\n', 'root._ptInPoly=_ptInPoly;\n');
+/* The renderer for anything that knows its own footprint — the yard
+   equipment that was silently drawing nothing. */
+write('render.js', ['_renderFootprint'],
+                   'var S={pxPerFt:6};\nfunction _shapeInk(){return "#8FA6BF";}\n' +
+                   'function _mkNS(t){return {tag:t,attrs:{},kids:[],\n' +
+                   '  setAttribute:function(k,v){this.attrs[k]=String(v);},\n' +
+                   '  appendChild:function(c){this.kids.push(c);},\n' +
+                   '  set textContent(v){this._text=v;}, get textContent(){return this._text;}};}\n',
+                   'module.exports.mk=_mkNS;\nmodule.exports.S=S;\n');
+
 write('pv.js',    ['_pvSunDev','_pvPreferSun','candidateAngles'],
                   'var PV_AZ_WINDOW_DEG=20;\n');
 

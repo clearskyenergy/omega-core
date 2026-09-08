@@ -11,7 +11,7 @@ and the sweep that the whole frame feature depends on had never executed once.
 ## Running
 
     node scripts/tests/extract.js
-    for t in tsw tfr tp tg tfence tpoi tsolarfence tobb; do node scripts/tests/$t.js; done
+    for t in tsw tfr tp tg tfence tpoi tsolarfence tobb tyard; do node scripts/tests/$t.js; done
 
 `extract.js` writes `sweep.js`, `geo.js`, `pv.js` and `fence.js` next to itself.
 Several names exist twice in `editor.html` — `cluster` and `compounds` each live
@@ -29,6 +29,7 @@ actually in the file rather than a copy that can drift.
 | tfr.js  | `_omegaFrame` — that it measures the polygon being PLANNED and not whichever shape happens to carry `isSiteBoundary`, that the parcel comes out square to the grid, and that a square parcel disengages the feature |
 | tg.js   | hull-to-hull separation against the axis-aligned boxes it replaced |
 | tp.js   | PV azimuth window and ordering |
+| tyard.js | the interconnection yard actually DRAWS — a box at its true footprint for every engine equipment kind, labels that fit inside their own box, nothing invented for a shape with no footprint. Writes `yard-preview.svg` to look at |
 | tobb.js | the fence is the MINIMUM-AREA rectangle round its contents, measured from geometry — the case that mattered is solar, written as a polygon whose points already carry the turn while its `rot` stays 0 |
 | tpoi.js | a transformer or substation you place is the POINT OF INTERCONNECT, not campus gear — it gets its own compound and stops the yard fence stretching hundreds of feet across empty ground to reach it |
 | tsolarfence.js | each compound is fenced in its OWN angle: solar sits at the sun's angle while the campus sits at the parcel's, and one global frame inflated the solar fence |
