@@ -6135,10 +6135,45 @@ const EQ=[
 
 // == ARMADA DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) ==
 // Source: Fleet Simulator BIGNODE specs. Container-class compute units.
+/* ══════════════════════════════════════════════════════════════════════
+   MODULAR DATA CENTRE UNITS
+
+   `kw` is IT LOAD, not facility draw — the engine multiplies by PUE to get
+   what the site has to serve. Do not fold cooling into it.
+
+   COOLING IS A PROPERTY OF THE PRODUCT, NOT OF THE SITE. A unit that carries
+   its own closed-loop plant needs no chiller yard and no water service, and
+   drawing one would be inventing infrastructure the customer is not buying.
+   A unit that needs external heat rejection says so here and the build can
+   place it. `water` is gallons per day: zero is a real siting advantage on a
+   dry parcel and belongs in the screening report.
+
+   `verified` carries the source. Numbers without one are planning estimates
+   that the vendor has not published — say so rather than letting an estimate
+   read as a datasheet.
+   ══════════════════════════════════════════════════════════════════════ */
 var DC_CATALOG = {
-  dc_cruiser:   { label:'Galleon Cruiser (20ft)', kw:35,   lf:20, wf:8,  spec:'Armada Galleon . 35 kW compute' },
-  dc_triton:    { label:'Galleon Triton',         kw:120,  lf:30, wf:10, spec:'Armada Galleon . 120 kW compute' },
-  dc_leviathan: { label:'Leviathan 1MW MDC',      kw:1000, lf:40, wf:10, spec:'Armada Leviathan . 1 MW modular data center' }
+  dc_cruiser:   { label:'Galleon Cruiser (20ft)', kw:35,   lf:20, wf:8,
+                  cooling:'integrated', water:0, ups:'integrated',
+                  spec:'Armada Galleon Cruiser · 20 ft container, 3 compute racks',
+                  verified:null },
+  dc_triton:    { label:'Galleon Triton (40ft)',  kw:120,  lf:40, wf:8,
+                  cooling:'integrated', water:0, ups:'integrated',
+                  spec:'Armada Galleon Triton · 40 ft container, 5 compute racks',
+                  verified:null },
+  /* Leviathan is three containers — two 45 ft (compute, power distribution)
+     and one 20 ft (cooling) — occupying 119 x 45 ft, 0.12 acres, as one
+     footprint. It was carried here as 1 MW on a 40 x 10 ft pad, which is 77%
+     light on load and thirteen times small on land: fifteen of them is 1.8
+     acres of pods, not 0.14. Cooling is a closed-circuit direct-to-chip loop
+     with N+1 air-cooled chillers INSIDE that footprint, so there is no yard
+     to draw and no water service to size. Utility interface is 480 V. */
+  dc_leviathan: { label:'Leviathan 1.77MW MDC',   kw:1770, lf:119, wf:45,
+                  coolKw:2200, cooling:'integrated-closed-loop', water:0,
+                  ups:'integrated', volts:480, acres:0.12,
+                  spec:'Armada Leviathan · 1.77 MW IT · closed-circuit direct-to-chip, '
+                     + 'air-cooled N+1, no site water · 480 V / 60 Hz',
+                  verified:'armada.ai/product/leviathan' }
 };
 // Compute drop width (px) for an equipment id. DC units scale to real footprint
 // when the map is calibrated; everything else keeps the 60px default.
@@ -151452,7 +151487,11 @@ if (root.console && console.info) {
     criticalFraction: 1.0,        /* IT is all critical                 */
     loadFactor: 0.90,
     /* equipment */
-    pod:  { kw: 1000, lf: 40, wf: 10, label: 'MDC pod', clearFt: 15 },
+    /* Leviathan, to its published spec: 1.77 MW IT on 119 x 45 ft with its
+       cooling inside that footprint. `kw` is IT — PUE above turns it into
+       facility load, so cooling must not be added here as well. */
+    pod:  { kw: 1770, lf: 119, wf: 45, label: 'MDC pod', clearFt: 15,
+            cooling: 'integrated-closed-loop', water: 0 },
     bess: { kwhPerUnit: 4000, lf: 40, wf: 8, clearFt: 10, label: 'BESS container' },
     /* interconnection yard: the point where everything ties together.
        Planning footprints, pad plus working clearance. */
