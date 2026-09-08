@@ -10295,7 +10295,15 @@ function _renderUtility(g, sh){
   var def=UTILITY_CATALOG[sh.utype]||{abbr:'?',label:sh.label||'UTILITY'};
   /* Enforce a sane minimum on-screen footprint so a small item (meter,
      disconnect) at a coarse scale never renders as an invisible speck. */
-  var w=Math.max(28,(sh.lf||3)*ppf), h=Math.max(20,(sh.wf||2)*ppf);
+  /* A floor stops a small item (meter, disconnect) rendering as an invisible
+     speck. An UNCAPPED floor makes it GROW relative to everything else as you
+     zoom out, until a 6 ft transformer is drawn larger than the compound it
+     feeds — which is exactly what it looked like. Cap the help at 3x true
+     size, so the symbol stays readable close in and still shrinks with the
+     drawing when you pull back. */
+  var _tw=(sh.lf||3)*ppf, _th=(sh.wf||2)*ppf;
+  var w=Math.min(Math.max(_tw,12), Math.max(_tw*3,1));
+  var h=Math.min(Math.max(_th,9),  Math.max(_th*3,1));
   var x=sh.cx-w/2, y=sh.cy-h/2;
   /* body box */
   var r=_mkNS('rect');
@@ -163932,8 +163940,26 @@ if (root.console && console.info) {
     { key: 'solar',      label: 'SOLAR FIELD',
       is: function (sh) { return sh.kind === 'dersolar'; } },
     { key: 'yard',       label: 'INTERCONNECTION YARD',
-      is: function (sh) { return !!sh.omegaYard || sh.kind === 'utility'; } }
+      is: function (sh) { return (!!sh.omegaYard || sh.kind === 'utility') && !isPoi(sh); } },
+    /* ── THE SERVICE ENTRANCE IS NOT PART OF THE CAMPUS ────────────────
+       A transformer or a substation somebody places is the POINT OF
+       INTERCONNECT — where the site meets the utility — not another block
+       of campus gear. Lumping it in with the yard made the clusterer stretch
+       ONE rectangle from the on-site switchgear all the way out to it, which
+       is the big green fence around empty car park, and it moved the feeder's
+       start point off the transformer so the run appeared to connect to
+       nothing. It gets its own compound, its own fence and its own run. */
+    { key: 'poi',        label: 'UTILITY SERVICE',
+      is: function (sh) { return isPoi(sh); } }
   ];
+
+  function isPoi(sh) {
+    if (!sh) return false;
+    if (sh.kind === 'substation') return true;
+    if (sh.kind !== 'utility') return false;
+    var t = String(sh.utype || '');
+    return t === 'xfmr' || t === 'mpoi' || t === 'meter' || t === 'ct';
+  }
 
   function boxOf(sh) {
     var b = _boxOfRaw(sh);
@@ -164008,7 +164034,7 @@ if (root.console && console.info) {
         }
       }
     }
-    return groups.map(hull);
+    return groups.map(function (g) { var h = hull(g); h.members = g; return h; });
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -164058,6 +164084,45 @@ if (root.console && console.info) {
     return { deg: best, cx: cx / n, cy: cy / n };
   }
 
+  /* The angle a particular set of equipment agrees on. The whole-site frame
+     is the right one for trenching between compounds, but it is the wrong
+     one for the SOLAR fence: solar is deliberately kept out of the parcel
+     frame because its angle answers to the sun, so measuring it in the
+     campus frame inflates its box and the fence comes out loose and
+     skewed. Each compound is therefore fenced in its own members' angle. */
+  function frameOf(shs) {
+    var p = P(); if (!(p > 0) || !shs || !shs.length) return null;
+    var tally = {}, best = null, bestN = 0, cx = 0, cy = 0, n = 0;
+    var was = FR; FR = null;                 /* measure raw while deciding */
+    shs.forEach(function (sh) {
+      if (!sh) return;
+      var b = boxOf(sh); if (!b) return;
+      var a = (((+sh.rot || 0) % 180) + 180) % 180;
+      var k = Math.round(a * 2) / 2;
+      tally[k] = (tally[k] || 0) + 1;
+      if (tally[k] > bestN) { bestN = tally[k]; best = k; }
+      cx += (b.x1 + b.x2) / 2; cy += (b.y1 + b.y2) / 2; n++;
+    });
+    FR = was;
+    if (!n || best == null) return null;
+    if (best < 0.5 || best > 179.5) return null;
+    if (bestN < n * FRAME_AGREE) return null;
+    return { deg: best, cx: cx / n, cy: cy / n };
+  }
+
+  /* Box of a set of shapes measured in a given frame. */
+  function boxIn(shs, fr) {
+    var was = FR; FR = fr || null;
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, got = false;
+    shs.forEach(function (sh) {
+      var b = boxOf(sh); if (!b) return;
+      if (b.x1 < x1) x1 = b.x1; if (b.y1 < y1) y1 = b.y1;
+      if (b.x2 > x2) x2 = b.x2; if (b.y2 > y2) y2 = b.y2; got = true;
+    });
+    FR = was;
+    return got ? { x1: x1, y1: y1, x2: x2, y2: y2 } : null;
+  }
+
   function compounds() {
     var p = P(); if (!(p > 0)) return [];
     var out = [], shapes = [];
@@ -164067,14 +164132,25 @@ if (root.console && console.info) {
       shapes.forEach(function (sh) {
         if (!sh || sh.omegaCampus || sh.omegaFence) return;   /* fences are not equipment */
         if (!G.is(sh)) return;
-        var b = boxOf(sh); if (b) boxes.push(b);
+        var b = boxOf(sh); if (b) { b.__sh = sh; boxes.push(b); }
       });
       if (!boxes.length) return;
       cluster(boxes, CFG.clusterFt * p).forEach(function (h, i) {
+        var mem = (h.members || []).map(function (b) { return b.__sh; })
+                                   .filter(function (x) { return !!x; });
+        /* Nothing is fenced that is not there. A cluster with no real
+           footprint is the empty rectangle people keep finding on the plan. */
+        var areaPx = (h.x2 - h.x1) * (h.y2 - h.y1);
+        if (!mem.length || !(areaPx > 1)) return;
+        var own = frameOf(mem);
+        var fb = own ? boxIn(mem, own) : null;
+        var pad = CFG.standoffFt * p;
         out.push({ key: G.key, label: G.label + (i ? ' ' + (i + 1) : ''),
-                   r: { x1: h.x1 - CFG.standoffFt * p, y1: h.y1 - CFG.standoffFt * p,
-                        x2: h.x2 + CFG.standoffFt * p, y2: h.y2 + CFG.standoffFt * p },
-                   n: boxes.length });
+                   r: { x1: h.x1 - pad, y1: h.y1 - pad, x2: h.x2 + pad, y2: h.y2 + pad },
+                   fenceFr: own || null,
+                   fenceR: fb ? { x1: fb.x1 - pad, y1: fb.y1 - pad,
+                                  x2: fb.x2 + pad, y2: fb.y2 + pad } : null,
+                   n: mem.length });
       });
     });
     return out;
@@ -164274,16 +164350,23 @@ if (root.console && console.info) {
     /* Colour by what is inside, so a fence is readable at a glance
        instead of being an anonymous dashed rectangle. */
     var IN_COLOR = { storage: '#22D3EE', compute: '#A78BFA', generation: '#F97316',
-                     solar: '#F5C871', yard: '#4ADE80', control: '#4ADE80' };
-    var fence = function (r, label, sub, tag) {
-      return push({ id: nid('f'), kind: 'rect', style: 'dashed',
+                     solar: '#F5C871', yard: '#4ADE80', control: '#4ADE80',
+                     poi: '#F59E0B' };
+    var fence = function (r, label, sub, tag, fr) {
+      var was = FR;
+      if (fr !== undefined) FR = fr;         /* this compound's own angle */
+      var sh = push({ id: nid('f'), kind: 'rect', style: 'dashed',
         pts: [{ x: r.x1, y: r.y1 }, { x: r.x2, y: r.y2 }],
         color: IN_COLOR[tag] || '#4ADE80',
         omegaFence: true, omegaCampus: tag, campusLabel: label, campusSub: sub || null });
+      FR = was;
+      return sh;
     };
     comps.forEach(function (c) {
-      var acres = ((c.r.x2 - c.r.x1) / p) * ((c.r.y2 - c.r.y1) / p) / 43560;
-      fence(c.r, c.label, n1(acres) + ' ac fenced \u00b7 ' + CFG.standoffFt + ' ft stand-off', c.key);
+      var r = c.fenceR || c.r;
+      var acres = ((r.x2 - r.x1) / p) * ((r.y2 - r.y1) / p) / 43560;
+      fence(r, c.label, n1(acres) + ' ac fenced \u00b7 ' + CFG.standoffFt + ' ft stand-off',
+            c.key, c.fenceR ? c.fenceFr : undefined);
     });
     fence(ctrlFence, CFG.ctrlLabel, 'control yard \u00b7 every compound ties here', 'control');
 
@@ -164300,25 +164383,12 @@ if (root.console && console.info) {
       var from = edgePoint(c.r, target);
       var to = ctrlPort(ctrlFence, from);
       conduit(route(from, to, others, corr).concat([target]),
-              'MV feeder \u2014 ' + c.label.toLowerCase());
+              c.key === 'poi' ? 'UTILITY SERVICE \u2014 ' + c.label.toLowerCase()
+                              : 'MV feeder \u2014 ' + c.label.toLowerCase());
       runs++;
     });
-    /* And the utility service in, if a substation is drawn. */
-    try {
-      var sb = (S_().shapes || []).filter(function (x) { return x && x.kind === 'substation'; }).pop();
-      if (sb && sb.pts && sb.pts.length > 1) {
-        var _s0 = sb.pts[0], _s1 = sb.pts[1];
-        if (FR && typeof root._frameTo === 'function') {
-          _s0 = root._frameTo(FR, _s0.x, _s0.y); _s1 = root._frameTo(FR, _s1.x, _s1.y);
-        }
-        var sr = { x1: Math.min(_s0.x, _s1.x), y1: Math.min(_s0.y, _s1.y),
-                   x2: Math.max(_s0.x, _s1.x), y2: Math.max(_s0.y, _s1.y) };
-        var f2 = edgePoint(sr, target), t2 = ctrlPort(ctrlFence, f2);
-        conduit(route(f2, t2, obs, corr).concat([target]),
-                'SERVICE FROM ' + String(sb.label || 'SUBSTATION').toUpperCase());
-        runs++;
-      }
-    } catch (e) {}
+    /* The service entrance now IS a compound, so the loop above already ran
+       its feeder. Nothing special-cased, and nothing drawn twice. */
 
     /* ── ACCESS ROADS ────────────────────────────────────────────────
        A fenced compound with no road to its gate is not a site anybody

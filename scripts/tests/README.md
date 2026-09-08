@@ -11,9 +11,13 @@ and the sweep that the whole frame feature depends on had never executed once.
 ## Running
 
     node scripts/tests/extract.js
-    for t in tsw tfr tp tg tfence; do node scripts/tests/$t.js; done
+    for t in tsw tfr tp tg tfence tpoi tsolarfence; do node scripts/tests/$t.js; done
 
-`extract.js` writes `sweep.js`, `geo.js`, `pv.js` and `fence.js` next to itself. Everything
+`extract.js` writes `sweep.js`, `geo.js`, `pv.js` and `fence.js` next to itself.
+Several names exist twice in `editor.html` — `cluster` and `compounds` each live
+in two modules — so a duplicate name is an error unless you say which one you
+want (`cluster#2`). That check exists because the first version of these tests
+silently extracted the wrong `compounds` and passed nothing. Everything
 is regenerated from `editor.html`, so the tests always run against what is
 actually in the file rather than a copy that can drift.
 
@@ -25,6 +29,8 @@ actually in the file rather than a copy that can drift.
 | tfr.js  | `_omegaFrame` — that it measures the polygon being PLANNED and not whichever shape happens to carry `isSiteBoundary`, that the parcel comes out square to the grid, and that a square parcel disengages the feature |
 | tg.js   | hull-to-hull separation against the axis-aligned boxes it replaced |
 | tp.js   | PV azimuth window and ordering |
+| tpoi.js | a transformer or substation you place is the POINT OF INTERCONNECT, not campus gear — it gets its own compound and stops the yard fence stretching hundreds of feet across empty ground to reach it |
+| tsolarfence.js | each compound is fenced in its OWN angle: solar sits at the sun's angle while the campus sits at the parcel's, and one global frame inflated the solar fence |
 | tfence.js | `equipFrame` / `boxOf` — that a fence follows the equipment's angle when the equipment agrees on one, stays square when it does not, measures a block at its true size, and routes ties parallel to the fence lines |
 
 ## Not covered

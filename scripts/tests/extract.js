@@ -4,9 +4,22 @@ const fs = require('fs'), path = require('path');
 const SRC = path.join(__dirname, '..', '..', 'editor.html');
 const s = fs.readFileSync(SRC, 'utf8');
 
-function grab(name) {
-  const i = s.indexOf('function ' + name + '(');
-  if (i < 0) throw new Error('not found in editor.html: ' + name);
+/* Several names appear more than once in editor.html — `cluster` and
+   `compounds` each exist in two different modules. Suffix the name with #N to
+   take the Nth occurrence; without it, a duplicate is an error rather than a
+   silent grab of the wrong one, which is exactly the trap this hit. */
+function grab(spec) {
+  const m = /^(.*?)(?:#(\d+))?$/.exec(spec);
+  const name = m[1], want = m[2] ? +m[2] : null;
+  const needle = 'function ' + name + '(';
+  const hits = [];
+  for (let k = s.indexOf(needle); k >= 0; k = s.indexOf(needle, k + 1)) hits.push(k);
+  if (!hits.length) throw new Error('not found in editor.html: ' + name);
+  if (hits.length > 1 && want == null) {
+    throw new Error(name + ' appears ' + hits.length + ' times — say ' + name + '#1..#' + hits.length);
+  }
+  const i = want == null ? hits[0] : hits[want - 1];
+  if (i == null) throw new Error(name + ' has no occurrence #' + want);
   let k = s.indexOf('{', i), d = 0;
   for (;; k++) {
     if (s[k] === '{') d++;
@@ -16,6 +29,7 @@ function grab(name) {
 }
 function write(file, names, extra, after) {
   const body = names.map(grab).join('\n');
+  names = names.map(n => n.split('#')[0]);
   fs.writeFileSync(path.join(__dirname, file),
     (extra || '') + body + '\nmodule.exports={' + names.join(',') + '};\n' + (after || ''));
   console.log(file, '<-', names.length, 'functions');
@@ -33,7 +47,7 @@ write('pv.js',    ['_pvSunDev','_pvPreferSun','candidateAngles'],
 
 /* FenceTie's own frame. equipFrame + boxOf are what decide whether a fence
    follows the equipment or the screen. */
-write('fence.js', ['equipFrame','boxOf','_boxOfRaw'],
+write('fence.js', ['equipFrame','boxOf','_boxOfRaw','isPoi','cluster#2','frameOf','boxIn','compounds#2'],
                   'var FR=null, FRAME_AGREE=0.6;\nvar root=global;\n',
                   'module.exports.setFR=function(f){FR=f;};\n'+
                   'module.exports.getFR=function(){return FR;};\n');
