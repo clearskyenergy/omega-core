@@ -164607,10 +164607,30 @@ if (root.console && console.info) {
      after pass, something else genuinely owns those nodes — so it stands
      down rather than arguing forever. Losing the layout argument is a
      cosmetic loss; flashing the ribbon at the user is not. */
-  var pending = null, obs = null, obsTarget = null, thrash = 0, stood_down = false;
+  var pending = null, obs = null, obsTarget = null, thrash = 0, stood_down = false, iv = null;
 
+  /* ── THE STAND-DOWN HAS TO COVER THE HEARTBEAT TOO ───────────────────
+     The first version only counted observer-driven passes, so it fixed the
+     module feeding its own observer and left the other half untouched: the
+     500 ms interval calls this 240 times — two full minutes — and every one
+     of those passes was free to re-order the ribbon without ever counting
+     as contested.
+
+     That matters because this ribbon is genuinely contested. Twenty-odd
+     separate patches each insert their own button next to a host with
+     insertBefore, several on their own retry timers, while place() enforces
+     one canonical ordering. When any of them disagrees with PLAN, the two
+     trade the node back and forth at 2 Hz for two minutes, which is exactly
+     what a person sees as flashing.
+
+     So every pass counts now, from either source. The grace window is what
+     keeps that honest: for the first few seconds the injectors are still
+     arriving and moves are expected, so nothing is counted as a fight until
+     the ribbon has had time to settle. */
+  var settleAt = 0;
   function placeSafely(fromObserver) {
     if (stood_down) return 0;
+    if (!settleAt) settleAt = (root.Date ? Date.now() : +new Date()) + 4000;
     if (obs) { try { obs.disconnect(); } catch (e) {} }
     var moved = 0;
     try { moved = place(); }
@@ -164619,11 +164639,13 @@ if (root.console && console.info) {
       /* Drop what our own writes queued before listening again. */
       try { obs.takeRecords(); obs.observe(obsTarget, { childList: true, subtree: true }); } catch (e) {}
     }
-    if (fromObserver) {
+    var settled = ((root.Date ? Date.now() : +new Date()) >= settleAt);
+    if (settled) {
       if (moved > 0) {
-        if (++thrash >= 6) {
+        if (++thrash >= 5) {
           stood_down = true;
-          try { obs.disconnect(); } catch (e) {}
+          try { if (obs) obs.disconnect(); } catch (e) {}
+          try { if (iv) clearInterval(iv); } catch (e) {}
           if (root.console) {
             console.warn(TAG + ' another module keeps re-ordering these ribbon buttons; '
               + 'standing down after ' + thrash + ' contested passes rather than flashing '
@@ -164649,7 +164671,8 @@ if (root.console && console.info) {
       obs = new MutationObserver(later);
       obs.observe(obsTarget, { childList: true, subtree: true });
     } catch (e) {}
-    var n = 0, iv = setInterval(function () {
+    var n = 0;
+    iv = setInterval(function () {
       placeSafely(false);
       /* The Shelf's one-shot sweep lands about 1.2 s in and Compute mode
          hides panels on purpose, so the repair runs on its own too. */
