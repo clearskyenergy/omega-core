@@ -1625,80 +1625,119 @@ function renderJD(){
   var host = document.getElementById('jd-body'); if (!host) return;
   var rows = jdOrgs();
   var cnt = document.getElementById('c-jd'); if (cnt) cnt.textContent = rows.length;
-
   if (!rows.length){
     host.innerHTML = '<div class="card"><div class="card-b"><div class="empty">'
       + '<b>No joint developments yet</b>'
-      + 'A partnership appears here as soon as an organisation is on a project’s roster. '
-      + 'Add them to a project and set the stage they take it over at.</div></div></div>';
+      + 'Tick “Co-develop with them” against an organisation on the Partners screen '
+      + 'and they get their own book here.</div></div></div>';
     return;
   }
+  var open = S.jdOpen && rows.filter(function(r){ return r.stats.orgId===S.jdOpen; })[0];
+  host.innerHTML = open ? jdDetailHtml(open) : jdListHtml(rows);
+}
 
-  var admin = false; try { admin = A.can('approve_any'); } catch(e){}
-  host.innerHTML = rows.map(function (r){
-    var name = A.orgName(r.stats.orgId);
-    var kind = r.org.kind ? A.orgKindOf(r.org.kind).label : '';
-    var hand = r.jd.handoff || '';
-    var need = hand ? jdRank(hand) : 0;
-    /* stageOf and isExit take a stage KEY, not a deal. */
-    var ready = need ? r.deals.filter(function (d){
-      return jdRank(d.stage) >= need && !F.isExit(d.stage); }) : [];
+function jdReady(r){
+  var need = r.jd.handoff ? jdRank(r.jd.handoff) : 0;
+  return { need:need, list: need ? r.deals.filter(function(d){
+    return jdRank(d.stage) >= need && !F.isExit(d.stage); }) : [] };
+}
 
-    var h = '<div class="card"><div class="card-h"><h2>' + esc(name) + '</h2>'
-      + '<span class="sub">' + esc(r.stats.orgId) + (kind ? ' · ' + esc(kind) : '') + '</span>'
-      + '<span class="tag" style="margin-left:auto">' + r.deals.length + ' project'
-      + (r.deals.length===1?'':'s') + '</span>'
-      + (hand ? '<span class="tag">' + ready.length + ' ready</span>'
-              : '<span class="tag">no handoff set</span>')
-      + '<button class="btn-x" onclick="jdBoard(\'' + esc(r.stats.orgId) + '\')">Open board</button>'
-      + '</div><div class="card-b">';
+/* The accounts. One line each, because the only question at this level is
+   which partnership to go into. */
+function jdListHtml(rows){
+  return '<div class="card"><div class="card-h"><h2>Accounts</h2>'
+    + '<span class="sub">Open one for its projects, its drawings and its handoff</span></div>'
+    + '<div class="tbl-wrap"><table><thead><tr><th>Partner</th><th>Role</th>'
+    + '<th>Hands off at</th><th class="num">Projects</th><th class="num">Ready</th>'
+    + '<th class="num">Sent</th></tr></thead><tbody>'
+    + rows.map(function(r){
+        var rd = jdReady(r);
+        var sent = r.deals.filter(function(d){ return !!d.dealRoomId; }).length;
+        return '<tr class="row" onclick="openJD(\'' + esc(r.stats.orgId) + '\')">'
+          + '<td><div class="t-name">' + esc(A.orgName(r.stats.orgId)) + '</div>'
+          +   '<div class="t-sub">' + esc(r.stats.orgId) + '</div></td>'
+          + '<td>' + esc(r.org.kind ? A.orgKindOf(r.org.kind).label : '—') + '</td>'
+          + '<td>' + (r.jd.handoff ? esc(F.stageOf(r.jd.handoff).label)
+                                   : '<span class="sub">not set</span>') + '</td>'
+          + '<td class="num mono">' + r.deals.length + '</td>'
+          + '<td class="num mono">' + (rd.need ? rd.list.length : '—') + '</td>'
+          + '<td class="num mono">' + (sent || '—') + '</td>'
+          + '</tr>'; }).join('')
+    + '</tbody></table></div></div>';
+}
 
-    /* How the JD is structured — one line, because the thing that actually
-       differs between partners is where they pick it up. */
-    h += '<div class="stats" style="margin-bottom:12px">'
-      + stat('Hands off at', hand ? F.stageOf(hand).label : '—',
-             hand ? 'ready when a project reaches it' : 'set it below')
-      + stat('Ready now', ready.length, hand ? 'can go to them today' : '—')
-      + stat('Brought', r.stats.referred, r.stats.live + ' live')
-      + '</div>';
+function openJD(orgId){ S.jdOpen = orgId; renderJD(); window.scrollTo(0,0); }
+function closeJD(){ S.jdOpen = ''; renderJD(); }
 
-    if (admin){
-      h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">'
-        + '<label class="sub">Hands off at '
-        + '<select id="jdh-' + esc(r.stats.orgId) + '">'
-        + '<option value="">— not set —</option>'
-        + F.STAGES.map(function (st){
-            return '<option value="' + esc(st.key) + '"' + (st.key===hand?' selected':'') + '>'
-                 + esc(st.label) + '</option>'; }).join('')
-        + '</select></label>'
-        + '<button class="btn-x" onclick="saveJD(\'' + esc(r.stats.orgId) + '\')">Save</button>'
-        + '<span class="sub" id="jdm-' + esc(r.stats.orgId) + '"></span></div>';
-    }
+/* One partnership: what it is, what is in it, and the way out to the room. */
+function jdDetailHtml(r){
+  var oid = esc(r.stats.orgId), name = A.orgName(r.stats.orgId);
+  var kind = r.org.kind ? A.orgKindOf(r.org.kind).label : '';
+  var rd = jdReady(r);
+  var admin=false; try{ admin=A.can('approve_any'); }catch(e){}
 
-    h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th>'
-      + '<th>Ready for ' + esc(name) + '</th><th class="num">Size</th><th></th></tr></thead><tbody>';
-    r.deals.forEach(function (d){
-      var st = F.stageOf(d.stage);
-      var isReady = need && jdRank(d.stage) >= need && !F.isExit(d.stage);
-      h += '<tr class="row"><td><div class="t-name">' + esc(d.name || d.id) + '</div>'
-        + '<div class="t-sub">' + esc(d.address || '') + '</div></td>'
-        + '<td><span class="tag" style="background:' + esc(st.color||'#6B7280') + '22;color:'
-        + esc(st.color||'#6B7280') + '">' + esc(st.label) + '</span></td>'
-        + '<td>' + (!need ? '<span class="sub">—</span>'
-                   : isReady ? '<span class="tag" style="background:#12805C22;color:#12805C">Ready</span>'
-                             : '<span class="sub">not yet</span>') + '</td>'
-        + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
-        + '<td style="white-space:nowrap">'
-        + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\')">Open</button> '
-        + '<button class="btn-x" onclick="jdBoard(\'' + esc(r.stats.orgId) + '\')">Board</button>'
-        + (isReady && r.org.kind === 'investor'
-            ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
-              + 'href="https://financing.csebuilders.com/dealroom">Deal room</a>' : '')
-        + '</td></tr>';
-    });
-    h += '</tbody></table></div></div></div>';
-    return h;
-  }).join('');
+  var h = '<div class="card"><div class="card-h">'
+    + '<button class="btn-x" onclick="closeJD()">← All accounts</button>'
+    + '<h2 style="margin-left:8px">' + esc(name) + '</h2>'
+    + '<span class="sub">' + esc(r.stats.orgId) + (kind ? ' · ' + esc(kind) : '') + '</span>'
+    + '<button class="btn-x" style="margin-left:auto" onclick="jdBoard(\'' + oid + '\')">'
+    + 'Open their board</button></div><div class="card-b">'
+    + '<div class="stats">'
+    +   stat('Hands off at', r.jd.handoff ? F.stageOf(r.jd.handoff).label : '—',
+             r.jd.handoff ? 'ready when a project reaches it' : 'set it below')
+    +   stat('Ready now', rd.need ? rd.list.length : '—', 'can go to them today')
+    +   stat('In their room', r.deals.filter(function(d){ return !!d.dealRoomId; }).length,
+             'already packaged')
+    + '</div>';
+  if (admin){
+    h += '<div style="display:flex;gap:8px;align-items:center;margin:14px 0 0;flex-wrap:wrap">'
+      + '<label class="sub">Hands off at <select id="jdh-' + oid + '">'
+      + '<option value="">— not set —</option>'
+      + F.STAGES.map(function (st){
+          return '<option value="' + esc(st.key) + '"'
+               + (st.key===r.jd.handoff?' selected':'') + '>' + esc(st.label) + '</option>'; }).join('')
+      + '</select></label>'
+      + '<button class="btn-x" onclick="saveJD(\'' + oid + '\')">Save</button>'
+      + '<span class="sub" id="jdm-' + oid + '"></span></div>';
+  }
+  h += '</div></div>';
+
+  h += '<div class="card"><div class="card-h"><h2>Projects</h2>'
+    + '<span class="sub">Everything on this partnership’s roster</span></div>';
+  if (!r.deals.length){
+    return h + '<div class="card-b"><div class="empty">Nothing on the roster yet. Add '
+      + esc(r.stats.orgId) + ' to a project’s partners and it appears here.</div></div></div>';
+  }
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th><th>Ready</th>'
+    + '<th class="num">Size</th><th>Drawing</th><th></th></tr></thead><tbody>';
+  r.deals.forEach(function (d){
+    var st = F.stageOf(d.stage);
+    var isReady = rd.need && jdRank(d.stage) >= rd.need && !F.isExit(d.stage);
+    h += '<tr><td><div class="t-name">' + esc(d.name || d.id) + '</div>'
+      + '<div class="t-sub">' + esc(d.address || '') + '</div></td>'
+      + '<td><span class="tag" style="background:' + esc(st.color||'#6B7280') + '22;color:'
+      + esc(st.color||'#6B7280') + '">' + esc(st.label) + '</span></td>'
+      + '<td>' + (!rd.need ? '<span class="sub">—</span>'
+                 : isReady ? '<span class="tag" style="background:#12805C22;color:#12805C">Ready</span>'
+                           : '<span class="sub">not yet</span>') + '</td>'
+      + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
+      + '<td>' + (d.projectId
+                   ? '<button class="btn-x" onclick="openEditor(\'' + esc(d.projectId) + '\')">Open drawing</button>'
+                   : '<span class="sub">none linked</span>') + '</td>'
+      + '<td style="white-space:nowrap">'
+      + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\')">Open</button>'
+      + (r.org.kind === 'investor'
+          ? (d.dealRoomId
+               ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
+                 + 'href="/dealroom?p=' + encodeURIComponent(d.dealRoomId) + '">In the deal room</a>'
+               : (isReady
+                   ? ' <button class="btn-x" onclick="sendToDealRoom(\'' + esc(d.id) + '\',\''
+                     + oid + '\')">Send to deal room</button>'
+                   : ''))
+          : '')
+      + '<span class="sub" id="dr-' + esc(d.id) + '"></span></td></tr>';
+  });
+  return h + '</tbody></table></div></div>';
 }
 
 /* What an organisation IS to us, and whether we co-develop with them. Two
@@ -1886,6 +1925,85 @@ function jdBoard(orgId){
   S.boardOrg = '';                 /* the two filters would fight */
   var sel = document.getElementById('kb-org'); if (sel) sel.value = '';
   go('board');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SENDING A PROJECT TO A DEAL ROOM
+
+   Two different worlds, and the bridge has to be explicit. This workspace runs
+   on `deals`; the financing portal runs on `fin_projects`. A deal room IS a
+   fin_projects document with a `room` on it, so sending a project means
+   CREATING that document from this one — not flipping a flag on the deal.
+
+   Two steps, because the rules require it: create is only permitted at draft,
+   open or review with no hold on it, so the room goes on immediately
+   afterwards as an update. A ClearSky administrator may file onto another
+   account, which is the clause that makes packaging somebody else's project
+   possible at all.
+
+   The id is written back onto the deal so it cannot be sent twice, and so the
+   row can point AT the room rather than offering to make a second one.
+   ══════════════════════════════════════════════════════════════════════ */
+function drMsg(dealId, text, bad){
+  var el=document.getElementById('dr-'+dealId); if(!el) return;
+  el.textContent = text ? ' ' + text : '';
+  el.style.color = bad ? 'var(--red,#B4322A)' : 'var(--muted,#5A6B7B)';
+}
+
+function sendToDealRoom(dealId, orgId){
+  var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
+  if (!d) return;
+  if (d.dealRoomId){ drMsg(dealId,'Already sent.'); return; }
+  var partner = A.orgName(orgId) || orgId;
+  if (!confirm('Package "' + (d.name||dealId) + '" for ' + partner + '?\n\n'
+      + 'It opens their deal room at stage Ordered. Nothing is emailed until '
+      + 'somebody adds the data room link and delivers it.')) return;
+
+  var uid=null, email='';
+  try { var u = firebase.auth().currentUser || {}; uid = u.uid; email = u.email || ''; } catch(e){}
+  if (!uid){ drMsg(dealId,'Not signed in.',true); return; }
+
+  drMsg(dealId,'Packaging…');
+  var now = Date.now(), ref;
+  db.collection('fin_projects').add({
+    name: d.name || dealId,
+    address: d.address || '',
+    state: d.state || '',
+    mw: +d.sizeMw || 0,
+    capexUsd: +d.capexUsd || 0,
+    stage: d.stage || '',
+    status: 'review',                /* the only statuses a create allows */
+    awardedTo: null,
+    developerUid: uid,
+    orgKey: orgId,
+    orgName: partner,
+    sourceDealId: dealId,            /* the way back to this workspace */
+    sourceWorkspace: 'osa',
+    createdAt: F.stamp(),
+    updatedAt: F.stamp()
+  })
+    .then(function(r){
+      ref = r;
+      return r.update({
+        room: { state:'ordered', forOrg: partner, dataRoomUrl:'', note:'',
+                history:[{ state:'ordered', at: now, by: email }] },
+        updatedAt: F.stamp()
+      });
+    })
+    .then(function(){
+      return db.collection(F.COLLECTION).doc(dealId)
+               .update({ dealRoomId: ref.id, dealRoomOrg: orgId, dealRoomAt: F.stamp() });
+    })
+    .then(function(){
+      d.dealRoomId = ref.id; d.dealRoomOrg = orgId;
+      drMsg(dealId,'Sent — it is in their room at Ordered.');
+      renderJD();
+    })
+    .catch(function(e){
+      drMsg(dealId, (e && e.code==='permission-denied')
+        ? 'Refused — only ClearSky can package a project for a partner.'
+        : ('Could not send: ' + ((e && e.message) || 'unknown error')), true);
+    });
 }
 
 function saveJD(orgId){
