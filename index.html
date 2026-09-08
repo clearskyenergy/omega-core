@@ -203,6 +203,14 @@ body.signed-out #app-body{display:none !important}
              radial-gradient(circle 220px at 92% 82%, rgba(255,255,255,.10) 0%, transparent 70%)}
 .dash-banner::after{content:'';position:absolute;right:-30px;top:-46px;width:250px;height:250px;
   border:32px solid rgba(255,255,255,.06);border-radius:50%;pointer-events:none}
+/* A workspace can supply its own banner image. The faint ring on the right
+   and the headline stay exactly where they are — only the ground changes —
+   so a busy photograph gets a scrim heavy enough to keep white type legible
+   on the left and light enough to show the picture on the right. */
+.dash-banner.has-img{background-size:cover;background-position:center}
+.dash-banner.has-img::before{
+  background:linear-gradient(90deg, rgba(8,16,26,.88) 0%, rgba(8,16,26,.62) 44%,
+                                     rgba(8,16,26,.22) 78%, rgba(8,16,26,.10) 100%)}
 .dash-banner-txt{position:absolute;z-index:1;left:26px;top:50%;transform:translateY(-50%);max-width:60%}
 .dash-banner-txt h2{font-size:20px;font-weight:800;color:#fff;letter-spacing:-.3px;line-height:1.15}
 .dash-banner-txt p{font-size:12.5px;color:rgba(255,255,255,.88);margin-top:5px;font-weight:600}
@@ -2444,6 +2452,22 @@ window._omegaReady = function(){
         <div class="acct-msg" id="acct-profile-msg"></div>
       </div>
 
+      <div class="acct-sec-title">Workspace banner</div>
+      <div class="acct-field">
+        <div id="acct-banner-prev" style="height:74px;border-radius:10px;border:1.5px solid var(--cs-border);
+             background:linear-gradient(120deg,#16202B 0%,#2B5FA8 48%,#2B5FA8 100%);
+             background-size:cover;background-position:center;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="acct-av-btn" onclick="document.getElementById('acct-banner-input').click()">Upload image</button>
+          <button class="acct-av-btn ghost" id="acct-banner-remove" onclick="removeBanner()">Use the default</button>
+          <input id="acct-banner-input" type="file" accept="image/*" style="display:none" onchange="onBannerPicked(event)">
+        </div>
+        <label style="margin-top:10px">…or paste an image URL</label>
+        <input id="acct-banner-url" type="text" placeholder="https://…" onkeydown="if(event.key==='Enter')saveBanner()">
+        <button class="acct-btn" id="acct-banner-btn" onclick="saveBanner()">Save banner</button>
+        <div class="acct-msg" id="acct-banner-msg"></div>
+      </div>
+
       <div class="acct-sec-title">Account</div>
       <div class="acct-row"><span class="k">Email</span><span class="v" id="acct-email">—</span></div>
       <div class="acct-row"><span class="k">Workspace</span><span class="v" id="acct-ws">—</span></div>
@@ -2755,6 +2779,15 @@ auth.onAuthStateChanged(user => {
        error the tier decides, exactly as it did before. */
     showApp(user);
     applyToolLocks();   // gate tools by workspace.unlockedTools (demo Enterprise = all unlocked)
+    (function () {
+      if (!db || !ws.orgId) return;
+      db.collection('omega_orgs').doc(ws.orgId).get()
+        .then(function (snap) {
+          var o = (snap.exists && snap.data()) || {};
+          applyDashBanner(o.bannerUrl || '');
+        })
+        .catch(function () { /* the default banner is a fine answer */ });
+    })();
     (function () {
       if (!db || !ws.orgId) return;
       db.collection('omega_orgs').doc(ws.orgId)
@@ -4256,6 +4289,100 @@ function onPhotoPicked(ev){
   reader.readAsDataURL(file);
   ev.target.value = '';   // allow re-picking the same file
 }
+/* ══════════════════════════════════════════════════════════════════════
+   WORKSPACE BANNER
+
+   The picture behind the welcome headline. Stored on omega_orgs, so it is
+   the workspace's, not the person's — everyone in the org sees the same one.
+
+   An uploaded file is resized to banner proportions and kept as a data URL
+   rather than pushed to Storage: it needs no rules change, no bucket path
+   and no cleanup, and the whole point is that it is one small image. It is
+   also hard-capped, because a Firestore document dies at 1 MB and a silent
+   save failure is the worst way to find that out. Anyone who would rather
+   host the file themselves can paste a URL instead.
+   ══════════════════════════════════════════════════════════════════════ */
+var BANNER_W = 1600, BANNER_H = 420, BANNER_MAX = 320 * 1024;
+
+function applyDashBanner(url){
+  var el = document.querySelector('.dash-banner');
+  if (!el) return;
+  if (url){ el.style.backgroundImage = 'url("' + String(url).replace(/"/g,'%22') + '")';
+            el.classList.add('has-img'); }
+  else { el.style.backgroundImage = ''; el.classList.remove('has-img'); }
+  var prev = document.getElementById('acct-banner-prev');
+  if (prev) prev.style.backgroundImage = el.style.backgroundImage;
+  window._dashBannerUrl = url || '';
+}
+function _bannerMsg(t, kind){
+  var m = document.getElementById('acct-banner-msg');
+  if (!m) return;
+  m.textContent = t || '';
+  m.className = 'acct-msg' + (kind ? ' ' + kind : '');
+}
+function onBannerPicked(ev){
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var cv = document.createElement('canvas');
+      cv.width = BANNER_W; cv.height = BANNER_H;
+      var ctx = cv.getContext('2d');
+      /* Cover, centred — the same crop the banner itself does, so what you
+         see in the preview is what lands on the dashboard. */
+      var scale = Math.max(BANNER_W / img.width, BANNER_H / img.height);
+      var dw = img.width * scale, dh = img.height * scale;
+      ctx.drawImage(img, (BANNER_W - dw) / 2, (BANNER_H - dh) / 2, dw, dh);
+      var q = 0.78, out = cv.toDataURL('image/jpeg', q);
+      while (out.length > BANNER_MAX && q > 0.4){ q -= 0.08; out = cv.toDataURL('image/jpeg', q); }
+      if (out.length > BANNER_MAX){
+        _bannerMsg('That image will not compress small enough to store. Try a simpler '
+          + 'picture, or host it somewhere and paste the URL instead.', 'err');
+        return;
+      }
+      applyDashBanner(out);
+      _bannerMsg('Banner ready — click Save banner to apply it for everyone in the workspace.', 'ok');
+    };
+    img.onerror = function(){ _bannerMsg('Could not read that image.', 'err'); };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function removeBanner(){
+  applyDashBanner('');
+  document.getElementById('acct-banner-url').value = '';
+  _bannerMsg('Back to the default — click Save banner to apply.', 'ok');
+}
+function saveBanner(){
+  var typed = (document.getElementById('acct-banner-url') || {}).value || '';
+  typed = String(typed).trim();
+  if (typed && !/^https:\/\//i.test(typed)){
+    _bannerMsg('An image URL has to start with https://', 'err'); return;
+  }
+  var url = typed || window._dashBannerUrl || '';
+  var ws = window.OMEGA_WORKSPACE || {};
+  if (!db || !ws.orgId){ _bannerMsg('Not connected to the workspace.', 'err'); return; }
+  var btn = document.getElementById('acct-banner-btn');
+  if (btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  db.collection('omega_orgs').doc(ws.orgId).set({ bannerUrl: url }, { merge: true })
+    .then(function(){
+      applyDashBanner(url);
+      _bannerMsg(url ? 'Saved. Everyone in the workspace sees this banner.'
+                     : 'Saved — back to the default banner.', 'ok');
+    })
+    .catch(function(e){
+      /* The rules are the boundary, not this dialog. Say which one refused. */
+      var perm = e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''));
+      _bannerMsg(perm
+        ? 'Only a workspace owner or admin can change the banner.'
+        : 'Could not save the banner: ' + ((e && e.message) || 'unknown error'), 'err');
+    })
+    .then(function(){ if (btn){ btn.disabled = false; btn.textContent = 'Save banner'; } });
+}
+
 function removePhoto(){
   _acctPendingPhoto = '__REMOVE__';
   renderAcctAvatar('', document.getElementById('acct-display-name').value);

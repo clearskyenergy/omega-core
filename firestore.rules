@@ -2121,8 +2121,14 @@ service cloud.firestore {
        ============================================================ */
     match /omega_orgs/{orgId} {
       function brandingOnly() {
+        /* bannerUrl is the dashboard hero image. It is branding in exactly the
+           sense the rest of this list is — a tenant admin choosing how their
+           own workspace looks — and it is capped client-side at ~320 KB, well
+           inside the 1 MB document limit even alongside colors and logoUrl.
+           It changes nothing about entitlement, status or vertical, which are
+           the fields this whitelist exists to keep out of tenant hands. */
         return request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['name', 'logoUrl', 'colors', 'exportBrand',
+                 .hasOnly(['name', 'logoUrl', 'bannerUrl', 'colors', 'exportBrand',
                            'defaultLayout', 'updatedAt']);
       }
       /* Unchanged from before. */
