@@ -11936,71 +11936,145 @@ function _shapeWorldCentroid(o){
   return _shapeCentroid(o);
 }
 
-function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
-  if (!tag || !deg) return 0;
-  var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r), n=0;
-  function turn(x,y){ var dx=x-cx, dy=y-cy; return { x:cx+dx*cos-dy*sin, y:cy+dx*sin+dy*cos }; }
-  function shed(o){
-    ['_geoPts','_geoC','_geoBoundary','_geoExcl','_geoBR','_geoRot','_geoTables',
-     '_geoLat','_geoLng'].forEach(function(k){ if(o[k]!==undefined){ try{ delete o[k]; }catch(e){} } });
-  }
-  function bump(o){
-    var a=((+o.rot||0)+deg)%360; if(a>180)a-=360; if(a<-180)a+=360;
-    o.rot=Math.round(a*10)/10;
-  }
-  var MAP = (typeof _O2_CAMPUS_OF_KIND!=='undefined') ? _O2_CAMPUS_OF_KIND : {};
+/* Geo stamps describe where a thing was; moving it makes every one of them
+   a lie. Shed them and let the next restamp re-derive from the new position. */
+function _shedGeo(o){
+  ['_geoPts','_geoC','_geoBoundary','_geoExcl','_geoBR','_geoRot','_geoTables',
+   '_geoLat','_geoLng'].forEach(function(k){
+     if(o[k]!==undefined){ try{ delete o[k]; }catch(e){} } });
+}
 
-  /* ── A FENCE IS A CONTAINER, NOT A DECORATION ─────────────────────────
-     A compound's fence is the line that says which equipment is inside it,
-     so turning the campus has to turn the fence AND everything the fence
-     holds — including the things nobody tagged, which is most of the
-     balance of plant. A fence counts as this campus's if it encloses any
-     tagged member of it, or if it sits inside the campus footprint. Then
-     anything standing inside such a fence belongs, tagged or not. */
-  var _fences = [];
-  (function(){
-    var seeds = [];
-    (S.shapes||[]).forEach(function(o){
-      if (!o || o.isSiteBoundary) return;
-      if (o.omegaCampus === tag || MAP[o.kind] === tag){
-        var c=_shapeWorldCentroid(o); if(c) seeds.push(c);
-      }
-    });
-    (S.shapes||[]).forEach(function(o){
-      if (!o || o.isSiteBoundary || !(o.omegaFence || o.omegaCampus === tag)) return;
-      var pw = _shapeWorldPts(o);
-      if (!pw || pw.length < 3) return;
-      var owns = false, i;
-      for (i=0; i<seeds.length && !owns; i++){
-        if (_ptInPoly(seeds[i].x, seeds[i].y, pw)) owns = true;
-      }
-      if (!owns && footprint){
-        var c2=_shapeWorldCentroid(o);
-        if (c2 && _ptInPoly(c2.x, c2.y, footprint)) owns = true;
-      }
-      if (owns) _fences.push({ sh:o, pts:pw });
-    });
-  })();
-  function inCampusFence(o){
-    if (!_fences.length) return false;
-    for (var i=0;i<_fences.length;i++) if (_fences[i].sh === o) return true;
+/* ── WHAT BELONGS TO A CAMPUS ─────────────────────────────────────────
+   Three ways in, and a thing needs only one: it carries the tag, it stands
+   inside the campus footprint, or it stands inside a fence that belongs to
+   the campus. The last is the one that matters most in practice, because
+   most of the balance of plant was never tagged by anything — a fence is
+   the line that says what is inside it, so it is treated as a container.
+   Built once and handed back as a predicate, so a rotate and the slide that
+   follows it agree on exactly the same set of members. */
+function _campusPredicate(tag, footprint){
+  var MAP = (typeof _O2_CAMPUS_OF_KIND!=='undefined') ? _O2_CAMPUS_OF_KIND : {};
+  var fences = [], seeds = [];
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.isSiteBoundary) return;
+    if (o.omegaCampus === tag || MAP[o.kind] === tag){
+      var c=_shapeWorldCentroid(o); if(c) seeds.push(c);
+    }
+  });
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.isSiteBoundary || !(o.omegaFence || o.omegaCampus === tag)) return;
+    var pw = _shapeWorldPts(o);
+    if (!pw || pw.length < 3) return;
+    var owns = false, i;
+    for (i=0; i<seeds.length && !owns; i++){
+      if (_ptInPoly(seeds[i].x, seeds[i].y, pw)) owns = true;
+    }
+    if (!owns && footprint){
+      var c2=_shapeWorldCentroid(o);
+      if (c2 && _ptInPoly(c2.x, c2.y, footprint)) owns = true;
+    }
+    if (owns) fences.push({ sh:o, pts:pw });
+  });
+  function inFence(o){
+    if (!fences.length) return false;
+    for (var i=0;i<fences.length;i++) if (fences[i].sh === o) return true;
     var c = (o && o.pts) ? _shapeWorldCentroid(o) : _shapeCentroid(o);
     if (!c) return false;
-    for (var j=0;j<_fences.length;j++){
-      if (_ptInPoly(c.x, c.y, _fences[j].pts)) return true;
-    }
+    for (var j=0;j<fences.length;j++) if (_ptInPoly(c.x, c.y, fences[j].pts)) return true;
     return false;
   }
-
-  function belongs(o){
+  return function(o){
     if (!o) return false;
     if (o.omegaCampus === tag || MAP[o.kind] === tag) return true;
     if (footprint){
       var c = (o.pts ? _shapeWorldCentroid(o) : _shapeCentroid(o));
       if (c && _ptInPoly(c.x, c.y, footprint)) return true;
     }
-    return inCampusFence(o);
+    return inFence(o);
+  };
+}
+
+/* World-space extent of everything that belongs to a campus. */
+function _campusBounds(tag, footprint){
+  var belongs=_campusPredicate(tag, footprint);
+  var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,got=false;
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0)?S.pxPerFt:6;
+  function take(x,y){ if(x<x1)x1=x; if(y<y1)y1=y; if(x>x2)x2=x; if(y>y2)y2=y; got=true; }
+  (S.shapes||[]).forEach(function(o){
+    if(!o||o.isSiteBoundary||!belongs(o)) return;
+    var p=(o.pts&&o.pts.length>=3)?_shapeWorldPts(o):null;
+    if(p){ p.forEach(function(q){ take(q.x,q.y); }); return; }
+    var c=_shapeCentroid(o);
+    if(c){ var hw=((+o.lf||3)*ppf)/2, hh=((+o.wf||2)*ppf)/2;
+           take(c.x-hw,c.y-hh); take(c.x+hw,c.y+hh); }
+  });
+  (S.elements||[]).forEach(function(el){
+    if(!el||!belongs(el)) return;
+    var w=+el.w||0, h=+el.h||(w*0.35);
+    take((+el.x||0),(+el.y||0)); take((+el.x||0)+w,(+el.y||0)+h);
+  });
+  return got?{x1:x1,y1:y1,x2:x2,y2:y2}:null;
+}
+
+/* Slide a whole campus without turning it. */
+function _shiftCampusMembers(tag, dx, dy, footprint){
+  if(!dx && !dy) return 0;
+  var belongs=_campusPredicate(tag, footprint), n=0;
+  (S.shapes||[]).forEach(function(o){
+    if(!o||o.locked||o.isSiteBoundary||!belongs(o)) return;
+    if(o.pts) o.pts=o.pts.map(function(p){
+      var q={x:p.x+dx,y:p.y+dy}; for(var k in p) if(k!=='x'&&k!=='y') q[k]=p[k]; return q; });
+    if(typeof o.cx==='number'){ o.cx+=dx; o.cy+=dy; }
+    if(o.tables) o.tables=o.tables.map(function(t){
+      var c=JSON.parse(JSON.stringify(t)); c.x=t.x+dx; c.y=t.y+dy; return c; });
+    if(typeof o.x==='number' && !o.pts){ o.x+=dx; o.y+=dy; }
+    _shedGeo(o); n++;
+    try{ if(typeof renderShape==='function') renderShape(o); }catch(e){}
+    try{ if(typeof _refreshShape==='function') _refreshShape(o); }catch(e){}
+    try{ if(typeof _geoRestampOne==='function') _geoRestampOne(o); }catch(e){}
+  });
+  (S.elements||[]).forEach(function(el){
+    if(!el||el.locked||!belongs(el)) return;
+    el.x=(+el.x||0)+dx; el.y=(+el.y||0)+dy;
+    _shedGeo(el); n++;
+    try{ if(typeof _reRenderEl==='function') _reRenderEl(el.id); }catch(e){}
+    try{ if(typeof _geoRestampOne==='function') _geoRestampOne(el); }catch(e){}
+  });
+  return n;
+}
+
+/* Turning a packed rectangle inside a parcel sweeps its corners outwards, so
+   a build that fitted can end up lying across the line. Slide it back —
+   slid, not scaled and not clipped, so the design is the design and only its
+   position changes. If it genuinely cannot fit at that angle, say so rather
+   than quietly leaving equipment over the line. */
+function _fitCampusInsideParcel(tag, footprint){
+  var site=null;
+  try{ var sb=_siteBoundaryShape(); site = sb ? _shapeWorldPts(sb) : null; }catch(e){}
+  if(!site || site.length<3) return null;
+  var b=_campusBounds(tag, footprint); if(!b) return null;
+  var sx1=Infinity,sy1=Infinity,sx2=-Infinity,sy2=-Infinity;
+  site.forEach(function(q){
+    if(q.x<sx1)sx1=q.x; if(q.y<sy1)sy1=q.y; if(q.x>sx2)sx2=q.x; if(q.y>sy2)sy2=q.y; });
+  if((b.x2-b.x1)>(sx2-sx1) || (b.y2-b.y1)>(sy2-sy1)) return 'toobig';
+  var dx=0, dy=0;
+  if(b.x1<sx1) dx=sx1-b.x1; else if(b.x2>sx2) dx=sx2-b.x2;
+  if(b.y1<sy1) dy=sy1-b.y1; else if(b.y2>sy2) dy=sy2-b.y2;
+  if(!dx && !dy) return null;
+  _shiftCampusMembers(tag, dx, dy, footprint);
+  return { dx:dx, dy:dy };
+}
+
+function _rotateCampusMembers(tag, deg, cx, cy, exceptId, footprint){
+  if (!tag || !deg) return 0;
+  var r = deg*Math.PI/180, cos=Math.cos(r), sin=Math.sin(r), n=0;
+  function turn(x,y){ var dx=x-cx, dy=y-cy; return { x:cx+dx*cos-dy*sin, y:cy+dx*sin+dy*cos }; }
+  var shed = _shedGeo;
+  function bump(o){
+    var a=((+o.rot||0)+deg)%360; if(a>180)a-=360; if(a<-180)a+=360;
+    o.rot=Math.round(a*10)/10;
   }
+  var belongs = _campusPredicate(tag, footprint);
 
   (S.shapes||[]).forEach(function(o){
     if (!o || o.id===exceptId || o.locked || o.isSiteBoundary) return;
@@ -33175,7 +33249,10 @@ var OMEGA_AXIS_NAME = { 0:'east\u2013west', 45:'north-west\u2013south-east',
    rather than waiting to be rebuilt. */
 function omegaSetLayoutFacing(dir){
   if (!dir || dir === 'parcel'){
-    try { S.siteAzimuth = null; } catch(e){}
+    /* 'parcel' is a rule, not an angle: it re-measures every build. Stored as
+       a sentinel so a saved project keeps following the boundary rather than
+       freezing whatever the boundary happened to be on the day. */
+    try { S.siteAzimuth = 'parcel'; } catch(e){}
     omegaAlignToLand();
     return;
   }
@@ -33224,10 +33301,43 @@ window.omegaSetLayoutFacing = omegaSetLayoutFacing;
 
    Deferred by a tick so the build has actually finished writing its shapes
    before they are turned, and guarded so wrapping twice is impossible. */
+/* ── "ALONG THE PARCEL" HAS TO MEAN SOMETHING AT BUILD TIME ────────────
+   It was stored as null, and the hook below returned early on null. So the
+   one option that is the DEFAULT — the one the dropdown shows on a fresh
+   project — was the only one that did nothing, and every build came out
+   square to the canvas while the control said it was running along the land.
+
+   Parcel is now RESOLVED rather than stored: the boundary's long edge is
+   measured at the moment of the build, so re-tracing the boundary carries the
+   next build with it. A legacy project holding null resolves the same way,
+   because null is exactly what the dropdown has been calling "Along the
+   parcel" all along. A compass point still wins over the parcel — it is an
+   explicit override, and the packers stay square either way; what changes is
+   that the finished build is turned before anyone sees it. */
+function _omegaLayoutAzimuth(){
+  var v = null;
+  try { v = (typeof S!=='undefined') ? S.siteAzimuth : null; } catch(e){ return null; }
+  if (typeof v === 'number' && isFinite(v)) return v;
+  if (v != null && v !== 'parcel') return null;
+  var sb = null;
+  try { sb = (typeof _siteBoundaryShape==='function') ? _siteBoundaryShape() : null; } catch(e){}
+  if (!sb) return null;
+  var pw = (typeof _shapeWorldPts==='function') ? _shapeWorldPts(sb) : null;
+  return _longestEdgeBearing(pw ? { pts:pw, closed:sb.closed } : sb);
+}
+window._omegaLayoutAzimuth = _omegaLayoutAzimuth;
+
+function _omegaAxisLabel(deg){
+  if (deg == null) return 'the set axis';
+  return OMEGA_AXIS_NAME[deg] || (Math.round(deg) + '° off east');
+}
+
 (function installAzimuthOnBuild(){
   function applyAfterBuild(){
     try {
-      if (typeof S === 'undefined' || S.siteAzimuth == null) return;
+      if (typeof S === 'undefined') return;
+      var _az = _omegaLayoutAzimuth();
+      if (_az == null) return;
       var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
       var tags = {};
       (S.shapes||[]).forEach(function(o){
@@ -33235,13 +33345,18 @@ window.omegaSetLayoutFacing = omegaSetLayoutFacing;
         var t = o.omegaCampus || MAP[o.kind];
         if (t) tags[t] = 1;
       });
-      var moved = 0;
+      var moved = 0, over = [];
       Object.keys(tags).forEach(function(t){
-        moved += omegaAlignCampus(t, S.siteAzimuth);
+        moved += omegaAlignCampus(t, _az);
+        /* Turning it must not push it off the land. */
+        var fit = _fitCampusInsideParcel(t, null);
+        if (fit === 'toobig') over.push(t);
       });
       if (moved && typeof showBanner === 'function'){
-        showBanner('cal', 'Built running ' + (OMEGA_AXIS_NAME[S.siteAzimuth] || 'to the set axis')
-          + ', as set on the Layout control.');
+        showBanner(over.length ? 'warn' : 'cal',
+          'Built running ' + _omegaAxisLabel(_az) + ', as set on the Layout control.'
+          + (over.length ? ' ' + over.join(' and ') + ' is wider than the parcel at that '
+              + 'angle and now crosses the line — make it smaller, or pick a different axis.' : ''));
       }
     } catch (e) {}
   }
@@ -33268,8 +33383,14 @@ window.omegaSetLayoutFacing = omegaSetLayoutFacing;
 
 function _o2FacingSelect(){
   var cur = null;
-  try { cur = (S.siteAzimuth == null) ? 'parcel' : S.siteAzimuth; } catch(e){ cur = 'parcel'; }
-  var opts = '<option value="parcel"' + (cur==='parcel'?' selected':'') + '>Along the parcel</option>';
+  try { cur = (S.siteAzimuth == null || S.siteAzimuth === 'parcel') ? 'parcel' : S.siteAzimuth; }
+  catch(e){ cur = 'parcel'; }
+  /* Show the bearing it actually measured, so 'Along the parcel' reads as a
+     live measurement rather than a hopeful label. */
+  var _pd = null;
+  try { if (cur === 'parcel') _pd = _omegaLayoutAzimuth(); } catch(e){}
+  var opts = '<option value="parcel"' + (cur==='parcel'?' selected':'') + '>Along the parcel'
+           + (_pd != null ? ' (' + Math.round(_pd) + '\u00b0)' : '') + '</option>';
   ['N','NE','E','SE','S','SW','W','NW'].forEach(function(d){
     var sel = (cur !== 'parcel' && OMEGA_COMPASS[d] === cur) ? ' selected' : '';
     opts += '<option value="'+d+'"'+sel+'>'+d+'</option>';
