@@ -164514,7 +164514,7 @@ if (root.console && console.info) {
     var el = document.getElementById(id);
     return el ? (el.closest('.rbtn-wrap') || el) : null;
   }
-  function place() {
+  function place(movedIds) {
     var moved = 0;
     /* Patch 116: Compute MODE (Patch 59) gathers Compute Build and Load
        Screen into its Analyze groups by label. While it is on, this
@@ -164531,6 +164531,7 @@ if (root.console && console.info) {
         if (el.parentNode !== body || el !== want) {
           body.insertBefore(el, prev ? prev.nextSibling : body.firstChild);
           moved++;
+          if (movedIds) movedIds.push(id);
         }
         prev = el;
       });
@@ -164623,36 +164624,47 @@ if (root.console && console.info) {
      trade the node back and forth at 2 Hz for two minutes, which is exactly
      what a person sees as flashing.
 
-     So every pass counts now, from either source. The grace window is what
-     keeps that honest: for the first few seconds the injectors are still
-     arriving and moves are expected, so nothing is counted as a fight until
-     the ribbon has had time to settle. */
-  var settleAt = 0;
+     So every pass counts now, from either source — and what counts as
+     contested is defined immediately below. */
+  /* ── A FIGHT IS THE SAME BUTTON MOVING TWICE, NOT ANY BUTTON MOVING ──
+     The first version of this counted a pass as contested whenever it moved
+     anything, once a few seconds had passed. That is wrong, and it emptied
+     the Compute tab: place() is what POPULATES these panels, the injectors
+     arrive over the first minutes of a session rather than all at once, and
+     every newly injected button is a legitimate move. So a healthy startup
+     looked exactly like a fight, the guard tripped, and it permanently
+     stopped the thing that was still filling the ribbon.
+
+     Population moves DIFFERENT buttons once each. A fight moves the SAME
+     button over and over. Counting per id tells them apart, so forty
+     buttons landing one after another never trips it, and one button
+     ping-ponging between two modules trips it quickly. */
+  var moveCount = {};
   function placeSafely(fromObserver) {
     if (stood_down) return 0;
-    if (!settleAt) settleAt = (root.Date ? Date.now() : +new Date()) + 4000;
     if (obs) { try { obs.disconnect(); } catch (e) {} }
-    var moved = 0;
-    try { moved = place(); }
+    var moved = 0, ids = [];
+    try { moved = place(ids); }
     catch (e) { moved = 0; }
     if (obs && obsTarget) {
       /* Drop what our own writes queued before listening again. */
       try { obs.takeRecords(); obs.observe(obsTarget, { childList: true, subtree: true }); } catch (e) {}
     }
-    var settled = ((root.Date ? Date.now() : +new Date()) >= settleAt);
-    if (settled) {
-      if (moved > 0) {
-        if (++thrash >= 5) {
-          stood_down = true;
-          try { if (obs) obs.disconnect(); } catch (e) {}
-          try { if (iv) clearInterval(iv); } catch (e) {}
-          if (root.console) {
-            console.warn(TAG + ' another module keeps re-ordering these ribbon buttons; '
-              + 'standing down after ' + thrash + ' contested passes rather than flashing '
-              + 'the ribbon. OmegaComputeTab.place() re-applies the layout by hand.');
-          }
-        }
-      } else { thrash = 0; }
+    var fought = null;
+    for (var k = 0; k < ids.length; k++) {
+      var id = ids[k];
+      moveCount[id] = (moveCount[id] || 0) + 1;
+      if (moveCount[id] >= 6 && !fought) fought = id;
+    }
+    if (fought) {
+      stood_down = true;
+      try { if (obs) obs.disconnect(); } catch (e) {}
+      try { if (iv) clearInterval(iv); } catch (e) {}
+      if (root.console) {
+        console.warn(TAG + ' "' + fought + '" has been re-placed ' + moveCount[fought]
+          + ' times \u2014 another module keeps moving it back. Standing down rather '
+          + 'than flashing the ribbon; OmegaComputeTab.place() re-applies by hand.');
+      }
     }
     return moved;
   }
