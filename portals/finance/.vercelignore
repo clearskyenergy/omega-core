@@ -9,3 +9,6 @@
 # A document explaining how the gate works is not a vulnerability on its own,
 # but it is free reconnaissance, and none of it is anything a customer needs.
 *.md
+
+.env*
+.vercel
