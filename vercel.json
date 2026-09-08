@@ -133,23 +133,5 @@
       "maxDuration": 30
     }
   },
-  "redirects": [
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "silmarillion.clearskyomega.com"
-        }
-      ],
-      "destination": "/login.html",
-      "permanent": false,
-      "missing": [
-        {
-          "type": "query",
-          "key": "via"
-        }
-      ]
-    }
-  ]
+  "redirects": []
 }
