@@ -806,7 +806,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
            what they <b>supplied</b>. A manufacturer who refers a site and then sells you its
            cells is doing both, and one combined number hides the second.</p></div>
       <div class="card">
-        <div class="card-h"><h2>By organisation</h2>
+      <div class="card-h"><h2>By organisation</h2>
           <button class="btn-x" id="po-add-btn" style="margin-left:auto"
                   onclick="togglePartnerAdd()">Add an organisation</button></div>
       <div id="po-add" style="display:none;padding:14px 16px;border-bottom:1px solid var(--line,#E1E6EC)">
@@ -831,10 +831,9 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           OMEGA yet. Either way the domain is what people sign in from and the key everything
           hangs off, so it cannot be changed afterwards; the name can.</p>
       </div>
-      <div class="card-h" style="border-top:0;padding-top:0"><span class="sub"></span>
-          <span class="sub">Sorted by capital closed on deals they originated. Set what each one
-            is to us and whether we co-develop with them — a joint development partner gets their
-            own book on the JD partners tab.</span></div>
+      <p class="sub" style="margin:0;padding:10px 16px 0">Sorted by capital closed on deals they
+         originated. Set what each one is to us, and tick the ones we co-develop with — those get
+         their own book on the JD partners tab.</p>
         <div class="tbl-wrap"><table>
           <thead><tr><th>Organisation</th><th>Role in the ecosystem</th><th>Joint development</th>
             <th class="num">Referred</th><th class="num">Live</th>
@@ -1732,9 +1731,7 @@ function setOrgJd(orgId, on){
     .then(function(){
       var o=A.orgs()[orgId];
       if(o){ o.jd = o.jd || {}; o.jd.active = !!on; }
-      var lbl=document.getElementById('jdl-'+orgId);
-      if(lbl) lbl.textContent = on ? 'On the JD tab' : 'Not a JD partner';
-      pMsg(orgId, on ? 'Now a JD partner' : 'Removed from JD');
+      pMsg(orgId, on ? 'Now a joint development' : 'No longer a joint development');
       renderJD();                       /* the other tab, not this table */
       var c=document.getElementById('c-jd'); if(c) c.textContent=jdOrgs().length;
     })
@@ -1948,12 +1945,18 @@ function renderPartners(){
       : '<span class="sub">'+esc(org.kind?A.orgKindOf(org.kind).label:'\u2014')+'</span>';
 
     var jdOn = !!(org.jd && org.jd.active);
+    /* ── A CHECKBOX LABEL SAYS WHAT TICKING IT DOES ────────────────────
+       This read the current state — so the box for an organisation we do NOT
+       co-develop with was labelled "Not a JD partner", and ticking a box that
+       says "not" to make it so is a sentence nobody should have to parse. The
+       label is now constant and describes the thing; checked or not carries
+       the yes and the no, which is the only job a checkbox has. */
     var jdCell = admin
       ? '<label style="display:flex;gap:7px;align-items:center;cursor:pointer">'
         + '<input type="checkbox"'+(jdOn?' checked':'')
         + ' onchange="setOrgJd(\'' + oid + '\',this.checked)">'
-        + '<span class="sub" id="jdl-'+oid+'">'+(jdOn?'On the JD tab':'Not a JD partner')+'</span></label>'
-      : (jdOn?'<span class="tag">JD partner</span>':'<span class="sub">\u2014</span>');
+        + '<span class="sub">Co-develop with them</span></label>'
+      : (jdOn?'<span class="tag">Co-developing</span>':'<span class="sub">—</span>');
 
     /* An organisation nobody uses should be removable, and one that is on a
        deal should be switched off instead — the deals keep rendering with a
