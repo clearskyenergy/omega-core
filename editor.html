@@ -32305,9 +32305,7 @@ function _o2VerbsClass(key){
   h += _o2Btn('+ Add', 'o2Add()', true, 'Open the placement flow for this class');
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
-  h += _o2Btn('\u27c2 Align to land', 'omegaAlignToLand()', true,
-               'Turn the layout so it runs along the long edge of the parcel, '
-             + 'instead of square to the screen.');
+  h += _o2FacingSelect();
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', !!one,
               'Turn the selection about its own centre \u2014 the parcel line and anything locked stay put');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2,
@@ -32346,9 +32344,7 @@ function _o2VerbsMulti(){
      +   '<span>'+n+' selected</span></div>';
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
-  h += _o2Btn('\u27c2 Align to land', 'omegaAlignToLand()', true,
-               'Turn the layout so it runs along the long edge of the parcel, '
-             + 'instead of square to the screen.');
+  h += _o2FacingSelect();
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', n>0,
               'Turn every picked item about the centre of the set');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2, 'Space the picked items evenly');
@@ -32698,6 +32694,146 @@ function _o2Spin(deg){
   _o2Repaint();
   _o2Commit();
   return objs.length;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   WHICH WAY THE LAYOUT RUNS
+
+   Picked as a compass direction, because that is how a site is described
+   out loud — "the rows run north-south", "it follows the road, roughly
+   north-east". An angle box would be the same information in a form nobody
+   uses in the field.
+
+   SCREEN NORTH IS UP, which is how the map draws unless somebody has turned
+   it. In screen space +x is east and +y is SOUTH, so an axis bearing works
+   out as: east-west 0 degrees, north-south 90, north-west/south-east 45,
+   north-east/south-west 135.
+
+   Eight points are offered because that is what a person reaches for, but a
+   layout has an AXIS rather than a heading — north and south describe the
+   same line, and a block turned to one is turned to the other. Rather than
+   drop four of them and make somebody hunt for the survivor, each maps to
+   its axis and the banner says which axis was used. */
+var OMEGA_COMPASS = {
+  N:90, S:90,      /* rows run up the page          */
+  E:0,  W:0,       /* rows run across it            */
+  NE:135, SW:135,
+  NW:45,  SE:45
+};
+var OMEGA_AXIS_NAME = { 0:'east\u2013west', 45:'north-west\u2013south-east',
+                        90:'north\u2013south', 135:'north-east\u2013south-west' };
+
+/* Set the direction the build runs in. Stored on the project so a later
+   generate uses it, and applied immediately so an existing build turns now
+   rather than waiting to be rebuilt. */
+function omegaSetLayoutFacing(dir){
+  if (!dir || dir === 'parcel'){
+    try { S.siteAzimuth = null; } catch(e){}
+    omegaAlignToLand();
+    return;
+  }
+  var key = String(dir).toUpperCase();
+  var deg = OMEGA_COMPASS[key];
+  if (deg == null){ alert('Pick a compass point, or Along the parcel.'); return; }
+  try { S.siteAzimuth = deg; } catch(e){}
+
+  var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+  var tags = {};
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.isSiteBoundary) return;
+    var t = o.omegaCampus || MAP[o.kind];
+    if (t) tags[t] = 1;
+  });
+  var names = Object.keys(tags);
+  if (!names.length){
+    if (typeof showBanner === 'function'){
+      showBanner('cal', 'Layout set to ' + OMEGA_AXIS_NAME[deg]
+        + '. Nothing is placed yet \u2014 the next build will run that way.');
+    }
+    return;
+  }
+  var moved = 0;
+  names.forEach(function(t){ moved += omegaAlignCampus(t, deg); });
+  try { if (typeof pushHist==='function') pushHist(); } catch(e){}
+  try { if (typeof _setSaved==='function') _setSaved('unsaved'); } catch(e){}
+  if (typeof showBanner === 'function'){
+    showBanner(moved ? 'cal' : 'shape', moved
+      ? ('Layout now runs ' + OMEGA_AXIS_NAME[deg] + ' \u2014 ' + moved + ' piece'
+         + (moved===1?'':'s') + ' turned. The next build will use it too.')
+      : ('Already running ' + OMEGA_AXIS_NAME[deg] + '. The next build will use it too.'));
+  }
+}
+window.omegaSetLayoutFacing = omegaSetLayoutFacing;
+
+/* The toolbar control. Reflects what is already set, so it reads as the
+   project's setting rather than a button that fires and forgets. */
+/* ── AND THE BUILD COMES OUT THAT WAY ────────────────────────────────
+   Setting the direction has to mean something at GENERATE time, not only
+   as a correction afterwards — that was the whole point of asking for it
+   up front. The packers lay their tiles square, so the honest description
+   is that the build is turned to the chosen axis the moment it finishes,
+   before anyone sees it: one action, one result, nothing to remember to
+   press.
+
+   Deferred by a tick so the build has actually finished writing its shapes
+   before they are turned, and guarded so wrapping twice is impossible. */
+(function installAzimuthOnBuild(){
+  function applyAfterBuild(){
+    try {
+      if (typeof S === 'undefined' || S.siteAzimuth == null) return;
+      var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+      var tags = {};
+      (S.shapes||[]).forEach(function(o){
+        if (!o || o.isSiteBoundary) return;
+        var t = o.omegaCampus || MAP[o.kind];
+        if (t) tags[t] = 1;
+      });
+      var moved = 0;
+      Object.keys(tags).forEach(function(t){
+        moved += omegaAlignCampus(t, S.siteAzimuth);
+      });
+      if (moved && typeof showBanner === 'function'){
+        showBanner('cal', 'Built running ' + (OMEGA_AXIS_NAME[S.siteAzimuth] || 'to the set axis')
+          + ', as set on the Layout control.');
+      }
+    } catch (e) {}
+  }
+  function wrap(objName, fnName){
+    var o = window[objName];
+    if (!o || typeof o[fnName] !== 'function' || o[fnName].__omegaAzimuth) return false;
+    var orig = o[fnName];
+    var w = function(){
+      var r = orig.apply(this, arguments);
+      setTimeout(applyAfterBuild, 0);
+      return r;
+    };
+    w.__omegaAzimuth = true;
+    o[fnName] = w;
+    return true;
+  }
+  var n = 0, iv = setInterval(function(){
+    wrap('OmegaAutoDesign','draw');
+    wrap('OmegaAutoDesign','run');
+    wrap('OmegaComputePlace','run');
+    if (++n > 60) clearInterval(iv);
+  }, 400);
+})();
+
+function _o2FacingSelect(){
+  var cur = null;
+  try { cur = (S.siteAzimuth == null) ? 'parcel' : S.siteAzimuth; } catch(e){ cur = 'parcel'; }
+  var opts = '<option value="parcel"' + (cur==='parcel'?' selected':'') + '>Along the parcel</option>';
+  ['N','NE','E','SE','S','SW','W','NW'].forEach(function(d){
+    var sel = (cur !== 'parcel' && OMEGA_COMPASS[d] === cur) ? ' selected' : '';
+    opts += '<option value="'+d+'"'+sel+'>'+d+'</option>';
+  });
+  return '<label class="o2-verb" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer" '
+       + 'title="Which way the layout runs. Set it before you generate and the build comes out '
+       + 'that way; change it after and what is placed turns to match. A layout has an axis, so '
+       + 'N and S mean the same line.">\u27c2 Layout'
+       + '<select onchange="omegaSetLayoutFacing(this.value)" '
+       + 'style="background:transparent;border:0;color:inherit;font:inherit;cursor:pointer">'
+       + opts + '</select></label>';
 }
 
 /* ══════════════════════════════════════════════════════════════════════
