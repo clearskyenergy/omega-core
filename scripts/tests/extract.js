@@ -17,7 +17,7 @@ function grab(name) {
 function write(file, names, extra, after) {
   const body = names.map(grab).join('\n');
   fs.writeFileSync(path.join(__dirname, file),
-    (extra || '') + body + '\n' + (after || '') + 'module.exports={' + names.join(',') + '};\n');
+    (extra || '') + body + '\nmodule.exports={' + names.join(',') + '};\n' + (after || ''));
   console.log(file, '<-', names.length, 'functions');
 }
 
@@ -30,3 +30,10 @@ write('geo.js',   ['_hullOf','_ptSegD','_segCross','_polyDist','_ptInPoly'],
                   'var root={};\n', 'root._ptInPoly=_ptInPoly;\n');
 write('pv.js',    ['_pvSunDev','_pvPreferSun','candidateAngles'],
                   'var PV_AZ_WINDOW_DEG=20;\n');
+
+/* FenceTie's own frame. equipFrame + boxOf are what decide whether a fence
+   follows the equipment or the screen. */
+write('fence.js', ['equipFrame','boxOf','_boxOfRaw'],
+                  'var FR=null, FRAME_AGREE=0.6;\nvar root=global;\n',
+                  'module.exports.setFR=function(f){FR=f;};\n'+
+                  'module.exports.getFR=function(){return FR;};\n');

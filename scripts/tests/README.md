@@ -10,9 +10,10 @@ and the sweep that the whole frame feature depends on had never executed once.
 
 ## Running
 
-    node scripts/tests/extract.js && node scripts/tests/tsw.js
+    node scripts/tests/extract.js
+    for t in tsw tfr tp tg tfence; do node scripts/tests/$t.js; done
 
-`extract.js` writes `sweep.js`, `geo.js` and `pv.js` next to itself. Everything
+`extract.js` writes `sweep.js`, `geo.js`, `pv.js` and `fence.js` next to itself. Everything
 is regenerated from `editor.html`, so the tests always run against what is
 actually in the file rather than a copy that can drift.
 
@@ -24,6 +25,7 @@ actually in the file rather than a copy that can drift.
 | tfr.js  | `_omegaFrame` — that it measures the polygon being PLANNED and not whichever shape happens to carry `isSiteBoundary`, that the parcel comes out square to the grid, and that a square parcel disengages the feature |
 | tg.js   | hull-to-hull separation against the axis-aligned boxes it replaced |
 | tp.js   | PV azimuth window and ordering |
+| tfence.js | `equipFrame` / `boxOf` — that a fence follows the equipment's angle when the equipment agrees on one, stays square when it does not, measures a block at its true size, and routes ties parallel to the fence lines |
 
 ## Not covered
 

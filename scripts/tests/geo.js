@@ -56,5 +56,5 @@ function _ptInPoly(x, y, pts){
   }
   return inside;
 }
-root._ptInPoly=_ptInPoly;
 module.exports={_hullOf,_ptSegD,_segCross,_polyDist,_ptInPoly};
+root._ptInPoly=_ptInPoly;

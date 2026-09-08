@@ -163936,6 +163936,24 @@ if (root.console && console.info) {
   ];
 
   function boxOf(sh) {
+    var b = _boxOfRaw(sh);
+    if (!b || !FR || typeof root._frameTo !== 'function') return b;
+    /* Into the frame. A rotated block carries lf/wf that are independent of
+       its rotation, so in the frame it IS axis-aligned with those extents —
+       the centre is the only thing that has to move. A polygon has its
+       points carried across instead, which is exact either way. */
+    if (sh && sh.pts && sh.pts.length >= 3 && !(sh.lf > 0 && sh.wf > 0)) {
+      var q = sh.pts.map(function (v) { return root._frameTo(FR, v.x, v.y); });
+      var xs = q.map(function (v) { return v.x; }), ys = q.map(function (v) { return v.y; });
+      return { x1: Math.min.apply(null, xs), y1: Math.min.apply(null, ys),
+               x2: Math.max.apply(null, xs), y2: Math.max.apply(null, ys) };
+    }
+    var hw = (b.x2 - b.x1) / 2, hh = (b.y2 - b.y1) / 2;
+    var c = root._frameTo(FR, b.x1 + hw, b.y1 + hh);
+    return { x1: c.x - hw, y1: c.y - hh, x2: c.x + hw, y2: c.y + hh };
+  }
+
+  function _boxOfRaw(sh) {
     var p = P(); if (!(p > 0)) return null;
     if (sh.pts && sh.pts.length >= 2 && sh.kind !== 'derdc' && sh.kind !== 'deralt'
         && sh.kind !== 'bespad' && !(sh.lf > 0 && sh.wf > 0)) {
@@ -163993,6 +164011,53 @@ if (root.console && console.info) {
     return groups.map(hull);
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     A FENCE FOLLOWS THE EQUIPMENT, NOT THE SCREEN
+
+     This pass measures axis-aligned boxes and draws axis-aligned fences.
+     That was invisible while every build came out square to the canvas. Now
+     that a build comes out square to the PARCEL, it is the thing that makes
+     a finished drawing look wrong: diagonal blocks sitting inside square
+     fences, with the duct bank running orthogonally through the gap.
+
+     It cannot simply inherit the build's frame. This pass also runs on its
+     own, 700 ms after any change, and from the Fence & Tie button on a site
+     nobody generated — so it has to work out the angle for itself. It does
+     that from the equipment: if most of what is being fenced agrees on a
+     rotation, that is the frame, and the fence, the ties and the roads are
+     all measured and drawn in it. Mixed angles mean a hand-built site, and
+     there a fence square to the canvas is the honest answer.
+
+     Everything downstream of boxOf then works in frame coordinates without
+     knowing it, exactly as the planner does, and only push() and conduit()
+     convert on the way out.
+     ══════════════════════════════════════════════════════════════════════ */
+  var FR = null;
+  var FRAME_AGREE = 0.6;    /* share of equipment that must share an angle */
+
+  function equipFrame() {
+    var p = P(); if (!(p > 0)) return null;
+    var shapes = [];
+    try { shapes = S_().shapes || []; } catch (e) { return null; }
+    var tally = {}, best = null, bestN = 0, cx = 0, cy = 0, n = 0;
+    shapes.forEach(function (sh) {
+      if (!sh || sh.omegaCampus || sh.omegaFence || sh.isSiteBoundary) return;
+      var mine = false;
+      for (var i = 0; i < GROUPS.length && !mine; i++) if (GROUPS[i].is(sh)) mine = true;
+      if (!mine) return;
+      var b = boxOf(sh); if (!b) return;
+      var a = (((+sh.rot || 0) % 180) + 180) % 180;
+      var k = Math.round(a * 2) / 2;
+      tally[k] = (tally[k] || 0) + 1;
+      if (tally[k] > bestN) { bestN = tally[k]; best = k; }
+      cx += (b.x1 + b.x2) / 2; cy += (b.y1 + b.y2) / 2; n++;
+    });
+    if (!n || best == null) return null;
+    if (best < 0.5 || best > 179.5) return null;          /* already square */
+    if (bestN < n * FRAME_AGREE) return null;             /* no agreement */
+    return { deg: best, cx: cx / n, cy: cy / n };
+  }
+
   function compounds() {
     var p = P(); if (!(p > 0)) return [];
     var out = [], shapes = [];
@@ -164019,6 +164084,7 @@ if (root.console && console.info) {
 
   function nid(p) { return (typeof root.uid === 'function') ? root.uid() : p + Date.now() + Math.random(); }
   function push(sh) {
+    try { if (FR && typeof root._framePlace === 'function') root._framePlace(FR, sh); } catch (e) {}
     S_().shapes.push(sh);
     try { if (typeof root._geoRestampOne === 'function') root._geoRestampOne(sh); } catch (e) {}
     try { if (typeof root.renderShape === 'function') root.renderShape(sh); } catch (e) {}
@@ -164057,6 +164123,11 @@ if (root.console && console.info) {
   }
 
   function conduit(pts, label) {
+    /* Routed orthogonally in the frame, which puts the duct bank parallel to
+       the fence lines it runs between rather than cutting across them. */
+    try {
+      if (FR && typeof root._framePoly === 'function') pts = root._framePoly(FR, pts, true);
+    } catch (e) {}
     var p = P() || 6, px = 0;
     for (var i = 1; i < pts.length; i++) px += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     var c = { id: nid('mv'), condType: 'MV-UG', route: 'trench',
@@ -164122,6 +164193,11 @@ if (root.console && console.info) {
       return null;
     }
     clearOurs();
+    /* Work out the angle of what is being fenced BEFORE measuring any of
+       it — equipFrame calls boxOf, which must see raw coordinates. From
+       here everything is in frame until push() and conduit() put it back. */
+    FR = null;
+    try { FR = equipFrame(); } catch (e) { FR = null; }
     var comps = compounds();
 
     /* ── A LONE SOLAR ARRAY IS NOT A CAMPUS ──────────────────────────────
@@ -164143,6 +164219,7 @@ if (root.console && console.info) {
           + 'A control yard ties compounds together and there is nothing here to tie. '
           + 'Run Design Site, or Fence & Tie, if you want them.');
       }
+      FR = null;
       return null;
     }
 
@@ -164150,6 +164227,7 @@ if (root.console && console.info) {
       if (typeof root.showBanner === 'function') {
         root.showBanner('cal', 'Nothing to fence yet \u2014 place storage, compute, generation or solar first.');
       }
+      FR = null;
       return null;
     }
 
@@ -164229,8 +164307,12 @@ if (root.console && console.info) {
     try {
       var sb = (S_().shapes || []).filter(function (x) { return x && x.kind === 'substation'; }).pop();
       if (sb && sb.pts && sb.pts.length > 1) {
-        var sr = { x1: Math.min(sb.pts[0].x, sb.pts[1].x), y1: Math.min(sb.pts[0].y, sb.pts[1].y),
-                   x2: Math.max(sb.pts[0].x, sb.pts[1].x), y2: Math.max(sb.pts[0].y, sb.pts[1].y) };
+        var _s0 = sb.pts[0], _s1 = sb.pts[1];
+        if (FR && typeof root._frameTo === 'function') {
+          _s0 = root._frameTo(FR, _s0.x, _s0.y); _s1 = root._frameTo(FR, _s1.x, _s1.y);
+        }
+        var sr = { x1: Math.min(_s0.x, _s1.x), y1: Math.min(_s0.y, _s1.y),
+                   x2: Math.max(_s0.x, _s1.x), y2: Math.max(_s0.y, _s1.y) };
         var f2 = edgePoint(sr, target), t2 = ctrlPort(ctrlFence, f2);
         conduit(route(f2, t2, obs, corr).concat([target]),
                 'SERVICE FROM ' + String(sb.label || 'SUBSTATION').toUpperCase());
@@ -164301,6 +164383,7 @@ if (root.console && console.info) {
       + 'to the master controller.';
     if (typeof root.showBanner === 'function') root.showBanner('cal', msg);
     if (root.console) console.info(TAG + ' ' + msg);
+    FR = null;
     return { compounds: comps, runs: runs, ctrl: ctrl };
   }
 

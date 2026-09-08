@@ -1,3 +1,4 @@
-scripts/tests/sweep.js
-scripts/tests/geo.js
-scripts/tests/pv.js
+sweep.js
+geo.js
+pv.js
+fence.js
