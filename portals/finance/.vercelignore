@@ -1,0 +1,11 @@
+# Internal notes are not part of the product.
+#
+# firestore.rules.PATCH.md was already being served publicly at
+# https://financing.csebuilders.com/firestore.rules.PATCH.md — thirteen
+# kilobytes describing the security rules, readable by anyone who guessed the
+# filename. README.md and RULES.md were not live only because they postdate
+# the last deploy; the next one would have published them too.
+#
+# A document explaining how the gate works is not a vulnerability on its own,
+# but it is free reconnaissance, and none of it is anything a customer needs.
+*.md
