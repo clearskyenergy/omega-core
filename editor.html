@@ -11945,16 +11945,41 @@ window._shapeWorldPts = _shapeWorldPts;
    surveying; an array angle is a fact about the sun. Solar is handed back to
    world space before it is laid out, and picks its own orientation.
    ══════════════════════════════════════════════════════════════════════ */
-function _omegaFrame(){
-  var deg = null;
-  try { deg = _omegaLayoutAzimuth(); } catch(e){}
+/* THE FRAME MUST COME FROM THE POLYGON BEING PLANNED.
+
+   There are two independent boundary markers in this file: `isSiteBoundary`,
+   which "Set boundary" writes, and `omegaRole === 'boundary'`, which the
+   site-roles system writes. Design Site resolves its parcel through the
+   second with a fallback; this resolved through the first. A parcel carrying
+   one and not the other would either switch the whole feature off silently,
+   or — far worse — compute an angle and a pivot from a DIFFERENT shape than
+   the one being planned, and lay the site out in a frame that matches
+   nothing on the drawing.
+
+   So the caller passes the polygon it is about to plan, and the frame is
+   measured from exactly that. An explicit compass choice still overrides the
+   measurement; only the pivot then comes from the polygon. */
+function _omegaFrame(poly){
+  var deg = null, v = null;
+  try { v = (typeof S !== 'undefined') ? S.siteAzimuth : null; } catch(e){}
+  if (typeof v === 'number' && isFinite(v)) {
+    deg = v;                                   /* explicit compass override */
+  } else if (poly && poly.length >= 3) {
+    deg = _longestEdgeBearing({ pts: poly, closed: true });
+  } else {
+    try { deg = _omegaLayoutAzimuth(); } catch(e){}
+  }
   if (deg == null || !isFinite(deg)) return null;
   var d = deg % 180; if (d < 0) d += 180;
   /* A parcel already square to the grid gains nothing and risks everything. */
   if (d < 0.5 || d > 179.5) return null;
-  var sb = null;
-  try { sb = _siteBoundaryShape(); } catch(e){}
-  var pw = sb ? _shapeWorldPts(sb) : null;
+
+  var pw = (poly && poly.length >= 3) ? poly : null;
+  if (!pw) {
+    var sb = null;
+    try { sb = _siteBoundaryShape(); } catch(e){}
+    pw = sb ? _shapeWorldPts(sb) : null;
+  }
   if (!pw || pw.length < 3) return null;
   var cx = 0, cy = 0;
   pw.forEach(function(q){ cx += q.x; cy += q.y; });
@@ -157549,7 +157574,7 @@ if (root.console && console.info) {
        Does nothing on a parcel already square to the grid, and falls back
        to today's behaviour on any failure. */
     var _fr = null;
-    try { _fr = (typeof _omegaFrame === 'function') ? _omegaFrame() : null; } catch (e) { _fr = null; }
+    try { _fr = (typeof _omegaFrame === 'function') ? _omegaFrame(poly) : null; } catch (e) { _fr = null; }
     var _excl = exclusions();
     if (_fr) {
       try {
