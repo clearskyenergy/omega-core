@@ -163074,6 +163074,29 @@ if (root.console && console.info) {
     }
     clearOurs();
     var comps = compounds();
+
+    /* ── A LONE SOLAR ARRAY IS NOT A CAMPUS ──────────────────────────────
+       Drawing one solar field was producing a master controller, a control
+       yard, two dashed compounds, a duct bank and an access road. None of
+       that was asked for and none of it belongs to the thing that was
+       drawn: a control yard exists to tie compounds TOGETHER, and there is
+       nothing to tie when there is one array.
+
+       Balance of plant is built when the campus builder asks for it, or
+       when somebody asks for it here by name. A bare draw gets what it
+       drew. Anyone who does want a fence round a solar field can still have
+       one - OmegaFenceTie.run({bop:true}) - it just is not assumed. */
+    var solarOnly = comps.length > 0 && comps.every(function (c) { return c.key === 'solar'; });
+    var asked = (opts.from === 'campus') || opts.bop === true;
+    if (solarOnly && !asked) {
+      if (typeof root.showBanner === 'function') {
+        root.showBanner('shape', 'Solar only \u2014 no control yard or compound fencing added. '
+          + 'A control yard ties compounds together and there is nothing here to tie. '
+          + 'Run Design Site, or Fence & Tie, if you want them.');
+      }
+      return null;
+    }
+
     if (!comps.length) {
       if (typeof root.showBanner === 'function') {
         root.showBanner('cal', 'Nothing to fence yet \u2014 place storage, compute, generation or solar first.');
@@ -163267,7 +163290,10 @@ if (root.console && console.info) {
     b.title = 'Fence & Tie \u2014 draws a security fence around every block of equipment on '
       + 'the drawing, places a master controller, and trenches a duct bank from each '
       + 'compound back to it. Runs on whatever is already there.';
-    b.onclick = function () { run(); };
+    /* Pressing this button IS asking for balance of plant, so it says so.
+       Without the flag the solar-only guard would refuse the one case where
+       somebody has explicitly requested a fence round a solar field. */
+    b.onclick = function () { run({ bop: true }); };
     b.innerHTML = '<span class="rb-ico" style="color:#4ADE80">\u25a7</span>'
       + '<span class="rb-lbl">Fence<br>&amp; Tie</span>';
     host.parentNode.insertBefore(b, host.nextSibling);
