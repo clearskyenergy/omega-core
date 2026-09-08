@@ -32244,6 +32244,9 @@ function _o2VerbsClass(key){
   h += _o2Btn('+ Add', 'o2Add()', true, 'Open the placement flow for this class');
   h += _o2Btn('\u29C9 Duplicate', 'o2Duplicate()', !!one, 'Copy the selected item, offset 30 px');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', !!one, 'Nudge the selection by an exact distance');
+  h += _o2Btn('\u27c2 Align to land', 'omegaAlignToLand()', true,
+               'Turn the layout so it runs along the long edge of the parcel, '
+             + 'instead of square to the screen.');
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', !!one,
               'Turn the selection about its own centre \u2014 the parcel line and anything locked stay put');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2,
@@ -32282,6 +32285,9 @@ function _o2VerbsMulti(){
      +   '<span>'+n+' selected</span></div>';
   h += _o2Btn('\u29C9 Duplicate', 'o2MultiDuplicate()', n>0, 'Copy every picked item');
   h += _o2Btn('\u2725 Move to', 'o2MoveTo()', n>0, 'Nudge every picked item');
+  h += _o2Btn('\u27c2 Align to land', 'omegaAlignToLand()', true,
+               'Turn the layout so it runs along the long edge of the parcel, '
+             + 'instead of square to the screen.');
   h += _o2Btn('\u21bb Rotate', 'o2Rotate()', n>0,
               'Turn every picked item about the centre of the set');
   h += _o2Btn('\u2261 Align uniformly', 'o2Align()', n>2, 'Space the picked items evenly');
@@ -32632,6 +32638,115 @@ function _o2Spin(deg){
   _o2Commit();
   return objs.length;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ALIGN THE LAYOUT TO THE LAND
+
+   A packed field comes out square to the screen. Land is not square to the
+   screen — a parcel runs along a road, a property line or a ridge, and a
+   layout that ignores that wastes the corners and looks like it was drawn
+   somewhere else. Rotating afterwards is the fix people reach for, but they
+   have to eyeball the angle, and eyeballing it is what leaves an array two
+   degrees off the boundary it is supposed to sit along.
+
+   So the angle is measured, not guessed: the longest edge of the parcel is
+   the one the site actually runs along, and that bearing is what the layout
+   is turned to. The delta is taken from where the campus already is, so
+   pressing it twice does nothing rather than turning it twice.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Bearing of the longest edge of a closed shape, in degrees, normalised to
+   the half-circle: an edge and the same edge reversed describe one
+   direction, and a field does not care which way along it you measured. */
+function _longestEdgeBearing(sh){
+  if (!sh || !sh.pts || sh.pts.length < 2) return null;
+  var pts = sh.pts, n = pts.length, best = -1, deg = null;
+  var last = sh.closed === false ? n - 1 : n;
+  for (var i = 0; i < last; i++){
+    var a = pts[i], b = pts[(i + 1) % n];
+    var dx = b.x - a.x, dy = b.y - a.y;
+    var len = dx*dx + dy*dy;
+    if (len <= best) continue;
+    best = len;
+    var d = Math.atan2(dy, dx) * 180 / Math.PI;
+    d %= 180; if (d < 0) d += 180;
+    deg = d;
+  }
+  return deg;
+}
+window._longestEdgeBearing = _longestEdgeBearing;
+
+/* Turn a campus so it runs along `deg`. Returns how many pieces moved. */
+function omegaAlignCampus(tag, deg){
+  if (!tag || deg == null) return 0;
+  var fence = (S.shapes||[]).filter(function(x){
+    return x && x.omegaCampus === tag && !x.isSiteBoundary; })[0];
+  var c = null, from = 0;
+  if (fence){
+    from = +fence.rot || 0;
+    c = (typeof _shapeCenter === 'function') ? _shapeCenter(fence) : null;
+  }
+  if (!c){
+    /* No fence to pivot on: use the middle of what is actually there, so a
+       campus drawn without a compound still turns about itself. */
+    var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+    var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,got=false;
+    (S.shapes||[]).forEach(function(o){
+      if (!o || (o.omegaCampus!==tag && MAP[o.kind]!==tag) || !o.pts) return;
+      o.pts.forEach(function(p){
+        if(p.x<x1)x1=p.x; if(p.y<y1)y1=p.y; if(p.x>x2)x2=p.x; if(p.y>y2)y2=p.y; got=true; });
+    });
+    if (!got) return 0;
+    c = { x:(x1+x2)/2, y:(y1+y2)/2 };
+  }
+  var delta = deg - from;
+  delta %= 180; if (delta > 90) delta -= 180; if (delta < -90) delta += 180;
+  if (Math.abs(delta) < 0.05) return 0;      /* already along it */
+  var n = _rotateCampusMembers(tag, delta, c.x, c.y, fence ? fence.id : null);
+  if (fence){
+    var a = ((+fence.rot||0) + delta) % 360; if(a>180)a-=360; if(a<-180)a+=360;
+    fence.rot = Math.round(a*10)/10;
+    try { if (typeof renderShape==='function') renderShape(fence); } catch(e){}
+    try { if (typeof _geoRestampOne==='function') _geoRestampOne(fence); } catch(e){}
+    n++;
+  }
+  try { if (typeof rerouteTrenchConduits==='function') rerouteTrenchConduits(); } catch(e){}
+  return n;
+}
+window.omegaAlignCampus = omegaAlignCampus;
+
+/* The button. Aligns every campus on the drawing to the parcel's long edge. */
+function omegaAlignToLand(){
+  var site = (typeof _siteBoundaryShape === 'function') ? _siteBoundaryShape() : null;
+  if (!site){
+    alert('No parcel boundary on the drawing.\n\nTrace one first \u2014 the long edge of '
+        + 'the parcel is what the layout gets aligned to, so there has to be one to measure.');
+    return;
+  }
+  var deg = _longestEdgeBearing(site);
+  if (deg == null){ alert('That boundary has no edge long enough to measure.'); return; }
+
+  var tags = {}, MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+  (S.shapes||[]).forEach(function(o){
+    if (!o || o.isSiteBoundary) return;
+    var t = o.omegaCampus || MAP[o.kind];
+    if (t) tags[t] = 1;
+  });
+  var names = Object.keys(tags);
+  if (!names.length){ alert('Nothing placed yet to align.'); return; }
+
+  var moved = 0;
+  names.forEach(function(t){ moved += omegaAlignCampus(t, deg); });
+  try { if (typeof pushHist==='function') pushHist(); } catch(e){}
+  try { if (typeof _setSaved==='function') _setSaved('unsaved'); } catch(e){}
+  if (typeof showBanner === 'function'){
+    showBanner(moved ? 'cal' : 'shape', moved
+      ? ('Aligned to the parcel \u2014 ' + moved + ' piece' + (moved===1?'':'s')
+         + ' now run along its long edge at ' + Math.round(deg) + '\u00b0.')
+      : 'Already running along the parcel\u2019s long edge.');
+  }
+}
+window.omegaAlignToLand = omegaAlignToLand;
 
 function o2Rotate(){
   var targets = o2Targets();
