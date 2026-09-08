@@ -1967,14 +1967,70 @@ function saveTenantRelationship(orgId){
     .catch(function(e){ if(msg) msg.textContent='Failed - '+(e.message||e); });
 }
 
+/* WRITES DIRECT, FOR THE SAME REASON saveTenantBilling DOES.
+   This posted to /api/tenant-branding, which needs FIREBASE_SERVICE_ACCOUNT
+   — an env var this deployment does not have — so every save came back
+   "Failed: FIREBASE_SERVICE_ACCOUNT is not set". The logo uploaded to
+   Storage perfectly well (that call is already client-side) and then the
+   branding never saved, which is the worst shape of all: the file is there,
+   the tenant still has no logo, and the reason names an environment
+   variable rather than anything a person can act on.
+
+   THE MIRROR IS THE POINT, not an extra. The endpoint wrote omega_orgs and
+   then copied a public snapshot to tenant_public/{host} for every hostname
+   on the org, because the sign-in page paints BEFORE anyone is
+   authenticated and cannot read omega_orgs. Saving only omega_orgs would
+   have looked like it worked and left the sign-in page on the old logo —
+   the logo still would not have stuck. Both writes happen here, in the
+   endpoint's own order and with its exact snapshot shape.
+
+   The rules already allow it: omega_orgs is `allow update: if isAdmin()`
+   and tenant_public is `allow write: if isAdmin()`, and only ClearSky staff
+   reach this console. When the service account lands, switching back to the
+   endpoint behaves identically from the outside. */
 function saveTenantBranding(orgId){
   var msg=document.getElementById('tbr-msg-'+orgId);
-  if(msg) msg.textContent='Saving…';
-  _authedPost('/api/tenant-branding', { orgId:orgId,
-      name: document.getElementById('tb-name-'+orgId).value || undefined,
-      logoUrl: document.getElementById('tb-logo-'+orgId).value || undefined })
-    .then(function(){ if(msg) msg.textContent='Saved — mirrored to every hostname.'; loadTenants(); })
-    .catch(function(e){ if(msg) msg.textContent='Failed — '+(e.message||e); });
+  function say(t){ if(msg) msg.textContent=t; }
+  var FV = firebase.firestore.FieldValue;
+  var nameEl = document.getElementById('tb-name-'+orgId);
+  var logoEl = document.getElementById('tb-logo-'+orgId);
+  var patch = { updatedAt: FV.serverTimestamp() };
+  if (nameEl && String(nameEl.value||'').trim()) patch.name = String(nameEl.value).trim();
+  if (logoEl && String(logoEl.value||'').trim()) patch.logoUrl = String(logoEl.value).trim();
+
+  say('Saving\u2026');
+  var ref = db.collection('omega_orgs').doc(orgId);
+  ref.set(patch, { merge:true })
+    .then(function(){ return ref.get(); })
+    .then(function(snap){
+      var org = (snap && snap.data()) || {};
+      var hosts = org.domains || [];
+      if (!hosts.length) return { mirrored: 0 };
+      var pub = {
+        orgId: orgId, name: org.name || orgId, logoUrl: org.logoUrl || '',
+        colors: org.colors || null, exportBrand: org.exportBrand || null,
+        tier: (org.publicTier || 'standard'), vertical: org.vertical || null,
+        shell: org.shell || 'default', domains: hosts, updatedAt: FV.serverTimestamp()
+      };
+      var batch = db.batch();
+      hosts.forEach(function(h){
+        batch.set(db.collection('tenant_public').doc(String(h).toLowerCase()), pub, { merge:true });
+      });
+      return batch.commit().then(function(){ return { mirrored: hosts.length }; });
+    })
+    .then(function(r){
+      say(r.mirrored
+        ? 'Saved \u2014 mirrored to ' + r.mirrored + ' hostname' + (r.mirrored===1?'':'s') + '.'
+        : 'Saved \u2014 no hostname on this org yet, so nothing to mirror. '
+          + 'Add one under domains and save again, or the sign-in page keeps the old logo.');
+      loadTenants();
+    })
+    ['catch'](function(e){
+      /* Name the refusal rather than the plumbing. */
+      say(e && e.code === 'permission-denied'
+        ? 'Firestore refused the write \u2014 this console needs a ClearSky admin account.'
+        : 'Failed \u2014 ' + ((e && (e.message || e.code)) || 'unknown'));
+    });
 }
 
 /* Role changes go through /api/set-role rather than a direct write, because
