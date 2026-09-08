@@ -77,7 +77,21 @@ select.sort-sel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9p
 @media(max-width:600px){.pt-head,.pt-row{grid-template-columns:1fr 110px 40px}.pt-head span:nth-child(3),.pt-head span:nth-child(4),.pt-row>div:nth-child(3),.pt-row>div:nth-child(4){display:none}}
 /* ══════════════════════ MOBILE ══════════════════════ */
 html{-webkit-text-size-adjust:100%}
+/* ── THIS IS WHY THE SIDEBAR DID NOT STICK ────────────────────────────
+   overflow-x:hidden does not stay on one axis. Per spec, when one axis is
+   not 'visible' the other computes to 'auto' — so this one declaration
+   turned <body> into a scroll container (measured: hidden/auto). The
+   sidebar is position:sticky, and sticky resolves against its nearest
+   SCROLLING ancestor, which then became <body>. The page actually scrolls
+   on the viewport, so body never moves, and a sidebar sticking to
+   something that never scrolls just scrolls away with the content.
+
+   overflow-x:clip clips exactly the same way and creates NO scroll
+   container, which is what it exists for. Guarded so a browser without it
+   keeps today's behaviour — a horizontal scrollbar in the worst case,
+   never a broken layout. */
 body{overflow-x:hidden}
+@supports (overflow-x: clip) { body{overflow-x:clip} }
 
 /* Drawer-only controls hidden on desktop; shown in the mobile drawer below. */
 .tb-drawer-who,.tb-drawer-actions{display:none}
@@ -248,6 +262,7 @@ body{background:#F4F6F8}
 /* ══════════════════════ MOBILE ══════════════════════ */
 html{-webkit-text-size-adjust:100%}
 body{overflow-x:hidden}
+@supports (overflow-x: clip) { body{overflow-x:clip} }
 
 /* ── AUTH SCREEN ── */
 @media (max-width:520px){
