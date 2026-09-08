@@ -98682,8 +98682,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
      shows two lines that happen to overlap. Give the spine a real vertex
      at every tap's x, so each tap terminates on a node the spine owns. */
   function spineWithTaps(xs, y, d, startX, endPt){
+    /* Walk toward the destination, not always left-to-right. A trunk sitting
+       to the LEFT of the row made the lane run out to the far end and then
+       double back over itself — one line drawn twice, which is worse than
+       the fan it replaced. */
+    var order=xs.slice().sort(function(a,b){ return a-b; });
+    if(endPt && endPt.x < startX) order.reverse();
     var pts=[{x:startX+d, y:y+d}];
-    xs.slice().sort(function(a,b){ return a-b; }).forEach(function(x){
+    order.forEach(function(x){
       var vx=x+d;
       if(Math.abs(vx-pts[pts.length-1].x)>0.4) pts.push({x:vx, y:y+d});
     });
@@ -99096,7 +99102,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       });
 
       var xs=units.map(function(b){ return b.cx; });
-      var startX=Math.min(minX, tx);
+      var lo=Math.min.apply(null, xs), hi=Math.max.apply(null, xs);
+      var startX=(Math.abs(tx-lo) >= Math.abs(tx-hi)) ? lo : hi;
       push({ condType:pwr, cluster:true, spine:true, omegaStore:true,
              emsEdgeOff:0, laneY:laneY, spineMinX:startX, labelDx:60, labelDy:-20,
              pts:seal(spineWithTaps(xs, laneY, 0, startX, {x:tx,y:laneY}),
@@ -99178,11 +99185,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
                         {x:u.cx,y:u.cy+u.hh}, null) });
         n++;
       });
-      var startX=Math.min(minX, tx);
+      var sxs=units.map(function(u){ return u.cx; });
+      var slo=Math.min.apply(null, sxs), shi=Math.max.apply(null, sxs);
+      var startX=(Math.abs(tx-slo) >= Math.abs(tx-shi)) ? slo : shi;
       push({ condType:'RMC-AC', cluster:true, spine:true, omegaSolarRun:true,
              emsEdgeOff:0, laneY:laneY, spineMinX:startX, labelDx:60, labelDy:-20,
-             pts:seal(spineWithTaps(units.map(function(u){return u.cx;}), laneY, 0,
-                                    startX, {x:tx,y:laneY}), null, {x:tx,y:laneY}) });
+             pts:seal(spineWithTaps(sxs, laneY, 0, startX, {x:tx,y:laneY}),
+                      null, {x:tx,y:laneY}) });
       n++;
       lanes.push(laneY);
     });
