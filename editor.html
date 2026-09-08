@@ -168016,9 +168016,14 @@ if (root.console && console.info) {
     var out = [];
     groups().forEach(function (g) {
       if (g.key === key || !g.bounds) return;
-      var dx = Math.max(0, Math.max(me.x1 - g.bounds.x2, g.bounds.x1 - me.x2));
-      var dy = Math.max(0, Math.max(me.y1 - g.bounds.y2, g.bounds.y1 - me.y2));
-      var gapPx = (dx > 0 && dy > 0) ? Math.sqrt(dx * dx + dy * dy) : Math.max(dx, dy);
+      var gapPx;
+      if (me.hull && g.bounds.hull && me.hull.length > 2 && g.bounds.hull.length > 2) {
+        gapPx = _polyDist(me.hull, g.bounds.hull);
+      } else {
+        var dx = Math.max(0, Math.max(me.x1 - g.bounds.x2, g.bounds.x1 - me.x2));
+        var dy = Math.max(0, Math.max(me.y1 - g.bounds.y2, g.bounds.y1 - me.y2));
+        gapPx = (dx > 0 && dy > 0) ? Math.sqrt(dx * dx + dy * dy) : Math.max(dx, dy);
+      }
       var gapFt = gapPx / ppf();
       var req = requiredFt(key, g.key);
       out.push({ other: g.key, label: g.label, gapFt: gapFt, needFt: req.ft,
@@ -168027,16 +168032,87 @@ if (root.console && console.info) {
     return out;
   }
 
+  /* ── CONVEX HULL, AND DISTANCE BETWEEN TWO OF THEM ───────────────────
+     Separation was measured box to box, and the boxes were built from raw
+     `pts` — which are stored UNROTATED. Both halves are wrong the moment
+     anything is turned, and since the Layout control started actually
+     turning builds, that is every build:
+
+       · unrotated points measure the shape's ghost, not the shape;
+       · an axis-aligned box around a diagonal compound is enormously
+         bigger than the compound, so two yards sitting a clean 60 ft apart
+         along a diagonal report as overlapping.
+
+     Hence "overlaps control — needs 30" on a drawing where nothing
+     overlaps. Hulls of world-space points, and true polygon-to-polygon
+     distance, measure what is actually on the paper. */
+  function _hullOf(pts) {
+    if (!pts || pts.length < 3) return (pts || []).slice();
+    var p = pts.slice().sort(function (a, b) { return (a.x - b.x) || (a.y - b.y); });
+    function cross(o, a, b) { return (a.x-o.x)*(b.y-o.y) - (a.y-o.y)*(b.x-o.x); }
+    var lo = [], hi = [], i;
+    for (i = 0; i < p.length; i++) {
+      while (lo.length >= 2 && cross(lo[lo.length-2], lo[lo.length-1], p[i]) <= 0) lo.pop();
+      lo.push(p[i]);
+    }
+    for (i = p.length - 1; i >= 0; i--) {
+      while (hi.length >= 2 && cross(hi[hi.length-2], hi[hi.length-1], p[i]) <= 0) hi.pop();
+      hi.push(p[i]);
+    }
+    lo.pop(); hi.pop();
+    var h = lo.concat(hi);
+    return h.length >= 3 ? h : p;
+  }
+  function _ptSegD(px, py, ax, ay, bx, by) {
+    var dx = bx-ax, dy = by-ay, l2 = dx*dx + dy*dy;
+    var t = l2 ? Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / l2)) : 0;
+    var qx = ax + t*dx, qy = ay + t*dy;
+    return Math.hypot(px-qx, py-qy);
+  }
+  function _segCross(a, b, c, d) {
+    function o(p, q, r) { var v = (q.y-p.y)*(r.x-q.x) - (q.x-p.x)*(r.y-q.y); return v > 1e-9 ? 1 : (v < -1e-9 ? -1 : 0); }
+    return o(a,b,c) !== o(a,b,d) && o(c,d,a) !== o(c,d,b);
+  }
+  function _polyDist(A, B) {
+    if (!A || !B || A.length < 2 || B.length < 2) return Infinity;
+    var i, j, best = Infinity;
+    for (i = 0; i < A.length; i++) {
+      var a1 = A[i], a2 = A[(i+1) % A.length];
+      for (j = 0; j < B.length; j++) {
+        var b1 = B[j], b2 = B[(j+1) % B.length];
+        if (_segCross(a1, a2, b1, b2)) return 0;
+        best = Math.min(best,
+          _ptSegD(a1.x,a1.y,b1.x,b1.y,b2.x,b2.y), _ptSegD(a2.x,a2.y,b1.x,b1.y,b2.x,b2.y),
+          _ptSegD(b1.x,b1.y,a1.x,a1.y,a2.x,a2.y), _ptSegD(b2.x,b2.y,a1.x,a1.y,a2.x,a2.y));
+      }
+    }
+    /* One entirely inside the other shares no edge crossing but is not apart. */
+    try {
+      if (root._ptInPoly && (root._ptInPoly(A[0].x, A[0].y, B) || root._ptInPoly(B[0].x, B[0].y, A))) return 0;
+    } catch (e) {}
+    return best;
+  }
+
   function bounds(m) {
-    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, got = false;
-    var eat = function (x, y) { if (x < x1) x1 = x; if (y < y1) y1 = y; if (x > x2) x2 = x; if (y > y2) y2 = y; got = true; };
-    m.shapes.forEach(function (sh) { (sh.pts || []).forEach(function (p) { eat(p.x, p.y); }); });
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity, got = false, all = [];
+    var eat = function (x, y) {
+      if (x < x1) x1 = x; if (y < y1) y1 = y; if (x > x2) x2 = x; if (y > y2) y2 = y;
+      got = true; all.push({ x: x, y: y });
+    };
+    var world = root._shapeWorldPts;
+    m.shapes.forEach(function (sh) {
+      var p = null;
+      try { p = (world && sh.pts && sh.pts.length >= 3) ? world(sh) : null; } catch (e) {}
+      (p || sh.pts || []).forEach(function (q) { eat(q.x, q.y); });
+    });
     m.elements.forEach(function (el) {
       var w = +el.w || 0, h = +el.h || (w * 0.35);
-      eat(+el.x || 0, +el.y || 0); eat((+el.x || 0) + w, (+el.y || 0) + h);
+      var x = +el.x || 0, y = +el.y || 0;
+      eat(x, y); eat(x + w, y); eat(x + w, y + h); eat(x, y + h);
     });
     if (!got) return null;
-    return { x1: x1, y1: y1, x2: x2, y2: y2, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 };
+    return { x1: x1, y1: y1, x2: x2, y2: y2, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2,
+             hull: _hullOf(all) };
   }
 
   /* ── THE GROUND ANCHOR HAS TO GO WITH EVERY MOVE, NOT JUST A TURN ──
@@ -168501,15 +168577,48 @@ if (root.console && console.info) {
       g.appendChild(r);
       return r;
     };
-    /* The others, faintly, so it is clear what you are moving relative
-       to -- and any separation that has gone short is drawn in red with
-       the number on it, while you are still holding the thing. */
+    /* Outline what a compartment really occupies, rather than the box that
+       contains it. On a turned build the box is far bigger than the thing,
+       and drawing it was as misleading as measuring it. */
+    var poly = function (pts, col, w, fill, dash) {
+      if (!pts || pts.length < 3) return null;
+      var el = ns('polygon');
+      el.setAttribute('points', pts.map(function (p) { return p.x + ',' + p.y; }).join(' '));
+      el.setAttribute('fill', fill || 'none');
+      el.setAttribute('stroke', col); el.setAttribute('stroke-width', w);
+      el.setAttribute('stroke-linejoin', 'round');
+      if (dash !== false) el.setAttribute('stroke-dasharray', '9 6');
+      g.appendChild(el);
+      return el;
+    };
+    /* ── SHOW THE CLEARANCE, DO NOT NARRATE IT ────────────────────────────
+       "overlaps control — needs 30" tells you that you are wrong without
+       telling you where right is, so the only way to find a legal position
+       was to nudge and re-read. The rule is a distance from a shape, which
+       is a band around that shape — and a band around a polygon is exactly
+       what you get by stroking it at twice the distance with round joins.
+       So the keep-out zone is drawn, once, as the thing it actually is. You
+       move until you are out of the shading. */
     if (KEY !== 'all') {
       var cf = conflicts(KEY);
       groups().forEach(function (gr) {
         if (gr.key === KEY || !gr.bounds) return;
         var c = cf.filter(function (x) { return x.other === gr.key; })[0];
-        box(gr.bounds, (c && !c.ok) ? '#F87171' : 'rgba(148,163,184,.45)', (c && !c.ok) ? 1.4 : 1);
+        var hull = gr.bounds.hull;
+        if (c && c.needFt > 0 && hull && hull.length > 2) {
+          var band = ns('polygon');
+          band.setAttribute('points', hull.map(function (p) { return p.x + ',' + p.y; }).join(' '));
+          band.setAttribute('fill', 'none');
+          band.setAttribute('stroke', c.ok ? 'rgba(148,163,184,.13)' : 'rgba(248,113,113,.20)');
+          band.setAttribute('stroke-width', c.needFt * ppf() * 2);
+          band.setAttribute('stroke-linejoin', 'round');
+          g.appendChild(band);
+        }
+        if (hull && hull.length > 2) {
+          poly(hull, (c && !c.ok) ? '#F87171' : 'rgba(148,163,184,.45)', (c && !c.ok) ? 1.4 : 1);
+        } else {
+          box(gr.bounds, (c && !c.ok) ? '#F87171' : 'rgba(148,163,184,.45)', (c && !c.ok) ? 1.4 : 1);
+        }
         if (c && !c.ok) {
           var t = ns('text');
           t.setAttribute('x', gr.bounds.cx); t.setAttribute('y', gr.bounds.y1 - pad - 6);
@@ -168525,7 +168634,8 @@ if (root.console && console.info) {
       });
     }
     var b = bounds(M); if (!b) return;
-    box(b, '#38BDF8', 1.6, 'rgba(56,189,248,.07)');
+    if (b.hull && b.hull.length > 2) poly(b.hull, '#38BDF8', 1.6, 'rgba(56,189,248,.07)');
+    else box(b, '#38BDF8', 1.6, 'rgba(56,189,248,.07)');
   
     /* ── THE ROTATE GRIP ────────────────────────────────────────────────
        [ and ] work and nobody wants to learn them. A block you can see is a
