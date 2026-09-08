@@ -99286,7 +99286,11 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        stub, labelled with the real distance. On site: it is placed and the
        run is drawn to it. Either way the marker is inside the parcel — a
        symbol standing on someone else's land is worse than no symbol. */
-    var px=remote ? (xp.x+30*ppf()) : (xp.x+Math.max(20, ft)*ppf()*0.25);
+    /* On site: drawn at the distance given, because the sheet is to scale
+       and a POI drawn at a fraction of its real offset is a lie the
+       schedule then contradicts. Off site: a stub, and the real length
+       goes on the run instead. */
+    var px=remote ? (xp.x+30*ppf()) : (xp.x+(ft>0?ft:40)*ppf());
     var poi=utilAsset('mpoi', poiLabel, 3, 2, px, xp.y, 'omegaPoi');
     var pp={ x:poi.pts[0].x, y:poi.pts[0].y };
     push({ condType:'MV-UG', cluster:true, spine:true, toId:poi.id,
