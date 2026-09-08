@@ -33565,7 +33565,14 @@ function omegaAlignCampus(tag, deg){
     try { if (typeof _geoRestampOne==='function') _geoRestampOne(fence); } catch(e){}
     n++;
   }
-  try { if (typeof rerouteTrenchConduits==='function') rerouteTrenchConduits(); } catch(e){}
+  /* Re-route from the geometry that exists now rather than dragging the old
+     runs along. A translated conduit still turns where the old layout turned,
+     which is half of why a rotated build came out with sprawling trenching.
+     _omegaRetrench also brings the parcel check with it. */
+  try {
+    if (window.OmegaConduit && OmegaConduit.runAll && typeof _omegaRetrench==='function') _omegaRetrench();
+    else if (typeof rerouteTrenchConduits==='function') rerouteTrenchConduits();
+  } catch(e){}
   return n;
 }
 window.omegaAlignCampus = omegaAlignCampus;
@@ -33578,7 +33585,11 @@ function omegaAlignToLand(){
         + 'the parcel is what the layout gets aligned to, so there has to be one to measure.');
     return;
   }
-  var deg = _longestEdgeBearing(site);
+  /* Measure the boundary where it actually lies, not where its stored points
+     say it does — a traced parcel that has been turned reads a bearing 
+     off by exactly that turn otherwise. */
+  var _sw = (typeof _shapeWorldPts==='function') ? _shapeWorldPts(site) : null;
+  var deg = _longestEdgeBearing(_sw ? { pts:_sw, closed:site.closed } : site);
   if (deg == null){ alert('That boundary has no edge long enough to measure.'); return; }
 
   var tags = {}, MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
