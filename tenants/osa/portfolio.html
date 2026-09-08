@@ -821,7 +821,8 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
           <thead><tr><th>Organisation</th><th>Role in the ecosystem</th><th>Joint development</th>
             <th class="num">Referred</th><th class="num">Live</th>
             <th class="num">Funded</th><th class="num">Conversion</th><th class="num">Closed $</th>
-            <th class="num">Supplied $</th><th class="num">Median days to close</th></tr></thead>
+            <th class="num">Supplied $</th><th class="num">Median days to close</th>
+            <th></th></tr></thead>
           <tbody id="partner-rows"></tbody></table></div>
       </div>
       <div id="partner-detail"></div>
@@ -1687,19 +1688,73 @@ function renderJD(){
    separate questions: a manufacturer can be a JD partner and an investor can
    be nothing more than a name on a cap table. Both write to the organisation
    record, which is where the rest of its metadata already lives. */
-function setOrgKind(orgId, kind){
-  A.saveOrg(orgId, { kind: kind })
-    .then(function(){ var o=A.orgs()[orgId]; if(o) o.kind=kind; render(); })
-    .catch(function(e){ alert(e.message || 'Could not save.'); render(); });
+/* Feedback goes next to the control, and NOTHING re-renders the table while
+   somebody is using it. A full render on save is what made the last version
+   feel broken: the element you were touching stopped existing. */
+function pMsg(orgId, text, bad){
+  var el=document.getElementById('pm-'+orgId); if(!el) return;
+  el.textContent = text || '';
+  el.style.color = bad ? 'var(--red,#B4322A)' : 'var(--muted,#5A6B7B)';
+  if(text && !bad) setTimeout(function(){ if(el.textContent===text) el.textContent=''; }, 2500);
 }
+
+function setOrgKind(orgId, kind){
+  pMsg(orgId,'Saving…');
+  A.saveOrg(orgId, { kind: kind })
+    .then(function(){
+      var o=A.orgs()[orgId]; if(o) o.kind=kind;
+      pMsg(orgId,'Saved'); renderJD();
+    })
+    .catch(function(e){ pMsg(orgId, e.message || 'Could not save.', true); });
+}
+
 function setOrgJd(orgId, on){
+  pMsg(orgId,'Saving…');
   A.saveOrg(orgId, { jd: { active: !!on } })
     .then(function(){
       var o=A.orgs()[orgId];
       if(o){ o.jd = o.jd || {}; o.jd.active = !!on; }
-      render();
+      var lbl=document.getElementById('jdl-'+orgId);
+      if(lbl) lbl.textContent = on ? 'On the JD tab' : 'Not a JD partner';
+      pMsg(orgId, on ? 'Now a JD partner' : 'Removed from JD');
+      renderJD();                       /* the other tab, not this table */
+      var c=document.getElementById('c-jd'); if(c) c.textContent=jdOrgs().length;
     })
-    .catch(function(e){ alert(e.message || 'Could not save.'); render(); });
+    .catch(function(e){ pMsg(orgId, e.message || 'Could not save.', true); });
+}
+
+function renameOrg(orgId){
+  var cur = A.orgName(orgId);
+  var next = prompt('Name for ' + orgId, cur);
+  if (next === null) return;
+  next = String(next).trim();
+  if (!next || next === cur) return;
+  pMsg(orgId,'Saving…');
+  A.saveOrg(orgId, { name: next })
+    .then(function(){ var o=A.orgs()[orgId]; if(o) o.name=next; render(); })
+    .catch(function(e){ pMsg(orgId, e.message || 'Could not rename.', true); });
+}
+
+/* Off, not gone. The deals that reference it keep rendering with a real name;
+   it just stops appearing anywhere somebody could pick it again. */
+function toggleOrgActive(orgId, on){
+  pMsg(orgId,'Saving…');
+  A.setOrgActive(orgId, on)
+    .then(function(){ var o=A.orgs()[orgId]; if(o) o.active=!!on; render(); })
+    .catch(function(e){ pMsg(orgId, e.message || 'Could not save.', true); });
+}
+
+/* Only offered where the organisation is on no deals — otherwise deactivate.
+   deleteOrg refuses anything seeded in config.js and says why, because the
+   entry would simply reappear on the next load. */
+function removeOrg(orgId){
+  if (!confirm('Delete ' + orgId + ' from the organisation registry?\n\n'
+      + 'It is on no deals, so nothing loses its name. This cannot be undone.')) return;
+  pMsg(orgId,'Deleting…');
+  A.deleteOrg(orgId)
+    .then(function(){ return A.loadOrgs(); })
+    .then(function(){ render(); })
+    .catch(function(e){ pMsg(orgId, e.message || 'Could not delete.', true); });
 }
 
 /* Their board: every project on that partnership's roster, and nothing else. */
@@ -1727,32 +1782,56 @@ function saveJD(orgId){
 function renderPartners(){
   var list=F.allPartners(S.deals);
   var host=document.getElementById('partner-rows');
-  if(!list.length){ host.innerHTML='<tr><td colspan="10"><div class="empty"><b>No partners yet</b>'
+  if(!list.length){ host.innerHTML='<tr><td colspan="11"><div class="empty"><b>No partners yet</b>'
     +'Organisations appear here as soon as they appear on a deal.</div></td></tr>'; }
   else host.innerHTML=list.map(function(s){
     var org=A.orgs()[s.orgId]||{};
     var admin=false; try{ admin=A.can('approve_any'); }catch(e){}
-    /* The controls stop the row-click from opening the detail panel — a
-       select that also navigates is a select nobody can use. */
+    var oid=esc(s.orgId);
+
+    /* ── THE ROW USED TO BE THE BUTTON ────────────────────────────────
+       Every click anywhere in the row ran openPartner, which calls go(),
+       which re-renders the table — so a select opened and was destroyed in
+       the same gesture and the control felt dead. Only the NAME opens the
+       detail now. A row that is both a link and a form is neither. */
     var kindCell = admin
-      ? '<select onclick="event.stopPropagation()" '
-        + 'onchange="setOrgKind(\''+esc(s.orgId)+'\',this.value)">'
+      ? '<select onchange="setOrgKind(\'' + oid + '\',this.value)">'
         + A.ORG_KINDS.map(function(k){
             return '<option value="'+esc(k.key)+'"'+(org.kind===k.key?' selected':'')+'>'
                  + esc(k.label)+'</option>'; }).join('')
         + '</select>'
       : '<span class="sub">'+esc(org.kind?A.orgKindOf(org.kind).label:'\u2014')+'</span>';
+
     var jdOn = !!(org.jd && org.jd.active);
     var jdCell = admin
-      ? '<label onclick="event.stopPropagation()" style="display:flex;gap:7px;align-items:center">'
+      ? '<label style="display:flex;gap:7px;align-items:center;cursor:pointer">'
         + '<input type="checkbox"'+(jdOn?' checked':'')
-        + ' onchange="setOrgJd(\''+esc(s.orgId)+'\',this.checked)">'
-        + '<span class="sub">'+(jdOn?'On the JD tab':'Not a JD partner')+'</span></label>'
+        + ' onchange="setOrgJd(\'' + oid + '\',this.checked)">'
+        + '<span class="sub" id="jdl-'+oid+'">'+(jdOn?'On the JD tab':'Not a JD partner')+'</span></label>'
       : (jdOn?'<span class="tag">JD partner</span>':'<span class="sub">\u2014</span>');
-    return '<tr class="row" onclick="openPartner(\''+s.orgId+'\')">'
-      + '<td><div class="t-name">'+esc(A.orgName(s.orgId))+'</div>'
+
+    /* An organisation nobody uses should be removable, and one that is on a
+       deal should be switched off instead — the deals keep rendering with a
+       real name, it just stops appearing where somebody could pick it. */
+    var acts = admin
+      ? '<button class="btn-x" onclick="renameOrg(\'' + oid + '\')">Rename</button> '
+        + '<button class="btn-x" onclick="toggleOrgActive(\'' + oid + '\','
+        + (org.active===false?'true':'false') + ')">'
+        + (org.active===false?'Reactivate':'Deactivate') + '</button> '
+        + (s.referred===0
+             ? '<button class="btn-x" onclick="removeOrg(\'' + oid + '\')">Delete</button>'
+             : '<span class="sub" title="It is on '+s.referred+' deal'
+               + (s.referred===1?'':'s')+', so deleting it would leave them nameless">'
+               + 'on '+s.referred+' deal'+(s.referred===1?'':'s')+'</span>')
+      : '';
+
+    return '<tr>'
+      + '<td><div class="t-name" style="cursor:pointer" onclick="openPartner(\'' + oid + '\')">'
+      +   esc(A.orgName(s.orgId))+'</div>'
       +   '<div class="t-sub">'+esc(s.orgId)
-      +   (org&&org.isShareholder?' <span class="tag">shareholder</span>':'')+'</div></td>'
+      +   (org.isShareholder?' <span class="tag">shareholder</span>':'')
+      +   (org.active===false?' <span class="tag">inactive</span>':'')
+      +   ' <span class="sub" id="pm-'+oid+'"></span></div></td>'
       + '<td>'+kindCell+'</td>'
       + '<td>'+jdCell+'</td>'
       + '<td class="num mono">'+s.referred+'</td>'
@@ -1762,6 +1841,7 @@ function renderPartners(){
       + '<td class="num mono">'+F.money(s.closedUsd,true)+'</td>'
       + '<td class="num mono">'+(s.supplyUsd?F.money(s.supplyUsd,true):'\u2014')+'</td>'
       + '<td class="num mono">'+(s.medianDaysToFund!=null?s.medianDaysToFund:'\u2014')+'</td>'
+      + '<td style="white-space:nowrap">'+acts+'</td>'
       + '</tr>'; }).join('');
 
   var det=document.getElementById('partner-detail');
