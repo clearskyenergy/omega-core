@@ -26452,6 +26452,28 @@ function _loadMapsAPI(){
     if(_gmapLoading)return;
     _gmapLoading=true;
     window._gmapCB=()=>{_gmapLoaded=true;_gmapCBs.forEach(cb=>cb.res());};
+    /* ── SAY WHAT GOOGLE WILL NOT ─────────────────────────────────────
+       When Maps auth fails, Google watermarks every tile "For development
+       purposes only" and puts up a dialog that asks "Do you own this
+       website?" — which tells you nothing and reads like the app is broken.
+       Google calls this hook on that failure, so the app can say what
+       actually happened. In practice it is one of three things and the
+       first is by far the commonest: billing is not enabled on the Cloud
+       project, the key's referrer restrictions do not include this
+       hostname, or the API is not enabled on the key. */
+    window.gm_authFailure = function(){
+      var host = location.hostname || 'this host';
+      var msg = 'Google Maps refused the key, so the imagery is watermarked and '
+        + 'searching an address will fail. Almost always this is billing: '
+        + 'Google now gives 10,000 free calls per API per month and rejects '
+        + 'everything after that unless a billing account is attached. Check '
+        + 'console.cloud.google.com → Billing on the Maps project. The other '
+        + 'two causes are the key not listing ' + host + ' in its referrer '
+        + 'restrictions, or the API not being enabled on the key.';
+      try { if (typeof showBanner === 'function') showBanner('warn', msg); } catch(e){}
+      try { console.error('[maps] auth failure — ' + msg); } catch(e){}
+      try { window._mapsAuthFailed = true; } catch(e){}
+    };
     const s=document.createElement('script');
     s.src='https://maps.googleapis.com/maps/api/js?key='+_CFG.googleMapsKey+'&libraries=places,geometry&callback=_gmapCB';
     s.onerror=e=>_gmapCBs.forEach(cb=>cb.rej(e));
@@ -72659,8 +72681,11 @@ window._crmToastModal=_crmToastModal;
           +(location.protocol==='file:'?'file:// (local testing)':location.hostname)
           +', or Static Maps not enabled on the key.', 'bad');
     };
+    /* This test is itself a billable Static Maps call, and it used to run on
+       every open of this dialog — burning the very allowance it is checking.
+       Cache-buster removed so a repeat test is served from the browser. */
     img.src='https://maps.googleapis.com/maps/api/staticmap?center=0,0&zoom=1&size=64x64&key='
-            +encodeURIComponent(k)+'&_cb='+Date.now();
+            +encodeURIComponent(k);
   };
 
   function seed(force){
@@ -72888,8 +72913,11 @@ window._crmToastModal=_crmToastModal;
       note('Rejected - usually a referrer restriction that excludes '
         +(location.protocol==='file:'?'file:// (local testing)':location.hostname)
         +', or Static Maps not enabled on this key.','bad'); };
+    /* This test is itself a billable Static Maps call, and it used to run on
+       every open of this dialog — burning the very allowance it is checking.
+       Cache-buster removed so a repeat test is served from the browser. */
     img.src='https://maps.googleapis.com/maps/api/staticmap?center=0,0&zoom=1&size=64x64&key='
-            +encodeURIComponent(k)+'&_cb='+Date.now();
+            +encodeURIComponent(k);
   };
 })();
 </script>
@@ -79351,6 +79379,29 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     }
     return null;
   }
+  /* ── A SATELLITE TILE NEVER CHANGES ───────────────────────────────────
+     Every capture refetched the whole grid, and a grid is rows x cols calls
+     — tweak the view and re-run four times and that is a hundred requests
+     for the same imagery. Google's free allowance is now 10,000 calls per
+     SKU per month, and Maps Static was the SKU that blew through it.
+
+     A tile is fully identified by centre, zoom and size, so it is cacheable
+     forever. Held for the session as bitmaps, capped so a long session
+     cannot grow without bound. Nothing here reduces what a FIRST capture
+     costs; it removes what every capture after it costs. */
+  var _tileCache = new Map(), TILE_CACHE_MAX = 400;
+  function _tileKey(u){ return u.replace(/[?&]key=[^&]*/, ''); }
+  function _tileGet(u){ return _tileCache.get(_tileKey(u)) || null; }
+  function _tilePut(u, blob){
+    if (_tileCache.size >= TILE_CACHE_MAX){
+      var first = _tileCache.keys().next();
+      if (!first.done) _tileCache.delete(first.value);
+    }
+    _tileCache.set(_tileKey(u), blob);
+  }
+  try { root.OmegaTileCache = { size:function(){ return _tileCache.size; },
+                                clear:function(){ _tileCache.clear(); } }; } catch(e){}
+
   async function fetchMosaic(p, key) {
     var T = MAXSIDE, S2 = 2;
     var cv = document.createElement('canvas');
@@ -79370,10 +79421,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       var batch = jobs.slice(i, i + CONC);
       var res = await Promise.all(batch.map(async function (j) {
         try {
-          var rr = await fetch(j.url);
-          if (!rr.ok) return null;
-          var b = await rr.blob();
-          if (b.size < 2000 || !/^image\//.test(b.type || '')) return null;
+          var b = _tileGet(j.url);
+          if (!b) {
+            var rr = await fetch(j.url);
+            if (!rr.ok) return null;
+            b = await rr.blob();
+            if (b.size < 2000 || !/^image\//.test(b.type || '')) return null;
+            _tilePut(j.url, b);
+          }
           var bmp = await createImageBitmap(b);
           return { j: j, bmp: bmp };
         } catch (e) { return null; }
