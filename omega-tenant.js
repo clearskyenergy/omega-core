@@ -111,6 +111,22 @@
   function writeCache(doc) {
     try { global.localStorage.setItem(CACHE_KEY + T.host, JSON.stringify(doc)); } catch (e) {}
   }
+  /* ── A CACHE FOR A DOCUMENT THAT NO LONGER EXISTS IS NOT A CACHE ─────────
+     readCache() pins a tenant synchronously so the page does not flash. That
+     is only sound while tenant_public still says the same thing. When the
+     document has gone, the cached pin has to go with it — and so does the pin
+     it already applied, or resolve() spends the rest of the session judging
+     every user against a workspace this host is not. That is what was logging
+     people out for moving between pages: a stale pin from an earlier state,
+     applied on every load, matching nobody. */
+  function dropCache() {
+    try { global.localStorage.removeItem(CACHE_KEY + T.host); } catch (e) {}
+  }
+  function unpin(previousOrgId) {
+    var c = cfg();
+    if (c.tenant && c.tenant.orgId === previousOrgId) { try { delete c.tenant; } catch (e) { c.tenant = null; } }
+    T.tenant = null;
+  }
 
   /* ── tenant_public → CLEARSKY_CONFIG.tenant (the shape omega-brand.js expects) ── */
   function toTenantBlock(pub) {
@@ -218,6 +234,19 @@
              reachable on preview hosts for development.) */
           refuse(T.host + ' is not a registered ClearSky-OMEGA portal address.');
         }
+      } else {
+        /* The host has no tenant_public document, but this browser had one
+           cached and has already pinned it. Nothing used to correct that —
+           the branch above only ran when there was NO cache — so the stale
+           pin survived every reload and every navigation, and resolve() kept
+           returning null for anyone outside that tenant.
+
+           Drop both the cache and the pin it applied, then carry on: with no
+           pin, resolve() falls through to the registry and the zero-config
+           path, which is what an unpinned host is supposed to do. */
+        log('tenant_public gone for ' + T.host + ' — dropping stale pin ' + cached.orgId);
+        dropCache();
+        unpin(cached.orgId);
       }
       fireReady();
     })['catch'](function (err) {

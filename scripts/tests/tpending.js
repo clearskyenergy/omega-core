@@ -109,6 +109,68 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
   ok(got && got.pendingApproval !== true, 'nothing is locked');
   ok(banners(t) === 0, 'and the banner is gone');
 
+  /* ── 6 · a cached pin for a host that no longer has a tenant_public doc ──
+     This is what was logging people out for moving between pages: the cache
+     pins a tenant synchronously so the page does not flash, and nothing ever
+     corrected it when the document behind it had gone. resolve() then judged
+     every user against a workspace this host is not. */
+  console.log('stale tenant pin');
+  const STALE = { orgId: 'fenecon.com', name: 'FENECON', domains: ['fenecon.com'], tier: 'trial' };
+  function runWithCache(docs, cached) {
+    const store = {};
+    if (cached) store['omega_tenant_public:roam.clearskyomega.com'] = JSON.stringify(cached);
+    const t = run(docs, {});
+    return t;
+  }
+  /* Drive resolveHost directly through a fake localStorage that holds a pin
+     for a host whose document has been removed. */
+  function stalePin(docsHaveHost) {
+    const seen = {};
+    const body = { children: [], firstChild: null, insertBefore() {}, appendChild() {} };
+    function snap(p) { return { exists: p in DOCS, data: () => DOCS[p] }; }
+    const DOCS = docsHaveHost
+      ? { 'tenant_public/roam.clearskyomega.com': STALE }
+      : {};
+    function ref(p) {
+      return { get: () => Promise.resolve(snap(p)), set: () => Promise.resolve(),
+               collection: c => ({ doc: d => ref(p + '/' + c + '/' + d) }) };
+    }
+    const G = {
+      console, setTimeout, Promise, Date, JSON,
+      CustomEvent: function (n, o) { this.type = n; this.detail = o && o.detail; },
+      location: { hostname: 'roam.clearskyomega.com', pathname: '/', search: '', href: '' },
+      localStorage: { _s: Object.assign({}, seen,
+                        { 'omega_tenant_public:roam.clearskyomega.com': JSON.stringify(STALE) }),
+                      getItem(k) { return this._s[k] === undefined ? null : this._s[k]; },
+                      setItem(k, v) { this._s[k] = v; },
+                      removeItem(k) { delete this._s[k]; } },
+      document: { body, createElement: () => ({ id: '', setAttribute() {}, innerHTML: '' }),
+                  getElementById: () => null, addEventListener() {}, readyState: 'complete',
+                  documentElement: { style: { setProperty() {} } } },
+      addEventListener() {}, dispatchEvent() {},
+      CLEARSKY_CONFIG: {},
+      firebase: { auth: () => ({ onAuthStateChanged() {}, signOut: () => Promise.resolve() }),
+                  firestore: Object.assign(() => ({ collection: c => ({ doc: d => ref(c + '/' + d) }) }),
+                                           { FieldValue: { serverTimestamp: () => '<ts>' } }) }
+    };
+    G.window = G;
+    vm.createContext(G);
+    vm.runInContext(SRC, G);
+    return G;
+  }
+
+  let G = stalePin(false);
+  await wait();
+  ok(!(G.CLEARSKY_CONFIG.tenant && G.CLEARSKY_CONFIG.tenant.orgId),
+     'a cached pin is dropped when the host has no tenant_public document');
+  ok(G.localStorage.getItem('omega_tenant_public:roam.clearskyomega.com') === null,
+     'and the cache behind it is cleared, so a reload does not re-pin it');
+
+  G = stalePin(true);
+  await wait();
+  ok(!!(G.CLEARSKY_CONFIG.tenant && G.CLEARSKY_CONFIG.tenant.orgId === 'fenecon.com'),
+     'a cache that still matches a live document keeps its pin');
+
   console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
   process.exit(fails ? 1 : 0);
 })();
