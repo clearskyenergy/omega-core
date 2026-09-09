@@ -1117,6 +1117,9 @@ function _tnBusy(on, note){
 function loadTenants(){
   if (!db){ document.getElementById('tn-body').innerHTML='<div class="empty">Not connected.</div>'; return; }
   _tnBusy(true, '');
+  /* Fired alongside, not awaited: the request queue is a small independent
+     read and the tenant table should not wait on it, nor fail with it. */
+  loadAccessRequests();
   db.collection('omega_orgs').get().then(function(sn){
     var rows=[];
     sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
@@ -1558,6 +1561,16 @@ function createTenant(){
     batch.set(db.collection('tenant_public').doc(host), pub);
     return batch.commit();
   }).then(function(){
+    /* Only now — a request marked approved beside a tenant that failed to
+       write is a person waiting for a workspace nobody knows to build. */
+    if (NT_FROM_REQ) {
+      var rid = NT_FROM_REQ; NT_FROM_REQ = null;
+      db.collection('access_requests').doc(rid).update({
+        status: 'approved', orgId: domain,
+        decidedBy: (currentUser && currentUser.email) || 'console',
+        decidedAt: FV.serverTimestamp()
+      }).then(loadAccessRequests)['catch'](function(){});
+    }
     if (btn) btn.disabled = false;
     say('Created — ' + host + (trialEndsAt
       ? (', trial to ' + new Date(trialEndsAt).toLocaleDateString()) : ', no trial') + '.');
@@ -1572,6 +1585,96 @@ function createTenant(){
       ? 'Firestore refused it — this console needs a ClearSky admin account.'
       : ((e && e.message) || 'Could not create the tenant.'));
   });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACCESS REQUESTS  —  the other end of the front door
+   --------------------------------------------------------------------------
+   /login creates the Firebase Auth account and files one access_requests row.
+   Nothing is granted by that: the person can sign in and sees the dashboard
+   with every tool locked until a tenant exists for their domain. This is where
+   somebody at ClearSky looks at the request and either sets the workspace up
+   or declines it.
+
+   "Set up" fills the New tenant form from what they actually told us rather
+   than opening an empty one — the company name, the domain and the vertical
+   are already answered, and re-typing them is how they get typed wrong. The
+   request is marked approved only after the tenant write succeeds, so a
+   failure leaves it in the queue instead of losing it. */
+var REQS = [];
+var NT_FROM_REQ = null;
+
+function loadAccessRequests(){
+  return db.collection('access_requests').where('status','==','pending').get()
+    .then(function(sn){
+      REQS = [];
+      sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; REQS.push(v); });
+      REQS.sort(function(a,b){
+        var am=(a.createdAt&&a.createdAt.toMillis)?a.createdAt.toMillis():0;
+        var bm=(b.createdAt&&b.createdAt.toMillis)?b.createdAt.toMillis():0;
+        return bm-am;
+      });
+      renderAccessRequests();
+    })
+    ['catch'](function(e){
+      /* Silent when the collection simply is not there yet. A console that
+         shouts about an empty queue trains people to ignore it. */
+      if (e && e.code === 'permission-denied') return;
+      REQS = []; renderAccessRequests();
+    });
+}
+
+function renderAccessRequests(){
+  var wrap=document.getElementById('tn-req-wrap');
+  var host=document.getElementById('tn-req');
+  if(!wrap||!host) return;
+  wrap.style.display = REQS.length ? '' : 'none';
+  var c=document.getElementById('tn-req-count'); if(c) c.textContent=REQS.length;
+  host.innerHTML = REQS.map(function(r,i){
+    var when = (r.createdAt&&r.createdAt.toDate) ? r.createdAt.toDate().toLocaleDateString() : '';
+    return '<div class="info-card"><div class="ic-top"><div>'
+      + '<div class="ic-name">'+esc(r.company||r.domain||r.email)+'</div>'
+      + '<div class="ic-sub">'+esc(r.email)+' · '+esc(r.domain||'')
+      +   (r.vertical?(' · '+esc(r.vertical)):'')+(when?(' · '+esc(when)):'')+'</div>'
+      + (r.note?('<div class="sub-txt" style="margin-top:6px">“'+esc(r.note)+'”</div>'):'')
+      + '</div><span class="chip warn">requested</span></div>'
+      + '<div class="ic-actions">'
+      + '<button onclick="setUpFromRequest('+i+')">Set up workspace</button>'
+      + '<button class="danger" onclick="declineRequest('+i+')">Decline</button>'
+      + '<span id="req-msg-'+i+'" class="sub-txt" style="margin-left:8px"></span>'
+      + '</div></div>';
+  }).join('');
+}
+
+function setUpFromRequest(i){
+  var r = REQS[i]; if(!r) return;
+  NT_FROM_REQ = r._id;
+  var box = document.getElementById('tn-new');
+  if (box && box.style.display === 'none') toggleNewTenant();
+  var set = function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+  set('nt-name', r.company||'');
+  set('nt-domain', r.domain || String(r.email||'').split('@')[1] || '');
+  set('nt-vertical', r.vertical||'developer');
+  set('nt-slug','');
+  set('nt-note', r.note||'');
+  if (!document.getElementById('nt-start').value)
+    document.getElementById('nt-start').value = new Date().toISOString().slice(0,10);
+  ntSuggest();
+  if (box && box.scrollIntoView) box.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function declineRequest(i){
+  var r = REQS[i]; if(!r) return;
+  if(!window.confirm('Decline the request from ' + (r.company||r.email) + '?\n\n'
+      + 'Their sign-in keeps working; they simply never get a workspace.')) return;
+  var m = document.getElementById('req-msg-'+i);
+  if(m) m.textContent = 'Declining…';
+  db.collection('access_requests').doc(r._id).update({
+    status: 'declined',
+    decidedBy: (currentUser && currentUser.email) || 'console',
+    decidedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(loadAccessRequests)
+    ['catch'](function(e){ if(m) m.textContent = 'Failed — '+((e&&e.message)||e); });
 }
 
 function renderTenants(){

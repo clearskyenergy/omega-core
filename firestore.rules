@@ -2119,6 +2119,54 @@ service cloud.firestore {
          decides what the tenant IS on the platform and what they can reach,
          and stays ClearSky-only. hasOnly() below is the line between them.
        ============================================================ */
+    /* ════════════════════════════════════════════════════════════════════════
+       ACCESS REQUESTS  —  access_requests/{uid}                ← CONTROL PLANE
+       ════════════════════════════════════════════════════════════════════════
+       The front door for somebody with no workspace. They create a Firebase
+       Auth account on /login and write ONE document here saying who they are
+       and what company they are from; ClearSky reads it in the master console
+       and either creates the tenant or declines.
+
+       WHY THIS EXISTS AT ALL. omega_orgs create is `if isAdmin()` and must
+       stay that way — a browser that can mint tenants can mint itself one.
+       /api/tenant-signup does it properly with the Admin SDK, and this
+       deployment has no FIREBASE_SERVICE_ACCOUNT, so until it does there was
+       no route from "I want an account" to anything ClearSky can see. A
+       request queue is the honest shape regardless: the thing being asked for
+       is approval, so the record should be the request, not a half-made tenant.
+
+       KEYED BY uid, NOT BY EMAIL. One person, one request; asking twice
+       overwrites their own row rather than filling a queue. It also means the
+       rule is `request.auth.uid == uid` — provably one document per caller,
+       with nothing to enumerate.
+
+       THE EMAIL IS TAKEN FROM THE TOKEN, not from the body. Otherwise anyone
+       could file a request in somebody else's name and ClearSky would approve
+       a domain on the strength of it.
+
+       status IS NOT THE CALLER'S TO SET beyond 'pending'. Approval is an
+       admin update; a self-declared 'approved' would be worth exactly as much
+       as the person writing it. */
+    match /access_requests/{uid} {
+      allow read:   if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn()
+                    && request.auth.uid == uid
+                    && request.resource.data.email == request.auth.token.email.lower()
+                    && request.resource.data.get('status', '') == 'pending'
+                    && request.resource.data.company is string
+                    && request.resource.data.company.size() > 1
+                    && request.resource.data.company.size() < 120;
+      /* Re-filing is allowed — a typo in the company name should not need a
+         support ticket — but only while it is still pending, and only by the
+         person it belongs to. Once ClearSky has acted, the row is history. */
+      allow update: if isAdmin()
+                    || (signedIn() && request.auth.uid == uid
+                        && resource.data.get('status', '') == 'pending'
+                        && request.resource.data.get('status', '') == 'pending'
+                        && request.resource.data.email == resource.data.email);
+      allow delete: if isAdmin();
+    }
+
     match /omega_orgs/{orgId} {
       function brandingOnly() {
         /* bannerUrl is the dashboard hero image. It is branding in exactly the

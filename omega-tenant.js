@@ -294,7 +294,7 @@
       if (s.exists) {
         var o = s.data(), host = (o.domains && o.domains[0]) || null;
         T.org = o; T.status = o.status || 'active';
-        if (T.status === 'pending') { pendingScreen(o, user); return; }
+        if (T.status === 'pending') { pendingBanner(o, user, null); lockedEntitlements(); return; }
         if (host && host !== T.host && !onStart) { global.location.href = 'https://' + host + global.location.pathname + global.location.search; return; }
         if (host && host !== T.host && onStart) { global.location.href = 'https://' + host + '/'; return; }
         try { global.dispatchEvent(new CustomEvent('omega:hub', { detail: { exists: true, org: o } })); } catch (e) {}
@@ -305,17 +305,39 @@
     })['catch'](function (err) { log('hub lookup failed', err && err.message); });
   }
 
-  function pendingScreen(org, user) {
+  /* An account with nothing unlocked. unlockedTools is what applyToolLocks()
+     reads, so an empty list draws every tool in the state the UI already has
+     for "not on your plan" — no second locked-out design to build or keep in
+     step. */
+  function lockedEntitlements() {
+    var ws = mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || {}) || {};
+    ws.unlockedTools = [];
+    ws.pendingApproval = true;
+    fireEntitlements(ws);
+  }
+
+  /* A strip at the top of the page, not a screen over it. It has to survive a
+     dashboard that repaints, so it is appended once and identified by id. */
+  function pendingBanner(org, user, req) {
     if (!global.document) return;
-    var name = (org && org.name) || 'your workspace';
+    if (document.getElementById('omega-pending')) return;
+    var esc = function (x) { return String(x == null ? '' : x).replace(/</g, '&lt;'); };
+    var who = (org && org.name) || (req && req.company) || 'Your workspace';
     var d = document.createElement('div');
     d.id = 'omega-pending';
-    d.setAttribute('style', 'position:fixed;inset:0;background:#0A1628;color:#E5EEF7;z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:24px;text-align:center');
-    d.innerHTML = '<div style="max-width:520px"><div style="font-size:12px;letter-spacing:.2em;color:#00A9A4;font-weight:700;margin-bottom:14px">CLEARSKY-OMEGA</div>'
-      + '<div style="font-size:22px;font-weight:700;margin-bottom:10px">' + String(name).replace(/</g, '&lt;') + ' is being set up</div>'
-      + '<div style="font-size:14px;color:#8BA3C4;line-height:1.6">Your workspace request is with the ClearSky team. Approval usually takes one business day; you\'ll get an email at <b style="color:#E5EEF7">' + String(user && user.email || '').replace(/</g, '&lt;') + '</b> the moment it\'s live.<br><br>Questions: <a href="mailto:support@csebuilders.com" style="color:#00A9A4">support@csebuilders.com</a></div>'
-      + '<button onclick="firebase.auth().signOut().then(function(){location.reload()})" style="margin-top:24px;background:transparent;border:1px solid #2A3F5F;color:#8BA3C4;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px">Sign out</button></div>';
-    document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(d); });
+    d.setAttribute('style', 'position:sticky;top:0;z-index:9998;background:#7C4A00;color:#FFF3E0;'
+      + 'font:600 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:10px 16px;'
+      + 'display:flex;gap:12px;align-items:center;flex-wrap:wrap');
+    d.innerHTML = '<span style="font-size:11px;letter-spacing:.14em;background:rgba(255,255,255,.16);'
+      + 'padding:3px 8px;border-radius:999px">AWAITING APPROVAL</span>'
+      + '<span style="flex:1;min-width:240px;font-weight:500">'
+      + esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
+      + 'usually one business day. We will email '
+      + '<b>' + esc(user && user.email) + '</b> the moment it is live.</span>'
+      + '<a href="mailto:support@csebuilders.com" style="color:#FFF3E0;text-decoration:underline">'
+      + 'Chase it up</a>';
+    function attach() { if (document.body) document.body.insertBefore(d, document.body.firstChild); }
+    if (document.body) attach(); else document.addEventListener('DOMContentLoaded', attach);
   }
 
   function loadEntitlements(user) {
@@ -335,8 +357,39 @@
       T.role = (T.member && T.member.role) || 'member';
       T.status = (T.org && T.org.status) || 'active';
 
+      /* ── NO TENANT RECORD FOR THIS DOMAIN ────────────────────────────────
+         Two very different people land here and they must not be treated the
+         same. A legacy tenant whose omega_orgs doc has never been seeded has
+         to keep working — that is why tenantActive() in the rules treats an
+         absent document as active. Somebody who signed themselves up on
+         /login three minutes ago must not.
+
+         The access request tells them apart, and it is only read in this
+         branch, so nobody with a tenant record pays for the lookup. */
+      if (!T.org) {
+        return d.collection('access_requests').doc(uid).get().then(function (rq) {
+          var r = rq.exists ? (rq.data() || {}) : null;
+          if (r && (r.status || 'pending') === 'pending') {
+            pendingBanner(null, user, r);
+            lockedEntitlements();
+            return;
+          }
+          fireEntitlements(mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null));
+        })['catch'](function () {
+          fireEntitlements(mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null));
+        });
+      }
+
       if (T.status === 'pending') {
-        pendingScreen(T.org, user);
+        /* NOT A WALL. A workspace awaiting approval used to get a full-screen
+           block, which tells somebody who has just signed up that the product
+           does not work. They get the dashboard instead, with a banner saying
+           where their request is and every tool locked — the same shape as a
+           tier they have not bought, which the UI already knows how to draw.
+           There is nothing to protect by hiding the shell: the data behind
+           each tool is gated by rules, not by whether a link is visible. */
+        pendingBanner(T.org, user, null);
+        lockedEntitlements();
         return;
       }
       if (T.status === 'suspended' || T.status === 'cancelled') {

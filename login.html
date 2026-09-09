@@ -268,8 +268,60 @@
         <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
 
         <div class="login-div"><span>New to ClearSky?</span></div>
-        <a href="https://clearskyomega.com/contact.html" class="btn-ghost" style="width:100%;justify-content:center">Request access</a>
+        <button type="button" class="btn-ghost" id="createBtn" style="width:100%;justify-content:center">Create an account</button>
         <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</p>
+      </div>
+
+      <!-- STATE 1b · CREATE AN ACCOUNT
+           "Request access" used to be a link to a marketing contact form on
+           another site, which is not a door — somebody types their email into
+           a form and hears nothing, and there is no account to sign into when
+           ClearSky does get round to it.
+
+           This makes the Firebase Auth account immediately (that needs no
+           privilege) and files ONE access request the master console can see.
+           The account exists from that moment, so the person can sign in
+           while they wait; what they get until approval is the dashboard with
+           every tool locked, not a wall — see omega-tenant.js.
+
+           A COLLEAGUE OF AN EXISTING TENANT SKIPS THE QUEUE. If their domain
+           already has a workspace, there is nothing for ClearSky to approve;
+           omega-tenant.js self-registers them as a member on arrival. Asking
+           them to wait a business day for an account their company already
+           pays for would be an invented obstacle. -->
+      <div id="paneSignup" class="choose" style="display:none;">
+        <h2>Create an account</h2>
+        <p class="sub">Use your work email. A ClearSky administrator approves each new company before its tools open up.</p>
+        <form id="signupForm" novalidate>
+          <div class="field">
+            <label for="suEmail">Work email</label>
+            <input id="suEmail" type="email" autocomplete="username" spellcheck="false" placeholder="you@yourcompany.com" required>
+          </div>
+          <div class="field">
+            <label for="suCompany">Company</label>
+            <input id="suCompany" type="text" autocomplete="organization" placeholder="Roam Energy" required>
+          </div>
+          <div class="field">
+            <label for="suVertical">What you do</label>
+            <select id="suVertical" style="width:100%">
+              <option value="installer">Installer &amp; sales channel</option>
+              <option value="developer">Developer, owner or capital</option>
+              <option value="epc">EPC &amp; engineering</option>
+              <option value="oem">OEM &amp; technology</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="suPass">Password</label>
+            <input id="suPass" type="password" autocomplete="new-password" placeholder="At least 8 characters" required>
+          </div>
+          <div class="field">
+            <label for="suNote">Anything we should know (optional)</label>
+            <input id="suNote" type="text" placeholder="Focus, timeline, who referred you">
+          </div>
+          <button type="submit" class="btn-primary" id="suSubmit" style="width:100%;justify-content:center">Create account</button>
+        </form>
+        <p class="form-msg" id="suMsg" role="status" aria-live="polite"></p>
+        <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="suBack">Back to sign in</button></p>
       </div>
 
       <!-- STATE 2 · this account reaches more than one workspace -->
@@ -460,6 +512,7 @@
 
   const ui = {
     signIn:  $("paneSignIn"),
+    signup:  $("paneSignup"),
     choose:  $("paneChoose"),
     blocked: $("paneBlocked"),
     loading: $("omegaLoading"),
@@ -473,6 +526,7 @@
 
   function showPane(name) {
     ui.signIn.style.display  = name === "signIn"  ? "" : "none";
+    ui.signup.style.display  = name === "signup"  ? "" : "none";
     ui.choose.style.display  = name === "choose"  ? "" : "none";
     ui.blocked.style.display = name === "blocked" ? "" : "none";
   }
@@ -941,6 +995,116 @@
         const m = friendly(err);
         if (m) say(m, "error");
       }
+    });
+
+    /* ---- Create an account ------------------------------------------------
+       Two things happen and they are deliberately separate: a Firebase Auth
+       account (which needs no privilege and exists the moment it is made) and
+       an access request (a document ClearSky reads and acts on). Making the
+       account first means somebody can sign in and see where their request is
+       while they wait, instead of having nothing at all until an
+       administrator gets to it.
+
+       PUBLIC EMAIL PROVIDERS ARE REFUSED. orgId is the email domain, so a
+       workspace keyed on gmail.com would hold strangers who share a mail
+       provider. Mirrors api/_lib/public-domains.js — shortened to the ones
+       people actually type, because this is a courtesy check and the server
+       list is the control. */
+    const PUBLIC_MAIL = ["gmail.com","googlemail.com","yahoo.com","ymail.com","outlook.com",
+      "hotmail.com","hotmail.co.uk","live.com","msn.com","aol.com","icloud.com","me.com","mac.com",
+      "protonmail.com","proton.me","pm.me","zoho.com","gmx.com","gmx.de","web.de","mail.com",
+      "yandex.com","yandex.ru","fastmail.com","hey.com","duck.com","comcast.net","att.net",
+      "verizon.net","sbcglobal.net","cox.net","charter.net","qq.com","163.com","naver.com",
+      "mail.ru","example.com"];
+
+    function suSay(text, kind) {
+      const el = $("suMsg");
+      el.textContent = text || "";
+      el.className = "form-msg " + (kind || "info");
+    }
+
+    $("createBtn").addEventListener("click", () => {
+      const typed = ui.email.value.trim();
+      if (typed) $("suEmail").value = typed;
+      suSay("");
+      showPane("signup");
+      $("suEmail").focus();
+    });
+    $("suBack").addEventListener("click", () => { showPane("signIn"); say(""); });
+
+    $("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email   = $("suEmail").value.trim().toLowerCase();
+      const company = $("suCompany").value.trim();
+      const vertical= $("suVertical").value;
+      const pass    = $("suPass").value;
+      const note    = $("suNote").value.trim();
+      const domain  = domainOf(email);
+
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return suSay("Check the email address — that one isn't valid.", "error");
+      if (PUBLIC_MAIL.indexOf(domain) > -1) {
+        return suSay("Use your work email. A workspace is keyed to your company's domain, so a "
+          + "personal address would put strangers in the same account.", "error");
+      }
+      if (company.length < 2) return suSay("Tell us the company name.", "error");
+      if (pass.length < 8)    return suSay("Passwords need at least 8 characters.", "error");
+
+      const btn = $("suSubmit");
+      btn.disabled = true;
+      suSay("Creating your account…");
+      let user = null;
+      try {
+        const cred = await auth.createUserWithEmailAndPassword(A, email, pass);
+        user = cred.user;
+      } catch (err) {
+        btn.disabled = false;
+        const c = (err && err.code) || "";
+        if (c.indexOf("email-already-in-use") > -1) {
+          showPane("signIn");
+          ui.email.value = email;
+          say("That email already has an OMEGA account — sign in, or use Forgot password.", "info");
+          ui.pass.focus();
+          return;
+        }
+        if (c.indexOf("weak-password") > -1) return suSay("That password is too easy to guess. Try a longer one.", "error");
+        return suSay(friendly(err), "error");
+      }
+
+      /* Best effort, and it must not block the flow: an unverified address
+         still gets an account, and ClearSky is approving the domain anyway. */
+      try { await auth.sendEmailVerification(user); } catch (_) {}
+
+      /* A colleague of an existing tenant has nothing to wait for. */
+      let orgExists = false;
+      try { orgExists = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
+      if (orgExists) {
+        suSay("Your company is already on OMEGA — taking you in.", "info");
+        showPane("signIn");
+        return route(user, { quick: true });
+      }
+
+      try {
+        await fs.setDoc(fs.doc(db, "access_requests", user.uid), {
+          email: email, company: company, vertical: vertical, domain: domain,
+          note: note || null, status: "pending",
+          uid: user.uid, userAgent: navigator.userAgent || null,
+          createdAt: fs.serverTimestamp()
+        });
+      } catch (err) {
+        /* The account is real either way. Say which half failed, because
+           "try again" would make a second account and fix nothing. */
+        btn.disabled = false;
+        return suSay("Your account was created, but we could not file the access request. "
+          + "Email dev@clearsky-usa.com and we will do it by hand — you can sign in with "
+          + "this email and password now.", "error");
+      }
+
+      blockedPane("unapproved", null);
+      $("blockedTitle").textContent = "Request received";
+      $("blockedBody").textContent = "Your account is created and " + company
+        + " is with the ClearSky team. Approval usually takes one business day, and we will email "
+        + email + " the moment it is through. You can sign in meanwhile — the tools stay locked "
+        + "until it is approved.";
     });
 
     $("forgotBtn").addEventListener("click", async () => {

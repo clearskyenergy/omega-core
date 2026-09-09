@@ -729,6 +729,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
           </div>
         </div>
       </div>
+      <!-- ACCESS REQUESTS — somebody created an account on /login and their
+           email domain has no workspace. One click sets the tenant up with
+           their own answers already in the form. -->
+      <div id="tn-req-wrap" style="display:none;margin-bottom:16px">
+        <div class="block-title" style="font-size:14px;margin-bottom:8px">Access requests<span class="cnt" id="tn-req-count">0</span></div>
+        <div id="tn-req"></div>
+      </div>
       <div id="tn-pending-wrap" style="display:none;margin-bottom:16px">
         <div class="block-title" style="font-size:14px;margin-bottom:8px">Pending signups<span class="cnt" id="tn-pending-count">0</span></div>
         <div id="tn-pending"></div>
