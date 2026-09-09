@@ -711,7 +711,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
                 <option value="oem">OEM &amp; technology channel</option>
               </select></label>
             <label class="nt-f"><span>Workspace host</span>
-              <input type="text" id="nt-slug" placeholder="roam"><small id="nt-host"></small></label>
+              <!-- oninput matters: this field is the one people edit by hand, and
+                   the line under it is the address the tenant will actually be
+                   given. Without it the hint only refreshed when some OTHER
+                   field fired, so typing "roam" left it reading whatever the
+                   last keystroke elsewhere had produced — the form quietly
+                   showing one address while about to create another. -->
+              <input type="text" id="nt-slug" placeholder="roam" oninput="ntSuggest()"><small id="nt-host"></small></label>
             <label class="nt-f"><span>Trial starts</span>
               <input type="date" id="nt-start" oninput="ntSuggest()"></label>
             <label class="nt-f"><span>Trial days</span>

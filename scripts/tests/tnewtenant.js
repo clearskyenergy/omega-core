@@ -68,6 +68,15 @@ DOM['nt-slug'].value = 'roam';
 S.ntSuggest();
 ok(DOM['nt-host'].textContent === 'roam.clearskyomega.com', 'an edited host is respected, not re-derived');
 
+/* The hint is the address the tenant actually gets, so it has to track the
+   field it describes. It did not: nt-slug had no oninput, so typing a host by
+   hand left the line underneath showing the previous derivation. */
+const adminHtml = require('fs').readFileSync(
+  require('path').join(__dirname, '..', '..', 'admin', 'index.html'), 'utf8');
+const slugTag = /<input[^>]*id="nt-slug"[^>]*>/.exec(adminHtml);
+ok(slugTag && /oninput="ntSuggest\(\)"/.test(slugTag[0]),
+   'the host field refreshes its own hint as you type');
+
 /* ── 2 · the trial window ────────────────────────────────────────────── */
 console.log('trial');
 DOM['nt-start'].value = '2026-09-09';
