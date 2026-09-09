@@ -177,14 +177,23 @@ auth.onAuthStateChanged(function(u){
 
 /* A plain customer never receives a quote request, and a tab that is
    permanently empty teaches people to ignore the page. So Received shows when
-   there is something in it, or when this org is set up as a distribution
-   partner and is waiting for the first one. Reading your own org record is
-   allowed; reading anyone else's is not, which is why this is a doc get and
-   not a query. */
+   there is something in it, or when this org is one of the two kinds that
+   answer them and is waiting for its first.
+
+   TWO KINDS, NOT ONE. A distributor is flagged (receivesFullBom) because
+   receiving a whole BOM is a commercial arrangement somebody grants. An OEM is
+   not flagged — it qualifies by being an OEM, which the tenant record already
+   says. Reading the catalogue for "do I have a SKU on file" is not an option:
+   equipment read is scoped to the org that CREATED the record, so a factory
+   querying for its own vendorOrgId would be refused.
+
+   Reading your own org record is allowed; reading anyone else's is not, which
+   is why this is a doc get and not a query. */
 var IS_SUPPLIER = false;
 function loadRole(){
   return db.collection('omega_orgs').doc(MYORG).get().then(function(d){
-    IS_SUPPLIER = !!(d.exists && d.data() && d.data().receivesFullBom);
+    var v = (d.exists && d.data()) || {};
+    IS_SUPPLIER = !!v.receivesFullBom || v.vertical === 'oem';
   }).catch(function(){ IS_SUPPLIER = false; });
 }
 
@@ -274,12 +283,38 @@ function renderReceived(){
       +     '<button onclick="toggleRespond('+i+')">'+(r.quote?'Revise quote':'Respond')+'</button>'
       +   '</div>'
       + '</div>'
+      + channelBlock(r)
       + (r.quote ? quoteBlock(r.quote, false) : '')
       + (r.decision ? decisionBlock(r.decision) : '')
       + '<div id="bom'+i+'" class="hide" style="margin-top:12px">'+bomTable(lines)+'</div>'
       + '<div id="resp'+i+'" class="hide panel">'+respondForm(i,r)+'</div>'
       + '</div>';
   }).join('');
+}
+
+/* ── WHO THE ORDER ACTUALLY GOES THROUGH ──────────────────────────────────
+   A factory quoting its own lines is not selling to the site; it is selling
+   through whichever distributor the customer picked. Without that name there
+   is no point of contact and no idea whose account the order lands on — which
+   is the single thing an OEM asks first. Shown only on a line-item request:
+   a distributor receiving the full BOM is not told who else is bidding it. */
+function channelBlock(r){
+  if (r.scope === 'full-bom') return '';
+  var d = r.distributors;
+  if (!d) return '';   /* filed before this was recorded — say nothing rather than something wrong */
+  if (!d.length) {
+    return '<div class="quote" style="background:#FBFCFD;border-color:var(--cs-border)">'
+      + '<div class="meta">No distributor on this request — the customer asked you directly.</div></div>';
+  }
+  return '<div class="quote" style="background:#F4FBF7;border-color:#CDE9DA">'
+    + '<div class="meta" style="margin-bottom:3px">Buying through</div>'
+    + d.map(function(x){
+        return '<b style="font-size:14px">'+esc(x.name||x.orgId)+'</b>'
+          + ' <span class="meta">'+esc(x.orgId)+'</span>';
+      }).join('<br>')
+    + '<div class="meta" style="margin-top:5px">Your point of contact for this order. '
+    + 'The customer selected them for the package; your lines are quoted against it.</div>'
+    + '</div>';
 }
 
 function bomTable(lines){
@@ -365,6 +400,10 @@ function downloadRfqCsv(i){
   rows.push(['ZIP', ship.zip||'']);
   rows.push(['State', ship.state||anon.state||'']);
   rows.push(['Scope', r.scope==='full-bom'?'Full BOM':'Line items']);
+  if(r.scope!=='full-bom' && r.distributors){
+    rows.push(['Buying through', (r.distributors||[]).map(function(x){ return x.name||x.orgId; }).join('; ')
+                                 || 'Direct — no distributor on this request']);
+  }
   rows.push([]);
   rows.push(['Category','SKU','Description','Qty','Unit','Unit price','Extended']);
   (r.lines||[]).forEach(function(l){

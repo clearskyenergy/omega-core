@@ -1416,6 +1416,164 @@ function seedTenantsFromBrowser(){
   });
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   NEW TENANT  —  ClearSky sets an account up deliberately
+   --------------------------------------------------------------------------
+   /api/tenant-signup is the self-serve door: somebody finds the product, asks
+   for a workspace, and it lands `pending` waiting for approval. This is the
+   other half — a company that has already said yes, set up by ClearSky — so it
+   opens `active` with the trial already running. Nobody should have to approve
+   an account they just created.
+
+   WRITTEN FROM THE BROWSER, for the reason seedTenantsFromBrowser() sets out
+   at length: omega_orgs create, billing/* and tenant_public all say
+   `if isAdmin()`, and a signed-in ClearSky address already satisfies it. The
+   endpoint needs FIREBASE_SERVICE_ACCOUNT, which this deployment does not
+   have, so routing through it would fail on an environment variable rather
+   than on anything a person can act on.
+
+   WHAT THIS CANNOT DO, and does not pretend to: custom claims. The owner's
+   `role` / `orgId` claims are Admin-SDK only. Nothing here depends on them —
+   omega-tenant.js self-registers the first member from the org record on their
+   first sign-in — but Storage rules and api/ functions that read the claim
+   will not see one until /api/set-role can run.
+
+   ── THE TRIAL IS A DATE, NOT A DURATION ─────────────────────────────────
+   trialEndsAt is stored as an ISO string because that is what
+   /api/tenant-signup writes and what _standing() above parses. Storing days
+   remaining would need something to decrement it. */
+var NT_BASE_HOST = 'clearskyomega.com';
+var NT_RESERVED = ['www','app','api','admin','console','staging','alpha','portal','silmarillion'];
+
+function toggleNewTenant(){
+  var box = document.getElementById('tn-new'); if(!box) return;
+  var open = box.style.display === 'none';
+  box.style.display = open ? '' : 'none';
+  if (open){
+    var d = document.getElementById('nt-start');
+    if (d && !d.value) d.value = new Date().toISOString().slice(0,10);
+    ntSuggest();
+    var n = document.getElementById('nt-name'); if (n) n.focus();
+  }
+}
+
+function ntSlugify(s){
+  return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32);
+}
+
+/* Fills in what can be derived and SHOWS it, rather than deriving it silently
+   at save time — the host is the address people will be sent, so it has to be
+   visible before the button is pressed. */
+function ntSuggest(){
+  var name = (document.getElementById('nt-name')||{}).value || '';
+  var dom  = String((document.getElementById('nt-domain')||{}).value || '').trim().toLowerCase();
+  var slugEl = document.getElementById('nt-slug');
+  if (slugEl && !slugEl.value){
+    var guess = ntSlugify(dom ? dom.split('.')[0] : name);
+    if (guess && NT_RESERVED.indexOf(guess) < 0) slugEl.value = guess;
+  }
+  var slug = ntSlugify((slugEl||{}).value || '');
+  var hostEl = document.getElementById('nt-host');
+  if (hostEl) hostEl.textContent = slug ? (slug + '.' + NT_BASE_HOST) : 'set a host';
+
+  var endsEl = document.getElementById('nt-ends');
+  if (endsEl){
+    var e = ntTrialEnd();
+    endsEl.textContent = e
+      ? ('ends ' + new Date(e).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'}))
+      : 'no trial — bills from day one';
+  }
+}
+
+/* Midday UTC, not midnight. A trial stamped at 00:00 on the end date has
+   already expired for anyone west of Greenwich on the morning it should still
+   be running, and _standing() compares against Date.now(). */
+function ntTrialEnd(){
+  var days = parseInt((document.getElementById('nt-days')||{}).value, 10);
+  var start = String((document.getElementById('nt-start')||{}).value || '').trim();
+  if (!isFinite(days) || days <= 0) return null;
+  var t = Date.parse(start + 'T12:00:00Z');
+  if (isNaN(t)) t = Date.now();
+  return new Date(t + days * 86400000).toISOString();
+}
+
+function createTenant(){
+  var msg = document.getElementById('nt-msg'), btn = document.getElementById('nt-btn');
+  function say(t){ if(msg) msg.textContent = t; }
+
+  var name = String((document.getElementById('nt-name')||{}).value || '').trim();
+  var domain = String((document.getElementById('nt-domain')||{}).value || '')
+                 .trim().toLowerCase().replace(/^@/,'').replace(/^https?:\/\//,'').split('/')[0];
+  var vertical = (document.getElementById('nt-vertical')||{}).value || 'developer';
+  var slug = ntSlugify((document.getElementById('nt-slug')||{}).value || '');
+  var logo = String((document.getElementById('nt-logo')||{}).value || '').trim();
+  var note = String((document.getElementById('nt-note')||{}).value || '').trim();
+
+  if (name.length < 2) return say('Give the company a name.');
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) return say('That does not look like an email domain.');
+  if (!slug) return say('Set a workspace host.');
+  if (NT_RESERVED.indexOf(slug) >= 0) return say('“' + slug + '” is reserved — pick another host.');
+
+  var host = slug + '.' + NT_BASE_HOST;
+  var trialEndsAt = ntTrialEnd();
+  var FV = firebase.firestore.FieldValue;
+  var ref = db.collection('omega_orgs').doc(domain);
+
+  /* The orgId IS the email domain and it never changes, so creating one that
+     already exists would quietly overwrite a live tenant's record. Checked
+     before anything is written rather than merged over. */
+  say('Checking…');
+  if (btn) btn.disabled = true;
+  ref.get().then(function(snap){
+    if (snap.exists){
+      throw new Error(domain + ' already has a workspace (' + ((snap.data()||{}).name || domain)
+        + '). Edit it in the table below instead.');
+    }
+    return db.collection('tenant_public').doc(host).get();
+  }).then(function(tp){
+    if (tp.exists) throw new Error(host + ' is already taken — pick another host.');
+
+    var brand = { name: name, logo: logo };
+    var org = {
+      name: name, slug: slug, domains: [host], logoUrl: logo,
+      vertical: vertical, shell: 'default', status: 'active',
+      receivesFullBom: false, exportBrand: brand,
+      note: note || null,
+      createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
+      createdBy: (currentUser && currentUser.email) || 'console',
+      approvedAt: FV.serverTimestamp(),
+      approvedBy: (currentUser && currentUser.email) || 'console'
+    };
+    var billing = { tier: 'trial', addons: [], toolOverrides: {}, paymentProvider: 'manual',
+                    trialEndsAt: trialEndsAt, subscriptionDue: null,
+                    createdAt: FV.serverTimestamp() };
+    var pub = { orgId: domain, name: name, logoUrl: logo, colors: null, exportBrand: brand,
+                tier: 'trial', vertical: vertical, shell: 'default', domains: [host],
+                receivesFullBom: false, status: 'active', updatedAt: FV.serverTimestamp() };
+
+    say('Creating…');
+    var batch = db.batch();
+    batch.set(ref, org);
+    batch.set(ref.collection('billing').doc('current'), billing);
+    batch.set(db.collection('tenant_public').doc(host), pub);
+    return batch.commit();
+  }).then(function(){
+    if (btn) btn.disabled = false;
+    say('Created — ' + host + (trialEndsAt
+      ? (', trial to ' + new Date(trialEndsAt).toLocaleDateString()) : ', no trial') + '.');
+    ['nt-name','nt-domain','nt-slug','nt-logo','nt-note'].forEach(function(id){
+      var e = document.getElementById(id); if (e) e.value = '';
+    });
+    ntSuggest();
+    loadTenants();
+  })['catch'](function(e){
+    if (btn) btn.disabled = false;
+    say(e && e.code === 'permission-denied'
+      ? 'Firestore refused it — this console needs a ClearSky admin account.'
+      : ((e && e.message) || 'Could not create the tenant.'));
+  });
+}
+
 function renderTenants(){
   var rows = STATE.tenants || [];
   var cnt=document.getElementById('tn-count'); if(cnt) cnt.textContent=rows.length;
@@ -1831,6 +1989,21 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '<span><b style="font-size:12.5px">Wholesaler / distributor</b>'
    + '<div class="sub-txt">Receives the whole BOM on every RFQ, not just their own SKUs, '
    + 'and gets the sourcing workspace on their dashboard.</div></span></label>';
+  /* ── BRANDS THIS ORG MAKES ─────────────────────────────────────────────
+     The other half of the routing rule, for the other kind of supplier. A
+     distributor is found by a flag; a MANUFACTURER is found by its product
+     appearing on somebody's drawing — and the only thing a BOM line carries
+     is the brand printed on the container. /api/rfq.js matches that brand
+     against this list when no /equipment row names the vendor, which is the
+     usual case: the editor's seed catalogue has hundreds of models and no
+     catalogue rows behind them.
+
+     Comma-separated, stored lowercased, matched exactly. "FENECON" on a BOM
+     line finds the org listing `fenecon`. Leave it empty for anyone who does
+     not manufacture — an empty list matches nothing, which is correct. */
+  h+=_tnField('Brands they make','tb-brands-'+orgId,(org.brands||[]).join(', '),'text','fenecon, fenecon usa');
+  h+='<div class="sub-txt" style="margin:-4px 0 8px">Comma-separated. A BOM line carrying one of '
+   + 'these brands routes its quote request to this org.</div>';
   h+=_tnField('Logo URL','tb-logo-'+orgId,org.logoUrl||'','text','/tenants/'+orgId+'/logo.png');
 
   /* ── UPLOAD, NOT JUST A URL ────────────────────────────────────────────
@@ -2102,6 +2275,14 @@ function saveTenantBranding(orgId){
   /* Written unconditionally — unticking it has to mean something, and a
      falsy-skip would make the flag impossible to turn off. */
   if (distEl) patch.receivesFullBom = !!distEl.checked;
+  /* Same reasoning: clearing the field has to clear the list, or a brand set
+     by mistake can never be taken off and keeps routing quotes. */
+  var brandEl = document.getElementById('tb-brands-'+orgId);
+  if (brandEl) {
+    patch.brands = String(brandEl.value||'').split(',')
+      .map(function(x){ return String(x||'').trim().toLowerCase(); })
+      .filter(function(x, i, a){ return x && a.indexOf(x) === i; });
+  }
 
   say('Saving\u2026');
   var ref = db.collection('omega_orgs').doc(orgId);

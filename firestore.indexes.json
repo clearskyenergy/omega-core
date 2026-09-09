@@ -1,0 +1,21 @@
+{
+  "//": "© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.",
+  "//1": "A collection-group query needs an index whose scope is COLLECTION_GROUP.",
+  "//2": "Firestore auto-creates single-field indexes at COLLECTION scope only, so",
+  "//3": "the Quote Desk's collectionGroup('recipients').where('vendorOrgId','==',org)",
+  "//4": "fails with FAILED_PRECONDITION until this override exists. Keeping it here",
+  "//5": "means it deploys with the rules rather than being clicked into the console",
+  "//6": "once and lost the next time the project is rebuilt.",
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "recipients",
+      "fieldPath": "vendorOrgId",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    }
+  ]
+}

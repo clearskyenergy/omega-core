@@ -37,12 +37,46 @@ module.exports = A.handler(function (req) {
       return A.canActInOrg(caller, sourceOrgId).then(function (ok) {
         if (!ok) throw A.httpError(403, 'not your project');
         /* 1 · resolve vendors for lines that don't name one */
-        var lines = b.bom.map(function (l, i) { return { idx: i, sku: String(l.sku || ''), description: l.description || '', qty: Number(l.qty) || 1, unit: l.unit || 'ea', category: l.category || null, vendorOrgId: l.vendorOrgId || null }; });
+        var lines = b.bom.map(function (l, i) { return { idx: i, sku: String(l.sku || ''), description: l.description || '', qty: Number(l.qty) || 1, unit: l.unit || 'ea', category: l.category || null, manufacturer: String(l.manufacturer || '') || null, vendorOrgId: l.vendorOrgId || null }; });
         var lookups = lines.filter(function (l) { return !l.vendorOrgId && l.sku; }).map(function (l) {
           return db.collection('equipment').where('key', '==', l.sku).limit(1).get().then(function (q) { if (!q.empty) { var e = q.docs[0].data(); l.vendorOrgId = e.vendorOrgId || null; l.category = l.category || e.category || null; } });
         });
         var sourceOrgName = '';
         return Promise.all(lookups).then(function () {
+          /* ── THE BRAND FALLBACK ──────────────────────────────────────────
+             The equipment lookup above only resolves a line whose catalogue
+             key has a row in /equipment carrying vendorOrgId. The editor's
+             SEED catalogue — where FENECON-IND-XXL and most of what people
+             actually place lives — has no such rows, so before this every
+             catalogue line failed to resolve and no OEM was ever routed an
+             RFQ. The customer was told there was nobody to ask, about a
+             drawing with that manufacturer's container on it.
+
+             So: a line that names a brand and still has no vendor is matched
+             against omega_orgs.brands[], lowercased. That puts the mapping on
+             the tenant record — one field, editable in the master console —
+             instead of requiring a catalogue row per SKU before a factory can
+             be quoted. An /equipment row still wins when there is one; this
+             only fills the gap. */
+          var brands = {};
+          lines.forEach(function (l) {
+            if (l.vendorOrgId || !l.manufacturer) return;
+            brands[String(l.manufacturer).trim().toLowerCase()] = 1;
+          });
+          var names = Object.keys(brands).filter(Boolean);
+          if (!names.length) return null;
+          return Promise.all(names.map(function (n) {
+            return db.collection('omega_orgs').where('brands', 'array-contains', n).limit(1).get()
+              .then(function (q) { if (!q.empty) brands[n] = q.docs[0].id; })
+              ['catch'](function () {});
+          })).then(function () {
+            lines.forEach(function (l) {
+              if (l.vendorOrgId || !l.manufacturer) return;
+              var hit = brands[String(l.manufacturer).trim().toLowerCase()];
+              if (hit && hit !== 1) l.vendorOrgId = hit;
+            });
+          });
+        }).then(function () {
           /* 2 · full-BOM recipients, and the customer's own name — needed
              because a distributor quotes a named account, not a stranger. */
           return Promise.all([
@@ -60,15 +94,37 @@ module.exports = A.handler(function (req) {
              quote request, it is a broadcast. When the caller names who it is
              for, only those are considered — and the flag still decides
              whether an org may receive a full BOM at all, so naming somebody
-             who is not a distributor does not make them one. */
-          var only = Array.isArray(b.toOrgIds) && b.toOrgIds.length
+             who is not a distributor does not make them one.
+
+             AN EMPTY LIST MEANS NONE, not "no preference". This read
+             `&& b.toOrgIds.length`, so a customer who deliberately ticked no
+             distributor — asking the manufacturers only — had their whole
+             takeoff broadcast to every distributor on the platform instead.
+             An absent field is the legacy caller with no opinion; an empty
+             array is somebody who answered the question. */
+          var only = Array.isArray(b.toOrgIds)
             ? b.toOrgIds.map(function (x) { return String(x || '').toLowerCase(); })
             : null;
+          /* ── WHO THE MANUFACTURER IS SELLING THROUGH ────────────────────
+             An OEM whose battery is on the drawing does not sell to the site,
+             it sells through the distributor the customer picked — so a quote
+             request that does not name that distributor gives the factory no
+             point of contact and no idea whose account the order lands on.
+             The selected distributors are recorded here and copied onto every
+             MANUFACTURER's recipient doc below.
+
+             Deliberately one direction. A manufacturer is told who is on the
+             other side of its channel; a distributor is NOT told which other
+             distributors are quoting the same package. Those two are bidding
+             against each other, and who else was asked is the customer's to
+             disclose, not ours. */
+          var distList = [];
           q.docs.forEach(function (d) {
             if (d.id === sourceOrgId) return;
             if ((d.data().status || 'active') !== 'active') return;
             if (only && only.indexOf(d.id.toLowerCase()) < 0) return;
             recipients[d.id] = { scope: 'full-bom', lines: lines };
+            distList.push({ orgId: d.id, name: d.data().name || d.id });
           });
           lines.forEach(function (l) {
             if (!l.vendorOrgId || l.vendorOrgId === sourceOrgId) return;
@@ -106,6 +162,8 @@ module.exports = A.handler(function (req) {
             var named = recipients[v].scope === 'full-bom';
             batch.set(ref.collection('recipients').doc(v), { vendorOrgId: v, scope: recipients[v].scope, lines: recipients[v].lines, anon: anon,
               ship: ship, projectName: named ? (project.name || project.title || null) : null,
+              /* Manufacturers only — see distList above. */
+              distributors: named ? null : distList,
               /* Each recipient sees only THEIR account number. A customer's
                  account with one distributor is not the other's business. */
               customerNumber: (b.accounts && b.accounts[v]) || null,

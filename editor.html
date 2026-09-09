@@ -35976,10 +35976,17 @@ function _bomWireGauge(kw) {
 // Build the BOM as an array of line items.
 function buildBOM() {
   var items = [];
-  var addItem = function(cat, desc, size, qty, unit, note, distSku) {
+  var addItem = function(cat, desc, size, qty, unit, note, distSku, mfr) {
     /* Returns the item so a caller can attach a real unit price to it
        (see the EV charging block) instead of relying on rate-card lookup. */
     var _o = { category:cat, description:desc, size:size||'', qty:qty, unit:unit||'ea', note:note||'', sku:distSku||'' };
+    /* THE SKU AND THE BRAND ARE WHAT ROUTE A QUOTE TO THE FACTORY.
+       /api/rfq.js resolves a line to a manufacturer by its catalogue key, and
+       failing that by the brand on it. Every line used to ship with sku:'',
+       so no BOM ever routed to an OEM and the RFQ panel told the customer
+       there was nobody to ask. Anything carrying a real catalogue key should
+       pass it here. */
+    if (mfr) _o.manufacturer = mfr;
     items.push(_o);
     return _o;
   };
@@ -36188,9 +36195,41 @@ function buildBOM() {
   if(_evGear.bess.length){
     var _mwhTot=0, _mwTot=0, _anyIncDisco=false;
     _evGear.bess.forEach(function(e){ _mwhTot+=(+(e.bgbKwh||0)); _mwTot+=(+(e.bgbKw||0)); if(e.bgbIncDisco) _anyIncDisco=true; });
-    addItem('Power Equipment', 'BESS assembly (container + racks + PCS)',
-            (_mwhTot?((_mwhTot/1000).toFixed(2)+' MWh'):'')+(_mwTot?(' / '+(_mwTot/1000).toFixed(2)+' MW'):''),
-            _evGear.bess.length, 'ea', 'Integrated PCS/inverter + BMS + fire suppression');
+    /* ── WHICH UNIT IS ACTUALLY ON THE PAD ──────────────────────────────
+       An assembly is placed against a configured unit (S.bessList), and that
+       config carries the catalogue key the user picked — FENECON-IND-XXL and
+       so on. Without it the line is "BESS assembly", which no manufacturer
+       can recognise as theirs, so a quote request had nowhere to go.
+
+       Grouped by catalogue key rather than merged: two different batteries on
+       one site are two different orders, and one line reading "2 ea" of two
+       makes cannot be quoted by either factory. One key (the ordinary case)
+       still produces exactly one line, worded as before. */
+    var _bCfgOf = function(e){
+      var L = (typeof S!=='undefined' && S.bessList) ? S.bessList : [];
+      for (var i=0;i<L.length;i++) if (L[i].id && e.bessId && L[i].id===e.bessId) return L[i];
+      return L.length===1 ? L[0] : null;   /* one configured unit → it is that one */
+    };
+    var _bGroups={}, _bOrder=[];
+    _evGear.bess.forEach(function(e){
+      var c=_bCfgOf(e), k=(c&&c.catalogKey)||'';
+      if(!_bGroups[k]){ _bGroups[k]={ sku:k, mfr:(c&&c.mfr)||'', model:(c&&c.model)||'', n:0, kwh:0, kw:0 }; _bOrder.push(k); }
+      var g=_bGroups[k]; g.n++; g.kwh+=(+(e.bgbKwh||0)); g.kw+=(+(e.bgbKw||0));
+    });
+    _bOrder.forEach(function(k){
+      var g=_bGroups[k];
+      var _one = _bOrder.length===1;
+      addItem('Power Equipment',
+            'BESS assembly (container + racks + PCS)'
+              + ((!_one && g.model) ? ' \u2014 ' + g.model : ''),
+            (_one
+              ? ((_mwhTot?((_mwhTot/1000).toFixed(2)+' MWh'):'')+(_mwTot?(' / '+(_mwTot/1000).toFixed(2)+' MW'):''))
+              : ((g.kwh?((g.kwh/1000).toFixed(2)+' MWh'):'')+(g.kw?(' / '+(g.kw/1000).toFixed(2)+' MW'):''))),
+            g.n, 'ea',
+            'Integrated PCS/inverter + BMS + fire suppression'
+              + (g.model ? ' \u00b7 ' + g.model : ''),
+            g.sku, g.mfr);
+    });
     addItem('Power Equipment', 'BESS concrete pad + grounding ring', '', _evGear.bess.length, 'ea', 'Reinforced slab; verify with civil');
     // Only add a BESS-tie AC disconnect when one isn't integrated AND the user
     // didn't place a separate disconnect node (avoids double-counting).
@@ -36796,8 +36835,12 @@ function submitRfqFile() {
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
     bom: (st.bom.items || []).map(function (it) {
+      /* manufacturer travels with the line so the server can route a
+         catalogue item to its factory even when no /equipment row exists
+         for the key yet — see the brand fallback in api/rfq.js. */
       return { sku: it.sku || '', description: it.description, qty: it.qty,
-               unit: it.unit, category: it.category };
+               unit: it.unit, category: it.category,
+               manufacturer: it.manufacturer || '' };
     })
   };
 

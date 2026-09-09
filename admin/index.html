@@ -441,6 +441,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
   .ptable{min-width:960px}
   .drawer{width:100%}
 }
+
+/* New-tenant form: label above field, so a narrow column still reads. */
+.nt-f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#5B6672}
+.nt-f>span{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+.nt-f input,.nt-f select{padding:7px 9px;border:1px solid #D9E0E7;border-radius:7px;
+  font:inherit;font-size:13px;background:#fff;color:#0F2733;width:100%;box-sizing:border-box}
+.nt-f small{color:#8A97A3;font-size:11px;min-height:14px}
 </style>
 </head>
 <body>
@@ -670,7 +677,56 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <span id="tn-refresh-note" style="font-size:12px;color:#5B6672;margin-right:10px"></span>
+          <button class="btn-ghost" id="tn-new-toggle" onclick="toggleNewTenant()">+ New tenant</button>
           <button class="btn-ghost" id="tn-refresh" onclick="loadTenants()">&#8635; Refresh</button>
+        </div>
+      </div>
+
+      <!-- NEW TENANT — the deliberate counterpart to a self-serve signup.
+           /api/tenant-signup exists for somebody who finds the product and
+           asks for an account; it lands pending and waits for approval. This
+           is the other case: ClearSky sets an account up for a company that
+           has already said yes, so it opens active with the trial already
+           running. Same documents, same shape, written here because every one
+           of them says `if isAdmin()` and a signed-in ClearSky address
+           satisfies that — see seedTenantsFromBrowser() for the same
+           reasoning at length. -->
+      <div id="tn-new" style="display:none;margin-bottom:18px">
+        <div class="info-card">
+          <div class="ic-top"><div>
+            <div class="ic-name">New tenant</div>
+            <div class="ic-sub">Creates <code>omega_orgs</code>, its billing record and the
+              <code>tenant_public</code> mirror the sign-in page paints from.</div>
+          </div></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:14px 0">
+            <label class="nt-f"><span>Company name</span>
+              <input type="text" id="nt-name" placeholder="Roam Energy" oninput="ntSuggest()"></label>
+            <label class="nt-f"><span>Email domain</span>
+              <input type="text" id="nt-domain" placeholder="roamenergy.co" oninput="ntSuggest()"></label>
+            <label class="nt-f"><span>Vertical</span>
+              <select id="nt-vertical">
+                <option value="installer">Installer &amp; sales channel</option>
+                <option value="developer">Developer, owner &amp; capital</option>
+                <option value="epc">EPC &amp; engineering</option>
+                <option value="oem">OEM &amp; technology channel</option>
+              </select></label>
+            <label class="nt-f"><span>Workspace host</span>
+              <input type="text" id="nt-slug" placeholder="roam"><small id="nt-host"></small></label>
+            <label class="nt-f"><span>Trial starts</span>
+              <input type="date" id="nt-start" oninput="ntSuggest()"></label>
+            <label class="nt-f"><span>Trial days</span>
+              <input type="number" id="nt-days" value="14" min="0" oninput="ntSuggest()">
+              <small id="nt-ends"></small></label>
+            <label class="nt-f"><span>Logo URL (optional)</span>
+              <input type="text" id="nt-logo" placeholder="/tenants/roam/roam-logo.png"></label>
+            <label class="nt-f"><span>Notes (optional)</span>
+              <input type="text" id="nt-note" placeholder="Focus: DCFC + L2 installation"></label>
+          </div>
+          <div class="ic-actions">
+            <button onclick="createTenant()" id="nt-btn">Create tenant</button>
+            <button class="btn-ghost" onclick="toggleNewTenant()">Cancel</button>
+            <span id="nt-msg" style="font-size:12px;color:#5B6672;margin-left:8px"></span>
+          </div>
         </div>
       </div>
       <div id="tn-pending-wrap" style="display:none;margin-bottom:16px">

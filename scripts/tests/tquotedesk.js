@@ -87,6 +87,7 @@ const ANON = {
   scope: 'line-items', lines: [LINES[0]], status: 'quoted',
   ship: { zip: null, address: null, state: 'IL' }, anon: { state: 'IL', sizeKw: 900 },
   contact: null, projectName: null, createdAt: { toMillis: () => 1756000000000 },
+  distributors: [{ orgId: 'walterswholesale.com', name: 'Walters Wholesale' }],
   quote: { fileUrl: 'https://x/q.pdf', fileName: 'Q-1044.pdf', totalUsd: 48200,
            leadTimeDays: 21, validUntil: '2026-10-15', note: 'Freight prepaid.',
            by: 'quotes@walterswholesale.com', at: 1757100000000 }
@@ -206,5 +207,77 @@ S.location.hash = '#sent';
 S.pickTab();
 ok(DOM['v-sent'].classList.contains('hide') === false, 'a hash in the link wins');
 
+/* ── 6 · the OEM's side: who is the order going through? ─────────────── */
+console.log('oem channel');
+const OEM = {
+  _id: 'fenecon.com', _rfqId: 'rfq789', vendorOrgId: 'fenecon.com',
+  scope: 'line-items', status: 'sent',
+  lines: [{ category: 'bess', sku: 'FEN-HOME-30', description: 'FENECON Home 30', qty: 4, unit: 'ea' }],
+  ship: { zip: '60123', address: '1200 W Industrial Dr, Elgin IL', state: 'IL' },
+  anon: { state: 'IL', sizeKw: 2500 }, contact: null, projectName: null,
+  distributors: [{ orgId: 'walterswholesale.com', name: 'Walters Wholesale' }],
+  createdAt: { toMillis: () => 1757000000000 }
+};
+S.IN = [OEM];
+S.renderReceived();
+const oh = DOM['received'].innerHTML;
+checkHtml(oh, 'OEM card markup balances');
+ok(/Buying through/.test(oh), 'the card says the order goes through somebody');
+ok(/Walters Wholesale/.test(oh), 'and names the distributor the customer picked');
+ok(/walterswholesale\.com/.test(oh), 'with the orgId, so it is unambiguous');
+ok(/point of contact/i.test(oh), 'and says what that name is for');
+ok(/Anonymous request/.test(oh), 'the customer is still withheld from the factory');
+
+/* a distributor is never told who else is bidding the same package */
+S.IN = [Object.assign({}, FULLBOM, { distributors: null })];
+S.renderReceived();
+ok(!/Buying through/.test(DOM['received'].innerHTML),
+   'a full-BOM recipient is shown no channel block — it IS the channel');
+
+/* asked directly, with no distributor on the request */
+S.IN = [Object.assign({}, OEM, { distributors: [] })];
+S.renderReceived();
+ok(/asked you directly/.test(DOM['received'].innerHTML),
+   'no distributor selected says so rather than showing an empty box');
+
+/* an RFQ filed before this existed must not claim anything */
+S.IN = [Object.assign({}, OEM, { distributors: undefined })];
+S.renderReceived();
+const legacy = DOM['received'].innerHTML;
+ok(!/Buying through/.test(legacy) && !/asked you directly/.test(legacy),
+   'an older request with no record of it stays silent rather than guessing');
+
+/* and the CSV carries the same fact */
+S.IN = [OEM];
+S.downloadRfqCsv(0);
+ok(/\nBuying through,Walters Wholesale/.test(csv), 'CSV names the distributor');
+S.IN = [Object.assign({}, OEM, { distributors: [] })];
+S.downloadRfqCsv(0);
+ok(/\nBuying through,Direct — no distributor on this request/.test(csv),
+   'CSV is explicit when there is none');
+S.IN = [FULLBOM];
+S.downloadRfqCsv(0);
+ok(!/Buying through/.test(csv), 'a distributor CSV does not list its competitors');
+
+/* ── 7 · an OEM gets the desk before its first request ───────────────── */
+console.log('who gets the desk');
+function roleFor(doc) {
+  let stored = null;
+  S.db = { collection: () => ({ doc: () => ({ get: () => Promise.resolve(
+    { exists: !!doc, data: () => doc }) }) }) };
+  return S.loadRole().then(() => S.IS_SUPPLIER);
+}
+Promise.resolve()
+  .then(() => roleFor({ receivesFullBom: true, vertical: 'installer' }))
+  .then(v => ok(v === true, 'a flagged distributor is a supplier'))
+  .then(() => roleFor({ vertical: 'oem' }))
+  .then(v => ok(v === true, 'an OEM qualifies by being an OEM — no second flag to forget'))
+  .then(() => roleFor({ vertical: 'developer' }))
+  .then(v => ok(v === false, 'a developer is not'))
+  .then(() => roleFor(null))
+  .then(v => ok(v === false, 'no org record is not'))
+  .then(() => {
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);
+  });
