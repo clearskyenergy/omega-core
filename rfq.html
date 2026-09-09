@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quote Desk · ClearSky-OMEGA</title>
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  QUOTE DESK — both ends of a Request for Quote, on one page.
+
+  RECEIVED   what your organisation has been asked to price. This is the
+             distributor's workspace: open the BOM, take the CSV into your
+             own pricing system, send the quote back.
+  SENT       what your organisation asked for, and what came back. Accept,
+             ask a question, or decline.
+
+  ── WHY ONE PAGE AND NOT TWO ─────────────────────────────────────────────
+  The two sides read the same documents — a recipient doc under
+  rfqs/{id}/recipients/{orgId} — from opposite directions, and several orgs
+  are on both sides of it. Walters prices somebody else's BOM in the morning
+  and files their own RFQ in the afternoon. Two pages would be two copies of
+  the same table with the buttons swapped, kept in step by hand.
+
+  Which tab opens is decided by what your org actually has, not by a flag on
+  your account: a tenant with quote requests waiting lands on Received.
+
+  ── WHY THE WRITES GO THROUGH /api/rfq ───────────────────────────────────
+  firestore.rules lets a vendor update their own recipient doc's status and
+  quote, and lets the customer flip `revealed`. That is enough for the happy
+  path and not enough for the product: a quote has to notify the customer's
+  org, a decline has to notify the vendor, and an accept has to hand over
+  contact details that a client must not be able to forge. All four are one
+  write plus one write, and one of the two is to a document the caller cannot
+  touch. So the browser asks, and the function decides — the same reason the
+  fan-out itself is server-side.
+
+  ── THE FILE ─────────────────────────────────────────────────────────────
+  A quote comes back as a PDF. It is uploaded to Storage under
+  rfqs/{rfqId}/{vendorOrgId}/ and the DOWNLOAD URL is what gets stored.
+  ⚠ A Firebase download URL carries its own token and is readable by anyone
+  holding the link, regardless of storage.rules. That is the same trade this
+  platform already makes for signed JDA paper and for map exports; it is
+  written down here so the next person choosing a path for something more
+  sensitive knows it is a choice and not a guarantee.
+-->
+<style>
+:root{--cs-navy:#0A1628;--cs-blue:#0070F2;--cs-teal:#00A9A4;--cs-border:#E1E6EC;--cs-text:#0F2733;--cs-muted:#6B7C8C;--cs-bg:#F6F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cs-bg);color:var(--cs-text);font:400 14px/1.5 'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{background:var(--cs-navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+.top a{color:#9fd4ff;text-decoration:none;font-weight:600;font-size:13px}
+.top h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--cs-border)}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--cs-muted);
+     font:600 13px inherit;padding:9px 14px;cursor:pointer;margin-bottom:-1px}
+.tab.on{color:var(--cs-blue);border-bottom-color:var(--cs-blue)}
+.tab .n{display:inline-block;margin-left:6px;background:#EEF1F4;color:var(--cs-muted);
+        border-radius:999px;padding:0 7px;font-size:11px}
+.tab.on .n{background:#EAF2FF;color:var(--cs-blue)}
+.card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:18px;margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:15px}
+.sub{color:var(--cs-muted);font-size:12.5px;margin:0 0 14px}
+.rowhead{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rowhead .t{font-size:14.5px;font-weight:700;margin:0}
+.meta{color:var(--cs-muted);font-size:12.5px;margin:3px 0 0}
+.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--cs-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--cs-border)}
+td{padding:8px 10px;border-bottom:1px solid #EEF1F4;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font:600 11px/1.6 inherit;background:#EAF2FF;color:var(--cs-blue)}
+.chip.ok{background:#E6F7EE;color:#1F7A45}.chip.warn{background:#FFF4E5;color:#9A6300}
+.chip.none{background:#EEF1F4;color:var(--cs-muted)}.chip.bad{background:#FDECEC;color:#A32020}
+button{background:var(--cs-blue);color:#fff;border:none;border-radius:8px;padding:7px 13px;font:600 12.5px inherit;cursor:pointer}
+button.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border)}
+button.danger{background:#fff;color:#A32020;border:1px solid #F0CFCF}
+button:disabled{opacity:.5;cursor:not-allowed}
+input[type=text],input[type=number],input[type=date],textarea,select{
+  padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px;
+  background:#fff;color:var(--cs-text)}
+textarea{width:100%;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+.fld label{display:block;font-size:11px;color:var(--cs-muted);font-weight:600;margin-bottom:3px}
+.fld input{width:100%}
+.panel{border:1px solid var(--cs-border);border-radius:9px;padding:14px;margin-top:12px;background:#FBFCFD}
+.empty{color:var(--cs-muted);padding:22px;text-align:center}
+.msg{font-size:12.5px;margin-top:8px;min-height:16px}
+.msg.bad{color:#A32020}.msg.good{color:#1F7A45}
+.quote{background:#F3F8FF;border:1px solid #D5E6FB;border-radius:9px;padding:12px;margin-top:10px}
+.quote b{font-size:15px;font-variant-numeric:tabular-nums}
+.hide{display:none}
+@media (max-width:900px){
+  .wrap{padding:14px}.card{padding:14px}
+  .card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  .top{flex-wrap:wrap;gap:8px;padding:12px 14px}
+  .acts{margin-left:0;width:100%}
+  #who{margin-left:0;width:100%;order:3}
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="/">&#8592; Portal</a>
+  <h1>Quote Desk</h1>
+  <span id="who" style="margin-left:auto;font-size:12.5px;opacity:.8"></span>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab on" id="tab-received" onclick="showTab('received')">Requests received<span class="n" id="n-received">0</span></button>
+    <button class="tab" id="tab-sent" onclick="showTab('sent')">Requests sent<span class="n" id="n-sent">0</span></button>
+  </div>
+
+  <div id="v-received">
+    <p class="sub">BOMs your organisation has been asked to price. Open one, take the CSV into your
+      own system, and send the quote back here — the customer sees it on their project.</p>
+    <div id="received"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div id="v-sent" class="hide">
+    <p class="sub">Quote requests you filed from a BOM, and what came back. Accepting reveals your
+      contact details to that supplier and to nobody else.</p>
+    <div id="sent"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+'use strict';
+var cfg = (window.CLEARSKY_CONFIG || {});
+var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
+var ME = null, MYORG = '', IN = [], OUT = [], TAB = 'received';
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
+function usd(n){ return (typeof n==='number'&&isFinite(n)) ? '$'+n.toLocaleString(undefined,{maximumFractionDigits:0}) : '—'; }
+function when(t){
+  var ms = t && t.toMillis ? t.toMillis() : (typeof t==='number'?t:0);
+  return ms ? new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '—';
+}
+function setMsg(id, text, bad){
+  var el=document.getElementById(id); if(!el) return;
+  el.className='msg '+(bad?'bad':'good'); el.textContent=text;
+}
+
+/* Status vocabulary is shared by both sides, so one map decides the wording
+   and the colour rather than each table inventing its own. */
+var STATUS = {
+  sent:     { label:'Awaiting quote',  cls:'warn' },
+  viewed:   { label:'Opened',          cls:'warn' },
+  quoted:   { label:'Quoted',          cls:'ok'   },
+  accepted: { label:'Accepted',        cls:'ok'   },
+  inquiry:  { label:'Question raised', cls:''     },
+  rejected: { label:'Declined',        cls:'bad'  },
+  declined: { label:'Declined',        cls:'bad'  }
+};
+function statusChip(s){
+  var m = STATUS[s] || { label: s||'—', cls:'none' };
+  return '<span class="chip '+m.cls+'">'+esc(m.label)+'</span>';
+}
+
+auth.onAuthStateChanged(function(u){
+  if(!u){ location.href='/'; return; }
+  ME=u; MYORG=orgOf(u.email);
+  document.getElementById('who').textContent = u.email + ' · ' + MYORG;
+  Promise.all([loadReceived(), loadSent(), loadRole()]).then(pickTab);
+});
+
+/* A plain customer never receives a quote request, and a tab that is
+   permanently empty teaches people to ignore the page. So Received shows when
+   there is something in it, or when this org is set up as a distribution
+   partner and is waiting for the first one. Reading your own org record is
+   allowed; reading anyone else's is not, which is why this is a doc get and
+   not a query. */
+var IS_SUPPLIER = false;
+function loadRole(){
+  return db.collection('omega_orgs').doc(MYORG).get().then(function(d){
+    IS_SUPPLIER = !!(d.exists && d.data() && d.data().receivesFullBom);
+  }).catch(function(){ IS_SUPPLIER = false; });
+}
+
+/* Whichever side of the desk you actually work is the side that opens. A hash
+   still wins, because a link somebody sent you names the tab it meant. */
+function pickTab(){
+  var show = IN.length > 0 || IS_SUPPLIER;
+  document.getElementById('tab-received').classList.toggle('hide', !show);
+  var h = String(location.hash||'').replace('#','').toLowerCase();
+  if ((h==='received' && show) || h==='sent') return showTab(h);
+  showTab(IN.length ? 'received' : (show && !OUT.length ? 'received' : 'sent'));
+}
+function showTab(t){
+  TAB=t;
+  document.getElementById('tab-received').classList.toggle('on', t==='received');
+  document.getElementById('tab-sent').classList.toggle('on', t==='sent');
+  document.getElementById('v-received').classList.toggle('hide', t!=='received');
+  document.getElementById('v-sent').classList.toggle('hide', t!=='sent');
+  if (location.hash.replace('#','') !== t) history.replaceState(null,'','#'+t);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RECEIVED  —  the distributor's workspace
+   ══════════════════════════════════════════════════════════════════════ */
+function loadReceived(){
+  /* One collection-group query keyed on the vendor's own orgId. The recipient
+     doc is keyed by orgId for exactly this reason: the rule can prove every
+     returned document passes, so the LIST is allowed. A query that has to
+     read the parent to decide would be refused for the whole result set. */
+  return db.collectionGroup('recipients').where('vendorOrgId','==',MYORG).get()
+    .then(function(sn){
+      IN=[];
+      sn.forEach(function(d){
+        var v=d.data()||{}; v._id=d.id; v._ref=d.ref;
+        v._rfqId = d.ref.parent.parent ? d.ref.parent.parent.id : '';
+        IN.push(v);
+      });
+      IN.sort(function(a,b){ return (b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)
+                                  - (a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0); });
+      document.getElementById('n-received').textContent = IN.length;
+      renderReceived();
+    })
+    .catch(function(e){ failBox('received', e); });
+}
+
+function failBox(id, e){
+  var msg = (e&&e.message)||'';
+  var host=document.getElementById(id); if(!host) return;
+  host.innerHTML='<div class="card"><div class="empty">'
+    + (/permission/i.test(msg)
+        ? 'Your account is not permitted to read quote requests. If that is wrong, an administrator has to grant it — this page cannot.'
+        : 'Could not load: '+esc(msg))
+    + '</div></div>';
+}
+
+function renderReceived(){
+  var host=document.getElementById('received');
+  if(!IN.length){
+    host.innerHTML='<div class="card"><div class="empty">No quote requests yet. When a customer '
+      + 'files an RFQ that routes to '+esc(MYORG)+', it lands here.</div></div>';
+    return;
+  }
+  host.innerHTML = IN.map(function(r,i){
+    var ship=r.ship||{}, anon=r.anon||{}, c=r.contact||null;
+    var title = r.projectName || (c&&c.projectName) || 'Anonymous request';
+    var lines = r.lines||[];
+    var units = lines.reduce(function(a,l){ return a+(+l.qty||0); },0);
+    var bits=[];
+    if(c) bits.push('<b>'+esc(c.orgName||c.orgId)+'</b>');
+    else  bits.push('Customer withheld until you are awarded');
+    if(r.customerNumber) bits.push('Account '+esc(r.customerNumber));
+    if(ship.address) bits.push(esc(ship.address));
+    if(ship.zip) bits.push('ZIP '+esc(ship.zip));
+    else if(anon.state) bits.push(esc(anon.state));
+    if(anon.sizeKw) bits.push(anon.sizeKw+' kW');
+
+    return '<div class="card">'
+      + '<div class="rowhead">'
+      +   '<div><p class="t">'+esc(title)+'</p>'
+      +     '<p class="meta">'+bits.join(' · ')+'</p>'
+      +     '<p class="meta">'+(r.scope==='full-bom'?'Full BOM':'Your lines only')+' · '
+      +       lines.length+' line'+(lines.length===1?'':'s')+' · '+units+' units · filed '+when(r.createdAt)+'</p>'
+      +   '</div>'
+      +   '<div class="acts">'+statusChip(r.status)
+      +     '<button class="ghost" onclick="toggleBom('+i+')" id="bomBtn'+i+'">Open BOM</button>'
+      +     '<button class="ghost" onclick="downloadRfqCsv('+i+')">Download CSV</button>'
+      +     '<button onclick="toggleRespond('+i+')">'+(r.quote?'Revise quote':'Respond')+'</button>'
+      +   '</div>'
+      + '</div>'
+      + (r.quote ? quoteBlock(r.quote, false) : '')
+      + (r.decision ? decisionBlock(r.decision) : '')
+      + '<div id="bom'+i+'" class="hide" style="margin-top:12px">'+bomTable(lines)+'</div>'
+      + '<div id="resp'+i+'" class="hide panel">'+respondForm(i,r)+'</div>'
+      + '</div>';
+  }).join('');
+}
+
+function bomTable(lines){
+  if(!lines.length) return '<div class="empty">No lines on this request.</div>';
+  return '<table><thead><tr><th>Category</th><th>SKU</th><th>Description</th>'
+    + '<th class="num">Qty</th><th>Unit</th></tr></thead><tbody>'
+    + lines.map(function(l){
+        return '<tr><td>'+esc(l.category||'—')+'</td><td>'+esc(l.sku||'—')+'</td>'
+          + '<td>'+esc(l.description||'—')+'</td><td class="num">'+esc(l.qty)+'</td>'
+          + '<td>'+esc(l.unit||'ea')+'</td></tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+
+function quoteBlock(q, mine){
+  var f = q.fileUrl
+    ? '<a href="'+esc(q.fileUrl)+'" target="_blank" rel="noopener">'+esc(q.fileName||'Open the quote')+'</a>'
+    : '<span class="chip none">no file</span>';
+  return '<div class="quote"><b>'+usd(q.totalUsd)+'</b>'
+    + (q.leadTimeDays ? ' <span class="meta">· '+q.leadTimeDays+' day lead time</span>' : '')
+    + (q.validUntil ? ' <span class="meta">· valid to '+esc(q.validUntil)+'</span>' : '')
+    + '<div style="margin-top:6px">'+f+'</div>'
+    + (q.note ? '<div class="meta" style="margin-top:6px">'+esc(q.note)+'</div>' : '')
+    + '<div class="meta" style="margin-top:6px">'+(mine?'From ':'Sent by ')+esc(q.by||'')+' · '+when(q.at)+'</div>'
+    + '</div>';
+}
+
+function decisionBlock(d){
+  var m = { accepted:'Accepted', inquiry:'Question raised', rejected:'Declined' };
+  return '<div class="quote" style="background:#FBFCFD;border-color:var(--cs-border)">'
+    + '<b style="font-size:13px">'+esc(m[d.decision]||d.decision)+'</b>'
+    + (d.reason ? '<div class="meta" style="margin-top:5px">'+esc(d.reason)+'</div>' : '')
+    + '<div class="meta" style="margin-top:5px">'+esc(d.by||'')+' · '+when(d.at)+'</div></div>';
+}
+
+function respondForm(i, r){
+  var q=r.quote||{};
+  return '<div class="grid">'
+    + fld('Quote total (USD)','number','q-total'+i, q.totalUsd!=null?q.totalUsd:'')
+    + fld('Lead time (days)','number','q-lead'+i, q.leadTimeDays!=null?q.leadTimeDays:'')
+    + fld('Valid until','date','q-valid'+i, q.validUntil||'')
+    + '</div>'
+    + '<div class="fld" style="margin-bottom:10px"><label>Quote document (PDF)</label>'
+    +   '<input type="file" id="q-file'+i+'" accept=".pdf,.csv,.xlsx,application/pdf" style="font-size:12.5px">'
+    +   '<div class="meta" style="margin:4px 0 0">Or paste a link to it: '
+    +     '<input type="text" id="q-url'+i+'" placeholder="https://…" value="'+esc(q.fileUrl||'')+'" style="width:260px;max-width:100%"></div>'
+    + '</div>'
+    + '<div class="fld"><label>Note to the customer</label>'
+    +   '<textarea id="q-note'+i+'" rows="2" placeholder="Substitutions, split shipment, freight terms…">'+esc(q.note||'')+'</textarea></div>'
+    + '<div style="display:flex;gap:8px;margin-top:10px">'
+    +   '<button class="ghost" onclick="toggleRespond('+i+')">Cancel</button>'
+    +   '<button id="q-btn'+i+'" onclick="sendQuote('+i+')">Send quote</button>'
+    + '</div>'
+    + '<div class="msg" id="q-msg'+i+'"></div>';
+}
+function fld(label,type,id,val){
+  return '<div class="fld"><label>'+esc(label)+'</label>'
+    + '<input type="'+type+'" id="'+id+'" value="'+esc(val)+'"></div>';
+}
+
+function toggleBom(i){
+  var el=document.getElementById('bom'+i), b=document.getElementById('bomBtn'+i);
+  var open=el.classList.toggle('hide')===false;
+  if(b) b.textContent = open ? 'Hide BOM' : 'Open BOM';
+}
+function toggleRespond(i){ document.getElementById('resp'+i).classList.toggle('hide'); }
+
+/* ── the CSV a distributor actually prices from ───────────────────────────
+   Customer block first, then the takeoff. A parts list with no ship-to and no
+   account number gets priced at list against the wrong branch, which is the
+   whole reason the File RFQ screen asks for them. */
+function downloadRfqCsv(i){
+  var r=IN[i], ship=r.ship||{}, anon=r.anon||{}, c=r.contact||null;
+  function q(v){ v=String(v==null?'':v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+  var rows=[];
+  rows.push(['Request for Quote']);
+  rows.push(['RFQ', r._rfqId]);
+  rows.push(['Project', r.projectName || (c&&c.projectName) || 'Withheld']);
+  rows.push(['Customer', c ? (c.orgName||c.orgId) : 'Withheld until awarded']);
+  rows.push(['Contact', c ? (c.email||'') : '']);
+  rows.push(['Account number', r.customerNumber||'']);
+  rows.push(['Ship to', ship.address||'']);
+  rows.push(['ZIP', ship.zip||'']);
+  rows.push(['State', ship.state||anon.state||'']);
+  rows.push(['Scope', r.scope==='full-bom'?'Full BOM':'Line items']);
+  rows.push([]);
+  rows.push(['Category','SKU','Description','Qty','Unit','Unit price','Extended']);
+  (r.lines||[]).forEach(function(l){
+    rows.push([l.category||'', l.sku||'', l.description||'', l.qty, l.unit||'ea', '', '']);
+  });
+  var csv=rows.map(function(cols){ return cols.map(q).join(','); }).join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url;
+  a.download='RFQ_'+(r._rfqId||'request').slice(0,10)+'_'+MYORG.split('.')[0]+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function sendQuote(i){
+  var r=IN[i];
+  var btn=document.getElementById('q-btn'+i);
+  var total=parseFloat((document.getElementById('q-total'+i)||{}).value);
+  var lead=parseInt((document.getElementById('q-lead'+i)||{}).value,10);
+  var valid=String((document.getElementById('q-valid'+i)||{}).value||'').trim();
+  var note=String((document.getElementById('q-note'+i)||{}).value||'').trim();
+  var url=String((document.getElementById('q-url'+i)||{}).value||'').trim();
+  var fEl=document.getElementById('q-file'+i);
+  var file=fEl&&fEl.files&&fEl.files[0];
+
+  if(!file && !url && !note){
+    return setMsg('q-msg'+i,'Attach the quote, paste a link to it, or write a note — an empty answer is not an answer.',true);
+  }
+  btn.disabled=true; setMsg('q-msg'+i, file?'Uploading…':'Sending…');
+
+  var up = file
+    ? storage.ref('rfqs/'+r._rfqId+'/'+MYORG+'/'+file.name).put(file)
+        .then(function(s){ return s.ref.getDownloadURL(); })
+    : Promise.resolve(url);
+
+  up.then(function(fileUrl){
+    setMsg('q-msg'+i,'Sending…');
+    return post({ action:'respond', rfqId:r._rfqId, vendorOrgId:MYORG,
+                  fileUrl:fileUrl||'', fileName:file?file.name:'',
+                  totalUsd:isFinite(total)?total:null,
+                  leadTimeDays:isFinite(lead)?lead:null,
+                  validUntil:valid, note:note });
+  }).then(function(){
+    setMsg('q-msg'+i,'Quote sent — the customer has been notified.');
+    return loadReceived();
+  }).catch(function(e){
+    btn.disabled=false;
+    setMsg('q-msg'+i, (e&&e.message)||'Could not send the quote.', true);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SENT  —  the customer's tracker, and the decision
+   ══════════════════════════════════════════════════════════════════════ */
+function loadSent(){
+  return db.collection('rfqs').where('sourceOrgId','==',MYORG).get().then(function(sn){
+    var jobs=[];
+    OUT=[];
+    sn.forEach(function(d){
+      var v=d.data()||{}; v._id=d.id; v._recips=[];
+      OUT.push(v);
+      jobs.push(d.ref.collection('recipients').get().then(function(rs){
+        rs.forEach(function(x){ var w=x.data()||{}; w._id=x.id; v._recips.push(w); });
+      }).catch(function(){}));
+    });
+    return Promise.all(jobs).then(function(){
+      OUT.sort(function(a,b){ return (b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0)
+                                   - (a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0); });
+      document.getElementById('n-sent').textContent = OUT.length;
+      renderSent();
+    });
+  }).catch(function(e){ failBox('sent', e); });
+}
+
+function renderSent(){
+  var host=document.getElementById('sent');
+  if(!OUT.length){
+    host.innerHTML='<div class="card"><div class="empty">You have not filed an RFQ yet. '
+      + 'Open a project’s Bill of Materials in the site map editor and press '
+      + '<b>File RFQ</b>.</div></div>';
+    return;
+  }
+  host.innerHTML = OUT.map(function(f,fi){
+    var ship=f.ship||{};
+    var lines=(f.bom||[]).length;
+    var meta=[];
+    if(ship.address) meta.push(esc(ship.address));
+    if(ship.zip) meta.push('ZIP '+esc(ship.zip));
+    meta.push(lines+' line'+(lines===1?'':'s'));
+    meta.push('filed '+when(f.createdAt));
+    meta.push('by '+esc(f.requestedBy||''));
+
+    var recips = (f._recips||[]).map(function(r,ri){ return recipientRow(f,fi,r,ri); }).join('');
+    return '<div class="card">'
+      + '<div class="rowhead"><div>'
+      +   '<p class="t">'+esc(f.projectName||f.projectId||'Project')+'</p>'
+      +   '<p class="meta">'+meta.join(' · ')+'</p></div></div>'
+      + (f.note ? '<p class="meta" style="margin-top:6px">“'+esc(f.note)+'”</p>' : '')
+      + '<div style="margin-top:12px">'+(recips||'<div class="empty">No recipients on this request.</div>')+'</div>'
+      + '</div>';
+  }).join('');
+}
+
+function recipientRow(f, fi, r, ri){
+  var id=fi+'_'+ri;
+  var decided = r.status==='accepted'||r.status==='rejected';
+  var acts = (r.quote && !decided)
+    ? '<button onclick="decide(\''+esc(f._id)+'\',\''+esc(r._id)+'\',\'accepted\','+fi+','+ri+')">Accept</button>'
+      + '<button class="ghost" onclick="askReason('+fi+','+ri+',\'inquiry\')">Ask a question</button>'
+      + '<button class="danger" onclick="askReason('+fi+','+ri+',\'rejected\')">Decline</button>'
+    : '';
+  return '<div style="border-top:1px solid var(--cs-border);padding:12px 0">'
+    + '<div class="rowhead">'
+    +   '<div><p class="t" style="font-size:13.5px">'+esc(r._id)+'</p>'
+    +     '<p class="meta">'+(r.scope==='full-bom'?'Full BOM':(r.lines||[]).length+' line'
+    +       ((r.lines||[]).length===1?'':'s'))
+    +       (r.customerNumber?' · account '+esc(r.customerNumber):'')+'</p></div>'
+    +   '<div class="acts">'+statusChip(r.status)+acts+'</div>'
+    + '</div>'
+    + (r.quote ? quoteBlock(r.quote, true) : '')
+    + (r.decision ? decisionBlock(r.decision) : '')
+    + '<div id="reason'+id+'" class="hide panel">'
+    +   '<div class="fld"><label id="reasonLbl'+id+'">Reason (optional)</label>'
+    +     '<textarea id="reasonTxt'+id+'" rows="2" placeholder="Optional — a fast no beats a slow explanation."></textarea></div>'
+    +   '<div style="display:flex;gap:8px;margin-top:9px">'
+    +     '<button class="ghost" onclick="closeReason('+fi+','+ri+')">Cancel</button>'
+    +     '<button id="reasonBtn'+id+'" onclick="sendReason(\''+esc(f._id)+'\',\''+esc(r._id)+'\','+fi+','+ri+')">Send</button>'
+    +   '</div>'
+    +   '<div class="msg" id="reasonMsg'+id+'"></div>'
+    + '</div>'
+    + '<div class="msg" id="decMsg'+id+'"></div>'
+    + '</div>';
+}
+
+var PENDING = {};
+function askReason(fi,ri,kind){
+  var id=fi+'_'+ri;
+  PENDING[id]=kind;
+  document.getElementById('reason'+id).classList.remove('hide');
+  document.getElementById('reasonLbl'+id).textContent =
+    kind==='inquiry' ? 'What do you need to know?' : 'Reason (optional)';
+  document.getElementById('reasonTxt'+id).placeholder =
+    kind==='inquiry' ? 'Ask the supplier directly — they see this.'
+                     : 'Optional — a fast no beats a slow explanation.';
+  document.getElementById('reasonBtn'+id).textContent =
+    kind==='inquiry' ? 'Send question' : 'Decline quote';
+}
+function closeReason(fi,ri){ document.getElementById('reason'+fi+'_'+ri).classList.add('hide'); }
+
+function sendReason(rfqId, vendorOrgId, fi, ri){
+  var id=fi+'_'+ri, kind=PENDING[id]||'inquiry';
+  var text=String((document.getElementById('reasonTxt'+id)||{}).value||'').trim();
+  if(kind==='inquiry' && !text){
+    return setMsg('reasonMsg'+id,'Write the question — the supplier cannot answer a blank one.',true);
+  }
+  var btn=document.getElementById('reasonBtn'+id); btn.disabled=true;
+  setMsg('reasonMsg'+id,'Sending…');
+  post({ action:'decide', rfqId:rfqId, vendorOrgId:vendorOrgId, decision:kind, reason:text })
+    .then(function(){ return loadSent(); })
+    .catch(function(e){ btn.disabled=false; setMsg('reasonMsg'+id,(e&&e.message)||'Could not send.',true); });
+}
+
+function decide(rfqId, vendorOrgId, what, fi, ri){
+  var id=fi+'_'+ri;
+  if(what==='accepted' && !confirm('Accept this quote?\n\n'+vendorOrgId+' will be given your '
+      + 'organisation name, your email and the project name. No other supplier on this RFQ is told.')) return;
+  setMsg('decMsg'+id,'Sending…');
+  post({ action:'decide', rfqId:rfqId, vendorOrgId:vendorOrgId, decision:what })
+    .then(function(){ return loadSent(); })
+    .catch(function(e){ setMsg('decMsg'+id,(e&&e.message)||'Could not send.',true); });
+}
+
+/* ── the one place that talks to /api/rfq ─────────────────────────────── */
+function post(body){
+  if(!ME) return Promise.reject(new Error('Sign in first.'));
+  return ME.getIdToken().then(function(tok){
+    return fetch('/api/rfq', { method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+tok },
+      body: JSON.stringify(body) });
+  }).then(function(r){
+    return r.text().then(function(t){
+      var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(r.ok) return j||{};
+      var d=(j&&(j.detail||j.error))||t.slice(0,200)||('HTTP '+r.status);
+      /* A deployment missing its credential and a refused request are fixed in
+         completely different places, so they must not read the same. */
+      if(r.status===500 && /SERVICE_ACCOUNT/i.test(d)){
+        throw new Error('Quote routing is not switched on yet — the server is missing its '
+          + 'Firebase credential. Nothing was changed.');
+      }
+      throw new Error(d);
+    });
+  });
+}
+window.addEventListener('hashchange', function(){
+  var h=String(location.hash||'').replace('#','').toLowerCase();
+  if(h==='received'||h==='sent') showTab(h);
+});
+</script>
+</body>
+</html>

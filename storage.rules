@@ -269,6 +269,33 @@ service firebase.storage {
       allow write: if signedIn() && (isAdminDomain() || onProject()) && okFile();
     }
 
+    /* -------- Quote documents  —  rfqs/{rfqId}/{vendorOrgId}/{file} --------
+       A supplier's answer to a Request for Quote. Written by the supplier the
+       request was sent to, read by them and by the customer who filed it.
+
+       The vendorOrgId is a PATH SEGMENT and the recipient document is keyed
+       by the same value, which is what makes the cheap branch first: a
+       supplier uploading their own quote never reaches the Firestore lookup.
+       Only the customer's read does, and only once per request.
+
+       Write is the supplier's alone. A customer must not be able to put a
+       document into a supplier's folder and have it read as that supplier's
+       quote — the folder is the attribution.
+
+       ⚠ THE STORED LINK IS A DOWNLOAD URL, which carries its own token and is
+       readable by anyone holding it regardless of this rule. Same trade as
+       /jda and /mapimg. This rule governs the bucket path, not the link. */
+    match /rfqs/{rfqId}/{vendorOrgId}/{fileName} {
+      function isCustomer() {
+        return firestore.exists(/databases/(default)/documents/rfqs/$(rfqId))
+          && firestore.get(/databases/(default)/documents/rfqs/$(rfqId))
+               .data.get('sourceOrgId', '') == userOrg();
+      }
+      allow read:  if signedIn() && (isAdminDomain() || vendorOrgId == userOrg() || isCustomer());
+      allow write: if signedIn() && (isAdminDomain() || vendorOrgId == userOrg()) && okFile();
+      allow delete: if isAdminDomain();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
