@@ -1728,15 +1728,17 @@ function jdDetailHtml(r){
                    : '<span class="sub">none linked</span>') + '</td>'
       + '<td style="white-space:nowrap">'
       + '<button class="btn-x" onclick="openDeal(\'' + esc(d.id) + '\')">Open</button>'
-      + (r.org.kind === 'investor'
-          ? (d.dealRoomId
-               ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
-                 + 'href="/dealroom?p=' + encodeURIComponent(d.dealRoomId) + '">In the deal room</a>'
-               : (isReady
-                   ? ' <button class="btn-x" onclick="sendToDealRoom(\'' + esc(d.id) + '\',\''
-                     + oid + '\')">Send to deal room</button>'
-                   : ''))
-          : '')
+      /* Fundable is a property of the PROJECT, not of whichever partnership
+         card you happen to be looking at. Once it is through pre-development
+         it can go to a room, and WHO it goes to is the next question — asked
+         on the way, not decided by where you clicked. */
+      + (d.dealRoomId
+           ? ' <a class="btn-x" style="text-decoration:none" target="_blank" rel="noopener" '
+             + 'href="/dealroom?p=' + encodeURIComponent(d.dealRoomId) + '">In the deal room</a>'
+           : (fundable(d)
+               ? ' <button class="btn-x" onclick="askDealRoom(\'' + esc(d.id) + '\',\''
+                 + oid + '\')">Send to deal room</button>'
+               : ''))
       + '<span class="sub" id="dr-' + esc(d.id) + '"></span></td></tr>';
   });
   return h + '</tbody></table></div></div>';
@@ -1946,6 +1948,45 @@ function jdBoard(orgId){
    The id is written back onto the deal so it cannot be sent twice, and so the
    row can point AT the room rather than offering to make a second one.
    ══════════════════════════════════════════════════════════════════════ */
+/* Through pre-development and still alive. The gate for a deal room is the
+   project's own readiness — the partner's handoff stage decides whether it is
+   ready FOR THEM, which is a different question and shown in its own column. */
+function fundable(d){
+  return jdRank(d.stage) >= jdRank('pre_dev') && !F.isExit(d.stage);
+}
+
+/* Who it goes to, asked at the point of sending. Capital partners only —
+   sending a fundable project to an EPC partnership is not a thing. */
+function capitalPartners(){
+  return jdOrgs().filter(function(r){ return r.org.kind === 'investor'; });
+}
+
+function askDealRoom(dealId, preferOrg){
+  var opts = capitalPartners();
+  if (!opts.length){
+    toast('No capital partner set up yet — tick one as a joint development '
+        + 'partner on Partners and set its role to Investor.', true);
+    return;
+  }
+  if (opts.length === 1){ sendToDealRoom(dealId, opts[0].stats.orgId); return; }
+  var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
+  Forms.open({
+    title: 'Send to a deal room',
+    intro: (d && d.name) || dealId,
+    fields: [{ key:'orgId', type:'radio', label:'Which capital partner', required:true,
+      value: preferOrg || opts[0].stats.orgId,
+      /* The hint is the reason a radio beats a dropdown here: each choice
+         carries a consequence, and where a partner takes projects over is
+         exactly what you want in front of you while picking one. */
+      options: opts.map(function(r){
+        var hand = r.jd.handoff ? F.stageOf(r.jd.handoff).label : null;
+        return { value:r.stats.orgId, label:A.orgName(r.stats.orgId),
+                 hint: (hand ? 'Takes projects at ' + hand : 'No handoff stage set')
+                     + ' · ' + r.deals.length + ' on their roster' }; }) }],
+    submitLabel: 'Send'
+  }).then(function(v){ if (v && v.orgId) sendToDealRoom(dealId, v.orgId); });
+}
+
 function drMsg(dealId, text, bad){
   var el=document.getElementById('dr-'+dealId); if(!el) return;
   el.textContent = text ? ' ' + text : '';
@@ -1977,7 +2018,11 @@ function sendToDealRoom(dealId, orgId){
     status: 'review',                /* the only statuses a create allows */
     awardedTo: null,
     developerUid: uid,
-    orgKey: orgId,
+    /* orgKey is deliberately absent. The rule lets a create through when it is
+       missing, when it matches the submitter's own workspace, or when an
+       administrator is filing — pinning it to the PARTNER's org would have
+       refused every OSA member who is not ClearSky staff. The project belongs
+       to whoever packaged it; who it is FOR is room.forOrg. */
     orgName: partner,
     sourceDealId: dealId,            /* the way back to this workspace */
     sourceWorkspace: 'osa',
