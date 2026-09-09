@@ -81,5 +81,41 @@ console.log('no page bounces on the first null');
   ok(/setTimeout\(/.test(seg), 'and gives the SDK a moment to finish restoring');
 }
 
+/* ── NO PAGE ACTS ON THE FIRST NULL ──────────────────────────────────────
+   Firebase reports "no user" before it has finished restoring a session.
+   Every page that treated that as final did visible damage: two navigated
+   away, two painted a sign-in card — with whatever address the browser had
+   saved, which is why somebody on FENECON's dashboard saw a Walters login and
+   read it as being signed into the wrong account. */
+console.log('no page acts on the first null');
+/* Anchored on each page's HANDLER, not on the registration line — index.html
+   registers below its handler, so a plain search lands past the guard. */
+const PAGES = {
+  'index.html':       'var _omegaOnAuth = function',
+  'projects.html':    'auth.onAuthStateChanged(user => {',
+  'marketplace.html': 'function onAuth(user, tries)',
+  'rfq.html':         'auth.onAuthStateChanged(function(u){'
+};
+Object.keys(PAGES).forEach(f => {
+  const src = fs.readFileSync(path.join(ROOT, f), 'utf8')
+                .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const i = src.indexOf(PAGES[f]);
+  ok(i >= 0, f + ' has the handler this test anchors on');
+  const seg = src.slice(Math.max(0, i - 200), i + 1100);
+  ok(/auth\.currentUser/.test(seg), f + ' confirms a null against auth.currentUser');
+  ok(/setTimeout\(/.test(seg), f + ' gives the SDK time before acting on it');
+});
+
+/* The dashboard's splash is the whole point — it must not come down until the
+   answer is real. */
+{
+  const src = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
+                .replace(/\/\*[\s\S]*?\*\//g, '');
+  const h = src.indexOf('var _omegaOnAuth');
+  const seg = src.slice(h, h + 900);
+  ok(seg.indexOf('auth.currentUser') < seg.indexOf("classList.add('auth-ready')"),
+     'index.html confirms BEFORE it tears the boot splash down');
+}
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

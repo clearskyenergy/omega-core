@@ -2747,6 +2747,21 @@ function revealJointDevNav(email){
 
 var _omegaOnAuth = function (user, tries) {
   if (window._omegaReady) window._omegaReady();
+  /* ── A NULL IS NOT YET A NO, AND THE SPLASH EXISTS FOR THIS ───────────────
+     #boot-splash is here so a signed-in visit never sees a login form on the
+     way in. But auth-ready was added on the FIRST callback whatever it said,
+     so a premature null tore the splash down and painted the sign-in screen —
+     complete with whatever address the browser had saved, which is why people
+     coming back to the portal saw somebody else's email and read it as being
+     logged into the wrong account.
+
+     Hold the splash and confirm. auth.currentUser is the SDK's own answer and
+     costs nothing to ask. The 8s failsafe below still applies, so this cannot
+     strand anyone on the splash. */
+  if (!user && !auth.currentUser && (tries || 0) < 4) {
+    setTimeout(function () { _omegaOnAuth(auth.currentUser, (tries || 0) + 1); }, 300);
+    return;
+  }
   /* Auth has answered — reveal whichever side of it applies. Set before the
      branches so an early return still leaves a usable page rather than the
      splash forever. */

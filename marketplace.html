@@ -901,7 +901,16 @@ initFirebase();
 
 function onAuth(user, tries){
   if (window._omegaReady) window._omegaReady();
-  if (!user){ el('auth-screen').style.display='flex'; el('app').style.display='none'; return; }
+  if (!user){
+    /* Same as index.html: a premature null used to paint the sign-in card,
+       saved credentials and all, at somebody who was signing in perfectly
+       well. Confirm before showing it. */
+    if ((tries || 0) < 4 && !auth.currentUser) {
+      setTimeout(function(){ onAuth(auth.currentUser, (tries || 0) + 1); }, 300);
+      return;
+    }
+    el('auth-screen').style.display='flex'; el('app').style.display='none'; return;
+  }
   var ws = resolveWorkspace(user.email);
   if (!ws){
     /* ── DO NOT SIGN ANYBODY OUT HERE ──────────────────────────────────────

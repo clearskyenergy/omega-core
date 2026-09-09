@@ -168,8 +168,20 @@ function statusChip(s){
   return '<span class="chip '+m.cls+'">'+esc(m.label)+'</span>';
 }
 
+/* A null on the first callback is the SDK still restoring, not a signed-out
+   user — and this page NAVIGATES on it, which cannot be taken back. Confirm
+   against auth.currentUser first; see the same fix in projects.html. */
+var _qdNull = 0;
 auth.onAuthStateChanged(function(u){
-  if(!u){ location.href='/'; return; }
+  if(!u){
+    if (_qdNull++ < 4 && !auth.currentUser) {
+      setTimeout(function(){ if (!auth.currentUser && _qdNull >= 4) location.href='/'; }, 400);
+      return;
+    }
+    if (!auth.currentUser) location.href='/';
+    return;
+  }
+  _qdNull = 0;
   ME=u; MYORG=orgOf(u.email);
   document.getElementById('who').textContent = u.email + ' · ' + MYORG;
   Promise.all([loadReceived(), loadSent(), loadRole()]).then(pickTab);
