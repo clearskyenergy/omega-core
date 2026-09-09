@@ -36496,11 +36496,18 @@ function _bomScanVendors(bom) {
   if (!host) return;
   var lines = (bom.items || []).filter(function (it) { return it.sku; });
 
+  /* ── A TAKEOFF WITH NO CATALOGUE SKU IS STILL AN ORDER ────────────────
+     This used to stop here and print a note. But the SKU scan exists to find
+     partner MANUFACTURERS, and a BOM of conduit, wire, fittings and gear has
+     no manufacturer to find — that is the normal case, not a defect in the
+     drawing. A distributor prices exactly this package, which is how most
+     takeoffs get quoted. Bailing before the button is drawn meant the one
+     BOM a distributor most wants to see was the one that could not be sent.
+
+     Same reasoning as the always-offer note in _bomRenderRfq below; that fix
+     covered "scan ran, matched nobody" and left "nothing to scan" behind. */
   if (!lines.length) {
-    host.innerHTML = '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">'
-      + 'No line on this BOM carries a catalogue SKU yet, so there is nothing to route to a '
-      + 'manufacturer. Place equipment from the catalogue and the matching lines become '
-      + 'quotable here.</div>';
+    _bomRenderRfq(bom, {}, (bom.items || []).length, (bom.items || []).length);
     return;
   }
 
