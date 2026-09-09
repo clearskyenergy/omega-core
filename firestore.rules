@@ -1729,9 +1729,10 @@ service cloud.firestore {
          revealed: bool — set by the customer on accept
          contact: { ... } — written by /api/rfq.js on reveal, absent before
 
-       A recipient doc is keyed by the vendor's orgId so the inbox query is a
-       collection-group .where('vendorOrgId','==',ORG) that this rule can
-       prove passes for every returned doc.
+       A recipient doc is keyed by the vendor's orgId AND carries vendorOrgId
+       as a field. The inbox is a collection-group
+       .where('vendorOrgId','==',ORG); see the note on that rule below for why
+       it must be authorised against the FIELD and not the key.
        ════════════════════════════════════════════════════════════════════════ */
     match /rfqs/{rfqId} {
       function isSourceHere() {
@@ -1774,8 +1775,29 @@ service cloud.firestore {
         allow delete: if false;
       }
     }
+    /* ── THE VENDOR'S INBOX, AS A COLLECTION-GROUP QUERY ──────────────────
+       Keyed on resource.data.vendorOrgId, NOT on the {vendorOrgId} path
+       wildcard, and the difference is the whole rule.
+
+       A list is authorised against the QUERY, not document by document:
+       Firestore has to prove from the query's own constraints that nothing
+       the caller may not read can come back. The Quote Desk asks
+       .where('vendorOrgId','==',ORG) — a constraint on a FIELD. A rule that
+       tests the document ID gives Firestore nothing to match that against,
+       because a collection-group query cannot be constrained by document id,
+       so it refuses the whole query. It did: "Missing or insufficient
+       permissions" on an inbox the vendor plainly owns.
+
+       The document is keyed by orgId AND carries vendorOrgId as a field. The
+       nested rule under /rfqs/{id}/recipients/{orgId} uses the path, which is
+       right for a get; this one uses the field, which is the only thing a
+       query can be proven against. */
     match /{path=**}/recipients/{vendorOrgId} {
-      allow read: if isOmegaStaff() || (signedIn() && canActInOrg(vendorOrgId));
+      allow read: if signedIn() && (
+                       isOmegaStaff()
+                    || resource.data.vendorOrgId == userOrg()
+                    || canActInOrg(resource.data.vendorOrgId)
+                  );
       allow write: if false;
     }
 
