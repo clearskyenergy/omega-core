@@ -105,6 +105,7 @@ module.exports = A.handler(function (req) {
         + row('Capacity', num(d.mw, 'MW') + (d.mwh ? ' · ' + num(d.mwh, 'MWh') : ''))
         + row('Development stage', d.stage)
         + row('Prepared by', d.orgName || d.orgKey)
+        + row('Contact', d.packagedBy || '')
         + '</table>'
         + (b.note ? '<p style="padding:12px 14px;background:#0A1628;border-left:3px solid #00A9A4;'
                   + 'border-radius:6px">' + esc(String(b.note)) + '</p>' : '')

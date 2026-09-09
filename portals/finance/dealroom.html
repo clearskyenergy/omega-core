@@ -283,7 +283,13 @@ function renderDetail(){
     + '<h2>' + esc(d.name || 'Untitled project') + '</h2>'
     + '<p class="sub">' + esc([d.city, d.state].filter(Boolean).join(', ') || 'Location not set')
     + ' · ' + esc(d.tech || 'technology not set')
-    + ' · ' + esc(num(d.mw,'MW')) + (d.mwh ? ' · ' + esc(num(d.mwh,'MWh')) : '') + '</p>'
+    + ' · ' + esc(num(d.mw,'MW')) + (d.mwh ? ' · ' + esc(num(d.mwh,'MWh')) : '')
+    /* Who prepared it, and who actually did the work. On a joint venture those
+       are different answers and a partner is entitled to both: the venture is
+       the counterparty, the person is who to ring about it. */
+    + (d.orgName ? ' · prepared by <b>' + esc(d.orgName) + '</b>' : '')
+    + (d.packagedBy ? ' <span title="Who packaged it">(' + esc(d.packagedBy) + ')</span>' : '')
+    + '</p>'
     + trackerHtml(d)
     + '</div>';
 

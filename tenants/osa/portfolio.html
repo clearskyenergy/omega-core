@@ -1948,6 +1948,30 @@ function jdBoard(orgId){
    The id is written back onto the deal so it cannot be sent twice, and so the
    row can point AT the room rather than offering to make a second one.
    ══════════════════════════════════════════════════════════════════════ */
+/* ── A JOINT VENTURE IS NOT A DOMAIN ──────────────────────────────────
+   The rest of the platform derives an organisation from an email domain.
+   That works for a company and fails for OSA, which is several companies
+   working together with no shared website and no shared mailbox. Somebody
+   files here from sunesol.com, ogisolar.com or clearsky-usa.com, and the work
+   belongs to the JOINT VENTURE — attributing it to whichever member happened
+   to be at the keyboard would split one book into three and make the JV
+   invisible to the people it is being sent to.
+
+   So anything this workspace sends out is stamped as the venture, and the
+   person is recorded BESIDE it rather than instead of it: who did the work is
+   worth knowing, and it is not the same question as whose deal it is.
+
+   Configurable rather than hardcoded, because the next JV will not be called
+   OSA and this should not need a code change to say so. */
+function jvName(){
+  var c = (window.CLEARSKY_CONFIG || {});
+  return (c.jv && c.jv.name) || (c.tenant && c.tenant.jvName) || 'OSA';
+}
+function jvKey(){
+  var c = (window.CLEARSKY_CONFIG || {});
+  return (c.jv && c.jv.key) || 'osa';
+}
+
 /* Through pre-development and still alive. The gate for a deal room is the
    project's own readiness — the partner's handoff stage decides whether it is
    ready FOR THEM, which is a different question and shown in its own column. */
@@ -2018,12 +2042,20 @@ function sendToDealRoom(dealId, orgId){
     status: 'review',                /* the only statuses a create allows */
     awardedTo: null,
     developerUid: uid,
+    /* The sponsor is the venture. packagedBy keeps the individual on the
+       record, which is the part a JV still needs to be able to answer. */
+    sponsorKey: jvKey(),
+    packagedBy: email,
+    packagedByOrg: (String(email).split('@')[1] || ''),
     /* orgKey is deliberately absent. The rule lets a create through when it is
        missing, when it matches the submitter's own workspace, or when an
        administrator is filing — pinning it to the PARTNER's org would have
        refused every OSA member who is not ClearSky staff. The project belongs
        to whoever packaged it; who it is FOR is room.forOrg. */
-    orgName: partner,
+    /* orgName is the SPONSOR — who prepared it. It was set to the partner,
+       which is the recipient, so the delivery email would have told Amperage
+       that Amperage prepared it. room.forOrg is where the recipient belongs. */
+    orgName: jvName(),
     sourceDealId: dealId,            /* the way back to this workspace */
     sourceWorkspace: 'osa',
     createdAt: F.stamp(),
