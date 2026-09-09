@@ -518,10 +518,65 @@
       + esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
       + 'usually one business day. We will email '
       + '<b>' + esc(user && user.email) + '</b> the moment it is live.</span>'
-      + '<a href="mailto:support@csebuilders.com" style="color:#FFF3E0;text-decoration:underline">'
-      + 'Chase it up</a>';
-    function attach() { if (document.body) document.body.insertBefore(d, document.body.firstChild); }
+      + '<button id="omega-upgrade" style="background:rgba(255,255,255,.16);border:1px solid '
+      + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
+      + 'border-radius:7px;cursor:pointer">Upgrade</button>'
+      + '<span id="omega-upgrade-msg" style="font-weight:500"></span>';
+    function attach() {
+      if (!document.body) return;
+      document.body.insertBefore(d, document.body.firstChild);
+      var b = d.querySelector('#omega-upgrade');
+      if (b) b.onclick = function () { requestUpgrade(user, org, req, b); };
+    }
     if (document.body) attach(); else document.addEventListener('DOMContentLoaded', attach);
+  }
+
+  /* ── ASKING IS A RECORD, NOT AN EMAIL ─────────────────────────────────────
+     This was a mailto:. A mailto opens whatever the machine thinks is a mail
+     client — frequently nothing, frequently the wrong account — and even when
+     it works the message lands in one person's inbox with no trace in the
+     product. Nobody else can see it was asked, and nothing shows how long it
+     has been waiting.
+
+     So it writes to the request document instead, which is the one this person
+     already owns and the one the master console already lists. The nudge shows
+     up beside the request it is about, where somebody is already deciding.
+
+     NOT a notification: omega_orgs/{org}/notifications is create-if-isAdmin,
+     deliberately — a self-writable channel into ClearSky's inbox is a spam
+     vector, and loosening it to send one message would be a bad trade.
+
+     The request document is created if it does not exist. A tenant can be
+     pending because their ORG is awaiting approval with no access request
+     behind it, and "there is nothing to write to" is not an answer to
+     somebody pressing a button. */
+  function requestUpgrade(user, org, req, btn) {
+    var d = db();
+    var msg = global.document && document.getElementById('omega-upgrade-msg');
+    function say(t) { if (msg) msg.textContent = ' ' + t; }
+    if (!d || !user) { say('\u2014 not connected yet, try again in a moment.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+
+    var company = (org && org.name) || (req && req.company)
+                || (global.OMEGA_WORKSPACE && global.OMEGA_WORKSPACE.clientName)
+                || (String(user.email || '').split('@')[1] || 'this workspace');
+    var ref = d.collection('access_requests').doc(user.uid);
+    ref.set({
+      email:   String(user.email || '').toLowerCase(),
+      company: String(company).slice(0, 119),
+      domain:  String(user.email || '').toLowerCase().split('@')[1] || '',
+      status:  'pending',
+      uid:     user.uid,
+      upgradeRequested: true,
+      nudgedAt: new Date().toISOString(),
+      nudges:  firebase.firestore.FieldValue.increment(1)
+    }, { merge: true }).then(function () {
+      if (btn) { btn.textContent = 'Requested'; }
+      say('\u2014 sent. ClearSky has it and will come back to you.');
+    })['catch'](function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Upgrade'; }
+      say('\u2014 could not send that: ' + ((e && e.message) || 'unknown error'));
+    });
   }
 
   function loadEntitlements(user) {
