@@ -745,6 +745,38 @@ function paintTopbar(user){
   var av = document.getElementById('tb-avatar');
   if (av) av.textContent = ((user && user.email) || '?').charAt(0).toUpperCase();
   _resolveDisplayName(user);
+  _paintTenantLogo();
+}
+
+/* ── THE LOGO ARRIVES AFTER THE TOPBAR IS PAINTED ──────────────────────
+   omega-tenant.js does fetch the branding — it reads tenant_public and sets
+   c.tenant.logo — but that is a Firestore round trip, and this topbar is
+   painted the moment auth reports. By the time the logo exists nothing repaints,
+   so an account with a perfectly good logo saved in the admin console shows its
+   name as text forever.
+
+   Read it here and upgrade the chip when it lands. omega_orgs is where the
+   console actually writes, and a tenant may read their own record, so this
+   needs no mirror and no new rule. The text stays until an image has loaded,
+   and comes back if the image fails: a broken logo should degrade to the
+   company's name, not to an empty box. */
+function _paintTenantLogo(){
+  var chip = document.getElementById('tb-client-chip');
+  if (!chip || chip.querySelector('img')) return;
+  var w = window.OMEGA_WORKSPACE || (typeof WS !== 'undefined' ? WS : null);
+  var org = (w && w.orgId) || '';
+  if (!org || !window.firebase || !firebase.apps || !firebase.apps.length) return;
+  firebase.firestore().collection('omega_orgs').doc(org).get()
+    .then(function (d) {
+      var url = d.exists && (d.data() || {}).logoUrl;
+      if (!url || chip.querySelector('img')) return;
+      try { if (w) w.logo = url; } catch (e) {}
+      var name = esc2((w && w.clientName) || '');
+      chip.innerHTML = '<img src="' + esc2(url) + '" alt="' + name + '" '
+        + 'onerror="this.parentNode.innerHTML=\'<span class=&quot;tb-client-txt&quot;>'
+        + name + '</span>\'">';
+    })
+    ['catch'](function () { /* the name is a fine answer */ });
 }
 function _paintName(name, user){
   var el = document.getElementById('tb-name');

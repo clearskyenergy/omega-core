@@ -388,15 +388,46 @@
     function asText() {
       box.innerHTML = '<span class="tb-client-txt">' + esc(name) + '</span>';
     }
-    if (!logo) { asText(); return; }
+    function asImage(src) {
+      var i = document.createElement('img');
+      i.id = 'tb-client-logo';
+      i.alt = name;
+      i.onerror = asText;
+      box.innerHTML = '';
+      box.appendChild(i);
+      i.src = src;
+    }
+    if (!logo) { asText(); upgradeChip(ws, box, asImage); return; }
 
-    var img = document.createElement('img');
-    img.id = 'tb-client-logo';
-    img.alt = name;
-    img.onerror = asText;
-    box.innerHTML = '';
-    box.appendChild(img);
-    img.src = logo;
+    asImage(logo);
+  }
+
+  /* ── THE LOGO USUALLY ARRIVES AFTER THIS RUNS ────────────────────────
+     The chip is painted the moment auth reports, and the branding is a
+     Firestore round trip — omega-tenant.js reads tenant_public and sets
+     tenant.logo, but by then nothing repaints. So an account with a perfectly
+     good logo saved in the console shows its name as text forever, on every
+     page, and looks like the console never saved it.
+
+     Ask omega_orgs directly, which is where the console actually writes, and
+     upgrade the chip if an answer arrives. A tenant may read their own record,
+     so this needs no mirror and no rule change. The name stays up meanwhile
+     and comes back if the image fails: a broken logo should degrade to the
+     company's name, never to an empty white box. */
+  function upgradeChip(ws, box, asImage) {
+    var org = (ws && ws.orgId) || '';
+    if (!org) return;
+    var fb = global.firebase;
+    if (!fb || !fb.apps || !fb.apps.length || !fb.firestore) return;
+    try {
+      fb.firestore().collection('omega_orgs').doc(String(org).toLowerCase()).get()
+        .then(function (d) {
+          var url = d && d.exists && (d.data() || {}).logoUrl;
+          if (!url || box.querySelector('img')) return;
+          try { ws.logo = url; } catch (e) {}
+          asImage(url);
+        })['catch'](function () { /* the name is a perfectly good answer */ });
+    } catch (e) {}
   }
 
   /* Paint the app chrome. Safe on any page — absent elements are skipped. */
