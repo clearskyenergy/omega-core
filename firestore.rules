@@ -494,6 +494,31 @@ service cloud.firestore {
     }
 
     /* ============================================================
+       DISTRIBUTION PARTNER DIRECTORY  —  distributors/{orgId}
+       The BOM tool has to offer a choice of distributor before it can file
+       an RFQ, and omega_orgs (correctly) refuses a cross-org read: a tenant
+       may see their OWN org document and nobody else's. /api/rfq assembles
+       the list server-side for exactly that reason — but that endpoint needs
+       the Admin SDK, so when the deployment has no service account the
+       dialog cannot offer anybody and the customer cannot file at all.
+
+       So the directory is its own collection, holding ONLY what a customer
+       is entitled to know in order to pick: the name, and the id to address
+       it by. No tier, no arrangement, no billing, no contact — those stay in
+       omega_orgs where the cross-org refusal still applies. This is the same
+       trade tenant_public makes for branding, one step narrower: signed in,
+       not world-readable, because the customer list is not public.
+
+       Written only by ClearSky. A tenant who could add themselves to the
+       directory would be putting their own name in front of every customer
+       on the platform.
+       ============================================================ */
+    match /distributors/{orgId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    /* ============================================================
        WIDGET & VERTICAL CATALOGS  —  widgets/{id}, verticals/{v}
        ← CONTROL PLANE. Same shape as /tools. Readable by everyone signed
        in because the palette needs the list; written only from the master
