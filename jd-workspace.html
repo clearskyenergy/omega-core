@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JD Workspace · ClearSky-OMEGA</title>
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  JD WORKSPACE — the shared surface between this tenant and the workspace it
+  does joint development with.
+
+  TWO ROLES, ONE PAGE. omega_orgs.jdRole says which:
+
+    design      work handed TO this org to draw. "To draw" → "Mark complete".
+    originator  projects this org brings TO the partner. Add one, send it,
+                watch it get picked up.
+
+  They are the same relationship from opposite ends and share every mechanism —
+  the roster, the files, the editor link — so they share a page. Splitting them
+  would mean two copies of the file handling and the project query, and the two
+  would drift.
+
+  ── WHY THIS READS `projects` AND NOT THE ASSIGNING WORKSPACE'S BOOK ──────
+  OSA records its assignments on `deals`, which is OSA's private pipeline and
+  should stay that way — a design partner has no business reading who else OSA
+  is talking to, at what price. So the assignment is stamped onto the PROJECT,
+  which is the one document both sides can already reach: firestore.rules gives
+  any org named in orgsInvolved[] read AND update on it (isCollaborator +
+  rosterAndOwnerUnchanged). That is the Silmarillion JDA model doing the job it
+  was built for.
+
+  It also means there is no second copy of the work to keep in step. The
+  drawing, the brief, the due date and the completion all live on the project
+  the drawing is in.
+
+  ── COMPLETION IS A CLAIM, NOT A GATE ────────────────────────────────────
+  "Mark complete" says the drawing is ready for the assigning team to look at.
+  It does not move anybody's pipeline stage on its own — OSA reads it, opens
+  the drawing, and decides. A partner marking their own work approved would be
+  a partner approving their own work.
+
+  ⚠ orgId AND orgsInvolved ARE HANDED BACK UNCHANGED. The rule requires it, and
+  the reason is worth remembering: without it a collaborator could add itself
+  to any project it can see, or take the project off its owner.
+-->
+<style>
+:root{--cs-navy:#0A1628;--cs-blue:#0070F2;--cs-teal:#00A9A4;--cs-border:#E1E6EC;--cs-text:#0F2733;--cs-muted:#6B7C8C;--cs-bg:#F6F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cs-bg);color:var(--cs-text);font:400 14px/1.5 'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{background:var(--cs-navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+.top a{color:#9fd4ff;text-decoration:none;font-weight:600;font-size:13px}
+.top h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+.wrap{max-width:1080px;margin:0 auto;padding:22px}
+.sub{color:var(--cs-muted);font-size:12.5px;margin:0 0 16px}
+.card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:18px;margin-bottom:14px}
+.rowhead{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rowhead .t{font-size:15px;font-weight:700;margin:0}
+.meta{color:var(--cs-muted);font-size:12.5px;margin:3px 0 0}
+.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font:600 11px/1.6 inherit;background:#EAF2FF;color:var(--cs-blue)}
+.chip.ok{background:#E6F7EE;color:#1F7A45}.chip.warn{background:#FFF4E5;color:#9A6300}
+.chip.bad{background:#FDECEC;color:#A32020}.chip.none{background:#EEF1F4;color:var(--cs-muted)}
+button{background:var(--cs-blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font:600 12.5px inherit;cursor:pointer}
+button.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.brief{background:#FBFCFD;border:1px solid var(--cs-border);border-radius:9px;padding:12px;margin-top:11px;font-size:13px;white-space:pre-wrap}
+.empty{color:var(--cs-muted);padding:26px;text-align:center}
+.msg{font-size:12.5px;margin-top:9px;min-height:16px}
+.msg.bad{color:#A32020}.msg.good{color:#1F7A45}
+.grp{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--cs-muted);margin:22px 0 9px}
+@media (max-width:760px){ .wrap{padding:14px} .card{padding:14px} .acts{margin-left:0;width:100%} }
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="/">&#8592; Portal</a>
+  <h1 id="pg-title">JD Workspace</h1>
+  <span id="who" style="margin-left:auto;font-size:12.5px;opacity:.8"></span>
+</div>
+<div class="wrap">
+  <p class="sub" id="pg-sub">Loading…</p>
+  <div id="pg-actions" style="margin-bottom:14px"></div>
+  <div id="list"><div class="card"><div class="empty">Loading…</div></div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+'use strict';
+var cfg = (window.CLEARSKY_CONFIG || {});
+var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
+var ME = null, MYORG = '', ROWS = [], ROLE = 'design', PARTNER = 'the partner workspace';
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
+function when(t){
+  if(!t) return '';
+  var ms = t && t.toMillis ? t.toMillis() : Date.parse(t);
+  return isFinite(ms) ? new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
+}
+function setMsg(id,text,bad){ var e=document.getElementById(id); if(!e) return;
+  e.className='msg '+(bad?'bad':'good'); e.textContent=text; }
+
+var STATUS = {
+  in_design: { label:'To draw',        cls:'warn' },
+  revise:    { label:'Changes asked',  cls:'warn' },
+  complete:  { label:'Marked complete',cls:'ok'   },
+  returned:  { label:'With the client',cls:''     },
+  /* Originator side. A project this org brought moves: kept here → offered →
+     picked up by the partner as a deal. */
+  draft:     { label:'Not sent yet',   cls:'none' },
+  offered:   { label:'Sent',           cls:'warn' },
+  adopted:   { label:'Picked up',      cls:'ok'   }
+};
+function chip(s){ var m=STATUS[s]||{label:s||'—',cls:'none'};
+  return '<span class="chip '+m.cls+'">'+esc(m.label)+'</span>'; }
+
+/* A null on the first callback is the SDK restoring, not a signed-out user —
+   the same guard every other page carries. Nothing here signs anybody out. */
+var _nulls = 0;
+auth.onAuthStateChanged(function(u){
+  if(!u){
+    var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    var cap = had ? 20 : 4;
+    if(_nulls++ < cap && !auth.currentUser){
+      setTimeout(function(){ if(!auth.currentUser && _nulls>=cap) location.href='/'; }, 400);
+      return;
+    }
+    if(!auth.currentUser) location.href='/';
+    return;
+  }
+  _nulls = 0;
+  ME=u; MYORG=orgOf(u.email);
+  document.getElementById('who').textContent = u.email + ' · ' + MYORG;
+  /* The role decides what this page IS. Read it before anything renders, or
+     an originator sees a design queue for a moment and reasonably concludes
+     the product has them filed as the wrong kind of partner. */
+  db.collection('omega_orgs').doc(MYORG).get().then(function(d){
+    var v = (d.exists && d.data()) || {};
+    ROLE = v.jdRole === 'originator' ? 'originator' : 'design';
+    PARTNER = v.jdPartnerOf || 'the partner workspace';
+  })['catch'](function(){})
+  .then(function(){ paintHeader(); load(); });
+});
+
+function paintHeader(){
+  var t=document.getElementById('pg-title'), sub=document.getElementById('pg-sub'),
+      act=document.getElementById('pg-actions');
+  if(t) t.textContent = PARTNER + ' \u00b7 JD Workspace';
+  if(sub) sub.textContent = ROLE==='originator'
+    ? 'Projects you are developing with ' + PARTNER + '. Build one here, attach what it needs, '
+      + 'and send it over \u2014 it lands in their inbox for review.'
+    : 'Projects ' + PARTNER + ' has asked your team to draw. Open one in the site map editor, '
+      + 'and mark it complete when the drawing is ready for them to review.';
+  if(act) act.innerHTML = ROLE==='originator'
+    ? '<button onclick="newProject()">+ New project</button>'
+      + '<span class="meta" style="margin-left:10px">Creates it in your workspace. '
+      + 'Nothing reaches ' + esc(PARTNER) + ' until you send it.</span>'
+    : '';
+}
+
+/* array-contains on orgsInvolved is the query the rule can prove: every
+   document it returns names this org, which is exactly what isCollaborator()
+   checks. A query the rule cannot prove is refused whole, not filtered. */
+function load(){
+  /* An originator sees everything they own; a design partner sees what they
+     have been added to. Two queries rather than one, because "mine" and
+     "shared with me" are different questions and a collaborator has no read
+     on the other org's whole project list. */
+  var q = ROLE==='originator'
+    ? db.collection('projects').where('orgId','==',MYORG).get()
+    : db.collection('projects').where('orgsInvolved','array-contains',MYORG).get();
+  q.then(function(sn){
+      ROWS=[];
+      sn.forEach(function(d){
+        var v=d.data()||{}; var dz=v.design||{};
+        if(ROLE!=='originator' && !dz.status) return;   /* not a design handoff */
+        ROWS.push({ id:d.id, name:v.name||v.address||d.id, address:v.address||'',
+                    ownerOrg:v.orgId||'', dz:dz, files:v.files||[],
+                    jd:v.jd||{}, dealId:v.dealId||'',
+                    roster:v.orgsInvolved||[] });
+      });
+      ROWS.sort(function(a,b){
+        var rank={in_design:0,revise:1,complete:2,returned:3};
+        var ra=rank[a.dz.status]==null?9:rank[a.dz.status];
+        var rb=rank[b.dz.status]==null?9:rank[b.dz.status];
+        if(ra!==rb) return ra-rb;
+        return String(a.name).localeCompare(String(b.name));
+      });
+      render();
+    })
+    ['catch'](function(e){
+      document.getElementById('list').innerHTML='<div class="card"><div class="empty">'
+        + (/permission/i.test(e.message||'')
+            ? 'Your account is not permitted to read assigned projects. If that is wrong, '
+              + 'the workspace that assigned the work has to add your organisation to it.'
+            : 'Could not load: '+esc(e.message))+'</div></div>';
+    });
+}
+
+function render(){
+  var host=document.getElementById('list');
+  if(!ROWS.length){
+    host.innerHTML='<div class="card"><div class="empty">Nothing assigned to '+esc(MYORG)
+      +' yet. When a workspace assigns your team a design, it lands here.</div></div>';
+    return;
+  }
+  if(ROLE==='originator'){
+    var here=ROWS.filter(function(r){ return jdState(r)==='draft'; });
+    var sent=ROWS.filter(function(r){ return jdState(r)!=='draft'; });
+    host.innerHTML =
+        (here.length ? '<div class="grp">Not sent yet ('+here.length+')</div>'+here.map(card).join('') : '')
+      + (sent.length ? '<div class="grp">With '+esc(PARTNER)+' ('+sent.length+')</div>'+sent.map(card).join('') : '');
+    return;
+  }
+  var open=ROWS.filter(function(r){ return r.dz.status==='in_design'||r.dz.status==='revise'; });
+  var done=ROWS.filter(function(r){ return r.dz.status!=='in_design'&&r.dz.status!=='revise'; });
+  host.innerHTML =
+      (open.length ? '<div class="grp">To draw ('+open.length+')</div>'+open.map(card).join('') : '')
+    + (done.length ? '<div class="grp">Sent back ('+done.length+')</div>'+done.map(card).join('') : '');
+}
+
+/* Picked up beats sent beats kept here: a deal id means the partner has taken
+   it into their pipeline, which is the only one of the three they control. */
+function jdState(r){
+  if(r.dealId) return 'adopted';
+  if(r.jd && r.jd.offeredAt) return 'offered';
+  return 'draft';
+}
+
+function card(r){
+  return ROLE==='originator' ? originatorCard(r) : designCard(r);
+}
+
+function originatorCard(r){
+  var i=ROWS.indexOf(r), st=jdState(r);
+  var bits=[];
+  if(r.address) bits.push(esc(r.address));
+  if(r.jd && r.jd.offeredAt) bits.push('sent '+when(r.jd.offeredAt));
+  if(r.dealId) bits.push('in '+esc(PARTNER)+'\u2019s pipeline');
+  return '<div class="card">'
+    + '<div class="rowhead"><div>'
+    +   '<p class="t">'+esc(r.name)+'</p>'
+    +   '<p class="meta">'+(bits.join(' \u00b7 ')||'No address yet')+'</p></div>'
+    +   '<div class="acts">'+chip(st)
+    +     '<button class="ghost" onclick="openEditor('+i+')">Open in editor</button>'
+    +     (st==='draft'
+        ? '<button onclick="sendToPartner('+i+')" id="send'+i+'">Send to '+esc(PARTNER)+'</button>'
+        : '')
+    +   '</div></div>'
+    + filesBlock(r,i)
+    + '<div class="msg" id="m'+i+'"></div></div>';
+}
+
+function designCard(r){
+  var i=ROWS.indexOf(r), dz=r.dz;
+  var bits=[];
+  if(r.address) bits.push(esc(r.address));
+  if(dz.fromOrg) bits.push('from '+esc(String(dz.fromOrg).toUpperCase()));
+  if(dz.sentAt) bits.push('sent '+when(dz.sentAt));
+  if(dz.dueAt){
+    var late = Date.parse(dz.dueAt) < Date.now() && (dz.status==='in_design'||dz.status==='revise');
+    bits.push('due '+when(dz.dueAt)+(late?' — overdue':''));
+  }
+  if(dz.lead) bits.push('lead '+esc(String(dz.lead).split('@')[0]));
+  var live = dz.status==='in_design'||dz.status==='revise';
+  return '<div class="card">'
+    + '<div class="rowhead"><div>'
+    +   '<p class="t">'+esc(r.name)+'</p>'
+    +   '<p class="meta">'+bits.join(' · ')+'</p></div>'
+    +   '<div class="acts">'+chip(dz.status)
+    +     '<button class="ghost" onclick="openEditor('+i+')">Open in editor</button>'
+    +     (live ? '<button onclick="markComplete('+i+')" id="done'+i+'">Mark complete</button>' : '')
+    +   '</div></div>'
+    + (dz.brief ? '<div class="brief">'+esc(dz.brief)+'</div>' : '')
+    + (dz.completedAt
+        ? '<p class="meta" style="margin-top:9px">Marked complete '+when(dz.completedAt)
+          + (dz.completedBy?' by '+esc(dz.completedBy):'')+'.</p>' : '')
+    + filesBlock(r,i)
+    + '<div class="msg" id="m'+i+'"></div></div>';
+}
+
+/* ── FILES LIVE ON THE PROJECT, WHICH BOTH SIDES CAN ALREADY REACH ────────
+   storage.rules already governs projects/{projectId}/{fileName} on the same
+   roster this page queries — the JDA block, added for exactly this. So a
+   drive link and an uploaded PDF need no new rule and no new collection, and
+   the partner sees them because they are on the project, not in a mailbox. */
+function filesBlock(r,i){
+  var list=(r.files||[]).map(function(f){
+    return '<div class="meta" style="margin-top:4px">\u2022 <a href="'+esc(f.url)+'" target="_blank" '
+      + 'rel="noopener">'+esc(f.name||f.url)+'</a>'
+      + (f.by?' <span style="opacity:.7">\u00b7 '+esc(String(f.by).split('@')[0])+'</span>':'')+'</div>';
+  }).join('');
+  return '<div class="brief" style="background:#fff">'
+    + '<div class="meta" style="font-weight:700;color:var(--cs-text)">Files and links</div>'
+    + (list || '<div class="meta" style="margin-top:4px">Nothing attached yet.</div>')
+    + '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;align-items:center">'
+    +   '<input type="text" id="lnk'+i+'" placeholder="Paste a Drive or SharePoint link" '
+    +     'style="flex:1;min-width:200px;padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px">'
+    +   '<button class="ghost" onclick="addLink('+i+')">Add link</button>'
+    +   '<input type="file" id="pdf'+i+'" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv" style="font-size:12px;max-width:190px">'
+    +   '<button class="ghost" onclick="addFile('+i+')">Upload</button>'
+    + '</div></div>';
+}
+
+function openEditor(i){ location.href='/editor.html?id='+encodeURIComponent(ROWS[i].id); }
+
+/* ── A NEW PROJECT STARTS HERE AND STAYS HERE ─────────────────────────────
+   Created in this org, owned by this org, and invisible to the partner until
+   it is sent. That order matters: a half-filled site appearing in somebody
+   else's inbox the moment it is named is how people stop using the button. */
+function newProject(){
+  var name = prompt('Project name');
+  if(!name) return;
+  var address = prompt('Site address (optional)') || '';
+  var now = new Date().toISOString();
+  db.collection('projects').add({
+    name:name, address:address, orgId:MYORG, uid:ME.uid,
+    ownerEmail:ME.email, ownerName:ME.displayName||ME.email,
+    type:'bess', stage:'origination',
+    elements:[], conduits:[], bessList:[], annotations:[],
+    orgsInvolved:[MYORG], files:[],
+    jd:{ partner:PARTNER, offeredAt:null },
+    createdAt:now, updatedAt:now
+  }).then(function(){ load(); })
+   ['catch'](function(e){ alert('Could not create it: '+e.message); });
+}
+
+/* ── SENDING IS ADDING THEM TO THE ROSTER ─────────────────────────────────
+   Not a copy and not a message. The partner is added to orgsInvolved, which
+   is the same mechanism that lets a design partner read work handed to them —
+   so from that moment they can open it, read the files and adopt it into
+   their pipeline, and there is exactly one copy of the project. */
+function sendToPartner(i){
+  var r=ROWS[i];
+  if(!confirm('Send "'+r.name+'" to '+PARTNER+'?\n\nThey will be able to open it, read '
+      + 'anything attached, and take it into their pipeline.')) return;
+  var btn=document.getElementById('send'+i); if(btn) btn.disabled=true;
+  setMsg('m'+i,'Sending…');
+  var partnerOrg = (window.OMEGA_WORKSPACE&&OMEGA_WORKSPACE.jdPartnerOrg) || '';
+  var patch = {
+    'jd.offeredAt': new Date().toISOString(),
+    'jd.offeredBy': ME.email,
+    updatedAt: new Date().toISOString()
+  };
+  if(partnerOrg) patch.orgsInvolved = firebase.firestore.FieldValue.arrayUnion(partnerOrg);
+  db.collection('projects').doc(r.id).update(patch).then(function(){
+    setMsg('m'+i,'Sent. It is in '+PARTNER+'\u2019s inbox for review.');
+    load();
+  })['catch'](function(e){
+    if(btn) btn.disabled=false;
+    setMsg('m'+i,'Could not send: '+e.message, true);
+  });
+}
+
+function addLink(i){
+  var r=ROWS[i], el=document.getElementById('lnk'+i);
+  var url=String((el&&el.value)||'').trim();
+  if(!/^https?:\/\//i.test(url)) return setMsg('m'+i,'A link has to start with http:// or https://', true);
+  setMsg('m'+i,'Adding…');
+  db.collection('projects').doc(r.id).update({
+    files: firebase.firestore.FieldValue.arrayUnion({
+      url:url, name:url.replace(/^https?:\/\//,'').slice(0,60), kind:'link',
+      by:ME.email, at:new Date().toISOString() }),
+    updatedAt:new Date().toISOString()
+  }).then(function(){ setMsg('m'+i,'Added.'); load(); })
+   ['catch'](function(e){ setMsg('m'+i,'Could not add: '+e.message, true); });
+}
+
+/* Uploaded under projects/{id}/ — the path storage.rules already gates on the
+   same roster. ⚠ The stored link is a Firebase download URL and carries its
+   own token, so it is readable by anyone holding it; same trade as everywhere
+   else here, written down rather than assumed. */
+function addFile(i){
+  var r=ROWS[i], el=document.getElementById('pdf'+i);
+  var f=el&&el.files&&el.files[0];
+  if(!f) return setMsg('m'+i,'Choose a file first.', true);
+  setMsg('m'+i,'Uploading…');
+  storage.ref('projects/'+r.id+'/'+f.name).put(f)
+    .then(function(s){ return s.ref.getDownloadURL(); })
+    .then(function(url){
+      return db.collection('projects').doc(r.id).update({
+        files: firebase.firestore.FieldValue.arrayUnion({
+          url:url, name:f.name, kind:'file', by:ME.email, at:new Date().toISOString() }),
+        updatedAt:new Date().toISOString()
+      });
+    })
+    .then(function(){ setMsg('m'+i,'Uploaded.'); load(); })
+    ['catch'](function(e){ setMsg('m'+i,'Upload failed: '+e.message, true); });
+}
+
+/* Dot paths only. The rule requires orgId and orgsInvolved to come back
+   unchanged, and the surest way to hand them back unchanged is never to send
+   them — see the note at the top of this file for why the rule exists. */
+function markComplete(i){
+  var r=ROWS[i];
+  if(!confirm('Mark "'+r.name+'" complete?\n\nThe team that assigned it will see the drawing '
+      + 'is ready to review. It does not move their pipeline on its own.')) return;
+  var btn=document.getElementById('done'+i); if(btn) btn.disabled=true;
+  setMsg('m'+i,'Saving…');
+  db.collection('projects').doc(r.id).update({
+    'design.status':      'complete',
+    'design.completedAt': new Date().toISOString(),
+    'design.completedBy': (ME && ME.email) || '',
+    updatedAt:            new Date().toISOString()
+  }).then(function(){
+    setMsg('m'+i,'Marked complete.');
+    load();
+  })['catch'](function(e){
+    if(btn) btn.disabled=false;
+    setMsg('m'+i, /permission/i.test(e.message||'')
+      ? 'Firestore refused the write — your organisation is on this project but not permitted '
+        + 'to update it. Ask the assigning workspace to check the roster.'
+      : 'Could not save: '+e.message, true);
+  });
+}
+</script>
+</body>
+</html>

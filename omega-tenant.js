@@ -346,6 +346,10 @@
        workspace entry, and what keeps that entry in the nav when the queue is
        empty. */
     if (T.org && T.org.jdPartnerOf) ws.jdPartnerOf = T.org.jdPartnerOf;
+    /* Which end of the relationship they are on, and the partner's orgId —
+       needed to put them on a project's roster when one is sent over. */
+    if (T.org && T.org.jdRole) ws.jdRole = T.org.jdRole;
+    if (T.org && T.org.jdPartnerOrg) ws.jdPartnerOrg = T.org.jdPartnerOrg;
     /* unlockedTools is what applyToolLocks() reads. Compute it from the
        catalog when omega-tools.js is present; otherwise leave config's. */
     if (global.OMEGATools && OMEGATools.catalog) {

@@ -79,7 +79,7 @@ PAGES.forEach(p => {
      'omega-tenant counts work by the collaborator roster, not a hardcoded domain');
   ok(/hideMarketplace/.test(t), 'and honours a tenant that should not see the marketplace');
 }
-ok(fs.existsSync(path.join(ROOT, 'design-queue.html')), '/design-queue.html exists');
+ok(fs.existsSync(path.join(ROOT, 'jd-workspace.html')), '/jd-workspace.html exists');
 
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);
