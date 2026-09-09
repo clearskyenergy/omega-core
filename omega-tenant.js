@@ -393,6 +393,13 @@
     if (l && label) l.textContent = label;
     if (c) c.textContent = String(n);
     a.style.display = '';
+    /* The section heading comes with it. A "Joint development" label with
+       nothing under it is worse than no label — and this item IS the JD
+       workspace from the partner's side, so it belongs under that heading
+       rather than floating above it. */
+    ['sn-jv-divider', 'sn-jv-label'].forEach(function (id) {
+      var e = document.getElementById(id); if (e) e.style.display = '';
+    });
   }
   function countDesignWork(org) {
     if (!global.document || !document.getElementById('sn-design')) return;

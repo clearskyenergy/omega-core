@@ -20,7 +20,10 @@ function navOf(file) {
   const j = s.indexOf('</nav>', i);
   const block = s.slice(i, j);
   const out = [];
-  const re = /<(a|button)\s[^>]*class="sn-item[^"]*"[\s\S]*?<span>([^<]+)<\/span>/g;
+  /* The span may carry attributes — the design-queue item labels its own.
+     Matching only bare <span> meant that item was invisible to this
+     comparison, which is exactly the drift the test exists to catch. */
+  const re = /<(a|button)\s[^>]*class="sn-item[^"]*"[\s\S]*?<span[^>]*>([^<]+)<\/span>/g;
   let m;
   while ((m = re.exec(block))) out.push(m[2].trim());
   return out;
