@@ -1303,7 +1303,10 @@ function refresh(manual){
     if (!S.inboxLoaded && A.can('write_deal')) loadInbox(false);
     if (!S.designLoaded) loadDesign(false);
     if (A.can('approve_any') && !S.staff.length) loadStaff();
-    if (A.can('approve_any') && !S.invites.length) loadInvites();
+    /* Loaded for anyone who can assign work, not only administrators — the
+       assignee dropdown needs them (see optUsers). The rules already decide
+       who may read them; asking is not a grant. */
+    if ((A.can('approve_any') || A.can('write_deal')) && !S.invites.length) loadInvites();
     /* Point the logo and the Portal button at THIS person's own tenant. Runs
        here because A.me() is resolved by now; harmless to repeat. */
     resolveHome();
@@ -2413,6 +2416,21 @@ function optUsers(){
   (S.staff||[]).forEach(function(s){
     if(s.email && !out.some(function(u){ return u.value===s.email; }))
       out.push({value:s.email,label:s.name+'  \u00b7  not signed in yet'});
+  });
+  /* And invited partner reps, for exactly the same reason. omega_users only
+     gains a row when somebody signs into THIS console, and a design partner
+     has no reason to visit it before there is work waiting — so requiring the
+     sign-in first makes assigning them impossible until they have been
+     assigned something. The invite is the pre-provisioning record this portal
+     already has; an outstanding one is a person somebody has decided belongs
+     here. Their omega_users row still only appears when they sign in
+     themselves, which is the rule this does not bend. */
+  (S.invites||[]).forEach(function(i){
+    if(!i.email || i.usedAt) return;
+    if(out.some(function(u){ return u.value===i.email; })) return;
+    var who = (i.note||'').replace(/^Design partner rep\s*\u2014\s*/,'') || i.email.split('@')[0];
+    out.push({value:i.email,
+      label:who+'  \u00b7  '+(i.orgName||i.orgId||'')+' \u00b7 invited, not signed in yet'});
   });
   return out.sort(function(a,b){ return a.label.localeCompare(b.label); });
 }
