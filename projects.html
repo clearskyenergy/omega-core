@@ -1015,7 +1015,17 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
     window.OmegaNewProject.configure({
       db: function () { return db; },
       auth: function () { return auth; },
-      orgId: function () { return (window.WS && WS.orgId) || ''; },
+      /* ── THE SAME LEXICAL TRAP, ONE LINE FROM THE LAST ONE ──────────
+         WS is declared `const WS = window.OMEGA_WORKSPACE`. A const binding
+         never becomes a property of window, so `window.WS` is undefined
+         forever and this getter returned '' on every click — which the module
+         reports as "your workspace has not finished loading", on a page whose
+         workspace had loaded perfectly well and was sitting right there in
+         the const. Read the global that actually exists. */
+      orgId: function () {
+        var w = window.OMEGA_WORKSPACE || (typeof WS !== 'undefined' ? WS : null);
+        return (w && w.orgId) || '';
+      },
       ownerName: function () {
         var u = (auth && auth.currentUser) || null;
         return (window._projMeName && _projMeName())
@@ -1023,7 +1033,10 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
       },
       afterCreate: function (id) {
         /* Straight into the editor, branded for this tenant. */
-        var slug = (window.WS && WS.allowedDomain) ? String(WS.allowedDomain).split('.')[0] : '';
+        /* Same trap: window.WS is undefined, so this slug was always empty and
+           the editor opened unbranded for every tenant. */
+        var _w = window.OMEGA_WORKSPACE || (typeof WS !== 'undefined' ? WS : null);
+        var slug = (_w && _w.allowedDomain) ? String(_w.allowedDomain).split('.')[0] : '';
         var url = '/editor.html?id=' + encodeURIComponent(id);
         if (slug) url += '&org=' + encodeURIComponent(slug);
         window.location.href = url;
