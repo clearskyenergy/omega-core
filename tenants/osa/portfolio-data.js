@@ -2013,6 +2013,20 @@
           + (a.dueAt ? ', due ' + fmtDate(a.dueAt) : '') });
   }
 
+  /* The partner said the drawing is ready. Recorded, not acted on: it is a
+     claim from the people who did the work, and somebody here still opens the
+     drawing and records what came back with the price. Kept separate from
+     designReturned() for exactly that reason — one is what they told us, the
+     other is what we concluded. */
+  function markDesignComplete(deal, o) {
+    return patch(deal, {
+      'design.status':      'complete',
+      'design.completedAt': o.at || stamp(),
+      'design.completedBy': o.by || ''
+    }, { type:'design', message:'Design marked complete by '
+          + (String(o.by||'the design team').split('@')[0]) });
+  }
+
   /* Back from the team, with the number. The price is the point of the round
      trip \u2014 before a design exists nobody knows what the project costs, which
      is the whole reason capex is not asked for at intake. */
@@ -2586,7 +2600,7 @@
     startPermitting:startPermitting, addApplication:addApplication,
     setApplicationStatus:setApplicationStatus,
     assign:assign, assignRep:assignRep, attachProject:attachProject, workload:workload,
-    assignDesign:assignDesign, designReturned:designReturned, designRevise:designRevise,
+    assignDesign:assignDesign, markDesignComplete: markDesignComplete, designReturned:designReturned, designRevise:designRevise,
     drawnUsd:drawnUsd, requestedDrawUsd:requestedDrawUsd, undrawnUsd:undrawnUsd,
     deployedUsd:deployedUsd, bomTotalUsd:bomTotalUsd, lineTotal:lineTotal,
     everReached:everReached, enteredAt:enteredAt, daysToFund:daysToFund, ageDays:ageDays,

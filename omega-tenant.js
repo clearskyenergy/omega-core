@@ -326,6 +326,16 @@
     if (T.member && T.member.toolAccess) ws.toolAccess = T.member.toolAccess;
     ws.role = T.role;
     ws.orgStatus = T.status;
+    /* ── THE ORG RECORD IS WHERE THE NAME LIVES ──────────────────────────
+       On a host that pins nobody, the workspace is derived from the email
+       domain — which gives "Renewablenrgsolutions", a company name nobody
+       chose. omega_orgs holds the one somebody typed. This merged every other
+       field off that record and left the name alone, so a tenant could be set
+       up properly and still be addressed by its domain with the capital in the
+       wrong place. Applied only when the record actually has one, so a
+       derived name stays as the fallback it is. */
+    if (T.org && T.org.name) ws.clientName = T.org.name;
+    if (T.org && T.org.logoUrl && !ws.logo) ws.logo = T.org.logoUrl;
     ws.vertical = ws.vertical || (T.org && T.org.vertical) || null;
     ws.shell = ws.shell || (T.org && T.org.shell) || 'default';
     /* Some tenants have no business in the marketplace — a design partner is
@@ -420,6 +430,9 @@
     T._ent = true; T._ws = ws;
     try { countDesignWork((ws && ws.orgId) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
+    /* The chrome was painted before this record arrived; repaint it now that
+       the real name is known, or the header keeps the derived one. */
+    try { if (global.OmegaBrand && OmegaBrand.paint) OmegaBrand.paint(ws); } catch (e) {}
     for (var i = 0; i < T._entCbs.length; i++) { try { T._entCbs[i](ws); } catch (e) {} }
     try { global.dispatchEvent(new CustomEvent('omega:entitlements', { detail: ws })); } catch (e) {}
     /* Re-run the gates that already exist on the page. */

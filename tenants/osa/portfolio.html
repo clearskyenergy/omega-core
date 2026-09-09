@@ -1622,6 +1622,25 @@ function jdOrgs(){
   }).filter(function (r){ return r.jd.active === true; });
 }
 
+/* Where the drawing is, in one cell. Reads the deal's own design block — the
+   copy this workspace controls — so the table costs no extra reads. The
+   partner's "I have finished" lands on the PROJECT, and paintDesignBack()
+   folds it back onto the deal the next time somebody opens it, which is what
+   keeps this column honest without every view fetching every project. */
+function jdDesignCell(d){
+  var dz = (d && d.design) || {};
+  var who = String(dz.lead || (dz.team||[])[0] || '').split('@')[0];
+  var org = String(dz.lead || (dz.team||[])[0] || '').split('@')[1] || '';
+  if (dz.status === 'complete')
+    return '<span class="tag" style="background:#12805C22;color:#12805C">Complete</span>';
+  if (dz.status === 'returned')
+    return '<span class="tag" style="background:#12805C22;color:#12805C">Returned</span>';
+  if (dz.status === 'in_design')
+    return '<span class="tag" style="background:#B4540022;color:#B45400">In design</span>'
+         + (who ? '<div class="t-sub">' + esc(who) + (org ? ' \u00b7 ' + esc(org) : '') + '</div>' : '');
+  return '<span class="sub">not assigned</span>';
+}
+
 function jdRank(key){
   for (var i=0;i<F.STAGES.length;i++) if (F.STAGES[i].key===key) return F.STAGES[i].rank;
   return 0;
@@ -1715,7 +1734,7 @@ function jdDetailHtml(r){
       + esc(r.stats.orgId) + ' to a project’s partners and it appears here.</div></div></div>';
   }
   h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th><th>Ready</th>'
-    + '<th class="num">Size</th><th>Drawing</th><th></th></tr></thead><tbody>';
+    + '<th class="num">Size</th><th>Design</th><th>Drawing</th><th></th></tr></thead><tbody>';
   r.deals.forEach(function (d){
     var st = F.stageOf(d.stage);
     var isReady = rd.need && jdRank(d.stage) >= rd.need && !F.isExit(d.stage);
@@ -1727,6 +1746,7 @@ function jdDetailHtml(r){
                  : isReady ? '<span class="tag" style="background:#12805C22;color:#12805C">Ready</span>'
                            : '<span class="sub">not yet</span>') + '</td>'
       + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
+      + '<td>' + jdDesignCell(d) + '</td>'
       + '<td>' + (d.projectId
                    ? '<button class="btn-x" onclick="openEditor(\'' + esc(d.projectId) + '\')">Open drawing</button>'
                    : '<span class="sub">none linked</span>') + '</td>'
@@ -4665,6 +4685,19 @@ function paintDesignBack(d){
     if(dz.status!=='complete') return;
     var who=String(dz.completedBy||'').split('@')[0];
     var when=dz.completedAt ? F.fmtDate(dz.completedAt) : '';
+    /* ── FOLD IT BACK INTO THIS WORKSPACE'S OWN BOOK ─────────────────────
+       The partner can write to the project and not to `deals`, which is
+       right — but it means every OSA view that reads the deal would show
+       "in design" forever. Reconcile once, here, where an OSA user with
+       write access is already looking at it. Every list then reflects it
+       without fetching a project per row.
+
+       It records what the partner said; it does not advance a stage or set
+       a price. Those are still decisions taken in this room. */
+    if(d.design && d.design.status==='in_design' && A.can('write_deal') && !d._demo){
+      F.markDesignComplete(d, { by: dz.completedBy||'', at: dz.completedAt||'' })
+        ['catch'](function(){ /* the banner stands either way */ });
+    }
     host.innerHTML='<div style="margin-top:13px;padding:11px 13px;border-radius:9px;'
       + 'background:rgba(31,122,69,.08);border:1px solid rgba(31,122,69,.28)">'
       + '<b>The design team marked this complete</b>'

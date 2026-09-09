@@ -110,6 +110,7 @@
     { key:'investor',     label:'Investor',          hint:'Provides capital.' },
     { key:'shareholder',  label:'Shareholder',       hint:'Holds equity in ClearSky.' },
     { key:'verifier',     label:'Verification partner', hint:'Signs feasibility / bankability opinions.' },
+    { key:'design',       label:'Design partner',    hint:'Draws the site map and lays out the equipment.' },
     { key:'broker',       label:'Broker / referrer', hint:'Introduces deals, no delivery role.' },
     { key:'internal',     label:'ClearSky',          hint:'Our own staff.' }
   ];
