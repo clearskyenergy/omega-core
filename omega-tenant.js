@@ -69,6 +69,23 @@
   'use strict';
 
   var CACHE_KEY = 'omega_tenant_public:';
+
+  /* ── "THIS TAB HAD A SIGNED-IN USER" ──────────────────────────────────────
+     Firebase reports no user before it has finished restoring, and every page
+     that acted on that showed a login form to somebody who was signed in. The
+     confirm-and-wait guards fix the common case, but they cannot tell a slow
+     restore from a genuine first visit, so they have to give up quickly.
+
+     This is the missing fact. sessionStorage lives for the life of the TAB, so
+     if it says a user was here, a null on the next page is a restore in
+     progress and the page should keep waiting rather than paint a login.
+
+     Cleared by endSession(), which the sign-out buttons call. That is the
+     whole rule: the only thing that ends a session is the person asking. */
+  var SESSION_KEY = 'omega_had_session';
+  function markSession() { try { global.sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) {} }
+  function endSession()  { try { global.sessionStorage.removeItem(SESSION_KEY); } catch (e) {} }
+  function hadSession()  { try { return global.sessionStorage.getItem(SESSION_KEY) === '1'; } catch (e) { return false; } }
   var LOCAL_HOSTS = ['localhost', '127.0.0.1'];
   var PREVIEW_SUFFIXES = ['.vercel.app', 'staging.clearskyomega.com', 'next.clearskyomega.com'];
   /* HUB HOSTS: no pinned tenant, no hostname lock. Where people sign up and
@@ -454,14 +471,24 @@
         lockedEntitlements();
         return;
       }
+      /* ── THE PRODUCT DOES NOT SIGN CUSTOMERS OUT ──────────────────────────
+         Both of these used to call auth.signOut() after showing the refusal.
+         Signing somebody out is not how you tell them their account is
+         suspended — it is how you tell them nothing at all, because the next
+         thing they see is a login form and the only story that fits is "it
+         logged me out". They then sign in again, successfully, and land on
+         the same wall, which is worse than the wall on its own.
+
+         The refusal covers the screen and says what is wrong and who to
+         contact. The session stays; the sign-out button is where it always
+         was. Nothing here is a security boundary — Firestore rules are, and
+         they do not care whether a browser is still holding a token. */
       if (T.status === 'suspended' || T.status === 'cancelled') {
         refuse('Your organisation\'s account is ' + T.status + '. Contact billing@csebuilders.com to restore access.');
-        try { firebase.auth().signOut(); } catch (e) {}
         return;
       }
       if (T.member && T.member.status === 'disabled') {
         refuse('Your access to this workspace has been disabled by your administrator.');
-        try { firebase.auth().signOut(); } catch (e) {}
         return;
       }
       /* Self-register in members so the tenant admin sees this person. Rules
@@ -500,7 +527,7 @@
     if (!global.firebase || !firebase.auth) return;
     try {
       firebase.auth().onAuthStateChanged(function (user) {
-        if (user) setTimeout(function () { loadEntitlements(user); }, 0);
+        if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
         else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; }
       });
     } catch (e) {}
@@ -517,6 +544,11 @@
     get status() { return T.status; },
     get refused() { return T.refused || null; },
     get hub() { return !!T.hub; },
+    /* Did this TAB have a signed-in user? Pages use it to tell a slow restore
+       apart from a genuine signed-out visit. endSession() is called by the
+       sign-out buttons — nothing else may call it. */
+    hadSession: hadSession,
+    endSession: endSession,
     effectiveTools: function (catalog) { return effectiveTools(catalog || (global.OMEGATools && OMEGATools.catalog ? OMEGATools.catalog() : [])); },
     canOpen: function (key) { return this.effectiveTools().indexOf(key) >= 0; },
     isAdmin: function () { return T.role === 'owner' || T.role === 'admin'; },

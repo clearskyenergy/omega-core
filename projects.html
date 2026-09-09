@@ -757,7 +757,10 @@ function _wsFromUser(user){
 function domainOf(email){ return (email||'').split('@')[1] || ''; }
 
 function esc2(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function signOut(){ auth.signOut().then(function(){ window.location.href='/'; }); }
+function signOut(){
+  try { if (window.OmegaTenant && OmegaTenant.endSession) OmegaTenant.endSession(); } catch(e){}
+  auth.signOut().then(function(){ window.location.href='/'; });
+}
 
 /* Paint the shared OMEGA topbar (client chip, tier badge, avatar, name) so this
    page matches the portal index and marketplace exactly. */
@@ -864,10 +867,11 @@ var _pjNullSeen = 0;
 auth.onAuthStateChanged(user => {
   _wsFromUser(user);
   if (!user) {
-    if (_pjNullSeen++ < 4 && !auth.currentUser) {
+    var _had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    if (_pjNullSeen++ < (_had ? 20 : 4) && !auth.currentUser) {
       setTimeout(function () {
         if (auth.currentUser) return;
-        if (_pjNullSeen >= 4) window.location.href = '/';
+        if (_pjNullSeen >= (_had ? 20 : 4)) window.location.href = '/';
       }, 400);
       return;
     }

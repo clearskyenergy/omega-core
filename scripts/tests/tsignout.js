@@ -117,5 +117,54 @@ Object.keys(PAGES).forEach(f => {
      'index.html confirms BEFORE it tears the boot splash down');
 }
 
+/* ── NOTHING SIGNS A CUSTOMER OUT BUT THE CUSTOMER ───────────────────────
+   Firebase auth state is shared by every tab on the origin, so one page
+   calling signOut() from an auth handler empties the session in whatever else
+   the person has open. A staff console left in a background tab was logging
+   tenants out of the workspace they were actually using — the session died
+   "in the background" while the page they were looking at stayed on screen. */
+console.log('no page evicts anyone');
+const EVICTORS = ['index.html', 'projects.html', 'marketplace.html', 'rfq.html',
+                  'console/index.html', 'tenants/osa/index.html',
+                  'tenants/osa/portfolio.html', 'tenants/solela/index.html'];
+EVICTORS.forEach(f => {
+  const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  /* Only inside auth-state handlers; a sign-out BUTTON must survive. */
+  let bad = 0;
+  const re = /onAuthStateChanged/g;
+  let m;
+  while ((m = re.exec(src))) {
+    let seg = src.slice(m.index, m.index + 2500)
+                 .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    /* Stop at the sign-out BUTTON if the window runs into it — index.html
+       registers its handler just above function signOut(), and that one is
+       the whole point of the rule, not a violation of it. */
+    const btn = seg.indexOf('function signOut(');
+    if (btn > 0) seg = seg.slice(0, btn);
+    if (/\bauth\.signOut\(\)|firebase\.auth\(\)\.signOut\(\)/.test(seg)) bad++;
+  }
+  ok(bad === 0, f + ' never signs anyone out from an auth handler');
+});
+
+/* The hint that makes "loading screen only" possible, and the one place
+   allowed to clear it. */
+console.log('session hint');
+{
+  const t = fs.readFileSync(path.join(ROOT, 'omega-tenant.js'), 'utf8');
+  ok(/hadSession: hadSession/.test(t) && /endSession: endSession/.test(t),
+     'omega-tenant exposes hadSession/endSession');
+  ok(/if \(user\) \{ markSession\(\);/.test(t), 'and marks the tab when a user arrives');
+}
+['index.html', 'projects.html', 'marketplace.html', 'rfq.html'].forEach(f => {
+  const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  ok(/OmegaTenant\.hadSession/.test(src), f + ' waits longer when the tab had a session');
+});
+['index.html', 'projects.html'].forEach(f => {
+  const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const i = src.indexOf('function signOut(');
+  const seg = src.slice(i, i + 400);
+  ok(/OmegaTenant\.endSession/.test(seg), f + "'s sign-out button clears the hint");
+});
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

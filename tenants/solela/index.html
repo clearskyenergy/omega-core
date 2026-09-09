@@ -486,7 +486,8 @@ function _wireAuth(){
       var ws = resolveWorkspace(email);
       if (!ws){
         showAuthErr('No ClearSky-OMEGA workspace is provisioned for @' + (domainOf(email) || 'your domain') + '. Contact your administrator to be added.');
-        auth.signOut();
+        /* Refusal, not eviction — auth is shared across tabs; see console/. */
+        showLogin();
         return;
       }
       WORKSPACE = ws;

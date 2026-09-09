@@ -602,7 +602,8 @@ function ready(){
         return;
       }
       var a = P.resolveActor(rec);
-      if (!a){ showAuthErr(P.accessMessage(user.email||'')); auth.signOut(); return; }
+      /* Refusal, not eviction — auth is shared across tabs; see console/. */
+      if (!a){ showAuthErr(P.accessMessage(user.email||'')); showLogin(); return; }
       ACTOR = a;
       ME.email = rec.email; ME.uid = user.uid; ME.name = rec.name;
       P.init(db, ME, ACTOR);
@@ -612,7 +613,10 @@ function ready(){
       console.error('[partner] identity:', err);
       showAuthErr('Could not read your account. On a new deployment this is usually the '
         + 'omega_users rules not being merged yet. ' + (err && err.message || ''));
-      auth.signOut();
+      /* A failed READ is the worst possible reason to end a session: the most
+         likely cause is a rules deploy, and signing the person out loses their
+         place for something that will be fixed without them. */
+      showLogin();
     });
   });
 })();

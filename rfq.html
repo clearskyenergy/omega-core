@@ -174,8 +174,10 @@ function statusChip(s){
 var _qdNull = 0;
 auth.onAuthStateChanged(function(u){
   if(!u){
-    if (_qdNull++ < 4 && !auth.currentUser) {
-      setTimeout(function(){ if (!auth.currentUser && _qdNull >= 4) location.href='/'; }, 400);
+    var _had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    var _cap = _had ? 20 : 4;
+    if (_qdNull++ < _cap && !auth.currentUser) {
+      setTimeout(function(){ if (!auth.currentUser && _qdNull >= _cap) location.href='/'; }, 400);
       return;
     }
     if (!auth.currentUser) location.href='/';

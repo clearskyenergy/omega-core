@@ -1175,7 +1175,8 @@ var _bootTries = 0;
       console.error('[portfolio] identity:', err);
       showAuthErr('Could not read your account. If this is a new deployment, the '
         + 'omega_users rules are probably not merged yet. ' + (err&&err.message||''));
-      auth.signOut();
+      /* A failed read is not grounds for ending a session — see osa/index.html. */
+      showLogin();
     });
   });
 })();

@@ -905,7 +905,8 @@ function onAuth(user, tries){
     /* Same as index.html: a premature null used to paint the sign-in card,
        saved credentials and all, at somebody who was signing in perfectly
        well. Confirm before showing it. */
-    if ((tries || 0) < 4 && !auth.currentUser) {
+    var _had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    if ((tries || 0) < (_had ? 20 : 4) && !auth.currentUser) {
       setTimeout(function(){ onAuth(auth.currentUser, (tries || 0) + 1); }, 300);
       return;
     }

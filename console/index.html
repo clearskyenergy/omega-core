@@ -830,9 +830,13 @@ window._omegaReady = function(){
     if (!user) { showLogin(); return; }
     var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
     if (!ws) {
+      /* Refusal, not eviction. Auth state is shared across every tab on this
+         origin, so signing out here reached into whatever the person had open
+         elsewhere and emptied it — this console, left in a background tab, was
+         logging tenants out of the workspace they were actually using. */
       showAuthErr('This console is for ClearSky staff. ' +
         OmegaBrand.accessMessage(user.email, WORKSPACES));
-      auth.signOut();
+      showLogin();
       return;
     }
     ME.email = (user.email || '').toLowerCase();

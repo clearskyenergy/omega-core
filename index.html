@@ -2758,7 +2758,13 @@ var _omegaOnAuth = function (user, tries) {
      Hold the splash and confirm. auth.currentUser is the SDK's own answer and
      costs nothing to ask. The 8s failsafe below still applies, so this cannot
      strand anyone on the splash. */
-  if (!user && !auth.currentUser && (tries || 0) < 4) {
+  /* This TAB had a signed-in user (OmegaTenant.hadSession), so a null here is
+     a restore in progress, not a signed-out visitor. Wait far longer before
+     showing anything but the loading state — the rule is that moving between
+     pages shows the loading screen and nothing else. Cleared only by the
+     sign-out button, via OmegaTenant.endSession(). */
+  var _hadSess = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+  if (!user && !auth.currentUser && (tries || 0) < (_hadSess ? 20 : 4)) {
     setTimeout(function () { _omegaOnAuth(auth.currentUser, (tries || 0) + 1); }, 300);
     return;
   }
@@ -3025,6 +3031,10 @@ function signInWithGoogle() {
 }
 
 function signOut() {
+  /* The ONLY thing that ends a session. Clearing the hint here is what lets
+     every other page tell "they asked to leave" from "auth is still waking
+     up" — without it a deliberate sign-out would sit on the loading screen. */
+  try { if (window.OmegaTenant && OmegaTenant.endSession) OmegaTenant.endSession(); } catch (e) {}
   /* ── BACK TO THE FRONT DOOR, NOT TO THIS PAGE'S OWN FORM ─────────────
      Signing out left the person on whatever URL they were on, which on the
      hub is /?tenant=…&via=omega-gateway — and that URL suppresses the
