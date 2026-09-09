@@ -2017,6 +2017,18 @@ function drMsg(dealId, text, bad){
   el.style.color = bad ? 'var(--red,#B4322A)' : 'var(--muted,#5A6B7B)';
 }
 
+/* ── THE SERVER PACKAGES IT, IF IT CAN ────────────────────────────────
+   Writing fin_projects from here requires a financing-portal profile, which
+   is a second account in a second product — fine for a company filing its own
+   deals, wrong for a joint venture whose people are spread across several
+   member firms. /api/dealroom-open does it with the Admin SDK and asserts
+   membership of THIS workspace instead, which is the narrower gate.
+
+   The direct write stays as the fallback so nothing regresses while the API's
+   service account is unset: ClearSky staff can package today either way, and
+   the moment the endpoint is live everybody else can too, with no change here.
+   A 403 is not a fallback case — the server has considered the question and
+   said no, and trying again from the browser would only fail differently. */
 function sendToDealRoom(dealId, orgId){
   var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
   if (!d) return;
@@ -2026,45 +2038,72 @@ function sendToDealRoom(dealId, orgId){
       + 'It opens their deal room at stage Ordered. Nothing is emailed until '
       + 'somebody adds the data room link and delivers it.')) return;
 
-  var uid=null, email='';
-  try { var u = firebase.auth().currentUser || {}; uid = u.uid; email = u.email || ''; } catch(e){}
-  if (!uid){ drMsg(dealId,'Not signed in.',true); return; }
+  var u=null; try { u = firebase.auth().currentUser; } catch(e){}
+  if (!u){ drMsg(dealId,'Not signed in.',true); return; }
 
   drMsg(dealId,'Packaging…');
-  var now = Date.now(), ref;
-  db.collection('fin_projects').add({
+  u.getIdToken()
+    .then(function(tok){
+      return fetch('/api/dealroom-open', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + tok },
+        body: JSON.stringify({ dealId: dealId, forOrgId: orgId,
+                               forOrgName: partner, jvName: jvName(), jvKey: jvKey() })
+      });
+    })
+    .then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if (r.ok) return j;
+        if (r.status === 403) { var e=new Error(j.error||j.message||'Refused'); e.hard=true; throw e; }
+        var e2=new Error(j.error||j.message||('HTTP '+r.status)); e2.fallback=true; throw e2;
+      });
+    })
+    .then(function(j){ finishDealRoom(dealId, orgId, j.projectId, j.already); })
+    .catch(function(e){
+      if (e && e.hard){ drMsg(dealId, e.message, true); return; }
+      /* The endpoint is missing, or its service account is not set. Try it the
+         old way, which still works for anyone the rules already admit. */
+      return sendToDealRoomDirect(dealId, orgId, partner, u);
+    });
+}
+
+function finishDealRoom(dealId, orgId, projectId, already){
+  var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
+  if (d){ d.dealRoomId = projectId; d.dealRoomOrg = orgId; }
+  drMsg(dealId, already ? 'Already had a room — opened it.'
+                        : 'Sent — it is in their room at Ordered.');
+  renderJD();
+}
+
+/* The original client-side path, kept as the fallback. */
+function sendToDealRoomDirect(dealId, orgId, partner, u){
+  var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
+  if (!d) return;
+  var email = (u && u.email) || '', uid = u && u.uid, now = Date.now(), ref;
+  if (!uid){ drMsg(dealId,'Not signed in.',true); return; }
+  return db.collection('fin_projects').add({
     name: d.name || dealId,
     address: d.address || '',
     state: d.state || '',
     mw: +d.sizeMw || 0,
     capexUsd: +d.capexUsd || 0,
     stage: d.stage || '',
-    status: 'review',                /* the only statuses a create allows */
+    status: 'review',
     awardedTo: null,
     developerUid: uid,
-    /* The sponsor is the venture. packagedBy keeps the individual on the
-       record, which is the part a JV still needs to be able to answer. */
     sponsorKey: jvKey(),
     packagedBy: email,
     packagedByOrg: (String(email).split('@')[1] || ''),
-    /* orgKey is deliberately absent. The rule lets a create through when it is
-       missing, when it matches the submitter's own workspace, or when an
-       administrator is filing — pinning it to the PARTNER's org would have
-       refused every OSA member who is not ClearSky staff. The project belongs
-       to whoever packaged it; who it is FOR is room.forOrg. */
-    /* orgName is the SPONSOR — who prepared it. It was set to the partner,
-       which is the recipient, so the delivery email would have told Amperage
-       that Amperage prepared it. room.forOrg is where the recipient belongs. */
     orgName: jvName(),
-    sourceDealId: dealId,            /* the way back to this workspace */
-    sourceWorkspace: 'osa',
+    sourceDealId: dealId,
+    sourceWorkspace: jvKey(),
     createdAt: F.stamp(),
     updatedAt: F.stamp()
   })
     .then(function(r){
       ref = r;
       return r.update({
-        room: { state:'ordered', forOrg: partner, dataRoomUrl:'', note:'',
+        room: { state:'ordered', forOrg: partner, forOrgId: orgId, dataRoomUrl:'', note:'',
                 history:[{ state:'ordered', at: now, by: email }] },
         updatedAt: F.stamp()
       });
@@ -2073,24 +2112,12 @@ function sendToDealRoom(dealId, orgId){
       return db.collection(F.COLLECTION).doc(dealId)
                .update({ dealRoomId: ref.id, dealRoomOrg: orgId, dealRoomAt: F.stamp() });
     })
-    .then(function(){
-      d.dealRoomId = ref.id; d.dealRoomOrg = orgId;
-      drMsg(dealId,'Sent — it is in their room at Ordered.');
-      renderJD();
-    })
+    .then(function(){ finishDealRoom(dealId, orgId, ref.id, false); })
     .catch(function(e){
-      /* Permission-denied here almost always means one thing: no financing
-         portal profile. Packaging writes into that portal, and its rules ask
-         for a profile with a sponsor role — which is self-serve and takes a
-         minute on the same sign-in. Saying "refused" and stopping there left
-         somebody staring at a button that would never work, with no idea it
-         was one signup away. */
       if (e && e.code === 'permission-denied'){
-        drMsg(dealId, '', false);
-        toast('You need a financing-portal account to package a project. Create one at '
-            + 'financing.csebuilders.com with the same sign-in — pick Developer. '
-            + 'Then this works.', true);
         var el=document.getElementById('dr-'+dealId);
+        toast('Packaging needs the server, and it is not configured yet. In the meantime a '
+            + 'financing-portal account works — same sign-in, pick Developer.', true);
         if (el) el.innerHTML = ' <a href="https://financing.csebuilders.com" target="_blank" '
           + 'rel="noopener">Create a financing-portal account →</a>';
         return;
