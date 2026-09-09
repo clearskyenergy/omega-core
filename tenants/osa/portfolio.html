@@ -4625,6 +4625,38 @@ function doPrescreen(deal){
 
 /* ── Deal drawer ──────────────────────────────────────────────────────── */
 function findDeal(id){ for(var i=0;i<S.deals.length;i++) if(S.deals[i].id===id) return S.deals[i]; return null; }
+/* ── WHAT THE DESIGN PARTNER SAID BACK ────────────────────────────────────
+   The partner cannot write to `deals` — that is this workspace's private book
+   and it stays that way — so "I have finished the drawing" is recorded on the
+   PROJECT, which is the document both sides can reach. This reads it back.
+
+   Deliberately NOT auto-advancing anything. A partner marking their own work
+   complete is a claim that the drawing is ready to look at, not a verdict that
+   it is good; somebody here opens it and decides. Marking it returned, with
+   the price, is still a decision taken in this room. */
+function paintDesignBack(d){
+  var host=document.getElementById('dz-back');
+  if(!host || !d || !d.projectId || d._demo) return;
+  /* The page already holds one; do not shadow it with a local named `db`. */
+  var fdb = (typeof db !== 'undefined' && db) ? db : null;
+  try{ if(!fdb && window.firebase && firebase.apps.length) fdb=firebase.firestore(); }catch(e){}
+  if(!fdb) return;
+  fdb.collection('projects').doc(d.projectId).get().then(function(snap){
+    if(!snap.exists) return;
+    var dz=(snap.data()||{}).design||{};
+    if(dz.status!=='complete') return;
+    var who=String(dz.completedBy||'').split('@')[0];
+    var when=dz.completedAt ? F.fmtDate(dz.completedAt) : '';
+    host.innerHTML='<div style="margin-top:13px;padding:11px 13px;border-radius:9px;'
+      + 'background:rgba(31,122,69,.08);border:1px solid rgba(31,122,69,.28)">'
+      + '<b>The design team marked this complete</b>'
+      + (who?' \u2014 '+esc(who):'') + (when?' \u00b7 '+esc(when):'')
+      + '<div style="font-size:12.5px;color:var(--ink-2);margin-top:4px">'
+      + 'Open the drawing and check it, then record what came back with the price. '
+      + 'Nothing has moved on its own.</div></div>';
+  })['catch'](function(){ /* the section stands without it */ });
+}
+
 function openDeal(id){
   if(event) event.stopPropagation && event.stopPropagation();
   S.openId=id; S.tab='overview';
@@ -4699,6 +4731,7 @@ function renderDrawer(){
   if(S.tab==='people')   h=tabPeople(d);
   if(S.tab==='history')  h=tabHistory(d);
   document.getElementById('dr-body').innerHTML=h;
+  paintDesignBack(d);
 
   var foot='';
   if(d._demo) foot='<span style="font-size:12px;color:var(--ink-2)">Sample deal \u2014 nothing saves.</span>';
@@ -4960,6 +4993,7 @@ function tabOverview(d){
           + (dz.status==='returned'
               ? '<button class="btn-o" onclick="doDesignRevise()">Send back for changes</button>':'')
           + '</div>':'')
+      + '<div id="dz-back"></div>'
       + '<div class="sec-note">The editor is where the site map is drawn, the equipment '
       + 'laid out and the price worked out. It is created in the <b>client\u2019s</b> workspace, '
       + 'so the finished drawing lands in their own portal with no export step \u2014 and the '

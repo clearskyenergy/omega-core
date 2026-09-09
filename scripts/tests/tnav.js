@@ -60,5 +60,23 @@ Object.keys(hrefs).forEach(h => {
   ok(fs.existsSync(path.join(ROOT, f)), h + ' resolves to a file that exists');
 });
 
+/* The design-partner surface: one nav item, hidden until there is work, and
+   a marketplace link that a design partner never sees. Both are runtime, so
+   the three navs stay identical in the markup — which is what the comparison
+   above depends on. */
+console.log('design partner');
+PAGES.forEach(p => {
+  const s = fs.readFileSync(path.join(ROOT, p), 'utf8');
+  ok(/id="sn-design"[^>]*style="display:none"/.test(s),
+     p + ' carries the design-queue item, hidden by default');
+});
+{
+  const t = fs.readFileSync(path.join(ROOT, 'omega-tenant.js'), 'utf8');
+  ok(/array-contains', org/.test(t) || /'array-contains', org/.test(t),
+     'omega-tenant counts work by the collaborator roster, not a hardcoded domain');
+  ok(/hideMarketplace/.test(t), 'and honours a tenant that should not see the marketplace');
+}
+ok(fs.existsSync(path.join(ROOT, 'design-queue.html')), '/design-queue.html exists');
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

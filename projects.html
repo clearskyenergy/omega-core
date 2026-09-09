@@ -597,6 +597,15 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
         <span>Marketplace</span>
       </a>
+      <!-- ══ ASSIGNED DESIGN WORK ══ Hidden until there is some. Revealed by
+           omega-tenant.js, which counts the projects this org has been added
+           to as a collaborator and labels the item with the workspace that
+           assigned them — "OSA 3" when there is one, "Design Queue 5" when
+           several. Hidden for everybody else, which is most tenants. -->
+      <a class="sn-item" data-sn="design" id="sn-design" href="/design-queue.html" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        <span id="sn-design-label">Design Queue</span><span class="sn-count" id="sn-design-n" style="margin-left:auto;font-size:11px;opacity:.85"></span>
+      </a>
       <a class="sn-item" data-sn="rfq" href="/rfq.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
         <span>Quote Desk</span>

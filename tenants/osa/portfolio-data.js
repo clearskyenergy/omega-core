@@ -1942,11 +1942,63 @@
      Sending it to the team, and getting it back. Two functions rather than one
      status dropdown because each direction has different consequences: going
      out sets a clock and a brief, coming back carries the price. */
+  /* ── THE HANDOFF RIDES ON THE PROJECT, NOT THE DEAL ──────────────────────
+     A design partner is a different tenant. They cannot read `deals` — that is
+     OSA's private book and should stay that way — so an assignment recorded
+     only there is an assignment they never see.
+
+     projects/{id} is the one document both sides can already reach:
+     firestore.rules gives any org named in orgsInvolved[] both read and update
+     (isCollaborator + rosterAndOwnerUnchanged), which is the Silmarillion JDA
+     model doing exactly what it was built for. So the assignment is stamped
+     onto the project, the partner's org is added to the roster, and the deal
+     keeps its own copy for OSA's views.
+
+     THE ORG COMES FROM THE EMAIL, as it does everywhere else on this platform.
+     Assigning gaurav.s@renewablenrgsolutions.com puts renewablenrgsolutions.com
+     on the roster; there is no second list of who works where to keep in step.
+
+     Best-effort by design: if the project write fails the assignment still
+     stands on the deal, because a permissions problem on one document should
+     not lose the fact that somebody was asked to do the work. */
+  function stampProjectAssignment(deal, o) {
+    if (!_db || !deal.projectId) return Promise.resolve(null);
+    var orgs = {};
+    (o.team || []).forEach(function (e) {
+      var d = String(e || '').toLowerCase().split('@')[1];
+      if (d) orgs[d] = 1;
+    });
+    var roster = Object.keys(orgs);
+    var body = {
+      design: {
+        status:      'in_design',
+        assignedOrgs: roster,
+        assignees:   o.team || [],
+        lead:        o.lead || '',
+        dueAt:       o.dueAt || null,
+        brief:       o.brief || '',
+        sentAt:      stamp(),
+        sentBy:      (_me && _me.email) || '',
+        fromOrg:     'osa',
+        dealId:      deal.id,
+        dealName:    deal.name || ''
+      },
+      updatedAt: stamp()
+    };
+    if (roster.length) body.orgsInvolved = firebase.firestore.FieldValue.arrayUnion.apply(null, roster);
+    return _db.collection('projects').doc(deal.projectId).update(body)
+      ['catch'](function (e) {
+        if (global.console) console.warn('[osa] project assignment not stamped:', e && e.message);
+        return null;
+      });
+  }
+
   function assignDesign(deal, a) {
     var team = (a.team || []).map(function (e) { return String(e).toLowerCase(); });
     var lead = String(a.lead || team[0] || '').toLowerCase();
     if (!lead && !team.length)
       return Promise.reject(new Error('Name at least one person.'));
+    stampProjectAssignment(deal, { team: team, lead: lead, dueAt: a.dueAt, brief: a.brief });
     return patch(deal, {
       'design.team':   team,
       'design.lead':   lead,

@@ -328,6 +328,10 @@
     ws.orgStatus = T.status;
     ws.vertical = ws.vertical || (T.org && T.org.vertical) || null;
     ws.shell = ws.shell || (T.org && T.org.shell) || 'default';
+    /* Some tenants have no business in the marketplace — a design partner is
+       here to draw what they are handed, not to shop. A flag on the org record
+       rather than a list of domains in three navs. */
+    if (T.org && T.org.hideMarketplace === true) ws.hideMarketplace = true;
     /* unlockedTools is what applyToolLocks() reads. Compute it from the
        catalog when omega-tools.js is present; otherwise leave config's. */
     if (global.OMEGATools && OMEGATools.catalog) {
@@ -355,8 +359,67 @@
     }
     return out;
   }
+  /* ── ASSIGNED DESIGN WORK ─────────────────────────────────────────────────
+     A design partner is a tenant like any other; what makes them one is that
+     somebody has put their org on a project's orgsInvolved[] roster. So the
+     nav item is data-driven rather than a domain hardcoded somewhere: count
+     the projects this org is a collaborator on that carry a design handoff,
+     and reveal the item if there are any.
+
+     Labelled with the workspace that assigned them — "OSA 3" while there is
+     one, "Design Queue 5" once there are several — because to the person
+     looking at it the useful word is who is waiting, not what the feature is
+     called.
+
+     Cached for the tab. The count is a nav badge, not a number anybody acts
+     on, and it is not worth a query on every page load of every tenant. */
+  var WORK_KEY = 'omega_design_queue';
+  function paintDesignNav(n, label) {
+    if (!global.document) return;
+    var a = document.getElementById('sn-design');
+    if (!a || !n) return;
+    var l = document.getElementById('sn-design-label');
+    var c = document.getElementById('sn-design-n');
+    if (l && label) l.textContent = label;
+    if (c) c.textContent = String(n);
+    a.style.display = '';
+  }
+  function countDesignWork(org) {
+    if (!global.document || !document.getElementById('sn-design')) return;
+    try {
+      var raw = global.sessionStorage.getItem(WORK_KEY + ':' + org);
+      if (raw) { var c = JSON.parse(raw); paintDesignNav(c.n, c.label); return; }
+    } catch (e) {}
+    var d = db(); if (!d || !org) return;
+    d.collection('projects').where('orgsInvolved', 'array-contains', org).get()
+      .then(function (sn) {
+        var n = 0, froms = {};
+        sn.forEach(function (doc) {
+          var dz = (doc.data() || {}).design || {};
+          if (dz.status !== 'in_design' && dz.status !== 'revise') return;
+          n++;
+          if (dz.fromOrg) froms[String(dz.fromOrg).toUpperCase()] = 1;
+        });
+        var keys = Object.keys(froms);
+        var label = (keys.length === 1) ? keys[0] : 'Design Queue';
+        try { global.sessionStorage.setItem(WORK_KEY + ':' + org,
+                JSON.stringify({ n: n, label: label })); } catch (e) {}
+        paintDesignNav(n, label);
+      })['catch'](function () { /* a nav badge is not worth an error */ });
+  }
+
+  /* Hiding a link is not a permission — Firestore rules are. This is about
+     not offering somebody a door that is not theirs to walk through. */
+  function paintMarketplaceNav(ws) {
+    if (!global.document || !ws || !ws.hideMarketplace) return;
+    var els = document.querySelectorAll('[data-sn="marketplace"]');
+    for (var i = 0; i < els.length; i++) els[i].style.display = 'none';
+  }
+
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
+    try { countDesignWork((ws && ws.orgId) || ''); } catch (e) {}
+    try { paintMarketplaceNav(ws); } catch (e) {}
     for (var i = 0; i < T._entCbs.length; i++) { try { T._entCbs[i](ws); } catch (e) {} }
     try { global.dispatchEvent(new CustomEvent('omega:entitlements', { detail: ws })); } catch (e) {}
     /* Re-run the gates that already exist on the page. */
