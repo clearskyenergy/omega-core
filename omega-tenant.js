@@ -501,10 +501,16 @@
     var org = orgIdFor(user); if (!org) return;
     var uid = user.uid;
     var ref = d.collection('omega_orgs').doc(org);
+    /* Independently caught. These are three different documents with three
+       different rules, and one refusal used to discard the other two — losing
+       the org record, and with it the tenant's name and every flag on it,
+       because a member document happened to be unreadable. */
+    function soft(p) { return p.then(function (s) { return s; },
+                                     function () { return { exists: false }; }); }
     Promise.all([
-      ref.get(),
-      ref.collection('billing').doc('current').get(),
-      ref.collection('members').doc(uid).get()
+      soft(ref.get()),
+      soft(ref.collection('billing').doc('current').get()),
+      soft(ref.collection('members').doc(uid).get())
     ]).then(function (r) {
       T.org = r[0].exists ? r[0].data() : null;
       T.billing = r[1].exists ? r[1].data() : null;
@@ -578,8 +584,24 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         })['catch'](function () {});
       }
-      var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
-      fireEntitlements(mergeEntitlements(ws));
+      /* ── WAIT FOR THE OBJECT THESE FLAGS HAVE TO LAND ON ────────────────
+         index.html sets window.OMEGA_WORKSPACE inside ITS auth handler, and
+         two handlers on the same event have no defined order. Lose that race
+         and ws is null, mergeEntitlements returns null, and everything just
+         read off the org record — the name, the tier, toolAccess,
+         hideMarketplace — is dropped on the floor with no error anywhere.
+
+         So wait for it. A couple of seconds is far longer than the gap
+         between two callbacks on the same event, and if it never arrives we
+         fire with whatever config had, which is the old behaviour. */
+      (function applyWhenReady(tries) {
+        var ws = global.OMEGA_WORKSPACE || cfg().tenant || null;
+        if (!ws && (tries || 0) < 20) {
+          setTimeout(function () { applyWhenReady((tries || 0) + 1); }, 100);
+          return;
+        }
+        fireEntitlements(mergeEntitlements(ws));
+      })(0);
     })['catch'](function (err) {
       log('entitlements read failed; config.js tier stands', err && err.message);
       fireEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null);
@@ -599,14 +621,53 @@
     global.OmegaBrand._tenantWrapped = true;
   }
 
-  function watchAuth() {
+  /* ── THIS RAN BEFORE THERE WAS AN APP TO WATCH ────────────────────────────
+     firebase.auth() throws "No Firebase App '[DEFAULT]' has been created"
+     until initializeApp() has run — and on the dashboard that happens LATER,
+     inside a poll waiting for config.js. omega-tenant.js loads before it. So
+     this registered nothing, the throw went into a bare catch, and the entire
+     second phase of this file — the org record, the billing tier, toolAccess,
+     hideMarketplace, the suspended check, member self-registration, the design
+     queue count — never ran at all on any host that does not pin a tenant.
+
+     It looked fine because every one of those has a sensible default: the
+     workspace falls back to the name derived from the email domain, the tier
+     falls back to config.js, and nothing errors. A whole phase was missing and
+     the page looked ordinary.
+
+     So: wait for an app instead of assuming one. Initialise it here if config
+     has landed and nobody else has yet — db() already does exactly that, and
+     doing it in two places is how the two get out of step. Give up after about
+     seven seconds, which is far longer than a page that is going to work ever
+     takes.
+
+     ⚠ Registering twice would double every entitlement read, so the guard is
+     on the registration and not on the retry. */
+  function watchAuth(tries) {
+    if (T._watching) return;
     if (!global.firebase || !firebase.auth) return;
+    var ready = false;
     try {
+      if (!firebase.apps.length) {
+        var c = cfg();
+        if (c && c.firebase) firebase.initializeApp(c.firebase);
+      }
+      ready = !!firebase.apps.length;
+    } catch (e) { ready = false; }
+
+    if (!ready) {
+      if ((tries || 0) < 60) setTimeout(function () { watchAuth((tries || 0) + 1); }, 120);
+      else log('no firebase app after 7s; entitlements will not load');
+      return;
+    }
+
+    try {
+      T._watching = true;
       firebase.auth().onAuthStateChanged(function (user) {
         if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
         else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; }
       });
-    } catch (e) {}
+    } catch (e) { T._watching = false; log('auth watch failed', e && e.message); }
   }
 
   /* ── boot ────────────────────────────────────────────────────────────────── */

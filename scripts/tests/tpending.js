@@ -33,6 +33,7 @@ function run(docs, opts) {
     CLEARSKY_CONFIG: { tenant: { name: 'Roam Energy', accountTier: 'Trial', tierLevel: 1,
                                  unlockedTools: ['editor', 'projects', 'proforma'] } },
     firebase: {
+      apps: [{ name: '[DEFAULT]' }], initializeApp: function(){},
       auth: () => ({ onAuthStateChanged(cb) { authCb = cb; }, signOut: () => Promise.resolve() }),
       firestore: Object.assign(() => ({ collection: c => ({ doc: d => ref(c + '/' + d) }) }),
                               { FieldValue: { serverTimestamp: () => '<ts>' } })
@@ -149,7 +150,7 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
                   documentElement: { style: { setProperty() {} } } },
       addEventListener() {}, dispatchEvent() {},
       CLEARSKY_CONFIG: {},
-      firebase: { auth: () => ({ onAuthStateChanged() {}, signOut: () => Promise.resolve() }),
+      firebase: { apps: [{ name: '[DEFAULT]' }], initializeApp: function(){}, auth: () => ({ onAuthStateChanged() {}, signOut: () => Promise.resolve() }),
                   firestore: Object.assign(() => ({ collection: c => ({ doc: d => ref(c + '/' + d) }) }),
                                            { FieldValue: { serverTimestamp: () => '<ts>' } }) }
     };
@@ -201,7 +202,7 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
                   documentElement: { style: { setProperty(){} } } },
       addEventListener(){}, dispatchEvent(){},
       CLEARSKY_CONFIG: {},
-      firebase: { auth: () => ({ onAuthStateChanged(cb){ authCb = cb; }, signOut: () => Promise.resolve() }),
+      firebase: { apps: [{ name: '[DEFAULT]' }], initializeApp: function(){}, auth: () => ({ onAuthStateChanged(cb){ authCb = cb; }, signOut: () => Promise.resolve() }),
                   firestore: Object.assign(() => ({ collection: c => ({ doc: d => ref(c + '/' + d) }) }),
                                            { FieldValue: { serverTimestamp: () => '<ts>' } }) }
     };
@@ -228,6 +229,98 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
   ok(b.G.OmegaTenant.hub === true, 'app. is still a hub');
   ok(String(b.redirected() || '').indexOf('fenecon.clearskyomega.com') > 0,
      'and still dispatches somebody who arrived not knowing their workspace');
+
+  /* ── 8 · the watcher must survive an app that does not exist YET ─────────
+     firebase.auth() throws until initializeApp() has run, and on the dashboard
+     that happens later, inside a poll waiting for config.js. This file loads
+     first. The throw went into a bare catch, so nothing was registered and the
+     whole second phase — org record, tier, toolAccess, hideMarketplace, member
+     self-registration — silently never ran. */
+  console.log('watcher waits for the app');
+  {
+    const body = { children: [], firstChild: null, insertBefore() {}, appendChild() {} };
+    const DOCS = { 'omega_orgs/roamenergy.co': { name: 'Roam Energy', status: 'active',
+                                                 hideMarketplace: true } };
+    function ref(p) {
+      return { get: () => Promise.resolve({ exists: p in DOCS, data: () => DOCS[p] }),
+               set: () => Promise.resolve(), collection: c => ({ doc: d => ref(p + '/' + c + '/' + d) }) };
+    }
+    let authCb = null, appMade = false;
+    const G = {
+      console, setTimeout, Promise, Date, JSON,
+      CustomEvent: function (n, o) { this.type = n; this.detail = o && o.detail; },
+      location: { hostname: 'silmarillion.clearskyomega.com', pathname: '/', search: '', href: '' },
+      localStorage: { _s: {}, getItem(k){return this._s[k]===undefined?null:this._s[k];},
+                      setItem(k,v){this._s[k]=v;}, removeItem(k){delete this._s[k];} },
+      sessionStorage: { _s: {}, getItem(k){return this._s[k]===undefined?null:this._s[k];},
+                        setItem(k,v){this._s[k]=v;}, removeItem(k){delete this._s[k];} },
+      document: { body, createElement: () => ({ id:'', setAttribute(){}, innerHTML:'' }),
+                  getElementById: () => null, querySelectorAll: () => [],
+                  addEventListener(){}, readyState:'complete',
+                  documentElement: { style: { setProperty(){} } } },
+      addEventListener(){}, dispatchEvent(){},
+      CLEARSKY_CONFIG: { firebase: { apiKey: 'x' }, tenant: { orgId: 'roamenergy.co', clientName: 'Roamenergy' } },
+      firebase: {
+        apps: [],                                  /* no app yet — as at boot */
+        initializeApp: function(){ appMade = true; this.apps = [{ name: '[DEFAULT]' }]; },
+        auth: function(){ if (!this.apps.length) throw new Error("No Firebase App '[DEFAULT]'");
+                          return { onAuthStateChanged(cb){ authCb = cb; }, signOut: () => Promise.resolve() }; },
+        firestore: Object.assign(function(){ return { collection: c => ({ doc: d => ref(c + '/' + d) }) }; },
+                                 { FieldValue: { serverTimestamp: () => '<ts>' } })
+      }
+    };
+    G.window = G;
+    vm.createContext(G);
+    vm.runInContext(SRC, G);
+    await wait(); await wait();
+    ok(authCb !== null, 'the auth watcher registers even though no app existed at boot');
+    let ent = null;
+    G.OmegaTenant.onEntitlements(w => { ent = w; });
+    if (authCb) authCb({ uid: 'r1', email: 'test@roamenergy.co' });
+    await wait(); await wait();
+    ok(ent !== null, 'entitlements fire — the second phase actually runs');
+    ok(!!(G.OmegaTenant.org && G.OmegaTenant.org.name === 'Roam Energy'),
+       'and the org record is loaded, which is where the name and the flags live');
+    ok(ent && ent.hideMarketplace === true, 'so a flag on the org record reaches the workspace');
+  }
+
+  /* One unreadable document must not discard the other two. */
+  console.log('reads are independent');
+  {
+    const body = { children: [], firstChild: null, insertBefore() {}, appendChild() {} };
+    const DOCS = { 'omega_orgs/roamenergy.co': { name: 'Roam Energy', status: 'active' } };
+    function ref(p) {
+      return { get: () => (/members/.test(p)
+                 ? Promise.reject(new Error('permission-denied'))
+                 : Promise.resolve({ exists: p in DOCS, data: () => DOCS[p] })),
+               set: () => Promise.resolve(), collection: c => ({ doc: d => ref(p + '/' + c + '/' + d) }) };
+    }
+    let authCb = null;
+    const G = {
+      console, setTimeout, Promise, Date, JSON,
+      CustomEvent: function (n, o) { this.type = n; this.detail = o && o.detail; },
+      location: { hostname: 'silmarillion.clearskyomega.com', pathname: '/', search: '', href: '' },
+      localStorage: { _s:{}, getItem(k){return this._s[k]===undefined?null:this._s[k];}, setItem(){}, removeItem(){} },
+      sessionStorage: { _s:{}, getItem(k){return this._s[k]===undefined?null:this._s[k];}, setItem(){}, removeItem(){} },
+      document: { body, createElement: () => ({ id:'', setAttribute(){}, innerHTML:'' }),
+                  getElementById: () => null, querySelectorAll: () => [],
+                  addEventListener(){}, readyState:'complete',
+                  documentElement: { style: { setProperty(){} } } },
+      addEventListener(){}, dispatchEvent(){},
+      CLEARSKY_CONFIG: { firebase: { apiKey: 'x' } },
+      firebase: { apps: [{ name: '[DEFAULT]' }], initializeApp(){},
+        auth: () => ({ onAuthStateChanged(cb){ authCb = cb; }, signOut: () => Promise.resolve() }),
+        firestore: Object.assign(function(){ return { collection: c => ({ doc: d => ref(c + '/' + d) }) }; },
+                                 { FieldValue: { serverTimestamp: () => '<ts>' } }) }
+    };
+    G.window = G;
+    vm.createContext(G);
+    vm.runInContext(SRC, G);
+    if (authCb) authCb({ uid: 'r1', email: 'test@roamenergy.co' });
+    await wait(); await wait();
+    ok(!!(G.OmegaTenant.org && G.OmegaTenant.org.name === 'Roam Energy'),
+       'an unreadable member document does not take the org record down with it');
+  }
 
   console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
   process.exit(fails ? 1 : 0);
