@@ -597,6 +597,10 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
         <span>Marketplace</span>
       </a>
+      <a class="sn-item" data-sn="rfq" href="/rfq.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+        <span>Quote Desk</span>
+      </a>
 
       <!-- ══ JOINT DEVELOPMENT / ADMINISTRATION ══ Same sections and the same
            gates as the dashboard. They were missing here, so the sidebar
@@ -622,6 +626,31 @@ window._omegaReady = function(){
       <a class="sn-item" id="sn-ops" href="/console/" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>
         <span>Ops Console</span>
+      </a>
+
+      <!-- ══ WORKSPACE ══ The panels themselves live on the dashboard, so
+           these are hash links; index.html opens the matching drawer from
+           location.hash on load. Present here because the sidebar has to be
+           the same list on every page — an item that appears and disappears
+           as you navigate reads as "my links are gone", not as "this page has
+           a different nav". -->
+      <div class="sn-divider"></div>
+      <div class="sn-section-label">Workspace</div>
+      <a class="sn-item" data-sn="todos" href="/#todos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>To-Dos</span>
+      </a>
+      <a class="sn-item" data-sn="team" href="/#team">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        <span>Team</span>
+      </a>
+      <a class="sn-item" data-sn="feed" href="/#feed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Company Feed</span>
+      </a>
+      <a class="sn-item" data-sn="chat" href="/#chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></svg>
+        <span>Chat</span>
       </a>
 
     </div>
@@ -746,6 +775,25 @@ function paintTopbar(user){
   if (av) av.textContent = ((user && user.email) || '?').charAt(0).toUpperCase();
   _resolveDisplayName(user);
   _paintTenantLogo();
+  _paintSidebarBrand();
+}
+
+/* ── THE SIDEBAR HEAD IS PART OF THE SIDEBAR ──────────────────────────────
+   The dashboard calls OmegaBrand.paint(ws), which fills sn-logo-txt with the
+   tenant's name. This page and the marketplace never called it, so the same
+   strip that reads "Walterswholesale / EnergyOS" on the dashboard read
+   " / EnergyOS" here — the nav looked like it belonged to a different
+   product halfway through a click-through.
+
+   Only the sidebar head is set, not the whole chrome: this page's topbar
+   deliberately carries the OMEGA product mark rather than the tenant's, and
+   OmegaBrand.paint() would overwrite that too. */
+function _paintSidebarBrand(){
+  var el = document.getElementById('sn-logo-txt');
+  if (!el) return;
+  var w = window.OMEGA_WORKSPACE || (typeof WS !== 'undefined' ? WS : null);
+  var name = (w && (w.clientName || w.name)) || '';
+  if (name) el.textContent = name;
 }
 
 /* ── THE LOGO ARRIVES AFTER THE TOPBAR IS PAINTED ──────────────────────
