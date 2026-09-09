@@ -61,3 +61,6 @@ write('fence.js', ['equipFrame','boxOf','_boxOfRaw','isPoi','cluster#2','corners
                   'var FR=null, FRAME_AGREE=0.6;\nvar root=global;\n',
                   'module.exports.setFR=function(f){FR=f;};\n'+
                   'module.exports.getFR=function(){return FR;};\n');
+
+write('rfq.js', ['_esc#1','_rfqLabel','_rfqInput','_bomRenderRfq','openRfqFile',
+                 '_rfqPrefillZip','_rfqProjectId','_rfqLoadDistributors','submitRfqFile']);
