@@ -342,6 +342,10 @@
        here to draw what they are handed, not to shop. A flag on the org record
        rather than a list of domains in three navs. */
     if (T.org && T.org.hideMarketplace === true) ws.hideMarketplace = true;
+    /* Who this tenant does joint development with — the label on their JD
+       workspace entry, and what keeps that entry in the nav when the queue is
+       empty. */
+    if (T.org && T.org.jdPartnerOf) ws.jdPartnerOf = T.org.jdPartnerOf;
     /* unlockedTools is what applyToolLocks() reads. Compute it from the
        catalog when omega-tools.js is present; otherwise leave config's. */
     if (global.OMEGATools && OMEGATools.catalog) {
@@ -384,14 +388,25 @@
      Cached for the tab. The count is a nav badge, not a number anybody acts
      on, and it is not worth a query on every page load of every tenant. */
   var WORK_KEY = 'omega_design_queue';
-  function paintDesignNav(n, label) {
+  /* ── THE WORKSPACE IS A PLACE, NOT A NOTIFICATION ─────────────────────────
+     This only appeared when the count was above zero, so a design partner's
+     JD workspace vanished the moment they finished everything — and the way
+     to check what you had just sent back was to remember the URL. The Quote
+     Desk is always in the nav whether or not anything is in it, for the same
+     reason: it is somewhere you go, not a badge that lights up.
+
+     So the count decides the BADGE, and omega_orgs.jdPartnerOf decides whether
+     the entry is there at all. A tenant nobody does joint development with
+     still sees nothing, which is most of them. */
+  function paintDesignNav(n, label, always) {
     if (!global.document) return;
     var a = document.getElementById('sn-design');
-    if (!a || !n) return;
+    if (!a) return;
+    if (!n && !always) return;
     var l = document.getElementById('sn-design-label');
     var c = document.getElementById('sn-design-n');
     if (l && label) l.textContent = label;
-    if (c) c.textContent = String(n);
+    if (c) c.textContent = n ? String(n) : '';
     a.style.display = '';
     /* The section heading comes with it. A "Joint development" label with
        nothing under it is worse than no label — and this item IS the JD
@@ -401,11 +416,14 @@
       var e = document.getElementById(id); if (e) e.style.display = '';
     });
   }
-  function countDesignWork(org) {
+  function countDesignWork(org, jdOf) {
     if (!global.document || !document.getElementById('sn-design')) return;
+    /* Paint the entry immediately when we already know they are a JD partner,
+       so it does not flicker in after the count returns. */
+    if (jdOf) paintDesignNav(0, jdOf, true);
     try {
       var raw = global.sessionStorage.getItem(WORK_KEY + ':' + org);
-      if (raw) { var c = JSON.parse(raw); paintDesignNav(c.n, c.label); return; }
+      if (raw) { var c = JSON.parse(raw); paintDesignNav(c.n, jdOf || c.label, !!jdOf); return; }
     } catch (e) {}
     var d = db(); if (!d || !org) return;
     d.collection('projects').where('orgsInvolved', 'array-contains', org).get()
@@ -418,10 +436,10 @@
           if (dz.fromOrg) froms[String(dz.fromOrg).toUpperCase()] = 1;
         });
         var keys = Object.keys(froms);
-        var label = (keys.length === 1) ? keys[0] : 'Design Queue';
+        var label = jdOf || ((keys.length === 1) ? keys[0] : 'Design Queue');
         try { global.sessionStorage.setItem(WORK_KEY + ':' + org,
                 JSON.stringify({ n: n, label: label })); } catch (e) {}
-        paintDesignNav(n, label);
+        paintDesignNav(n, label, !!jdOf);
       })['catch'](function () { /* a nav badge is not worth an error */ });
   }
 
@@ -435,7 +453,7 @@
 
   function fireEntitlements(ws) {
     T._ent = true; T._ws = ws;
-    try { countDesignWork((ws && ws.orgId) || ''); } catch (e) {}
+    try { countDesignWork((ws && ws.orgId) || '', (ws && ws.jdPartnerOf) || ''); } catch (e) {}
     try { paintMarketplaceNav(ws); } catch (e) {}
     /* The chrome was painted before this record arrived; repaint it now that
        the real name is known, or the header keeps the derived one. */
