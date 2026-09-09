@@ -66,5 +66,20 @@ const mkt = fs.readFileSync(path.join(ROOT, 'marketplace.html'), 'utf8');
 ok(/function onAuth\(user, tries\)/.test(mkt), 'marketplace.html likewise');
 ok(/onAuthStateChanged\(function\(u\)\{ onAuth\(u, 0\); \}\)/.test(mkt), 'and registers it too');
 
+/* A page that NAVIGATES AWAY on "no user" cannot correct itself — whatever
+   auth reports a moment later lands somewhere else. projects.html did that
+   the instant the observer fired null. */
+console.log('no page bounces on the first null');
+{
+  const s = fs.readFileSync(path.join(ROOT, 'projects.html'), 'utf8');
+  const i = s.indexOf('auth.onAuthStateChanged(user => {');
+  const seg = s.slice(Math.max(0, i - 1400), i + 900)
+               .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok(!/if \(!user\) \{ window\.location\.href = '\/'; return; \}/.test(seg),
+     'projects.html no longer redirects on the first null');
+  ok(/auth\.currentUser/.test(seg), 'it confirms against auth.currentUser before giving up');
+  ok(/setTimeout\(/.test(seg), 'and gives the SDK a moment to finish restoring');
+}
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

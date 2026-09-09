@@ -847,9 +847,34 @@ function _resolveDisplayName(user){
   } catch(e){ /* ignore — email fallback stands */ }
 }
 
+/* ── A NULL IS NOT YET A NO ────────────────────────────────────────────────
+   This bounced to '/' the instant the observer reported no user. Every other
+   page in the product treats "no user" as a state to render — a sign-in panel,
+   an error — and can correct itself when auth resolves a moment later. This
+   one navigated away, and a navigation cannot be taken back: whatever arrives
+   afterwards lands on a different page.
+
+   So a click on Projects could land you on the portal looking at a login
+   form, which is indistinguishable from having been logged out, and is what
+   people reported as "it logs me out when I move between pages".
+
+   Confirm it. If the SDK still has no user a second later, it really is
+   signed out and the redirect is right. */
+var _pjNullSeen = 0;
 auth.onAuthStateChanged(user => {
   _wsFromUser(user);
-  if (!user) { window.location.href = '/'; return; }
+  if (!user) {
+    if (_pjNullSeen++ < 4 && !auth.currentUser) {
+      setTimeout(function () {
+        if (auth.currentUser) return;
+        if (_pjNullSeen >= 4) window.location.href = '/';
+      }, 400);
+      return;
+    }
+    if (!auth.currentUser) window.location.href = '/';
+    return;
+  }
+  _pjNullSeen = 0;
   if (window._omegaReady) window._omegaReady();
   myEmail = (user.email || '').toLowerCase();
   paintTopbar(user);
