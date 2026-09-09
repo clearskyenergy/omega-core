@@ -763,8 +763,10 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
         <input id="kb-q" class="fbar-i" style="flex:1;min-width:180px"
           placeholder="Filter cards…" oninput="S.boardQ=this.value;renderBoard()">
         <select id="kb-org" class="fbar-i" onchange="S.boardOrg=this.value;renderBoard()"></select>
+        <select id="kb-jdorg" class="fbar-i"
+                title="Show only the projects on one joint development's roster"
+                onchange="S.boardJdOrg=this.value;renderBoard()"></select>
         <span class="fbar-n" id="kb-count"></span>
-        <span id="kb-jd" style="margin-left:8px"></span>
       </div>
       <div id="kb-host" class="kb-wrap"></div>
     </section>
@@ -2645,15 +2647,22 @@ function renderBoard(){
   var cnt=document.getElementById('kb-count');
   if(cnt) cnt.textContent = list.length+(list.length===S.deals.length?'':' of '+S.deals.length)+' shown';
 
-  /* A filtered board that does not say it is filtered is how somebody
-     concludes half their pipeline has vanished. */
-  var chip=document.getElementById('kb-jd');
-  if(chip){
-    chip.innerHTML = S.boardJdOrg
-      ? '<span class="tag" style="background:#5B4BC422;color:#5B4BC4">Joint development · '
-        + esc(A.orgName(S.boardJdOrg)) + '</span> '
-        + '<button class="btn-x" onclick="S.boardJdOrg=\'\';render()">Show every project</button>'
-      : '';
+  /* Rebuilt every render rather than cached like the originator list, because
+     ticking a partner on the Partners screen has to show up here without a
+     reload. A filtered board that cannot say what it is filtered by is how
+     somebody concludes half their pipeline has vanished, so the control itself
+     carries the state — no separate chip to fall out of step with it. */
+  var jsel=document.getElementById('kb-jdorg');
+  if(jsel){
+    var jds=jdOrgs();
+    jsel.innerHTML='<option value="">Joint development \u2014 any</option>'
+      + jds.map(function(r){
+          var n=r.deals.length;
+          return '<option value="'+esc(r.stats.orgId)+'"'
+               + (S.boardJdOrg===r.stats.orgId?' selected':'')+'>'
+               + esc(A.orgName(r.stats.orgId))+' ('+n+')</option>'; }).join('');
+    jsel.value = S.boardJdOrg || '';
+    jsel.style.display = jds.length ? '' : 'none';
   }
 
   var sel=document.getElementById('kb-org');
