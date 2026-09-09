@@ -895,19 +895,32 @@ function initFirebase(){
   try{ firebase.initializeApp(CFG.firebase); }catch(e){ if(!/already exists/.test(e.message)) console.error('FB init',e); }
   auth = firebase.auth();
   db = firebase.firestore();
-  auth.onAuthStateChanged(onAuth);
+  auth.onAuthStateChanged(function(u){ onAuth(u, 0); });
 }
 initFirebase();
 
-function onAuth(user){
+function onAuth(user, tries){
   if (window._omegaReady) window._omegaReady();
   if (!user){ el('auth-screen').style.display='flex'; el('app').style.display='none'; return; }
   var ws = resolveWorkspace(user.email);
   if (!ws){
-    /* Only a personal mailbox lands here now — see resolveWorkspace(). */
-    setText('auth-err','Please sign in with your work email. Personal mailboxes '
-      + 'cannot hold a workspace. Questions: dev@clearsky-usa.com.');
-    auth.signOut(); return;
+    /* ── DO NOT SIGN ANYBODY OUT HERE ──────────────────────────────────────
+       Same fix as index.html, same reason. resolveWorkspace() consults the
+       tenant pin that omega-tenant.js applies from tenant_public, and that
+       lands on its own schedule; arriving before it settles is not evidence
+       that the account is wrong. This called auth.signOut(), so a page you
+       merely navigated to could destroy a valid credential — and the comment
+       above it ("only a personal mailbox lands here") was the giveaway that
+       the transient case had never been considered.
+
+       Wait for the pin, then judge, and when the answer is really no, leave
+       the session alone and say so. */
+    if (!(tries > 8)) { setTimeout(function(){ onAuth(user, (tries||0)+1); }, 250); return; }
+    setText('auth-err','We could not match ' + (user.email||'that account') + ' to a workspace '
+      + 'on this deployment. If your company is a ClearSky customer, ask your administrator to '
+      + 'add you. Questions: dev@clearsky-usa.com.');
+    el('auth-screen').style.display='flex'; el('app').style.display='none';
+    return;
   }
   currentUser = user; WORKSPACE = ws; currentOrg = ws.orgId;
   window.OMEGA_WORKSPACE = ws; window.CS_BRAND = ws.clientName;

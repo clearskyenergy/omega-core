@@ -2745,7 +2745,7 @@ function revealJointDevNav(email){
   });
 }
 
-auth.onAuthStateChanged(user => {
+var _omegaOnAuth = function (user, tries) {
   if (window._omegaReady) window._omegaReady();
   /* Auth has answered — reveal whichever side of it applies. Set before the
      branches so an early return still leaves a usable page rather than the
@@ -2758,8 +2758,25 @@ auth.onAuthStateChanged(user => {
     var ws = resolveWorkspace(email);
 
     if (!ws) {
+      /* ── DO NOT SIGN ANYBODY OUT HERE ────────────────────────────────────
+         This used to call auth.signOut(). "I cannot resolve a workspace for
+         this email" is not the same statement as "this session is invalid",
+         and treating them as one is why people were being logged out simply
+         for moving between pages: the tenant pin that resolve() consults is
+         applied by omega-tenant.js from tenant_public, and it lands on its own
+         schedule. Arrive in the window before it settles and a perfectly good
+         account resolves to nothing — and the page destroyed the credential
+         over it, so the next page had nothing to restore either.
+
+         Wait for the pin, then judge. And when the answer really is no, say
+         so and leave the session alone: signing out is not a recovery from
+         "not allowed", it is just a second problem on top of the first. The
+         sign-out button is right there for anyone who wants it. */
+      if (!(tries > 8)) {
+        setTimeout(function () { _omegaOnAuth(user, (tries || 0) + 1); }, 250);
+        return;
+      }
       showAuthErr(OmegaBrand.accessMessage(email, WORKSPACES));
-      auth.signOut();
       return;
     }
     // Bind this session to the resolved tenant.
@@ -2840,7 +2857,8 @@ auth.onAuthStateChanged(user => {
     WORKSPACE = null; window.OMEGA_WORKSPACE = null;
     showLogin();
   }
-});
+};
+auth.onAuthStateChanged(function (user) { _omegaOnAuth(user, 0); });
 }
 
 function showRedirecting(name){
