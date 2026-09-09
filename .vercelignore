@@ -15,3 +15,26 @@ tenants/*/*.rules
 tenants/*/*.md
 *.md
 !tenants/osa/*.md
+
+# ── NOT WEB CONTENT, AND ONE OF THEM IS THE CUSTOMER BOOK ────────────────
+# Vercel serves the repo root, so anything sitting here is a URL. These were:
+#
+#   /firestore.rules       200 — the entire access-control model, comments and
+#   /storage.rules         200   all, including which collections are called
+#                                out as the most sensitive and why. Rules are
+#                                enforced server-side so secrecy is not the
+#                                control, but handing an attacker the map and
+#                                the reasoning is still a gift.
+#   /admin/seed-plan.json  200 — every tenant's name, domain, hostname and
+#                                billing tier in one file at a guessable path.
+#                                That is the customer list.
+#   /firebase.json         200 — harmless, but it is CLI config, not a page.
+#
+# seed-plan.json is fetched by the console's one-shot "seed tenants" button.
+# omega_orgs is already seeded, so that button is spent; if it is ever needed
+# again, regenerate the file and deploy without this line for one release.
+firestore.rules
+storage.rules
+firestore.indexes.json
+firebase.json
+admin/seed-plan.json
