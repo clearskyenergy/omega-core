@@ -171,6 +171,64 @@ const banners = t => t.body.children.filter(n => n.id === 'omega-pending').lengt
   ok(!!(G.CLEARSKY_CONFIG.tenant && G.CLEARSKY_CONFIG.tenant.orgId === 'fenecon.com'),
      'a cache that still matches a live document keeps its pin');
 
+  /* ── 7 · the host everyone works on must not dispatch ───────────────────
+     silmarillion was in HUB_HOSTS, so every signed-in tenant user was
+     redirected to their org's own hostname. A Firebase session belongs to one
+     ORIGIN, so the redirect left it behind — which is what "it logs me out
+     when I move between pages" actually was. Two of the three targets did not
+     even resolve. */
+  console.log('open host does not dispatch');
+  function bootOn(hostname, docs) {
+    const body = { children: [], firstChild: null, insertBefore() {}, appendChild() {} };
+    const DOCS = docs || {};
+    function ref(p) {
+      return { get: () => Promise.resolve({ exists: p in DOCS, data: () => DOCS[p] }),
+               set: () => Promise.resolve(), collection: c => ({ doc: d => ref(p + '/' + c + '/' + d) }) };
+    }
+    let redirectedTo = null;
+    const loc = { pathname: '/', search: '', get href() { return 'https://' + hostname + '/'; },
+                  set href(v) { redirectedTo = v; } };
+    Object.defineProperty(loc, 'hostname', { value: hostname });
+    let authCb = null;
+    const G = {
+      console, setTimeout, Promise, Date, JSON,
+      CustomEvent: function (n, o) { this.type = n; this.detail = o && o.detail; },
+      location: loc,
+      localStorage: { _s: {}, getItem(k){ return this._s[k]===undefined?null:this._s[k]; },
+                      setItem(k,v){ this._s[k]=v; }, removeItem(k){ delete this._s[k]; } },
+      document: { body, createElement: () => ({ id:'', setAttribute(){}, innerHTML:'' }),
+                  getElementById: () => null, addEventListener(){}, readyState:'complete',
+                  documentElement: { style: { setProperty(){} } } },
+      addEventListener(){}, dispatchEvent(){},
+      CLEARSKY_CONFIG: {},
+      firebase: { auth: () => ({ onAuthStateChanged(cb){ authCb = cb; }, signOut: () => Promise.resolve() }),
+                  firestore: Object.assign(() => ({ collection: c => ({ doc: d => ref(c + '/' + d) }) }),
+                                           { FieldValue: { serverTimestamp: () => '<ts>' } }) }
+    };
+    G.window = G;
+    vm.createContext(G);
+    vm.runInContext(SRC, G);
+    return { G, signIn: u => authCb && authCb(u), redirected: () => redirectedTo };
+  }
+
+  const FEN = { 'omega_orgs/fenecon.com': { name: 'FENECON', status: 'active',
+                                            domains: ['fenecon.clearskyomega.com'] } };
+  const FUSER = { uid: 'f1', email: 'test@fenecon.com' };
+
+  let b = bootOn('silmarillion.clearskyomega.com', FEN);
+  b.signIn(FUSER);
+  await wait(); await wait();
+  ok(b.G.OmegaTenant.hub === false, 'silmarillion is not a hub');
+  ok(b.redirected() === null,
+     'and does NOT redirect a Fenecon user off the origin that holds their session');
+
+  b = bootOn('app.clearskyomega.com', FEN);
+  b.signIn(FUSER);
+  await wait(); await wait();
+  ok(b.G.OmegaTenant.hub === true, 'app. is still a hub');
+  ok(String(b.redirected() || '').indexOf('fenecon.clearskyomega.com') > 0,
+     'and still dispatches somebody who arrived not knowing their workspace');
+
   console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
   process.exit(fails ? 1 : 0);
 })();

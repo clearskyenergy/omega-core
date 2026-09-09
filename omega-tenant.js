@@ -81,8 +81,34 @@
      then refuses with "is not a registered ClearSky-OMEGA portal address" —
      which is the hostname lock doing exactly what it should to a host nobody
      told it about. */
-  var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com',
-                   'silmarillion.clearskyomega.com'];
+  var HUB_HOSTS = ['app.clearskyomega.com', 'clearskyomega.com', 'www.clearskyomega.com'];
+
+  /* ── HOSTS THAT SERVE EVERY TENANT INLINE ────────────────────────────────
+     A HUB dispatches: a signed-in user is redirected to their own org's
+     hostname. An OPEN host does not — it resolves each user's workspace from
+     their email domain and serves them where they already are.
+
+     silmarillion.clearskyomega.com was in HUB_HOSTS and is the host everyone
+     actually works on, so every signed-in tenant user was being redirected to
+     omega_orgs/{their domain}.domains[0]. A Firebase session belongs to ONE
+     ORIGIN, so the redirect left it behind: FENECON users landed on
+     fenecon.clearskyomega.com with no session and a login form, which is why
+     it looked like being logged out for moving between pages. It happened on
+     every page, because the routing runs on every page load.
+
+     Walters and Roam had it worse — walters.clearskyomega.com and
+     roam.clearskyomega.com do not resolve at all, so the hub was sending them
+     to a hostname that does not exist.
+
+     Dispatching is still right for app./www./clearskyomega.com, where somebody
+     arrives without knowing which workspace is theirs. It is wrong for the
+     host that IS the workspace.
+
+     NOT simply removed from HUB_HOSTS: without a tenant_public document, an
+     unlisted host is refused outright as a copied deployment. This says
+     "serves every tenant, pins none", which is a third thing from "hub" and
+     "one tenant's portal". */
+  var OPEN_HOSTS = ['silmarillion.clearskyomega.com'];
   var TIER_LEVEL = { trial: -1, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
   var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 
@@ -96,6 +122,7 @@
     return false;
   }
   function isHubHost(h) { return HUB_HOSTS.indexOf(h) >= 0; }
+  function isOpenHost(h) { return OPEN_HOSTS.indexOf(h) >= 0; }
   function log() { if (global.console && console.log) console.log.apply(console, ['[OmegaTenant]'].concat([].slice.call(arguments))); }
 
   var T = {
@@ -215,6 +242,12 @@
       /* Hub: nothing to pin. If a tenant page (not /start) is opened on the
          hub, routeFromHub() sends signed-in users to their own workspace. */
       T.hub = true; fireReady(); return;
+    }
+    if (isOpenHost(T.host)) {
+      /* Serves every tenant, pins none and dispatches nobody. Each user's
+         workspace is resolved from their email domain, on this host, with the
+         session they already have. */
+      fireReady(); return;
     }
     var cached = readCache();
     if (cached && cached.orgId) { applyPublic(cached); log('cached', cached.orgId); }
