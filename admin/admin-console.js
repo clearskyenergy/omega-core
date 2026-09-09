@@ -1815,6 +1815,22 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
   /* ── Identity & usage ── */
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Identity &amp; usage</div>';
   h+=_tnField('Display name','tb-name-'+orgId,org.name||'','text','');
+
+  /* ── WHOLESALER / DISTRIBUTOR ──────────────────────────────────────────
+     receivesFullBom is not a preference, it is the routing rule: /api/rfq.js
+     sends a partner manufacturer only the lines carrying its own SKUs, and
+     sends anyone with this flag the WHOLE bill of materials. A distributor
+     quotes the package, not a line, so a half-BOM is no use to them.
+
+     Setting it is what turns an ordinary tenant into one that can receive
+     RFQs at all — Walters, City Electric Supply — and it is what their
+     dashboard keys the distributor workspace off. Hence a switch here rather
+     than a field somebody has to know the name of. */
+  h+='<label style="display:flex;gap:9px;align-items:flex-start;margin:10px 0 4px;cursor:pointer">'
+   + '<input type="checkbox" id="tb-dist-'+esc(orgId)+'"'+(org.receivesFullBom?' checked':'')+'>'
+   + '<span><b style="font-size:12.5px">Wholesaler / distributor</b>'
+   + '<div class="sub-txt">Receives the whole BOM on every RFQ, not just their own SKUs, '
+   + 'and gets the sourcing workspace on their dashboard.</div></span></label>';
   h+=_tnField('Logo URL','tb-logo-'+orgId,org.logoUrl||'','text','/tenants/'+orgId+'/logo.png');
 
   /* ── UPLOAD, NOT JUST A URL ────────────────────────────────────────────
@@ -2082,6 +2098,10 @@ function saveTenantBranding(orgId){
   var patch = { updatedAt: FV.serverTimestamp() };
   if (nameEl && String(nameEl.value||'').trim()) patch.name = String(nameEl.value).trim();
   if (logoEl && String(logoEl.value||'').trim()) patch.logoUrl = String(logoEl.value).trim();
+  var distEl = document.getElementById('tb-dist-'+orgId);
+  /* Written unconditionally — unticking it has to mean something, and a
+     falsy-skip would make the flag impossible to turn off. */
+  if (distEl) patch.receivesFullBom = !!distEl.checked;
 
   say('Saving\u2026');
   var ref = db.collection('omega_orgs').doc(orgId);
@@ -2095,6 +2115,9 @@ function saveTenantBranding(orgId){
         orgId: orgId, name: org.name || orgId, logoUrl: org.logoUrl || '',
         colors: org.colors || null, exportBrand: org.exportBrand || null,
         tier: (org.publicTier || 'standard'), vertical: org.vertical || null,
+        /* The dashboard reads its shell from tenant_public, so the flag has to
+           travel with the rest of the branding or the workspace never appears. */
+        receivesFullBom: org.receivesFullBom === true,
         shell: org.shell || 'default', domains: hosts, updatedAt: FV.serverTimestamp()
       };
       var batch = db.batch();
