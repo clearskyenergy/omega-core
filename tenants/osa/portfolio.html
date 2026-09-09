@@ -2047,9 +2047,23 @@ function sendToDealRoom(dealId, orgId){
       renderJD();
     })
     .catch(function(e){
-      drMsg(dealId, (e && e.code==='permission-denied')
-        ? 'Refused — only ClearSky can package a project for a partner.'
-        : ('Could not send: ' + ((e && e.message) || 'unknown error')), true);
+      /* Permission-denied here almost always means one thing: no financing
+         portal profile. Packaging writes into that portal, and its rules ask
+         for a profile with a sponsor role — which is self-serve and takes a
+         minute on the same sign-in. Saying "refused" and stopping there left
+         somebody staring at a button that would never work, with no idea it
+         was one signup away. */
+      if (e && e.code === 'permission-denied'){
+        drMsg(dealId, '', false);
+        toast('You need a financing-portal account to package a project. Create one at '
+            + 'financing.csebuilders.com with the same sign-in — pick Developer. '
+            + 'Then this works.', true);
+        var el=document.getElementById('dr-'+dealId);
+        if (el) el.innerHTML = ' <a href="https://financing.csebuilders.com" target="_blank" '
+          + 'rel="noopener">Create a financing-portal account →</a>';
+        return;
+      }
+      drMsg(dealId, 'Could not send: ' + ((e && e.message) || 'unknown error'), true);
     });
 }
 
