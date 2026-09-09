@@ -1913,11 +1913,14 @@
       gridScore:null, bankableScore:null, status:'new', ageDays:2,
       senderOrg:'csebuilders.com', senderName:'CSE Builders', docs:[] },
 
-    { siteName:'SJ Burns \u2013 330 Roberts', address:'330 Roberts Street, Clinton, IA 52732',
-      ask:'Retrofit at the Roberts St building. Need a number on a Home 30 stack.',
-      powerKw:60, energyKwh:180, stage:'Referred',
-      gridScore:null, bankableScore:52, status:'new', ageDays:1.5,
-      senderOrg:'csebuilders.com', senderName:'CSE Builders', docs:[] }
+    /* ── THERE USED TO BE A SIXTH ──────────────────────────────────────────
+       A near-duplicate of the Roberts St row, seeded on purpose so the
+       duplicate banner had something to fire on. It cost more than it
+       demonstrated: every walkthrough opened on a warning about data the demo
+       had planted, and the first question was always whether the platform had
+       double-counted something. The banner is exercised by real duplicates
+       when they happen, which is what it is for. Five sites, five requests,
+       one row each. */
   ];
 
   function seedNote(txt, tone) {
@@ -1933,11 +1936,26 @@
     var btn = $('or-seed'); btn.disabled = true; btn.textContent = 'Checking\u2026';
     var staff = isAdmin();
 
-    /* Refuse a second run. Cheaper and clearer than de-duplicating after. */
-    d.collection('projects').where('orgId', '==', orgId()).get().then(function (snap) {
+    /* ── REFUSE A SECOND RUN, AND ASK THE DATABASE WHETHER THERE WAS ONE ──
+       This counted seeded referrals out of S.rows — the rows this module had
+       already loaded into memory. On a page where that load has not finished,
+       or has not started, S.rows is empty and the guard waves the click
+       through. It did: FENECON ended up with the six demo referrals three
+       times over, eighteen rows written inside the same minute, and the
+       duplicate banner firing on five sites nobody entered twice.
+
+       The referrals collection is the thing being guarded, so the referrals
+       collection is what gets asked. One extra read on a button nobody presses
+       twice on purpose. */
+    Promise.all([
+      d.collection('projects').where('orgId', '==', orgId()).get(),
+      d.collection('referrals').where('toOrgId', '==', myOrg()).get()
+    ]).then(function (got) {
+      var snap = got[0], refSnap = got[1];
       var already = 0;
       snap.forEach(function (doc) { if ((doc.data() || {}).demo === true) already++; });
-      var seededRefs = S.rows.filter(function (r) { return r.seed === true; }).length;
+      var seededRefs = 0;
+      refSnap.forEach(function (doc) { if ((doc.data() || {}).seed === true) seededRefs++; });
 
       if (already || seededRefs) {
         btn.disabled = false; btn.textContent = 'Load demo data';
@@ -1958,7 +1976,7 @@
       var mine = myOrg();
 
       btn.textContent = 'Loading\u2026';
-      seedNote('Writing five sites and six quote requests\u2026');
+      seedNote('Writing five sites and five quote requests\u2026');
 
       DEMO_SITES.forEach(function (s) {
         writes.push(d.collection('projects').add({
