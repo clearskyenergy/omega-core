@@ -2471,6 +2471,26 @@ window._omegaReady = function(){
         <div class="acct-msg" id="acct-profile-msg"></div>
       </div>
 
+      <div class="acct-sec-title">Workspace logo</div>
+      <div class="acct-field">
+        <!-- Checked on a DARK ground on purpose. A logo lives on the navy
+             topbar, and a white-on-transparent mark previewed on white looks
+             like a missing image — which is how one gets uploaded and nobody
+             notices until a customer opens the portal. -->
+        <div id="acct-logo-prev" style="height:58px;border-radius:10px;border:1.5px solid var(--cs-border);
+             background:#0B2A3D;margin-bottom:8px;display:flex;align-items:center;
+             justify-content:center;padding:8px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="acct-av-btn" onclick="document.getElementById('acct-logo-input').click()">Upload image</button>
+          <button class="acct-av-btn ghost" onclick="removeLogo()">Use the name instead</button>
+          <input id="acct-logo-input" type="file" accept="image/*" style="display:none" onchange="onLogoPicked(event)">
+        </div>
+        <label style="margin-top:10px">…or paste an image URL</label>
+        <input id="acct-logo-url" type="text" placeholder="https://…" onkeydown="if(event.key==='Enter')saveLogo()">
+        <button class="acct-btn" id="acct-logo-btn" onclick="saveLogo()">Save logo</button>
+        <div class="acct-msg" id="acct-logo-msg"></div>
+      </div>
+
       <div class="acct-sec-title">Workspace banner</div>
       <div class="acct-field">
         <div id="acct-banner-prev" style="height:74px;border-radius:10px;border:1.5px solid var(--cs-border);
@@ -2842,6 +2862,7 @@ var _omegaOnAuth = function (user, tries) {
         .then(function (snap) {
           var o = (snap.exists && snap.data()) || {};
           applyDashBanner(o.bannerUrl || '');
+          try { paintLogoPreview(o.logoUrl || ''); } catch(e){}
         })
         .catch(function () { /* the default banner is a fine answer */ });
     })();
@@ -4382,6 +4403,96 @@ function _bannerMsg(t, kind){
   m.textContent = t || '';
   m.className = 'acct-msg' + (kind ? ' ' + kind : '');
 }
+/* ── WORKSPACE LOGO ───────────────────────────────────────────────────────
+   Same shape as the banner and stored the same way — a data URI on the org
+   record — so it needs no Storage rule and no upload path. logoUrl is already
+   on brandingOnly() in firestore.rules, which is what lets a workspace owner
+   or admin set it without ClearSky doing it for them.
+
+   PNG, NOT JPEG. A logo is usually white-on-transparent so it can sit on the
+   navy topbar; re-encoding it as JPEG fills that transparency with black and
+   the mark disappears into the bar. Smaller cap than the banner for the same
+   reason it is a smaller image. */
+var LOGO_MAX_W = 420, LOGO_MAX_H = 140, LOGO_MAX = 180 * 1024;
+var _pendingLogo = null;
+
+function _logoMsg(t, kind){
+  var m = document.getElementById('acct-logo-msg');
+  if (m){ m.textContent = t; m.className = 'acct-msg ' + (kind || ''); }
+}
+function paintLogoPreview(url){
+  var box = document.getElementById('acct-logo-prev');
+  if (!box) return;
+  var ws = window.OMEGA_WORKSPACE || {};
+  box.innerHTML = url
+    ? '<img src="' + String(url).replace(/"/g,'&quot;') + '" alt="" '
+      + 'style="max-height:42px;max-width:100%;object-fit:contain">'
+    : '<span style="color:#8BA3C4;font:600 13px system-ui">'
+      + String(ws.clientName || 'No logo').replace(/</g,'&lt;') + '</span>';
+}
+function onLogoPicked(ev){
+  var file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var scale = Math.min(LOGO_MAX_W / img.width, LOGO_MAX_H / img.height, 1);
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
+      var cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);   /* transparent ground kept */
+      var out = cv.toDataURL('image/png');
+      if (out.length > LOGO_MAX){
+        _logoMsg('That image is too large to store on the workspace record. Try a '
+          + 'smaller one, or host it and paste the URL instead.', 'err');
+        return;
+      }
+      _pendingLogo = out;
+      paintLogoPreview(out);
+      _logoMsg('Logo ready — click Save logo to apply it for everyone in the workspace.', 'ok');
+    };
+    img.onerror = function(){ _logoMsg('Could not read that image.', 'err'); };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function removeLogo(){
+  _pendingLogo = '';
+  paintLogoPreview('');
+  _logoMsg('Click Save logo to go back to showing the workspace name.', 'ok');
+}
+function saveLogo(){
+  var typed = String((document.getElementById('acct-logo-url') || {}).value || '').trim();
+  if (typed && !/^https:\/\//i.test(typed)){
+    _logoMsg('An image URL has to start with https://', 'err'); return;
+  }
+  var ws = window.OMEGA_WORKSPACE || {};
+  var url = typed || (_pendingLogo === null ? (ws.logo || '') : _pendingLogo);
+  if (!db || !ws.orgId){ _logoMsg('Not connected to the workspace.', 'err'); return; }
+  var btn = document.getElementById('acct-logo-btn');
+  if (btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  db.collection('omega_orgs').doc(ws.orgId).set({ logoUrl: url }, { merge: true })
+    .then(function(){
+      try { ws.logo = url; window.OMEGA_WORKSPACE = ws; } catch(e){}
+      try { if (window.OmegaBrand && OmegaBrand.paint) OmegaBrand.paint(ws); } catch(e){}
+      paintLogoPreview(url);
+      _pendingLogo = null;
+      _logoMsg(url ? 'Saved. Everyone in the workspace sees this logo.'
+                   : 'Saved — showing the workspace name instead.', 'ok');
+    })
+    .catch(function(e){
+      /* The rules are the boundary, not this dialog. Say which one refused. */
+      var perm = e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''));
+      _logoMsg(perm
+        ? 'Only a workspace owner or admin can change the logo.'
+        : 'Could not save the logo: ' + ((e && e.message) || 'unknown error'), 'err');
+    })
+    .then(function(){ if (btn){ btn.disabled = false; btn.textContent = 'Save logo'; } });
+}
+
 function onBannerPicked(ev){
   var file = ev.target.files && ev.target.files[0];
   ev.target.value = '';
@@ -5593,8 +5704,11 @@ function _paintSideApps(){
       for (var i=0;i<tools.length && n<DASH_MAX;i++){
         var t=tools[i];
         if (_required(t) || _pinned(t.key)){
+          /* The catalogue is the name. This used to override it for the
+             editor because the published row said something else — a rename
+             hardcoded in one of the three places the tool is listed, so the
+             other two disagreed with it. */
           var label = (t.name||t.key);
-          if (t.key==='editor'){ label='Site Map'; }
           // The Site Map editor opens the new-project flow; other tools use their href.
           if (t.key==='editor'){
             html += '<a class="sn-app" href="#" onclick="if(typeof openNewProjectModal===\'function\'){openNewProjectModal(\'bess\');}return false;"><span class="sn-app-dot"></span>'+label+'</a>';

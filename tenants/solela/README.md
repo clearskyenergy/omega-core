@@ -8,7 +8,7 @@ This is a deliberately narrow deployment. It has three tools and nothing else:
 | Tool | Route | Hosted |
 |---|---|---|
 | Projects | `/projects.html` | this repo |
-| BESS Site Map | `/editor.html` | `tools.csebuilders.com` (Vercel rewrite) |
+| Site Map | `/editor.html` | `tools.csebuilders.com` (Vercel rewrite) |
 | ComEd Capacity map | `/comed-capacity.html` | `tools.csebuilders.com` (Vercel rewrite) |
 
 There is **no marketplace, no tool catalog, and no pro-forma suite** in this

@@ -67,7 +67,7 @@ Every non-trial tenant gets it automatically.
 
 Category is `permitting` — the headline outputs are the utility submission and
 AHJ packages. `design` is the defensible alternative if you would rather it sit
-next to BESS Site Map.
+next to Site Map.
 
 ## How the tool gets its tenant
 
