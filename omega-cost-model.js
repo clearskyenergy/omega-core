@@ -198,6 +198,118 @@
     return 1 + 0.006 * ((m - 3) / 3);
   }
 
+
+  /* ── THE PRICING LOOP ─────────────────────────────────────────────────
+     Ported from compute() in clearsky-cost-estimator.html so the site finder
+     can price a site in place, and /api/ can price one with nobody watching,
+     WITHOUT either of them owning a second version of this arithmetic.
+
+     The order of operations is the substance, not the tables. Voltage regime,
+     then ground conditions, then the AHJ, then the labour basis on the labour
+     FRACTION only, then equipment escalation on equipment only. Change that
+     order and every number moves; it is written out here in the same sequence
+     as the original for exactly that reason.
+
+     Takes an explicit input instead of reading a page's state object, because
+     a serverless function has no S — and a "shared" model that reaches for
+     globals is not shared, it is coupled.
+
+     Verified against the estimator's own compute() by parity test, not by
+     reading. Same input, same total, to the cent. */
+  function price(input) {
+    input = input || {};
+    var K = num(input.kw), E = kwhOf(input);
+    if (K == null || !(K > 0)) return null;
+
+    var V = M.VOLT[voltOf(input)], vm = V.m;
+    var soilM = M.SOIL[input.soil || ""] || 1.00;
+    var ahjM  = M.AHJ[input.ahj || ""] || 1.00;
+    var labM  = M.LABOR[input.labor || ""] || 1.00;
+    var escM  = escalationOf(input);
+    var F = sizeFOf(input), P = padOf(input), FT = poiOf(input);
+    var ven = input.vendor || null;
+
+    function n0(v){ return Math.round(v).toLocaleString(); }
+
+    var divs = [], subLo = 0, subBase = 0, subHi = 0, d, i;
+
+    for (d = 0; d < M.MODEL.length; d++) {
+      var D = M.MODEL[d], lines = [], dTot = 0;
+      for (i = 0; i < D.lines.length; i++) {
+        var L = D.lines[i], qty, unit = "", raw;
+
+        /* A supplier's own number beats the generic rate, and says so. */
+        var vRate = null, vNote = "";
+        if (L.id === "eq.dc" && ven && typeof ven.dcPerKwh === "number" && ven.dcPerKwh > 0) {
+          vRate = ven.dcPerKwh;
+          vNote = (ven.name || "supplier") + (ven.stale ? " — quote is stale" : "");
+        }
+        if (vRate != null) {
+          L = { id:L.id, n:L.n, basis:L.basis, rate:vRate, lab:L.lab,
+                vs:L.vs, soil:L.soil, ahj:L.ahj };
+        }
+
+        if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh" + (vNote ? " · " + vNote : ""); }
+        else if (L.basis === "kw")  { qty = K;  unit = "$" + L.rate + " / kW"; }
+        else if (L.basis === "ft")  { qty = FT; unit = "$" + L.rate + " / ft × " + n0(FT) + " ft"; }
+        else if (L.basis === "pad") { qty = P;  unit = "$" + L.rate + " / sq ft × " + n0(P) + " sq ft"; }
+        else                        { qty = F;  unit = "flat, scaled ×" + F.toFixed(2) + " for size"; }
+        raw = L.rate * (qty == null ? 0 : qty);
+
+        var mods = [];
+        if (L.vs && vm[L.vs] !== 1) { raw *= vm[L.vs]; mods.push(V.label.split(" (")[0] + " ×" + vm[L.vs].toFixed(2)); }
+        if (L.soil && soilM !== 1)  { raw *= soilM;    mods.push("ground ×" + soilM.toFixed(2)); }
+        if (L.ahj  && ahjM  !== 1)  { raw *= ahjM;     mods.push("AHJ ×" + ahjM.toFixed(2)); }
+        if (L.lab > 0 && labM !== 1){
+          raw = raw * (1 - L.lab) + raw * L.lab * labM;
+          mods.push("labour ×" + labM.toFixed(2) + " on " + Math.round(L.lab * 100) + "%");
+        }
+        if (D.id === "eq" && escM !== 1) { raw *= escM; mods.push("escalation ×" + escM.toFixed(3)); }
+
+        lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw });
+        dTot += raw;
+      }
+      var sp = M.SPREAD[D.id];
+      divs.push({ id:D.id, name:D.name, lines:lines,
+                  lo:dTot*(1-sp), base:dTot, hi:dTot*(1+sp), spread:sp });
+      subLo += dTot*(1-sp); subBase += dTot; subHi += dTot*(1+sp);
+    }
+
+    /* An unknown utility upgrade is an EXPOSURE, reported separately. Burying
+       it in the total is how a budget becomes a surprise. */
+    var up = M.UPGRADE[input.utilityUpgrade || ""] || M.UPGRADE[""];
+    var upCost = 0, upLine = null;
+    if (up.cost > 0 || (input.carryUpgrade && up.exposure)) {
+      upCost = up.cost > 0 ? up.cost : up.exposure[0];
+      upLine = { name:"Utility-side upgrade — " + up.label, cost:upCost,
+                 carried: up.cost === 0 };
+      subLo += upCost*0.8; subBase += upCost; subHi += upCost*1.35;
+    }
+
+    var runLo = subLo, runBase = subBase, runHi = subHi, marks = [], m;
+    for (m = 0; m < M.MARKUP.length; m++) {
+      var K2 = M.MARKUP[m];
+      var aLo = runLo*K2.lo, aBase = runBase*K2.base, aHi = runHi*K2.hi;
+      marks.push({ id:K2.id, n:K2.n, rate:K2.base, lo:aLo, base:aBase, hi:aHi });
+      runLo += aLo; runBase += aBase; runHi += aHi;
+    }
+
+    var per  = function (t){ return E ? t/E : null; };
+    var perK = function (t){ return K ? t/K : null; };
+
+    return {
+      kw:K, kwh:E, hours:hoursOf(input), pad:P, poiFt:FT,
+      voltage:voltOf(input), voltLabel:V.label,
+      divisions:divs, markups:marks, upgrade:up, upgradeLine:upLine,
+      subtotal:{ lo:subLo, base:subBase, hi:subHi },
+      total:{ lo:runLo, base:runBase, hi:runHi },
+      perKwh:{ lo:per(runLo), base:per(runBase), hi:per(runHi) },
+      perKw:{ lo:perK(runLo), base:perK(runBase), hi:perK(runHi) },
+      escalation:escM, quoteAgeMonths:quoteAgeMonths(input)
+    };
+  }
+  M.price = price;
+
   M.helpers = { num:num, hours:hoursOf, kwh:kwhOf, pad:padOf, poi:poiOf,
                 volt:voltOf, sizeF:sizeFOf, escalation:escalationOf,
                 quoteAgeMonths:quoteAgeMonths };
