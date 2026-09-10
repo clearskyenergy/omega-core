@@ -66396,17 +66396,45 @@ var CGC_CU_75C = [                     /* NEC 310.16, 75 °C copper */
   { size:'250 kcmil', a:255 }, { size:'350 kcmil', a:310 },
   { size:'500 kcmil', a:380 }
 ];
-/* Trade size holding 3 power conductors + EGC inside 40% fill. */
-var CGC_TRADE = { '#2':'1-1/4"', '#1/0':'1-1/2"', '#2/0':'2"', '#4/0':'2-1/2"',
-                  '250 kcmil':'3"', '350 kcmil':'3"', '500 kcmil':'3-1/2"' };
-/* NEC 250.122 — EGC by the OCPD protecting the set. */
-function _cgcEgc(amps){
-  if(amps<=100) return '#8';
-  if(amps<=200) return '#6';
-  if(amps<=300) return '#4';
-  if(amps<=400) return '#3';
-  if(amps<=600) return '#1';
-  return '#1/0';
+/* THHN/THWN-2 cross-sections, NEC Ch. 9 Table 5 (in²). */
+var CGC_AREA = { '#8':0.0366, '#6':0.0507, '#4':0.0824, '#3':0.0973, '#2':0.1158,
+                 '#1':0.1562, '#1/0':0.1855, '#2/0':0.2223, '#3/0':0.2679,
+                 '#4/0':0.3237, '250 kcmil':0.3970, '350 kcmil':0.5242,
+                 '400 kcmil':0.5863, '500 kcmil':0.7073, '600 kcmil':0.8676,
+                 '700 kcmil':0.9887, '800 kcmil':1.0936 };
+/* RMC, 40% fill for >2 conductors — NEC Ch. 9 Table 4 (in²). */
+var CGC_RMC = [ { t:'1"', a:0.355 }, { t:'1-1/4"', a:0.610 }, { t:'1-1/2"', a:0.829 },
+                { t:'2"', a:1.363 }, { t:'2-1/2"', a:1.946 }, { t:'3"', a:3.000 },
+                { t:'3-1/2"', a:4.009 }, { t:'4"', a:5.153 } ];
+/* NEC 250.122 Table — EGC by the rating of the OCPD ahead of the feeder. */
+var CGC_EGC = [ {a:100,s:'#8'}, {a:200,s:'#6'}, {a:300,s:'#4'}, {a:400,s:'#3'},
+                {a:500,s:'#2'}, {a:600,s:'#1'}, {a:800,s:'#1/0'}, {a:1000,s:'#2/0'},
+                {a:1200,s:'#3/0'}, {a:1600,s:'#4/0'}, {a:2000,s:'250 kcmil'},
+                {a:2500,s:'350 kcmil'}, {a:3000,s:'400 kcmil'}, {a:4000,s:'500 kcmil'},
+                {a:5000,s:'700 kcmil'}, {a:6000,s:'800 kcmil'} ];
+function _cgcEgcFor(ocpd){
+  for(var i=0;i<CGC_EGC.length;i++) if(CGC_EGC[i].a>=ocpd) return CGC_EGC[i].s;
+  return '800 kcmil';
+}
+function _cgcTradeFor(phaseSize, egcSize){
+  /* An unknown size must not silently become the biggest conduit on the
+     list — the missing-EGC-area case produced NaN, NaN failed every
+     comparison, and a 180 A feeder came back wanting 4" RMC. */
+  var pa=CGC_AREA[phaseSize], ea=CGC_AREA[egcSize];
+  if(!(pa>0)||!(ea>0)) return null;
+  var need = pa*3 + ea;
+  for(var i=0;i<CGC_RMC.length;i++) if(CGC_RMC[i].a>=need) return CGC_RMC[i].t;
+  return '4"';
+}
+
+/* NEC 240.6(A) standard frames. _stdOCPD stops at 4000 A and then rounds to
+   the nearest hundred, which invents devices that are not made; above 4000 A
+   this says so instead of naming a 5,400 A breaker. */
+var CGC_FRAMES = [100,125,150,175,200,225,250,300,350,400,450,500,600,700,800,
+                  1000,1200,1600,2000,2500,3000,4000,5000,6000];
+function _cgcOcpd(a){
+  for(var i=0;i<CGC_FRAMES.length;i++) if(CGC_FRAMES[i]>=a) return CGC_FRAMES[i];
+  return null;                      /* past 6000 A it is a switchboard, not a breaker */
 }
 function _cgcFeeder(kw, volts, phase){
   var V=+volts||480, kW=+kw||0;
@@ -66420,14 +66448,31 @@ function _cgcFeeder(kw, volts, phase){
   for(var i=0;i<CGC_CU_75C.length;i++){
     if(CGC_CU_75C[i].a>=design){ pick=CGC_CU_75C[i]; sets=1; break; }
   }
-  var perSet=design/sets;
-  return { amps:Math.round(amps), design:Math.round(design), sets:sets,
-           conductor:pick.size, perSet:Math.round(perSet),
-           egc:_cgcEgc(perSet), trade:CGC_TRADE[pick.size]||'3"',
-           volts:V,
-           text:sets+' \u00d7 ('+'3\u2013'+pick.size+' + '+_cgcEgc(perSet)+' EGC) in '
-                +sets+' \u00d7 '+(CGC_TRADE[pick.size]||'3"')+' RMC \u00b7 '
-                +Math.round(amps)+' A @ '+V+' V' };
+  /* ── THE EGC IS SIZED ON THE FEEDER, NOT ON THE SET ────────────────
+     250.122(F): where conductors run in parallel in separate raceways,
+     each raceway carries a full-size equipment grounding conductor sized
+     on the overcurrent device protecting the FEEDER. Sizing it on the
+     per-set current gave #3 where the code wants 400 kcmil — a fault on
+     one raceway has to clear against the whole 3,000 A device, not
+     against its own eighth of the load. */
+  var ocpd = _cgcOcpd(Math.round(design));
+  var egc  = ocpd ? _cgcEgcFor(ocpd) : null;
+  var trade= egc ? _cgcTradeFor(pick.size, egc) : null;
+  if(!ocpd || !egc || !trade){
+    /* Past what a single feeder does. Say that rather than print a
+       schedule for a device nobody sells. */
+    return { amps:Math.round(amps), design:Math.round(design), ocpd:null, sets:sets,
+             conductor:pick.size, perSet:Math.round(design/sets), egc:null,
+             trade:null, volts:V, overrun:true,
+             text:Math.round(amps)+' A @ '+V+' V \u2014 beyond a single feeder; '
+                  +'split it across switchboard sections and size each one' };
+  }
+  return { amps:Math.round(amps), design:Math.round(design), ocpd:ocpd, sets:sets,
+           conductor:pick.size, perSet:Math.round(design/sets),
+           egc:egc, trade:trade, volts:V,
+           text:sets+' \u00d7 ('+'3\u2013'+pick.size+' + '+egc+' EGC) in '
+                +sets+' \u00d7 '+trade+' RMC \u00b7 '
+                +Math.round(amps)+' A @ '+V+' V \u00b7 '+ocpd+' A OCPD' };
 }
 
 /* Fibre and controls. One armoured single-mode run per unit plus a copper
@@ -66538,7 +66583,7 @@ function _cgcFinishRun(){
     var F = c.tap ? tapF : (st.power ? spineF : null);
     if(F){
       c.feeder   = F;
-      c.condSize = F.trade + ' RMC';
+      c.condSize = F.trade ? (F.trade + ' RMC') : null;
       c.sets     = F.sets;
       c.conductor= F.conductor;
       c.egc      = F.egc;
