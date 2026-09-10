@@ -53686,21 +53686,86 @@ function _derText(g,x,y,s,size,fill,anchor,weight){
   if(weight)t.setAttribute('font-weight',weight); t.textContent=s; g.appendChild(t); return t;
 }
 
+/* ── THE UNIT IS THREE CONTAINERS, NOT ONE BOX ────────────────────────
+   This drew one purple rectangle with evenly spaced slats across the whole
+   footprint — a generic container at whatever aspect the pad happened to
+   be. A modular data centre of this class is a ZONED site: per the
+   published architecture, two 45 ft containers (IT, and the electrical
+   plant) and one 20 ft (mechanical), separated so each can be serviced,
+   with the chillers adjacent to the mechanical zone on their own airflow
+   and service clearance.
+
+   Drawn in that proportion — 45 : 45 : 20 ft along the length — so the
+   plan says which end the switchgear ties into and which end needs air.
+   The racks are drawn as the schedule describes them: eight compute racks
+   and four narrower network racks, not a repeating pattern.
+
+   Small containers keep the plain body: a 20 ft node has no zones to
+   separate, and inventing them would be drawing something that is not
+   there. */
 function _derRenderDc(g, sh){
   var ppf=_derScale(); var w=(sh.lf||20)*ppf, h=(sh.wf||8)*ppf;
   var x=sh.pts[0].x-w/2, y=sh.pts[0].y-h/2;
   /* concrete pad + bollards */
   var padM=2*ppf;
   _derRect(g, x-padM, y-padM, w+padM*2, h+padM*2, '#e9e9e9', '#9a9a9a', 1);
-  /* node body -- purple compute container */
-  _derRect(g, x, y, w, h, '#4C3B87', '#A78BFA', 1.5);
-  /* rack slats */
-  var slats=Math.max(3, Math.round((sh.lf||20)/3));
-  for(var i=0;i<slats;i++){
-    var sx=x + (i+0.15)*(w/slats);
-    _derRect(g, sx, y+h*0.18, (w/slats)*0.7, h*0.64, '#2B2050', '#8B6FE0', 0.8);
+
+  var zoned = (+sh.lf||0) >= 80 && w > 40;      /* big enough to read */
+  if(!zoned){
+    _derRect(g, x, y, w, h, '#4C3B87', '#A78BFA', 1.5);
+    var slats=Math.max(3, Math.round((sh.lf||20)/3));
+    for(var i=0;i<slats;i++){
+      var sx=x + (i+0.15)*(w/slats);
+      _derRect(g, sx, y+h*0.18, (w/slats)*0.7, h*0.64, '#2B2050', '#8B6FE0', 0.8);
+    }
+    _derText(g, x+w/2, y+h+padM+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+    return;
   }
-  _derText(g, x+w/2, y+h+padM+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+
+  /* Zones along the length, in the published 45 : 45 : 20 ft proportion.
+     A gap between them is the service separation, not a drawing margin. */
+  var gap=Math.max(1, 3*ppf);
+  var usable=w-gap*2;
+  var itW=usable*(45/110), elW=usable*(45/110), meW=usable*(20/110);
+  var zx=x;
+  /* Containers sit against one edge; the rest of the depth is the service
+     aisle and, at the mechanical end, the chiller bank. */
+  var bodyH=h*0.62, bodyY=y+h*0.06;
+
+  /* IT — compute + network racks */
+  _derRect(g, zx, bodyY, itW, bodyH, '#4C3B87', '#A78BFA', 1.5);
+  var nC=8, nN=4, cell=itW/(nC+nN+1);
+  for(var c=0;c<nC;c++){
+    _derRect(g, zx+(c+0.5)*cell, bodyY+bodyH*0.16, cell*0.62, bodyH*0.68, '#2B2050', '#8B6FE0', 0.7);
+  }
+  for(var n2=0;n2<nN;n2++){
+    _derRect(g, zx+(nC+n2+0.6)*cell, bodyY+bodyH*0.26, cell*0.40, bodyH*0.48, '#1E1740', '#6D5BC4', 0.6);
+  }
+  if(w>150) _derText(g, zx+itW/2, bodyY+bodyH+9, 'IT', Math.max(6,Math.min(10,ppf*0.6)), '#A78BFA', 'middle', '700');
+  zx += itW+gap;
+
+  /* Electrical plant — UPS and distribution */
+  _derRect(g, zx, bodyY, elW, bodyH, '#3F3468', '#7DD3FC', 1.4);
+  for(var u=0;u<4;u++){
+    _derRect(g, zx+elW*(0.08+u*0.23), bodyY+bodyH*0.22, elW*0.16, bodyH*0.56, '#1F2A44', '#38BDF8', 0.7);
+  }
+  if(w>150) _derText(g, zx+elW/2, bodyY+bodyH+9, 'UPS / DIST', Math.max(6,Math.min(10,ppf*0.6)), '#7DD3FC', 'middle', '700');
+  zx += elW+gap;
+
+  /* Mechanical plant, with the chiller bank on its own clearance */
+  _derRect(g, zx, bodyY, meW, bodyH, '#24463F', '#5EEAD4', 1.4);
+  if(w>150) _derText(g, zx+meW/2, bodyY+bodyH+9, 'MECH', Math.max(6,Math.min(10,ppf*0.6)), '#5EEAD4', 'middle', '700');
+  var chY=bodyY+bodyH+Math.max(1.5,2*ppf);
+  var chH=Math.max(2, y+h-chY-1);
+  if(chH>2){
+    for(var q=0;q<3;q++){
+      _derRect(g, zx+meW*(0.05+q*0.32), chY, meW*0.26, chH, '#123932', '#2DD4BF', 0.7);
+    }
+  }
+
+  _derText(g, x+w/2, y+h+padM+11,
+    (sh.model||'MODULAR DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW IT \u2022 '+(sh.lf||0)+'\u00d7'+(sh.wf||0)+' ft',
+    Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
 }
 
 function _derRenderWind(g, sh){
@@ -66281,8 +66346,10 @@ function _cgcBlocks(){
     (S.shapes||[]).forEach(function(sh){
       if(!sh || sh.kind!=='derdc') return;
       var p=(sh.pts&&sh.pts[0])?sh.pts[0]:null; if(!p) return;
+      /* pts[0] is the CENTRE of the pad — that is what _derRenderDc draws
+         from. Adding half put every tap a pad away from its own block. */
       var hw=((+sh.lf||40)*ppf)/2, hh=((+sh.wf||10)*ppf)/2;
-      out.push({ sh:sh, cx:p.x+hw, cy:p.y+hh, hw:hw, hh:hh });
+      out.push({ sh:sh, cx:p.x, cy:p.y, hw:hw, hh:hh });
     });
   }catch(e){}
   return out;
@@ -66303,6 +66370,72 @@ function _cgcNearest(pts, x, y){
     if(!best || d<best.d) best={ x:px, y:py, d:d };
   }
   return best;
+}
+
+/* ── WHAT IS ACTUALLY IN THE TRENCH ───────────────────────────────────
+   The runs were labelled by their conduit TYPE and nothing else, so a
+   1.77 MW feeder and a lighting circuit both read "RMC - 480V 3D AC".
+   At 480 V a Leviathan draws 2,129 A; that is not one 2" conduit, it is
+   eight parallel sets, and a drawing that does not say so understates the
+   trench, the pull and the cost by most of an order of magnitude.
+
+   Sized the way a feeder is sized: 125% of continuous load (NEC 215.2 /
+   210.19), 75 °C copper ampacity from Table 310.16 because that is what
+   terminations are rated for, parallel sets per 310.10(H), EGC per
+   250.122 sized per SET, and a conduit trade size that keeps three
+   current-carrying conductors plus the EGC inside 40% fill (Ch. 9 T.1).
+
+   Screening-grade and labelled as such: no derating for ambient or for
+   more than three current-carrying conductors in a raceway, no voltage
+   drop check over the run length. Both matter on a long pull and both
+   need a length this function is not given. It exists so the trench says
+   eight 3" conduits instead of one 2" one. */
+var CGC_CU_75C = [                     /* NEC 310.16, 75 °C copper */
+  { size:'#2',        a:115 }, { size:'#1/0',      a:150 },
+  { size:'#2/0',      a:175 }, { size:'#4/0',      a:230 },
+  { size:'250 kcmil', a:255 }, { size:'350 kcmil', a:310 },
+  { size:'500 kcmil', a:380 }
+];
+/* Trade size holding 3 power conductors + EGC inside 40% fill. */
+var CGC_TRADE = { '#2':'1-1/4"', '#1/0':'1-1/2"', '#2/0':'2"', '#4/0':'2-1/2"',
+                  '250 kcmil':'3"', '350 kcmil':'3"', '500 kcmil':'3-1/2"' };
+/* NEC 250.122 — EGC by the OCPD protecting the set. */
+function _cgcEgc(amps){
+  if(amps<=100) return '#8';
+  if(amps<=200) return '#6';
+  if(amps<=300) return '#4';
+  if(amps<=400) return '#3';
+  if(amps<=600) return '#1';
+  return '#1/0';
+}
+function _cgcFeeder(kw, volts, phase){
+  var V=+volts||480, kW=+kw||0;
+  if(!(kW>0)) return null;
+  var amps = (phase===1) ? (kW*1000/V) : (kW*1000/(V*Math.sqrt(3)));
+  var design = amps*1.25;                       /* continuous load */
+  var pick=CGC_CU_75C[CGC_CU_75C.length-1];     /* work down from the largest */
+  var sets=Math.max(1, Math.ceil(design/pick.a));
+  /* One set is cheaper to pull than two of half the size — only step down
+     the conductor when a single set can carry it. */
+  for(var i=0;i<CGC_CU_75C.length;i++){
+    if(CGC_CU_75C[i].a>=design){ pick=CGC_CU_75C[i]; sets=1; break; }
+  }
+  var perSet=design/sets;
+  return { amps:Math.round(amps), design:Math.round(design), sets:sets,
+           conductor:pick.size, perSet:Math.round(perSet),
+           egc:_cgcEgc(perSet), trade:CGC_TRADE[pick.size]||'3"',
+           volts:V,
+           text:sets+' \u00d7 ('+'3\u2013'+pick.size+' + '+_cgcEgc(perSet)+' EGC) in '
+                +sets+' \u00d7 '+(CGC_TRADE[pick.size]||'3"')+' RMC \u00b7 '
+                +Math.round(amps)+' A @ '+V+' V' };
+}
+
+/* Fibre and controls. One armoured single-mode run per unit plus a copper
+   BMS pair, in their own raceway — data does not share a power conduit. */
+function _cgcDataSpec(units){
+  var n=Math.max(1,units||1);
+  return { text:n+' \u00d7 (24-strand SM fibre + 2\u2013#14 BMS pair) in '
+                +n+' \u00d7 1-1/4" EMT' };
 }
 
 function _cgcStart(opts){
@@ -66374,11 +66507,49 @@ function _cgcFinishRun(){
   if(!S._trenches) S._trenches=[];
   S._trenches.push({ id:uid(), pts:spine.slice(), in:CGC.surface, leg:st.leg });
 
+  /* Per-unit and whole-plant feeders, sized once for this step. A tap
+     carries ONE unit's service; the spine carries every unit it collects. */
+  var blocks=_cgcBlocks();
+  var unitKw=0;
+  try{
+    var U=null;
+    for(var uk in DC_CATALOG){
+      if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
+      if(!U||DC_CATALOG[uk].kw>U.kw) U=DC_CATALOG[uk];
+    }
+    unitKw=(U&&U.kw)||1770;
+  }catch(e){ unitKw=1770; }
+  /* Facility draw, not IT: cooling and losses are on the same feeder. */
+  var pue=1.0; try{ pue=(S.computeBuild&&+S.computeBuild.pue)||1.0; }catch(e){}
+  var tapKw  = unitKw*Math.max(1,pue);
+  var spineKw= tapKw*Math.max(1,blocks.length);
+  var tapF   = st.power ? _cgcFeeder(tapKw, 480) : null;
+  var spineF = st.power ? _cgcFeeder(spineKw, 480) : null;
+  var dataS  = st.power ? null : _cgcDataSpec(blocks.length);
+
   function commit(pts, label, extra){
     var c={ id:uid(), condType:st.cond, pts:pts, pxLen:_polyLen(pts),
             ftLen:+(_polyLen(pts)/ppf).toFixed(1), runLabel:label,
             omegaCompute:true, labelDx:40, labelDy:-24 };
     if(extra){ for(var k in extra){ if(extra.hasOwnProperty(k)) c[k]=extra[k]; } }
+    /* The schedule travels ON the run, so the conductor schedule, the BOM
+       and the export read what is in the trench instead of re-deriving it
+       from a conduit type that only names the raceway. */
+    var F = c.tap ? tapF : (st.power ? spineF : null);
+    if(F){
+      c.feeder   = F;
+      c.condSize = F.trade + ' RMC';
+      c.sets     = F.sets;
+      c.conductor= F.conductor;
+      c.egc      = F.egc;
+      c.amps     = F.amps;
+      c.volts    = F.volts;
+      c.runLabel = label + ' \u00b7 ' + F.text;
+    } else if(dataS){
+      c.condSize = '1-1/4" EMT';
+      c.conductor= '24-strand SM fibre + 2\u2013#14';
+      c.runLabel = label + ' \u00b7 ' + dataS.text;
+    }
     if(!S.conduits) S.conduits=[];
     S.conduits.push(c);
     if(typeof renderConduit==='function') renderConduit(c);
@@ -66387,6 +66558,7 @@ function _cgcFinishRun(){
 
   commit(spine, st.label, tie ? { spine:true, toId:tie.id, tieKind:tie.what, runLabel:st.label } : { spine:true });
   CGC.runs++;
+  if(spineF && !CGC.sched) CGC.sched='Spine: '+spineF.text+'.';
   if(st.power && tie && !CGC.tied){
     CGC.tied = tie;
     _cgcEmitLoad(tie);
@@ -66395,7 +66567,7 @@ function _cgcFinishRun(){
   /* The taps. Offsets keep the B feed and the fibre off the A feed's line
      where they share a lane, which is what the auto-router does too. */
   var off = (st.key==='b') ? 6 : (st.key==='data' ? 5 : 0);
-  _cgcBlocks().forEach(function(b){
+  blocks.forEach(function(b){
     var n=_cgcNearest(spine, b.cx, b.cy); if(!n) return;
     var edgeY = (n.y > b.cy) ? (b.cy + b.hh) : (b.cy - b.hh);
     commit([{ x:b.cx+off, y:edgeY }, { x:n.x, y:n.y }], st.label+' tap',
@@ -66423,10 +66595,10 @@ function _cgcFinish(){
   if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
   if(typeof setMode==='function') setMode('select'); else S.mode='select';
   if(typeof _dcfcGuideHide==='function') _dcfcGuideHide();
-  var tied=CGC.tied;
+  var tied=CGC.tied, sched=CGC.sched||'';
   if(typeof showBanner==='function'){
     showBanner(tied?'ok':'wiz',' Conduit routed — '+runs+' spine'+(runs===1?'':'s')+', '
-      +taps+' tap'+(taps===1?'':'s')+'. '
+      +taps+' tap'+(taps===1?'':'s')+'. '+(sched?(sched+' '):'')
       +(tied
          ? ('Tied to '+(tied.label||'the transformer')
             + (tied.what && tied.what!=='utility' ? (' — behind the site '+(CGC_TIE_WORD[tied.what]||tied.what)) : '')
@@ -100280,10 +100452,20 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   /* Centre + half-extents of a placed DER shape (single-point shapes carry
      lf/wf in feet, like _derPlaceAlt / _derPlaceDcPad write them). */
+  /* ── pts[0] IS THE CENTRE ──────────────────────────────────────────
+     _derRenderDc and _derRenderAlt both draw from pts[0] MINUS half the
+     footprint, so the stored point is the middle of the pad. This added
+     half instead, putting every computed centre a full pad-width and
+     pad-depth away from where the equipment is actually drawn — so every
+     tap started off the corner of a shape rather than its edge.
+
+     It stayed invisible while the unit was carried at 40 x 10 ft: half a
+     pad was 13 x 3 px on a zoomed-out site. At the unit's real 119 x 45
+     it is 40 x 15 px and obvious. */
   function box(sh){
     var p=(sh.pts&&sh.pts[0])?sh.pts[0]:{x:0,y:0};
     var hw=((+sh.lf||10)*ppf())/2, hh=((+sh.wf||6)*ppf())/2;
-    return { cx:p.x+hw, cy:p.y+hh, hw:hw, hh:hh };
+    return { cx:p.x, cy:p.y, hw:hw, hh:hh };
   }
   function rows(shapes){
     var m={}, out=[];
