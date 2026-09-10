@@ -3181,11 +3181,11 @@
         warn +
         /* PRICE IT FROM THE CARD. The estimator handoff was only in the detail
            panel, which is two clicks and a scroll from the list a rep is
-           actually scanning. Marked data-noselect so it prices the site
-           instead of opening the card underneath it. */
+           actually scanning. Marked data-noselect so the click runs the
+           pricing path rather than the card's plain select. */
         '<div class="mt" style="margin-top:9px">' +
           '<button class="cardCost" data-noselect="1" data-cost-id="' + esc(r.id) + '" ' +
-            'title="Send this site to the cost estimator \u2014 installed cost, schedule and a printable report">' +
+            'title="Price it here \u2014 sized against this circuit, priced from the same cost model the estimator uses">' +
             'Price this site' +
           '</button>' +
           (_estimates[r.id]
@@ -4200,6 +4200,33 @@
         batteryScore: r.score, largeLoadScore: r.loadScore
       },
 
+      /* ── WHAT THIS SITE WAS PRICED AT, IF IT HAS BEEN ───────────────
+         Present only once somebody has actually pressed price. A packet
+         with no estimate says so by leaving this null, which is a different
+         statement from a packet carrying a zero. The class and the band
+         travel WITH the figure, never the figure alone: a total with no
+         class attached is the one thing that must not leave this tool. */
+      estimate: (function () {
+        var d = _estimates[r.id];
+        if (!d) return null;
+        return {
+          basis: d.pricedBy === "sitefinder"
+            ? "Priced in the site finder against omega-cost-model.js, the same "
+              + "model and the same tables the cost estimator runs."
+            : "Returned by the cost estimator.",
+          pricedAt: d.at || null,
+          kw: d.kw, kwh: d.kwh,
+          sizeWasAssumed: !!d.assumedSize,
+          total: d.total, perKw: d.perKw, perKwh: d.perKwh,
+          estimateClass: d.estimateClass,
+          estimateClassWhy: d.estimateClassWhy,
+          accuracyLow: d.accuracyLow, accuracyHigh: d.accuracyHigh,
+          stillUnanswered: d.unanswered || [],
+          notAQuote: "An estimate, not a bid. No agreed contingency, no site "
+                     + "walk, no firm equipment pricing."
+        };
+      })(),
+
       /* ── WHAT THE ESTIMATOR MUST BE TOLD ────────────────────────────
          Not defaults. Not nulls to be quietly filled in. An explicit list
          of the things this tool cannot know, each with why it matters, so
@@ -4242,6 +4269,14 @@
   }
 
   function downloadPacket(r) {
+    /* Price it on the way out if nobody has. The packet is what leaves this
+       tool and goes to a lender, a partner or a customer, and one that says
+       "no estimate" because a button went unpressed is a packet that gets
+       priced in a spreadsheet instead. */
+    if (!_estimates[r.id]) {
+      var e0 = computeEstimate(r);
+      if (e0) _estimates[r.id] = e0;
+    }
     var name = (r.addr || r.id).replace(/[^A-Za-z0-9]+/g, "-")
                  .replace(/^-|-$/g, "").slice(0, 60).toLowerCase();
     var blob = new Blob([JSON.stringify(sitePacket(r), null, 2)],
@@ -4273,7 +4308,97 @@
   var COST_IN = "clearsky.cost-estimate/1";
   var _estimates = {};
 
-  function costThisSite(r) {
+  /* ══════════════════════════════════════════════════════════════════
+     PRICE IT HERE, NOT IN ANOTHER TAB
+     ------------------------------------------------------------------
+     This opened the estimator in a new window and waited for a postMessage
+     back. That worked, and it meant leaving the site you were looking at,
+     landing in a second tool, and coming back — for a number the tool can
+     work out where you are standing.
+
+     It can do that now WITHOUT a second implementation of the cost model:
+     omega-cost-model.js holds the tables and the pricing loop, the estimator
+     reads the same file, and a parity test proves the two agree to the cent.
+     That file is the only reason this is safe to do inline; before it, a
+     second copy here would have been a second answer.
+
+     SIZE COMES FROM THE CIRCUIT WHEN THERE IS ONE. sizePick() already means
+     "everything the circuit will take, at 2 hours", which is the honest
+     default for a screen. When no circuit is attributed there is nothing to
+     size against, so this prices a STATED assumption and says so on the
+     result rather than refusing — a screening number somebody can argue with
+     beats a blank panel, as long as the assumption is on the page.
+     ══════════════════════════════════════════════════════════════════ */
+  var ASSUMED_KW = 1000, ASSUMED_HOURS = 2;
+
+  /* Works the estimate out and returns it, or returns null when the model
+     is not on the page. Separated from the button so the packet can price a
+     site it is about to write without going anywhere near the UI — and
+     without the fallback chain, which ends at downloadPacket and would
+     otherwise call itself. */
+  function computeEstimate(r) {
+    var CM = window.OmegaCostModel;
+    if (!CM || typeof CM.price !== "function") return null;
+
+    var pick = sizePick(r);
+    var assumed = pick.kw == null;
+    var kw = assumed ? ASSUMED_KW : pick.kw;
+    var hours = pick.hours || ASSUMED_HOURS;
+
+    /* Only what this tool actually knows. Everything else stays unanswered
+       so the estimate classes itself honestly instead of inheriting
+       defaults nobody chose. */
+    var ph = phaseOf(r);
+    var est = CM.price({
+      kw: kw, hours: hours,
+      volt: (ph && ph.phase === "3p480") ? "480" : "",
+      poiFt: null, padArea: null,
+      soil: "", ahj: "", labor: "",
+      utilityUpgrade: "", carryUpgrade: false,
+      quoteDate: ""
+    });
+    if (!est) return null;
+
+    /* Same shape the estimator posts back, so renderCostBack is unchanged. */
+    return {
+      type: COST_IN, siteId: r.id,
+      total: est.total, perKwh: est.perKwh, perKw: est.perKw,
+      kw: est.kw, kwh: est.kwh,
+      /* Priced from this page, so nothing here has been walked, quoted or
+         answered. That is a Class 5 screen and it should say Class 5. */
+      estimateClass: "Class 5 — concept screening",
+      estimateClassWhy: assumed
+        ? "No circuit is attributed to this site, so it is priced at an assumed "
+          + ASSUMED_KW.toLocaleString() + " kW for " + ASSUMED_HOURS
+          + " hours. Attribute a circuit and this re-prices against what the feeder will take."
+        : "Priced from the circuit's available " + Math.round(kw).toLocaleString()
+          + " kW at " + hours + " hours, with the site's own drivers still unanswered.",
+      accuracyLow: -0.30, accuracyHigh: 0.50,
+      unanswered: ["interconnection voltage", "distance to the POI",
+                   "utility-side upgrade", "equipment yard", "ground conditions",
+                   "AHJ", "labour basis", "equipment quote date", "duration"],
+      assumedSize: assumed, at: new Date().toISOString(), pricedBy: "sitefinder"
+    };
+  }
+
+  function priceInPlace(r) {
+    var est = computeEstimate(r);
+    /* No model on the page — the old route still works, and a rep who
+       needs a number today should get one. */
+    if (!est) { costInEstimator(r); return; }
+    _estimates[r.id] = est;
+    var host = document.getElementById("costBack");
+    if (host) host.setAttribute("data-id", r.id);
+    renderCostBack(r.id);
+    /* The card carries the figure too, so a priced site stays marked in the
+       list after the drawer is closed. */
+    try { render(); } catch (e) {}
+  }
+
+  /* The old route, kept for the cases the inline path cannot serve: the
+     model failed to load, or somebody wants the full estimator to answer the
+     nine drivers properly. */
+  function costInEstimator(r) {
     var key = "cs-packet-" + r.id + "-" + Date.now().toString(36);
     try {
       sessionStorage.setItem(key, JSON.stringify(sitePacket(r)));
@@ -5145,7 +5270,7 @@
     var pk = document.getElementById("dPacket");
     if (pk) pk.onclick = function () { downloadPacket(r); };
     var cs = document.getElementById("costSite");
-    if (cs) cs.onclick = function () { costThisSite(r); };
+    if (cs) cs.onclick = function () { priceInPlace(r); };
 
     /* Sizer. The slider and the number box are two views of one value, so
        each writes the other before committing — otherwise dragging leaves a
@@ -5393,7 +5518,17 @@
     if (cb) {
       e.preventDefault(); e.stopPropagation();
       var cr = ST.byId[cb.getAttribute("data-cost-id")];
-      if (cr) costThisSite(cr);
+      /* The card's own Price this site — same inline path as the drawer.
+         Open the card first so the number lands where a rep is already
+         reading, and only re-open when it is not the open one: select()
+         re-runs the circuit and assessor lookups, and pressing price twice
+         should not bill two verifications. ST.sel is an id for a parcel and
+         a record for an address search, so both shapes are checked. */
+      if (cr) {
+        var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+        if (selId !== cr.id) select(cr.id);
+        priceInPlace(cr);
+      }
       return;
     }
     if (e.target.closest && e.target.closest("[data-noselect]")) {
