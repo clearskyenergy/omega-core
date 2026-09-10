@@ -99368,11 +99368,33 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var bessKw=Math.round(critKw);
     var bessKwh=Math.round(critKw*(minutes/60)/derate());
 
-    /* Compute pods. */
+    /* ── ONE SOURCE FOR THE UNIT, AND IT IS THE DATASHEET ──────────────
+       This picked the largest row in DERC_DC, which carried the unit at
+       1,000 kW on a 40 x 10 ft pad. DC_CATALOG carries the same unit at
+       its published spec — 1.77 MW IT on 119 x 45 ft, 2.2 MW of cooling,
+       closed-circuit direct-to-chip, no site water, 480 V — and the
+       comment above that entry already said the smaller row was 77% light
+       on load and thirteen times small on land.
+
+       Two catalogues disagreeing about one product is a bug wherever it
+       lands, and it landed here: every pod count, every conductor, every
+       will-serve check and every acreage figure came off the light number.
+       DC_CATALOG wins when it has the row; DERC_DC remains the fallback.
+
+       Shapes already on a drawing keep their own lf/wf, so nothing that
+       has been placed moves. */
     var podSpec=null;
     try{
       var best=null;
-      for(var k in DERC_DC){ if(!best||DERC_DC[k].kw>best.kw) best=Object.assign({id:k},DERC_DC[k]); }
+      if(typeof DC_CATALOG!=='undefined'){
+        for(var dk in DC_CATALOG){
+          if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,dk)) continue;
+          if(!best||DC_CATALOG[dk].kw>best.kw) best=Object.assign({id:dk},DC_CATALOG[dk]);
+        }
+      }
+      if(!best){
+        for(var k in DERC_DC){ if(!best||DERC_DC[k].kw>best.kw) best=Object.assign({id:k},DERC_DC[k]); }
+      }
       podSpec=best;
     }catch(e){}
     var podKw=(podSpec&&podSpec.kw)?podSpec.kw:1000;
@@ -101439,14 +101461,15 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
       +'<div style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:9px;padding:12px;margin-bottom:14px">'
         +'<div style="width:170px;margin-bottom:10px"><label style="'+lbl+'">IT load (MW)</label>'
           +'<input id="cgb-itmw" type="number" min="0.1" step="0.5" value="5" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
-        +'<label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
+        +'<label id="cgb-r-bess" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
           +'<input type="checkbox" id="cgb-bess" checked onchange="OmegaCGB.sync()" style="width:13px;height:13px"> Battery energy storage</label>'
-        +'<label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
+        +'<label id="cgb-r-cool" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
           +'<input type="checkbox" id="cgb-cool" checked onchange="OmegaCGB.sync()" style="width:13px;height:13px"> Cooling plant (chillers / CRAH / heat rejection)</label>'
-        +'<label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
+        +'<label id="cgb-r-genset" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
           +'<input type="checkbox" id="cgb-genset" checked onchange="OmegaCGB.sync()" style="width:13px;height:13px"> Standby generator</label>'
-        +'<label style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer">'
+        +'<label id="cgb-r-bldg" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer">'
           +'<input type="checkbox" id="cgb-bldg" checked onchange="OmegaCGB.sync()" style="width:13px;height:13px"> Draw the building envelope first</label>'
+        +'<div id="cgb-packaged" style="display:none;font-size:9.5px;color:#8FA3B8;line-height:1.6"></div>'
       +'</div>'
 
       +'<div style="'+sec+'">6 \u00b7 Placement plan</div>'
@@ -101494,12 +101517,27 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
         : '<span style="color:#F59E0B">Facility '+fac.toFixed(1)+' MW exceeds '+_src+' by '+(fac-CGB.subMw).toFixed(1)+' MW'+_gap+'</span><br>';
     }
     if(CGB.fmt==='modular'){
-      var blocks=Math.max(1,Math.ceil(CGB.computeMw));
-      plan.innerHTML=head+'<span style="color:#C4B5FD;font-weight:700">You\u2019ll place:</span> '+blocks
-        +' \u00d7 1 MW modular compute block'+(blocks>1?'s':'')+' \u2014 click the map where the array starts, '
-        +'then draw the power tie and the fibre.'
-        +'<br><span style="color:#8FA3B8">Ending the power run on a transformer or switchgear files the plant '
-        +'as a constant load on the one-line.</span>';
+      /* Sized against the REAL unit, from the catalogue the datasheet
+         populates — so the count, the pad and the tie-in all agree with
+         what actually turns up on a truck. */
+      var U=null;
+      try{
+        for(var uk in DC_CATALOG){
+          if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
+          if(!U||DC_CATALOG[uk].kw>U.kw) U=DC_CATALOG[uk];
+        }
+      }catch(e){}
+      var uKw=(U&&U.kw)||1770, uMw=uKw/1000;
+      var blocks=Math.max(1,Math.ceil((CGB.computeMw||0)/uMw));
+      var fits=(blocks*uMw);
+      plan.innerHTML=head
+        +'<span style="color:#C4B5FD;font-weight:700">You\u2019ll place:</span> '+blocks
+        +' \u00d7 modular compute unit'+(blocks>1?'s':'')+' at '+uMw.toFixed(2)+' MW IT each'
+        +(U&&U.lf?(' \u00b7 '+U.lf+' \u00d7 '+U.wf+' ft pad'+(blocks>1?' each':'')):'')
+        +' \u2014 click the map where the array starts, then draw the power tie and the fibre.'
+        +'<br><span style="color:#8FA3B8">'+fits.toFixed(2)+' MW of IT envelope for the '
+        +(CGB.computeMw||0)+' MW asked for. Ending the power run on a transformer or switchgear files '
+        +'the plant as a constant load on the one-line; the fibre run is the second tie.</span>';
       return;
     }
     plan.innerHTML=head+'<span style="color:#C4B5FD;font-weight:700">You\u2019ll place:</span> click the map once for each node, in order:<br>'+chain
@@ -101545,6 +101583,13 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
         'What is already on this site \u2014 solar, storage, fuel cell, genset, EV charging \u2014 that the '
         + 'block can sit behind. This is what makes adding compute to an operating site worth doing: '
         + 'the DER that was sized for a peaky load has headroom against a flat one.');
+      put('cgb-packaged',
+        '<strong style="color:#C4B5FD">The unit arrives with its own plant.</strong> UPS and power '
+        + 'distribution, mechanical plant and N+1 chillers, monitoring and controls all ship inside '
+        + 'the enclosure \u2014 there is no cooling yard to draw, no site water to size, and no UPS room. '
+        + 'It presents one 480 V / 60 Hz service interface and a fibre drop. Storage is whatever the '
+        + 'site already has; the campus options above are for a build where you are constructing '
+        + 'that plant yourself.');
     } else {
       put('cgb-sec3', '3 \u00b7 Source');
       put('cgb-sub-lbl', 'Grid substation on site');
@@ -101555,7 +101600,30 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
       put('cgb-sec4', '4 \u00b7 On-site generation');
       put('cgb-gen-lbl', 'Include on-site generation');
       put('cgb-gen-help', '');
+      put('cgb-packaged', '');
     }
+
+    /* ── A MODULAR UNIT IS NOT A SMALL CAMPUS ─────────────────────────
+       Battery, cooling plant, standby generator and the building envelope
+       are campus scope. The modular unit ships its own UPS, distribution,
+       mechanical plant and chillers, and it goes on a pad on a site that
+       already exists — so offering those four here asked the user to
+       specify plant that is either inside the enclosure already or was
+       built years ago by somebody else, and then drew it on the map a
+       second time.
+
+       Hidden AND unticked: leaving them ticked but invisible would place
+       a cooling yard and a building nobody asked for. */
+    ['bess','cool','genset','bldg'].forEach(function(k){
+      var row=document.getElementById('cgb-r-'+k);
+      var box=document.getElementById('cgb-'+k);
+      if(row) row.style.display = mod ? 'none' : 'flex';
+      if(box && mod) box.checked = false;
+      if(box && !mod && box.getAttribute('data-was')==='1') box.checked = true;
+      if(box && !mod) box.setAttribute('data-was','1');
+    });
+    var pk=document.getElementById('cgb-packaged');
+    if(pk) pk.style.display = mod ? 'block' : 'none';
     sync();
   }
 
