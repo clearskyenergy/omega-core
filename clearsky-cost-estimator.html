@@ -370,7 +370,63 @@ var SCHEMA_IN  = "clearsky.site-packet/1";
 var SCHEMA_OUT = "clearsky.cost-estimate/1";
 
 /* The benchmark rail. Not a clamp — a reference. See the header comment. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THE BAND, AND WHAT IT IS
+
+   $385–$485 / kWh is an INTERNAL reference range for commercial and
+   industrial storage. It is not sourced, it is not a citation, and it has
+   been presented on the hero of every estimate as though it were a
+   benchmark. Naming it for what it is costs nothing and stops a reader
+   treating an in-house rule of thumb as a market fact.
+
+   Third-party figures that ARE citable live in MARKET below, beside it. */
 var BAND_LO = 385, BAND_HI = 485;
+var BAND_SRC = "an internal ClearSky reference range for commercial and " +
+               "industrial storage \u2014 not a published benchmark";
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PUBLISHED MARKET REFERENCES
+
+   Real, citable, and quoted exactly as the publisher states them, with the
+   caveats that decide whether a comparison means anything.
+
+   DURATION IS THE WHOLE TRAP HERE. A two-hour system spreads its power-side
+   hardware — PCS, transformer, switchgear, the interconnection itself — over
+   half the kWh a four-hour system does, so it reads dearer per kWh and
+   cheaper per kW. Comparing this tool's $/kWh against a fleet average of a
+   different average duration, without saying so, produces a confident and
+   meaningless verdict. Every entry therefore carries the duration its
+   figures reflect, and the panel reports BOTH axes.
+
+   These are references, never a price for this site: a national average
+   across a fleet says nothing about one circuit in Cook County.
+   ══════════════════════════════════════════════════════════════════════════ */
+var MARKET = [
+  { id:"eia-batt-2022",
+    label:"EIA \u2014 large-scale battery storage installed cost, 2022",
+    perKwh:395.79, perKw:1205.16, hours:3.05,
+    n:"104 plants \u00b7 3,502.7 MW \u00b7 10,665.6 MWh",
+    src:"published",
+    ref:"U.S. Energy Information Administration, \u201cBattery Storage in the " +
+        "United States: An Update on Market Trends\u201d, released 17 March 2026, " +
+        "Figure 11 (2022 final data), from Form EIA-860",
+    url:"https://www.eia.gov/analysis/studies/electricity/batterystorage/",
+    caveat:"Total installed cost as reported on Form EIA-860. Government grants, " +
+           "tax benefits and other incentives are excluded. The fleet averages " +
+           "3.05 h, so its $/kWh is not directly comparable to a 2 h system." },
+  { id:"eia-gencost-2024",
+    label:"EIA \u2014 battery construction cost, generators installed 2024",
+    perKwh:null, perKw:1469, hours:null,
+    n:"10,195 MW at new plants \u00b7 $16.3 billion",
+    src:"published",
+    ref:"U.S. Energy Information Administration, \u201cConstruction cost data for " +
+        "electric generators installed in 2024\u201d, released 6 July 2026, " +
+        "capacity-weighted average, from Form EIA-860",
+    url:"https://www.eia.gov/electricity/generatorcosts/",
+    caveat:"Capacity-weighted $/kW of nameplate. EIA publishes no duration split " +
+           "for this figure, so it cannot be converted to $/kWh. Grants and tax " +
+           "benefits excluded." }
+];
 
 /* ══════════════════════════════════════════════════════════════════════════
    THE COST MODEL
@@ -1480,16 +1536,16 @@ function bandRail(r){
     if (S.req.laborBasis === "pw" || S.req.laborBasis === "pla") bits.push("the labour basis is not open shop");
     if (S.req.ahj === "hard") bits.push("a difficult AHJ is priced in");
     why = bits.length
-      ? "<b>Outside the benchmark, and here is why:</b> " + bits.join("; ") + "."
-      : "<b>Outside the benchmark.</b> The drivers above are what moved it.";
+      ? "<b>Outside the internal range, and here is why:</b> " + bits.join("; ") + "."
+      : "<b>Outside the internal range.</b> The drivers above are what moved it.";
   } else {
     why = "The base estimate sits inside the <b>$" + BAND_LO + "\u2013$" + BAND_HI +
-          " / kWh</b> benchmark for commercial and industrial storage" +
+          " / kWh</b> range" +
           (hi > BAND_HI ? ", though the high case reaches $" + Math.round(hi) + " / kWh"
            : lo < BAND_LO ? ", though the low case reaches $" + Math.round(lo) + " / kWh"
            : " and so does the whole range") +
-          ". The band is a reference, not a rule \u2014 a site is allowed to sit outside " +
-          "it, and this one does not.";
+          ". That range is " + BAND_SRC + "; published figures are compared " +
+          "below. A site is allowed to sit outside it, and this one does not.";
   }
 
   return '<div class="rail">' +
@@ -1580,6 +1636,62 @@ function sourceHtml(r){
     h += '<p class="note">Every line in this estimate is priced from a quote or a ' +
          'booked actual.</p>';
   }
+  return h + '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   AGAINST THE PUBLISHED MARKET
+
+   Both axes, always, with the duration each side reflects printed next to
+   it. A single "you are 13% above the benchmark" line is the kind of
+   sentence that gets pasted into a credit memo and is wrong more often than
+   it is right, because the two numbers being compared were almost never
+   built on the same duration.
+
+   The tool states the gap and states what explains it. It does not adjust
+   the published figure to make the comparison flatter: a source is quoted as
+   published or not quoted at all.
+   ══════════════════════════════════════════════════════════════════════════ */
+function marketHtml(r){
+  function delta(mine, theirs){
+    if (mine == null || theirs == null) return "\u2014";
+    var d = (mine - theirs) / theirs;
+    return (d >= 0 ? "+" : "\u2212") + Math.round(Math.abs(d) * 100) + "%";
+  }
+  var h = '<div class="panel"><h3>Against the published market</h3>' +
+    '<p class="lead">Third-party figures, quoted as published. Duration is printed ' +
+    'beside every number because it is what makes or breaks the comparison \u2014 a ' +
+    r.hours + ' h system spreads its power-side hardware over ' +
+    'fewer kWh than a longer one, so it reads dearer per kWh and cheaper per kW.</p>' +
+    '<table class="t"><thead><tr><th style="width:42%">Reference</th>' +
+    '<th class="r">$/kWh</th><th class="r">$/kW</th><th class="r">Duration</th>' +
+    '<th class="r">This site</th></tr></thead><tbody>';
+
+  h += '<tr class="mk"><td><b>This estimate</b></td>' +
+       '<td class="r"><b>$' + Math.round(r.perKwh.base) + '</b></td>' +
+       '<td class="r"><b>$' + Math.round(r.perKw.base) + '</b></td>' +
+       '<td class="r">' + r.hours + ' h</td><td class="r"></td></tr>';
+
+  for (var i = 0; i < MARKET.length; i++) {
+    var m = MARKET[i];
+    h += '<tr class="li"><td>' + esc(m.label) + srcBadge({ src:m.src }) +
+         '<span class="bs">' + esc(m.n) + '</span></td>' +
+         '<td class="r">' + (m.perKwh == null ? '\u2014' : '$' + Math.round(m.perKwh)) + '</td>' +
+         '<td class="r">' + (m.perKw  == null ? '\u2014' : '$' + Math.round(m.perKw))  + '</td>' +
+         '<td class="r">' + (m.hours  == null ? 'not split' : m.hours + ' h') + '</td>' +
+         '<td class="r">' + delta(r.perKwh.base, m.perKwh) + ' / ' +
+                            delta(r.perKw.base,  m.perKw)  + '</td></tr>';
+  }
+  h += '</tbody></table>';
+
+  for (var j = 0; j < MARKET.length; j++) {
+    h += '<p class="note"><b>' + esc(MARKET[j].label) + '.</b> ' +
+         esc(MARKET[j].ref) + '. <a href="' + esc(MARKET[j].url) +
+         '" target="_blank" rel="noopener">Source</a>. ' + esc(MARKET[j].caveat) + '</p>';
+  }
+  h += '<p class="note">The $' + BAND_LO + '\u2013$' + BAND_HI + ' / kWh range on the ' +
+       'headline above is ' + esc(BAND_SRC) + '. It is shown because it is what this ' +
+       'company has been using, not because it is evidence.</p>';
   return h + '</div>';
 }
 
@@ -1804,7 +1916,7 @@ function renderOut(){
   $("blank").style.display = "none";
   $("body").style.display = "";
   $("body").innerHTML = heroHtml(r) + kpiHtml(r, sch) + tableHtml(r) +
-                        sourceHtml(r) + ganttHtml(sch) + riskHtml(r);
+                        sourceHtml(r) + marketHtml(r) + ganttHtml(sch) + riskHtml(r);
 
   $("clsChip").textContent = "CLASS " + r.cls.n;
   $("clsChip").className = "srcTag " + (r.cls.n === 5 ? "c5" : "c4");
@@ -1904,7 +2016,16 @@ function toJson(){
       equipmentEscalation: r.escalation
     },
     benchmark: { lowPerKwh:BAND_LO, highPerKwh:BAND_HI,
-                 inBand: r.perKwh.base >= BAND_LO && r.perKwh.base <= BAND_HI },
+                 inBand: r.perKwh.base >= BAND_LO && r.perKwh.base <= BAND_HI,
+                 /* Labelled in the file itself. A reader opening this JSON
+                    cannot see the page, and an unlabelled band is exactly
+                    what gets quoted onward as a market benchmark. */
+                 basis: BAND_SRC },
+    marketReferences: MARKET.map(function (m){
+      return { id:m.id, label:m.label, perKwh:m.perKwh, perKw:m.perKw,
+               durationHours:m.hours, sample:m.n, tier:m.src,
+               citation:m.ref, url:m.url, caveat:m.caveat };
+    }),
     estimateClass: { aace: r.cls.n, low: r.cls.lo, high: r.cls.hi,
                      rangeLowUsd: Math.round(r.total.base*(1+r.cls.lo)),
                      rangeHighUsd: Math.round(r.total.base*(1+r.cls.hi)),
@@ -2047,6 +2168,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports)
   module.exports = { MODEL:MODEL, MARKUP:MARKUP, SPREAD:SPREAD, VOLT:VOLT,
                      UPGRADE:UPGRADE, BAND_LO:BAND_LO, BAND_HI:BAND_HI,
+                     MARKET:MARKET, marketHtml:marketHtml, BAND_SRC:BAND_SRC,
                      S:S, compute:compute, cpm:cpm, tasks:tasks, estClass:estClass,
                      sourceHtml:sourceHtml, tableHtml:tableHtml,
                      toJson:toJson, toCsv:toCsv,

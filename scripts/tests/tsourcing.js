@@ -183,5 +183,54 @@ ok('the CSV names the source on every line', function(){
     'ragged CSV — rows have ' + [...new Set(widths)].join('/') + ' columns');
 });
 
+/* ── published references ─────────────────────────────────────────────── */
+ok('every market reference carries a citation, a link and its caveat', function(){
+  assert(EST.MARKET.length > 0, 'no market references at all');
+  EST.MARKET.forEach(function(m){
+    assert(m.ref && m.ref.length > 40, m.id + ' has no real citation');
+    assert(/^https:\/\/www\.eia\.gov\//.test(m.url), m.id + ' has no source URL');
+    assert(m.caveat && m.caveat.length > 30, m.id + ' states no caveat');
+    assert.strictEqual(m.src, 'published', m.id + ' claims tier ' + m.src);
+  });
+});
+
+ok('a reference with no duration split is NOT converted to $/kWh', function(){
+  /* EIA publishes $/kW only for the 2024 construction-cost figure. Dividing
+     it by an assumed duration would manufacture a number and attribute it to
+     EIA, which is worse than leaving the cell empty. */
+  const noSplit = EST.MARKET.filter(m => m.hours == null);
+  assert(noSplit.length > 0, 'expected at least one reference with no duration');
+  noSplit.forEach(m => assert.strictEqual(m.perKwh, null,
+    m.id + ' has a $/kWh the publisher never printed'));
+});
+
+ok('the internal band is labelled as internal, not as a benchmark', function(){
+  assert(/internal/i.test(EST.BAND_SRC || ''),
+    'BAND_SRC does not say the range is internal');
+  const hero = EST.marketHtml(EST.compute());
+  assert(/not because it is evidence/.test(hero),
+    'the panel does not disclose that the band is not evidence');
+});
+
+ok('the JSON export carries the references and labels the band', function(){
+  setup();
+  const r = EST.compute();
+  EST.setLast(r, EST.cpm());
+  const j = JSON.parse(EST.toJson());
+  assert(j.marketReferences && j.marketReferences.length === EST.MARKET.length,
+    'the export drops the market references');
+  assert(j.marketReferences.every(m => m.citation && m.url),
+    'a reference reaches the export with no citation');
+  assert(/internal/i.test(j.benchmark.basis || ''),
+    'the export presents the internal band with no basis stated');
+});
+
+ok('both axes are reported, because duration decides the comparison', function(){
+  setup();
+  const h = EST.marketHtml(EST.compute());
+  assert(/\$\/kWh/.test(h) && /\$\/kW</.test(h), 'the panel does not show both axes');
+  assert(/Duration/.test(h), 'the panel does not print duration');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);
