@@ -8,3 +8,12 @@ audit-*.json
 .vercel
 firebase-debug.log
 *-debug.log
+
+# ── THIS REPO IS PUBLIC ───────────────────────────────────────────────────
+# omega-twin's scaffold is delivered as a tarball, not through here. It
+# carries Tommy's cell number (SETUP.md), partner emails and the client
+# list (CLAUDE.md). Extracting it at the repo root is the natural thing
+# to do -- bootstrap.sh says `cd twin-scaffold` -- and without this line
+# the next `git add -A` publishes all of it. The twin service lives in
+# clearskyenergy/omega-twin, which is private.
+twin-scaffold/
