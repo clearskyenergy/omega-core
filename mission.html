@@ -134,6 +134,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         <div class="coreBtns">
           <button id="micBig">🎙 TALK</button>
           <button id="focusInput">⌨ TYPE</button>
+          <button id="mute">🔊 VOICE ON</button>
         </div>
       </div>
       <div class="panel" style="height:190px">
@@ -438,6 +439,41 @@ function meter(node){
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
 
+/* The browser's own synthesiser. Free, offline, and always there — it is the
+   floor under the voice, not a feature. Picks the least robotic English voice
+   on the machine and drops the pitch a little; nothing here pretends to be
+   the ElevenLabs voice. */
+function browserSpeak(text){
+  return new Promise(done=>{
+    try{
+      const S=window.speechSynthesis;
+      if(!S || !text){ done(); return; }
+      S.cancel();
+      const u=new SpeechSynthesisUtterance(String(text).slice(0,600));
+      const vs=S.getVoices()||[];
+      const pref=vs.find(v=>/Daniel|Oliver|Arthur|Google UK English Male/i.test(v.name))
+              || vs.find(v=>/en-GB/i.test(v.lang))
+              || vs.find(v=>/^en/i.test(v.lang));
+      if(pref) u.voice=pref;
+      u.rate=1.02; u.pitch=0.9;
+      u.onend=u.onerror=()=>done();
+      S.speak(u);
+      setTimeout(done, 15000);          /* never hang the reply on the voice */
+    }catch(_){ done(); }
+  });
+}
+
+/* Speaking is not tied to the microphone. He types as often as he talks, and
+   a reply he has to read is not an assistant answering him. Persisted, so the
+   choice survives a reload. */
+let voiceOut = (()=>{ try{ return localStorage.getItem('jarvisVoiceOut')!=='0'; }catch(_){ return true; } })();
+function setVoiceOut(on){
+  voiceOut=on;
+  try{ localStorage.setItem('jarvisVoiceOut', on?'1':'0'); }catch(_){}
+  const b=el('mute'); if(b) b.textContent = on ? '🔊 VOICE ON' : '🔇 MUTED';
+  if(!on && window.speechSynthesis) try{ window.speechSynthesis.cancel(); }catch(_){}
+}
+
 async function speakReply(text){
   speaking=true; try{ if(rec) rec.stop(); }catch(_){}
   try{
@@ -445,14 +481,28 @@ async function speakReply(text){
     const r=await fetch(CHAT+'/speak',{method:'POST',
       headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
       body:JSON.stringify({text})});
-    if(!r.ok) throw new Error('speak '+r.status);
+    if(!r.ok){
+      /* The body names the reason — quota, unknown voice, a key without
+         text_to_speech permission. Surfacing it beats a silent assistant,
+         because "he stopped talking" and "the key ran out" look identical
+         from the outside. */
+      const why=await r.text().catch(()=>'');
+      throw new Error('speak '+r.status+' '+why.slice(0,140));
+    }
     const url=URL.createObjectURL(await r.blob());
     const a=new Audio(url); let stop=null;
     try{ const c=ctxOf(); if(c){ const src=c.createMediaElementSource(a); src.connect(c.destination); stop=meter(src);} }catch(_){}
     await new Promise(d=>{ a.onended=a.onerror=d; a.play().catch(d); });
     if(stop) stop();
     URL.revokeObjectURL(url);
-  }catch(e){ console.warn('[jarvis] voice out:', e.message); }
+  }catch(e){
+    console.warn('[jarvis] voice out:', e.message);
+    coreState('voice: '+e.message.slice(0,60), false);
+    /* ElevenLabs is the good voice, not the only one. If it is out of quota
+       he still gets an answer out loud from the browser's own synthesiser —
+       a worse voice beats no voice, and it costs nothing. */
+    await browserSpeak(text);
+  }
   finally{ speaking=false; if(listening){ try{rec.start();}catch(_){} } }
 }
 
@@ -571,7 +621,7 @@ async function submit(said){
     const reply=r.ok?(j.reply||'No answer.'):(j.error||('HTTP '+r.status));
     pending.remove(); say('jarvis', reply, j.costUsd);
     caps('JARVIS', reply, false);
-    if(r.ok && listening) await speakReply(reply);
+    if(r.ok && voiceOut) await speakReply(reply);
     load();
   }catch(e){ pending.remove(); say('jarvis', e.message); }
   coreState(listening?'listening — say “Jarvis”':'voice off', false);
@@ -581,6 +631,8 @@ el('ask').addEventListener('keydown',e=>{
   if(e.key==='Enter'){ e.preventDefault(); const v=e.target.value; e.target.value=''; submit(v); }
 });
 el('focusInput').addEventListener('click',()=>el('ask').focus());
+el('mute').addEventListener('click',()=>setVoiceOut(!voiceOut));
+setVoiceOut(voiceOut);
 el('micBig').addEventListener('click',()=>listening?stopVoice():startVoice());
 el('mic').addEventListener('click',()=>listening?stopVoice():startVoice());
 

@@ -457,6 +457,30 @@ function caps(who, text, isAwake) {
 }
 function capsOff() { el('captions').classList.remove('on'); }
 
+/* The floor under the voice. ElevenLabs is the good voice; this one is the
+   one that is always there. If the key is out of quota or the request fails,
+   he still answers out loud instead of going quiet — a silent assistant and a
+   broken assistant look exactly the same from the outside. */
+function browserSpeak(text) {
+  return new Promise(done => {
+    try {
+      const S = window.speechSynthesis;
+      if (!S || !text) { done(); return; }
+      S.cancel();
+      const u = new SpeechSynthesisUtterance(String(text).slice(0, 600));
+      const vs = S.getVoices() || [];
+      const pref = vs.find(v => /Daniel|Oliver|Arthur|Google UK English Male/i.test(v.name))
+                || vs.find(v => /en-GB/i.test(v.lang))
+                || vs.find(v => /^en/i.test(v.lang));
+      if (pref) u.voice = pref;
+      u.rate = 1.02; u.pitch = 0.9;
+      u.onend = u.onerror = () => done();
+      S.speak(u);
+      setTimeout(done, 15000);
+    } catch (_) { done(); }
+  });
+}
+
 async function speakReply(text) {
   const user = auth.currentUser; if (!user) return;
   speaking = true;
@@ -468,7 +492,12 @@ async function speakReply(text) {
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     });
-    if (!res.ok) throw new Error('speak ' + res.status);
+    if (!res.ok) {
+      /* The body names the reason — quota, unknown voice, a key without
+         text_to_speech. The status alone sends you to the wrong fix. */
+      const why = await res.text().catch(() => '');
+      throw new Error('speak ' + res.status + ' ' + why.slice(0, 140));
+    }
     const url = URL.createObjectURL(await res.blob());
     const a = new Audio(url);
     a.crossOrigin = 'anonymous';
@@ -484,6 +513,8 @@ async function speakReply(text) {
     URL.revokeObjectURL(url);
   } catch (e) {
     console.warn('[jarvis] voice out:', e.message);
+    orb.set(0);
+    await browserSpeak(text);
   } finally {
     speaking = false;
     if (listening) { try { rec.start(); } catch (_) {} }
