@@ -578,9 +578,28 @@ async function speakReply(text){
 }
 
 async function ask(said){
-  await submit(said);
+  const reply = await submit(said);
+  if(!listening){ awake=false; return; }
+
+  /* IF HE JUST ASKED A QUESTION, HE IS WAITING FOR AN ANSWER.
+
+     Making someone say the wake word again to answer a question they were
+     just asked is the single most artificial thing a voice assistant does.
+     So a reply that ENDS in a question mark stays awake — no wake word, no
+     fourteen-second clock — until Thomas actually says something.
+
+     Anchored to the end on purpose. A reply that merely contains a question
+     mark ("you asked what's next? here it is:") is not a question TO him,
+     and treating it as one leaves the microphone hot for no reason. */
+  if(/\?\s*$/.test(String(reply||''))){
+    awake = true;
+    clearTimeout(followTimer);
+    caps('WAITING FOR YOUR ANSWER', '', true);
+    coreState('waiting for your answer…', true);
+    return;
+  }
+
   awake=false;
-  if(!listening) return;
   /* open the follow-up window */
   followUntil = Date.now() + FOLLOW_MS;
   caps('STILL LISTENING — follow up, or stay quiet', '', true);
@@ -796,6 +815,7 @@ async function submit(said){
     caps('JARVIS', reply, false);
     if(r.ok && voiceOut) await speakReply(reply);
     load();
+    return reply;
   }catch(e){ pending.remove(); say('jarvis', e.message); }
   coreState(listening?'listening — say “Jarvis”':'voice off', false);
 }
