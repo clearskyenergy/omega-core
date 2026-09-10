@@ -53711,7 +53711,16 @@ function _derRenderDc(g, sh){
   var ppf=_derScale(); var w=(sh.lf||20)*ppf, h=(sh.wf||8)*ppf;
   var x=sh.pts[0].x-w/2, y=sh.pts[0].y-h/2;
 
-  var zoned = (+sh.lf||0) >= 80 && w > 34;
+  /* ── GATE ON FEET, NOT ON PIXELS ──────────────────────────────────
+     derdc is in _BAKE_KINDS: the group is drawn once and then scaled by a
+     transform, so a pixel test here is a test of the zoom that happened to
+     be active at PLACEMENT. Place a unit while zoomed out and it baked the
+     plain body, then stayed a plain box at every zoom afterwards.
+
+     The drawing is vector and scales cleanly, so the only question worth
+     asking is how big the thing really is. A 119 ft unit is three
+     containers whatever the zoom; a 20 ft node has nothing to zone. */
+  var zoned = (+sh.lf||0) >= 80;
   if(!zoned){
     var padM0=2*ppf;
     _derRect(g, x-padM0, y-padM0, w+padM0*2, h+padM0*2, '#e9e9e9', '#9a9a9a', 1);
@@ -53725,8 +53734,8 @@ function _derRenderDc(g, sh){
     return;
   }
 
-  var detail = w > 150;                  /* ribs, fans, stairs */
-  var fine   = w > 260;                  /* labels too */
+  var detail = true;                     /* ribs, fans, stairs — vector, scales */
+  var fine   = (+sh.lf||0) >= 100;       /* room for module labels */
 
   /* Concrete pad, with the accent as a thin edge rather than a fill. */
   var padM=Math.max(1.5, 2.5*ppf);
@@ -53790,7 +53799,7 @@ function _derRenderDc(g, sh){
   }
 
   if(fine){
-    var fs=Math.max(6,Math.min(9,ppf*0.5));
+    var fs=Math.max(1.5, bodyH*0.16);    /* relative to the body, so it scales */
     _derText(g, itX+itW/2, bodyY+bodyH*0.60, 'IT',    fs, '#3C4043', 'middle', '700');
     _derText(g, elX+elW/2, bodyY+bodyH*0.60, 'POWER', fs, '#3C4043', 'middle', '700');
     _derText(g, meX+meW/2, bodyY+bodyH*0.60, 'MECH',  fs, '#3C4043', 'middle', '700');
