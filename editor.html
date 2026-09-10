@@ -9893,7 +9893,24 @@ function covClick(e){
          grid on this click. Without it, anchor on the click. */
       if(window.OmegaComputePlace && typeof OmegaComputePlace.buildAt==='function') OmegaComputePlace.buildAt(xp);
       else if(window.OmegaCompute && typeof OmegaCompute.placeAt==='function') OmegaCompute.placeAt(xp);
-      try{ S.mode='select'; }catch(e){}
+      /* ── DO NOT CLOBBER A MODE THE HANDLER JUST SET ──────────────────
+         This dropped straight to 'select' afterwards, and placing the
+         blocks hands over to the conduit stepper, which arms 'cgcplace'
+         on its way out. So the mode was set correctly and then thrown
+         away one line later — and thrown away by assignment rather than
+         through setMode(), so the status chip kept saying CGCPLACE and
+         the overlay kept its .on class while S.mode read 'select'.
+
+         Everything LOOKED armed. The panel was up, the crosshair was up,
+         the chip said CGCPLACE, and every click fell through the guard
+         above and did nothing at all. Only leave a mode this handler is
+         still the owner of, and leave it through setMode so the chrome
+         and the state cannot disagree again. */
+      try{
+        if(S.mode==='computeplace'){
+          if(typeof setMode==='function') setMode('select'); else S.mode='select';
+        }
+      }catch(e){}
     }
     return;
   }
@@ -52927,12 +52944,37 @@ function p0OrdScreenCA(){
  * ===================================================================== */
 
 /* ---- CAPACITY CATALOGS ------------------------------------------------ */
-/* Data-center compute nodes (kW electrical LOAD they consume). */
-var DERC_DC = {
-  dc_cruiser:   { label:'35 kW Compute Container (20ft)', kw:35,  lf:20, wf:8  },
-  dc_triton:    { label:'120 kW Compute Container (40ft)', kw:120, lf:30, wf:10 },
-  dc_leviathan: { label:'1 MW Modular Data Center', kw:1000, lf:40, wf:10 }
-};
+/* ── ONE PRODUCT, ONE SET OF NUMBERS ──────────────────────────────────────
+   This held its own kW and footprint for the same three units DC_CATALOG
+   describes, and they did not agree: the 1 MW row on a 40 x 10 ft pad against
+   a published 1.77 MW on 119 x 45 ft. Two catalogues disagreeing about one
+   product is not a fallback, it is a coin toss decided by which code path a
+   number happened to come through — and the light one was reaching pod counts,
+   conductors, will-serve checks and acreage.
+
+   DERC_DC is now a VIEW of DC_CATALOG, projected to the four fields this
+   module uses. Same keys, so every saved drawing, the cluster dialog and
+   derSetDc() resolve exactly as before; one place to correct a spec.
+
+   The literal below is the floor, not the source: it is used only if
+   DC_CATALOG is somehow absent, which would mean the file was cut in half. */
+var DERC_DC = (function () {
+  var out = {
+    dc_cruiser:   { label:'Compute Container (20ft)', kw:35,   lf:20,  wf:8  },
+    dc_triton:    { label:'Compute Container (40ft)', kw:120,  lf:40,  wf:8  },
+    dc_leviathan: { label:'1.77 MW Modular Data Center', kw:1770, lf:119, wf:45 }
+  };
+  try {
+    if (typeof DC_CATALOG !== 'undefined') {
+      for (var k in DC_CATALOG) {
+        if (!Object.prototype.hasOwnProperty.call(DC_CATALOG, k)) continue;
+        var c = DC_CATALOG[k];
+        out[k] = { label:c.label, kw:c.kw, lf:c.lf, wf:c.wf };
+      }
+    }
+  } catch (e) {}
+  return out;
+})();
 /* Wind turbines (kW nameplate each). Small/medium distributed class. */
 var DERC_WIND = {
   wind_10:  { label:'Distributed Wind 10 kW',  kw:10,   lf:6,  wf:6,  rotorFt:23 },
@@ -66092,28 +66134,90 @@ var CGC_STEPS = [
    utility feeds, or the switchgear lineup downstream of it. Matched on the
    element's own kind first and its label second, because a switchgear
    lineup gets placed from several different tools. */
+/* ── WHAT IS ALREADY ON THIS SITE ─────────────────────────────────────
+   A modular block is added to a site somebody already operates, so the
+   point of connection is usually NOT a transformer somebody is about to
+   build — it is the plant that is already drawn: the switchgear from the
+   BESS build, the PV inverter, the EMS that arbitrates between them.
+   This only looked for transformers and switchgear, so on exactly the
+   site this feature exists for — solar and storage already there, now add
+   compute — it found nothing and tied to nothing.
+
+   Ranked, because the candidates are not equal. The utility interface is
+   the right answer when there is one; the EMS is the common point every
+   other build already ties into; storage and PV are behind-the-meter
+   sources the block can sit behind; charging is last because a charger is
+   a load, and hanging a constant load off one is a choice somebody should
+   make deliberately rather than by proximity.
+
+   `rank` is what breaks a tie when two candidates are equally close. It
+   never overrides distance beyond the reach test — ending the run on the
+   inverter you deliberately walked it to should tie to the inverter. */
+  var CGC_TIE_KINDS = [
+    { rank:1, what:'utility',  test:function(k,lb){ return k==='xfmr'||k==='mainswgr'||k==='switchgear'||k==='panel'
+                                                        || /transformer|switchgear|\bmdp\b|xfmr|point of interconnect|\bpoi\b/i.test(lb); } },
+    { rank:2, what:'ems',      test:function(k,lb,el){ return k==='ems' || el.isEms===true || /\bems\b|energy management|microgrid controller/i.test(lb); } },
+    { rank:3, what:'storage',  test:function(k,lb,el){ return k==='bess' || el.type==='bess-asm' || el.bgbRole==='bess'
+                                                        || /\bbess\b|battery|storage/i.test(lb); } },
+    { rank:4, what:'solar',    test:function(k,lb,el){ return k==='pvinv'||k==='inverter' || !!el.bgbPvSys
+                                                        || /inverter|\bpv\b|solar/i.test(lb); } },
+    { rank:5, what:'charging', test:function(k,lb){ return k==='charger'||k==='evl2'||k==='evunit'
+                                                        || /charger|evse|dcfc/i.test(lb); } }
+  ];
+  var CGC_TIE_WORD = { utility:'utility interface', ems:'EMS', storage:'storage',
+                       solar:'solar', charging:'charging' };
+
 function _cgcPowerTargets(){
   var out=[];
   try{
     (S.elements||[]).forEach(function(el){
       if(!el) return;
-      var k=String(el.eqId||el.evKind||'').toLowerCase();
+      var k=String(el.eqId||el.evKind||el.type||'').toLowerCase();
       var lb=String(el.label||'');
-      var isT = k==='xfmr' || k==='panel' || k==='mainswgr' || k==='switchgear'
-             || /transformer|switchgear|mdp|xfmr/i.test(lb);
-      if(!isT) return;
+      var hit=null;
+      for(var i=0;i<CGC_TIE_KINDS.length;i++){
+        var T=CGC_TIE_KINDS[i];
+        var ok=false; try{ ok=T.test(k,lb,el); }catch(e){}
+        if(ok){ hit=T; break; }
+      }
+      if(!hit) return;
+      /* Never offer the load we are about to file as its own source. */
+      if(el.omegaComputeLoad) return;
       var w=+el.w||32, h=+el.h||w;
-      out.push({ el:el, id:el.id, label:lb||'Transformer',
+      out.push({ el:el, id:el.id, label:lb||CGC_TIE_WORD[hit.what]||'Equipment',
+                 what:hit.what, rank:hit.rank,
                  cx:(+el.x||0)+w/2, cy:(+el.y||0)+h/2 });
     });
   }catch(e){}
+  out.sort(function(a,b){ return a.rank-b.rank; });
   return out;
+}
+
+/* One line naming what the run can land on, so the user knows before they
+   start drawing rather than after they have finished. */
+function _cgcTieOptions(){
+  var t=_cgcPowerTargets();
+  if(!t.length) return '';
+  var seen={}, bits=[];
+  t.forEach(function(x){
+    var w=CGC_TIE_WORD[x.what]||x.what;
+    if(seen[w]) return; seen[w]=1;
+    bits.push('<strong>'+String(x.label).replace(/[<>&]/g,'')+'</strong>');
+  });
+  return ' <span style="color:#8FA3B8">On this site: '+bits.slice(0,4).join(', ')
+       + (bits.length>4?(' +'+(bits.length-4)+' more'):'') + '.</span>';
 }
 function _cgcNearestTarget(x,y){
   var best=null;
   _cgcPowerTargets().forEach(function(t){
-    var d=(x-t.cx)*(x-t.cx)+(y-t.cy)*(y-t.cy);
-    if(!best || d<best.d){ best=t; best.d=d; }
+    t.d=(x-t.cx)*(x-t.cx)+(y-t.cy)*(y-t.cy);
+    if(!best){ best=t; return; }
+    /* Distance decides. Rank only breaks a near-tie — two cabinets in one
+       lineup should not send the feed to the charger because it happened
+       to be two pixels closer. */
+    var near=Math.abs(Math.sqrt(t.d)-Math.sqrt(best.d)) < 24;
+    if(t.d<best.d && !near) best=t;
+    else if(near && t.rank<best.rank) best=t;
   });
   return best;
 }
@@ -66281,7 +66385,7 @@ function _cgcFinishRun(){
     return c;
   }
 
-  commit(spine, st.label, tie ? { spine:true, toId:tie.id, runLabel:st.label } : { spine:true });
+  commit(spine, st.label, tie ? { spine:true, toId:tie.id, tieKind:tie.what, runLabel:st.label } : { spine:true });
   CGC.runs++;
   if(st.power && tie && !CGC.tied){
     CGC.tied = tie;
@@ -66324,8 +66428,11 @@ function _cgcFinish(){
     showBanner(tied?'ok':'wiz',' Conduit routed — '+runs+' spine'+(runs===1?'':'s')+', '
       +taps+' tap'+(taps===1?'':'s')+'. '
       +(tied
-         ? ('Tied to '+(tied.label||'the transformer')+' — the plant is on the one-line as a constant load. Press Run to recompute.')
-         : ('No transformer or switchgear at the end of the power run, so nothing was tied — the one-line will not show the compute load until it is.')));
+         ? ('Tied to '+(tied.label||'the transformer')
+            + (tied.what && tied.what!=='utility' ? (' — behind the site '+(CGC_TIE_WORD[tied.what]||tied.what)) : '')
+            + '. The plant is on the one-line as a constant load. Press Run to recompute.')
+         : ('Nothing on the site at the end of the power run — no transformer, switchgear, EMS, storage or inverter — '
+            + 'so nothing was tied, and the one-line will not show the compute load until it is.')));
   }
 }
 window._cgcFinish=_cgcFinish;
@@ -66372,9 +66479,11 @@ function _cgcGuideRender(){
   }).join('');
 
   var np=(typeof _dcfcDraw!=='undefined' && _dcfcDraw)?_dcfcDraw.pts.length:0;
+  var opts=''; try{ if(st && st.power) opts=_cgcTieOptions(); }catch(e){}
   var hint = st
     ? '<strong style="color:'+st.col+'">Draw '+st.hint+'.</strong> Click points to route it ('
       +np+' pt'+(np===1?'':'s')+'), then <strong>Enter</strong> to finish. Every block taps onto it automatically.'
+      +opts
     : 'Done.';
   var actions = st
     ? '<button onclick="_cgcFinishRun()" style="width:100%;padding:9px;background:'+st.col+';color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">✓ Finish Trench (Enter)</button>'
@@ -99379,7 +99488,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        Two catalogues disagreeing about one product is a bug wherever it
        lands, and it landed here: every pod count, every conductor, every
        will-serve check and every acreage figure came off the light number.
-       DC_CATALOG wins when it has the row; DERC_DC remains the fallback.
+       DC_CATALOG is now the single source and DERC_DC is a view of it, so
+       these two agree by construction; the loop below keeps the DERC_DC
+       branch only for the case where DC_CATALOG is somehow absent.
 
        Shapes already on a drawing keep their own lf/wf, so nothing that
        has been placed moves. */
@@ -99906,7 +100017,13 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{ if(cond&&cond.ok) S.computeBuild.conduit={runs:cond.runs,diverse:cond.diverse,hub:cond.hub}; }catch(e){}
 
     var m=document.getElementById('ocb-modal'); if(m) m.remove();
-    try{ S.mode='select'; }catch(e){}
+    /* Only if nothing downstream has taken the mode — the conduit stepper
+       arms its own, and assigning over it leaves the chrome lying. */
+    try{
+      if(S.mode==='computeplace'){
+        if(typeof setMode==='function') setMode('select'); else S.mode='select';
+      }
+    }catch(e){}
     var msg=' Compute site placed \u2014 '+(r.itKw/1000).toFixed(1)+' MW IT, '
       +r.pods+' pods'
       +(r.fcBlocks?(', '+r.fcBlocks+' \u00d7 '+(r.genLabel||'generation')+' ('+(r.fcKw/1000).toFixed(2)+' MW), '+r.gasMmbtuHr+' MMBtu/hr gas'):', no on-site generation')
