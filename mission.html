@@ -48,6 +48,13 @@ button:hover{background:rgba(0,68,255,.18)}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
 .gate p{color:var(--dim);font-size:13px;line-height:1.6}
 .foot{margin-top:16px;font-size:11px;color:var(--dim);letter-spacing:1px}
+#mic.on{background:rgba(255,60,60,.18);border-color:#ff4d4d;color:#ff9d9d}
+.caps{position:fixed;left:0;right:0;bottom:0;background:rgba(5,11,20,.96);
+      border-top:1px solid var(--glow-blue);padding:12px 20px;z-index:9;display:none}
+.caps.on{display:block}
+.capwho{font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:4px}
+.capwho.awake{color:var(--good)}
+#captext{font-size:15px;color:var(--ink);line-height:1.45;max-height:96px;overflow-y:auto}
 @keyframes spin{100%{transform:rotate(360deg)}}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
@@ -65,6 +72,7 @@ button:hover{background:rgba(0,68,255,.18)}
   <header>
     <h1>JARVIS // CORE_PORTAL_v1.0</h1>
     <div class="status-badge" id="badge">● CONNECTING</div>
+    <button id="mic">🎙 VOICE OFF</button>
     <button id="refresh">REFRESH</button>
   </header>
 
@@ -93,6 +101,7 @@ button:hover{background:rgba(0,68,255,.18)}
     </div>
   </div>
   <div class="foot" id="foot"></div>
+  <div class="caps" id="caps"><div class="capwho" id="capwho"></div><div id="captext"></div></div>
 </div>
 
 <script type="module">
@@ -244,7 +253,7 @@ async function load(){
        ran in the last five minutes, so a run visibly registers. */
     const q=s.counts.queued||0;
     const last=s.runs && s.runs[0] && s.runs[0].at ? Date.now()-new Date(s.runs[0].at).getTime() : 1e9;
-    arc.set(Math.min(1, q/12) + (last<300000?0.35:0) + 0.12);
+    if(!audioOwns) arc.set(Math.min(1, q/12) + (last<300000?0.35:0) + 0.12);
 
     rows(el('spend'), [
       ['PER DAY', money(s.spend.perDay),'cy'],
@@ -279,6 +288,126 @@ async function load(){
     badge.className='status-badge err'; badge.textContent='● '+e.message;
   }
 }
+
+/* ══ VOICE ═══════════════════════════════════════════════════════════════
+   Same twin, same endpoint. The difference here is that the reactor already
+   on screen becomes the level meter: while listening or speaking its energy
+   comes from live amplitude instead of queue depth, and reverts the moment
+   the audio stops. One object doing two jobs beats a second orb competing
+   with it for attention. */
+const CHAT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const WAKE = /\bjarvis\b/i;
+let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
+let actx=null, micStream=null, meterStop=null;
+
+function caps(who, text, isAwake){
+  el('caps').classList.add('on');
+  el('capwho').textContent = who;
+  el('capwho').className = 'capwho' + (isAwake?' awake':'');
+  el('captext').textContent = text || '';
+}
+function capsOff(){ el('caps').classList.remove('on'); }
+
+function ctxOf(){
+  if(!actx){ const C=window.AudioContext||window.webkitAudioContext; if(C) actx=new C(); }
+  if(actx&&actx.state==='suspended') actx.resume().catch(()=>{});
+  return actx;
+}
+function meter(node){
+  const c=ctxOf(); if(!c) return null;
+  const an=c.createAnalyser(); an.fftSize=1024; node.connect(an);
+  const buf=new Uint8Array(an.fftSize); let alive=true; audioOwns=true;
+  (function poll(){
+    if(!alive) return;
+    an.getByteTimeDomainData(buf);
+    let sum=0; for(let i=0;i<buf.length;i++) sum+=Math.abs(buf[i]-128);
+    arc.set(Math.min(1,(sum/buf.length)/30));
+    requestAnimationFrame(poll);
+  })();
+  return ()=>{ alive=false; audioOwns=false; try{node.disconnect(an);}catch(_){} };
+}
+
+async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
+
+async function speakReply(text){
+  speaking=true; try{ if(rec) rec.stop(); }catch(_){}
+  try{
+    const t=await token();
+    const r=await fetch(CHAT+'/speak',{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({text})});
+    if(!r.ok) throw new Error('speak '+r.status);
+    const url=URL.createObjectURL(await r.blob());
+    const a=new Audio(url); let stop=null;
+    try{ const c=ctxOf(); if(c){ const src=c.createMediaElementSource(a); src.connect(c.destination); stop=meter(src);} }catch(_){}
+    await new Promise(d=>{ a.onended=a.onerror=d; a.play().catch(d); });
+    if(stop) stop();
+    URL.revokeObjectURL(url);
+  }catch(e){ console.warn('[jarvis] voice out:', e.message); }
+  finally{ speaking=false; if(listening){ try{rec.start();}catch(_){} } }
+}
+
+async function ask(said){
+  caps('JARVIS','thinking…',false);
+  try{
+    const t=await token();
+    const r=await fetch(CHAT,{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({message:said})});
+    const j=await r.json().catch(()=>({}));
+    const reply = r.ok ? (j.reply||'No answer.') : (j.error||('HTTP '+r.status));
+    caps('JARVIS', reply, false);
+    if(r.ok) await speakReply(reply);
+    load();                                  /* an action may have moved the numbers */
+  }catch(e){ caps('JARVIS', e.message, false); }
+  awake=false;
+  if(listening) caps('LISTENING — say “Jarvis”','',false);
+}
+
+function startVoice(){
+  if(!SR){ alert('Voice needs Chrome.'); return; }
+  rec=new SR(); rec.continuous=true; rec.interimResults=true; rec.lang='en-US';
+  rec.onresult=ev=>{
+    if(speaking) return;
+    let interim='', final='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const t=ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) final+=t; else interim+=t;
+    }
+    const heard=(final||interim).trim();
+    if(!awake){
+      if(WAKE.test(heard)){
+        awake=true;
+        const after=heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i,'').trim();
+        caps('AWAKE — go ahead', after, true);
+        if(final&&after) ask(after);
+      } else caps('LISTENING — say “Jarvis”', heard, false);
+      return;
+    }
+    caps('AWAKE — go ahead', heard, true);
+    if(final&&heard) ask(heard);
+  };
+  rec.onerror=e=>{ if(e.error==='not-allowed'){ alert('Chrome blocked the microphone.'); stopVoice(); } };
+  rec.onend=()=>{ if(listening&&!speaking){ try{rec.start();}catch(_){} } };
+  rec.start(); listening=true;
+  el('mic').classList.add('on'); el('mic').textContent='🎙 LISTENING';
+  caps('LISTENING — say “Jarvis”','',false);
+  if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+    navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{
+      micStream=st; const c=ctxOf(); if(c) meterStop=meter(c.createMediaStreamSource(st));
+    }).catch(()=>{});
+  }
+}
+function stopVoice(){
+  listening=false; awake=false;
+  if(meterStop){ meterStop(); meterStop=null; }
+  if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+  try{ if(rec) rec.stop(); }catch(_){}
+  el('mic').classList.remove('on'); el('mic').textContent='🎙 VOICE OFF';
+  capsOff(); load();
+}
+el('mic').addEventListener('click',()=>listening?stopVoice():startVoice());
 
 el('refresh').addEventListener('click',load);
 el('signin').addEventListener('click',async()=>{
