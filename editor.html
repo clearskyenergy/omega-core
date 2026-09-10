@@ -9869,7 +9869,7 @@ function nearestEl(cx,cy){
 }
 
 function covClick(e){
-  if(S.mode==='clusterplace'||S.mode==='dcclusterplace'||S.mode==='emsplace'||S.mode==='sourceplace'||S.mode==='topoinsert'||S.mode==='chargerplace'||S.mode==='derbuildplace'||S.mode==='wizplace'||S.mode==='dcfcplace'||S.mode==='bgbplace'||S.mode==='cgbplace'||S.mode==='computeplace'){
+  if(S.mode==='clusterplace'||S.mode==='dcclusterplace'||S.mode==='emsplace'||S.mode==='sourceplace'||S.mode==='topoinsert'||S.mode==='chargerplace'||S.mode==='derbuildplace'||S.mode==='wizplace'||S.mode==='dcfcplace'||S.mode==='bgbplace'||S.mode==='cgbplace'||S.mode==='computeplace'||S.mode==='cgcplace'){
     e.stopPropagation();
     var scrX=document.getElementById('sc').getBoundingClientRect();
     var xp=(typeof _plotUnproject==='function')
@@ -9886,6 +9886,7 @@ function covClick(e){
     else if(S.mode==='dcfcplace' && typeof placeDcfcAt==='function') placeDcfcAt(xp);
     else if(S.mode==='bgbplace' && typeof placeBgbAt==='function') placeBgbAt(xp);
     else if(S.mode==='cgbplace' && typeof placeCgbAt==='function') placeCgbAt(xp);
+    else if(S.mode==='cgcplace' && typeof placeCgcAt==='function') placeCgcAt(xp);
     else if(S.mode==='computeplace'){
       /* The parcel packer owns this when it is loaded — it knows whether a
          boundary was traced and picks between packing it and anchoring the
@@ -21361,7 +21362,7 @@ function setMode(m){
   // Sync the new grouped menu bar + status chip
   if(typeof mbSyncMode==='function') mbSyncMode(m);
   var _covOn = (m==='conduit') || (m==='dimension') || (typeof SHAPE_MODES!=='undefined' && !!SHAPE_MODES[m])
-    || m==='clusterplace' || m==='dcclusterplace' || m==='emsplace' || m==='sourceplace' || m==='topoinsert' || m==='chargerplace' || m==='derbuildplace' || m==='wizplace' || m==='dcfcplace' || m==='bgbplace' || m==='cgbplace' || m==='computeplace';
+    || m==='clusterplace' || m==='dcclusterplace' || m==='emsplace' || m==='sourceplace' || m==='topoinsert' || m==='chargerplace' || m==='derbuildplace' || m==='wizplace' || m==='dcfcplace' || m==='bgbplace' || m==='cgbplace' || m==='computeplace' || m==='cgcplace';
   document.getElementById('cov').classList.toggle('on',_covOn);
   if(m==='conduit')showBanner('cond',' Click START point -- or click directly on an element to snap');
   /* ── THESE INSTRUCTIONS WERE NEVER REACHABLE ────────────────────────────
@@ -21411,7 +21412,8 @@ function _sbText(m){
          wizplace:'Guided build: click to place the next item . ESC exits',
          dcfcplace:'DCFC build: click to place the next item . ESC exits',
          bgbplace:'BESS guided build: click to place the next node . ESC exits',
-         cgbplace:'Compute guided build: click to place the next node . ESC exits'};
+         cgbplace:'Compute guided build: click to place the next node . ESC exits',
+         cgcplace:'Compute conduit: click points to route the trench, Enter to finish . ESC stops'};
   return t[m]||'';
 }
 let bannerTimer=null;
@@ -66030,6 +66032,388 @@ document.addEventListener('keydown', function(e){
     _dcfcDraw.preview={x:e.clientX-r.left, y:e.clientY-r.top}; _dcfcRenderTrenches();
   });
 })();
+/* ══════════════════════════════════════════════════════════════════════
+   COMPUTE GUIDED CONDUIT  —  you draw the spines, the blocks tap on
+   ----------------------------------------------------------------------
+   The compute build placed its blocks and then trenched the whole site in
+   one go. The routing it produces is right — A feed, redundant B feed on
+   the far side of the row so one strike cannot take both, fibre following
+   the A route — but WHERE the trench goes was never the user's decision,
+   and on a real parcel that matters more than the topology: it has to miss
+   the truck court, the fire lane and the leach field.
+
+   So this puts the same routing under a guided panel, the way the BESS,
+   L2 and DCFC builds already work. Three steps, and only three, whether
+   there are five blocks or forty:
+
+       1  A-feed power trench     click the route, Enter
+       2  B-feed power trench     click the route, Enter
+       3  BMS / data trench       click the route, Enter
+
+   Each spine you finish is committed as a run, and then every placed block
+   drops a tap onto it on the shortest perpendicular. That is the division
+   that makes this worth doing: the spine is a siting decision and belongs
+   to whoever knows the site, the tap is geometry and belongs to the
+   machine. Asking somebody to hand-draw forty identical stubs would be a
+   worse tool than the one it replaced, not a better one.
+
+   It reuses the trench-drawing state the DCFC and BESS builds share
+   (_dcfcDraw, _dcfcRenderTrenches, the #dcfc-guide panel), which is why it
+   lives in this block rather than in a patch at the end of the file.
+   ══════════════════════════════════════════════════════════════════════ */
+var CGC = { active:false, ix:0, steps:[], surface:'soil', runs:0, taps:0, tied:null };
+
+/* ── WHAT THE THREE RUNS ACTUALLY ARE ──────────────────────────────────
+   A modular compute block is not a thing that sits on a site; it is a
+   constant load hanging off a transformer, with fibre to it. Those are the
+   two ties that decide whether the drawing means anything downstream: the
+   power tie is what puts it on the one-line and in the load total, and the
+   fibre tie is what makes it a data centre rather than a shed.
+
+   So the steps are named for their TERMINATION, not for their colour. The
+   power run ends on the transformer or the switchgear lineup that the grid
+   feeds; finishing it registers the plant as a constant load against that
+   transformer, so the one-line and the load figures move on their own. */
+var CGC_STEPS = [
+  { key:'a',    cond:'RMC-AC',  leg:'main',   col:'#F59E0B',
+    label:'Power tie — blocks to transformer',
+    hint:'the 480 V <strong>A feed</strong> — end the run on the transformer or switchgear that the grid feeds',
+    power:true },
+  { key:'b',    cond:'RMC-AC',  leg:'feeder', col:'#F59E0B',
+    label:'Redundant B feed',
+    hint:'the <strong>B feed</strong> — keep it on the far side of the row, so one strike cannot take both',
+    power:true },
+  { key:'data', cond:'EMT-BMS', leg:'branch', col:'#2563EB',
+    label:'Fibre / BMS',
+    hint:'<strong>fibre and controls</strong> — end the run on the demarc, the EMS or the meet-me point' }
+];
+
+/* Anything a compute plant can legitimately hang off: the transformer the
+   utility feeds, or the switchgear lineup downstream of it. Matched on the
+   element's own kind first and its label second, because a switchgear
+   lineup gets placed from several different tools. */
+function _cgcPowerTargets(){
+  var out=[];
+  try{
+    (S.elements||[]).forEach(function(el){
+      if(!el) return;
+      var k=String(el.eqId||el.evKind||'').toLowerCase();
+      var lb=String(el.label||'');
+      var isT = k==='xfmr' || k==='panel' || k==='mainswgr' || k==='switchgear'
+             || /transformer|switchgear|mdp|xfmr/i.test(lb);
+      if(!isT) return;
+      var w=+el.w||32, h=+el.h||w;
+      out.push({ el:el, id:el.id, label:lb||'Transformer',
+                 cx:(+el.x||0)+w/2, cy:(+el.y||0)+h/2 });
+    });
+  }catch(e){}
+  return out;
+}
+function _cgcNearestTarget(x,y){
+  var best=null;
+  _cgcPowerTargets().forEach(function(t){
+    var d=(x-t.cx)*(x-t.cx)+(y-t.cy)*(y-t.cy);
+    if(!best || d<best.d){ best=t; best.d=d; }
+  });
+  return best;
+}
+
+/* ── THE BLOCK BECOMES A LOAD ──────────────────────────────────────────
+   The one-line's load emitter walks S.elements looking for loadKw. Compute
+   blocks are SHAPES (kind 'derdc'), so however many were placed, the
+   one-line showed nothing at all — the plant existed on the site plan and
+   nowhere else. Finishing the power tie files one load element against the
+   transformer it ties to, carrying IT kW, facility kW and PUE, which is
+   the shape that emitter already knows how to draw (it adds the UPS and
+   the it_load node itself).
+
+   ONE element for the plant, not one per block. The one-line is a study of
+   how power gets there, and forty identical PQ nodes hanging off the same
+   bus tells a reader nothing forty times. */
+function _cgcEmitLoad(target){
+  var C=null; try{ C=S.computeBuild; }catch(e){}
+  if(!C || !(+C.itKw>0)) return null;
+  var blocks=_cgcBlocks().length;
+  var label='Modular compute'+(blocks?(' ('+blocks+' \u00d7 1 MW)'):'');
+
+  /* Replace rather than accumulate: re-running the tie should correct the
+     figure, not file a second plant against the same transformer. */
+  try{
+    for(var i=(S.elements||[]).length-1;i>=0;i--){
+      var e=S.elements[i];
+      if(e && e.omegaComputeLoad){
+        S.elements.splice(i,1);
+        var n=document.querySelector('#csvg [data-elid="'+e.id+'"]');
+        if(n&&n.parentNode) n.parentNode.removeChild(n);
+      }
+    }
+  }catch(e){}
+
+  var cx=(target?target.cx:0)+70, cy=(target?target.cy:0)+40;
+  var el=null;
+  try{ el=_evAdd('panel', cx, cy, label,
+        (C.itKw/1000).toFixed(1)+' MW IT \u00b7 '+(C.facKw/1000).toFixed(1)
+        +' MW facility at PUE '+(+C.pue||1.3).toFixed(2)); }catch(e){}
+  if(!el) return null;
+  el.loadKw    = Math.round(C.facKw);
+  el.loadItKw  = Math.round(C.itKw);
+  el.loadKind  = 'datacenter';
+  el.loadPue   = +C.pue || 1.3;
+  el.loadHours = 8760;              /* constant load: it does not cycle */
+  el.omegaComputeLoad = true;
+  el.fedFromId = target ? target.id : null;
+  try{ if(typeof renderEl==='function') renderEl(el); }catch(e){}
+  return el;
+}
+
+function _cgcPpf(){ return (typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6; }
+function _cgcStep(){ return CGC.steps[CGC.ix] || null; }
+
+/* pts[0] is the TOP-LEFT corner — same convention box() uses in the
+   trencher. Centre is the corner plus half the footprint. */
+function _cgcBlocks(){
+  var out=[], ppf=_cgcPpf();
+  try{
+    (S.shapes||[]).forEach(function(sh){
+      if(!sh || sh.kind!=='derdc') return;
+      var p=(sh.pts&&sh.pts[0])?sh.pts[0]:null; if(!p) return;
+      var hw=((+sh.lf||40)*ppf)/2, hh=((+sh.wf||10)*ppf)/2;
+      out.push({ sh:sh, cx:p.x+hw, cy:p.y+hh, hw:hw, hh:hh });
+    });
+  }catch(e){}
+  return out;
+}
+
+/* Closest point on the drawn spine. A tap is a perpendicular drop, so the
+   answer has to be a point ON a segment, not the nearest vertex — those
+   differ by most of a segment on a long run. */
+function _cgcNearest(pts, x, y){
+  var best=null;
+  for(var i=1;i<pts.length;i++){
+    var a=pts[i-1], b=pts[i];
+    var dx=b.x-a.x, dy=b.y-a.y, L=dx*dx+dy*dy;
+    var t = L ? (((x-a.x)*dx + (y-a.y)*dy)/L) : 0;
+    if(t<0) t=0; if(t>1) t=1;
+    var px=a.x+t*dx, py=a.y+t*dy;
+    var d=(x-px)*(x-px)+(y-py)*(y-py);
+    if(!best || d<best.d) best={ x:px, y:py, d:d };
+  }
+  return best;
+}
+
+function _cgcStart(opts){
+  opts = opts || {};
+  if(!_cgcBlocks().length){
+    if(typeof showBanner==='function') showBanner('wiz','Place the compute blocks first — a trench with nothing on it is just a ditch.');
+    return false;
+  }
+  CGC.active=true; CGC.ix=0; CGC.runs=0; CGC.taps=0; CGC.surface='soil'; CGC.tied=null;
+  /* No diversity means both feeds share one lane, so there is no second
+     trench to draw and offering the step would be a lie. */
+  CGC.steps = CGC_STEPS.filter(function(s){ return (opts.diverse===false) ? (s.key!=='b') : true; });
+  if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
+  if(typeof setMode==='function') setMode('cgcplace'); else S.mode='cgcplace';
+  _cgcGuideRender();
+  return true;
+}
+window._cgcStart=_cgcStart;
+
+function placeCgcAt(p){
+  if(!CGC.active || typeof _dcfcDraw==='undefined') return;
+  var st=_cgcStep(); if(!st) return;
+  if(!_dcfcDraw) _dcfcDraw={ pts:[], preview:null, leg:st.leg };
+  _dcfcDraw.pts.push({ x:p.x, y:p.y });
+  if(typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches();
+  _cgcGuideRender();
+}
+window.placeCgcAt=placeCgcAt;
+
+function _cgcDrawUndoPt(){
+  if(typeof _dcfcDraw!=='undefined' && _dcfcDraw && _dcfcDraw.pts.length){
+    _dcfcDraw.pts.pop();
+    if(typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches();
+    _cgcGuideRender();
+  }
+}
+window._cgcDrawUndoPt=_cgcDrawUndoPt;
+
+function _cgcToggleSurface(){
+  CGC.surface = (CGC.surface==='concrete') ? 'soil' : 'concrete';
+  _cgcGuideRender();
+}
+window._cgcToggleSurface=_cgcToggleSurface;
+
+function _cgcFinishRun(){
+  var st=_cgcStep(); if(!st) return;
+  if(typeof _dcfcDraw==='undefined' || !_dcfcDraw || _dcfcDraw.pts.length<2){
+    if(typeof _evBanner==='function') _evBanner('⚠ Click at least two points, then press Enter to finish the trench.');
+    return;
+  }
+  var spine=_dcfcDraw.pts.slice(), ppf=_cgcPpf();
+
+  /* ── LAND IT ON THE TRANSFORMER ────────────────────────────────────
+     A power run that stops six feet short of the switchgear is a drawing,
+     not a connection: nothing downstream can tell what it feeds. If the
+     last point is near a transformer or a switchgear lineup, snap to it
+     and record the relationship on the run, so the one-line and the
+     exports read a tie rather than infer one from geometry. */
+  var tie=null;
+  if(st.power){
+    var last=spine[spine.length-1];
+    var t=_cgcNearestTarget(last.x,last.y);
+    var reach=Math.max(90, 40*ppf);                 /* ~40 ft, floor 90 px */
+    if(t && Math.sqrt(t.d) <= reach){
+      tie=t; spine[spine.length-1]={ x:t.cx, y:t.cy };
+    }
+  }
+
+  if(!S._trenches) S._trenches=[];
+  S._trenches.push({ id:uid(), pts:spine.slice(), in:CGC.surface, leg:st.leg });
+
+  function commit(pts, label, extra){
+    var c={ id:uid(), condType:st.cond, pts:pts, pxLen:_polyLen(pts),
+            ftLen:+(_polyLen(pts)/ppf).toFixed(1), runLabel:label,
+            omegaCompute:true, labelDx:40, labelDy:-24 };
+    if(extra){ for(var k in extra){ if(extra.hasOwnProperty(k)) c[k]=extra[k]; } }
+    if(!S.conduits) S.conduits=[];
+    S.conduits.push(c);
+    if(typeof renderConduit==='function') renderConduit(c);
+    return c;
+  }
+
+  commit(spine, st.label, tie ? { spine:true, toId:tie.id, runLabel:st.label } : { spine:true });
+  CGC.runs++;
+  if(st.power && tie && !CGC.tied){
+    CGC.tied = tie;
+    _cgcEmitLoad(tie);
+  }
+
+  /* The taps. Offsets keep the B feed and the fibre off the A feed's line
+     where they share a lane, which is what the auto-router does too. */
+  var off = (st.key==='b') ? 6 : (st.key==='data' ? 5 : 0);
+  _cgcBlocks().forEach(function(b){
+    var n=_cgcNearest(spine, b.cx, b.cy); if(!n) return;
+    var edgeY = (n.y > b.cy) ? (b.cy + b.hh) : (b.cy - b.hh);
+    commit([{ x:b.cx+off, y:edgeY }, { x:n.x, y:n.y }], st.label+' tap',
+           { tap:true, labelHidden:true, fromShapeId:b.sh.id });
+    CGC.taps++;
+  });
+
+  _dcfcDraw=null;
+  CGC.ix++;
+  try{ if(typeof _geoStampAll==='function') _geoStampAll(); }catch(e){}
+  if(typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches();
+  if(typeof updCondStat==='function') updCondStat();
+  if(typeof renderLegend==='function') renderLegend();
+  if(typeof updateSummaryPanel==='function') updateSummaryPanel();
+  if(typeof pushHist==='function') pushHist();
+
+  if(CGC.ix >= CGC.steps.length) return _cgcFinish();
+  _cgcGuideRender();
+}
+window._cgcFinishRun=_cgcFinishRun;
+
+function _cgcFinish(){
+  var runs=CGC.runs, taps=CGC.taps;
+  CGC.active=false;
+  if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
+  if(typeof setMode==='function') setMode('select'); else S.mode='select';
+  if(typeof _dcfcGuideHide==='function') _dcfcGuideHide();
+  var tied=CGC.tied;
+  if(typeof showBanner==='function'){
+    showBanner(tied?'ok':'wiz',' Conduit routed — '+runs+' spine'+(runs===1?'':'s')+', '
+      +taps+' tap'+(taps===1?'':'s')+'. '
+      +(tied
+         ? ('Tied to '+(tied.label||'the transformer')+' — the plant is on the one-line as a constant load. Press Run to recompute.')
+         : ('No transformer or switchgear at the end of the power run, so nothing was tied — the one-line will not show the compute load until it is.')));
+  }
+}
+window._cgcFinish=_cgcFinish;
+
+function _cgcCancel(){
+  CGC.active=false;
+  if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
+  if(typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches();
+  if(typeof setMode==='function') setMode('select'); else S.mode='select';
+  if(typeof _dcfcGuideHide==='function') _dcfcGuideHide();
+  /* Runs already committed STAY. Cancelling step three should not throw
+     away the two trenches somebody has already drawn. */
+  if(typeof showBanner==='function'){
+    showBanner('wiz', CGC.runs
+      ? ('Conduit build stopped — '+CGC.runs+' run'+(CGC.runs===1?'':'s')+' kept.')
+      : 'Conduit build cancelled.');
+  }
+}
+window._cgcCancel=_cgcCancel;
+
+function _cgcGuideRender(){
+  var el=document.getElementById('dcfc-guide'); if(!el) return;
+  var st=_cgcStep();
+  var rows=CGC.steps.map(function(s,i){
+    var done=i<CGC.ix, now=i===CGC.ix;
+    var dot = done ? '#22C55E' : (now ? s.col : '#26364d');
+    var ink = done ? '#16202B' : (now ? '#16202B' : '#64748B');
+    return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0'+(done?';opacity:.85':'')+'">'
+      +'<div style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:'+dot+';color:'+ink
+      +';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">'
+      +(done?'✓':(i+1))+'</div>'
+      +'<div><div style="font-size:11px;font-weight:600;color:'+(now?'#E2EEF9':'#8FA3B8')+'">'+s.label+'</div>'
+      +'<div style="font-size:9px;color:#64748B">'+(done?'drawn — blocks tapped on':(now?'drawing now':'waiting'))+'</div></div></div>';
+  }).join('');
+
+  var np=(typeof _dcfcDraw!=='undefined' && _dcfcDraw)?_dcfcDraw.pts.length:0;
+  var hint = st
+    ? '<strong style="color:'+st.col+'">Draw '+st.hint+'.</strong> Click points to route it ('
+      +np+' pt'+(np===1?'':'s')+'), then <strong>Enter</strong> to finish. Every block taps onto it automatically.'
+    : 'Done.';
+  var actions = st
+    ? '<button onclick="_cgcFinishRun()" style="width:100%;padding:9px;background:'+st.col+';color:#16202B;font-weight:800;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;margin-bottom:6px">✓ Finish Trench (Enter)</button>'
+      +'<button onclick="_cgcDrawUndoPt()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px">⌫ Undo Point (Backspace)</button>'
+      +'<button onclick="_cgcToggleSurface()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((CGC.surface==='concrete')?'sawcut concrete':'in-ground')+'</button>'
+    : '';
+
+  el.innerHTML=''
+    +'<div id="dcfc-guide-drag" title="Drag to move" style="padding:11px 14px;border-bottom:1px solid #26364d;display:flex;align-items:center;justify-content:space-between;background:rgba(167,139,250,.10);cursor:move;user-select:none">'
+      +'<div style="font-size:12px;font-weight:800;color:#C4B5FD;pointer-events:none"><span style="color:#8FA3B8;margin-right:4px">⠿</span>▦ Compute Conduit</div>'
+      +'<div style="display:flex;align-items:center;gap:2px">'
+        +'<button onclick="_dcfcGuideToggleMin(event)" id="dcfc-guide-min" title="Minimize / expand" style="background:none;border:none;color:#8FA3B8;font-size:15px;cursor:pointer;line-height:1;padding:4px 8px;min-width:32px;min-height:32px">–</button>'
+        +'<button onclick="_cgcCancel()" title="Stop" style="background:none;border:none;color:#64748B;font-size:16px;cursor:pointer;line-height:1;padding:4px 8px;min-width:32px;min-height:32px">×</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="dcfc-guide-body">'
+    +'<div style="padding:9px 14px">'+rows+'</div>'
+    +'<div style="padding:9px 14px;border-top:1px solid #26364d;background:rgba(0,0,0,.2);font-size:10px;color:#B7C6D8;line-height:1.5">'+hint+'</div>'
+    +'<div style="padding:9px 14px 12px">'+actions
+      +'<button onclick="_cgcCancel()" style="width:100%;padding:6px;background:none;border:1px solid #26364d;color:#64748B;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:2px">Stop (Esc)</button></div>'
+    +'</div>';
+  el.style.display='block';
+  if(typeof _dcfcGuideAttachDrag==='function') _dcfcGuideAttachDrag(el);
+  if(typeof _dcfcGuideApplyMin==='function') _dcfcGuideApplyMin(el);
+}
+window._cgcGuideRender=_cgcGuideRender;
+
+/* Enter / Backspace / Escape, and the live rubber band. */
+document.addEventListener('keydown', function(e){
+  if(typeof CGC==='undefined' || !CGC.active) return;
+  if(['INPUT','TEXTAREA'].indexOf(e.target.tagName)>=0 || e.target.contentEditable==='true') return;
+  if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); _cgcFinishRun(); return; }
+  if(e.key==='Backspace'){ e.preventDefault(); e.stopPropagation(); _cgcDrawUndoPt(); return; }
+  if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); _cgcCancel(); return; }
+}, true);
+(function(){
+  var cov=document.getElementById('cov'); if(!cov) return;
+  cov.addEventListener('mousemove', function(e){
+    if(typeof CGC==='undefined' || !CGC.active) return;
+    if(typeof _dcfcDraw==='undefined' || !_dcfcDraw) return;
+    var sc=document.getElementById('sc'); if(!sc) return;
+    var r=sc.getBoundingClientRect();
+    _dcfcDraw.preview={ x:e.clientX-r.left, y:e.clientY-r.top };
+    if(typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches();
+  });
+})();
+window.OmegaCGC={ start:_cgcStart, finishRun:_cgcFinishRun, cancel:_cgcCancel,
+                  state:function(){ return CGC; } };
+
 /* ═══ END BESS GUIDED BUILD ══════════════════════════════════════════ */
 
 function _evScale(){ return (typeof S!=='undefined' && S.pxPerFt && S.pxPerFt>0) ? S.pxPerFt : 6; }
@@ -67857,7 +68241,7 @@ function _chModeWants(m){
   if(!m || m==='select') return false;
   if(typeof SHAPE_MODES!=='undefined' && SHAPE_MODES[m]) return true;
   var extra={conduit:1,dimension:1,clusterplace:1,dcclusterplace:1,computeplace:1,emsplace:1,
-             sourceplace:1,topoinsert:1,chargerplace:1,derbuildplace:1,callout:1,wizplace:1,dcfcplace:1,bgbplace:1,cgbplace:1};
+             sourceplace:1,topoinsert:1,chargerplace:1,derbuildplace:1,callout:1,wizplace:1,dcfcplace:1,bgbplace:1,cgbplace:1,cgcplace:1};
   return !!extra[m];
 }
 function _chActive(){ return _chOn && typeof S!=='undefined' && _chModeWants(S.mode); }
@@ -99461,6 +99845,19 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       S.computeBessHint={ suggestedKw:r.bessKw, suggestedKwh:r.bessKwh,
                           basis:'compute ride-through', lowConfidence:false };
     }catch(e){}
+
+    /* ── HAND OVER TO THE CONDUIT STEPPER ────────────────────────────
+       The auto-trench below produces the right topology, and where it puts
+       the trench was never the user's choice — which on a real parcel is
+       the part that has to miss the truck court and the fire lane. So the
+       blocks land here and the routing moves to a guided panel: draw each
+       spine, every block taps onto it, and the power run lands on the
+       transformer. Falls through to the automatic router when the stepper
+       is not present. */
+    if(window.OmegaCGC && typeof OmegaCGC.start==='function'){
+      var _dv=(document.getElementById('ocb-diverse')||{}).checked!==false;
+      if(OmegaCGC.start({ diverse:_dv })) return;
+    }
 
     /* Trench it. Runs AFTER the shapes exist so the router can read their
        real placed geometry rather than the grid we intended. */
