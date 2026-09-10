@@ -34,6 +34,12 @@ tenants/*/*.md
 # omega_orgs is already seeded, so that button is spent; if it is ever needed
 # again, regenerate the file and deploy without this line for one release.
 firestore.rules
+# The twin's rules fragment is a root-level file too, so it is a URL as
+# well. The literal names above are not a glob -- a new *.rules at the
+# root is public until it is named here. This one maps the twin's whole
+# backing store (transcripts, pipeline, partner commitments) and says
+# in its own comments what it is protecting.
+firestore-twin.rules
 storage.rules
 firestore.indexes.json
 firebase.json

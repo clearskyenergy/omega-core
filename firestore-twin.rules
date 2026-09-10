@@ -1,0 +1,98 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · TWIN FRAGMENT to firestore.rules
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   Backing store for the Tommy Twin service (clearskyenergy/omega-twin).
+   Six collections, all prefixed `twin_`, all admin-only.
+
+   HOW TO APPLY
+   ─────────────
+   This is NOT a complete rules file. It is ONE paste-in block: drop it
+   anywhere inside `match /databases/{database}/documents`, alongside the
+   C block of firestore.rules.control-plane.addendum. It defines no helper
+   and touches no existing collection, so it cannot change the meaning of
+   anything already deployed.
+
+   Validate before pasting:
+     node scripts/check-rules.js firestore.rules firestore-twin.rules
+   That checks this block against the base file AS IF already merged —
+   undefined helpers, same-scope duplicates, brace balance.
+
+   Then search the LIVE rules text in the console for `twin_backlog`
+   before calling it deployed. Same discipline as capacityAllocations:
+   a rules file that fails to deploy leaves the previous version running
+   and says nothing.
+
+   ⚠ NOT DEPLOYED BY CLAUDE. Rules deploys are Tommy's, per CLAUDE.md §7.
+
+   ── WHO THIS LETS IN ────────────────────────────────────────────────────────
+   isAdmin() is DOMAIN-based, not person-based: it is true for every
+   clearsky-usa.com and csebuilders.com address, not for Tommy alone. That is
+   the existing helper and the one the build plan names, so it is what this
+   block uses — but understand what it is protecting. These six collections
+   hold, in one place:
+
+     · every meeting transcript the twin has ingested (twin_sources)
+     · the 140-account sales pipeline with contacts and stages (twin_pipeline)
+     · partner commitments to and from the OSA side (twin_meetings)
+     · unsent email drafted in Tommy's voice (twin_drafts)
+
+   That is the customer book plus the deal flow plus the JV's internal
+   commitments. It is a strictly larger exposure than any single tenant
+   collection in this file. If a ClearSky address is ever issued to a
+   contractor, an intern, or a partner-side person, tighten this to a uid
+   allowlist or an omega_staff role BEFORE that address is created — not
+   after. Flagged, not fixed: narrowing it today would lock the twin's own
+   admin surface out of its own data on day one.
+
+   ── WHY THE SERVICE IS NOT MENTIONED ────────────────────────────────────────
+   run-ingest, run-analyze, run-build and run-report all use the Firebase
+   Admin SDK, which bypasses rules entirely. Nothing below is written for
+   them. These rules exist for exactly one client: twin.html (Phase 3),
+   where Tommy reads a brief and flips status on a phone. Read that as the
+   scope of the whole block.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+    /* ───────────────────────────────────────────────────────────────────────
+       TWIN · the operating twin's state
+
+       Six sibling collections, one grant. They are listed separately rather
+       than folded into a single `match /{col}/{id}` with a prefix test,
+       because a wildcard that matches on a NAME PATTERN would also match a
+       future collection someone names twin_anything — including one holding
+       data that should not inherit this grant by accident. Explicit is the
+       point.
+
+       sources   raw ingested email and transcripts, pre-parse
+       meetings  parsed meetings: commitments split Tommy / others
+       backlog   product items and their status through the approve gate
+       pipeline  accounts, stages, next actions
+       drafts    email awaiting Tommy's send. NEVER sent from the browser.
+       runs      one doc per run: inputs, outputs, cost, errors, report text
+
+       DELETE is granted. This is Tommy's own scratch state, not a tenant
+       record and not an audit log with a retention obligation — the
+       "flag, don't drop" rule in CLAUDE.md governs MIGRATION SCRIPTS over
+       customer data, which this is not. twin_runs is the closest thing to a
+       ledger here; if run history ever needs to survive Tommy's own thumb,
+       drop delete on that one line and leave the other five.
+       ─────────────────────────────────────────────────────────────────────── */
+    match /twin_sources/{sourceId} {
+      allow read, write: if isAdmin();
+    }
+    match /twin_meetings/{meetingId} {
+      allow read, write: if isAdmin();
+    }
+    match /twin_backlog/{itemId} {
+      allow read, write: if isAdmin();
+    }
+    match /twin_pipeline/{accountId} {
+      allow read, write: if isAdmin();
+    }
+    match /twin_drafts/{draftId} {
+      allow read, write: if isAdmin();
+    }
+    match /twin_runs/{runId} {
+      allow read, write: if isAdmin();
+    }
