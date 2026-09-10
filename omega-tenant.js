@@ -149,11 +149,29 @@
   };
 
   /* ── localStorage cache (best-effort; private mode may throw) ───────────── */
+  /* ── AN OPEN HOST MUST NEVER CARRY A PIN, INCLUDING AN OLD ONE ─────────
+     silmarillion.clearskyomega.com serves every tenant, so it pins nobody.
+     The code stopped WRITING a pin for it — but a browser that used an
+     earlier build still has one in localStorage, and the read path honoured
+     it. On that machine the host resolved to whatever tenant was cached
+     (FENECON, in the case that surfaced), every other org's sign-in was
+     judged against a workspace they are not in, and login was refused.
+
+     It presented as "nobody can log in on Chrome, but Safari is fine",
+     which is exactly what a per-browser cache looks like from the outside.
+     Not writing a bad value is not the same as not reading one: clear it. */
   function readCache() {
-    try { var raw = global.localStorage.getItem(CACHE_KEY + T.host); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+    try {
+      if (isOpenHost(T.host)) { dropCache(); return null; }
+      var raw = global.localStorage.getItem(CACHE_KEY + T.host);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
   }
   function writeCache(doc) {
-    try { global.localStorage.setItem(CACHE_KEY + T.host, JSON.stringify(doc)); } catch (e) {}
+    try {
+      if (isOpenHost(T.host)) return;      /* never pin the shared host */
+      global.localStorage.setItem(CACHE_KEY + T.host, JSON.stringify(doc));
+    } catch (e) {}
   }
   /* ── A CACHE FOR A DOCUMENT THAT NO LONGER EXISTS IS NOT A CACHE ─────────
      readCache() pins a tenant synchronously so the page does not flash. That
