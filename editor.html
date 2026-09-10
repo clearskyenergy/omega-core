@@ -53686,31 +53686,28 @@ function _derText(g,x,y,s,size,fill,anchor,weight){
   if(weight)t.setAttribute('font-weight',weight); t.textContent=s; g.appendChild(t); return t;
 }
 
-/* ── THE UNIT IS THREE CONTAINERS, NOT ONE BOX ────────────────────────
-   This drew one purple rectangle with evenly spaced slats across the whole
-   footprint — a generic container at whatever aspect the pad happened to
-   be. A modular data centre of this class is a ZONED site: per the
-   published architecture, two 45 ft containers (IT, and the electrical
-   plant) and one 20 ft (mechanical), separated so each can be serviced,
-   with the chillers adjacent to the mechanical zone on their own airflow
-   and service clearance.
+/* ── DRAWN AS THE UNIT LOOKS ──────────────────────────────────────────
+   Three containers on one pad, which is what a Leviathan-class unit is:
+   two long bodies — the IT module and the electrical plant — and one short
+   one for the mechanical plant, with the chillers on their own clearance
+   beside it. 45 : 45 : 20 ft along a 119 ft pad, per the published
+   footprint.
 
-   Drawn in that proportion — 45 : 45 : 20 ft along the length — so the
-   plan says which end the switchgear ties into and which end needs air.
-   The racks are drawn as the schedule describes them: eight compute racks
-   and four narrower network racks, not a repeating pattern.
+   Drawn as containers, not as a diagram. An earlier version filled the IT
+   body with twelve rack ticks and the mechanical end with chiller ticks;
+   at any real site scale a 119 ft pad is eighty pixels wide and that
+   detail collapses into noise. Clean bodies, a door line each, and the
+   colour carrying which module is which reads correctly from 80 px to
+   full zoom.
 
-   Small containers keep the plain body: a 20 ft node has no zones to
-   separate, and inventing them would be drawing something that is not
-   there. */
+   Small containers keep the plain body: a 20 ft node has nothing to zone. */
 function _derRenderDc(g, sh){
   var ppf=_derScale(); var w=(sh.lf||20)*ppf, h=(sh.wf||8)*ppf;
   var x=sh.pts[0].x-w/2, y=sh.pts[0].y-h/2;
-  /* concrete pad + bollards */
   var padM=2*ppf;
   _derRect(g, x-padM, y-padM, w+padM*2, h+padM*2, '#e9e9e9', '#9a9a9a', 1);
 
-  var zoned = (+sh.lf||0) >= 80 && w > 40;      /* big enough to read */
+  var zoned = (+sh.lf||0) >= 80 && w > 40;
   if(!zoned){
     _derRect(g, x, y, w, h, '#4C3B87', '#A78BFA', 1.5);
     var slats=Math.max(3, Math.round((sh.lf||20)/3));
@@ -53722,45 +53719,38 @@ function _derRenderDc(g, sh){
     return;
   }
 
-  /* Zones along the length, in the published 45 : 45 : 20 ft proportion.
-     A gap between them is the service separation, not a drawing margin. */
   var gap=Math.max(1, 3*ppf);
   var usable=w-gap*2;
   var itW=usable*(45/110), elW=usable*(45/110), meW=usable*(20/110);
+  /* Containers along the front of the pad; the depth behind them is the
+     service aisle and the chiller run. */
+  var bodyH=h*0.60, bodyY=y+h*0.05;
   var zx=x;
-  /* Containers sit against one edge; the rest of the depth is the service
-     aisle and, at the mechanical end, the chiller bank. */
-  var bodyH=h*0.62, bodyY=y+h*0.06;
 
-  /* IT — compute + network racks */
-  _derRect(g, zx, bodyY, itW, bodyH, '#4C3B87', '#A78BFA', 1.5);
-  var nC=8, nN=4, cell=itW/(nC+nN+1);
-  for(var c=0;c<nC;c++){
-    _derRect(g, zx+(c+0.5)*cell, bodyY+bodyH*0.16, cell*0.62, bodyH*0.68, '#2B2050', '#8B6FE0', 0.7);
+  function container(cx, cw, fill, stroke){
+    _derRect(g, cx, bodyY, cw, bodyH, fill, stroke, 1.4);
+    /* one door line, at the serviceable end */
+    var dx=cx+cw*0.86;
+    _derRect(g, dx, bodyY+bodyH*0.18, Math.max(0.7,cw*0.03), bodyH*0.64, stroke, stroke, 0);
   }
-  for(var n2=0;n2<nN;n2++){
-    _derRect(g, zx+(nC+n2+0.6)*cell, bodyY+bodyH*0.26, cell*0.40, bodyH*0.48, '#1E1740', '#6D5BC4', 0.6);
-  }
-  if(w>150) _derText(g, zx+itW/2, bodyY+bodyH+9, 'IT', Math.max(6,Math.min(10,ppf*0.6)), '#A78BFA', 'middle', '700');
+
+  container(zx, itW, '#4C3B87', '#A78BFA');                 /* IT */
   zx += itW+gap;
-
-  /* Electrical plant — UPS and distribution */
-  _derRect(g, zx, bodyY, elW, bodyH, '#3F3468', '#7DD3FC', 1.4);
-  for(var u=0;u<4;u++){
-    _derRect(g, zx+elW*(0.08+u*0.23), bodyY+bodyH*0.22, elW*0.16, bodyH*0.56, '#1F2A44', '#38BDF8', 0.7);
-  }
-  if(w>150) _derText(g, zx+elW/2, bodyY+bodyH+9, 'UPS / DIST', Math.max(6,Math.min(10,ppf*0.6)), '#7DD3FC', 'middle', '700');
+  container(zx, elW, '#3F3468', '#7DD3FC');                 /* electrical plant */
+  var elX=zx;
   zx += elW+gap;
+  container(zx, meW, '#24463F', '#5EEAD4');                 /* mechanical plant */
 
-  /* Mechanical plant, with the chiller bank on its own clearance */
-  _derRect(g, zx, bodyY, meW, bodyH, '#24463F', '#5EEAD4', 1.4);
-  if(w>150) _derText(g, zx+meW/2, bodyY+bodyH+9, 'MECH', Math.max(6,Math.min(10,ppf*0.6)), '#5EEAD4', 'middle', '700');
-  var chY=bodyY+bodyH+Math.max(1.5,2*ppf);
-  var chH=Math.max(2, y+h-chY-1);
-  if(chH>2){
-    for(var q=0;q<3;q++){
-      _derRect(g, zx+meW*(0.05+q*0.32), chY, meW*0.26, chH, '#123932', '#2DD4BF', 0.7);
-    }
+  /* Chiller bank, adjacent to the mechanical module on its own clearance. */
+  var chY=bodyY+bodyH+Math.max(1.2,1.6*ppf);
+  var chH=Math.max(1.5, y+h-chY-1);
+  if(chH>1.5) _derRect(g, zx, chY, meW, chH, '#123932', '#2DD4BF', 0.8);
+
+  if(w>190){
+    var fs=Math.max(6,Math.min(9,ppf*0.55));
+    _derText(g, x+itW/2,      bodyY+bodyH*0.62, 'IT',    fs, '#DDD6FE', 'middle', '700');
+    _derText(g, elX+elW/2,    bodyY+bodyH*0.62, 'POWER', fs, '#BAE6FD', 'middle', '700');
+    _derText(g, zx+meW/2,     bodyY+bodyH*0.62, 'MECH',  fs, '#A7F3D0', 'middle', '700');
   }
 
   _derText(g, x+w/2, y+h+padM+11,
@@ -66168,7 +66158,7 @@ document.addEventListener('keydown', function(e){
    (_dcfcDraw, _dcfcRenderTrenches, the #dcfc-guide panel), which is why it
    lives in this block rather than in a patch at the end of the file.
    ══════════════════════════════════════════════════════════════════════ */
-var CGC = { active:false, ix:0, steps:[], surface:'soil', runs:0, taps:0, tied:null };
+var CGC = { active:false, ix:0, steps:[], surface:'soil', runs:0, taps:0, tied:null, ctrl:null };
 
 /* ── WHAT THE THREE RUNS ACTUALLY ARE ──────────────────────────────────
    A modular compute block is not a thing that sits on a site; it is a
@@ -66181,18 +66171,41 @@ var CGC = { active:false, ix:0, steps:[], surface:'soil', runs:0, taps:0, tied:n
    power run ends on the transformer or the switchgear lineup that the grid
    feeds; finishing it registers the plant as a constant load against that
    transformer, so the one-line and the load figures move on their own. */
+/* ── COMPUTE → CONTROLLER → TRANSFORMER ───────────────────────────────
+   The blocks did not feed the transformer directly, and drawing it that way
+   was wrong about the thing that makes this business work.
+
+   A modular block is a constant load. What turns a constant load into an
+   asset on a site that already has solar and storage is the CONTROLLER
+   sitting between it and the grid — the EMS deciding, second by second,
+   how much of that load is served from PV, how much from the battery, how
+   much is imported, and when to curtail. That is the dynamic function; it
+   is how NextNRG and Joules.ai operate a site. A run from the racks
+   straight to the transformer draws a dumb load on a meter and throws
+   away the reason the site is worth building.
+
+   So the power path is two legs, not one:
+
+       1  compute  ->  controller      every block taps this run
+       2  controller -> transformer    the grid tie, and where the plant is
+                                       filed as a load on the one-line
+
+   Step 1 places the controller at the end of the run if the site has none.
+   Step 2 is the only step that ties, because the tie is a grid tie — and
+   after step 1 the thing on the other end of the compute run is the EMS,
+   not the utility. */
 var CGC_STEPS = [
-  { key:'a',    cond:'RMC-AC',  leg:'main',   col:'#F59E0B',
-    label:'Power tie — blocks to transformer',
-    hint:'the 480 V <strong>A feed</strong> — end the run on the transformer or switchgear that the grid feeds',
-    power:true },
-  { key:'b',    cond:'RMC-AC',  leg:'feeder', col:'#F59E0B',
-    label:'Redundant B feed',
-    hint:'the <strong>B feed</strong> — keep it on the far side of the row, so one strike cannot take both',
-    power:true },
+  { key:'ctrl', cond:'RMC-AC',  leg:'main',   col:'#F59E0B',
+    label:'Compute → controller',
+    hint:'the 480 V feed from the blocks to the <strong>controller / EMS</strong> — end the run where the controller goes',
+    power:true, sizeBy:'plant', makesController:true },
+  { key:'grid', cond:'RMC-AC',  leg:'feeder', col:'#F59E0B',
+    label:'Controller → transformer',
+    hint:'the <strong>grid tie</strong> — from the controller out to the transformer or switchgear the utility feeds',
+    power:true, sizeBy:'plant', ties:true, fromController:true },
   { key:'data', cond:'EMT-BMS', leg:'branch', col:'#2563EB',
     label:'Fibre / BMS',
-    hint:'<strong>fibre and controls</strong> — end the run on the demarc, the EMS or the meet-me point' }
+    hint:'<strong>fibre and controls</strong> — blocks to the controller, and the controller out to the demarc' }
 ];
 
 /* Anything a compute plant can legitimately hang off: the transformer the
@@ -66492,7 +66505,8 @@ function _cgcStart(opts){
   CGC.active=true; CGC.ix=0; CGC.runs=0; CGC.taps=0; CGC.surface='soil'; CGC.tied=null;
   /* No diversity means both feeds share one lane, so there is no second
      trench to draw and offering the step would be a lie. */
-  CGC.steps = CGC_STEPS.filter(function(s){ return (opts.diverse===false) ? (s.key!=='b') : true; });
+  CGC.steps = CGC_STEPS.slice();
+  CGC.ctrl = null;
   if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
   if(typeof setMode==='function') setMode('cgcplace'); else S.mode='cgcplace';
   _cgcGuideRender();
@@ -66539,14 +66553,50 @@ function _cgcFinishRun(){
      last point is near a transformer or a switchgear lineup, snap to it
      and record the relationship on the run, so the one-line and the
      exports read a tie rather than infer one from geometry. */
-  var tie=null;
-  if(st.power){
-    var last=spine[spine.length-1];
-    var t=_cgcNearestTarget(last.x,last.y);
-    var reach=Math.max(90, 40*ppf);                 /* ~40 ft, floor 90 px */
-    if(t && Math.sqrt(t.d) <= reach){
-      tie=t; spine[spine.length-1]={ x:t.cx, y:t.cy };
+  var last=spine[spine.length-1];
+  var reach=Math.max(90, 40*ppf);                   /* ~40 ft, floor 90 px */
+
+  /* ── LEG 1 ENDS AT THE CONTROLLER, AND MAKES ONE IF THERE IS NONE ──
+     A site that already runs solar and storage has an EMS; a bare site
+     does not, and the compute run has to terminate on something. Reuse
+     what is there when the run ends near it, otherwise place one at the
+     end of the run — the controller is not optional in this topology, so
+     leaving the run hanging in the air would be drawing a system that
+     cannot work. */
+  if(st.makesController){
+    var near=null;
+    _cgcPowerTargets().forEach(function(t){
+      if(t.what!=='ems') return;
+      var d=Math.sqrt((last.x-t.cx)*(last.x-t.cx)+(last.y-t.cy)*(last.y-t.cy));
+      if(d<=reach && (!near||d<near.d)){ near=t; near.d=d; }
+    });
+    if(near){
+      CGC.ctrl=near; spine[spine.length-1]={ x:near.cx, y:near.cy };
+    } else if(typeof placeEmsNode==='function'){
+      var made=null;
+      try{ made=placeEmsNode({x:last.x,y:last.y}); }catch(e){}
+      if(made){
+        var mw=+made.w||24;
+        CGC.ctrl={ el:made, id:made.id, label:made.label||'EMS', what:'ems',
+                   cx:(+made.x||0)+mw/2, cy:(+made.y||0)+mw/2 };
+      }
     }
+  }
+
+  var tie=null;
+  if(st.ties){
+    var t2=_cgcNearestTarget(last.x,last.y);
+    /* The controller is where this leg STARTS; it must not also be what
+       it ties to, or the grid tie is a loop back to itself. */
+    if(t2 && CGC.ctrl && t2.id===CGC.ctrl.id) t2=null;
+    if(t2 && Math.sqrt(t2.d) <= reach){
+      tie=t2; spine[spine.length-1]={ x:t2.cx, y:t2.cy };
+    }
+  }
+
+  /* Leg 2 starts at the controller, wherever the user began drawing. */
+  if(st.fromController && CGC.ctrl){
+    spine[0]={ x:CGC.ctrl.cx, y:CGC.ctrl.cy };
   }
 
   if(!S._trenches) S._trenches=[];
@@ -66611,8 +66661,11 @@ function _cgcFinishRun(){
 
   /* The taps. Offsets keep the B feed and the fibre off the A feed's line
      where they share a lane, which is what the auto-router does too. */
-  var off = (st.key==='b') ? 6 : (st.key==='data' ? 5 : 0);
-  blocks.forEach(function(b){
+  /* Only the compute leg taps the blocks. The grid tie is one run from the
+     controller out — tapping the racks onto it would put them on the
+     utility side of the thing that is supposed to be controlling them. */
+  var off = (st.key==='data') ? 5 : 0;
+  (st.ties ? [] : blocks).forEach(function(b){
     var n=_cgcNearest(spine, b.cx, b.cy); if(!n) return;
     var edgeY = (n.y > b.cy) ? (b.cy + b.hh) : (b.cy - b.hh);
     commit([{ x:b.cx+off, y:edgeY }, { x:n.x, y:n.y }], st.label+' tap',
