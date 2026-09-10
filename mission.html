@@ -2,107 +2,162 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>JARVIS // Mission Control</title>
 <style>
-:root{--glow-cyan:#00f3ff;--glow-blue:#0044ff;--bg-dark:#050b14;--panel-bg:rgba(10,25,47,.7);
-      --ink:#e2f1ff;--dim:#5f7d99;--good:#56ff1a;--warn:#ffb020;--bad:#ff4d4d}
-*{box-sizing:border-box}
-body{background:var(--bg-dark);color:var(--ink);font-family:'Courier New',Courier,monospace;
-     margin:0;padding:20px;overflow-x:hidden}
-body::before{content:" ";display:block;position:fixed;inset:0;z-index:2;pointer-events:none;
+:root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
+      --ink:#c1e7ff;--dim:#5f7d99;--good:#00ff66;--warn:#ffaa00;--bad:#ff4d4d;
+      --edge:1px solid rgba(0,243,255,.3)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Courier New',Courier,monospace}
+body{background:var(--bg);color:var(--ink);height:100vh;padding:16px;display:flex;
+     flex-direction:column;gap:14px;overflow:hidden}
+body::before{content:" ";position:fixed;inset:0;z-index:9999;pointer-events:none;
   background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.25) 50%),
              linear-gradient(90deg,rgba(255,0,0,.06),rgba(0,255,0,.02),rgba(0,0,255,.06));
-  background-size:100% 4px,3px 100%}
-header{border-bottom:2px solid var(--glow-cyan);padding-bottom:10px;margin-bottom:20px;
-       display:flex;justify-content:space-between;align-items:center;gap:16px;
-       box-shadow:0 0 15px rgba(0,243,255,.2)}
-h1{margin:0;font-size:22px;letter-spacing:4px;text-shadow:0 0 10px var(--glow-cyan)}
-.status-badge{color:var(--glow-cyan);animation:blink 2s infinite;font-size:13px}
-.status-badge.err{color:var(--bad);animation:none}
-button{background:transparent;border:1px solid var(--glow-blue);color:var(--glow-cyan);
-       font-family:inherit;font-size:12px;padding:7px 14px;cursor:pointer;letter-spacing:1px}
-button:hover{background:rgba(0,68,255,.18)}
-.dashboard-grid{display:grid;grid-template-columns:1fr 2fr 1fr;gap:20px}
-@media(max-width:1100px){.dashboard-grid{grid-template-columns:1fr}}
-.panel{background:var(--panel-bg);border:1px solid var(--glow-blue);
-       box-shadow:0 0 15px rgba(0,68,255,.15);padding:18px;border-radius:4px;position:relative}
+  background-size:100% 4px,6px 100%}
+header{display:flex;justify-content:space-between;align-items:center;gap:14px;
+       border-bottom:var(--edge);padding-bottom:10px;flex:none}
+.title{font-size:20px;font-weight:bold;letter-spacing:3px;color:var(--glow-cyan);
+       text-shadow:0 0 10px rgba(0,243,255,.5)}
+.badge{font-size:11px;padding:5px 10px;border:var(--edge);border-radius:4px;
+       background:rgba(0,243,255,.1);letter-spacing:1px}
+.badge.err{border-color:var(--bad);color:var(--bad)}
+button{background:transparent;border:var(--edge);color:var(--glow-cyan);font-family:inherit;
+       font-size:11px;letter-spacing:1px;padding:7px 12px;cursor:pointer;border-radius:4px}
+button:hover{background:rgba(0,243,255,.12)}
+button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
+
+.grid{display:grid;grid-template-columns:300px 1fr 400px;gap:14px;flex:1;min-height:0}
+/* Stacked, the fixed panel heights plus a 100vh body with overflow hidden
+   pile on top of each other. Below the breakpoint the page scrolls instead. */
+@media(max-width:1200px){
+  .grid{grid-template-columns:1fr}
+  body{height:auto;min-height:100vh;overflow-y:auto}
+  .panel{min-height:180px}
+  .arcWrap{min-height:240px}
+}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.panel{background:var(--panel);border:var(--edge);border-radius:6px;padding:14px;
+       position:relative;box-shadow:inset 0 0 15px rgba(0,68,255,.2);min-height:0;
+       display:flex;flex-direction:column;gap:9px}
 .panel::before{content:'';position:absolute;top:0;left:0;width:10px;height:10px;
   border-top:2px solid var(--glow-cyan);border-left:2px solid var(--glow-cyan)}
-.panel h2{font-size:14px;margin:0 0 10px;color:var(--glow-cyan);letter-spacing:2px;
-  border-bottom:1px solid rgba(0,243,255,.3);padding-bottom:5px}
-.row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px}
-.row .k{color:var(--dim)}
-.row .v{color:var(--ink);text-align:right}
+.panel::after{content:'';position:absolute;bottom:0;right:0;width:10px;height:10px;
+  border-bottom:2px solid var(--glow-cyan);border-right:2px solid var(--glow-cyan)}
+.ptitle{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:var(--glow-cyan);
+        border-bottom:1px solid rgba(0,243,255,.12);padding-bottom:5px;flex:none}
+.row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
+.row .k{color:var(--dim)} .row .v{color:var(--ink);text-align:right}
 .v.cy{color:var(--glow-cyan)} .v.good{color:var(--good)} .v.warn{color:var(--warn)} .v.bad{color:var(--bad)}
-.alert{margin-top:10px;border:1px solid var(--warn);color:var(--warn);padding:9px;font-size:12px;line-height:1.5}
-.arc-container{display:flex;justify-content:center;align-items:center;height:300px;position:relative}
-#arc{width:100%;height:300px;display:block}
-.arc-core{position:absolute;text-align:center}
-.arc-core .n{font-size:30px;color:var(--glow-cyan);text-shadow:0 0 12px var(--glow-cyan)}
-.arc-core .l{font-size:10px;color:var(--dim);letter-spacing:2px}
-.log-display{background:rgba(0,0,0,.5);height:260px;overflow-y:auto;padding:10px;
-  border:1px solid rgba(0,243,255,.2);font-size:12.5px;color:#79c0ff;line-height:1.7}
-.log-display .t{color:var(--dim)}
-.log-display .e{color:var(--bad)}
+.scroll{overflow-y:auto;min-height:0}
+.scroll::-webkit-scrollbar{width:5px}
+.scroll::-webkit-scrollbar-thumb{background:rgba(0,243,255,.3);border-radius:4px}
+.alert{border:1px solid var(--warn);color:var(--warn);padding:9px;font-size:11.5px;line-height:1.5}
+
+.core{align-items:center;justify-content:center;gap:0}
+#arc{width:100%;flex:1;min-height:0;display:block}
+.coreName{font-size:26px;letter-spacing:8px;color:var(--glow-cyan);
+          text-shadow:0 0 16px rgba(0,243,255,.6);margin-top:4px}
+.coreState{font-size:12px;color:var(--dim);letter-spacing:1px;margin-top:8px;text-align:center}
+.coreState.awake{color:var(--good)}
+.coreBtns{display:flex;gap:10px;margin-top:12px}
+.queue{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.queue .n{font-size:30px;color:var(--glow-cyan);text-shadow:0 0 12px var(--glow-cyan)}
+.queue .l{font-size:9px;color:var(--dim);letter-spacing:2px}
+.arcWrap{position:relative;flex:1;width:100%;min-height:0;display:flex}
+
+.thread{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:9px;font-size:13px}
+.msg{padding:9px 11px;border-radius:5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.msg.you{background:rgba(0,68,255,.14);border:1px solid rgba(0,68,255,.35);align-self:flex-end;max-width:88%}
+.msg.jarvis{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.18);max-width:96%}
+.msg .meta{font-size:10px;color:var(--dim);margin-top:5px}
+.ask{display:flex;gap:8px;align-items:center;border-top:1px solid rgba(0,243,255,.12);padding-top:10px;flex:none}
+.ask input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:13px;font-family:inherit}
+.ask .p{color:var(--glow-cyan);font-weight:bold}
+.foot{font-size:10.5px;color:var(--dim);letter-spacing:1px;flex:none}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
-.gate p{color:var(--dim);font-size:13px;line-height:1.6}
-.foot{margin-top:16px;font-size:11px;color:var(--dim);letter-spacing:1px}
-#mic.on{background:rgba(255,60,60,.18);border-color:#ff4d4d;color:#ff9d9d}
-.caps{position:fixed;left:0;right:0;bottom:0;background:rgba(5,11,20,.96);
-      border-top:1px solid var(--glow-blue);padding:12px 20px;z-index:9;display:none}
+.gate p{color:var(--dim);font-size:13px;line-height:1.6;margin:10px 0 18px}
+.caps{position:fixed;left:0;right:0;bottom:0;background:rgba(2,8,19,.97);
+      border-top:1px solid var(--glow-blue);padding:11px 18px;z-index:99;display:none}
 .caps.on{display:block}
-.capwho{font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:4px}
+.capwho{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
 .capwho.awake{color:var(--good)}
-#captext{font-size:15px;color:var(--ink);line-height:1.45;max-height:96px;overflow-y:auto}
-@keyframes spin{100%{transform:rotate(360deg)}}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#captext{font-size:14px;color:var(--ink);line-height:1.4;max-height:80px;overflow-y:auto}
 </style>
 </head>
 <body>
 
 <div class="gate" id="gate" hidden>
-  <h1>JARVIS // CORE_PORTAL</h1>
-  <p>Every figure on this panel is read from the twin. Sign in to see them.</p>
+  <div class="title">J.A.R.V.I.S</div>
+  <p>Every figure here is read from the twin. Nothing is simulated.</p>
   <button id="signin">AUTHENTICATE</button>
   <p id="gateErr" style="color:var(--bad)"></p>
 </div>
 
-<div id="app" hidden>
+<div id="app" hidden style="display:none;flex-direction:column;gap:14px;flex:1;min-height:0;width:100%">
   <header>
-    <h1>JARVIS // CORE_PORTAL_v1.0</h1>
-    <div class="status-badge" id="badge">● CONNECTING</div>
-    <button id="mic">🎙 VOICE OFF</button>
-    <button id="refresh">REFRESH</button>
+    <div class="title">J.A.R.V.I.S // COGNITIVE INTERFACE</div>
+    <div class="badge" id="badge">CONNECTING</div>
+    <div style="display:flex;gap:8px">
+      <button id="mic">🎙 VOICE OFF</button>
+      <button id="refresh">REFRESH</button>
+    </div>
   </header>
 
-  <div class="dashboard-grid">
-    <div class="panel">
-      <h2>PIPELINE</h2>
-      <div id="pipeline"></div>
-      <div id="alert"></div>
-    </div>
-
-    <div class="panel" style="grid-column:2">
-      <h2>ORCHESTRATION</h2>
-      <div class="arc-container">
-        <canvas id="arc"></canvas>
-        <div class="arc-core"><div class="n" id="queueN">—</div><div class="l">IN QUEUE</div></div>
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="col">
+      <div class="panel">
+        <div class="ptitle">Pipeline</div>
+        <div id="pipeline"></div>
+        <div id="alert"></div>
       </div>
-      <h2>AGENT ACTIVITY — LAST 8 RUNS</h2>
-      <div class="log-display" id="logStream"></div>
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Subsystems</div>
+        <div id="features" class="scroll"></div>
+      </div>
     </div>
 
-    <div class="panel">
-      <h2>SPEND</h2>
-      <div id="spend"></div>
-      <h2 style="margin-top:16px">SUBSYSTEMS</h2>
-      <div id="features"></div>
+    <!-- CENTRE -->
+    <div class="col">
+      <div class="panel core">
+        <div class="arcWrap">
+          <canvas id="arc"></canvas>
+          <div class="queue"><div class="n" id="queueN">—</div><div class="l">IN QUEUE</div></div>
+        </div>
+        <div class="coreName">J.A.R.V.I.S</div>
+        <div class="coreState" id="coreState">voice off</div>
+        <div class="coreBtns">
+          <button id="micBig">🎙 TALK</button>
+          <button id="focusInput">⌨ TYPE</button>
+        </div>
+      </div>
+      <div class="panel" style="height:190px">
+        <div class="ptitle">Agent Activity — last 8 runs</div>
+        <div class="scroll" id="logStream" style="font-size:12px;color:#79b6df;line-height:1.7"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col">
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Conversation</div>
+        <div class="thread scroll" id="thread"></div>
+        <div class="ask">
+          <span class="p">&gt;</span>
+          <input id="ask" placeholder="Ask Jarvis, or say his name" autocomplete="off">
+        </div>
+      </div>
+      <div class="panel" style="flex:none">
+        <div class="ptitle">Spend</div>
+        <div id="spend"></div>
+      </div>
     </div>
   </div>
   <div class="foot" id="foot"></div>
-  <div class="caps" id="caps"><div class="capwho" id="capwho"></div><div id="captext"></div></div>
 </div>
+
+<div class="caps" id="caps"><div class="capwho" id="capwho"></div><div id="captext"></div></div>
 
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
@@ -348,22 +403,8 @@ async function speakReply(text){
   finally{ speaking=false; if(listening){ try{rec.start();}catch(_){} } }
 }
 
-async function ask(said){
-  caps('JARVIS','thinking…',false);
-  try{
-    const t=await token();
-    const r=await fetch(CHAT,{method:'POST',
-      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
-      body:JSON.stringify({message:said})});
-    const j=await r.json().catch(()=>({}));
-    const reply = r.ok ? (j.reply||'No answer.') : (j.error||('HTTP '+r.status));
-    caps('JARVIS', reply, false);
-    if(r.ok) await speakReply(reply);
-    load();                                  /* an action may have moved the numbers */
-  }catch(e){ caps('JARVIS', e.message, false); }
-  awake=false;
-  if(listening) caps('LISTENING — say “Jarvis”','',false);
-}
+async function ask(said){ await submit(said); awake=false;
+  if(listening) caps('LISTENING — say “Jarvis”','',false); }
 
 function startVoice(){
   if(!SR){ alert('Voice needs Chrome.'); return; }
@@ -380,7 +421,7 @@ function startVoice(){
       if(WAKE.test(heard)){
         awake=true;
         const after=heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i,'').trim();
-        caps('AWAKE — go ahead', after, true);
+        caps('AWAKE — go ahead', after, true); coreState('awake — go ahead', true);
         if(final&&after) ask(after);
       } else caps('LISTENING — say “Jarvis”', heard, false);
       return;
@@ -392,6 +433,8 @@ function startVoice(){
   rec.onend=()=>{ if(listening&&!speaking){ try{rec.start();}catch(_){} } };
   rec.start(); listening=true;
   el('mic').classList.add('on'); el('mic').textContent='🎙 LISTENING';
+  el('micBig').classList.add('on'); el('micBig').textContent='⏹ STOP';
+  coreState('listening — say “Jarvis”', false);
   caps('LISTENING — say “Jarvis”','',false);
   if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
     navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{
@@ -405,8 +448,64 @@ function stopVoice(){
   if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
   try{ if(rec) rec.stop(); }catch(_){}
   el('mic').classList.remove('on'); el('mic').textContent='🎙 VOICE OFF';
+  el('micBig').classList.remove('on'); el('micBig').textContent='🎙 TALK';
+  coreState('voice off', false);
   capsOff(); load();
 }
+/* ---- conversation ---- */
+function coreState(text, awakeNow){
+  const e=el('coreState'); if(!e) return;
+  e.textContent=text; e.className='coreState'+(awakeNow?' awake':'');
+}
+function say(role, text, cost){
+  const box=el('thread'); if(!box) return null;
+  const d=document.createElement('div');
+  d.className='msg '+(role==='you'?'you':'jarvis');
+  d.textContent=text;
+  const m=document.createElement('div'); m.className='meta';
+  m.textContent=[new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
+                 cost!=null?money(cost):''].filter(Boolean).join('  ·  ');
+  d.appendChild(m); box.appendChild(d); box.scrollTop=box.scrollHeight;
+  return d;
+}
+async function loadThread(){
+  try{
+    const t=await token(); if(!t) return;
+    const r=await fetch(CHAT,{headers:{Authorization:'Bearer '+t}});
+    if(!r.ok) return;
+    const j=await r.json();
+    const box=el('thread'); box.textContent='';
+    (j.messages||[]).slice(-30).forEach(m=>say(m.role, m.text, m.costUsd));
+  }catch(_){}
+}
+
+/* One path for typed and spoken. A second code path for the keyboard is how
+   the two drift until only one of them works. */
+async function submit(said){
+  said=(said||'').trim(); if(!said) return;
+  say('you', said);
+  coreState('thinking…', false);
+  const pending=say('jarvis','…');
+  try{
+    const t=await token();
+    const r=await fetch(CHAT,{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({message:said})});
+    const j=await r.json().catch(()=>({}));
+    const reply=r.ok?(j.reply||'No answer.'):(j.error||('HTTP '+r.status));
+    pending.remove(); say('jarvis', reply, j.costUsd);
+    caps('JARVIS', reply, false);
+    if(r.ok && listening) await speakReply(reply);
+    load();
+  }catch(e){ pending.remove(); say('jarvis', e.message); }
+  coreState(listening?'listening — say “Jarvis”':'voice off', false);
+}
+
+el('ask').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); const v=e.target.value; e.target.value=''; submit(v); }
+});
+el('focusInput').addEventListener('click',()=>el('ask').focus());
+el('micBig').addEventListener('click',()=>listening?stopVoice():startVoice());
 el('mic').addEventListener('click',()=>listening?stopVoice():startVoice());
 
 el('refresh').addEventListener('click',load);
@@ -416,8 +515,10 @@ el('signin').addEventListener('click',async()=>{
 });
 
 authMod.onAuthStateChanged(auth,u=>{
-  el('gate').hidden=!!u; el('app').hidden=!u;
-  if(u){load(); setInterval(load,30000);}
+  el('gate').hidden=!!u;
+  el('app').hidden=!u;
+  el('app').style.display = u ? 'flex' : 'none';
+  if(u){ load(); loadThread(); setInterval(load,30000); }
 });
 </script>
 </body>
