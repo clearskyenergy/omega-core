@@ -233,6 +233,29 @@
     .gIn{min-width:0}
   }
 </style>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="/omega-tools.js"></script>
+<style>
+/* Battery pricing panel. Deliberately plain: it is a ledger of what a
+   supplier charges, and it should read like one. */
+.vt{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+.vt th,.vt td{border:1px solid #d9dde3;padding:4px 5px;text-align:left;vertical-align:middle}
+.vt thead th{background:#f2f4f7;font-weight:600;font-size:11px;white-space:nowrap}
+.vt tbody th{font-weight:600;white-space:nowrap}
+.vt input,.vt select{width:100%;box-sizing:border-box;font:inherit;font-size:12px;
+  padding:3px 4px;border:1px solid #cfd5dc;border-radius:3px;background:#fff}
+/* A number nobody has entered must not look like a number. */
+.vt input::placeholder{color:#9aa3ad}
+.vt tr.stale input,.vt tr.stale select{background:#fff8e6}
+.vt tr.stalemsg td{background:#fff8e6;border-top:0;font-size:11px;color:#7a5b00}
+#secVend .pill{display:inline-block;padding:2px 7px;border-radius:9px;background:#eef1f5;
+  font-size:11px;color:#41505f}
+#secVend .pill.warn{background:#fde8e8;color:#8a1f1f}
+#secVend button{font:inherit;font-size:12px;padding:5px 10px;cursor:pointer;
+  border:1px solid #0b3d63;background:#0b3d63;color:#fff;border-radius:4px}
+</style>
 </head>
 <body>
 
@@ -276,6 +299,19 @@
     <div class="sec" id="secAsm">
       <h4>3 · Commercial assumptions</h4>
       <div id="asmForm"></div>
+    </div>
+
+    <div class="sec" id="secVend">
+      <h4>4 · Battery pricing on file <span class="ct" id="vendCt"></span></h4>
+      <p class="hint" style="margin:0 0 8px">Your own numbers, per supplier. Nothing here
+        ships with a price — a figure appears because somebody put a real quote behind it,
+        and the estimate says which supplier and which quote it used. Leave a field empty
+        and the estimate falls back to its generic rate and tells you so.</p>
+      <div id="vendForm"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+        <button type="button" id="btnVendSave">Save to my organisation</button>
+        <span id="vendStat"></span>
+      </div>
     </div>
 
   </div>
@@ -418,6 +454,88 @@ var MODEL = [
    $389 / $435 / $483 spread on the reference system. */
 var SPREAD = { eq:0.04, cv:0.18, el:0.15, en:0.12, pm:0.20, cm:0.10 };
 
+/* ══════════════════════════════════════════════════════════════════════════
+   BATTERY PRICING ON FILE
+   --------------------------------------------------------------------------
+   A place to keep what each supplier actually charges you, and NOTHING ELSE.
+
+   Every price here ships as null. Not zero — null. A zero would price a
+   battery at nothing and quietly produce an estimate somebody could sign;
+   a null cannot be multiplied, so a missing figure is a visible gap rather
+   than a cheap project. The estimator falls back to its generic $/kWh rate
+   and says on the report which one it used.
+
+   WHY NOT SEED IT WITH PUBLISHED FIGURES. Cell prices move quarterly, differ
+   by an order of magnitude between a cell, a rack and an installed container,
+   and a number lifted from a press release is not a number anybody will
+   honour. Twice today a figure that looked authoritative turned out to be
+   wrong by 77% and by a whole line item. A supplier's own quote is the only
+   thing worth pricing a project from, so this holds quotes.
+
+   PROVENANCE TRAVELS WITH THE PRICE. basis says what kind of number it is —
+   a firm quote, a budgetary indication, a list price, or a figure somebody
+   remembered. ref is the document it came from, date is when it was given,
+   and stale is computed rather than trusted: battery pricing more than a
+   couple of quarters old is history, not a quote.
+
+   Scope of each figure is stated because it is where these comparisons go
+   wrong: dcPerKwh is the DC block delivered to site — racks, BMS, thermal
+   and enclosure — and NOT the PCS, and not installation.
+   ══════════════════════════════════════════════════════════════════════════ */
+var BESS_BASIS = [
+  ["",          "— nothing on file —"],
+  ["quote",     "Firm quote"],
+  ["budgetary", "Budgetary / ROM"],
+  ["list",      "List price"],
+  ["verbal",    "Verbal or remembered"]
+];
+var VEND_STALE_DAYS = 180;
+
+/* Identity only. No specifications, because an invented spec is the same
+   mistake as an invented price. */
+var BESS_VENDORS = [
+  { key:"catl",       name:"CATL" },
+  { key:"fenecon",    name:"FENECON" },
+  { key:"cleancells", name:"Clean Cells" },
+  { key:"sparkz",     name:"SparkZ" },
+  { key:"pytes",      name:"Pytes" }
+];
+
+/* The editable record per supplier. Everything null until somebody types it. */
+function vendBlank(key, name){
+  return { key:key, name:name,
+           model:"",            /* the product the price is for            */
+           dcPerKwh:null,       /* $/kWh, DC block delivered — no PCS      */
+           pcsPerKw:null,       /* $/kW, if the supplier prices it         */
+           basis:"", ref:"", date:"", note:"" };
+}
+var VENDORS = (function(){
+  var o={}, i;
+  for(i=0;i<BESS_VENDORS.length;i++) o[BESS_VENDORS[i].key]=vendBlank(BESS_VENDORS[i].key, BESS_VENDORS[i].name);
+  return o;
+})();
+var VEND_SEL = "";        /* which supplier this estimate is priced from */
+
+function vendHasPrice(v){ return !!(v && typeof v.dcPerKwh === "number" && v.dcPerKwh > 0); }
+function vendAgeDays(v){
+  if(!v || !v.date) return null;
+  var t = Date.parse(v.date); if(isNaN(t)) return null;
+  return Math.floor((Date.now()-t)/86400000);
+}
+function vendStale(v){ var d=vendAgeDays(v); return d!=null && d > VEND_STALE_DAYS; }
+/* One line naming where the battery number came from, for the report. */
+function vendProvenance(v){
+  if(!vendHasPrice(v)) return "";
+  var bits=[], d=vendAgeDays(v), lbl="";
+  for(var i=0;i<BESS_BASIS.length;i++) if(BESS_BASIS[i][0]===v.basis) lbl=BESS_BASIS[i][1];
+  bits.push(v.name + (v.model ? " " + v.model : ""));
+  bits.push("$" + v.dcPerKwh + "/kWh DC");
+  if(lbl) bits.push(lbl.toLowerCase());
+  if(v.ref)  bits.push("ref " + v.ref);
+  if(v.date) bits.push(v.date + (d!=null ? " (" + d + " days old)" : ""));
+  return bits.join(" \u00b7 ");
+}
+
 /* Markups, compounded in this order on the direct+indirect subtotal. */
 var MARKUP = [
   { id:"mk.cm",  n:"Construction management and site supervision", lo:0.030, base:0.030, hi:0.030 },
@@ -481,6 +599,158 @@ var S = {
                             "ia" = wait for the signed interconnection
                             agreement, which is safer and four months slower. */
 };
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BATTERY PRICING PANEL — editing, and keeping it for the organisation
+   --------------------------------------------------------------------------
+   Stored at toolData/{orgId}/tools/costestimator, which is the contract the
+   other tools already use. Deliberately NOT localStorage: what a supplier
+   charges is something a company knows, not something one laptop knows, and
+   a price that lives in one browser is a price the next person re-negotiates
+   from scratch. It also survives the cache clearing that fixes other things.
+
+   Degrades to standalone when Firebase is absent — the fields still work for
+   the session, they just do not persist, and the panel says so rather than
+   pretending it saved.
+   ══════════════════════════════════════════════════════════════════════════ */
+var VEND_TOOLKEY = 'costestimator';
+var V_DB = null, V_FB = null, V_ORG = null;
+
+function vendStat(txt, cls){
+  var e = $('vendStat');
+  if (e) e.innerHTML = '<span class="pill'+(cls?' '+cls:'')+'">' + esc(txt) + '</span>';
+}
+
+function renderVendForm(){
+  var host = $('vendForm'); if(!host) return;
+  var h = '', i, v;
+
+  h += '<label class="fld"><span>Price this estimate from</span>'
+     + '<select id="vendSel"><option value="">— generic rate, no supplier —</option>';
+  for(i=0;i<BESS_VENDORS.length;i++){
+    v = VENDORS[BESS_VENDORS[i].key];
+    h += '<option value="'+BESS_VENDORS[i].key+'"'+(VEND_SEL===BESS_VENDORS[i].key?' selected':'')+'>'
+       + esc(v.name) + (vendHasPrice(v) ? ' — $'+v.dcPerKwh+'/kWh' : ' — no price on file')
+       + '</option>';
+  }
+  h += '</select></label>';
+
+  h += '<table class="vt"><thead><tr><th>Supplier</th><th>Product</th>'
+     + '<th>$/kWh DC</th><th>$/kW PCS</th><th>Basis</th><th>Quote ref</th><th>Dated</th></tr></thead><tbody>';
+  for(i=0;i<BESS_VENDORS.length;i++){
+    var k = BESS_VENDORS[i].key; v = VENDORS[k];
+    var warn = vendHasPrice(v) && vendStale(v);
+    h += '<tr'+(warn?' class="stale"':'')+'>'
+      +  '<th scope="row">'+esc(v.name)+'</th>'
+      +  '<td><input data-v="'+k+'" data-f="model" value="'+esc(v.model||'')+'" placeholder="model / container"></td>'
+      +  '<td><input data-v="'+k+'" data-f="dcPerKwh" type="number" min="0" step="0.01" value="'
+      +      (v.dcPerKwh==null?'':v.dcPerKwh)+'" placeholder="—"></td>'
+      +  '<td><input data-v="'+k+'" data-f="pcsPerKw" type="number" min="0" step="0.01" value="'
+      +      (v.pcsPerKw==null?'':v.pcsPerKw)+'" placeholder="—"></td>'
+      +  '<td><select data-v="'+k+'" data-f="basis">';
+    for(var b=0;b<BESS_BASIS.length;b++){
+      h += '<option value="'+BESS_BASIS[b][0]+'"'+(v.basis===BESS_BASIS[b][0]?' selected':'')+'>'
+         + esc(BESS_BASIS[b][1]) + '</option>';
+    }
+    h += '</select></td>'
+      +  '<td><input data-v="'+k+'" data-f="ref" value="'+esc(v.ref||'')+'" placeholder="PO / quote no."></td>'
+      +  '<td><input data-v="'+k+'" data-f="date" type="date" value="'+esc(v.date||'')+'"></td>'
+      +  '</tr>';
+    if(warn){
+      h += '<tr class="stalemsg"><td colspan="7">Quoted '+vendAgeDays(v)+' days ago. '
+         + 'Cell pricing moves quarterly — re-confirm before this goes in front of a customer.</td></tr>';
+    }
+  }
+  h += '</tbody></table>';
+  host.innerHTML = h;
+
+  var priced = 0;
+  for(i=0;i<BESS_VENDORS.length;i++) if(vendHasPrice(VENDORS[BESS_VENDORS[i].key])) priced++;
+  var ct = $('vendCt');
+  if(ct) ct.textContent = priced ? (priced + ' of ' + BESS_VENDORS.length + ' priced')
+                                 : 'nothing on file yet';
+}
+
+/* Edits land on the record as they are typed; the estimate re-runs so the
+   effect of a price is visible immediately rather than after a save. */
+document.addEventListener('input', function(e){
+  var t = e.target, k = t && t.getAttribute && t.getAttribute('data-v');
+  if(!k || !VENDORS[k]) return;
+  var f = t.getAttribute('data-f'), val = t.value;
+  if(f==='dcPerKwh' || f==='pcsPerKw'){
+    /* Empty means UNKNOWN, and unknown must stay null. Coercing a blank to
+       zero would price a battery at nothing and still produce a total. */
+    VENDORS[k][f] = (val === '' ? null : (isFinite(+val) ? +val : null));
+  } else {
+    VENDORS[k][f] = val;
+  }
+  if(typeof render === 'function') { try { render(); } catch(_){} }
+});
+document.addEventListener('change', function(e){
+  var t = e.target;
+  if(t && t.id === 'vendSel'){
+    VEND_SEL = t.value;
+    renderVendForm();
+    if(typeof render === 'function') { try { render(); } catch(_){} }
+  }
+});
+
+function vendCollect(){
+  var out = { v:1, sel:VEND_SEL, vendors:{} }, i, k;
+  for(i=0;i<BESS_VENDORS.length;i++){ k=BESS_VENDORS[i].key; out.vendors[k]=VENDORS[k]; }
+  return out;
+}
+function vendApply(st){
+  if(!st || !st.vendors) return;
+  var i, k, src;
+  for(i=0;i<BESS_VENDORS.length;i++){
+    k = BESS_VENDORS[i].key; src = st.vendors[k];
+    if(!src) continue;
+    VENDORS[k] = {
+      key:k, name:BESS_VENDORS[i].name,
+      model: src.model || "",
+      dcPerKwh: (typeof src.dcPerKwh === 'number' ? src.dcPerKwh : null),
+      pcsPerKw: (typeof src.pcsPerKw === 'number' ? src.pcsPerKw : null),
+      basis: src.basis || "", ref: src.ref || "", date: src.date || "", note: src.note || ""
+    };
+  }
+  VEND_SEL = st.sel || "";
+  renderVendForm();
+}
+
+function vendSave(){
+  if(!V_DB || !V_ORG){ vendStat('Not signed in — nothing saved', 'warn'); return; }
+  vendStat('Saving…');
+  OMEGATools.saveToolData(V_DB, V_FB, V_ORG, VEND_TOOLKEY, vendCollect())
+    .then(function(){ vendStat('Saved for ' + V_ORG); })
+    ['catch'](function(err){ vendStat('Save failed: ' + ((err && err.message) || 'unknown error'), 'warn'); });
+}
+function vendLoad(){
+  if(!V_DB || !V_ORG) return;
+  OMEGATools.loadToolData(V_DB, V_ORG, VEND_TOOLKEY).then(function(doc){
+    if(doc && doc.data){ vendApply(doc.data); vendStat('Loaded — ' + V_ORG); }
+    else vendStat(V_ORG + ' — nothing on file yet');
+    if(typeof render === 'function'){ try{ render(); }catch(_){} }
+  })['catch'](function(){ vendStat('Could not load saved pricing', 'warn'); });
+}
+function vendInitCloud(){
+  if(typeof firebase === 'undefined' || typeof OMEGATools === 'undefined'){
+    vendStat('Standalone — this session only'); return;
+  }
+  var cfg = window.firebaseConfig || window.FIREBASE_CONFIG || null;
+  try{
+    if(!firebase.apps.length){
+      if(!cfg){ vendStat('Standalone — no Firebase config'); return; }
+      firebase.initializeApp(cfg);
+    }
+    V_FB = firebase; V_DB = firebase.firestore();
+    firebase.auth().onAuthStateChanged(function(u){
+      V_ORG = OMEGATools.orgFromUrl(u ? u.email : null);
+      if(V_ORG) vendLoad(); else vendStat('Sign in to keep this for your team');
+    });
+  }catch(e){ vendStat('Standalone — this session only'); }
+}
 
 function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
 
@@ -601,7 +871,23 @@ function compute(){
     for (var i = 0; i < D.lines.length; i++) {
       var L = D.lines[i], qty, unit = "", raw;
 
-      if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh"; }
+      /* ── A SUPPLIER'S OWN NUMBER BEATS THE GENERIC RATE ────────────────
+         eq.dc is the battery block, and it is the one line where a real
+         quote exists often enough to be worth using. When the selected
+         supplier has a $/kWh on file, price from it and say so on the line;
+         otherwise leave the generic rate alone. Never silently: the unit
+         column names the supplier, so nobody has to wonder which number
+         built the total. */
+      var _vRate = null, _vNote = "";
+      if (L.id === "eq.dc" && VEND_SEL && VENDORS[VEND_SEL] && vendHasPrice(VENDORS[VEND_SEL])) {
+        _vRate = VENDORS[VEND_SEL].dcPerKwh;
+        _vNote = VENDORS[VEND_SEL].name + (vendStale(VENDORS[VEND_SEL]) ? " \u2014 quote is stale" : "");
+      }
+      if (_vRate != null) {
+        L = { id:L.id, n:L.n, basis:L.basis, rate:_vRate, lab:L.lab, vs:L.vs, soil:L.soil, ahj:L.ahj };
+      }
+
+      if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh" + (_vNote ? " \u00b7 " + _vNote : ""); }
       else if (L.basis === "kw")  { qty = K;  unit = "$" + L.rate + " / kW"; }
       else if (L.basis === "ft")  { qty = FT; unit = "$" + L.rate + " / ft \u00d7 " + n0(FT) + " ft"; }
       else if (L.basis === "pad") { qty = P;  unit = "$" + L.rate + " / sq ft \u00d7 " + n0(P) + " sq ft"; }
@@ -1342,6 +1628,8 @@ function enable(on){
 }
 
 function render(){ renderPacketSummary(); renderReq(); renderAsm(); renderOut(); report(); }
+/* The pricing panel is rebuilt by its own edits, not by render(), so a
+   keystroke does not tear the field out from under the cursor. */
 
 /* ══════════════════════════════════════════════════════════════════════════
    EXPORT
@@ -1461,6 +1749,9 @@ function toJson(){
    WIRING
    ══════════════════════════════════════════════════════════════════════════ */
 function boot(){
+  renderVendForm();
+  var _bs = $("btnVendSave"); if(_bs) _bs.onclick = vendSave;
+  vendInitCloud();
   var drop = $("drop"), file = $("pkFile");
   drop.onclick = function(){ file.click(); };
   drop.onkeydown = function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } };
