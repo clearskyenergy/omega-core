@@ -9886,7 +9886,14 @@ function covClick(e){
     else if(S.mode==='dcfcplace' && typeof placeDcfcAt==='function') placeDcfcAt(xp);
     else if(S.mode==='bgbplace' && typeof placeBgbAt==='function') placeBgbAt(xp);
     else if(S.mode==='cgbplace' && typeof placeCgbAt==='function') placeCgbAt(xp);
-    else if(S.mode==='computeplace' && window.OmegaCompute && typeof OmegaCompute.placeAt==='function') OmegaCompute.placeAt(xp);
+    else if(S.mode==='computeplace'){
+      /* The parcel packer owns this when it is loaded — it knows whether a
+         boundary was traced and picks between packing it and anchoring the
+         grid on this click. Without it, anchor on the click. */
+      if(window.OmegaComputePlace && typeof OmegaComputePlace.buildAt==='function') OmegaComputePlace.buildAt(xp);
+      else if(window.OmegaCompute && typeof OmegaCompute.placeAt==='function') OmegaCompute.placeAt(xp);
+      try{ S.mode='select'; }catch(e){}
+    }
     return;
   }
   /* Call THROUGH window: five separate wrappers reassign
@@ -155264,14 +155271,53 @@ if (root.console && console.info) {
      corner of the viewport. The original is kept for comparison. */
   var legacyPlace = null;
 
+  /* ── ASK BEFORE YOU DROP ──────────────────────────────────────────────
+     This replacement ran build() the instant the button was pressed, so
+     pressing "Place" dropped a whole site somewhere the user had not
+     chosen — and because it replaces rather than wraps, arming the click
+     mode inside OmegaCompute itself did nothing: this function is what the
+     button actually calls.
+
+     So the mode is armed HERE, and the click decides what happens:
+
+       parcel traced   -> pack it into the parcel, which is why somebody
+                          traced one, and the click is just the go-ahead
+       no parcel       -> lay the grid out from the click, which is what
+                          every other build on this ribbon does
+
+     The old behaviour also failed the no-parcel case badly: build() bailed
+     with "No parcel yet — use Trace Boundary" and placed nothing, so the
+     modular option simply did not work until you had drawn a boundary. */
+  function armClick() {
+    try {
+      if (typeof root.setMode === 'function') { root.setMode('computeplace'); return true; }
+      if (typeof S !== 'undefined') { S.mode = 'computeplace'; return true; }
+    } catch (e) {}
+    return build();                       /* no mode machinery — drop it */
+  }
+
+  function buildAt(pt) {
+    var poly = null;
+    try { poly = boundary(); } catch (e) {}
+    if (poly && poly.length >= 3) return build();
+    /* No parcel: anchor the grid on the click. legacyPlace is the original
+       OmegaCompute.place, whose placeAt() takes that anchor. */
+    try {
+      if (root.OmegaCompute && typeof root.OmegaCompute.placeAt === 'function') {
+        return root.OmegaCompute.placeAt(pt);
+      }
+    } catch (e) {}
+    return build();
+  }
+
   function install() {
     if (!root.OmegaCompute || typeof root.OmegaCompute.place !== 'function') return false;
     if (root.OmegaCompute.place.__placed) return true;
     legacyPlace = root.OmegaCompute.place;
-    root.OmegaCompute.place = function () { return build(); };
+    root.OmegaCompute.place = function () { return armClick(); };
     root.OmegaCompute.place.__placed = true;
     root.OmegaCompute.placeSubstation = placeSubstation;
-    if (root.console) console.info(TAG + ' ready \u2014 placement is now parcel-aware');
+    if (root.console) console.info(TAG + ' ready \u2014 placement is parcel-aware, on a click');
     return true;
   }
 
@@ -155283,6 +155329,8 @@ if (root.console && console.info) {
 
   root.OmegaComputePlace = {
     build: build,
+    buildAt: buildAt,
+    armClick: armClick,
     /* Wipes everything the engine placed AND any auto-layout solar,
        which build() alone leaves behind. For undoing a run that filled
        the parcel with a thousand shapes. */
