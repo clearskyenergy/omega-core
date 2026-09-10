@@ -144,6 +144,7 @@ button.send:disabled{background:#A8B6C6;cursor:default}
   </div>
   <div class="who" id="who"></div>
   <button class="mic" id="micBtn" hidden>🎙 Voice off</button>
+  <button class="mic" id="meetBtn" hidden>🎧 Meeting</button>
   <button class="gear" id="clearBtn" hidden>Clear</button>
   <button class="gear" id="gear" hidden>Settings</button>
 </header>
@@ -455,6 +456,81 @@ function stopVoice() {
 
 el('micBtn').addEventListener('click', () => listening ? stopVoice() : startVoice());
 
+/* ══ MEETING MODE ════════════════════════════════════════════════════════
+   Continuous transcription with no wake word, accumulated locally and filed
+   as one source when you stop. It enters the same pipeline as a notetaker
+   report, so it becomes a meeting with commitments — and unlike Otter, nobody
+   has to admit it from a waiting room.
+
+   It listens to THIS machine's microphone. On speaker it hears the room; on
+   headphones it hears only you. Said plainly in the UI, because a transcript
+   containing half a conversation is worse than none. */
+let meetRec = null, meeting = false, meetText = '';
+
+function startMeeting() {
+  if (!SR) { alert('Meeting capture needs Chrome.'); return; }
+  if (listening) stopVoice();
+  meetText = '';
+  meetRec = new SR();
+  meetRec.continuous = true;
+  meetRec.interimResults = true;
+  meetRec.lang = 'en-US';
+  meetRec.onresult = ev => {
+    let interim = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) meetText += t.trim() + ' '; else interim += t;
+    }
+    caps('RECORDING — ' + Math.round(meetText.length / 5) + ' words',
+         (meetText.slice(-220) + interim).trim(), true);
+  };
+  meetRec.onend = () => { if (meeting) { try { meetRec.start(); } catch (_) {} } };
+  meetRec.onerror = e => {
+    if (e.error === 'not-allowed') { alert('Chrome blocked the microphone.'); stopMeeting(true); }
+  };
+  meetRec.start();
+  meeting = true;
+  el('meetBtn').classList.add('on');
+  el('meetBtn').textContent = '⏹ End meeting';
+  caps('RECORDING — on speaker it hears the room, on headphones only you', '', true);
+}
+
+async function stopMeeting(discard) {
+  meeting = false;
+  try { if (meetRec) meetRec.stop(); } catch (_) {}
+  el('meetBtn').classList.remove('on');
+  el('meetBtn').textContent = '🎧 Meeting';
+  capsOff();
+  const text = meetText.trim();
+  meetText = '';
+  if (discard || text.length < 40) return;
+
+  const title = prompt('Name this call (blank for a timestamp):', '') || '';
+  bubble('you', '[meeting transcript — ' + Math.round(text.length / 5) + ' words]', new Date().toISOString());
+  const pending = thinking();
+  try {
+    const user = auth.currentUser;
+    const token = await user.getIdToken();
+    const res = await fetch(ENDPOINT + '/meeting', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: text, title })
+    });
+    const j = await res.json().catch(() => ({}));
+    pending.remove();
+    bubble('jarvis', res.ok
+      ? 'Filed “' + j.title + '” (' + j.chars + ' characters). It goes through the ' +
+        'analyse loop within ten minutes — commitments and open questions will ' +
+        'land in your backlog. Ask me about it then.'
+      : (j.error || ('HTTP ' + res.status)), new Date().toISOString());
+  } catch (e) {
+    pending.remove();
+    bubble('jarvis', e.message, new Date().toISOString());
+  }
+}
+
+el('meetBtn').addEventListener('click', () => meeting ? stopMeeting(false) : startMeeting());
+
 /* ---- settings ---------------------------------------------------------- */
 
 async function settingsCall(method, body) {
@@ -580,12 +656,14 @@ authMod.onAuthStateChanged(auth, async user => {
   if (!user) {
     gate.hidden = false; composer.hidden = true; empty.hidden = true;
     el('gear').hidden = true; el('clearBtn').hidden = true;
-    el('micBtn').hidden = true; stopVoice(); openPanel(false);
+    el('micBtn').hidden = true; el('meetBtn').hidden = true;
+    stopVoice(); stopMeeting(true); openPanel(false);
     el('who').textContent = '';
     return;
   }
   gate.hidden = true; composer.hidden = false;
-  el('gear').hidden = false; el('clearBtn').hidden = false; el('micBtn').hidden = false;
+  el('gear').hidden = false; el('clearBtn').hidden = false;
+  el('micBtn').hidden = false; el('meetBtn').hidden = false;
   el('who').textContent = user.email || '';
   try {
     const { messages } = await call('GET');
