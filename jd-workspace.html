@@ -277,7 +277,11 @@ function designCard(r){
     +   '<p class="meta">'+bits.join(' · ')+'</p></div>'
     +   '<div class="acts">'+chip(dz.status)
     +     '<button class="ghost" onclick="openEditor('+i+')">Open in editor</button>'
-    +     (live ? '<button onclick="markComplete('+i+')" id="done'+i+'">Mark complete</button>' : '')
+    +     (live
+            ? '<button onclick="markComplete('+i+')" id="done'+i+'">Mark complete</button>'
+            : (dz.status==='complete'
+                ? '<button class="ghost" onclick="reopenDesign('+i+')" id="undo'+i+'">Reopen</button>'
+                : ''))
     +   '</div></div>'
     + (dz.brief ? '<div class="brief">'+esc(dz.brief)+'</div>' : '')
     + (dz.completedAt
@@ -415,11 +419,49 @@ function markComplete(i){
     load();
   })['catch'](function(e){
     if(btn) btn.disabled=false;
-    setMsg('m'+i, /permission/i.test(e.message||'')
-      ? 'Firestore refused the write — your organisation is on this project but not permitted '
-        + 'to update it. Ask the assigning workspace to check the roster.'
-      : 'Could not save: '+e.message, true);
+    setMsg('m'+i, _designErr(e), true);
   });
+}
+
+/* ── COMPLETE IS NOT A ONE-WAY DOOR ───────────────────────────────────────
+   Marking complete was final from this page: a mis-click, or a drawing that
+   turned out to need another pass, left the row sitting in "Sent back" with
+   no way to pull it out — and the only remedy was to ask the assigning
+   workspace to reset a status on your behalf.
+
+   Reopening puts it back to 'in_design', which is the state it was in before,
+   so the assigning side sees it leave their review queue the same way it
+   arrived. The completion stamp is CLEARED rather than kept: leaving
+   completedAt on a row that is open again would show "marked complete
+   <date>" under a project that is being drawn, which is worse than losing
+   the date. Firestore has no field delete through this path without the
+   sentinel, so they are nulled and every reader already treats a falsy
+   completedAt as "not completed". */
+function reopenDesign(i){
+  var r=ROWS[i];
+  if(!confirm('Reopen "'+r.name+'"?\n\nIt goes back to the To draw list and leaves the '
+      + 'assigning team\u2019s review queue.')) return;
+  var btn=document.getElementById('undo'+i); if(btn) btn.disabled=true;
+  setMsg('m'+i,'Saving\u2026');
+  db.collection('projects').doc(r.id).update({
+    'design.status':      'in_design',
+    'design.completedAt': null,
+    'design.completedBy': null,
+    updatedAt:            new Date().toISOString()
+  }).then(function(){
+    setMsg('m'+i,'Reopened \u2014 back on the To draw list.');
+    load();
+  })['catch'](function(e){
+    if(btn) btn.disabled=false;
+    setMsg('m'+i, _designErr(e), true);
+  });
+}
+
+function _designErr(e){
+  return /permission/i.test((e&&e.message)||'')
+    ? 'Firestore refused the write \u2014 your organisation is on this project but not permitted '
+      + 'to update it. Ask the assigning workspace to check the roster.'
+    : 'Could not save: '+((e&&e.message)||'unknown error');
 }
 </script>
 </body>
