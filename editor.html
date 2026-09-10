@@ -2041,7 +2041,7 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="rb-flyout" id="fly-dc">
             <div class="rb-fly-head">Compute</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',openDcClusterDialog)"><span class="fi-ico">▦</span> Data-Ctr Cluster</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> Leviathan Pad <span class="fi-sub">1 MW</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">1 MW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
           </div>
@@ -5930,8 +5930,8 @@ const ICONS={
     <text x="30" y="59" font-size="5" fill="#B8A080" text-anchor="middle" font-family="'Courier New',monospace" font-weight="700">UTIL POLE</text>
   </svg>`,
 
-  // == ARMADA DATA-CENTER / EDGE COMPUTE NODES (from Fleet Simulator) =======
-  // Galleon Cruiser -- 20ft compute container (~35 kW)
+  // == MODULAR DATA-CENTER / EDGE COMPUTE NODES ==============================
+  // 20ft compute container (~35 kW)
   dc_cruiser:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#2E2450"/>
     <rect x="6" y="18" width="44" height="22" rx="2" fill="#4C3B87" stroke="#A78BFA" stroke-width="1.5"/>
@@ -5940,27 +5940,27 @@ const ICONS={
     <rect x="27" y="21" width="7" height="16" rx="1" fill="#2B2050" stroke="#8B6FE0" stroke-width="1"/>
     <rect x="36" y="21" width="7" height="16" rx="1" fill="#2B2050" stroke="#8B6FE0" stroke-width="1"/>
     ${[23,26,29,32,35].map(y=>[9,18,27,36].map(x=>`<rect x="${x+1}" y="${y}" width="5" height="1.4" rx=".3" fill="#A78BFA" opacity=".7"/>`).join('')).join('')}
-    <text x="28" y="50" font-size="4.5" fill="#A78BFA" text-anchor="middle" font-family="monospace" font-weight="bold">CRUISER</text>
+    <text x="28" y="50" font-size="4.5" fill="#A78BFA" text-anchor="middle" font-family="monospace" font-weight="bold">20 FT</text>
   </svg>`,
 
-  // Galleon Triton -- galleon-class compute node (~120 kW)
+  // 40ft compute container (~120 kW)
   dc_triton:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#2E2450"/>
     <rect x="5" y="15" width="46" height="28" rx="2" fill="#4C3B87" stroke="#A78BFA" stroke-width="1.5"/>
     ${[7,17,27,37].map(x=>`<rect x="${x}" y="18" width="8" height="22" rx="1" fill="#2B2050" stroke="#8B6FE0" stroke-width="1"/>`).join('')}
     ${[20,24,28,32,36].map(y=>[7,17,27,37].map(x=>`<rect x="${x+1}" y="${y}" width="6" height="1.5" rx=".3" fill="#A78BFA" opacity=".7"/>`).join('')).join('')}
     <circle cx="45" cy="12" r="2.2" fill="#C4B5FD"/>
-    <text x="28" y="52" font-size="4.5" fill="#A78BFA" text-anchor="middle" font-family="monospace" font-weight="bold">TRITON</text>
+    <text x="28" y="52" font-size="4.5" fill="#A78BFA" text-anchor="middle" font-family="monospace" font-weight="bold">40 FT</text>
   </svg>`,
 
-  // Leviathan -- 1MW modular data center (40ft class)
+  // 1MW modular data center (40ft class)
   dc_leviathan:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#241C3E"/>
     <rect x="3" y="13" width="50" height="32" rx="2" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.8"/>
     ${[5,14,23,32,41].map(x=>`<rect x="${x}" y="16" width="7" height="26" rx="1" fill="#241C3E" stroke="#A78BFA" stroke-width="1"/>`).join('')}
     ${[18,22,26,30,34,38].map(y=>[5,14,23,32,41].map(x=>`<rect x="${x+1}" y="${y}" width="5" height="1.5" rx=".3" fill="#C4B5FD" opacity=".8"/>`).join('')).join('')}
     <path d="M40 15l-2 4h4l-2 4" stroke="#00E5FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    <text x="28" y="53" font-size="4.2" fill="#C4B5FD" text-anchor="middle" font-family="monospace" font-weight="bold">LEVIATHAN 1MW</text>
+    <text x="28" y="53" font-size="4.2" fill="#C4B5FD" text-anchor="middle" font-family="monospace" font-weight="bold">1 MW MDC</text>
   </svg>`,
 
   // EMS -- Energy Management System common node (square junction point)
@@ -6128,12 +6128,12 @@ const EQ=[
   {id:'camera',  label:'Camera'},
   {id:'ups',     label:'UPS'},
   {id:'pole',    label:'Utility Pole'},
-  {id:'dc_cruiser',   label:'Galleon Cruiser'},
-  {id:'dc_triton',    label:'Galleon Triton'},
-  {id:'dc_leviathan', label:'Leviathan 1MW'},
+  {id:'dc_cruiser',   label:'Compute Container 20ft'},
+  {id:'dc_triton',    label:'Compute Container 40ft'},
+  {id:'dc_leviathan', label:'1 MW MDC'},
 ];
 
-// == ARMADA DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) ==
+// == MODULAR DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) =
 // Source: Fleet Simulator BIGNODE specs. Container-class compute units.
 /* ══════════════════════════════════════════════════════════════════════
    MODULAR DATA CENTRE UNITS
@@ -6153,25 +6153,25 @@ const EQ=[
    read as a datasheet.
    ══════════════════════════════════════════════════════════════════════ */
 var DC_CATALOG = {
-  dc_cruiser:   { label:'Galleon Cruiser (20ft)', kw:35,   lf:20, wf:8,
+  dc_cruiser:   { label:'Compute Container (20ft)', kw:35,  lf:20, wf:8,
                   cooling:'integrated', water:0, ups:'integrated',
-                  spec:'Armada Galleon Cruiser · 20 ft container, 3 compute racks',
+                  spec:'20 ft compute container · 3 racks',
                   verified:null },
-  dc_triton:    { label:'Galleon Triton (40ft)',  kw:120,  lf:40, wf:8,
+  dc_triton:    { label:'Compute Container (40ft)', kw:120, lf:40, wf:8,
                   cooling:'integrated', water:0, ups:'integrated',
-                  spec:'Armada Galleon Triton · 40 ft container, 5 compute racks',
+                  spec:'40 ft compute container · 5 racks',
                   verified:null },
-  /* Leviathan is three containers — two 45 ft (compute, power distribution)
+  /* The 1.77 MW unit is three containers — two 45 ft (compute, power distribution)
      and one 20 ft (cooling) — occupying 119 x 45 ft, 0.12 acres, as one
      footprint. It was carried here as 1 MW on a 40 x 10 ft pad, which is 77%
      light on load and thirteen times small on land: fifteen of them is 1.8
      acres of pods, not 0.14. Cooling is a closed-circuit direct-to-chip loop
      with N+1 air-cooled chillers INSIDE that footprint, so there is no yard
      to draw and no water service to size. Utility interface is 480 V. */
-  dc_leviathan: { label:'Leviathan 1.77MW MDC',   kw:1770, lf:119, wf:45,
+  dc_leviathan: { label:'1.77 MW Modular Data Center', kw:1770, lf:119, wf:45,
                   coolKw:2200, cooling:'integrated-closed-loop', water:0,
                   ups:'integrated', volts:480, acres:0.12,
-                  spec:'Armada Leviathan · 1.77 MW IT · closed-circuit direct-to-chip, '
+                  spec:'1.77 MW IT · closed-circuit direct-to-chip, '
                      + 'air-cooled N+1, no site water · 480 V / 60 Hz',
                   verified:'armada.ai/product/leviathan' }
 };
@@ -9869,7 +9869,7 @@ function nearestEl(cx,cy){
 }
 
 function covClick(e){
-  if(S.mode==='clusterplace'||S.mode==='dcclusterplace'||S.mode==='emsplace'||S.mode==='sourceplace'||S.mode==='topoinsert'||S.mode==='chargerplace'||S.mode==='derbuildplace'||S.mode==='wizplace'||S.mode==='dcfcplace'||S.mode==='bgbplace'||S.mode==='cgbplace'){
+  if(S.mode==='clusterplace'||S.mode==='dcclusterplace'||S.mode==='emsplace'||S.mode==='sourceplace'||S.mode==='topoinsert'||S.mode==='chargerplace'||S.mode==='derbuildplace'||S.mode==='wizplace'||S.mode==='dcfcplace'||S.mode==='bgbplace'||S.mode==='cgbplace'||S.mode==='computeplace'){
     e.stopPropagation();
     var scrX=document.getElementById('sc').getBoundingClientRect();
     var xp=(typeof _plotUnproject==='function')
@@ -9886,6 +9886,7 @@ function covClick(e){
     else if(S.mode==='dcfcplace' && typeof placeDcfcAt==='function') placeDcfcAt(xp);
     else if(S.mode==='bgbplace' && typeof placeBgbAt==='function') placeBgbAt(xp);
     else if(S.mode==='cgbplace' && typeof placeCgbAt==='function') placeCgbAt(xp);
+    else if(S.mode==='computeplace' && window.OmegaCompute && typeof OmegaCompute.placeAt==='function') OmegaCompute.placeAt(xp);
     return;
   }
   /* Call THROUGH window: five separate wrappers reassign
@@ -21353,9 +21354,19 @@ function setMode(m){
   // Sync the new grouped menu bar + status chip
   if(typeof mbSyncMode==='function') mbSyncMode(m);
   var _covOn = (m==='conduit') || (m==='dimension') || (typeof SHAPE_MODES!=='undefined' && !!SHAPE_MODES[m])
-    || m==='clusterplace' || m==='dcclusterplace' || m==='emsplace' || m==='sourceplace' || m==='topoinsert' || m==='chargerplace' || m==='derbuildplace' || m==='wizplace' || m==='dcfcplace' || m==='bgbplace' || m==='cgbplace';
+    || m==='clusterplace' || m==='dcclusterplace' || m==='emsplace' || m==='sourceplace' || m==='topoinsert' || m==='chargerplace' || m==='derbuildplace' || m==='wizplace' || m==='dcfcplace' || m==='bgbplace' || m==='cgbplace' || m==='computeplace';
   document.getElementById('cov').classList.toggle('on',_covOn);
   if(m==='conduit')showBanner('cond',' Click START point -- or click directly on an element to snap');
+  /* ── THESE INSTRUCTIONS WERE NEVER REACHABLE ────────────────────────────
+     The branch below was gated on SHAPE_MODES, which holds line, rect,
+     circle, polyline, parking, bespad, callout and utility — and nothing
+     else. Every *place entry in the table under it (BESS cluster, EV
+     chargers, EMS node, source point, DER build, data-centre cluster) fell
+     through to hideBanner(), so arming one of those tools told the user
+     nothing at all: the cursor changed and that was the whole hint.
+
+     The strings were written to be shown. Gate on the table itself. */
+  else if(typeof _sbText==='function' && _sbText(m)){ showBanner('shape',_sbText(m)); }
   else if(typeof SHAPE_MODES!=='undefined' && SHAPE_MODES[m]){
     var _sb={line:'Line: click start, then end . ESC cancels',
              rect:'Rectangle: click two opposite corners . ESC cancels',
@@ -21364,7 +21375,8 @@ function setMode(m){
              parking:'Parking: click to drop a stall array . ESC exits',
              bespad:'BESS Pad: click to drop a to-scale pad . ESC exits',
              clusterplace:'BESS Cluster: click to drop the cluster . ESC exits',
-             dcclusterplace:'Data-Center Cluster: click to drop Armada blocks . ESC exits',
+             dcclusterplace:'Data-Center Cluster: click to drop compute blocks . ESC exits',
+             computeplace:'Compute Site: click where the array starts . ESC exits',
              emsplace:'EMS Node: click to place the common point . ESC exits',
              sourceplace:'Source/POI: click to set the connection point . ESC exits',
              chargerplace:'EV Chargers: click to place each unit . ESC exits',
@@ -21374,6 +21386,26 @@ function setMode(m){
     showBanner('shape',_sb[m]||'Draw mode');
   }
   else hideBanner();
+}
+/* The same table, callable before the branch above so a placement mode that
+   is not a SHAPE_MODE still gets its instruction. One copy, one place to add
+   the next tool's line. */
+function _sbText(m){
+  var t={parking:'Parking: click to drop a stall array . ESC exits',
+         bespad:'BESS Pad: click to drop a to-scale pad . ESC exits',
+         clusterplace:'BESS Cluster: click to drop the cluster . ESC exits',
+         dcclusterplace:'Data-Center Cluster: click to drop compute blocks . ESC exits',
+         computeplace:'Compute Site: click the map where the array starts . ESC exits',
+         emsplace:'EMS Node: click to place the common point . ESC exits',
+         sourceplace:'Source/POI: click to set the connection point . ESC exits',
+         chargerplace:'EV Chargers: click to place each unit . ESC exits',
+         topoinsert:'Topology: click to place the component . ESC exits',
+         derbuildplace:'DER Build: click to place the generation site . ESC exits',
+         wizplace:'Guided build: click to place the next item . ESC exits',
+         dcfcplace:'DCFC build: click to place the next item . ESC exits',
+         bgbplace:'BESS guided build: click to place the next node . ESC exits',
+         cgbplace:'Compute guided build: click to place the next node . ESC exits'};
+  return t[m]||'';
 }
 let bannerTimer=null;
 function showBanner(type,msg){
@@ -22893,7 +22925,7 @@ var OFFTAKERS = [
   { id:'datacenter', ico:'▤', name:'Data Center',
     sub:'Edge / colo / AI compute. 24x7 critical load; BESS for peak + bridging + grid services.',
     loadKW:2000, loadKWh:20000, block:'DATA CENTER CRITICAL LOAD',
-    note:'24x7 critical compute (e.g. Armada edge AI). Size for peak shaving, bridging, and grid-services stacking.' }
+    note:'24x7 critical compute (e.g. edge AI). Size for peak shaving, bridging, and grid-services stacking.' }
 ];
 
 function _offtakerById(id){
@@ -52878,7 +52910,7 @@ function p0OrdScreenCA(){
 <script>
 /* =====================================================================
  *  DER / GENERATION MODULE  (ES5-safe)  --  NextNRG
- *  Adds: Data-center pads (Cruiser/Triton/Leviathan), Solar (ground +
+ *  Adds: Data-center pads (20ft / 40ft / 1 MW MDC), Solar (ground +
  *  rooftop, area-fill like parking), Wind turbines (pad-style multi),
  *  Alt-energy/generators (single-symbol like CT cabinet), and a DER
  *  Generation analysis tab with a revenue waterfall:
@@ -52888,9 +52920,9 @@ function p0OrdScreenCA(){
 /* ---- CAPACITY CATALOGS ------------------------------------------------ */
 /* Data-center compute nodes (kW electrical LOAD they consume). */
 var DERC_DC = {
-  dc_cruiser:   { label:'Galleon Cruiser (20ft)', kw:35,   lf:20, wf:8  },
-  dc_triton:    { label:'Galleon Triton',         kw:120,  lf:30, wf:10 },
-  dc_leviathan: { label:'Leviathan 1MW MDC',      kw:1000, lf:40, wf:10 }
+  dc_cruiser:   { label:'35 kW Compute Container (20ft)', kw:35,  lf:20, wf:8  },
+  dc_triton:    { label:'120 kW Compute Container (40ft)', kw:120, lf:30, wf:10 },
+  dc_leviathan: { label:'1 MW Modular Data Center', kw:1000, lf:40, wf:10 }
 };
 /* Wind turbines (kW nameplate each). Small/medium distributed class. */
 var DERC_WIND = {
@@ -53774,7 +53806,7 @@ var DER_RATES = {
   btmPerKwYr:         95     /* BTM demand-charge reduction $/kW-yr */
 };
 
-/* ---- DATA-CENTER COMPUTE PRICING (sold to the Armada units) ----------
+/* ---- DATA-CENTER COMPUTE PRICING (sold to the compute units) ----------
    Two methods, shown side by side:
    - Capacity method: $/kW of committed compute power per MONTH (contract-style).
    - Energy method:   $/MWh delivered to the racks at ~near-continuous duty. */
@@ -53785,7 +53817,7 @@ var DC_COMPUTE = {
 };
 function derComputeRevenue(){
   var t=derTotals();
-  var kw=t.dcLoadKw;                       /* committed compute power from placed Armada units */
+  var kw=t.dcLoadKw;                       /* committed compute power from placed compute units */
   var capYr   = kw * DC_COMPUTE.capacityPerKwMo * 12;
   var mwhYr   = kw * DC_COMPUTE.dutyFactor * 8760 / 1000;
   var enYr    = mwhYr * DC_COMPUTE.energyPerMwh;
@@ -54415,7 +54447,7 @@ function _derAnalysisInner(){
         +'<div style="font-size:10px;color:#94A3B8;margin-top:3px">'+Math.round(comp.mwhYr).toLocaleString()+' MWh/yr \u00d7 $'+DC_COMPUTE.energyPerMwh+'/MWh ('+(DC_COMPUTE.dutyFactor*100).toFixed(0)+'% duty)</div>'
       +'</div>'
     +'</div>'
-    +'<div style="font-size:10px;color:#64748B;margin-bottom:16px">Based on placed Armada units: '+t.dcUnits+' node(s) = '+comp.kw.toLocaleString()+' kW compute. Capacity method is contract-style (committed power); energy method bills delivered MWh. Capacity method typically yields the higher, more bankable figure.</div>';
+    +'<div style="font-size:10px;color:#64748B;margin-bottom:16px">Based on placed compute units: '+t.dcUnits+' node(s) = '+comp.kw.toLocaleString()+' kW compute. Capacity method is contract-style (committed power); energy method bills delivered MWh. Capacity method typically yields the higher, more bankable figure.</div>';
 
   /* ---- grid value stack (toggles) ---- */
   var stackRows='';
@@ -54493,7 +54525,7 @@ function _derAnalysisInner(){
       +'<div style="font-size:26px;font-weight:900;color:#4ADE80">'+_fmtMoneyDer(grandTotal)+'<span style="font-size:12px;color:#64748B">/yr</span></div>'
     +'</div>'
     +_derPnlHtml()
-    +'<div style="margin-top:14px;font-size:9.5px;color:#64748B;line-height:1.5">Illustrative planning estimate only. Compute revenue is priced off the placed Armada units (capacity vs. energy method). Grid value-stack layers are toggleable and co-optimize on the placed BESS MW. Actual revenue depends on enrolled programs, cleared market prices, dispatch performance, interconnection limits, and utilization. The PJM/ComEd rows (arbitrage, FR, capacity, reserves, generic DR) are illustrative wholesale-market anchors \u2014 accurate for PJM territory, not applicable in vertically-integrated or non-PJM ISO territory (Georgia Power/SERC, CAISO, ERCOT, SPP, MISO, etc.). Use \u201cAdd a utility DER/DR program\u201d below the stack to add your actual utility\u2019s program (a small nationwide library is included, plus a custom option) and enter its real rate \u2014 not a market-cleared price.</div>'
+    +'<div style="margin-top:14px;font-size:9.5px;color:#64748B;line-height:1.5">Illustrative planning estimate only. Compute revenue is priced off the placed compute units (capacity vs. energy method). Grid value-stack layers are toggleable and co-optimize on the placed BESS MW. Actual revenue depends on enrolled programs, cleared market prices, dispatch performance, interconnection limits, and utilization. The PJM/ComEd rows (arbitrage, FR, capacity, reserves, generic DR) are illustrative wholesale-market anchors \u2014 accurate for PJM territory, not applicable in vertically-integrated or non-PJM ISO territory (Georgia Power/SERC, CAISO, ERCOT, SPP, MISO, etc.). Use \u201cAdd a utility DER/DR program\u201d below the stack to add your actual utility\u2019s program (a small nationwide library is included, plus a custom option) and enter its real rate \u2014 not a market-cleared price.</div>'
     +'</div></div>';
 }
 
@@ -55568,13 +55600,13 @@ window.placeClusterAt=placeClusterAt;
 <script>
 /* =====================================================================
  *  DATA-CENTER CLUSTER + SOURCE POINT + WIZARD RE-SEQUENCE  (ES5-safe)
- *  - DC blocks placed BESS-pad-style, Armada-sized, clusterable.
+ *  - DC blocks placed BESS-pad-style, to real footprint, clusterable.
  *  - Source point (Utility POI / Utility+DER / Off-grid) set on the map.
  *  - Topology wizard: Source -> BESS cluster -> EMS -> XFMR -> Meter
  *      -> Panel -> Ancillary (chargers) -> Data center -> Utility.
  * ===================================================================== */
 
-/* ---- DATA-CENTER CLUSTER (Armada blocks, like BESS pads) ------------ */
+/* ---- DATA-CENTER CLUSTER (compute blocks, like BESS pads) ----------- */
 var _dcClusterCfg = { id:'dc_leviathan', qty:2, cols:2 };
 function openDcClusterDialog(){
   var opts='';
@@ -55584,11 +55616,11 @@ function openDcClusterDialog(){
     +'<div id="dccl-modal" style="position:fixed;inset:0;background:rgba(6,12,22,.78);z-index:100001;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.remove()">'
     +'<div style="background:#0F1D30;border:1px solid #2E2450;border-radius:12px;max-width:460px;width:100%">'
     +'<div style="padding:16px 20px;border-bottom:1px solid #2E2450;display:flex;align-items:center;justify-content:space-between">'
-      +'<div style="font-size:16px;font-weight:800;color:#C4B5FD">\u25a6 Data-Center Cluster (Armada)</div>'
+      +'<div style="font-size:16px;font-weight:800;color:#C4B5FD">\u25a6 Data-Center Cluster</div>'
       +'<button onclick="document.getElementById(\'dccl-modal\').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">\u00d7</button>'
     +'</div>'
     +'<div style="padding:18px 20px;font-size:13px;color:#CBD5E1">'
-      +'<div style="margin-bottom:12px"><label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px">Armada unit</label>'
+      +'<div style="margin-bottom:12px"><label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px">Compute unit</label>'
         +'<select id="dccl-model" style="width:100%;background:#0B1626;border:1px solid #2E2450;color:#E2EEF9;border-radius:6px;padding:8px">'+opts+'</select></div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
         +'<div><label style="font-size:11px;color:#94A3B8;display:block;margin-bottom:4px">How many</label>'
@@ -55598,7 +55630,7 @@ function openDcClusterDialog(){
       +'</div>'
       +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-top:10px">'
         +'<input type="checkbox" id="dccl-trench" checked style="width:14px;height:14px"> Trench cluster to EMS (AC / DC / BMS)</label>'
-      +'<p style="font-size:11px;color:#64748B;margin:10px 0 0">Click the map to drop the data-center cluster to scale. Units size to the Armada footprint.</p>'
+      +'<p style="font-size:11px;color:#64748B;margin:10px 0 0">Click the map to drop the data-center cluster to scale. Units size to their real footprint.</p>'
     +'</div>'
     +'<div style="padding:14px 20px;border-top:1px solid #2E2450;display:flex;gap:8px;justify-content:flex-end">'
       +'<button onclick="document.getElementById(\'dccl-modal\').remove()" style="background:none;border:1px solid #2E2450;color:#94A3B8;border-radius:6px;padding:8px 16px;font-size:12px;cursor:pointer">Cancel</button>'
@@ -55811,7 +55843,7 @@ var TOPO_STEPS = [
   { id:'meter',   label:'4 \u00b7 Meter',               desc:'Revenue meter / PT&CT (auto-connects)',               run:'_topoInsert:meter' },
   { id:'panel',   label:'5 \u00b7 Panelboard',          desc:'Main panel / POI board (auto-connects)',              run:'_topoInsert:panel' },
   { id:'anc',     label:'6 \u00b7 Ancillary (Chargers)', desc:'EV chargers \u2014 add several or skip',              run:'openChargerDialog' },
-  { id:'dc',      label:'7 \u00b7 Data-Center Blocks',  desc:'Armada compute blocks (cluster)',                     run:'openDcClusterDialog' },
+  { id:'dc',      label:'7 \u00b7 Data-Center Blocks',  desc:'Modular compute blocks (cluster)',                     run:'openDcClusterDialog' },
   { id:'util',    label:'8 \u00b7 Utility Connection',  desc:'Final tie to the grid (skip if off-grid)',            run:'_topoInsert:util_poi' }
 ];
 function _topoStepsHtml(){
@@ -67817,7 +67849,7 @@ function _chEnsure(){
 function _chModeWants(m){
   if(!m || m==='select') return false;
   if(typeof SHAPE_MODES!=='undefined' && SHAPE_MODES[m]) return true;
-  var extra={conduit:1,dimension:1,clusterplace:1,dcclusterplace:1,emsplace:1,
+  var extra={conduit:1,dimension:1,clusterplace:1,dcclusterplace:1,computeplace:1,emsplace:1,
              sourceplace:1,topoinsert:1,chargerplace:1,derbuildplace:1,callout:1,wizplace:1,dcfcplace:1,bgbplace:1,cgbplace:1};
   return !!extra[m];
 }
@@ -98870,7 +98902,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
     /* Utility ceiling. An explicit cfg.utilKw wins, because the guided
        modal lets the user type a substation rating by hand and that has to
-       reach the sizer -- otherwise Modular Armada AI ignored the 20 MW the
+       reach the sizer -- otherwise the modular path ignored the 20 MW the
        user had just entered and sized fuel cells to carry the whole
        facility. Falls back to the Find Substation lookup. */
     var util=null, utilSrc='none';
@@ -99087,8 +99119,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
             +'<div style="font-size:9.5px;color:#94A3B8;margin-top:4px;line-height:1.5">Draw the trench, then click along it to drop each pod and each generation unit, one at a time.</div>'
           +'</div>'
           +'<div id="ocb-fmt-cluster" onclick="OmegaCompute.fmt(\'cluster\')" style="border:1px solid #26364d;border-radius:10px;padding:11px 12px;cursor:pointer">'
-            +'<div style="font-size:12px;font-weight:800;color:#E2EEF9">\u25a6 Modular Armada AI</div>'
-            +'<div style="font-size:9.5px;color:#94A3B8;margin-top:4px;line-height:1.5">Drop the whole sized site in a grid in one click, then auto-trench it.</div>'
+            +'<div style="font-size:12px;font-weight:800;color:#E2EEF9">\u25a6 Modular blocks</div>'
+            +'<div style="font-size:9.5px;color:#94A3B8;margin-top:4px;line-height:1.5">Click where the array starts and the whole sized site lands as a grid, then auto-trenches.</div>'
           +'</div>'
         +'</div>'
         +'<div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#A78BFA;margin-bottom:6px">2 \u00b7 Load</div>'
@@ -99327,7 +99359,35 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   }
 
   /* ── PLACEMENT ─────────────────────────────────────────────────────── */
+  /* ── THE USER PICKS THE SPOT ──────────────────────────────────────────
+     This used to drop the whole array at 18% across and 18% down the
+     viewport and call it placed. On a real parcel that is the middle of the
+     parking lot, or the neighbour's field, and the only way to fix it was to
+     select every pod and drag them one at a time — which is the work the
+     guided build exists to avoid.
+
+     Every other build on this ribbon arms a placement mode and waits for a
+     click: BESS pads, the BESS cluster, EV chargers, the DER build, the
+     source point. This one is now the same — arm 'computeplace', and lay the
+     grid out from wherever the click lands, with the click as the array's
+     top-left corner. Esc leaves the mode without placing anything, same as
+     the rest. */
   function place(){
+    if(!_r){ recalc(); }
+    var r=_r; if(!r) return;
+    if(typeof S==='undefined'||!S.shapes){ alert('No active project.'); return; }
+    if(r.pods<1 && r.fcBlocks<1){ alert('Nothing to place \u2014 set an IT load.'); return; }
+    var m0=document.getElementById('ocb-modal'); if(m0) m0.remove();
+    try{
+      if(typeof setMode==='function'){ setMode('computeplace'); return true; }
+      S.mode='computeplace'; return true;
+    }catch(e){
+      /* No canvas mode machinery on this page — drop it rather than refuse. */
+      return placeAt(null);
+    }
+  }
+
+  function placeAt(anchor){
     if(!_r){ recalc(); }
     var r=_r; if(!r) return;
     if(typeof S==='undefined'||!S.shapes){ alert('No active project.'); return; }
@@ -99336,7 +99396,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var ppf=(S.pxPerFt&&S.pxPerFt>0)?S.pxPerFt:6;
     var svg=document.getElementById('csvg')||document.getElementById('sc');
     var W=(svg&&svg.clientWidth)||900, H=(svg&&svg.clientHeight)||600;
-    var x0=Math.max(40,W*0.18), y0=Math.max(40,H*0.18);
+    var x0, y0;
+    if(anchor && isFinite(anchor.x) && isFinite(anchor.y)){ x0=anchor.x; y0=anchor.y; }
+    else { x0=Math.max(40,W*0.18); y0=Math.max(40,H*0.18); }
     var made=0;
 
     /* Compute pods first - this is a load-led build, so the load lands
@@ -99408,6 +99470,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{ if(cond&&cond.ok) S.computeBuild.conduit={runs:cond.runs,diverse:cond.diverse,hub:cond.hub}; }catch(e){}
 
     var m=document.getElementById('ocb-modal'); if(m) m.remove();
+    try{ S.mode='select'; }catch(e){}
     var msg=' Compute site placed \u2014 '+(r.itKw/1000).toFixed(1)+' MW IT, '
       +r.pods+' pods'
       +(r.fcBlocks?(', '+r.fcBlocks+' \u00d7 '+(r.genLabel||'generation')+' ('+(r.fcKw/1000).toFixed(2)+' MW), '+r.gasMmbtuHr+' MMBtu/hr gas'):', no on-site generation')
@@ -99445,7 +99508,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     if(c){ c.style.borderColor=(v==='cluster')?'#A78BFA':'#26364d';
            c.style.background=(v==='cluster')?'rgba(167,139,250,.10)':'transparent'; }
     var b=document.getElementById('ocb-go');
-    if(b) b.innerHTML=(v==='guided')?'\u25b6 Start Placing':'\u25a6 Place Modular Armada AI';
+    if(b) b.innerHTML=(v==='guided')?'\u25b6 Start Placing':'\u25a6 Place Modular Blocks';
   }
   /* One entry point. The sizing above is identical either way -- only the
      PLACEMENT differs, so the guided flow inherits the counts the sizer
@@ -99463,7 +99526,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   /* OMEGA PATCH 16.
      place() reads its sizing from _r, which only recalc() sets, and recalc()
      reads the ocb-* inputs. That is fine while THIS modal is open, but the
-     Modular Armada AI hand-off comes from the guided-build modal, where
+     modular-block hand-off comes from the guided-build modal, where
      those inputs do not exist -- so IT load resolved to zero and the user
      got "Nothing to place -- set an IT load" while staring at 5 MW on
      screen. Size from an explicit config instead of the DOM. */
@@ -99472,7 +99535,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return place();
   }
 
-  window.OmegaCompute={ open:open, size:size, place:place, recalc:recalc, noteText:noteText,
+  window.OmegaCompute={ open:open, size:size, place:place, placeAt:placeAt, recalc:recalc, noteText:noteText,
                         fmt:fmt, run:run, placeWith:placeWith,
                         heatRate:function(){
                           try{ if(S.computeBuild && +S.computeBuild.heatRate>0) return +S.computeBuild.heatRate; }catch(e){}
@@ -100259,8 +100322,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
    fed from an existing service there is no substation to draw, and the
    MW figure is the ceiling everything downstream has to fit under.
 
-   The old cluster path is unchanged but renamed. It places Leviathan-class
-   modular compute blocks, so it is now labelled MODULAR ARMADA AI rather
+   The old cluster path is unchanged but renamed. It places 1 MW-class
+   modular compute blocks, so it is now labelled MODULAR BLOCKS rather
    than "cluster" -- the distinction is a product one, not a layout one.
    ══════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -100757,8 +100820,8 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
           +'<div style="font-size:12.5px;font-weight:800;color:#E2EEF9">\u26a1 Guided build</div>'
           +'<div style="font-size:10px;color:#94A3B8;margin-top:5px;line-height:1.5">Full engineered chain. Click once per node; conduit routes itself between them.</div></div>'
         +'<div id="cgb-f-modular" onclick="OmegaCGB.fmt(\'modular\')" style="border:2px solid #26364d;border-radius:10px;padding:12px;cursor:pointer">'
-          +'<div style="font-size:12.5px;font-weight:800;color:#E2EEF9">\u25a6 Modular Armada AI</div>'
-          +'<div style="font-size:10px;color:#94A3B8;margin-top:5px;line-height:1.5">Leviathan-class modular compute blocks, sized and dropped as a cluster in one click.</div></div>'
+          +'<div style="font-size:12.5px;font-weight:800;color:#E2EEF9">\u25a6 Modular blocks</div>'
+          +'<div style="font-size:10px;color:#94A3B8;margin-top:5px;line-height:1.5">Factory-built 1 MW compute blocks \u2014 one block per MW, placed as a cluster where you click.</div></div>'
       +'</div>'
 
       +'<div style="'+sec+'">2 \u00b7 Redundancy topology</div>'
@@ -100843,8 +100906,8 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
     if(CGB.fmt==='modular'){
       var blocks=Math.max(1,Math.ceil(CGB.computeMw));
       plan.innerHTML=head+'<span style="color:#C4B5FD;font-weight:700">You\u2019ll place:</span> '+blocks
-        +' \u00d7 Leviathan 1 MW modular compute block'+(blocks>1?'s':'')+' in one click, then the trench is routed automatically.'
-        +'<br><span style="color:#8FA3B8">Modular Armada AI \u2014 factory-built blocks, no field-assembled chain.</span>';
+        +' \u00d7 1 MW modular compute block'+(blocks>1?'s':'')+' \u2014 click the map where the array starts, then the trench is routed automatically.'
+        +'<br><span style="color:#8FA3B8">Factory-built blocks, no field-assembled chain.</span>';
       return;
     }
     plan.innerHTML=head+'<span style="color:#C4B5FD;font-weight:700">You\u2019ll place:</span> click the map once for each node, in order:<br>'+chain
@@ -100857,7 +100920,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
     if(g){ g.style.borderColor=(v==='guided')?'#A78BFA':'#26364d'; g.style.background=(v==='guided')?'rgba(167,139,250,.10)':'transparent'; }
     if(c){ c.style.borderColor=(v==='modular')?'#A78BFA':'#26364d'; c.style.background=(v==='modular')?'rgba(167,139,250,.10)':'transparent'; }
     var b=document.getElementById('cgb-go');
-    if(b) b.innerHTML=(v==='guided')?'\u25b6 Place Configured System':'\u25a6 Place Modular Armada AI';
+    if(b) b.innerHTML=(v==='guided')?'\u25b6 Place Configured System':'\u25a6 Place Modular Blocks';
     sync();
   }
 
@@ -100875,7 +100938,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
           island: (CGB.incSub ? 'parallel' : 'independent')
         });
       }
-      try{ if(typeof showBanner==='function') showBanner('wiz','Modular Armada AI is unavailable \u2014 falling back to the guided chain.'); }catch(e){}
+      try{ if(typeof showBanner==='function') showBanner('wiz','Modular block placement is unavailable \u2014 falling back to the guided chain.'); }catch(e){}
     }
     start();
   }
@@ -138320,7 +138383,7 @@ var EQ_ARCH = {
   solar:'solar-ground', pad:'pad', bollard:'bollard', fence:'fence',
   jbox:'jbox', charger:'charger', camera:'camera', ups:'ups', pole:'pole',
   ems:'ems',
-  /* Armada modular data-center units are compute, not storage */
+  /* Modular data-center units are compute, not storage */
   dc_cruiser:'compute-pod', dc_triton:'compute-pod',
   dc_leviathan:'compute-pod'
 };
@@ -151904,7 +151967,7 @@ if (root.console && console.info) {
     criticalFraction: 1.0,        /* IT is all critical                 */
     loadFactor: 0.90,
     /* equipment */
-    /* Leviathan, to its published spec: 1.77 MW IT on 119 x 45 ft with its
+    /* The 1.77 MW unit, to its published spec: 1.77 MW IT on 119 x 45 ft with its
        cooling inside that footprint. `kw` is IT — PUE above turns it into
        facility load, so cooling must not be added here as well. */
     pod:  { kw: 1770, lf: 119, wf: 45, label: 'MDC pod', clearFt: 15,
