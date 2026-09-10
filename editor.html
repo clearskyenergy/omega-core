@@ -53686,71 +53686,114 @@ function _derText(g,x,y,s,size,fill,anchor,weight){
   if(weight)t.setAttribute('font-weight',weight); t.textContent=s; g.appendChild(t); return t;
 }
 
-/* ── DRAWN AS THE UNIT LOOKS ──────────────────────────────────────────
-   Three containers on one pad, which is what a Leviathan-class unit is:
-   two long bodies — the IT module and the electrical plant — and one short
-   one for the mechanical plant, with the chillers on their own clearance
-   beside it. 45 : 45 : 20 ft along a 119 ft pad, per the published
-   footprint.
+/* ── DRAWN AS THE UNIT LOOKS FROM ABOVE ───────────────────────────────
+   From the vendor's own aerial render, the read from above is: a dark
+   concrete pad, white container roofs with corrugation ribs, a bank of
+   grey mechanical units with roof fans along one edge, and stair
+   platforms on the service side. Three bodies for one unit — the IT
+   module and the electrical plant at 45 ft, the mechanical at 20 ft —
+   inside a 119 x 45 ft pad.
 
-   Drawn as containers, not as a diagram. An earlier version filled the IT
-   body with twelve rack ticks and the mechanical end with chiller ticks;
-   at any real site scale a 119 ft pad is eighty pixels wide and that
-   detail collapses into noise. Clean bodies, a door line each, and the
-   colour carrying which module is which reads correctly from 80 px to
-   full zoom.
+   The earlier version drew three flat purple rectangles. Purple was the
+   app's colour for "compute" and nothing to do with the product, and flat
+   fills at any zoom read as blocks of colour rather than as equipment.
+   The colours here are the object's: light roofs, grey plant, dark pad.
+   The accent survives as a thin outline on the pad so the unit is still
+   findable at a glance and still speaks the app's colour language.
+
+   Detail is gated on how many pixels the pad actually occupies. Ribs and
+   fans are meaningless at 80 px and would just muddy the silhouette, so
+   below that it degrades to clean roofs on a pad — which is still the
+   right shape and the right colour.
 
    Small containers keep the plain body: a 20 ft node has nothing to zone. */
 function _derRenderDc(g, sh){
   var ppf=_derScale(); var w=(sh.lf||20)*ppf, h=(sh.wf||8)*ppf;
   var x=sh.pts[0].x-w/2, y=sh.pts[0].y-h/2;
-  var padM=2*ppf;
-  _derRect(g, x-padM, y-padM, w+padM*2, h+padM*2, '#e9e9e9', '#9a9a9a', 1);
 
-  var zoned = (+sh.lf||0) >= 80 && w > 40;
+  var zoned = (+sh.lf||0) >= 80 && w > 34;
   if(!zoned){
-    _derRect(g, x, y, w, h, '#4C3B87', '#A78BFA', 1.5);
+    var padM0=2*ppf;
+    _derRect(g, x-padM0, y-padM0, w+padM0*2, h+padM0*2, '#e9e9e9', '#9a9a9a', 1);
+    _derRect(g, x, y, w, h, '#E8EAED', '#5F6368', 1.2);
     var slats=Math.max(3, Math.round((sh.lf||20)/3));
     for(var i=0;i<slats;i++){
       var sx=x + (i+0.15)*(w/slats);
-      _derRect(g, sx, y+h*0.18, (w/slats)*0.7, h*0.64, '#2B2050', '#8B6FE0', 0.8);
+      _derRect(g, sx, y+h*0.18, (w/slats)*0.7, h*0.64, '#C8CCD1', '#9AA0A6', 0.6);
     }
-    _derText(g, x+w/2, y+h+padM+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+    _derText(g, x+w/2, y+h+padM0+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
     return;
   }
 
-  var gap=Math.max(1, 3*ppf);
+  var detail = w > 150;                  /* ribs, fans, stairs */
+  var fine   = w > 260;                  /* labels too */
+
+  /* Concrete pad, with the accent as a thin edge rather than a fill. */
+  var padM=Math.max(1.5, 2.5*ppf);
+  _derRect(g, x-padM, y-padM, w+padM*2, h+padM*2, '#3C4043', '#A78BFA', 1.2);
+
+  /* Bands across the depth: chiller plant, the containers, the walkway. */
+  var chH = h*0.22, walkH = h*0.16;
+  var bodyY = y + chH + h*0.03;
+  var bodyH = h - chH - walkH - h*0.06;
+
+  var gap=Math.max(1, 2.5*ppf);
   var usable=w-gap*2;
   var itW=usable*(45/110), elW=usable*(45/110), meW=usable*(20/110);
-  /* Containers along the front of the pad; the depth behind them is the
-     service aisle and the chiller run. */
-  var bodyH=h*0.60, bodyY=y+h*0.05;
-  var zx=x;
 
-  function container(cx, cw, fill, stroke){
-    _derRect(g, cx, bodyY, cw, bodyH, fill, stroke, 1.4);
-    /* one door line, at the serviceable end */
-    var dx=cx+cw*0.86;
-    _derRect(g, dx, bodyY+bodyH*0.18, Math.max(0.7,cw*0.03), bodyH*0.64, stroke, stroke, 0);
+  function roof(cx, cw, fill, stroke){
+    _derRect(g, cx, bodyY, cw, bodyH, fill, stroke, 1);
+    if(!detail) return;
+    /* corrugation — ribs across the short axis, the way a container reads */
+    var ribs=Math.max(2, Math.round(cw/(2.2*ppf)));
+    for(var r=1;r<ribs;r++){
+      var rx=cx+(r*cw/ribs);
+      var ln=_mkNS('line');
+      ln.setAttribute('x1',rx); ln.setAttribute('y1',bodyY+bodyH*0.10);
+      ln.setAttribute('x2',rx); ln.setAttribute('y2',bodyY+bodyH*0.90);
+      ln.setAttribute('stroke','#B0B5BA'); ln.setAttribute('stroke-width',0.4);
+      g.appendChild(ln);
+    }
   }
 
-  container(zx, itW, '#4C3B87', '#A78BFA');                 /* IT */
-  zx += itW+gap;
-  container(zx, elW, '#3F3468', '#7DD3FC');                 /* electrical plant */
-  var elX=zx;
-  zx += elW+gap;
-  container(zx, meW, '#24463F', '#5EEAD4');                 /* mechanical plant */
+  var zx=x;
+  roof(zx, itW, '#EDEFF2', '#5F6368');            /* IT module */
+  var itX=zx; zx += itW+gap;
+  roof(zx, elW, '#E2E5E9', '#5F6368');            /* electrical plant */
+  var elX=zx; zx += elW+gap;
+  roof(zx, meW, '#C9CDD2', '#5F6368');            /* mechanical */
+  var meX=zx;
 
-  /* Chiller bank, adjacent to the mechanical module on its own clearance. */
-  var chY=bodyY+bodyH+Math.max(1.2,1.6*ppf);
-  var chH=Math.max(1.5, y+h-chY-1);
-  if(chH>1.5) _derRect(g, zx, chY, meW, chH, '#123932', '#2DD4BF', 0.8);
+  /* Chiller bank along the top edge — the fans are the giveaway from above. */
+  if(chH > 2){
+    _derRect(g, x, y, w, chH, '#9AA0A6', '#5F6368', 0.8);
+    if(detail){
+      var fans=Math.max(3, Math.round(w/(9*ppf)));
+      var fr=Math.min(chH*0.34, (w/fans)*0.30);
+      for(var f=0; f<fans; f++){
+        var fx=x+(f+0.5)*(w/fans);
+        var c=_mkNS('circle');
+        c.setAttribute('cx',fx); c.setAttribute('cy',y+chH/2); c.setAttribute('r',Math.max(0.8,fr));
+        c.setAttribute('fill','#7A8085'); c.setAttribute('stroke','#4A4E52');
+        c.setAttribute('stroke-width',0.4); g.appendChild(c);
+      }
+    }
+  }
 
-  if(w>190){
-    var fs=Math.max(6,Math.min(9,ppf*0.55));
-    _derText(g, x+itW/2,      bodyY+bodyH*0.62, 'IT',    fs, '#DDD6FE', 'middle', '700');
-    _derText(g, elX+elW/2,    bodyY+bodyH*0.62, 'POWER', fs, '#BAE6FD', 'middle', '700');
-    _derText(g, zx+meW/2,     bodyY+bodyH*0.62, 'MECH',  fs, '#A7F3D0', 'middle', '700');
+  /* Stair platforms on the service side. */
+  if(detail && walkH > 2){
+    var wy=y+h-walkH;
+    [itX+itW*0.5, elX+elW*0.5, meX+meW*0.5].forEach(function(sx2){
+      var sw2=Math.max(2, 4*ppf);
+      _derRect(g, sx2-sw2/2, wy, sw2, walkH*0.8, '#8A8F94', '#5F6368', 0.5);
+    });
+  }
+
+  if(fine){
+    var fs=Math.max(6,Math.min(9,ppf*0.5));
+    _derText(g, itX+itW/2, bodyY+bodyH*0.60, 'IT',    fs, '#3C4043', 'middle', '700');
+    _derText(g, elX+elW/2, bodyY+bodyH*0.60, 'POWER', fs, '#3C4043', 'middle', '700');
+    _derText(g, meX+meW/2, bodyY+bodyH*0.60, 'MECH',  fs, '#3C4043', 'middle', '700');
   }
 
   _derText(g, x+w/2, y+h+padM+11,
