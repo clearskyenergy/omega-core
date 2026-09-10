@@ -1864,6 +1864,28 @@ window._omegaReady = function(){
             </div>
           </div>
         </div>
+
+        <!-- Jarvis: the operating twin, as a conversation. Same th-bubble
+             furniture as a DM thread on purpose — it is a person you talk to,
+             not a tool you operate. -->
+        <div class="sw-view" data-sw-view="jarvis">
+          <div class="convo-thread-pane">
+            <div class="convo-thread-head">
+              <span class="convo-thread-title">Jarvis</span>
+              <span class="convo-thread-sub" id="jv-sub">Reads your mail, knows the pipeline</span>
+            </div>
+            <div class="convo-thread" id="jv-thread">
+              <div class="th-empty">Ask him anything. Answers can take up to a minute.</div>
+            </div>
+            <div class="th-compose">
+              <div class="th-compose-row">
+                <input class="th-input" id="jv-text" type="text" placeholder="Ask Jarvis" maxlength="2000"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();jvSend();}">
+                <button class="th-send" id="jv-send" onclick="jvSend()">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -3960,8 +3982,11 @@ function renderConvoList(){
 // Mirror the conversation list into the left sidebar (#sn-dm-list)
 function _paintSidebarDMs(){
   var side = document.getElementById('sn-dm-list'); if(!side) return;
-  if (!_convos.length){ side.innerHTML=''; return; }
-  var h='';
+  /* Jarvis is pinned and always present — including before any human
+     conversation exists, which is why this no longer returns early on an
+     empty list. */
+  var h = '<a class="sn-dm-item'+(_jvOpen?' active':'')+'" href="#" data-jarvis="1">'
+        + '<span class="dm-ava" style="background:#2B5FA8">J</span><span>Jarvis</span></a>';
   for (var i=0;i<_convos.length;i++){
     var c=_convos[i], on=(c.id===_convoOpen);
     var name=_convoTitle(c); var ini=(name||'?').charAt(0).toUpperCase();
@@ -3971,12 +3996,106 @@ function _paintSidebarDMs(){
   side.innerHTML=h;
 }
 
+/* ══ JARVIS — the operating twin, as a conversation ══════════════════════
+   Talks to the twinChat function, which verifies this user's Firebase ID
+   token and checks its own allowlist server side. The nav entry is
+   convenience; the gate is in the function. */
+var JV_ENDPOINT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
+var _jvOpen = false, _jvBusy = false, _jvLoaded = false;
+
+function _jvMoney(n){
+  if (n == null) return '';
+  if (n === 0) return '$0';
+  if (n < 0.01) return '<$0.01';
+  return '$' + Number(n).toFixed(2);
+}
+
+function _jvCall(method, body){
+  var u = (typeof currentUser !== 'undefined' && currentUser) || (typeof auth !== 'undefined' && auth && auth.currentUser);
+  if (!u) return Promise.reject(new Error('Sign in first.'));
+  return u.getIdToken().then(function(tok){
+    var h = { 'Authorization': 'Bearer ' + tok };
+    if (body) h['Content-Type'] = 'application/json';
+    return fetch(JV_ENDPOINT, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined });
+  }).then(function(r){
+    return r.json()['catch'](function(){ return {}; }).then(function(j){
+      if (r.status === 403) throw new Error('This account is not allowed to talk to Jarvis.');
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      return j;
+    });
+  });
+}
+
+/* escHtml on every field: the twin quotes back subject lines and partner mail,
+   which is text other people wrote. It renders as words, never as markup. */
+function _jvBubble(role, text, when, cost){
+  var box = document.getElementById('jv-thread'); if (!box) return;
+  var empty = box.querySelector('.th-empty'); if (empty) box.innerHTML = '';
+  var meta = [];
+  if (when) meta.push(_fmtWhen ? _fmtWhen(when) : '');
+  if (cost != null) meta.push(_jvMoney(cost));
+  var div = document.createElement('div');
+  div.className = 'th-bubble ' + (role === 'you' ? 'me' : 'them');
+  div.innerHTML = escHtml(text || '') +
+    '<div class="th-bubble-when">' + escHtml(meta.filter(Boolean).join(' \u00b7 ')) + '</div>';
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+function jvSend(){
+  var el = document.getElementById('jv-text');
+  var btn = document.getElementById('jv-send');
+  var text = ((el && el.value) || '').trim();
+  if (!text || _jvBusy) return;
+  _jvBusy = true; btn.disabled = true; el.value = '';
+  _jvBubble('you', text, new Date());
+  var pending = _jvBubble('jarvis', 'Thinking\u2026', null);
+  _jvCall('POST', { message: text }).then(function(j){
+    if (pending) pending.parentNode.removeChild(pending);
+    _jvBubble('jarvis', j.reply || 'No answer.', new Date(), j.costUsd);
+  })['catch'](function(e){
+    if (pending) pending.parentNode.removeChild(pending);
+    _jvBubble('jarvis', e.message, new Date());
+  }).then(function(){
+    _jvBusy = false; btn.disabled = false; if (el) el.focus();
+  });
+}
+
+function openJarvis(){
+  _jvOpen = true;
+  if (window.swSelect) swSelect('jarvis');
+  if (typeof _snHighlight === 'function') _snHighlight('chat');
+  var sw = document.getElementById('sw'), scrim = document.getElementById('sw-scrim');
+  var title = document.getElementById('sw-drawer-title'); if (title) title.textContent = 'Jarvis';
+  if (sw) sw.classList.add('sw-open');
+  if (scrim) scrim.classList.add('on');
+  document.body.style.overflow = 'hidden';
+  if (typeof _paintSidebarDMs === 'function') _paintSidebarDMs();
+
+  if (_jvLoaded) return;
+  _jvLoaded = true;
+  _jvCall('GET').then(function(j){
+    var msgs = j.messages || [];
+    if (!msgs.length) return;
+    var box = document.getElementById('jv-thread'); if (box) box.innerHTML = '';
+    for (var i = 0; i < msgs.length; i++){
+      _jvBubble(msgs[i].role, msgs[i].text, msgs[i].at, msgs[i].costUsd);
+    }
+  })['catch'](function(e){
+    _jvLoaded = false;
+    _jvBubble('jarvis', e.message, new Date());
+  });
+}
+
 // Delegated click for sidebar DM items (robust vs inline onclick encoding).
 if (!window.__snDmWired){
   window.__snDmWired = true;
   document.addEventListener('click', function(e){
     var it = e.target && e.target.closest ? e.target.closest('.sn-dm-item') : null;
-    if (it){ e.preventDefault(); var id=it.getAttribute('data-convo'); if(id) openConvo(id); }
+    if (it){ e.preventDefault();
+      if (it.getAttribute('data-jarvis')){ openJarvis(); return; }
+      var id=it.getAttribute('data-convo'); if(id) openConvo(id); }
   });
 }
 function openConvo(id){
