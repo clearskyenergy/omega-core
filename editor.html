@@ -166694,8 +166694,18 @@ if (root.console && console.info) {
         if (visible(btns[j])) { any = true; break; }
       }
       /* Some panels are legitimately just a readout with no controls —
-         only ones that HELD buttons and now hold none are hidden. */
-      if (!any && btns.length > 0) {
+         only ones that HELD buttons and now hold none are hidden.
+
+         "HELD buttons" cannot mean "still has button nodes". OmegaShelf
+         MOVES nodes with appendChild — Calibrate Scale and Clear Scale go
+         from Edit to Build › Ground — so the panel it empties has
+         btns.length === 0, sailed past this guard, and Edit › SCALE has been
+         standing as a labelled box with nothing in it: the exact thing this
+         patch was written to remove, in the exact panel named in its own
+         comment. A panel whose body is empty of controls AND of text is not
+         a readout; it is a leftover. */
+      var isReadout = !btns.length && !!(body.textContent || '').replace(/\s+/g, '');
+      if (!any && !isReadout) {
         if (p.style.display !== 'none') { p.style.display = 'none'; p.setAttribute(FLAG, '1'); hid++; }
       } else if (p.getAttribute(FLAG) && any) {
         p.style.display = ''; p.removeAttribute(FLAG); shown++;
