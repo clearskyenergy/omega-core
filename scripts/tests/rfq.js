@@ -197,17 +197,59 @@ function _rfqLoadDistributors() {
       var j = null; try { j = JSON.parse(t); } catch (e) {}
       if (!r.ok) {
         var d = (j && (j.detail || j.error)) || ('HTTP ' + r.status);
-        box.innerHTML = '<span style="color:#F59E0B">Could not load partners — ' + _esc(d)
-          + '. Manufacturer routing still works.</span>';
-        return;
+        return _rfqDistsFallback(box, d);
       }
       var list = (j && j.distributors) || [];
-      window._RFQ_DISTS = list;
-      if (!list.length) {
-        box.innerHTML = '<span style="color:#6B8299">No distribution partner is set up for your '
-          + 'account yet. The manufacturers below still receive their lines.</span>';
-        return;
+      if (!list.length) return _rfqDistsFallback(box, null);
+      _rfqPaintDists(box, list);
+    });
+  })['catch'](function (e) {
+    _rfqDistsFallback(box, (e && e.message) || 'network error');
+  });
+}
+function _rfqDistsFallback(box, why) {
+  var fin = function (list) {
+    if (list && list.length) {
+      _rfqPaintDists(box, list);
+      if (why) {
+        box.insertAdjacentHTML('beforeend',
+          '<div style="font-size:9px;color:#6B8299;margin-top:4px">Listed from the partner '
+          + 'directory — the quote service is unavailable (' + _esc(why) + '), so routing is '
+          + 'recorded and sent when it returns.</div>');
       }
+      return;
+    }
+    window._RFQ_DISTS = [];
+    box.innerHTML = why
+      ? '<span style="color:#F59E0B">Could not load partners — ' + _esc(why)
+        + '. Manufacturer routing still works.</span>'
+      : '<span style="color:#6B8299">No distribution partner is set up for your '
+        + 'account yet. The manufacturers below still receive their lines.</span>';
+  };
+
+  var db = null;
+  try { db = firebase.firestore(); } catch (e) {}
+  if (!db) return fin(null);
+
+  var mine = '';
+  try { mine = String((firebase.auth().currentUser || {}).email || '').split('@')[1] || ''; } catch (e) {}
+  mine = mine.toLowerCase();
+
+  db.collection('distributors').get().then(function (q) {
+    var out = [];
+    q.forEach(function (doc) {
+      var v = doc.data() || {};
+      if (doc.id === mine) return;
+      if (v.active === false) return;
+      out.push({ orgId: doc.id, name: v.name || doc.id });
+    });
+    out.sort(function (a, c) { return a.name.localeCompare(c.name); });
+    fin(out);
+  })['catch'](function () { fin(null); });
+}
+function _rfqPaintDists(box, list) {
+  window._RFQ_DISTS = list;
+  {
       /* The account field sits OUTSIDE the <label>. Inside one, a click meant
          for the text box activates the label and toggles the checkbox, so
          typing an account number would untick the partner you are typing it
@@ -227,11 +269,7 @@ function _rfqLoadDistributors() {
       + '<div style="font-size:9px;color:#6B8299;margin-top:6px;line-height:1.5">'
       + 'A partner you tick receives the whole BOM, your project name and the ship-to — they cannot '
       + 'price a named account otherwise. Your account number goes only to the partner it belongs to.</div>';
-    });
-  })['catch'](function (e) {
-    box.innerHTML = '<span style="color:#F59E0B">Could not reach the quote service: '
-      + _esc((e && e.message) || 'network error') + '</span>';
-  });
+  }
 }
 function submitRfqFile() {
   var box = document.getElementById('rfq-file-msg');
@@ -281,8 +319,12 @@ function submitRfqFile() {
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
     bom: (st.bom.items || []).map(function (it) {
+      /* manufacturer travels with the line so the server can route a
+         catalogue item to its factory even when no /equipment row exists
+         for the key yet — see the brand fallback in api/rfq.js. */
       return { sku: it.sku || '', description: it.description, qty: it.qty,
-               unit: it.unit, category: it.category };
+               unit: it.unit, category: it.category,
+               manufacturer: it.manufacturer || '' };
     })
   };
 
@@ -315,17 +357,19 @@ function submitRfqFile() {
       }
       /* Name the reason. "It didn't work" costs somebody twenty minutes. */
       var d = (j && (j.detail || j.error)) || t.slice(0, 200) || ('HTTP ' + r.status);
-      if (r.status === 500 && /SERVICE_ACCOUNT/i.test(d)) {
-        say('Quote routing is not switched on yet — the server is missing its Firebase '
-          + 'credential, so it cannot write the request. The BOM is unchanged. '
-          + 'Export the sourcing CSV and send it directly in the meantime.', true);
-        return;
+      if (r.status >= 500) {
+        /* The endpoint is the primary path because it also does the
+           manufacturer fan-out. When it cannot answer, the half of the job
+           the customer explicitly asked for — send my BOM to the partner I
+           ticked — is still a write the customer is entitled to make, and
+           firestore.rules now says so. File it directly rather than
+           handing back an apology. */
+        return _rfqFileDirect(payload, say, done, d);
       }
       say('Could not send: ' + _esc(d), true);
     });
   })['catch'](function (e) {
-    done();
-    say('Could not reach the quote service: ' + _esc((e && e.message) || 'network error'), true);
+    _rfqFileDirect(payload, say, done, (e && e.message) || 'network error');
   });
 }
-module.exports={_esc,_rfqLabel,_rfqInput,_bomRenderRfq,openRfqFile,_rfqPrefillZip,_rfqProjectId,_rfqLoadDistributors,submitRfqFile};
+module.exports={_esc,_rfqLabel,_rfqInput,_bomRenderRfq,openRfqFile,_rfqPrefillZip,_rfqProjectId,_rfqLoadDistributors,_rfqDistsFallback,_rfqPaintDists,submitRfqFile};

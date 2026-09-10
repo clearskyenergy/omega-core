@@ -1,0 +1,80 @@
+# ============================================================================
+# tests.yml — the gate on every pull request, including the twin's own.
+#
+# The build loop opens PRs against this repo. It checks syntax and runs an
+# adversarial review before it pushes, but it has no checkout and no
+# node_modules, so it cannot run these tests — which is exactly why they
+# belong here instead. A change that breaks the parcel planner or the
+# capacity ledger now fails on the PR, whether a person wrote it or the twin
+# did.
+#
+# Before this existed, 30 test files ran only when somebody remembered. One of
+# them (trfq.js) had been throwing a ReferenceError for long enough that
+# nobody knew, because nothing ever ran it.
+#
+# Two jobs on purpose. `tests` is the gate and must be green. `audit` reports
+# things that are true, wrong, and not yet decided — it annotates the PR
+# without blocking it, so a known gap stays visible instead of being either
+# ignored or papered over.
+# ============================================================================
+
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    name: unit and geometry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step. These tests are pure functions extracted straight out
+      # of the HTML — there is no build, no bundler and no dependency to fetch,
+      # which is the whole reason they are fast enough to run on every push.
+      - name: capacity, sizer, site intel
+        run: |
+          node scripts/test-caps.js
+          node scripts/test-bess-sizer.js
+          node scripts/test-site-intel.js
+
+      # extract.js regenerates sweep/geo/pv/fence/rfq from editor.html, so the
+      # tests always run against what is actually in the file rather than a
+      # copy that has drifted.
+      - name: extract the editor's functions
+        run: node scripts/tests/extract.js
+
+      - name: geometry, routing and tool tests
+        run: |
+          failed=""
+          for t in scripts/tests/t*.js; do
+            if node "$t"; then
+              echo "  PASS $t"
+            else
+              echo "  FAIL $t"
+              failed="$failed $t"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo ""
+            echo "Failed:$failed"
+            exit 1
+          fi
+
+  audit:
+    name: script references (reporting only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: every <script src> resolves to a file that exists
+        run: node scripts/check-html-scripts.js
