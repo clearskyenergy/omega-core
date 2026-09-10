@@ -37013,17 +37013,115 @@ function submitRfqFile() {
       }
       /* Name the reason. "It didn't work" costs somebody twenty minutes. */
       var d = (j && (j.detail || j.error)) || t.slice(0, 200) || ('HTTP ' + r.status);
-      if (r.status === 500 && /SERVICE_ACCOUNT/i.test(d)) {
-        say('Quote routing is not switched on yet — the server is missing its Firebase '
-          + 'credential, so it cannot write the request. The BOM is unchanged. '
-          + 'Export the sourcing CSV and send it directly in the meantime.', true);
-        return;
+      if (r.status >= 500) {
+        /* The endpoint is the primary path because it also does the
+           manufacturer fan-out. When it cannot answer, the half of the job
+           the customer explicitly asked for — send my BOM to the partner I
+           ticked — is still a write the customer is entitled to make, and
+           firestore.rules now says so. File it directly rather than
+           handing back an apology. */
+        return _rfqFileDirect(payload, say, done, d);
       }
       say('Could not send: ' + _esc(d), true);
     });
   })['catch'](function (e) {
+    _rfqFileDirect(payload, say, done, (e && e.message) || 'network error');
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   FILING WITHOUT THE ENDPOINT
+   ----------------------------------------------------------------------
+   /api/rfq does two jobs: it records the request, and it decides who else
+   should see it — matching BOM lines to the manufacturers that make them.
+   The second is server work and stays there; a browser guessing at it
+   would route somebody's takeoff to the wrong factory.
+
+   The first job is not. A customer filing their own request, to a partner
+   they picked from a directory they can already read, is a write they are
+   entitled to make — and firestore.rules allows exactly that shape and
+   nothing wider: their own org, their own uid, status 'open', recipients
+   limited to ids that exist in /distributors, no quote and no reveal.
+
+   So when the endpoint is unavailable this files the distributor half
+   directly and says plainly that manufacturer routing did not run. That is
+   worth doing because the alternative was the request not existing at all
+   — the customer had picked a partner, typed an account number, and the
+   button apologised.
+   ══════════════════════════════════════════════════════════════════════ */
+function _rfqFileDirect(payload, say, done, why) {
+  var db = null, u = null;
+  try { db = firebase.firestore(); u = firebase.auth().currentUser; } catch (e) {}
+  if (!db || !u) { done(); return say('Could not send: ' + _esc(why || 'not signed in'), true); }
+
+  var to = (payload.toOrgIds || []).filter(function (x) { return !!x; });
+  if (!to.length) {
     done();
-    say('Could not reach the quote service: ' + _esc((e && e.message) || 'network error'), true);
+    return say('The quote service is unavailable (' + _esc(why) + ') and no distribution '
+      + 'partner was ticked, so there is nobody this can be filed with. '
+      + 'Tick a partner, or export the sourcing CSV.', true);
+  }
+
+  var org = '';
+  try { org = (window.OMEGA_WORKSPACE && OMEGA_WORKSPACE.orgId) || ''; } catch (e) {}
+  if (!org) org = String(u.email || '').toLowerCase().split('@')[1] || '';
+  if (!org) { done(); return say('Could not resolve your organisation.', true); }
+
+  var FV = firebase.firestore.FieldValue;
+  var ref = db.collection('rfqs').doc();
+  var head = {
+    sourceOrgId:    org,
+    createdByUid:   u.uid,
+    createdByEmail: String(u.email || '').toLowerCase(),
+    status:         'open',
+    projectId:      payload.projectId || null,
+    projectName:    (function () { try { return (S && S.projectName) || null; } catch (e) { return null; } })(),
+    address:        payload.address || '',
+    zip:            payload.zip || '',
+    note:           payload.note || '',
+    bom:            payload.bom || [],
+    scope:          'full-bom',
+    /* Say how it was filed, so the Quote Desk and any later reconciliation
+       can tell a client-filed request from a routed one. */
+    filedVia:       'client',
+    routedMfr:      false,
+    createdAt:      FV.serverTimestamp(),
+    updatedAt:      FV.serverTimestamp()
+  };
+
+  ref.set(head).then(function () {
+    var accts = payload.accounts || {};
+    return Promise.all(to.map(function (orgId) {
+      return ref.collection('recipients').doc(orgId).set({
+        vendorOrgId: orgId,
+        status:      'sent',
+        revealed:    false,
+        scope:       'full-bom',
+        account:     accts[orgId] || null,
+        createdAt:   FV.serverTimestamp(),
+        updatedAt:   FV.serverTimestamp()
+      });
+    }));
+  }).then(function () {
+    done();
+    var n = to.length;
+    var m = document.getElementById('bom-rfq-msg');
+    if (m) m.innerHTML = '<span style="color:#22C55E">RFQ filed with ' + n + ' partner'
+      + (n === 1 ? '' : 's') + '. Manufacturer routing did not run \u2014 the quote service is '
+      + 'unavailable.</span>';
+    var host = document.getElementById('rfq-file-modal');
+    if (host) host.remove();
+    if (typeof showBanner === 'function') {
+      showBanner('cal', 'RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
+        + '. Manufacturer routing did not run \u2014 only the partners you ticked were asked.');
+    }
+  })['catch'](function (e) {
+    done();
+    var msg = (e && e.message) || 'unknown error';
+    say(/permission/i.test(msg)
+      ? ('Firestore refused the write. The partner has to be listed in the distributor '
+         + 'directory before a request can be filed to it.')
+      : ('Could not file the request: ' + _esc(msg)), true);
   });
 }
 

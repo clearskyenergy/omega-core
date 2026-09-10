@@ -1763,8 +1763,41 @@ service cloud.firestore {
       function isSourceHere() {
         return signedIn() && canActInOrg(resource.data.get('sourceOrgId', '\u0000'));
       }
+      /* ── A CUSTOMER MAY FILE THEIR OWN REQUEST ────────────────────────
+         This was create-if-false, "/api/rfq.js only", and the reasoning was
+         sound: a browser that can write recipient documents can route its
+         own BOM to anyone, or route somebody else's away. The routing
+         decision is the product.
+
+         Two things changed. The distributor directory is a signed-in
+         collection now, so which partners exist is no longer a secret a
+         client write could leak. And the endpoint has been down — no
+         service account on the deployment — so a customer who had picked a
+         partner and typed an account number could not file at all. A gate
+         that refuses everybody protects nothing.
+
+         So a customer may create their OWN request, and only that:
+           sourceOrgId   an org they can act in — you cannot file as
+                         somebody else, which is the attack the old rule
+                         was written for
+           createdByUid  their own uid
+           status        starts 'open', with no quote, contact or reveal
+
+         Still refused to a client: deciding who else is asked beyond a
+         listed distributor (see recipients), revealing identity, writing a
+         quote, or touching a request that is not theirs. /api/rfq.js stays
+         the path for manufacturer fan-out — matching a BOM line to a
+         factory is server work, and a browser's version of it is a guess. */
+      function ownRfqCreate() {
+        return signedIn()
+            && canActInOrg(request.resource.data.get('sourceOrgId', ' '))
+            && request.resource.data.get('createdByUid', '') == request.auth.uid
+            && request.resource.data.get('status', '') == 'open'
+            && !('contact' in request.resource.data)
+            && !('revealed' in request.resource.data);
+      }
       allow read:   if isOmegaStaff() || isSourceHere();
-      allow create: if false;      /* /api/rfq.js only */
+      allow create: if ownRfqCreate();
       allow update: if isOmegaAdmin()
                     || (isSourceHere()
                         && request.resource.data.diff(resource.data).affectedKeys()
@@ -1783,7 +1816,22 @@ service cloud.firestore {
           return signedIn() && canActInOrg(parentSource());
         }
         allow read: if isOmegaStaff() || isVendorHere() || isSourceHere();
-        allow create: if false;    /* /api/rfq.js only */
+        /* ── ONLY TO A LISTED PARTNER, ONLY ON YOUR OWN REQUEST ────────
+           The customer names the distributor; they cannot invent one. The
+           recipient's id has to exist in /distributors, which only ClearSky
+           writes — so "send my BOM to whoever I like" is still refused, and
+           what is allowed is exactly what the dialog offers.
+
+           Created in the state a fresh request is in: sent, unopened, no
+           quote and no reveal. Everything after that is the vendor's update
+           rule below, unchanged. */
+        allow create: if isSourceHere()
+                      && exists(/databases/$(database)/documents/distributors/$(vendorOrgId))
+                      && request.resource.data.get('vendorOrgId', '') == vendorOrgId
+                      && request.resource.data.get('status', '') == 'sent'
+                      && request.resource.data.get('revealed', false) == false
+                      && !('quote' in request.resource.data)
+                      && !('contact' in request.resource.data);
         /* Vendor: quote or decline, own fields only. */
         allow update: if isVendorHere()
                       && resource.data.get('status', '') in ['sent', 'viewed', 'quoted']
