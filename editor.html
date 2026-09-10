@@ -66347,7 +66347,17 @@ function _cgcCancel(){
 window._cgcCancel=_cgcCancel;
 
 function _cgcGuideRender(){
-  var el=document.getElementById('dcfc-guide'); if(!el) return;
+  /* ENSURE, don't look up. #dcfc-guide is created on demand by whichever
+     guided build runs first — so on a fresh page load it does not exist,
+     and a bare getElementById meant this panel returned silently and the
+     stepper armed a mode with no instructions anywhere on screen. */
+  var el=(typeof _dcfcGuideEnsure==='function')
+           ? _dcfcGuideEnsure()
+           : document.getElementById('dcfc-guide');
+  if(!el) return;
+  /* The shared panel is amber for the EV build; this one is the compute
+     accent, so the border matches the header it is about to draw. */
+  try{ el.style.borderColor='#A78BFA'; }catch(e){}
   var st=_cgcStep();
   var rows=CGC.steps.map(function(s,i){
     var done=i<CGC.ix, now=i===CGC.ix;
