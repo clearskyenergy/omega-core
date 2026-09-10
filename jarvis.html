@@ -75,6 +75,18 @@ header .gear:hover{background:rgba(255,255,255,.16);color:#fff}
 .sw input:checked+span:before{transform:translateX(16px)}
 .sw input:disabled+span{opacity:.45;cursor:not-allowed}
 .cost{font-size:11px;color:var(--cs-sub);margin-top:5px}
+.mic{background:transparent;border:1px solid rgba(255,255,255,.25);color:#C7D4E2;border-radius:7px;
+     padding:6px 11px;font-family:inherit;font-size:12px;cursor:pointer;margin-left:12px}
+.mic.on{background:var(--cs-red);border-color:var(--cs-red);color:#fff;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
+.captions{position:fixed;left:0;right:0;bottom:0;z-index:8;background:rgba(15,23,32,.94);
+          color:#E6EEF6;padding:12px 16px;font-size:15px;line-height:1.45;display:none}
+.captions.on{display:block}
+.captions .who{font-size:11px;letter-spacing:1px;color:#8FA6BC;margin-bottom:3px}
+.captions .awake{color:#56ff1a}
+.panel-err{border:1px solid var(--cs-red);color:var(--cs-red);border-radius:8px;
+           padding:11px 12px;font-size:13px;line-height:1.5}
+@media(max-width:900px){.panel{width:100%}}
 
 main{flex:1;overflow-y:auto;padding:22px 16px 8px}
 .thread{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
@@ -131,6 +143,8 @@ button.send:disabled{background:#A8B6C6;cursor:default}
     <div class="sub">ClearSky OMEGA operating twin</div>
   </div>
   <div class="who" id="who"></div>
+  <button class="mic" id="micBtn" hidden>🎙 Voice off</button>
+  <button class="gear" id="clearBtn" hidden>Clear</button>
   <button class="gear" id="gear" hidden>Settings</button>
 </header>
 
@@ -166,6 +180,11 @@ button.send:disabled{background:#A8B6C6;cursor:default}
 
   <div class="thread" id="thread"></div>
 </main>
+
+<div class="captions" id="captions">
+  <div class="who" id="capWho">LISTENING</div>
+  <div id="capText"></div>
+</div>
 
 <footer id="composerWrap" hidden>
   <div class="composer">
@@ -311,6 +330,131 @@ el('signin').addEventListener('click', async () => {
   }
 });
 
+/* ══ VOICE ═══════════════════════════════════════════════════════════════
+   Chrome's SpeechRecognition does the listening and gives interim results,
+   which is what the captions are. Nothing is sent until the wake word is
+   heard — an always-on mic that forwards everything is a different product
+   and not one anyone asked for.
+
+   Recognition is stopped while he speaks. Otherwise he hears his own reply,
+   transcribes it, finds "jarvis" in it, and answers himself. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const WAKE = /\bjarvis\b/i;
+let rec = null, listening = false, awake = false, speaking = false;
+
+function caps(who, text, isAwake) {
+  el('captions').classList.add('on');
+  const w = el('capWho');
+  w.textContent = who;
+  w.className = 'who' + (isAwake ? ' awake' : '');
+  el('capText').textContent = text;
+}
+function capsOff() { el('captions').classList.remove('on'); }
+
+async function speakReply(text) {
+  const user = auth.currentUser; if (!user) return;
+  speaking = true;
+  try { if (rec) rec.stop(); } catch (_) {}
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch(ENDPOINT + '/speak', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) throw new Error('speak ' + res.status);
+    const url = URL.createObjectURL(await res.blob());
+    const a = new Audio(url);
+    await new Promise(done => { a.onended = a.onerror = done; a.play().catch(done); });
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.warn('[jarvis] voice out:', e.message);
+  } finally {
+    speaking = false;
+    if (listening) { try { rec.start(); } catch (_) {} }
+  }
+}
+
+async function handleUtterance(said) {
+  caps('JARVIS', 'thinking…', false);
+  bubble('you', said, new Date().toISOString());
+  const pending = thinking();
+  try {
+    const { reply, costUsd } = await call('POST', { message: said });
+    pending.remove();
+    bubble('jarvis', reply, new Date().toISOString(), costUsd);
+    caps('JARVIS', reply, false);
+    await speakReply(reply);
+  } catch (e) {
+    pending.remove();
+    bubble('jarvis', e.message, new Date().toISOString());
+    caps('JARVIS', e.message, false);
+  }
+  awake = false;
+  if (listening) caps('LISTENING — say “Jarvis”', '', false);
+}
+
+function startVoice() {
+  if (!SR) { alert('Voice needs Chrome. Safari does not implement SpeechRecognition.'); return; }
+  rec = new SR();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = 'en-US';
+
+  rec.onresult = ev => {
+    if (speaking) return;
+    let interim = '', final = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) final += t; else interim += t;
+    }
+    const heard = (final || interim).trim();
+
+    if (!awake) {
+      if (WAKE.test(heard)) {
+        awake = true;
+        /* Everything after the wake word is the instruction. Saying
+           "Jarvis, what's on my plate" should not send the word Jarvis. */
+        const after = heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i, '').trim();
+        caps('AWAKE — go ahead', after, true);
+        if (final && after) { handleUtterance(after); }
+      } else {
+        caps('LISTENING — say “Jarvis”', heard, false);
+      }
+      return;
+    }
+
+    caps('AWAKE — go ahead', heard, true);
+    if (final && heard) handleUtterance(heard);
+  };
+
+  rec.onerror = e => {
+    if (e.error === 'not-allowed') {
+      alert('Chrome blocked the microphone. Allow it in the address bar, then try again.');
+      stopVoice();
+    }
+  };
+  /* Chrome ends the session on its own every so often. Restart unless the
+     user turned it off, or a long silence looks like a working mic. */
+  rec.onend = () => { if (listening && !speaking) { try { rec.start(); } catch (_) {} } };
+
+  rec.start();
+  listening = true;
+  el('micBtn').classList.add('on');
+  el('micBtn').textContent = '🎙 Listening';
+  caps('LISTENING — say “Jarvis”', '', false);
+}
+
+function stopVoice() {
+  listening = false; awake = false;
+  try { if (rec) rec.stop(); } catch (_) {}
+  el('micBtn').classList.remove('on');
+  el('micBtn').textContent = '🎙 Voice off';
+  capsOff();
+}
+
+el('micBtn').addEventListener('click', () => listening ? stopVoice() : startVoice());
+
 /* ---- settings ---------------------------------------------------------- */
 
 async function settingsCall(method, body) {
@@ -327,14 +471,30 @@ async function settingsCall(method, body) {
   return data;
 }
 
+function panelMessage(text, isError) {
+  const b = el('panelBody');
+  b.textContent = '';
+  const d = document.createElement('div');
+  d.className = isError ? 'panel-err' : 'obs';
+  d.textContent = text;
+  b.appendChild(d);
+}
+
 function renderSettings(sum) {
   const b = el('panelBody');
+  /* Defensive: a panel that renders empty tells you nothing and looks broken.
+     Anything unexpected in the payload becomes a visible sentence instead. */
+  if (!sum || !sum.totals || !Array.isArray(sum.features)) {
+    panelMessage('The twin answered, but not with settings. Try again in a moment.', true);
+    return;
+  }
   b.textContent = '';
 
   const totals = document.createElement('div');
   totals.className = 'totals';
   [[money(sum.totals.perDay), 'per day, switched on'],
-   [money(sum.totals.perMonth), 'projected per month'],
+   [sum.observedDays >= 3 ? money(sum.totals.perMonth) : '—', 'per month' +
+     (sum.observedDays >= 3 ? '' : ' (too early)')],
    [money(sum.totals.measuredToDate), 'spent so far']
   ].forEach(([n, l]) => {
     const t = document.createElement('div');
@@ -347,9 +507,11 @@ function renderSettings(sum) {
 
   const obs = document.createElement('div');
   obs.className = 'obs';
-  obs.textContent = sum.observedDays >= 1
-    ? 'Averaged over ' + sum.observedDays + ' day(s) of history.'
-    : 'Less than a day of history — per-day figures will settle as it runs.';
+  obs.textContent = sum.observedDays >= 3
+    ? 'Averaged over ' + sum.observedDays + ' days of history.'
+    : 'Only ' + (sum.observedDays || 0) + ' day of history, and it included a one-off ' +
+      'backfill — the monthly figure is arithmetic, not a forecast. It settles once ' +
+      'the queue is empty and analyse stops making calls.';
   b.appendChild(obs);
 
   sum.features.forEach(f => {
@@ -400,21 +562,30 @@ function openPanel(open) {
 
 el('gear').addEventListener('click', async () => {
   openPanel(true);
-  el('panelBody').textContent = 'Loading…';
+  panelMessage('Reading what the twin has spent…', false);
   try { renderSettings(await settingsCall('GET')); }
-  catch (e) { el('panelBody').textContent = e.message; }
+  catch (e) { panelMessage(e.message || 'Could not reach the twin.', true); }
 });
+/* The thread keeps every reply, including the failures from before a fix
+   landed. Clearing is local to the view — the transcript stays in Firestore. */
+el('clearBtn').addEventListener('click', () => {
+  thread.textContent = '';
+  empty.hidden = false;
+});
+
 el('closePanel').addEventListener('click', () => openPanel(false));
 el('scrim').addEventListener('click', () => openPanel(false));
 
 authMod.onAuthStateChanged(auth, async user => {
   if (!user) {
     gate.hidden = false; composer.hidden = true; empty.hidden = true;
-    el('gear').hidden = true; openPanel(false);
+    el('gear').hidden = true; el('clearBtn').hidden = true;
+    el('micBtn').hidden = true; stopVoice(); openPanel(false);
     el('who').textContent = '';
     return;
   }
-  gate.hidden = true; composer.hidden = false; el('gear').hidden = false;
+  gate.hidden = true; composer.hidden = false;
+  el('gear').hidden = false; el('clearBtn').hidden = false; el('micBtn').hidden = false;
   el('who').textContent = user.email || '';
   try {
     const { messages } = await call('GET');
