@@ -66255,9 +66255,14 @@ var CGC_STEPS = [
     label:'Controller → transformer',
     hint:'the <strong>grid tie</strong> — from the controller out to the transformer or switchgear the utility feeds',
     power:true, sizeBy:'plant', ties:true, fromController:true },
+  /* Controls terminate on the CONTROLLER, not on a demarc somewhere. The
+     EMS cannot dispatch a load it cannot see: the BMS pair and the fibre
+     are how it reads the block and how it tells it to back off. A data run
+     that ends anywhere else draws a controller wired to nothing. */
   { key:'data', cond:'EMT-BMS', leg:'branch', col:'#2563EB',
-    label:'Fibre / BMS',
-    hint:'<strong>fibre and controls</strong> — blocks to the controller, and the controller out to the demarc' }
+    label:'Fibre / BMS → controller',
+    hint:'<strong>fibre and controls</strong> from the blocks back to the controller — this is what lets the EMS see and dispatch the load',
+    toController:true }
 ];
 
 /* Anything a compute plant can legitimately hang off: the transformer the
@@ -66658,6 +66663,12 @@ function _cgcFinishRun(){
   if(st.fromController && CGC.ctrl){
     spine[0]={ x:CGC.ctrl.cx, y:CGC.ctrl.cy };
   }
+  /* Controls END on the controller, wherever the user stopped drawing. */
+  var ctrlTie=null;
+  if(st.toController && CGC.ctrl){
+    spine[spine.length-1]={ x:CGC.ctrl.cx, y:CGC.ctrl.cy };
+    ctrlTie=CGC.ctrl;
+  }
 
   if(!S._trenches) S._trenches=[];
   S._trenches.push({ id:uid(), pts:spine.slice(), in:CGC.surface, leg:st.leg });
@@ -66711,7 +66722,10 @@ function _cgcFinishRun(){
     return c;
   }
 
-  commit(spine, st.label, tie ? { spine:true, toId:tie.id, tieKind:tie.what, runLabel:st.label } : { spine:true });
+  var spineExtra = { spine:true };
+  if(tie){ spineExtra.toId=tie.id; spineExtra.tieKind=tie.what; spineExtra.runLabel=st.label; }
+  else if(ctrlTie){ spineExtra.toId=ctrlTie.id; spineExtra.tieKind='ems'; }
+  commit(spine, st.label, spineExtra);
   CGC.runs++;
   if(spineF && !CGC.sched) CGC.sched='Spine: '+spineF.text+'.';
   if(st.power && tie && !CGC.tied){
