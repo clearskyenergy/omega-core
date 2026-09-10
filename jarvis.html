@@ -84,6 +84,10 @@ header .gear:hover{background:rgba(255,255,255,.16);color:#fff}
 .captions.on{display:block}
 .captions .who{font-size:11px;letter-spacing:1px;color:#8FA6BC;margin-bottom:3px}
 .captions .awake{color:#56ff1a}
+#orb{position:fixed;right:22px;bottom:96px;width:132px;height:132px;z-index:7;
+     pointer-events:none;opacity:0;transition:opacity .35s}
+#orb.on{opacity:1}
+@media(max-width:700px){#orb{width:92px;height:92px;right:10px;bottom:120px}}
 .pauseAll{width:100%;margin:0 0 14px;padding:11px;border-radius:9px;cursor:pointer;
           font-family:inherit;font-size:13.5px;font-weight:600;
           background:#fff;border:1.5px solid var(--cs-red);color:var(--cs-red)}
@@ -186,6 +190,8 @@ button.send:disabled{background:#A8B6C6;cursor:default}
 
   <div class="thread" id="thread"></div>
 </main>
+
+<canvas id="orb"></canvas>
 
 <div class="captions" id="captions">
   <div class="who" id="capWho">LISTENING</div>
@@ -336,6 +342,99 @@ el('signin').addEventListener('click', async () => {
   }
 });
 
+/* ══ THE ORB ═════════════════════════════════════════════════════════════
+   The same harmonic particle ring as the mission reactor, but its energy is
+   live audio amplitude rather than queue depth — so it moves with his voice
+   while listening and with Jarvis's while speaking. A sphere that pulses on a
+   timer looks alive; one that pulses on the actual waveform IS alive, and the
+   difference is obvious the moment you say a long word. */
+const orb = (() => {
+  const cv = document.getElementById('orb');
+  if (!cv) return { set(){}, show(){} };
+  const ctx = cv.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0, energy = 0, target = 0, t = 0;
+
+  const RINGS = [
+    { n: 150, r: 0.88, amp: 0.06,  spin:  0.00030, hue: '0,243,255', a: 0.90 },
+    { n: 120, r: 0.72, amp: 0.085, spin: -0.00042, hue: '0,220,210', a: 0.62 },
+    { n: 90,  r: 0.55, amp: 0.115, spin:  0.00055, hue: '0,180,190', a: 0.38 }
+  ];
+
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    if (!r.width) return;
+    W = r.width; H = r.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+  resize();
+
+  function frame() {
+    if (!W) { resize(); requestAnimationFrame(frame); return; }
+    t += 1;
+    /* Fast attack, slow release — speech is spiky, and easing both directions
+       equally turns every syllable into mush. */
+    energy += (target - energy) * (target > energy ? 0.35 : 0.06);
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.44;
+    for (const ring of RINGS) {
+      const spin = t * ring.spin * 1000;
+      for (let i = 0; i < ring.n; i++) {
+        const th = (i / ring.n) * Math.PI * 2 + spin;
+        const d = ring.amp * (
+            Math.sin(th * 3 + t * 0.010) +
+            Math.sin(th * 5 - t * 0.014) * 0.55 +
+            Math.sin(th * 11 + t * 0.020) * 0.30
+          ) * (0.4 + energy * 2.2);
+        const rr = R * ring.r * (1 + d);
+        ctx.fillStyle = 'rgba(' + ring.hue + ',' + (ring.a * (0.30 + energy * 1.4)).toFixed(3) + ')';
+        ctx.fillRect(cx + Math.cos(th) * rr, cy + Math.sin(th) * rr, 1.5, 1.5);
+      }
+    }
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.6);
+    g.addColorStop(0, 'rgba(0,243,255,' + (0.06 + energy * 0.30).toFixed(3) + ')');
+    g.addColorStop(1, 'rgba(0,243,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.6, 0, Math.PI * 2); ctx.fill();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  return {
+    set(v) { target = Math.max(0, Math.min(1, v)); },
+    show(on) { cv.classList.toggle('on', !!on); if (!on) target = 0; }
+  };
+})();
+
+/* One AudioContext for both directions. Amplitude is mean absolute deviation
+   of the time-domain samples — cheap, and it tracks loudness closely enough
+   that the ring visibly follows a sentence. */
+let actx = null;
+function audioCtx() {
+  if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); }
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  return actx;
+}
+function meter(node) {
+  const c = audioCtx(); if (!c) return null;
+  const an = c.createAnalyser();
+  an.fftSize = 1024;
+  node.connect(an);
+  const buf = new Uint8Array(an.fftSize);
+  let alive = true;
+  (function poll() {
+    if (!alive) return;
+    an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += Math.abs(buf[i] - 128);
+    orb.set(Math.min(1, (sum / buf.length) / 34));
+    requestAnimationFrame(poll);
+  })();
+  return { stop() { alive = false; try { node.disconnect(an); } catch (_) {} } };
+}
+
 /* ══ VOICE ═══════════════════════════════════════════════════════════════
    Chrome's SpeechRecognition does the listening and gives interim results,
    which is what the captions are. Nothing is sent until the wake word is
@@ -347,6 +446,7 @@ el('signin').addEventListener('click', async () => {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const WAKE = /\bjarvis\b/i;
 let rec = null, listening = false, awake = false, speaking = false;
+let micStream = null, micMeter = null;
 
 function caps(who, text, isAwake) {
   el('captions').classList.add('on');
@@ -371,7 +471,16 @@ async function speakReply(text) {
     if (!res.ok) throw new Error('speak ' + res.status);
     const url = URL.createObjectURL(await res.blob());
     const a = new Audio(url);
+    a.crossOrigin = 'anonymous';
+    let m = null;
+    try {
+      const c = audioCtx();
+      if (c) { const src = c.createMediaElementSource(a); src.connect(c.destination); m = meter(src); }
+    } catch (_) { /* visualisation is optional; the audio still plays */ }
+    orb.show(true);
     await new Promise(done => { a.onended = a.onerror = done; a.play().catch(done); });
+    if (m) m.stop();
+    orb.set(0);
     URL.revokeObjectURL(url);
   } catch (e) {
     console.warn('[jarvis] voice out:', e.message);
@@ -446,6 +555,16 @@ function startVoice() {
 
   rec.start();
   listening = true;
+  orb.show(true);
+  /* A second getUserMedia purely for the visual — SpeechRecognition does not
+     hand back its stream. Same permission, already granted. */
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      micStream = stream;
+      const c = audioCtx();
+      if (c) micMeter = meter(c.createMediaStreamSource(stream));
+    }).catch(() => {});
+  }
   el('micBtn').classList.add('on');
   el('micBtn').textContent = '🎙 Listening';
   caps('LISTENING — say “Jarvis”', '', false);
@@ -453,6 +572,9 @@ function startVoice() {
 
 function stopVoice() {
   listening = false; awake = false;
+  if (micMeter) { micMeter.stop(); micMeter = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  orb.show(false);
   try { if (rec) rec.stop(); } catch (_) {}
   el('micBtn').classList.remove('on');
   el('micBtn').textContent = '🎙 Voice off';
