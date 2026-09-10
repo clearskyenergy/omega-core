@@ -2077,6 +2077,14 @@
     var cut = { kw: 0, sf: 0, type: 0, circ: 0, sfUnknown: 0 };
 
     var out = ST.rows.filter(function (r) {
+      /* A DELIBERATE KEEP OUTRANKS A FILTER. A rep who starred this site
+         did so knowing what it is; hiding it again behind a minimum kW they
+         set for prospecting means the one site they are working disappears
+         while they widen the search for others. It is still viewport-bound
+         in render(), so this does not put the whole starred list back on
+         every screen — it only stops a filter deleting a site the rep
+         already chose. It is not counted as a cut either: it was not. */
+      if (isSaved(r.id)) return true;
       if ((r.sz.kw || 0) < minKw) { cut.kw++; return false; }
       /* UNKNOWN IS NOT ZERO. Parcels carry acreage, never building area —
          estimateSqftFromAcres is off precisely so a modelled figure is not
@@ -2300,14 +2308,29 @@
     return rec;
   }
 
-  /* Star the current site, or any card, into the kept list. */
+  /* Star the current site, or any card, into the kept list.
+
+     STARRING DOES NOT TAKE THE SITE AWAY FROM YOU.
+
+     This used to clear ST.current when you starred the site you were looking
+     at, so the card vanished out of the working panel the moment you kept
+     it and the only way back was the Starred tab. That made sense once,
+     when starred sites were prepended to every view and leaving the lookup
+     in place showed the same row twice. They are not prepended any more, so
+     all it does now is throw away the thing the rep just decided they cared
+     about, mid-job, and make them go and find it again.
+
+     Keeping it costs nothing: render() puts `current` in the working views
+     and `saved` in the Starred tab, never both in the same list, so there is
+     no double row to avoid. The star is a keep, not a filing-away. */
   function starSite(rec) {
     if (!rec || isSaved(rec.id)) return;
     rec.starred = true;          /* marks a deliberate keep, not a lookup */
     rec.starredAt = new Date().toISOString();
+    /* One object in both places on purpose: a refresh of the lookup then
+       updates the starred copy's circuit and capacity too. */
     ST.saved.unshift(rec);
     persistSaved();
-    if (ST.current && ST.current.id === rec.id) ST.current = null;
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -2600,9 +2623,10 @@
     var rows = filtered();
     var wrap = document.getElementById("cards");
 
-    /* Saved sites always list, above whatever the viewport returned, and are
-       never filtered out — a rep who deliberately kept an address should not
-       have to remember which filter is hiding it.
+    /* The starred list, built for the Starred tab. The working views do not
+       prepend it — a starred site reaches them as the current lookup or as a
+       viewport row, where it is exempt from the filters but not from the
+       viewport.
 
        Each is enriched INDIVIDUALLY. A single malformed record used to throw
        inside the map() and take the whole render with it: the panel kept its
@@ -2666,19 +2690,20 @@
       if (!vb.contains([im.lat, im.lon])) continue;
       try { imported.push(enrich(im)); } catch (e) {}
     }
-    /* STARRED SITES LIVE IN THE STARRED TAB, AND NOWHERE ELSE.
+    /* THE STARRED LIST IS NOT PREPENDED TO EVERY VIEW.
 
-       They used to be prepended to every view. The working panel then filled
-       up with sites the rep had already filed, pushing the thing they were
-       actually looking at down the page — and repeating, in a list meant for
-       "what is in front of me", a list that already has its own tab.
+       It used to be. The working panel then filled up with sites the rep had
+       already filed, pushing the thing they were actually looking at down
+       the page — and repeating, in a list meant for "what is in front of
+       me", a list that already has its own tab.
 
        So the working views show what the rep is working: the address they
        just looked up, anything imported that falls in the viewport, and what
-       "Search this area" returned. A starred site that genuinely sits in the
-       current viewport still appears, because it IS in front of them — it
-       just arrives as a viewport result rather than being pinned to the top
-       of every screen. */
+       "Search this area" returned. A starred site still appears in all three
+       when it belongs there — starring the current lookup leaves it exactly
+       where it was, and a starred viewport row is exempt from the filters —
+       because a site the rep kept is a site the rep is working on. What it
+       does not do is arrive pinned to the top of every screen. */
     /* The lookup wins over a viewport row for the same site: it was asked
        about directly and carries the fresher read. */
     if (current) {
