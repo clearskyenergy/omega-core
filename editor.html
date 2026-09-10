@@ -101328,7 +101328,33 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var CGB={ active:false, phase:null, seq:[], stepIx:0, placed:{}, conds:[],
             subMw:20, genType:'fuelcell_sofc', genMw:6, computeMw:5, incBess:true, incCool:true,
             incSub:true, incGen:true, incGenset:true, incBldg:true, topo:'RADIAL',
-            bldg:null, bldg0:null, keyBound:false, fmt:'guided' };
+            bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:null };
+
+  /* ── THE TWO FORMATS DO NOT SHARE A STARTING POINT ────────────────────
+     The dialog opened with campus numbers — a 20 MW substation, 6 MW of gas
+     fuel cell, 5 MW of IT — and kept them when you switched to Modular
+     blocks. So the modular path started by asking a question it does not
+     ask (what substation are you building) with an answer nobody wants, and
+     every figure had to be retyped before the plan meant anything.
+
+     Each format seeds its own numbers, ONCE per dialog. Re-picking a format
+     you have already been in leaves your edits alone — a toggle that resets
+     the form is a toggle people stop touching. */
+  var CGB_SEED = {
+    guided:  { subMw:20, genType:'fuelcell_sofc', genMw:6,   computeMw:5 },
+    /* One unit on a site that already runs solar: a megawatt of utility
+       capacity, the PV that is already there, a megawatt of compute. */
+    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1 }
+  };
+  function seedFor(fmtKey){
+    var d=CGB_SEED[fmtKey]; if(!d) return;
+    CGB.subMw=d.subMw; CGB.genType=d.genType; CGB.genMw=d.genMw; CGB.computeMw=d.computeMw;
+    function put(id,v){ var e=document.getElementById(id); if(e) e.value=v; }
+    put('cgb-submw', d.subMw);
+    put('cgb-genmw', d.genMw);
+    put('cgb-itmw',  d.computeMw);
+    var g=document.getElementById('cgb-gentype'); if(g) g.value=d.genType;
+  }
 
   function ppf(){ return (typeof S!=='undefined'&&S.pxPerFt>0)?S.pxPerFt:6; }
   function snap(v){ return Math.round(v*2)/2; }
@@ -102051,6 +102077,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
   function fmt(v){
     CGB.fmt=v;
     var mod=(v==='modular');
+    if(CGB.seeded!==v){ seedFor(v); CGB.seeded=v; }
     var g=document.getElementById('cgb-f-guided'), c=document.getElementById('cgb-f-modular');
     if(g){ g.style.borderColor=(v==='guided')?'#A78BFA':'#26364d'; g.style.background=(v==='guided')?'rgba(167,139,250,.10)':'transparent'; }
     if(c){ c.style.borderColor=mod?'#A78BFA':'#26364d'; c.style.background=mod?'rgba(167,139,250,.10)':'transparent'; }
