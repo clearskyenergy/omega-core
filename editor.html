@@ -101328,7 +101328,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var CGB={ active:false, phase:null, seq:[], stepIx:0, placed:{}, conds:[],
             subMw:20, genType:'fuelcell_sofc', genMw:6, computeMw:5, incBess:true, incCool:true,
             incSub:true, incGen:true, incGenset:true, incBldg:true, topo:'RADIAL',
-            bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:null };
+            bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:{} };
 
   /* ── THE TWO FORMATS DO NOT SHARE A STARTING POINT ────────────────────
      The dialog opened with campus numbers — a 20 MW substation, 6 MW of gas
@@ -101960,7 +101960,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
           +'<input type="checkbox" id="cgb-sub" checked onchange="OmegaCGB.sync()" style="width:14px;height:14px"> <strong id="cgb-sub-lbl">Grid substation on site</strong></label>'
         +'<div id="cgb-sub-help" style="font-size:9.5px;color:#8FA3B8;line-height:1.5;margin-bottom:8px">Optional. On a site fed from an existing service there is nothing to draw \u2014 but if a substation is in scope, its rating is the ceiling everything downstream fits under.</div>'
         +'<div style="width:200px"><label style="'+lbl+'" id="cgb-submw-lbl">Substation (MW)</label>'
-          +'<input id="cgb-submw" type="number" min="1" step="1" value="20" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
+          +'<input id="cgb-submw" type="number" min="0" step="0.1" value="'+CGB.subMw+'" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
       +'</div>'
 
       +'<div style="'+sec+'" id="cgb-sec4">4 \u00b7 On-site generation</div>'
@@ -101970,14 +101970,14 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
         +'<div id="cgb-gen-help" style="font-size:9.5px;color:#8FA3B8;line-height:1.5;margin-bottom:8px"></div>'
         +'<div style="display:grid;grid-template-columns:1fr 130px;gap:10px">'
           +'<div><label style="'+lbl+'">Type</label><select id="cgb-gentype" onchange="OmegaCGB.sync()" style="'+inp+'">'+genOpts+'</select></div>'
-          +'<div><label style="'+lbl+'">Size (MW)</label><input id="cgb-genmw" type="number" min="0" step="0.5" value="6" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
+          +'<div><label style="'+lbl+'">Size (MW)</label><input id="cgb-genmw" type="number" min="0" step="0.1" value="'+CGB.genMw+'" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
         +'</div>'
       +'</div>'
 
       +'<div style="'+sec+'">5 \u00b7 Compute &amp; support</div>'
       +'<div style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:9px;padding:12px;margin-bottom:14px">'
         +'<div style="width:170px;margin-bottom:10px"><label style="'+lbl+'">IT load (MW)</label>'
-          +'<input id="cgb-itmw" type="number" min="0.1" step="0.5" value="5" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
+          +'<input id="cgb-itmw" type="number" min="0.1" step="0.1" value="'+CGB.computeMw+'" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
         +'<label id="cgb-r-bess" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
           +'<input type="checkbox" id="cgb-bess" checked onchange="OmegaCGB.sync()" style="width:13px;height:13px"> Battery energy storage</label>'
         +'<label id="cgb-r-cool" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
@@ -102077,7 +102077,11 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
   function fmt(v){
     CGB.fmt=v;
     var mod=(v==='modular');
-    if(CGB.seeded!==v){ seedFor(v); CGB.seeded=v; }
+    /* Seeded once PER FORMAT, not once per switch. Remembering only the
+       last format meant guided -> modular -> guided -> modular re-seeded
+       every time and threw away whatever had been typed in between. */
+    if(!CGB.seeded) CGB.seeded={};
+    if(!CGB.seeded[v]){ seedFor(v); CGB.seeded[v]=1; }
     var g=document.getElementById('cgb-f-guided'), c=document.getElementById('cgb-f-modular');
     if(g){ g.style.borderColor=(v==='guided')?'#A78BFA':'#26364d'; g.style.background=(v==='guided')?'rgba(167,139,250,.10)':'transparent'; }
     if(c){ c.style.borderColor=mod?'#A78BFA':'#26364d'; c.style.background=mod?'rgba(167,139,250,.10)':'transparent'; }
