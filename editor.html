@@ -53745,7 +53745,7 @@ function _derRenderDc(g, sh){
     _derRect(g, cx, bodyY, cw, bodyH, fill, stroke, 1);
     if(!detail) return;
     /* corrugation — ribs across the short axis, the way a container reads */
-    var ribs=Math.max(2, Math.round(cw/(2.2*ppf)));
+    var ribs=Math.max(2, Math.round(cw/(4.5*ppf)));
     for(var r=1;r<ribs;r++){
       var rx=cx+(r*cw/ribs);
       var ln=_mkNS('line');
@@ -53769,7 +53769,7 @@ function _derRenderDc(g, sh){
     _derRect(g, x, y, w, chH, '#9AA0A6', '#5F6368', 0.8);
     if(detail){
       var fans=Math.max(3, Math.round(w/(9*ppf)));
-      var fr=Math.min(chH*0.34, (w/fans)*0.30);
+      var fr=Math.min(chH*0.30, (w/fans)*0.26);
       for(var f=0; f<fans; f++){
         var fx=x+(f+0.5)*(w/fans);
         var c=_mkNS('circle');
