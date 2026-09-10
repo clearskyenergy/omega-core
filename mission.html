@@ -6,14 +6,22 @@
 <title>JARVIS // Mission Control</title>
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
-      --ink:#c1e7ff;--dim:#5f7d99;--good:#00ff66;--warn:#ffaa00;--bad:#ff4d4d;
-      --edge:1px solid rgba(0,243,255,.3)}
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Courier New',Courier,monospace}
+      --ink:#dceefc;--dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
+      --edge:1px solid rgba(0,243,255,.3);
+      /* Prose in a monospace at label contrast is the whole readability
+         problem. The terminal look lives in the CHROME — titles, badges,
+         numbers, timestamps — and the things you actually read are set in
+         the system UI face at full contrast. */
+      --mono:'SF Mono',ui-monospace,Menlo,'Courier New',monospace;
+      --ui:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--ui)}
+.title,.ptitle,.badge,button,.foot,.capwho,.queue,.coreName,.coreState,
+.mono,.tm,.n,.v{font-family:var(--mono)}
 body{background:var(--bg);color:var(--ink);height:100vh;padding:16px;display:flex;
      flex-direction:column;gap:14px;overflow:hidden}
 body::before{content:" ";position:fixed;inset:0;z-index:9999;pointer-events:none;
-  background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.25) 50%),
-             linear-gradient(90deg,rgba(255,0,0,.06),rgba(0,255,0,.02),rgba(0,0,255,.06));
+  background:linear-gradient(rgba(18,16,16,0) 50%,rgba(0,0,0,.13) 50%),
+             linear-gradient(90deg,rgba(255,0,0,.03),rgba(0,255,0,.01),rgba(0,0,255,.03));
   background-size:100% 4px,6px 100%}
 header{display:flex;justify-content:space-between;align-items:center;gap:14px;
        border-bottom:var(--edge);padding-bottom:10px;flex:none}
@@ -44,15 +52,43 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   border-top:2px solid var(--glow-cyan);border-left:2px solid var(--glow-cyan)}
 .panel::after{content:'';position:absolute;bottom:0;right:0;width:10px;height:10px;
   border-bottom:2px solid var(--glow-cyan);border-right:2px solid var(--glow-cyan)}
-.ptitle{font-size:12px;text-transform:uppercase;letter-spacing:2px;color:var(--glow-cyan);
-        border-bottom:1px solid rgba(0,243,255,.12);padding-bottom:5px;flex:none}
-.row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}
-.row .k{color:var(--dim)} .row .v{color:var(--ink);text-align:right}
+.ptitle{font-size:11px;text-transform:uppercase;letter-spacing:2.2px;color:var(--glow-cyan);
+        border-bottom:1px solid rgba(0,243,255,.16);padding-bottom:7px;flex:none;opacity:.9}
+/* The old row was two spans with space-between and no min-width, so a long
+   title wrapped UNDER its own status badge — which is what made "no recipient"
+   land on top of the text. The label side now shrinks properly and the badge
+   never wraps. */
+.row{display:flex;align-items:flex-start;gap:12px;font-size:13.5px;line-height:1.55;
+     padding:8px 0;border-bottom:1px solid rgba(0,243,255,.07)}
+.row:last-child{border-bottom:none}
+.row .k{color:var(--ink);flex:1;min-width:0;overflow-wrap:anywhere}
+.row .v{color:var(--dim);flex:none;white-space:nowrap;text-align:right;font-size:11.5px;
+        padding-top:2px;letter-spacing:.5px}
+
+/* A ranked to-do can be a paragraph. Three lines is enough to know which one
+   it is; the rest is one click away, so the panel stays a list instead of
+   becoming a wall. */
+.row .k.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+              overflow:hidden;cursor:pointer}
+.row .k.clamp.open{-webkit-line-clamp:unset;overflow:visible}
+.row .k.clamp::after{content:'';display:block}
+
+/* Time first, in mono, on its own column so the titles line up. */
+.tm{color:var(--glow-cyan);flex:none;font-size:12px;letter-spacing:.5px;padding-top:2px;
+    min-width:66px;opacity:.85}
+.tm.past{color:var(--dim);opacity:.6}
+
+/* The number IS the handle he speaks — "execute 1 through 4". */
+.num{flex:none;min-width:22px;height:20px;border:1px solid rgba(0,243,255,.35);
+     border-radius:4px;color:var(--glow-cyan);font-family:var(--mono);font-size:11px;
+     display:flex;align-items:center;justify-content:center;margin-top:1px}
+.row.picked{background:rgba(0,243,255,.07)}
+.row.picked .num{background:rgba(0,243,255,.22);border-color:var(--glow-cyan)}
 .v.cy{color:var(--glow-cyan)} .v.good{color:var(--good)} .v.warn{color:var(--warn)} .v.bad{color:var(--bad)}
-.scroll{overflow-y:auto;min-height:0}
+.scroll{overflow-y:auto;min-height:0;padding-right:4px}
 .scroll::-webkit-scrollbar{width:5px}
 .scroll::-webkit-scrollbar-thumb{background:rgba(0,243,255,.3);border-radius:4px}
-.alert{border:1px solid var(--warn);color:var(--warn);padding:9px;font-size:11.5px;line-height:1.5}
+.alert{border:1px solid var(--warn);color:var(--warn);padding:10px;font-size:12.5px;line-height:1.55;border-radius:4px}
 
 .core{align-items:center;justify-content:center;gap:0}
 #arc{width:100%;flex:1;min-height:0;display:block}
@@ -66,13 +102,13 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .queue .l{font-size:9px;color:var(--dim);letter-spacing:2px}
 .arcWrap{position:relative;flex:1;width:100%;min-height:0;display:flex}
 
-.thread{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:9px;font-size:13px}
-.msg{padding:9px 11px;border-radius:5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.thread{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
+.msg{padding:10px 13px;border-radius:6px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .msg.you{background:rgba(0,68,255,.14);border:1px solid rgba(0,68,255,.35);align-self:flex-end;max-width:88%}
 .msg.jarvis{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.18);max-width:96%}
 .msg .meta{font-size:10px;color:var(--dim);margin-top:5px}
 .ask{display:flex;gap:8px;align-items:center;border-top:1px solid rgba(0,243,255,.12);padding-top:10px;flex:none}
-.ask input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:13px;font-family:inherit}
+.ask input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:14px;font-family:var(--ui)}
 .ask .p{color:var(--glow-cyan);font-weight:bold}
 .foot{font-size:10.5px;color:var(--dim);letter-spacing:1px;flex:none}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
@@ -82,7 +118,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .caps.on{display:block}
 .capwho{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
 .capwho.awake{color:var(--good)}
-#captext{font-size:14px;color:var(--ink);line-height:1.4;max-height:80px;overflow-y:auto}
+#captext{font-size:16px;color:var(--ink);line-height:1.5;max-height:88px;overflow-y:auto}
 </style>
 </head>
 <body>
@@ -288,20 +324,40 @@ const arc = (() => {
    ranked backlog get the room; spend and subsystem toggles fold away behind a
    summary, because you look at those when something is wrong, not while you
    are working. */
+/* fmt() may return: { n, time, past, left, right, cls, clamp }
+     n      a spoken handle — "execute 1 through 4"
+     time   its own mono column, so titles line up instead of being pushed
+            right by however long the last timestamp was
+     clamp  three lines, click to open. A ranked to-do is a paragraph, and
+            six paragraphs stacked is not a list any more.
+   The old version called fmt(r) three times for every row and rendered a
+   long title straight into a collision with its own status badge. */
 function listInto(host, rows, fmt, empty){
   const b=el(host); if(!b) return;
   b.textContent='';
   if(!rows || !rows.length){
     const d=document.createElement('div'); d.className='row';
-    const k=document.createElement('span'); k.className='k'; k.textContent=empty;
-    d.appendChild(k); b.appendChild(d); return;
+    const k=document.createElement('span'); k.className='k'; k.style.color='var(--dim)';
+    k.textContent=empty; d.appendChild(k); b.appendChild(d); return;
   }
   rows.forEach(r=>{
+    const f=fmt(r);
     const d=document.createElement('div'); d.className='row';
-    const a=document.createElement('span'); a.className='k'; a.textContent=fmt(r).left;
-    const c=document.createElement('span'); c.className='v'+(fmt(r).cls?' '+fmt(r).cls:'');
-    c.textContent=fmt(r).right||'';
-    d.appendChild(a); d.appendChild(c); b.appendChild(d);
+    if(f.n!=null){ const n=document.createElement('span'); n.className='num'; n.textContent=f.n; d.appendChild(n); }
+    if(f.time){ const t=document.createElement('span'); t.className='tm'+(f.past?' past':''); t.textContent=f.time; d.appendChild(t); }
+    const a=document.createElement('span');
+    a.className='k'+(f.clamp?' clamp':'');
+    a.textContent=f.left;
+    if(f.clamp){
+      a.title='click to expand';
+      a.addEventListener('click',()=>a.classList.toggle('open'));
+    }
+    d.appendChild(a);
+    if(f.right){
+      const c=document.createElement('span'); c.className='v'+(f.cls?' '+f.cls:'');
+      c.textContent=f.right; d.appendChild(c);
+    }
+    b.appendChild(d);
   });
 }
 
@@ -321,19 +377,30 @@ async function load(){
     const nowMs=Date.now();
     listInto('schedule', (s.schedule||[]), e=>{
       const past = e.startsAt && new Date(e.startsAt).getTime() < nowMs;
-      return { left: e.when + '  ' + e.title,
-               right: e.others ? e.others+'' : '',
-               cls: past ? '' : 'cy' };
+      return { time: e.when, past: past, left: e.title,
+               /* A bare "8" next to a meeting reads as a time, a room, or a
+                  priority. It is the number of other people in it. */
+               right: e.others ? e.others + (e.others===1?' guest':' guests') : '',
+               cls: '' };
     }, 'nothing on the calendar');
 
-    listInto('todos', (s.todos||[]), t=>({
+    const SIZE={S:'small',M:'medium',L:'large',XL:'x-large'};
+    listInto('todos', (s.todos||[]), (t,i)=>({
       left: t.title || '(untitled)',
-      right: (t.size||''), cls:'cy'
+      clamp: true,
+      right: SIZE[t.size] || t.size || '',
+      cls:''
     }), 'backlog is empty');
 
-    listInto('drafts', (s.draftList||[]), d=>({
-      left: d.subject || '(no subject)',
-      right: d.to ? '→' : 'no recipient',
+    /* The order rendered here IS the order he speaks to. Held so that
+       "execute 1 through 4" resolves against exactly what is on his screen
+       and never against a list that has since been re-sorted underneath him. */
+    outbox = (s.draftList||[]).map((d,i)=>({ n:i+1, id:d.id,
+      label: d.subject || '(no subject)', to: d.to || null }));
+    listInto('drafts', outbox, d=>({
+      n: d.n,
+      left: d.label,
+      right: d.to ? 'ready' : 'no recipient',
       cls: d.to ? 'good' : 'warn'
     }), 'nothing waiting');
 
@@ -402,6 +469,10 @@ const CHAT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const WAKE = /\bjarvis\b/i;
 let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
+
+/* What "Waiting to go out" is currently showing, in the order it is showing
+   it. The numbers on screen are the handles he speaks. */
+let outbox=[];
 /* After he answers, the conversation stays open briefly. A real exchange has
    follow-ups, and making you say his name before every one of them is the
    difference between talking to someone and operating a machine. Silence past
@@ -605,11 +676,106 @@ async function loadThread(){
   }catch(_){}
 }
 
+/* "1-4" · "1,3,4" · "1 and 3" · "2 through 5" · "all" — the same shapes the
+   SMS side accepts, because he should not have to remember which channel he
+   is on. */
+function parseNumbers(text, max){
+  const t=String(text||'').toLowerCase();
+  if(/\ball\b/.test(t)){ const a=[]; for(let i=1;i<=max;i++) a.push(i); return a; }
+  const out=[], re=/(\d+)\s*(?:-|–|to|through|thru)\s*(\d+)|(\d+)/g; let m;
+  while((m=re.exec(t))){
+    if(m[1]&&m[2]){ const a=+m[1], b=+m[2]; if(a<=b&&b-a<100) for(let n=a;n<=b;n++) out.push(n); }
+    else if(m[3]) out.push(+m[3]);
+  }
+  return [...new Set(out)];
+}
+
+/* A spoken command that is nothing but a verb and some numbers is resolved
+   HERE, against the list he is looking at — not sent to a model to be guessed
+   at. It costs nothing, it cannot pick the wrong list, and it cannot invent an
+   item 5 when the panel is showing four. */
+const VERBS={execute:'send',send:'send',do:'send',run:'send',fire:'send',
+             approve:'approve',reject:'reject',park:'park',open:'open',show:'open',read:'open'};
+const CMD=/^(?:hey\s+)?(?:jarvis[,\s]*)?(execute|send|do|run|fire|approve|reject|park|open|show|read)\s*(?:the\s+)?(?:items?|numbers?|drafts?|emails?)?\s*(all|[\d][\d\s,&\-–]*(?:\s*(?:and|through|thru|to)\s*\d+)?[\d\s,&]*)$/i;
+
+function asCommand(text){
+  const m=String(text||'').trim().replace(/[.!]+$/,'').match(CMD);
+  if(!m) return null;
+  if(!outbox.length) return null;
+  const verb=VERBS[m[1].toLowerCase()];
+  const nums=parseNumbers(m[2], outbox.length);
+  if(!verb || !nums.length) return null;
+  const picked=[], missing=[];
+  nums.forEach(n=>{ const hit=outbox.find(o=>o.n===n); hit?picked.push(hit):missing.push(n); });
+  /* Every number named an item that is not there. That is an answerable
+     mistake, not a question for a model — say so and stop. */
+  return { verb, picked, missing };
+}
+
+function highlight(ns){
+  [...document.querySelectorAll('#drafts .row')].forEach((r,i)=>{
+    r.classList.toggle('picked', ns.indexOf(i+1)!==-1);
+  });
+}
+
+/* Everything on this panel leaves the building, so the number resolves to a
+   list of names he confirms — not straight to a send. The confirmation IS the
+   second look that actions.js is built around. */
+function confirmCommand(cmd){
+  if(!cmd.picked.length){
+    say('jarvis','There is no item '+cmd.missing.join(', ')+' on that list — it is showing '+
+        outbox.length+'.', 0);
+    return;
+  }
+  const box=document.createElement('div');
+  box.className='msg jarvis';
+  const verb=cmd.verb==='send'?'Send':cmd.verb[0].toUpperCase()+cmd.verb.slice(1);
+  const noRecipient=cmd.picked.filter(p=>!p.to);
+  const lines=[verb+' '+cmd.picked.length+(cmd.picked.length===1?' item':' items')+'?'];
+  cmd.picked.forEach(p=>lines.push('  '+p.n+'. '+p.label+(p.to?'':'  — no recipient')));
+  if(cmd.missing.length) lines.push('No item '+cmd.missing.join(', ')+' on the list.');
+  if(cmd.verb==='send'&&noRecipient.length) lines.push('The ones with no recipient will be refused.');
+  box.textContent=lines.join('\n');
+
+  const bar=document.createElement('div');
+  bar.style.cssText='display:flex;gap:8px;margin-top:10px';
+  const yes=document.createElement('button'); yes.textContent='CONFIRM';
+  const no=document.createElement('button');  no.textContent='CANCEL';
+  bar.appendChild(yes); bar.appendChild(no); box.appendChild(bar);
+  el('thread').appendChild(box); el('thread').scrollTop=el('thread').scrollHeight;
+  highlight(cmd.picked.map(p=>p.n));
+
+  const done=()=>{ bar.remove(); highlight([]); };
+  no.addEventListener('click',()=>{ done(); say('jarvis','Left alone.'); });
+  yes.addEventListener('click',async()=>{
+    done(); yes.disabled=true;
+    coreState('working…', false);
+    try{
+      const t=await token();
+      const r=await fetch(CHAT+'/act',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({verb:cmd.verb, kind:'draft', ids:cmd.picked.map(p=>p.id)})});
+      const j=await r.json().catch(()=>({}));
+      const reply=r.ok?(j.reply||'Done.'):(j.error||('HTTP '+r.status));
+      say('jarvis', reply, 0);
+      caps('JARVIS', reply, false);
+      if(r.ok && voiceOut) await speakReply(reply);
+      load();
+    }catch(e){ say('jarvis', e.message); }
+    coreState(listening?'listening — say \u201cJarvis\u201d':'voice off', false);
+  });
+}
+
 /* One path for typed and spoken. A second code path for the keyboard is how
    the two drift until only one of them works. */
 async function submit(said){
   said=(said||'').trim(); if(!said) return;
   say('you', said);
+
+  /* Resolved on this side of the wire, for nothing. */
+  const cmd=asCommand(said);
+  if(cmd){ confirmCommand(cmd); return; }
+
   coreState('thinking…', false);
   const pending=say('jarvis','…');
   try{
