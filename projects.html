@@ -682,7 +682,7 @@ window._omegaReady = function(){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Portal
     </a>
-    <a class="tb-tab" href="/marketplace.html" id="tab-marketplace">
+    <a class="tb-tab" data-sn="marketplace" href="/marketplace.html" id="tab-marketplace">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
       Marketplace
     </a>
@@ -758,6 +758,21 @@ let myEmail = '';
 const WS = window.OMEGA_WORKSPACE
   || (window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant && window.CLEARSKY_CONFIG.tenant.orgId
         ? window.CLEARSKY_CONFIG.tenant : { orgId:'', allowedDomain:'', clientName:'', accountTier:'' });
+/* ── PUBLISH IT, DON'T KEEP IT ────────────────────────────────────────────
+   omega-tenant.js applies the org record — the tenant's real name, the tier,
+   hideMarketplace, the Joint development roster — onto window.OMEGA_WORKSPACE.
+   This page kept WS to itself, so on /projects that object never existed:
+   phase 2 waited two seconds, found nothing, and dropped the lot. The sidebar
+   then read "renewablenrgsolutions.co" where the dashboard read "Renewable NRG
+   Solutions", offered a Marketplace the account cannot use, and had no Joint
+   development section at all — the same nav disagreeing with itself between
+   two clicks.
+
+   Same object, not a copy, so _wsFromUser() filling in the orgId below and
+   mergeEntitlements() filling in the name both land on the one WS this page
+   paints from. */
+window.OMEGA_WORKSPACE = window.OMEGA_WORKSPACE || WS;
+
 function _wsFromUser(user){
   if (WS.orgId || !user || !user.email) return;
   var dom = (user.email.split('@')[1] || '').toLowerCase();
@@ -1231,7 +1246,7 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
             + String(t.name || t.key).replace(/</g,'&lt;') + '</a>';
       n++;
     }
-    host.innerHTML = html || '<a class="sn-app" href="/marketplace.html"><span class="sn-app-dot"></span>Browse marketplace</a>';
+    host.innerHTML = html || '<a class="sn-app" data-sn="marketplace" href="/marketplace.html"><span class="sn-app-dot"></span>Browse marketplace</a>';
   }
   /* THE CSS COLLAPSES WITH max-height AND AN .open CLASS, not with display.
      This toggled style.display instead, which does nothing to a div that is

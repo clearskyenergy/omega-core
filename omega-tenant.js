@@ -313,6 +313,37 @@
     var e = String(user && user.email || '').toLowerCase();
     return e.split('@')[1] || '';
   }
+  /* ── THE SHARED NAV CANNOT DEPEND ON EACH PAGE REMEMBERING A GLOBAL ────
+     Everything phase 2 does — the tenant's real name in the sidebar head, the
+     Joint development section, hiding the marketplace from a design partner —
+     lands on window.OMEGA_WORKSPACE. The dashboard and the marketplace set it;
+     /projects builds its own local WS object and never published one, so on
+     that page the object never arrived, mergeEntitlements got null, and the
+     whole phase was dropped with no error. The nav quietly disagreed with
+     itself depending on which page you were standing on.
+
+     Waiting longer would not have helped: nothing was coming. So when nothing
+     lands, build the minimum from the org record we have just read and publish
+     it. mergeEntitlements then fills in the name, tier, flags and roster on top
+     as it would for any other page, and every page gets the same chrome whether
+     or not its author knew to declare the global. */
+  function baseWorkspace(org, user) {
+    var have = global.OMEGA_WORKSPACE || cfg().tenant || null;
+    if (have) return have;
+    var domain = String((user && user.email) || '').toLowerCase().split('@')[1] || '';
+    var ws = {
+      orgId:         org || domain,
+      allowedDomain: org || domain,
+      clientName:    (T.org && T.org.name) || org || domain,
+      accountTier:   '',
+      logo:          (T.org && T.org.logoUrl) || ''
+    };
+    /* Published, not just returned: _paintSidebarBrand() and the topbar chip
+       on those pages read the global directly. */
+    try { global.OMEGA_WORKSPACE = ws; } catch (e) {}
+    return ws;
+  }
+
   function mergeEntitlements(ws) {
     if (!ws) return ws;
     var b = T.billing || {};
@@ -451,8 +482,17 @@
      not offering somebody a door that is not theirs to walk through. */
   function paintMarketplaceNav(ws) {
     if (!global.document || !ws || !ws.hideMarketplace) return;
-    var els = document.querySelectorAll('[data-sn="marketplace"]');
-    for (var i = 0; i < els.length; i++) els[i].style.display = 'none';
+    /* A STYLESHEET, NOT A LOOP OVER WHAT EXISTS RIGHT NOW. This ran once, at
+       entitlement time, and the pinned-apps list is painted later — so a
+       tenant with nothing pinned still got "Browse marketplace" in their
+       sidebar, injected after the loop had already been and gone. A rule
+       covers the links that arrive afterwards too, which is most of them on a
+       page that builds its own nav. */
+    if (document.getElementById('omega-no-mkt')) return;
+    var st = document.createElement('style');
+    st.id = 'omega-no-mkt';
+    st.textContent = '[data-sn="marketplace"]{display:none !important}';
+    (document.head || document.documentElement).appendChild(st);
   }
 
   function fireEntitlements(ws) {
@@ -619,9 +659,9 @@
             lockedEntitlements();
             return;
           }
-          fireEntitlements(mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null));
+          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
         })['catch'](function () {
-          fireEntitlements(mergeEntitlements(global.OMEGA_WORKSPACE || cfg().tenant || null));
+          fireEntitlements(mergeEntitlements(baseWorkspace(org, user)));
         });
       }
 
@@ -684,7 +724,7 @@
           setTimeout(function () { applyWhenReady((tries || 0) + 1); }, 100);
           return;
         }
-        fireEntitlements(mergeEntitlements(ws));
+        fireEntitlements(mergeEntitlements(ws || baseWorkspace(org, user)));
       })(0);
     })['catch'](function (err) {
       log('entitlements read failed; config.js tier stands', err && err.message);

@@ -79,6 +79,37 @@ PAGES.forEach(p => {
      'omega-tenant counts work by the collaborator roster, not a hardcoded domain');
   ok(/hideMarketplace/.test(t), 'and honours a tenant that should not see the marketplace');
 }
+/* ── THE NAV IS ONLY AS CONSISTENT AS THE OBJECT IT READS ────────────────
+   Every runtime decision above — the Joint development section, the tenant's
+   real name in the sidebar head, hiding the marketplace — is applied by
+   omega-tenant.js onto window.OMEGA_WORKSPACE. /projects kept its workspace in
+   a local const and never published one, so phase 2 waited, found nothing and
+   dropped everything: identical markup, three different navs on screen. The
+   markup checks above all passed the whole time. */
+console.log('the workspace object each nav page hands to omega-tenant');
+PAGES.forEach(p => {
+  const s = fs.readFileSync(path.join(ROOT, p), 'utf8');
+  ok(/window\.OMEGA_WORKSPACE\s*=/.test(s), p + ' publishes window.OMEGA_WORKSPACE');
+});
+{
+  const t = fs.readFileSync(path.join(ROOT, 'omega-tenant.js'), 'utf8');
+  ok(/function baseWorkspace\(/.test(t),
+     'omega-tenant builds one itself when a page publishes none');
+  ok(!/fireEntitlements\(mergeEntitlements\(global\.OMEGA_WORKSPACE \|\| cfg\(\)\.tenant \|\| null\)\)/.test(t),
+     'and no path still fires entitlements with null');
+}
+
+/* A marketplace a tenant may not use must not be offered anywhere on the page,
+   not just in the sidebar — one flag, every entry point. */
+console.log('marketplace entry points');
+PAGES.forEach(p => {
+  const s = fs.readFileSync(path.join(ROOT, p), 'utf8');
+  const links = (s.match(/<a\s[^>]*href="\/marketplace\.html"[^>]*>/g) || [])
+                  .filter(a => !/data-sn="marketplace"/.test(a));
+  ok(!links.length, p + ' tags every /marketplace.html link with data-sn'
+     + (links.length ? ' — ' + links.length + ' untagged' : ''));
+});
+
 ok(fs.existsSync(path.join(ROOT, 'jd-workspace.html')), '/jd-workspace.html exists');
 
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');

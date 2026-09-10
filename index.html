@@ -1678,7 +1678,7 @@ window._omegaReady = function(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         Portal
       </a>
-      <a class="tb-tab" href="/marketplace.html">
+      <a class="tb-tab" data-sn="marketplace" href="/marketplace.html">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>
         Marketplace
       </a>
@@ -2002,7 +2002,7 @@ window._omegaReady = function(){
         <div class="block-title">My Applications</div>
         <div class="block-sub">The tools you use most — launch straight into your workspace.</div>
       </div>
-      <a class="view-all" href="/marketplace.html">Browse Marketplace ›</a>
+      <a class="view-all" data-sn="marketplace" href="/marketplace.html">Browse Marketplace ›</a>
     </div>
 
     <div class="platform-map">
@@ -5721,7 +5721,7 @@ function _paintSideApps(){
       }
     }
   }catch(e){}
-  list.innerHTML = html || '<a class="sn-app" href="/marketplace.html"><span class="sn-app-dot"></span>Browse Marketplace…</a>';
+  list.innerHTML = html || '<a class="sn-app" data-sn="marketplace" href="/marketplace.html"><span class="sn-app-dot"></span>Browse Marketplace…</a>';
 }
 
 </script>
