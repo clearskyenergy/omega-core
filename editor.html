@@ -100916,12 +100916,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         ? 'Click the <strong>opposite corner</strong> of the building.'
         : 'Click one <strong>corner of the building</strong> \u2014 the data hall and electrical rooms. Equipment goes inside it.';
     else if(CGB.phase==='first')
-      hint='Click the map to place '+nm+'.';
+      hint='Click the map to place '+nm+'.'+_roomNote(k);
     else if(CGB.phase==='draw')
       hint='Route the trench to '+nm+': click points, <strong>ENTER</strong> to finish the run.'
         +'<br><span style="color:#8FA3B8">'+Math.max(0,CGB.run.length-1)+' point(s) \u00b7 BACKSPACE removes one \u00b7 ESC cancels</span>';
     else if(CGB.phase==='snap')
-      hint='Click <strong>on the run</strong> to drop '+nm+'. Which side you click is which side it lands on.'
+      hint='Click <strong>on the run</strong> to drop '+nm+'.'+_roomNote(k)+' Which side you click is which side it lands on.'
         +'<br><span style="color:#8FA3B8">BACKSPACE re-routes this leg \u00b7 ESC cancels</span>';
     e.innerHTML='<div style="padding:10px 13px;border-bottom:1px solid #26364d;display:flex;align-items:center;justify-content:space-between">'
       +'<div style="font-size:11.5px;font-weight:800;color:#A78BFA">\u25a6 Compute \u2014 Guided Build</div>'
@@ -100963,7 +100963,172 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     S.shapes.push(sh); CGB.bldg=sh; CGB.bldg0=null;
     try{ if(typeof renderShape==='function') renderShape(sh); }catch(e){}
     try{ if(typeof updShapeCount==='function') updShapeCount(); }catch(e){}
+    try{ buildRooms(sh); }catch(e){ if(window.console) console.warn('[CGB] rooms', e&&e.message); }
     CGB.phase='first'; hud();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     AUTO-CALIBRATED ROOMS INSIDE THE ENVELOPE
+     ------------------------------------------------------------------
+     Drawing the envelope produced one grey box labelled "DATA HALL /
+     ELECTRICAL ROOMS", and then every piece of indoor plant was dropped
+     wherever the click landed inside it. That is a footprint, not a
+     building: nothing said how much floor the racks actually need, the
+     UPS and the batteries ended up wherever there was room on screen,
+     and the drawing could not answer the first question anybody asks,
+     which is whether the load fits in the shell.
+
+     So the shell is programmed from the LOAD, not from the box:
+
+       data hall   IT watts / 150 W per ft², the ASHRAE-era density this
+                   file already carries in the Building Designer's own
+                   space-use table — so the two agree by construction
+                   rather than by coincidence
+       UPS / swgr  18% of the hall
+       electrical  12%
+       battery     10%, or the real ESS footprint when one is sized
+       mechanical  22% — chillers, CRAH, heat rejection indoors
+       NOC         6%, floored at 400 ft²
+       support     8% — corridor, restroom, storage
+
+     Those ratios are screening rules and are labelled as such on the
+     plan. The point is not that they are the answer; it is that a room
+     appears at a defensible size instead of not appearing at all, and
+     the Building Designer opens on the same shape to refine it.
+
+     The rooms are laid out with the Designer's own squarified treemap,
+     for the same reason it uses one: long thin slivers are what make a
+     generated plan look fake, and they are also unbuildable.
+
+     WHAT THIS DOES NOT DO: it does not place the equipment for you. Each
+     node is still a click, and the chain of conduit between them is the
+     one that already works. What it does is SNAP that click to the room
+     the node belongs in, so a rough click on the right part of the
+     building lands the switchgear in the electrical room rather than
+     four feet outside it. */
+  var CGB_ROOM_OF = {
+    stepdown:'electrical', mvswgr:'electrical', pdu:'electrical', pduB:'electrical',
+    sst:'electrical', dcbus:'electrical', sts:'electrical',
+    ups:'ups', upsB:'ups', upsC:'ups',
+    bess:'battery', cooling:'mech', compute:'hall'
+    /* substation, powergen and genset are deliberately absent — they are
+       yard plant and belong outdoors. */
+  };
+
+  function roomProgram(){
+    var itKw = Math.max(0, (+CGB.computeMw||0) * 1000);
+    if(!(itKw>0)) return null;
+    var hall = (itKw*1000)/150;                       /* W / (W per ft²) */
+    var bessSf = 0;
+    try{
+      var kwh=(S.computeBuild&&S.computeBuild.bess&&+S.computeBuild.bess.kwh)||0;
+      if(kwh>0) bessSf = kwh/18;                      /* racked LFP, aisles in */
+    }catch(e){}
+    var P=[
+      { key:'hall',       label:'DATA HALL',            sf:hall },
+      { key:'mech',       label:'MECHANICAL / COOLING', sf:hall*0.22 },
+      { key:'ups',        label:'UPS / SWITCHGEAR',     sf:hall*0.18 },
+      { key:'electrical', label:'ELECTRICAL ROOM',      sf:hall*0.12 },
+      { key:'battery',    label:'BATTERY / ESS',        sf:Math.max(bessSf, hall*0.10) },
+      { key:'support',    label:'SUPPORT / CORRIDOR',   sf:hall*0.08 },
+      { key:'noc',        label:'NOC',                  sf:Math.max(400, hall*0.06) }
+    ];
+    if(!CGB.incBess) P=P.filter(function(r){ return r.key!=='battery'; });
+    if(!CGB.incCool) P=P.filter(function(r){ return r.key!=='mech'; });
+    return P;
+  }
+
+  /* Lay the program into the envelope and draw it. Returns the rooms with
+     their pixel rectangles, or null when there is nothing to program. */
+  function buildRooms(sh){
+    CGB.rooms=null;
+    var P=roomProgram(); if(!P || !P.length) return null;
+    var eng=null;
+    try{ eng = window.OmegaBldgEngine || (window.OmegaBldg && OmegaBldg.engine); }catch(e){}
+    if(!eng || typeof eng.squarify!=='function') return null;
+
+    var a=sh.pts[0], b=sh.pts[1];
+    var x=Math.min(a.x,b.x), y=Math.min(a.y,b.y);
+    var w=Math.abs(b.x-a.x), h=Math.abs(b.y-a.y);
+    /* Inset for the exterior wall, so rooms do not sit on the envelope
+       line and read as one merged blob. */
+    var pad=Math.max(3, Math.min(w,h)*0.02);
+    x+=pad; y+=pad; w-=pad*2; h-=pad*2;
+    if(w<20||h<20) return null;
+
+    var rects=eng.squarify(P.map(function(r){ return { key:r.key, label:r.label, sf:r.sf, value:r.sf }; }),
+                           x, y, w, h);
+    if(!rects || !rects.length) return null;
+
+    /* Does the program fit the plate the user drew? A room drawn at the
+       right proportion inside a footprint that is half the size it needs
+       is a drawing that lies, so say the number. */
+    var ppf=(S.pxPerFt&&S.pxPerFt>0)?S.pxPerFt:0;
+    var needSf=0; P.forEach(function(r){ needSf+=r.sf; });
+    var haveSf= ppf>0 ? ((w/ppf)*(h/ppf)) : 0;
+
+    var rooms=[];
+    rects.forEach(function(rc){
+      var it=rc.item;
+      var rs={ id:(typeof uid==='function'?uid():'r'+Math.random().toString(36).slice(2)),
+               kind:'rect',
+               pts:[{x:rc.x,y:rc.y},{x:rc.x+rc.w,y:rc.y+rc.h}],
+               stroke:'#64748B', color:'#64748B', fill:'#38BDF8', fillOpacity:0.05,
+               label:it.label + (ppf>0 ? ('  ·  '+Math.round(it.sf).toLocaleString()+' ft²') : ''),
+               omegaRoom:it.key, omegaCompute:true, roomSf:Math.round(it.sf) };
+      S.shapes.push(rs);
+      try{ if(typeof renderShape==='function') renderShape(rs); }catch(e){}
+      rooms.push({ key:it.key, label:it.label, sf:it.sf,
+                   x:rc.x, y:rc.y, w:rc.w, h:rc.h,
+                   cx:rc.x+rc.w/2, cy:rc.y+rc.h/2, shapeId:rs.id });
+    });
+    CGB.rooms=rooms;
+    try{ if(typeof updShapeCount==='function') updShapeCount(); }catch(e){}
+    try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+
+    if(typeof showBanner==='function'){
+      var msg=rooms.length+' rooms programmed from '+(CGB.computeMw||0)+' MW IT — '
+            + Math.round(needSf).toLocaleString()+' ft² required.';
+      if(haveSf>0){
+        msg += (needSf<=haveSf)
+          ? (' The envelope you drew is '+Math.round(haveSf).toLocaleString()+' ft², so it fits.')
+          : (' The envelope you drew is only '+Math.round(haveSf).toLocaleString()
+             +' ft² — short by '+Math.round(needSf-haveSf).toLocaleString()+' ft². Redraw it larger or split the load across levels.');
+      } else {
+        msg += ' Calibrate the scale to check it against the footprint in real square feet.';
+      }
+      showBanner(haveSf>0 && needSf>haveSf ? 'wiz' : 'ok', msg);
+    }
+    return rooms;
+  }
+
+  /* Snap a click to the room the node belongs in. Outdoor plant, and any
+     node with no room, are returned untouched — a genset does not belong
+     in a building and moving it into one would be worse than a rough
+     click. */
+  /* Which programmed room this node belongs in, said in the step panel so
+     the user routes the trench there rather than finding out afterwards. */
+  function _roomNote(k){
+    if(!CGB.rooms || !CGB.rooms.length) return '';
+    var want=CGB_ROOM_OF[k]; if(!want) return ' <span style="color:#8FA3B8">Yard plant \u2014 outside the building.</span>';
+    for(var i=0;i<CGB.rooms.length;i++){
+      if(CGB.rooms[i].key===want){
+        return ' <span style="color:#8FA3B8">Goes in the <strong>'+CGB.rooms[i].label+'</strong>.</span>';
+      }
+    }
+    return '';
+  }
+
+  function snapToRoom(key, p){
+    if(!CGB.rooms || !CGB.rooms.length) return p;
+    var want=CGB_ROOM_OF[key]; if(!want) return p;
+    var room=null;
+    for(var i=0;i<CGB.rooms.length;i++){ if(CGB.rooms[i].key===want){ room=CGB.rooms[i]; break; } }
+    if(!room) return p;
+    /* Inside the right room already? Leave the click alone — the user may
+       be arranging two cabinets in one room and knows better than we do. */
+    if(p.x>=room.x && p.x<=room.x+room.w && p.y>=room.y && p.y<=room.y+room.h) return p;
+    return { x:room.cx, y:room.cy, snappedTo:room.label };
   }
 
   function start(){
@@ -101070,7 +101235,12 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
 
   function placeFirst(p){
     var k=CGB.seq[CGB.stepIx]; if(!k) return;
-    var el=mkEl(k,p); if(!el) return;
+    var q=p;
+    try{ q=snapToRoom(k,p); }catch(e){}
+    var el=mkEl(k,q); if(!el) return;
+    if(q && q.snappedTo && typeof showBanner==='function'){
+      showBanner('ok',' '+(CGB_NODES[k]?CGB_NODES[k].label:k)+' placed in the '+q.snappedTo+'.');
+    }
     advance(el,k);
   }
 
