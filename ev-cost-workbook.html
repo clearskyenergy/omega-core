@@ -545,6 +545,19 @@ var STANDARD_ITEMS = {
        freight:{mat:0, lab:162.50, per:'port', label:'EVSE freight / shipping'},
        wallMount:{mat:225, lab:500, per:'port', label:'Wall-mount kits'},
        pedestal:{mat:1250, lab:500, per:'pedestal', label:'Pedestals & mounting'},
+       /* ── THE PEDESTAL THE HARDWARE ACTUALLY SITS ON ──────────────────
+          A floor-standing L2 charger needs a pedestal, one per UNIT — a
+          single-port AC Pro gets its own, a dual-port AC Ultra shares one
+          between its two ports. At about $450 each.
+
+          Separate from the `pedestal` allowance above, which is the
+          $1,250 + $500 "pedestal & mounting" figure carried on the filed
+          Eversource sheets and is left alone. This is the accessory line
+          that was missing entirely: on a 10 x Autel AC Pro job the
+          utility form's "Other (cable management, mounting kits)" row
+          came out at zero, because STANDARD had no pedestal entry and
+          standardRate had no case for one. */
+       pedestalUnit:{mat:450, lab:0, per:'unit', label:'Charger pedestals'},
        bollard:{mat:250, lab:300, per:'pedestal', label:'Protective bollards'},
        metering:{mat:210, lab:2000, per:'site', label:'Metering equipment'},
        housePanel:{mat:0, lab:1250, per:'site', label:'House panel upgrade'},
@@ -2562,6 +2575,11 @@ var STANDARD=[
   /* future proofing, from the FP positions drawn on the map */
   ['Spare conduit & conductors \u2014 future proofing','fp','conduit',true],
   ['Panel positions \u2014 future proofing','fp','panel',true],
+  /* One pedestal per charger UNIT. The row already exists on both utility
+     forms — Eversource maps it to "Other (cable management, mounting
+     kits)" and National Grid to its mounting-hardware row — it simply had
+     no rate behind it, so it filed as zero. */
+  ['Pedestals & mounting','evse','pedestal'],
   /* placed on the drawing, so priced from it */
   ['Protective Bollards','ne','bollard',true],
   ['Concrete Work/Bases/Pads','mr','concrete',true],
@@ -2769,6 +2787,38 @@ function standardRate(row, bucket){
     case 'permit':     return { qty:1, unit:'LS', mat:0, lab:permitFromSubtotal(subtotalExcluding('permit')),
                                 note:'3% of project cost' };
     case 'activation': return { qty:ports, unit:'EA', mat:395*ports, lab:0, note:'$395/port' };
+    /* ── ONE PEDESTAL PER CHARGER UNIT ────────────────────────────────
+       Counted per UNIT, not per port: a single-port AC Pro stands on its
+       own pedestal, a dual-port AC Ultra shares one between its ports.
+       Ten AC Pro therefore bill ten pedestals, not five.
+
+       The unit count comes from the editor fleet when the drawing handed
+       one over, because that is the only place that knows how many
+       ENCLOSURES were placed rather than how many plugs they carry. With
+       no fleet, fall back to the port count — nearly every L2 model is
+       single-port, so port-per-unit is the safer guess, and it errs
+       toward including a pedestal rather than dropping one from a
+       submission.
+
+       Material only. The labour to set it is already in the EVSE
+       installation line, and inventing a second labour figure would
+       inflate the eligible total on a form somebody has to justify. */
+    case 'pedestal':   /* Level 2 only. A DCFC dispenser is bolted to a
+                          concrete foundation that the civil lines already
+                          carry, not stood on a $450 pole, and billing one
+                          would put an item on a utility form that is not
+                          on the job. */
+                       if(typeof chargerClass==='function' && chargerClass()==='dcfc') return null;
+                       var _pu=0;
+                       try{
+                         if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
+                           for(var _pi=0;_pi<EDITOR_FLEET.length;_pi++) _pu += (num(EDITOR_FLEET[_pi].qty)||0);
+                         }
+                       }catch(e){}
+                       if(!_pu) _pu = ports;
+                       return _pu>0 ? { qty:_pu, unit:'EA',
+                                mat:ST.pedestalUnit.mat*_pu, lab:0,
+                                note:_pu+' \u00d7 $'+ST.pedestalUnit.mat+' pedestal (one per charger)' } : null;
     /* Both per port, identical on all five submitted jobs. They were the
        only cost lines with no rate at all \u2014 they arrived from the estimate
        or not at all, so a hand-built job silently lost them. */
