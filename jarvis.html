@@ -84,6 +84,11 @@ header .gear:hover{background:rgba(255,255,255,.16);color:#fff}
 .captions.on{display:block}
 .captions .who{font-size:11px;letter-spacing:1px;color:#8FA6BC;margin-bottom:3px}
 .captions .awake{color:#56ff1a}
+.pauseAll{width:100%;margin:0 0 14px;padding:11px;border-radius:9px;cursor:pointer;
+          font-family:inherit;font-size:13.5px;font-weight:600;
+          background:#fff;border:1.5px solid var(--cs-red);color:var(--cs-red)}
+.pauseAll:hover{background:var(--cs-red);color:#fff}
+.pauseAll:disabled{opacity:.5;cursor:default}
 .panel-err{border:1px solid var(--cs-red);color:var(--cs-red);border-radius:8px;
            padding:11px 12px;font-size:13px;line-height:1.5}
 @media(max-width:900px){.panel{width:100%}}
@@ -590,6 +595,22 @@ function renderSettings(sum) {
       'the queue is empty and analyse stops making calls.';
   b.appendChild(obs);
 
+  /* One switch that stops everything. The per-feature toggles already do it,
+     but when you are unsure what is costing money the thing you want is a
+     single obvious way to make it stop. */
+  const pause = document.createElement('button');
+  pause.className = 'pauseAll';
+  const anyOn = sum.features.some(f => f.enabled);
+  pause.textContent = anyOn ? 'Pause everything' : 'Resume the defaults';
+  pause.addEventListener('click', async () => {
+    pause.disabled = true;
+    const next = {};
+    sum.features.forEach(f => { next[f.id] = anyOn ? false : !!['ingest','analyze','brief','chat','act'].includes(f.id); });
+    try { renderSettings(await settingsCall('POST', { enabled: next })); }
+    catch (e) { pause.disabled = false; panelMessage(e.message, true); }
+  });
+  b.appendChild(pause);
+
   sum.features.forEach(f => {
     const row = document.createElement('div');
     row.className = 'feat' + (f.enabled ? '' : ' off');
@@ -622,8 +643,12 @@ function renderSettings(sum) {
 
     const price = document.createElement('div');
     price.className = 'price';
-    const d = document.createElement('div'); d.className = 'd'; d.textContent = money(f.perDay) + '/day';
-    const m = document.createElement('div'); m.className = 'm'; m.textContent = money(f.perMonth) + '/mo';
+    /* Spent-so-far is the number that answers "what did I spend $12 on".
+       A per-day rate does not, especially when the day was a backfill. */
+    const d = document.createElement('div'); d.className = 'd';
+    d.textContent = f.measuredSpend ? money(f.measuredSpend) : money(f.perDay);
+    const m = document.createElement('div'); m.className = 'm';
+    m.textContent = f.measuredSpend ? 'spent · ' + money(f.perDay) + '/day' : 'per day';
     price.appendChild(d); price.appendChild(m);
 
     row.appendChild(sw); row.appendChild(txt); row.appendChild(price);
