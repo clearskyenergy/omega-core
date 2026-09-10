@@ -618,8 +618,15 @@ function startVoice(){
       if(WAKE.test(heard)){
         awake=true;
         const after=heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i,'').trim();
-        caps('AWAKE — go ahead', after, true); coreState('awake — go ahead', true);
-        if(final&&after) ask(after);
+        caps('AWAKE — go ahead', after||heard, true); coreState('awake — go ahead', true);
+        /* "Hi Jarvis" leaves NOTHING after the wake word, and the old guard
+           (`if final && after`) then asked nothing at all — he greeted the
+           thing and it sat there silently waiting for a real question. Send
+           the whole utterance when the wake word was not a prefix to
+           something else. Bare "Jarvis" answers too, out of the free path,
+           so a wake is always audible rather than something you have to
+           watch the screen to confirm. */
+        if(final) ask(after || heard);
       } else caps('LISTENING — say “Jarvis”', heard, false);
       return;
     }
