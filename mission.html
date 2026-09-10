@@ -107,14 +107,18 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   <div class="grid">
     <!-- LEFT -->
     <div class="col">
-      <div class="panel">
-        <div class="ptitle">Pipeline</div>
-        <div id="pipeline"></div>
+      <div class="panel" style="flex:none;max-height:36%">
+        <div class="ptitle">Today</div>
+        <div id="schedule" class="scroll"></div>
         <div id="alert"></div>
       </div>
       <div class="panel" style="flex:1;min-height:0">
-        <div class="ptitle">Subsystems</div>
-        <div id="features" class="scroll"></div>
+        <div class="ptitle">To do — ranked</div>
+        <div id="todos" class="scroll"></div>
+      </div>
+      <div class="panel" style="flex:none;max-height:26%">
+        <div class="ptitle">Waiting to go out</div>
+        <div id="drafts" class="scroll"></div>
       </div>
     </div>
 
@@ -149,8 +153,13 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
       </div>
       <div class="panel" style="flex:none">
-        <div class="ptitle">Spend</div>
-        <div id="spend"></div>
+        <div class="ptitle">System</div>
+        <div id="pipeline"></div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:11px;letter-spacing:1px;color:var(--dim)">SPEND &amp; SUBSYSTEMS</summary>
+          <div id="spend" style="margin-top:8px"></div>
+          <div id="features" style="margin-top:8px"></div>
+        </details>
       </div>
     </div>
   </div>
@@ -274,6 +283,27 @@ const arc = (() => {
   return { set(v) { target = Math.max(0.12, Math.min(1, v)); } };
 })();
 
+/* The dashboard is about the day, not about the machine. Schedule and the
+   ranked backlog get the room; spend and subsystem toggles fold away behind a
+   summary, because you look at those when something is wrong, not while you
+   are working. */
+function listInto(host, rows, fmt, empty){
+  const b=el(host); if(!b) return;
+  b.textContent='';
+  if(!rows || !rows.length){
+    const d=document.createElement('div'); d.className='row';
+    const k=document.createElement('span'); k.className='k'; k.textContent=empty;
+    d.appendChild(k); b.appendChild(d); return;
+  }
+  rows.forEach(r=>{
+    const d=document.createElement('div'); d.className='row';
+    const a=document.createElement('span'); a.className='k'; a.textContent=fmt(r).left;
+    const c=document.createElement('span'); c.className='v'+(fmt(r).cls?' '+fmt(r).cls:'');
+    c.textContent=fmt(r).right||'';
+    d.appendChild(a); d.appendChild(c); b.appendChild(d);
+  });
+}
+
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
@@ -286,18 +316,35 @@ async function load(){
 
     badge.className='status-badge'; badge.textContent='● SYSTEM_ONLINE';
 
+    /* today */
+    const nowMs=Date.now();
+    listInto('schedule', (s.schedule||[]), e=>{
+      const past = e.startsAt && new Date(e.startsAt).getTime() < nowMs;
+      return { left: e.when + '  ' + e.title,
+               right: e.others ? e.others+'' : '',
+               cls: past ? '' : 'cy' };
+    }, 'nothing on the calendar');
+
+    listInto('todos', (s.todos||[]), t=>({
+      left: t.title || '(untitled)',
+      right: (t.size||''), cls:'cy'
+    }), 'backlog is empty');
+
+    listInto('drafts', (s.draftList||[]), d=>({
+      left: d.subject || '(no subject)',
+      right: d.to ? '→' : 'no recipient',
+      cls: d.to ? 'good' : 'warn'
+    }), 'nothing waiting');
+
     const ing=s.ingest;
     rows(el('pipeline'), ing ? [
       ['LAST INGEST', clock(ing.at),'cy'],
       ['FETCHED', num(ing.fetched)],
       ['WRITTEN', num(ing.written)],
       ['MEETINGS SEEN', num(ing.meetings)],
-      ['SOURCES', num(s.counts.sources),'cy'],
       ['MEETINGS', num(s.counts.meetings)],
       ['BACKLOG', num(s.counts.backlog)],
-      ['DRAFTS WAITING', num(s.counts.drafts), s.counts.drafts?'warn':''],
-      ['TODAY', s.calendar.count==null?dash:s.calendar.count+' meetings'],
-      ['NEXT', s.calendar.next||'clear','cy']
+      ['QUEUE', num(s.counts.queued), (s.counts.queued||0)?'warn':'good']
     ] : [['LAST INGEST','no run recorded','bad']]);
 
     el('alert').textContent='';
@@ -354,6 +401,12 @@ const CHAT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const WAKE = /\bjarvis\b/i;
 let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
+/* After he answers, the conversation stays open briefly. A real exchange has
+   follow-ups, and making you say his name before every one of them is the
+   difference between talking to someone and operating a machine. Silence past
+   the window ends the turn — which is also what stops him answering the room. */
+const FOLLOW_MS = 14000;
+let followUntil = 0, followTimer = null;
 let actx=null, micStream=null, meterStop=null;
 
 function caps(who, text, isAwake){
@@ -403,8 +456,21 @@ async function speakReply(text){
   finally{ speaking=false; if(listening){ try{rec.start();}catch(_){} } }
 }
 
-async function ask(said){ await submit(said); awake=false;
-  if(listening) caps('LISTENING — say “Jarvis”','',false); }
+async function ask(said){
+  await submit(said);
+  awake=false;
+  if(!listening) return;
+  /* open the follow-up window */
+  followUntil = Date.now() + FOLLOW_MS;
+  caps('STILL LISTENING — follow up, or stay quiet', '', true);
+  coreState('still listening…', true);
+  clearTimeout(followTimer);
+  followTimer = setTimeout(()=>{
+    if(!listening || Date.now() < followUntil) return;
+    caps('LISTENING — say “Jarvis”','',false);
+    coreState('listening — say “Jarvis”', false);
+  }, FOLLOW_MS + 200);
+}
 
 function startVoice(){
   if(!SR){ alert('Voice needs Chrome.'); return; }
@@ -417,6 +483,16 @@ function startVoice(){
       if(ev.results[i].isFinal) final+=t; else interim+=t;
     }
     const heard=(final||interim).trim();
+
+    /* Inside the follow-up window, treat speech as continuation — no wake
+       word. Two characters of noise is not a follow-up, so require something
+       that could plausibly be a sentence. */
+    if(!awake && Date.now() < followUntil && heard.length > 3 && !WAKE.test(heard)){
+      caps('FOLLOW-UP', heard, true); coreState('go on…', true);
+      if(final){ followUntil = 0; ask(heard); }
+      return;
+    }
+
     if(!awake){
       if(WAKE.test(heard)){
         awake=true;
@@ -443,7 +519,7 @@ function startVoice(){
   }
 }
 function stopVoice(){
-  listening=false; awake=false;
+  listening=false; awake=false; followUntil=0; clearTimeout(followTimer);
   if(meterStop){ meterStop(); meterStop=null; }
   if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
   try{ if(rec) rec.stop(); }catch(_){}
