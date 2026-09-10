@@ -2041,7 +2041,8 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="rb-flyout" id="fly-dc">
             <div class="rb-fly-head">Compute</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',openDcClusterDialog)"><span class="fi-ico">▦</span> Data-Ctr Cluster</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">1 MW</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
           </div>
@@ -5954,6 +5955,7 @@ const ICONS={
   </svg>`,
 
   // 1MW modular data center (40ft class)
+  dc_mdc1:(s=60)=>ICONS.dc_triton(s),
   dc_leviathan:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#241C3E"/>
     <rect x="3" y="13" width="50" height="32" rx="2" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.8"/>
@@ -6130,7 +6132,8 @@ const EQ=[
   {id:'pole',    label:'Utility Pole'},
   {id:'dc_cruiser',   label:'Compute Container 20ft'},
   {id:'dc_triton',    label:'Compute Container 40ft'},
-  {id:'dc_leviathan', label:'1 MW MDC'},
+  {id:'dc_mdc1',      label:'1 MW MDC'},
+  {id:'dc_leviathan', label:'1.77 MW MDC'},
 ];
 
 // == MODULAR DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) =
@@ -6168,6 +6171,26 @@ var DC_CATALOG = {
      acres of pods, not 0.14. Cooling is a closed-circuit direct-to-chip loop
      with N+1 air-cooled chillers INSIDE that footprint, so there is no yard
      to draw and no water service to size. Utility interface is 480 V. */
+  /* ── TWO REAL UNITS, NOT ONE WITH TWO STORIES ──────────────────────
+     This file carried a single entry that meant different things in
+     different places: 1 MW on a 40 x 10 ft pad in one table, 1.77 MW on
+     119 x 45 in another. They are not the same product and pretending
+     otherwise put a 77%-light figure into pod counts, conductors and
+     acreage.
+
+     So: two units. The 1 MW container is the smaller planning block —
+     nominal, no vendor datasheet behind it, and `verified:null` says so.
+     The 1.77 MW unit is the published Leviathan spec. Which one a project
+     uses is now a choice somebody makes, not an accident of which code
+     path read which table.
+
+     dc_leviathan keeps its id. Every drawing already saved references it,
+     and those shapes carry their own lf/wf/kw, so they keep rendering at
+     whatever they were placed as. */
+  dc_mdc1:      { label:'1 MW Modular Data Center', kw:1000, lf:40, wf:10,
+                  cooling:'integrated', water:0, ups:'integrated', volts:480,
+                  spec:'1 MW IT \u00b7 40 ft container class \u00b7 480 V / 60 Hz',
+                  verified:null },
   dc_leviathan: { label:'1.77 MW Modular Data Center', kw:1770, lf:119, wf:45,
                   coolKw:2200, cooling:'integrated-closed-loop', water:0,
                   ups:'integrated', volts:480, acres:0.12,
@@ -53720,34 +53743,53 @@ function _derRenderDc(g, sh){
      The drawing is vector and scales cleanly, so the only question worth
      asking is how big the thing really is. A 119 ft unit is three
      containers whatever the zoom; a 20 ft node has nothing to zone. */
+  /* ── THE FOOTPRINT IS THE PAD ─────────────────────────────────────
+     119 x 45 ft is the published baseline footprint — 5,355 ft², which is
+     the 0.12 acres per unit the vendor quotes. So it is the whole pad, and
+     the equipment sits INSIDE it.
+
+     This drew 119 x 45 of containers and then added a concrete margin
+     around them, so the object on the map was larger than the figure it
+     was labelled with, and two units placed side by side needed more
+     ground than the datasheet says they do. The pad is now exactly the
+     stored footprint and everything is inset within it. */
   var zoned = (+sh.lf||0) >= 80;
   if(!zoned){
-    var padM0=2*ppf;
-    _derRect(g, x-padM0, y-padM0, w+padM0*2, h+padM0*2, '#e9e9e9', '#9a9a9a', 1);
-    _derRect(g, x, y, w, h, '#E8EAED', '#5F6368', 1.2);
-    var slats=Math.max(3, Math.round((sh.lf||20)/3));
-    for(var i=0;i<slats;i++){
-      var sx=x + (i+0.15)*(w/slats);
-      _derRect(g, sx, y+h*0.18, (w/slats)*0.7, h*0.64, '#C8CCD1', '#9AA0A6', 0.6);
+    /* Pad is the footprint; the container sits on it. */
+    _derRect(g, x, y, w, h, '#3C4043', '#9a9a9a', 1);
+    var m0=Math.max(0.5, 1.5*ppf);
+    _derRect(g, x+m0, y+m0, Math.max(1,w-m0*2), Math.max(1,h-m0*2), '#E8EAED', '#5F6368', 1.1);
+    var slats=Math.max(3, Math.round((sh.lf||20)/4));
+    for(var i=1;i<slats;i++){
+      var sx=x+m0 + i*((w-m0*2)/slats);
+      var ln0=_mkNS('line');
+      ln0.setAttribute('x1',sx); ln0.setAttribute('y1',y+m0+(h-m0*2)*0.12);
+      ln0.setAttribute('x2',sx); ln0.setAttribute('y2',y+m0+(h-m0*2)*0.88);
+      ln0.setAttribute('stroke','#B0B5BA'); ln0.setAttribute('stroke-width',0.4);
+      g.appendChild(ln0);
     }
-    _derText(g, x+w/2, y+h+padM0+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+    _derText(g, x+w/2, y+h+11, (sh.model||'DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW', Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
     return;
   }
 
   var detail = true;                     /* ribs, fans, stairs — vector, scales */
   var fine   = (+sh.lf||0) >= 100;       /* room for module labels */
 
-  /* Concrete pad, with the accent as a thin edge rather than a fill. */
-  var padM=Math.max(1.5, 2.5*ppf);
-  _derRect(g, x-padM, y-padM, w+padM*2, h+padM*2, '#3C4043', '#A78BFA', 1.2);
+  /* The pad IS the footprint. Accent as a thin edge, not a fill. */
+  _derRect(g, x, y, w, h, '#3C4043', '#A78BFA', 1.2);
+
+  /* Everything sits inside the slab, with a working margin off the edge. */
+  var m = Math.max(0.8, 3*ppf);
+  var ix=x+m, iy=y+m, iw=w-m*2, ih=h-m*2;
+  if(iw<4||ih<4){ iw=w; ih=h; ix=x; iy=y; }
 
   /* Bands across the depth: chiller plant, the containers, the walkway. */
-  var chH = h*0.22, walkH = h*0.16;
-  var bodyY = y + chH + h*0.03;
-  var bodyH = h - chH - walkH - h*0.06;
+  var chH = ih*0.24, walkH = ih*0.16;
+  var bodyY = iy + chH + ih*0.04;
+  var bodyH = ih - chH - walkH - ih*0.08;
 
-  var gap=Math.max(1, 2.5*ppf);
-  var usable=w-gap*2;
+  var gap=Math.max(0.8, 2.5*ppf);
+  var usable=iw-gap*2;
   var itW=usable*(45/110), elW=usable*(45/110), meW=usable*(20/110);
 
   function roof(cx, cw, fill, stroke){
@@ -53765,7 +53807,7 @@ function _derRenderDc(g, sh){
     }
   }
 
-  var zx=x;
+  var zx=ix;
   roof(zx, itW, '#EDEFF2', '#5F6368');            /* IT module */
   var itX=zx; zx += itW+gap;
   roof(zx, elW, '#E2E5E9', '#5F6368');            /* electrical plant */
@@ -53775,14 +53817,14 @@ function _derRenderDc(g, sh){
 
   /* Chiller bank along the top edge — the fans are the giveaway from above. */
   if(chH > 2){
-    _derRect(g, x, y, w, chH, '#9AA0A6', '#5F6368', 0.8);
+    _derRect(g, ix, iy, iw, chH, '#9AA0A6', '#5F6368', 0.8);
     if(detail){
-      var fans=Math.max(3, Math.round(w/(9*ppf)));
-      var fr=Math.min(chH*0.30, (w/fans)*0.26);
+      var fans=Math.max(3, Math.round(iw/(9*ppf)));
+      var fr=Math.min(chH*0.30, (iw/fans)*0.26);
       for(var f=0; f<fans; f++){
-        var fx=x+(f+0.5)*(w/fans);
+        var fx=ix+(f+0.5)*(iw/fans);
         var c=_mkNS('circle');
-        c.setAttribute('cx',fx); c.setAttribute('cy',y+chH/2); c.setAttribute('r',Math.max(0.8,fr));
+        c.setAttribute('cx',fx); c.setAttribute('cy',iy+chH/2); c.setAttribute('r',Math.max(0.8,fr));
         c.setAttribute('fill','#7A8085'); c.setAttribute('stroke','#4A4E52');
         c.setAttribute('stroke-width',0.4); g.appendChild(c);
       }
@@ -53791,7 +53833,7 @@ function _derRenderDc(g, sh){
 
   /* Stair platforms on the service side. */
   if(detail && walkH > 2){
-    var wy=y+h-walkH;
+    var wy=iy+ih-walkH;
     [itX+itW*0.5, elX+elW*0.5, meX+meW*0.5].forEach(function(sx2){
       var sw2=Math.max(2, 4*ppf);
       _derRect(g, sx2-sw2/2, wy, sw2, walkH*0.8, '#8A8F94', '#5F6368', 0.5);
@@ -53805,7 +53847,7 @@ function _derRenderDc(g, sh){
     _derText(g, meX+meW/2, bodyY+bodyH*0.60, 'MECH',  fs, '#3C4043', 'middle', '700');
   }
 
-  _derText(g, x+w/2, y+h+padM+11,
+  _derText(g, x+w/2, y+h+11,
     (sh.model||'MODULAR DATA CENTER')+' \u2022 '+(sh.kw||0)+' kW IT \u2022 '+(sh.lf||0)+'\u00d7'+(sh.wf||0)+' ft',
     Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
 }
@@ -99858,17 +99900,27 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
        Shapes already on a drawing keep their own lf/wf, so nothing that
        has been placed moves. */
+    /* ── THE UNIT IS A CHOICE, NOT THE BIGGEST ROW ────────────────────
+       This took whichever catalogue row had the highest kW, which was fine
+       while there was effectively one unit and wrong the moment there were
+       two: asking for a 1 MW container got you a 1.77 MW one because it
+       sorted first. cfg.unitId is what the dialog picked; the largest row
+       is only the fallback for callers that do not say. */
     var podSpec=null;
     try{
-      var best=null;
+      var want=cfg.unitId||null, best=null;
       if(typeof DC_CATALOG!=='undefined'){
-        for(var dk in DC_CATALOG){
-          if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,dk)) continue;
-          if(!best||DC_CATALOG[dk].kw>best.kw) best=Object.assign({id:dk},DC_CATALOG[dk]);
+        if(want && DC_CATALOG[want]) best=Object.assign({id:want},DC_CATALOG[want]);
+        if(!best){
+          for(var dk in DC_CATALOG){
+            if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,dk)) continue;
+            if(!best||DC_CATALOG[dk].kw>best.kw) best=Object.assign({id:dk},DC_CATALOG[dk]);
+          }
         }
       }
       if(!best){
-        for(var k in DERC_DC){ if(!best||DERC_DC[k].kw>best.kw) best=Object.assign({id:k},DERC_DC[k]); }
+        if(want && DERC_DC[want]) best=Object.assign({id:want},DERC_DC[want]);
+        else for(var k in DERC_DC){ if(!best||DERC_DC[k].kw>best.kw) best=Object.assign({id:k},DERC_DC[k]); }
       }
       podSpec=best;
     }catch(e){}
@@ -101328,7 +101380,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var CGB={ active:false, phase:null, seq:[], stepIx:0, placed:{}, conds:[],
             subMw:20, genType:'fuelcell_sofc', genMw:6, computeMw:5, incBess:true, incCool:true,
             incSub:true, incGen:true, incGenset:true, incBldg:true, topo:'RADIAL',
-            bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:{} };
+            bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:{},
+            unitId:'dc_mdc1' };
 
   /* ── THE TWO FORMATS DO NOT SHARE A STARTING POINT ────────────────────
      The dialog opened with campus numbers — a 20 MW substation, 6 MW of gas
@@ -101344,11 +101397,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     guided:  { subMw:20, genType:'fuelcell_sofc', genMw:6,   computeMw:5 },
     /* One unit on a site that already runs solar: a megawatt of utility
        capacity, the PV that is already there, a megawatt of compute. */
-    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1 }
+    /* The 1 MW container is the main offering; the Leviathan is the
+       larger block, picked per project. */
+    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1, unitId:'dc_mdc1' }
   };
   function seedFor(fmtKey){
     var d=CGB_SEED[fmtKey]; if(!d) return;
     CGB.subMw=d.subMw; CGB.genType=d.genType; CGB.genMw=d.genMw; CGB.computeMw=d.computeMw;
+    if(d.unitId){ CGB.unitId=d.unitId; var us=document.getElementById('cgb-unit'); if(us) us.value=d.unitId; }
     function put(id,v){ var e=document.getElementById(id); if(e) e.value=v; }
     put('cgb-submw', d.subMw);
     put('cgb-genmw', d.genMw);
@@ -101976,6 +102032,24 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
 
       +'<div style="'+sec+'">5 \u00b7 Compute &amp; support</div>'
       +'<div style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:9px;padding:12px;margin-bottom:14px">'
+        +'<div id="cgb-unit-row" style="display:none;margin-bottom:10px">'
+          +'<label style="'+lbl+'">Unit</label>'
+          +'<select id="cgb-unit" onchange="OmegaCGB.sync()" style="'+inp+'">'
+          + (function(){
+              var o='';
+              try{
+                for(var uk in DC_CATALOG){
+                  if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
+                  var u=DC_CATALOG[uk];
+                  if(!(u.kw>=500)) continue;              /* the MW-class blocks */
+                  o+='<option value="'+uk+'"'+(uk===CGB.unitId?' selected':'')+'>'
+                    + u.label+' \u00b7 '+u.lf+'\u00d7'+u.wf+' ft'
+                    + (u.verified?'':' \u00b7 nominal')+'</option>';
+                }
+              }catch(e){}
+              return o;
+            })()
+          +'</select></div>'
         +'<div style="width:170px;margin-bottom:10px"><label style="'+lbl+'">IT load (MW)</label>'
           +'<input id="cgb-itmw" type="number" min="0.1" step="0.1" value="'+CGB.computeMw+'" onchange="OmegaCGB.sync()" oninput="OmegaCGB.sync()" style="'+inp+'"></div>'
         +'<label id="cgb-r-bess" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#CBD5E1;cursor:pointer;margin-bottom:6px">'
@@ -102017,6 +102091,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
     if((e=g('cgb-genmw'))) CGB.genMw=Math.max(0,parseFloat(e.value)||0);
     if((e=g('cgb-itmw')))  CGB.computeMw=Math.max(0,parseFloat(e.value)||0);
     if((e=g('cgb-gentype'))) CGB.genType=e.value;
+    if((e=g('cgb-unit')))    CGB.unitId=e.value;
     var plan=g('cgb-plan'); if(!plan) return;
     var s=seq();
     var chain=s.map(function(k){ var N=CGB_NODES[k];
@@ -102038,13 +102113,8 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
          populates — so the count, the pad and the tie-in all agree with
          what actually turns up on a truck. */
       var U=null;
-      try{
-        for(var uk in DC_CATALOG){
-          if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
-          if(!U||DC_CATALOG[uk].kw>U.kw) U=DC_CATALOG[uk];
-        }
-      }catch(e){}
-      var uKw=(U&&U.kw)||1770, uMw=uKw/1000;
+      try{ U=DC_CATALOG[CGB.unitId]||null; }catch(e){}
+      var uKw=(U&&U.kw)||1000, uMw=uKw/1000;
       var blocks=Math.max(1,Math.ceil((CGB.computeMw||0)/uMw));
       var fits=(blocks*uMw);
       plan.innerHTML=head
@@ -102146,6 +102216,8 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
     });
     var pk=document.getElementById('cgb-packaged');
     if(pk) pk.style.display = mod ? 'block' : 'none';
+    var ur=document.getElementById('cgb-unit-row');
+    if(ur) ur.style.display = mod ? 'block' : 'none';
     sync();
   }
 
@@ -102156,7 +102228,7 @@ function dist(a,b){ return Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); }
       var OC=window.OmegaCompute;
       if(OC && typeof OC.placeWith==='function'){
         return OC.placeWith({
-          itMw: CGB.computeMw, pue: 1.3, rideMin: 10,
+          itMw: CGB.computeMw, pue: 1.3, rideMin: 10, unitId: CGB.unitId,
           utilKw: (CGB.incSub && CGB.subMw>0) ? CGB.subMw*1000 : null,
           utilSrc: 'entered in guided build',
           redundancy: (CGB.topo==='TWON' ? '2N' : (CGB.topo==='RADIAL' ? 'N' : 'N1')),
