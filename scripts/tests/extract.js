@@ -62,5 +62,9 @@ write('fence.js', ['equipFrame','boxOf','_boxOfRaw','isPoi','cluster#2','corners
                   'module.exports.setFR=function(f){FR=f;};\n'+
                   'module.exports.getFR=function(){return FR;};\n');
 
+/* _rfqDistsFallback is called from _rfqLoadDistributors on every failure path
+   and was never in this list, so trfq.js threw a ReferenceError the moment it
+   reached the distributor list — the one branch that test exists to cover. */
 write('rfq.js', ['_esc#1','_rfqLabel','_rfqInput','_bomRenderRfq','openRfqFile',
-                 '_rfqPrefillZip','_rfqProjectId','_rfqLoadDistributors','submitRfqFile']);
+                 '_rfqPrefillZip','_rfqProjectId','_rfqLoadDistributors',
+                 '_rfqDistsFallback','_rfqPaintDists','submitRfqFile']);
