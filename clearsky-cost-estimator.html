@@ -263,6 +263,13 @@
 .vt input::placeholder{color:#9aa3ad}
 .vt tr.stale input,.vt tr.stale select{background:#fff8e6}
 .vt tr.stalemsg td{background:#fff8e6;border-top:0;font-size:11px;color:#7a5b00}
+  .vt tr.vscope td{background:#fafbfc;border-top:0;padding:8px 10px 10px}
+  .scopeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px}
+  .scopeGrid label{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .scopeGrid label.wide{grid-column:span 3}
+  .scopeGrid span{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
+  .scopeGrid input{width:100%;min-width:0}
+  .scopeNote{margin-top:8px;font-size:11px;color:var(--mut);line-height:1.5}
 #secVend .pill{display:inline-block;padding:2px 7px;border-radius:9px;background:#eef1f5;
   font-size:11px;color:#41505f}
 #secVend .pill.warn{background:#fde8e8;color:#8a1f1f}
@@ -321,10 +328,18 @@
         and the estimate says which supplier and which quote it used. Leave a field empty
         and the estimate falls back to its generic rate and tells you so.</p>
       <div id="vendForm"></div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
         <button type="button" id="btnVendSave">Save to my organisation</button>
+        <button type="button" id="btnVendImport">Load a quote file</button>
+        <button type="button" id="btnVendExport">Export</button>
+        <input type="file" id="vendFile" accept=".json,application/json" style="display:none">
         <span id="vendStat"></span>
       </div>
+      <p class="hint" style="margin:8px 0 0">A quote file is one supplier's
+        prices and the scope behind them, entered once and shared with the
+        team. It stays on this machine until you press <b>Save to my
+        organisation</b>, which writes it to your organisation's own record —
+        not to anywhere public.</p>
     </div>
 
   </div>
@@ -439,11 +454,10 @@ var VEND_STALE_DAYS = 180;
 /* Identity only. No specifications, because an invented spec is the same
    mistake as an invented price. */
 var BESS_VENDORS = [
-  { key:"catl",       name:"CATL" },
-  { key:"fenecon",    name:"FENECON" },
-  { key:"cleancells", name:"Clean Cells" },
-  { key:"sparkz",     name:"SparkZ" },
-  { key:"pytes",      name:"Pytes" },
+  /* Gotion leads because it is the main product line. The order of this
+     list is the order of the panel and the dropdown, and a rep should not
+     have to scroll past four alternates to reach the one they actually
+     sell. */
   /* ── ONE SUPPLIER, THREE PRICES ──────────────────────────────────────
      Gotion quotes the same DC block at three prices depending on where the
      cells and the assembly come from, and the spread between them is large
@@ -454,7 +468,12 @@ var BESS_VENDORS = [
      decides ITC adders, which is the other reason it cannot be a footnote. */
   { key:"gotion_us",    name:"Gotion \u2014 US cells, US assembled" },
   { key:"gotion_us_cn", name:"Gotion \u2014 US assembled, imported components" },
-  { key:"gotion_cn",    name:"Gotion \u2014 imported, fully assembled" }
+  { key:"gotion_cn",    name:"Gotion \u2014 imported, fully assembled" },
+  { key:"catl",       name:"CATL" },
+  { key:"fenecon",    name:"FENECON" },
+  { key:"cleancells", name:"Clean Cells" },
+  { key:"sparkz",     name:"SparkZ" },
+  { key:"pytes",      name:"Pytes" }
 ];
 
 /* The editable record per supplier. Everything null until somebody types it. */
@@ -628,9 +647,37 @@ function renderVendForm(){
       +  '<td><input data-v="'+k+'" data-f="ref" value="'+esc(v.ref||'')+'" placeholder="PO / quote no."></td>'
       +  '<td><input data-v="'+k+'" data-f="date" type="date" value="'+esc(v.date||'')+'"></td>'
       +  '</tr>';
+    /* ── THE SCOPE ROW ────────────────────────────────────────────────
+       Only for suppliers that actually have a price: scope is meaningless
+       without one, and eight empty boxes on every blank row make the panel
+       unreadable.
+
+       These fields are the difference between a $/kWh and a price. EXW at a
+       factory gate is not delivered. A quote with an expiry is not a price
+       after that date. An LFP number bound to a lithium index has a moving
+       part in it. All of it is printed on the quote letter, and all of it
+       used to be dropped on the way in — leaving a bare number that reads
+       like a delivered, firm, indefinite price, which is exactly the
+       misreading that costs a project its freight budget. */
+    if(vendHasPrice(v)){
+      h += '<tr class="vscope"><td></td><td colspan="6">'
+        +  '<div class="scopeGrid">'
+        +    '<label><span>Incoterm</span><input data-v="'+k+'" data-f="incoterm" value="'
+        +      esc(v.incoterm||'')+'" placeholder="EXW / DAP + place"></label>'
+        +    '<label><span>Block size (MWh)</span><input data-v="'+k+'" data-f="blockMwh" '
+        +      'type="number" min="0" step="0.1" value="'+(v.blockMwh==null?'':v.blockMwh)+'" placeholder="\u2014"></label>'
+        +    '<label><span>Quote expires</span><input data-v="'+k+'" data-f="expires" '
+        +      'type="date" value="'+esc(v.expires||'')+'"></label>'
+        +    '<label class="wide"><span>Excludes</span><input data-v="'+k+'" data-f="excludes" value="'
+        +      esc(v.excludes||'')+'" placeholder="PCS, freight, commissioning, spares\u2026"></label>'
+        +    '<label class="wide"><span>Index binding</span><input data-v="'+k+'" data-f="indexTo" value="'
+        +      esc(v.indexTo||'')+'" placeholder="Li2CO3 $22.06/kg \u00b7 reprice at \u00b15%"></label>'
+        +  '</div>'
+        +  '<div class="scopeNote">' + esc(vendProvenance(v)) + '</div>'
+        +  '</td></tr>';
+    }
     if(warn){
-      h += '<tr class="stalemsg"><td colspan="7">Quoted '+vendAgeDays(v)+' days ago. '
-         + 'Cell pricing moves quarterly — re-confirm before this goes in front of a customer.</td></tr>';
+      h += '<tr class="stalemsg"><td colspan="7">' + esc(vendWhyStale(v)) + '</td></tr>';
     }
   }
   h += '</tbody></table>';
@@ -649,7 +696,7 @@ document.addEventListener('input', function(e){
   var t = e.target, k = t && t.getAttribute && t.getAttribute('data-v');
   if(!k || !VENDORS[k]) return;
   var f = t.getAttribute('data-f'), val = t.value;
-  if(f==='dcPerKwh' || f==='pcsPerKw'){
+  if(f==='dcPerKwh' || f==='pcsPerKw' || f==='blockMwh'){
     /* Empty means UNKNOWN, and unknown must stay null. Coercing a blank to
        zero would price a battery at nothing and still produce a total. */
     VENDORS[k][f] = (val === '' ? null : (isFinite(+val) ? +val : null));
@@ -683,11 +730,107 @@ function vendApply(st){
       model: src.model || "",
       dcPerKwh: (typeof src.dcPerKwh === 'number' ? src.dcPerKwh : null),
       pcsPerKw: (typeof src.pcsPerKw === 'number' ? src.pcsPerKw : null),
-      basis: src.basis || "", ref: src.ref || "", date: src.date || "", note: src.note || ""
+      basis: src.basis || "", ref: src.ref || "", date: src.date || "", note: src.note || "",
+      /* Scope round-trips with the price. A saved record that keeps the
+         number and loses the incoterm is worse than one that saved nothing:
+         it comes back looking like a delivered, unexpiring price. */
+      blockMwh: (typeof src.blockMwh === 'number' ? src.blockMwh : null),
+      incoterm: src.incoterm || "", expires: src.expires || "",
+      excludes: src.excludes || "", indexTo: src.indexTo || ""
     };
   }
   VEND_SEL = st.sel || "";
   renderVendForm();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   A QUOTE ARRIVES AS A FILE, NOT AS TWENTY-FOUR KEYSTROKES
+
+   A real quote letter carries a price, a product, an incoterm, a block size,
+   an expiry, a list of exclusions and an index binding — per sourcing
+   option. Typing that in for three options is enough friction that it does
+   not happen, and what ends up in the tool is a bare $/kWh with the scope
+   left in somebody's inbox. That bare number is the dangerous one.
+
+   So the fields arrive together, from a file, and can be handed to a
+   colleague the same way.
+
+   IT IS A FILE AND NOT A HARDCODED TABLE FOR A REASON. Supplier pricing is
+   confidential, this repository is public, and anything shipped in the page
+   is readable by every tenant on the platform. Prices belong in the
+   organisation's own record — which is exactly where Save puts them.
+   ══════════════════════════════════════════════════════════════════════════ */
+var VEND_FILE_SCHEMA = "clearsky.battery-pricing/1";
+
+function vendImportObj(o){
+  if(!o || typeof o !== "object") throw new Error("that file is not a quote file");
+  var src = o.vendors || o;              /* accept a bare map too */
+  var applied = [], skipped = [], k, i;
+  for(i=0;i<BESS_VENDORS.length;i++){
+    k = BESS_VENDORS[i].key;
+    if(!src[k]) continue;
+    var d = src[k], cur = VENDORS[k];
+    /* Field by field, and only what the file actually states. A quote file
+       covering one supplier must not blank the others, and a field the file
+       is silent on keeps whatever was already there. */
+    if(typeof d.dcPerKwh === "number") cur.dcPerKwh = d.dcPerKwh;
+    if(typeof d.pcsPerKw === "number") cur.pcsPerKw = d.pcsPerKw;
+    if(typeof d.blockMwh === "number") cur.blockMwh = d.blockMwh;
+    ["model","basis","ref","date","note","incoterm","expires","excludes","indexTo"]
+      .forEach(function(f){ if(typeof d[f] === "string" && d[f] !== "") cur[f] = d[f]; });
+    applied.push(BESS_VENDORS[i].name);
+  }
+  for(k in src) if(src.hasOwnProperty(k) && !VENDORS[k]) skipped.push(k);
+  if(!applied.length) throw new Error("nothing in that file matched a supplier in this list");
+  if(o.sel && VENDORS[o.sel]) VEND_SEL = o.sel;
+  renderVendForm();
+  if(typeof render === "function"){ try{ render(); }catch(_){} }
+  return { applied:applied, skipped:skipped };
+}
+
+function vendImport(){
+  var f = $("vendFile"); if(!f) return;
+  f.value = "";
+  f.onchange = function(){
+    var file = f.files && f.files[0]; if(!file) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      try {
+        var res = vendImportObj(JSON.parse(rd.result));
+        vendStat("Loaded " + res.applied.length + " supplier" +
+                 (res.applied.length === 1 ? "" : "s") +
+                 " \u2014 press Save to keep it for your team");
+      } catch(e){
+        vendStat("Could not read that file: " + (e.message || "not valid JSON"), "warn");
+      }
+    };
+    rd.onerror = function(){ vendStat("Could not read that file", "warn"); };
+    rd.readAsText(file);
+  };
+  f.click();
+}
+
+function vendExport(){
+  var out = vendCollect(), i, k, any = false;
+  out.schemaVersion = VEND_FILE_SCHEMA;
+  out.exportedAt = new Date().toISOString();
+  /* Only suppliers that actually have a price. Exporting eight blank records
+     produces a file that looks like pricing and is not. */
+  var keep = {};
+  for(i=0;i<BESS_VENDORS.length;i++){
+    k = BESS_VENDORS[i].key;
+    if(vendHasPrice(VENDORS[k])){ keep[k] = VENDORS[k]; any = true; }
+  }
+  if(!any){ vendStat("Nothing priced yet \u2014 nothing to export", "warn"); return; }
+  out.vendors = keep;
+  out.confidential = "Supplier pricing. Treat under the terms of the quote it came from.";
+  var blob = new Blob([JSON.stringify(out, null, 2)], { type:"application/json;charset=utf-8" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "battery-pricing.json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+  vendStat("Exported");
 }
 
 function vendSave(){
@@ -744,16 +887,24 @@ function vendTier(v){
 function vendRates(){
   var v = VEND_SEL ? VENDORS[VEND_SEL] : null;
   if (!vendHasPrice(v)) return null;
-  var ref = [v.ref, v.incoterm, (v.expires ? "valid to " + v.expires : "")]
+  var ref = [v.model, v.ref, v.incoterm,
+             (v.expires ? (vendExpired(v) ? "EXPIRED " : "valid to ") + v.expires : ""),
+             (v.excludes ? "excludes " + v.excludes : ""),
+             (v.indexTo ? "indexed: " + v.indexTo : "")]
               .filter(function(x){ return !!x; }).join(" \u00b7 ");
+  /* The name is what sits on the line itself, so it stays short and carries
+     the one thing that would otherwise be misread: a factory-gate price
+     sitting in a column headed installed cost, with the haul missing. */
+  var label = v.name + (vendAtGate(v) ? " \u2014 " + v.incoterm + ", freight not included" : "")
+                     + (vendExpired(v) ? " \u2014 quote expired" : "");
   var out = {};
   out["eq.dc"] = { rate:v.dcPerKwh, src:vendTier(v), ref:ref, asOf:v.date || "",
-                   name:v.name + (v.model ? " " + v.model : "") };
+                   name:label };
   /* Only when the supplier actually prices it. A PCS the quote is silent on
      stays on the model's rate, and stays honestly marked as unsourced. */
   if (typeof v.pcsPerKw === "number" && v.pcsPerKw > 0) {
     out["eq.pcs"] = { rate:v.pcsPerKw, src:vendTier(v), ref:ref,
-                      asOf:v.date || "", name:v.name };
+                      asOf:v.date || "", name:label };
   }
   return out;
 }
@@ -1838,6 +1989,8 @@ function toJson(){
 function boot(){
   renderVendForm();
   var _bs = $("btnVendSave"); if(_bs) _bs.onclick = vendSave;
+  var _bi = $("btnVendImport"); if(_bi) _bi.onclick = vendImport;
+  var _be = $("btnVendExport"); if(_be) _be.onclick = vendExport;
   vendInitCloud();
   var drop = $("drop"), file = $("pkFile");
   drop.onclick = function(){ file.click(); };
@@ -1898,6 +2051,7 @@ if (typeof module !== "undefined" && module.exports)
                      sourceHtml:sourceHtml, tableHtml:tableHtml,
                      toJson:toJson, toCsv:toCsv,
                      VENDORS:VENDORS, vendRates:vendRates, vendTier:vendTier,
+                     vendImportObj:vendImportObj, BESS_VENDORS:BESS_VENDORS,
                      setVendSel:function(k){ VEND_SEL = k; },
                      setLast:function(r, sch){ LAST = { r:r, sch:sch }; } };
 })();
