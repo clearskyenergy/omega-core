@@ -87055,7 +87055,22 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       candidates.forEach(function (c) {
         if (c === lead) {
           if (c._autoHid) { c.labelHidden = false; delete c._autoHid; }
-          c.runLabel = (g.length > 1) ? (g.length + ' runs') : null;
+          /* ── DECLUTTERING THE MAP MUST NOT DELETE THE SCHEDULE ────────
+             This overwrote runLabel with "N runs", or with NULL when the
+             corridor held only one — and runLabel is what the conduit
+             schedule, the takeoff and the exports read. So a feeder
+             authored as "8 x (3-500 kcmil + 400 kcmil EGC) in 8 x 3in RMC"
+             came back from a save with no description at all, and the
+             single-run case destroyed a label to replace it with nothing.
+
+             The non-lead runs are already suppressed by labelHidden, which
+             is reversible. Keep the authored text, remember it once so
+             re-running this cannot compound the prefix, and let the count
+             ride in front of it. */
+          if (c.runLabel0 == null) c.runLabel0 = c.runLabel || '';
+          c.runLabel = (g.length > 1)
+            ? (g.length + ' runs' + (c.runLabel0 ? (' \u00b7 ' + c.runLabel0) : ''))
+            : (c.runLabel0 || null);
           kept++;
         } else {
           c.labelHidden = true; c._autoHid = true;
@@ -87134,7 +87149,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var s = S_(); if (!s) return 0;
       var n2 = 0;
       (s.conduits || []).forEach(function (c) {
-        if (c && c._autoHid && !c._userHid) { c.labelHidden = false; delete c._autoHid; c.runLabel = null; n2++; }
+        /* Restoring a label must put back what was authored, not blank it. */
+        if (c && c._autoHid && !c._userHid) {
+          c.labelHidden = false; delete c._autoHid;
+          c.runLabel = (c.runLabel0 != null) ? (c.runLabel0 || null) : c.runLabel;
+          n2++;
+        }
       });
       try {
         (s.conduits || []).forEach(function (c) {
