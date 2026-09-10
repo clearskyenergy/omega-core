@@ -5357,7 +5357,22 @@
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
   /* --------------------------------------------------------------- wiring */
-  document.getElementById("cards").addEventListener("click", function (e) {
+  /* ── THE DRAWER NEEDS THIS HANDLER TOO ────────────────────────────────
+     Delegated off #cards only, so anything rendered into the DRAWER that
+     relies on it did nothing at all. "Look up the grid here" is emitted by
+     gridAtlasHtml() into the drawer body and matched by [data-ga-id] below —
+     the click never reached this listener, so the button sat there inert.
+     No error, because no code ran.
+
+     wireDrawer() binds dPacket and costSite by id, which is why Cost site
+     and Download the packet work and this one did not — a binding by id and
+     a delegated match are two different mechanisms, and only one of them was
+     covering the drawer.
+
+     Delegation, not another id binding: the drawer body is re-rendered on
+     every redrawDrawer(), and an onclick attached to an element that gets
+     replaced is a handler that works once. */
+  function onSiteClick(e) {
     /* The star must not also open the card — a rep flagging three sites in a
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
@@ -5418,17 +5433,26 @@
     }
     var c = e.target.closest ? e.target.closest(".card") : null;
     if (c) select(c.getAttribute("data-id"));
-  });
+  }
   document.getElementById("cards").addEventListener("keydown", function (e) {
     if (e.key !== "Enter" && e.key !== " ") return;
     var c = e.target.closest ? e.target.closest(".card") : null;
     if (c) { e.preventDefault(); select(c.getAttribute("data-id")); }
   });
+
   document.getElementById("dClose").onclick = closeDrawer;
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
 
   document.getElementById("run").onclick = function () { run(true); };
   document.getElementById("mapNote").onclick = function () { run(true); };
+
+  document.getElementById("cards").addEventListener("click", onSiteClick);
+  /* Same handler, second surface. #dBody survives every drawer re-render;
+     the buttons inside it do not. */
+  (function () {
+    var db = document.getElementById("dBody");
+    if (db) db.addEventListener("click", onSiteClick);
+  })();
 
   var views = document.querySelectorAll(".views button");
   for (var v = 0; v < views.length; v++) {
