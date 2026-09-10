@@ -66316,7 +66316,15 @@ function _cgcEmitLoad(target){
   var C=null; try{ C=S.computeBuild; }catch(e){}
   if(!C || !(+C.itKw>0)) return null;
   var blocks=_cgcBlocks().length;
-  var label='Modular compute'+(blocks?(' ('+blocks+' \u00d7 1 MW)'):'');
+  /* Name it after the unit that is actually placed, not a round number
+     baked into a string — this read "1 x 1 MW" beside a 1.77 MW block. */
+  var uMw=0;
+  try{
+    var b0=_cgcBlocks()[0];
+    if(b0 && b0.sh && +b0.sh.kw>0) uMw=(+b0.sh.kw)/1000;
+  }catch(e){}
+  var label='Modular compute'
+          + (blocks ? (' ('+blocks+' \u00d7 '+(uMw>0?uMw.toFixed(2):'?')+' MW)') : '');
 
   /* Replace rather than accumulate: re-running the tie should correct the
      figure, not file a second plant against the same transformer. */
