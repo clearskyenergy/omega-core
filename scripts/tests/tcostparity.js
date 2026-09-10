@@ -1,7 +1,19 @@
-/* Does omega-cost-model.price() agree with the estimator's own compute()?
-   Same tables now, but the LOOP was ported by hand — and a pricing loop that
-   is nearly right is worse than one that is obviously wrong, because it ships.
-   So: run both on the same inputs and compare to the cent. */
+/* THE COST MODEL, PINNED.
+
+   This began as a parity test: the estimator kept its own hand-ported copy of
+   the pricing loop, and the two had to agree to the cent. compute() now
+   delegates to omega-cost-model.js, so that comparison is close to
+   tautological and would quietly stop testing anything.
+
+   What it tests instead is the thing a client asking for bankable numbers
+   actually needs: the same inputs produce the same dollars, today and after
+   the next refactor. Three cases are frozen at the values the tool produced
+   before the loops were merged. If a rate is corrected on purpose these
+   numbers move, and moving them is a deliberate act with a commit message —
+   which is exactly the audit trail an estimate is supposed to have.
+
+   The parity comparison is kept alongside, because it costs one line and it
+   still catches compute() drifting away from the shared model. */
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
@@ -57,17 +69,20 @@ const CASES = [
   { name:'2 MW / 2h, 12 kV, unknown everything',
     est:{ kw:2000, hours:2, req:{ interconnectionVoltage:'12470', poiDistanceFt:'', utilitySideUpgrade:'',
           padArea:'', soilAndGrading:'', ahj:'', laborBasis:'', equipmentQuoteDate:'' } },
-    mod:{ kw:2000, hours:2, volt:'12470' } },
+    mod:{ kw:2000, hours:2, volt:'12470' },
+    gold:1605420 },
   { name:'500 kW / 4h, 480 V, poor ground, hard AHJ, prevailing wage',
     est:{ kw:500, hours:4, req:{ interconnectionVoltage:'480', poiDistanceFt:'900', utilitySideUpgrade:'none',
           padArea:'3000', soilAndGrading:'poor', ahj:'hard', laborBasis:'pw', equipmentQuoteDate:'' } },
     mod:{ kw:500, hours:4, volt:'480', poiFt:900, utilityUpgrade:'none', padArea:3000,
-          soil:'poor', ahj:'hard', labor:'pw' } },
+          soil:'poor', ahj:'hard', labor:'pw' },
+    gold:801455 },
   { name:'5 MW / 2h, 34.5 kV, rock, streamlined, union, xfmr upgrade',
     est:{ kw:5000, hours:2, req:{ interconnectionVoltage:'34500', poiDistanceFt:'250', utilitySideUpgrade:'xfmr',
           padArea:'', soilAndGrading:'rock', ahj:'fast', laborBasis:'pla', equipmentQuoteDate:'' } },
     mod:{ kw:5000, hours:2, volt:'34500', poiFt:250, utilityUpgrade:'xfmr',
-          soil:'rock', ahj:'fast', labor:'pla' } }
+          soil:'rock', ahj:'fast', labor:'pla' },
+    gold:4517336 }
 ];
 
 CASES.forEach(function (c) {
@@ -84,7 +99,40 @@ CASES.forEach(function (c) {
   ok(cent(a.total.lo) === cent(b.total.lo) && cent(a.total.hi) === cent(b.total.hi),
      '   band matches');
   ok(a.divisions.length === b.divisions.length, '   same divisions');
+  /* The frozen number. A rate change is allowed to break this; an
+     accidental one is not allowed to pass unnoticed. */
+  ok(Math.round(b.total.base) === c.gold,
+     '   pinned at $' + c.gold.toLocaleString() +
+     (Math.round(b.total.base) === c.gold ? '' :
+      '  — NOW $' + Math.round(b.total.base).toLocaleString() +
+      '. If a rate was corrected on purpose, update the gold value in this test.'));
 });
+
+/* ── THE AUDIT TELLS THE TRUTH ─────────────────────────────────────────
+   The coverage figure is the claim a lender will lean on, so it is tested
+   like a number rather than trusted like a label. */
+const bare = M.price({ kw:2000, hours:2, volt:'12470', utilityUpgrade:'none' });
+ok(bare.sourcing.evidenceShare === 0,
+   'with nothing on file, NOTHING is claimed as evidence');
+ok(bare.sourcing.shareByTier.planning === 1,
+   'and the whole total is declared an internal planning rate');
+ok(bare.sourcing.biggestGaps[0].id === 'eq.dc',
+   'the biggest unbacked number is named first — it is the battery');
+ok(Math.round(bare.sourcing.auditedUsd) === Math.round(bare.total.base),
+   'the audit covers every dollar in the total, markups included');
+
+const withQuote = M.price({ kw:2000, hours:2, volt:'12470', utilityUpgrade:'none',
+  rates:{ 'eq.dc':{ rate:113, src:'quote', ref:'Q-123', asOf:'2026-08-28', name:'A supplier' } } });
+ok(withQuote.sourcing.evidenceShare > 0.2 && withQuote.sourcing.evidenceShare < 0.4,
+   'one battery quote backs roughly a quarter to a third of the total');
+ok(withQuote.divisions[0].lines[0].src === 'quote' &&
+   withQuote.divisions[0].lines[0].ref === 'Q-123',
+   'the line carries its own citation, not just the total');
+
+const typed = M.price({ kw:2000, hours:2, volt:'12470', utilityUpgrade:'none',
+  rates:{ 'eq.dc':{ rate:113 } } });
+ok(typed.sourcing.evidenceShare === 0,
+   'a number typed in with NO reference is a planning rate, whoever typed it');
 
 /* A supplier quote must move the battery line and nothing else. */
 ES.kw = 2000; ES.hours = 2; ES.packet = null; ES.carryUpgrade = false;

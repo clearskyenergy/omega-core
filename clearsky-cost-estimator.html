@@ -58,6 +58,18 @@
     padding:3px 7px;flex:none}
   .srcTag.c4{color:#1f6f3a;background:#eaf7ee;border-color:#bfe3cb}
   .srcTag.c5{color:#a3372a;background:#fdf1ef;border-color:#f3d3cc}
+  /* Provenance pills. Deliberately NOT a traffic light: a planning rate is
+     not an error, it is an un-evidenced number, and colouring it red would
+     make a perfectly good screening estimate look broken. Evidence reads
+     green, a citable reference reads neutral-blue, and a planning rate is
+     plain grey — visible, unalarming, and obviously the one without a
+     document behind it. */
+  .srcPill{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;
+    border-radius:4px;padding:1px 5px;border:1px solid;white-space:nowrap;vertical-align:1px}
+  .srcPill.s-actual{color:#1f6f3a;background:#eaf7ee;border-color:#bfe3cb}
+  .srcPill.s-quote{color:#1f6f3a;background:#eaf7ee;border-color:#bfe3cb}
+  .srcPill.s-published{color:#2b5f9e;background:#eef4fb;border-color:#c8dcf2}
+  .srcPill.s-planning{color:#6b7683;background:#f3f5f7;border-color:#dde3e9}
   .btn{height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 12px;
     font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;flex:none}
   .btn:hover{border-color:var(--dim)}
@@ -431,16 +443,39 @@ var BESS_VENDORS = [
   { key:"fenecon",    name:"FENECON" },
   { key:"cleancells", name:"Clean Cells" },
   { key:"sparkz",     name:"SparkZ" },
-  { key:"pytes",      name:"Pytes" }
+  { key:"pytes",      name:"Pytes" },
+  /* ── ONE SUPPLIER, THREE PRICES ──────────────────────────────────────
+     Gotion quotes the same DC block at three prices depending on where the
+     cells and the assembly come from, and the spread between them is large
+     enough to change a project. That is a sourcing DECISION, not a detail
+     inside one supplier record, so each option is its own selectable row:
+     picking one puts the choice — and its price — on the face of the
+     estimate instead of inside somebody's head. Domestic content also
+     decides ITC adders, which is the other reason it cannot be a footnote. */
+  { key:"gotion_us",    name:"Gotion \u2014 US cells, US assembled" },
+  { key:"gotion_us_cn", name:"Gotion \u2014 US assembled, imported components" },
+  { key:"gotion_cn",    name:"Gotion \u2014 imported, fully assembled" }
 ];
 
 /* The editable record per supplier. Everything null until somebody types it. */
 function vendBlank(key, name){
   return { key:key, name:name,
            model:"",            /* the product the price is for            */
-           dcPerKwh:null,       /* $/kWh, DC block delivered — no PCS      */
+           dcPerKwh:null,       /* $/kWh, DC block — no PCS                */
            pcsPerKw:null,       /* $/kW, if the supplier prices it         */
-           basis:"", ref:"", date:"", note:"" };
+           basis:"", ref:"", date:"", note:"",
+           /* ── WHAT THE PRICE ACTUALLY COVERS ──────────────────────────
+              A $/kWh with no scope attached is the most dangerous number in
+              this tool: EXW at a factory gate and delivered to site are not
+              the same price, a quote that expires in 60 days is not a price
+              in month four, and an LFP price bound to a lithium index is a
+              price with a moving part in it. All of that arrives on the
+              quote letter and used to be dropped on the way in. */
+           blockMwh:null,       /* the block size the price is quoted for  */
+           incoterm:"",         /* e.g. "EXW Manteno, IL" — gate or door   */
+           expires:"",          /* the quote's own expiry, if it states one */
+           excludes:"",         /* what the price does NOT carry           */
+           indexTo:"" };        /* commodity binding and reprice trigger   */
 }
 var VENDORS = (function(){
   var o={}, i;
@@ -455,7 +490,31 @@ function vendAgeDays(v){
   var t = Date.parse(v.date); if(isNaN(t)) return null;
   return Math.floor((Date.now()-t)/86400000);
 }
-function vendStale(v){ var d=vendAgeDays(v); return d!=null && d > VEND_STALE_DAYS; }
+/* A quote that names its own expiry is stale on that date, not on our
+   180-day rule of thumb. The rule of thumb only covers quotes that do not
+   say — it is a fallback, and a supplier's own terms outrank it. */
+function vendExpired(v){
+  if(!v || !v.expires) return false;
+  var t = Date.parse(v.expires); if(isNaN(t)) return false;
+  return Date.now() > t;
+}
+function vendStale(v){
+  if(vendExpired(v)) return true;
+  var d=vendAgeDays(v); return d!=null && d > VEND_STALE_DAYS;
+}
+/* EXW / FCA is a price at the supplier's gate. Freight to site is real money
+   and it is NOT in that number, so the tool has to say so rather than let a
+   factory-gate price be read as a delivered one. It does not guess a freight
+   figure — an invented allowance is the same sin as an invented price. */
+function vendAtGate(v){
+  return !!(v && v.incoterm && /^\s*(EXW|FCA|EX\s*WORKS)/i.test(v.incoterm));
+}
+function vendWhyStale(v){
+  if(vendExpired(v)) return "This quote expired on " + v.expires + ".";
+  var d = vendAgeDays(v);
+  return "Quoted " + d + " days ago. Cell pricing moves quarterly \u2014 "
+       + "re-confirm before this goes in front of a customer.";
+}
 /* One line naming where the battery number came from, for the report. */
 function vendProvenance(v){
   if(!vendHasPrice(v)) return "";
@@ -466,6 +525,11 @@ function vendProvenance(v){
   if(lbl) bits.push(lbl.toLowerCase());
   if(v.ref)  bits.push("ref " + v.ref);
   if(v.date) bits.push(v.date + (d!=null ? " (" + d + " days old)" : ""));
+  if(v.expires) bits.push((vendExpired(v) ? "EXPIRED " : "valid to ") + v.expires);
+  if(v.incoterm) bits.push(v.incoterm + (vendAtGate(v) ? " \u2014 freight to site not included" : ""));
+  if(v.blockMwh) bits.push("quoted on a " + v.blockMwh + " MWh block");
+  if(v.excludes) bits.push("excludes " + v.excludes);
+  if(v.indexTo)  bits.push("indexed: " + v.indexTo);
   return bits.join(" \u00b7 ");
 }
 
@@ -659,6 +723,41 @@ function vendInitCloud(){
   }catch(e){ vendStat('Standalone — this session only'); }
 }
 
+/* ── THE SELECTED SUPPLIER, AS A PRICED LINE WITH A PROVENANCE ──────────
+   The shared model takes a map of line id -> {rate, src, ref, asOf, name},
+   so a supplier price is no longer a special case buried in the pricing
+   loop: it is one override among the many an org will eventually have, and
+   it raises the audited coverage exactly as a trenching actual would.
+
+   THE TIER IS NOT WHAT THE SUPPLIER CALLS IT. A firm written quote is a
+   committed price and counts as evidence. A budgetary or ROM number, a list
+   price, and a quote that has passed its own expiry are all indicative —
+   real figures, worth having, but nobody is bound by them, so they are
+   recorded as references rather than as offers. Something remembered from a
+   call is a planning rate no matter who said it. */
+function vendTier(v){
+  if (!v || !v.basis) return "planning";
+  if (v.basis === "verbal") return "planning";
+  if (v.basis === "quote") return vendStale(v) ? "published" : "quote";
+  return "published";                 /* budgetary / ROM / list price */
+}
+function vendRates(){
+  var v = VEND_SEL ? VENDORS[VEND_SEL] : null;
+  if (!vendHasPrice(v)) return null;
+  var ref = [v.ref, v.incoterm, (v.expires ? "valid to " + v.expires : "")]
+              .filter(function(x){ return !!x; }).join(" \u00b7 ");
+  var out = {};
+  out["eq.dc"] = { rate:v.dcPerKwh, src:vendTier(v), ref:ref, asOf:v.date || "",
+                   name:v.name + (v.model ? " " + v.model : "") };
+  /* Only when the supplier actually prices it. A PCS the quote is silent on
+     stays on the model's rate, and stays honestly marked as unsourced. */
+  if (typeof v.pcsPerKw === "number" && v.pcsPerKw > 0) {
+    out["eq.pcs"] = { rate:v.pcsPerKw, src:vendTier(v), ref:ref,
+                      asOf:v.date || "", name:v.name };
+  }
+  return out;
+}
+
 function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -742,122 +841,97 @@ function unanswered(){
 
 /* AACE 18R-97. Class 3 is not reachable from a desk and this page will not
    claim it: it needs a site walk and firm quotes. */
-function estClass(){
+/* ── THE CLASS, AND WHAT IT IS ALLOWED TO CLAIM ────────────────────────
+   AACE 18R-97 classes are not a mood. They describe how the estimate was
+   BUILT, and the two things that decide it are how much of the project is
+   defined and how much of the money is priced from something real.
+
+   This page could always measure the first. It can now measure the second,
+   so the class carries the evidence share with it — a Class 4 resting
+   entirely on internal planning rates and a Class 4 where two thirds of the
+   dollars come off written quotes are not the same estimate, and a reader
+   deserves to be told which one they are holding.
+
+   The ceiling stays at Class 4 on purpose. Class 3 needs a site walk, and no
+   amount of quoting tells this tool whether anybody has stood on the ground.
+   It says what is still missing instead of promoting itself. */
+function estClass(r){
   var miss = unanswered().length;
   var p = S.packet;
   var posBad = p && p.site && p.site.positionIsBuilding === false;
   var gaps = (p && p.gaps) ? p.gaps.length : 0;
+  var ev = (r && r.sourcing) ? r.sourcing.evidenceShare : 0;
+  var evPct = Math.round(ev * 100);
+  var evLine = ev > 0
+    ? " " + evPct + "% of the total is priced from written quotes or booked "
+      + "actuals; the rest is an internal planning rate."
+    : " Nothing in this total is priced from a quote or a booked cost yet \u2014 "
+      + "every rate is an internal planning figure.";
+
   if (miss >= 3 || posBad || S.req.utilitySideUpgrade === "" || volt() === "")
-    return { n:5, lo:-0.30, hi:0.50, label:"Class 5 — concept screening",
-             why:"Some of what decides the cost is still unanswered." };
+    return { n:5, lo:-0.30, hi:0.50, label:"Class 5 \u2014 concept screening",
+             evidenceShare:ev,
+             why:"Some of what decides the cost is still unanswered." + evLine };
   if (miss >= 1 || gaps > 0)
-    return { n:4, lo:-0.20, hi:0.30, label:"Class 4 — study estimate",
-             why:"Every driver is answered, but nothing is quoted or walked." };
-  return { n:4, lo:-0.20, hi:0.30, label:"Class 4 — study estimate",
-           why:"To reach Class 3 this needs a site walk and firm equipment quotes." };
+    return { n:4, lo:-0.20, hi:0.30, label:"Class 4 \u2014 study estimate",
+             evidenceShare:ev,
+             why:"Not every driver is answered yet." + evLine };
+  return { n:4, lo:-0.20, hi:0.30, label:"Class 4 \u2014 study estimate",
+           evidenceShare:ev,
+           why:"Every driver is answered." + evLine +
+               " Class 3 additionally needs a site walk, which this tool cannot " +
+               "verify from a desk." };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
    THE CALCULATION
    ══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   ONE PRICING LOOP, IN ONE FILE
+
+   This function used to BE the loop — a second, hand-maintained copy of the
+   arithmetic that also lives in omega-cost-model.js. The parity test proved
+   the two agreed to the cent on the day it was written, which is precisely
+   as long as that kind of proof lasts: the next person to correct a rate
+   corrects one of them.
+
+   That is not an abstract tidiness argument here. A client asking for
+   bankable numbers is asking, in effect, whether the same input always
+   produces the same output and whether anybody can trace how. Two
+   implementations cannot honestly answer either question, and this codebase
+   has already been bitten twice by exactly that — a container carried at two
+   different capacities, a pedestal at two different prices.
+
+   So this now calls the shared model and does nothing else. The resolved
+   values are passed rather than the raw fields (hours, pad, POI distance),
+   so the page's own defaults keep deciding what an unanswered input means
+   and the model is not left to re-default them differently.
+
+   estClass() stays here: the estimate CLASS is a statement about this
+   page's inputs and the packet behind them, not about the arithmetic.
+   ══════════════════════════════════════════════════════════════════════════ */
 function compute(){
-  var K = kw(), E = kwh();
+  var K = kw();
   if (K == null || !(K > 0)) return null;
+  if (typeof OmegaCostModel === "undefined" || !OmegaCostModel.price) return null;
 
-  var V = VOLT[volt()], vm = V.m;
-  var soilM  = SOIL[S.req.soilAndGrading] || 1.00;
-  var ahjM   = AHJ[S.req.ahj] || 1.00;
-  var labM   = LABOR[S.req.laborBasis] || 1.00;
-  var escM   = escalation();
-  var F = sizeF(), P = pad(), FT = poiFt();
-
-  var divs = [], subLo = 0, subBase = 0, subHi = 0;
-
-  for (var d = 0; d < MODEL.length; d++) {
-    var D = MODEL[d], lines = [], dTot = 0;
-    for (var i = 0; i < D.lines.length; i++) {
-      var L = D.lines[i], qty, unit = "", raw;
-
-      /* ── A SUPPLIER'S OWN NUMBER BEATS THE GENERIC RATE ────────────────
-         eq.dc is the battery block, and it is the one line where a real
-         quote exists often enough to be worth using. When the selected
-         supplier has a $/kWh on file, price from it and say so on the line;
-         otherwise leave the generic rate alone. Never silently: the unit
-         column names the supplier, so nobody has to wonder which number
-         built the total. */
-      var _vRate = null, _vNote = "";
-      if (L.id === "eq.dc" && VEND_SEL && VENDORS[VEND_SEL] && vendHasPrice(VENDORS[VEND_SEL])) {
-        _vRate = VENDORS[VEND_SEL].dcPerKwh;
-        _vNote = VENDORS[VEND_SEL].name + (vendStale(VENDORS[VEND_SEL]) ? " \u2014 quote is stale" : "");
-      }
-      if (_vRate != null) {
-        L = { id:L.id, n:L.n, basis:L.basis, rate:_vRate, lab:L.lab, vs:L.vs, soil:L.soil, ahj:L.ahj };
-      }
-
-      if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh" + (_vNote ? " \u00b7 " + _vNote : ""); }
-      else if (L.basis === "kw")  { qty = K;  unit = "$" + L.rate + " / kW"; }
-      else if (L.basis === "ft")  { qty = FT; unit = "$" + L.rate + " / ft \u00d7 " + n0(FT) + " ft"; }
-      else if (L.basis === "pad") { qty = P;  unit = "$" + L.rate + " / sq ft \u00d7 " + n0(P) + " sq ft"; }
-      else                        { qty = F;  unit = "flat, scaled \u00d7" + F.toFixed(2) + " for size"; }
-      raw = L.rate * (qty == null ? 0 : qty);
-
-      /* order matters and is documented: voltage regime, then ground
-         conditions, then the AHJ, then the labour basis on the labour
-         fraction only, then equipment escalation on equipment only. */
-      var mods = [];
-      if (L.vs && vm[L.vs] !== 1) { raw *= vm[L.vs]; mods.push(V.label.split(" (")[0] + " \u00d7" + vm[L.vs].toFixed(2)); }
-      if (L.soil && soilM !== 1)  { raw *= soilM;    mods.push("ground \u00d7" + soilM.toFixed(2)); }
-      if (L.ahj  && ahjM  !== 1)  { raw *= ahjM;     mods.push("AHJ \u00d7" + ahjM.toFixed(2)); }
-      if (L.lab > 0 && labM !== 1){
-        raw = raw * (1 - L.lab) + raw * L.lab * labM;
-        mods.push("labour \u00d7" + labM.toFixed(2) + " on " + Math.round(L.lab*100) + "%");
-      }
-      if (D.id === "eq" && escM !== 1) { raw *= escM; mods.push("escalation \u00d7" + escM.toFixed(3)); }
-
-      lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw });
-      dTot += raw;
-    }
-    var sp = SPREAD[D.id];
-    divs.push({ id:D.id, name:D.name, lines:lines,
-                lo:dTot*(1-sp), base:dTot, hi:dTot*(1+sp), spread:sp });
-    subLo += dTot*(1-sp); subBase += dTot; subHi += dTot*(1+sp);
-  }
-
-  /* Utility-side upgrade, only when it is KNOWN. When it is unknown it is
-     an exposure, reported separately, because burying it in the total is
-     how a budget becomes a surprise. */
-  var up = UPGRADE[S.req.utilitySideUpgrade] || UPGRADE[""];
-  var upCost = 0, upLine = null;
-  if (up.cost > 0 || (S.carryUpgrade && up.exposure)) {
-    upCost = up.cost > 0 ? up.cost : up.exposure[0];
-    upLine = { name:"Utility-side upgrade \u2014 " + up.label, cost:upCost,
-               carried: up.cost === 0 };
-    subLo += upCost*0.8; subBase += upCost; subHi += upCost*1.35;
-  }
-
-  /* Markups compound in order. */
-  var runLo = subLo, runBase = subBase, runHi = subHi, marks = [];
-  for (var m = 0; m < MARKUP.length; m++) {
-    var M = MARKUP[m];
-    var aLo = runLo*M.lo, aBase = runBase*M.base, aHi = runHi*M.hi;
-    marks.push({ id:M.id, n:M.n, rate:M.base, lo:aLo, base:aBase, hi:aHi });
-    runLo += aLo; runBase += aBase; runHi += aHi;
-  }
-
-  var per = function (t){ return E ? t/E : null; };
-  var perK = function (t){ return K ? t/K : null; };
-
-  return {
-    kw:K, kwh:E, hours:hours(), pad:P, poiFt:FT,
-    voltage:volt(), voltLabel:V.label,
-    divisions:divs, markups:marks, upgrade:up, upgradeLine:upLine,
-    subtotal:{ lo:subLo, base:subBase, hi:subHi },
-    total:{ lo:runLo, base:runBase, hi:runHi },
-    perKwh:{ lo:per(runLo), base:per(runBase), hi:per(runHi) },
-    perKw:{ lo:perK(runLo), base:perK(runBase), hi:perK(runHi) },
-    escalation:escM, quoteAgeMonths:quoteAgeMonths(),
-    cls:estClass()
-  };
+  var r = OmegaCostModel.price({
+    kw: K, hours: hours(),
+    volt: S.req.interconnectionVoltage,
+    poiFt: poiFt(), padArea: pad(),
+    soil: S.req.soilAndGrading,
+    ahj: S.req.ahj,
+    labor: S.req.laborBasis,
+    utilityUpgrade: S.req.utilitySideUpgrade,
+    carryUpgrade: S.carryUpgrade,
+    quoteDate: S.req.equipmentQuoteDate,
+    rates: vendRates()
+  });
+  if (!r) return null;
+  /* The class is decided AFTER the price, because it now depends on how much
+     of that price came from evidence. */
+  r.cls = estClass(r);
+  return r;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1296,6 +1370,68 @@ function heroHtml(r){
   '</div>' + bandRail(r) + '</div>';
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   WHERE EVERY NUMBER CAME FROM
+
+   The question a lender's independent engineer asks is not "what is the
+   total". It is "show me where each number came from", and an estimate that
+   cannot answer line by line is not bankable however carefully it was built.
+
+   Coverage is stated in DOLLARS, never in lines. Sourcing twenty small civil
+   items while the battery sits on a planning rate is not "80% backed" — it
+   is the one number that matters left unbacked, and a line count would hide
+   exactly that. The panel therefore leads with the money and then names the
+   largest unbacked items in order, because "38% unsourced" tells a reader to
+   worry while "the battery, $335k" tells them what to go and get.
+   ══════════════════════════════════════════════════════════════════════════ */
+var SRC_LBL = { actual:"actual", quote:"quote", published:"reference", planning:"planning" };
+function srcBadge(L){
+  var t = L && L.src ? L.src : "planning";
+  var title = t === "actual"    ? "A booked cost from a completed project"
+            : t === "quote"     ? "A written, in-date quote for this scope"
+            : t === "published" ? "A citable reference — a named benchmark, or an indicative or expired supplier price"
+            :                     "An internal planning rate. Nobody has quoted this.";
+  return '<span class="srcPill s-' + t + '" title="' + esc(title) + '">'
+       + esc(SRC_LBL[t] || t) + (L && L.ratedBy ? " \u00b7 " + esc(L.ratedBy) : "") + '</span>';
+}
+
+function sourceHtml(r){
+  var S2 = r.sourcing;
+  if (!S2) return "";
+  var ev = Math.round(S2.evidenceShare * 100);
+  var cited = Math.round(S2.citedShare * 100);
+  var h = '<div class="panel"><h3>Where every number came from</h3>' +
+    '<p class="lead">Measured in dollars, not in line items \u2014 the share of this ' +
+    'total that rests on something an independent engineer can ask to see.</p>' +
+    '<div class="kpis"><div class="kpi"><div class="n">' + ev + '<small>%</small></div>' +
+      '<div class="l">Priced from a written quote or a booked actual</div></div>' +
+    '<div class="kpi"><div class="n">' + cited + '<small>%</small></div>' +
+      '<div class="l">Backed by anything citable, references included</div></div>' +
+    '<div class="kpi"><div class="n">' + usdK(S2.usdByTier.planning) + '</div>' +
+      '<div class="l">Still on internal planning rates</div></div></div>';
+
+  if (S2.biggestGaps.length) {
+    h += '<table class="t"><thead><tr><th style="width:58%">Largest numbers with nothing behind them</th>' +
+         '<th class="r">Amount</th><th class="r" style="width:120px">Standing</th></tr></thead><tbody>';
+    for (var i = 0; i < S2.biggestGaps.length; i++) {
+      var g = S2.biggestGaps[i];
+      h += '<tr class="li"><td>' + esc(g.n) + '</td>' +
+           '<td class="r">' + usd(g.cost) + '</td>' +
+           '<td class="r">' + srcBadge(g) + '</td></tr>';
+    }
+    h += '</tbody></table>' +
+      '<p class="note">Each of these becomes evidence the moment a real number ' +
+      'replaces it \u2014 a supplier quote in the battery pricing panel above, or ' +
+      'a cost booked off a job this company has already built. Nothing here is ' +
+      'wrong; it is simply not yet evidence, and this estimate will not describe ' +
+      'it as anything more than that.</p>';
+  } else {
+    h += '<p class="note">Every line in this estimate is priced from a quote or a ' +
+         'booked actual.</p>';
+  }
+  return h + '</div>';
+}
+
 function tableHtml(r){
   var h = '<div class="panel"><h3>Where the money goes</h3>' +
     '<p class="lead">Bottom-up, at the reference rates listed against each line and scaled to ' +
@@ -1321,9 +1457,10 @@ function tableHtml(r){
     if (open) {
       for (j = 0; j < D.lines.length; j++) {
         var L = D.lines[j];
-        h += '<tr class="li"><td>' + esc(L.n) +
+        h += '<tr class="li"><td>' + esc(L.n) + ' ' + srcBadge(L) +
              '<span class="bs">' + esc(L.basis) +
-             (L.mods.length ? ' \u00b7 ' + esc(L.mods.join(" \u00b7 ")) : '') + '</span></td>' +
+             (L.mods.length ? ' \u00b7 ' + esc(L.mods.join(" \u00b7 ")) : '') +
+             (L.ref ? ' \u00b7 ' + esc(L.ref) : '') + '</span></td>' +
              '<td class="r"></td><td class="r">'+usd(L.cost)+'</td>' +
              '<td class="r"></td><td class="r"></td><td></td></tr>';
       }
@@ -1516,7 +1653,7 @@ function renderOut(){
   $("blank").style.display = "none";
   $("body").style.display = "";
   $("body").innerHTML = heroHtml(r) + kpiHtml(r, sch) + tableHtml(r) +
-                        ganttHtml(sch) + riskHtml(r);
+                        sourceHtml(r) + ganttHtml(sch) + riskHtml(r);
 
   $("clsChip").textContent = "CLASS " + r.cls.n;
   $("clsChip").className = "srcTag " + (r.cls.n === 5 ? "c5" : "c4");
@@ -1557,20 +1694,35 @@ function csvCell(v){
   return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
 }
 function toCsv(){
-  var r = LAST.r, rows = [["Division","Line item","Basis","Modifiers","Cost USD"]], i, j;
+  /* Source and reference are columns, not a footnote. The CSV is what gets
+     pasted into somebody else's model, and a rate that arrives there without
+     its provenance is a rate that will be quoted as fact by Friday. */
+  var r = LAST.r, rows = [["Division","Line item","Basis","Modifiers",
+                           "Source","Reference","Cost USD"]], i, j;
   for (i = 0; i < r.divisions.length; i++)
     for (j = 0; j < r.divisions[i].lines.length; j++) {
       var L = r.divisions[i].lines[j];
-      rows.push([r.divisions[i].name, L.n, L.basis, L.mods.join(" | "), Math.round(L.cost)]);
+      rows.push([r.divisions[i].name, L.n, L.basis, L.mods.join(" | "),
+                 (SRC_LBL[L.src] || "planning") + (L.ratedBy ? " (" + L.ratedBy + ")" : ""),
+                 L.ref || "", Math.round(L.cost)]);
     }
-  if (r.upgradeLine) rows.push(["Utility", r.upgradeLine.name, "allowance", "", Math.round(r.upgradeLine.cost)]);
-  rows.push(["", "Direct and indirect subtotal", "", "", Math.round(r.subtotal.base)]);
+  if (r.upgradeLine) rows.push(["Utility", r.upgradeLine.name, "allowance", "", "planning", "", Math.round(r.upgradeLine.cost)]);
+  rows.push(["", "Direct and indirect subtotal", "", "", "", "", Math.round(r.subtotal.base)]);
   for (i = 0; i < r.markups.length; i++)
-    rows.push(["Markup", r.markups[i].n, pct(r.markups[i].rate), "", Math.round(r.markups[i].base)]);
-  rows.push(["", "TOTAL INSTALLED (base)", "", "", Math.round(r.total.base)]);
-  rows.push(["", "TOTAL INSTALLED (low)",  "", "", Math.round(r.total.lo)]);
-  rows.push(["", "TOTAL INSTALLED (high)", "", "", Math.round(r.total.hi)]);
-  rows.push(["", "$ per kWh (base)", "", "", Math.round(r.perKwh.base)]);
+    rows.push(["Markup", r.markups[i].n, pct(r.markups[i].rate), "", "planning", "", Math.round(r.markups[i].base)]);
+  rows.push(["", "TOTAL INSTALLED (base)", "", "", "", "", Math.round(r.total.base)]);
+  rows.push(["", "TOTAL INSTALLED (low)",  "", "", "", "", Math.round(r.total.lo)]);
+  rows.push(["", "TOTAL INSTALLED (high)", "", "", "", "", Math.round(r.total.hi)]);
+  rows.push(["", "$ per kWh (base)", "", "", "", "", Math.round(r.perKwh.base)]);
+  if (r.sourcing) {
+    rows.push(["", "", "", "", "", "", ""]);
+    rows.push(["Audit", "Priced from a written quote or a booked actual", "", "",
+               "", "", Math.round(r.sourcing.evidenceShare * 100) + "%"]);
+    rows.push(["Audit", "Backed by anything citable", "", "",
+               "", "", Math.round(r.sourcing.citedShare * 100) + "%"]);
+    rows.push(["Audit", "Still on internal planning rates", "", "",
+               "", "", Math.round(r.sourcing.usdByTier.planning)]);
+  }
   var out = "";
   for (i = 0; i < rows.length; i++) {
     for (j = 0; j < rows[i].length; j++) out += (j?",":"") + csvCell(rows[i][j]);
@@ -1606,6 +1758,34 @@ function toJson(){
                      rangeLowUsd: Math.round(r.total.base*(1+r.cls.lo)),
                      rangeHighUsd: Math.round(r.total.base*(1+r.cls.hi)),
                      note: r.cls.why },
+    /* ── THE AUDIT TRAIL ────────────────────────────────────────────────
+       The export is the artefact that reaches a lender's technical adviser,
+       so it carries the provenance of every dollar rather than only the
+       dollars. Shares are fractions of the TOTAL, markups included, because
+       a coverage figure computed over a friendlier denominator is a
+       marketing number, not an audit. */
+    sourcing: r.sourcing ? {
+      evidenceShare: r.sourcing.evidenceShare,
+      citedShare: r.sourcing.citedShare,
+      auditedUsd: Math.round(r.sourcing.auditedUsd),
+      usdByTier: {
+        actual: Math.round(r.sourcing.usdByTier.actual),
+        quote: Math.round(r.sourcing.usdByTier.quote),
+        published: Math.round(r.sourcing.usdByTier.published),
+        planning: Math.round(r.sourcing.usdByTier.planning)
+      },
+      tierMeanings: {
+        actual: "A booked cost from a project this company completed.",
+        quote: "A written, in-date quote for this scope.",
+        published: "A citable reference: a named benchmark, or an indicative or expired supplier price. Not a committed price for this site.",
+        planning: "An internal planning rate carrying nobody's signature."
+      },
+      lines: r.sourcing.rows.map(function (x){
+        return { id:x.id, name:x.n, tier:x.src, reference:x.ref || null,
+                 asOf:x.asOf || null, ratedBy:x.ratedBy || null,
+                 usd: Math.round(x.cost) };
+      })
+    } : null,
     cost: {
       divisions: r.divisions.map(function (D){
         return { id:D.id, name:D.name, low:Math.round(D.lo), base:Math.round(D.base),
@@ -1714,7 +1894,12 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports)
   module.exports = { MODEL:MODEL, MARKUP:MARKUP, SPREAD:SPREAD, VOLT:VOLT,
                      UPGRADE:UPGRADE, BAND_LO:BAND_LO, BAND_HI:BAND_HI,
-                     S:S, compute:compute, cpm:cpm, tasks:tasks, estClass:estClass };
+                     S:S, compute:compute, cpm:cpm, tasks:tasks, estClass:estClass,
+                     sourceHtml:sourceHtml, tableHtml:tableHtml,
+                     toJson:toJson, toCsv:toCsv,
+                     VENDORS:VENDORS, vendRates:vendRates, vendTier:vendTier,
+                     setVendSel:function(k){ VEND_SEL = k; },
+                     setLast:function(r, sch){ LAST = { r:r, sch:sch }; } };
 })();
 
 </script>

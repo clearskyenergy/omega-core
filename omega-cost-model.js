@@ -155,6 +155,100 @@
 
   /* Explicit, not eval(): a Content-Security-Policy that forbids eval is a
      reasonable policy for a page that renders customer money. */
+  /* ══════════════════════════════════════════════════════════════════════
+     WHERE EVERY NUMBER CAME FROM
+
+     A lender's independent engineer does not ask what the total is. They ask
+     where each number came from, and an estimate that cannot answer that is
+     not bankable no matter how carefully it was built.
+
+     Until now this file could not answer it at all: thirty-two rates, not one
+     of them carrying a citation. They are honest planning rates — but nothing
+     in the tool SAID they were planning rates, and a defensible-looking table
+     of undefended numbers is worse than an obviously rough one, because it
+     invites a reader to trust it.
+
+     So every rate now declares its tier, and the default is the weakest one.
+     A line that names no source IS a planning rate; it cannot quietly pass
+     for something better by omission, and a rate added next year inherits the
+     honest default rather than the flattering one.
+
+     The tiers are ordered by what an IE will accept:
+
+       actual     a booked cost from a job this company completed. The only
+                  tier that is evidence rather than an opinion about the
+                  future. Needs the project it came off.
+       quote      a written price from a supplier or an EPC, with a document
+                  reference and a date. Bankable for the scope it covers, and
+                  for exactly as long as the quote is good for.
+       published  a citable figure that is NOT a committed price for this
+                  site: a named report, table and edition, or a supplier's
+                  budgetary/ROM or list price. Defensible as a market
+                  reference, never as the price this project will pay. The
+                  axis that separates this tier from `quote` is committed
+                  versus indicative, which is the distinction a lender cares
+                  about — an expired quote lands here too, because a price
+                  nobody is still bound by is a reference, not an offer.
+       planning   an internal figure carrying nobody's signature. Fine for a
+                  screen. It is not evidence, and this tool must never let it
+                  be mistaken for evidence.
+
+     Coverage is measured in DOLLARS, not in lines. Sourcing twenty small
+     civil lines and leaving the battery on a planning rate is not 80%
+     backed — it is the one number that matters left unbacked, and a
+     line-count percentage would hide precisely that.
+     ══════════════════════════════════════════════════════════════════════ */
+  var TIERS = {
+    actual:    { rank:4, label:"Booked project actual",  short:"actual"    },
+    quote:     { rank:3, label:"Written quote",          short:"quote"     },
+    published: { rank:2, label:"Published benchmark",    short:"published" },
+    planning:  { rank:1, label:"Internal planning rate", short:"planning"  }
+  };
+  /* A quote or an actual is evidence about a real transaction. A published
+     benchmark is a market reference and a planning rate is an opinion, and
+     an IE treats those two groups differently — so the tool does too. */
+  function tierIsEvidence(t){ return t === "actual" || t === "quote"; }
+
+  /* THE HONEST DEFAULT, applied once at load. Nothing here changes a rate;
+     it only stops a rate from implying a provenance it does not have. */
+  (function stampDefaults(){
+    var d, i, L;
+    for (d = 0; d < MODEL.length; d++) {
+      for (i = 0; i < MODEL[d].lines.length; i++) {
+        L = MODEL[d].lines[i];
+        if (!L.src) L.src = "planning";
+        if (!L.ref) L.ref = "";
+        if (!L.asOf) L.asOf = "";
+      }
+    }
+  })();
+
+  /* ── AN ORG'S OWN NUMBERS REPLACE ANY LINE ─────────────────────────────
+     input.rates is a map of line id -> { rate, src, ref, asOf, name }. It is
+     how a company makes this model theirs: the battery off a supplier quote,
+     the trenching off what the last three jobs actually cost, the switchgear
+     off a distributor's written price. Each override carries its own
+     provenance, so replacing a rate RAISES the audited coverage instead of
+     quietly changing the answer.
+
+     Anything the override does not state stays as the model had it, and an
+     override with no tier is treated as a quote only if it names a
+     reference — otherwise it is somebody typing a number, which is a
+     planning rate no matter who typed it. */
+  function rateFor(L, input) {
+    var over = input && input.rates ? input.rates[L.id] : null;
+    if (!over || typeof over.rate !== "number" || !(over.rate > 0)) {
+      return { rate:L.rate, src:L.src || "planning", ref:L.ref || "",
+               asOf:L.asOf || "", from:"" };
+    }
+    var tier = over.src && TIERS[over.src] ? over.src
+             : (over.ref ? "quote" : "planning");
+    return { rate:over.rate, src:tier, ref:over.ref || "",
+             asOf:over.asOf || "", from:over.name || "" };
+  }
+
+  M.TIERS = TIERS;
+  M.tierIsEvidence = tierIsEvidence;
   M.MODEL = MODEL;
   M.SPREAD = SPREAD;
   M.MARKUP = MARKUP;
@@ -172,6 +266,9 @@
      explicit input, because a Vercel function has no S and a shared model
      that reaches for global state is not shared, it is coupled. */
   function num(v){ var n = typeof v === "number" ? v : parseFloat(v); return isFinite(n) ? n : null; }
+  /* Never mutate a caller's input object. A shared model that edits what it
+     was handed produces bugs that only appear on the second call. */
+  function shallow(o){ var c = {}, k; for (k in o) if (o.hasOwnProperty(k)) c[k] = o[k]; return c; }
   function hoursOf(i){ var h = num(i.hours); return h && h > 0 ? h : 2; }
   function kwhOf(i){ var k = num(i.kw); return k == null ? null : k * hoursOf(i); }
   /* 0.8 sq ft per kWh plus 800 for clearances, fire access and the PCS pad.
@@ -229,6 +326,24 @@
     var F = sizeFOf(input), P = padOf(input), FT = poiOf(input);
     var ven = input.vendor || null;
 
+    /* The old vendor hook is now one case of the general rates override, so
+       there is a single path from "somebody has a real price" to the total.
+       Kept as a shim rather than deleted: /api/ and the site finder both
+       still pass input.vendor, and a silent behaviour change in a shared
+       pricing file is exactly what this file exists to prevent. */
+    if (ven && typeof ven.dcPerKwh === "number" && ven.dcPerKwh > 0) {
+      var rr = {}, kk;
+      if (input.rates) for (kk in input.rates) if (input.rates.hasOwnProperty(kk)) rr[kk] = input.rates[kk];
+      if (!rr["eq.dc"]) {
+        rr["eq.dc"] = { rate:ven.dcPerKwh, src:ven.src || "quote",
+                        ref:ven.ref || "", asOf:ven.date || "",
+                        name:ven.name || "supplier" };
+      }
+      input = shallow(input); input.rates = rr;
+    }
+
+    var srcRows = [];
+
     function n0(v){ return Math.round(v).toLocaleString(); }
 
     var divs = [], subLo = 0, subBase = 0, subHi = 0, d, i;
@@ -238,23 +353,19 @@
       for (i = 0; i < D.lines.length; i++) {
         var L = D.lines[i], qty, unit = "", raw;
 
-        /* A supplier's own number beats the generic rate, and says so. */
-        var vRate = null, vNote = "";
-        if (L.id === "eq.dc" && ven && typeof ven.dcPerKwh === "number" && ven.dcPerKwh > 0) {
-          vRate = ven.dcPerKwh;
-          vNote = (ven.name || "supplier") + (ven.stale ? " — quote is stale" : "");
-        }
-        if (vRate != null) {
-          L = { id:L.id, n:L.n, basis:L.basis, rate:vRate, lab:L.lab,
-                vs:L.vs, soil:L.soil, ahj:L.ahj };
-        }
+        /* THE RATE AND ITS PROVENANCE ARRIVE TOGETHER. One lookup answers
+           both "what is this line priced at" and "who says so", so a number
+           can never reach the total having shed its source on the way. */
+        var R = rateFor(L, input);
+        var vNote = R.from || "";
+        if (L.id === "eq.dc" && ven && ven.stale && vNote) vNote += " — quote is stale";
 
-        if (L.basis === "kwh")      { qty = E;  unit = "$" + L.rate + " / kWh" + (vNote ? " · " + vNote : ""); }
-        else if (L.basis === "kw")  { qty = K;  unit = "$" + L.rate + " / kW"; }
-        else if (L.basis === "ft")  { qty = FT; unit = "$" + L.rate + " / ft × " + n0(FT) + " ft"; }
-        else if (L.basis === "pad") { qty = P;  unit = "$" + L.rate + " / sq ft × " + n0(P) + " sq ft"; }
+        if (L.basis === "kwh")      { qty = E;  unit = "$" + R.rate + " / kWh" + (vNote ? " · " + vNote : ""); }
+        else if (L.basis === "kw")  { qty = K;  unit = "$" + R.rate + " / kW"; }
+        else if (L.basis === "ft")  { qty = FT; unit = "$" + R.rate + " / ft × " + n0(FT) + " ft"; }
+        else if (L.basis === "pad") { qty = P;  unit = "$" + R.rate + " / sq ft × " + n0(P) + " sq ft"; }
         else                        { qty = F;  unit = "flat, scaled ×" + F.toFixed(2) + " for size"; }
-        raw = L.rate * (qty == null ? 0 : qty);
+        raw = R.rate * (qty == null ? 0 : qty);
 
         var mods = [];
         if (L.vs && vm[L.vs] !== 1) { raw *= vm[L.vs]; mods.push(V.label.split(" (")[0] + " ×" + vm[L.vs].toFixed(2)); }
@@ -266,7 +377,10 @@
         }
         if (D.id === "eq" && escM !== 1) { raw *= escM; mods.push("escalation ×" + escM.toFixed(3)); }
 
-        lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw });
+        lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw,
+                     src:R.src, ref:R.ref, asOf:R.asOf, ratedBy:R.from });
+        srcRows.push({ id:L.id, n:L.n, src:R.src, ref:R.ref, asOf:R.asOf,
+                       ratedBy:R.from, cost:raw });
         dTot += raw;
       }
       var sp = M.SPREAD[D.id];
@@ -294,6 +408,35 @@
       runLo += aLo; runBase += aBase; runHi += aHi;
     }
 
+    /* ── THE AUDIT ────────────────────────────────────────────────────
+       Everything that made it into the total gets a row, not just the
+       direct lines. A contingency percentage and an EPC margin are numbers
+       an IE will ask about too, and leaving them out of the audit would put
+       a flattering denominator under the coverage figure. They are internal
+       planning assumptions until somebody replaces them with a real one, so
+       that is what they are recorded as. */
+    if (upLine) {
+      srcRows.push({ id:"util.upgrade", n:upLine.name, src:"planning",
+                     ref:"", asOf:"", ratedBy:"", cost:upCost });
+    }
+    for (m = 0; m < marks.length; m++) {
+      srcRows.push({ id:"markup." + marks[m].id, n:marks[m].n, src:"planning",
+                     ref:"", asOf:"", ratedBy:"", cost:marks[m].base });
+    }
+
+    var byTier = { actual:0, quote:0, published:0, planning:0 }, sTot = 0, si;
+    for (si = 0; si < srcRows.length; si++) {
+      var t = TIERS[srcRows[si].src] ? srcRows[si].src : "planning";
+      byTier[t] += srcRows[si].cost; sTot += srcRows[si].cost;
+    }
+    function share(v){ return sTot > 0 ? v / sTot : 0; }
+    /* Biggest unbacked money first. "38% is unsourced" tells a reader to
+       worry; "the battery, $335k, is unsourced" tells them what to go and
+       get, which is the only version that changes anything. */
+    var gaps = srcRows.filter(function (r){ return !tierIsEvidence(r.src); })
+                      .sort(function (a, b){ return b.cost - a.cost; })
+                      .slice(0, 8);
+
     var per  = function (t){ return E ? t/E : null; };
     var perK = function (t){ return K ? t/K : null; };
 
@@ -305,7 +448,23 @@
       total:{ lo:runLo, base:runBase, hi:runHi },
       perKwh:{ lo:per(runLo), base:per(runBase), hi:per(runHi) },
       perKw:{ lo:perK(runLo), base:perK(runBase), hi:perK(runHi) },
-      escalation:escM, quoteAgeMonths:quoteAgeMonths(input)
+      escalation:escM, quoteAgeMonths:quoteAgeMonths(input),
+      sourcing: {
+        rows: srcRows,
+        usdByTier: byTier,
+        shareByTier: { actual:share(byTier.actual), quote:share(byTier.quote),
+                       published:share(byTier.published),
+                       planning:share(byTier.planning) },
+        /* Two different questions, deliberately reported separately. A bank
+           asks what is EVIDENCE — a quote or a booked cost. A market study
+           asks what is CITED, which a published benchmark satisfies and a
+           planning rate does not. Collapsing them into one "backed" number
+           would let a national average stand in for a price on this site. */
+        evidenceShare: share(byTier.actual + byTier.quote),
+        citedShare:    share(byTier.actual + byTier.quote + byTier.published),
+        auditedUsd:    sTot,
+        biggestGaps:   gaps
+      }
     };
   }
   M.price = price;
