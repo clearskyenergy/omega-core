@@ -1329,22 +1329,95 @@ function meter(node){
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
 
+/* ── getting the RIGHT voice out of a phone ──────────────────────────────
+   On a desk Jarvis speaks in the ElevenLabs voice. On a phone he was speaking
+   in the handset's default — a different person entirely — and the reason was
+   not the voice code at all.
+
+   iOS refuses to play audio a script started unless that SAME <audio> element
+   has already played once inside a real user gesture. The unlock belongs to
+   the element, not to the page, so a fresh `new Audio(url)` per reply never
+   inherits it: every spoken answer failed the autoplay check, threw, and fell
+   into the catch — which is the browser synthesiser. The fallback was working
+   exactly as designed. It was just being reached every single time.
+
+   So: ONE element, unlocked on the first touch anywhere, reused for every
+   reply after that. */
+let sndEl=null, sndSrc=null, audioUnlocked=false;
+
+/* 44 bytes: a valid WAV header with no samples. Playing silence inside the
+   gesture is what marks the element as user-approved for the session. */
+const SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
+function unlockAudio(){
+  if(audioUnlocked) return;
+  audioUnlocked=true;
+  try{
+    sndEl=new Audio();
+    sndEl.playsInline=true;            /* or iOS takes it fullscreen */
+    sndEl.setAttribute('playsinline','');
+    sndEl.preload='auto';
+    sndEl.src=SILENCE;
+    const p=sndEl.play();
+    if(p&&p.catch) p.catch(()=>{});
+  }catch(_){ sndEl=null; }
+  /* The synthesiser needs its own gesture, and on iOS getVoices() is empty
+     until it has been poked at least once. */
+  try{
+    const S=window.speechSynthesis;
+    if(S){ const u=new SpeechSynthesisUtterance(' '); u.volume=0; S.speak(u); S.getVoices(); }
+  }catch(_){}
+  try{ ctxOf(); }catch(_){}
+}
+/* capture:true so it runs before anything calls stopPropagation, and once:true
+   because after the first one it is dead weight on every tap. */
+['pointerdown','touchend','keydown'].forEach(ev=>
+  document.addEventListener(ev, unlockAudio, {capture:true, once:true}));
+
+/* getVoices() is empty on the first call in Safari and Chrome — the list
+   arrives later on the voiceschanged event. Picking a voice synchronously at
+   speak time is therefore a coin flip that lands on the OS default, which is
+   the other half of why the phone sounded wrong. */
+let voicesP=null;
+function voices(){
+  if(voicesP) return voicesP;
+  voicesP=new Promise(done=>{
+    const S=window.speechSynthesis;
+    if(!S){ done([]); return; }
+    const got=()=>{ const v=S.getVoices()||[]; if(v.length){ done(v); return true; } return false; };
+    if(got()) return;
+    let n=0;
+    const tick=setInterval(()=>{ if(got()||++n>20){ clearInterval(tick); if(n>20) done(S.getVoices()||[]); } },100);
+    try{ S.addEventListener('voiceschanged',()=>{ if(got()) clearInterval(tick); },{once:true}); }catch(_){}
+  });
+  return voicesP;
+}
+
 /* The browser's own synthesiser. Free, offline, and always there — it is the
    floor under the voice, not a feature. Picks the least robotic English voice
    on the machine and drops the pitch a little; nothing here pretends to be
    the ElevenLabs voice. */
-function browserSpeak(text){
+async function browserSpeak(text){
+  const S=window.speechSynthesis;
+  if(!S || !text) return;
+  const vs=await voices();            /* never picks before the list exists */
   return new Promise(done=>{
     try{
-      const S=window.speechSynthesis;
-      if(!S || !text){ done(); return; }
       S.cancel();
       const u=new SpeechSynthesisUtterance(String(text).slice(0,600));
-      const vs=S.getVoices()||[];
-      const pref=vs.find(v=>/Daniel|Oliver|Arthur|Google UK English Male/i.test(v.name))
-              || vs.find(v=>/en-GB/i.test(v.lang))
-              || vs.find(v=>/^en/i.test(v.lang));
+      /* Named voices first, in the order of how close they are to the one he
+         hears on the desktop. Daniel is the en-GB male on iOS and macOS,
+         Arthur is its newer sibling, "Google UK English Male" is the Android
+         and desktop-Chrome equivalent. Only then fall back to any en-GB, and
+         only then to any English at all — an en-US female default is the
+         thing this list exists to avoid. */
+      const by=re=>vs.find(v=>re.test(v.name));
+      const pref = by(/^Daniel/i) || by(/Google UK English Male/i)
+                || by(/^(Arthur|Oliver)/i)
+                || vs.find(v=>/en[-_]GB/i.test(v.lang))
+                || vs.find(v=>/^en/i.test(v.lang));
       if(pref) u.voice=pref;
+      if(pref&&pref.lang) u.lang=pref.lang;
       u.rate=1.02; u.pitch=0.9;
       u.onend=u.onerror=()=>done();
       S.speak(u);
@@ -1380,9 +1453,41 @@ async function speakReply(text){
       throw new Error('speak '+r.status+' '+why.slice(0,140));
     }
     const url=URL.createObjectURL(await r.blob());
-    const a=new Audio(url); let stop=null;
-    try{ const c=ctxOf(); if(c){ const src=c.createMediaElementSource(a); src.connect(c.destination); stop=meter(src);} }catch(_){}
-    await new Promise(d=>{ a.onended=a.onerror=d; a.play().catch(d); });
+    /* The unlocked element if we have one, so iOS lets this play at all. */
+    if(!sndEl){ try{ sndEl=new Audio(); sndEl.playsInline=true; }catch(_){} }
+    const a = sndEl;
+    if(!a) throw new Error('no audio element');
+    a.src=url;
+    let stop=null;
+    /* The arc reacts to his voice by metering the audio through WebAudio. That
+       is worth having, but it has a sharp edge: once an element is routed into
+       the graph it outputs ONLY through the graph, permanently. Metering
+       against a context that is not running does not make a quiet reply, it
+       makes a silent one — and silence reads as "he ignored me", which is
+       worse than any voice.
+
+       So resume FIRST and wait for it, and only wire the element in once the
+       context is confirmed running. If it will not resume, the audio plays
+       straight to the speakers with no meter. */
+    try{
+      const c=ctxOf();
+      if(c){
+        if(c.state!=='running'){ try{ await c.resume(); }catch(_){} }
+        if(c.state==='running'){
+          /* createMediaElementSource throws if called twice on one element, so
+             the node for the shared element is made once and kept. */
+          if(!sndSrc){ sndSrc=c.createMediaElementSource(a); sndSrc.connect(c.destination); }
+          stop=meter(sndSrc);
+        }
+      }
+    }catch(_){}
+    await new Promise((res,rej)=>{
+      a.onended=a.onerror=res;
+      const pl=a.play();
+      /* A rejected play() IS the autoplay block. Reject, so the catch below
+         reaches the browser voice — a worse voice beats no voice. */
+      if(pl&&pl.catch) pl.catch(()=>rej(new Error('autoplay blocked')));
+    });
     if(stop) stop();
     URL.revokeObjectURL(url);
   }catch(e){
