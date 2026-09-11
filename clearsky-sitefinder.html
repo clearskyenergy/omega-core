@@ -504,6 +504,8 @@
   .dcnNext{margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);
     font-size:11.5px;line-height:1.5}
   .dcnK{width:auto;min-width:96px}
+  .dcnFlag{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fdf7ec;
+    border:1px solid #eedfbe;color:#7a5b00;font-size:10.5px;line-height:1.5}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -818,6 +820,9 @@
      opening the estimator in another tab — which is the exact behaviour the
      inline pricing was built to remove. It was missing. -->
 <script src="/omega-cost-model.js"></script>
+<!-- What the battery earns, and the incentives against it. Same discipline as
+     the cost model: every figure declares its source. -->
+<script src="/omega-value-stack.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -4919,6 +4924,11 @@
      C&I programme is not on file rather than borrowing a residential one.
      ══════════════════════════════════════════════════════════════════ */
   var ITC_RATE = 0.30;
+  /* ComEd's VPP programme rate. A planning figure carried by this platform,
+     not a published tariff — Rider VPP / BYODLR is still before the ICC —
+     so the stack labels it as such rather than as revenue. */
+  var VPP_PER_KW_YEAR = 150;
+  var _cardFlag = "";
 
   /* "$1.0M", "$715k" — a customer reads magnitude, not digits. */
   function plainMoney(v) {
@@ -4970,27 +4980,55 @@
         fmt(pk.kw) + ' kW for ' + (Math.round(fit.hours * 10) / 10) + ' hours']);
     }
     if (est) {
+      var VS = window.OmegaValueStack;
       var cost = est.total.base;
-      var itc = cost * ITC_RATE;
+      var kwhFit = fit ? fit.kwh : est.kwh;
+      var inc = VS ? VS.incentives({ capexUsd: cost, kwh: kwhFit, itcRate: ITC_RATE,
+                                     rebatePerKwh: VS.COMED_REBATE.perKwh,
+                                     rebateName: "ComEd storage rebate" })
+                   : { items: [], total: cost * ITC_RATE, flags: [] };
+      var net = Math.max(0, cost - inc.total);
+
       rows.push(["Cost to build", plainMoney(cost), inst ? esc(inst.name) : ""]);
-      rows.push(["Federal tax credit", "\u2212" + plainMoney(itc),
-                 Math.round(ITC_RATE * 100) + "% \u00b7 needs prevailing wage"]);
-      rows.push(["Net cost", plainMoney(cost - itc), ""]);
-      /* Payback on demand charges ALONE. Deliberately the narrowest revenue
-         case there is — no arbitrage, no capacity payment, no VPP — so the
-         number is a floor a customer can trust rather than a best case
-         they will later be argued down from. */
-      if (r.saveHi) {
-        var yrLo = (cost - itc) / r.saveHi, yrHi = (cost - itc) / r.saveLo;
-        rows.push(["Pays back in",
-          (yrLo < 1 ? "<1" : Math.round(yrLo)) + "\u2013" + Math.round(yrHi) + " years",
-          "on demand charges alone"]);
+      for (var ii = 0; ii < inc.items.length; ii++) {
+        rows.push([inc.items[ii].name === "Federal investment tax credit"
+                     ? "Federal tax credit" : "ComEd rebate",
+                   "\u2212" + plainMoney(inc.items[ii].usd),
+                   esc(inc.items[ii].how || "")]);
       }
+      rows.push(["Net cost", plainMoney(net), net === 0 ? "incentives cover it" : ""]);
+
+      /* Payback now runs on the WHOLE stack, not demand charges alone — the
+         capacity and VPP streams are the reason a site like this pencils, and
+         leaving them out understated it as badly as inventing one would
+         overstate it. Each stream still carries its own source. */
+      var vs = VS ? VS.stack({ kw: sizePick(r).kw,
+                               hours: fit ? fit.hours : sizePick(r).hours,
+                               demandLoPerKwMonth: DEMAND_LO,
+                               demandHiPerKwMonth: DEMAND_HI,
+                               vppPerKwYear: VPP_PER_KW_YEAR }) : null;
+      if (vs && vs.perYear > 0) {
+        rows.push(["Earns", plainMoney(vs.perYear) + "/yr",
+                   vs.streams.length + " revenue streams"]);
+        var yr = net / vs.perYear;
+        rows.push(["Pays back in",
+          (yr < 1 ? "under a year" : (Math.round(yr * 10) / 10) + " years"),
+          "across the whole stack"]);
+      } else if (r.saveHi) {
+        var yrLo = (cost - inc.total) / r.saveHi;
+        rows.push(["Pays back in", Math.max(0, Math.round(yrLo)) + " years",
+                   "on demand charges alone"]);
+      }
+      if (inc.flags.length) _cardFlag = inc.flags[0];
     }
     for (var i = 0; i < rows.length; i++) {
       h += '<div class="dcnRow"><span class="dcnK">' + rows[i][0] + '</span>' +
            '<span class="dcnV">' + rows[i][1] + '</span>' +
            (rows[i][2] ? '<span class="dcnX">' + rows[i][2] + '</span>' : '') + '</div>';
+    }
+    if (_cardFlag) {
+      h += '<div class="dcnFlag"><b>Confirm before quoting:</b> ' + esc(_cardFlag) + '</div>';
+      _cardFlag = "";
     }
     h += '<div class="dcnNext"><b>Next:</b> ' + esc(nextStep(r, d, fit, est)) + '</div>';
     return h + '</div>';
