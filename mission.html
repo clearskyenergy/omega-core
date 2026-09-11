@@ -160,6 +160,9 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 /* ── the index ───────────────────────────────────────────────────────────
    Everywhere you can go, on one screen, filtered by typing. */
 .ixWrap{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.ixGroup{grid-column:1/-1;font-family:var(--mono);font-size:9px;letter-spacing:2px;
+          color:var(--glow-cyan);margin:12px 0 2px;opacity:.8}
+.ixGroup:first-child{margin-top:0}
 .ixGrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
         overflow-y:auto;min-height:0;padding-right:4px;align-content:start}
 .ixCard{background:var(--panel);border:1px solid rgba(0,243,255,.18);border-radius:7px;
@@ -245,6 +248,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .noteGo:hover{color:#0a5c2e}
 
 
+
+
+.bdThread{flex:1;min-height:0;display:flex;flex-direction:column;gap:9px;font-size:12.5px;
+          line-height:1.6}
+.bdMsg{border-radius:8px;padding:9px 11px;white-space:pre-wrap}
+.bdMsg.me{background:rgba(0,68,255,.16);border:1px solid rgba(0,243,255,.18);align-self:flex-end;
+          max-width:92%}
+.bdMsg.him{background:rgba(6,18,36,.6);border:1px solid rgba(0,243,255,.14)}
+.bdMsg .pin{margin-top:7px;font-size:9px;padding:4px 8px;min-height:0}
 
 /* ── the day, hour by hour ───────────────────────────────────────────────
    A list of two rows tells you nothing about a day. A column of hours shows
@@ -917,6 +929,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== BOARD ========== -->
     <section class="view" data-view="board">
+      <div class="cmdGrid" style="grid-template-columns:1fr 330px">
       <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
           <span class="ptitle" style="border:none;padding:0;margin:0">Whiteboard</span>
@@ -926,6 +939,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
         <div class="boardSurface" id="boardSurface"></div>
       </div>
+      <div class="panel" style="flex:0 0 330px;min-height:0" id="bdThinkPanel">
+        <div class="ptitle">Think with me<span class="live" id="bdThinkState"></span></div>
+        <div id="bdThread" class="scroll bdThread"></div>
+        <textarea id="bdAsk" class="askBox"
+          placeholder="How do I get Walters to sign? What would make OMEGA feel like a game people want to win?"></textarea>
+        <div class="cardActs">
+          <button id="bdSend">THINK</button>
+          <button id="bdRead" title="Read the whole board first">READ THE BOARD</button>
+        </div>
+      </div>
+      </div>
     </section>
 
     <!-- ========== INDEX ========== -->
@@ -934,11 +958,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         <div class="ptitle">Everywhere you can go<span class="live" id="ixN"></span></div>
         <div class="ixWrap">
           <div class="ixHead">
-            <input id="ixQ" class="brainQ" placeholder="Type to filter — a view, a tool, a person…">
-            <span class="ixChip on" data-ix="all">ALL</span>
-            <span class="ixChip" data-ix="view">VIEWS</span>
-            <span class="ixChip" data-ix="tool">TOOLS</span>
-            <span class="ixChip" data-ix="page">PAGES</span>
+            <input id="ixQ" class="brainQ" placeholder="Type to filter — a view, a tool, an area…">
           </div>
           <div class="ixGrid" id="ixGrid"></div>
         </div>
@@ -2748,6 +2768,13 @@ async function bdLoad(){
   bdLoaded=true;
   bdPalette();
   el('bdAdd').addEventListener('click',()=>bdNew());
+  el('bdSend').addEventListener('click',()=>bdThink(false));
+  el('bdRead').addEventListener('click',()=>bdThink(true));
+  el('bdAsk').addEventListener('keydown',e=>{
+    /* Enter sends, shift+Enter breaks the line — the way every chat box
+       people already use behaves. */
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); bdThink(false); }
+  });
   /* Double-click anywhere empty drops a note there — faster than reaching for
      the button when an idea is already leaving. */
   el('boardSurface').addEventListener('dblclick',e=>{
@@ -2886,6 +2913,74 @@ function bdSave(){
 }
 
 
+
+
+/* ══ THINKING WITH THE BOARD ══════════════════════════════════════════════
+   The notes are the raw material; this is the conversation about them. It
+   sends the whole board as context, so an answer can refer to what is
+   actually up there rather than asking him to restate it — the point of a
+   board is that you already wrote it down once.
+
+   Replies can be pinned back as notes, which closes the loop: think, keep the
+   part worth keeping, think again against a board that now includes it. */
+let bdBusy=false;
+
+function bdSay(who, text){
+  const host=el('bdThread');
+  const d=document.createElement('div');
+  d.className='bdMsg '+(who==='me'?'me':'him');
+  d.textContent=text;
+  if(who!=='me'){
+    const pin=document.createElement('button');
+    pin.className='pin'; pin.textContent='PIN AS A NOTE';
+    pin.addEventListener('click',()=>{
+      bdNew(); const n=bdNotes[bdNotes.length-1];
+      n.text=text.slice(0,600); bdPaint(); bdSave();
+      pin.textContent='PINNED'; pin.disabled=true;
+    });
+    d.appendChild(pin);
+  }
+  host.appendChild(d);
+  host.scrollTop=host.scrollHeight;
+}
+
+async function bdThink(withBoard){
+  if(bdBusy) return;
+  const box=el('bdAsk');
+  const q=box.value.trim();
+  if(!q && !withBoard) return;
+  bdBusy=true;
+  el('bdThinkState').textContent='thinking…';
+
+  const notes=bdNotes.map(n=>String(n.text||'').trim()).filter(Boolean);
+  let msg;
+  if(withBoard && notes.length){
+    msg = 'Here is my brainstorming board:\n'
+        + notes.map((t,i)=>(i+1)+'. '+t).join('\n')
+        + (q ? ('\n\n'+q) : '\n\nWhat do you make of this? Push back where I am wrong, '
+             + 'and be concrete about ClearSky and OMEGA — winning accounts, closing them, '
+             + 'and what would make the software worth coming back to.');
+  }else{
+    msg = q;
+  }
+  bdSay('me', q || 'Read the board.');
+  box.value='';
+
+  try{
+    const t=await token();
+    const r=await fetch(CHAT,{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({message:msg})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    bdSay('him', j.reply || '(no reply)');
+    el('bdThinkState').textContent = j.costUsd ? ('$'+Number(j.costUsd).toFixed(3)) : 'free';
+  }catch(e){
+    bdSay('him','I could not think about that — '+e.message);
+    el('bdThinkState').textContent='failed';
+  }
+  bdBusy=false;
+}
 
 /* ══ THE DAY ═════════════════════════════════════════════════════════════
    Hour by hour, because a list of two rows tells you nothing about a day and
@@ -4075,7 +4170,7 @@ function ixItems(){
   const out=[];
   IX_VIEWS.forEach(([v,n,d])=>out.push({kind:'view',key:v,name:n,note:d,go:()=>showView(v)}));
   ((platform&&platform.tools)||[]).forEach(t=>out.push({
-    kind:'tool',key:t.file,name:t.title,note:t.area+' · '+t.kb+'KB',
+    kind:'tool',key:t.file,name:t.title,area:t.area,note:t.kb+'KB',
     go:()=>window.open(t.file,'_blank','noopener')}));
   IX_PAGES.forEach(([f,n,d])=>out.push({kind:'page',key:f,name:n,note:d,
     go:()=>window.open(f,'_blank','noopener')}));
@@ -4087,19 +4182,40 @@ function renderIndex(){
   host.textContent='';
   const q=ixQ.trim().toLowerCase();
   const all=ixItems();
-  const list=all.filter(i=>
-    (ixFilter==='all'||i.kind===ixFilter) &&
-    (!q || (i.name+' '+i.note+' '+i.key).toLowerCase().indexOf(q)!==-1));
+  const list=all.filter(i=>!q || (i.name+' '+i.note+' '+i.key).toLowerCase().indexOf(q)!==-1);
+
+  /* Grouped under headings rather than filtered by chips. Four buttons that
+     each hide most of the page is not a filter, it is four more things to
+     read before you can look for the one thing you came for. Typing narrows
+     everything at once; the headings do the sorting the chips were doing, and
+     they do it without being clicked. */
+  const groups={};
   list.forEach(i=>{
-    const c=document.createElement('button'); c.className='ixCard';
-    const k=document.createElement('div'); k.className='ixk'; k.textContent=i.kind.toUpperCase();
-    const n=document.createElement('div'); n.className='ixn'; n.textContent=i.name;
-    const v=document.createElement('div'); v.className='ixv'; v.textContent=i.note;
-    c.append(k,n,v);
-    c.addEventListener('click',i.go);
-    host.appendChild(c);
+    const g = i.kind==='view' ? 'The dashboard'
+            : i.kind==='page' ? 'Pages'
+            : (i.area||'Other');
+    (groups[g]=groups[g]||[]).push(i);
   });
-  el('ixN').textContent=list.length+' OF '+all.length;
+  const order=['The dashboard','Design','Siting','Sizing','Economics','Sell','Operate','Admin','Other','Pages'];
+  const names=Object.keys(groups).sort((a,b)=>{
+    const ia=order.indexOf(a), ib=order.indexOf(b);
+    return (ia<0?99:ia)-(ib<0?99:ib) || a.localeCompare(b);
+  });
+
+  names.forEach(g=>{
+    const h=document.createElement('div'); h.className='ixGroup';
+    h.textContent=g+'  ·  '+groups[g].length;
+    host.appendChild(h);
+    groups[g].forEach(i=>{
+      const c=document.createElement('button'); c.className='ixCard';
+      const n=document.createElement('div'); n.className='ixn'; n.textContent=i.name;
+      const v=document.createElement('div'); v.className='ixv'; v.textContent=i.note;
+      c.append(n,v);
+      c.addEventListener('click',i.go);
+      host.appendChild(c);
+    });
+  });
+  el('ixN').textContent = q ? (list.length+' OF '+all.length) : (all.length+' PLACES');
   const nb=el('nIndex'); if(nb) nb.textContent=all.length;
 }
 
@@ -4110,12 +4226,7 @@ async function loadIndex(){
   if(q && !q.dataset.wired){
     q.dataset.wired='1';
     q.addEventListener('input',e=>{ ixQ=e.target.value; renderIndex(); });
-    document.querySelectorAll('.ixChip').forEach(ch=>
-      ch.addEventListener('click',()=>{
-        ixFilter=ch.dataset.ix;
-        document.querySelectorAll('.ixChip').forEach(o=>o.classList.toggle('on',o===ch));
-        renderIndex();
-      }));
+
   }
 }
 
