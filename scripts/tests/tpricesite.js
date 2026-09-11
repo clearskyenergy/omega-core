@@ -472,9 +472,16 @@ ok('the card names the battery that fits', function () {
     'the card uses a different source from the drawer, so they can disagree');
   var dh = html.slice(html.indexOf('function decisionHtml'));
   dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
-  assert(/if \(fit\) \{/.test(dh),
-    'the strip is not silent when nothing is on file — a row of apologies ' +
-    'down a list of twenty sites is worse than no row');
+  /* The row is now gated on a SIZE existing rather than on a product being
+     loaded — a site with a circuit always has a size, and that size is what
+     the rebate and the cost are already computed from. What must never
+     appear is a row apologising for missing data: with no circuit there is
+     no size and no row at all. */
+  assert(/if \(shownKwh\) \{/.test(dh),
+    'the battery row is not gated on there being a size to show — a row of '
+    + 'apologies down a list of twenty sites is worse than no row');
+  assert(!/no supplier pricing on file[\s\S]{0,40}rows\.push/.test(dh),
+    'the strip apologises for missing pricing in a data row');
 });
 
 ok('the hand-built lookup record still lacks those fields', function () {
@@ -569,6 +576,43 @@ ok('the AACE class keeps a plain-English twin', function () {
     'the class has no plain-language version, so the card speaks cost engineering');
   assert(/estimateClassPlain \|\| /.test(html),
     'the plain version is not preferred where a person reads it');
+});
+
+/* ── THE CARD SHOWS THE SIZE IT PRICED ────────────────────────────────
+   The ComEd rebate is $250 per kWh OF THIS BATTERY. A card that printed an
+   $826k rebate and no kWh was asking to be trusted on arithmetic it would
+   not show — and the battery row only appeared once a supplier product was
+   loaded, which is not when the rest of the card starts computing. */
+ok('the battery size shows whether or not a product is loaded', function () {
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(!/if \(fit\) \{[\s\S]{0,80}rows\.push\(\["Battery"/.test(dh),
+    'the battery row is still behind a product being loaded');
+  assert(/est \? est\.kwh : pk\.kwh/.test(dh),
+    'with no product it does not fall back to the size everything else uses');
+  assert(/no product picked yet/.test(dh),
+    'a sized-but-unproducted battery is not distinguished from a real one');
+});
+
+ok('the rebate and the shown size come from the same kWh', function () {
+  /* If these ever diverge the card prints a rebate against a battery it is
+     not displaying, which is the defect this replaced. */
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/kwhFit = fit \? fit\.kwh : est\.kwh/.test(dh),
+    'the rebate basis changed shape — re-check it matches the displayed size');
+});
+
+ok('the confirmation folds instead of filling the card', function () {
+  /* It must be present — a rebate covering the whole project cannot reach a
+     customer unchecked — but four lines of conditions on a card scanned
+     twenty at a time gets scrolled past, which is worse than folded. */
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/<details class="dcnFlag"/.test(dh), 'the warning is not collapsible');
+  assert(/data-noselect="1"[\s\S]{0,120}<summary/.test(dh),
+    'opening the warning would also open the site');
+  assert(dh.indexOf('_cardFlag = ""') > 0, 'the flag is not cleared after rendering');
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
