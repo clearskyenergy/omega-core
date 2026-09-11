@@ -242,7 +242,16 @@
     #top,#rail{display:none}
     #out{padding:0}
     .panel,.hero{break-inside:avoid;box-shadow:none}
+    /* THE SCHEDULE HAS TO SURVIVE THE PRINT. On screen the Gantt scrolls
+       inside .gWrap; on paper there is nothing to scroll, so an auto
+       overflow simply cuts the chart off at the page width and the weeks
+       past that edge are gone with no indication they existed. Releasing
+       both the clip and the inner minimum lets it reflow to the page. */
+    .gWrap{overflow:visible}
     .gIn{min-width:0}
+    /* A schedule split across a page break is unreadable, and the whole
+       point of printing this is to put it in front of somebody. */
+    .gRow{break-inside:avoid}
   }
 </style>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -1299,8 +1308,20 @@ function adoptHandoff(){
   var q = null;
   try { q = new URLSearchParams(location.search).get("packet"); } catch (e) {}
   if (!q) return;
+  /* localStorage first: it is shared across tabs, so the handoff survives a
+     blocked pop-up, a middle-click, or a browser that turns the pop-up into
+     a same-tab navigation. sessionStorage is still read as a fallback so a
+     tab opened by the previous build still works. Either way the entry is
+     removed on adoption — it has been used, and leaving it would hand the
+     same stale site to the next open. */
   var raw = null;
-  try { raw = sessionStorage.getItem(q); sessionStorage.removeItem(q); } catch (e) {}
+  try {
+    raw = localStorage.getItem(q);
+    if (raw) localStorage.removeItem(q);
+  } catch (e) {}
+  if (!raw) {
+    try { raw = sessionStorage.getItem(q); sessionStorage.removeItem(q); } catch (e2) {}
+  }
   if (!raw) return;
   var obj = null;
   try { obj = JSON.parse(raw); } catch (e) { return; }
@@ -1910,9 +1931,34 @@ function ganttHtml(sch){
 
 function renderOut(){
   var r = compute();
-  if (!r) { $("blank").style.display = ""; $("body").style.display = "none";
-            $("clsChip").textContent = "NO PACKET"; $("clsChip").className = "srcTag";
-            enable(false); return; }
+  if (!r) {
+    /* ── TWO DIFFERENT BLANKS, AND THEY ARE NOT THE SAME PROBLEM ───────
+       This said "NO PACKET" for both, which sent people hunting a broken
+       handoff when the handoff had worked perfectly. A packet arrives
+       whole and still carries no kW whenever the site finder could not
+       attribute a circuit — nothing to size against, so nothing to price.
+
+       Saying which one it is turns a dead end into one field to fill. */
+    var got = !!S.packet;
+    $("blank").style.display = ""; $("body").style.display = "none";
+    $("clsChip").textContent = got ? "NO SIZE" : "NO SITE";
+    $("clsChip").className = "srcTag";
+    $("blank").innerHTML = got
+      ? '<h3>' + esc((S.packet.site && S.packet.site.address) || "This site") +
+        ' loaded \u2014 but with no size</h3>' +
+        '<p>The packet came across intact. It carries no kW figure, which ' +
+        'happens when the Site Finder could not attribute a circuit to the ' +
+        'site \u2014 there is nothing to size the battery against.</p>' +
+        '<p>Enter a <b>system power</b> under <b>Commercial assumptions</b> on ' +
+        'the left and the estimate, the schedule and the report all build from ' +
+        'there. Everything else the packet knows is already filled in.</p>'
+      : '<h3>No site loaded</h3>' +
+        '<p>Open a site from the Site Finder, or drop its JSON on the left, or ' +
+        'open the assumptions panel and enter a size by hand. The estimate ' +
+        'builds itself line by line as soon as there is a kW figure to build ' +
+        'it from.</p>';
+    enable(false); return;
+  }
   var sch = cpm();
   $("blank").style.display = "none";
   $("body").style.display = "";

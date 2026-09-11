@@ -467,6 +467,9 @@
 .phSugUse{font:inherit;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:5px;
   border:1px solid var(--line);background:#fff;cursor:pointer}
 .phSugUse:hover{background:#eef2f6}
+  .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
+    border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
+  .pktLink:hover{filter:brightness(.94)}
 #phSrc{width:100%;font:inherit;font-size:12px;padding:5px 7px;border-radius:5px;
   border:1px solid var(--line,#d9dee3)}
 #phSrc:disabled{background:#f4f6f8;color:#98a2ac}
@@ -4684,23 +4687,73 @@
   /* The old route, kept for the cases the inline path cannot serve: the
      model failed to load, or somebody wants the full estimator to answer the
      nine drivers properly. */
-  function costInEstimator(r) {
-    var key = "cs-packet-" + r.id + "-" + Date.now().toString(36);
+  /* ══════════════════════════════════════════════════════════════════
+     THE HANDOFF TO THE ESTIMATOR
+
+     The packet travelled in sessionStorage, which is the wrong shelf for
+     it. sessionStorage is copied into a new tab only when that tab is
+     opened by window.open WITH an opener — so the moment a pop-up blocker
+     steps in, or somebody middle-clicks, or the browser turns the pop-up
+     into a same-tab navigation, the estimator lands on a URL naming a key
+     that does not exist in its world and reports "NO PACKET". Which is
+     exactly what it did.
+
+     localStorage is shared across every tab on the origin, so the handoff
+     survives however the second page got opened. The estimator deletes the
+     entry the moment it adopts it, and stale entries are pruned here on
+     the way in, so this does not become a drawer full of old sites.
+
+     The packet is a few kilobytes of JSON about a property. It is not
+     secret, it never leaves the browser, and it lives for seconds. */
+  var PACKET_TTL_MS = 10 * 60 * 1000;
+
+  function prunePackets() {
     try {
-      sessionStorage.setItem(key, JSON.stringify(sitePacket(r)));
+      var kill = [], i, k;
+      for (i = 0; i < localStorage.length; i++) {
+        k = localStorage.key(i);
+        if (!k || k.indexOf("cs-packet-") !== 0) continue;
+        var stamp = parseInt(k.slice(k.lastIndexOf("-") + 1), 36);
+        if (!isFinite(stamp) || Date.now() - stamp > PACKET_TTL_MS) kill.push(k);
+      }
+      for (i = 0; i < kill.length; i++) localStorage.removeItem(kill[i]);
+    } catch (e) { /* private mode: nothing to prune */ }
+  }
+
+  function costInEstimator(r) {
+    prunePackets();
+    var key = "cs-packet-" + r.id + "-" + Date.now().toString(36);
+    var url = "/clearsky-cost-estimator.html?packet=" + encodeURIComponent(key);
+    try {
+      localStorage.setItem(key, JSON.stringify(sitePacket(r)));
     } catch (e) {
-      /* Private mode, or the quota is full. Fall back to the file, which is
-         the route that always worked. */
+      /* Private mode, or the quota is full. The file is the route that has
+         always worked. */
       downloadPacket(r);
       return;
     }
-    var w = window.open("/clearsky-cost-estimator.html?packet=" +
-                        encodeURIComponent(key), "_blank");
+    var w = window.open(url, "_blank");
     if (!w) {
-      try { sessionStorage.removeItem(key); } catch (e2) {}
-      alert("The estimator could not open \u2014 a pop-up blocker stopped it. " +
-            "Allow pop-ups for this site, or use Download the packet instead.");
+      /* THE PACKET STAYS PUT. Discarding it here and showing an alert meant
+         a blocked pop-up cost the rep both the tab and the work. The entry
+         is valid for ten minutes, so hand them a link they can click —
+         a click is a user gesture and no blocker refuses that. */
+      packetLink(url);
     }
+  }
+
+  /* Shown in the drawer rather than an alert: an alert is dismissed and
+     gone, and this needs to still be there when they look back. */
+  function packetLink(url) {
+    var host = document.getElementById("costBack");
+    if (!host) { window.location.href = url; return; }
+    host.innerHTML =
+      '<div class="sec"><h4>The estimator was blocked</h4>' +
+      '<p class="note">Your browser stopped this page opening a new tab. ' +
+      'The site is packaged and waiting \u2014 open it here, or allow pop-ups ' +
+      'for this site and press the button again.</p>' +
+      '<p><a class="pktLink" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+      'Open the estimator</a></p></div>';
   }
 
   window.addEventListener("message", function (ev) {
@@ -5047,13 +5100,32 @@
 
   function packetBlockHtml(r) {
     var p = sitePacket(r);
-    return '<div class="sec"><h4>Send to the cost estimator</h4>' +
+    return '<div class="sec"><h4>Review this site</h4>' +
       '<div class="setKeyRow">' +
-      '<button id="costSite" data-id="' + esc(r.id) + '">Cost site</button>' +
-      '<button id="dPacket" data-id="' + esc(r.id) + '">Download the packet</button>' +
+      /* ONE BUTTON, BECAUSE THERE IS ONE THING PEOPLE WANT HERE.
+
+         This row had two equal buttons, "Cost site" and "Download the
+         packet", and neither said what it did. A rep who wants to look at
+         a site properly — answer the nine drivers, read the schedule,
+         print the lot for a customer — wants the estimator, every time.
+         Downloading a JSON file is a real need but a rare one, and giving
+         it equal weight made the common action a coin toss.
+
+         So the estimator is the button and says so, and the file is a link
+         underneath. The screening number stays where it was: the card's
+         own "Price this site", inline, no tab. */
+      '<button class="pri" id="costSite" data-id="' + esc(r.id) +
+        '" title="Opens the cost estimator with this site already loaded">' +
+        'Open the estimator</button>' +
       '</div>' +
       '<div id="costBack" data-id="' + esc(r.id) + '"></div>' +
-      '<p class="note">One JSON file for this site: what the circuit ' +
+      '<p class="note">The full breakdown, the nine drivers, the schedule, ' +
+      'and Print / PDF. This site goes across with it, already costed, so ' +
+      'the estimator opens on the number you can see above rather than ' +
+      'on an empty form. ' +
+      '<a href="#" id="dPacket" data-noselect="1" data-id="' + esc(r.id) + '">' +
+      'Download the packet instead</a> \u2014 one JSON file for this site: ' +
+      'what the circuit ' +
       'publishes, what the county knows, what the ledger holds, and the size ' +
       'this tool arrived at. It also carries <b>' + p.required.length +
       ' things the estimator has to be told</b> \u2014 interconnection voltage, ' +
@@ -5640,9 +5712,20 @@
     /* Save/remove, from the card's own panel. Re-opens so the button label
        and the list agree immediately. */
     var pk = document.getElementById("dPacket");
-    if (pk) pk.onclick = function () { downloadPacket(r); };
+    /* Now a link rather than a button, so the default navigation has to be
+       stopped or the drawer closes behind the download. */
+    if (pk) pk.onclick = function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      downloadPacket(r);
+      return false;
+    };
     var cs = document.getElementById("costSite");
-    if (cs) cs.onclick = function () { priceInPlace(r); };
+    if (cs) cs.onclick = function () {
+      /* Price it first if nobody has, so the packet carries a figure and the
+         estimator opens on a site that is already costed rather than blank. */
+      if (!_estimates[r.id]) priceInPlace(r);
+      costInEstimator(r);
+    };
 
     /* Sizer. The slider and the number box are two views of one value, so
        each writes the other before committing — otherwise dragging leaves a
