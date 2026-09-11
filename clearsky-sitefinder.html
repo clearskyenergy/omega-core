@@ -499,6 +499,11 @@
   .dcnX{color:var(--mut);font-size:10.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap}
   .dcnOpen{margin-top:4px;font-size:10.5px;color:var(--mut);line-height:1.5}
+  /* The one action. Given its own line and its own weight, because a card
+     a customer reads and then puts down has failed. */
+  .dcnNext{margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);
+    font-size:11.5px;line-height:1.5}
+  .dcnK{width:auto;min-width:96px}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -3376,7 +3381,8 @@
             'Price this site' +
           '</button>' +
           (_estimates[r.id]
-            ? '<span class="cardCostVal" title="' + esc(_estimates[r.id].estimateClass) + '">'
+            ? '<span class="cardCostVal" title="' +
+              esc(_estimates[r.id].estimateClassPlain || _estimates[r.id].estimateClass) + '">'
               + '$' + Math.round(_estimates[r.id].total.base / 1000).toLocaleString() + 'k'
               + '<small> est.</small></span>'
             : '') +
@@ -4865,6 +4871,55 @@
     return { blockers: blockers, opens: opens };
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     THE CARD IS FOR THE CUSTOMER, NOT THE ENGINEER
+
+     It read "Class 5 — concept screening · phase assumed, not checked ·
+     no load data — sized on the circuit alone". Every word of that is true
+     and none of it is a sentence a building owner can act on. They are
+     asking four things: how big a battery fits, what it costs, what comes
+     back, and what happens next.
+
+     So the card answers those four in plain words and the AACE class, the
+     provenance tiers and the sourcing audit stay where they belong — in
+     the estimator, for the people who need to defend the number.
+
+     ── THE INCENTIVE, AND WHAT IS DELIBERATELY NOT HERE ──────────────
+     The federal credit is shown at a stated rate with its condition in one
+     sentence, because it is statutory and it is the biggest single number
+     on the page after the cost.
+
+     NO ILLINOIS REBATE IS SHOWN. The only Illinois storage programme on
+     file anywhere in this platform is ComEd BESH at $300/kWh, and it is
+     RESIDENTIAL. Applied to a 5.4 MWh commercial battery it would claim a
+     $1.6M rebate against a $1.0M project — a number so wrong it would be
+     caught, and the ones that are not caught are worse. The card says the
+     C&I programme is not on file rather than borrowing a residential one.
+     ══════════════════════════════════════════════════════════════════ */
+  var ITC_RATE = 0.30;
+
+  /* "$1.0M", "$715k" — a customer reads magnitude, not digits. */
+  function plainMoney(v) {
+    if (v == null || !isFinite(v)) return "\u2014";
+    if (Math.abs(v) >= 1e6) return "$" + (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M";
+    return "$" + Math.round(v / 1000).toLocaleString() + "k";
+  }
+
+  /* The single most useful thing a rep can do next, chosen from what is
+     actually missing. One action, never a list: a next step that offers
+     five options is not a next step. */
+  function nextStep(r, d, fit, est) {
+    if (d.blockers.length) return "Nothing to do here \u2014 the circuit is full.";
+    var ph = phaseOf(r);
+    if (!ph || !ph.confirmed)
+      return "Get a meter photo or a bill \u2014 the service phase decides what can go in.";
+    if (!fit) return "Load your supplier pricing so this can size a real product.";
+    if (!est) return "Press Price this site.";
+    if (r.approx) return "Confirm the address \u2014 the pin is not on the building.";
+    if (!r.annualKwh) return "Ask for twelve months of bills \u2014 a real peak usually lowers the size and the cost.";
+    return "Book a site walk.";
+  }
+
   function decisionHtml(r) {
     var d = decision(r);
     var fit = fitBest(r);
@@ -4873,35 +4928,49 @@
     var tone = d.blockers.length ? "no" : (d.opens.length > 4 ? "maybe" : "go");
 
     var head = d.blockers.length
-      ? "Stop \u2014 " + esc(d.blockers[0])
-      : (d.opens.length ? d.opens.length + " open question" +
-          (d.opens.length === 1 ? "" : "s") : "Nothing outstanding");
+      ? "Not this one \u2014 " + esc(d.blockers[0])
+      : (d.opens.length > 4 ? "Early days \u2014 " + d.opens.length + " things still unknown"
+         : d.opens.length ? "Worth a look \u2014 " + d.opens.length + " thing" +
+             (d.opens.length === 1 ? "" : "s") + " still to confirm"
+         : "Ready to take to the customer");
 
     var h = '<div class="dcn dcn-' + tone + '">' +
       '<div class="dcnHead">' + head + '</div>';
 
-    /* The three facts a go/no-go turns on, when they exist. Absent ones are
-       simply left out — a card is not a form. */
     var rows = [];
     if (fit) {
-      rows.push(["Max battery",
-        (fit.units ? fit.units + '\u00d7 ' : '') +
-        fmt(Math.round(fit.kwh)) + ' kWh \u00b7 ' + (Math.round(fit.hours * 10) / 10) + ' h',
-        esc(fit.model ? fit.name + ' ' + fit.model : fit.name)]);
+      /* kW comes from the circuit, not back-derived from the energy and a
+         rounded duration — that route drifts by tens of kW and a customer
+         checking the arithmetic would find it. */
+      var pk = sizePick(r);
+      rows.push(["Battery that fits",
+        (Math.round(fit.kwh / 100) / 10) + ' MWh',
+        fmt(pk.kw) + ' kW for ' + (Math.round(fit.hours * 10) / 10) + ' hours']);
     }
-    if (inst) rows.push(["Installer", esc(inst.name), inst.project ? esc(inst.project) : ""]);
     if (est) {
-      rows.push(["Installed", "$" + Math.round(est.total.base / 1000).toLocaleString() + "k",
-                 esc(est.estimateClass || "")]);
+      var cost = est.total.base;
+      var itc = cost * ITC_RATE;
+      rows.push(["Cost to build", plainMoney(cost), inst ? esc(inst.name) : ""]);
+      rows.push(["Federal tax credit", "\u2212" + plainMoney(itc),
+                 Math.round(ITC_RATE * 100) + "% \u00b7 needs prevailing wage"]);
+      rows.push(["Net cost", plainMoney(cost - itc), ""]);
+      /* Payback on demand charges ALONE. Deliberately the narrowest revenue
+         case there is — no arbitrage, no capacity payment, no VPP — so the
+         number is a floor a customer can trust rather than a best case
+         they will later be argued down from. */
+      if (r.saveHi) {
+        var yrLo = (cost - itc) / r.saveHi, yrHi = (cost - itc) / r.saveLo;
+        rows.push(["Pays back in",
+          (yrLo < 1 ? "<1" : Math.round(yrLo)) + "\u2013" + Math.round(yrHi) + " years",
+          "on demand charges alone"]);
+      }
     }
     for (var i = 0; i < rows.length; i++) {
       h += '<div class="dcnRow"><span class="dcnK">' + rows[i][0] + '</span>' +
            '<span class="dcnV">' + rows[i][1] + '</span>' +
            (rows[i][2] ? '<span class="dcnX">' + rows[i][2] + '</span>' : '') + '</div>';
     }
-    if (d.opens.length) {
-      h += '<div class="dcnOpen">' + d.opens.map(esc).join(' \u00b7 ') + '</div>';
-    }
+    h += '<div class="dcnNext"><b>Next:</b> ' + esc(nextStep(r, d, fit, est)) + '</div>';
     return h + '</div>';
   }
 
@@ -5002,8 +5071,18 @@
       total: est.total, perKwh: est.perKwh, perKw: est.perKw,
       kw: est.kw, kwh: est.kwh,
       /* Priced from this page, so nothing here has been walked, quoted or
-         answered. That is a Class 5 screen and it should say Class 5. */
+         answered. That is a Class 5 screen and it should say Class 5 — in
+         the packet, which goes to an engineer or a lender who needs the
+         AACE class to place the number.
+
+         It should NOT say Class 5 to a building owner. "Class 5 — concept
+         screening" is a true statement that carries no meaning outside
+         cost engineering, and a card that has to be translated before it
+         can be used has failed. The plain version travels beside it and is
+         what the card shows; both mean exactly the same thing. */
       estimateClass: "Class 5 — concept screening",
+      estimateClassPlain: "Early estimate, before anyone has visited. "
+        + "The real number usually lands between 30% below and 50% above this.",
       estimateClassWhy: assumed
         ? "No circuit is attributed to this site, so it is priced at an assumed "
           + ASSUMED_KW.toLocaleString() + " kW for " + ASSUMED_HOURS
@@ -5138,15 +5217,25 @@
       '<div style="font-size:22px;font-weight:700;line-height:1.15">' + mid + '</div>' +
       '<div style="font-size:12px;opacity:.75;margin-top:2px">' + band + ' \u00b7 ' +
         (d.perKwh && d.perKwh.base ? "$" + Math.round(d.perKwh.base) + " / kWh" : "") + '</div>' +
-      '<p class="note"><b>' + esc(d.estimateClass) + '.</b> ' + esc(d.estimateClassWhy) +
-        ' Accuracy on this class runs ' + Math.round(d.accuracyLow * 100) + '% to +' +
-        Math.round(d.accuracyHigh * 100) + '%. ' +
-        (open ? open + ' of the nine cost drivers ' + (open === 1 ? 'is' : 'are') +
-                ' still unanswered in the estimator \u2014 answering them narrows this.'
-              : 'Every cost driver has been answered.') +
+      /* PLAIN FIRST, PRECISE SECOND. The same fact twice: a sentence a
+         building owner can act on, then the cost-engineering language a
+         lender's adviser will look for. Neither audience is served by
+         choosing between them, and putting the technical one first is what
+         made this read as French. */
+      '<p class="note">' +
+        (d.estimateClassPlain
+          ? '<b>' + esc(d.estimateClassPlain) + '</b> '
+          : '<b>' + esc(d.estimateClass) + '.</b> ') +
+        (open ? open + ' of the nine things that move this price ' +
+                (open === 1 ? 'is' : 'are') + ' still unanswered \u2014 answering ' +
+                'them narrows it.'
+              : 'Everything that moves this price has been answered.') +
         ' <b>This is an estimate, not a quote.</b> It is not a bid, it carries no ' +
         'contingency you have agreed, and it does not replace a site walk or firm ' +
         'equipment pricing.</p>' +
+      '<p class="note" style="opacity:.7">For the record: ' + esc(d.estimateClass) +
+        ', accuracy ' + Math.round(d.accuracyLow * 100) + '% to +' +
+        Math.round(d.accuracyHigh * 100) + '%. ' + esc(d.estimateClassWhy) + '</p>' +
       (exp ? '<p class="note"><b>Outside this total:</b></p><ul class="note">' + exp + '</ul>' : '') +
       '</div>';
   }

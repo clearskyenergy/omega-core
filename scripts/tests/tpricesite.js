@@ -494,11 +494,14 @@ ok('the card carries a decision strip, not another score', function () {
   assert(/function decision\(r\)/.test(html) && /function decisionHtml\(r\)/.test(html),
     'no decision strip');
   assert(/decisionHtml\(r\) \+/.test(html), 'it is not rendered on the card');
+  /* Scoped to decision() itself. Helpers live between it and decisionHtml
+     now, and a slice that swallows them made "v / 1000" in a money
+     formatter read as a score calculation. */
   var fn = html.slice(html.indexOf('function decision(r)'));
-  fn = fn.slice(0, fn.indexOf('function decisionHtml'));
+  fn = fn.slice(0, fn.indexOf('\n  var ITC_RATE'));
   assert(/blockers\s*=\s*\[\]/.test(fn) && /opens\s*=\s*\[\]/.test(fn),
     'it does not separate blockers from open questions');
-  assert(!/score|\/ ?100/.test(fn),
+  assert(!/\bscore\b|\/\s*100\b/.test(fn),
     'the strip computes a score — there is already one, answering a different '
     + 'question, and a single number hides which of five problems a site has');
 });
@@ -507,7 +510,7 @@ ok('only an uninterconnectable site is a hard stop', function () {
   /* A site nobody can interconnect is not a smaller deal, it is not a deal.
      Everything else is an open question with a name. */
   var fn = html.slice(html.indexOf('function decision(r)'));
-  fn = fn.slice(0, fn.indexOf('function decisionHtml'));
+  fn = fn.slice(0, fn.indexOf('\n  var ITC_RATE'));
   var blockerPushes = (fn.match(/blockers\.push/g) || []).length;
   assert(blockerPushes === 1,
     'there are ' + blockerPushes + ' kinds of hard stop; capacity is the only one');
@@ -523,6 +526,48 @@ ok('it names the battery and the installer the team actually chose', function ()
   var dh = html.slice(html.indexOf('function decisionHtml'));
   dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
   assert(/fitBest\(r\)/.test(dh), 'the battery on the strip is not the fitted one');
+});
+
+/* ── THE CARD IS FOR THE CUSTOMER ─────────────────────────────────────
+   It read "Class 5 — concept screening · phase assumed, not checked". Every
+   word true, none of it actionable by a building owner. They are asking
+   four things: how big, what it costs, what comes back, what happens next. */
+ok('the card answers the four questions a customer actually asks', function () {
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  ['Battery that fits', 'Cost to build', 'Federal tax credit', 'Net cost', 'Pays back in']
+    .forEach(function (label) {
+      assert(dh.indexOf(label) > 0, 'the card does not show "' + label + '"');
+    });
+  assert(/dcnNext/.test(dh), 'there is no next step');
+});
+
+ok('the next step is ONE action, chosen from what is missing', function () {
+  var ns = html.slice(html.indexOf('function nextStep'));
+  ns = ns.slice(0, ns.indexOf('function decisionHtml'));
+  var returns = (ns.match(/return "/g) || []).length;
+  assert(returns >= 5, 'the next step does not adapt to what is actually missing');
+  assert(!/\bor\b.*\bor\b/.test(ns),
+    'a next step offering several options is not a next step');
+});
+
+ok('NO state rebate is claimed for a commercial site', function () {
+  /* The only Illinois storage programme anywhere in this platform is ComEd
+     BESH at $300/kWh and it is RESIDENTIAL. Applied to a 5.4 MWh commercial
+     battery it would claim a $1.6M rebate against a $1.0M project. */
+  var dh = html.slice(html.indexOf('var ITC_RATE'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(!/BESH|300\s*\/\s*kWh|inc_rate/.test(dh),
+    'a residential rebate is being applied to a commercial site');
+  assert(/ITC_RATE/.test(dh) && /prevailing wage/.test(dh),
+    'the federal credit is shown without the condition that earns it');
+});
+
+ok('the AACE class keeps a plain-English twin', function () {
+  assert(/estimateClassPlain/.test(html),
+    'the class has no plain-language version, so the card speaks cost engineering');
+  assert(/estimateClassPlain \|\| /.test(html),
+    'the plain version is not preferred where a person reads it');
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
