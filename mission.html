@@ -75,7 +75,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 /* One view at a time. hidden rather than unmounted, so the canvas keeps its
    size and the thread keeps its scroll position. */
 .view{display:none;flex:1;min-height:0}
-.view.on{display:flex;flex-direction:column;gap:12px}
+.view.on{display:flex;flex-direction:column;gap:12px;position:relative}
 .cmdGrid{display:grid;grid-template-columns:280px 1fr 400px;gap:12px;flex:1;min-height:0}
 .live{margin-left:auto;font-size:8px;color:var(--good);letter-spacing:1.4px}
 
@@ -245,6 +245,30 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .noteGo:hover{color:#0a5c2e}
 
 
+
+/* ── the day, hour by hour ───────────────────────────────────────────────
+   A list of two rows tells you nothing about a day. A column of hours shows
+   you the SHAPE of it — where the meetings sit, and therefore where they do
+   not, which is the half you are actually trying to find. */
+.dayGrid{position:relative;padding-right:8px}
+.hourRow{display:flex;gap:10px;align-items:flex-start;min-height:40px;
+         border-top:1px solid rgba(0,243,255,.06);padding:2px 0}
+.hourRow.now{border-top-color:rgba(255,107,107,.55)}
+.hourLab{flex:0 0 52px;font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+         color:var(--dim);padding-top:4px}
+.hourRow.now .hourLab{color:var(--bad)}
+.hourBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.evt{border-left:2px solid var(--glow-cyan);background:rgba(0,243,255,.07);
+     border-radius:5px;padding:6px 9px;cursor:pointer;transition:background .14s}
+.evt:hover{background:rgba(0,243,255,.15)}
+.evt .et{font-size:12.5px;color:var(--ink);line-height:1.35}
+.evt .eg{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);margin-top:2px}
+.evt.ooo{border-left-color:var(--warn);background:rgba(255,183,51,.07)}
+.slot{border-left:2px dashed rgba(61,255,139,.45);background:rgba(61,255,139,.05);
+      border-radius:5px;padding:5px 9px;font-size:12px;color:var(--good)}
+.slot .sw{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);
+          margin-top:2px;display:block}
+
 /* ── the core as a layer ─────────────────────────────────────────────── */
 .main{position:relative}
 .coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
@@ -275,10 +299,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .panel > .minBtn:hover{opacity:1}
 .panel.min{display:none!important}
 
-.dock{display:flex;gap:9px;align-items:center;flex-wrap:wrap;flex:none;
-      padding:2px 0 0;min-height:0}
+/* The dock is a LAYER, not a row. Folded panels drift around the background
+   and stay clickable where they are — parked in a line at the bottom they
+   were just a smaller list, which is not what folding something away is for.
+
+   pointer-events:none on the layer and auto on the orbs, so the drifting
+   field never eats a click meant for a panel underneath it. */
+.dock{position:absolute;inset:0;pointer-events:none;z-index:2}
 .dock:empty{display:none}
-.orb{position:relative;width:34px;height:34px;border-radius:50%;cursor:pointer;
+.orb{position:absolute;pointer-events:auto;width:34px;height:34px;border-radius:50%;cursor:pointer;
      border:1px solid rgba(0,243,255,.45);background:radial-gradient(circle at 34% 30%,
        rgba(0,243,255,.40),rgba(0,60,140,.30) 60%,rgba(0,20,50,.5));
      box-shadow:0 0 14px rgba(0,243,255,.22);flex:none;padding:0;
@@ -842,9 +871,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== CALENDAR ========== -->
     <section class="view" data-view="calendar">
-      <div class="panel" style="flex:1;min-height:0">
-        <div class="ptitle">The week</div>
-        <div id="week" class="scroll"></div>
+      <div class="cmdGrid" style="grid-template-columns:1fr 320px">
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">Today, hour by hour<span class="live" id="dayN"></span></div>
+          <div id="week" class="scroll dayGrid"></div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">What the day could look like</div>
+          <div id="dayPlan" class="scroll"></div>
+        </div>
       </div>
     </section>
 
@@ -1712,6 +1747,7 @@ async function load(){
 
     /* today */
     const nowMs=Date.now();
+    try{ renderDay(); }catch(_){}
     listInto('schedule', (s.schedule||[]), e=>{
       const past = e.startsAt && new Date(e.startsAt).getTime() < nowMs;
       return { time: e.when, past: past, left: e.title,
@@ -1727,14 +1763,9 @@ async function load(){
     /* The order rendered here IS the order he speaks to. Held so that
        "execute 1 through 4" resolves against exactly what is on his screen
        and never against a list that has since been re-sorted underneath him. */
-    outbox = (s.draftList||[]).map((d,i)=>({ n:i+1, id:d.id,
+    outboxAll = (s.draftList||[]).map((d,i)=>({ n:i+1, id:d.id,
       label: d.subject || '(no subject)', to: d.to || null }));
-    listInto('drafts', outbox, d=>({
-      n: d.n,
-      left: d.label,
-      right: d.to ? 'ready' : 'no recipient',
-      cls: d.to ? 'good' : 'warn'
-    }), 'nothing waiting');
+    renderOutbox();
 
     const ing=s.ingest;
     rows(el('pipeline'), ing ? [
@@ -1807,6 +1838,14 @@ let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
 /* What "Waiting to go out" is currently showing, in the order it is showing
    it. The numbers on screen are the handles he speaks. */
 let outbox=[];
+/* The master list, straight from the server. `outbox` is the NUMBERED list he
+   speaks to, and it is derived from this on every render — which is exactly
+   the distinction I collapsed the first time: renderOutbox assigned its own
+   filtered result back to `outbox`, so each pass re-filtered the previous
+   pass's output and the queue shrank on every tick. 50 became 18 became
+   whatever survived next. A display list and a source of truth cannot be the
+   same variable. */
+let outboxAll=[];
 /* After he answers, the conversation stays open briefly. A real exchange has
    follow-ups, and making you say his name before every one of them is the
    difference between talking to someone and operating a machine. Silence past
@@ -2326,6 +2365,11 @@ function showView(name){
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='clients') loadBook(false);
+  /* The Outbox ranks by WHO a draft is addressed to, which needs the client
+     book. Without it every row scored the same and no reason was printed —
+     the ranking silently degraded to the order it arrived in. */
+  if(name==='outbox') loadBook(false).then(()=>{ try{ renderOutbox(); }catch(_){} });
+  if(name==='calendar') { try{ renderDay(); }catch(_){} }
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
@@ -2841,6 +2885,331 @@ function bdSave(){
   },700);
 }
 
+
+
+/* ══ THE DAY ═════════════════════════════════════════════════════════════
+   Hour by hour, because a list of two rows tells you nothing about a day and
+   a column of hours shows you its SHAPE — where the meetings sit and
+   therefore where they do not, which is the half you are trying to find.
+
+   Clicking an event opens what is actually in it: who is invited, who has
+   accepted, where, and the joining link. "5 guests" reads very differently
+   once you can see that three of them declined. */
+const DAY_FROM=6, DAY_TO=22;
+
+function hourOf(iso){
+  const d=new Date(iso); return isNaN(d)?null:d.getHours()+d.getMinutes()/60;
+}
+function hhmm(iso){
+  const d=new Date(iso); if(isNaN(d)) return '';
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+
+function renderDay(){
+  const host=el('week'); if(!host) return;
+  const evts=(lastStatus.schedule||[]).slice();
+  host.textContent='';
+  const now=new Date(), nowH=now.getHours();
+
+  el('dayN').textContent = evts.length ? evts.length+' ON THE BOOK' : 'NOTHING BOOKED';
+
+  for(let h=DAY_FROM; h<=DAY_TO; h++){
+    const row=document.createElement('div');
+    row.className='hourRow'+(h===nowH?' now':'');
+    const lab=document.createElement('div'); lab.className='hourLab';
+    lab.textContent=(h%12===0?12:h%12)+(h<12?' AM':' PM');
+    const body=document.createElement('div'); body.className='hourBody';
+
+    evts.filter(e=>{
+      const st=hourOf(e.startsAt);
+      return st!=null && Math.floor(st)===h;
+    }).forEach(e=>{
+      const d=document.createElement('div');
+      const ooo=/out of office|ooo|shabbat|holiday/i.test(e.title||'');
+      d.className='evt'+(ooo?' ooo':'');
+      const t=document.createElement('div'); t.className='et'; t.textContent=e.title||'(no title)';
+      const g=document.createElement('div'); g.className='eg';
+      const bits=[];
+      if(e.startsAt) bits.push(hhmm(e.startsAt)+(e.endsAt?'–'+hhmm(e.endsAt):''));
+      if(e.others) bits.push(e.others+' guest'+(e.others===1?'':'s'));
+      if(e.location) bits.push(String(e.location).slice(0,28));
+      g.textContent=bits.join('  ·  ');
+      d.append(t,g);
+      d.addEventListener('click',()=>showEvent(e,d));
+      body.appendChild(d);
+    });
+    row.append(lab,body); host.appendChild(row);
+  }
+  renderPlan(evts);
+}
+
+/* The detail card, reusing the same beam-up the contact card uses. */
+function showEvent(e, fromEl){
+  const back=el('cardBack'), card=el('card');
+  card.textContent='';
+  if(fromEl){
+    const r=fromEl.getBoundingClientRect();
+    card.style.transformOrigin=(r.left+r.width/2)+'px '+(r.top+r.height/2)+'px';
+  }
+  const nm=document.createElement('div'); nm.className='cardName'; nm.textContent=e.title||'(no title)';
+  card.appendChild(nm);
+  const sub=document.createElement('div'); sub.className='cardOrg';
+  sub.textContent=[e.startsAt?hhmm(e.startsAt)+(e.endsAt?' – '+hhmm(e.endsAt):''):'',
+                   e.location||''].filter(Boolean).join('  ·  ');
+  card.appendChild(sub);
+
+  const guests=(e.guests||[]).filter(g=>!g.self);
+  if(guests.length){
+    const h=document.createElement('div');
+    h.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:14px 0 4px';
+    h.textContent='GUESTS · '+guests.length;
+    card.appendChild(h);
+    guests.forEach(g=>{
+      const r=document.createElement('div'); r.className='row';
+      const k=document.createElement('span'); k.className='k';
+      k.textContent=g.name||g.email||'(unknown)';
+      const v=document.createElement('span');
+      const st=(g.status||'').toLowerCase();
+      v.className='v '+(st==='accepted'?'good':st==='declined'?'bad':'');
+      v.textContent = st==='accepted'?'yes' : st==='declined'?'no'
+                    : st==='tentative'?'maybe' : 'no reply';
+      r.append(k,v); card.appendChild(r);
+    });
+  }else if(e.others){
+    const p=document.createElement('div'); p.className='cardNote';
+    p.textContent=e.others+' guest'+(e.others===1?'':'s')+', but the invite list did not come through.';
+    card.appendChild(p);
+  }
+
+  if(e.notes){
+    const h=document.createElement('div');
+    h.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:14px 0 4px';
+    h.textContent='NOTES';
+    card.appendChild(h);
+    const n=document.createElement('div'); n.className='cardNote';
+    n.style.whiteSpace='pre-wrap'; n.textContent=String(e.notes).slice(0,900);
+    card.appendChild(n);
+  }
+
+  const bar=document.createElement('div'); bar.className='cardActs';
+  if(e.link){
+    const j=document.createElement('button'); j.textContent='JOIN';
+    j.addEventListener('click',()=>window.open(e.link,'_blank','noopener'));
+    bar.appendChild(j);
+  }
+  const c=document.createElement('button'); c.textContent='CLOSE';
+  c.addEventListener('click',()=>{ back.hidden=true; });
+  bar.appendChild(c);
+  card.appendChild(bar);
+  back.hidden=false;
+}
+
+/* ══ WHAT THE DAY COULD LOOK LIKE ════════════════════════════════════════
+   Not a rearrangement of his meetings — those are commitments to other people
+   and this has no business moving them. It reads the gaps BETWEEN them and
+   says what could go in each one, in an order that reflects what he said
+   matters: the animals get fed whether or not the day is busy, thirty minutes
+   of exercise is thirty minutes and not an hour, and Friday stops.
+
+   Deterministic. A schedule that is different every time you look at it is a
+   suggestion you cannot plan around. */
+const RITUALS=[
+  { id:'animals',  need:0.5, label:'Feed the animals',          why:'before the day starts',   early:true },
+  { id:'workout',  need:0.5, label:'30 minutes — training',     why:'you asked for thirty, not an hour' },
+  { id:'family',   need:1.5, label:'Family — no screens',       why:'the block everything else gets fitted around', late:true },
+  { id:'music',    need:0.75,label:'Music',                     why:'' },
+  { id:'reflect',  need:0.5, label:'Sit and think',             why:'end of the working day', late:true }
+];
+
+function busyBlocks(evts){
+  return evts.map(e=>{
+    const a=hourOf(e.startsAt);
+    let b=hourOf(e.endsAt);
+    if(a==null) return null;
+    if(b==null||b<=a) b=a+1;                 /* an event with no end is an hour */
+    return {a,b,title:e.title||''};
+  }).filter(Boolean).sort((x,y)=>x.a-y.a);
+}
+
+function renderPlan(evts){
+  const host=el('dayPlan'); if(!host) return;
+  host.textContent='';
+  const isFriday=new Date().getDay()===5;
+
+  const note=document.createElement('div'); note.className='cardNote';
+  note.style.marginTop='0';
+  note.textContent = isFriday
+    ? 'Friday. Everything below stops at sundown — the rest of the day is yours, and nothing here will suggest otherwise.'
+    : 'Suggestions for the gaps between what is already booked. Nothing here moves a meeting.';
+  host.appendChild(note);
+
+  const busy=busyBlocks(evts);
+  /* Free gaps inside the working window. */
+  const gaps=[]; let cur=DAY_FROM;
+  busy.forEach(b=>{ if(b.a>cur) gaps.push({a:cur,b:Math.min(b.a,DAY_TO)}); cur=Math.max(cur,b.b); });
+  if(cur<DAY_TO) gaps.push({a:cur,b:DAY_TO});
+
+  /* Shabbat: Friday evening onward is not a gap to fill. */
+  const stop = isFriday ? 17 : DAY_TO;
+  const usable=gaps.map(g=>({a:g.a,b:Math.min(g.b,stop)})).filter(g=>g.b-g.a>=0.5);
+
+  const placed=[];
+  RITUALS.forEach(r=>{
+    /* Early things take the first gap of the day, late things the last. */
+    const pool = r.early ? usable : r.late ? usable.slice().reverse() : usable;
+    for(const g of pool){
+      if(g.b-g.a >= r.need){
+        const at = r.late ? g.b-r.need : g.a;
+        placed.push({at, r});
+        if(r.late) g.b -= r.need; else g.a += r.need;
+        break;
+      }
+    }
+  });
+  placed.sort((x,y)=>x.at-y.at);
+
+  if(!placed.length){
+    const d=document.createElement('div'); d.className='note';
+    d.textContent='The day is full. Nothing fits without moving something, and moving it is your call.';
+    host.appendChild(d); return;
+  }
+
+  placed.forEach(p=>{
+    const d=document.createElement('div'); d.className='slot'; d.style.marginTop='8px';
+    const h=Math.floor(p.at), m=Math.round((p.at-h)*60);
+    const when=(h%12===0?12:h%12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM');
+    d.textContent=when+'  ·  '+p.r.label;
+    if(p.r.why){ const w=document.createElement('span'); w.className='sw'; w.textContent=p.r.why; d.appendChild(w); }
+    host.appendChild(d);
+  });
+
+  if(isFriday){
+    const d=document.createElement('div'); d.className='slot'; d.style.marginTop='10px';
+    d.style.borderLeftColor='var(--warn)'; d.style.color='var(--warn)';
+    d.textContent='Sundown  ·  Shabbat — 24 hours off';
+    const w=document.createElement('span'); w.className='sw';
+    w.textContent='nothing is scheduled past this, and nothing will be';
+    d.appendChild(w);
+    host.appendChild(d);
+  }
+}
+
+/* ══ THE OUTBOX, SORTED ══════════════════════════════════════════════════
+   Fifty rows in one flat list, half of which cannot be sent, is not a queue —
+   it is a pile with numbers painted on it.
+
+   THE FIRST CUT IS WHETHER IT CAN GO AT ALL. A draft with no recipient is not
+   a queued message; it is a note with an envelope drawn on it. Saying
+   "execute items 1 through 4" against a list where item 1 has nobody to go to
+   is how you learn that the numbers meant nothing. Those move out of the way
+   and wait behind a count.
+
+   WHAT IS LEFT IS RANKED BY WHO IT IS TO. A draft addressed to a paying
+   client, or one that came out of a meeting, outranks a passing thought — and
+   the reason is printed on the row, same as Tasks, because a ranking you
+   cannot argue with is one you stop believing.
+
+   AND THE CLUSTER GETS FOLDED. Six separate EVCS drafts is one conversation
+   the twin wrote down six times. */
+let outFilter='ready';
+
+function draftTriage(d, orgNames){
+  const s=String(d.label||'').toLowerCase();
+  let score=0; const why=[];
+  const add=(n,w)=>{ score+=n; if(w&&why.indexOf(w)===-1) why.push(w); };
+
+  if(d.to) add(30,'ready to send'); else add(-100,'no recipient');
+
+  /* Addressed to somebody the business actually knows. */
+  const to=String(d.to||'').toLowerCase();
+  const dom=(to.split('@')[1]||'').split(/[,\s>]/)[0];
+  const client=(orgNames||[]).find(o=>o.id && dom && (dom===o.id || dom.endsWith('.'+o.id)));
+  if(client){
+    add(client.paying?26:14, client.paying?'a paying client':'a client');
+  }else if(to){
+    /* Somebody on the roster, even if their org is not billed. */
+    const known=(lastStatus.people||[]).some(p=>p.email && to.indexOf(String(p.email).toLowerCase())!==-1);
+    if(known) add(10,'someone you know');
+  }
+  /* Named in the subject rather than the address — "EVCS", "Walters". */
+  (orgNames||[]).forEach(o=>{
+    if(o.word && o.word.length>3 && s.indexOf(o.word)!==-1) add(o.paying?12:7,'about '+o.name);
+  });
+
+  if(d.fromBacklog) add(18,'from a meeting');
+  if(/\b(nda|contract|term sheet|agreement|loi|msa)\b/.test(s)) add(14,'legal');
+  if(/\b(access|portal|onboard|login|invite)\b/.test(s)) add(12,'the portal');
+  if(/\b(invoice|payment|pricing|quote|fees?)\b/.test(s)) add(12,'money');
+  return {score:Math.round(score), why};
+}
+
+function renderOutbox(){
+  const host=el('drafts'); if(!host) return;
+  host.textContent='';
+
+  /* Who counts as a customer, from the book if it is loaded. */
+  const orgNames=(((book&&book.clients)||[]).map(c=>({
+    id:String(c.orgId||'').toLowerCase(),
+    name:c.name,
+    word:String(c.name||'').toLowerCase().split(/[\s\/]+/)[0],
+    paying:(c.amountPaid>0)||(c.tier&&c.tier!=='trial')
+  })));
+
+  const rows=outboxAll.map(d=>{
+    const t=draftTriage(d,orgNames);
+    return {d, score:t.score, why:t.why, ready:!!d.to, dupeOf:null};
+  });
+  /* Fold the cluster: keep the strongest, count the rest. */
+  const kept=[];
+  rows.slice().sort((a,b)=>b.score-a.score).forEach(r=>{
+    const hit=kept.find(k=>k.ready===r.ready && overlap(k.d.label,r.d.label)>=0.6);
+    if(hit){ r.dupeOf=hit; hit.dupes=(hit.dupes||0)+1; }
+    else kept.push(r);
+  });
+
+  const ready=rows.filter(r=>r.ready&&!r.dupeOf).sort((a,b)=>b.score-a.score);
+  const stuck=rows.filter(r=>!r.ready&&!r.dupeOf);
+  const folded=rows.filter(r=>r.dupeOf).length;
+
+  const bar=document.createElement('div'); bar.className='triBar';
+  const chip=(label,on,fn)=>{
+    const c=document.createElement('span'); c.className='ixChip'+(on?' on':'');
+    c.textContent=label; c.addEventListener('click',fn); bar.appendChild(c);
+  };
+  chip('READY '+ready.length, outFilter==='ready', ()=>{ outFilter='ready'; renderOutbox(); });
+  chip('NO RECIPIENT '+stuck.length, outFilter==='stuck', ()=>{ outFilter='stuck'; renderOutbox(); });
+  chip('ALL '+rows.length, outFilter==='all', ()=>{ outFilter='all'; renderOutbox(); });
+  if(folded) { const f=document.createElement('span'); f.className='triWhy';
+    f.style.marginLeft='4px'; f.textContent=folded+' folded as duplicates'; bar.appendChild(f); }
+  host.appendChild(bar);
+
+  const show = outFilter==='ready' ? ready : outFilter==='stuck' ? stuck
+             : ready.concat(stuck);
+  if(!show.length){
+    const d=document.createElement('div'); d.className='note';
+    d.textContent='nothing waiting'; host.appendChild(d); return;
+  }
+
+  /* The number on the row is the number he SAYS. It has to match what is on
+     screen, so it is assigned after filtering — never from the master list. */
+  outbox = show.map((r,i)=>Object.assign({}, r.d, {n:i+1}));
+
+  show.forEach((r,i)=>{
+    const row=document.createElement('div'); row.className='row';
+    const n=document.createElement('span'); n.className='n'; n.textContent=i+1;
+    const k=document.createElement('span'); k.className='k clamp'; k.textContent=r.d.label;
+    const why=document.createElement('span'); why.className='triWhy';
+    const bits=r.why.filter(w=>w!=='ready to send').slice(0,2);
+    if(r.dupes) bits.push('+'+r.dupes+' like it');
+    why.textContent=bits.join(' · ');
+    const v=document.createElement('span');
+    v.className='v '+(r.ready?'good':'warn');
+    v.textContent=r.ready ? (r.d.to.split(',')[0].trim().slice(0,26)) : 'no recipient';
+    row.append(n,k,why,v);
+    host.appendChild(row);
+  });
+}
+
 /* ══ TRIAGE ══════════════════════════════════════════════════════════════
    161 items ranked by the analyse loop is a pile, not a plan. Two things
    were missing: nothing read the URGENCY that is sitting in plain English in
@@ -2953,7 +3322,11 @@ function noiseOf(t){
    are plainly the same errand, but share little as strings. */
 function overlap(a,b){
   const A=new Set(words(a)), B=new Set(words(b));
-  if(A.size<3||B.size<3) return 0;
+  /* Two distinctive words is enough. At three, "EVCS NDA" could never fold
+     into "EVCS — NDA then exchange", because the shorter one only HAS two
+     words once the stop-list is applied — and those are exactly the pair a
+     human reads as the same errand. */
+  if(A.size<2||B.size<2) return 0;
   let hit=0; A.forEach(w=>{ if(B.has(w)) hit++; });
   return hit/Math.min(A.size,B.size);
 }
@@ -3541,6 +3914,33 @@ function dockFor(view){
   return d;
 }
 
+
+/* One loop for every orb on the page. Slow — this is background, and a thing
+   moving fast in the corner of your eye is a thing you keep looking at. Orbs
+   bounce off the edges rather than wrapping, because something that vanishes
+   on one side and reappears on the other reads as a glitch. */
+let driftRAF=0;
+function startDrift(){
+  if(driftRAF) return;
+  const step=()=>{
+    const orbs=document.querySelectorAll('.dock .orb');
+    if(!orbs.length){ driftRAF=0; return; }          /* nothing folded — stop */
+    orbs.forEach(o=>{
+      const p=o.__p; if(!p) return;
+      const d=o.parentElement;
+      const w=d.clientWidth||900, h=d.clientHeight||500;
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<6){ p.x=6; p.vx=Math.abs(p.vx); }
+      if(p.x>w-40){ p.x=w-40; p.vx=-Math.abs(p.vx); }
+      if(p.y<6){ p.y=6; p.vy=Math.abs(p.vy); }
+      if(p.y>h-40){ p.y=h-40; p.vy=-Math.abs(p.vy); }
+      o.style.left=p.x.toFixed(1)+'px'; o.style.top=p.y.toFixed(1)+'px';
+    });
+    driftRAF=requestAnimationFrame(step);
+  };
+  driftRAF=requestAnimationFrame(step);
+}
+
 function minimise(p){
   const view=p.closest('.view'); if(!view) return;
   /* Idempotent on purpose. applyMin() folds whatever localStorage remembers,
@@ -3562,7 +3962,16 @@ function minimise(p){
   lab.textContent=title.trim().slice(0,22);
   orb.append(glyph,lab);
   orb.addEventListener('click',()=>restore(p,orb));
-  dockFor(view).appendChild(orb);
+  const dock=dockFor(view);
+  /* Start somewhere sensible and drift from there. Spawning them all at the
+     same point makes a clump that takes ten seconds to untangle. */
+  const w=dock.clientWidth||900, h=dock.clientHeight||500;
+  orb.__p={ x: 40+Math.random()*Math.max(60,w-120),
+            y: 40+Math.random()*Math.max(60,h-120),
+            vx:(Math.random()-0.5)*0.22, vy:(Math.random()-0.5)*0.22 };
+  orb.style.left=orb.__p.x+'px'; orb.style.top=orb.__p.y+'px';
+  dock.appendChild(orb);
+  startDrift();
 }
 
 function restore(p,orb){
