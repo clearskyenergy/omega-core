@@ -120,6 +120,30 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       mask-image:linear-gradient(90deg,transparent,#000,transparent);
       -webkit-mask-image:linear-gradient(90deg,transparent,#000,transparent)}
 
+/* ── DOOM MODE ───────────────────────────────────────────────────────────
+   Same data, same dashboard, different master. Only the palette and the core
+   geometry change — nothing here alters a number, because a skin that edits
+   the truth is not a skin. */
+:root[data-mode="doom"]{
+  --glow-cyan:#3ddc84;
+  --glow-blue:#0b6b2f;
+  --ink:#d9f5e3;
+  --dim:#7fae92;
+  --panel:rgba(6,20,12,.62);
+  --edge:1px solid rgba(61,220,132,.30);
+  --bg:#03110a;
+}
+:root[data-mode="doom"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.16) 50%),
+             linear-gradient(90deg,rgba(0,255,90,.03),rgba(0,120,40,.02),rgba(0,255,90,.03));
+  background-size:100% 4px,6px 100%;
+}
+:root[data-mode="doom"] .mark{border-color:var(--glow-cyan);
+  box-shadow:0 0 12px rgba(61,220,132,.4) inset}
+:root[data-mode="doom"] .talkBar{
+  background:linear-gradient(90deg,rgba(11,107,47,.14),rgba(61,220,132,.08),rgba(11,107,47,.14));
+  box-shadow:inset 0 0 20px rgba(11,107,47,.25)}
+
 @media(max-width:1280px){
   #app{grid-template-columns:1fr}
   .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
@@ -494,6 +518,53 @@ function makeCore(id, opts) {
   const LAT = 9, LON = 18, PER_LAT = 96, PER_LON = 64;
   const TILT = -0.42;                         /* the axis leans toward you */
 
+  /* An icosahedron. Doom mode is angular and armoured where Jarvis is
+     spherical and precise — the shape does the talking, so nothing has to
+     pretend to be a rendering of a person. */
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const ICO_V = [
+    [-1, PHI, 0], [1, PHI, 0], [-1, -PHI, 0], [1, -PHI, 0],
+    [0, -1, PHI], [0, 1, PHI], [0, -1, -PHI], [0, 1, -PHI],
+    [PHI, 0, -1], [PHI, 0, 1], [-PHI, 0, -1], [-PHI, 0, 1]
+  ].map(v => { const L = Math.hypot(v[0], v[1], v[2]); return [v[0]/L, v[1]/L, v[2]/L]; });
+  const ICO_E = [[0,11],[0,5],[0,1],[0,7],[0,10],[1,5],[5,11],[11,10],[10,7],[7,1],
+                 [3,9],[3,4],[3,2],[3,6],[3,8],[4,9],[2,4],[6,2],[8,6],[9,8],
+                 [5,4],[11,2],[10,6],[7,8],[1,9],[4,11],[2,10],[6,7],[8,1],[9,5]];
+
+  /* A cloaked, armoured figure — hood, shoulders, a cape that falls to a
+     point, arms, greaves. Written as coordinates here rather than traced from
+     anything: the poster Thomas sent is Marvel's artwork and Marvel's
+     character, and this is a silhouette of my own making that carries the
+     same weight. x is across, y is down from the crown, z is depth. */
+  const FIG = {
+    v: [
+      [ 0.00,-1.00, 0.06],[-0.17,-0.86,-0.02],[ 0.17,-0.86,-0.02],   /* hood peak, temples */
+      [-0.20,-0.66,-0.04],[ 0.20,-0.66,-0.04],[ 0.00,-0.60, 0.14],   /* jaw, faceplate */
+      [-0.40,-0.52,-0.06],[ 0.40,-0.52,-0.06],                       /* shoulders */
+      [-0.22,-0.46, 0.02],[ 0.22,-0.46, 0.02],                       /* collar */
+      [-0.26, 0.00, 0.00],[ 0.26, 0.00, 0.00],                       /* waist */
+      [-0.55,-0.16,-0.10],[ 0.55,-0.16,-0.10],                       /* cape shoulders */
+      [-0.62, 0.46,-0.16],[ 0.62, 0.46,-0.16],                       /* cape mid */
+      [-0.34, 0.96,-0.12],[ 0.34, 0.96,-0.12],[ 0.00, 1.10,-0.06],   /* cape hem */
+      [-0.44,-0.30, 0.10],[ 0.44,-0.30, 0.10],                       /* elbows */
+      [-0.34, 0.10, 0.16],[ 0.34, 0.10, 0.16],                       /* gauntlets */
+      [-0.16, 0.52, 0.04],[ 0.16, 0.52, 0.04],                       /* knees */
+      [-0.18, 0.92, 0.06],[ 0.18, 0.92, 0.06],                       /* boots */
+      [ 0.00,-0.46, 0.10],[ 0.00, 0.02, 0.12]                        /* sternum, belt */
+    ],
+    /* 29 vertices, so the highest legal index is 28. The first version of this
+       list reached for 29 — sternum and belt were written one place further
+       along than they actually sit — and every frame threw before a single
+       line was drawn. The shells looked like they had "disappeared"; in fact
+       nothing was being drawn at all. */
+    e: [[0,1],[0,2],[1,3],[2,4],[3,5],[4,5],[1,2],
+        [1,6],[2,7],[6,8],[7,9],[8,9],[8,27],[9,27],
+        [8,10],[9,11],[10,11],[10,28],[11,28],[27,28],
+        [6,12],[7,13],[12,14],[13,15],[14,16],[15,17],[16,18],[17,18],[14,10],[15,11],
+        [6,19],[7,20],[19,21],[20,22],[21,28],[22,28],
+        [10,23],[11,24],[23,25],[24,26],[25,26]]
+  };
+
   /* Three orbits, each tilted differently, each carrying one body. */
   const ORBITS = [
     { rx: 1.34, ry: 0.30, rot: -0.30, speed: 0.0060, a: 0.34 },
@@ -530,6 +601,88 @@ function makeCore(id, opts) {
     return { x: cx + x * R, y: cy + y2 * R, z: z2 };
   }
 
+  /* Rotate a unit vector by yaw then the shared tilt, and project. Same
+     camera as the globe, so switching modes does not also move the eye. */
+  function spin(v, yaw) {
+    const cy2 = Math.cos(yaw), sy = Math.sin(yaw);
+    let x = v[0] * cy2 - v[2] * sy, y = v[1], z = v[0] * sy + v[2] * cy2;
+    const ct = Math.cos(TILT), st = Math.sin(TILT);
+    return [x, y * ct - z * st, y * st + z * ct];
+  }
+
+  function drawDoom(cx, cy, R, yaw, col) {
+    /* the smoke it stands in */
+    const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 2.0);
+    g.addColorStop(0, 'rgba(' + col + ',' + (0.12 + energy * 0.12).toFixed(3) + ')');
+    g.addColorStop(0.4, 'rgba(8,60,26,0.07)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 2.0, 0, Math.PI * 2); ctx.fill();
+
+    STARS.forEach(st2 => {
+      const x = cx + Math.cos(st2.a) * R * st2.r * 1.7;
+      const y = cy + Math.sin(st2.a) * R * st2.r * 1.1;
+      const tw = 0.3 + 0.4 * Math.abs(Math.sin(t * 0.008 + st2.tw));
+      ctx.fillStyle = 'rgba(' + col + ',' + (tw * 0.4).toFixed(3) + ')';
+      ctx.fillRect(x, y, st2.s, st2.s);
+    });
+
+    /* the figure, floating — a slow bob so it hangs rather than sits */
+    const bob = Math.sin(t * 0.012) * R * 0.035;
+    const fyaw = Math.sin(t * 0.004) * 0.55;        /* turns, never spins */
+    const fp = FIG.v.map(v => {
+      const p = spin([v[0], v[1], v[2]], fyaw);
+      return [cx + p[0] * R * 0.92, cy + p[1] * R * 0.80 + bob, p[2]];
+    });
+    ctx.lineCap = 'round';
+    FIG.e.forEach(([a, b]) => {
+      const p = fp[a], q = fp[b];
+      const z = (p[2] + q[2]) / 2;
+      const al = (0.55 + z * 0.35) * (0.5 + energy * 0.6);
+      ctx.strokeStyle = 'rgba(' + col + ',' + Math.max(0.12, Math.min(0.95, al)).toFixed(3) + ')';
+      ctx.lineWidth = 2.1;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    });
+    /* the mask reads as a mask because of the two lights behind it */
+    [[-0.075, -0.70], [0.075, -0.70]].forEach(([ex, ey]) => {
+      const e = spin([ex, ey, 0.16], fyaw);
+      const x = cx + e[0] * R * 0.92, y = cy + e[1] * R * 0.80 + bob;
+      const eg = ctx.createRadialGradient(x, y, 0, x, y, 6);
+      eg.addColorStop(0, 'rgba(220,255,232,0.95)');
+      eg.addColorStop(1, 'rgba(' + col + ',0)');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.lineWidth = 1;
+
+    const P = ICO_V.map(v => spin(v, yaw));
+    /* two shells, counter-rotating — armour over a core */
+    /* Two counter-rotating shells AROUND the figure — armour, not decoration.
+       These were dimmed almost to nothing when the figure went in, which lost
+       the thing that made the core read as a core. Wider radii keep them clear
+       of the silhouette; the weight is back. */
+    [[1.42, 1.8, 0.85], [1.05, 1.2, 0.55]].forEach((shell, si) => {
+      const pts = si === 0 ? P : ICO_V.map(v => spin(v, -yaw * 1.6));
+      ICO_E.forEach(([a, b]) => {
+        const p = pts[a], q = pts[b];
+        const z = (p[2] + q[2]) / 2;
+        const al = (z > 0 ? 0.55 : 0.13) * shell[2] * (0.55 + energy * 0.7);
+        ctx.strokeStyle = 'rgba(' + col + ',' + al.toFixed(3) + ')';
+        ctx.lineWidth = shell[1] * (z > 0 ? 1 : 0.6);
+        ctx.beginPath();
+        ctx.moveTo(cx + p[0] * R * shell[0], cy + p[1] * R * shell[0]);
+        ctx.lineTo(cx + q[0] * R * shell[0], cy + q[1] * R * shell[0]);
+        ctx.stroke();
+      });
+      pts.forEach(p => {
+        if (p[2] <= 0) return;
+        const x = cx + p[0] * R * shell[0], y = cy + p[1] * R * shell[0];
+        ctx.fillStyle = 'rgba(190,255,214,' + (0.45 * shell[2]).toFixed(3) + ')';
+        ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+      });
+    });
+  }
+
   function frame() {
     if (!W || !H) { resize(); requestAnimationFrame(frame); return; }
     t += 1;
@@ -539,7 +692,9 @@ function makeCore(id, opts) {
     const cx = W / 2, cy = H / 2;
     const R = Math.min(W, H) * (opts.scale || 0.30);
     const yaw = t * (0.0022 + energy * 0.0024);
-    const cyan = '0,243,255';
+    const doom = document.documentElement.dataset.mode === 'doom';
+    const cyan = doom ? '61,220,132' : '0,243,255';
+    if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
     /* the halo it sits in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.1);
@@ -659,6 +814,8 @@ function listInto(host, rows, fmt, empty){
       const c=document.createElement('span'); c.className='v'+(f.cls?' '+f.cls:'');
       c.textContent=f.right; d.appendChild(c);
     }
+    /* A row that can be acted on says so by carrying its buttons. */
+    if(f.act) d.appendChild(taskButtons(f.act, d, a));
     b.appendChild(d);
   });
 }
@@ -691,7 +848,8 @@ async function load(){
       left: t.title || '(untitled)',
       clamp: true,
       right: SIZE[t.size] || t.size || '',
-      cls:''
+      cls:'',
+      act: t.id
     }), 'backlog is empty');
 
     /* The order rendered here IS the order he speaks to. Held so that
@@ -1099,11 +1257,52 @@ function confirmCommand(cmd){
   });
 }
 
+/* ── modes ───────────────────────────────────────────────────────────────
+   "Jarvis, doom mode." Purely a skin: the palette swaps and the core becomes
+   an armoured icosahedron instead of a globe. Handled HERE rather than in the
+   twin because how the page looks is the browser's business — which also
+   means it is instant and costs nothing.
+
+   No number changes. A skin that edits the truth is not a skin. */
+const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+
+function setMode(mode, announce){
+  const doom = mode === 'doom';        /* anything else is Iron Man mode */
+  document.documentElement.dataset.mode = doom ? 'doom' : '';
+  try{ localStorage.setItem('jarvisMode', doom ? 'doom' : 'ironman'); }catch(_){}
+  const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
+  if(n) n.textContent = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
+  if(sub) sub.textContent = doom ? 'SOVEREIGN CORE' : 'AI CORE';
+  const gn=document.querySelector('.gName'), gs=document.querySelector('.gSub');
+  if(gn) gn.textContent = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
+  if(gs) gs.textContent = doom ? 'SOVEREIGN CORE' : 'AI CORE';
+  if(announce){
+    const line = doom ? 'Doom mode. Same numbers, worse manners.'
+                      : 'Iron Man mode.';
+    say('jarvis', line, 0);
+    if(voiceOut) speakReply(line);
+  }
+}
+try{ setMode(localStorage.getItem('jarvisMode')==='doom' ? 'doom' : 'ironman', false); }catch(_){}
+
+function modeCommand(said){
+  const m = String(said||'').trim().replace(/[.!]+$/,'').match(MODE_CMD);
+  if(!m) return null;
+  const word = m[1].toLowerCase();
+  /* Bare "jarvis" is a wake word, not a mode. Only accept it with "mode". */
+  if((word==='jarvis'||word==='normal'||word==='standard') && !/mode/i.test(said)) return null;
+  return (word==='doom') ? 'doom' : 'ironman';
+}
+
 /* One path for typed and spoken. A second code path for the keyboard is how
    the two drift until only one of them works. */
 async function submit(said){
   said=(said||'').trim(); if(!said) return;
   say('you', said);
+
+  /* A skin change never leaves the browser. */
+  const mode=modeCommand(said);
+  if(mode){ setMode(mode, true); return; }
 
   /* Resolved on this side of the wire, for nothing. */
   const cmd=asCommand(said);
@@ -1305,6 +1504,52 @@ function renderConns(s){
     const y=document.createElement('span'); y.className='why'; y.textContent=why;
     d.appendChild(dot); d.appendChild(w); d.appendChild(y); host.appendChild(d);
   });
+}
+
+/* ── acting on a task ────────────────────────────────────────────────────
+   Complete, rename, dismiss — on his own board, from the board. Each one is
+   the same /act endpoint the numbered voice commands use, so there is one
+   path to the action layer and one approval model behind it.
+
+   DISMISS DOES NOT DELETE. It sets a status, which stops the row showing and
+   stops it counting. A task he waves away today is one he may want back
+   tomorrow, and a row that is gone cannot be argued with. */
+async function taskAct(id, verb, text){
+  try{
+    const t=await token();
+    const r=await fetch(CHAT+'/act',{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify(text!=null ? {verb,kind:'backlog',ids:[id],text} : {verb,kind:'backlog',ids:[id]})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ say('jarvis', j.error || ('HTTP '+r.status)); return false; }
+    load();
+    return true;
+  }catch(e){ say('jarvis', e.message); return false; }
+}
+
+function taskButtons(id, row, titleEl){
+  const bar=document.createElement('span');
+  bar.style.cssText='display:flex;gap:4px;flex:none;margin-left:6px';
+  const mk=(label,title,fn)=>{
+    const b=document.createElement('button');
+    b.textContent=label; b.title=title;
+    b.style.cssText='padding:2px 7px;font-size:11px;letter-spacing:0;line-height:1.4';
+    b.addEventListener('click',ev=>{ ev.stopPropagation(); fn(b); });
+    bar.appendChild(b); return b;
+  };
+  mk('✓','mark complete', async b=>{ b.disabled=true; row.style.opacity='.4'; 
+      if(!await taskAct(id,'done')) { b.disabled=false; row.style.opacity=''; } });
+  mk('✎','rename', async ()=>{
+      const next=prompt('Rename this task:', titleEl.textContent);
+      if(next==null) return;
+      const t=next.trim(); if(!t) return;
+      titleEl.textContent=t;
+      await taskAct(id,'retitle',t);
+  });
+  mk('✕','dismiss — keeps the record, stops showing it', async b=>{
+      b.disabled=true; row.style.opacity='.4';
+      if(!await taskAct(id,'drop')) { b.disabled=false; row.style.opacity=''; } });
+  return bar;
 }
 
 function renderOverview(s){
