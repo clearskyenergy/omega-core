@@ -1988,7 +1988,7 @@ function showView(name){
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='clients') loadBook(false);
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
-  if(name==='brain'){ loadBrain(); }
+  if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   wireZoom();                 /* views built later get the control too */
 }
@@ -2834,7 +2834,50 @@ function bdraw(){
   ctx.restore();
 }
 
-function bloop(){ btick(); bdraw(); braf=requestAnimationFrame(bloop); }
+/* ── the idle tour ───────────────────────────────────────────────────────
+   Left alone, the brain goes back to moving. After ten seconds of no input it
+   picks a hub, eases the camera onto it, sits there a moment, then moves on —
+   so a dashboard nobody is touching is showing you the shape of the business
+   rather than a frozen diagram.
+
+   Weighted by degree, so it visits the places that actually connect things
+   instead of wandering into the 40 orgs that have one edge each. Any input at
+   all cancels it on the same frame; it never fights you for the camera. */
+const BIDLE_MS = 10000;      /* how long you have to be away before it moves */
+const BHOLD_MS = 7000;       /* how long it lingers on each one */
+let bIdleAt = Date.now(), bTour = null;
+
+function bpoke(){ bIdleAt = Date.now(); bTour = null; }
+
+function bpickTour(){
+  if(!BG || !BG.nodes.length) return null;
+  const pool = BG.nodes.filter(n => bvisible(n) && n.deg > 0);
+  if(!pool.length) return null;
+  /* Degree-weighted: a node with six edges is six times as likely as one with
+     one, which is roughly "how interesting is this to look at". */
+  let total = 0; for(const n of pool) total += n.deg;
+  let r = Math.random() * total, pick = pool[0];
+  for(const n of pool){ r -= n.deg; if(r <= 0){ pick = n; break; } }
+  const cv = el('brainCv');
+  const k = Math.max(0.8, Math.min(1.9, (cv ? cv.clientWidth : 800) / 900));
+  return { node: pick, x: -pick.x * k, y: -pick.y * k, k: k, until: Date.now() + BHOLD_MS };
+}
+
+function btour(){
+  if(Date.now() - bIdleAt < BIDLE_MS){ bTour = null; return; }
+  if(!bTour || Date.now() > bTour.until){
+    bTour = bpickTour();
+    if(bTour){ bsel = bTour.node; bpath = null; binspect(bTour.node); }
+  }
+  if(!bTour) return;
+  /* Ease, never jump. The whole point is that it drifts. */
+  bview.x += (bTour.x - bview.x) * 0.018;
+  bview.y += (bTour.y - bview.y) * 0.018;
+  bview.k += (bTour.k - bview.k) * 0.018;
+  balpha = Math.max(balpha, 0.02);   /* keep the layout breathing under it */
+}
+
+function bloop(){ btick(); btour(); bdraw(); braf=requestAnimationFrame(bloop); }
 
 /* ── shortest path between two nodes (plain BFS) ─────────────────────── */
 function bfsPath(a,b){
@@ -2914,7 +2957,7 @@ function binspect(n){
       const s=document.createElement('span'); s.className='hn'; s.textContent=o.label;
       const c=document.createElement('span'); c.className='hc'; c.textContent=l.kind;
       d.append(s,c);
-      d.addEventListener('click',()=>{ bsel=o; bpath=null; binspect(o); bcenter(o); });
+      d.addEventListener('click',()=>{ bpoke(); bsel=o; bpath=null; binspect(o); bcenter(o); });
       host.appendChild(d);
     });
   }
@@ -2935,7 +2978,7 @@ function bhubs(){
     const s=document.createElement('span'); s.className='hn'; s.textContent=n.label;
     const c=document.createElement('span'); c.className='hc'; c.textContent=n.deg;
     d.append(sq,s,c);
-    d.addEventListener('click',()=>{ bsel=n; bpath=null; binspect(n); bcenter(n); });
+    d.addEventListener('click',()=>{ bpoke(); bsel=n; bpath=null; binspect(n); bcenter(n); });
     host.appendChild(d);
   });
 }
@@ -2976,10 +3019,12 @@ function bwire(){
   const cv=el('brainCv'); if(!cv||cv.dataset.wired) return;
   cv.dataset.wired='1';
   cv.addEventListener('pointerdown',e=>{
+    bpoke();
     bdragging=true; bmoved=false; bdx=e.clientX-bview.x; bdy=e.clientY-bview.y;
     cv.classList.add('drag'); cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener('pointermove',e=>{
+    if(bdragging||e.buttons) bpoke();
     if(bdragging){
       const nx=e.clientX-bdx, ny=e.clientY-bdy;
       if(Math.abs(nx-bview.x)+Math.abs(ny-bview.y)>2) bmoved=true;
@@ -3009,15 +3054,17 @@ function bwire(){
     bsel=n; bpath=null; binspect(n);
   });
   cv.addEventListener('wheel',e=>{
-    e.preventDefault();
+    e.preventDefault(); bpoke();
     const f=e.deltaY<0?1.12:0.89;
     bview.k=Math.max(0.15,Math.min(4,bview.k*f));
   },{passive:false});
 
-  ['fRepel','fLink'].forEach(id=>
-    el(id).addEventListener('input',()=>{ balpha=Math.max(balpha,0.35); }));
-  el('brainQ').addEventListener('input',e=>{ bq=e.target.value; });
-  el('brainFit').addEventListener('click',bfit);
+  ['fRepel','fLink','fLab'].forEach(id=>
+    el(id).addEventListener('input',()=>{ bpoke(); balpha=Math.max(balpha,0.35); }));
+  el('brainQ').addEventListener('input',e=>{ bq=e.target.value; bpoke(); });
+  el('brainFit').addEventListener('click',()=>{ bpoke(); bfit(); });
+  /* Hovering a node counts as being here, even without a click. */
+  cv.addEventListener('pointerenter',bpoke);
 }
 
 function bfit(){
