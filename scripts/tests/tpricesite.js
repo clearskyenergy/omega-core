@@ -21,9 +21,27 @@ function ok(name, fn) {
 
 console.log('price-this-site');
 
-ok('the drawer button prices in place, not in another tab', function () {
-  assert(/cs\.onclick = function \(\) \{ priceInPlace\(r\); \}/.test(html),
-    'the drawer #costSite button no longer calls priceInPlace');
+/* The two entry points answer two different questions and must not drift
+   back into each other. The CARD screens a site without leaving the map;
+   the DRAWER hands it to the estimator for a proper review — the nine
+   drivers, the schedule, and Print/PDF. Collapsing either into the other
+   is a regression, in one direction or the other, so both are pinned. */
+ok('the drawer button opens the estimator, already costed', function () {
+  var seg = html.slice(html.indexOf('var cs = document.getElementById("costSite")'));
+  seg = seg.slice(0, 420);
+  assert(/costInEstimator\(r\)/.test(seg),
+    'the drawer button does not open the estimator');
+  assert(/if \(!_estimates\[r\.id\]\) priceInPlace\(r\)/.test(seg),
+    'it opens the estimator without pricing first, so the packet carries no figure');
+});
+
+ok('the drawer offers the estimator, not two equal unlabelled buttons', function () {
+  /* Matched on the closing tag: the label is built by concatenation, so
+     ">Open the estimator<" never appears contiguously in the source. */
+  assert(/Open the estimator<\/button>/.test(html),
+    'the primary action is not named "Open the estimator"');
+  assert(!/<button id="dPacket"/.test(html),
+    'Download the packet is still a button competing with the estimator');
 });
 
 ok('the card button prices in place too', function () {
@@ -186,6 +204,61 @@ ok('phase is never used to guess the interconnection voltage', function () {
   assert(!/3p480/.test(code),
     'the dead "3p480" phase test is back; phase does not determine voltage — '
       + 'three-phase service can be 208 V, 480 V or a primary tie');
+});
+
+/* ── THE HANDOFF ITSELF ───────────────────────────────────────────────
+   The packet used to travel in sessionStorage, which a new tab only
+   inherits when it was opened by window.open WITH an opener. A pop-up
+   blocker, a middle-click, or a browser that turns the pop-up into a
+   same-tab navigation all break that, and the estimator lands on a URL
+   naming a key that does not exist in its world: "NO PACKET". */
+ok('the packet travels in localStorage, which every tab can read', function () {
+  var seg = html.slice(html.indexOf('function costInEstimator'));
+  seg = seg.slice(0, seg.indexOf('\n  /* Shown in the drawer'));
+  assert(/localStorage\.setItem\(key/.test(seg),
+    'the packet is not written where a second tab can read it');
+  assert(!/sessionStorage\.setItem/.test(seg),
+    'it is still writing the packet to sessionStorage');
+});
+
+ok('a blocked pop-up keeps the packet and offers a link', function () {
+  var seg = html.slice(html.indexOf('function costInEstimator'));
+  seg = seg.slice(0, seg.indexOf('\n  /* Shown in the drawer'));
+  assert(!/removeItem/.test(seg),
+    'a blocked pop-up still throws the packet away');
+  assert(/packetLink\(url\)/.test(seg),
+    'a blocked pop-up leaves the rep with no way through');
+});
+
+ok('stale packets are pruned rather than accumulated', function () {
+  assert(/function prunePackets/.test(html), 'nothing prunes old packets');
+  assert(/prunePackets\(\);[\s\S]{0,120}var key = "cs-packet-"/.test(html),
+    'pruning does not run when a packet is written');
+});
+
+ok('the estimator reads localStorage first and still accepts the old shelf',
+  function () {
+    var est = fs.readFileSync(path.join(ROOT, 'clearsky-cost-estimator.html'), 'utf8');
+    var seg = est.slice(est.indexOf('function adoptHandoff'));
+    seg = seg.slice(0, seg.indexOf('loadPacket(obj)'));
+    assert(/localStorage\.getItem\(q\)/.test(seg), 'the estimator ignores localStorage');
+    assert(/sessionStorage\.getItem\(q\)/.test(seg),
+      'the sessionStorage fallback is gone, so a tab opened by the old build breaks');
+    assert(/localStorage\.removeItem\(q\)/.test(seg),
+      'the adopted packet is not cleared, so the next open gets a stale site');
+  });
+
+ok('the printed estimate keeps the schedule', function () {
+  /* The Gantt scrolls inside .gWrap on screen. On paper there is nothing to
+     scroll, so an auto overflow cuts the chart at the page width and the
+     weeks past that edge vanish with no sign they were there. */
+  var est = fs.readFileSync(path.join(ROOT, 'clearsky-cost-estimator.html'), 'utf8');
+  var pr = est.slice(est.indexOf('@media print{'));
+  pr = pr.slice(0, pr.indexOf('\n  }'));
+  assert(/\.gWrap\{overflow:visible\}/.test(pr),
+    'the Gantt is still clipped in print');
+  assert(/\.gRow\{break-inside:avoid\}/.test(pr),
+    'schedule rows can split across a page break');
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
