@@ -482,6 +482,14 @@
     white-space:nowrap}
   .fitPrice small{display:block;font-weight:500;font-size:10px;color:var(--mut)}
   .fitNoPrice{font-weight:600;font-size:11px;color:var(--mut)}
+  /* On the card: one line, quiet, and unmistakably about equipment rather
+     than capacity — the number above it is already kW and two kW-ish
+     figures stacked would read as a contradiction. */
+  .fitCard{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:5px;
+    padding:4px 7px;border-radius:6px;background:#f2f7f5;border:1px solid #dbe8e3}
+  .fitCardWhat{font-size:11.5px;font-weight:700;color:#17513f}
+  .fitCardWho{font-size:10.5px;color:#4a6b60}
+  .fitCardUsd{margin-left:auto;font-size:11.5px;font-weight:700;color:#17513f}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -3296,6 +3304,7 @@
       '<div class="bd">' +
         '<div class="kw">' + kwTxt + ' <small>kW deliverable</small></div>' +
         '<div class="kwsub">' + sub + '</div>' +
+        fitLineHtml(r) +
         /* The address is the link. A rep reads the address first and wants
            to see the roof; making them open the card and find a button is a
            step that does not need to exist. */
@@ -4721,6 +4730,35 @@
     return { target:targetKwh, kw:pick.kw, hours:pick.hours, options:out };
   }
 
+  /* The one option a rep would pick, for the card. Same source as the
+     drawer's list — whatever the organisation has on file — so the card and
+     the panel can never recommend different things. */
+  function fitBest(r) {
+    var f = fitOptions(r);
+    if (!f || !f.options.length) return null;
+    return f.options[0];
+  }
+
+  /* One line, on the card, under the kW. It answers "what do I put there"
+     at the point a rep is scanning a list rather than reading a panel.
+     Silent when nothing is on file: a card is not the place to explain that
+     pricing has not been loaded, and a row of apologies down a list of
+     twenty sites is worse than no row at all. */
+  function fitLineHtml(r) {
+    var o = fitBest(r);
+    if (!o) return "";
+    return '<div class="fitCard">' +
+      '<span class="fitCardWhat">' +
+        (o.blocks
+          ? o.blocks + '\u00d7 ' + (o.blockKwh / 1000) + ' MWh \u00b7 ' +
+            fmt(Math.round(o.kwh)) + ' kWh \u00b7 ' + (Math.round(o.hours * 10) / 10) + ' h'
+          : fmt(Math.round(o.kwh)) + ' kWh') +
+      '</span>' +
+      '<span class="fitCardWho">' + esc(o.name) + '</span>' +
+      (o.priced ? '<span class="fitCardUsd">$' + fmt(Math.round(o.usd)) + '</span>' : '') +
+      '</div>';
+  }
+
   function fitOptionsHtml(r) {
     var f = fitOptions(r);
     var head = '<div class="sec"><h4>What fits here</h4>';
@@ -5524,6 +5562,30 @@
       nameplate: v.state.nameplate, queue: v.state.queue,
       circ: v.state, sz: v.size, src: "lookup"
     };
+    /* ── THE LOOKUP RECORD IS A RECORD LIKE ANY OTHER ──────────────────
+       It was built by hand and handed straight to drawerHtml, which expects
+       what enrich() produces. So it crashed on the first derived field it
+       met — r.claims.length, and once that was guarded, r.cst.note — and
+       the drawer rendered its header and nothing else. Address search is
+       the front door of this tool and it was throwing every time.
+
+       Guarding fields one at a time is losing: the next field added to the
+       drawer breaks it again. It goes through enrich() now, the same path
+       every searched row takes, so it HAS cst, claims, mine and whatever is
+       added next. enrich re-registers the feeder from the record's own
+       published figures first, which this record carries, so nothing is
+       lost by the round trip.
+
+       Wrapped, because a lookup that renders a plainer drawer is worth more
+       than one that renders none. */
+    try { rec = enrich(rec); }
+    catch (eEnrich) {
+      rec.cst = rec.cst || (L.circuitStatus ? L.circuitStatus(rec.circ) : { label: "", color: "#8a94a0", note: "" });
+      rec.claims = rec.claims || [];
+      rec.mine = rec.mine || [];
+      if (window.console) console.warn("lookup record could not be enriched", eEnrich);
+    }
+    ST.byId[rec.id] = rec;
     ST.sel = rec;
     document.getElementById("dAddr").textContent = short;
     document.getElementById("dSub").textContent =
