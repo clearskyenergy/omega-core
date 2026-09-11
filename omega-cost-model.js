@@ -244,7 +244,51 @@
     var tier = over.src && TIERS[over.src] ? over.src
              : (over.ref ? "quote" : "planning");
     return { rate:over.rate, src:tier, ref:over.ref || "",
-             asOf:over.asOf || "", from:over.name || "" };
+             asOf:over.asOf || "", from:over.name || "",
+             supplier: over.supplier || over.name || "",
+             /* The unit the supplier actually SELLS, when the quote names
+                one. See the granularity note in the pricing loop. */
+             blockKwh: (typeof over.blockKwh === "number" && over.blockKwh > 0)
+                         ? over.blockKwh : null,
+             /* Whether the price is at the supplier's gate. Freight is then
+                a real cost that is NOT in this rate. */
+             atGate: !!over.atGate, gateTerm: over.gateTerm || "" };
+  }
+
+  /* ── YOU CANNOT BUY A THIRD OF A CONTAINER ────────────────────────────
+     Quotes for battery hardware are written per kWh against a PRODUCT, and
+     the product is a block of a fixed size — Gotion quote a 5 MWh DC block.
+     Price a 1.77 MWh site at the per-kWh rate and the arithmetic is clean
+     and the commercial reality is not: you buy blocks.
+
+     The tool does NOT silently bill whole blocks. The quote this was built
+     against was itself issued for a 12.5 MWh demand, which is two and a half
+     blocks, so per-kWh is a defensible reading of that document and picking
+     the other one for the customer would be substituting our assumption for
+     their supplier's terms.
+
+     What it does instead is what this file already does with an unknown
+     utility upgrade: report the difference as an EXPOSURE, separately, with
+     the stranded capacity named. Burying it in the total is how a budget
+     becomes a surprise; hiding it entirely is how a small site gets quoted
+     at a third of what it will cost to buy. */
+  function granularity(kwh, blockKwh, rate) {
+    if (!blockKwh || !(blockKwh > 0) || kwh == null || !(kwh > 0)) return null;
+    var exact = kwh / blockKwh;
+    var whole = Math.ceil(exact - 1e-9);
+    var billedKwh = whole * blockKwh;
+    var stranded = billedKwh - kwh;
+    return {
+      blockKwh: blockKwh,
+      blocksNeeded: exact,
+      blocksBought: whole,
+      billedKwh: billedKwh,
+      strandedKwh: stranded,
+      /* What it costs if the supplier bills whole blocks rather than the
+         kWh on the drawing. Zero when the site lands on a block boundary. */
+      exposureUsd: stranded * rate,
+      belowOneBlock: exact < 1
+    };
   }
 
   /* ── A SUPPLIER RECORD BECOMES PRICED LINES, IN ONE PLACE ─────────────
@@ -305,6 +349,17 @@
   function hasPrice(v){
     return !!(v && typeof v.dcPerKwh === "number" && v.dcPerKwh > 0);
   }
+  /* Freight, when somebody has actually got a haul quote. It is expressed
+     per kWh so it scales with the hardware it is hauling, and it is ADDED
+     to the gate price rather than replacing it — the two are different
+     facts from different documents, and folding them into one number would
+     lose which is which. With no freight recorded the gate price stands
+     alone and the exposure is reported instead. */
+  function freightPerKwhOf(v){
+    var f = v && v.freightPerKwh;
+    return (typeof f === "number" && f > 0) ? f : null;
+  }
+
   function ratesFromVendor(v){
     if (!hasPrice(v)) return null;
     var ref = [v.model, v.ref, v.incoterm,
@@ -312,14 +367,40 @@
                (v.excludes ? "excludes " + v.excludes : ""),
                (v.indexTo ? "indexed: " + v.indexTo : "")]
                 .filter(function (x){ return !!x; }).join(" \u00b7 ");
+    var frtNow = freightPerKwhOf(v);
     var label = (v.name || "supplier")
-              + (atGate(v) ? " \u2014 " + v.incoterm + ", freight not included" : "")
+              + (atGate(v)
+                  ? (frtNow ? " \u2014 " + v.incoterm + " + $" + frtNow + "/kWh freight"
+                            : " \u2014 " + v.incoterm + ", freight not included")
+                  : "")
               + (quoteExpired(v) ? " \u2014 quote expired" : "");
     var tier = vendorTier(v);
-    var out = { "eq.dc": { rate:v.dcPerKwh, src:tier, ref:ref,
-                           asOf:v.date || "", name:label } };
+    var frt = freightPerKwhOf(v);
+    var out = { "eq.dc": { rate:v.dcPerKwh + (frt || 0), src:tier, ref:ref,
+                           asOf:v.date || "", name:label,
+                           /* Both are commercial terms off the quote letter,
+                              not modelling choices, so they travel with the
+                              rate rather than being re-derived downstream. */
+                           blockKwh: (typeof v.blockMwh === "number" && v.blockMwh > 0)
+                                       ? v.blockMwh * 1000 : null,
+                           /* At-gate stops being an EXPOSURE once freight is
+                              priced in; the term is still reported, because
+                              the reader should see what was added and why. */
+                           atGate: atGate(v) && !frt, gateTerm: v.incoterm || "",
+                           freightPerKwh: frt,
+                           /* The plain name, for sentences. `name` carries
+                              the warnings and reads badly mid-sentence. */
+                           supplier: v.name || "" } };
     /* Only when the supplier actually prices it. A PCS the quote is silent
        on stays on the model's rate and stays honestly marked unsourced. */
+    if (frt) {
+      /* The blended rate is only as good as its weakest half. A firm battery
+         quote plus a freight figure nobody sourced is not a firm price for
+         the pair, and saying so is cheaper than finding out later. */
+      out["eq.dc"].ref = ref + " \u00b7 plus $" + frt + "/kWh freight" +
+        (v.freightRef ? " (" + v.freightRef + ")" : " (no freight reference on file)");
+      if (!v.freightRef) out["eq.dc"].src = "published";
+    }
     if (typeof v.pcsPerKw === "number" && v.pcsPerKw > 0) {
       out["eq.pcs"] = { rate:v.pcsPerKw, src:tier, ref:ref,
                         asOf:v.date || "", name:label };
@@ -430,7 +511,7 @@
       input = shallow(input); input.rates = rr;
     }
 
-    var srcRows = [];
+    var srcRows = [], grans = [], gates = [];
 
     function n0(v){ return Math.round(v).toLocaleString(); }
 
@@ -465,8 +546,21 @@
         }
         if (D.id === "eq" && escM !== 1) { raw *= escM; mods.push("escalation ×" + escM.toFixed(3)); }
 
+        /* Only a kWh-basis line can have a block size; a $/kW rate is not
+           sold in containers. */
+        var gran = (L.basis === "kwh") ? granularity(E, R.blockKwh, R.rate) : null;
+        if (gran) {
+          mods.push(gran.belowOneBlock
+            ? "below one " + (gran.blockKwh / 1000) + " MWh block"
+            : n0(gran.blocksBought) + " \u00d7 " + (gran.blockKwh / 1000) + " MWh blocks");
+        }
+        if (R.atGate) mods.push(R.gateTerm + ", freight not included");
+
         lines.push({ id:L.id, n:L.n, basis:unit, mods:mods, cost:raw,
-                     src:R.src, ref:R.ref, asOf:R.asOf, ratedBy:R.from });
+                     src:R.src, ref:R.ref, asOf:R.asOf, ratedBy:R.from,
+                     granularity:gran, atGate:!!R.atGate, gateTerm:R.gateTerm || "" });
+        if (gran) grans.push({ id:L.id, n:L.n, g:gran, ratedBy:R.supplier });
+        if (R.atGate) gates.push({ id:L.id, n:L.n, term:R.gateTerm, ratedBy:R.from });
         srcRows.push({ id:L.id, n:L.n, src:R.src, ref:R.ref, asOf:R.asOf,
                        ratedBy:R.from, cost:raw });
         dTot += raw;
@@ -525,6 +619,59 @@
                       .sort(function (a, b){ return b.cost - a.cost; })
                       .slice(0, 8);
 
+    /* ── EXPOSURES ────────────────────────────────────────────────────
+       Costs that are real, not in the total, and known by name. The
+       utility upgrade has been handled this way since the beginning and
+       the reasoning generalises: a number somebody can act on beats a
+       contingency percentage that quietly absorbs it.
+
+       Each one says what it is, what it would cost if it lands, and what
+       closes it. An exposure with no closing action is just worrying. */
+    var exposures = [], gi;
+    for (gi = 0; gi < grans.length; gi++) {
+      var G = grans[gi].g;
+      if (G.strandedKwh <= 0) continue;         /* lands on a block boundary */
+      exposures.push({
+        id: "granularity." + grans[gi].id,
+        name: (grans[gi].ratedBy || "The supplier") + " sells in " +
+              (G.blockKwh / 1000) + " MWh blocks",
+        usd: G.exposureUsd,
+        why: G.belowOneBlock
+          ? "This site needs " + n0(E) + " kWh, which is less than one block. " +
+            "Priced here at the per-kWh rate on the quote; if the supplier bills " +
+            "a whole block, " + n0(G.strandedKwh) + " kWh of it is stranded."
+          : "This site needs " + n0(E) + " kWh. " + n0(G.blocksBought) +
+            " blocks is " + n0(G.billedKwh) + " kWh, leaving " + n0(G.strandedKwh) +
+            " kWh stranded if the supplier bills whole blocks rather than the " +
+            "kWh on the drawing.",
+        closes: "Ask the supplier whether they will bill the exact kWh, or size " +
+                "the system to a whole number of blocks."
+      });
+    }
+    for (gi = 0; gi < gates.length; gi++) {
+      exposures.push({
+        id: "freight." + gates[gi].id,
+        name: "Freight to site \u2014 " + gates[gi].term,
+        /* Deliberately null. An invented allowance is an invented price,
+           and a made-up freight number is the kind of thing that reads as
+           diligence right up until somebody checks it. */
+        usd: null,
+        why: "This line is priced at the supplier's gate, so delivery to site " +
+             "is not in it. The amount is not known here and is not guessed.",
+        closes: "Get a haul quote for the route and enter it as its own line."
+      });
+    }
+    if (upLine && upLine.carried) {
+      exposures.push({
+        id: "utility.upgrade",
+        name: "Utility-side upgrade \u2014 " + up.label,
+        usd: upCost,
+        why: "Carried as an allowance because the interconnection study has not " +
+             "returned. It can exceed the cost of the battery.",
+        closes: "The facilities study prices it."
+      });
+    }
+
     var per  = function (t){ return E ? t/E : null; };
     var perK = function (t){ return K ? t/K : null; };
 
@@ -537,6 +684,7 @@
       perKwh:{ lo:per(runLo), base:per(runBase), hi:per(runHi) },
       perKw:{ lo:perK(runLo), base:perK(runBase), hi:perK(runHi) },
       escalation:escM, quoteAgeMonths:quoteAgeMonths(input),
+      exposures: exposures,
       sourcing: {
         rows: srcRows,
         usdByTier: byTier,

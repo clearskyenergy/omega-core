@@ -4264,6 +4264,10 @@
           estimateClassWhy: d.estimateClassWhy,
           accuracyLow: d.accuracyLow, accuracyHigh: d.accuracyHigh,
           stillUnanswered: d.unanswered || [],
+          exposures: (d.exposures || []).map(function (x) {
+            return { name: x.name, usd: (x.usd == null ? null : Math.round(x.usd)),
+                     inTotal: false, why: x.why, closedBy: x.closes };
+          }),
           notAQuote: "An estimate, not a bid. No agreed contingency, no site "
                      + "walk, no firm equipment pricing."
         };
@@ -4477,7 +4481,12 @@
       unanswered: ["interconnection voltage", "distance to the POI",
                    "utility-side upgrade", "equipment yard", "ground conditions",
                    "AHJ", "labour basis", "equipment quote date", "duration"],
-      assumedSize: assumed, at: new Date().toISOString(), pricedBy: "sitefinder"
+      assumedSize: assumed, at: new Date().toISOString(), pricedBy: "sitefinder",
+      /* Costs that are real and NOT in the total — a supplier's block size,
+         a price quoted at their gate. They travel with the estimate into
+         the packet, because a total handed on without them is a number
+         somebody will treat as complete. */
+      exposures: est.exposures || []
     };
   }
 
@@ -4535,6 +4544,12 @@
                Math.round(d.total.hi / 1000).toLocaleString() + "k";
     var mid = "$" + Math.round(d.total.base / 1000).toLocaleString() + "k";
     var open = d.unanswered.length;
+    var exp = (d.exposures || []).map(function (x) {
+      return '<li>' + esc(x.name) + ' \u2014 ' +
+             (x.usd == null ? 'amount unknown' :
+              '$' + Math.round(x.usd / 1000).toLocaleString() + 'k') +
+             ', not in the total</li>';
+    }).join('');
     host.innerHTML =
       '<div class="sec"><h4>Estimated installed cost</h4>' +
       '<div style="font-size:22px;font-weight:700;line-height:1.15">' + mid + '</div>' +
@@ -4548,7 +4563,9 @@
               : 'Every cost driver has been answered.') +
         ' <b>This is an estimate, not a quote.</b> It is not a bid, it carries no ' +
         'contingency you have agreed, and it does not replace a site walk or firm ' +
-        'equipment pricing.</p></div>';
+        'equipment pricing.</p>' +
+      (exp ? '<p class="note"><b>Outside this total:</b></p><ul class="note">' + exp + '</ul>' : '') +
+      '</div>';
   }
 
   /* The editable version, in the drawer. Deliberately two controls rather
