@@ -374,13 +374,29 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   box-shadow:inset 0 0 20px rgba(11,107,47,.25)}
 
 .col{display:flex;flex-direction:column;gap:14px;min-height:0}
-.panel{background:var(--panel);border:var(--edge);border-radius:6px;padding:14px;
-       position:relative;box-shadow:inset 0 0 15px rgba(0,68,255,.2);min-height:0;
-       display:flex;flex-direction:column;gap:9px}
-.panel::before{content:'';position:absolute;top:0;left:0;width:10px;height:10px;
-  border-top:2px solid var(--glow-cyan);border-left:2px solid var(--glow-cyan)}
-.panel::after{content:'';position:absolute;bottom:0;right:0;width:10px;height:10px;
-  border-bottom:2px solid var(--glow-cyan);border-right:2px solid var(--glow-cyan)}
+/* Panels float rather than sit in boxes. The heavy version — a solid edge all
+   the way round, a filled inset glow, and 2px corner braces — drew a rectangle
+   first and the content second, which is why the whole page read as a grid of
+   containers instead of readings over a surface.
+
+   What stays is the corner tick, because that is the language; what goes is
+   the weight. A hairline edge at a tenth of the old opacity, a background you
+   can see the core through, and the glow moved OUTSIDE so it lifts the panel
+   off the page rather than filling it in. */
+.panel{background:linear-gradient(rgba(6,18,36,.44),rgba(4,12,26,.30));
+       border:1px solid rgba(0,243,255,.10);border-radius:10px;padding:14px;
+       position:relative;min-height:0;display:flex;flex-direction:column;gap:9px;
+       box-shadow:0 2px 26px rgba(0,20,60,.30);
+       backdrop-filter:blur(2px)}
+.panel::before{content:'';position:absolute;top:-1px;left:-1px;width:13px;height:13px;
+  border-top:1px solid rgba(0,243,255,.55);border-left:1px solid rgba(0,243,255,.55);
+  border-top-left-radius:10px;pointer-events:none}
+.panel::after{content:'';position:absolute;bottom:-1px;right:-1px;width:13px;height:13px;
+  border-bottom:1px solid rgba(0,243,255,.55);border-right:1px solid rgba(0,243,255,.55);
+  border-bottom-right-radius:10px;pointer-events:none}
+/* The core panel carries no chrome at all — the burst IS the panel. */
+.panel.core{background:transparent;border-color:transparent;box-shadow:none}
+.panel.core::before,.panel.core::after{opacity:.35}
 .ptitle{font-size:11px;text-transform:uppercase;letter-spacing:2.2px;color:var(--glow-cyan);
         border-bottom:1px solid rgba(0,243,255,.16);padding-bottom:7px;flex:none;opacity:.9}
 /* The old row was two spans with space-between and no min-width, so a long
@@ -388,7 +404,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
    land on top of the text. The label side now shrinks properly and the badge
    never wraps. */
 .row{display:flex;align-items:flex-start;gap:12px;font-size:13.5px;line-height:1.55;
-     padding:8px 0;border-bottom:1px solid rgba(0,243,255,.07)}
+     padding:8px 0;border-bottom:1px solid rgba(0,243,255,.055)}
 .row:last-child{border-bottom:none}
 .row .k{color:var(--ink);flex:1;min-width:0;overflow-wrap:anywhere}
 .row .v{color:var(--dim);flex:none;white-space:nowrap;text-align:right;font-size:11.5px;
@@ -462,9 +478,24 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .foot{font-size:10.5px;color:var(--dim);letter-spacing:1px;flex:none}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
 .gateBody p{color:var(--dim);font-size:13px;line-height:1.6;margin:10px 0 18px}
-.caps{position:fixed;left:0;right:0;bottom:0;background:rgba(2,8,19,.97);
-      border-top:1px solid var(--glow-blue);padding:11px 18px;z-index:99;display:none}
+/* Captions sit ABOVE the talk bar, never over it. Pinned to the bottom they
+   covered the one thing on the page you always need — the box you type into —
+   so the moment he said anything out loud he could no longer answer in
+   writing. The bar is ~62px; this clears it and leaves a gap.
+
+   It also stops swallowing clicks. A caption is something to read, not
+   something to press, and a full-width fixed panel with pointer events is a
+   lid over whatever is beneath it. The inner text keeps its own events so a
+   long answer can still be scrolled. */
+/* --talkH is measured from the real bar, not guessed. A hard-coded offset was
+   19px short on a 940px viewport and would be wrong again the next time the
+   bar gains a button. */
+.caps{position:fixed;left:0;right:0;bottom:var(--talkH, 124px);background:rgba(2,8,19,.95);
+      border-top:1px solid var(--glow-blue);border-bottom:1px solid var(--glow-blue);
+      padding:10px 18px;z-index:90;display:none;pointer-events:none;
+      backdrop-filter:blur(3px)}
 .caps.on{display:block}
+.caps #captext,.caps .capwho{pointer-events:auto}
 .capwho{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
 .capwho.awake{color:var(--good)}
 #captext{font-size:16px;color:var(--ink);line-height:1.5;max-height:88px;overflow-y:auto}
@@ -600,6 +631,9 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   /* The tool's name and its filename stop competing for one line. */
   .stone .ptitle{flex-wrap:wrap;row-gap:2px}
   .stone .ptitle .live{margin-left:0;flex-basis:100%}
+  /* The sticky talk bar is taller here because of the home-bar inset. */
+  .caps{bottom:var(--talkH, 110px);padding:8px 12px}
+  #captext{font-size:14px;max-height:70px}
 }
 
 /* Phone held sideways: the strip and the sticky bar cost too much of a ~375px
@@ -1115,6 +1149,8 @@ function makeBurst(id, opts){
     t += 0.0042;
     energy += (target-energy)*0.07;
     if(!W||!H){ resize(); requestAnimationFrame(frame); return; }
+    /* Doom owns the canvas in doom mode. Stand down without clearing. */
+    if(document.documentElement.dataset.mode === 'doom'){ requestAnimationFrame(frame); return; }
 
     ctx.clearRect(0,0,W,H);
     const cx=W/2, cy=H/2;
@@ -1465,12 +1501,18 @@ function makeCore(id, opts) {
     if (!W || !H) { resize(); requestAnimationFrame(frame); return; }
     t += 1;
     energy += (target - energy) * 0.02;
+    const doomNow = document.documentElement.dataset.mode === 'doom';
+    /* Two renderers share the arc canvas — the burst for Jarvis, this one for
+       Doom — and whichever is not on duty returns WITHOUT clearing. Clearing
+       is what would make them fight: each would wipe the other's frame and you
+       would get a flicker at 60fps rather than a picture. */
+    if (opts.doomOnly && !doomNow) { requestAnimationFrame(frame); return; }
     ctx.clearRect(0, 0, W, H);
 
     const cx = W / 2, cy = H / 2;
     const R = Math.min(W, H) * (opts.scale || 0.30);
     const yaw = t * (0.0022 + energy * 0.0024);
-    const doom = document.documentElement.dataset.mode === 'doom';
+    const doom = doomNow;
     const cyan = doom ? '61,220,132' : '0,243,255';
     if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
@@ -1560,6 +1602,8 @@ function makeCore(id, opts) {
    globe as the thing you see on the way in, and it still is; the core you sit
    in front of all day is the one that had to come alive. */
 const arc = makeBurst('arc', { scale: 0.60 });
+/* The Doom figure he drew, still on the same canvas, still only in doom mode. */
+const doomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
 
 /* fmt() may return: { n, time, past, left, right, cls, clamp }
@@ -1740,7 +1784,8 @@ function meter(node){
     if(!alive) return;
     an.getByteTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum+=Math.abs(buf[i]-128);
-    arc.set(Math.min(1,(sum/buf.length)/30));
+    const lvl=Math.min(1,(sum/buf.length)/30);
+    arc.set(lvl); try{ doomCore.set(lvl); }catch(_){}
     requestAnimationFrame(poll);
   })();
   return ()=>{ alive=false; audioOwns=false; try{node.disconnect(an);}catch(_){} };
@@ -2251,6 +2296,28 @@ function showView(name){
 /* Must match the breakpoint that hides .railFoot, or the TALK button ends up
    in a container CSS has already taken off the screen. */
 const phone=window.matchMedia('(max-width:1100px)');
+/* Keep --talkH honest: the talk bar changes height when the mic moves into it
+   on a phone, when the safe-area inset applies, and whenever the window is
+   resized. Captions read off it so they always clear the box he types in. */
+function measureTalk(){
+  const bar=document.querySelector('.talkBar');
+  if(!bar) return;
+  const r=bar.getBoundingClientRect();
+  if(r.height<=0) return;                 /* not laid out yet — try again later */
+  /* The distance from the bottom of the WINDOW to the TOP of the bar. Not the
+     bar's height: the bar is not flush to the bottom — there is body padding
+     and a footer line under it — so height alone left the caption sitting
+     across the bar it was supposed to clear. */
+  const clear=Math.max(0, Math.round(window.innerHeight - r.top)) + 12;
+  document.documentElement.style.setProperty('--talkH', clear+'px');
+}
+window.addEventListener('resize',measureTalk);
+if(window.ResizeObserver){
+  const tb=document.querySelector('.talkBar');
+  if(tb) new ResizeObserver(measureTalk).observe(tb);
+}
+measureTalk();
+
 function placeMic(reflow){
   const mic=el('micBig'), bar=document.querySelector('.talkBar'),
         foot=document.querySelector('.railFoot');
@@ -2264,6 +2331,7 @@ function placeMic(reflow){
      constants declared further down the file. They are in the temporal dead
      zone until then, so touching it here would throw. */
   if(reflow) fitStone();
+  measureTalk();
 }
 placeMic(false);
 phone.addEventListener('change',()=>placeMic(true));
@@ -4449,6 +4517,9 @@ function renderPeople(s){
 authMod.onAuthStateChanged(auth,u=>{
   el('gate').hidden=!!u;
   el('app').hidden=!u;
+  /* The bar has no height while the app is hidden behind the gate, so the
+     first measurement has to happen after sign-in, not at load. */
+  requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
   if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
          load(); loadThread(); setInterval(load,30000); }
