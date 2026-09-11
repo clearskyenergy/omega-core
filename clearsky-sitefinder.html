@@ -467,6 +467,21 @@
 .phSugUse{font:inherit;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:5px;
   border:1px solid var(--line);background:#fff;cursor:pointer}
 .phSugUse:hover{background:#eef2f6}
+  /* One row per option, price hard right, so a rep compares down a column
+     rather than reading sentences. */
+  .fitList{margin:8px 0 4px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .fitRow{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:9px 11px;
+    border-top:1px solid var(--line);align-items:baseline}
+  .fitRow:first-child{border-top:0}
+  .fitRow:nth-child(even){background:#fafbfc}
+  .fitName{font-weight:700;font-size:12.5px}
+  .fitModel{display:block;font-weight:500;font-size:11px;color:var(--mut);margin-top:1px}
+  .fitSpec{grid-column:1;font-size:11.5px;color:var(--ink)}
+  .fitNote{grid-column:1;font-size:11px;color:var(--mut);line-height:1.45;margin-top:2px}
+  .fitPrice{grid-row:1;grid-column:2;text-align:right;font-weight:700;font-size:13px;
+    white-space:nowrap}
+  .fitPrice small{display:block;font-weight:500;font-size:10px;color:var(--mut)}
+  .fitNoPrice{font-weight:600;font-size:11px;color:var(--mut)}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -4592,7 +4607,8 @@
      falls back to the model's generic rates and says so in the audit. A
      missing quote must degrade to an honest number, never to a blank
      panel. */
-  var _orgPricing = null;     /* the selected supplier's record, or null */
+  var _orgPricing = null;     /* the selected supplier's record, or null   */
+  var _orgVendors = null;     /* ALL of them, for the fit list            */
 
   function loadOrgPricing() {
     if (!db || !ORG) return;
@@ -4603,9 +4619,16 @@
         var doc = snap.data() || {};
         var st = doc.data || {};
         var sel = st.sel, vendors = st.vendors;
-        if (!sel || !vendors || !vendors[sel]) return;
+        /* Every supplier, not just the selected one: pricing uses the
+           selection, but "what could I actually build here" is a question
+           about the whole catalogue. */
+        if (vendors) _orgVendors = vendors;
+        if (!sel || !vendors || !vendors[sel]) { try { redrawSel(); } catch (e0) {} return; }
         var v = vendors[sel];
-        if (!window.OmegaCostModel || !OmegaCostModel.vendorHasPrice(v)) return;
+        if (!window.OmegaCostModel || !OmegaCostModel.vendorHasPrice(v)) {
+          try { redrawSel(); } catch (e1) {}
+          return;
+        }
         _orgPricing = v;
         /* Anything already priced was priced on the generic rate, so it is
            now wrong by exactly the amount the quote moves it. Re-price
@@ -4626,6 +4649,114 @@
      site it is about to write without going anywhere near the UI — and
      without the fallback chain, which ends at downloadPacket and would
      otherwise call itself. */
+  function redrawSel() {
+    var id = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    var rec = id && ST.byId[id];
+    if (rec) redrawDrawer(rec);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     WHAT COULD ACTUALLY GO HERE
+
+     The panel said what the circuit allows and what it would cost, and
+     never what a rep could BUY. Those are different questions, and the gap
+     is where most of the surprise in this business lives: a supplier sells
+     a 5 MWh block, so a site with room for 3.8 MWh has one real option and
+     it is not 3.8 MWh.
+
+     Built ONLY from what the organisation has on file. This tool ships no
+     catalogue — an invented product is worse than none, because somebody
+     will quote it.
+
+     THE DURATION MOVES, NOT THE POWER. The circuit caps kW and does not
+     care about kWh, so a block that overshoots the target energy is not
+     waste; it is a longer system at the same power, which is usually worth
+     more. A block that undershoots means two blocks or a smaller product,
+     and that is said rather than rounded away. */
+  function fitOptions(r) {
+    if (!_orgVendors || !window.OmegaCostModel) return null;
+    var pick = sizePick(r);
+    if (pick.kw == null) return null;
+    var targetKwh = pick.kwh, out = [], k;
+    for (k in _orgVendors) {
+      if (!_orgVendors.hasOwnProperty(k)) continue;
+      var v = _orgVendors[k];
+      if (!v || !v.name) continue;
+      var priced = OmegaCostModel.vendorHasPrice(v);
+      var blockKwh = (typeof v.blockMwh === "number" && v.blockMwh > 0)
+                       ? v.blockMwh * 1000 : null;
+      if (!priced && !blockKwh) continue;
+      var o = { key:k, name:v.name, model:v.model || "", priced:priced,
+                tier: OmegaCostModel.vendorTier(v),
+                stale: OmegaCostModel.quoteStale(v) };
+      if (blockKwh) {
+        var n = Math.max(1, Math.round(targetKwh / blockKwh));
+        o.blocks = n; o.blockKwh = blockKwh;
+        o.kwh = n * blockKwh; o.hours = o.kwh / pick.kw;
+        o.overshootKwh = o.kwh - targetKwh;
+      } else {
+        o.kwh = targetKwh; o.hours = pick.hours;
+      }
+      if (priced) o.usd = v.dcPerKwh * o.kwh;
+      out.push(o);
+    }
+    out.sort(function (a, b) {
+      return Math.abs(a.kwh - targetKwh) - Math.abs(b.kwh - targetKwh);
+    });
+    return { target:targetKwh, kw:pick.kw, hours:pick.hours, options:out };
+  }
+
+  function fitOptionsHtml(r) {
+    var f = fitOptions(r);
+    var head = '<div class="sec"><h4>What fits here</h4>';
+    if (!f) {
+      return head + '<p class="note">Battery options appear here once this site ' +
+        'has a circuit to size against and your organisation has supplier pricing ' +
+        'on file. Pricing is kept in the cost estimator, under ' +
+        '<b>Battery pricing on file</b>.</p></div>';
+    }
+    if (!f.options.length) {
+      return head + '<p class="note">Nothing on file to offer against ' +
+        fmt(Math.round(f.target)) + ' kWh. Add a supplier price or a block size in ' +
+        'the cost estimator and the options that fit this site appear here. This ' +
+        'tool ships no catalogue of its own \u2014 an invented product is worse than ' +
+        'none, because somebody will quote it.</p></div>';
+    }
+    var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>, which ' +
+      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. What your ' +
+      'suppliers actually sell against that:</p><div class="fitList">';
+    for (var i = 0; i < f.options.length; i++) {
+      var o = f.options[i];
+      h += '<div class="fitRow">' +
+        '<div class="fitName">' + esc(o.name) +
+          (o.model ? '<span class="fitModel">' + esc(o.model) + '</span>' : '') + '</div>' +
+        '<div class="fitSpec">' +
+          (o.blocks
+            ? o.blocks + ' \u00d7 ' + (o.blockKwh / 1000) + ' MWh block' +
+              (o.blocks > 1 ? 's' : '') + ' \u2014 ' + fmt(Math.round(o.kwh)) + ' kWh at ' +
+              fmt(f.kw) + ' kW, <b>' + (Math.round(o.hours * 10) / 10) + ' h</b>'
+            : fmt(Math.round(o.kwh)) + ' kWh at ' + fmt(f.kw) + ' kW') +
+        '</div>' +
+        (o.overshootKwh
+          ? '<div class="fitNote">' +
+              (o.overshootKwh > 0
+                ? fmt(Math.round(o.overshootKwh)) + ' kWh more than the target \u2014 the ' +
+                  'circuit caps kW, not kWh, so that is a longer system at the same ' +
+                  'power rather than waste'
+                : fmt(Math.round(-o.overshootKwh)) + ' kWh short of the target') +
+            '</div>'
+          : '') +
+        '<div class="fitPrice">' +
+          (o.priced
+            ? '$' + fmt(Math.round(o.usd)) + '<small> DC block' +
+              (o.stale ? ' \u00b7 quote stale' : '') + '</small>'
+            : '<span class="fitNoPrice">no price on file</span>') +
+        '</div></div>';
+    }
+    return h + '</div><p class="note">DC block only, at the supplier\u2019s own terms. ' +
+      'Press <b>Open the estimator</b> for the installed cost.</p></div>';
+  }
+
   function computeEstimate(r) {
     var CM = window.OmegaCostModel;
     if (!CM || typeof CM.price !== "function") return null;
@@ -5505,6 +5636,10 @@
             ' kW; this customer\u2019s peak only justifies ' + fmt(sz.loadCeiling) + ' kW of shaving.') +
       '</div></div>' +
       sizerHtml(r, pick) +
+      /* Directly under the sizer, because it answers the question the sizer
+         provokes: the rep has just settled on a number and the next thought
+         is "so what do I actually put there". */
+      fitOptionsHtml(r) +
       (r.saveLo ? '<div class="note">Demand-charge exposure removed: <b>' + money(r.saveLo) +
         '\u2013' + money(r.saveHi) + '</b> a year at $' + DEMAND_LO + '\u2013' + DEMAND_HI +
         '/kW-month. Screening range, not a quote.</div>' : '') +
@@ -5639,7 +5774,13 @@
         '</div>');
     }
     h.push('<div class="form" style="margin-top:11px">' +
-      '<div><label for="rKw">Hold (kW)</label><input id="rKw" type="number" min="1" step="25" value="' +
+      /* step="25" with min="1" makes the valid values 1, 26, 51 … so the
+         browser rejected 944 — the exact figure the panel had just put in
+         the box and told the rep was available. "The two nearest valid
+         values are 926 and 951" is not a sentence anybody should meet while
+         trying to claim a circuit. A hold is a number of kilowatts, not a
+         multiple of anything. */
+      '<div><label for="rKw">Hold (kW)</label><input id="rKw" type="number" min="1" step="1" value="' +
         (own ? own.kw : Math.max(0, Math.min(sz.kw || 0, st.sellable || 0))) + '"></div>' +
       '<div><label for="rSt">Stage</label><select id="rSt">' + statusOpts(own && own.status) + '</select></div>' +
       '<div class="full"><label for="rNote">Note</label>' +
