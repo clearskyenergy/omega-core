@@ -840,6 +840,8 @@
 <!-- What the battery earns, and the incentives against it. Same discipline as
      the cost model: every figure declares its source. -->
 <script src="/omega-value-stack.js"></script>
+<!-- Published product datasheets. Specs ship; prices never do. -->
+<script src="/omega-bess-catalog.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -4793,17 +4795,40 @@
     return [];
   }
 
+  /* The suppliers to size against: whatever the organisation has on file,
+     and failing that the shipped catalogue so a card still names a real
+     product. A supplier the org HAS configured always wins — their record
+     carries prices and possibly a revised datasheet, and this must never
+     quietly prefer a shipped spec over one somebody entered. */
+  function vendorsForFit() {
+    var out = {}, k, any = false;
+    if (_orgVendors) {
+      for (k in _orgVendors) {
+        if (!_orgVendors.hasOwnProperty(k)) continue;
+        out[k] = _orgVendors[k]; any = true;
+      }
+    }
+    if (!any && window.OmegaBessCatalog) {
+      var d = OmegaBessCatalog.defaultVendor();
+      if (d) out[d.key] = d;
+    }
+    return out;
+  }
+
   function fitOptions(r) {
-    if (!_orgVendors || !window.OmegaCostModel) return null;
+    var VEND = vendorsForFit();
+    var hasAny = false, vk;
+    for (vk in VEND) if (VEND.hasOwnProperty(vk)) { hasAny = true; break; }
+    if (!hasAny || !window.OmegaCostModel) return null;
     var pick = sizePick(r);
     if (pick.kw == null) return null;
     var targetKwh = pick.kwh;
     var ceilKwh = pick.kw * MAX_FIT_HOURS;
     var out = [], k;
 
-    for (k in _orgVendors) {
-      if (!_orgVendors.hasOwnProperty(k)) continue;
-      var v = _orgVendors[k];
+    for (k in VEND) {
+      if (!VEND.hasOwnProperty(k)) continue;
+      var v = VEND[k];
       if (!v || !v.name) continue;
       var priced = OmegaCostModel.vendorHasPrice(v);
       var prods = productsOf(v);
@@ -4811,7 +4836,11 @@
 
       var base = { key:k, name:v.name, priced:priced,
                    tier: OmegaCostModel.vendorTier(v),
-                   stale: OmegaCostModel.quoteStale(v) };
+                   stale: OmegaCostModel.quoteStale(v),
+                   /* Whether this came from the shipped datasheet or from
+                      something the organisation entered. The card needs to
+                      distinguish a default from a decision. */
+                   fromCatalog: !!v.fromCatalog };
 
       if (!prods.length) {
         /* Priced but no product on file: it can still say what the target
@@ -5005,8 +5034,10 @@
     if (shownKwh) {
       rows.push(["Battery", (Math.round(shownKwh / 100) / 10) + ' MWh',
         (fit
-          ? (fit.units ? fit.units + '\u00d7 ' : '') + esc(fit.model || fit.name) +
-            ' \u00b7 ' + fmt(pk.kw) + ' kW, ' + (Math.round(fit.hours * 10) / 10) + ' h'
+          ? (fit.units ? fit.units + '\u00d7 ' : '') +
+            esc(fit.name) + ' ' + esc(fit.model || '') +
+            ' \u00b7 ' + fmt(pk.kw) + ' kW, ' + (Math.round(fit.hours * 10) / 10) + ' h' +
+            (fit.fromCatalog ? ' \u00b7 default' : '')
           : fmt(pk.kw || (est && est.kw)) + ' kW for ' +
             (Math.round((pk.hours || 0) * 10) / 10) + ' hours \u00b7 no product picked yet')]);
     }
@@ -5142,6 +5173,7 @@
         'on file. Pricing is kept in the cost estimator, under ' +
         '<b>Battery pricing on file</b>.</p></div>';
     }
+    var cat = f.options.length && f.options[0].fromCatalog;
     if (!f.options.length) {
       return head + '<p class="note">Nothing on file to offer against ' +
         fmt(Math.round(f.target)) + ' kWh. Add a supplier price or a block size in ' +
@@ -5187,7 +5219,12 @@
         '</div></div>';
     }
     return h + '</div><p class="note">DC block only, at the supplier\u2019s own terms. ' +
-      'Press <b>Open the estimator</b> for the installed cost.</p></div>';
+      'Press <b>Open the estimator</b> for the installed cost.' +
+      (cat ? ' Sized against the shipped ' + esc(OmegaBessCatalog.entry().name) +
+             ' datasheet because no supplier pricing is loaded \u2014 ' +
+             esc(OmegaBessCatalog.entry().source) + '. Pick a supplier in the cost ' +
+             'estimator to change it.'
+           : '') + '</p></div>';
   }
 
   function computeEstimate(r) {
