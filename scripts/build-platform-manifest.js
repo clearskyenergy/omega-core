@@ -25,9 +25,14 @@ var execSync = require('child_process').execSync;
 var ROOT = path.join(__dirname, '..');
 var OUT = path.join(ROOT, 'assets', 'platform.json');
 
-/* Not tools: the shell, the gate, and the twin's own two surfaces. */
+/* Not tools: the shell, the gate, and the twin's own two surfaces.
+
+   cameras.html is in the repo but is not part of the product either — it is
+   one person's Ring wall, not something a tenant is ever gated into. Listing
+   it on the OMEGA map would put it in front of every reader of that map and
+   imply it ships with the platform. */
 var SKIP = ['mission.html', 'jarvis.html', 'login.html', 'index.html',
-            'start.html', '404.html'];
+            'start.html', '404.html', 'cameras.html'];
 
 /* ONLY WHAT IS ACTUALLY IN THE REPO.
 

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<!--
+  OMEGA · Cameras — the Ring wall
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+  ---------------------------------------------------------------------------
+  Every device the Ring account has authorised this app to see, with a still
+  from each one, and live video on demand.
+
+  THE PAGE HOLDS NO CREDENTIAL. It calls /api/ring, which is the only thing
+  that knows a Ring token — see the header of that file for why. A token in a
+  page is a token anyone who opens the page can lift, and a Ring token does
+  not merely read data, it opens a live video session into a house.
+
+  Ring speaks JSON:API, so nothing here reads `device.name`. A resource is
+  {type, id, attributes, relationships} and the related records arrive in a
+  separate `included` array that has to be indexed and joined back. That join
+  is the only clever thing in this file.
+
+  ONE HONEST NOTE ON FIELD NAMES. The published docs give the endpoints, the
+  envelope and the relationships, but not the attribute names inside each
+  resource. So the renderer asks for the first of several plausible keys and
+  falls back to a dash rather than inventing a value, and every card carries a
+  RAW button that shows exactly what Ring returned. When the real names are
+  in front of us the guesswork comes out and the names go in.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cameras · OMEGA</title>
+<style>
+:root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow:#00f3ff;--ink:#dceefc;
+      --dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
+      --edge:1px solid rgba(0,243,255,.3);
+      --mono:'SF Mono',ui-monospace,Menlo,'Courier New',monospace;
+      --ui:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--ui)}
+body{background:var(--bg);color:var(--ink);min-height:100vh;min-height:100dvh;
+     padding:16px;display:flex;flex-direction:column;gap:14px}
+
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;
+       border-bottom:var(--edge);padding-bottom:10px;flex-wrap:wrap}
+.title{font-family:var(--mono);font-size:18px;letter-spacing:3px;color:var(--glow)}
+.sub{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim)}
+button{background:transparent;border:var(--edge);color:var(--glow);font-family:var(--mono);
+       font-size:11px;letter-spacing:1px;padding:9px 13px;cursor:pointer;border-radius:4px;
+       min-height:38px}
+button:hover{background:rgba(0,243,255,.12)}
+button:disabled{opacity:.45;cursor:default}
+
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:10px;padding:5px 10px;border:var(--edge);
+       border-radius:4px;background:rgba(0,243,255,.1);letter-spacing:1px}
+.badge.err{border-color:var(--bad);color:var(--bad)}
+.badge.ok{border-color:var(--good);color:var(--good)}
+
+/* The wall. auto-fill with a minimum means one column on a phone and as many
+   as fit on a desk, without a breakpoint per size. */
+.wall{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.cam{background:var(--panel);border:var(--edge);border-radius:8px;overflow:hidden;
+     display:flex;flex-direction:column;box-shadow:inset 0 0 15px rgba(0,68,255,.2)}
+.shot{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
+.shot img,.shot video{width:100%;height:100%;object-fit:cover;display:block}
+.shot .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:2px;
+          text-align:center;padding:16px;line-height:1.7}
+.live{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:9px;
+      letter-spacing:1.5px;color:#fff;background:rgba(255,60,60,.85);
+      padding:3px 7px;border-radius:3px}
+.meta{padding:12px;display:flex;flex-direction:column;gap:8px}
+.nm{font-size:15px;line-height:1.3}
+.sm{font-family:var(--mono);font-size:10px;letter-spacing:1.2px;color:var(--dim);
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
+.dot.on{background:var(--good);box-shadow:0 0 7px var(--good)}
+.dot.off{background:var(--bad)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts button{flex:1;min-width:84px;padding:8px 6px;font-size:10px}
+
+.note{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:1px;
+      line-height:1.8}
+.raw{background:#000;border:1px solid rgba(0,243,255,.18);border-radius:6px;padding:10px;
+     font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:pre-wrap;
+     word-break:break-word;max-height:320px;overflow:auto;line-height:1.55}
+[hidden]{display:none!important}
+
+.gate{min-height:70vh;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:14px;text-align:center;padding:20px}
+.gate[hidden]{display:none!important}
+.gate p{color:var(--dim);font-size:13px;max-width:420px;line-height:1.7}
+
+.evts{display:flex;flex-direction:column;gap:0}
+.evt{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(0,243,255,.07);
+     font-size:12.5px;align-items:baseline}
+.evt:last-child{border-bottom:none}
+.evt .t{font-family:var(--mono);font-size:10px;color:var(--dim);flex:none}
+
+@media(max-width:700px){
+  body{padding:10px}
+  .wall{grid-template-columns:1fr}
+  .title{font-size:16px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="title">CAMERAS</div>
+    <div class="sub">RING · <span id="who">—</span></div>
+  </div>
+  <div class="bar">
+    <span class="badge" id="badge">CONNECTING</span>
+    <button id="refresh">REFRESH</button>
+    <button id="signout" hidden>SIGN OUT</button>
+  </div>
+</header>
+
+<div class="gate" id="gate" hidden>
+  <div class="title">CAMERAS</div>
+  <p>Live video from the Ring account. The credential lives on the server;
+     this page never holds one.</p>
+  <button id="signin">AUTHENTICATE</button>
+  <p id="gateErr" style="color:var(--bad);font-size:12px"></p>
+</div>
+
+<main id="app" hidden style="display:flex;flex-direction:column;gap:14px">
+  <div class="wall" id="wall"></div>
+  <div class="note" id="empty" hidden></div>
+  <div class="raw" id="raw" hidden></div>
+</main>
+
+<script type="module">
+/* Public web config — the Firestore rules and /api/ring's allowlist are what
+   gate access, not this. */
+const FIREBASE_CONFIG = {
+  apiKey:"AIzaSyABoM1lgOYUnd5ZadaoTMhYmA9cHa8Tyo0",
+  authDomain:"clearsky-portal.firebaseapp.com",
+  projectId:"clearsky-portal",
+  storageBucket:"clearsky-portal.firebasestorage.app",
+  messagingSenderId:"742134484347",
+  appId:"1:742134484347:web:ab0f95fd221536158481de"
+};
+const V='https://www.gstatic.com/firebasejs/10.12.5/';
+const [appMod,authMod]=await Promise.all([import(V+'firebase-app.js'),import(V+'firebase-auth.js')]);
+const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(FIREBASE_CONFIG);
+const auth=authMod.getAuth(app);
+
+const el=id=>document.getElementById(id);
+const dash='—';
+
+function badge(text, kind){
+  const b=el('badge'); b.textContent=text; b.className='badge'+(kind?' '+kind:'');
+}
+
+/* ── talking to the proxy ────────────────────────────────────────────────
+   Every call carries the caller's Firebase ID token. /api/ring verifies it,
+   checks the allowlist, and only then talks to Ring. */
+async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
+
+async function ring(path, opts){
+  opts=opts||{};
+  const t=await token();
+  if(!t) throw new Error('not signed in');
+  const r=await fetch('/api/ring?path='+encodeURIComponent(path),{
+    method:opts.method||'GET',
+    headers:Object.assign({Authorization:'Bearer '+t},
+      opts.body?{'Content-Type':'application/json'}:{}),
+    body:opts.body?JSON.stringify(opts.body):undefined
+  });
+  if(opts.blob){
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||('HTTP '+r.status)); }
+    return r.blob();
+  }
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+
+/* ── JSON:API ────────────────────────────────────────────────────────────
+   A response is {data:[...], included:[...]}. A device does not carry its own
+   status — it carries a POINTER to one, and the status itself is somewhere in
+   `included`. So index everything by type+id first, then follow the pointers.
+   Doing this properly once is what stops every field read below from being a
+   guess about where the value lives. */
+function indexIncluded(doc){
+  const ix={};
+  (doc.included||[]).forEach(r=>{ ix[r.type+'/'+r.id]=r; });
+  return ix;
+}
+function related(dev, name, ix){
+  const rel=(dev.relationships||{})[name];
+  if(!rel||!rel.data) return null;
+  const d=Array.isArray(rel.data)?rel.data[0]:rel.data;
+  if(!d) return null;
+  return ix[d.type+'/'+d.id]||null;
+}
+/* First key that actually carries a value. Ring's attribute names are not in
+   the published docs, so this asks for the plausible ones rather than
+   hardcoding one and rendering undefined. */
+function pick(attrs){
+  const a=attrs||{};
+  for(let i=1;i<arguments.length;i++){
+    const k=arguments[i];
+    if(a[k]!==undefined && a[k]!==null && a[k]!=='') return a[k];
+  }
+  return null;
+}
+
+/* ── the wall ────────────────────────────────────────────────────────────── */
+let devices=[], incl={};
+const sessions=new Map();   /* deviceId -> {pc, location} for live views */
+
+async function load(){
+  badge('LOADING');
+  try{
+    const doc=await ring('/v1/devices?include=status,capabilities,location');
+    devices=doc.data||[];
+    incl=indexIncluded(doc);
+    render();
+    /* Kept for when a field name does not match — this is the ground truth,
+       and it beats me guessing twice. */
+    el('raw').textContent=JSON.stringify(doc,null,2);
+    badge(devices.length+' DEVICE'+(devices.length===1?'':'S'),'ok');
+  }catch(e){
+    badge('ERROR','err');
+    el('wall').textContent='';
+    el('empty').hidden=false;
+    el('empty').textContent=e.message;
+    el('raw').hidden=true;
+  }
+}
+
+function render(){
+  const wall=el('wall'); wall.textContent='';
+  el('empty').hidden=devices.length>0;
+  if(!devices.length){
+    el('empty').textContent='No devices returned. Either the Ring account has not '
+      + 'authorised this app for any device, or the token is for a different account.';
+    return;
+  }
+  devices.forEach(dev=>{
+    const a=dev.attributes||{};
+    const st=related(dev,'status',incl), loc=related(dev,'location',incl);
+    const sa=(st&&st.attributes)||{}, la=(loc&&loc.attributes)||{};
+
+    const card=document.createElement('div'); card.className='cam';
+
+    const shot=document.createElement('div'); shot.className='shot';
+    const ph=document.createElement('div'); ph.className='ph';
+    ph.textContent='NO STILL YET';
+    shot.appendChild(ph);
+    card.appendChild(shot);
+
+    const meta=document.createElement('div'); meta.className='meta';
+    const nm=document.createElement('div'); nm.className='nm';
+    nm.textContent=pick(a,'name','device_name','description','label')||('Device '+dev.id);
+    meta.appendChild(nm);
+
+    const sm=document.createElement('div'); sm.className='sm';
+    /* Online is a tri-state: true, false, and "Ring did not say". Painting
+       an unknown as offline would invent a fact about a camera. */
+    const online=pick(sa,'online','is_online','connected');
+    const dot=document.createElement('span');
+    dot.className='dot'+(online===true?' on':online===false?' off':'');
+    sm.appendChild(dot);
+    const stx=document.createElement('span');
+    stx.textContent=online===true?'ONLINE':online===false?'OFFLINE':'STATUS UNKNOWN';
+    sm.appendChild(stx);
+
+    const model=pick(a,'model','device_type','kind','type');
+    if(model){ const x=document.createElement('span'); x.textContent=String(model).toUpperCase(); sm.appendChild(x); }
+    const batt=pick(sa,'battery_level','battery','battery_percentage');
+    if(batt!=null){ const x=document.createElement('span'); x.textContent='BATT '+batt+'%'; sm.appendChild(x); }
+    const place=[pick(la,'state','region'),pick(la,'country')].filter(Boolean).join(' · ');
+    if(place){ const x=document.createElement('span'); x.textContent=place.toUpperCase(); sm.appendChild(x); }
+    meta.appendChild(sm);
+
+    const acts=document.createElement('div'); acts.className='acts';
+    const bStill=document.createElement('button'); bStill.textContent='STILL';
+    const bLive=document.createElement('button'); bLive.textContent='LIVE';
+    const bHist=document.createElement('button'); bHist.textContent='EVENTS';
+    const bRaw=document.createElement('button'); bRaw.textContent='RAW';
+    acts.append(bStill,bLive,bHist,bRaw);
+    meta.appendChild(acts);
+
+    const out=document.createElement('div'); out.className='note'; out.hidden=true;
+    meta.appendChild(out);
+    card.appendChild(meta);
+    wall.appendChild(card);
+
+    bStill.addEventListener('click',()=>still(dev,shot,ph,bStill,out));
+    bLive.addEventListener('click',()=>toggleLive(dev,shot,ph,bLive,out));
+    bHist.addEventListener('click',()=>events(dev,out,bHist));
+    bRaw.addEventListener('click',()=>{
+      out.hidden=false;
+      const pre=document.createElement('div'); pre.className='raw';
+      pre.textContent=JSON.stringify({device:dev,status:st,location:loc},null,2);
+      out.textContent=''; out.appendChild(pre);
+    });
+  });
+}
+
+/* ── a still ─────────────────────────────────────────────────────────────── */
+async function still(dev, shot, ph, btn, out){
+  btn.disabled=true; ph.textContent='ASKING THE CAMERA…';
+  try{
+    const b=await ring('/v1/devices/'+encodeURIComponent(dev.id)+'/media/image/download',
+                       {method:'POST', body:{}, blob:true});
+    const img=shot.querySelector('img')||document.createElement('img');
+    /* Revoke the previous object URL or a page left open all day leaks one
+       blob per refresh. */
+    if(img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    const u=URL.createObjectURL(b);
+    img.dataset.url=u; img.src=u; img.alt='';
+    if(!img.parentNode) shot.appendChild(img);
+    ph.hidden=true;
+  }catch(e){
+    ph.hidden=false; ph.textContent='NO STILL — '+e.message.toUpperCase();
+    out.hidden=false; out.textContent=e.message;
+  }
+  btn.disabled=false;
+}
+
+/* ── live view, over WHEP ────────────────────────────────────────────────
+   WebRTC in one direction: the browser makes an offer, Ring answers, video
+   arrives. Two things matter and both are easy to get wrong.
+
+   The transceiver has to be added BEFORE createOffer, or the offer describes
+   a connection that receives nothing and the answer politely agrees.
+
+   And the session has to be DELETED when the view closes. A live view nobody
+   closed is a camera left running — it costs battery on the device and it is
+   the kind of thing that only shows up as "why is the doorbell flat again". */
+async function toggleLive(dev, shot, ph, btn, out){
+  if(sessions.has(dev.id)){ return stopLive(dev, shot, ph, btn); }
+  btn.disabled=true; btn.textContent='…'; ph.hidden=false; ph.textContent='OPENING STREAM…';
+  try{
+    const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+    pc.addTransceiver('video',{direction:'recvonly'});
+    pc.addTransceiver('audio',{direction:'recvonly'});
+
+    const vid=document.createElement('video');
+    vid.autoplay=true; vid.playsInline=true; vid.muted=true; vid.controls=false;
+    pc.ontrack=ev=>{ if(ev.streams&&ev.streams[0]){ vid.srcObject=ev.streams[0]; ph.hidden=true; } };
+
+    const offer=await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    /* Wait for ICE gathering: a non-trickle WHEP POST must carry the full
+       candidate list, and sending the offer early yields a session that
+       negotiates and then never produces a frame. Capped, because a browser
+       behind a hostile network can gather forever. */
+    await iceDone(pc, 4000);
+
+    const res=await ring('/v1/devices/'+encodeURIComponent(dev.id)+'/media/streaming/whep/sessions',
+                         {method:'POST', body:{sdp:pc.localDescription.sdp}});
+    if(!res.sdp) throw new Error('no answer from Ring');
+    await pc.setRemoteDescription({type:'answer', sdp:res.sdp});
+
+    shot.querySelectorAll('img').forEach(i=>i.remove());
+    shot.appendChild(vid);
+    const tag=document.createElement('div'); tag.className='live'; tag.textContent='● LIVE';
+    shot.appendChild(tag);
+
+    sessions.set(dev.id,{pc, location:res.location, vid, tag});
+    btn.textContent='STOP'; btn.disabled=false;
+    out.hidden=true;
+  }catch(e){
+    ph.hidden=false; ph.textContent='NO STREAM';
+    out.hidden=false; out.textContent=e.message;
+    btn.textContent='LIVE'; btn.disabled=false;
+    const s=sessions.get(dev.id); if(s&&s.pc) try{s.pc.close();}catch(_){}
+    sessions.delete(dev.id);
+  }
+}
+
+function iceDone(pc, ms){
+  if(pc.iceGatheringState==='complete') return Promise.resolve();
+  return new Promise(res=>{
+    const t=setTimeout(go, ms);
+    function go(){ clearTimeout(t); pc.removeEventListener('icegatheringstatechange',chk); res(); }
+    function chk(){ if(pc.iceGatheringState==='complete') go(); }
+    pc.addEventListener('icegatheringstatechange',chk);
+  });
+}
+
+async function stopLive(dev, shot, ph, btn){
+  const s=sessions.get(dev.id); sessions.delete(dev.id);
+  if(!s) return;
+  try{ s.pc.close(); }catch(_){}
+  if(s.vid) s.vid.remove();
+  if(s.tag) s.tag.remove();
+  ph.hidden=false; ph.textContent='STREAM CLOSED';
+  btn.textContent='LIVE';
+  /* Tell Ring too. Closing the peer connection ends it for US; the session on
+     their side is what keeps the camera awake. */
+  if(s.location){
+    const m=/\/v1\/devices\/[^/]+\/media\/streaming\/whep\/sessions\/[^/?]+/.exec(s.location);
+    if(m){ try{ await ring(m[0],{method:'DELETE'}); }catch(_){} }
+  }
+}
+/* A closed tab must not leave a camera streaming either. Closing the peer
+   connection is all this can honestly do: telling Ring to drop the session
+   needs an authenticated request, and a tab being torn down is not a place to
+   get an ID token. Ring's own session timeout is the real backstop — which is
+   exactly why STOP does the explicit DELETE while it still can. */
+window.addEventListener('pagehide',()=>{
+  sessions.forEach(s=>{ try{ s.pc.close(); }catch(_){} });
+});
+
+/* ── event history ───────────────────────────────────────────────────────── */
+async function events(dev, out, btn){
+  btn.disabled=true;
+  out.hidden=false; out.textContent='Loading…';
+  try{
+    const doc=await ring('/v1/history/devices/'+encodeURIComponent(dev.id)+'/events');
+    const rows=doc.data||[];
+    out.textContent='';
+    if(!rows.length){ out.textContent='No events on file.'; btn.disabled=false; return; }
+    const list=document.createElement('div'); list.className='evts';
+    rows.slice(0,20).forEach(r=>{
+      const a=r.attributes||{};
+      const d=document.createElement('div'); d.className='evt';
+      const t=document.createElement('span'); t.className='t';
+      const when=pick(a,'created_at','occurred_at','timestamp','time','event_time');
+      const dt=when?new Date(when):null;
+      t.textContent=(dt&&!isNaN(dt))?dt.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):dash;
+      const k=document.createElement('span');
+      k.textContent=String(pick(a,'event_type','type','kind')||r.type||'event').replace(/_/g,' ');
+      d.append(t,k); list.appendChild(d);
+    });
+    out.appendChild(list);
+  }catch(e){ out.textContent=e.message; }
+  btn.disabled=false;
+}
+
+/* ── boot ────────────────────────────────────────────────────────────────── */
+el('signin').addEventListener('click',async()=>{
+  el('gateErr').textContent='';
+  try{ await authMod.signInWithPopup(auth,new authMod.GoogleAuthProvider()); }
+  catch(e){ el('gateErr').textContent=e.message; }
+});
+el('signout').addEventListener('click',()=>authMod.signOut(auth));
+el('refresh').addEventListener('click',load);
+
+authMod.onAuthStateChanged(auth,u=>{
+  el('gate').hidden=!!u;
+  el('app').hidden=!u;
+  el('signout').hidden=!u;
+  el('who').textContent=u?(u.email||dash):dash;
+  if(u) load(); else badge('SIGNED OUT');
+});
+</script>
+</body>
+</html>
