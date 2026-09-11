@@ -193,6 +193,24 @@
   };
 
   S.register = function (key, impl) { S.providers[key] = impl; return impl; };
+
+  /* ── CONFIGURATION, NOT A DEPLOY ──────────────────────────────────────
+     A provider's endpoint, its credential and its field map are facts about
+     an agreement somebody signed, not facts about this codebase. They
+     arrive from the organisation's own settings, so the person holding the
+     credentials can finish the integration without waiting for a release.
+
+     Credentials are never stored in this module. The route is proxied and
+     the key rides on the request the proxy makes, so a browser that can
+     read this file cannot read the key. */
+  S.configure = function (key, cfg) {
+    var p = S.providers[key];
+    if (!p || !cfg) return p;
+    if (typeof cfg.proxy === "string" && cfg.proxy) p.proxy = cfg.proxy;
+    if (cfg.map && typeof cfg.map === "object") p.map = cfg.map;
+    if (typeof cfg.enabled === "boolean") p.enabled = cfg.enabled;
+    return p;
+  };
   S.use = function (key) {
     if (!S.providers[key]) throw new Error("No listing provider registered as '" + key + "'.");
     S.active = S.providers[key]; S.name = key; return S.active;
@@ -325,6 +343,9 @@
 
     search: function (bbox, filters, cb) {
       if (!this.proxy) { cb(new Error("Crexi is not connected. Set the proxy route, then re-run.")); return; }
+      /* `this` does not survive into the callback, and the configured field
+         map lives on the provider. */
+      var self = this;
       var q = "?minLat=" + bbox.s + "&maxLat=" + bbox.n +
               "&minLon=" + bbox.w + "&maxLon=" + bbox.e +
               "&types=" + encodeURIComponent((filters.types || []).join(",")) +
@@ -333,7 +354,7 @@
       req(this.proxy + "/crexi/search" + q, function (err, j) {
         if (err) { cb(err); return; }
         var rows = (j && (j.results || j.data || j.listings)) || [], out = [], i;
-        for (i = 0; i < rows.length; i++) out.push(fromCrexi(rows[i]));
+        for (i = 0; i < rows.length; i++) out.push(fromCrexi(rows[i], self.map));
         cb(null, out);
       });
     },
@@ -343,49 +364,151 @@
        is whether that building is on the market and who to call about it. */
     detail: function (idOrAddr, cb) {
       if (!this.proxy) { cb(null, null); return; }
+      var self = this;
       req(this.proxy + "/crexi/detail?q=" + encodeURIComponent(idOrAddr), function (err, j) {
-        cb(err, err ? null : fromCrexi(j && (j.result || j)));
+        cb(err, err ? null : fromCrexi(j && (j.result || j), self.map));
       });
     }
   });
 
-  /* THE ONLY PLACE CREXI FIELD NAMES APPEAR. Placeholders until a live
-     record is in hand — confirm every one before this reaches a customer. */
-  function fromCrexi(r) {
+  /* ══════════════════════════════════════════════════════════════════════
+     THE FIELD MAP — WHERE THEIR RECORD BECOMES OURS
+
+     Every Crexi field name in this file is a GUESS. They were written from
+     their public documentation before any live record existed, and the
+     original note said to confirm every one before it reached a customer.
+     That note is the problem: confirming them means editing this file,
+     which means a deploy, which means the integration cannot be finished by
+     the person who actually has the credentials and the sample payload.
+
+     So the guesses become DEFAULTS and the real names are configuration.
+     S.configure("crexi", { map: { addr: "propertyAddress", ... } }) and the
+     mapper follows it. Dotted paths work — "location.address" — because
+     listing APIs nest, and a map that cannot express nesting would send
+     everybody straight back to editing this file.
+
+     WHAT IS NOT CONFIGURABLE is the shape it produces. Every consumer of
+     this pipeline — the cards, the ledger, the packet, the estimator —
+     reads the same record, so a provider may say where its data lives but
+     never what the pipeline is called.
+     ══════════════════════════════════════════════════════════════════════ */
+  var CREXI_DEFAULT_MAP = {
+    id:        ["listingId", "id"],
+    addr:      ["address", "streetAddress", "location.address"],
+    city:      ["city", "location.city"],
+    state:     ["state", "location.state"],
+    zip:       ["zip", "zipCode"],
+    lat:       ["latitude", "location.lat"],
+    lon:       ["longitude", "location.lng"],
+    sqft:      ["buildingSize", "squareFeet", "sqft"],
+    lotAcres:  ["lotSize", "acres"],
+    type:      ["propertyType", "assetType"],
+    subtype:   ["propertySubtype", "propertyType"],
+    yearBuilt: ["yearBuilt"],
+    zoning:    ["zoning"],
+    ownerName: ["ownerName"],
+    brokerName:  ["broker.name", "listingAgent.name", "broker.fullName"],
+    brokerFirm:  ["broker.company", "listingAgent.company", "broker.brokerage"],
+    brokerPhone: ["broker.phone", "listingAgent.phone"],
+    brokerEmail: ["broker.email", "listingAgent.email"],
+    dealType:  ["dealType"],
+    askPrice:  ["askingPrice", "price"],
+    askRate:   ["askingRate", "leaseRate"],
+    capRate:   ["capRate"],
+    daysOnMarket: ["daysOnMarket"],
+    url:       ["url", "listingUrl"],
+    lastSaleDate:  ["lastSaleDate"],
+    lastSalePrice: ["lastSalePrice"],
+    photos:    ["images", "photos"]
+  };
+
+  /* One dotted path, resolved without throwing on a missing branch. */
+  function dig(obj, path) {
+    if (!obj || !path) return undefined;
+    var parts = String(path).split("."), cur = obj, i;
+    for (i = 0; i < parts.length; i++) {
+      if (cur == null) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+  /* First path that yields something. The configured path is tried before
+     the defaults, so an organisation overrides one field without having to
+     restate the other twenty-five. */
+  function pick(rec, cfgMap, key) {
+    var tries = [];
+    if (cfgMap && cfgMap[key]) tries = tries.concat(cfgMap[key]);
+    tries = tries.concat(CREXI_DEFAULT_MAP[key] || []);
+    for (var i = 0; i < tries.length; i++) {
+      var v = dig(rec, tries[i]);
+      if (v !== undefined && v !== null && v !== "") return v;
+    }
+    return undefined;
+  }
+
+  /* Which of our fields their sample actually fills, and by which path.
+     The point of the whole exercise: paste one real listing and see what
+     lands where, instead of discovering it on a customer's screen. */
+  S.mapReport = function (sample, cfgMap) {
+    var out = { filled: [], empty: [], unused: [] }, k, i;
+    for (k in CREXI_DEFAULT_MAP) {
+      if (!CREXI_DEFAULT_MAP.hasOwnProperty(k)) continue;
+      var tries = ((cfgMap && cfgMap[k]) || []).concat(CREXI_DEFAULT_MAP[k]);
+      var hit = null;
+      for (i = 0; i < tries.length; i++) {
+        var v = dig(sample, tries[i]);
+        if (v !== undefined && v !== null && v !== "") { hit = { path: tries[i], value: v }; break; }
+      }
+      if (hit) out.filled.push({ field: k, path: hit.path, value: hit.value });
+      else out.empty.push({ field: k, tried: tries });
+    }
+    /* Their fields we are ignoring. Often where the useful thing is hiding. */
+    for (k in sample) {
+      if (!sample.hasOwnProperty(k)) continue;
+      var used = false;
+      for (i = 0; i < out.filled.length; i++) {
+        if (String(out.filled[i].path).split(".")[0] === k) { used = true; break; }
+      }
+      if (!used) out.unused.push(k);
+    }
+    return out;
+  };
+
+  function fromCrexi(r, cfgMap) {
     if (!r) return null;
-    var br = r.broker || r.listingAgent || {};
+    var P = function (k) { return pick(r, cfgMap, k); };
     return {
-      id:      str(r.listingId || r.id),
-      addr:    str(r.address || r.streetAddress || (r.location && r.location.address)),
-      city:    str(r.city || (r.location && r.location.city)),
-      state:   str(r.state || (r.location && r.location.state)),
-      zip:     str(r.zip || r.zipCode),
-      lat:     numOr(r.latitude != null ? r.latitude : (r.location && r.location.lat)),
-      lon:     numOr(r.longitude != null ? r.longitude : (r.location && r.location.lng)),
-      sqft:    numOr(r.buildingSize || r.squareFeet || r.sqft),
-      lotAcres:numOr(r.lotSize || r.acres),
-      type:    normType(r.propertyType || r.assetType),
-      subtype: str(r.propertySubtype || r.propertyType),
-      yearBuilt: numOr(r.yearBuilt),
-      zoning:  str(r.zoning),
-      owner: { name: str(r.ownerName || ""), mailing: "", phone: "", email: "" },
+      id:      str(P("id")),
+      addr:    str(P("addr")),
+      city:    str(P("city")),
+      state:   str(P("state")),
+      zip:     str(P("zip")),
+      lat:     numOr(P("lat")),
+      lon:     numOr(P("lon")),
+      sqft:    numOr(P("sqft")),
+      lotAcres:numOr(P("lotAcres")),
+      type:    normType(P("type")),
+      subtype: str(P("subtype")),
+      yearBuilt: numOr(P("yearBuilt")),
+      zoning:  str(P("zoning")),
+      owner: { name: str(P("ownerName")), mailing: "", phone: "", email: "" },
       /* The broker is the reachable human on a listed building, and often the
          only one. Kept distinct from `owner` because they are not the same
          person and a rep must know which they are calling. */
-      broker: { name: str(br.name || br.fullName), firm: str(br.company || br.brokerage),
-                phone: str(br.phone), email: str(br.email) },
+      broker: { name: str(P("brokerName")), firm: str(P("brokerFirm")),
+                phone: str(P("brokerPhone")), email: str(P("brokerEmail")) },
       listed: {
-        forSale:  r.forSale === true || /sale/i.test(str(r.dealType)),
-        forLease: r.forLease === true || /lease/i.test(str(r.dealType)),
-        askPrice: numOr(r.askingPrice || r.price),
-        askRate:  numOr(r.askingRate || r.leaseRate),
-        capRate:  numOr(r.capRate),
-        daysOnMarket: numOr(r.daysOnMarket),
-        url:      str(r.url || r.listingUrl)
+        forSale:  r.forSale === true || /sale/i.test(str(P("dealType"))),
+        forLease: r.forLease === true || /lease/i.test(str(P("dealType"))),
+        askPrice: numOr(P("askPrice")),
+        askRate:  numOr(P("askRate")),
+        capRate:  numOr(P("capRate")),
+        daysOnMarket: numOr(P("daysOnMarket")),
+        url:      str(P("url"))
       },
-      lastSale: { date: str(r.lastSaleDate), price: numOr(r.lastSalePrice) },
+      lastSale: { date: str(P("lastSaleDate")), price: numOr(P("lastSalePrice")) },
       assessedValue: null,
-      photos: r.images || r.photos || [],
+      photos: P("photos") || [],
       annualKwh: null,
       feederId: null,
       src: "crexi"

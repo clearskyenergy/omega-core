@@ -4651,6 +4651,28 @@
   var _orgInstallers = null;  /* EPCs, and which one the team selected    */
   var _orgInstSel = "";
 
+  /* ── PARTNER LISTING FEEDS ────────────────────────────────────────────
+     A provider's endpoint and its field map live on the organisation, not
+     in this file. Absent, the provider stays off and the pipeline runs on
+     the sources it already has — a feed nobody has configured must degrade
+     to the previous behaviour, never to an error. */
+  function loadOrgFeeds() {
+    if (!db || !ORG || !window.OmegaListings || !OmegaListings.configure) return;
+    db.collection("toolData").doc(ORG).collection("prefs").doc("apiSettings")
+      .get()
+      .then(function (snap) {
+        if (!snap.exists) return;
+        var doc = snap.data() || {};
+        var st = doc.data || doc;
+        var keys = ["crexi"], i;
+        for (i = 0; i < keys.length; i++) {
+          var cfg = st[keys[i]];
+          if (cfg && cfg.proxy) OmegaListings.configure(keys[i], cfg);
+        }
+      })
+      ["catch"](function () { /* denied or offline: the feed simply stays off */ });
+  }
+
   function loadOrgPricing() {
     if (!db || !ORG) return;
     db.collection("toolData").doc(ORG).collection("tools").doc("costestimator")
@@ -7059,6 +7081,10 @@
            this page waits for it, and without it estimates fall back to the
            model's generic rates and say so. */
         loadOrgPricing();
+        /* The listing feed, configured in Settings. Read here rather than
+           hardcoded so the person with the data agreement can finish the
+           integration without a deploy — see omega-settings.js. */
+        loadOrgFeeds();
         /* Fill the claim name from the account so nobody has to type one
            before their first hold. Anything typed afterwards wins. */
         seedRepFromAccount(u2);
