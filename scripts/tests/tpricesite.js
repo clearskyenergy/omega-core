@@ -34,15 +34,25 @@ ok('the card button prices in place too', function () {
 ok('every function the price path calls is defined in this file', function () {
   var body = html.slice(html.indexOf('function computeEstimate'));
   body = body.slice(0, body.indexOf('\n  function costInEstimator'));
+  /* Strip comments and string literals FIRST. Scanning raw source made this
+     read English prose as code — a comment containing "... stores (the)"
+     was reported as a call to an undefined stores(). The check is worth
+     keeping; the tokenizer had to stop being naive. */
+  var code = body
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\])*"/g, '""');
   var called = {}, m, re = /([A-Za-z_$][\w$]*)\s*\(/g;
-  while ((m = re.exec(body))) called[m[1]] = 1;
+  while ((m = re.exec(code))) called[m[1]] = 1;
   ['function', 'if', 'return', 'catch', 'typeof', 'price', 'Math', 'Date',
    'toLocaleString'].forEach(function (k) { delete called[k]; });
   var missing = Object.keys(called).filter(function (n) {
+    if (/^(function|if|for|while|switch|catch|return|typeof|new)$/.test(n)) return false;
     if (/^(String|Number|Object|Array|JSON|parseInt|parseFloat|isFinite|isNaN)$/.test(n)) return false;
     if (new RegExp('function\\s+' + n + '\\s*\\(').test(html)) return false;
     if (new RegExp('\\b' + n + '\\s*=\\s*function').test(html)) return false;
-    if (new RegExp('\\.' + n + '\\s*\\(').test(body)) return false;   /* a method */
+    if (new RegExp('\\.' + n + '\\s*\\(').test(code)) return false;   /* a method */
     return true;
   });
   assert.deepStrictEqual(missing, [],
@@ -121,6 +131,61 @@ ok('the packet path cannot recurse back into itself', function () {
   ce = ce.slice(0, ce.indexOf('\n  function priceInPlace'));
   assert(!/costInEstimator\(|downloadPacket\(/.test(ce),
     'computeEstimate falls back, and its fallback chain ends at downloadPacket');
+});
+
+/* ── THE DEPENDENCY, NOT JUST THE CODE PATH ───────────────────────────
+   Every test above passed while this feature was completely broken in the
+   browser: the page never loaded omega-cost-model.js, so window.OmegaCostModel
+   was undefined, computeEstimate() returned null, and every press fell
+   through to opening the estimator in another tab — the exact behaviour the
+   inline pricing existed to remove.
+
+   The tests checked that the code CALLED the model. Nothing checked that
+   the model was there to call. Any page that prices against a shared
+   library must load it, and that is now asserted rather than assumed. */
+['clearsky-sitefinder.html', 'clearsky-cost-estimator.html'].forEach(function (f) {
+  ok(f + ' loads the cost model it prices with', function () {
+    var src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    assert(/OmegaCostModel/.test(src), f + ' does not use the model at all');
+    assert(/<script[^>]+src="\/?omega-cost-model\.js"/.test(src),
+      f + ' calls OmegaCostModel but never loads omega-cost-model.js — '
+        + 'the global will be undefined in a browser');
+  });
+});
+
+ok('the site finder prices from the org quote, not just the generic rate', function () {
+  assert(/ratesFromVendor\(_orgPricing\)/.test(html),
+    'computeEstimate does not pass the organisation\'s supplier pricing, so the '
+    + 'same site prices differently here than in the estimator');
+  assert(/toolData"\)\.doc\(ORG\)/.test(html),
+    'nothing reads toolData/{orgId}/tools/costestimator');
+});
+
+ok('the finder never WRITES the org pricing', function () {
+  /* It is a consumer. A screen that could quietly edit the organisation's
+     battery pricing is a screen nobody should trust. */
+  var seg = html.slice(html.indexOf('function loadOrgPricing'));
+  seg = seg.slice(0, seg.indexOf('\n  function computeEstimate'));
+  assert(!/\.set\(|\.update\(|saveToolData/.test(seg),
+    'loadOrgPricing can write to the org record');
+});
+
+ok('phase is suggested from the load, and never auto-confirmed', function () {
+  assert(/function phaseSuggest/.test(html), 'no phase suggestion exists');
+  var use = html.slice(html.indexOf('var use = document.getElementById("phSugUse")'));
+  use = use.slice(0, 320);
+  assert(/setPhase\(r\.id, use\.getAttribute\("data-phsug"\), false/.test(use),
+    'accepting the suggestion marks it CONFIRMED — a tool\'s opinion is not a meter photo');
+});
+
+ok('phase is never used to guess the interconnection voltage', function () {
+  /* Comments stripped: the removal is explained in one, and a note about a
+     mistake must not read as the mistake. */
+  var code = html.replace(/\/\*[\s\S]*?\*\//g, ' ')
+                 .replace(/<!--[\s\S]*?-->/g, ' ');
+  assert(!/3p480/.test(code),
+    'the dead "3p480" phase test is back; phase does not determine voltage — '
+      + 'three-phase service can be 208 V, 480 V or a primary tie');
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');

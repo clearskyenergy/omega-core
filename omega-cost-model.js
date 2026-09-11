@@ -247,8 +247,96 @@
              asOf:over.asOf || "", from:over.name || "" };
   }
 
+  /* ── A SUPPLIER RECORD BECOMES PRICED LINES, IN ONE PLACE ─────────────
+     This lived in clearsky-cost-estimator.html, which meant the site finder
+     priced sites WITHOUT the supplier pricing the organisation had entered:
+     the same site, through two doors, gave two different numbers and only
+     one of them knew about the quote. That is the identical failure this
+     file was created to end, reappearing one level up — not in the
+     arithmetic this time, but in what the arithmetic was fed.
+
+     So the translation from "a supplier record" to "priced lines carrying
+     provenance" lives here, beside the loop that consumes it. The estimator
+     calls it. The site finder calls it. A quote entered once is the same
+     number wherever a site is priced.
+
+     Pure and DOM-free on purpose: it runs in a page, in a Vercel function,
+     and in a test. */
+  var QUOTE_STALE_DAYS = 180;
+
+  function quoteAgeDays(v){
+    if (!v || !v.date) return null;
+    var t = Date.parse(v.date);
+    if (isNaN(t)) return null;
+    return Math.floor((Date.now() - t) / 86400000);
+  }
+  /* A quote that names its own expiry is stale on that date. The 180-day
+     rule of thumb only covers quotes that do not say — a supplier's own
+     terms outrank ours. */
+  function quoteExpired(v){
+    if (!v || !v.expires) return false;
+    var t = Date.parse(v.expires);
+    if (isNaN(t)) return false;
+    return Date.now() > t;
+  }
+  function quoteStale(v){
+    if (quoteExpired(v)) return true;
+    var d = quoteAgeDays(v);
+    return d != null && d > QUOTE_STALE_DAYS;
+  }
+  /* EXW / FCA is a price at the supplier's gate. Freight to site is real
+     money and is NOT in that number, so the tool says so rather than let a
+     factory-gate price read as a delivered one. It does not guess a freight
+     figure: an invented allowance is an invented price. */
+  function atGate(v){
+    return !!(v && v.incoterm && /^\s*(EXW|FCA|EX\s*WORKS)/i.test(v.incoterm));
+  }
+  /* THE TIER IS NOT WHAT THE SUPPLIER CALLS IT. A firm, in-date written
+     quote is a committed price and counts as evidence. Budgetary or ROM
+     numbers, list prices, and quotes past their own expiry are indicative —
+     real figures worth having, but nobody is bound by them. Something
+     remembered from a call is a planning rate whoever said it. */
+  function vendorTier(v){
+    if (!v || !v.basis) return "planning";
+    if (v.basis === "verbal") return "planning";
+    if (v.basis === "quote") return quoteStale(v) ? "published" : "quote";
+    return "published";
+  }
+  function hasPrice(v){
+    return !!(v && typeof v.dcPerKwh === "number" && v.dcPerKwh > 0);
+  }
+  function ratesFromVendor(v){
+    if (!hasPrice(v)) return null;
+    var ref = [v.model, v.ref, v.incoterm,
+               (v.expires ? (quoteExpired(v) ? "EXPIRED " : "valid to ") + v.expires : ""),
+               (v.excludes ? "excludes " + v.excludes : ""),
+               (v.indexTo ? "indexed: " + v.indexTo : "")]
+                .filter(function (x){ return !!x; }).join(" \u00b7 ");
+    var label = (v.name || "supplier")
+              + (atGate(v) ? " \u2014 " + v.incoterm + ", freight not included" : "")
+              + (quoteExpired(v) ? " \u2014 quote expired" : "");
+    var tier = vendorTier(v);
+    var out = { "eq.dc": { rate:v.dcPerKwh, src:tier, ref:ref,
+                           asOf:v.date || "", name:label } };
+    /* Only when the supplier actually prices it. A PCS the quote is silent
+       on stays on the model's rate and stays honestly marked unsourced. */
+    if (typeof v.pcsPerKw === "number" && v.pcsPerKw > 0) {
+      out["eq.pcs"] = { rate:v.pcsPerKw, src:tier, ref:ref,
+                        asOf:v.date || "", name:label };
+    }
+    return out;
+  }
+
   M.TIERS = TIERS;
   M.tierIsEvidence = tierIsEvidence;
+  M.QUOTE_STALE_DAYS = QUOTE_STALE_DAYS;
+  M.quoteAgeDays = quoteAgeDays;
+  M.quoteExpired = quoteExpired;
+  M.quoteStale = quoteStale;
+  M.atGate = atGate;
+  M.vendorTier = vendorTier;
+  M.vendorHasPrice = hasPrice;
+  M.ratesFromVendor = ratesFromVendor;
   M.MODEL = MODEL;
   M.SPREAD = SPREAD;
   M.MARKUP = MARKUP;

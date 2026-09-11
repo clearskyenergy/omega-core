@@ -568,22 +568,15 @@ function vendAgeDays(v){
 /* A quote that names its own expiry is stale on that date, not on our
    180-day rule of thumb. The rule of thumb only covers quotes that do not
    say — it is a fallback, and a supplier's own terms outrank it. */
-function vendExpired(v){
-  if(!v || !v.expires) return false;
-  var t = Date.parse(v.expires); if(isNaN(t)) return false;
-  return Date.now() > t;
-}
-function vendStale(v){
-  if(vendExpired(v)) return true;
-  var d=vendAgeDays(v); return d!=null && d > VEND_STALE_DAYS;
-}
+/* One rule for "is this quote still good", in the shared model, so the
+   panel and the pricing loop can never disagree about it. */
+function vendExpired(v){ return OmegaCostModel.quoteExpired(v); }
+function vendStale(v){ return OmegaCostModel.quoteStale(v); }
 /* EXW / FCA is a price at the supplier's gate. Freight to site is real money
    and it is NOT in that number, so the tool has to say so rather than let a
    factory-gate price be read as a delivered one. It does not guess a freight
    figure — an invented allowance is the same sin as an invented price. */
-function vendAtGate(v){
-  return !!(v && v.incoterm && /^\s*(EXW|FCA|EX\s*WORKS)/i.test(v.incoterm));
-}
+function vendAtGate(v){ return OmegaCostModel.atGate(v); }
 function vendWhyStale(v){
   if(vendExpired(v)) return "This quote expired on " + v.expires + ".";
   var d = vendAgeDays(v);
@@ -922,47 +915,19 @@ function vendInitCloud(){
   }catch(e){ vendStat('Standalone — this session only'); }
 }
 
-/* ── THE SELECTED SUPPLIER, AS A PRICED LINE WITH A PROVENANCE ──────────
-   The shared model takes a map of line id -> {rate, src, ref, asOf, name},
-   so a supplier price is no longer a special case buried in the pricing
-   loop: it is one override among the many an org will eventually have, and
-   it raises the audited coverage exactly as a trenching actual would.
+/* ── THE SELECTED SUPPLIER, AS PRICED LINES ────────────────────────────
+   The translation itself moved to omega-cost-model.js. It had to: the site
+   finder prices sites too, and while this lived here that page priced them
+   without the organisation's supplier pricing — the same site through two
+   doors, two answers, one of them unaware a quote existed. Same class of
+   failure the shared model was created to end, one level up.
 
-   THE TIER IS NOT WHAT THE SUPPLIER CALLS IT. A firm written quote is a
-   committed price and counts as evidence. A budgetary or ROM number, a list
-   price, and a quote that has passed its own expiry are all indicative —
-   real figures, worth having, but nobody is bound by them, so they are
-   recorded as references rather than as offers. Something remembered from a
-   call is a planning rate no matter who said it. */
-function vendTier(v){
-  if (!v || !v.basis) return "planning";
-  if (v.basis === "verbal") return "planning";
-  if (v.basis === "quote") return vendStale(v) ? "published" : "quote";
-  return "published";                 /* budgetary / ROM / list price */
-}
+   What stays here is only the question this page can answer: WHICH supplier
+   the user picked. */
+function vendTier(v){ return OmegaCostModel.vendorTier(v); }
 function vendRates(){
   var v = VEND_SEL ? VENDORS[VEND_SEL] : null;
-  if (!vendHasPrice(v)) return null;
-  var ref = [v.model, v.ref, v.incoterm,
-             (v.expires ? (vendExpired(v) ? "EXPIRED " : "valid to ") + v.expires : ""),
-             (v.excludes ? "excludes " + v.excludes : ""),
-             (v.indexTo ? "indexed: " + v.indexTo : "")]
-              .filter(function(x){ return !!x; }).join(" \u00b7 ");
-  /* The name is what sits on the line itself, so it stays short and carries
-     the one thing that would otherwise be misread: a factory-gate price
-     sitting in a column headed installed cost, with the haul missing. */
-  var label = v.name + (vendAtGate(v) ? " \u2014 " + v.incoterm + ", freight not included" : "")
-                     + (vendExpired(v) ? " \u2014 quote expired" : "");
-  var out = {};
-  out["eq.dc"] = { rate:v.dcPerKwh, src:vendTier(v), ref:ref, asOf:v.date || "",
-                   name:label };
-  /* Only when the supplier actually prices it. A PCS the quote is silent on
-     stays on the model's rate, and stays honestly marked as unsourced. */
-  if (typeof v.pcsPerKw === "number" && v.pcsPerKw > 0) {
-    out["eq.pcs"] = { rate:v.pcsPerKw, src:vendTier(v), ref:ref,
-                      asOf:v.date || "", name:label };
-  }
-  return out;
+  return OmegaCostModel.ratesFromVendor(v);
 }
 
 function todayISO(){ var d=new Date(); return d.toISOString().slice(0,10); }
