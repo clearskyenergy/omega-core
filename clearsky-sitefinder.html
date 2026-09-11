@@ -5005,7 +5005,7 @@
         rows.push([inc.items[ii].name === "Federal investment tax credit"
                      ? "Federal tax credit" : "ComEd rebate",
                    "\u2212" + plainMoney(inc.items[ii].usd),
-                   esc(inc.items[ii].how || "")]);
+                   esc(inc.items[ii].short || inc.items[ii].how || "")]);
       }
       rows.push(["Net cost", plainMoney(net), net === 0 ? "incentives cover it" : ""]);
 

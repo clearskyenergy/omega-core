@@ -221,6 +221,10 @@
       out.push({ id: "itc", name: "Federal investment tax credit",
                  usd: capex * itcRate, tier: "published",
                  how: Math.round(itcRate * 100) + "% of installed cost.",
+                 /* The condition, short enough to survive onto a card. The
+                    full rate is not automatic and a customer who reads only
+                    the number will assume it is. */
+                 short: Math.round(itcRate * 100) + "% \u00b7 needs prevailing wage",
                  ref: "Statutory. The full rate requires the prevailing-wage and "
                     + "apprenticeship conditions; without them the base rate applies." });
     }
@@ -243,6 +247,7 @@
                  how: "$" + reb + " / kWh on " + Math.round(kwh).toLocaleString() + " kWh" +
                       ((isFinite(cap) && cap > 0 && raw > cap)
                         ? ", capped at $" + Math.round(cap).toLocaleString() : ""),
+                 short: "$" + reb + " / kWh \u00b7 needs paired DG + Rate BESH",
                  ref: input.rebateRef || COMED_REBATE.ref,
                  conditions: input.rebateConditions || COMED_REBATE.conditions,
                  url: input.rebateUrl || COMED_REBATE.url });
