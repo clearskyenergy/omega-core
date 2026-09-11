@@ -1,0 +1,366 @@
+{
+  "generatedAt": "2026-09-11T01:55:15.091Z",
+  "repo": "omega-core",
+  "tools": [
+    {
+      "file": "editor.html",
+      "title": "Site Map Designer Pro",
+      "area": "Design",
+      "kb": 10595,
+      "scripts": 241,
+      "lines": 171749
+    },
+    {
+      "file": "permit.html",
+      "title": "ClearSky Permit Creator",
+      "area": "Design",
+      "kb": 681,
+      "scripts": 5,
+      "lines": 1785
+    },
+    {
+      "file": "ev-cost-workbook.html",
+      "title": "EV Cost Workbook",
+      "area": "Economics",
+      "kb": 406,
+      "scripts": 10,
+      "lines": 7632
+    },
+    {
+      "file": "clearsky-sitefinder.html",
+      "title": "Site Finder",
+      "area": "Siting",
+      "kb": 328,
+      "scripts": 12,
+      "lines": 6577
+    },
+    {
+      "file": "comed-capacity.html",
+      "title": "ComEd Capacity Finder",
+      "area": "Siting",
+      "kb": 317,
+      "scripts": 7,
+      "lines": 6191
+    },
+    {
+      "file": "compute-power-sizer.html",
+      "title": "Compute Power Sizer",
+      "area": "Sizing",
+      "kb": 217,
+      "scripts": 9,
+      "lines": 206
+    },
+    {
+      "file": "edge-fund-power-calculator.html",
+      "title": "Site power sizing for AI compute — EDGE FUND",
+      "area": "Sizing",
+      "kb": 211,
+      "scripts": 2,
+      "lines": 98
+    },
+    {
+      "file": "battery-sizer.html",
+      "title": "Battery Sizer",
+      "area": "Sizing",
+      "kb": 173,
+      "scripts": 1,
+      "lines": 3609
+    },
+    {
+      "file": "fleet-simulator-3d.html",
+      "title": "NextNRG · 3D Fleet Simulator (Energy + Compute)",
+      "area": "Operate",
+      "kb": 131,
+      "scripts": 3,
+      "lines": 2518
+    },
+    {
+      "file": "ClearSky_Enlarged_Plot_Plan_Generator.html",
+      "title": "ClearSky CAD — Enlarged Plot Plan Generator",
+      "area": "Design",
+      "kb": 122,
+      "scripts": 1,
+      "lines": 2539
+    },
+    {
+      "file": "clearsky-cost-estimator.html",
+      "title": "Cost Estimator",
+      "area": "Economics",
+      "kb": 119,
+      "scripts": 6,
+      "lines": 2240
+    },
+    {
+      "file": "valuestack.html",
+      "title": "BESS Value Stack & Site Revenue Analyzer . ClearSky-OMEGA",
+      "area": "Economics",
+      "kb": 111,
+      "scripts": 10,
+      "lines": 2005
+    },
+    {
+      "file": "sales-proposal.html",
+      "title": "Sales Proposal Builder",
+      "area": "Sell",
+      "kb": 110,
+      "scripts": 2,
+      "lines": 2190
+    },
+    {
+      "file": "apartment-bess.html",
+      "title": "Residential BESS Portfolio Analyzer — ClearSky",
+      "area": "Economics",
+      "kb": 98,
+      "scripts": 1,
+      "lines": 1480
+    },
+    {
+      "file": "grid-atlas.html",
+      "title": "Grid Atlas",
+      "area": "Siting",
+      "kb": 92,
+      "scripts": 7,
+      "lines": 1708
+    },
+    {
+      "file": "proforma.html",
+      "title": "NextNRG — BESS Pro Forma",
+      "area": "Economics",
+      "kb": 88,
+      "scripts": 2,
+      "lines": 1749
+    },
+    {
+      "file": "site-lifecycle.html",
+      "title": "Site Lifecycle Console",
+      "area": "Operate",
+      "kb": 83,
+      "scripts": 6,
+      "lines": 1529
+    },
+    {
+      "file": "om-console.html",
+      "title": "O&M Operations Console",
+      "area": "Operate",
+      "kb": 81,
+      "scripts": 7,
+      "lines": 1190
+    },
+    {
+      "file": "marketplace.html",
+      "title": "App Marketplace",
+      "area": "Sell",
+      "kb": 77,
+      "scripts": 12,
+      "lines": 1372
+    },
+    {
+      "file": "sla-intelligence.html",
+      "title": "SLA & Contractual Intelligence",
+      "area": "Operate",
+      "kb": 75,
+      "scripts": 7,
+      "lines": 995
+    },
+    {
+      "file": "field-service.html",
+      "title": "Field Service & Dispatch",
+      "area": "Operate",
+      "kb": 68,
+      "scripts": 7,
+      "lines": 880
+    },
+    {
+      "file": "projects.html",
+      "title": "My Projects",
+      "area": "Admin",
+      "kb": 68,
+      "scripts": 14,
+      "lines": 1281
+    },
+    {
+      "file": "owner-reporting.html",
+      "title": "Owner Reporting & Audit",
+      "area": "Operate",
+      "kb": 59,
+      "scripts": 10,
+      "lines": 780
+    },
+    {
+      "file": "fleet-command.html",
+      "title": "Fleet Command",
+      "area": "Operate",
+      "kb": 55,
+      "scripts": 7,
+      "lines": 730
+    },
+    {
+      "file": "bess-grid-sizing.html",
+      "title": "BESS Sizing & Pro Forma",
+      "area": "Other",
+      "kb": 51,
+      "scripts": 6,
+      "lines": 1008
+    },
+    {
+      "file": "branded-report.html",
+      "title": "DER generation and storage — 1901 Convention Ctr Dr, Miami Beach, FL",
+      "area": "Other",
+      "kb": 51,
+      "scripts": 0,
+      "lines": 1
+    },
+    {
+      "file": "intake-admin.html",
+      "title": "Intake queue",
+      "area": "Admin",
+      "kb": 51,
+      "scripts": 7,
+      "lines": 1106
+    },
+    {
+      "file": "site-optimizer.html",
+      "title": "Site Optimizer",
+      "area": "Siting",
+      "kb": 44,
+      "scripts": 5,
+      "lines": 879
+    },
+    {
+      "file": "jarvis.html",
+      "title": "Jarvis",
+      "area": "Other",
+      "kb": 36,
+      "scripts": 1,
+      "lines": 861
+    },
+    {
+      "file": "jda.html",
+      "title": "Joint Development Partners",
+      "area": "Other",
+      "kb": 35,
+      "scripts": 8,
+      "lines": 651
+    },
+    {
+      "file": "ClearSky_Partner_Referral_Intake.html",
+      "title": "ClearSky Partner Referral Intake",
+      "area": "Other",
+      "kb": 34,
+      "scripts": 1,
+      "lines": 769
+    },
+    {
+      "file": "account-settings.html",
+      "title": "OMEGA Signal",
+      "area": "Admin",
+      "kb": 34,
+      "scripts": 7,
+      "lines": 501
+    },
+    {
+      "file": "investment-analysis.html",
+      "title": "Site Investment Analysis",
+      "area": "Other",
+      "kb": 34,
+      "scripts": 7,
+      "lines": 522
+    },
+    {
+      "file": "rfq.html",
+      "title": "Quote Desk",
+      "area": "Sell",
+      "kb": 32,
+      "scripts": 8,
+      "lines": 622
+    },
+    {
+      "file": "bess-iso-calculator.html",
+      "title": "BESS ISO Calculator",
+      "area": "Other",
+      "kb": 30,
+      "scripts": 1,
+      "lines": 681
+    },
+    {
+      "file": "datacenter-compute-calculator.html",
+      "title": "Data Center Compute Calculator",
+      "area": "Other",
+      "kb": 26,
+      "scripts": 1,
+      "lines": 430
+    },
+    {
+      "file": "conductor-sizing.html",
+      "title": "Conductor & Transformer Sizing",
+      "area": "Sizing",
+      "kb": 23,
+      "scripts": 5,
+      "lines": 456
+    },
+    {
+      "file": "jd-workspace.html",
+      "title": "JD Workspace",
+      "area": "Other",
+      "kb": 23,
+      "scripts": 8,
+      "lines": 469
+    },
+    {
+      "file": "power-flow.html",
+      "title": "Multi-Node Power Flow",
+      "area": "Sizing",
+      "kb": 22,
+      "scripts": 5,
+      "lines": 400
+    },
+    {
+      "file": "degradation-warranty.html",
+      "title": "BESS Degradation & Warranty",
+      "area": "Economics",
+      "kb": 19,
+      "scripts": 5,
+      "lines": 351
+    },
+    {
+      "file": "interconnection-study.html",
+      "title": "Interconnection Study",
+      "area": "Sizing",
+      "kb": 19,
+      "scripts": 5,
+      "lines": 354
+    },
+    {
+      "file": "site-discovery.html",
+      "title": "Site Discovery & Screening",
+      "area": "Siting",
+      "kb": 19,
+      "scripts": 5,
+      "lines": 366
+    },
+    {
+      "file": "dcfc-proforma.html",
+      "title": "DCFC BESS Pro Forma",
+      "area": "Economics",
+      "kb": 18,
+      "scripts": 1,
+      "lines": 317
+    },
+    {
+      "file": "financing.html",
+      "title": "Apply for financing",
+      "area": "Other",
+      "kb": 16,
+      "scripts": 8,
+      "lines": 308
+    },
+    {
+      "file": "interconnection-screener.html",
+      "title": "Interconnection Screener",
+      "area": "Sizing",
+      "kb": 16,
+      "scripts": 5,
+      "lines": 315
+    }
+  ]
+}

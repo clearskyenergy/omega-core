@@ -121,6 +121,18 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .cardNote{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:12px;
           border-top:1px solid rgba(0,243,255,.10);padding-top:10px}
 .rowClick{cursor:pointer}
+.toolNode{display:flex;align-items:baseline;gap:10px;padding:7px 9px;border:1px solid transparent;
+          border-radius:5px;cursor:pointer;font-size:13px}
+.toolNode:hover{background:rgba(0,243,255,.07);border-color:rgba(0,243,255,.22)}
+.toolNode.on{background:rgba(0,243,255,.14);border-color:var(--glow-cyan)}
+.toolNode .tn{flex:1;min-width:0;color:var(--ink);overflow-wrap:anywhere}
+.toolNode .tk{flex:none;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.areaHead{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--glow-cyan);
+          margin:12px 0 4px;opacity:.75}
+.areaHead:first-child{margin-top:0}
+.askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
+        color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
+.askBox:focus{outline:none;border-color:var(--glow-cyan)}
 .rowClick:hover{background:rgba(0,243,255,.06)}
 
 /* A connection is green only if something measured says so. */
@@ -327,6 +339,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="outbox">✉  Outbox<span class="pill" id="nOut"></span></button>
       <button class="navItem" data-view="calendar">▦  Calendar<span class="pill" id="nCal"></span></button>
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
+      <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
+      <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
       <button class="navItem" data-view="system">⚙  System</button>
     </nav>
@@ -451,6 +465,36 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div class="panel" style="flex:1;min-height:0">
         <div class="ptitle">Who you work with</div>
         <div id="people" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== CLIENTS ========== -->
+    <section class="view" data-view="clients">
+      <div class="panel" style="flex:none">
+        <div class="ptitle">The book<span class="live" id="bookAt"></span></div>
+        <div id="bookTotals"></div>
+      </div>
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Organisations on the portal</div>
+        <div id="clients" class="scroll"></div>
+      </div>
+      <div class="panel" style="flex:none;max-height:34%">
+        <div class="ptitle">Financing &amp; deals</div>
+        <div id="finance" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== PLATFORM ========== -->
+    <section class="view" data-view="platform">
+      <div class="cmdGrid" style="grid-template-columns:1fr 380px">
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">OMEGA — click a tool to work on it<span class="live" id="platN"></span></div>
+          <div id="platform" class="scroll"></div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">Work on it</div>
+          <div id="platDetail" class="scroll"></div>
+        </div>
       </div>
     </section>
 
@@ -955,6 +999,7 @@ function listInto(host, rows, fmt, empty){
   });
 }
 
+let lastStatus={};
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
@@ -1013,6 +1058,7 @@ async function load(){
     el('alert').textContent='';
     if(ing&&ing.alert){const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;el('alert').appendChild(d);}
 
+    lastStatus=s;
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
     renderQuick(); renderNeeds(s); renderConns(s);
 
@@ -1485,6 +1531,8 @@ function showView(name){
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
+  if(name==='clients') loadBook(false);
+  if(name==='platform') loadPlatform();
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
@@ -1718,6 +1766,165 @@ function renderRoutines(s){
     right: r.human || '',
     cls: r.enabled===false?'warn':'good'
   }), 'none yet — say “every weekday at 8am send me my schedule”');
+}
+
+/* ── the book ────────────────────────────────────────────────────────────
+   Who is on the portal, what they were billed, what they have paid, and what
+   is still out. Read from omega_orgs and its billing subcollection — the same
+   documents the admin console writes, so there is no second copy of the truth
+   to drift.
+
+   Fetched when the view is opened, not on the thirty-second poll: it reads
+   fifteen subcollections and the dashboard he leaves open all day should not
+   pay for a panel he opens twice a week. */
+let bookLoaded=false;
+/* Not `money` — that one already exists for the twin's own spend, where the
+   interesting digits are cents. This is for invoices, where they are
+   thousands. Two formatters because they answer two different questions. */
+function usd(n){ return '$'+Number(n||0).toLocaleString('en-US'); }
+
+async function loadBook(force){
+  if(bookLoaded && !force) return;
+  bookLoaded=true;
+  try{
+    const t=await token();
+    const r=await fetch(CHAT+'/business',{headers:{Authorization:'Bearer '+t}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const b=await r.json();
+
+    rows(el('bookTotals'), [
+      ['ORGANISATIONS', num(b.totals.orgs), 'cy'],
+      ['BILLED', usd(b.totals.due)],
+      ['COLLECTED', usd(b.totals.paid), 'good'],
+      ['OUTSTANDING', usd(b.totals.outstanding), b.totals.outstanding>0?'warn':'good'],
+      ['OVERDUE', b.totals.overdue ? (b.totals.overdue+' · '+usd(b.totals.overdueAmount)) : 'none',
+        b.totals.overdue?'bad':'good'],
+      /* Said out loud, because an org nobody has priced and an org that owes
+         nothing are different facts. */
+      ['NOT PRICED YET', num(b.totals.notBilled), b.totals.notBilled?'warn':'']
+    ]);
+    const at=el('bookAt'); if(at) at.textContent=String(b.at||'').slice(11,16)+' UTC';
+
+    listInto('clients', b.clients, c=>({
+      left: c.name + (c.tier? '  ·  '+c.tier : '  ·  not priced'),
+      right: c.outstanding>0 ? usd(c.outstanding)+(c.overdue?('  '+c.daysOverdue+'d late'):'')
+                             : (c.lastPaidAt? 'paid '+c.lastPaidAt : 'nothing due'),
+      cls: c.overdue?'bad':(c.outstanding>0?'warn':'good')
+    }), 'no organisations');
+
+    const f=b.finance||{}, d=b.deals||{};
+    rows(el('finance'), [
+      ['FINANCING PROJECTS', num(f.projects), 'cy'],
+      ['CAPACITY', (f.mw||0).toLocaleString()+' MW  ·  '+(f.mwh||0).toLocaleString()+' MWh'],
+      ['TOTAL ASK', usd(f.ask)],
+      ['OFFERS IN', num(f.offers), (f.offers||0)?'good':'warn'],
+      ['AWARDED', num(f.awarded)],
+      ['DEALS', num(d.count), 'cy'],
+      ['DEAL CAPACITY', (d.mw||0).toLocaleString()+' MW'],
+      /* The capex field is barely filled in, and a total that quietly averages
+         nine deals with one number in them is worse than saying so. */
+      ['CAPEX ON FILE', d.capexKnown ? usd(d.capex)+'  across '+d.capexKnown+' of '+d.count
+                                     : 'not recorded on any deal', d.capexKnown?'':'warn']
+    ]);
+    const nc=el('nClients'); if(nc) nc.textContent=b.totals.orgs||'';
+  }catch(e){
+    bookLoaded=false;
+    listInto('clients', [], ()=>({}), 'could not read the book: '+e.message);
+  }
+}
+
+/* ── the platform ────────────────────────────────────────────────────────
+   OMEGA's own surfaces, generated from the repo by
+   scripts/build-platform-manifest.js rather than typed out here. A hand-kept
+   list of your own product is a list that is wrong within a fortnight.
+
+   Clicking one selects it; the panel beside it shows what is already queued
+   against that file and takes a request for a change. The request becomes a
+   PROPOSED backlog item — approving it is still a separate act, and the build
+   loop still runs the reviewer before anything is pushed. */
+let platform=null, platPick=null;
+
+async function loadPlatform(){
+  if(platform) return;
+  try{
+    const r=await fetch('assets/platform.json',{cache:'no-cache'});
+    platform=await r.json();
+  }catch(e){ platform={tools:[]}; }
+  const host=el('platform'); if(!host) return;
+  host.textContent='';
+  const areas={};
+  (platform.tools||[]).forEach(t=>{ (areas[t.area]=areas[t.area]||[]).push(t); });
+  Object.keys(areas).sort().forEach(area=>{
+    const h=document.createElement('div'); h.className='areaHead'; h.textContent=area;
+    host.appendChild(h);
+    areas[area].forEach(t=>{
+      const d=document.createElement('div'); d.className='toolNode'; d.dataset.file=t.file;
+      const n=document.createElement('span'); n.className='tn'; n.textContent=t.title;
+      const k=document.createElement('span'); k.className='tk'; k.textContent=t.kb+'KB';
+      d.appendChild(n); d.appendChild(k);
+      d.addEventListener('click',()=>pickTool(t));
+      host.appendChild(d);
+    });
+  });
+  const pn=el('platN'); if(pn) pn.textContent=(platform.tools||[]).length+' TOOLS';
+  const np=el('nPlat'); if(np) np.textContent=(platform.tools||[]).length||'';
+}
+
+function pickTool(t){
+  platPick=t;
+  [...document.querySelectorAll('.toolNode')].forEach(n=>n.classList.toggle('on', n.dataset.file===t.file));
+  const host=el('platDetail'); host.textContent='';
+
+  const h=document.createElement('div');
+  h.innerHTML='';
+  const nm=document.createElement('div'); nm.className='cardName'; nm.style.fontSize='15px';
+  nm.textContent=t.title; h.appendChild(nm);
+  const sub=document.createElement('div'); sub.className='cardOrg'; sub.style.textAlign='left';
+  sub.textContent=t.file+'  ·  '+t.kb+'KB  ·  '+t.lines.toLocaleString()+' lines  ·  '+t.scripts+' scripts';
+  h.appendChild(sub);
+  host.appendChild(h);
+
+  /* Anything already queued against this file. */
+  const queued=(lastStatus.todos||[]).filter(x=>(x.affectedFiles||[]).indexOf(t.file)!==-1);
+  const q=document.createElement('div'); q.className='ptitle'; q.style.marginTop='14px';
+  q.textContent='Already queued · '+queued.length;
+  host.appendChild(q);
+  queued.slice(0,6).forEach(x=>{
+    const d=document.createElement('div'); d.className='row';
+    const k=document.createElement('span'); k.className='k clamp'; k.textContent=x.title||'(untitled)';
+    d.appendChild(k); host.appendChild(d);
+  });
+
+  const q2=document.createElement('div'); q2.className='ptitle'; q2.style.marginTop='14px';
+  q2.textContent='Ask Jarvis to change it';
+  host.appendChild(q2);
+  const ta=document.createElement('textarea'); ta.className='askBox';
+  ta.placeholder='e.g. the parcel frame snaps to the wrong edge when the lot is rotated — make it follow the longest boundary';
+  host.appendChild(ta);
+  const bar=document.createElement('div'); bar.className='cardActs';
+  const go=document.createElement('button'); go.textContent='QUEUE THE CHANGE';
+  go.addEventListener('click',async()=>{
+    const text=ta.value.trim(); if(!text) return;
+    go.disabled=true; go.textContent='QUEUEING…';
+    try{
+      const tk=await token();
+      const r=await fetch(CHAT+'/request',{method:'POST',
+        headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},
+        body:JSON.stringify({file:t.file,text})});
+      const j=await r.json().catch(()=>({}));
+      say('jarvis', r.ok ? (j.reply||'Queued.') : (j.error||('HTTP '+r.status)), 0);
+      if(r.ok){ ta.value=''; load(); }
+    }catch(e){ say('jarvis', e.message); }
+    go.disabled=false; go.textContent='QUEUE THE CHANGE';
+  });
+  bar.appendChild(go);
+  host.appendChild(bar);
+
+  const note=document.createElement('div'); note.className='cardNote';
+  note.textContent='This queues it as proposed. Approve it in Tasks and the build loop '
+    + 'edits the file, runs a syntax check and an adversarial review, and opens a pull '
+    + 'request — it never pushes to main.';
+  host.appendChild(note);
 }
 
 /* ── the hologram ────────────────────────────────────────────────────────
