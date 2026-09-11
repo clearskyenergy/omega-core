@@ -175,6 +175,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         border:1px solid rgba(0,243,255,.2);border-radius:12px;color:var(--dim);cursor:pointer}
 .ixChip.on{border-color:var(--glow-cyan);color:var(--glow-cyan);background:rgba(0,243,255,.08)}
 
+.addBar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:0 0 10px}
+.addBar .brainQ{flex:1;min-width:190px}
+.urgPick{display:flex;gap:5px}
+
 .triBar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 8px;position:sticky;top:0;
         background:linear-gradient(var(--bg) 70%,transparent);z-index:2}
 .triChip{flex:none;font-family:var(--mono);font-size:8.5px;letter-spacing:1.3px;
@@ -206,6 +210,37 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .doPick .doFile{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:1px}
 .doAlt{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .doAlt button{font-size:9.5px;padding:6px 9px}
+
+
+/* ── the whiteboard ──────────────────────────────────────────────────────
+   Post-its on a surface. Drag to move, click the text to write, and it saves
+   itself. The grid is drawn in CSS rather than an image so it stays crisp at
+   any zoom and costs nothing to load. */
+.boardBar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+          padding:10px 12px;border-bottom:1px solid rgba(0,243,255,.14);flex:none}
+.boardBar button{font-size:9.5px;padding:6px 10px}
+.bdPal{display:flex;gap:5px}
+.bdSwatch{width:15px;height:15px;border-radius:3px;cursor:pointer;
+          border:1px solid rgba(255,255,255,.25)}
+.bdSwatch.on{outline:1.5px solid var(--glow-cyan);outline-offset:1px}
+.boardSurface{position:absolute;inset:44px 0 0 0;overflow:auto;
+  background-color:rgba(2,10,22,.6);
+  background-image:linear-gradient(rgba(0,243,255,.055) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(0,243,255,.055) 1px,transparent 1px);
+  background-size:28px 28px}
+.note{position:absolute;width:190px;min-height:110px;border-radius:3px;
+      padding:10px 11px 22px;font-size:13px;line-height:1.45;color:#12202e;
+      box-shadow:0 6px 18px rgba(0,0,0,.42);cursor:grab;
+      display:flex;flex-direction:column;gap:4px}
+.note.drag{cursor:grabbing;z-index:50;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+.note textarea{flex:1;background:transparent;border:none;outline:none;resize:none;
+               font-family:var(--ui);font-size:13px;line-height:1.45;color:inherit;
+               width:100%;min-height:66px}
+.note textarea::placeholder{color:rgba(18,32,46,.45)}
+.noteX{position:absolute;right:5px;bottom:4px;font-family:var(--mono);font-size:9px;
+       letter-spacing:1px;color:rgba(18,32,46,.5);cursor:pointer;background:none;
+       border:none;padding:2px 4px;min-height:0}
+.noteX:hover{color:#8a1c1c}
 
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
@@ -611,6 +646,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
+      <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
@@ -753,6 +789,19 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div class="panel" style="flex:none;max-height:34%">
         <div class="ptitle">Financing &amp; deals</div>
         <div id="finance" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== BOARD ========== -->
+    <section class="view" data-view="board">
+      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+        <div class="boardBar">
+          <span class="ptitle" style="border:none;padding:0;margin:0">Whiteboard</span>
+          <button id="bdAdd">+ NOTE</button>
+          <span class="bdPal" id="bdPal"></span>
+          <span class="live" id="bdState">—</span>
+        </div>
+        <div class="boardSurface" id="boardSurface"></div>
       </div>
     </section>
 
@@ -2016,6 +2065,7 @@ function showView(name){
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
+  if(name==='board'){ bdLoad(); }
   wireZoom();                 /* views built later get the control too */
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
@@ -2256,6 +2306,47 @@ function renderTasks(){
          ()=>{ hideNoise=!hideNoise; renderTasks(); });
   host.appendChild(bar);
 
+  /* Put something on the list by hand. The twin fills this from meetings;
+     until now nothing let HIM add to it, so a thing that came up in a corridor
+     had nowhere to go but his memory. */
+  const addBar=document.createElement('div'); addBar.className='addBar';
+  const inp=document.createElement('input');
+  inp.className='brainQ'; inp.placeholder='Add something — Enter for the queue, or pick below';
+  addBar.appendChild(inp);
+  const urg=document.createElement('div'); urg.className='urgPick';
+  let chosen='queue';
+  [['NOW','now'],['TODAY','today'],['QUEUE','queue']].forEach(([label,val])=>{
+    const c=document.createElement('span');
+    c.className='ixChip'+(val===chosen?' on':''); c.textContent=label;
+    c.addEventListener('click',()=>{
+      chosen=val;
+      [...urg.children].forEach(x=>x.classList.toggle('on',x===c));
+    });
+    urg.appendChild(c);
+  });
+  addBar.appendChild(urg);
+  const send=async()=>{
+    const text=inp.value.trim(); if(!text) return;
+    inp.disabled=true;
+    try{
+      const t=await token();
+      const r=await fetch(CHAT+'/task',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:text, urgency:chosen})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      inp.value='';
+      say('jarvis', j.reply||'On the list.', 0);
+      load();
+    }catch(e){ say('jarvis','Could not add that — '+e.message, 0); }
+    inp.disabled=false; inp.focus();
+  };
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') send(); });
+  const go=document.createElement('button'); go.textContent='ADD';
+  go.style.cssText='font-size:9.5px;padding:7px 12px'; go.addEventListener('click',send);
+  addBar.appendChild(go);
+  host.appendChild(addBar);
+
   const v=visibleTasks();
   if(!v.length){ const d=document.createElement('div'); d.className='note';
     d.textContent='backlog is empty'; host.appendChild(d); return; }
@@ -2285,6 +2376,147 @@ function renderTasks(){
     if(r.dupeOf){ row.style.opacity='.45'; meta.textContent='same as: '+r.dupeOf.t.title.slice(0,40)+'…'; }
     host.appendChild(row);
   });
+}
+
+
+/* ══ THE WHITEBOARD ══════════════════════════════════════════════════════
+   Post-its on a surface, for the thinking that has no shape yet. A backlog
+   item has to be a sentence about a piece of work; half of what matters at
+   the start is not that tidy.
+
+   It saves to Firestore under toolData/{org}/tools/whiteboard, which already
+   exists and is already governed by rules that let a signed-in member of the
+   org read and write their own org's tool data. Nothing here needed a new
+   collection or a rules change — which is the point, because a rules change
+   for a sticky note is how a rules file becomes 3,000 lines nobody reads.
+
+   Not localStorage: a board you brainstormed on your laptop and cannot see
+   from your phone is a notebook, and you already have one of those. */
+
+const BD_COLOURS=['#ffe27a','#a8e6a3','#9fd4ff','#ffb3c6','#e2c7ff','#ffd0a1'];
+let bdNotes=[], bdColour=BD_COLOURS[0], bdDb=null, bdSaveT=null, bdLoaded=false;
+
+async function bdStore(){
+  if(bdDb) return bdDb;
+  const fs=await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+  bdDb={fs, db:fs.getFirestore(app)};
+  return bdDb;
+}
+function bdOrg(){
+  const e=(auth.currentUser&&auth.currentUser.email)||'';
+  return (e.split('@')[1]||'').toLowerCase();
+}
+function bdState(t){ const e=el('bdState'); if(e) e.textContent=t; }
+
+async function bdLoad(){
+  if(bdLoaded) return;
+  bdLoaded=true;
+  bdPalette();
+  el('bdAdd').addEventListener('click',()=>bdNew());
+  /* Double-click anywhere empty drops a note there — faster than reaching for
+     the button when an idea is already leaving. */
+  el('boardSurface').addEventListener('dblclick',e=>{
+    if(e.target!==el('boardSurface')) return;
+    const r=e.currentTarget.getBoundingClientRect();
+    bdNew(e.clientX-r.left+e.currentTarget.scrollLeft-95,
+          e.clientY-r.top+e.currentTarget.scrollTop-40);
+  });
+  try{
+    bdState('loading…');
+    const {fs,db}=await bdStore();
+    const ref=fs.doc(db,'toolData',bdOrg(),'tools','whiteboard');
+    const snap=await fs.getDoc(ref);
+    bdNotes=(snap.exists()&&(snap.data().notes||[]))||[];
+    bdPaint();
+    bdState(bdNotes.length+' note'+(bdNotes.length===1?'':'s'));
+  }catch(e){
+    bdState('offline — '+e.message.slice(0,40));
+    bdPaint();
+  }
+}
+
+function bdPalette(){
+  const host=el('bdPal'); host.textContent='';
+  BD_COLOURS.forEach(c=>{
+    const b=document.createElement('span');
+    b.className='bdSwatch'+(c===bdColour?' on':'');
+    b.style.background=c;
+    b.addEventListener('click',()=>{ bdColour=c; bdPalette(); });
+    host.appendChild(b);
+  });
+}
+
+function bdNew(x,y){
+  const s=el('boardSurface');
+  bdNotes.push({
+    id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    x: x==null ? 30+((bdNotes.length*26)%420) : Math.max(0,Math.round(x)),
+    y: y==null ? 30+((bdNotes.length*22)%300) : Math.max(0,Math.round(y)),
+    text:'', c:bdColour
+  });
+  bdPaint(); bdSave();
+  const last=s.querySelector('.note:last-of-type textarea');
+  if(last) last.focus();
+}
+
+function bdPaint(){
+  const host=el('boardSurface'); if(!host) return;
+  host.textContent='';
+  bdNotes.forEach(n=>{
+    const d=document.createElement('div');
+    d.className='note'; d.style.left=n.x+'px'; d.style.top=n.y+'px';
+    d.style.background=n.c||BD_COLOURS[0];
+
+    const ta=document.createElement('textarea');
+    ta.value=n.text||''; ta.placeholder='…';
+    ta.addEventListener('input',()=>{ n.text=ta.value; bdSave(); });
+    /* A textarea inside a draggable parent: let the pointer through to the
+       text, or you can never type in your own note. */
+    ta.addEventListener('pointerdown',e=>e.stopPropagation());
+    d.appendChild(ta);
+
+    const x=document.createElement('button'); x.className='noteX'; x.textContent='REMOVE';
+    x.addEventListener('pointerdown',e=>e.stopPropagation());
+    x.addEventListener('click',()=>{
+      bdNotes=bdNotes.filter(o=>o!==n); bdPaint(); bdSave();
+    });
+    d.appendChild(x);
+
+    let dx=0,dy=0,moving=false;
+    d.addEventListener('pointerdown',e=>{
+      moving=true; d.classList.add('drag');
+      dx=e.clientX-d.offsetLeft; dy=e.clientY-d.offsetTop;
+      d.setPointerCapture(e.pointerId);
+    });
+    d.addEventListener('pointermove',e=>{
+      if(!moving) return;
+      n.x=Math.max(0,Math.round(e.clientX-dx));
+      n.y=Math.max(0,Math.round(e.clientY-dy));
+      d.style.left=n.x+'px'; d.style.top=n.y+'px';
+    });
+    d.addEventListener('pointerup',()=>{
+      if(!moving) return;
+      moving=false; d.classList.remove('drag'); bdSave();
+    });
+    host.appendChild(d);
+  });
+  const nb=el('nBoard'); if(nb) nb.textContent=bdNotes.length||'';
+}
+
+/* Debounced: typing a sentence should be one write, not forty. */
+function bdSave(){
+  clearTimeout(bdSaveT);
+  bdState('saving…');
+  bdSaveT=setTimeout(async()=>{
+    try{
+      const {fs,db}=await bdStore();
+      const ref=fs.doc(db,'toolData',bdOrg(),'tools','whiteboard');
+      await fs.setDoc(ref,{notes:bdNotes, updatedAt:new Date().toISOString()},{merge:true});
+      bdState(bdNotes.length+' note'+(bdNotes.length===1?'':'s')+' · saved');
+    }catch(e){
+      bdState('NOT SAVED — '+e.message.slice(0,44));
+    }
+  },700);
 }
 
 /* ══ TRIAGE ══════════════════════════════════════════════════════════════
@@ -2335,6 +2567,11 @@ function triage(t){
   const s=String(t.title||'').toLowerCase();
   let score=0; const why=[];
   const add=(n,label)=>{ score+=n; if(label&&why.indexOf(label)===-1) why.push(label); };
+
+  /* An urgency he set by hand is a fact, not a signal to be weighed against
+     the wording. It goes straight to the top of its band. */
+  if(t.urgency==='now')   add(60,'you said now');
+  if(t.urgency==='today') add(38,'you said today');
 
   const d=whenIn(s);
   if(d!==null){
@@ -3011,6 +3248,7 @@ const IX_VIEWS=[
   ['clients','Clients','the book, and what it is owed'],
   ['platform','Platform','OMEGA, and the stone'],
   ['brain','Brain','how it all connects'],
+  ['board','Board','post-its for the loose thinking'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
 ];
