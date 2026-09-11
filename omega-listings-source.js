@@ -733,6 +733,142 @@
   }
   S.normType = normType;
 
+  /* ══════════════════════════════════════════════════════════════════════
+     PROVENANCE AUDIT — what is actually behind the numbers
+     ----------------------------------------------------------------------
+     Every provider MUST return the NORMALIZED shape. Nothing checked that,
+     and the failure mode is silent: one field name guessed wrong against a
+     partner's live payload and `sqft` comes back null on every record in a
+     bulk load. Nobody notices until a rep sorts by building size and gets an
+     empty column — by which point the load has been repeated and shared.
+
+     That is the difference between data and BANKABLE data, and it is not
+     precision. It is knowing, per field, how many records carry a real value,
+     how many are modelled, and how many are empty — and being able to put
+     that in front of somebody who is lending against it.
+
+     audit() answers three questions and nothing else:
+
+       COVERAGE   of N records, how many carry each field
+       PROVENANCE which numbers are measured, which are modelled, which are
+                  a proxy — annualKwh already declares this and the answer
+                  belongs in the report rather than buried per record
+       BROKEN     a field that is empty on EVERY record, when some records
+                  have it, is a mapping fault rather than missing data. Said
+                  plainly, because it is the one that gets shipped.
+
+     No thresholds, no score. A number somebody lends against should be read,
+     not graded.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* Fields a listing genuinely may not have, so their absence is not a fault.
+     Everything else empty across the board is a mapping problem. */
+  S.OPTIONAL = ["photos","annualKwh","feederId","assessedValue","subtype",
+                "yearBuilt","lotAcres","owner","lastSale","broker","listed"];
+
+  function _present(v) {
+    if (v == null || v === "") return false;
+    if (typeof v === "number") return isFinite(v);
+    if (Object.prototype.toString.call(v) === "[object Array]") return v.length > 0;
+    if (typeof v === "object") {
+      for (var k in v) {
+        if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+        if (_present(v[k])) return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  S.audit = function (rows, opts) {
+    opts = opts || {};
+    rows = rows || [];
+    var n = rows.length, i, f, v;
+    var fields = S.NORMALIZED.concat(["broker","listed"]);
+    var cov = {}, faults = [], notes = [];
+
+    for (i = 0; i < fields.length; i++) cov[fields[i]] = 0;
+    var kwhSrc = {}, srcMix = {};
+
+    for (i = 0; i < n; i++) {
+      var r = rows[i] || {};
+      for (f = 0; f < fields.length; f++) {
+        if (_present(r[fields[f]])) cov[fields[f]]++;
+      }
+      /* A modelled figure is fine. A modelled figure nobody labels is not. */
+      if (r.annualKwh && _present(r.annualKwh.value)) {
+        var ks = r.annualKwh.src || "unlabelled";
+        kwhSrc[ks] = (kwhSrc[ks] || 0) + 1;
+      }
+      var sk = r.src || "unstamped";
+      srcMix[sk] = (srcMix[sk] || 0) + 1;
+    }
+
+    /* A required field empty on every single record is a mapping fault, not
+       an absent value — a real dataset does not lose one column entirely. */
+    for (f = 0; f < fields.length; f++) {
+      var key = fields[f];
+      if (S.OPTIONAL.indexOf(key) >= 0) continue;
+      /* src has its own, more precise fault below — saying it twice makes a
+         reader wonder whether they are two different problems. */
+      if (key === "src") continue;
+      if (n > 0 && cov[key] === 0) {
+        faults.push(key + " is empty on "
+                  + (n === 1 ? "the only record" : "all " + n + " records")
+                  + " — the field name is almost certainly mapped wrong, not "
+                  + "missing from the source.");
+      }
+    }
+    if (srcMix.unstamped) {
+      faults.push(srcMix.unstamped + " record" + (srcMix.unstamped === 1 ? " carries" : "s carry")
+                + " no src — nothing downstream can say where they came from.");
+    }
+    if (kwhSrc.unlabelled) {
+      faults.push(kwhSrc.unlabelled + " energy figure" + (kwhSrc.unlabelled === 1 ? " carries" : "s carry")
+                + " no provenance. A modelled number presented as measured is the "
+                + "failure this file exists to prevent.");
+    }
+    if (kwhSrc.modelled || kwhSrc.proxy) {
+      notes.push("Energy: " + (kwhSrc.metered || 0) + " metered, "
+               + (kwhSrc.modelled || 0) + " modelled, " + (kwhSrc.proxy || 0) + " proxy. "
+               + "Modelled figures are CBECS-order screening values, not a meter read.");
+    }
+
+    return { records: n, coverage: cov, optional: S.OPTIONAL.slice(),
+             energySrc: kwhSrc, srcMix: srcMix, faults: faults, notes: notes,
+             at: new Date().toISOString() };
+  };
+
+  /* One block of plain text, for a data room or an email to a partner's
+     integration team. Deliberately not a chart: the useful artefact is the
+     sentence "of 4,812 sites, 4,790 carry a building size from the listing". */
+  S.auditText = function (rep) {
+    if (!rep) return "";
+    var out = [], k, pct, i;
+    out.push("Records: " + rep.records);
+    out.push("");
+    out.push("Field coverage");
+    for (k in rep.coverage) {
+      if (!Object.prototype.hasOwnProperty.call(rep.coverage, k)) continue;
+      pct = rep.records ? Math.round((rep.coverage[k] / rep.records) * 100) : 0;
+      out.push("  " + (k + "                ").slice(0, 16)
+             + (rep.coverage[k] + " / " + rep.records + "  " + pct + "%")
+             + (rep.optional.indexOf(k) >= 0 ? "   (optional)" : ""));
+    }
+    if (rep.faults.length) {
+      out.push("");
+      out.push("Faults");
+      for (i = 0; i < rep.faults.length; i++) out.push("  - " + rep.faults[i]);
+    }
+    if (rep.notes.length) {
+      out.push("");
+      for (i = 0; i < rep.notes.length; i++) out.push(rep.notes[i]);
+    }
+    out.push("");
+    out.push("Audited " + rep.at);
+    return out.join("\n");
+  };
+
   function req(url, cb) {
     var x = new XMLHttpRequest();
     try { x.open("GET", url, true); } catch (e) { cb(e); return; }
