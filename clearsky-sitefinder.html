@@ -789,6 +789,11 @@
   "use strict";
 
   var L = window.OmegaLedger, SRC = window.OmegaListings;
+  /* One duration default for the whole page, read from the shared cost model
+     where it is available so the finder and the estimator cannot drift. The
+     literal is the fallback for the moment before that script loads. */
+  var DEFAULT_HOURS = (window.OmegaCostModel && window.OmegaCostModel.DEFAULT_HOURS) || 4;
+
   var ORG = (location.search.match(/[?&]org=([^&]+)/) || [])[1] || "demo";
   try { ORG = decodeURIComponent(ORG); } catch (e) {}
 
@@ -1455,11 +1460,11 @@
     var lf = r.loadFactor || EUI_LF[r.type] || 0.5;
     var kwh = r.annualKwh ? r.annualKwh.value : null;
     var peakKw = (kwh && lf) ? (kwh / 8760) / lf : null;
-    /* 15% of peak at 2 hours is the standard opening screen for a C&I
+    /* 15% of peak at the default duration is the standard opening screen for a C&I
        demand-charge deal. Going deeper needs interval data we do not have. */
     var loadKw = peakKw ? peakKw * 0.15 : null;
 
-    var sz = L.sizeAt({ feederId: r.feederId, siteId: r.id, loadKw: loadKw, hours: 2 });
+    var sz = L.sizeAt({ feederId: r.feederId, siteId: r.id, loadKw: loadKw, hours: DEFAULT_HOURS });
     r.peakKw = peakKw;
     r.lf = lf;
     r.sz = sz;
@@ -1503,12 +1508,12 @@
       };
       r.sz = {
         kw: loadKw == null ? Math.round(after) : Math.round(Math.min(loadKw, after)),
-        hours: 2,
+        hours: DEFAULT_HOURS,
         loadCeiling: loadKw == null ? null : Math.round(loadKw),
         circuitCeiling: Math.round(after),
         state: r.circ
       };
-      r.sz.kwh = r.sz.kw * 2;
+      r.sz.kwh = r.sz.kw * DEFAULT_HOURS;
       r.sz.circuitLimited = loadKw == null || after <= loadKw;
       r.sz.binds = r.sz.circuitLimited ? "circuit" : "load";
     }
@@ -3111,7 +3116,7 @@
       g("Ceiling from the wire", fmt(maxByWire) + " kW") +
       g("Ceiling from the load", maxByLoad == null
         ? "N/A \u2014 no building load known" : fmt(maxByLoad) + " kW") +
-      g("At 2 hours", fmt(maxBess * 2) + " kWh") +
+      g("At " + DEFAULT_HOURS + " hours", fmt(maxBess * DEFAULT_HOURS) + " kWh") +
       g("Battery deal score", '<b>' + r.score + '</b> / 100') +
       g("Large load score", '<b>' + r.loadScore + '</b> / 100') +
       '</div>';
@@ -4253,7 +4258,7 @@
       g("Ceiling from the wire", fmt(maxByWire) + " kW") +
       g("Ceiling from the load",
         maxByLoad == null ? "N/A \u2014 no building load known" : fmt(maxByLoad) + " kW") +
-      g("At 2 hours", fmt(maxBess * 2) + " kWh") +
+      g("At " + DEFAULT_HOURS + " hours", fmt(maxBess * DEFAULT_HOURS) + " kWh") +
       '</div>';
 
     /* Interconnections, in order of authority. */
@@ -4425,8 +4430,8 @@
            they actually intend to propose, which is what should be priced. */
         batteryKw: (function () { var q = sizePick(r); return q.kw != null ? q.kw : (sz.kw != null ? sz.kw : null); })(),
         batteryKwh: (function () { var q = sizePick(r); return q.kwh != null ? q.kwh : (sz.kwh != null ? sz.kwh : null); })(),
-        assumedHours: (function () { var q = sizePick(r); return q.hours || sz.hours || 2; })(),
-        sizedBy: (function () { var q = sizePick(r); return q.custom ? "chosen in the site finder" : "circuit maximum at 2 h (default)"; })(),
+        assumedHours: (function () { var q = sizePick(r); return q.hours || sz.hours || DEFAULT_HOURS; })(),
+        sizedBy: (function () { var q = sizePick(r); return q.custom ? "chosen in the site finder" : "circuit maximum at " + DEFAULT_HOURS + " h (default)"; })(),
         circuitCeilingKw: (function () { return sizeCap(r); })(),
         bindingConstraint: sz.binds || null,
         customerPeakKw: r.peakKw != null ? Math.round(r.peakKw) : null,
@@ -4561,13 +4566,13 @@
      second copy here would have been a second answer.
 
      SIZE COMES FROM THE CIRCUIT WHEN THERE IS ONE. sizePick() already means
-     "everything the circuit will take, at 2 hours", which is the honest
+     "everything the circuit will take, at four hours", which is the honest
      default for a screen. When no circuit is attributed there is nothing to
      size against, so this prices a STATED assumption and says so on the
      result rather than refusing — a screening number somebody can argue with
      beats a blank panel, as long as the assumption is on the page.
      ══════════════════════════════════════════════════════════════════ */
-  var ASSUMED_KW = 1000, ASSUMED_HOURS = 2;
+  var ASSUMED_KW = 1000, ASSUMED_HOURS = DEFAULT_HOURS;
 
   /* ══════════════════════════════════════════════════════════════════
      THE ORGANISATION'S OWN SUPPLIER PRICING
@@ -4956,11 +4961,18 @@
     return cap != null && cap > 0 ? cap : null;
   }
 
-  /* What the rep has chosen, or the default: everything available at 2 h. */
+  /* What the rep has chosen, or the default: everything available at four
+     hours. Four rather than two because the US fleet EIA reports averages
+     about three hours, NREL's utility-scale benchmark is written at four,
+     and the C&I revenue cases that actually pay are four — a two-hour
+     default made every $/kWh this tool produced read high against every
+     published figure, for a reason that had nothing to do with the site.
+     It is a default, not a cap: duration is an equipment choice and the
+     circuit does not care. */
   function sizePick(r) {
     var cap = sizeCap(r);
-    if (cap == null) return { kw: null, kwh: null, hours: 2, cap: null, custom: false };
-    var pickKw = cap, hours = 2, custom = false;
+    if (cap == null) return { kw: null, kwh: null, hours: DEFAULT_HOURS, cap: null, custom: false };
+    var pickKw = cap, hours = DEFAULT_HOURS, custom = false;
     var v = r.sizePick;
     if (v) {
       if (v.kw != null) { pickKw = Math.max(1, Math.min(cap, Math.round(v.kw))); custom = true; }
@@ -5162,7 +5174,7 @@
         'team\u2019s holds. Duration is an equipment choice and is not capped: an 8-hour ' +
         'system at this kW still draws this kW.' +
         (pick.custom ? ' <a href="#" data-noselect="1" data-szreset="' + esc(r.id) +
-          '">Reset to the full circuit at 2 h</a>' : '') +
+          '">Reset to the full circuit at ' + DEFAULT_HOURS + ' h</a>' : '') +
       '</div></div>';
   }
 
@@ -5882,7 +5894,7 @@
       if (!ST.rep) { say("Set your name in the top right first \u2014 a claim with no owner is not a claim.", "err"); return; }
       L.reserve({
         feederId: r.feederId, siteId: r.id, address: r.addr, lat: r.lat, lon: r.lon,
-        kw: kw, status: status, note: note, rep: ST.rep, hours: 2
+        kw: kw, status: status, note: note, rep: ST.rep, hours: sizePick(r).hours
       }, function (err) {
         if (err) { say(err.message, "err"); return; }
         say(status === "prospect"

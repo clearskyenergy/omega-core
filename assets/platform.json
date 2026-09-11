@@ -1,8 +1,12 @@
 {
-  "generatedAt": "2026-09-11T11:59:55.850Z",
+  "generatedAt": "2026-09-11T13:15:08.347Z",
   "repo": "omega-core",
   "tools": [
     {
+      "lastPush": "2026-09-10T03:26:15-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(rfq): a customer can file their own request when the endpoint is down",
+      "commits": 114,
       "file": "editor.html",
       "title": "Site Map Designer Pro",
       "area": "Design",
@@ -11,6 +15,10 @@
       "lines": 171749
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "permit.html",
       "title": "ClearSky Permit Creator",
       "area": "Design",
@@ -19,6 +27,10 @@
       "lines": 1785
     },
     {
+      "lastPush": "2026-09-10T07:28:28-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "fix(ev-workbook): charger pedestals were missing from every fleet-priced job",
+      "commits": 2,
       "file": "ev-cost-workbook.html",
       "title": "EV Cost Workbook",
       "area": "Economics",
@@ -27,22 +39,34 @@
       "lines": 7632
     },
     {
+      "lastPush": "2026-09-11T07:53:02-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "fix(sitefinder): Grid Atlas answered and then threw on the way to the screen",
+      "commits": 15,
       "file": "clearsky-sitefinder.html",
       "title": "Site Finder",
       "area": "Siting",
-      "kb": 328,
+      "kb": 333,
       "scripts": 12,
-      "lines": 6577
+      "lines": 6671
     },
     {
+      "lastPush": "2026-09-11T07:36:04-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(sitefinder): open the ComEd map on the site you are looking at",
+      "commits": 2,
       "file": "comed-capacity.html",
       "title": "ComEd Capacity Finder",
       "area": "Siting",
-      "kb": 317,
+      "kb": 318,
       "scripts": 7,
-      "lines": 6191
+      "lines": 6222
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "compute-power-sizer.html",
       "title": "Compute Power Sizer",
       "area": "Sizing",
@@ -51,6 +75,10 @@
       "lines": 206
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "edge-fund-power-calculator.html",
       "title": "Site power sizing for AI compute — EDGE FUND",
       "area": "Sizing",
@@ -59,6 +87,10 @@
       "lines": 98
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "battery-sizer.html",
       "title": "Battery Sizer",
       "area": "Sizing",
@@ -67,6 +99,22 @@
       "lines": 3609
     },
     {
+      "lastPush": "2026-09-11T08:14:34-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(estimator): installers, and an EPC quote that replaces a whole division",
+      "commits": 10,
+      "file": "clearsky-cost-estimator.html",
+      "title": "Cost Estimator",
+      "area": "Economics",
+      "kb": 131,
+      "scripts": 6,
+      "lines": 2461
+    },
+    {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "fleet-simulator-3d.html",
       "title": "NextNRG · 3D Fleet Simulator (Energy + Compute)",
       "area": "Operate",
@@ -75,6 +123,10 @@
       "lines": 2518
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "ClearSky_Enlarged_Plot_Plan_Generator.html",
       "title": "ClearSky CAD — Enlarged Plot Plan Generator",
       "area": "Design",
@@ -83,14 +135,10 @@
       "lines": 2539
     },
     {
-      "file": "clearsky-cost-estimator.html",
-      "title": "Cost Estimator",
-      "area": "Economics",
-      "kb": 119,
-      "scripts": 6,
-      "lines": 2240
-    },
-    {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 3,
       "file": "valuestack.html",
       "title": "BESS Value Stack & Site Revenue Analyzer . ClearSky-OMEGA",
       "area": "Economics",
@@ -99,6 +147,10 @@
       "lines": 2005
     },
     {
+      "lastPush": "2026-09-07T20:41:21-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "The platform is owned by the company, and now says so",
+      "commits": 2,
       "file": "sales-proposal.html",
       "title": "Sales Proposal Builder",
       "area": "Sell",
@@ -107,6 +159,10 @@
       "lines": 2190
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "apartment-bess.html",
       "title": "Residential BESS Portfolio Analyzer — ClearSky",
       "area": "Economics",
@@ -115,6 +171,10 @@
       "lines": 1480
     },
     {
+      "lastPush": "2026-09-07T20:41:21-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "The platform is owned by the company, and now says so",
+      "commits": 3,
       "file": "grid-atlas.html",
       "title": "Grid Atlas",
       "area": "Siting",
@@ -123,6 +183,10 @@
       "lines": 1708
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "proforma.html",
       "title": "NextNRG — BESS Pro Forma",
       "area": "Economics",
@@ -131,6 +195,10 @@
       "lines": 1749
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "site-lifecycle.html",
       "title": "Site Lifecycle Console",
       "area": "Operate",
@@ -139,6 +207,10 @@
       "lines": 1529
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "om-console.html",
       "title": "O&M Operations Console",
       "area": "Operate",
@@ -147,6 +219,10 @@
       "lines": 1190
     },
     {
+      "lastPush": "2026-09-09T20:04:44-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "fix(nav): the sidebar changed between the dashboard and /projects",
+      "commits": 17,
       "file": "marketplace.html",
       "title": "App Marketplace",
       "area": "Sell",
@@ -155,6 +231,10 @@
       "lines": 1372
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "sla-intelligence.html",
       "title": "SLA & Contractual Intelligence",
       "area": "Operate",
@@ -163,6 +243,10 @@
       "lines": 995
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "field-service.html",
       "title": "Field Service & Dispatch",
       "area": "Operate",
@@ -171,6 +255,10 @@
       "lines": 880
     },
     {
+      "lastPush": "2026-09-09T20:04:44-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "fix(nav): the sidebar changed between the dashboard and /projects",
+      "commits": 19,
       "file": "projects.html",
       "title": "My Projects",
       "area": "Admin",
@@ -179,6 +267,10 @@
       "lines": 1281
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "owner-reporting.html",
       "title": "Owner Reporting & Audit",
       "area": "Operate",
@@ -187,6 +279,10 @@
       "lines": 780
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "fleet-command.html",
       "title": "Fleet Command",
       "area": "Operate",
@@ -195,6 +291,10 @@
       "lines": 730
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "bess-grid-sizing.html",
       "title": "BESS Sizing & Pro Forma",
       "area": "Other",
@@ -203,6 +303,10 @@
       "lines": 1008
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "branded-report.html",
       "title": "DER generation and storage — 1901 Convention Ctr Dr, Miami Beach, FL",
       "area": "Other",
@@ -211,6 +315,10 @@
       "lines": 1
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "intake-admin.html",
       "title": "Intake queue",
       "area": "Admin",
@@ -219,6 +327,10 @@
       "lines": 1106
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 3,
       "file": "site-optimizer.html",
       "title": "Site Optimizer",
       "area": "Siting",
@@ -227,6 +339,10 @@
       "lines": 879
     },
     {
+      "lastPush": "2026-09-08T13:06:35-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(jda): partner programmes and a pipeline per partnership",
+      "commits": 5,
       "file": "jda.html",
       "title": "Joint Development Partners",
       "area": "Other",
@@ -235,6 +351,10 @@
       "lines": 651
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "ClearSky_Partner_Referral_Intake.html",
       "title": "ClearSky Partner Referral Intake",
       "area": "Other",
@@ -243,6 +363,10 @@
       "lines": 769
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 3,
       "file": "account-settings.html",
       "title": "OMEGA Signal",
       "area": "Admin",
@@ -251,6 +375,10 @@
       "lines": 501
     },
     {
+      "lastPush": "2026-09-07T20:41:21-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "The platform is owned by the company, and now says so",
+      "commits": 2,
       "file": "investment-analysis.html",
       "title": "Site Investment Analysis",
       "area": "Other",
@@ -259,6 +387,10 @@
       "lines": 522
     },
     {
+      "lastPush": "2026-09-09T11:34:20-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "fix(auth): a background tab was signing customers out of the tab they were using",
+      "commits": 4,
       "file": "rfq.html",
       "title": "Quote Desk",
       "area": "Sell",
@@ -267,6 +399,10 @@
       "lines": 622
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "bess-iso-calculator.html",
       "title": "BESS ISO Calculator",
       "area": "Other",
@@ -275,6 +411,10 @@
       "lines": 681
     },
     {
+      "lastPush": "2026-09-06T06:05:18-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "chore: consolidate 16 tenant repos into omega-core",
+      "commits": 1,
       "file": "datacenter-compute-calculator.html",
       "title": "Data Center Compute Calculator",
       "area": "Other",
@@ -283,6 +423,10 @@
       "lines": 430
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "conductor-sizing.html",
       "title": "Conductor & Transformer Sizing",
       "area": "Sizing",
@@ -291,6 +435,10 @@
       "lines": 456
     },
     {
+      "lastPush": "2026-09-09T22:55:24-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(jd): complete is not a one-way door — reopen a design",
+      "commits": 2,
       "file": "jd-workspace.html",
       "title": "JD Workspace",
       "area": "Other",
@@ -299,6 +447,10 @@
       "lines": 469
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "power-flow.html",
       "title": "Multi-Node Power Flow",
       "area": "Sizing",
@@ -307,6 +459,10 @@
       "lines": 400
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "degradation-warranty.html",
       "title": "BESS Degradation & Warranty",
       "area": "Economics",
@@ -315,6 +471,10 @@
       "lines": 351
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "interconnection-study.html",
       "title": "Interconnection Study",
       "area": "Sizing",
@@ -323,6 +483,10 @@
       "lines": 354
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "site-discovery.html",
       "title": "Site Discovery & Screening",
       "area": "Siting",
@@ -331,6 +495,10 @@
       "lines": 366
     },
     {
+      "lastPush": "2026-09-07T20:41:21-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "The platform is owned by the company, and now says so",
+      "commits": 2,
       "file": "dcfc-proforma.html",
       "title": "DCFC BESS Pro Forma",
       "area": "Economics",
@@ -339,6 +507,10 @@
       "lines": 317
     },
     {
+      "lastPush": "2026-09-06T15:13:41-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(financing): Apply for Financing — DLL pricing request from the editor",
+      "commits": 1,
       "file": "financing.html",
       "title": "Apply for financing",
       "area": "Other",
@@ -347,6 +519,10 @@
       "lines": 308
     },
     {
+      "lastPush": "2026-09-08T03:46:07-05:00",
+      "lastBy": "clearskyenergy",
+      "lastMsg": "feat(brand): the mark is an omega again, and it glows",
+      "commits": 2,
       "file": "interconnection-screener.html",
       "title": "Interconnection Screener",
       "area": "Sizing",
