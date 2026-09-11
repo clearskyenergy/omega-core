@@ -3648,7 +3648,7 @@ async function fetchDraft(id){
   /* A twin deployed before /draft existed answers this GET with the chat
      thread, 200. It echoes the id when it knows the route; a 200 that does
      not is not a draft, and must not be painted as one. */
-  if(j.id!==id) throw new Error('the deployed twin has no /draft route — redeploy twinChat');
+  if(String(j.id)!==String(id)) throw new Error('the deployed twin has no /draft route — redeploy twinChat');
   draftCache.set(id, j);
   return j;
 }
@@ -3656,11 +3656,15 @@ async function fetchDraft(id){
 function showDraft(d, fromEl){
   const back=el('cardBack'), card=el('card');
   if(!back||!card||!d||!d.id) return;
+  /* The list's id is whatever the twin handed it; dataset only ever holds a
+     string. One string, compared everywhere, or the guards below never match
+     and the card sits on "reading it…" for good. */
+  const id=String(d.id);
   card.textContent='';
   card.classList.add('draft');
   /* Which draft this card is showing, so a body that lands after he has
      moved on to another one paints nothing. */
-  card.dataset.draft=d.id;
+  card.dataset.draft=id;
   if(fromEl){
     const r=fromEl.getBoundingClientRect();
     card.style.transformOrigin=(r.left+r.width/2)+'px '+(r.top+r.height/2)+'px';
@@ -3715,8 +3719,8 @@ function showDraft(d, fromEl){
   back.hidden=false;
   card.style.animation='none'; void card.offsetWidth; card.style.animation='';
 
-  fetchDraft(d.id).then(j=>{
-    if(card.dataset.draft!==d.id) return;
+  fetchDraft(id).then(j=>{
+    if(card.dataset.draft!==id) return;
     const to=(j.to||[]).join(', ');
     if(j.needsRecipient||!to) paint(Object.assign({},d,{to:null}));
     else if(to!==d.to) paint(Object.assign({},d,{to:to}));
@@ -3741,7 +3745,7 @@ function showDraft(d, fromEl){
     body.textContent=j.body||'(empty — a subject and nothing else)';
     if(j.body){ cp.disabled=false; cp.addEventListener('click',()=>copyToClipboard(j.body,cp)); }
   }, e=>{
-    if(card.dataset.draft!==d.id) return;
+    if(card.dataset.draft!==id) return;
     fromV.textContent=madeV.textContent='—';
     body.className='draftBody bad';
     body.textContent='The twin could not read it: '+e.message;
