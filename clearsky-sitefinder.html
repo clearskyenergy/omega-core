@@ -506,6 +506,16 @@
   .dcnK{width:auto;min-width:96px}
   .dcnFlag{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fdf7ec;
     border:1px solid #eedfbe;color:#7a5b00;font-size:10.5px;line-height:1.5}
+  .vsList{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:8px 0 4px}
+  .vsRow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 11px;
+    border-top:1px solid var(--line)}
+  .vsRow:first-child{border-top:0}
+  .vsTot{background:#f2f7f5;font-weight:700}
+  .vsName{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:6px}
+  .vsUsd{text-align:right;font-weight:700;font-size:13px;white-space:nowrap}
+  .vsUsd small{font-weight:500;font-size:10px;color:var(--mut)}
+  .vsHow{grid-column:1/-1;font-size:11px;color:var(--ink);line-height:1.5}
+  .vsRef{grid-column:1/-1;font-size:10.5px;color:var(--mut);line-height:1.5}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -4975,9 +4985,10 @@
          rounded duration — that route drifts by tens of kW and a customer
          checking the arithmetic would find it. */
       var pk = sizePick(r);
-      rows.push(["Battery that fits",
-        (Math.round(fit.kwh / 100) / 10) + ' MWh',
-        fmt(pk.kw) + ' kW for ' + (Math.round(fit.hours * 10) / 10) + ' hours']);
+      rows.push(["Battery", (Math.round(fit.kwh / 100) / 10) + ' MWh',
+        (fit.units ? fit.units + '\u00d7 ' : '') +
+        esc(fit.model || fit.name) + ' \u00b7 ' + fmt(pk.kw) + ' kW, ' +
+        (Math.round(fit.hours * 10) / 10) + ' h']);
     }
     if (est) {
       var VS = window.OmegaValueStack;
@@ -5031,6 +5042,63 @@
       _cardFlag = "";
     }
     h += '<div class="dcnNext"><b>Next:</b> ' + esc(nextStep(r, d, fit, est)) + '</div>';
+    return h + '</div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     THE VALUE STACK
+
+     The platform could say what a site costs and never what it returns, so
+     every conversation ended at a capex number. This is the other half, and
+     it is built to the same rule: every stream names its source and its
+     tier, and a stream nobody can cite is reported as an assumption rather
+     than as revenue. A revenue stack is exactly where optimism gets
+     laundered into a spreadsheet.
+
+     The streams that are MISSING are listed too. A total that silently
+     omits two of five reads like a complete answer. */
+  function valueStackHtml(r) {
+    var VS = window.OmegaValueStack;
+    if (!VS) return "";
+    var pick = sizePick(r);
+    if (pick.kw == null) return "";
+    var fit = fitBest(r);
+    var vs = VS.stack({ kw: pick.kw, hours: fit ? fit.hours : pick.hours,
+                        demandLoPerKwMonth: DEMAND_LO, demandHiPerKwMonth: DEMAND_HI,
+                        vppPerKwYear: VPP_PER_KW_YEAR });
+    if (!vs) return "";
+
+    var h = '<div class="sec"><h4>Value stack</h4>' +
+      '<p class="note">What this battery earns in a year, stream by stream, with ' +
+      'where each number comes from. Nothing here is a forecast of prices \u2014 it is ' +
+      'today\u2019s published rates applied to this site\u2019s size.</p><div class="vsList">';
+    for (var i = 0; i < vs.streams.length; i++) {
+      var st = vs.streams[i];
+      h += '<div class="vsRow">' +
+        '<div class="vsName">' + esc(st.name) +
+          '<span class="srcPill s-' + esc(st.tier) + '">' + esc(st.tier) + '</span></div>' +
+        '<div class="vsUsd">' + money(st.usd) +
+          (st.usdHi && st.usdHi !== st.usd ? '\u2013' + money(st.usdHi) : '') +
+          '<small>/yr</small></div>' +
+        '<div class="vsHow">' + esc(st.how) + '</div>' +
+        '<div class="vsRef">' + esc(st.ref) + '</div>' +
+        '</div>';
+    }
+    h += '<div class="vsRow vsTot"><div class="vsName">Total</div>' +
+      '<div class="vsUsd">' + money(vs.perYear) +
+      (vs.perYearHi !== vs.perYear ? '\u2013' + money(vs.perYearHi) : '') +
+      '<small>/yr</small></div></div></div>';
+    if (vs.missing.length) {
+      h += '<p class="note"><b>Not counted:</b> ' + vs.missing.map(esc).join(' ') + '</p>';
+    }
+
+    /* What the utility charges, both ways. A pro forma carrying only the
+       one-off cost is wrong every year after the first. */
+    var uc = VS.utilityCost({ kw: pick.kw,
+                              upgradeUsd: null, upgradeCarried: true,
+                              standbyPerKwMonth: null });
+    h += '<p class="note"><b>Utility cost \u2014 one-off:</b> ' + esc(uc.capexNote) +
+         '<br><b>Utility cost \u2014 every year:</b> ' + esc(uc.opexNote) + '</p>';
     return h + '</div>';
   }
 
@@ -6018,6 +6086,7 @@
          provokes: the rep has just settled on a number and the next thought
          is "so what do I actually put there". */
       fitOptionsHtml(r) +
+      valueStackHtml(r) +
       (r.saveLo ? '<div class="note">Demand-charge exposure removed: <b>' + money(r.saveLo) +
         '\u2013' + money(r.saveHi) + '</b> a year at $' + DEMAND_LO + '\u2013' + DEMAND_HI +
         '/kW-month. Screening range, not a quote.</div>' : '') +
