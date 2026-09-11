@@ -482,14 +482,23 @@
     white-space:nowrap}
   .fitPrice small{display:block;font-weight:500;font-size:10px;color:var(--mut)}
   .fitNoPrice{font-weight:600;font-size:11px;color:var(--mut)}
-  /* On the card: one line, quiet, and unmistakably about equipment rather
-     than capacity — the number above it is already kW and two kW-ish
-     figures stacked would read as a contradiction. */
-  .fitCard{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:5px;
-    padding:4px 7px;border-radius:6px;background:#f2f7f5;border:1px solid #dbe8e3}
-  .fitCardWhat{font-size:11.5px;font-weight:700;color:#17513f}
-  .fitCardWho{font-size:10.5px;color:#4a6b60}
-  .fitCardUsd{margin-left:auto;font-size:11.5px;font-weight:700;color:#17513f}
+  /* The decision strip. Tone carries the verdict so it reads before it is
+     read: a stop is red, an unsettled site is amber, a clean one is green.
+     Never a score — the numbers below it say which problem it has. */
+  .dcn{margin-top:7px;border-radius:8px;padding:7px 9px;border:1px solid}
+  .dcn-go{background:#f1f8f4;border-color:#cfe6d9}
+  .dcn-maybe{background:#fdf7ec;border-color:#eedfbe}
+  .dcn-no{background:#fdf1ef;border-color:#f2d2cb}
+  .dcnHead{font-size:11px;font-weight:700;letter-spacing:.02em;margin-bottom:4px}
+  .dcn-go .dcnHead{color:#1c6b41}
+  .dcn-maybe .dcnHead{color:#8a5a00}
+  .dcn-no .dcnHead{color:#a3372a}
+  .dcnRow{display:flex;align-items:baseline;gap:6px;font-size:11.5px;line-height:1.5}
+  .dcnK{flex:none;width:58px;color:var(--mut);font-size:10.5px}
+  .dcnV{font-weight:700}
+  .dcnX{color:var(--mut);font-size:10.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
+  .dcnOpen{margin-top:4px;font-size:10.5px;color:var(--mut);line-height:1.5}
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
@@ -3304,7 +3313,7 @@
       '<div class="bd">' +
         '<div class="kw">' + kwTxt + ' <small>kW deliverable</small></div>' +
         '<div class="kwsub">' + sub + '</div>' +
-        fitLineHtml(r) +
+        decisionHtml(r) +
         /* The address is the link. A rep reads the address first and wants
            to see the roof; making them open the card and find a button is a
            step that does not need to exist. */
@@ -4633,6 +4642,8 @@
      panel. */
   var _orgPricing = null;     /* the selected supplier's record, or null   */
   var _orgVendors = null;     /* ALL of them, for the fit list            */
+  var _orgInstallers = null;  /* EPCs, and which one the team selected    */
+  var _orgInstSel = "";
 
   function loadOrgPricing() {
     if (!db || !ORG) return;
@@ -4647,6 +4658,10 @@
            selection, but "what could I actually build here" is a question
            about the whole catalogue. */
         if (vendors) _orgVendors = vendors;
+        /* The installer the team picked in the estimator. The card should
+           name who is going to build it, not leave a rep to remember. */
+        if (st.installers) _orgInstallers = st.installers;
+        if (st.instSel) _orgInstSel = st.instSel;
         if (!sel || !vendors || !vendors[sel]) { try { redrawSel(); } catch (e0) {} return; }
         var v = vendors[sel];
         if (!window.OmegaCostModel || !OmegaCostModel.vendorHasPrice(v)) {
@@ -4739,24 +4754,93 @@
     return f.options[0];
   }
 
-  /* One line, on the card, under the kW. It answers "what do I put there"
-     at the point a rep is scanning a list rather than reading a panel.
-     Silent when nothing is on file: a card is not the place to explain that
-     pricing has not been loaded, and a row of apologies down a list of
-     twenty sites is worse than no row at all. */
-  function fitLineHtml(r) {
-    var o = fitBest(r);
-    if (!o) return "";
-    return '<div class="fitCard">' +
-      '<span class="fitCardWhat">' +
-        (o.blocks
-          ? o.blocks + '\u00d7 ' + (o.blockKwh / 1000) + ' MWh \u00b7 ' +
-            fmt(Math.round(o.kwh)) + ' kWh \u00b7 ' + (Math.round(o.hours * 10) / 10) + ' h'
-          : fmt(Math.round(o.kwh)) + ' kWh') +
-      '</span>' +
-      '<span class="fitCardWho">' + esc(o.name) + '</span>' +
-      (o.priced ? '<span class="fitCardUsd">$' + fmt(Math.round(o.usd)) + '</span>' : '') +
-      '</div>';
+  function selectedInstaller() {
+    if (!_orgInstallers || !_orgInstSel) return null;
+    var w = _orgInstallers[_orgInstSel];
+    return (w && w.name) ? w : null;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     GO / NO-GO, ON THE CARD
+
+     A rep scanning twenty cards is making one decision about each: is this
+     worth an hour. Everything needed for that was already on the page and
+     spread across four sections and a drawer — capacity here, phase there,
+     position quality further down, the estimate in another panel.
+
+     THIS DOES NOT SCORE THE SITE. There is already a score and it answers a
+     different question. This lists what would STOP the deal and what is
+     still unknown, because that is what a go/no-go actually turns on, and
+     because a single number would hide which of five very different
+     problems a site has.
+
+     Only one thing here is a hard no: no capacity left on the circuit. A
+     site nobody can interconnect is not a smaller deal, it is not a deal.
+     Everything else is an open question with a name, and the count is
+     honest — three unknowns is a site worth an hour, eight is not. */
+  function decision(r) {
+    var blockers = [], opens = [];
+
+    var sellable = r.circ && r.circ.sellable;
+    if (r.circ && r.circ.known && !(sellable > 0)) {
+      blockers.push(r.circ.oversubscribed
+        ? "the circuit is oversubscribed"
+        : "no capacity left on this circuit");
+    } else if (!r.circ || !r.circ.known) {
+      opens.push("circuit capacity is not published here");
+    }
+
+    var ph = phaseOf(r);
+    if (!ph) opens.push("service phase not recorded");
+    else if (!ph.confirmed) opens.push("phase assumed, not checked");
+
+    if (r.approx) opens.push("the pin is not the building");
+    if (!r.sqft && !r.lotAcres) opens.push("no parcel size");
+    if (!r.annualKwh) opens.push("no load data \u2014 sized on the circuit alone");
+    if (!_estimates[r.id]) opens.push("not priced yet");
+    if (!fitBest(r)) opens.push("no supplier pricing on file");
+
+    return { blockers: blockers, opens: opens };
+  }
+
+  function decisionHtml(r) {
+    var d = decision(r);
+    var fit = fitBest(r);
+    var inst = selectedInstaller();
+    var est = _estimates[r.id];
+    var tone = d.blockers.length ? "no" : (d.opens.length > 4 ? "maybe" : "go");
+
+    var head = d.blockers.length
+      ? "Stop \u2014 " + esc(d.blockers[0])
+      : (d.opens.length ? d.opens.length + " open question" +
+          (d.opens.length === 1 ? "" : "s") : "Nothing outstanding");
+
+    var h = '<div class="dcn dcn-' + tone + '">' +
+      '<div class="dcnHead">' + head + '</div>';
+
+    /* The three facts a go/no-go turns on, when they exist. Absent ones are
+       simply left out — a card is not a form. */
+    var rows = [];
+    if (fit) {
+      rows.push(["Battery",
+        (fit.blocks ? fit.blocks + '\u00d7 ' + (fit.blockKwh / 1000) + ' MWh \u00b7 ' : '') +
+        fmt(Math.round(fit.kwh)) + ' kWh \u00b7 ' + (Math.round(fit.hours * 10) / 10) + ' h',
+        esc(fit.name)]);
+    }
+    if (inst) rows.push(["Installer", esc(inst.name), inst.project ? esc(inst.project) : ""]);
+    if (est) {
+      rows.push(["Installed", "$" + Math.round(est.total.base / 1000).toLocaleString() + "k",
+                 esc(est.estimateClass || "")]);
+    }
+    for (var i = 0; i < rows.length; i++) {
+      h += '<div class="dcnRow"><span class="dcnK">' + rows[i][0] + '</span>' +
+           '<span class="dcnV">' + rows[i][1] + '</span>' +
+           (rows[i][2] ? '<span class="dcnX">' + rows[i][2] + '</span>' : '') + '</div>';
+    }
+    if (d.opens.length) {
+      h += '<div class="dcnOpen">' + d.opens.map(esc).join(' \u00b7 ') + '</div>';
+    }
+    return h + '</div>';
   }
 
   function fitOptionsHtml(r) {

@@ -442,15 +442,19 @@ ok('the address lookup is normalised the same way every other record is',
   });
 
 ok('the card names the battery that fits', function () {
+  /* It reaches the card through the decision strip now — one surface
+     instead of two stacked ones. fitLineHtml was removed rather than left
+     as an unused second path to the same fact. */
   assert(/function fitBest\(r\)/.test(html), 'nothing picks a best-fit option');
-  assert(/fitLineHtml\(r\) \+/.test(html), 'the card does not render it');
-  var fn = html.slice(html.indexOf('function fitLineHtml'));
-  fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
-  assert(/if \(!o\) return "";/.test(fn),
-    'the card line is not silent when nothing is on file — a row of ' +
-    'apologies down a list of twenty sites is worse than no row');
-  assert(/fitOptions\(r\)/.test(html.slice(html.indexOf('function fitBest'), html.indexOf('function fitLineHtml'))),
+  assert(!/fitLineHtml/.test(html), 'the superseded card line is back as dead code');
+  var src = html.slice(html.indexOf('function fitBest'), html.indexOf('function selectedInstaller'));
+  assert(/fitOptions\(r\)/.test(src),
     'the card uses a different source from the drawer, so they can disagree');
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/if \(fit\) \{/.test(dh),
+    'the strip is not silent when nothing is on file — a row of apologies ' +
+    'down a list of twenty sites is worse than no row');
 });
 
 ok('the hand-built lookup record still lacks those fields', function () {
@@ -460,6 +464,45 @@ ok('the hand-built lookup record still lacks those fields', function () {
   rec = rec.slice(0, rec.indexOf('ST.sel = rec'));
   assert(!/\bclaims:/.test(rec) && !/\bmine:/.test(rec),
     'the lookup record now sets claims/mine — re-check the guards are still needed');
+});
+
+/* ── GO / NO-GO ON THE CARD ───────────────────────────────────────────
+   A rep scanning twenty cards is making one decision about each: is this
+   worth an hour. Everything needed for it was already on the page, spread
+   across four sections and a drawer. */
+ok('the card carries a decision strip, not another score', function () {
+  assert(/function decision\(r\)/.test(html) && /function decisionHtml\(r\)/.test(html),
+    'no decision strip');
+  assert(/decisionHtml\(r\) \+/.test(html), 'it is not rendered on the card');
+  var fn = html.slice(html.indexOf('function decision(r)'));
+  fn = fn.slice(0, fn.indexOf('function decisionHtml'));
+  assert(/blockers\s*=\s*\[\]/.test(fn) && /opens\s*=\s*\[\]/.test(fn),
+    'it does not separate blockers from open questions');
+  assert(!/score|\/ ?100/.test(fn),
+    'the strip computes a score — there is already one, answering a different '
+    + 'question, and a single number hides which of five problems a site has');
+});
+
+ok('only an uninterconnectable site is a hard stop', function () {
+  /* A site nobody can interconnect is not a smaller deal, it is not a deal.
+     Everything else is an open question with a name. */
+  var fn = html.slice(html.indexOf('function decision(r)'));
+  fn = fn.slice(0, fn.indexOf('function decisionHtml'));
+  var blockerPushes = (fn.match(/blockers\.push/g) || []).length;
+  assert(blockerPushes === 1,
+    'there are ' + blockerPushes + ' kinds of hard stop; capacity is the only one');
+  assert(/oversubscribed/.test(fn), 'an oversubscribed circuit is not called out');
+});
+
+ok('it names the battery and the installer the team actually chose', function () {
+  assert(/function selectedInstaller/.test(html), 'the selected installer is not read');
+  var fn = html.slice(html.indexOf('function selectedInstaller'));
+  fn = fn.slice(0, fn.indexOf('function decision(r)'));
+  assert(/_orgInstSel/.test(fn),
+    'it does not use the estimator selection, so the card could name a different EPC');
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/fitBest\(r\)/.test(dh), 'the battery on the strip is not the fitted one');
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
