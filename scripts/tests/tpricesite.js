@@ -535,7 +535,7 @@ ok('it names the battery and the installer the team actually chose', function ()
 ok('the card answers the four questions a customer actually asks', function () {
   var dh = html.slice(html.indexOf('function decisionHtml'));
   dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
-  ['Battery that fits', 'Cost to build', 'Federal tax credit', 'Net cost', 'Pays back in']
+  ['Battery', 'Cost to build', 'Net cost', 'Pays back in', 'Earns']
     .forEach(function (label) {
       assert(dh.indexOf(label) > 0, 'the card does not show "' + label + '"');
     });
@@ -559,8 +559,9 @@ ok('NO state rebate is claimed for a commercial site', function () {
   dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
   assert(!/BESH|300\s*\/\s*kWh|inc_rate/.test(dh),
     'a residential rebate is being applied to a commercial site');
-  assert(/ITC_RATE/.test(dh) && /prevailing wage/.test(dh),
-    'the federal credit is shown without the condition that earns it');
+  assert(/ITC_RATE/.test(dh) && /\.short \|\|/.test(dh),
+    'the federal credit is shown without the condition that earns it — the '
+    + 'short-form condition from the value stack must reach the card');
 });
 
 ok('the AACE class keeps a plain-English twin', function () {
