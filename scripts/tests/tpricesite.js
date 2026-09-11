@@ -261,5 +261,44 @@ ok('the printed estimate keeps the schedule', function () {
     'schedule rows can split across a page break');
 });
 
+/* ── STRAIGHT INTO THE COMED MAP ──────────────────────────────────────
+   Wanting the utility's map for the site you are looking at used to mean
+   copying the address into a second tool by hand, for a point this page
+   already knows to five decimal places. */
+ok('the drawer links into the ComEd map with the site on the URL', function () {
+  assert(/function comedUrl/.test(html), 'nothing builds a ComEd link');
+  var fn = html.slice(html.indexOf('function comedUrl'));
+  fn = fn.slice(0, fn.indexOf('\n  function gridAtlasHtml'));
+  ['addr=', 'lat=', 'lon=', 'org=', 'return='].forEach(function (k) {
+    assert(fn.indexOf(k) > 0, 'the ComEd link omits ' + k);
+  });
+  assert(/\/comed-capacity\?/.test(fn), 'it does not point at the ComEd tool');
+});
+
+ok('coordinates are sent, not just the address', function () {
+  /* Address-only would put the site through a geocoder a second time, and a
+     second geocode of the same string lands a block away often enough to
+     matter when the question is what the grid looks like at ONE point. */
+  var est = fs.readFileSync(path.join(ROOT, 'comed-capacity.html'), 'utf8');
+  var seg = est.slice(est.indexOf('ARRIVING FROM THE SITE FINDER'));
+  seg = seg.slice(0, 2000);
+  assert(/isFinite\(lat\)&&isFinite\(lon\)/.test(seg),
+    'the ComEd tool does not prefer the coordinates it was handed');
+  assert(/analyze\(L\.latLng\(lat,lon\)\)/.test(seg),
+    'it centres on the point without analysing it');
+  assert(/\}\s*else if\(addr\)\{\s*geocode\(addr\)/.test(seg),
+    'an address-only link is not honoured');
+  assert(/getElementById\("q"\)\.value=addr/.test(seg),
+    'the address is not put in the search box, so the rep cannot see what is loaded');
+});
+
+ok('the two grid sources are not both styled as the primary action', function () {
+  /* One is the utility's published hosting capacity; the other is national
+     transmission data and is NOT circuit capacity. A rep who reads the
+     second as the first has a number that does not mean what they think. */
+  assert(/id="gaRun"[\s\S]{0,80}class="ghost"|class="ghost" id="gaRun"/.test(html),
+    'the national-data button still reads as a primary action');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);

@@ -470,6 +470,18 @@
   .pktLink{display:inline-block;font-weight:600;font-size:12.5px;padding:7px 12px;
     border-radius:7px;background:var(--accent);color:#fff;text-decoration:none}
   .pktLink:hover{filter:brightness(.94)}
+  /* An anchor rather than a button on purpose: it opens a tool in a new tab,
+     so it should middle-click, cmd-click and copy-link like every other link
+     a person expects to. It only has to LOOK like the button beside it. */
+  .setKeyRow a.btnLink{display:inline-flex;align-items:center;text-decoration:none;
+    border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;
+    font-size:13px;background:var(--accent);color:#fff;cursor:pointer}
+  .setKeyRow a.btnLink:hover{filter:brightness(.94)}
+  /* The second action in the row is a different source answering a different
+     question, so it must not read as a second primary. */
+  .setKeyRow button.ghost{background:#fff;color:var(--ink);
+    border:1px solid var(--line);font-weight:600}
+  .setKeyRow button.ghost:hover{border-color:var(--dim);background:#f6f8fa}
 #phSrc{width:100%;font:inherit;font-size:12px;padding:5px 7px;border-radius:5px;
   border:1px solid var(--line,#d9dee3)}
 #phSrc:disabled{background:#f4f6f8;color:#98a2ac}
@@ -5012,16 +5024,58 @@
      is approximate" findings — is skipped entirely. */
   var _ga = {};
 
+  /* ── STRAIGHT INTO THE COMED MAP, AT THIS SITE ────────────────────────
+     Wanting the ComEd hosting-capacity map for the site you are looking at
+     meant copying the address out of this card, opening a second tool, and
+     typing it in again — for a point this page already knows to five
+     decimal places.
+
+     THE COORDINATES GO WITH IT, and they are what the other tool uses.
+     Sending the address alone would put it through a geocoder a second
+     time, and a second geocode of the same string lands a block away often
+     enough to matter when the whole question is what the grid looks like at
+     ONE point. The address rides along so the search box shows what is
+     being looked at, and so a rep can re-search from there if they want.
+
+     org carries across because that tool scopes its pipeline by it, and
+     return= so its back button comes home rather than to the generic tools
+     host. */
+  function comedUrl(r) {
+    var q = [];
+    if (r.addr) q.push("addr=" + encodeURIComponent(r.addr));
+    if (r.lat != null && r.lon != null) {
+      q.push("lat=" + encodeURIComponent(r.lat));
+      q.push("lon=" + encodeURIComponent(r.lon));
+    }
+    if (ORG) q.push("org=" + encodeURIComponent(ORG));
+    q.push("return=" + encodeURIComponent(location.origin + location.pathname));
+    return "/comed-capacity?" + q.join("&");
+  }
+
   function gridAtlasHtml(r) {
     var st = _ga[r.id];
     var head = '<div class="sec"><h4>Grid Atlas \u00b7 transmission near this point</h4>';
     if (!st) {
       return head +
-        '<button id="gaRun" data-noselect="1" data-ga-id="' + esc(r.id) + '">Look up the grid here</button>' +
-        '<p class="note">Nearest substations and transmission from national data \u2014 available ' +
-        'everywhere, including where the hosting-capacity layer has nothing. ' +
-        '<b>This is not circuit capacity.</b> It says what the grid looks like around this ' +
-        'point, not how many kW the feeder will take.</p></div>';
+        '<div class="setKeyRow">' +
+        '<a class="pri btnLink" id="gaComEd" data-noselect="1" target="_blank" rel="noopener" ' +
+          'href="' + esc(comedUrl(r)) + '" ' +
+          'title="Opens the ComEd Capacity Finder centred on this site">' +
+          'Open the ComEd map here</a>' +
+        '<button class="ghost" id="gaRun" data-noselect="1" data-ga-id="' + esc(r.id) +
+          '" title="National transmission data \u2014 not circuit capacity">' +
+          'National grid data</button>' +
+        '</div>' +
+        /* Two sources, and they answer different questions. Saying which is
+           which stops a rep reading transmission proximity as capacity. */
+        '<p class="note"><b>The ComEd map</b> opens on this exact point with the ' +
+        'address already in its search box \u2014 hosting capacity, circuits and ' +
+        'substations as the utility publishes them.</p>' +
+        '<p class="note"><b>Look up the grid here</b> is different: nearest ' +
+        'substations and transmission from national data, available everywhere ' +
+        'including where the hosting-capacity layer has nothing. ' +
+        '<b>It is not circuit capacity.</b> It says what the grid looks like around ' +
+        'this point, not how many kW the feeder will take.</p></div>';
     }
     if (st.busy) return head + '<p class="note">Asking Grid Atlas\u2026</p></div>';
     if (st.err)  return head + '<p class="note bad">' + esc(st.err) + '</p>' +
@@ -5044,7 +5098,10 @@
         : '') +
       '<p class="note"><b>Transmission proximity, not feeder capacity.</b> It does not say how ' +
       'many kW this circuit will accept \u2014 that is the circuit block above, and where that ' +
-      'is blank it is still blank.</p></div>';
+      'is blank it is still blank.</p>' +
+      '<div class="setKeyRow" style="margin-top:8px">' +
+      '<a class="pri btnLink" id="gaComEd" data-noselect="1" target="_blank" rel="noopener" ' +
+        'href="' + esc(comedUrl(r)) + '">Open the ComEd map here</a></div></div>';
   }
 
   function runGridAtlas(r) {

@@ -1786,6 +1786,37 @@ function geocode(raw){
 document.getElementById("goBtn").onclick=function(){geocode(document.getElementById("q").value);};
 document.getElementById("q").addEventListener("keydown",function(e){if(e.key==="Enter")geocode(this.value);});
 
+/* ── ARRIVING FROM THE SITE FINDER ────────────────────────────────────────
+   A rep looking at a site in the Site Finder and wanting the ComEd map at
+   THAT point should not have to copy the address across and type it into a
+   second tool. The finder links here with the site on the URL and this
+   picks it up.
+
+   COORDINATES WIN OVER THE ADDRESS. The finder already knows exactly where
+   the site is; re-geocoding the address here would send it through
+   Nominatim a second time and can easily land a block away, or on the
+   centroid of the street, and the whole point of this tool is what the grid
+   looks like at ONE point. The address is still filled into the box so the
+   rep can see what they are looking at and re-search if they want.
+
+   Address-only is honoured too, for a link built by hand or a site the
+   finder never resolved to a point. */
+(function(){
+  function p(n){
+    var m=(location.search||"").match(new RegExp("[?&]"+n+"=([^&]*)"));
+    if(!m) return "";
+    try{ return decodeURIComponent(m[1].replace(/\+/g," ")); }catch(e){ return ""; }
+  }
+  var addr=p("addr"), lat=parseFloat(p("lat")), lon=parseFloat(p("lon"));
+  if(addr){ try{ document.getElementById("q").value=addr; }catch(e){} }
+  if(isFinite(lat)&&isFinite(lon)&&(lat!==0||lon!==0)){
+    map.setView([lat,lon],17);
+    analyze(L.latLng(lat,lon));
+  } else if(addr){
+    geocode(addr);
+  }
+})();
+
 /* ── BACK TO PORTAL ──
    OMEGATools.hrefFor() appends ?return=<portal origin+path> because this tool
    is served from TOOL_HOST, a DIFFERENT ORIGIN from the portal — so the
