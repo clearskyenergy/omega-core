@@ -63,6 +63,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       background:rgba(0,243,255,.1);border-radius:9px;padding:1px 7px;min-width:20px;text-align:center}
 .navItem.on .pill{color:var(--glow-cyan)}
 .railFoot{flex:none;border-top:1px solid rgba(0,243,255,.14);padding-top:10px}
+/* Hung off the parent rather than set inline, because this button MOVES: on a
+   phone it lives in the talk bar, where full width and a top margin are both
+   wrong. An inline style would have followed it there and outranked the fix. */
+.railFoot #micBig{width:100%;margin-top:8px}
 
 .main{display:flex;flex-direction:column;gap:12px;min-height:0}
 .hDate{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim)}
@@ -224,17 +228,6 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   background:linear-gradient(90deg,rgba(11,107,47,.14),rgba(61,220,132,.08),rgba(11,107,47,.14));
   box-shadow:inset 0 0 20px rgba(11,107,47,.25)}
 
-@media(max-width:1280px){
-  #app{grid-template-columns:1fr}
-  .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
-        border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
-  #nav{flex-direction:row;flex-wrap:wrap;flex:1}
-  .railFoot{border-top:none;padding-top:0;display:flex;gap:6px;align-items:center}
-  .cmdGrid{grid-template-columns:1fr}
-  body{height:auto;min-height:100vh;overflow-y:auto}
-  .panel{min-height:180px}
-  .arcWrap{min-height:240px}
-}
 .col{display:flex;flex-direction:column;gap:14px;min-height:0}
 .panel{background:var(--panel);border:var(--edge);border-radius:6px;padding:14px;
        position:relative;box-shadow:inset 0 0 15px rgba(0,68,255,.2);min-height:0;
@@ -330,6 +323,147 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .capwho{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
 .capwho.awake{color:var(--good)}
 #captext{font-size:16px;color:var(--ink);line-height:1.5;max-height:88px;overflow-y:auto}
+/* ══ SMALL SCREENS ═══════════════════════════════════════════════════════
+   All of this overrides the desktop rules above, so it lives at the end of the
+   sheet: media queries carry no specificity of their own and source order is
+   what decides.
+
+   Three tiers, because screens fail in three different ways:
+
+     ≤1280   a laptop or landscape tablet — enough width, not enough for three
+             columns. Stack the columns, keep the rail.
+     ≤1100   no room for a 196px rail beside the content. The rail becomes a
+             strip of tabs you swipe, and the microphone — the reason this page
+             exists — moves into a talk bar that sticks to the bottom.
+     ≤700    a phone in one hand. Touch targets, type sizes, and the fact that
+             a panel with no height to scroll inside will unroll to 4,000px.
+
+   The tiers stack; each one assumes the ones above it have already applied. */
+
+/* Hoisted out of an inline style so a breakpoint can reach it at all. */
+.platGrid{grid-template-columns:250px 1fr 350px}
+
+/* ── ≤1280 · STACK THE COLUMNS ───────────────────────────────────────────── */
+@media(max-width:1280px){
+  /* minmax(0,1fr), not 1fr: "1fr" is shorthand for minmax(AUTO,1fr), and an
+     auto minimum sizes the track to its CONTENT — so one track holding
+     something that scrolls sideways grows to the full scroll width and drags
+     the whole page with it. */
+  #app{grid-template-columns:minmax(0,1fr)}
+  .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
+        border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
+  #nav{flex-direction:row;flex-wrap:wrap;flex:1}
+  .railFoot{border-top:none;padding-top:0;display:flex;gap:6px;align-items:center}
+  .cmdGrid{grid-template-columns:1fr}
+  body{height:auto;min-height:100vh;overflow-y:auto}
+  .panel{min-height:180px}
+  .arcWrap{min-height:240px}
+
+  /* Two columns, and "work on it" runs full width underneath. The stone stays
+     beside the list, because seeing the tool and its name at once is the
+     entire point of it. */
+  .platGrid{grid-template-columns:210px 1fr;grid-auto-rows:minmax(0,auto)}
+  .platGrid .platWork{grid-column:1/-1;flex:none!important}
+  .platGrid .stone{min-height:380px}
+  #platform{max-height:380px}
+}
+
+/* ── ≤1100 · THE RAIL BECOMES A STRIP ────────────────────────────────────
+   Below this there is no width for a rail beside the content, and the wrapped
+   version of it was a 415px-tall wall of navigation you scrolled past before
+   reaching a single fact. */
+@media(max-width:1100px){
+  #app{grid-template-columns:minmax(0,1fr)}
+  #app,.rail,.main,#nav,.view,.cmdGrid,.platGrid{min-width:0}
+
+  .rail{flex-direction:column;flex-wrap:nowrap;gap:8px;padding-right:0;
+        padding-bottom:8px;border-right:none}
+  .brand{padding-bottom:0;border-bottom:none}
+
+  /* width:100% and not just min-width:0. In a column flex container the items
+     stretch to the cross size of the LINE, and the line is as wide as its
+     widest item — so a nav full of tabs sets the line to 1,192px and then
+     stretches its own siblings to match it. An explicit width pins the line
+     back to the rail, and only then does overflow-x have anything to clip. */
+  .brand,#nav{width:100%;max-width:100%}
+  #nav{flex:none;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;
+       overflow-y:hidden;gap:6px;padding-bottom:4px;
+       scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+       scrollbar-width:none}
+  #nav::-webkit-scrollbar{display:none}
+  .navItem{width:auto;flex:0 0 auto;white-space:nowrap;scroll-snap-align:start;
+           min-height:44px;padding:10px 13px;border-color:rgba(0,243,255,.14)}
+  .pill{margin-left:7px}
+  .railFoot{display:none}   /* the mic moves into the talk bar — see placeMic() */
+
+  /* The microphone follows you instead of sitting at the foot of a document
+     that is several screens long. */
+  .talkBar{position:sticky;bottom:0;z-index:60;gap:8px;
+           margin:0 -16px;border-radius:0;border-left:none;border-right:none;
+           padding:8px 16px calc(8px + env(safe-area-inset-bottom));
+           background:var(--bg)}
+  .askWrap input{font-size:16px}   /* under 16px, iOS zooms the page on focus */
+  .talkBar #micBig{flex:0 0 auto;width:auto;margin:0;min-height:40px;padding:9px 13px}
+
+  /* A list that scrolls inside a fixed-height grid on the desktop has no
+     height to scroll inside once the PAGE is what scrolls — so it unrolls.
+     The conversation alone came to 4,211px and the command centre to a 7,797px
+     document, which left the thread four screens below the fold. Capping keeps
+     each one a panel you scroll THROUGH, not a page you scroll PAST. */
+  .panel .scroll{max-height:58vh}
+
+  .stoneOpen{opacity:1}   /* there is no hover to reveal it on a touch screen */
+}
+
+/* ── ≤900 · ONE COLUMN ───────────────────────────────────────────────────
+   The stone has to claim a shape here. In a scrolling column there is no
+   leftover height for it to fill, so without this it collapses to a sliver. */
+@media(max-width:900px){
+  .platGrid{grid-template-columns:1fr}
+  .platGrid .stone{min-height:0}
+  .stoneWrap{aspect-ratio:16/10;flex:none}
+  #platform{max-height:300px}
+}
+
+/* ── ≤700 · A PHONE IN ONE HAND ──────────────────────────────────────────── */
+@media(max-width:700px){
+  body{padding:10px 10px 0;gap:10px;min-height:100vh;min-height:100dvh}
+  #app{gap:10px}
+  .foot{padding-bottom:8px}
+  .talkBar{margin:0 -10px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+  .wave{display:none}
+
+  header{flex-wrap:wrap;gap:8px;padding-bottom:8px}
+  .hDate{font-size:9.5px}
+  .hClock{font-size:16px}
+  header button{min-height:38px}
+
+  .cmdGrid,.platGrid{grid-template-columns:minmax(0,1fr)}
+  .panel{min-height:0;padding:12px}
+  .quick{grid-template-columns:1fr}
+  .quick button{min-height:44px}
+  .arcWrap{min-height:280px}
+  .toolNode{min-height:42px;align-items:center}
+  #platform{max-height:250px}
+
+  /* Labels that read as texture on a 27" monitor read as nothing at all in a
+     hand, so the smallest type on the page comes up to where it is legible. */
+  .bsub,.areaHead,.live{font-size:10px}
+  .row .v{font-size:12px}
+  .navItem{font-size:13.5px}
+
+  /* The tool's name and its filename stop competing for one line. */
+  .stone .ptitle{flex-wrap:wrap;row-gap:2px}
+  .stone .ptitle .live{margin-left:0;flex-basis:100%}
+}
+
+/* Phone held sideways: the strip and the sticky bar cost too much of a ~375px
+   tall viewport, so the tall things shrink rather than pushing the rest off. */
+@media(max-width:1100px) and (orientation:landscape) and (max-height:500px){
+  .stoneWrap{aspect-ratio:auto;height:190px}
+  .arcWrap{min-height:190px}
+  .panel .scroll{max-height:70vh}
+}
 </style>
 </head>
 <body>
@@ -376,7 +510,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <div class="railFoot">
       <div class="ptitle" style="border:none;padding:0;margin-bottom:6px">Voice</div>
       <div class="coreState" id="coreState" style="text-align:left;margin:0">voice off</div>
-      <button id="micBig" style="width:100%;margin-top:8px">🎙 TALK</button>
+      <button id="micBig">🎙 TALK</button>
       <div style="display:flex;gap:6px;margin-top:6px">
         <button id="focusInput" style="flex:1">⌨ TYPE</button>
         <button id="mute" style="flex:1">🔊 ON</button>
@@ -514,7 +648,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== PLATFORM ========== -->
     <section class="view" data-view="platform">
-      <div class="cmdGrid" style="grid-template-columns:250px 1fr 350px">
+      <div class="cmdGrid platGrid">
         <div class="panel" style="flex:1;min-height:0">
           <div class="ptitle">OMEGA<span class="live" id="platN"></span></div>
           <div id="platform" class="scroll"></div>
@@ -530,7 +664,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
             <div class="stoneOpen" id="stoneOpen" hidden>OPEN THIS TOOL ↗</div>
           </div>
         </div>
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel platWork" style="flex:1;min-height:0">
           <div class="ptitle">Work on it</div>
           <div id="platDetail" class="scroll"></div>
         </div>
@@ -1577,6 +1711,36 @@ function showView(name){
   b.addEventListener('click',()=>showView(b.dataset.view));
 });
 
+/* ── the microphone, on a phone ──────────────────────────────────────────
+   On a narrow screen the rail collapses to a strip of tabs and its voice
+   controls go with it, which would leave the one button this whole page is
+   built around off the screen. So the TALK button MOVES into the sticky talk
+   bar rather than being duplicated there.
+
+   Moving the node keeps its listeners — they are bound to the element, not to
+   a position in the tree — so there is exactly one TALK button at all times
+   and no chance of the two drifting apart. */
+/* Must match the breakpoint that hides .railFoot, or the TALK button ends up
+   in a container CSS has already taken off the screen. */
+const phone=window.matchMedia('(max-width:1100px)');
+function placeMic(reflow){
+  const mic=el('micBig'), bar=document.querySelector('.talkBar'),
+        foot=document.querySelector('.railFoot');
+  if(!mic||!bar||!foot) return;
+  if(phone.matches){ if(mic.parentElement!==bar) bar.appendChild(mic); }
+  else if(mic.parentElement!==foot){
+    /* back to where the markup had it: under the state line, above TYPE/ON */
+    foot.insertBefore(mic, foot.lastElementChild);
+  }
+  /* Not on the first call: this runs at module top level, and fitStone reads
+     constants declared further down the file. They are in the temporal dead
+     zone until then, so touching it here would throw. */
+  if(reflow) fitStone();
+}
+placeMic(false);
+phone.addEventListener('change',()=>placeMic(true));
+window.addEventListener('orientationchange',()=>setTimeout(()=>placeMic(true),150));
+
 function tickClock(){
   const now=new Date();
   const f=(o)=>new Intl.DateTimeFormat('en-US',Object.assign({timeZone:'America/Chicago'},o)).format(now);
@@ -1929,7 +2093,15 @@ async function loadPlatform(){
    behind the dashboard would fight the dashboard for the main thread every
    time you clicked its name in a list. Past the threshold the stone shows the
    tool's shape in numbers and still opens on click. */
-const STONE_W=1440, STONE_H=900, STONE_MAX_KB=1200;
+const STONE_W=1440, STONE_H=900;
+
+/* A phone will happily try to run a 1440x900 page behind the dashboard and
+   spend the battery doing it, so the bar for what is worth framing is lower
+   in a hand than on a desk. Read at click time, not at load: rotating a
+   tablet changes the answer. */
+function stoneMaxKb(){
+  return window.matchMedia('(max-width:900px)').matches ? 400 : 1200;
+}
 
 function fitStone(){
   const wrap=el('stoneWrap'), f=el('stoneFrame');
@@ -1961,14 +2133,15 @@ function stone(t){
   idle.hidden=true;
   open.hidden=false;
 
-  if(t.kb>STONE_MAX_KB){
+  if(t.kb>stoneMaxKb()){
     f.hidden=true; f.removeAttribute('src');
     const d=document.createElement('div'); d.className='stoneHeavy';
     d.innerHTML='<div style="font-size:26px;color:var(--glow-cyan);font-family:var(--mono)">'
       + t.kb.toLocaleString()+'KB</div>'
       + '<div>'+t.lines.toLocaleString()+' lines · '+t.scripts+' scripts</div>'
       + '<div style="max-width:340px">Too heavy to run behind the dashboard. '
-      + 'Click to open it in its own tab.</div>';
+      + (matchMedia('(hover:none)').matches ? 'Tap' : 'Click')
+      + ' to open it in its own tab.</div>';
     wrap.insertBefore(d, open);
   }else{
     f.hidden=false;
