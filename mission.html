@@ -311,7 +311,16 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
                       align-items:center;justify-content:center;gap:2px;
                       text-shadow:0 0 18px rgba(2,8,19,.9)}
 /* Everything else in main rides above it. */
-.main > header,.main > .view,.main > .talkBar,.main > .authFix{position:relative;z-index:1}
+/* position:relative WITHOUT z-index, on purpose. Giving these a z-index makes
+   each one a STACKING CONTEXT, and a stacking context traps its children's
+   z-index inside it — which is why "expand" went dark and empty: .panel.zoom
+   asks for z-index:140, but confined to a .view at z-index:1 it can never rise
+   above the backdrop, which is a child of body at 139. The backdrop covered
+   the very panel it was meant to sit behind.
+
+   They still paint above the core layer without it: .coreLayer is z-index:0
+   and comes FIRST in the DOM, so a later positioned sibling is above it. */
+.main > header,.main > .view,.main > .talkBar,.main > .authFix{position:relative}
 /* The hole the core used to fill: space for the burst to be seen through. */
 .coreHole{flex:1;min-height:180px;pointer-events:none}
 
