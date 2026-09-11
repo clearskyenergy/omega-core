@@ -652,6 +652,85 @@ function makeCore(id, opts) {
     return [x, y * ct - z * st, y * st + z * ct];
   }
 
+  /* ── the figure, as a depth-displaced point cloud ──────────────────────
+     Thomas's own drawing plus a matching depth map. Every pixel is sampled on
+     a grid and pushed along z by the brightness of the depth map at that
+     point, then rotated and projected — so turning it reveals the form
+     instead of skewing a flat picture.
+
+     Sampled ONCE into typed arrays. Re-reading the images every frame is the
+     difference between this costing nothing and it costing the tab. */
+  var cloud = null, cloudState = 'idle';
+  function buildCloud() {
+    if (cloudState !== 'idle') return;
+    cloudState = 'loading';
+    var fig = new Image(), dep = new Image(), got = 0;
+    function ready() {
+      if (++got < 2) return;
+      try {
+        var w = 132, h = Math.round(w * (fig.height / fig.width)) || 132;
+        var c1 = document.createElement('canvas'); c1.width = w; c1.height = h;
+        var x1 = c1.getContext('2d', { willReadFrequently: true });
+        x1.drawImage(fig, 0, 0, w, h);
+        var cdat = x1.getImageData(0, 0, w, h).data;
+        var c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+        var x2 = c2.getContext('2d', { willReadFrequently: true });
+        x2.drawImage(dep, 0, 0, w, h);
+        var ddat = x2.getImageData(0, 0, w, h).data;
+
+        var pos = [], lums = [];
+        for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+          var i = (y * w + x) * 4;
+          if (cdat[i + 3] < 40) continue;                /* cut-out background */
+          var lum = (cdat[i] * 0.299 + cdat[i + 1] * 0.587 + cdat[i + 2] * 0.114) / 255;
+          if (lum > 0.965) continue;                     /* the white page */
+          var dz = (ddat[i] / 255 - 0.5);
+          pos.push((x / w - 0.5), (y / h - 0.5), dz);
+          /* Keep LUMINANCE, not colour. The drawing is a black cloak and dark
+             armour on white; painted in its own colours on a dark dashboard it
+             vanishes, and only the highlights survive — which is exactly what
+             the first attempt looked like. A hologram is the subject's FORM
+             rendered in the light of the projector, so brightness comes from
+             the artwork and hue comes from the mode. Lifted off the floor so
+             the darkest folds still read as cloth rather than as holes. */
+          /* Measured: the drawing's average luminance is 0.35, so a straight
+             mapping lands the whole figure at about a fifth opacity on a dark
+             panel — technically drawn, practically invisible. Lift the floor
+             and flatten the curve so the cloak reads as cloth and the
+             faceplate still reads as metal. */
+          lums.push(0.42 + 0.58 * Math.pow(lum, 0.55));
+        }
+        cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums), n: lums.length };
+        cloudState = cloud.n > 200 ? 'ready' : 'failed';
+      } catch (e) {
+        /* A canvas that cannot be read must not take the core down with it —
+           fall back to the wireframe. */
+        cloudState = 'failed';
+      }
+    }
+    fig.onload = ready; dep.onload = ready;
+    fig.onerror = dep.onerror = function () { cloudState = 'failed'; };
+    fig.src = 'assets/doom-figure.png';
+    dep.src = 'assets/doom-depth.png';
+  }
+
+  function drawCloud(cx, cy, R, yaw, col) {
+    var c = Math.cos(yaw * 0.55), sn = Math.sin(yaw * 0.55);
+    var S = R * 2.3, p = cloud.pos, lu = cloud.lum;
+    for (var k = 0; k < cloud.n; k++) {
+      var px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
+      var x = px * c - pz * sn * 0.85;
+      var z = px * sn + pz * c;
+      /* nearer samples are drawn bigger and brighter — the only parallax cue
+         a flat canvas has, and enough of one */
+      var near = 0.72 + z * 0.62;
+      var a = lu[k] * Math.max(0.34, Math.min(1, near));
+      var sz = 1.25 + Math.max(0, z) * 1.7;
+      ctx.fillStyle = 'rgba(' + col + ',' + a.toFixed(3) + ')';
+      ctx.fillRect(cx + x * S, cy + py * S * 1.02, sz, sz);
+    }
+  }
+
   function drawDoom(cx, cy, R, yaw, col) {
     /* the smoke it stands in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 2.0);
@@ -668,6 +747,16 @@ function makeCore(id, opts) {
       ctx.fillStyle = 'rgba(' + col + ',' + (tw * 0.4).toFixed(3) + ')';
       ctx.fillRect(x, y, st2.s, st2.s);
     });
+
+    if (cloudState === 'idle') buildCloud();
+    if (cloudState === 'ready') {
+      var bob2 = Math.sin(t * 0.012) * R * 0.03;
+      ctx.save(); ctx.translate(0, bob2);
+      drawCloud(cx, cy - R * 0.04, R, yaw, col);
+      ctx.restore();
+      drawShells(cx, cy, R, yaw, col);
+      return;
+    }
 
     /* the figure, floating — a slow bob so it hangs rather than sits */
     const bob = Math.sin(t * 0.012) * R * 0.035;
@@ -697,6 +786,10 @@ function makeCore(id, opts) {
     });
     ctx.lineWidth = 1;
 
+    drawShells(cx, cy, R, yaw, col);
+  }
+
+  function drawShells(cx, cy, R, yaw, col) {
     const P = ICO_V.map(v => spin(v, yaw));
     /* two shells, counter-rotating — armour over a core */
     /* Two counter-rotating shells AROUND the figure — armour, not decoration.
@@ -1636,20 +1729,48 @@ function renderRoutines(s){
 
    Torn down when the card closes — a card that leaves an animation running
    behind it is a tab that quietly eats a core all afternoon. */
-const HOLO = {
-  v: [
-    [ 0.00,-0.96, 0.00],[ 0.00,-0.78, 0.00],                 /* head, neck */
-    [-0.30,-0.70, 0.00],[ 0.30,-0.70, 0.00],                 /* shoulders */
-    [-0.44,-0.36, 0.05],[ 0.44,-0.36, 0.05],                 /* elbows */
-    [-0.42, 0.00, 0.08],[ 0.42, 0.00, 0.08],                 /* hands */
-    [-0.19,-0.08, 0.00],[ 0.19,-0.08, 0.00],                 /* hips */
-    [-0.21, 0.40, 0.03],[ 0.21, 0.40, 0.03],                 /* knees */
-    [-0.21, 0.84, 0.06],[ 0.21, 0.84, 0.06],                 /* feet */
-    [ 0.00,-0.52, 0.03],[ 0.00,-0.08, 0.00]                  /* chest, pelvis */
-  ],
-  e: [[1,14],[14,15],[2,3],[2,14],[3,14],[2,8],[3,9],[8,9],
-      [2,4],[4,6],[3,5],[5,7],[15,8],[15,9],[8,10],[10,12],[9,11],[11,13]]
-};
+/* The body as SEGMENTS WITH THICKNESS, not lines between joints.
+
+   A stick figure is a diagram of a person; a hologram is a scan of one. The
+   difference is contour — rings taken across the form at intervals, with
+   longitudinal lines running between them. That is also exactly how a real
+   volumetric capture renders, which is why it reads as one.
+
+   Each segment is [ax,ay,az, bx,by,bz, radiusAtA, radiusAtB]. Tapering is
+   what keeps a forearm from looking like a pipe. */
+const HOLO_SEGS = [
+  /* [ax,ay,az, bx,by,bz, rA, rB, depth]
+     depth squashes the cross-section front-to-back. THIS is what stops it
+     looking like plumbing: a ribcage is about twice as wide as it is deep, a
+     forearm is nearly round, and a circle everywhere reads as a robot. */
+  [ 0.00,-0.750, 0.00,  0.00,-0.690, 0.00, 0.044, 0.062, 0.90],  /* neck */
+  [ 0.00,-0.690, 0.00,  0.00,-0.520, 0.01, 0.185, 0.190, 0.58],  /* ribcage */
+  [ 0.00,-0.520, 0.01,  0.00,-0.330, 0.01, 0.190, 0.150, 0.58],  /* waist in */
+  [ 0.00,-0.330, 0.01,  0.00,-0.190, 0.00, 0.150, 0.152, 0.62],  /* abdomen */
+  [ 0.00,-0.190, 0.00,  0.00,-0.055, 0.00, 0.152, 0.150, 0.66],  /* pelvis */
+  /* shoulders — the deltoid is most of what makes a front silhouette human */
+  [-0.062,-0.672, 0.00, -0.215,-0.628, 0.00, 0.100, 0.080, 0.85],
+  [ 0.062,-0.672, 0.00,  0.215,-0.628, 0.00, 0.100, 0.080, 0.85],
+  /* arms */
+  [-0.215,-0.628, 0.00, -0.300,-0.355, 0.02, 0.072, 0.050, 0.92],
+  [-0.300,-0.355, 0.02, -0.345,-0.070, 0.04, 0.048, 0.034, 0.92],
+  [ 0.215,-0.628, 0.00,  0.300,-0.355, 0.02, 0.072, 0.050, 0.92],
+  [ 0.300,-0.355, 0.02,  0.345,-0.070, 0.04, 0.048, 0.034, 0.92],
+  /* hands */
+  [-0.345,-0.070, 0.04, -0.358, 0.022, 0.05, 0.034, 0.024, 0.70],
+  [ 0.345,-0.070, 0.04,  0.358, 0.022, 0.05, 0.034, 0.024, 0.70],
+  /* legs, parted so they read as two */
+  [-0.088,-0.055, 0.00, -0.122, 0.330, 0.01, 0.108, 0.070, 0.88],
+  [-0.122, 0.330, 0.01, -0.132, 0.700, 0.02, 0.066, 0.040, 0.88],
+  [ 0.088,-0.055, 0.00,  0.122, 0.330, 0.01, 0.108, 0.070, 0.88],
+  [ 0.122, 0.330, 0.01,  0.132, 0.700, 0.02, 0.066, 0.040, 0.88],
+  /* feet point FORWARD, not down — a stub under the ankle reads as a peg */
+  [-0.132, 0.700, 0.02, -0.132, 0.792, 0.105, 0.040, 0.030, 1.70],
+  [ 0.132, 0.700, 0.02,  0.132, 0.792, 0.105, 0.040, 0.030, 1.70]
+];
+/* An ellipsoid, not a ball. Taller than wide and narrower than deep is what
+   separates a head from a bauble. */
+const HOLO_HEAD = { y: -0.868, rx: 0.082, ry: 0.104, rz: 0.090 };
 
 function makeHologram(cv){
   if(!cv) return { stop(){} };
@@ -1664,6 +1785,13 @@ function makeHologram(cv){
     ctx.setTransform(dpr,0,0,dpr,0,0);
   }
   size();
+  /* The card is measured the instant it is built, before layout has settled,
+     and it can change size with the viewport afterwards. Without this the
+     backing store keeps its first guess and the figure is drawn into the
+     wrong aspect ratio — which looks exactly like a modelling mistake and is
+     not one. */
+  const ro = window.ResizeObserver ? new ResizeObserver(size) : null;
+  if (ro) ro.observe(cv);
 
   function frame(){
     if(!alive) return;
@@ -1697,22 +1825,114 @@ function makeHologram(cv){
     ctx.lineTo(cx+R*0.30,cy-R); ctx.lineTo(cx-R*0.30,cy-R);
     ctx.closePath(); ctx.fill();
 
-    /* the figure */
-    const pts=HOLO.v.map(v=>{
-      const c=Math.cos(yaw), sn=Math.sin(yaw);
+    /* the body */
+    const c=Math.cos(yaw), sn=Math.sin(yaw);
+    const proj=v=>{
       const x=v[0]*c-v[2]*sn, z=v[0]*sn+v[2]*c;
       return [cx+x*R, cy+v[1]*R, z];
+    };
+    const RINGS=6, SIDES=16;
+    ctx.lineCap='round';
+    HOLO_SEGS.forEach(sg=>{
+      const a=[sg[0],sg[1],sg[2]], b=[sg[3],sg[4],sg[5]], ra=sg[6], rb=sg[7];
+      const depth = sg[8] == null ? 1 : sg[8];
+      let ax=b[0]-a[0], ay=b[1]-a[1], az=b[2]-a[2];
+      const L=Math.hypot(ax,ay,az)||1; ax/=L; ay/=L; az/=L;
+      /* a basis across the segment. The reference vector is chosen to be the
+         one LEAST parallel to the axis, or the cross product collapses and the
+         ring degenerates to a line. */
+      const ref = Math.abs(ay)<0.9 ? [0,1,0] : [1,0,0];
+      let ux=ay*ref[2]-az*ref[1], uy=az*ref[0]-ax*ref[2], uz=ax*ref[1]-ay*ref[0];
+      const ul=Math.hypot(ux,uy,uz)||1; ux/=ul; uy/=ul; uz/=ul;
+      let vx=ay*uz-az*uy, vy=az*ux-ax*uz, vz=ax*uy-ay*ux;
+      /* WHICH BASIS VECTOR IS "ACROSS" DEPENDS ON THE SEGMENT.
+         For a vertical segment the cross product hands back u pointing along
+         z and v pointing along x — the opposite way round from a horizontal
+         one. Squashing the wrong one made the torso deep and narrow, and the
+         whole figure collapsed into a spike. So name them by what they point
+         at, not by the order they came out of the maths. */
+      if (Math.abs(ux) < Math.abs(vx)) {
+        const tx=ux, ty=uy, tz=uz; ux=vx; uy=vy; uz=vz; vx=tx; vy=ty; vz=tz;
+      }
+
+      const grid=[];
+      for(let k=0;k<=RINGS;k++){
+        const t2=k/RINGS, r=ra+(rb-ra)*t2;
+        const cxp=a[0]+(b[0]-a[0])*t2, cyp=a[1]+(b[1]-a[1])*t2, czp=a[2]+(b[2]-a[2])*t2;
+        const ring=[];
+        for(let m=0;m<SIDES;m++){
+          const th=(m/SIDES)*Math.PI*2, co=Math.cos(th), si=Math.sin(th);
+          /* u is across the body, v is front-to-back: squash v only. */
+          const ru = r, rv = r * depth;
+          const nx=ux*co+vx*si, ny=uy*co+vy*si, nz=uz*co+vz*si;   /* outward */
+          const q=proj([cxp+nx*ru, cyp+ny*ru, czp+nz*rv]);
+          /* the same yaw applied to the normal, so lighting turns with it */
+          q.push(nx*c - nz*sn, nz*c + nx*sn);
+          ring.push(q);
+        }
+        grid.push(ring);
+      }
+      /* SHADE THE SURFACE, do not draw a cage.
+
+         Each quad between two rings is filled with a brightness taken from
+         how squarely it faces the light, and the ones facing away are not
+         drawn at all. That is what turns a lattice into a body: a wireframe
+         shows you every edge at once, which is exactly why it reads flat. */
+      for(let k=0;k<RINGS;k++){
+        for(let m=0;m<SIDES;m++){
+          const m2=(m+1)%SIDES;
+          const p1=grid[k][m], p2=grid[k][m2], p3=grid[k+1][m2], p4=grid[k+1][m];
+          const facing=(p1[4]+p2[4]+p3[4]+p4[4])/4;    /* +z is toward us */
+          if(facing<=0.02) continue;                    /* back of the body */
+          const lit=(p1[3]+p2[3]+p3[3]+p4[3])/4;        /* light from the left */
+          const shade=0.10+0.34*facing+0.16*Math.max(0,-lit);
+          ctx.fillStyle='rgba('+col+','+shade.toFixed(3)+')';
+          ctx.beginPath();
+          ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]);
+          ctx.lineTo(p3[0],p3[1]); ctx.lineTo(p4[0],p4[1]); ctx.closePath();
+          ctx.fill();
+        }
+      }
+      /* a few contour rings on top, so it still reads as a scan rather than
+         as a solid object */
+      grid.forEach((ring,k)=>{
+        if(k%2) return;
+        ctx.beginPath();
+        let started=false;
+        for(let m=0;m<=SIDES;m++){
+          const p=ring[m%SIDES];
+          if(p[4]<=0){ started=false; continue; }
+          if(!started){ ctx.moveTo(p[0],p[1]); started=true; }
+          else ctx.lineTo(p[0],p[1]);
+        }
+        ctx.strokeStyle='rgba(190,250,255,0.42)'; ctx.lineWidth=1; ctx.stroke();
+      });
     });
-    HOLO.e.forEach(([a,b])=>{
-      const p=pts[a], q=pts[b], z=(p[2]+q[2])/2;
-      ctx.strokeStyle='rgba('+col+','+(0.55+z*0.35).toFixed(3)+')';
-      ctx.lineWidth=1.8; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(p[0],p[1]); ctx.lineTo(q[0],q[1]); ctx.stroke();
-    });
-    /* head */
-    const hd=pts[0];
-    ctx.strokeStyle='rgba('+col+',0.85)'; ctx.lineWidth=1.8;
-    ctx.beginPath(); ctx.arc(hd[0],hd[1]+R*0.06,R*0.11,0,Math.PI*2); ctx.stroke();
+
+    /* the head, as a small globe on the same camera */
+    const HX=HOLO_HEAD.rx, HYr=HOLO_HEAD.ry, HZ=HOLO_HEAD.rz, HY=HOLO_HEAD.y;
+    for(let i=1;i<8;i++){
+      const lat=-Math.PI/2+(i/8)*Math.PI;
+      ctx.beginPath();
+      for(let j=0;j<=34;j++){
+        const lon=(j/34)*Math.PI*2;
+        const p=proj([Math.cos(lat)*Math.cos(lon)*HX, HY+Math.sin(lat)*HYr, Math.cos(lat)*Math.sin(lon)*HZ]);
+        ctx.strokeStyle='rgba('+col+','+(p[2]>0?0.60:0.15).toFixed(3)+')';
+        if(j===0) ctx.moveTo(p[0],p[1]);
+        else { ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p[0],p[1]); }
+      }
+    }
+    for(let i=0;i<12;i++){
+      const lon=(i/12)*Math.PI*2;
+      ctx.beginPath();
+      for(let j=0;j<=24;j++){
+        const lat=-Math.PI/2+(j/24)*Math.PI;
+        const p=proj([Math.cos(lat)*Math.cos(lon)*HX, HY+Math.sin(lat)*HYr, Math.cos(lat)*Math.sin(lon)*HZ]);
+        ctx.strokeStyle='rgba('+col+','+(p[2]>0?0.45:0.12).toFixed(3)+')';
+        if(j===0) ctx.moveTo(p[0],p[1]);
+        else { ctx.lineTo(p[0],p[1]); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p[0],p[1]); }
+      }
+    }
 
     /* a scan line travelling up it */
     const sy=cy+R - ((t*1.6)%(R*2.1));
@@ -1722,7 +1942,7 @@ function makeHologram(cv){
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  return { stop(){ alive=false; } };
+  return { stop(){ alive=false; if(ro) ro.disconnect(); } };
 }
 let cardHolo=null;
 
