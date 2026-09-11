@@ -4853,7 +4853,20 @@
         var P = prods[pi];
         var unit = +P.kwh;
         if (!isFinite(unit) || unit <= 0) continue;
-        var n = Math.floor(ceilKwh / unit);
+        /* ── SIZED TO THE TARGET, NOT TO THE CEILING ──────────────────
+           This used to take the most energy that fitted under the 8-hour
+           cap, which is what "the maximum" literally asks for and is not
+           what anybody wants to build. On an 826 kW circuit it proposed
+           two containers for 6.5 hours when one 3.4 MWh unit gives 4.1 —
+           a second container is more land, more interconnection work and
+           roughly twice the hardware, to buy duration nobody asked for.
+
+           So the recommendation is the configuration closest to the
+           DEFAULT DURATION, and the ceiling survives only as a bound. The
+           maximum is still computed and still shown in the list, because
+           "how big could this go" is a real question — it is just not the
+           question the card is answering. */
+        var n = Math.round(targetKwh / unit);
         if (n < 1) n = 1;                    /* one unit is the minimum sale */
         if (n > MAX_FIT_UNITS) n = MAX_FIT_UNITS;
         var kwh = n * unit;
@@ -4866,16 +4879,34 @@
         }, v, priced));
       }
     }
-    /* THE BIGGEST FIRST — the question is "how large can this go", so the
-       answer leads. Fewest units breaks a tie: one container beats two
-       cabinets at the same energy, every time. */
+    /* CLOSEST TO THE TARGET FIRST, then fewest units. One container beats
+       two cabinets at the same energy, every time — a second enclosure is
+       a second foundation, a second set of terminations and a second thing
+       to maintain, and none of that shows up in a kWh comparison. */
     out.sort(function (a, b) {
-      if (b.kwh !== a.kwh) return b.kwh - a.kwh;
+      var da = Math.abs(a.kwh - targetKwh), db = Math.abs(b.kwh - targetKwh);
+      if (da !== db) return da - db;
       return (a.units || 0) - (b.units || 0);
     });
+    /* The largest that would still fit under the ceiling, kept separate so
+       the panel can answer "how big could this go" without the card
+       recommending it. */
+    var biggest = null, bi;
+    for (bi = 0; bi < out.length; bi++) {
+      var o2 = out[bi];
+      if (!o2.unitKwh) continue;
+      var nMax = Math.floor(ceilKwh / o2.unitKwh);
+      if (nMax < 1) nMax = 1;
+      if (nMax > MAX_FIT_UNITS) nMax = MAX_FIT_UNITS;
+      var kMax = nMax * o2.unitKwh;
+      if (!biggest || kMax > biggest.kwh) {
+        biggest = { name:o2.name, model:o2.model, units:nMax, unitKwh:o2.unitKwh,
+                    kwh:kMax, hours:kMax / pick.kw };
+      }
+    }
     return { target:targetKwh, kw:pick.kw, hours:pick.hours,
              ceilKwh:ceilKwh, maxHours:MAX_FIT_HOURS, maxUnits:MAX_FIT_UNITS,
-             options:out };
+             biggest:biggest, options:out };
   }
 
   function mergeOpt(base, o, v, priced) {
@@ -5181,11 +5212,21 @@
         'tool ships no catalogue of its own \u2014 an invented product is worse than ' +
         'none, because somebody will quote it.</p></div>';
     }
-    var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>. It ' +
-      'caps power, not energy \u2014 so the biggest system here is bounded by ' +
-      'duration and by how many units a site takes, not by the wire. Capped at <b>' +
-      f.maxHours + ' h</b> (' + fmt(Math.round(f.ceilKwh)) + ' kWh) and <b>' +
-      f.maxUnits + ' units</b>. Largest first:</p><div class="fitList">';
+    var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>, which ' +
+      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. Closest ' +
+      'to that first \u2014 a second enclosure is a second foundation, a second set ' +
+      'of terminations and a second thing to maintain, none of which shows up in a ' +
+      'kWh comparison.' +
+      (f.biggest && f.biggest.kwh > f.target * 1.2
+        ? ' The circuit caps power, not energy \u2014 so if you want the most that ' +
+          'would fit rather than the right size, it is <b>' + f.biggest.units +
+          '\u00d7 ' + esc(f.biggest.model || f.biggest.name) + '</b>, ' +
+          fmt(Math.round(f.biggest.kwh)) + ' kWh at ' +
+          (Math.round(f.biggest.hours * 10) / 10) + ' h, bounded by <b>' +
+          f.maxHours + ' h</b> (' + fmt(Math.round(f.ceilKwh)) + ' kWh) and <b>' +
+          f.maxUnits + ' units</b>.'
+        : '') +
+      '</p><div class="fitList">';
     for (var i = 0; i < f.options.length; i++) {
       var o = f.options[i];
       h += '<div class="fitRow">' +

@@ -426,6 +426,22 @@ ok('a default is labelled as a default, not as a decision', function () {
     'a catalogue-sourced product is not distinguished from a chosen one');
 });
 
+ok('the recommendation is right-sized, not maximised', function () {
+  /* "Give me the max" is what was asked for and taking it literally
+     produced two containers on an 826 kW circuit — 6.5 hours nobody
+     requested, a second foundation, a second set of terminations. One
+     3.4 MWh unit gives 4.1 h. The card recommends the configuration
+     closest to the default duration; the maximum survives as a note. */
+  var fn = html.slice(html.indexOf('function fitOptions(r)'));
+  fn = fn.slice(0, fn.indexOf('function mergeOpt'));
+  assert(/var n = Math\.round\(targetKwh \/ unit\)/.test(fn),
+    'units are still sized against the ceiling rather than the target');
+  assert(/Math\.abs\(a\.kwh - targetKwh\)/.test(fn),
+    'the list is not ordered by closeness to the target');
+  assert(/biggest/.test(fn),
+    'the maximum is no longer computed at all — it is still a real question');
+});
+
 ok('the maximum is bounded, and says by what', function () {
   /* The circuit caps kW and does not cap kWh at all, so "the maximum
      battery" has no bound from the wire. Two bounds are used instead and
@@ -439,8 +455,9 @@ ok('the maximum is bounded, and says by what', function () {
     'the maximum is unbounded');
   assert(/if \(n > MAX_FIT_UNITS\) n = MAX_FIT_UNITS/.test(fn),
     'the unit cap is not applied, so the smallest product will always win');
-  assert(/return b\.kwh - a\.kwh/.test(fn),
-    'the list is not ordered largest first, which is the question being asked');
+  assert(/biggest \|\| kMax > biggest\.kwh/.test(fn),
+    'the largest configuration is not tracked, so the panel cannot answer '
+    + '"how big could this go"');
   var ui = html.slice(html.indexOf('function fitOptionsHtml'));
   ui = ui.slice(0, ui.indexOf('function computeEstimate'));
   assert(/caps power, not energy/.test(ui),
