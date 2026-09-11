@@ -409,5 +409,29 @@ ok('a hold can be any whole kW, not a multiple of 25', function () {
     'the hold field still rejects the number the panel offers');
 });
 
+/* ── THE ADDRESS LOOKUP IS NOT AN ENRICHED RECORD ─────────────────────
+   enrich() attaches claims and mine to every row a search builds. The
+   address lookup builds its own record by hand — no parcel, no ledger rows
+   — and has neither. liveClaims read r.claims.length on the first line, so
+   searching an address threw inside drawerHtml and the drawer half-drew.
+   Address search is the front door of this tool. */
+ok('record arrays are read through a guard, never bare', function () {
+  assert(/function claimsOf\(r\)/.test(html) && /function mineOf\(r\)/.test(html),
+    'the guards are gone');
+  assert(!/\br\.claims\.length/.test(html),
+    'a bare r.claims.length is back — the address lookup will throw again');
+  assert(!/\br\.mine\.length/.test(html),
+    'a bare r.mine.length is back');
+});
+
+ok('the hand-built lookup record still lacks those fields', function () {
+  /* If it ever gains them the guards stay anyway, but this is the reason
+     they exist and it is worth failing loudly if the shape changes. */
+  var rec = html.slice(html.indexOf('id: "addr:" + lat.toFixed(5)'));
+  rec = rec.slice(0, rec.indexOf('ST.sel = rec'));
+  assert(!/\bclaims:/.test(rec) && !/\bmine:/.test(rec),
+    'the lookup record now sets claims/mine — re-check the guards are still needed');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);
