@@ -175,6 +175,20 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         border:1px solid rgba(0,243,255,.2);border-radius:12px;color:var(--dim);cursor:pointer}
 .ixChip.on{border-color:var(--glow-cyan);color:var(--glow-cyan);background:rgba(0,243,255,.08)}
 
+/* The panel that opens under a task when you ask for it to be done. */
+.doPanel{background:rgba(0,20,40,.75);border:1px solid rgba(61,255,139,.3);
+         border-radius:7px;padding:11px 12px;margin:6px 0 10px;
+         display:flex;flex-direction:column;gap:7px}
+.doHead{font-size:12.5px;color:var(--ink);line-height:1.6}
+.doHead.ok{color:var(--good)} .doHead.bad{color:var(--bad)}
+.doPick{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;
+        padding:8px 10px;font-family:var(--ui);font-size:12.5px;letter-spacing:0;
+        color:var(--ink);border-color:rgba(0,243,255,.22)}
+.doPick:hover{border-color:var(--glow-cyan)}
+.doPick .doFile{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:1px}
+.doAlt{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.doAlt button{font-size:9.5px;padding:6px 9px}
+
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
    beside it rather than buried: search, an inspector, the hubs ranked by how
@@ -2208,6 +2222,137 @@ async function taskAct(id, verb, text){
   }catch(e){ say('jarvis', e.message); return false; }
 }
 
+
+/* ══ DOING A TASK, RATHER THAN TICKING IT ════════════════════════════════
+   ✓ ✎ ✕ are bookkeeping. They move a row around a list; none of them does
+   the thing the row describes. The whole point of the twin is that the work
+   leaves the list.
+
+   There is no new backend here, because the chain already exists and was
+   only missing a way in from this screen:
+
+       /request  → a PROPOSED backlog item scoped to a file
+       /act approve → the build loop is allowed to pick it up
+       runBuild (15 min) → edits the file, syntax-checks it, runs the
+                           adversarial review, opens a PR
+
+   Nothing is pushed to main and nothing is merged. The end of this is a pull
+   request with your name on the review.
+
+   WHICH FILE. A build item without affectedFiles is an instruction with no
+   address, so the file has to be settled before anything is queued. The match
+   is made here against the 44 tools the manifest already knows, by scoring
+   word overlap between the task and each tool's name — and the score is SHOWN
+   rather than trusted, because "Grid Atlas" in a sentence is a strong signal
+   and "site" on its own is not. If nothing scores, it says so and offers the
+   honest alternative: hand it to Jarvis in the conversation, where a person
+   is still reading the answer. */
+
+const STOP = new Set(['the','a','an','and','or','for','to','of','in','on','with','from',
+  'is','are','be','it','this','that','into','as','at','by','add','get','use','using',
+  'we','our','my','me','then','so','if','not','no','all','any','new','more','before']);
+
+function words(t){
+  return String(t||'').toLowerCase().split(/[^a-z0-9]+/)
+    .filter(w=>w.length>2 && !STOP.has(w));
+}
+
+/* Score a task against a tool. Overlap on distinctive words, weighted by how
+   long the word is — "transformer" matching is worth far more than "site". */
+function toolScore(taskWords, tool){
+  const tw = new Set(words(tool.title + ' ' + tool.file.replace(/[-_.]/g,' ')));
+  let score = 0;
+  for(const w of taskWords) if(tw.has(w)) score += Math.min(4, w.length) / 4;
+  return score;
+}
+
+function matchTools(title){
+  const tw = words(title);
+  if(!tw.length) return [];
+  return ((platform&&platform.tools)||[])
+    .map(t=>({ tool:t, score:toolScore(tw,t) }))
+    .filter(x=>x.score >= 1.5)
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,4);
+}
+
+/* The panel that opens under a task when you ask for it to be done. */
+function doPanel(id, title, row){
+  const old=row.parentNode.querySelector('.doPanel');
+  if(old) old.remove();
+  const box=document.createElement('div'); box.className='doPanel';
+
+  const hits=matchTools(title);
+  const head=document.createElement('div'); head.className='doHead';
+  head.textContent = hits.length
+    ? 'Which file should Jarvis change?'
+    : 'No tool in the platform matches this one.';
+  box.appendChild(head);
+
+  if(hits.length){
+    hits.forEach(h=>{
+      const b=document.createElement('button'); b.className='doPick';
+      const n=document.createElement('span'); n.textContent=h.tool.title;
+      const f=document.createElement('span'); f.className='doFile';
+      f.textContent=h.tool.file+'  ·  match '+h.score.toFixed(1);
+      b.append(n,f);
+      b.addEventListener('click',()=>queueBuild(id,title,h.tool,box));
+      box.appendChild(b);
+    });
+  }
+
+  const alt=document.createElement('div'); alt.className='doAlt';
+  const ask=document.createElement('button');
+  ask.textContent = hits.length ? 'NONE OF THESE — ASK JARVIS INSTEAD' : 'HAND IT TO JARVIS';
+  ask.addEventListener('click',()=>{
+    /* Not every task is a code change. Handing it to the conversation is the
+       honest fallback: a person is still reading what comes back. */
+    const box2=el('ask'); box2.value='Work on this for me: '+title;
+    showView('command'); box2.focus();
+    box.remove();
+  });
+  alt.appendChild(ask);
+  const cancel=document.createElement('button');
+  cancel.textContent='CANCEL'; cancel.addEventListener('click',()=>box.remove());
+  alt.appendChild(cancel);
+  box.appendChild(alt);
+
+  row.insertAdjacentElement('afterend', box);
+}
+
+async function queueBuild(taskId, title, tool, box){
+  box.textContent=''; 
+  const p=document.createElement('div'); p.className='doHead';
+  p.textContent='Queueing against '+tool.file+'…';
+  box.appendChild(p);
+  try{
+    const t=await token();
+    /* 1. a proposed item, addressed to a file */
+    const r=await fetch(CHAT+'/request',{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({file:tool.file, text:title})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.id) throw new Error(j.error||('HTTP '+r.status));
+
+    /* 2. approve it, which is the only thing that lets the loop touch it */
+    const r2=await fetch(CHAT+'/act',{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({verb:'approve', kind:'backlog', ids:[j.id]})});
+    const j2=await r2.json().catch(()=>({}));
+    if(!r2.ok) throw new Error(j2.error||('HTTP '+r2.status));
+
+    p.textContent='Queued. The build loop runs every 15 minutes — it edits '
+      + tool.file + ', syntax-checks it, runs the review, and opens a pull '
+      + 'request. Nothing goes to main.';
+    p.className='doHead ok';
+    say('jarvis','Queued against '+tool.file+'. I will open a pull request, not push.',0);
+    load();
+  }catch(e){
+    p.className='doHead bad';
+    p.textContent='Could not queue it — '+e.message;
+  }
+}
+
 function taskButtons(id, row, titleEl){
   const bar=document.createElement('span');
   bar.style.cssText='display:flex;gap:4px;flex:none;margin-left:6px';
@@ -2218,6 +2363,10 @@ function taskButtons(id, row, titleEl){
     b.addEventListener('click',ev=>{ ev.stopPropagation(); fn(b); });
     bar.appendChild(b); return b;
   };
+  mk('▶ DO','have Jarvis actually do this', ()=>{
+      loadPlatform().then(()=>doPanel(id, titleEl.textContent, row));
+  }).style.cssText='padding:2px 8px;font-size:10px;letter-spacing:.5px;line-height:1.4;'
+    +'border-color:rgba(61,255,139,.45);color:var(--good)';
   mk('✓','mark complete', async b=>{ b.disabled=true; row.style.opacity='.4'; 
       if(!await taskAct(id,'done')) { b.disabled=false; row.style.opacity=''; } });
   mk('✎','rename', async ()=>{
