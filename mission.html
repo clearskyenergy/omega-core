@@ -241,6 +241,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
        letter-spacing:1px;color:rgba(18,32,46,.5);cursor:pointer;background:none;
        border:none;padding:2px 4px;min-height:0}
 .noteX:hover{color:#8a1c1c}
+.noteGo{right:auto;left:5px;color:rgba(18,32,46,.62)}
+.noteGo:hover{color:#0a5c2e}
 
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
@@ -2474,6 +2476,37 @@ function bdPaint(){
        text, or you can never type in your own note. */
     ta.addEventListener('pointerdown',e=>e.stopPropagation());
     d.appendChild(ta);
+
+    /* A note that turned out to be work should not have to be retyped into
+       the backlog. The note stays — it is the thinking; the task is the
+       commitment, and losing the first to make the second is how a board
+       becomes a graveyard. */
+    const toTask=document.createElement('button');
+    toTask.className='noteX noteGo'; toTask.textContent='→ TASK';
+    toTask.addEventListener('pointerdown',e=>e.stopPropagation());
+    toTask.addEventListener('click',async()=>{
+      const text=(n.text||'').trim();
+      if(!text){ toTask.textContent='EMPTY'; setTimeout(()=>toTask.textContent='→ TASK',1200); return; }
+      toTask.textContent='…';
+      try{
+        const t=await token();
+        const r=await fetch(CHAT+'/task',{method:'POST',
+          headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+          body:JSON.stringify({title:text.slice(0,300), urgency:'queue'})});
+        const j=await r.json().catch(()=>({}));
+        if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+        n.task=j.id; bdSave();
+        toTask.textContent='ON THE LIST';
+        say('jarvis', j.reply||'On the list.', 0);
+        load();
+      }catch(e){
+        toTask.textContent='FAILED';
+        say('jarvis','Could not add that — '+e.message, 0);
+        setTimeout(()=>toTask.textContent='→ TASK',1600);
+      }
+    });
+    if(n.task) toTask.textContent='ON THE LIST';
+    d.appendChild(toTask);
 
     const x=document.createElement('button'); x.className='noteX'; x.textContent='REMOVE';
     x.addEventListener('pointerdown',e=>e.stopPropagation());
