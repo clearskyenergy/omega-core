@@ -1030,6 +1030,168 @@ async function subsystems(list){
    Built as a factory because the sign-in screen shows the same object while
    it waits — one implementation, two canvases, no chance of them drifting
    into looking like different products. */
+
+/* ══ THE BURST ═══════════════════════════════════════════════════════════
+   The core is not an object any more. A wireframe globe is a diagram of a
+   thing; this is a thing happening — several thousand points thrown outward
+   along filaments, turning, with the far side genuinely behind the near one.
+
+   WHY FILAMENTS AND NOT A CLOUD. Scatter points evenly on a sphere and you
+   get fog: pretty, and completely without structure. Real bursts have
+   strands, because matter leaves along paths. So every particle belongs to
+   one of 130 filaments, sits near that filament's axis, and drifts further
+   from it the further out it travels — which is what makes the eye read
+   tendrils instead of noise.
+
+   DEPTH DOES ALL THE WORK. Each point carries a z. z decides size and alpha
+   together, so the far side of the burst recedes rather than being drawn on
+   top of the near side. Without that this is a flat firework.
+
+   TWO TEMPERATURES. A cool majority and a warm minority clustered on one
+   flank, so the thing has a lit side. A single-hue burst reads as a screen
+   saver; two reads as something with a direction.
+
+   It listens: energy comes from the same meter that drives the voice, so it
+   swells when he speaks rather than pulsing on a timer and pretending. */
+function makeBurst(id, opts){
+  opts = opts || {};
+  const cv = document.getElementById(id);
+  if (!cv) return { set(){}, resize(){} };
+  const ctx = cv.getContext('2d');
+  let W=0, H=0, t=0, energy=0.15, target=0.15;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  const FIL = 150, PER = 26;
+  const STR = [];                 /* particles kept grouped BY filament */
+
+  function unit(){
+    /* Rejection-sampled so the directions are uniform on the sphere. Picking
+       two angles independently crowds the poles, and a burst with dense poles
+       looks like it has a handle. */
+    for(;;){
+      const x=Math.random()*2-1, y=Math.random()*2-1, z=Math.random()*2-1;
+      const d=x*x+y*y+z*z;
+      if(d>0.0001 && d<=1){ const m=Math.sqrt(d); return [x/m,y/m,z/m]; }
+    }
+  }
+
+  for(let f=0; f<FIL; f++){
+    const ax=unit();
+    /* The warm flank: biased to one side rather than sprinkled, so the thing
+       has a lit side instead of confetti. */
+    const warm = (ax[0] > 0.05 && Math.random() < 0.55) || Math.random() < 0.05;
+    const len  = 0.65 + Math.random()*1.35;     /* some strands reach far out */
+    const curl = (Math.random()-0.5)*0.85;      /* and they bend on the way */
+    const cax  = unit();
+    const pts=[];
+    for(let i=0;i<PER;i++){
+      const u=i/(PER-1);
+      /* Exponent below 1 puts MORE mass further out. Above 1 and everything
+         piles into the middle and the strands never appear — which is what a
+         burst drawn as a point cloud always looks like. */
+      const tt=Math.pow(u,0.82);
+      const k=tt*tt*curl;                       /* bend grows with distance */
+      const w=tt*(0.045+Math.random()*0.05);    /* thickness of the strand */
+      const j=unit();
+      let x=ax[0]+cax[0]*k+j[0]*w,
+          y=ax[1]+cax[1]*k+j[1]*w,
+          z=ax[2]+cax[2]*k+j[2]*w;
+      const m=Math.sqrt(x*x+y*y+z*z)||1;
+      pts.push({ x:x/m, y:y/m, z:z/m, r:tt*len, tw:Math.random()*6.283 });
+    }
+    STR.push({ pts, warm, sp:0.55+Math.random()*0.9, tw:Math.random()*6.283 });
+  }
+
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    W=Math.max(1,Math.round(r.width)); H=Math.max(1,Math.round(r.height));
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  if(window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+  resize();
+
+  function frame(){
+    t += 0.0042;
+    energy += (target-energy)*0.07;
+    if(!W||!H){ resize(); requestAnimationFrame(frame); return; }
+
+    ctx.clearRect(0,0,W,H);
+    const cx=W/2, cy=H/2;
+    const R=Math.min(W,H)*(opts.scale||0.46)*(1+energy*0.16);
+    const a=t*0.55, ca=Math.cos(a), sa=Math.sin(a);
+    const tilt=-0.22, ct=Math.cos(tilt), st=Math.sin(tilt);
+
+    ctx.globalCompositeOperation='lighter';   /* overlapping strands glow */
+
+    const proj=(p,breath)=>{
+      let x=p.x*ca - p.z*sa;
+      let z=p.x*sa + p.z*ca;
+      const y=p.y*ct - z*st;
+      z      =p.y*st + z*ct;
+      const rr=p.r*breath;
+      return { px:cx+x*rr*R, py:cy+y*rr*R, d:(z+1)/2, r:p.r };
+    };
+
+    for(let f=0; f<STR.length; f++){
+      const S=STR[f];
+      /* Each strand breathes on its own clock, so the whole thing never
+         pulses in unison like a heartbeat prop. */
+      const breath=1+Math.sin(t*S.sp*2.1+S.tw)*0.06+energy*0.26;
+
+      /* THE STRAND ITSELF. This is what makes it read as a burst rather than
+         fog: matter left along a path, and you can see the path. Depth at the
+         midpoint sets the whole stroke's alpha — per-point alpha on a stroke
+         is not a thing canvas will do, and splitting each strand into 25
+         separately-stroked segments to fake it costs more than it buys. */
+      const mid=proj(S.pts[Math.floor(PER*0.55)],breath);
+      let sa2=(0.02+mid.d*0.14)*(0.6+energy*0.9);
+      if(sa2>0.006){
+        ctx.beginPath();
+        for(let i=0;i<S.pts.length;i++){
+          const q=proj(S.pts[i],breath);
+          if(i===0) ctx.moveTo(q.px,q.py); else ctx.lineTo(q.px,q.py);
+        }
+        ctx.strokeStyle = S.warm
+          ? 'rgba(255,138,58,'+sa2.toFixed(3)+')'
+          : 'rgba(120,215,255,'+sa2.toFixed(3)+')';
+        ctx.lineWidth=(0.5+mid.d*1.1);
+        ctx.stroke();
+      }
+
+      /* and the grains riding along it */
+      for(let i=0;i<S.pts.length;i++){
+        const p=S.pts[i], q=proj(p,breath);
+        if(q.px<-40||q.px>W+40||q.py<-40||q.py>H+40) continue;
+        const fade=1-Math.min(1,p.r*0.30);
+        let alp=(0.06+q.d*0.80)*fade*(0.70+0.30*Math.sin(t*2.4+p.tw));
+        alp*=0.55+energy*0.85;
+        if(alp<=0.012) continue;
+        const sz=(0.5+q.d*1.85)*(1-p.r*0.14);
+        ctx.fillStyle = S.warm
+          ? 'rgba(255,'+Math.round(120+q.d*80)+','+Math.round(45+q.d*45)+','+alp.toFixed(3)+')'
+          : 'rgba('+Math.round(70+q.d*120)+','+Math.round(198+q.d*57)+',255,'+alp.toFixed(3)+')';
+        ctx.fillRect(q.px,q.py,sz,sz);
+      }
+    }
+
+    /* The centre: where everything came from. Drawn last so it sits on top of
+       its own filaments. */
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*0.42);
+    g.addColorStop(0,'rgba(220,250,255,'+(0.5+energy*0.4).toFixed(3)+')');
+    g.addColorStop(0.22,'rgba(120,225,255,'+(0.24+energy*0.26).toFixed(3)+')');
+    g.addColorStop(0.6,'rgba(40,120,255,0.085)');
+    g.addColorStop(1,'rgba(0,60,200,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,R*0.42,0,6.2832); ctx.fill();
+
+    ctx.globalCompositeOperation='source-over';
+    requestAnimationFrame(frame);
+  }
+  frame();
+
+  return { set(v){ target=Math.max(0.12,Math.min(1,v)); }, resize };
+}
+
 function makeCore(id, opts) {
   opts = opts || {};
   const cv = document.getElementById(id);
@@ -1394,7 +1556,10 @@ function makeCore(id, opts) {
   return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
 }
 
-const arc = makeCore('arc', { scale: 0.30 });
+/* The burst for the command centre, the globe for the gate. He asked for the
+   globe as the thing you see on the way in, and it still is; the core you sit
+   in front of all day is the one that had to come alive. */
+const arc = makeBurst('arc', { scale: 0.60 });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
 
 /* fmt() may return: { n, time, past, left, right, cls, clamp }
