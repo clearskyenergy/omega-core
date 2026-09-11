@@ -175,6 +175,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         border:1px solid rgba(0,243,255,.2);border-radius:12px;color:var(--dim);cursor:pointer}
 .ixChip.on{border-color:var(--glow-cyan);color:var(--glow-cyan);background:rgba(0,243,255,.08)}
 
+.triBar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 8px;position:sticky;top:0;
+        background:linear-gradient(var(--bg) 70%,transparent);z-index:2}
+.triChip{flex:none;font-family:var(--mono);font-size:8.5px;letter-spacing:1.3px;
+         padding:2px 6px;border-radius:3px;min-width:46px;text-align:center;
+         background:rgba(0,243,255,.1);color:var(--dim);align-self:flex-start;margin-top:2px}
+.triChip.bad{background:rgba(255,107,107,.18);color:var(--bad)}
+.triChip.warn{background:rgba(255,183,51,.16);color:var(--warn)}
+.triWhy{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.8px;
+        color:var(--dim);max-width:190px;overflow:hidden;text-overflow:ellipsis;
+        white-space:nowrap;align-self:center}
+
 .authFix{display:flex;gap:12px;align-items:center;flex-wrap:wrap;flex:none;
          background:rgba(60,10,10,.5);border:1px solid rgba(255,107,107,.45);
          border-radius:7px;padding:10px 13px;font-size:12.5px;line-height:1.6;color:var(--ink)}
@@ -1398,14 +1409,8 @@ async function load(){
                cls: '' };
     }, 'nothing on the calendar');
 
-    const SIZE={S:'small',M:'medium',L:'large',XL:'x-large'};
-    listInto('todos', (s.todos||[]), (t,i)=>({
-      left: t.title || '(untitled)',
-      clamp: true,
-      right: SIZE[t.size] || t.size || '',
-      cls:'',
-      act: t.id
-    }), 'backlog is empty');
+    buildTriage(s.todos||[]);
+    renderTasks();
 
     /* The order rendered here IS the order he speaks to. Held so that
        "execute 1 through 4" resolves against exactly what is on his screen
@@ -2230,6 +2235,195 @@ async function taskAct(id, verb, text){
 }
 
 
+
+
+
+/* The task list, in the order it actually deserves. */
+const SIZE={S:'small',M:'medium',L:'large',XL:'x-large'};
+function renderTasks(){
+  const host=el('todos'); if(!host) return;
+  host.textContent='';
+
+  const hidden=triaged.filter(r=>r.noise||r.dupeOf).length;
+  const bar=document.createElement('div'); bar.className='triBar';
+  const mkChip=(label,on,fn)=>{
+    const c=document.createElement('span'); c.className='ixChip'+(on?' on':'');
+    c.textContent=label; c.addEventListener('click',fn); bar.appendChild(c); return c;
+  };
+  mkChip('BY PRIORITY', sortMode==='priority', ()=>{ sortMode='priority'; renderTasks(); });
+  mkChip('AS RANKED',   sortMode!=='priority', ()=>{ sortMode='rank'; renderTasks(); });
+  mkChip(hideNoise ? ('HIDING '+hidden) : ('SHOWING ALL '+triaged.length), !hideNoise,
+         ()=>{ hideNoise=!hideNoise; renderTasks(); });
+  host.appendChild(bar);
+
+  const v=visibleTasks();
+  if(!v.length){ const d=document.createElement('div'); d.className='note';
+    d.textContent='backlog is empty'; host.appendChild(d); return; }
+
+  v.forEach(r=>{
+    const row=document.createElement('div'); row.className='row';
+    const b=band(r.score);
+    const chip=document.createElement('span');
+    chip.className='triChip '+b.c; chip.textContent=b.k;
+    chip.title='score '+r.score;
+    const k=document.createElement('span'); k.className='k clamp';
+    k.textContent=r.t.title||'(untitled)';
+
+    const meta=document.createElement('span'); meta.className='triWhy';
+    /* Say WHY it is where it is. A ranking you cannot argue with is one you
+       stop believing. */
+    const bits=r.why.slice(0,3);
+    if(r.dupes) bits.push('+'+r.dupes+' like it');
+    meta.textContent=bits.join(' · ');
+
+    const size=document.createElement('span'); size.className='v';
+    size.textContent=SIZE[r.t.size]||r.t.size||'';
+
+    row.append(chip,k,meta,size);
+    if(r.t.id) row.appendChild(taskButtons(r.t.id,row,k));
+    if(r.noise){ row.style.opacity='.45'; meta.textContent='hidden: '+r.noise; }
+    if(r.dupeOf){ row.style.opacity='.45'; meta.textContent='same as: '+r.dupeOf.t.title.slice(0,40)+'…'; }
+    host.appendChild(row);
+  });
+}
+
+/* ══ TRIAGE ══════════════════════════════════════════════════════════════
+   161 items ranked by the analyse loop is a pile, not a plan. Two things
+   were missing: nothing read the URGENCY that is sitting in plain English in
+   the titles, and nothing threw anything away.
+
+   Every judgement here is deterministic and, more importantly, SHOWN. Each
+   row says which signal fired — "overdue", "money", "blocks others" — so a
+   ranking you disagree with is one you can argue with. An auto-prioritiser
+   you cannot interrogate is one you stop trusting by Thursday, and then you
+   are back to reading 161 rows.
+
+   NOTHING IS DELETED. Noise is hidden behind a count you can switch off. A
+   filter that silently drops work is worse than no filter, because you cannot
+   tell the difference between "there is nothing to do" and "it ate it". */
+
+const MONTHS='jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
+
+/* Dates that people actually write in a task title. Returns days from now —
+   negative is past. Deliberately conservative: it would rather find no date
+   than invent one, because a wrong date outranks real work. */
+function whenIn(text){
+  const s=String(text||'').toLowerCase();
+  const now=new Date();
+  if(/\btoday\b|\btonight\b/.test(s)) return 0;
+  if(/\btomorrow\b/.test(s)) return 1;
+  if(/\bthis week\b/.test(s)) return 3;
+  if(/\bnext week\b/.test(s)) return 9;
+  /* "Sept 8", "September 8", "9/8" */
+  let m=s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/);
+  if(m){
+    const mi=MONTHS.indexOf(m[1]), d=+m[2];
+    if(mi>=0 && d>=1 && d<=31){
+      let y=now.getFullYear();
+      let when=new Date(y,mi,d);
+      /* A date more than six months back is almost certainly next year's. */
+      const diff=Math.round((when-now)/86400000);
+      if(diff < -183) when=new Date(y+1,mi,d);
+      return Math.round((when-now)/86400000);
+    }
+  }
+  return null;
+}
+
+/* What kind of work is this, and how loudly is it asking. */
+function triage(t){
+  const s=String(t.title||'').toLowerCase();
+  let score=0; const why=[];
+  const add=(n,label)=>{ score+=n; if(label&&why.indexOf(label)===-1) why.push(label); };
+
+  const d=whenIn(s);
+  if(d!==null){
+    if(d<0)       add(50,'past its date');
+    else if(d<=1) add(40,'today');
+    else if(d<=7) add(24,'this week');
+    else          add(6,'dated');
+  }
+  if(/\boverdue\b|\bpast due\b|\blate\b/.test(s))              add(45,'overdue');
+  /* ESCALATE earns its place here: the cluster "ESCALATE — second Bronx
+     20 MW: $800k nonrefundable deposit" was being folded UNDER a blander
+     "Track: second Bronx 20 MW" because nothing scored the shouting. When two
+     rows are the same errand, the one carrying the alarm has to be the one
+     that survives. */
+  if(/\burgent\b|\basap\b|\bimmediately\b|\bright away\b|\bescalate\b|\bcritical\b|\bblocker\b/.test(s)) add(35,'urgent');
+  if(/^[A-Z\s]{6,}[—:-]/.test(String(t.title||''))) add(8,'flagged');
+  /* Someone is waiting on him — the most expensive kind of delay, because it
+     is costing somebody else time as well. */
+  if(/\bowes?\b|\bchase\b|\bfollow[- ]?up\b|\bwaiting\b|\bawaiting\b/.test(s)) add(22,'someone is waiting');
+  if(/\b(invoice|payment|paid|billing|pricing|cost[- ]of[- ]capital|quote|deposit)\b/.test(s)) add(20,'money');
+  if(/\b(gates?|blocks?|before the|prereq|depends on|until)\b/.test(s))  add(18,'blocks others');
+  if(/\b(nda|contract|agreement|msa|loi|sign|countersign|execute)\b/.test(s)) add(15,'legal');
+  if(/\b(call|meeting|reconvene|working session)\b/.test(s))    add(10,'a conversation');
+  /* The twin filing work about itself. Real sometimes, but it should never
+     outrank a customer. */
+  if(/\bjarvis\b|\btwin\b|\bmemory core\b|\bdashboard\b/.test(s)) add(-30,'about the twin');
+  if(/\b(maybe|consider|think about|explore|at some point|someday)\b/.test(s)) add(-12,'speculative');
+
+  /* The loop's own rank still counts for something — it read the meeting this
+     came out of, which none of the above did. Small, and it only breaks ties. */
+  if(typeof t.rank==='number') score += Math.max(0, 12 - t.rank*0.06);
+
+  return {score:Math.round(score), why, days:d};
+}
+
+function band(score){
+  if(score>=45) return {k:'NOW',   c:'bad'};
+  if(score>=22) return {k:'SOON',  c:'warn'};
+  if(score>=8)  return {k:'QUEUE', c:''};
+  return {k:'LATER', c:''};
+}
+
+/* ── noise ───────────────────────────────────────────────────────────────
+   Only things that are demonstrably not work. A vague-sounding task is still
+   a task; a placeholder is not. */
+function noiseOf(t){
+  const s=String(t.title||'').trim();
+  if(s.length<12) return 'too short to act on';
+  if(/^(test|testing|asdf|xxx|tbd|todo|placeholder|foo|bar)\b/i.test(s)) return 'placeholder';
+  if(/^\(?untitled/i.test(s)) return 'untitled';
+  return null;
+}
+
+/* Near-duplicates. Word-set overlap, not string distance: "Coordinate with TJ
+   on OSA portal → OGI analysis API contract" and "Spec call with TJ Warren:
+   OSA portal ↔ OGI analysis tool API" share almost every distinctive word and
+   are plainly the same errand, but share little as strings. */
+function overlap(a,b){
+  const A=new Set(words(a)), B=new Set(words(b));
+  if(A.size<3||B.size<3) return 0;
+  let hit=0; A.forEach(w=>{ if(B.has(w)) hit++; });
+  return hit/Math.min(A.size,B.size);
+}
+
+let triaged=[], hideNoise=true, sortMode='priority';
+
+function buildTriage(list){
+  const rows=(list||[]).map((t,i)=>{
+    const tr=triage(t);
+    return {t, i, score:tr.score, why:tr.why, days:tr.days,
+            noise:noiseOf(t), dupeOf:null};
+  });
+  /* Keep the strongest of each cluster and fold the rest into it. */
+  const kept=[];
+  rows.slice().sort((a,b)=>b.score-a.score).forEach(r=>{
+    const hit=kept.find(k=>overlap(k.t.title, r.t.title)>=0.6);
+    if(hit){ r.dupeOf=hit; hit.dupes=(hit.dupes||0)+1; }
+    else kept.push(r);
+  });
+  triaged=rows;
+  return rows;
+}
+
+function visibleTasks(){
+  let v=triaged.filter(r=> !(hideNoise && (r.noise || r.dupeOf)) );
+  if(sortMode==='priority') v.sort((a,b)=>b.score-a.score);
+  else v.sort((a,b)=>a.i-b.i);
+  return v;
+}
 
 /* ── when the door is shut, say which door ───────────────────────────────
    A 403 used to paint the badge red and leave nine empty panels behind it,
