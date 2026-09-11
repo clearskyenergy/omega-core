@@ -138,6 +138,37 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
 
+/* ── the brain ───────────────────────────────────────────────────────────
+   A force-directed graph of what the twin actually knows, with the controls
+   beside it rather than buried: search, an inspector, the hubs ranked by how
+   connected they are, and the physics itself exposed as sliders. */
+.brainGrid{grid-template-columns:230px 1fr 210px}
+.brainSide{flex:1;min-height:0;gap:8px}
+.brainStage{flex:1;min-height:0;padding:0;overflow:hidden;position:relative;background:#01050c}
+#brainCv{width:100%;height:100%;display:block;cursor:grab}
+#brainCv.drag{cursor:grabbing}
+.brainHint{position:absolute;left:12px;bottom:10px;font-family:var(--mono);font-size:9px;
+           letter-spacing:1.4px;color:var(--dim);opacity:.65;pointer-events:none}
+.brainFit{position:absolute;right:10px;top:10px;font-size:9px;padding:5px 9px;min-height:0}
+.brainQ{background:rgba(0,0,0,.35);border:1px solid rgba(0,243,255,.22);border-radius:5px;
+        color:var(--ink);font-size:12.5px;padding:7px 9px;outline:none;width:100%}
+.brainQ:focus{border-color:var(--glow-cyan)}
+.brainIns{font-size:12px;line-height:1.65;color:var(--dim);max-height:210px}
+.brainIns b{color:var(--ink);font-weight:600}
+.frow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
+      letter-spacing:1.2px;color:var(--dim)}
+.frow span{flex:0 0 42px}
+.frow input{flex:1;accent-color:var(--glow-cyan);height:3px}
+.tRow{display:flex;align-items:center;gap:7px;padding:5px 0;cursor:pointer;font-size:12px}
+.tRow .sq{width:9px;height:9px;border-radius:2px;flex:none}
+.tRow .tn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tRow .tc{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.tRow.off{opacity:.35}
+.hubRow{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:12px;cursor:pointer}
+.hubRow:hover{color:var(--glow-cyan)}
+.hubRow .hn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hubRow .hc{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
 /* A subsystem switch. Reads as the state it is IN, and is obviously pressable. */
 .sw{flex:none;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;
     padding:4px 10px;min-height:26px;border-radius:11px;
@@ -511,6 +542,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
+      <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
       <button class="navItem" data-view="system">⚙  System</button>
     </nav>
@@ -651,6 +683,40 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div class="panel" style="flex:none;max-height:34%">
         <div class="ptitle">Financing &amp; deals</div>
         <div id="finance" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== BRAIN ========== -->
+    <section class="view" data-view="brain">
+      <div class="cmdGrid brainGrid">
+
+        <div class="panel brainSide">
+          <div class="ptitle">The brain<span class="live" id="brainN"></span></div>
+          <input id="brainQ" class="brainQ" placeholder="Search…" autocomplete="off">
+          <div class="ptitle" style="margin-top:4px">Inspector</div>
+          <div id="brainIns" class="scroll brainIns">Click a node to focus it — only that node and
+            what it touches stay lit. Shift-click a second node to trace the path between them.</div>
+          <div class="ptitle">Top hubs</div>
+          <div id="brainHubs" class="scroll" style="max-height:190px"></div>
+          <div class="ptitle">Forces</div>
+          <div class="frow"><span>Repel</span><input type="range" id="fRepel" min="200" max="4000" value="1400"></div>
+          <div class="frow"><span>Link</span><input type="range" id="fLink" min="20" max="220" value="90"></div>
+          <div class="frow"><span>Labels</span><input type="range" id="fLab" min="0" max="60" value="14"></div>
+        </div>
+
+        <div class="panel brainStage">
+          <canvas id="brainCv"></canvas>
+          <div class="brainHint" id="brainHint">drag to pan · scroll to zoom · click to focus</div>
+          <button class="brainFit" id="brainFit">FIT</button>
+        </div>
+
+        <div class="panel brainSide">
+          <div class="ptitle">Filter</div>
+          <div id="brainTypes"></div>
+          <div class="ptitle" style="margin-top:10px">Path</div>
+          <div id="brainPath" class="scroll brainIns" style="max-height:200px">Shift-click two nodes.</div>
+        </div>
+
       </div>
     </section>
 
@@ -1866,6 +1932,7 @@ function showView(name){
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='clients') loadBook(false);
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
+  if(name==='brain'){ loadBrain(); }
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
@@ -2150,7 +2217,7 @@ function renderRoutines(s){
    Fetched when the view is opened, not on the thirty-second poll: it reads
    fifteen subcollections and the dashboard he leaves open all day should not
    pay for a panel he opens twice a week. */
-let bookLoaded=false;
+let bookLoaded=false, book=null;
 /* Not `money` — that one already exists for the twin's own spend, where the
    interesting digits are cents. This is for invoices, where they are
    thousands. Two formatters because they answer two different questions. */
@@ -2164,6 +2231,7 @@ async function loadBook(force){
     const r=await fetch(CHAT+'/business',{headers:{Authorization:'Bearer '+t}});
     if(!r.ok) throw new Error('HTTP '+r.status);
     const b=await r.json();
+    book=b;                      /* the brain joins people to orgs through this */
 
     rows(el('bookTotals'), [
       ['ORGANISATIONS', num(b.totals.orgs), 'cy'],
@@ -2378,6 +2446,427 @@ function pickTool(t){
     + 'edits the file, runs a syntax check and an adversarial review, and opens a pull '
     + 'request — it never pushes to main.';
   host.appendChild(note);
+}
+
+
+/* ══ THE BRAIN ═══════════════════════════════════════════════════════════
+   A force-directed graph of what the twin actually knows.
+
+   The point of it is the EDGES. A list of 99 people tells you who exists; a
+   graph tells you that this person is at that org, that org owns this deal,
+   and the meeting on your calendar this morning has two of them in the room.
+   None of these links are decorative — every one is a join against real data,
+   and where a join cannot be made the node simply has no edge rather than a
+   guessed one.
+
+   The physics is O(n²) on repulsion. At ~300 nodes that is 45k pair
+   comparisons a frame, which a laptop does not notice, and it avoids
+   dragging in a quadtree to solve a problem this graph does not have. Alpha
+   decays so the layout settles instead of jittering forever. */
+
+const BTYPE = {
+  client:  { label:'Clients',   c:'#00f3ff' },
+  org:     { label:'Orgs',      c:'#5b8cff' },
+  person:  { label:'People',    c:'#3dff8b' },
+  deal:    { label:'Deals',     c:'#ffb733' },
+  tool:    { label:'Tools',     c:'#b98cff' },
+  area:    { label:'Areas',     c:'#ff6bd6' },
+  today:   { label:'Today',     c:'#ff6b6b' },
+  state:   { label:'States',    c:'#8fa7bd' }
+};
+
+let BG = null;           /* {nodes, links, byId} */
+let bview = { x:0, y:0, k:1 };
+let bsel = null, bpath = null, bhover = null;
+let balpha = 0, braf = 0;
+let bOff = {};           /* type -> hidden */
+let bq = '';
+
+function bslug(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+
+/* Match a free-text org name from the people roster against a billed client.
+   Deliberately conservative: a first-token match both ways, so "SunESol" finds
+   "SunESol" but "Energy" does not swallow every org with the word in it. */
+function matchClient(name, clients){
+  const n=bslug(name); if(!n) return null;
+  for(const c of clients){
+    const cn=bslug(c.name), oid=bslug(c.orgId);
+    if(cn===n || oid===n) return c;
+    if(cn.startsWith(n+'-') || n.startsWith(cn+'-')) return c;
+    if(oid.split('-')[0]===n.split('-')[0] && n.split('-')[0].length>4) return c;
+  }
+  return null;
+}
+
+function buildBrain(){
+  const nodes=[], links=[], byId={};
+  const add=(id,label,type,meta)=>{
+    if(byId[id]) return byId[id];
+    const n={id,label:String(label||id),type,meta:meta||{},deg:0,
+             x:(Math.random()-0.5)*600, y:(Math.random()-0.5)*600, vx:0, vy:0};
+    byId[id]=n; nodes.push(n); return n;
+  };
+  const tie=(a,b,kind)=>{ if(!a||!b||a===b) return; links.push({a,b,kind}); a.deg++; b.deg++; };
+
+  const clients=(book&&book.clients)||[];
+  clients.forEach(c=> add('org:'+c.orgId, c.name, 'client', c));
+
+  /* people → the org they work at */
+  (lastStatus.people||[]).forEach(p=>{
+    const n=add('per:'+(p.email||bslug(p.name)), p.name, 'person', p);
+    if(!p.org) return;
+    const c=matchClient(p.org, clients);
+    const o=c ? byId['org:'+c.orgId] : add('org:'+bslug(p.org), p.org, 'org', {name:p.org});
+    tie(n,o,'works at');
+  });
+
+  /* deals → the org that owns them */
+  const deals=(book&&book.deals&&book.deals.top)||[];
+  deals.forEach(d=>{
+    const n=add('deal:'+d.id, d.name||'(untitled deal)', 'deal', d);
+    if(d.orgId && byId['org:'+d.orgId]) tie(n, byId['org:'+d.orgId], 'owned by');
+  });
+
+  /* tools → the area they belong to */
+  ((platform&&platform.tools)||[]).forEach(t=>{
+    const n=add('tool:'+t.file, t.title, 'tool', t);
+    tie(n, add('area:'+bslug(t.area), t.area, 'area', {}), 'part of');
+  });
+
+  /* today's meetings → the people actually in them. `others` is a list of
+     addresses, which is exactly what the roster is keyed by, so this is a real
+     join rather than a name-similarity guess. */
+  (lastStatus.schedule||[]).forEach((ev,i)=>{
+    const n=add('cal:'+i, ev.title||'(untitled)', 'today', ev);
+    const who=Array.isArray(ev.others)?ev.others:String(ev.others||'').split(/[,;\s]+/);
+    who.filter(Boolean).forEach(addr=>{
+      const key='per:'+String(addr).toLowerCase().trim();
+      if(byId[key]) tie(n, byId[key], 'in the room');
+    });
+  });
+
+  /* where the financing pipeline actually is */
+  const byState=(book&&book.finance&&book.finance.byState)||{};
+  Object.keys(byState).forEach(st=>
+    add('st:'+st, st+' · '+byState[st], 'state', {state:st, projects:byState[st]}));
+
+  BG={nodes,links,byId};
+  return BG;
+}
+
+/* ── physics ─────────────────────────────────────────────────────────── */
+function btick(){
+  if(!BG) return;
+  const n=BG.nodes, L=BG.links;
+  const repel=+el('fRepel').value, linkLen=+el('fLink').value;
+  const a=balpha;
+  for(let i=0;i<n.length;i++){
+    const p=n[i];
+    for(let j=i+1;j<n.length;j++){
+      const q=n[j];
+      let dx=p.x-q.x, dy=p.y-q.y, d2=dx*dx+dy*dy;
+      if(d2<0.01){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=0.01; }
+      if(d2>360000) continue;                 /* far apart is already resolved */
+      const f=repel/d2, d=Math.sqrt(d2);
+      const ux=dx/d, uy=dy/d;
+      p.vx+=ux*f*a; p.vy+=uy*f*a; q.vx-=ux*f*a; q.vy-=uy*f*a;
+    }
+  }
+  for(const l of L){
+    const dx=l.b.x-l.a.x, dy=l.b.y-l.a.y;
+    const d=Math.sqrt(dx*dx+dy*dy)||0.01;
+    const f=(d-linkLen)*0.012*a, ux=dx/d, uy=dy/d;
+    l.a.vx+=ux*f; l.a.vy+=uy*f; l.b.vx-=ux*f; l.b.vy-=uy*f;
+  }
+  for(const p of n){
+    p.vx-=p.x*0.0016*a; p.vy-=p.y*0.0016*a;   /* gentle pull to the middle */
+    p.vx*=0.86; p.vy*=0.86;
+    p.x+=p.vx; p.y+=p.vy;
+  }
+  balpha*=0.994;
+  if(balpha<0.005) balpha=0.005;              /* never fully frozen, never hot */
+}
+
+/* ── drawing ─────────────────────────────────────────────────────────── */
+function bsize(n){ return 3 + Math.min(13, Math.sqrt(n.deg)*2.6); }
+function bvisible(n){ return !bOff[n.type]; }
+
+function bneighbours(node){
+  const set=new Set([node.id]);
+  for(const l of BG.links){
+    if(l.a===node) set.add(l.b.id);
+    if(l.b===node) set.add(l.a.id);
+  }
+  return set;
+}
+
+function bdraw(){
+  const cv=el('brainCv'); if(!cv||!BG) return;
+  const ctx=cv.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth, h=cv.clientHeight;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.save();
+  ctx.translate(w/2+bview.x, h/2+bview.y);
+  ctx.scale(bview.k,bview.k);
+
+  const lit = bsel ? bneighbours(bsel) : null;
+  const onPath = bpath ? new Set(bpath.map(n=>n.id)) : null;
+  const labMin=+el('fLab').value;
+  const qq=bq.trim().toLowerCase();
+
+  /* links first, underneath */
+  for(const l of BG.links){
+    if(!bvisible(l.a)||!bvisible(l.b)) continue;
+    let alpha=0.16;
+    if(onPath) alpha = (onPath.has(l.a.id)&&onPath.has(l.b.id)) ? 0.95 : 0.04;
+    else if(lit) alpha = (lit.has(l.a.id)&&lit.has(l.b.id)) ? 0.55 : 0.03;
+    ctx.strokeStyle='rgba(140,200,230,'+alpha+')';
+    ctx.lineWidth=(onPath&&onPath.has(l.a.id)&&onPath.has(l.b.id))?2/bview.k:1/bview.k;
+    ctx.beginPath(); ctx.moveTo(l.a.x,l.a.y); ctx.lineTo(l.b.x,l.b.y); ctx.stroke();
+  }
+
+  for(const n of BG.nodes){
+    if(!bvisible(n)) continue;
+    const r=bsize(n);
+    let alpha=1;
+    if(onPath) alpha=onPath.has(n.id)?1:0.12;
+    else if(lit) alpha=lit.has(n.id)?1:0.12;
+    const hit = qq && n.label.toLowerCase().indexOf(qq)!==-1;
+    if(qq && !hit) alpha=Math.min(alpha,0.1);
+
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle=(BTYPE[n.type]||{}).c||'#8fa7bd';
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,6.2832); ctx.fill();
+    if(n===bsel||n===bhover||hit){
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5/bview.k; ctx.stroke();
+    }
+    /* Only label what earns it, or the graph becomes a wall of text. */
+    if(alpha>0.5 && (n.deg>=labMin || n===bsel || n===bhover || hit || (onPath&&onPath.has(n.id)))){
+      ctx.globalAlpha=Math.min(1,alpha);
+      ctx.fillStyle='#dceefc';
+      ctx.font=(11/bview.k)+'px -apple-system,system-ui,sans-serif';
+      ctx.fillText(n.label.slice(0,34), n.x+r+3/bview.k, n.y+3/bview.k);
+    }
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function bloop(){ btick(); bdraw(); braf=requestAnimationFrame(bloop); }
+
+/* ── shortest path between two nodes (plain BFS) ─────────────────────── */
+function bfsPath(a,b){
+  const prev={}, seen=new Set([a.id]); let q=[a];
+  while(q.length){
+    const next=[];
+    for(const n of q){
+      if(n===b){
+        const out=[]; let cur=b;
+        while(cur){ out.unshift(cur); cur=prev[cur.id]; }
+        return out;
+      }
+      for(const l of BG.links){
+        const o = l.a===n ? l.b : (l.b===n ? l.a : null);
+        if(!o||seen.has(o.id)) continue;
+        seen.add(o.id); prev[o.id]=n; next.push(o);
+      }
+    }
+    q=next;
+  }
+  return null;
+}
+
+/* ── the inspector ───────────────────────────────────────────────────── */
+function binspect(n){
+  const host=el('brainIns'); host.textContent='';
+  if(!n){ host.textContent='Click a node to focus it.'; return; }
+  const m=n.meta||{};
+  const head=document.createElement('div');
+  head.innerHTML='<b>'+n.label.replace(/[<>&]/g,'')+'</b>';
+  host.appendChild(head);
+  const kind=document.createElement('div');
+  kind.style.cssText='font-family:var(--mono);font-size:9.5px;letter-spacing:1.4px;margin:3px 0 7px';
+  kind.style.color=(BTYPE[n.type]||{}).c||'#8fa7bd';
+  kind.textContent=((BTYPE[n.type]||{}).label||n.type).toUpperCase()+' · '+n.deg+' CONNECTION'+(n.deg===1?'':'S');
+  host.appendChild(kind);
+
+  const facts=[];
+  if(n.type==='person'){
+    if(m.role) facts.push(['Role',m.role]);
+    if(m.org) facts.push(['Org',m.org]);
+    if(m.email) facts.push(['Email',m.email]);
+    if(m.phone) facts.push(['Phone',m.phone]);
+    if(m.source) facts.push(['Known from',m.source]);
+  } else if(n.type==='client'){
+    facts.push(['Tier',m.tier||'—']); facts.push(['Vertical',m.vertical||'—']);
+    facts.push(['Billed',usd(m.amountDue)]); facts.push(['Paid',usd(m.amountPaid)]);
+    if(m.outstanding) facts.push(['Outstanding',usd(m.outstanding)]);
+  } else if(n.type==='deal'){
+    facts.push(['Stage',m.stage||'—']);
+    if(m.mw) facts.push(['MW',String(m.mw)]);
+    if(m.state) facts.push(['State',m.state]);
+  } else if(n.type==='tool'){
+    facts.push(['File',m.file]); facts.push(['Size',m.kb+'KB']);
+    facts.push(['Lines',(m.lines||0).toLocaleString()]);
+  } else if(n.type==='today'){
+    if(m.when) facts.push(['When',m.when]);
+  } else if(n.type==='state'){
+    facts.push(['Financing projects',String(m.projects)]);
+  }
+  facts.forEach(([k,v])=>{
+    const r=document.createElement('div'); r.className='row';
+    const a=document.createElement('span'); a.className='k'; a.textContent=k;
+    const b=document.createElement('span'); b.className='v'; b.textContent=v;
+    r.append(a,b); host.appendChild(r);
+  });
+
+  const nb=BG.links.filter(l=>l.a===n||l.b===n).slice(0,10);
+  if(nb.length){
+    const t=document.createElement('div');
+    t.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:9px 0 3px';
+    t.textContent='CONNECTED TO';
+    host.appendChild(t);
+    nb.forEach(l=>{
+      const o=l.a===n?l.b:l.a;
+      const d=document.createElement('div'); d.className='hubRow';
+      const s=document.createElement('span'); s.className='hn'; s.textContent=o.label;
+      const c=document.createElement('span'); c.className='hc'; c.textContent=l.kind;
+      d.append(s,c);
+      d.addEventListener('click',()=>{ bsel=o; bpath=null; binspect(o); bcenter(o); });
+      host.appendChild(d);
+    });
+  }
+}
+
+function bcenter(n){
+  const cv=el('brainCv'); if(!cv) return;
+  bview.x=-n.x*bview.k; bview.y=-n.y*bview.k;
+  balpha=Math.max(balpha,0.25);
+}
+
+function bhubs(){
+  const host=el('brainHubs'); host.textContent='';
+  BG.nodes.slice().sort((a,b)=>b.deg-a.deg).slice(0,10).forEach(n=>{
+    const d=document.createElement('div'); d.className='hubRow';
+    const sq=document.createElement('span'); sq.className='sq';
+    sq.style.cssText='width:8px;height:8px;border-radius:2px;flex:none;background:'+((BTYPE[n.type]||{}).c||'#8fa7bd');
+    const s=document.createElement('span'); s.className='hn'; s.textContent=n.label;
+    const c=document.createElement('span'); c.className='hc'; c.textContent=n.deg;
+    d.append(sq,s,c);
+    d.addEventListener('click',()=>{ bsel=n; bpath=null; binspect(n); bcenter(n); });
+    host.appendChild(d);
+  });
+}
+
+function btypes(){
+  const host=el('brainTypes'); host.textContent='';
+  const count={};
+  BG.nodes.forEach(n=>{ count[n.type]=(count[n.type]||0)+1; });
+  Object.keys(BTYPE).forEach(t=>{
+    if(!count[t]) return;
+    const d=document.createElement('div'); d.className='tRow'+(bOff[t]?' off':'');
+    const sq=document.createElement('span'); sq.className='sq'; sq.style.background=BTYPE[t].c;
+    const nm=document.createElement('span'); nm.className='tn'; nm.textContent=BTYPE[t].label;
+    const c=document.createElement('span'); c.className='tc'; c.textContent=count[t];
+    d.append(sq,nm,c);
+    d.addEventListener('click',()=>{ bOff[t]=!bOff[t]; btypes(); });
+    host.appendChild(d);
+  });
+}
+
+/* ── pointer handling ────────────────────────────────────────────────── */
+function bat(ev){
+  const cv=el('brainCv'), r=cv.getBoundingClientRect();
+  const x=(ev.clientX-r.left-r.width/2-bview.x)/bview.k;
+  const y=(ev.clientY-r.top-r.height/2-bview.y)/bview.k;
+  let best=null, bd=1e9;
+  for(const n of BG.nodes){
+    if(!bvisible(n)) continue;
+    const d=(n.x-x)*(n.x-x)+(n.y-y)*(n.y-y);
+    const rr=bsize(n)+6;
+    if(d<rr*rr && d<bd){ bd=d; best=n; }
+  }
+  return best;
+}
+
+let bdragging=false, bdx=0, bdy=0, bmoved=false;
+function bwire(){
+  const cv=el('brainCv'); if(!cv||cv.dataset.wired) return;
+  cv.dataset.wired='1';
+  cv.addEventListener('pointerdown',e=>{
+    bdragging=true; bmoved=false; bdx=e.clientX-bview.x; bdy=e.clientY-bview.y;
+    cv.classList.add('drag'); cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(bdragging){
+      const nx=e.clientX-bdx, ny=e.clientY-bdy;
+      if(Math.abs(nx-bview.x)+Math.abs(ny-bview.y)>2) bmoved=true;
+      bview.x=nx; bview.y=ny;
+    }else{
+      const h=bat(e);
+      if(h!==bhover){ bhover=h; cv.title=h?h.label:''; }
+    }
+  });
+  cv.addEventListener('pointerup',e=>{
+    bdragging=false; cv.classList.remove('drag');
+    if(bmoved) return;                     /* a pan is not a click */
+    const n=bat(e);
+    if(!n){ bsel=null; bpath=null; binspect(null); return; }
+    if(e.shiftKey && bsel && bsel!==n){
+      const path=bfsPath(bsel,n);
+      bpath=path;
+      const host=el('brainPath'); host.textContent='';
+      if(!path){ host.textContent='No path between those two.'; return; }
+      path.forEach((p,i)=>{
+        const d=document.createElement('div'); d.className='hubRow';
+        const s=document.createElement('span'); s.className='hn'; s.textContent=(i+1)+'. '+p.label;
+        d.appendChild(s); host.appendChild(d);
+      });
+      return;
+    }
+    bsel=n; bpath=null; binspect(n);
+  });
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const f=e.deltaY<0?1.12:0.89;
+    bview.k=Math.max(0.15,Math.min(4,bview.k*f));
+  },{passive:false});
+
+  ['fRepel','fLink'].forEach(id=>
+    el(id).addEventListener('input',()=>{ balpha=Math.max(balpha,0.35); }));
+  el('brainQ').addEventListener('input',e=>{ bq=e.target.value; });
+  el('brainFit').addEventListener('click',bfit);
+}
+
+function bfit(){
+  if(!BG||!BG.nodes.length) return;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  BG.nodes.filter(bvisible).forEach(n=>{
+    x0=Math.min(x0,n.x); x1=Math.max(x1,n.x);
+    y0=Math.min(y0,n.y); y1=Math.max(y1,n.y);
+  });
+  const cv=el('brainCv'); const w=cv.clientWidth||800, h=cv.clientHeight||600;
+  const k=Math.min(w/Math.max(80,(x1-x0)*1.15), h/Math.max(80,(y1-y0)*1.15));
+  bview.k=Math.max(0.15,Math.min(2.2,k));
+  bview.x=-((x0+x1)/2)*bview.k; bview.y=-((y0+y1)/2)*bview.k;
+}
+
+let brainReady=false;
+async function loadBrain(){
+  /* Needs all three planes before the joins mean anything. */
+  await Promise.all([loadBook(false), loadPlatform()]);
+  buildBrain();
+  bhubs(); btypes(); bwire(); binspect(null);
+  el('brainN').textContent=BG.nodes.length+' NODES · '+BG.links.length+' LINKS';
+  const nb=el('nBrain'); if(nb) nb.textContent=BG.nodes.length;
+  if(!brainReady){ brainReady=true; balpha=1; bloop(); }
+  else balpha=Math.max(balpha,0.6);
+  setTimeout(bfit,900);
 }
 
 /* ── the hologram ────────────────────────────────────────────────────────
