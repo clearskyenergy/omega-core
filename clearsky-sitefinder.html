@@ -73,12 +73,31 @@
     border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;white-space:nowrap;
     box-shadow:0 1px 3px rgba(26,39,51,.05)}
   #filters::-webkit-scrollbar{height:0}
-  .f{display:flex;align-items:center;gap:6px;flex:none}
-  .f label{font-size:11px;color:var(--muted);font-weight:600}
-  .f select,.f input{height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;
-    padding:0 8px;font-size:12px;color:var(--ink);outline:none;font-family:inherit}
-  .f select:focus,.f input:focus{border-color:var(--accent)}
-  .f input[type=number]{width:82px}
+  /* ── FILTERS AS PILLS ──────────────────────────────────────────────
+     The bar was five stranded labels beside five bare controls, reading as
+     a form to be filled rather than a set of choices already made. Every
+     map people already use puts each filter in one pill that states its
+     own current value, so the bar answers "what am I looking at" without
+     being read left to right.
+
+     The label goes INSIDE the pill, small and quiet, so the value is the
+     thing the eye lands on; and a pill holding a non-default value carries
+     the accent, which is the part that matters — the commonest way to be
+     confused by a search tool is to forget a filter is on. */
+  .f{display:flex;align-items:center;gap:7px;flex:none;height:32px;padding:0 10px;
+    border:1px solid var(--line);border-radius:999px;background:#fff;
+    transition:border-color .12s ease, box-shadow .12s ease}
+  .f:hover{border-color:var(--dim)}
+  .f:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,169,164,.13)}
+  .f.on{border-color:var(--accent);background:#f2fbfa}
+  .f label{font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;flex:none}
+  .f.on label{color:var(--accent)}
+  .f select,.f input{height:28px;border:0;background:transparent;border-radius:0;
+    padding:0;font-size:12.5px;font-weight:600;color:var(--ink);outline:none;
+    font-family:inherit;max-width:190px}
+  .f select{cursor:pointer}
+  .f input[type=number]{width:58px}
   .btn{height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:0 12px;
     font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;flex:none}
   .btn:hover{border-color:var(--dim)}
@@ -136,7 +155,11 @@
   .star:hover{background:#fff;color:#c98a2b}
   .hide:hover{background:#fff;color:#e0533d}
   /* The status pill moves down so the controls never sit on top of it. */
-  .card:hover,.card.hot{box-shadow:0 6px 20px rgba(26,39,51,.13);border-color:#c3cdd7}
+  .card:hover,.card.hot,.card.warm{box-shadow:0 6px 20px rgba(26,39,51,.13);border-color:#c3cdd7}
+  /* Driven from the map, so it has to read from across the pane without
+     competing with the selected card. A rail, not a glow. */
+  .card.warm{box-shadow:0 6px 20px rgba(26,39,51,.13),inset 3px 0 0 var(--accent)}
+  .card.hot{border-color:var(--accent);box-shadow:0 8px 24px rgba(26,39,51,.17)}
   .card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .card.blocked{background:#fffaf9}
   .card .ph{height:132px;position:relative;background:var(--panel2);flex:none;overflow:hidden}
@@ -192,9 +215,20 @@
   #drawer{position:absolute;top:calc(var(--topH) + var(--filtH));right:0;bottom:0;
     width:min(520px,92vw);background:#fff;
     border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(26,39,51,.16);z-index:1200;
-    transform:translateX(102%);transition:transform .26s cubic-bezier(.2,.8,.2,1);
+    transition:clip-path .26s cubic-bezier(.2,.8,.2,1), visibility .26s;
     display:flex;flex-direction:column}
-  #drawer.open{transform:none}
+  /* REVEALED BY CLIPPING, NOT BY MOVING. Parking a 520 px panel at
+     translateX(102%) hides it and still makes the document 520 px wider
+     than the window — the map, the list and the filter bar then sit
+     scrolled sideways behind it, and overflow-x:hidden does not save you
+     because the viewport can still be scrolled programmatically.
+
+     clip-path keeps the panel where it belongs and wipes it in from the
+     right edge, so the reveal still reads as a slide and the page is
+     exactly as wide as the window. */
+  #drawer:not(.open){clip-path:inset(0 0 0 100%);visibility:hidden;pointer-events:none}
+  #drawer.open{clip-path:inset(0);visibility:visible}
+  @media (prefers-reduced-motion: reduce){ #drawer{transition:visibility .1s} }
   .d-h{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:10px;flex:none}
   .d-h .ti{flex:1;min-width:0}
   .d-h .ti b{display:block;font-size:15px;line-height:1.3}
@@ -272,11 +306,57 @@
     #listPane{scroll-behavior:auto}
   }
 
+  html,body{overflow-x:hidden}
   .leaflet-container{background:#e8ebef;font-family:var(--sans)}
-  .mk{border-radius:7px;border:2px solid #fff;box-shadow:0 2px 6px rgba(26,39,51,.3);
-    display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;
-    font-weight:700;font-family:var(--mono);cursor:pointer}
-  .mk.sel{outline:3px solid var(--accent);outline-offset:2px}
+  /* ── CAPACITY BUBBLES ──────────────────────────────────────────────
+     The pins were coloured dots carrying kW/100 as a bare number, which
+     meant reading the map required decoding it: a 22 px circle with "9" in
+     it is not "900 kW available", it is a puzzle.
+
+     A property map is scanned, not studied. The headline number goes IN the
+     pin, in full, the way every map people already know how to read does
+     it — which for this tool is the deliverable kW, because that is the
+     number a rep is hunting. Colour still carries circuit status, so the
+     pin says how much and how encumbered in one glance.
+
+     The tail matters more than it looks: it anchors the bubble to a point.
+     Without it a rounded rectangle floats and the eye cannot tell which
+     parcel it belongs to. */
+  .mkb{position:relative;display:inline-flex;align-items:center;justify-content:center;
+    height:24px;padding:0 9px;border-radius:13px;background:#fff;color:var(--ink);
+    border:1.5px solid var(--line);box-shadow:0 2px 7px rgba(26,39,51,.22);
+    font-size:11.5px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;
+    cursor:pointer;transition:transform .09s ease, box-shadow .09s ease;
+    /* Leaflet puts its own transform on the OUTER icon element, so the
+       bubble is offset here on the inner one: centred over the point, sitting
+       above it, tail landing on it. Every state below has to restate this
+       translate — a transform replaces, it does not accumulate. */
+    transform:translate(-50%,-100%)}
+  .mkb:after{content:"";position:absolute;left:50%;top:100%;margin-left:-4px;
+    width:0;height:0;border:4px solid transparent;border-top-color:#fff;
+    filter:drop-shadow(0 1.5px 0 var(--line))}
+  .mkb i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;
+    flex:none;font-style:normal}
+  .mkb small{font-weight:600;opacity:.6;margin-left:2px;font-size:9.5px}
+  /* Hovering a card raises its pin, and hovering a pin raises its card. The
+     two lists are the same list; making that obvious is most of what a map
+     beside a feed is for. */
+  .mkb.hov{transform:translate(-50%,-100%) translateY(-2px) scale(1.06);
+    box-shadow:0 5px 14px rgba(26,39,51,.3);border-color:#9fb0c0}
+  .mkb.sel{background:var(--ink);color:#fff;border-color:var(--ink);
+    box-shadow:0 5px 16px rgba(26,39,51,.38);
+    transform:translate(-50%,-100%) scale(1.06)}
+  .mkb.sel:after{border-top-color:var(--ink);filter:none}
+  .mkb.sel small{opacity:.65}
+  /* Seen-and-moved-on. Zillow greys a listing you have opened; the same
+     cue here stops a rep re-opening the same six cards on every pan. */
+  .mkb.seen{color:#7b8794;border-color:#dfe5ea}
+  .mkb.seen i{opacity:.45}
+  .mkb.blocked{text-decoration:line-through;text-decoration-thickness:1.5px;
+    text-decoration-color:rgba(200,60,40,.6)}
+  /* The icon element itself carries no box, so it must not intercept
+     clicks meant for the map around the bubble. */
+  .csPin{width:0;height:0;overflow:visible;background:none;border:0}
   #mapNote{position:absolute;left:50%;transform:translateX(-50%);top:12px;z-index:900;
     background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 15px;
     font-size:12px;font-weight:600;box-shadow:0 3px 12px rgba(26,39,51,.14);cursor:pointer}
@@ -303,9 +383,23 @@
   /* ── settings ─────────────────────────────────────────────────────── */
   #settings{position:absolute;top:calc(var(--topH) + var(--filtH));right:0;bottom:0;
     width:min(420px,94vw);background:#fff;border-left:1px solid var(--line);z-index:1210;
-    box-shadow:-14px 0 40px rgba(26,39,51,.16);transform:translateX(102%);
-    transition:transform .26s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
-  #settings.open{transform:none}
+    box-shadow:-14px 0 40px rgba(26,39,51,.16);
+    transition:clip-path .24s cubic-bezier(.2,.8,.2,1), visibility .24s;
+    display:flex;flex-direction:column}
+  /* PARKED OFF-CANVAS IS ALSO OFF-DOCUMENT. This closed with
+     translateX(102%), which hides the panel and still counts toward the
+     document width: a 420 px drawer made the page 1,970 px wide in a
+     1,440 px window, and the map, the list and the filter bar all sat
+     scrolled sideways behind it. overflow-x:hidden does not fix it —
+     the viewport can still be scrolled programmatically, and something
+     does on every click near the right edge.
+
+     So the reveal moves VERTICALLY. A horizontal slide is the only part of
+     the old animation that cost anything, the panel still arrives rather
+     than appearing, and the document is exactly as wide as the window. */
+  #settings:not(.open){clip-path:inset(0 0 0 100%);visibility:hidden;pointer-events:none}
+  #settings.open{clip-path:inset(0);visibility:visible}
+  @media (prefers-reduced-motion: reduce){ #settings{transition:visibility .1s} }
   .setH{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);flex:none}
   .setH b{flex:1;font-size:15px}
   .setH button{border:0;background:var(--panel2);color:var(--muted);width:28px;height:28px;
@@ -421,7 +515,7 @@
 
 <div id="filters">
   <div class="f">
-    <label for="fKw">Min kW available</label>
+    <label for="fKw">kW</label>
     <input id="fKw" type="number" min="0" step="50" value="250">
   </div>
   <div class="f">
@@ -434,7 +528,7 @@
     </select>
   </div>
   <div class="f">
-    <label for="fSqft">Min SF</label>
+    <label for="fSqft">Size</label>
     <input id="fSqft" type="number" min="0" step="5000" value="20000">
   </div>
   <div class="f">
@@ -3745,30 +3839,113 @@
     }, true);
   }
 
+  /* The number in the bubble. Rounded the way a person would say it out
+     loud — "1.2 MW", "880 kW" — because a pin reading "1,184" is a figure to
+     be checked and "1.2 MW" is a site to go and look at. The card carries
+     the exact number for anybody who wants it. */
+  function pinLabel(kw) {
+    if (kw == null) return "\u2014";
+    if (kw >= 1000) {
+      var mw = kw / 1000;
+      /* toFixed, not a rounded number: 1020 kW is 1.0 MW and printing it as
+         "1 MW" throws away the only digit that distinguishes it from 1,049. */
+      return (mw >= 10 ? String(Math.round(mw)) : mw.toFixed(1)) + " MW";
+    }
+    return Math.round(kw) + " kW";
+  }
+
+  /* Sites already opened this session. Held in memory only: this is a
+     reading aid for one sweep of a corridor, not a fact about the site, and
+     persisting it would grey out a rep's whole territory by Thursday. */
+  var SEEN = {};
+
+  function markerHtml(r, state) {
+    var kw = r.sz.kw;
+    var cls = "mkb" + (state || "") +
+              (SEEN[r.id] ? " seen" : "") +
+              ((r.circ.sellable || 0) <= 0 ? " blocked" : "");
+    return '<div class="' + cls + '">' +
+             '<i style="background:' + (r.offTerritory ? "#8a94a0" : r.cst.color) + '"></i>' +
+             esc(pinLabel(kw)) +
+           '</div>';
+  }
+
+  function markerIcon(r, state) {
+    /* Width is measured by the browser, not guessed: a fixed iconSize either
+       clips "1.2 MW" or leaves a dead margin around "40 kW", and a pin whose
+       hit area does not match its shape is worse than either. */
+    return window.L.divIcon({
+      className: "csPin", iconSize: null, iconAnchor: [0, 0],
+      html: markerHtml(r, state)
+    });
+  }
+
+  function paintMarker(id, state) {
+    var m = MARKERS[id], r = ST.byId[id];
+    if (!m || !r) return;
+    m.setIcon(markerIcon(r, state));
+  }
+
   function drawMarkers(rows) {
     markerLayer.clearLayers(); MARKERS = {};
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
-      var kw = r.sz.kw || 0;
-      var d = kw > 1500 ? 26 : kw > 700 ? 22 : kw > 250 ? 18 : 14;
       var m = window.L.marker([r.lat, r.lon], {
-        icon: window.L.divIcon({
-          className: "", iconSize: [d, d], iconAnchor: [d / 2, d / 2],
-          html: '<div class="mk" style="width:' + d + 'px;height:' + d + 'px;background:' +
-                r.cst.color + '">' + (d >= 22 ? Math.round(kw / 100) : "") + '</div>'
-        })
+        icon: markerIcon(r, r.id === selId ? " sel" : ""),
+        riseOnHover: true
       });
       (function (row) {
         m.on("click", function () { select(row.id, true); });
+        /* Pin to card. The list scrolls to it rather than only tinting it:
+           a highlighted card three screens down is a highlight nobody sees. */
+        m.on("mouseover", function () { hoverSite(row.id, true, true); });
+        m.on("mouseout",  function () { hoverSite(null); });
       })(r);
       m.addTo(markerLayer);
       MARKERS[r.id] = m;
     }
   }
 
+  /* ── ONE HOVER, BOTH PANES ────────────────────────────────────────────
+     The feed and the map are two views of one list and a rep is constantly
+     asking "which one is that". Answering it costs a class on each side. */
+  var _hovId = null;
+  function hoverSite(id, fromMap, scroll) {
+    if (_hovId === id) return;
+    var prev = _hovId;
+    _hovId = id;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (prev && prev !== selId) paintMarker(prev, "");
+    if (prev) {
+      var pc = document.querySelector('.card[data-id="' + cssEsc(prev) + '"]');
+      if (pc) pc.className = pc.className.replace(/ ?warm/, "");
+    }
+    if (!id) return;
+    if (id !== selId) paintMarker(id, " hov");
+    var el = document.querySelector('.card[data-id="' + cssEsc(id) + '"]');
+    if (el) {
+      if (el.className.indexOf("warm") < 0) el.className += " warm";
+      if (fromMap && scroll) {
+        try { el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+        catch (e) { el.scrollIntoView(); }
+      }
+    }
+  }
+
   function select(id, fromMap) {
     var r = ST.byId[id]; if (!r) return;
+    var prev = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
     ST.sel = id;
+    /* Opened once is opened. The pin dims so a second sweep of the same
+       corridor shows what is left to look at rather than everything again. */
+    SEEN[id] = true;
+    if (prev && prev !== id) paintMarker(prev, "");
+    paintMarker(id, " sel");
+    if (MARKERS[id] && MARKERS[id].setZIndexOffset) MARKERS[id].setZIndexOffset(1000);
+    if (prev && prev !== id && MARKERS[prev] && MARKERS[prev].setZIndexOffset)
+      MARKERS[prev].setZIndexOffset(0);
+
     var c = document.querySelectorAll(".card"), i;
     for (i = 0; i < c.length; i++) c[i].className = c[i].className.replace(/ ?hot/, "");
     var el = document.querySelector('.card[data-id="' + cssEsc(id) + '"]');
@@ -5758,6 +5935,19 @@
     var c = e.target.closest ? e.target.closest(".card") : null;
     if (c) select(c.getAttribute("data-id"));
   });
+  /* ── CARD TO PIN ──────────────────────────────────────────────────────
+     Delegated on the container, because the cards are rebuilt on every
+     render and per-card listeners would leak a set per pan. mouseover
+     rather than mouseenter for the same reason: it bubbles. */
+  (function () {
+    var host = document.getElementById("cards");
+    host.addEventListener("mouseover", function (e) {
+      var c = e.target.closest ? e.target.closest(".card") : null;
+      hoverSite(c ? c.getAttribute("data-id") : null);
+    });
+    host.addEventListener("mouseleave", function () { hoverSite(null); });
+  })();
+
   document.getElementById("cards").addEventListener("keydown", function (e) {
     if (e.key !== "Enter" && e.key !== " ") return;
     var c = e.target.closest ? e.target.closest(".card") : null;
@@ -5789,10 +5979,25 @@
   }
 
   var fids = ["fKw", "fType", "fSqft", "fCirc", "fSort"];
-  for (var f = 0; f < fids.length; f++) {
-    document.getElementById(fids[f]).onchange = render;
-    document.getElementById(fids[f]).oninput = render;
+  /* What each pill looks like when nobody has touched it. A pill only
+     lights up when it is actually narrowing the search — the commonest way
+     to be confused by a search tool is to forget a filter is on, and the
+     second commonest is for it to shout about one that is not. */
+  var F_DEFAULT = { fKw:"250", fType:"", fSqft:"20000", fCirc:"", fSort:"kw" };
+  function paintFilterPills() {
+    for (var i = 0; i < fids.length; i++) {
+      var el = document.getElementById(fids[i]);
+      if (!el || !el.parentNode) continue;
+      var on = String(el.value) !== F_DEFAULT[fids[i]];
+      var cn = el.parentNode.className.replace(/ ?on\b/, "");
+      el.parentNode.className = on ? cn + " on" : cn;
+    }
   }
+  for (var f = 0; f < fids.length; f++) {
+    document.getElementById(fids[f]).onchange = function () { paintFilterPills(); render(); };
+    document.getElementById(fids[f]).oninput  = function () { paintFilterPills(); render(); };
+  }
+  paintFilterPills();
 
   /* Type list is built from what actually came back, so a rep is never
      offered a filter that returns nothing. */
