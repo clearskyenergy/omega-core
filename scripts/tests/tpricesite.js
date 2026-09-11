@@ -300,5 +300,41 @@ ok('the two grid sources are not both styled as the primary action', function ()
     'the national-data button still reads as a primary action');
 });
 
+/* ── EVERY DELEGATED CONTROL HAS A LISTENER THAT CAN SEE IT ───────────
+   The click handler was bound to #cards alone while three controls were
+   rendered into the DRAWER: the Grid Atlas lookup, the duration buttons in
+   the sizer, and "reset to the full circuit". Their clicks landed on an
+   element the listener never saw, so all three did nothing — no error, no
+   console message, just furniture that looks like a button.
+
+   This checks the property rather than the three instances: every
+   data-* action the page renders must be reachable from a container that
+   actually has the handler. */
+ok('the delegated click handler is bound to the drawer as well as the list',
+  function () {
+    assert(/function onDelegatedClick/.test(html),
+      'the handler is still an anonymous function bound to one container');
+    assert(/getElementById\("cards"\)\.addEventListener\("click", onDelegatedClick\)/.test(html),
+      'the list no longer gets the handler');
+    assert(/getElementById\("dBody"\)[\s\S]{0,120}addEventListener\("click", onDelegatedClick\)/.test(html),
+      'the DRAWER does not get the handler, so its buttons are inert');
+  });
+
+ok('every drawer action the page renders is one the handler answers', function () {
+  /* Rendered actions vs handled actions, compared as sets. A new control
+     added to the drawer without a branch here shows up as a failure rather
+     than as a button nobody notices is dead. */
+  var rendered = {}, m;
+  var re = /data-(ga-id|hrs|szreset|cost-id|star|hide|phsug)=/g;
+  while ((m = re.exec(html))) rendered['data-' + m[1]] = true;
+  var missing = Object.keys(rendered).filter(function (a) {
+    if (html.indexOf('closest("[' + a + ']")') > 0) return false;
+    if (html.indexOf('getAttribute("' + a + '")') > 0) return false;
+    return true;
+  });
+  assert.deepStrictEqual(missing, [],
+    'rendered but never handled: ' + missing.join(', '));
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);

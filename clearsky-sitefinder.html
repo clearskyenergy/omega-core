@@ -6003,7 +6003,25 @@
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
   /* --------------------------------------------------------------- wiring */
-  document.getElementById("cards").addEventListener("click", function (e) {
+  /* ══════════════════════════════════════════════════════════════════════
+     ONE HANDLER, BOUND TO BOTH PANES
+
+     This was bound to #cards alone. Three controls are rendered into the
+     DRAWER — the Grid Atlas lookup, the duration buttons in the sizer, and
+     "reset to the full circuit" — and their clicks were landing on an
+     element this listener never sees, so all three did nothing at all. No
+     error, no console message; a button that looks like a button and is
+     furniture.
+
+     Delegation is still right: both panes are rebuilt wholesale on every
+     render, and per-control listeners would leak a set on every pan. What
+     was wrong was assuming one container. The branches that only make sense
+     in a list — the card star, hide, and click-to-select — simply never
+     match inside the drawer, so the same function serves both.
+
+     Anything added to the drawer from here gets a working click for free,
+     which is the property this file did not have five minutes ago. */
+  function onDelegatedClick(e) {
     /* The star must not also open the card — a rep flagging three sites in a
        row should not have three panels open behind them. */
     /* The address is a link to satellite view. Clicking it must open Google,
@@ -6074,7 +6092,15 @@
     }
     var c = e.target.closest ? e.target.closest(".card") : null;
     if (c) select(c.getAttribute("data-id"));
-  });
+  }
+
+  document.getElementById("cards").addEventListener("click", onDelegatedClick);
+  /* The drawer body is replaced by innerHTML on every render but the element
+     itself persists, so one listener on it outlives every redraw. */
+  (function () {
+    var db = document.getElementById("dBody");
+    if (db) db.addEventListener("click", onDelegatedClick);
+  })();
   /* ── CARD TO PIN ──────────────────────────────────────────────────────
      Delegated on the container, because the cards are rebuilt on every
      render and per-card listeners would leak a set per pan. mouseover
