@@ -133,6 +133,34 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
+
+/* ── the stone ───────────────────────────────────────────────────────────
+   A live frame of whichever tool is selected, with the whole surface acting
+   as the door into it. The tool is rendered at full size and scaled down, so
+   what you see is the real page rather than a screenshot that goes stale the
+   next time someone edits it. */
+.stone{flex:1;min-height:0;display:flex;flex-direction:column;gap:9px}
+.stoneWrap{position:relative;flex:1;min-height:0;border:1px solid rgba(0,243,255,.18);
+           border-radius:6px;overflow:hidden;background:rgba(0,0,0,.35)}
+/* pointer-events:none makes the preview inert glass. Without it the frame
+   eats every hover and click: you would be half-using a live tool behind the
+   dashboard instead of looking at it, and the surface would never open. */
+#stoneFrame{position:absolute;top:0;left:0;width:1440px;height:900px;border:0;
+            transform-origin:top left;background:#fff;pointer-events:none}
+.stoneWrap{cursor:pointer}
+.stoneIdle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+           color:var(--dim);font-size:13px;text-align:center;padding:24px;line-height:1.6}
+.stoneOpen{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;
+           padding-bottom:18px;font-family:var(--mono);font-size:11px;letter-spacing:2px;
+           color:var(--glow-cyan);cursor:pointer;opacity:0;transition:opacity .16s;
+           background:linear-gradient(transparent 55%,rgba(2,8,19,.82))}
+.stoneWrap:hover .stoneOpen{opacity:1}
+/* display:flex on an absolutely-positioned layer outranks the [hidden]
+   attribute, so both layers need the override or they stack. */
+.stoneIdle[hidden],.stoneOpen[hidden],#stoneFrame[hidden]{display:none!important}
+.stoneHeavy{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;
+            align-items:center;justify-content:center;color:var(--dim);font-size:12.5px;
+            text-align:center;padding:24px;line-height:1.6}
 .rowClick:hover{background:rgba(0,243,255,.06)}
 
 /* A connection is green only if something measured says so. */
@@ -486,10 +514,21 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== PLATFORM ========== -->
     <section class="view" data-view="platform">
-      <div class="cmdGrid" style="grid-template-columns:1fr 380px">
+      <div class="cmdGrid" style="grid-template-columns:250px 1fr 350px">
         <div class="panel" style="flex:1;min-height:0">
-          <div class="ptitle">OMEGA — click a tool to work on it<span class="live" id="platN"></span></div>
+          <div class="ptitle">OMEGA<span class="live" id="platN"></span></div>
           <div id="platform" class="scroll"></div>
+        </div>
+        <div class="panel stone">
+          <div class="ptitle">
+            <span id="stoneName">The stone</span>
+            <span class="live" id="stoneMeta"></span>
+          </div>
+          <div class="stoneWrap" id="stoneWrap">
+            <div class="stoneIdle" id="stoneIdle">Choose a tool on the left.</div>
+            <iframe id="stoneFrame" title="tool preview" hidden></iframe>
+            <div class="stoneOpen" id="stoneOpen" hidden>OPEN THIS TOOL ↗</div>
+          </div>
         </div>
         <div class="panel" style="flex:1;min-height:0">
           <div class="ptitle">Work on it</div>
@@ -1532,7 +1571,7 @@ function showView(name){
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='clients') loadBook(false);
-  if(name==='platform') loadPlatform();
+  if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
@@ -1868,11 +1907,82 @@ async function loadPlatform(){
   });
   const pn=el('platN'); if(pn) pn.textContent=(platform.tools||[]).length+' TOOLS';
   const np=el('nPlat'); if(np) np.textContent=(platform.tools||[]).length||'';
+
+  /* Open on the site map editor. It is the tool this workspace was built
+     around, and an empty stone teaches nobody what the stone is for. */
+  const first=(platform.tools||[]).filter(t=>t.file==='editor.html')[0]
+           || (platform.tools||[])[0];
+  if(first) pickTool(first);
+}
+
+/* ── the stone ───────────────────────────────────────────────────────────
+   The middle of the platform view is a live frame of the selected tool, and
+   the whole surface is the door into it.
+
+   It renders the tool at a fixed 1440x900 and scales that down to whatever
+   room the panel has, so the preview is the page as a desktop user sees it
+   rather than the page reflowed into a narrow column — a tool squeezed to
+   350px would show you its mobile fallback and tell you nothing about the
+   thing you are about to edit.
+
+   Heavy tools are NOT framed. editor.html is 10MB and 241 scripts; loading it
+   behind the dashboard would fight the dashboard for the main thread every
+   time you clicked its name in a list. Past the threshold the stone shows the
+   tool's shape in numbers and still opens on click. */
+const STONE_W=1440, STONE_H=900, STONE_MAX_KB=1200;
+
+function fitStone(){
+  const wrap=el('stoneWrap'), f=el('stoneFrame');
+  if(!wrap||!f||f.hidden) return;
+  const w=wrap.clientWidth, h=wrap.clientHeight;
+  if(!w||!h) return;
+  /* Cover, not contain: the frame fills the panel and the overflow is clipped.
+     Letterboxing a preview wastes the space the preview exists to use. */
+  const k=Math.max(w/STONE_W, h/STONE_H);
+  f.style.transform='scale('+k+')';
+}
+if(window.ResizeObserver){
+  const ro=new ResizeObserver(fitStone);
+  const w=el('stoneWrap'); if(w) ro.observe(w);
+}
+window.addEventListener('resize',fitStone);
+
+function openTool(file){ window.open(file,'_blank','noopener'); }
+
+function stone(t){
+  const wrap=el('stoneWrap'), f=el('stoneFrame'),
+        idle=el('stoneIdle'), open=el('stoneOpen');
+  const nm=el('stoneName'), meta=el('stoneMeta');
+  if(!wrap) return;
+  const heavy=wrap.querySelector('.stoneHeavy'); if(heavy) heavy.remove();
+
+  nm.textContent=t.title;
+  meta.textContent=t.file.toUpperCase();
+  idle.hidden=true;
+  open.hidden=false;
+
+  if(t.kb>STONE_MAX_KB){
+    f.hidden=true; f.removeAttribute('src');
+    const d=document.createElement('div'); d.className='stoneHeavy';
+    d.innerHTML='<div style="font-size:26px;color:var(--glow-cyan);font-family:var(--mono)">'
+      + t.kb.toLocaleString()+'KB</div>'
+      + '<div>'+t.lines.toLocaleString()+' lines · '+t.scripts+' scripts</div>'
+      + '<div style="max-width:340px">Too heavy to run behind the dashboard. '
+      + 'Click to open it in its own tab.</div>';
+    wrap.insertBefore(d, open);
+  }else{
+    f.hidden=false;
+    if(f.getAttribute('src')!==t.file) f.setAttribute('src',t.file);
+    fitStone();
+  }
+  open.onclick=()=>openTool(t.file);
+  wrap.onclick=()=>openTool(t.file);
 }
 
 function pickTool(t){
   platPick=t;
   [...document.querySelectorAll('.toolNode')].forEach(n=>n.classList.toggle('on', n.dataset.file===t.file));
+  stone(t);
   const host=el('platDetail'); host.textContent='';
 
   const h=document.createElement('div');
