@@ -3543,6 +3543,11 @@ function dockFor(view){
 
 function minimise(p){
   const view=p.closest('.view'); if(!view) return;
+  /* Idempotent on purpose. applyMin() folds whatever localStorage remembers,
+     and anything else that folds the same panel would otherwise leave a second
+     orb behind for a panel that can only come back once — an orb that does
+     nothing when you click it. */
+  if(p.classList.contains('min')) return;
   const key=panelKey(p);
   const title=(p.querySelector('.ptitle')||{}).textContent||'panel';
   p.classList.add('min');
