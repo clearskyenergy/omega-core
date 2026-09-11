@@ -1921,6 +1921,7 @@ async function load(){
     lastStatus=s;
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
     renderQuick(); renderNeeds(s); renderConns(s);
+    glassSync();
 
     /* The queue count lives in Overview. It used to sit inside the sphere as
        well, which made the centre of the core a number rather than a name. */
@@ -2593,7 +2594,7 @@ async function probeBrain(){
   }catch(_){ brainOn=false; brainInfo=null; }
   const n=el('neural');
   if(n){ n.hidden=!brainOn; n.title=brainOn?('Jarvis is thinking on this Mac · '+((brainInfo&&brainInfo.model)||'')):''; }
-  if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} }
+  if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} if(brainOn) glassSync(true); }
   return brainOn;
 }
 /* What the twin knows right now, small enough to ride along with every
@@ -2636,6 +2637,130 @@ async function recordBrain(b){
 function face(state){
   if(!brainOn) return;
   try{ fetch(BRAIN+'/face',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})}).catch(()=>{}); }catch(_){}
+}
+
+/* ── the glass: the command center on the board ──────────────────────────
+   barehands shows any folder of markdown as an orb, so the dashboard's panels
+   go to the board the same way a note does: rendered here as plain markdown
+   and pushed to the brain daemon (POST /glass), which writes them into
+   ~/jarvis/glass — orb 1, "Command Center". Tap the ring, tap the orb, tap
+   "Tasks today". Jarvis presents one on request ("show me my calendar on the
+   board"). Same triage, same tiers, same manifest he sees here; nothing on
+   the Mac needs a credential. The brain graph goes along as a picture into
+   the media airlock. Sent on every poll while the brain is up, skipped when
+   nothing changed. */
+const GLASS_EVERY=30000; let glassAt=0, glassSig='';
+function gl(s){ return String(s==null?'':s).replace(/\s+/g,' ').trim(); }
+function gtime(){ return new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+function gh(h){ const H=Math.floor(h)%24, M=Math.round((h%1)*60); const ap=H>=12?'PM':'AM'; return ((H+11)%12+1)+(M?':'+String(M).padStart(2,'0'):'')+' '+ap; }
+function glassHome(){
+  const s=lastStatus||{}, c=s.counts||{};
+  const out=['# Command Center','', 'As of '+gtime()+' · from the dashboard', '',
+    '**On your plate** '+(c.backlog!=null?c.backlog:'—'),
+    '**Waiting to go out** '+((s.draftList||[]).length),
+    '**Meetings on file** '+(c.meetings!=null?c.meetings:'—'),
+    '**In queue** '+(c.queued!=null?c.queued:'—'),
+    '**People known** '+((s.people||[]).length), '', '# Needs you'];
+  (s.draftList||[]).filter(d=>!d.to).slice(0,8).forEach(d=>out.push(gl(d.subject||'(no subject)')+' — needs a recipient'));
+  (s.todos||[]).filter(t=>t.status==='blocked').slice(0,5).forEach(t=>out.push(gl(t.title)+' — blocked'));
+  if(c.queued) out.push(c.queued+' meetings waiting to be analysed');
+  out.push('', '# On this orb', 'Tasks today · Calendar · Clients · Platform · Brain · Outbox', 'Say "show me my tasks on the board" and Jarvis puts it up.');
+  return out.join('\n');
+}
+function glassTasks(){
+  const rows=visibleTasks();
+  const out=['# Tasks today','', 'As of '+gtime()+' · '+rows.length+' shown, numbered the way the Tasks view numbers them', ''];
+  let last=null;
+  rows.slice(0,40).forEach((r,i)=>{
+    const b=band(r.score).k;
+    if(b!==last){ out.push('', '# '+b); last=b; }
+    const why=(r.why||[]).slice(0,3).join(', ');
+    out.push((i+1)+'. **'+gl(r.t.title)+'**'+(why?' — '+why:'')+(r.dupes?' (+'+r.dupes+' similar)':''));
+  });
+  if(rows.length>40) out.push('', '… '+(rows.length-40)+' more in the Tasks view');
+  return out.join('\n');
+}
+function glassCalendar(){
+  const s=lastStatus||{};
+  const evts=(s.schedule||[]).slice().sort((a,b)=>String(a.startsAt||'').localeCompare(String(b.startsAt||'')));
+  const out=['# Calendar','', new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})+' · as of '+gtime(), '', '# Meetings'];
+  if(!evts.length) out.push('nothing on the calendar today');
+  evts.forEach(e=>out.push('**'+gl(e.when)+'** '+gl(e.title)+(e.others?' · '+e.others+(e.others===1?' guest':' guests'):'')+(e.location?' · '+gl(e.location):'')));
+  out.push('', '# Anchors');
+  anchorsToday().forEach(k=>out.push(gh(k.a)+'–'+gh(k.b)+' '+k.label+(k.optional?' (optional)':'')));
+  if(isFri()) out.push(gh(SHABBAT_FROM)+' onward · Shabbat');
+  out.push('', '# Windows the plan fits into');
+  RITUALS.forEach(r=>out.push(gh(r.win[0])+'–'+gh(r.win[1])+' '+r.label+' — '+r.why));
+  return out.join('\n');
+}
+function glassClients(){
+  const b=book||{}, cs=b.clients||[], t=b.totals||{};
+  const out=['# Clients','', 'As of '+gtime()+' · '+cs.length+' organisations', '',
+    '**Billed** '+usd(t.due||0)+' · **Collected** '+usd(t.paid||0)+' · **Outstanding** '+usd(t.outstanding||0)+(t.overdue?' · **Overdue** '+t.overdue:''), ''];
+  cs.slice().sort((a,b)=>(b.outstanding||0)-(a.outstanding||0)).forEach(c=>{
+    const money=c.outstanding>0 ? usd(c.outstanding)+(c.overdue?' · '+c.daysOverdue+'d late':'') : (c.lastPaidAt?'paid '+c.lastPaidAt:'nothing due');
+    out.push('**'+gl(c.name)+'** · '+(c.tier||'not priced')+' · '+money);
+  });
+  if(!cs.length) out.push('open the Clients view once and this fills in');
+  return out.join('\n');
+}
+function glassPlatform(){
+  const tools=(platform&&platform.tools)||[];
+  const out=['# Platform','', 'As of '+gtime()+' · '+tools.length+' tools', ''];
+  const areas={}; tools.forEach(t=>{ (areas[t.area]=areas[t.area]||[]).push(t); });
+  Object.keys(areas).sort().forEach(a=>{
+    out.push('', '# '+a);
+    areas[a].forEach(t=>out.push('**'+gl(t.title)+'** · '+t.kb+'KB'+(t.lastPush?' · pushed '+ago(t.lastPush)+(t.lastBy?' by '+gl(t.lastBy):''):'')+(t.lastMsg?' · '+gl(t.lastMsg).slice(0,60):'')));
+  });
+  if(!tools.length) out.push('open the Platform view once and this fills in');
+  return out.join('\n');
+}
+function glassBrain(){
+  const s=lastStatus||{}, cs=(book&&book.clients)||[], people=s.people||[], deals=(book&&book.deals&&book.deals.top)||[];
+  const out=['# Brain','', 'As of '+gtime()+' · '+cs.length+' clients · '+people.length+' people · '+deals.length+' deals · '+(((platform&&platform.tools)||[]).length)+' tools', '', 'Who is connected to whom. The picture is Brain.png in Props.', ''];
+  cs.forEach(c=>{
+    const at=people.filter(p=>p.org && matchClient(p.org, cs)===c).map(p=>gl(p.name)+(p.role?' ('+gl(p.role)+')':''));
+    const own=deals.filter(d=>d.orgId===c.orgId).map(d=>gl(d.name||'(untitled deal)'));
+    out.push('**'+gl(c.name)+'**'+(c.tier?' · '+c.tier:'')+(at.length?' · people: '+at.slice(0,6).join(', '):'')+(own.length?' · deals: '+own.slice(0,4).join(', '):''));
+  });
+  const loose=people.filter(p=>!p.org).slice(0,12).map(p=>gl(p.name));
+  if(loose.length) out.push('', '# People without an org', loose.join(', '));
+  (s.schedule||[]).forEach(e=>out.push('', '**Today** '+gl(e.when)+' '+gl(e.title)+(e.others?' · '+e.others+' guests':'')));
+  return out.join('\n');
+}
+function glassOutbox(){
+  const names=clientOrgs();
+  const rows=(outboxAll||[]).map(d=>Object.assign({d}, draftTriage(d,names))).sort((a,b)=>b.score-a.score);
+  const out=['# Outbox','', 'As of '+gtime()+' · '+rows.length+' drafts · nothing sends from the board; sending stays behind the twin', ''];
+  const ready=rows.filter(r=>r.d.to), stuck=rows.filter(r=>!r.d.to);
+  out.push('# Ready to send ('+ready.length+')');
+  ready.slice(0,20).forEach((r,i)=>out.push((i+1)+'. **'+gl(r.d.label)+'** → '+gl(r.d.to)+((r.why||[]).length?' — '+r.why.slice(0,2).join(', '):'')));
+  out.push('', '# Stuck — no recipient ('+stuck.length+')');
+  stuck.slice(0,20).forEach(r=>out.push('**'+gl(r.d.label)+'**'+(r.d.fromBacklog?' · from the backlog':'')));
+  return out.join('\n');
+}
+async function glassSync(force){
+  if(!brainOn) return;
+  const now=Date.now(); if(!force && now-glassAt<GLASS_EVERY) return;
+  glassAt=now;
+  /* The book and the manifest load lazily with their views; the board wants
+     them whether or not he opened those views today. Both cache. */
+  try{ await loadBook(false); }catch(_){}
+  try{ await loadPlatform(); }catch(_){}
+  let notes={};
+  try{
+    notes={'Command Center':glassHome(), 'Tasks today':glassTasks(), 'Calendar':glassCalendar(),
+           'Clients':glassClients(), 'Platform':glassPlatform(), 'Brain':glassBrain(), 'Outbox':glassOutbox()};
+  }catch(e){ notes={'Command Center':'# Command Center\n\ncould not render: '+e.message}; }
+  const images={};
+  try{ const cv=el('brainCv'); if(cv&&cv.width>50&&BG&&BG.nodes&&BG.nodes.length) images['Brain']=cv.toDataURL('image/png'); }catch(_){}
+  /* Skip the write when nothing but the clock moved. */
+  const sig=JSON.stringify(notes).replace(/As of [^·\n]+/g,'')+Object.keys(images).join(',');
+  if(sig===glassSig && !force) return;
+  glassSig=sig;
+  try{
+    await fetch(BRAIN+'/glass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes,images})});
+  }catch(_){}
 }
 
 async function submit(said){
@@ -2927,8 +3052,7 @@ function renderConns(s){
        subscription; off means the twin is on its own and will ask before
        it spends. */
     ['Neural link', brainOn?'ok':'off',
-      brainOn?('thinking on this Mac · '+((brainInfo&&brainInfo.model)||'claude')+' · $0')
-             :'off — double-click JARVIS neural link on the Desktop'],
+      brainOn?'on this Mac · $0':'off — Desktop: JARVIS neural link'],
     ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
       mins==null?'no run recorded':('read '+mins+' min ago')],
     ['Calendar', (s.schedule||[]).length?'ok':'warn',
