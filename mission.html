@@ -138,6 +138,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
 
+/* A subsystem switch. Reads as the state it is IN, and is obviously pressable. */
+.sw{flex:none;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;
+    padding:4px 10px;min-height:26px;border-radius:11px;
+    border:1px solid rgba(0,243,255,.25);background:rgba(0,243,255,.05);color:var(--dim)}
+.sw.on{border-color:var(--good);color:var(--good);background:rgba(61,255,139,.10)}
+.sw:hover:not(:disabled){border-color:var(--glow-cyan);color:var(--glow-cyan)}
+.sw:disabled{opacity:.5}
+
 /* ── the stone ───────────────────────────────────────────────────────────
    A live frame of whichever tool is selected, with the whole surface acting
    as the door into it. The tool is rendered at full size and scaled down, so
@@ -748,6 +756,57 @@ function rows(host, list){
   }
 }
 
+/* ── the subsystems panel, as actual switches ────────────────────────────
+   This listed ON / OFF / BLOCKED and offered no way to change any of it,
+   which is the exact failure config.js warns about at the top of its own
+   file — "a switch that only greys out a button teaches you to trust it, and
+   then it does not stop the spend" — only inverted: the toggles were built to
+   be load-bearing and the dashboard never gave you one to pull.
+
+   BLOCKED stays unclickable, because the block is a fact about the world and
+   not a preference. The server refuses those writes anyway (config.write
+   forces a blocked feature to false); refusing here too means the UI and the
+   server agree instead of the UI promising something the server undoes.
+
+   The row re-reads the server's answer rather than assuming the click worked,
+   so what you see is what the twin will actually do on its next run. */
+async function subsystems(list){
+  const host=el('features'); host.textContent='';
+  (list||[]).forEach(f=>{
+    const r=document.createElement('div'); r.className='row';
+    const a=document.createElement('span'); a.className='k'; a.textContent=f.label.toUpperCase();
+
+    if(f.blocked){
+      const b=document.createElement('span'); b.className='v bad'; b.textContent='BLOCKED';
+      b.title=typeof f.blocked==='string'?f.blocked:'';
+      r.append(a,b); host.appendChild(r); return;
+    }
+
+    const sw=document.createElement('button');
+    sw.className='sw'+(f.enabled?' on':'');
+    sw.textContent=f.enabled?('ON'+(f.perDay?' '+money(f.perDay):'')):'OFF';
+    sw.addEventListener('click',async()=>{
+      const want=!f.enabled;
+      sw.disabled=true; sw.textContent='…';
+      try{
+        const tk=await token();
+        const res=await fetch(CHAT+'/settings',{method:'POST',
+          headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},
+          body:JSON.stringify({enabled:{[f.id]:want}})});
+        const j=await res.json().catch(()=>({}));
+        if(!res.ok) throw new Error(j.error||('HTTP '+res.status));
+        /* Redraw from what came BACK, not from what we asked for. */
+        subsystems(j.features||[]);
+        say('jarvis', f.label+' is '+(want?'on':'off')+'.', 0);
+      }catch(e){
+        sw.disabled=false; sw.textContent=f.enabled?'ON':'OFF';
+        say('jarvis','Could not change that — '+e.message, 0);
+      }
+    });
+    r.append(a,sw); host.appendChild(r);
+  });
+}
+
 /* ══ THE CORE ════════════════════════════════════════════════════════════
    A wireframe sphere: parallels and meridians projected orthographically,
    rotating about its own axis with a slight tilt, plus three orbital rings
@@ -1250,11 +1309,7 @@ async function load(){
       ['TO DATE', money(s.spend.measuredToDate),'good']
     ]);
 
-    rows(el('features'), s.features.map(f=>[
-      f.label.toUpperCase(),
-      f.blocked?'BLOCKED':(f.enabled?'ON '+money(f.perDay):'OFF'),
-      f.blocked?'bad':(f.enabled?'good':'')
-    ]));
+    subsystems(s.features);
 
     const log=el('logStream'); log.textContent='';
     if(!s.runs.length){log.textContent='no runs recorded';}
@@ -1981,8 +2036,18 @@ function renderConns(s){
                :(feat.chat&&feat.chat.enabled?'answering':'switched off')],
     ['ElevenLabs', feat.voice&&feat.voice.enabled?'ok':'off',
       feat.voice&&feat.voice.enabled?'speaking':'off — browser voice'],
+    /* Name the number. "Twilio — idle" tells you a vendor exists; the number
+       tells you which phone is him, which is the thing you actually need when
+       a text arrives from it. */
     ['Twilio', feat.sms&&feat.sms.blocked?'warn':(feat.sms&&feat.sms.enabled?'ok':'off'),
-      feat.sms&&feat.sms.blocked?'A2P in review':'idle'],
+      (function(){
+        const n=(s.twilio&&s.twilio.from)||null;
+        const pretty=n&&/^\+1\d{10}$/.test(n)
+          ? '('+n.slice(2,5)+') '+n.slice(5,8)+'-'+n.slice(8)
+          : (n||'no number');
+        if(feat.sms&&feat.sms.blocked) return pretty+' · A2P in review';
+        return feat.sms&&feat.sms.enabled ? pretty : pretty+' · off';
+      })()],
     ['Repo', feat.build&&feat.build.enabled?'ok':'off',
       feat.build&&feat.build.enabled?'can open PRs':'switched off'],
     ['Routines', feat.routines&&feat.routines.enabled?'ok':'off',
