@@ -2383,10 +2383,28 @@ async function probeBrain(){
   if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} }
   return brainOn;
 }
+/* What the twin knows right now, small enough to ride along with every
+   question: the counts, today's meetings, the top of the plate, what is
+   waiting to go out. The brain has no credential to the twin and should not
+   need one to know what day he is having — this page already knows. */
+function brainContext(){
+  const s=lastStatus||{}; const c=s.counts||{};
+  const line=(t)=>String(t||'').replace(/\s+/g,' ').trim().slice(0,90);
+  const out=['Live from the twin at '+new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})+':'];
+  out.push('counts: '+(c.backlog!=null?c.backlog+' on the plate, ':'')+(s.draftList?s.draftList.length+' drafts waiting, ':'')+
+           (c.meetings!=null?c.meetings+' meetings on file, ':'')+(c.queued!=null?c.queued+' queued':''));
+  const today=(s.schedule||[]).slice(0,8).map(e=>line(e.when+' '+e.title+(e.others?' ('+e.others+' guests)':'')));
+  if(today.length) out.push('today: '+today.join(' | '));
+  const top=(s.todos||[]).slice(0,10).map((t,i)=>(i+1)+'. '+line(t.title)+(t.urgency?' ['+t.urgency+']':''));
+  if(top.length) out.push('top of the plate: '+top.join(' | '));
+  const drafts=(s.draftList||[]).slice(0,6).map(d=>line((d.to||'no recipient')+': '+d.subject));
+  if(drafts.length) out.push('waiting to go out: '+drafts.join(' | '));
+  return out.join('\n').slice(0,2500);
+}
 async function askBrain(said){
   const startedAt=new Date().toISOString();
   const r=await fetch(BRAIN+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({text:said})});
+    body:JSON.stringify({text:said, context:brainContext()})});
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok) throw new Error(j.error||('neural link HTTP '+r.status));
   return Object.assign({startedAt}, j);
