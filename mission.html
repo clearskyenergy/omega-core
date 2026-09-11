@@ -35,11 +35,78 @@ button{background:transparent;border:var(--edge);color:var(--glow-cyan);font-fam
 button:hover{background:rgba(0,243,255,.12)}
 button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
-.grid{display:grid;grid-template-columns:300px 1fr 400px;gap:14px;flex:1;min-height:0}
-/* Stacked, the fixed panel heights plus a 100vh body with overflow hidden
-   pile on top of each other. Below the breakpoint the page scrolls instead. */
-@media(max-width:1200px){
-  .grid{grid-template-columns:1fr}
+/* ── the shell ──────────────────────────────────────────────────────────
+   A rail on the left that names the parts, one view at a time in the middle,
+   and the microphone across the bottom where it is reachable from every view.
+   The old layout put six panels on one screen and let the important ones be
+   whichever fitted; this lets a view breathe and still be one click away. */
+#app[hidden]{display:none!important}
+#app{display:grid;grid-template-columns:196px 1fr;gap:14px;flex:1;min-height:0;width:100%}
+
+.rail{display:flex;flex-direction:column;gap:12px;min-height:0;
+      border-right:1px solid rgba(0,243,255,.14);padding-right:12px}
+.brand{display:flex;gap:10px;align-items:center;padding-bottom:10px;
+       border-bottom:1px solid rgba(0,243,255,.14)}
+.mark{width:30px;height:30px;border:1px solid var(--glow-cyan);border-radius:6px;
+      display:flex;align-items:center;justify-content:center;color:var(--glow-cyan);
+      font-size:15px;box-shadow:0 0 12px rgba(0,243,255,.35) inset}
+.bname{font-family:var(--mono);font-size:14px;letter-spacing:3px;color:var(--glow-cyan)}
+.bsub{font-family:var(--mono);font-size:8px;letter-spacing:1.6px;color:var(--dim)}
+
+#nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow-y:auto}
+.navItem{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+         border:1px solid transparent;background:transparent;color:var(--dim);
+         font-family:var(--ui);font-size:13px;letter-spacing:0;padding:8px 9px;border-radius:6px}
+.navItem:hover{background:rgba(0,243,255,.07);color:var(--ink)}
+.navItem.on{background:rgba(0,243,255,.12);border-color:rgba(0,243,255,.35);color:var(--glow-cyan)}
+.pill{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);
+      background:rgba(0,243,255,.1);border-radius:9px;padding:1px 7px;min-width:20px;text-align:center}
+.navItem.on .pill{color:var(--glow-cyan)}
+.railFoot{flex:none;border-top:1px solid rgba(0,243,255,.14);padding-top:10px}
+
+.main{display:flex;flex-direction:column;gap:12px;min-height:0}
+.hDate{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim)}
+.hClock{font-family:var(--mono);font-size:17px;color:var(--glow-cyan)}
+
+/* One view at a time. hidden rather than unmounted, so the canvas keeps its
+   size and the thread keeps its scroll position. */
+.view{display:none;flex:1;min-height:0}
+.view.on{display:flex;flex-direction:column;gap:12px}
+.cmdGrid{display:grid;grid-template-columns:280px 1fr 400px;gap:12px;flex:1;min-height:0}
+.live{margin-left:auto;font-size:8px;color:var(--good);letter-spacing:1.4px}
+.ptitle{display:flex;align-items:center}
+
+/* The feed: one line each, tagged by what kind of thing it is. Every line is
+   derived from something measured — there is no filler in here. */
+.fi{display:flex;gap:9px;align-items:flex-start;padding:7px 0;
+    border-bottom:1px solid rgba(0,243,255,.07);font-size:12.5px;line-height:1.5}
+.fi:last-child{border-bottom:none}
+.fi .t{flex:none;font-family:var(--mono);font-size:8px;letter-spacing:1px;
+       padding:2px 6px;border-radius:3px;margin-top:2px}
+.t.info{background:rgba(0,243,255,.12);color:var(--glow-cyan)}
+.t.warn{background:rgba(255,183,51,.14);color:var(--warn)}
+.t.good{background:rgba(61,255,139,.12);color:var(--good)}
+.t.bad{background:rgba(255,107,107,.14);color:var(--bad)}
+
+/* The microphone, across the bottom, reachable from every view. */
+.talkBar{flex:none;display:flex;align-items:center;gap:14px;
+         border:var(--edge);border-radius:8px;padding:10px 16px;
+         background:linear-gradient(90deg,rgba(0,68,255,.10),rgba(0,243,255,.07),rgba(0,68,255,.10));
+         box-shadow:inset 0 0 20px rgba(0,68,255,.18)}
+.askWrap{flex:1;display:flex;align-items:center;gap:9px}
+.askWrap .p{color:var(--glow-cyan);font-family:var(--mono)}
+.wave{flex:none;width:74px;height:16px;opacity:.5;
+      background:repeating-linear-gradient(90deg,var(--glow-cyan) 0 2px,transparent 2px 6px);
+      mask-image:linear-gradient(90deg,transparent,#000,transparent);
+      -webkit-mask-image:linear-gradient(90deg,transparent,#000,transparent)}
+
+@media(max-width:1280px){
+  #app{grid-template-columns:1fr}
+  .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
+        border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
+  #nav{flex-direction:row;flex-wrap:wrap;flex:1}
+  .railFoot{border-top:none;padding-top:0;display:flex;gap:6px;align-items:center}
+  .cmdGrid{grid-template-columns:1fr}
   body{height:auto;min-height:100vh;overflow-y:auto}
   .panel{min-height:180px}
   .arcWrap{min-height:240px}
@@ -90,7 +157,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .scroll::-webkit-scrollbar-thumb{background:rgba(0,243,255,.3);border-radius:4px}
 .alert{border:1px solid var(--warn);color:var(--warn);padding:10px;font-size:12.5px;line-height:1.55;border-radius:4px}
 
-.core{align-items:center;justify-content:center;gap:0}
+.core{align-items:center;justify-content:center;gap:0;flex:1;min-height:0}
 #arc{width:100%;flex:1;min-height:0;display:block}
 .coreName{font-size:26px;letter-spacing:8px;color:var(--glow-cyan);
           text-shadow:0 0 16px rgba(0,243,255,.6);margin-top:4px}
@@ -107,9 +174,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .msg.you{background:rgba(0,68,255,.14);border:1px solid rgba(0,68,255,.35);align-self:flex-end;max-width:88%}
 .msg.jarvis{background:rgba(0,243,255,.06);border:1px solid rgba(0,243,255,.18);max-width:96%}
 .msg .meta{font-size:10px;color:var(--dim);margin-top:5px}
-.ask{display:flex;gap:8px;align-items:center;border-top:1px solid rgba(0,243,255,.12);padding-top:10px;flex:none}
-.ask input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:14px;font-family:var(--ui)}
-.ask .p{color:var(--glow-cyan);font-weight:bold}
+.askWrap input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:14px;font-family:var(--ui)}
 .foot{font-size:10.5px;color:var(--dim);letter-spacing:1px;flex:none}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
 .gate p{color:var(--dim);font-size:13px;line-height:1.6;margin:10px 0 18px}
@@ -130,76 +195,172 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   <p id="gateErr" style="color:var(--bad)"></p>
 </div>
 
-<div id="app" hidden style="display:none;flex-direction:column;gap:14px;flex:1;min-height:0;width:100%">
-  <header>
-    <div class="title">J.A.R.V.I.S // COGNITIVE INTERFACE</div>
-    <div class="badge" id="badge">CONNECTING</div>
-    <div style="display:flex;gap:8px">
-      <button id="mic">🎙 VOICE OFF</button>
-      <button id="refresh">REFRESH</button>
-    </div>
-  </header>
+<div id="app" hidden style="display:none">
 
-  <div class="grid">
-    <!-- LEFT -->
-    <div class="col">
-      <div class="panel" style="flex:none;max-height:36%">
-        <div class="ptitle">Today</div>
-        <div id="schedule" class="scroll"></div>
-        <div id="alert"></div>
+  <!-- ───────────────────────── SIDEBAR ───────────────────────── -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">◈</div>
+      <div>
+        <div class="bname">JARVIS</div>
+        <div class="bsub">COMMAND CENTER</div>
       </div>
+    </div>
+
+    <nav id="nav">
+      <button class="navItem on" data-view="command">◧  Command Center</button>
+      <button class="navItem" data-view="tasks">▤  Tasks<span class="pill" id="nTasks"></span></button>
+      <button class="navItem" data-view="outbox">✉  Outbox<span class="pill" id="nOut"></span></button>
+      <button class="navItem" data-view="calendar">▦  Calendar<span class="pill" id="nCal"></span></button>
+      <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
+      <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
+      <button class="navItem" data-view="system">⚙  System</button>
+    </nav>
+
+    <div class="railFoot">
+      <div class="ptitle" style="border:none;padding:0;margin-bottom:6px">Voice</div>
+      <div class="coreState" id="coreState" style="text-align:left;margin:0">voice off</div>
+      <button id="micBig" style="width:100%;margin-top:8px">🎙 TALK</button>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button id="focusInput" style="flex:1">⌨ TYPE</button>
+        <button id="mute" style="flex:1">🔊 ON</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ───────────────────────── MAIN ───────────────────────── -->
+  <main class="main">
+    <header>
+      <div>
+        <div class="hDate" id="hDate"></div>
+        <div class="hClock" id="hClock"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="badge" id="badge">CONNECTING</div>
+        <button id="mic">🎙 VOICE OFF</button>
+        <button id="refresh">REFRESH</button>
+      </div>
+    </header>
+
+    <!-- ========== COMMAND CENTER ========== -->
+    <section class="view on" data-view="command">
+      <div class="cmdGrid">
+
+        <div class="col">
+          <div class="panel" style="flex:none">
+            <div class="ptitle">Overview</div>
+            <div id="overview"></div>
+          </div>
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Mission timeline — today</div>
+            <div id="schedule" class="scroll"></div>
+            <div id="alert"></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="panel core">
+            <div class="arcWrap">
+              <canvas id="arc"></canvas>
+              <div class="queue"><div class="n" id="queueN">—</div><div class="l">IN QUEUE</div></div>
+            </div>
+            <div class="coreName">J.A.R.V.I.S</div>
+          </div>
+          <div class="panel" style="flex:none;height:150px">
+            <div class="ptitle">Agent activity — last 8 runs</div>
+            <div class="scroll" id="logStream"></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="panel" style="flex:none;max-height:38%">
+            <div class="ptitle">Live feed<span class="live">● LIVE</span></div>
+            <div id="feed" class="scroll"></div>
+          </div>
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Conversation</div>
+            <div class="thread scroll" id="thread"></div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========== TASKS ========== -->
+    <section class="view" data-view="tasks">
       <div class="panel" style="flex:1;min-height:0">
         <div class="ptitle">To do — ranked</div>
         <div id="todos" class="scroll"></div>
       </div>
-      <div class="panel" style="flex:none;max-height:26%">
-        <div class="ptitle">Waiting to go out</div>
+    </section>
+
+    <!-- ========== OUTBOX ========== -->
+    <section class="view" data-view="outbox">
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Waiting to go out — say “execute items 1 through 4”</div>
         <div id="drafts" class="scroll"></div>
       </div>
-    </div>
+    </section>
 
-    <!-- CENTRE -->
-    <div class="col">
-      <div class="panel core">
-        <div class="arcWrap">
-          <canvas id="arc"></canvas>
-          <div class="queue"><div class="n" id="queueN">—</div><div class="l">IN QUEUE</div></div>
-        </div>
-        <div class="coreName">J.A.R.V.I.S</div>
-        <div class="coreState" id="coreState">voice off</div>
-        <div class="coreBtns">
-          <button id="micBig">🎙 TALK</button>
-          <button id="focusInput">⌨ TYPE</button>
-          <button id="mute">🔊 VOICE ON</button>
-        </div>
-      </div>
-      <div class="panel" style="height:190px">
-        <div class="ptitle">Agent Activity — last 8 runs</div>
-        <div class="scroll" id="logStream" style="font-size:12px;color:#79b6df;line-height:1.7"></div>
-      </div>
-    </div>
-
-    <!-- RIGHT -->
-    <div class="col">
+    <!-- ========== CALENDAR ========== -->
+    <section class="view" data-view="calendar">
       <div class="panel" style="flex:1;min-height:0">
-        <div class="ptitle">Conversation</div>
-        <div class="thread scroll" id="thread"></div>
-        <div class="ask">
-          <span class="p">&gt;</span>
-          <input id="ask" placeholder="Ask Jarvis, or say his name" autocomplete="off">
+        <div class="ptitle">The week</div>
+        <div id="week" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== ROUTINES ========== -->
+    <section class="view" data-view="routines">
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Routines — say “every weekday at 8am send me my schedule”</div>
+        <div id="routines" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== PEOPLE ========== -->
+    <section class="view" data-view="people">
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ptitle">Who you work with</div>
+        <div id="people" class="scroll"></div>
+      </div>
+    </section>
+
+    <!-- ========== SYSTEM ========== -->
+    <section class="view" data-view="system">
+      <div class="cmdGrid">
+        <div class="col">
+          <div class="panel" style="flex:none">
+            <div class="ptitle">Pipeline</div>
+            <div id="pipeline"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel" style="flex:none">
+            <div class="ptitle">Spend</div>
+            <div id="spend"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Subsystems</div>
+            <div id="features" class="scroll"></div>
+          </div>
         </div>
       </div>
-      <div class="panel" style="flex:none">
-        <div class="ptitle">System</div>
-        <div id="pipeline"></div>
-        <details style="margin-top:8px">
-          <summary style="cursor:pointer;font-size:11px;letter-spacing:1px;color:var(--dim)">SPEND &amp; SUBSYSTEMS</summary>
-          <div id="spend" style="margin-top:8px"></div>
-          <div id="features" style="margin-top:8px"></div>
-        </details>
+    </section>
+
+    <!-- ───────── TALK BAR ───────── -->
+    <div class="talkBar">
+      <div class="wave" id="waveL"></div>
+      <div class="askWrap">
+        <span class="p">&gt;</span>
+        <input id="ask" placeholder="Ask Jarvis, or say his name" autocomplete="off">
       </div>
+      <div class="wave" id="waveR"></div>
     </div>
-  </div>
+  </main>
+
   <div class="foot" id="foot"></div>
 </div>
 
@@ -317,7 +478,9 @@ const arc = (() => {
   }
   requestAnimationFrame(frame);
 
-  return { set(v) { target = Math.max(0.12, Math.min(1, v)); } };
+  /* resize is exposed because the view switcher calls it. A guarded call to a
+     method that does not exist is dead code that looks like a safeguard. */
+  return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
 })();
 
 /* The dashboard is about the day, not about the machine. Schedule and the
@@ -417,6 +580,8 @@ async function load(){
 
     el('alert').textContent='';
     if(ing&&ing.alert){const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;el('alert').appendChild(d);}
+
+    renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
 
     el('queueN').textContent=num(s.counts.queued);
     /* Energy from the work actually outstanding, plus a lift for a loop that
@@ -835,11 +1000,133 @@ el('signin').addEventListener('click',async()=>{
   catch(e){el('gateErr').textContent=e.message;}
 });
 
+/* ── views ───────────────────────────────────────────────────────────────
+   Hidden rather than unmounted: the canvas keeps its measured size and the
+   conversation keeps its scroll position, so coming back to a view is
+   instant and looks like you never left. */
+function showView(name){
+  [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
+  [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
+  try{ localStorage.setItem('jarvisView', name); }catch(_){}
+  if(name==='command' && arc && arc.resize) arc.resize();
+}
+[...document.querySelectorAll('.navItem')].forEach(b=>{
+  b.addEventListener('click',()=>showView(b.dataset.view));
+});
+
+function tickClock(){
+  const now=new Date();
+  const f=(o)=>new Intl.DateTimeFormat('en-US',Object.assign({timeZone:'America/Chicago'},o)).format(now);
+  const d=el('hDate'), c=el('hClock');
+  if(d) d.textContent=f({weekday:'long',month:'long',day:'numeric'}).toUpperCase();
+  if(c) c.textContent=f({hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+}
+setInterval(tickClock,1000); tickClock();
+
+/* ── the live feed ───────────────────────────────────────────────────────
+   EVERY LINE IS DERIVED FROM SOMETHING MEASURED. The reference dashboard
+   this borrows its shape from shows CPU, RAM and disk gauges; a web page
+   cannot read any of those, and inventing them is how a dashboard becomes
+   decoration you stop believing. So the feed says what is actually true
+   about his day and his queues, or it says nothing. */
+function buildFeed(s){
+  const out=[];
+  const ing=s.ingest||{};
+  const nowMs=Date.now();
+
+  if(ing.alert) out.push(['bad', ing.alert]);
+
+  const upcoming=(s.schedule||[]).filter(e=>e.startsAt && new Date(e.startsAt).getTime()>nowMs);
+  if(upcoming.length){
+    const n=upcoming[0];
+    const mins=Math.round((new Date(n.startsAt).getTime()-nowMs)/60000);
+    out.push([mins<=15?'warn':'info',
+      (mins<60? mins+' min':'')+(mins>=60? Math.round(mins/60)+'h':'')+' until '+n.title+
+      (n.others? ' — '+n.others+(n.others===1?' guest':' guests'):'')]);
+  } else if((s.schedule||[]).length){
+    out.push(['good','Nothing left on the calendar today.']);
+  }
+
+  const noRecipient=(s.draftList||[]).filter(d=>!d.to).length;
+  if(noRecipient) out.push(['warn', noRecipient+(noRecipient===1?' draft has':' drafts have')+' no recipient — they will be refused if you send them']);
+  const ready=(s.draftList||[]).filter(d=>d.to).length;
+  if(ready) out.push(['info', ready+(ready===1?' draft is':' drafts are')+' ready to go — say “execute items 1 through '+Math.min(ready,4)+'”']);
+
+  const backlog=(s.counts||{}).backlog;
+  if(backlog) out.push(['info', backlog+' open on your plate, ranked']);
+  const queued=(s.counts||{}).queued;
+  if(queued) out.push(['warn', queued+' waiting to be analysed']);
+
+  if(ing.at){
+    const mins=Math.round((nowMs-new Date(ing.at).getTime())/60000);
+    out.push([mins>90?'warn':'good','Mail last read '+(mins<1?'just now':mins+' min ago')+
+      (ing.fetched? ' — '+ing.fetched+' fetched':'')]);
+  }
+
+  /* cost.js reports perDay, perMonth and measuredToDate — there is no
+     "today", and inventing one would be a number he could not check. */
+  const sp=s.spend||{};
+  if(sp.measuredToDate) out.push(['info','$'+Number(sp.measuredToDate).toFixed(2)+' measured to date'+
+    (sp.perDay? ', $'+Number(sp.perDay).toFixed(2)+'/day at this rate':'')]);
+
+  listInto('feed', out, r=>({left:r[1], clamp:false}), 'nothing to report');
+  /* tag each line with its kind */
+  [...document.querySelectorAll('#feed .row')].forEach((row,i)=>{
+    if(!out[i]) return;
+    const t=document.createElement('span');
+    t.className='t '+out[i][0];
+    t.textContent=out[i][0]==='bad'?'ALERT':out[i][0]==='warn'?'WARN':out[i][0]==='good'?'OK':'INFO';
+    row.classList.add('fi'); row.insertBefore(t,row.firstChild);
+  });
+}
+
+function renderOverview(s){
+  const c=s.counts||{};
+  rows(el('overview'), [
+    ['ON YOUR PLATE', num(c.backlog), (c.backlog||0)>100?'warn':'cy'],
+    ['WAITING TO GO OUT', num(c.drafts)],
+    ['MEETINGS ON FILE', num(c.meetings)],
+    ['IN QUEUE', num(c.queued), (c.queued||0)?'warn':'good'],
+    ['PEOPLE KNOWN', num(c.people==null?null:c.people)]
+  ]);
+  const set=(id,v)=>{ const e=el(id); if(e) e.textContent=(v==null?'':v); };
+  set('nTasks', c.backlog||''); set('nOut', c.drafts||'');
+  set('nCal', (s.schedule||[]).length||''); set('nPeople', c.people||'');
+  set('nRout', (s.routines||[]).length||'');
+}
+
+function renderWeek(s){
+  const nowMs=Date.now();
+  listInto('week', (s.week||s.schedule||[]), e=>({
+    time: (e.day? e.day+' ':'')+e.when,
+    past: e.startsAt && new Date(e.startsAt).getTime()<nowMs,
+    left: e.title,
+    right: e.others? e.others+(e.others===1?' guest':' guests') : ''
+  }), 'nothing on the calendar');
+}
+
+function renderRoutines(s){
+  listInto('routines', (s.routines||[]), r=>({
+    left: (r.enabled===false?'(paused) ':'')+r.what,
+    right: r.human || '',
+    cls: r.enabled===false?'warn':'good'
+  }), 'none yet — say “every weekday at 8am send me my schedule”');
+}
+
+function renderPeople(s){
+  listInto('people', (s.people||[]), p=>({
+    left: p.name + (p.role? ' — '+p.role : ''),
+    right: p.org || '',
+    clamp:false
+  }), 'no one harvested yet');
+}
+
 authMod.onAuthStateChanged(auth,u=>{
   el('gate').hidden=!!u;
   el('app').hidden=!u;
-  el('app').style.display = u ? 'flex' : 'none';
-  if(u){ load(); loadThread(); setInterval(load,30000); }
+  el('app').style.display = u ? 'grid' : 'none';
+  if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
+         load(); loadThread(); setInterval(load,30000); }
 });
 </script>
 </body>
