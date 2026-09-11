@@ -5081,18 +5081,29 @@
     if (st.err)  return head + '<p class="note bad">' + esc(st.err) + '</p>' +
       '<button id="gaRun" data-noselect="1" data-ga-id="' + esc(r.id) + '">Try again</button></div>';
 
-    var g = st.sum;
+    /* `sum`, NOT `g`. This read `var g = st.sum` and then called g(...) as
+       the label/value helper on the very next line — the local shadowed the
+       function it was trying to use, so rendering a result threw "g is not a
+       function" and the panel showed that instead of the answer.
+
+       It survived because the button that gets here was inert: the code path
+       had never once run. Fixing the click is what exposed it, which is the
+       argument for fixing clicks even when the thing behind them is
+       untested — a dead button hides whatever is behind it. */
+    var sum = st.sum;
     return head +
       '<div class="grid2">' +
-        g("Nearest substation", g.nearestSubKm == null ? "\u2014"
-            : (g.nearestSubKm < 10 ? g.nearestSubKm.toFixed(1) : Math.round(g.nearestSubKm)) + " km") +
-        g("Highest voltage nearby", g.maxKv ? fmt(g.maxKv) + " kV" : "not published") +
-        g("Substations found", String(g.substations)) +
-        g("Transmission lines", String(g.lines)) +
+        g("Nearest substation", sum.nearestSubKm == null ? "\u2014"
+            : (sum.nearestSubKm < 10 ? sum.nearestSubKm.toFixed(1)
+                                     : Math.round(sum.nearestSubKm)) + " km") +
+        g("Highest voltage nearby", sum.maxKv ? fmt(sum.maxKv) + " kV" : "not published") +
+        g("Substations found", String(sum.substations)) +
+        g("Transmission lines", String(sum.lines)) +
       '</div>' +
-      (g.nearestSubName ? '<p class="note">Nearest is <b>' + esc(g.nearestSubName) + '</b>.</p>' : '') +
-      (g.findings && g.findings.length
-        ? '<div style="margin-top:8px">' + g.findings.slice(0, 4).map(function (f) {
+      (sum.nearestSubName
+        ? '<p class="note">Nearest is <b>' + esc(sum.nearestSubName) + '</b>.</p>' : '') +
+      (sum.findings && sum.findings.length
+        ? '<div style="margin-top:8px">' + sum.findings.slice(0, 4).map(function (f) {
             return '<div class="note' + (f.severity === 'blocker' ? ' bad' : '') + '">' +
                    esc(f.text || '') + '</div>'; }).join('') + '</div>'
         : '') +
