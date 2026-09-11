@@ -244,6 +244,55 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .noteGo{right:auto;left:5px;color:rgba(18,32,46,.62)}
 .noteGo:hover{color:#0a5c2e}
 
+
+/* ── the core as a layer ─────────────────────────────────────────────── */
+.main{position:relative}
+.coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
+           transition:opacity .5s ease}
+.coreLayer.on{opacity:1}
+.coreLayer canvas{width:100%;height:100%;display:block}
+/* transform:none matters. The older .coreLabel rule centres a SMALL box with
+   translate(-50%,-50%); inherit that on a box stretched to inset:0 and it
+   shifts itself up and left by half the whole layer, which parks the title on
+   top of the brand. Specificity won the position and lost the transform. */
+.coreLayer .coreLabel{position:absolute;inset:0;transform:none;
+                      display:flex;flex-direction:column;
+                      align-items:center;justify-content:center;gap:2px;
+                      text-shadow:0 0 18px rgba(2,8,19,.9)}
+/* Everything else in main rides above it. */
+.main > header,.main > .view,.main > .talkBar,.main > .authFix{position:relative;z-index:1}
+/* The hole the core used to fill: space for the burst to be seen through. */
+.coreHole{flex:1;min-height:180px;pointer-events:none}
+
+/* ── minimised panels ────────────────────────────────────────────────────
+   A panel you are not reading should not cost a rectangle. Collapsed, it
+   becomes an orb in the dock — the same object the brain draws, because a
+   thing that shrinks to a dot and a thing that IS a dot should look alike. */
+.panel > .minBtn{position:absolute;top:6px;right:30px;z-index:3;opacity:0;
+  font-size:10px;line-height:1;padding:4px 6px;min-height:0;border-radius:4px;
+  transition:opacity .14s}
+.panel:hover > .minBtn{opacity:.75}
+.panel > .minBtn:hover{opacity:1}
+.panel.min{display:none!important}
+
+.dock{display:flex;gap:9px;align-items:center;flex-wrap:wrap;flex:none;
+      padding:2px 0 0;min-height:0}
+.dock:empty{display:none}
+.orb{position:relative;width:34px;height:34px;border-radius:50%;cursor:pointer;
+     border:1px solid rgba(0,243,255,.45);background:radial-gradient(circle at 34% 30%,
+       rgba(0,243,255,.40),rgba(0,60,140,.30) 60%,rgba(0,20,50,.5));
+     box-shadow:0 0 14px rgba(0,243,255,.22);flex:none;padding:0;
+     transition:transform .16s,box-shadow .16s;
+     animation:orbIn .22s cubic-bezier(.2,.9,.25,1) both}
+.orb:hover{transform:translateY(-2px) scale(1.08);box-shadow:0 0 22px rgba(0,243,255,.45)}
+.orb .olab{position:absolute;left:50%;top:calc(100% + 5px);transform:translateX(-50%);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:1px;color:var(--dim);
+  white-space:nowrap;opacity:0;transition:opacity .14s;pointer-events:none}
+.orb:hover .olab{opacity:1}
+.orb .on{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10px;color:var(--glow-cyan)}
+@keyframes orbIn{from{transform:scale(.2);opacity:0}to{transform:none;opacity:1}}
+
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
    beside it rather than buried: search, an inspector, the hubs ranked by how
@@ -702,6 +751,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
   <!-- ───────────────────────── MAIN ───────────────────────── -->
   <main class="main">
+    <!-- The core is a LAYER, not a panel. It sits behind everything in the
+         main area and the panels float over it, which is the difference
+         between a dashboard with a picture in one cell and a dashboard that
+         is standing in front of something. Only lit on the command view. -->
+    <div class="coreLayer" id="coreLayer">
+      <canvas id="arc"></canvas>
+      <div class="coreLabel">
+        <div class="cName">J.A.R.V.I.S</div>
+        <div class="cSub">AI CORE</div>
+      </div>
+    </div>
     <header>
       <div>
         <div class="hDate" id="hDate"></div>
@@ -735,15 +795,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
 
         <div class="col">
-          <div class="panel core">
-            <div class="arcWrap">
-              <canvas id="arc"></canvas>
-              <div class="coreLabel">
-                <div class="cName">J.A.R.V.I.S</div>
-                <div class="cSub">AI CORE</div>
-              </div>
-            </div>
-          </div>
+          <div class="coreHole"></div>
           <div class="panel" style="flex:none">
             <div class="ptitle">Quick commands</div>
             <div class="quick" id="quick"></div>
@@ -2279,6 +2331,10 @@ function showView(name){
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   wireZoom();                 /* views built later get the control too */
+  applyMin();
+  /* The core burns behind the command centre and nowhere else — a graph or a
+     task list read through a firework is a worse graph and a worse list. */
+  const cl=el('coreLayer'); if(cl) cl.classList.toggle('on', name==='command');
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
@@ -3452,6 +3508,78 @@ function pickTool(t){
 
 
 
+
+/* ══ MINIMISE ════════════════════════════════════════════════════════════
+   A panel you are not reading should not cost a rectangle. Collapsed, it
+   becomes an orb — deliberately the same object the brain draws, because a
+   thing that shrinks to a dot and a thing that IS a dot ought to look alike.
+
+   The orb goes in a dock inside the SAME view, so a panel never disappears to
+   somewhere you would have to remember. Click it and the panel comes back
+   exactly where it was — nothing is reordered, because a layout that
+   rearranges itself when you fold something away is a layout you stop
+   trusting with anything you want to find again.
+
+   The choice persists per view. Folding six panels away and having them all
+   return on the next reload is the feature failing to be a feature. */
+const MIN_KEY='jarvisMinimised';
+let minned = (()=>{ try{ return JSON.parse(localStorage.getItem(MIN_KEY)||'{}'); }
+                    catch(_){ return {}; } })();
+function saveMin(){ try{ localStorage.setItem(MIN_KEY, JSON.stringify(minned)); }catch(_){} }
+
+/* A stable name for a panel that has no id: its title. Two panels with the
+   same title in one view would collide, and none do. */
+function panelKey(p){
+  const t=p.querySelector('.ptitle');
+  const view=(p.closest('.view')||{}).dataset;
+  return ((view&&view.view)||'x')+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+}
+
+function dockFor(view){
+  let d=view.querySelector(':scope > .dock');
+  if(!d){ d=document.createElement('div'); d.className='dock'; view.appendChild(d); }
+  return d;
+}
+
+function minimise(p){
+  const view=p.closest('.view'); if(!view) return;
+  const key=panelKey(p);
+  const title=(p.querySelector('.ptitle')||{}).textContent||'panel';
+  p.classList.add('min');
+  minned[key]=1; saveMin();
+
+  const orb=document.createElement('button');
+  orb.className='orb'; orb.dataset.key=key;
+  orb.title='Open '+title.trim();
+  const glyph=document.createElement('span'); glyph.className='on';
+  glyph.textContent=title.trim().charAt(0).toUpperCase();
+  const lab=document.createElement('span'); lab.className='olab';
+  lab.textContent=title.trim().slice(0,22);
+  orb.append(glyph,lab);
+  orb.addEventListener('click',()=>restore(p,orb));
+  dockFor(view).appendChild(orb);
+}
+
+function restore(p,orb){
+  p.classList.remove('min');
+  if(orb) orb.remove();
+  delete minned[panelKey(p)]; saveMin();
+  remeasure();
+}
+
+/* Applied on every render pass, so panels built later fold correctly too. */
+function applyMin(){
+  document.querySelectorAll('.view').forEach(v=>{
+    const d=v.querySelector(':scope > .dock');
+    if(d) d.textContent='';
+  });
+  document.querySelectorAll('.panel').forEach(p=>{
+    const key=panelKey(p);
+    if(minned[key]){ p.classList.remove('min'); minimise(p); }
+    else p.classList.remove('min');
+  });
+}
+
 /* ══ ZOOM ════════════════════════════════════════════════════════════════
    Every panel is the same object: click the corner and it takes the screen,
    Escape and it goes back. Attached to every .panel in one pass rather than
@@ -3495,6 +3623,12 @@ function wireZoom(){
     b.title='Expand';
     b.addEventListener('click',e=>{ e.stopPropagation(); zoomPanel(p); });
     p.appendChild(b);
+
+    const m=document.createElement('button');
+    m.className='minBtn'; m.textContent='●';
+    m.title='Minimise to an orb';
+    m.addEventListener('click',e=>{ e.stopPropagation(); if(zoomed===p) unzoom(); minimise(p); });
+    p.appendChild(m);
   });
 }
 el('zoomBack').addEventListener('click',unzoom);

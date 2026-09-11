@@ -628,7 +628,20 @@ function vendBlank(key, name){
               into the battery rate, because they are two facts from two
               documents and a blended number loses which is which. */
            freightPerKwh:null,  /* $/kWh to haul it from the gate to site  */
-           freightRef:"" };     /* the haul quote behind that figure       */
+           freightRef:"",       /* the haul quote behind that figure       */
+           /* ── WHAT THIS SUPPLIER ACTUALLY SELLS ───────────────────────
+              [{ model, kwh, usableKwh, form, acKw }] straight off their
+              datasheet. A price per kWh says what a kilowatt-hour costs; a
+              product list says what you can physically buy, and those are
+              different questions. The site finder needs the second to
+              answer "how big can this site go" — you cannot install 3,304
+              kWh if the smallest thing the supplier ships is a 5,068 kWh
+              container.
+
+              Usable is carried beside nominal because they differ by enough
+              to matter — 2,703 nominal against 2,528 usable on one of
+              these — and a revenue case runs on the usable figure. */
+           products:[] };
 }
 var VENDORS = (function(){
   var o={}, i;
@@ -636,6 +649,23 @@ var VENDORS = (function(){
   return o;
 })();
 var VEND_SEL = "";        /* which supplier this estimate is priced from */
+
+/* Only entries with a real energy figure survive. A product list is read by
+   the site finder to decide what fits on a circuit, and an entry with no
+   kWh is not a product, it is a name. */
+function cleanProducts(list){
+  if(!list || !list.length) return [];
+  var out = [], i;
+  for(i=0;i<list.length;i++){
+    var p = list[i];
+    if(!p || typeof p.kwh !== 'number' || !(p.kwh > 0)) continue;
+    out.push({ model: String(p.model || ''), kwh: p.kwh,
+               usableKwh: (typeof p.usableKwh === 'number' ? p.usableKwh : null),
+               form: String(p.form || ''),
+               acKw: (typeof p.acKw === 'number' ? p.acKw : null) });
+  }
+  return out;
+}
 
 function vendHasPrice(v){ return !!(v && typeof v.dcPerKwh === "number" && v.dcPerKwh > 0); }
 function vendAgeDays(v){
@@ -968,7 +998,8 @@ function vendApply(st){
       incoterm: src.incoterm || "", expires: src.expires || "",
       excludes: src.excludes || "", indexTo: src.indexTo || "",
       freightPerKwh: (typeof src.freightPerKwh === 'number' ? src.freightPerKwh : null),
-      freightRef: src.freightRef || ""
+      freightRef: src.freightRef || "",
+      products: cleanProducts(src.products)
     };
   }
   VEND_SEL = st.sel || "";
@@ -1027,6 +1058,7 @@ function vendImportObj(o){
     if(typeof d.blockMwh === "number") cur.blockMwh = d.blockMwh;
     ["model","basis","ref","date","note","incoterm","expires","excludes","indexTo"]
       .forEach(function(f){ if(typeof d[f] === "string" && d[f] !== "") cur[f] = d[f]; });
+    if(d.products) cur.products = cleanProducts(d.products);
     applied.push(BESS_VENDORS[i].name);
   }
   /* Installers ride in the same file. An EPC quote and a battery quote are
