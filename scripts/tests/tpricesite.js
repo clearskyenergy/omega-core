@@ -375,7 +375,8 @@ ok('the drawer offers battery options sized to the opportunity', function () {
   fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
   assert(/_orgVendors/.test(fn),
     'options are not built from the organisation\'s own supplier records');
-  assert(/blockMwh/.test(fn), 'block size is ignored, so every option is a fiction');
+  assert(/productsOf\(v\)/.test(fn),
+    'the supplier product list is ignored, so every option is a fiction');
 });
 
 ok('it ships NO catalogue of its own', function () {
@@ -385,21 +386,40 @@ ok('it ships NO catalogue of its own', function () {
   fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
   assert(!/\b(CATL|Gotion|Tesla|Megapack|Sungrow|BYD)\b/.test(fn),
     'a product name is hard-coded into the fit logic');
-  assert(/if \(!priced && !blockKwh\) continue/.test(fn),
+  assert(/if \(!priced && !prods\.length\) continue/.test(fn),
     'a supplier with nothing on file still produces an option');
 });
 
-ok('overshooting the target is described as duration, not waste', function () {
-  /* The circuit caps kW and does not care about kWh. A block bigger than
-     the target is a LONGER system at the same power, which is usually
-     worth more — calling it stranded would be wrong here, even though the
-     same overshoot IS stranded capacity when you are billed for a block. */
-  var fn = html.slice(html.indexOf('function fitOptionsHtml'));
-  fn = fn.slice(0, fn.indexOf('function computeEstimate'));
-  assert(/caps kW, not kWh/.test(fn),
-    'the overshoot is not explained in terms of duration');
-  assert(/short of the target/.test(fn),
-    'an option that undershoots is not called out');
+ok('the maximum is bounded, and says by what', function () {
+  /* The circuit caps kW and does not cap kWh at all, so "the maximum
+     battery" has no bound from the wire. Two bounds are used instead and
+     both are printed — a maximum is only meaningful beside what limited
+     it. Without the unit cap the arithmetic favours the smallest product,
+     because many small units always tile closer to a ceiling than one big
+     one, and it would recommend thirty cabinets. */
+  var fn = html.slice(html.indexOf('function fitOptions(r)'));
+  fn = fn.slice(0, fn.indexOf('function mergeOpt'));
+  assert(/MAX_FIT_HOURS/.test(fn) && /MAX_FIT_UNITS/.test(fn),
+    'the maximum is unbounded');
+  assert(/if \(n > MAX_FIT_UNITS\) n = MAX_FIT_UNITS/.test(fn),
+    'the unit cap is not applied, so the smallest product will always win');
+  assert(/return b\.kwh - a\.kwh/.test(fn),
+    'the list is not ordered largest first, which is the question being asked');
+  var ui = html.slice(html.indexOf('function fitOptionsHtml'));
+  ui = ui.slice(0, ui.indexOf('function computeEstimate'));
+  assert(/caps power, not energy/.test(ui),
+    'the panel does not explain why the wire is not the bound');
+  assert(/f\.maxHours/.test(ui) && /f\.maxUnits/.test(ui),
+    'the two bounds are applied but never shown, so the maximum looks arbitrary');
+});
+
+ok('usable energy is reported beside nominal', function () {
+  /* They differ by enough to matter — 2,703 nominal against 2,528 usable on
+     one of these — and a revenue case runs on the usable figure. */
+  var ui = html.slice(html.indexOf('function fitOptionsHtml'));
+  ui = ui.slice(0, ui.indexOf('function computeEstimate'));
+  assert(/usableKwh/.test(ui) && /revenue case runs on/.test(ui),
+    'usable energy is not distinguished from nominal');
 });
 
 ok('a hold can be any whole kW, not a multiple of 25', function () {

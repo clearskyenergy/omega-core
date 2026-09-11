@@ -4884,10 +4884,10 @@
        simply left out — a card is not a form. */
     var rows = [];
     if (fit) {
-      rows.push(["Battery",
-        (fit.blocks ? fit.blocks + '\u00d7 ' + (fit.blockKwh / 1000) + ' MWh \u00b7 ' : '') +
+      rows.push(["Max battery",
+        (fit.units ? fit.units + '\u00d7 ' : '') +
         fmt(Math.round(fit.kwh)) + ' kWh \u00b7 ' + (Math.round(fit.hours * 10) / 10) + ' h',
-        esc(fit.name)]);
+        esc(fit.model ? fit.name + ' ' + fit.model : fit.name)]);
     }
     if (inst) rows.push(["Installer", esc(inst.name), inst.project ? esc(inst.project) : ""]);
     if (est) {
@@ -4921,29 +4921,35 @@
         'tool ships no catalogue of its own \u2014 an invented product is worse than ' +
         'none, because somebody will quote it.</p></div>';
     }
-    var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>, which ' +
-      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. What your ' +
-      'suppliers actually sell against that:</p><div class="fitList">';
+    var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>. It ' +
+      'caps power, not energy \u2014 so the biggest system here is bounded by ' +
+      'duration and by how many units a site takes, not by the wire. Capped at <b>' +
+      f.maxHours + ' h</b> (' + fmt(Math.round(f.ceilKwh)) + ' kWh) and <b>' +
+      f.maxUnits + ' units</b>. Largest first:</p><div class="fitList">';
     for (var i = 0; i < f.options.length; i++) {
       var o = f.options[i];
       h += '<div class="fitRow">' +
         '<div class="fitName">' + esc(o.name) +
           (o.model ? '<span class="fitModel">' + esc(o.model) + '</span>' : '') + '</div>' +
         '<div class="fitSpec">' +
-          (o.blocks
-            ? o.blocks + ' \u00d7 ' + (o.blockKwh / 1000) + ' MWh block' +
-              (o.blocks > 1 ? 's' : '') + ' \u2014 ' + fmt(Math.round(o.kwh)) + ' kWh at ' +
-              fmt(f.kw) + ' kW, <b>' + (Math.round(o.hours * 10) / 10) + ' h</b>'
+          (o.units
+            ? o.units + ' \u00d7 ' + fmt(Math.round(o.unitKwh)) + ' kWh' +
+              (o.form ? ' ' + esc(o.form) : '') + ' \u2014 ' +
+              fmt(Math.round(o.kwh)) + ' kWh at ' + fmt(f.kw) + ' kW, <b>' +
+              (Math.round(o.hours * 10) / 10) + ' h</b>'
             : fmt(Math.round(o.kwh)) + ' kWh at ' + fmt(f.kw) + ' kW') +
         '</div>' +
-        (o.overshootKwh
-          ? '<div class="fitNote">' +
-              (o.overshootKwh > 0
-                ? fmt(Math.round(o.overshootKwh)) + ' kWh more than the target \u2014 the ' +
-                  'circuit caps kW, not kWh, so that is a longer system at the same ' +
-                  'power rather than waste'
-                : fmt(Math.round(-o.overshootKwh)) + ' kWh short of the target') +
-            '</div>'
+        /* Usable is the number a revenue case runs on. Nominal is what the
+           datasheet leads with, and the two differ by enough to matter —
+           2,703 nominal against 2,528 usable on one of these. */
+        (o.usableKwh
+          ? '<div class="fitNote">' + fmt(Math.round(o.usableKwh)) +
+            ' kWh usable at the datasheet\u2019s own rate \u2014 that is the figure a ' +
+            'revenue case runs on, not the nominal above it.</div>'
+          : '') +
+        (o.overCeiling
+          ? '<div class="fitNote">One unit already exceeds the ' + f.maxHours +
+            ' h cap at this kW. It is shown because you cannot buy less than one.</div>'
           : '') +
         '<div class="fitPrice">' +
           (o.priced
