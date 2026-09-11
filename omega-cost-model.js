@@ -408,6 +408,58 @@
     return out;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     AN INSTALLER'S QUOTE REPLACES A WHOLE DIVISION
+
+     A supplier quotes a rate. An EPC quotes a JOB: one figure for all the
+     electrical, one for all the civil. That cannot be pushed into a line
+     rate — splitting "$306,083.93 of electrical" across trenching, cable,
+     terminations and gear would be inventing a breakdown the contractor
+     never gave, and a made-up split reads exactly like a real one.
+
+     So an installer override replaces the DIVISION TOTAL and says so. Every
+     line inside it is then reported as covered by that quote rather than
+     priced, because that is the truth: the contractor priced the scope, not
+     the schedule of rates.
+
+     IT SCALES PER kWh BECAUSE THAT IS THE SIZE WE WERE GIVEN. A lump sum is
+     for one project; using it on another means scaling it, and scaling is an
+     assumption whichever way it is done. Per-kWh is used because the quote
+     was issued against a stated system size in kWh. kW is the better driver
+     for electrical work — conductors and gear follow power, not energy — so
+     a record that states projectKw uses that instead, and the basis is
+     printed either way rather than left for a reader to guess. */
+  function installerDivisions(v) {
+    if (!v) return null;
+    var base = null, unit = "";
+    if (typeof v.projectKw === "number" && v.projectKw > 0) { base = v.projectKw; unit = "kW"; }
+    else if (typeof v.projectKwh === "number" && v.projectKwh > 0) { base = v.projectKwh; unit = "kWh"; }
+    if (!base) return null;            /* a lump sum with no size cannot scale */
+
+    var d = v.divisions || {}, out = null, k;
+    for (k in d) {
+      if (!d.hasOwnProperty(k)) continue;
+      var amt = d[k];
+      if (typeof amt !== "number" || !(amt > 0)) continue;
+      out = out || {};
+      out[k] = {
+        per: amt / base, unit: unit,
+        quotedUsd: amt, quotedFor: base,
+        src: v.basis === "quote" ? "quote" : v.basis === "verbal" ? "planning" : "published",
+        name: v.name || "installer",
+        ref: [v.ref, v.date, v.project].filter(Boolean).join(" \u00b7 "),
+        qualifier: v.qualifier || "",
+        /* Headroom the contractor themselves flagged — copper where aluminium
+           would serve, and the like. Reported, never deducted: a saving
+           nobody has priced is not a saving. */
+        savingPct: (typeof v.savingPct === "number" && v.savingPct > 0) ? v.savingPct : null,
+        savingWhy: v.savingWhy || ""
+      };
+    }
+    return out;
+  }
+
+  M.installerDivisions = installerDivisions;
   M.TIERS = TIERS;
   M.tierIsEvidence = tierIsEvidence;
   M.QUOTE_STALE_DAYS = QUOTE_STALE_DAYS;
@@ -511,7 +563,8 @@
       input = shallow(input); input.rates = rr;
     }
 
-    var srcRows = [], grans = [], gates = [];
+    var srcRows = [], grans = [], gates = [], quoted = [];
+    var idivs = installerDivisions(input.installer);
 
     function n0(v){ return Math.round(v).toLocaleString(); }
 
@@ -565,8 +618,41 @@
                        ratedBy:R.from, cost:raw });
         dTot += raw;
       }
+      /* ── AN INSTALLER'S PRICE FOR THIS WHOLE DIVISION ────────────────
+         Replaces the modelled total outright. The lines stay on screen
+         because a reader still needs to see what the scope covers, but
+         they are marked as covered by the quote rather than priced, and
+         they no longer add up to the number beside them — the contractor's
+         figure does. Saying that plainly beats silently rescaling each
+         line to fit, which would manufacture a breakdown nobody quoted. */
+      var iv = idivs && idivs[D.id];
+      if (iv) {
+        var qty2 = iv.unit === "kW" ? K : E;
+        if (qty2 != null && qty2 > 0) {
+          dTot = iv.per * qty2;
+          for (var li = 0; li < lines.length; li++) {
+            lines[li].coveredBy = iv.name;
+            lines[li].src = iv.src;
+            lines[li].ref = iv.ref;
+            lines[li].ratedBy = iv.name;
+          }
+          srcRows = srcRows.filter(function (row) {
+            return String(row.id).indexOf(D.id + ".") !== 0;
+          });
+          srcRows.push({ id:"div." + D.id, n:D.name + " \u2014 quoted by " + iv.name,
+                         src:iv.src, ref:iv.ref, asOf:"", ratedBy:iv.name, cost:dTot });
+          quoted.push({ div:D.id, name:D.name, iv:iv, usd:dTot });
+        }
+      }
+
       var sp = M.SPREAD[D.id];
       divs.push({ id:D.id, name:D.name, lines:lines,
+                  quotedBy: iv ? iv.name : "",
+                  /* The division carries its own provenance, not just its
+                     lines: it is the thing that was quoted. */
+                  src: iv ? iv.src : "planning",
+                  ref: iv ? iv.ref : "",
+                  qualifier: iv ? iv.qualifier : "",
                   lo:dTot*(1-sp), base:dTot, hi:dTot*(1+sp), spread:sp });
       subLo += dTot*(1-sp); subBase += dTot; subHi += dTot*(1+sp);
     }
@@ -659,6 +745,23 @@
         why: "This line is priced at the supplier's gate, so delivery to site " +
              "is not in it. The amount is not known here and is not guessed.",
         closes: "Get a haul quote for the route and enter it as its own line."
+      });
+    }
+    for (gi = 0; gi < quoted.length; gi++) {
+      var Q = quoted[gi];
+      if (!Q.iv.savingPct) continue;
+      exposures.push({
+        id: "ve." + Q.div,
+        name: Q.name + " \u2014 value engineering not taken",
+        /* NEGATIVE, and deliberately so: this is money that might come OUT,
+           not a cheque to write. It is reported rather than deducted
+           because a saving nobody has priced is not a saving, and an
+           estimate that quietly banks one is an estimate that misses. */
+        usd: -(Q.usd * Q.iv.savingPct),
+        why: Q.iv.savingWhy || ("The " + Q.name + " price carries options a "
+             + "redesign could cheapen."),
+        closes: "Ask " + Q.iv.name + " to re-price the alternative, or put the "
+              + "scope out to the other installers."
       });
     }
     if (upLine && upLine.carried) {

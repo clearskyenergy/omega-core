@@ -280,6 +280,8 @@
   .scopeGrid span{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
   .scopeGrid input{width:100%;min-width:0}
   .scopeNote{margin-top:8px;font-size:11px;color:var(--mut);line-height:1.5}
+  .vsub{margin:18px 0 6px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--mut);border-top:1px solid var(--line);padding-top:14px}
 #secVend .pill{display:inline-block;padding:2px 7px;border-radius:9px;background:#eef1f5;
   font-size:11px;color:#41505f}
 #secVend .pill.warn{background:#fde8e8;color:#8a1f1f}
@@ -542,6 +544,66 @@ var BESS_VENDORS = [
   { key:"pytes",      name:"Pytes" }
 ];
 
+/* ══════════════════════════════════════════════════════════════════════════
+   INSTALLERS — WHO IS ACTUALLY GOING TO BUILD IT
+
+   A supplier quotes a RATE. An EPC quotes a JOB: one figure for all the
+   electrical, one for all the civil. So this is not a second copy of the
+   battery panel — it replaces whole divisions rather than single lines,
+   because that is the shape of the document that arrives.
+
+   Identity only, as with the suppliers. No price ships in this file.
+   ══════════════════════════════════════════════════════════════════════════ */
+var INSTALLERS = [
+  { key:"uec",      name:"Uptime EV Charger (UEC)" },
+  { key:"solarity", name:"Solarity" },
+  { key:"spatco",   name:"SPATCO" },
+  { key:"agi",      name:"AGI" },
+  { key:"pxt",      name:"PxT" }
+];
+
+function instBlank(key, name){
+  return { key:key, name:name,
+           project:"",          /* the job the quote was written against   */
+           projectKw:null,      /* its size in kW \u2014 the better driver      */
+           projectKwh:null,     /* or in kWh, if that is what was stated   */
+           divisions:{ el:null, cv:null },   /* as quoted, by division     */
+           gcUsd:null,          /* general conditions / mobilisation       */
+           basis:"", ref:"", date:"",
+           /* What the quote is NOT. A price worked out from a site map and
+              pre-engineering documents is a real number and is not a firm
+              engineered price, and the difference is the kind of thing that
+              gets forgotten between the quote arriving and somebody
+              quoting it onward. */
+           qualifier:"",
+           savingPct:null,      /* headroom the contractor themselves named */
+           savingWhy:"" };
+}
+var INSTALLERS_ST = (function(){
+  var o={}, i;
+  for(i=0;i<INSTALLERS.length;i++) o[INSTALLERS[i].key]=instBlank(INSTALLERS[i].key, INSTALLERS[i].name);
+  return o;
+})();
+var INST_SEL = "";
+
+function instHasQuote(v){
+  if(!v) return false;
+  var d=v.divisions||{}, k;
+  for(k in d) if(d.hasOwnProperty(k) && typeof d[k]==="number" && d[k]>0) return true;
+  return false;
+}
+function instSized(v){
+  return !!(v && ((typeof v.projectKw==="number"&&v.projectKw>0) ||
+                  (typeof v.projectKwh==="number"&&v.projectKwh>0)));
+}
+/* The record the shared model consumes. Nothing derived here — the model
+   owns the scaling so the site finder and /api/ get the same answer. */
+function instRecord(){
+  var v = INST_SEL ? INSTALLERS_ST[INST_SEL] : null;
+  if(!instHasQuote(v) || !instSized(v)) return null;
+  return v;
+}
+
 /* The editable record per supplier. Everything null until somebody types it. */
 function vendBlank(key, name){
   return { key:key, name:name,
@@ -757,6 +819,74 @@ function renderVendForm(){
     }
   }
   h += '</tbody></table>';
+  /* ── INSTALLERS ────────────────────────────────────────────────────
+     Separate from the suppliers above because it answers a different
+     question: not what the hardware costs, but what it costs to put in the
+     ground here. An EPC quote arrives as division totals, so that is how
+     it is entered and how it is applied. */
+  h += '<h5 class="vsub">Installers \u00b7 who builds it</h5>' +
+       '<label class="fld"><span>Price the build from</span>' +
+       '<select id="instSel"><option value="">\u2014 modelled rates, no installer \u2014</option>';
+  for(i=0;i<INSTALLERS.length;i++){
+    var iv = INSTALLERS_ST[INSTALLERS[i].key];
+    h += '<option value="'+INSTALLERS[i].key+'"'+(INST_SEL===INSTALLERS[i].key?' selected':'')+'>'
+       + esc(iv.name)
+       + (instHasQuote(iv) ? (instSized(iv) ? ' \u2014 quoted' : ' \u2014 quoted, no size on file')
+                           : ' \u2014 no quote on file')
+       + '</option>';
+  }
+  h += '</select></label>';
+
+  h += '<table class="vt"><thead><tr><th>Installer</th><th>Job quoted</th>'
+    +  '<th>Electrical $</th><th>Civil $</th><th>Size</th><th>Basis</th><th>Dated</th>'
+    +  '</tr></thead><tbody>';
+  for(i=0;i<INSTALLERS.length;i++){
+    var ik = INSTALLERS[i].key, w = INSTALLERS_ST[ik];
+    h += '<tr>'
+      +  '<th scope="row">'+esc(w.name)+'</th>'
+      +  '<td><input data-i="'+ik+'" data-f="project" value="'+esc(w.project||'')+'" placeholder="site or job"></td>'
+      +  '<td><input data-i="'+ik+'" data-f="el" type="number" min="0" step="0.01" value="'
+      +      (w.divisions.el==null?'':w.divisions.el)+'" placeholder="\u2014"></td>'
+      +  '<td><input data-i="'+ik+'" data-f="cv" type="number" min="0" step="0.01" value="'
+      +      (w.divisions.cv==null?'':w.divisions.cv)+'" placeholder="\u2014"></td>'
+      +  '<td><input data-i="'+ik+'" data-f="projectKwh" type="number" min="0" step="1" value="'
+      +      (w.projectKwh==null?'':w.projectKwh)+'" placeholder="kWh"></td>'
+      +  '<td><select data-i="'+ik+'" data-f="basis">';
+    for(var b2=0;b2<BESS_BASIS.length;b2++){
+      h += '<option value="'+BESS_BASIS[b2][0]+'"'+(w.basis===BESS_BASIS[b2][0]?' selected':'')+'>'
+         + esc(BESS_BASIS[b2][1]) + '</option>';
+    }
+    h += '</select></td>'
+      +  '<td><input data-i="'+ik+'" data-f="date" type="date" value="'+esc(w.date||'')+'"></td>'
+      +  '</tr>';
+    if(instHasQuote(w)){
+      h += '<tr class="vscope"><td></td><td colspan="6"><div class="scopeGrid">'
+        +  '<label class="wide"><span>What this quote is NOT</span><input data-i="'+ik+'" '
+        +    'data-f="qualifier" value="'+esc(w.qualifier||'')
+        +    '" placeholder="e.g. priced off the site map and pre-engineering, not a firm engineered price"></label>'
+        +  '<label><span>Quote ref</span><input data-i="'+ik+'" data-f="ref" value="'+esc(w.ref||'')+'"></label>'
+        +  '<label><span>General conditions $</span><input data-i="'+ik+'" data-f="gcUsd" type="number" '
+        +    'min="0" step="0.01" value="'+(w.gcUsd==null?'':w.gcUsd)+'" placeholder="\u2014"></label>'
+        +  '<label><span>Saving available %</span><input data-i="'+ik+'" data-f="savingPct" type="number" '
+        +    'min="0" max="100" step="0.5" value="'+(w.savingPct==null?'':Math.round(w.savingPct*1000)/10)
+        +    '" placeholder="\u2014"></label>'
+        +  '<label class="wide"><span>Where the saving is</span><input data-i="'+ik+'" data-f="savingWhy" '
+        +    'value="'+esc(w.savingWhy||'')+'" placeholder="e.g. copper conduit; aluminium would serve"></label>'
+        +  '</div>'
+        +  (!instSized(w)
+             ? '<div class="scopeNote" style="color:#8a5a00"><b>No size on file.</b> A lump sum '
+               + 'cannot be applied to another project until it is known what it bought. Enter the '
+               + 'kWh it was quoted against.</div>'
+             : '<div class="scopeNote">Applied as $'
+               + (w.divisions.el ? (w.divisions.el/(w.projectKwh||w.projectKw)).toFixed(2) : '\u2014')
+               + ' / ' + (w.projectKw ? 'kW' : 'kWh') + ' electrical and $'
+               + (w.divisions.cv ? (w.divisions.cv/(w.projectKwh||w.projectKw)).toFixed(2) : '\u2014')
+               + ' / ' + (w.projectKw ? 'kW' : 'kWh') + ' civil, replacing those divisions outright.</div>')
+        +  '</td></tr>';
+    }
+  }
+  h += '</tbody></table>';
+
   host.innerHTML = h;
 
   var priced = 0;
@@ -769,6 +899,23 @@ function renderVendForm(){
 /* Edits land on the record as they are typed; the estimate re-runs so the
    effect of a price is visible immediately rather than after a save. */
 document.addEventListener('input', function(e){
+  var it = e.target, ik = it && it.getAttribute && it.getAttribute('data-i');
+  if(ik && INSTALLERS_ST[ik]){
+    var iff = it.getAttribute('data-f'), iv = it.value, W = INSTALLERS_ST[ik];
+    if(iff === 'el' || iff === 'cv'){
+      W.divisions[iff] = (iv === '' ? null : (isFinite(+iv) ? +iv : null));
+    } else if(iff === 'projectKw' || iff === 'projectKwh' || iff === 'gcUsd'){
+      W[iff] = (iv === '' ? null : (isFinite(+iv) ? +iv : null));
+    } else if(iff === 'savingPct'){
+      /* Typed as a percentage, held as a fraction. One conversion, in one
+         place, so nobody later divides by a hundred twice. */
+      W[iff] = (iv === '' ? null : (isFinite(+iv) ? (+iv)/100 : null));
+    } else {
+      W[iff] = iv;
+    }
+    if(typeof render === 'function'){ try{ render(); }catch(_){} }
+    return;
+  }
   var t = e.target, k = t && t.getAttribute && t.getAttribute('data-v');
   if(!k || !VENDORS[k]) return;
   var f = t.getAttribute('data-f'), val = t.value;
@@ -783,6 +930,12 @@ document.addEventListener('input', function(e){
 });
 document.addEventListener('change', function(e){
   var t = e.target;
+  if(t && t.id === 'instSel'){
+    INST_SEL = t.value;
+    renderVendForm();
+    if(typeof render === 'function') { try { render(); } catch(_){} }
+    return;
+  }
   if(t && t.id === 'vendSel'){
     VEND_SEL = t.value;
     renderVendForm();
@@ -791,8 +944,9 @@ document.addEventListener('change', function(e){
 });
 
 function vendCollect(){
-  var out = { v:1, sel:VEND_SEL, vendors:{} }, i, k;
+  var out = { v:1, sel:VEND_SEL, vendors:{}, instSel:INST_SEL, installers:{} }, i, k;
   for(i=0;i<BESS_VENDORS.length;i++){ k=BESS_VENDORS[i].key; out.vendors[k]=VENDORS[k]; }
+  for(i=0;i<INSTALLERS.length;i++){ k=INSTALLERS[i].key; out.installers[k]=INSTALLERS_ST[k]; }
   return out;
 }
 function vendApply(st){
@@ -818,6 +972,23 @@ function vendApply(st){
     };
   }
   VEND_SEL = st.sel || "";
+  if(st.installers){
+    for(i=0;i<INSTALLERS.length;i++){
+      k = INSTALLERS[i].key; src = st.installers[k];
+      if(!src) continue;
+      var b = instBlank(k, INSTALLERS[i].name);
+      ["project","basis","ref","date","qualifier","savingWhy"].forEach(function(f){
+        if(typeof src[f]==="string") b[f]=src[f];
+      });
+      ["projectKw","projectKwh","gcUsd","savingPct"].forEach(function(f){
+        if(typeof src[f]==="number") b[f]=src[f];
+      });
+      if(src.divisions) b.divisions = { el: (typeof src.divisions.el==="number"?src.divisions.el:null),
+                                        cv: (typeof src.divisions.cv==="number"?src.divisions.cv:null) };
+      INSTALLERS_ST[k]=b;
+    }
+  }
+  INST_SEL = st.instSel || "";
   renderVendForm();
 }
 
@@ -842,7 +1013,7 @@ var VEND_FILE_SCHEMA = "clearsky.battery-pricing/1";
 
 function vendImportObj(o){
   if(!o || typeof o !== "object") throw new Error("that file is not a quote file");
-  var src = o.vendors || o;              /* accept a bare map too */
+  var src = o.vendors || (o.installers ? {} : o);   /* a bare map is vendors */
   var applied = [], skipped = [], k, i;
   for(i=0;i<BESS_VENDORS.length;i++){
     k = BESS_VENDORS[i].key;
@@ -858,8 +1029,31 @@ function vendImportObj(o){
       .forEach(function(f){ if(typeof d[f] === "string" && d[f] !== "") cur[f] = d[f]; });
     applied.push(BESS_VENDORS[i].name);
   }
+  /* Installers ride in the same file. An EPC quote and a battery quote are
+     different documents but they are the same act — somebody putting a real
+     number on a real scope — and making the team manage two file formats
+     for that is how one of them stops being kept up to date. */
+  var isrc = o.installers || {};
+  for(i=0;i<INSTALLERS.length;i++){
+    k = INSTALLERS[i].key;
+    if(!isrc[k]) continue;
+    var d2 = isrc[k], cur2 = INSTALLERS_ST[k];
+    ["project","basis","ref","date","qualifier","savingWhy"].forEach(function(f){
+      if(typeof d2[f] === "string" && d2[f] !== "") cur2[f] = d2[f];
+    });
+    ["projectKw","projectKwh","gcUsd","savingPct"].forEach(function(f){
+      if(typeof d2[f] === "number") cur2[f] = d2[f];
+    });
+    if(d2.divisions){
+      if(typeof d2.divisions.el === "number") cur2.divisions.el = d2.divisions.el;
+      if(typeof d2.divisions.cv === "number") cur2.divisions.cv = d2.divisions.cv;
+    }
+    applied.push(INSTALLERS[i].name);
+  }
+  if(o.instSel && INSTALLERS_ST[o.instSel]) INST_SEL = o.instSel;
+
   for(k in src) if(src.hasOwnProperty(k) && !VENDORS[k]) skipped.push(k);
-  if(!applied.length) throw new Error("nothing in that file matched a supplier in this list");
+  if(!applied.length) throw new Error("nothing in that file matched a supplier or installer in this list");
   if(o.sel && VENDORS[o.sel]) VEND_SEL = o.sel;
   renderVendForm();
   if(typeof render === "function"){ try{ render(); }catch(_){} }
@@ -899,8 +1093,15 @@ function vendExport(){
     k = BESS_VENDORS[i].key;
     if(vendHasPrice(VENDORS[k])){ keep[k] = VENDORS[k]; any = true; }
   }
+  var ikeep = {};
+  for(i=0;i<INSTALLERS.length;i++){
+    k = INSTALLERS[i].key;
+    if(instHasQuote(INSTALLERS_ST[k])){ ikeep[k] = INSTALLERS_ST[k]; any = true; }
+  }
   if(!any){ vendStat("Nothing priced yet \u2014 nothing to export", "warn"); return; }
   out.vendors = keep;
+  out.installers = ikeep;
+  out.instSel = INST_SEL;
   out.confidential = "Supplier pricing. Treat under the terms of the quote it came from.";
   var blob = new Blob([JSON.stringify(out, null, 2)], { type:"application/json;charset=utf-8" });
   var a = document.createElement("a");
@@ -1117,6 +1318,7 @@ function compute(){
   if (typeof OmegaCostModel === "undefined" || !OmegaCostModel.price) return null;
 
   var r = OmegaCostModel.price({
+    installer: instRecord(),
     kw: K, hours: hours(),
     volt: S.req.interconnectionVoltage,
     poiFt: poiFt(), padArea: pad(),
@@ -1718,7 +1920,12 @@ function tableHtml(r){
   for (i = 0; i < r.divisions.length; i++) {
     var D = r.divisions[i], open = !!OPEN[D.id];
     h += '<tr class="div" data-div="'+D.id+'">' +
-      '<td><span class="tw">'+(open?'\u25be':'\u25b8')+'</span>' + esc(D.name) + '</td>' +
+      '<td><span class="tw">'+(open?'\u25be':'\u25b8')+'</span>' + esc(D.name) +
+      /* A division somebody actually quoted must not look like a division the
+         model worked out. Same table, different provenance, and the reader is
+         entitled to know which one they are looking at. */
+      (D.quotedBy ? ' <span class="srcPill s-quote">quoted \u00b7 ' + esc(D.quotedBy) + '</span>' : '') +
+      '</td>' +
       '<td class="r">'+usdK(D.lo)+'</td><td class="r">'+usd(D.base)+'</td>' +
       '<td class="r">'+usdK(D.hi)+'</td>' +
       '<td class="r">$'+ (r.kwh ? (D.base/r.kwh).toFixed(0) : '—') +'</td>' +
@@ -1799,6 +2006,18 @@ function riskHtml(r){
      ones with a supplier's signature behind them and a specific action that
      closes each. A reader who skims gets the cheque they may have to write
      and the call that avoids it. */
+  /* WHAT THE INSTALLER'S QUOTE IS NOT. A price worked out from a site map
+     and pre-engineering documents is a real number and is not a firm
+     engineered price. That distinction survives about one forwarding of an
+     email, so the estimate carries it rather than relying on memory. */
+  (function () {
+    var W = (typeof instRecord === 'function') ? instRecord() : null;
+    if (!W || !W.qualifier) return;
+    h += '<div class="note warnb"><b>' + esc(W.name) + ' \u2014 what this quote is not.</b> ' +
+         esc(W.qualifier) +
+         (W.ref ? ' <span style="opacity:.75">(' + esc(W.ref) + ')</span>' : '') + '</div>';
+  })();
+
   if (r.exposures && r.exposures.length) {
     for (var xi = 0; xi < r.exposures.length; xi++) {
       var X = r.exposures[xi];
@@ -2229,6 +2448,8 @@ if (typeof module !== "undefined" && module.exports)
                      toJson:toJson, toCsv:toCsv,
                      VENDORS:VENDORS, vendRates:vendRates, vendTier:vendTier,
                      vendImportObj:vendImportObj, BESS_VENDORS:BESS_VENDORS,
+                     INSTALLERS:INSTALLERS, INSTALLERS_ST:INSTALLERS_ST,
+                     instRecord:instRecord, setInstSel:function(k){ INST_SEL = k; },
                      setVendSel:function(k){ VEND_SEL = k; },
                      setLast:function(r, sch){ LAST = { r:r, sch:sch }; } };
 })();
