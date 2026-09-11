@@ -83,6 +83,46 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
               padding:8px 10px;color:var(--ink);border-color:rgba(0,243,255,.2)}
 .quick button:hover{border-color:var(--glow-cyan);color:var(--glow-cyan)}
 
+/* ── the contact card ────────────────────────────────────────────────────
+   It rises from the row that was clicked rather than appearing in the middle
+   of the screen, so the thing you touched and the thing that opened are
+   visibly the same object. transform-origin is set from the row's position at
+   open time; that is what makes it read as "beamed up" instead of "a modal
+   appeared". */
+.cardBack{position:fixed;inset:0;z-index:120;background:rgba(2,8,19,.62);
+          backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center}
+.cardBack[hidden]{display:none!important}
+.card{width:min(460px,92vw);background:var(--panel);border:var(--edge);border-radius:10px;
+      padding:20px 22px;position:relative;
+      box-shadow:0 0 40px rgba(0,243,255,.18), inset 0 0 24px rgba(0,68,255,.20);
+      animation:beam .22s cubic-bezier(.2,.9,.25,1) both}
+@keyframes beam{
+  from{opacity:0;transform:translateY(26px) scale(.86);filter:blur(6px)}
+  to  {opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+}
+.card::before{content:'';position:absolute;top:0;left:0;width:14px;height:14px;
+  border-top:2px solid var(--glow-cyan);border-left:2px solid var(--glow-cyan)}
+.card::after{content:'';position:absolute;bottom:0;right:0;width:14px;height:14px;
+  border-bottom:2px solid var(--glow-cyan);border-right:2px solid var(--glow-cyan)}
+.holo{width:100%;height:150px;display:block;margin:-4px 0 10px}
+.cardName{font-family:var(--mono);font-size:20px;letter-spacing:2px;color:var(--glow-cyan);
+          text-shadow:0 0 14px rgba(0,243,255,.5)}
+.cardRole{font-size:13px;color:var(--ink);margin-top:4px}
+.cardOrg{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--dim);margin-top:2px}
+.cardRole,.cardOrg{text-align:center}
+.cardRows{margin:16px 0 4px;border-top:1px solid rgba(0,243,255,.14);padding-top:12px}
+.cardRow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px}
+.cardRow .lbl{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim);
+              min-width:56px;flex:none}
+.cardRow .val{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}
+.cardRow .cp{flex:none;padding:2px 8px;font-size:10px;letter-spacing:1px}
+.cardActs{display:flex;gap:8px;margin-top:16px}
+.cardActs button{flex:1;justify-content:center;padding:9px}
+.cardNote{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:12px;
+          border-top:1px solid rgba(0,243,255,.10);padding-top:10px}
+.rowClick{cursor:pointer}
+.rowClick:hover{background:rgba(0,243,255,.06)}
+
 /* A connection is green only if something measured says so. */
 .conn{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;
       border-bottom:1px solid rgba(0,243,255,.06)}
@@ -451,6 +491,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
   <div class="foot" id="foot"></div>
 </div>
+
+<div class="cardBack" id="cardBack" hidden><div class="card" id="card"></div></div>
 
 <div class="caps" id="caps"><div class="capwho" id="capwho"></div><div id="captext"></div></div>
 
@@ -1585,12 +1627,227 @@ function renderRoutines(s){
   }), 'none yet — say “every weekday at 8am send me my schedule”');
 }
 
+/* ── the hologram ────────────────────────────────────────────────────────
+   A wireframe figure turning on a projector pad, for the top of a contact
+   card. It is decoration and it says so: it is the same for everyone, it
+   encodes nothing about the person, and no part of the card's meaning depends
+   on it. A portrait that LOOKED like the person would be a lie, because the
+   twin has never seen any of them.
+
+   Torn down when the card closes — a card that leaves an animation running
+   behind it is a tab that quietly eats a core all afternoon. */
+const HOLO = {
+  v: [
+    [ 0.00,-0.96, 0.00],[ 0.00,-0.78, 0.00],                 /* head, neck */
+    [-0.30,-0.70, 0.00],[ 0.30,-0.70, 0.00],                 /* shoulders */
+    [-0.44,-0.36, 0.05],[ 0.44,-0.36, 0.05],                 /* elbows */
+    [-0.42, 0.00, 0.08],[ 0.42, 0.00, 0.08],                 /* hands */
+    [-0.19,-0.08, 0.00],[ 0.19,-0.08, 0.00],                 /* hips */
+    [-0.21, 0.40, 0.03],[ 0.21, 0.40, 0.03],                 /* knees */
+    [-0.21, 0.84, 0.06],[ 0.21, 0.84, 0.06],                 /* feet */
+    [ 0.00,-0.52, 0.03],[ 0.00,-0.08, 0.00]                  /* chest, pelvis */
+  ],
+  e: [[1,14],[14,15],[2,3],[2,14],[3,14],[2,8],[3,9],[8,9],
+      [2,4],[4,6],[3,5],[5,7],[15,8],[15,9],[8,10],[10,12],[9,11],[11,13]]
+};
+
+function makeHologram(cv){
+  if(!cv) return { stop(){} };
+  const ctx=cv.getContext('2d');
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  let W=0,H=0,t=0,alive=true;
+
+  function size(){
+    const r=cv.getBoundingClientRect();
+    if(!r.width||!r.height) return;
+    W=r.width; H=r.height; cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  size();
+
+  function frame(){
+    if(!alive) return;
+    if(!W||!H){ size(); requestAnimationFrame(frame); return; }
+    t++;
+    ctx.clearRect(0,0,W,H);
+    const cx=W/2, cy=H*0.46, R=Math.min(W,H)*0.36;
+    const yaw=t*0.012;
+    const col='0,243,255';
+
+    /* the projector pad */
+    const padY=cy+R*0.92;
+    for(let i=0;i<3;i++){
+      const rr=R*(0.52+i*0.22), a=(0.30-i*0.07);
+      ctx.strokeStyle='rgba('+col+','+a.toFixed(3)+')'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.ellipse(cx,padY,rr,rr*0.26,0,0,Math.PI*2); ctx.stroke();
+    }
+    /* two arc segments that rotate on the pad */
+    for(let k=0;k<2;k++){
+      const a0=yaw*1.6+k*Math.PI;
+      ctx.strokeStyle='rgba('+col+',0.55)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(cx,padY,R*0.74,R*0.19,0,a0,a0+0.9); ctx.stroke();
+    }
+    /* the beam */
+    const bg=ctx.createLinearGradient(0,padY,0,cy-R);
+    bg.addColorStop(0,'rgba('+col+',0.16)');
+    bg.addColorStop(1,'rgba('+col+',0)');
+    ctx.fillStyle=bg;
+    ctx.beginPath();
+    ctx.moveTo(cx-R*0.58,padY); ctx.lineTo(cx+R*0.58,padY);
+    ctx.lineTo(cx+R*0.30,cy-R); ctx.lineTo(cx-R*0.30,cy-R);
+    ctx.closePath(); ctx.fill();
+
+    /* the figure */
+    const pts=HOLO.v.map(v=>{
+      const c=Math.cos(yaw), sn=Math.sin(yaw);
+      const x=v[0]*c-v[2]*sn, z=v[0]*sn+v[2]*c;
+      return [cx+x*R, cy+v[1]*R, z];
+    });
+    HOLO.e.forEach(([a,b])=>{
+      const p=pts[a], q=pts[b], z=(p[2]+q[2])/2;
+      ctx.strokeStyle='rgba('+col+','+(0.55+z*0.35).toFixed(3)+')';
+      ctx.lineWidth=1.8; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(p[0],p[1]); ctx.lineTo(q[0],q[1]); ctx.stroke();
+    });
+    /* head */
+    const hd=pts[0];
+    ctx.strokeStyle='rgba('+col+',0.85)'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.arc(hd[0],hd[1]+R*0.06,R*0.11,0,Math.PI*2); ctx.stroke();
+
+    /* a scan line travelling up it */
+    const sy=cy+R - ((t*1.6)%(R*2.1));
+    ctx.strokeStyle='rgba(160,245,255,0.5)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx-R*0.5,sy); ctx.lineTo(cx+R*0.5,sy); ctx.stroke();
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { stop(){ alive=false; } };
+}
+let cardHolo=null;
+
+/* ── the contact card ────────────────────────────────────────────────────
+   Click a name and the card rises from that row. Everything on it came from
+   the payload; nothing is looked up or guessed while it is open, so what it
+   shows is exactly what the twin knows and it says where that came from.
+
+   Email opens Gmail compose in whichever Google account the browser is signed
+   into — the same place he already writes from. Call is a tel: link, which
+   his Mac hands to the iPhone. Neither of them sends anything: both open the
+   thing he would have opened, addressed, and leave him holding it. */
+function copyToClipboard(text, btn){
+  const done = ()=>{ const was=btn.textContent; btn.textContent='COPIED'; 
+                     setTimeout(()=>{ btn.textContent=was; },1100); };
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done, ()=>fallback());
+  } else fallback();
+  function fallback(){
+    /* localhost over plain http is not a secure context in every browser, and
+       an assistant whose copy button silently does nothing is worse than one
+       without a copy button. */
+    const ta=document.createElement('textarea');
+    ta.value=text; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); done(); }catch(_){ btn.textContent='COPY FAILED'; }
+    ta.remove();
+  }
+}
+
+function closeCard(){
+  const b=el('cardBack'); if(b) b.hidden=true;
+  /* Stop the animation with the card. One left running behind a closed
+     dialog is how a tab quietly eats a core all afternoon. */
+  if(cardHolo){ cardHolo.stop(); cardHolo=null; }
+}
+
+function showCard(p, fromEl){
+  const back=el('cardBack'), card=el('card');
+  if(!back||!card) return;
+  card.textContent='';
+
+  const holo=document.createElement('canvas'); holo.className='holo';
+  card.appendChild(holo);
+
+  const h=document.createElement('div'); h.style.textAlign='center';
+  const nm=document.createElement('div'); nm.className='cardName'; nm.textContent=p.name;
+  h.appendChild(nm);
+  if(p.role){ const r=document.createElement('div'); r.className='cardRole'; r.textContent=p.role; h.appendChild(r); }
+  if(p.org){ const o=document.createElement('div'); o.className='cardOrg'; o.textContent=String(p.org).toUpperCase(); h.appendChild(o); }
+  card.appendChild(h);
+
+  const rows=document.createElement('div'); rows.className='cardRows';
+  const addRow=(label,value)=>{
+    if(!value) return;
+    const d=document.createElement('div'); d.className='cardRow';
+    const l=document.createElement('span'); l.className='lbl'; l.textContent=label;
+    const v=document.createElement('span'); v.className='val'; v.textContent=value;
+    const c=document.createElement('button'); c.className='cp'; c.textContent='COPY';
+    c.addEventListener('click',()=>copyToClipboard(value,c));
+    d.appendChild(l); d.appendChild(v); d.appendChild(c); rows.appendChild(d);
+  };
+  addRow('EMAIL', p.email);
+  addRow('PHONE', p.phone);
+  card.appendChild(rows);
+
+  const acts=document.createElement('div'); acts.className='cardActs';
+  if(p.email){
+    const b=document.createElement('button'); b.textContent='✉ EMAIL';
+    b.addEventListener('click',()=>{
+      window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(p.email),'_blank','noopener');
+    });
+    acts.appendChild(b);
+  }
+  if(p.phone){
+    const b=document.createElement('button'); b.textContent='✆ CALL';
+    b.addEventListener('click',()=>{ window.location.href='tel:'+String(p.phone).replace(/[^0-9+]/g,''); });
+    acts.appendChild(b);
+  }
+  const ask=document.createElement('button'); ask.textContent='ASK JARVIS';
+  ask.addEventListener('click',()=>{ closeCard(); submit('who is '+(p.first||p.name)); });
+  acts.appendChild(ask);
+  const x=document.createElement('button'); x.textContent='CLOSE';
+  x.addEventListener('click',closeCard); acts.appendChild(x);
+  card.appendChild(acts);
+
+  /* Where this came from, always. A harvested row has a domain guess where a
+     curated one has a title read out of a signature block, and the card must
+     not let those look like the same kind of fact. */
+  const note=document.createElement('div'); note.className='cardNote';
+  note.textContent = p.source === 'mail'
+    ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
+      ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
+    : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : '');
+  card.appendChild(note);
+
+  /* Rise from the row that was clicked. */
+  if(fromEl){
+    const r=fromEl.getBoundingClientRect();
+    card.style.transformOrigin = (r.left + r.width/2) + 'px ' + (r.top + r.height/2) + 'px';
+  }
+  back.hidden=false;
+  card.style.animation='none'; void card.offsetWidth; card.style.animation='';
+  if(cardHolo) cardHolo.stop();
+  cardHolo = makeHologram(holo);
+}
+
+el('cardBack').addEventListener('click', ev=>{ if(ev.target.id==='cardBack') closeCard(); });
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') closeCard(); });
+
 function renderPeople(s){
   listInto('people', (s.people||[]), p=>({
     left: p.name + (p.role? ' — '+p.role : ''),
     right: p.org || '',
     clamp:false
   }), 'no one harvested yet');
+  /* The rendered order is the payload order, so the nth row is the nth
+     person. Bound after render rather than inside the formatter, because
+     listInto's job is to draw a list and not to know what a person is. */
+  const rows=[...document.querySelectorAll('#people .row')];
+  (s.people||[]).forEach((p,i)=>{
+    const row=rows[i]; if(!row) return;
+    row.classList.add('rowClick');
+    row.addEventListener('click',()=>showCard(p,row));
+  });
 }
 
 authMod.onAuthStateChanged(auth,u=>{
