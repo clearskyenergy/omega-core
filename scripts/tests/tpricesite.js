@@ -336,5 +336,31 @@ ok('every drawer action the page renders is one the handler answers', function (
     'rendered but never handled: ' + missing.join(', '));
 });
 
+/* ── ONE DURATION DEFAULT, READ FROM ONE PLACE ────────────────────────
+   The finder and the estimator each used to carry their own literal 2. A
+   default that lives in two files is a default that will eventually be two
+   different defaults, and every kWh figure on the platform depends on it. */
+ok('the site finder takes its duration default from the shared model', function () {
+  assert(/window\.OmegaCostModel && window\.OmegaCostModel\.DEFAULT_HOURS/.test(html),
+    'the finder does not read DEFAULT_HOURS from the cost model');
+  assert(!/hours:\s*2\b/.test(html),
+    'a hard-coded 2-hour default is still in the site finder');
+  assert(!/at 2 h\b/.test(html.replace(/\/\*[\s\S]*?\*\//g, ' ')),
+    'a visible "at 2 h" string survives in the site finder');
+});
+
+ok('the model exports the default AFTER declaring it', function () {
+  /* It was assigned onto the exports object above its own `var`, where
+     hoisting gives the name but not the value — so it exported undefined
+     and every caller fell back to its own literal, which is the drift this
+     shared file exists to stop. */
+  var src = fs.readFileSync(path.join(ROOT, 'omega-cost-model.js'), 'utf8');
+  assert(src.indexOf('var DEFAULT_HOURS') < src.indexOf('M.DEFAULT_HOURS'),
+    'DEFAULT_HOURS is exported before it is assigned');
+  global.window = global;
+  var M2 = require(path.join(ROOT, 'omega-cost-model.js'));
+  assert.strictEqual(M2.DEFAULT_HOURS, 4, 'the exported default is ' + M2.DEFAULT_HOURS);
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);

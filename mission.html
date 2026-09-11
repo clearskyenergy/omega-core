@@ -2945,6 +2945,90 @@ function binspect(n){
     r.append(a,b); host.appendChild(r);
   });
 
+  /* ── what this node is actually FOR ──────────────────────────────────
+     A node that only tells you its own name is a dot with a label. A client
+     should answer "who do I know there, are they paid up, and what is open
+     against them"; a tool should answer "when did it last move, is it
+     reachable, and can I get it fixed". Both are one click from here. */
+  if(n.type==='client'||n.type==='org'){
+    /* Every task whose text names this org. A contains-match is a weak join
+       and is labelled as one — "mentions" — rather than dressed up as
+       something the backlog actually records. */
+    const key=n.label.toLowerCase().split(/[\s/]+/)[0];
+    const hits=(lastStatus.todos||[]).filter(t=>
+      key.length>3 && String(t.title||'').toLowerCase().indexOf(key)!==-1);
+    if(hits.length){
+      bhead(host,'TASKS THAT MENTION THEM · '+hits.length);
+      hits.slice(0,5).forEach(t=>{
+        const d=document.createElement('div'); d.className='row';
+        const k=document.createElement('span'); k.className='k clamp'; k.textContent=t.title;
+        d.appendChild(k); host.appendChild(d);
+      });
+    }
+    if(n.type==='client'){
+      const m2=n.meta||{};
+      const state = m2.overdue ? ('OVERDUE '+m2.daysOverdue+'d') :
+                    (m2.outstanding>0 ? 'OWES '+usd(m2.outstanding) :
+                    (m2.amountPaid>0 ? 'PAID UP' : 'NOTHING BILLED'));
+      bhead(host,'STANDING');
+      const r=document.createElement('div'); r.className='row';
+      const a=document.createElement('span'); a.className='k'; a.textContent=state;
+      const b=document.createElement('span');
+      b.className='v '+(m2.overdue?'bad':(m2.outstanding>0?'warn':'good'));
+      b.textContent=(m2.tier||'—').toUpperCase();
+      r.append(a,b); host.appendChild(r);
+      bacts(host,[['OPEN PORTAL',()=>window.open('https://'+m2.orgId,'_blank','noopener')]]);
+    }
+  }
+
+  if(n.type==='tool'){
+    const m3=n.meta||{};
+    bhead(host,'HISTORY');
+    const hrows=[['Last push', m3.lastPush?ago(m3.lastPush):'—'],
+                 ['By', m3.lastBy||'—'],
+                 ['Commits', String(m3.commits||0)]];
+    hrows.forEach(([k,v])=>{
+      const r=document.createElement('div'); r.className='row';
+      const a=document.createElement('span'); a.className='k'; a.textContent=k;
+      const b=document.createElement('span'); b.className='v'; b.textContent=v;
+      r.append(a,b); host.appendChild(r);
+    });
+    if(m3.lastMsg){
+      const d=document.createElement('div'); d.className='row';
+      const k=document.createElement('span'); k.className='k clamp'; k.textContent=m3.lastMsg;
+      d.appendChild(k); host.appendChild(d);
+    }
+    bhead(host,'REACHABLE');
+    const live=document.createElement('div'); live.className='row';
+    const lk=document.createElement('span'); lk.className='k'; lk.textContent='checking…';
+    const lv=document.createElement('span'); lv.className='v'; lv.textContent='';
+    live.append(lk,lv); host.appendChild(live);
+    /* An honest liveness check: one request, right now. It is NOT uptime —
+       nothing here has been watching this page all week — so it says what it
+       actually did and when. */
+    fetch(m3.file,{method:'GET',cache:'no-store'}).then(r=>{
+      lk.textContent = r.ok ? 'HTTP '+r.status+' · served' : 'HTTP '+r.status+' · BROKEN';
+      lv.className='v '+(r.ok?'good':'bad');
+      lv.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    }).catch(e=>{
+      lk.textContent='did not load — '+e.message.slice(0,40); lv.className='v bad'; lv.textContent='now';
+    });
+    bacts(host,[
+      ['OPEN',()=>window.open(m3.file,'_blank','noopener')],
+      ['ASK JARVIS TO FIX IT',()=>{ showView('platform');
+        const t=((platform&&platform.tools)||[]).find(x=>x.file===m3.file);
+        if(t) setTimeout(()=>pickTool(t),60); }]
+    ]);
+  }
+
+  if(n.type==='person'){
+    const e=(n.meta||{}).email;
+    const acts=[];
+    if(e) acts.push(['EMAIL',()=>window.open('https://mail.google.com/mail/?view=cm&to='+encodeURIComponent(e),'_blank','noopener')]);
+    if((n.meta||{}).phone) acts.push(['CALL',()=>{ location.href='tel:'+String(n.meta.phone).replace(/[^0-9+]/g,''); }]);
+    if(acts.length) bacts(host,acts);
+  }
+
   const nb=BG.links.filter(l=>l.a===n||l.b===n).slice(0,10);
   if(nb.length){
     const t=document.createElement('div');
@@ -2961,6 +3045,33 @@ function binspect(n){
       host.appendChild(d);
     });
   }
+}
+
+function bhead(host,text){
+  const t=document.createElement('div');
+  t.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:9px 0 3px';
+  t.textContent=text; host.appendChild(t);
+}
+function bacts(host,pairs){
+  const bar=document.createElement('div'); bar.className='cardActs'; bar.style.marginTop='10px';
+  pairs.forEach(([label,fn])=>{
+    const b=document.createElement('button'); b.textContent=label;
+    b.style.fontSize='9.5px'; b.style.padding='7px 6px';
+    b.addEventListener('click',e=>{ e.stopPropagation(); bpoke(); fn(); });
+    bar.appendChild(b);
+  });
+  host.appendChild(bar);
+}
+/* "3 days ago" beats an ISO string when the question is "is anyone still
+   looking after this". */
+function ago(iso){
+  const d=new Date(iso); if(isNaN(d)) return '—';
+  const s=(Date.now()-d.getTime())/1000;
+  if(s<3600) return Math.max(1,Math.round(s/60))+' min ago';
+  if(s<86400) return Math.round(s/3600)+' hr ago';
+  const days=Math.round(s/86400);
+  if(days<31) return days+' day'+(days===1?'':'s')+' ago';
+  return d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'});
 }
 
 function bcenter(n){
@@ -3062,6 +3173,21 @@ function bwire(){
   ['fRepel','fLink','fLab'].forEach(id=>
     el(id).addEventListener('input',()=>{ bpoke(); balpha=Math.max(balpha,0.35); }));
   el('brainQ').addEventListener('input',e=>{ bq=e.target.value; bpoke(); });
+  /* Enter takes you to the best match. Typing a name and then having to hunt
+     for the highlighted dot is the search working and the interface not. */
+  el('brainQ').addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    const q=bq.trim().toLowerCase(); if(!q||!BG) return;
+    const pool=BG.nodes.filter(n=>bvisible(n)&&n.label.toLowerCase().indexOf(q)!==-1);
+    if(!pool.length) return;
+    /* Prefer an exact name, then the shortest label that contains it — the
+       shortest is almost always the thing itself rather than something named
+       after it. */
+    pool.sort((a,b)=>
+      (a.label.toLowerCase()===q?-1:0)-(b.label.toLowerCase()===q?-1:0)
+      || a.label.length-b.label.length);
+    bpoke(); bsel=pool[0]; bpath=null; binspect(pool[0]); bcenter(pool[0]);
+  });
   el('brainFit').addEventListener('click',()=>{ bpoke(); bfit(); });
   /* Hovering a node counts as being here, even without a click. */
   cv.addEventListener('pointerenter',bpoke);

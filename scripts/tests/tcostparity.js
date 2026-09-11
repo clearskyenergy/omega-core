@@ -108,6 +108,26 @@ CASES.forEach(function (c) {
       '. If a rate was corrected on purpose, update the gold value in this test.'));
 });
 
+/* ── THE DURATION DEFAULT ──────────────────────────────────────────────
+   Four, not two. Two made every $/kWh this tool produced read high against
+   every published figure for a reason that had nothing to do with the site:
+   the power-side hardware was spread over half the energy. The US fleet EIA
+   reports averages about three hours and NREL's utility-scale benchmark is
+   written at four.
+
+   Pinned because it moves every unstated-duration number in the platform,
+   and because the site finder reads it from here — a drift between the two
+   is the exact class of bug this shared file exists to prevent. */
+ok(M.DEFAULT_HOURS === 4, 'the default duration is 4 h, not ' + M.DEFAULT_HOURS);
+const dflt = M.price({ kw: 944, volt: '12470', utilityUpgrade: 'none' });
+ok(dflt.hours === 4 && dflt.kwh === 944 * 4,
+   'an estimate with no duration stated prices at 4 h (' + dflt.hours + ' h, ' + dflt.kwh + ' kWh)');
+ok(Math.round(dflt.perKw.base) > 1000,
+   'at 4 h the $/kW lands in the range EIA reports for the built fleet ($'
+   + Math.round(dflt.perKw.base) + '/kW against their $1,205)');
+const stated = M.price({ kw: 944, hours: 2, volt: '12470', utilityUpgrade: 'none' });
+ok(stated.hours === 2, 'a stated duration still wins over the default');
+
 /* ── THE AUDIT TELLS THE TRUTH ─────────────────────────────────────────
    The coverage figure is the claim a lender will lean on, so it is tested
    like a number rather than trusted like a label. */

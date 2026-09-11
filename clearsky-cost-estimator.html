@@ -705,7 +705,7 @@ function vendProvenance(v){
    ══════════════════════════════════════════════════════════════════════════ */
 var S = {
   packet: null,
-  kw: null, hours: 2,
+  kw: null, hours: 4,
   req: { interconnectionVoltage:"", poiDistanceFt:"", utilitySideUpgrade:"",
          padArea:"", soilAndGrading:"", ahj:"", laborBasis:"",
          equipmentQuoteDate:"", duration:"" },
@@ -1205,7 +1205,10 @@ function fmtMon(d){
 /* ══════════════════════════════════════════════════════════════════════════
    DERIVED INPUTS
    ══════════════════════════════════════════════════════════════════════════ */
-function hours(){ var h = num(S.req.duration); return h && h > 0 ? h : (S.hours || 2); }
+function hours(){
+  var h = num(S.req.duration);
+  return h && h > 0 ? h : (S.hours || OmegaCostModel.DEFAULT_HOURS);
+}
 function kw(){ return S.kw; }
 function kwh(){ return S.kw == null ? null : S.kw * hours(); }
 
@@ -1471,7 +1474,8 @@ function loadPacket(p){
   S.packet = p;
   var sz = p.sizing || {};
   S.kw    = sz.batteryKw != null ? sz.batteryKw : null;
-  S.hours = sz.assumedHours || 2;
+  /* The packet's own figure wins; four only where it is silent. */
+  S.hours = sz.assumedHours || OmegaCostModel.DEFAULT_HOURS;
   if (!S.req.duration) S.req.duration = String(S.hours);
 
   /* Anything the packet DOES answer, prefill — but only those. The nine

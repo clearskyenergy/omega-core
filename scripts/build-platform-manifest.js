@@ -86,13 +86,37 @@ function titleOf(src, file) {
     .replace(/\s+/g, ' ').trim();
 }
 
+/* WHEN WAS THIS LAST TOUCHED, AND HOW OFTEN.
+
+   A tool's size tells you how much is in it; its history tells you whether
+   anyone still looks after it. A file last pushed in March with two commits
+   behind it is a different proposition from one that moved yesterday, and
+   that is exactly what you want to know before asking for a change to it. */
+function history(file) {
+  try {
+    var out = execSync(
+      'git log -1 --format=%cI%x09%an%x09%s -- ' + JSON.stringify(file),
+      { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (!out) return {};
+    var bits = out.split('\t');
+    var n = execSync('git rev-list --count HEAD -- ' + JSON.stringify(file),
+      { cwd: ROOT, encoding: 'utf8' }).trim();
+    return {
+      lastPush: bits[0] || null,
+      lastBy: bits[1] || null,
+      lastMsg: (bits[2] || '').slice(0, 120),
+      commits: Number(n) || 0
+    };
+  } catch (e) { return {}; }
+}
+
 var rows = trackedHtml()
   .filter(function (f) { return SKIP.indexOf(f) === -1; })
   .map(function (f) {
     var p = path.join(ROOT, f);
     var src = fs.readFileSync(p, 'utf8');
     var st = fs.statSync(p);
-    return {
+    return Object.assign(history(f), {
       file: f,
       title: titleOf(src, f),
       area: areaOf(f),
@@ -101,7 +125,7 @@ var rows = trackedHtml()
          you actually want to know before asking for a change. */
       scripts: (src.match(/<script\b/gi) || []).length,
       lines: src.split('\n').length
-    };
+    });
   })
   .sort(function (a, b) { return b.kb - a.kb; });
 

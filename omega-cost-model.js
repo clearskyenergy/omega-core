@@ -490,7 +490,27 @@
   /* Never mutate a caller's input object. A shared model that edits what it
      was handed produces bugs that only appear on the second call. */
   function shallow(o){ var c = {}, k; for (k in o) if (o.hasOwnProperty(k)) c[k] = o[k]; return c; }
-  function hoursOf(i){ var h = num(i.hours); return h && h > 0 ? h : 2; }
+  /* FOUR HOURS IS THE DEFAULT DURATION.
+
+     Two was a conservative screening figure and it made every comparison
+     awkward: the US fleet EIA reports averages about three hours, NREL's
+     utility-scale benchmark is written at four, and most C&I revenue cases
+     that pay for themselves are four. A two-hour default meant this tool's
+     $/kWh read high against every published figure for a reason that had
+     nothing to do with the site — the power-side hardware was being spread
+     over half the energy.
+
+     It is a DEFAULT, not a cap. Duration is an equipment choice; an eight
+     hour system at the same kW still draws the same kW, and the circuit
+     does not care. */
+  var DEFAULT_HOURS = 4;
+  /* Exported HERE, next to the declaration. It was assigned onto M further
+     up the file, where `var` had hoisted the name but not the value, so
+     M.DEFAULT_HOURS was undefined and every caller reading it silently fell
+     back to its own literal — which is precisely the drift between pages
+     this file exists to stop. */
+  M.DEFAULT_HOURS = DEFAULT_HOURS;
+  function hoursOf(i){ var h = num(i.hours); return h && h > 0 ? h : DEFAULT_HOURS; }
   function kwhOf(i){ var k = num(i.kw); return k == null ? null : k * hoursOf(i); }
   /* 0.8 sq ft per kWh plus 800 for clearances, fire access and the PCS pad.
      NFPA 855 separation is inside that number, not on top of it. */
