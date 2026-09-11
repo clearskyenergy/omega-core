@@ -175,6 +175,13 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         border:1px solid rgba(0,243,255,.2);border-radius:12px;color:var(--dim);cursor:pointer}
 .ixChip.on{border-color:var(--glow-cyan);color:var(--glow-cyan);background:rgba(0,243,255,.08)}
 
+.authFix{display:flex;gap:12px;align-items:center;flex-wrap:wrap;flex:none;
+         background:rgba(60,10,10,.5);border:1px solid rgba(255,107,107,.45);
+         border-radius:7px;padding:10px 13px;font-size:12.5px;line-height:1.6;color:var(--ink)}
+.authFix b{color:var(--bad)}
+.authActs{display:flex;gap:6px;margin-left:auto}
+.authActs button{font-size:9.5px;padding:7px 10px}
+
 /* The panel that opens under a task when you ask for it to be done. */
 .doPanel{background:rgba(0,20,40,.75);border:1px solid rgba(61,255,139,.3);
          border-radius:7px;padding:11px 12px;margin:6px 0 10px;
@@ -1374,7 +1381,7 @@ async function load(){
   try{
     const tok=await u.getIdToken();
     const res=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+tok}});
-    if(res.status===403) throw new Error('ACCOUNT NOT PERMITTED');
+    if(res.status===403){ authTrouble(); throw new Error('ACCOUNT NOT PERMITTED'); }
     if(!res.ok) throw new Error('HTTP '+res.status);
     const s=await res.json();
 
@@ -2222,6 +2229,65 @@ async function taskAct(id, verb, text){
   }catch(e){ say('jarvis', e.message); return false; }
 }
 
+
+
+/* ── when the door is shut, say which door ───────────────────────────────
+   A 403 used to paint the badge red and leave nine empty panels behind it,
+   which is indistinguishable from the twin being broken. It usually is not:
+   the endpoint refuses any session Google has not marked email_verified, and
+   the OMEGA SSO handoff signs you in with a CUSTOM token, which carries no
+   such claim. So the dashboard works when you sign in here with Google and
+   fails when you arrived from another OMEGA page — with nothing on screen to
+   tell the two apart.
+
+   The browser already knows all of it: the address, whether the session is
+   verified, and which provider minted it. So say it, and put the fix next to
+   it rather than leaving someone to guess. */
+function authTrouble(){
+  if(el('authFix')) return;
+  const u=auth.currentUser;
+  const prov=(u&&u.providerData&&u.providerData[0]&&u.providerData[0].providerId)||'custom token';
+  const bar=document.createElement('div');
+  bar.id='authFix'; bar.className='authFix';
+
+  const msg=document.createElement('div');
+  msg.style.flex='1';
+  msg.innerHTML = u
+    ? 'Signed in as <b>'+String(u.email||'unknown').replace(/[<>&]/g,'')+'</b> — '
+      + (u.emailVerified
+          ? 'verified, but this address is not on the endpoint allowlist.'
+          : 'Google has <b>not verified</b> this session (' + prov + '), and the twin '
+            + 'refuses unverified sessions. Signing in here directly fixes it.')
+    : 'Not signed in.';
+  bar.appendChild(msg);
+
+  const acts=document.createElement('div'); acts.className='authActs';
+  const again=document.createElement('button');
+  again.textContent='SIGN IN WITH GOOGLE';
+  again.addEventListener('click',async()=>{
+    again.disabled=true; again.textContent='…';
+    try{
+      /* Sign out first, or Firebase hands back the same custom session and
+         nothing changes. */
+      await authMod.signOut(auth);
+      await authMod.signInWithPopup(auth,new authMod.GoogleAuthProvider());
+      bar.remove();
+      load();
+    }catch(e){
+      again.disabled=false; again.textContent='SIGN IN WITH GOOGLE';
+      msg.textContent='Could not re-authenticate — '+e.message;
+    }
+  });
+  acts.appendChild(again);
+  const hide=document.createElement('button');
+  hide.textContent='DISMISS'; hide.addEventListener('click',()=>bar.remove());
+  acts.appendChild(hide);
+  bar.appendChild(acts);
+
+  const main=document.querySelector('.main');
+  const hdr=main&&main.querySelector('header');
+  if(hdr&&hdr.parentNode) hdr.parentNode.insertBefore(bar,hdr.nextSibling);
+}
 
 /* ══ DOING A TASK, RATHER THAN TICKING IT ════════════════════════════════
    ✓ ✎ ✕ are bookkeeping. They move a row around a list; none of them does
