@@ -373,21 +373,57 @@ ok('the drawer offers battery options sized to the opportunity', function () {
     'the block is not rendered into the drawer');
   var fn = html.slice(html.indexOf('function fitOptions('));
   fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
-  assert(/_orgVendors/.test(fn),
+  /* fitOptions reads vendorsForFit(), which prefers the organisation's own
+     records and falls back to the shipped datasheet. Checking both halves
+     rather than grepping fitOptions for _orgVendors, which moved. */
+  assert(/vendorsForFit\(\)/.test(fn),
+    'options are not built from the resolved supplier set');
+  var vf = html.slice(html.indexOf('function vendorsForFit'));
+  vf = vf.slice(0, vf.indexOf('function fitOptions('));
+  assert(/_orgVendors/.test(vf),
     'options are not built from the organisation\'s own supplier records');
   assert(/productsOf\(v\)/.test(fn),
     'the supplier product list is ignored, so every option is a fiction');
 });
 
-ok('it ships NO catalogue of its own', function () {
-  /* An invented product is worse than no product, because somebody will
-     quote it. Every option must come off a record the org entered. */
+ok('no product name is hard-coded into the fit LOGIC', function () {
+  /* The rule was "ship no catalogue", and it conflated two things. A PRICE
+     is confidential and this repository is public, so prices still never
+     ship. A published DATASHEET is marketing material the manufacturer
+     puts on its own website, and refusing to ship it cost the card its
+     product names: a site already sized at 3.3 MWh could only say "no
+     product picked yet". The catalogue ships as DATA, in its own module,
+     and the logic still knows no brands. */
   var fn = html.slice(html.indexOf('function fitOptions('));
   fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
   assert(!/\b(CATL|Gotion|Tesla|Megapack|Sungrow|BYD)\b/.test(fn),
     'a product name is hard-coded into the fit logic');
   assert(/if \(!priced && !prods\.length\) continue/.test(fn),
     'a supplier with nothing on file still produces an option');
+});
+
+ok('the shipped catalogue carries specs and never a price', function () {
+  var cat = fs.readFileSync(path.join(ROOT, 'omega-bess-catalog.js'), 'utf8');
+  var code = cat.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  assert(!/dcPerKwh:\s*[0-9]/.test(code) && !/perKwh:\s*[0-9]/.test(code),
+    'a price shipped in the catalogue — this repository is public');
+  assert(/ESD1280-05P5068/.test(code), 'the catalogue has no products');
+  assert(/source:/.test(code) && /asOf:/.test(code),
+    'the catalogue does not say where its specs came from or when');
+});
+
+ok('an org list beats the shipped one, never the other way round', function () {
+  var fn = html.slice(html.indexOf('function vendorsForFit'));
+  fn = fn.slice(0, fn.indexOf('function fitOptions('));
+  assert(/if \(!any && window\.OmegaBessCatalog\)/.test(fn),
+    'the shipped catalogue can override what the organisation configured');
+});
+
+ok('a default is labelled as a default, not as a decision', function () {
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/fromCatalog \?/.test(dh),
+    'a catalogue-sourced product is not distinguished from a chosen one');
 });
 
 ok('the maximum is bounded, and says by what', function () {
