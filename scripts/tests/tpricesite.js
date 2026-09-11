@@ -668,5 +668,59 @@ ok('the confirmation folds instead of filling the card', function () {
   assert(dh.indexOf('_cardFlag = ""') > 0, 'the flag is not cleared after rendering');
 });
 
+/* ── THE CARD AND THE MAP ARE TWO VIEWS OF ONE SITE ───────────────────
+   Selecting a card highlighted its pin and left the map where it was, so
+   on a list spanning two miles the highlighted pin was often off screen. */
+ok('picking a card moves the map to it', function () {
+  assert(/function panToSite\(r\)/.test(html), 'nothing pans to a selected site');
+  assert(/if \(!fromMap\) panToSite\(r\)/.test(html),
+    'select() does not pan, or pans when the click came FROM the map');
+});
+
+ok('a programmatic pan does not re-run the viewport search', function () {
+  /* "Search as I move" is on by default. Following a card to its pin would
+     otherwise rebuild the list under the rep and quite possibly drop the
+     card they just clicked — the list is viewport-filtered. */
+  var me = html.slice(html.indexOf('map.on("moveend"'));
+  me = me.slice(0, 700);
+  assert(/if \(_panningToSite\) \{ _panningToSite = false; return; \}/.test(me),
+    'a tool-driven pan is treated as the rep moving the map');
+  var pt = html.slice(html.indexOf('function panToSite'));
+  pt = pt.slice(0, pt.indexOf('function select(id, fromMap)'));
+  assert(/setTimeout\(function \(\) \{ _panningToSite = false/.test(pt),
+    'the suppression flag can survive a pan that never fires, swallowing '
+    + 'the next real move');
+});
+
+ok('a site already on screen is left alone', function () {
+  /* Yanking the map under somebody who can already see the pin is its own
+     annoyance. */
+  var pt = html.slice(html.indexOf('function panToSite'));
+  pt = pt.slice(0, pt.indexOf('function select(id, fromMap)'));
+  assert(/getBounds\(\)\.pad\(-0\.18\)\.contains\(ll\)/.test(pt),
+    'it re-centres even when the site is already visible');
+  assert(/ST\.view === "list"/.test(pt),
+    'it tries to pan a map that is not on screen');
+});
+
+ok('the product line is not clipped', function () {
+  /* It carries the model number. Clipping it to one line hid exactly the
+     thing somebody was looking for, and read as though no product had
+     been picked at all. */
+  assert(!/\.dcnX\{[^}]*text-overflow:ellipsis/.test(html),
+    'the product column still truncates');
+  assert(/\.dcnX\{[^}]*overflow-wrap:anywhere/.test(html),
+    'the product column cannot wrap');
+});
+
+ok('under a megawatt the card says kWh', function () {
+  /* "0.8 MWh" against a model called ESD1267-05P760-G reads as a mismatch
+     and sends somebody hunting an 800 kWh product that does not exist. */
+  var dh = html.slice(html.indexOf('function decisionHtml'));
+  dh = dh.slice(0, dh.indexOf('function fitOptionsHtml'));
+  assert(/shownKwh < 1000 \?/.test(dh),
+    'a sub-megawatt battery is still rounded to MWh');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);
