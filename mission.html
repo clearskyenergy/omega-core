@@ -2036,21 +2036,25 @@ function clampCaps(){
   b.classList.toggle('fold', capsState.mode==='fold');
   b.classList.toggle('free', free);
   /* The lid — the text takes a pointer only when there is more of it than
-     fits — is measured here, after the shape is set, because a docked strip
-     and a free box have different heights to overflow. It lived in capsFit()
-     alone once, and an overflowing caption lost its scroll on every dock,
-     unfold, free and resize until the next line arrived. */
-  if(t) b.classList.toggle('scrolls', t.scrollHeight > t.clientHeight+1);
+     fits — is measured LAST, once the position is settled, because a docked
+     strip and a free box have different widths to overflow and a strip
+     docked from a free box still carries the box's inline left/top until the
+     reset below: measured before that, the strip read (viewport − x) wide and
+     the lid came on over text that fit. It lived in capsFit() alone once,
+     and an overflowing caption lost its scroll on every dock, unfold, free
+     and resize until the next line arrived. */
+  const lid=()=>{ if(t) b.classList.toggle('scrolls', t.scrollHeight > t.clientHeight+1); };
   const fb=el('capFree');
   if(fb){ fb.textContent=free?'DOCK':'FREE';
           fb.title=free?'Dock it above the talk bar':'Free it — then drag it anywhere'; }
-  if(!free){ b.style.left=''; b.style.top=''; b.classList.remove('edgeL'); return; }
+  if(!free){ b.style.left=''; b.style.top=''; b.classList.remove('edgeL'); lid(); return; }
   const r=b.getBoundingClientRect();
   capsState.x=Math.min(Math.max(0,capsState.x), Math.max(0, window.innerWidth-r.width));
   capsState.y=Math.min(Math.max(0,capsState.y), Math.max(0, window.innerHeight-talkClear-r.height));
   b.style.left=capsState.x+'px'; b.style.top=capsState.y+'px';
   /* A folded dot's preview opens toward the middle of the screen. */
   b.classList.toggle('edgeL', capsState.x < window.innerWidth/2);
+  lid();
 }
 /* Layout reads one frame late and at most once a frame: caps() fires on every
    interim speech result, and a scrollHeight read inline there would be a
@@ -2662,7 +2666,7 @@ function face(state){
    the Mac needs a credential. The brain graph goes along as a picture into
    the media airlock. Sent on every poll while the brain is up, skipped when
    nothing changed. */
-const GLASS_EVERY=30000; let glassAt=0, glassSig='';
+const GLASS_EVERY=30000, GLASS_STALE=300000; let glassAt=0, glassSig='', glassWrote=0;
 function gl(s){ return String(s==null?'':s).replace(/\s+/g,' ').trim(); }
 function gtime(){ return new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
 function gh(h){ const H=Math.floor(h)%24, M=Math.round((h%1)*60); const ap=H>=12?'PM':'AM'; return ((H+11)%12+1)+(M?':'+String(M).padStart(2,'0'):'')+' '+ap; }
@@ -2767,10 +2771,11 @@ async function glassSync(force){
   }catch(e){ notes={'Command Center':'# Command Center\n\ncould not render: '+e.message}; }
   const images={};
   try{ const cv=el('brainCv'); if(cv&&cv.width>50&&BG&&BG.nodes&&BG.nodes.length) images['Brain']=cv.toDataURL('image/png'); }catch(_){}
-  /* Skip the write when nothing but the clock moved. */
+  /* Skip the write when nothing but the clock moved — for five minutes;
+     after that the clock IS the news, or a note reads as abandoned. */
   const sig=JSON.stringify(notes).replace(/As of [^·\n]+/g,'')+Object.keys(images).join(',');
-  if(sig===glassSig && !force) return;
-  glassSig=sig;
+  if(sig===glassSig && !force && now-glassWrote<GLASS_STALE) return;
+  glassSig=sig; glassWrote=now;
   try{
     await fetch(BRAIN+'/glass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes,images})});
   }catch(_){}
