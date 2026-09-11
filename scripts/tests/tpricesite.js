@@ -362,5 +362,52 @@ ok('the model exports the default AFTER declaring it', function () {
   assert.strictEqual(M2.DEFAULT_HOURS, 4, 'the exported default is ' + M2.DEFAULT_HOURS);
 });
 
+/* ── WHAT COULD ACTUALLY GO HERE ──────────────────────────────────────
+   The panel said what the circuit allows and what it would cost, and never
+   what a rep could BUY. The gap between those is where the surprise lives:
+   a supplier sells a 5 MWh block, so a site with room for 3.8 MWh has one
+   real option and it is not 3.8 MWh. */
+ok('the drawer offers battery options sized to the opportunity', function () {
+  assert(/function fitOptions\b/.test(html), 'nothing computes what fits');
+  assert(/fitOptionsHtml\(r\) \+/.test(html),
+    'the block is not rendered into the drawer');
+  var fn = html.slice(html.indexOf('function fitOptions('));
+  fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
+  assert(/_orgVendors/.test(fn),
+    'options are not built from the organisation\'s own supplier records');
+  assert(/blockMwh/.test(fn), 'block size is ignored, so every option is a fiction');
+});
+
+ok('it ships NO catalogue of its own', function () {
+  /* An invented product is worse than no product, because somebody will
+     quote it. Every option must come off a record the org entered. */
+  var fn = html.slice(html.indexOf('function fitOptions('));
+  fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
+  assert(!/\b(CATL|Gotion|Tesla|Megapack|Sungrow|BYD)\b/.test(fn),
+    'a product name is hard-coded into the fit logic');
+  assert(/if \(!priced && !blockKwh\) continue/.test(fn),
+    'a supplier with nothing on file still produces an option');
+});
+
+ok('overshooting the target is described as duration, not waste', function () {
+  /* The circuit caps kW and does not care about kWh. A block bigger than
+     the target is a LONGER system at the same power, which is usually
+     worth more — calling it stranded would be wrong here, even though the
+     same overshoot IS stranded capacity when you are billed for a block. */
+  var fn = html.slice(html.indexOf('function fitOptionsHtml'));
+  fn = fn.slice(0, fn.indexOf('function computeEstimate'));
+  assert(/caps kW, not kWh/.test(fn),
+    'the overshoot is not explained in terms of duration');
+  assert(/short of the target/.test(fn),
+    'an option that undershoots is not called out');
+});
+
+ok('a hold can be any whole kW, not a multiple of 25', function () {
+  /* step="25" with min="1" made the valid values 1, 26, 51 … so the browser
+     refused 944 — the exact figure the panel had just said was available. */
+  assert(/id="rKw" type="number" min="1" step="1"/.test(html),
+    'the hold field still rejects the number the panel offers');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);
