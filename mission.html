@@ -292,6 +292,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .anch.work{border-left-color:rgba(0,243,255,.45)}
 .anch.late{border-left-color:rgba(185,140,255,.5);color:#cbb0ff}
 .anch.first{border-left-color:rgba(255,183,51,.5);color:#e8c98a}
+/* The hours an anchor runs on into, after the one it starts in. */
+.anch.cont{opacity:.55}
 
 /* ── the day, hour by hour ───────────────────────────────────────────────
    A list of two rows tells you nothing about a day. A column of hours shows
@@ -689,7 +691,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   font-size:9px;letter-spacing:2px;color:var(--dim)}
 .caps.fold.awake #captext::before{color:var(--good)}
 .caps.fold.edgeL #captext{right:auto;left:calc(100% + 8px)}   /* a dot on the left half */
-.caps.fold:hover #captext{display:block}
+/* A pointer only. A touch screen has no hover, but iOS fakes one on the first
+   tap — so the tap that should have unfolded the dot opened this bubble and a
+   second was needed. There, the dot unfolds on the first. */
+@media(hover:hover){ .caps.fold:hover #captext{display:block} }
 /* ══ SMALL SCREENS ═══════════════════════════════════════════════════════
    All of this overrides the desktop rules above, so it lives at the end of the
    sheet: media queries carry no specificity of their own and source order is
@@ -1900,6 +1905,9 @@ async function load(){
     /* The order rendered here IS the order he speaks to. Held so that
        "execute 1 through 4" resolves against exactly what is on his screen
        and never against a list that has since been re-sorted underneath him. */
+    /* A fresh list is the truth about the drafts. A card opened from it must
+       not show a body and recipients fetched against the one before it. */
+    draftCache.clear();
     outboxAll = (s.draftList||[]).map((d,i)=>({ n:i+1, id:d.id,
       label: d.subject || '(no subject)', to: d.to || null }));
     renderOutbox();
@@ -2023,10 +2031,16 @@ function capsFree(){
    capsFit() calls it too, because a one-line caption that grows to five lines
    is a different height to clamp. */
 function clampCaps(){
-  const b=el('caps'); if(!b) return;
+  const b=el('caps'), t=el('captext'); if(!b) return;
   const free=capsFree();
   b.classList.toggle('fold', capsState.mode==='fold');
   b.classList.toggle('free', free);
+  /* The lid — the text takes a pointer only when there is more of it than
+     fits — is measured here, after the shape is set, because a docked strip
+     and a free box have different heights to overflow. It lived in capsFit()
+     alone once, and an overflowing caption lost its scroll on every dock,
+     unfold, free and resize until the next line arrived. */
+  if(t) b.classList.toggle('scrolls', t.scrollHeight > t.clientHeight+1);
   const fb=el('capFree');
   if(fb){ fb.textContent=free?'DOCK':'FREE';
           fb.title=free?'Dock it above the talk bar':'Free it — then drag it anywhere'; }
@@ -2047,12 +2061,11 @@ function capsFit(){
   capsFitRAF=requestAnimationFrame(()=>{
     capsFitRAF=0;
     const b=el('caps'), t=el('captext'), w=el('capwho'); if(!b||!t||!w) return;
-    b.classList.toggle('scrolls', t.scrollHeight > t.clientHeight+1);
     /* The folded dot has no room for the speaker line, so it rides on the
        bubble and colours the dot. */
     t.dataset.who=w.textContent;
     b.classList.toggle('awake', w.classList.contains('awake'));
-    clampCaps();
+    clampCaps();                            /* sizes it, and sets the scroll lid */
   });
 }
 /* Clamp before saving, so what is remembered is what is on screen. */
@@ -2690,7 +2703,7 @@ function glassCalendar(){
   anchorsToday().forEach(k=>out.push(gh(k.a)+'–'+gh(k.b)+' '+k.label+(k.optional?' (optional)':'')));
   if(isFri()) out.push(gh(SHABBAT_FROM)+' onward · Shabbat');
   out.push('', '# Windows the plan fits into');
-  RITUALS.forEach(r=>out.push(gh(r.win[0])+'–'+gh(r.win[1])+' '+r.label+' — '+r.why));
+  RITUALS.forEach(r=>out.push(gh(r.win[0])+'–'+gh(r.win[1])+' '+r.label+' — '+ritualWhy(r)));
   return out.join('\n');
 }
 function glassClients(){
@@ -3008,8 +3021,9 @@ function renderQuick(){
    here is read from a field, never inferred. */
 function renderNeeds(s){
   const out=[];
-  /* The draft rides on the row (4th slot) so a click can open it. */
-  (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient', d]); });
+  /* The draft rides on the row (4th slot) so a click can open it — only when
+     it has an id, because a row that opens nothing must not offer to. */
+  (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient', d.id?d:null]); });
   (s.todos||[]).forEach(t=>{ if(t.status==='blocked') out.push(['bad', t.title||'(untitled)', 'blocked']); });
   if((s.counts||{}).queued) out.push(['info', (s.counts.queued)+' meetings waiting to be analysed','queued']);
 
@@ -3528,12 +3542,17 @@ function renderDay(){
 
     /* His own routine first, so the day has a shape even on a light diary.
        A real event in the same hour is drawn too, after it — church stays on
-       the page and the early service he actually booked stays with it. */
-    anchorsToday().filter(k=>Math.floor(k.a)===h%24)
+       the page and the early service he actually booked stays with it.
+       An anchor is drawn in EVERY hour it runs through, not just the one it
+       starts in: church in the 8 AM row alone left 9 and 10 looking free on
+       a Sunday, the very lie the planner's busy list already refuses to
+       tell. The first row carries it; the rest say it is still going. */
+    anchorsToday().filter(k=>k.a<h+1 && k.b>h)
       .forEach(k=>{
         const d=document.createElement('div');
-        d.className='anch '+k.tag;
-        d.textContent=k.label;
+        const cont=Math.floor(k.a)!==h;
+        d.className='anch '+k.tag+(cont?' cont':'');
+        d.textContent=(cont?'· ':'')+k.label;
         body.appendChild(d);
       });
 
@@ -3744,7 +3763,9 @@ function showDraft(d, fromEl){
     body.className='draftBody';
     body.textContent=j.body||'(empty — a subject and nothing else)';
     if(j.body){ cp.disabled=false; cp.addEventListener('click',()=>copyToClipboard(j.body,cp)); }
-  }, e=>{
+  /* .catch, not a second argument to .then: a throw inside the paint above is
+     a failure too, and the card must not sit on "reading it…" for it. */
+  }).catch(e=>{
     if(card.dataset.draft!==id) return;
     fromV.textContent=madeV.textContent='—';
     body.className='draftBody bad';
@@ -3767,7 +3788,9 @@ function showDraft(d, fromEl){
    knows the hour but not the habit will keep producing a day nobody lives. */
 const RITUALS=[
   { id:'animals', need:0.5,  win:[8,9.5],   label:'Feed the animals',
-    why:'after the school run, before the day closes in' },
+    why:'after the school run, before the day closes in',
+    /* No school run on a Saturday or a Sunday. */
+    whyWeekend:'before the day gets going' },
   { id:'workout', need:0.5,  win:[11.5,14], label:'30 minutes — training',
     why:'midday, the way you like it — thirty, not an hour' },
   { id:'reflect', need:0.5,  win:[16.5,18], label:'Sit and think',
@@ -3775,6 +3798,12 @@ const RITUALS=[
   { id:'music',   need:0.75, win:[22,25],   label:'Music',
     why:'after they are asleep' }
 ];
+/* The reason a ritual sits where it does can depend on the day. The plan and
+   the glass both read it through here, so they cannot disagree. */
+function ritualWhy(r){
+  const dow=new Date().getDay();
+  return (dow===0||dow===6) && r.whyWeekend ? r.whyWeekend : r.why;
+}
 
 function busyBlocks(evts){
   return evts.map(e=>{
@@ -3841,7 +3870,8 @@ function renderPlan(evts){
     const h=Math.floor(p.at), m=Math.round((p.at-h)*60);
     const when=(h%12===0?12:h%12)+':'+String(m).padStart(2,'0')+(h<12?' AM':' PM');
     d.textContent=when+'  ·  '+p.r.label;
-    if(p.r.why){ const w=document.createElement('span'); w.className='sw'; w.textContent=p.r.why; d.appendChild(w); }
+    const why=ritualWhy(p.r);
+    if(why){ const w=document.createElement('span'); w.className='sw'; w.textContent=why; d.appendChild(w); }
     host.appendChild(d);
   });
 
@@ -3973,9 +4003,12 @@ function renderOutbox(){
     v.className='v '+(r.ready?'good':'warn');
     v.textContent=r.ready ? (r.d.to.split(',')[0].trim().slice(0,26)) : 'no recipient';
     row.append(n,k,why,v);
-    /* The row opens the draft. outbox[i] carries the number he would say. */
-    row.classList.add('rowClick');
-    row.addEventListener('click',()=>showDraft(outbox[i], row));
+    /* The row opens the draft. outbox[i] carries the number he would say.
+       No id, no pointer: showDraft() would open nothing. */
+    if(r.d.id){
+      row.classList.add('rowClick');
+      row.addEventListener('click',()=>showDraft(outbox[i], row));
+    }
     host.appendChild(row);
   });
 }
