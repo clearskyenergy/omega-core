@@ -504,8 +504,15 @@
   .dcnNext{margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);
     font-size:11.5px;line-height:1.5}
   .dcnK{width:auto;min-width:96px}
-  .dcnFlag{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fdf7ec;
+  .dcnFlag{margin-top:6px;border-radius:6px;background:#fdf7ec;
     border:1px solid #eedfbe;color:#7a5b00;font-size:10.5px;line-height:1.5}
+  .dcnFlag>summary{cursor:pointer;padding:5px 8px;font-weight:700;list-style:none;
+    display:flex;align-items:center;gap:5px}
+  .dcnFlag>summary::-webkit-details-marker{display:none}
+  .dcnFlag>summary:before{content:"\26a0"}
+  .dcnFlag>summary:after{content:"\25b8";margin-left:auto;font-size:9px;opacity:.7}
+  .dcnFlag[open]>summary:after{content:"\25be"}
+  .dcnFlag>div{padding:0 8px 7px}
   .vsList{border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:8px 0 4px}
   .vsRow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 11px;
     border-top:1px solid var(--line)}
@@ -4980,15 +4987,28 @@
       '<div class="dcnHead">' + head + '</div>';
 
     var rows = [];
-    if (fit) {
-      /* kW comes from the circuit, not back-derived from the energy and a
-         rounded duration — that route drifts by tens of kW and a customer
-         checking the arithmetic would find it. */
-      var pk = sizePick(r);
-      rows.push(["Battery", (Math.round(fit.kwh / 100) / 10) + ' MWh',
-        (fit.units ? fit.units + '\u00d7 ' : '') +
-        esc(fit.model || fit.name) + ' \u00b7 ' + fmt(pk.kw) + ' kW, ' +
-        (Math.round(fit.hours * 10) / 10) + ' h']);
+    /* THE SIZE ALWAYS SHOWS. The rebate below is $250 per kWh OF THIS
+       BATTERY, so a card printing the rebate and not the kWh it came from is
+       asking to be trusted on arithmetic it will not show.
+
+       With a product on file this is the real thing — model, count, hours.
+       Without one it is still the system being applied for: the circuit's kW
+       at the default duration, which is already what the rebate, the cost and
+       the payback are all computed against. Leaving the row out until a
+       product is loaded hid the number the rest of the card rests on.
+
+       kW comes from the circuit, never back-derived from the energy and a
+       rounded duration — that route drifts by tens of kW and a customer
+       checking the arithmetic would find it. */
+    var pk = sizePick(r);
+    var shownKwh = fit ? fit.kwh : (est ? est.kwh : pk.kwh);
+    if (shownKwh) {
+      rows.push(["Battery", (Math.round(shownKwh / 100) / 10) + ' MWh',
+        (fit
+          ? (fit.units ? fit.units + '\u00d7 ' : '') + esc(fit.model || fit.name) +
+            ' \u00b7 ' + fmt(pk.kw) + ' kW, ' + (Math.round(fit.hours * 10) / 10) + ' h'
+          : fmt(pk.kw || (est && est.kw)) + ' kW for ' +
+            (Math.round((pk.hours || 0) * 10) / 10) + ' hours \u00b7 no product picked yet')]);
     }
     if (est) {
       var VS = window.OmegaValueStack;
@@ -5038,7 +5058,18 @@
            (rows[i][2] ? '<span class="dcnX">' + rows[i][2] + '</span>' : '') + '</div>';
     }
     if (_cardFlag) {
-      h += '<div class="dcnFlag"><b>Confirm before quoting:</b> ' + esc(_cardFlag) + '</div>';
+      /* Folded by default. It has to be here — a rebate covering the whole
+         project must not reach a customer unchecked — but it is four lines of
+         conditions on a card being scanned twenty at a time, and a warning
+         that makes the card unreadable gets scrolled past, which is the one
+         outcome worse than not showing it.
+
+         <details> rather than a scripted toggle: keyboard-reachable, survives
+         a re-render with no state to track, costs nothing. data-noselect so
+         opening it does not also open the site. */
+      h += '<details class="dcnFlag" data-noselect="1">' +
+        '<summary data-noselect="1">Confirm before quoting</summary>' +
+        '<div>' + esc(_cardFlag) + '</div></details>';
       _cardFlag = "";
     }
     h += '<div class="dcnNext"><b>Next:</b> ' + esc(nextStep(r, d, fit, est)) + '</div>';
