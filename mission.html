@@ -144,11 +144,18 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
    of the grid and gives it the whole screen, and Escape to put it back. It
    is added in JS to every .panel rather than written into each one, so a
    panel added later gets the behaviour without anyone remembering to. */
+/* The title keeps a lane clear on the right for the two controls. Without it
+   the live counter — "2 ON THE BOOK", "211 NODES · 149 LINKS" — ran underneath
+   them and you could read neither. */
+.panel > .ptitle{padding-right:62px}
 .panel > .zoomBtn{position:absolute;top:6px;right:6px;z-index:3;opacity:0;
   font-size:10px;line-height:1;padding:4px 6px;min-height:0;border-radius:4px;
   transition:opacity .14s}
 .panel:hover > .zoomBtn,.panel.zoom > .zoomBtn{opacity:.75}
 .panel > .zoomBtn:hover{opacity:1}
+/* A zoomed panel is a flex column; without this its canvas child cannot grow
+   into the new box and renders into nothing. */
+.panel.zoom > canvas,.panel.zoom .arcWrap,.panel.zoom .brainStage{min-height:0;flex:1}
 .panel.zoom{position:fixed;inset:18px;z-index:140;margin:0;
   box-shadow:0 0 60px rgba(0,243,255,.14), inset 0 0 30px rgba(0,68,255,.25);
   animation:zoomIn .18s cubic-bezier(.2,.9,.25,1) both}
@@ -353,7 +360,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 #brainCv.drag{cursor:grabbing}
 .brainHint{position:absolute;left:12px;bottom:10px;font-family:var(--mono);font-size:9px;
            letter-spacing:1.4px;color:var(--dim);opacity:.65;pointer-events:none}
-.brainFit{position:absolute;right:10px;top:10px;font-size:9px;padding:5px 9px;min-height:0}
+.brainFit{position:absolute;left:10px;top:10px;z-index:3;font-size:9px;padding:5px 9px;min-height:0}
 .brainQ{background:rgba(0,0,0,.35);border:1px solid rgba(0,243,255,.22);border-radius:5px;
         color:var(--ink);font-size:12.5px;padding:7px 9px;outline:none;width:100%}
 .brainQ:focus{border-color:var(--glow-cyan)}
@@ -3737,15 +3744,12 @@ function renderOverview(s){
   set('nRout', (s.routines||[]).length||'');
 }
 
-function renderWeek(s){
-  const nowMs=Date.now();
-  listInto('week', (s.week||s.schedule||[]), e=>({
-    time: (e.day? e.day+' ':'')+e.when,
-    past: e.startsAt && new Date(e.startsAt).getTime()<nowMs,
-    left: e.title,
-    right: e.others? e.others+(e.others===1?' guest':' guests') : ''
-  }), 'nothing on the calendar');
-}
+/* renderDay() owns #week. This used to render a flat list into the SAME
+   element, and load() runs every thirty seconds — so the hour grid appeared,
+   looked right, and then collapsed back to two lines on the next poll. Two
+   renderers, one element, last writer wins every half minute: the reason it
+   "kept reverting to the earlier version". */
+function renderWeek(s){ renderDay(); }
 
 function renderRoutines(s){
   listInto('routines', (s.routines||[]), r=>({
@@ -4169,12 +4173,19 @@ function unzoom(){
   remeasure();
 }
 function remeasure(){
-  requestAnimationFrame(()=>{
+  /* Twice, a frame apart. The first pass runs before the browser has laid the
+     zoomed panel out, so a canvas measured then gets the OLD size — which is
+     exactly what "expand shows a blank canvas" was: correctly resized to the
+     dimensions it had a frame ago. */
+  const pass=()=>{
     try{ window.dispatchEvent(new Event('resize')); }catch(_){}
     try{ if(arc&&arc.resize) arc.resize(); }catch(_){}
+    try{ if(typeof doomCore!=='undefined'&&doomCore&&doomCore.resize) doomCore.resize(); }catch(_){}
     try{ fitStone(); }catch(_){}
-    try{ if(BG) balpha=Math.max(balpha,0.2); }catch(_){}
-  });
+    try{ if(BG){ balpha=Math.max(balpha,0.25); bfit(); } }catch(_){}
+    try{ bdPaint(); }catch(_){}
+  };
+  requestAnimationFrame(()=>{ pass(); requestAnimationFrame(pass); });
 }
 function wireZoom(){
   document.querySelectorAll('.panel').forEach(p=>{
