@@ -74,6 +74,26 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .view.on{display:flex;flex-direction:column;gap:12px}
 .cmdGrid{display:grid;grid-template-columns:280px 1fr 400px;gap:12px;flex:1;min-height:0}
 .live{margin-left:auto;font-size:8px;color:var(--good);letter-spacing:1.4px}
+
+/* Quick commands are real messages, not shortcuts to a different code path.
+   Each one types itself into the same box he would have typed it into, so
+   what a button does and what a sentence does can never diverge. */
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.quick button{text-align:left;font-family:var(--ui);font-size:12px;letter-spacing:0;
+              padding:8px 10px;color:var(--ink);border-color:rgba(0,243,255,.2)}
+.quick button:hover{border-color:var(--glow-cyan);color:var(--glow-cyan)}
+
+/* A connection is green only if something measured says so. */
+.conn{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;
+      border-bottom:1px solid rgba(0,243,255,.06)}
+.conn:last-child{border-bottom:none}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.ok{background:var(--good);box-shadow:0 0 6px var(--good)}
+.dot.warn{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.dot.bad{background:var(--bad);box-shadow:0 0 6px var(--bad)}
+.dot.off{background:var(--dim)}
+.conn .who{flex:1;min-width:0}
+.conn .why{color:var(--dim);font-size:11px;text-align:right;white-space:nowrap}
 .ptitle{display:flex;align-items:center}
 
 /* The feed: one line each, tagged by what kind of thing it is. Every line is
@@ -286,6 +306,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
             <div id="schedule" class="scroll"></div>
             <div id="alert"></div>
           </div>
+          <div class="panel" style="flex:none">
+            <div class="ptitle">Connections</div>
+            <div id="conns"></div>
+          </div>
         </div>
 
         <div class="col">
@@ -298,16 +322,24 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
               </div>
             </div>
           </div>
-          <div class="panel" style="flex:none;height:150px">
+          <div class="panel" style="flex:none">
+            <div class="ptitle">Quick commands</div>
+            <div class="quick" id="quick"></div>
+          </div>
+          <div class="panel" style="flex:none;height:132px">
             <div class="ptitle">Agent activity — last 8 runs</div>
             <div class="scroll" id="logStream"></div>
           </div>
         </div>
 
         <div class="col">
-          <div class="panel" style="flex:none;max-height:38%">
+          <div class="panel" style="flex:none;max-height:34%">
             <div class="ptitle">Live feed<span class="live">● LIVE</span></div>
             <div id="feed" class="scroll"></div>
+          </div>
+          <div class="panel" style="flex:none;max-height:26%">
+            <div class="ptitle">Needs you<span class="live" id="needsN"></span></div>
+            <div id="needs" class="scroll"></div>
           </div>
           <div class="panel" style="flex:1;min-height:0">
             <div class="ptitle">Conversation</div>
@@ -689,6 +721,7 @@ async function load(){
     if(ing&&ing.alert){const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;el('alert').appendChild(d);}
 
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
+    renderQuick(); renderNeeds(s); renderConns(s);
 
     /* The queue count lives in Overview. It used to sit inside the sphere as
        well, which made the centre of the core a number rather than a name. */
@@ -1186,6 +1219,91 @@ function buildFeed(s){
     t.className='t '+out[i][0];
     t.textContent=out[i][0]==='bad'?'ALERT':out[i][0]==='warn'?'WARN':out[i][0]==='good'?'OK':'INFO';
     row.classList.add('fi'); row.insertBefore(t,row.firstChild);
+  });
+}
+
+/* ── quick commands ──────────────────────────────────────────────────────
+   Every one of these is a real message, sent down the same path as anything
+   he types. None of them is a shortcut to a different code path, so what a
+   button does and what a sentence does can never drift apart — and every one
+   of them is answered by the free path, so the whole panel costs nothing. */
+const QUICK = [
+  ['Catch me up',      'catch me up'],
+  ['My day',           'what is on my calendar'],
+  ['On my plate',      'what is on my plate'],
+  ['Drafts waiting',   'show me my drafts'],
+  ['What came in',     'what is in my inbox'],
+  ['What have I spent','what have i spent']
+];
+function renderQuick(){
+  const host=el('quick'); if(!host || host.dataset.built) return;
+  host.dataset.built='1';
+  QUICK.forEach(([label,msg])=>{
+    const b=document.createElement('button');
+    b.textContent=label;
+    b.addEventListener('click',()=>{ el('ask').value=''; submit(msg); });
+    host.appendChild(b);
+  });
+}
+
+/* ── needs you ───────────────────────────────────────────────────────────
+   Not the backlog. The backlog is work; this is the shorter list of things
+   that cannot move at all until Thomas does something — an address he has
+   not supplied, an item the builder refused and left blocked. Everything
+   here is read from a field, never inferred. */
+function renderNeeds(s){
+  const out=[];
+  (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient']); });
+  (s.todos||[]).forEach(t=>{ if(t.status==='blocked') out.push(['bad', t.title||'(untitled)', 'blocked']); });
+  if((s.counts||{}).queued) out.push(['info', (s.counts.queued)+' meetings waiting to be analysed','queued']);
+
+  listInto('needs', out, r=>({left:r[1], right:r[2], cls:r[0]==='bad'?'bad':r[0]==='warn'?'warn':'', clamp:true}),
+           'nothing is waiting on you');
+  const n=el('needsN'); if(n) n.textContent = out.length ? out.length+' WAITING' : '';
+}
+
+/* ── connections ─────────────────────────────────────────────────────────
+   The reference dashboard shows a stack of green "Connected" pills. Green is
+   the easiest thing in the world to draw and the hardest to earn, so every
+   row here is derived from something the twin actually did, and each one
+   carries the reason. Nothing is green because a key exists in a config. */
+function renderConns(s){
+  const host=el('conns'); if(!host) return;
+  host.textContent='';
+  const ing=s.ingest||{};
+  const mins = ing.at ? Math.round((Date.now()-new Date(ing.at).getTime())/60000) : null;
+  const feat = {}; (s.features||[]).forEach(f=>feat[f.id]=f);
+  /* The loop rows carry no credit failure, because the pivot catches it
+     before it can become a run error — so this reads the fact the pivot
+     recorded instead of inferring from silence. Stale after two hours: a
+     block from this morning is not evidence about now. */
+  const mb = s.model || {};
+  const blockedMins = mb.at ? (Date.now()-new Date(mb.at).getTime())/60000 : null;
+  const creditOut = !!mb.blocked && blockedMins !== null && blockedMins < 120;
+
+  const rows=[
+    ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
+      mins==null?'no run recorded':('read '+mins+' min ago')],
+    ['Calendar', (s.schedule||[]).length?'ok':'warn',
+      (s.schedule||[]).length?((s.schedule.length)+' today'):'nothing today, or not readable'],
+    ['Anthropic', creditOut?'bad':(feat.chat&&feat.chat.enabled?'ok':'off'),
+      creditOut?('out of credit'+(blockedMins<2?'':' — '+Math.round(blockedMins)+' min ago'))
+               :(feat.chat&&feat.chat.enabled?'answering':'switched off')],
+    ['ElevenLabs', feat.voice&&feat.voice.enabled?'ok':'off',
+      feat.voice&&feat.voice.enabled?'speaking':'off — browser voice'],
+    ['Twilio', feat.sms&&feat.sms.blocked?'warn':(feat.sms&&feat.sms.enabled?'ok':'off'),
+      feat.sms&&feat.sms.blocked?'A2P in review':'idle'],
+    ['Repo', feat.build&&feat.build.enabled?'ok':'off',
+      feat.build&&feat.build.enabled?'can open PRs':'switched off'],
+    ['Routines', feat.routines&&feat.routines.enabled?'ok':'off',
+      ((s.routines||[]).length||0)+' set up']
+  ];
+  rows.forEach(([who,state,why])=>{
+    const d=document.createElement('div'); d.className='conn';
+    const dot=document.createElement('span'); dot.className='dot '+state;
+    const w=document.createElement('span'); w.className='who'; w.textContent=who;
+    const y=document.createElement('span'); y.className='why'; y.textContent=why;
+    d.appendChild(dot); d.appendChild(w); d.appendChild(y); host.appendChild(d);
   });
 }
 
