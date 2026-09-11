@@ -267,6 +267,7 @@
   .scopeGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px}
   .scopeGrid label{display:flex;flex-direction:column;gap:3px;min-width:0}
   .scopeGrid label.wide{grid-column:span 3}
+  .scopeGrid label.wide2{grid-column:span 2}
   .scopeGrid span{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
   .scopeGrid input{width:100%;min-width:0}
   .scopeNote{margin-top:8px;font-size:11px;color:var(--mut);line-height:1.5}
@@ -550,7 +551,13 @@ function vendBlank(key, name){
            incoterm:"",         /* e.g. "EXW Manteno, IL" — gate or door   */
            expires:"",          /* the quote's own expiry, if it states one */
            excludes:"",         /* what the price does NOT carry           */
-           indexTo:"" };        /* commodity binding and reprice trigger   */
+           indexTo:"",          /* commodity binding and reprice trigger   */
+           /* Freight closes the gap an EXW price leaves. Kept as its own
+              pair — an amount and where it came from — rather than folded
+              into the battery rate, because they are two facts from two
+              documents and a blended number loses which is which. */
+           freightPerKwh:null,  /* $/kWh to haul it from the gate to site  */
+           freightRef:"" };     /* the haul quote behind that figure       */
 }
 var VENDORS = (function(){
   var o={}, i;
@@ -721,6 +728,17 @@ function renderVendForm(){
         +      esc(v.excludes||'')+'" placeholder="PCS, freight, commissioning, spares\u2026"></label>'
         +    '<label class="wide"><span>Index binding</span><input data-v="'+k+'" data-f="indexTo" value="'
         +      esc(v.indexTo||'')+'" placeholder="Li2CO3 $22.06/kg \u00b7 reprice at \u00b15%"></label>'
+        /* Only asked for when the price is at the gate. A DAP price already
+           includes delivery and a freight box beside it invites a
+           double-count. */
+        +    (vendAtGate(v)
+              ? '<label><span>Freight ($/kWh)</span><input data-v="'+k+'" data-f="freightPerKwh" '
+                + 'type="number" min="0" step="0.01" value="'
+                + (v.freightPerKwh==null?'':v.freightPerKwh)+'" placeholder="\u2014"></label>'
+              + '<label class="wide2"><span>Haul quote reference</span><input data-v="'+k+'" '
+                + 'data-f="freightRef" value="'+esc(v.freightRef||'')
+                + '" placeholder="who quoted the haul, and when"></label>'
+              : '')
         +  '</div>'
         +  '<div class="scopeNote">' + esc(vendProvenance(v)) + '</div>'
         +  '</td></tr>';
@@ -745,7 +763,7 @@ document.addEventListener('input', function(e){
   var t = e.target, k = t && t.getAttribute && t.getAttribute('data-v');
   if(!k || !VENDORS[k]) return;
   var f = t.getAttribute('data-f'), val = t.value;
-  if(f==='dcPerKwh' || f==='pcsPerKw' || f==='blockMwh'){
+  if(f==='dcPerKwh' || f==='pcsPerKw' || f==='blockMwh' || f==='freightPerKwh'){
     /* Empty means UNKNOWN, and unknown must stay null. Coercing a blank to
        zero would price a battery at nothing and still produce a total. */
     VENDORS[k][f] = (val === '' ? null : (isFinite(+val) ? +val : null));
@@ -785,7 +803,9 @@ function vendApply(st){
          it comes back looking like a delivered, unexpiring price. */
       blockMwh: (typeof src.blockMwh === 'number' ? src.blockMwh : null),
       incoterm: src.incoterm || "", expires: src.expires || "",
-      excludes: src.excludes || "", indexTo: src.indexTo || ""
+      excludes: src.excludes || "", indexTo: src.indexTo || "",
+      freightPerKwh: (typeof src.freightPerKwh === 'number' ? src.freightPerKwh : null),
+      freightRef: src.freightRef || ""
     };
   }
   VEND_SEL = st.sel || "";
@@ -1753,6 +1773,22 @@ function riskHtml(r){
        'That is wider than the low\u2013high columns above, and deliberately so: those columns are ' +
        'the model\u2019s spread, this is the estimate\u2019s.</div>';
 
+  /* ── WHAT THE SUPPLIER'S OWN TERMS PUT OUTSIDE THE TOTAL ──────────────
+     Named exposures, before the generic warnings, because these are the
+     ones with a supplier's signature behind them and a specific action that
+     closes each. A reader who skims gets the cheque they may have to write
+     and the call that avoids it. */
+  if (r.exposures && r.exposures.length) {
+    for (var xi = 0; xi < r.exposures.length; xi++) {
+      var X = r.exposures[xi];
+      h += '<div class="note bad"><b>' + esc(X.name) + ' \u2014 ' +
+           (X.usd == null ? 'not in the total, amount unknown'
+                          : usdK(X.usd) + ' not in the total') +
+           '.</b> ' + esc(X.why) +
+           ' <i>' + esc(X.closes) + '</i></div>';
+    }
+  }
+
   var un = unanswered(), i, lbl = {};
   for (i = 0; i < REQ_UI.length; i++) lbl[REQ_UI[i].k] = REQ_UI[i].lab;
   if (un.length) {
@@ -1986,6 +2022,14 @@ function toJson(){
                     cannot see the page, and an unlabelled band is exactly
                     what gets quoted onward as a market benchmark. */
                  basis: BAND_SRC },
+    /* Exposures are part of the answer, not commentary on it. A reader who
+       takes cost.totalUsd and ignores this block has an incomplete number,
+       so it sits beside the cost rather than in a notes field. */
+    exposures: (r.exposures || []).map(function (x){
+      return { id:x.id, name:x.name,
+               usd: (x.usd == null ? null : Math.round(x.usd)),
+               inTotal:false, why:x.why, closedBy:x.closes };
+    }),
     marketReferences: MARKET.map(function (m){
       return { id:m.id, label:m.label, perKwh:m.perKwh, perKw:m.perKw,
                durationHours:m.hours, sample:m.n, tier:m.src,

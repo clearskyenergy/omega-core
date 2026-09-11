@@ -159,8 +159,31 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
 .core{align-items:center;justify-content:center;gap:0;flex:1;min-height:0}
 #arc{width:100%;flex:1;min-height:0;display:block}
-.coreName{font-size:26px;letter-spacing:8px;color:var(--glow-cyan);
-          text-shadow:0 0 16px rgba(0,243,255,.6);margin-top:4px}
+/* The label sits INSIDE the sphere, which is what makes it read as a core
+   rather than a diagram with a caption. pointer-events:none so it never
+   steals a click from anything behind it. */
+.coreLabel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+           text-align:center;pointer-events:none}
+.cName{font-family:var(--mono);font-size:24px;letter-spacing:7px;color:var(--glow-cyan);
+       text-shadow:0 0 18px rgba(0,243,255,.7)}
+.cSub{font-family:var(--mono);font-size:9px;letter-spacing:5px;color:var(--dim);margin-top:3px}
+.queue{position:static;transform:none;margin-top:10px;display:flex;gap:6px;
+       align-items:baseline;justify-content:center}
+.queue .n{font-family:var(--mono);font-size:15px;color:var(--glow-cyan);text-shadow:0 0 10px var(--glow-cyan)}
+.queue .l{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:2px}
+
+/* The loading screen is the same object, waiting. */
+.gate{max-width:none;margin:0;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;flex:1;min-height:0;gap:8px}
+.gateCore{position:relative;width:min(58vw,520px);height:min(58vw,520px);max-height:56vh}
+#gateArc{width:100%;height:100%;display:block}
+.gateLabel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+           text-align:center;pointer-events:none}
+.gName{font-family:var(--mono);font-size:26px;letter-spacing:8px;color:var(--glow-cyan);
+       text-shadow:0 0 20px rgba(0,243,255,.7)}
+.gSub{font-family:var(--mono);font-size:10px;letter-spacing:6px;color:var(--dim);margin-top:4px}
+.gVer{font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--good);margin-top:8px}
+.gateBody{text-align:center;max-width:420px}
 .coreState{font-size:12px;color:var(--dim);letter-spacing:1px;margin-top:8px;text-align:center}
 .coreState.awake{color:var(--good)}
 .coreBtns{display:flex;gap:10px;margin-top:12px}
@@ -177,7 +200,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .askWrap input{flex:1;background:transparent;border:none;outline:none;color:#fff;font-size:14px;font-family:var(--ui)}
 .foot{font-size:10.5px;color:var(--dim);letter-spacing:1px;flex:none}
 .gate{max-width:420px;margin:16vh auto;text-align:center}
-.gate p{color:var(--dim);font-size:13px;line-height:1.6;margin:10px 0 18px}
+.gateBody p{color:var(--dim);font-size:13px;line-height:1.6;margin:10px 0 18px}
 .caps{position:fixed;left:0;right:0;bottom:0;background:rgba(2,8,19,.97);
       border-top:1px solid var(--glow-blue);padding:11px 18px;z-index:99;display:none}
 .caps.on{display:block}
@@ -189,10 +212,18 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 <body>
 
 <div class="gate" id="gate" hidden>
-  <div class="title">J.A.R.V.I.S</div>
-  <p>Every figure here is read from the twin. Nothing is simulated.</p>
-  <button id="signin">AUTHENTICATE</button>
-  <p id="gateErr" style="color:var(--bad)"></p>
+  <div class="gateCore"><canvas id="gateArc"></canvas>
+    <div class="gateLabel">
+      <div class="gName">J.A.R.V.I.S</div>
+      <div class="gSub">AI CORE</div>
+      <div class="gVer" id="gVer">STANDBY</div>
+    </div>
+  </div>
+  <div class="gateBody">
+    <p>Every figure here is read from the twin. Nothing is simulated.</p>
+    <button id="signin">AUTHENTICATE</button>
+    <p id="gateErr" style="color:var(--bad)"></p>
+  </div>
 </div>
 
 <div id="app" hidden style="display:none">
@@ -262,9 +293,12 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
           <div class="panel core">
             <div class="arcWrap">
               <canvas id="arc"></canvas>
-              <div class="queue"><div class="n" id="queueN">—</div><div class="l">IN QUEUE</div></div>
+              <div class="coreLabel">
+                <div class="cName">J.A.R.V.I.S</div>
+                <div class="cSub">AI CORE</div>
+                <div class="queue"><span class="n" id="queueN">—</span><span class="l">IN QUEUE</span></div>
+              </div>
             </div>
-            <div class="coreName">J.A.R.V.I.S</div>
           </div>
           <div class="panel" style="flex:none;height:150px">
             <div class="ptitle">Agent activity — last 8 runs</div>
@@ -401,92 +435,167 @@ function rows(host, list){
   }
 }
 
-/* ══ THE REACTOR ═════════════════════════════════════════════════════════
-   Concentric particle rings whose radius is displaced by summed sines — three
-   harmonics at different frequencies and drift rates, which is what produces
-   the lobed, breathing shape rather than a circle with noise on it.
+/* ══ THE CORE ════════════════════════════════════════════════════════════
+   A wireframe sphere: parallels and meridians projected orthographically,
+   rotating about its own axis with a slight tilt, plus three orbital rings
+   at different inclinations and a travelling body on each.
 
-   It is driven by real state: `energy` rises with the analyse queue and with
-   how recently a loop ran, so a busy twin visibly churns and an idle one
-   settles. A decorative animation that looks identical whether the system is
-   working or dead is a screensaver. */
-const arc = (() => {
-  const cv = document.getElementById('arc');
-  if (!cv) return { set(){} };
+   Depth is the whole trick. Every point carries a z, and z decides both its
+   alpha and its size, so the far side of the sphere reads as the far side
+   rather than as a flat circle of dots. Without that it looks like a doily.
+
+   IT IS DRIVEN BY REAL STATE. `energy` rises with the analyse queue and with
+   how recently a loop ran, and it moves the rotation speed, the glow and the
+   orbital pace. An animation that looks identical whether the system is
+   working or dead is a screensaver, and this one has a job: you should be
+   able to tell from across the room that the twin is busy.
+
+   Built as a factory because the sign-in screen shows the same object while
+   it waits — one implementation, two canvases, no chance of them drifting
+   into looking like different products. */
+function makeCore(id, opts) {
+  opts = opts || {};
+  const cv = document.getElementById(id);
+  if (!cv) return { set(){}, resize(){} };
   const ctx = cv.getContext('2d');
-  let W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0; const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let energy = 0.15, target = 0.15, t = 0;
 
-  const RINGS = [
-    { n: 220, r: 0.86, amp: 0.055, spin: 0.00022, hue: '0,243,255', size: 1.5, a: 0.85 },
-    { n: 180, r: 0.74, amp: 0.075, spin: -0.00031, hue: '0,220,210', size: 1.3, a: 0.62 },
-    { n: 140, r: 0.62, amp: 0.095, spin: 0.00041, hue: '0,180,190', size: 1.1, a: 0.40 },
-    { n: 90,  r: 0.30, amp: 0.130, spin: -0.00055, hue: '0,243,255', size: 1.0, a: 0.22 }
+  const LAT = 9, LON = 18, PER_LAT = 96, PER_LON = 64;
+  const TILT = -0.42;                         /* the axis leans toward you */
+
+  /* Three orbits, each tilted differently, each carrying one body. */
+  const ORBITS = [
+    { rx: 1.34, ry: 0.30, rot: -0.30, speed: 0.0060, a: 0.34 },
+    { rx: 1.16, ry: 0.46, rot:  0.55, speed: -0.0042, a: 0.26 },
+    { rx: 1.46, ry: 0.16, rot:  0.16, speed: 0.0031, a: 0.20 }
   ];
+
+  /* Fixed stars, so the field does not shimmer randomly every frame. */
+  const STARS = Array.from({ length: 46 }, () => ({
+    a: Math.random() * Math.PI * 2,
+    r: 0.62 + Math.random() * 0.75,
+    s: 0.6 + Math.random() * 1.1,
+    tw: Math.random() * Math.PI * 2
+  }));
 
   function resize() {
     const rect = cv.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;     /* still hidden behind the gate */
+    if (!rect.width || !rect.height) return;   /* still hidden */
     W = rect.width; H = rect.height;
     cv.width = W * dpr; cv.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  /* The canvas is measured while the app is still hidden, so it comes back
-     0x0 and nothing ever draws. Observing the element covers both that
-     transition and ordinary window resizes. */
   if (window.ResizeObserver) new ResizeObserver(resize).observe(cv);
   window.addEventListener('resize', resize);
   resize();
 
+  /* lat/lon on a unit sphere → rotated → screen. Returns z so the caller can
+     fade the far hemisphere. */
+  function project(lat, lon, yaw, cx, cy, R) {
+    const cl = Math.cos(lat), sl = Math.sin(lat);
+    let x = cl * Math.cos(lon + yaw), y = sl, z = cl * Math.sin(lon + yaw);
+    const ct = Math.cos(TILT), st = Math.sin(TILT);
+    const y2 = y * ct - z * st, z2 = y * st + z * ct;
+    return { x: cx + x * R, y: cy + y2 * R, z: z2 };
+  }
+
   function frame() {
     if (!W || !H) { resize(); requestAnimationFrame(frame); return; }
     t += 1;
-    energy += (target - energy) * 0.02;      /* ease, so it never snaps */
+    energy += (target - energy) * 0.02;
     ctx.clearRect(0, 0, W, H);
-    const cx = W / 2, cy = H / 2;
-    const R = Math.min(W, H) * 0.42;
 
-    for (const ring of RINGS) {
-      const spin = t * ring.spin * 1000;
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * (opts.scale || 0.30);
+    const yaw = t * (0.0022 + energy * 0.0024);
+    const cyan = '0,243,255';
+
+    /* the halo it sits in */
+    const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.1);
+    g.addColorStop(0, 'rgba(' + cyan + ',' + (0.10 + energy * 0.10).toFixed(3) + ')');
+    g.addColorStop(0.45, 'rgba(0,120,220,0.05)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 2.1, 0, Math.PI * 2); ctx.fill();
+
+    /* stars */
+    STARS.forEach(st2 => {
+      const x = cx + Math.cos(st2.a) * R * st2.r * 1.7;
+      const y = cy + Math.sin(st2.a) * R * st2.r * 1.1;
+      const tw = 0.35 + 0.45 * Math.abs(Math.sin(t * 0.01 + st2.tw));
+      ctx.fillStyle = 'rgba(' + cyan + ',' + (tw * 0.5).toFixed(3) + ')';
+      ctx.fillRect(x, y, st2.s, st2.s);
+    });
+
+    /* parallels */
+    for (let i = 1; i < LAT; i++) {
+      const lat = -Math.PI / 2 + (i / LAT) * Math.PI;
       ctx.beginPath();
-      for (let i = 0; i < ring.n; i++) {
-        const th = (i / ring.n) * Math.PI * 2 + spin;
-        /* three harmonics — the lobes, the wobble, the fine tremor */
-        const d = ring.amp * (
-            Math.sin(th * 3 + t * 0.006) * 1.0 +
-            Math.sin(th * 5 - t * 0.009) * 0.55 +
-            Math.sin(th * 11 + t * 0.014) * 0.28
-          ) * (0.55 + energy);
-        const rr = R * ring.r * (1 + d);
-        const x = cx + Math.cos(th) * rr;
-        const y = cy + Math.sin(th) * rr;
-        const a = ring.a * (0.45 + 0.55 * energy);
-        ctx.fillStyle = 'rgba(' + ring.hue + ',' + a.toFixed(3) + ')';
-        ctx.fillRect(x, y, ring.size, ring.size);
+      for (let j = 0; j <= PER_LAT; j++) {
+        const p = project(lat, (j / PER_LAT) * Math.PI * 2, yaw, cx, cy, R);
+        const a = (p.z > 0 ? 0.42 : 0.11) * (0.6 + energy * 0.6);
+        ctx.strokeStyle = 'rgba(' + cyan + ',' + a.toFixed(3) + ')';
+        if (j === 0) { ctx.moveTo(p.x, p.y); }
+        else { ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
       }
-      ctx.closePath();
     }
 
-    /* core glow */
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.5);
-    g.addColorStop(0, 'rgba(0,243,255,' + (0.10 + energy * 0.14).toFixed(3) + ')');
-    g.addColorStop(1, 'rgba(0,243,255,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx, cy, R * 0.5, 0, Math.PI * 2); ctx.fill();
+    /* meridians */
+    for (let i = 0; i < LON; i++) {
+      const lon = (i / LON) * Math.PI * 2;
+      ctx.beginPath();
+      for (let j = 0; j <= PER_LON; j++) {
+        const lat = -Math.PI / 2 + (j / PER_LON) * Math.PI;
+        const p = project(lat, lon, yaw, cx, cy, R);
+        const a = (p.z > 0 ? 0.30 : 0.08) * (0.6 + energy * 0.6);
+        ctx.strokeStyle = 'rgba(' + cyan + ',' + a.toFixed(3) + ')';
+        if (j === 0) { ctx.moveTo(p.x, p.y); }
+        else { ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+      }
+    }
+
+    /* vertex glints on the front hemisphere only */
+    for (let i = 1; i < LAT; i++) {
+      const lat = -Math.PI / 2 + (i / LAT) * Math.PI;
+      for (let j = 0; j < LON; j++) {
+        const p = project(lat, (j / LON) * Math.PI * 2, yaw, cx, cy, R);
+        if (p.z <= 0) continue;
+        const a = 0.30 + 0.5 * p.z * (0.4 + energy);
+        ctx.fillStyle = 'rgba(140,240,255,' + Math.min(0.9, a).toFixed(3) + ')';
+        ctx.fillRect(p.x, p.y, 1.4, 1.4);
+      }
+    }
+
+    /* orbits, and one body riding each */
+    ORBITS.forEach((o, k) => {
+      ctx.save();
+      ctx.translate(cx, cy); ctx.rotate(o.rot);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, R * o.rx, R * o.ry, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(' + cyan + ',' + (o.a * (0.5 + energy * 0.5)).toFixed(3) + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      const th = t * o.speed * (1 + energy);
+      const bx = Math.cos(th) * R * o.rx, by = Math.sin(th) * R * o.ry;
+      const bg = ctx.createRadialGradient(bx, by, 0, bx, by, 7);
+      bg.addColorStop(0, 'rgba(190,250,255,0.95)');
+      bg.addColorStop(1, 'rgba(' + cyan + ',0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(bx, by, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
 
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
-  /* resize is exposed because the view switcher calls it. A guarded call to a
-     method that does not exist is dead code that looks like a safeguard. */
   return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
-})();
+}
 
-/* The dashboard is about the day, not about the machine. Schedule and the
-   ranked backlog get the room; spend and subsystem toggles fold away behind a
-   summary, because you look at those when something is wrong, not while you
-   are working. */
+const arc = makeCore('arc', { scale: 0.30 });
+const gateCore = makeCore('gateArc', { scale: 0.34 });
+
 /* fmt() may return: { n, time, past, left, right, cls, clamp }
      n      a spoken handle — "execute 1 through 4"
      time   its own mono column, so titles line up instead of being pushed
