@@ -96,7 +96,11 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
    visibly the same object. transform-origin is set from the row's position at
    open time; that is what makes it read as "beamed up" instead of "a modal
    appeared". */
-.cardBack{position:fixed;inset:0;z-index:120;background:rgba(2,8,19,.62);
+/* 150, not 120: a zoomed panel sits at 140 and its backdrop at 139. At 120 a
+   card opened from an expanded Outbox rose up BEHIND the panel it came from —
+   the same trap the zoom fix found, one layer up. 150 is also above the
+   caption (145), which can now be dragged anywhere and must not cover a card. */
+.cardBack{position:fixed;inset:0;z-index:150;background:rgba(2,8,19,.62);
           backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center}
 .cardBack[hidden]{display:none!important}
 .card{width:min(460px,92vw);background:var(--panel);border:var(--edge);border-radius:10px;
@@ -127,6 +131,19 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .cardActs button{flex:1;justify-content:center;padding:9px}
 .cardNote{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:12px;
           border-top:1px solid rgba(0,243,255,.10);padding-top:10px}
+/* The draft card is the same card, wider, with the message scrolling inside
+   it: a subject line fits in 460px, an email does not. Everything but the
+   body is flex:none so the body is the only thing that gives. */
+.card.draft{width:min(640px,94vw);max-height:88vh;display:flex;flex-direction:column}
+.card.draft > *{flex:none} .card.draft > .draftBody{flex:1 1 auto}
+.card.draft .cardName{font-size:15px;letter-spacing:1px;line-height:1.35;overflow-wrap:anywhere}
+.card.draft .cardOrg{text-align:left;margin-top:5px}
+.card.draft .cardRows{margin-bottom:0}
+.draftBody{min-height:80px;overflow-y:auto;white-space:pre-wrap;font-size:13px;
+           line-height:1.6;color:var(--ink);background:rgba(0,0,0,.22);
+           border:1px solid rgba(0,243,255,.12);border-radius:6px;padding:10px 12px;margin-top:12px}
+.draftBody.wait{color:var(--dim);font-style:italic}
+.draftBody.bad{color:var(--bad);border-color:rgba(255,107,107,.35)}
 .rowClick{cursor:pointer}
 .toolNode{display:flex;align-items:baseline;gap:10px;padding:7px 9px;border:1px solid transparent;
           border-radius:5px;cursor:pointer;font-size:13px}
@@ -602,20 +619,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
    It also stops swallowing clicks. A caption is something to read, not
    something to press, and a full-width fixed panel with pointer events is a
-   lid over whatever is beneath it. The inner text keeps its own events so a
-   long answer can still be scrolled. */
+   lid over whatever is beneath it. The text takes a pointer only when there
+   is more of it than fits, so a long answer can still be scrolled and a short
+   one blocks nothing. */
 /* --talkH is measured from the real bar, not guessed. A hard-coded offset was
    19px short on a 940px viewport and would be wrong again the next time the
    bar gains a button. */
+/* z-index 145: above the zoom scrim (139) and an expanded panel (140). Voice
+   keeps running while a panel is expanded, and a transcript dimmed under a
+   backdrop — with its grip unreachable — was the bug. Below the card (150). */
 .caps{position:fixed;left:0;right:0;bottom:var(--talkH, 124px);background:rgba(2,8,19,.95);
       border-top:1px solid var(--glow-blue);border-bottom:1px solid var(--glow-blue);
-      padding:10px 18px;z-index:90;display:none;pointer-events:none;
+      padding:10px 18px;z-index:145;display:none;pointer-events:none;
       backdrop-filter:blur(3px)}
 .caps.on{display:block}
-.caps #captext,.caps .capwho{pointer-events:auto}
+.caps.scrolls #captext{pointer-events:auto}
 .capwho{font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:3px}
 .capwho.awake{color:var(--good)}
 #captext{font-size:16px;color:var(--ink);line-height:1.5;max-height:88px;overflow-y:auto}
+
+/* Where you read the caption is your decision. The grip is the only part of
+   the panel that takes a pointer: drag it and the strip becomes a box you can
+   put anywhere; FOLD shrinks it to a dot that pulses while there is something
+   to read and shows the last line on hover; DOCK puts it back above the talk
+   bar. Every state rule here carries a class, because the phone block at the
+   end of the sheet writes bare .caps rules and (0,2,0) beats (0,1,0)
+   regardless of source order. */
+.capGrip{display:flex;align-items:center;gap:8px;margin-bottom:3px;pointer-events:auto;
+         cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.caps.drag .capGrip,.caps.fold.drag{cursor:grabbing}
+.capGrip .capwho{margin-bottom:0;flex:1;min-width:0;overflow:hidden;
+                 text-overflow:ellipsis;white-space:nowrap}
+.capBtn{flex:none;font-size:9px;line-height:1;padding:3px 6px;min-height:0;
+        border-radius:4px;opacity:.55}
+.capBtn:hover{opacity:1}
+.capDot{flex:none;display:none;width:7px;height:7px;border-radius:50%;
+        background:var(--glow-cyan);box-shadow:0 0 8px var(--glow-cyan)}
+.caps.awake .capDot{background:var(--good);box-shadow:0 0 8px var(--good)}
+@keyframes capPulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:none}}
+
+/* Free: a bounded box wherever it was dropped. left/top come from JS as px
+   strings. The base rule pins BOTH horizontal edges, so both are released
+   here — with right:0 still in force, a 520px box stretched to the far edge. */
+.caps.free{left:auto;right:auto;bottom:auto;top:0;width:min(520px,calc(100vw - 24px));
+  border:1px solid var(--glow-blue);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+/* No bottom edge to grow up from, so it must not grow down without limit either. */
+.caps.free #captext{max-height:min(40vh,220px)}
+
+/* Folded: a dot — the same object a minimised panel becomes — parked at the
+   right end of where the strip was, or where the box was. The dot IS the
+   control, so this is the one state where the panel itself takes a pointer.
+   The hover preview is a bubble BESIDE the dot, not a wider pill: a docked
+   dot is anchored on the right, and a pill that grew leftwards under the
+   pointer moved the dot out from under it and lost its own hover. */
+.caps.on.fold{display:block;left:auto;right:16px;width:auto;padding:8px;cursor:pointer;
+  border:1px solid rgba(0,243,255,.45);border-radius:999px;
+  box-shadow:0 0 14px rgba(0,243,255,.22);pointer-events:auto;touch-action:none}
+.caps.free.fold{right:auto}   /* the inline left/top still govern */
+.caps.fold .capGrip{margin:0;gap:0}
+.caps.fold .capGrip .capwho,.caps.fold .capBtn{display:none}
+.caps.fold .capDot{display:block;animation:capPulse 2.2s ease-in-out infinite}
+.caps.fold #captext{display:none;position:absolute;top:50%;transform:translateY(-50%);
+  right:calc(100% + 8px);max-width:min(380px,60vw);padding:6px 10px;border-radius:999px;
+  background:rgba(2,8,19,.95);border:1px solid rgba(0,243,255,.3);
+  font-size:12px;line-height:1.3;max-height:none;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;pointer-events:none}
+/* Who said it rides on the bubble; capsFit() copies it over. */
+.caps.fold #captext::before{content:attr(data-who) '  ';font-family:var(--mono);
+  font-size:9px;letter-spacing:2px;color:var(--dim)}
+.caps.fold.awake #captext::before{color:var(--good)}
+.caps.fold.edgeL #captext{right:auto;left:calc(100% + 8px)}   /* a dot on the left half */
+.caps.fold:hover #captext{display:block}
 /* ══ SMALL SCREENS ═══════════════════════════════════════════════════════
    All of this overrides the desktop rules above, so it lives at the end of the
    sheet: media queries carry no specificity of their own and source order is
@@ -697,6 +771,13 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
            background:var(--bg)}
   .askWrap input{font-size:16px}   /* under 16px, iOS zooms the page on focus */
   .talkBar #micBig{flex:0 0 auto;width:auto;margin:0;min-height:40px;padding:9px 13px}
+
+  /* The caption folds here but does not detach: no room to float a box, and
+     no hover to reveal a dimmed button. The grip gives the page its scroll
+     back; clampCaps() keeps a saved free position for a wider window. */
+  .capGrip{cursor:default;touch-action:auto}
+  .capBtn{opacity:1;min-height:32px;padding:6px 10px}
+  #capFree{display:none}
 
   /* A list that scrolls inside a fixed-height grid on the desktop has no
      height to scroll inside once the PAGE is what scrolls — so it unrolls.
@@ -1093,7 +1174,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 <div class="zoomBack" id="zoomBack" hidden></div>
 <div class="cardBack" id="cardBack" hidden><div class="card" id="card"></div></div>
 
-<div class="caps" id="caps"><div class="capwho" id="capwho"></div><div id="captext"></div></div>
+<div class="caps" id="caps">
+  <div class="capGrip" id="capGrip">
+    <div class="capwho" id="capwho"></div><span class="capDot" aria-hidden="true"></span>
+    <button class="capBtn" id="capFree" title="Free it — then drag it anywhere">FREE</button>
+    <button class="capBtn" id="capFold" title="Fold it to a dot">FOLD</button>
+  </div>
+  <div id="captext"></div>
+</div>
 
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
@@ -1908,8 +1996,133 @@ function caps(who, text, isAwake){
   el('capwho').textContent = who;
   el('capwho').className = 'capwho' + (isAwake?' awake':'');
   el('captext').textContent = text || '';
+  capsFit();
 }
 function capsOff(){ el('caps').classList.remove('on'); }
+
+/* Where the caption sits is a preference, not part of any one message: it
+   holds across capsOff() and the next caps(), and across a reload. Neither of
+   those touches the classes below — they only add and remove 'on'.
+   mode is dock, free or fold. x/y are the free position and are kept through
+   a fold, so a folded box comes back where it was. */
+const CAPS_KEY='jarvisCaps';
+let capsState=(()=>{ try{ return JSON.parse(localStorage.getItem(CAPS_KEY)||'{}')||{}; }
+                     catch(_){ return {}; } })();
+function saveCaps(){ try{ localStorage.setItem(CAPS_KEY, JSON.stringify(capsState)); }catch(_){} }
+let talkClear=124;   /* the last number measureTalk() put in --talkH */
+/* A free box only where there is room and a pointer to drag it with. On a
+   phone the saved position is kept but not used, so it is still there when
+   the window is wide again. */
+function capsFree(){
+  return capsState.mode!=='dock' && capsState.x!=null && capsState.y!=null && !phone.matches;
+}
+/* Puts the saved state on the element and keeps a free box inside the
+   viewport, never over the talk bar. Hung off measureTalk(), so a resize, the
+   mic moving into the bar, or a rotation all re-clamp with no new listeners;
+   capsFit() calls it too, because a one-line caption that grows to five lines
+   is a different height to clamp. */
+function clampCaps(){
+  const b=el('caps'); if(!b) return;
+  const free=capsFree();
+  b.classList.toggle('fold', capsState.mode==='fold');
+  b.classList.toggle('free', free);
+  const fb=el('capFree');
+  if(fb){ fb.textContent=free?'DOCK':'FREE';
+          fb.title=free?'Dock it above the talk bar':'Free it — then drag it anywhere'; }
+  if(!free){ b.style.left=''; b.style.top=''; b.classList.remove('edgeL'); return; }
+  const r=b.getBoundingClientRect();
+  capsState.x=Math.min(Math.max(0,capsState.x), Math.max(0, window.innerWidth-r.width));
+  capsState.y=Math.min(Math.max(0,capsState.y), Math.max(0, window.innerHeight-talkClear-r.height));
+  b.style.left=capsState.x+'px'; b.style.top=capsState.y+'px';
+  /* A folded dot's preview opens toward the middle of the screen. */
+  b.classList.toggle('edgeL', capsState.x < window.innerWidth/2);
+}
+/* Layout reads one frame late and at most once a frame: caps() fires on every
+   interim speech result, and a scrollHeight read inline there would be a
+   forced reflow per syllable. */
+let capsFitRAF=0;
+function capsFit(){
+  if(capsFitRAF) return;
+  capsFitRAF=requestAnimationFrame(()=>{
+    capsFitRAF=0;
+    const b=el('caps'), t=el('captext'), w=el('capwho'); if(!b||!t||!w) return;
+    b.classList.toggle('scrolls', t.scrollHeight > t.clientHeight+1);
+    /* The folded dot has no room for the speaker line, so it rides on the
+       bubble and colours the dot. */
+    t.dataset.who=w.textContent;
+    b.classList.toggle('awake', w.classList.contains('awake'));
+    clampCaps();
+  });
+}
+/* Clamp before saving, so what is remembered is what is on screen. */
+function foldCaps(on){
+  capsState.mode = on ? 'fold' : (capsState.x!=null ? 'free' : 'dock');
+  clampCaps(); saveCaps();
+}
+function dockCaps(){
+  capsState.mode='dock'; delete capsState.x; delete capsState.y;
+  clampCaps(); saveCaps();
+}
+/* Pops out of the strip where it was: same height, centred, so it reads as
+   the same object coming loose rather than a new one appearing. */
+function freeCaps(){
+  const b=el('caps'), r=b.getBoundingClientRect();
+  capsState.mode='free'; capsState.x=0; capsState.y=Math.round(r.top);
+  clampCaps();                            /* now it is box-sized — centre it */
+  capsState.x=Math.round((window.innerWidth-b.getBoundingClientRect().width)/2);
+  clampCaps(); saveCaps();
+}
+/* The drag: the whiteboard note's pattern (capture the pointer, a .drag class
+   for the cursor, persist on release) plus the brain's rule that a pan is not
+   a click — a grip pressed and released in place must not free a docked
+   strip, and a dot that was dragged must not unfold. Offsets come from
+   getBoundingClientRect(): this box is position:fixed and has no offsetParent.
+   Dragging a docked strip frees it. */
+let cdx=0, cdy=0, csx=0, csy=0, cmoving=false, cmoved=false;
+(function wireCaps(){
+  const b=el('caps'), fold=el('capFold'), free=el('capFree');
+  if(!b||!fold||!free) return;
+  b.addEventListener('pointerdown',e=>{
+    cmoved=false;
+    if(phone.matches) return;                                  /* fold only on a phone */
+    if(e.target.closest('.capBtn')) return;                    /* a button is not a handle */
+    if(!b.classList.contains('fold') && !e.target.closest('.capGrip')) return;
+    const r=b.getBoundingClientRect();
+    cmoving=true; csx=e.clientX; csy=e.clientY;
+    /* A fraction of the width, not a pixel offset: a full-width strip that
+       becomes a 520px box on the first move keeps the pointer over the same
+       part of it instead of leaving the box behind. */
+    cdx=r.width ? (e.clientX-r.left)/r.width : 0; cdy=e.clientY-r.top;
+    b.classList.add('drag'); b.setPointerCapture(e.pointerId);
+  });
+  b.addEventListener('pointermove',e=>{
+    if(!cmoving) return;
+    if(!cmoved){
+      if(Math.abs(e.clientX-csx)+Math.abs(e.clientY-csy)<=2) return;   /* still a click */
+      cmoved=true;
+      if(capsState.mode!=='fold') capsState.mode='free';
+      /* docked → free: give it a position so clampCaps() sizes it as a box
+         before the width below is read */
+      if(capsState.x==null){ capsState.x=0; capsState.y=0; clampCaps(); }
+    }
+    const w=b.getBoundingClientRect().width;
+    capsState.x=Math.round(e.clientX-cdx*w); capsState.y=Math.round(e.clientY-cdy);
+    clampCaps();
+  });
+  const end=()=>{
+    if(!cmoving) return;
+    cmoving=false; b.classList.remove('drag');
+    if(cmoved) saveCaps();                                     /* persist on release only */
+  };
+  b.addEventListener('pointerup',end);
+  b.addEventListener('pointercancel',end);
+  /* The folded dot is the control: a click brings the panel back. */
+  b.addEventListener('click',()=>{ if(cmoved||!b.classList.contains('fold')) return; foldCaps(false); });
+  fold.addEventListener('pointerdown',e=>e.stopPropagation());
+  free.addEventListener('pointerdown',e=>e.stopPropagation());
+  fold.addEventListener('click',e=>{ e.stopPropagation(); foldCaps(true); });
+  free.addEventListener('click',e=>{ e.stopPropagation(); capsFree()?dockCaps():freeCaps(); });
+})();
 
 function ctxOf(){
   if(!actx){ const C=window.AudioContext||window.webkitAudioContext; if(C) actx=new C(); }
@@ -2537,8 +2750,15 @@ function measureTalk(){
      bar's height: the bar is not flush to the bottom — there is body padding
      and a footer line under it — so height alone left the caption sitting
      across the bar it was supposed to clear. */
-  const clear=Math.max(0, Math.round(window.innerHeight - r.top)) + 12;
-  document.documentElement.style.setProperty('--talkH', clear+'px');
+  /* A bar scrolled off the bottom of a long page measures as no clearance at
+     all, which put the caption — and the floor clampCaps() holds a free box
+     above — at the very bottom, the one place they must never be. Keep the
+     last good number instead. */
+  if(r.top<=window.innerHeight){
+    talkClear=Math.max(0, Math.round(window.innerHeight - r.top)) + 12;
+    document.documentElement.style.setProperty('--talkH', talkClear+'px');
+  }
+  clampCaps();
 }
 window.addEventListener('resize',measureTalk);
 if(window.ResizeObserver){
@@ -2663,13 +2883,24 @@ function renderQuick(){
    here is read from a field, never inferred. */
 function renderNeeds(s){
   const out=[];
-  (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient']); });
+  /* The draft rides on the row (4th slot) so a click can open it. */
+  (s.draftList||[]).forEach(d=>{ if(!d.to) out.push(['warn', d.subject||'(no subject)', 'needs a recipient', d]); });
   (s.todos||[]).forEach(t=>{ if(t.status==='blocked') out.push(['bad', t.title||'(untitled)', 'blocked']); });
   if((s.counts||{}).queued) out.push(['info', (s.counts.queued)+' meetings waiting to be analysed','queued']);
 
-  listInto('needs', out, r=>({left:r[1], right:r[2], cls:r[0]==='bad'?'bad':r[0]==='warn'?'warn':'', clamp:true}),
+  /* A draft row is not clamped: its click means "open", not "expand". */
+  listInto('needs', out, r=>({left:r[1], right:r[2], cls:r[0]==='bad'?'bad':r[0]==='warn'?'warn':'', clamp:!r[3]}),
            'nothing is waiting on you');
   const n=el('needsN'); if(n) n.textContent = out.length ? out.length+' WAITING' : '';
+  /* Bound after render, the way People does: listInto draws a list and does
+     not know what a draft is. */
+  const rowsEl=[...document.querySelectorAll('#needs .row')];
+  out.forEach((r,i)=>{
+    if(!r[3]) return;
+    const row=rowsEl[i]; if(!row) return;
+    row.classList.add('rowClick');
+    row.addEventListener('click',()=>showDraft({id:r[3].id, label:r[1], to:r[3].to||null}, row));
+  });
 }
 
 /* ── connections ─────────────────────────────────────────────────────────
@@ -3109,6 +3340,9 @@ async function bdThink(withBoard){
    24 is midnight, 25 is 1am — because the late block is part of the SAME day
    to the person living it, whatever the date says. */
 const DAY_FROM=6, DAY_TO=26;
+/* Shabbat is ONE day: Friday from six in the evening to the end of the
+   visible day. Saturday and Sunday are ordinary days to this page. */
+const SHABBAT_FROM=18;
 
 /* ── the shape of his actual day ─────────────────────────────────────────
    Anchors, not suggestions. These are what already happens, said in his own
@@ -3116,12 +3350,18 @@ const DAY_FROM=6, DAY_TO=26;
    a 6:30am workout while he is making his daughter's breakfast. A gap is only
    free if nothing — meeting OR anchor — is already in it.
 
+   `dow` is the days it happens, Sunday=0 … Saturday=6; leave it off for every
+   day. There is no school run on a Saturday and no desk on a Sunday, and a
+   weekend drawn with either is a weekday wearing the wrong date.
+
    Fri is the exception the whole week bends around: it ends at sundown. */
+const WEEKDAYS=[1,2,3,4,5];
 const ANCHORS=[
   { a:6,     b:6.25,  label:'Coffee',                    tag:'first' },
   { a:6.25,  b:7.25,  label:'Breakfast + pack her lunch',tag:'family' },
-  { a:7.75,  b:8,     label:'School run',                tag:'family' },
-  { a:8,     b:8.25,  label:'At the desk',               tag:'work' },
+  { a:7.75,  b:8,     label:'School run',                tag:'family', dow:WEEKDAYS },
+  { a:8,     b:8.25,  label:'At the desk',               tag:'work',   dow:WEEKDAYS },
+  { a:8.5,   b:11,    label:'Church',                    tag:'family', dow:[0] },
   { a:19.75, b:20.5,  label:'Kids to bed',               tag:'family' },
   { a:20.5,  b:22,    label:'Wife and the baby',         tag:'family' },
   { a:22.5,  b:26,    label:'Deep work — if you want it',tag:'late', optional:true }
@@ -3136,6 +3376,15 @@ function hhmm(iso){
 }
 
 function isFri(){ return new Date().getDay()===5; }
+
+/* The anchors that belong to TODAY: the right day of the week, and on a
+   Friday nothing past sundown. Both renderers ask this one question so the
+   day view and the planner cannot disagree about what is already happening. */
+function anchorsToday(){
+  const dow=new Date().getDay();
+  return ANCHORS.filter(k=>(!k.dow || k.dow.indexOf(dow)>=0)
+                        && !(isFri() && k.a>=SHABBAT_FROM));
+}
 
 function renderDay(){
   const host=el('week'); if(!host) return;
@@ -3153,8 +3402,10 @@ function renderDay(){
     lab.textContent=(hh%12===0?12:hh%12)+(pm?' PM':' AM');
     const body=document.createElement('div'); body.className='hourBody';
 
-    /* His own routine first, so the day has a shape even on a light diary. */
-    ANCHORS.filter(k=>Math.floor(k.a)===h%24 && !(isFri() && k.a>=17))
+    /* His own routine first, so the day has a shape even on a light diary.
+       A real event in the same hour is drawn too, after it — church stays on
+       the page and the early service he actually booked stays with it. */
+    anchorsToday().filter(k=>Math.floor(k.a)===h%24)
       .forEach(k=>{
         const d=document.createElement('div');
         d.className='anch '+k.tag;
@@ -3246,6 +3497,133 @@ function showEvent(e, fromEl){
   back.hidden=false;
 }
 
+/* ── the draft card ──────────────────────────────────────────────────────
+   "OMEGA access" is a subject line, and a subject line is not a message —
+   you cannot decide about fifty of those. Click one and the card says who it
+   is to, what it says, where it came from, and why the list put it where it
+   did: the same reasons draftTriage prints on the row, computed the same
+   way, so the card never disagrees with the list it opened from.
+
+   The body lives only in the twin (GET /draft?id=). The status payload
+   carries titles, not bodies — fifty of those every thirty seconds is a lot
+   of bytes for a list — so it is fetched on the first click and kept: a
+   draft does not change while he reads it. An error is NOT kept, so the next
+   click asks again. The twin answers with subject, to[], body, kind,
+   needsRecipient, createdBy, createdAt, fromBacklog and — when the backlog
+   item behind it still exists — origin{title, type, source}.
+
+   No send button. Sending stays behind the twin's gate, where "execute 3"
+   already goes. This card is for reading. */
+const draftCache=new Map();
+async function fetchDraft(id){
+  if(draftCache.has(id)) return draftCache.get(id);
+  const t=await token(); if(!t) throw new Error('not signed in');
+  const r=await fetch(CHAT+'/draft?id='+encodeURIComponent(id),{headers:{Authorization:'Bearer '+t}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  /* A twin deployed before /draft existed answers this GET with the chat
+     thread, 200. It echoes the id when it knows the route; a 200 that does
+     not is not a draft, and must not be painted as one. */
+  if(j.id!==id) throw new Error('the deployed twin has no /draft route — redeploy twinChat');
+  draftCache.set(id, j);
+  return j;
+}
+
+function showDraft(d, fromEl){
+  const back=el('cardBack'), card=el('card');
+  if(!back||!card||!d||!d.id) return;
+  card.textContent='';
+  card.classList.add('draft');
+  /* Which draft this card is showing, so a body that lands after he has
+     moved on to another one paints nothing. */
+  card.dataset.draft=d.id;
+  if(fromEl){
+    const r=fromEl.getBoundingClientRect();
+    card.style.transformOrigin=(r.left+r.width/2)+'px '+(r.top+r.height/2)+'px';
+  }
+
+  /* What the list already knows goes up at once. The body follows. */
+  const nm=document.createElement('div'); nm.className='cardName';
+  nm.textContent=(d.n?d.n+' · ':'')+(d.label||'(no subject)');
+  card.appendChild(nm);
+  const sub=document.createElement('div'); sub.className='cardOrg'; sub.textContent='DRAFT';
+  card.appendChild(sub);
+
+  const rows=document.createElement('div'); rows.className='cardRows';
+  const addRow=(label)=>{
+    const r=document.createElement('div'); r.className='cardRow';
+    const l=document.createElement('span'); l.className='lbl'; l.textContent=label;
+    const v=document.createElement('span'); v.className='val';
+    r.append(l,v); rows.appendChild(r); return v;
+  };
+  const toV=addRow('TO'), stV=addRow('STATUS'), whyV=addRow('RANKED ON'),
+        fromV=addRow('FROM'), madeV=addRow('CREATED');
+  card.appendChild(rows);
+
+  /* TO, STATUS and RANKED ON come out of the same triage as the row. Painted
+     once from what the list knows, again if the twin's recipients differ. */
+  const paint=(dd)=>{
+    const tri=draftTriage(dd, clientOrgs());
+    const stuck=tri.why.indexOf('no recipient')!==-1;
+    toV.textContent=dd.to||'no recipient — pick one';
+    toV.style.color=dd.to?'':'var(--warn)';
+    stV.textContent=stuck ? 'not sendable — no recipient'
+                          : 'ready to send'+(d.n?' — say “execute '+d.n+'”':'');
+    stV.style.color=stuck?'var(--warn)':'var(--good)';
+    const why=tri.why.filter(w=>w!=='ready to send'&&w!=='no recipient');
+    whyV.textContent=why.length?why.join(' · '):'nothing in particular';
+  };
+  paint(d);
+  fromV.textContent=madeV.textContent='reading…';
+  fromV.style.color=madeV.style.color='var(--dim)';
+
+  const body=document.createElement('div'); body.className='draftBody wait';
+  body.textContent='reading it…';
+  card.appendChild(body);
+
+  const bar=document.createElement('div'); bar.className='cardActs';
+  const cp=document.createElement('button'); cp.textContent='COPY BODY'; cp.disabled=true;
+  bar.appendChild(cp);
+  const x=document.createElement('button'); x.textContent='CLOSE';
+  x.addEventListener('click',closeCard); bar.appendChild(x);
+  card.appendChild(bar);
+
+  back.hidden=false;
+  card.style.animation='none'; void card.offsetWidth; card.style.animation='';
+
+  fetchDraft(d.id).then(j=>{
+    if(card.dataset.draft!==d.id) return;
+    const to=(j.to||[]).join(', ');
+    if(j.needsRecipient||!to) paint(Object.assign({},d,{to:null}));
+    else if(to!==d.to) paint(Object.assign({},d,{to:to}));
+    sub.textContent=String(j.kind||'email').toUpperCase()+' DRAFT';
+    /* Where it came from. A draft that can name the meeting behind it is
+       one he can decide about in one read; one that cannot says so. */
+    const o=j.origin;
+    fromV.style.color='';
+    fromV.textContent = o
+      ? [o.title||'(untitled)', o.type||null].filter(Boolean).join(' · ')+(o.source?' — '+o.source:'')
+      : j.fromBacklog ? 'backlog item '+j.fromBacklog+' — no longer there'
+      : 'nothing behind it — not tied to a meeting or a backlog item';
+    /* ago() already turns into a date once it is old; do not print it twice. */
+    const when=j.createdAt?ago(j.createdAt):'';
+    const full=j.createdAt&&!isNaN(new Date(j.createdAt))
+      ? new Date(j.createdAt).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'})+' '+hhmm(j.createdAt)
+      : '';
+    madeV.style.color='';
+    madeV.textContent=(full ? (/ago$/.test(when)?when+' · ':'')+full : 'no date recorded')
+                     +(j.createdBy?' · by '+j.createdBy:'');
+    body.className='draftBody';
+    body.textContent=j.body||'(empty — a subject and nothing else)';
+    if(j.body){ cp.disabled=false; cp.addEventListener('click',()=>copyToClipboard(j.body,cp)); }
+  }, e=>{
+    if(card.dataset.draft!==d.id) return;
+    fromV.textContent=madeV.textContent='—';
+    body.className='draftBody bad';
+    body.textContent='The twin could not read it: '+e.message;
+  });
+}
+
 /* ══ WHAT THE DAY COULD LOOK LIKE ════════════════════════════════════════
    Not a rearrangement of his meetings — those are commitments to other people
    and this has no business moving them. It reads the gaps BETWEEN them and
@@ -3283,7 +3661,7 @@ function busyBlocks(evts){
 function renderPlan(evts){
   const host=el('dayPlan'); if(!host) return;
   host.textContent='';
-  const isFriday=new Date().getDay()===5;
+  const isFriday=isFri();
 
   const note=document.createElement('div'); note.className='cardNote';
   note.style.marginTop='0';
@@ -3293,17 +3671,18 @@ function renderPlan(evts){
   host.appendChild(note);
 
   /* Anchors are as busy as meetings. Offering him thirty minutes of training
-     at 6:30 while he is packing a lunch box is the planner not knowing him. */
+     at 6:30 while he is packing a lunch box, or at 9 on a Sunday while he is
+     in church, is the planner not knowing him. */
   const busy=busyBlocks(evts)
-    .concat(ANCHORS.filter(k=>!k.optional).map(k=>({a:k.a,b:k.b,title:k.label})))
+    .concat(anchorsToday().filter(k=>!k.optional).map(k=>({a:k.a,b:k.b,title:k.label})))
     .sort((x,y)=>x.a-y.a);
   /* Free gaps inside the working window. */
   const gaps=[]; let cur=DAY_FROM;
   busy.forEach(b=>{ if(b.a>cur) gaps.push({a:cur,b:Math.min(b.a,DAY_TO)}); cur=Math.max(cur,b.b); });
   if(cur<DAY_TO) gaps.push({a:cur,b:DAY_TO});
 
-  /* Shabbat: Friday evening onward is not a gap to fill. */
-  const stop = isFriday ? 17 : DAY_TO;
+  /* Shabbat: Friday from six in the evening onward is not a gap to fill. */
+  const stop = isFriday ? SHABBAT_FROM : DAY_TO;
   const usable=gaps.map(g=>({a:g.a,b:Math.min(g.b,stop)})).filter(g=>g.b-g.a>=0.5);
 
   const placed=[];
@@ -3341,7 +3720,7 @@ function renderPlan(evts){
   if(isFriday){
     const d=document.createElement('div'); d.className='slot'; d.style.marginTop='10px';
     d.style.borderLeftColor='var(--warn)'; d.style.color='var(--warn)';
-    d.textContent='Sundown  ·  Shabbat — 24 hours off';
+    d.textContent='Sundown  ·  Shabbat';
     const w=document.createElement('span'); w.className='sw';
     w.textContent='nothing is scheduled past this, and nothing will be';
     d.appendChild(w);
@@ -3398,17 +3777,22 @@ function draftTriage(d, orgNames){
   return {score:Math.round(score), why};
 }
 
-function renderOutbox(){
-  const host=el('drafts'); if(!host) return;
-  host.textContent='';
-
-  /* Who counts as a customer, from the book if it is loaded. */
-  const orgNames=(((book&&book.clients)||[]).map(c=>({
+/* Who counts as a customer, from the book if it is loaded. One function, so
+   the card and the list rank a draft on the same names. */
+function clientOrgs(){
+  return (((book&&book.clients)||[]).map(c=>({
     id:String(c.orgId||'').toLowerCase(),
     name:c.name,
     word:String(c.name||'').toLowerCase().split(/[\s\/]+/)[0],
     paying:(c.amountPaid>0)||(c.tier&&c.tier!=='trial')
   })));
+}
+
+function renderOutbox(){
+  const host=el('drafts'); if(!host) return;
+  host.textContent='';
+
+  const orgNames=clientOrgs();
 
   const rows=outboxAll.map(d=>{
     const t=draftTriage(d,orgNames);
@@ -3461,6 +3845,9 @@ function renderOutbox(){
     v.className='v '+(r.ready?'good':'warn');
     v.textContent=r.ready ? (r.d.to.split(',')[0].trim().slice(0,26)) : 'no recipient';
     row.append(n,k,why,v);
+    /* The row opens the draft. outbox[i] carries the number he would say. */
+    row.classList.add('rowClick');
+    row.addEventListener('click',()=>showDraft(outbox[i], row));
     host.appendChild(row);
   });
 }
@@ -4305,7 +4692,9 @@ function wireZoom(){
   });
 }
 el('zoomBack').addEventListener('click',unzoom);
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') unzoom(); });
+/* Escape closes the top thing only. A card open over a zoomed panel takes
+   the key; the panel stays expanded for the next click. */
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&el('cardBack').hidden) unzoom(); });
 
 /* ══ INDEX ═══════════════════════════════════════════════════════════════
    One screen listing everywhere you can go — the views of this dashboard, the
@@ -5242,6 +5631,9 @@ function copyToClipboard(text, btn){
 
 function closeCard(){
   const b=el('cardBack'); if(b) b.hidden=true;
+  /* The draft card widens the same element; hand it back the way it was
+     found, or the next contact card opens 640px wide with a stale id. */
+  const c=el('card'); if(c){ c.classList.remove('draft'); delete c.dataset.draft; }
   /* Stop the animation with the card. One left running behind a closed
      dialog is how a tab quietly eats a core all afternoon. */
   if(cardHolo){ cardHolo.stop(); cardHolo=null; }
