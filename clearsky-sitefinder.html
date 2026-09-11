@@ -361,6 +361,18 @@
 .phConf{display:flex;gap:7px;align-items:flex-start;margin:7px 0 6px;
   font-size:12px;line-height:1.4;cursor:pointer}
 .phConf input{margin-top:2px;flex:none}
+/* The suggestion reads as an offer, not as a value. Deliberately not styled
+   like the recorded fields above it: a proposal that looks like an answer is
+   how an assumption ends up in a proposal. */
+.phSug{margin:8px 0 6px;padding:9px 10px;border:1px dashed var(--line);
+  border-radius:7px;background:#f7f9fb}
+.phSugHd{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);
+  margin-bottom:4px}
+.phSug p{margin:0 0 6px;font-size:11.5px;line-height:1.5;color:var(--ink)}
+.phSugRisk{color:#8a5a00}
+.phSugUse{font:inherit;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:5px;
+  border:1px solid var(--line);background:#fff;cursor:pointer}
+.phSugUse:hover{background:#eef2f6}
 #phSrc{width:100%;font:inherit;font-size:12px;padding:5px 7px;border-radius:5px;
   border:1px solid var(--line,#d9dee3)}
 #phSrc:disabled{background:#f4f6f8;color:#98a2ac}
@@ -655,6 +667,11 @@
 <script src="omega-comed-layers.js"></script>
 <script src="omega-listings-source.js"></script>
 <script src="omega-comed-listings.js"></script>
+<!-- The cost model. "Price this site" prices in place against this file, and
+     without it computeEstimate() returns null and every press falls back to
+     opening the estimator in another tab — which is the exact behaviour the
+     inline pricing was built to remove. It was missing. -->
+<script src="/omega-cost-model.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -2077,6 +2094,14 @@
     var cut = { kw: 0, sf: 0, type: 0, circ: 0, sfUnknown: 0 };
 
     var out = ST.rows.filter(function (r) {
+      /* A DELIBERATE KEEP OUTRANKS A FILTER. A rep who starred this site
+         did so knowing what it is; hiding it again behind a minimum kW they
+         set for prospecting means the one site they are working disappears
+         while they widen the search for others. It is still viewport-bound
+         in render(), so this does not put the whole starred list back on
+         every screen — it only stops a filter deleting a site the rep
+         already chose. It is not counted as a cut either: it was not. */
+      if (isSaved(r.id)) return true;
       if ((r.sz.kw || 0) < minKw) { cut.kw++; return false; }
       /* UNKNOWN IS NOT ZERO. Parcels carry acreage, never building area —
          estimateSqftFromAcres is off precisely so a modelled figure is not
@@ -2300,14 +2325,29 @@
     return rec;
   }
 
-  /* Star the current site, or any card, into the kept list. */
+  /* Star the current site, or any card, into the kept list.
+
+     STARRING DOES NOT TAKE THE SITE AWAY FROM YOU.
+
+     This used to clear ST.current when you starred the site you were looking
+     at, so the card vanished out of the working panel the moment you kept
+     it and the only way back was the Starred tab. That made sense once,
+     when starred sites were prepended to every view and leaving the lookup
+     in place showed the same row twice. They are not prepended any more, so
+     all it does now is throw away the thing the rep just decided they cared
+     about, mid-job, and make them go and find it again.
+
+     Keeping it costs nothing: render() puts `current` in the working views
+     and `saved` in the Starred tab, never both in the same list, so there is
+     no double row to avoid. The star is a keep, not a filing-away. */
   function starSite(rec) {
     if (!rec || isSaved(rec.id)) return;
     rec.starred = true;          /* marks a deliberate keep, not a lookup */
     rec.starredAt = new Date().toISOString();
+    /* One object in both places on purpose: a refresh of the lookup then
+       updates the starred copy's circuit and capacity too. */
     ST.saved.unshift(rec);
     persistSaved();
-    if (ST.current && ST.current.id === rec.id) ST.current = null;
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -2600,9 +2640,10 @@
     var rows = filtered();
     var wrap = document.getElementById("cards");
 
-    /* Saved sites always list, above whatever the viewport returned, and are
-       never filtered out — a rep who deliberately kept an address should not
-       have to remember which filter is hiding it.
+    /* The starred list, built for the Starred tab. The working views do not
+       prepend it — a starred site reaches them as the current lookup or as a
+       viewport row, where it is exempt from the filters but not from the
+       viewport.
 
        Each is enriched INDIVIDUALLY. A single malformed record used to throw
        inside the map() and take the whole render with it: the panel kept its
@@ -2666,19 +2707,20 @@
       if (!vb.contains([im.lat, im.lon])) continue;
       try { imported.push(enrich(im)); } catch (e) {}
     }
-    /* STARRED SITES LIVE IN THE STARRED TAB, AND NOWHERE ELSE.
+    /* THE STARRED LIST IS NOT PREPENDED TO EVERY VIEW.
 
-       They used to be prepended to every view. The working panel then filled
-       up with sites the rep had already filed, pushing the thing they were
-       actually looking at down the page — and repeating, in a list meant for
-       "what is in front of me", a list that already has its own tab.
+       It used to be. The working panel then filled up with sites the rep had
+       already filed, pushing the thing they were actually looking at down
+       the page — and repeating, in a list meant for "what is in front of
+       me", a list that already has its own tab.
 
        So the working views show what the rep is working: the address they
        just looked up, anything imported that falls in the viewport, and what
-       "Search this area" returned. A starred site that genuinely sits in the
-       current viewport still appears, because it IS in front of them — it
-       just arrives as a viewport result rather than being pinned to the top
-       of every screen. */
+       "Search this area" returned. A starred site still appears in all three
+       when it belongs there — starring the current lookup leaves it exactly
+       where it was, and a starred viewport row is exempt from the filters —
+       because a site the rep kept is a site the rep is working on. What it
+       does not do is arrive pinned to the top of every screen. */
     /* The lookup wins over a viewport row for the same site: it was asked
        about directly and carries the fresher read. */
     if (current) {
@@ -3181,11 +3223,11 @@
         warn +
         /* PRICE IT FROM THE CARD. The estimator handoff was only in the detail
            panel, which is two clicks and a scroll from the list a rep is
-           actually scanning. Marked data-noselect so it prices the site
-           instead of opening the card underneath it. */
+           actually scanning. Marked data-noselect so the click runs the
+           pricing path rather than the card's plain select. */
         '<div class="mt" style="margin-top:9px">' +
           '<button class="cardCost" data-noselect="1" data-cost-id="' + esc(r.id) + '" ' +
-            'title="Send this site to the cost estimator \u2014 installed cost, schedule and a printable report">' +
+            'title="Price it here \u2014 sized against this circuit, priced from the same cost model the estimator uses">' +
             'Price this site' +
           '</button>' +
           (_estimates[r.id]
@@ -4200,6 +4242,33 @@
         batteryScore: r.score, largeLoadScore: r.loadScore
       },
 
+      /* ── WHAT THIS SITE WAS PRICED AT, IF IT HAS BEEN ───────────────
+         Present only once somebody has actually pressed price. A packet
+         with no estimate says so by leaving this null, which is a different
+         statement from a packet carrying a zero. The class and the band
+         travel WITH the figure, never the figure alone: a total with no
+         class attached is the one thing that must not leave this tool. */
+      estimate: (function () {
+        var d = _estimates[r.id];
+        if (!d) return null;
+        return {
+          basis: d.pricedBy === "sitefinder"
+            ? "Priced in the site finder against omega-cost-model.js, the same "
+              + "model and the same tables the cost estimator runs."
+            : "Returned by the cost estimator.",
+          pricedAt: d.at || null,
+          kw: d.kw, kwh: d.kwh,
+          sizeWasAssumed: !!d.assumedSize,
+          total: d.total, perKw: d.perKw, perKwh: d.perKwh,
+          estimateClass: d.estimateClass,
+          estimateClassWhy: d.estimateClassWhy,
+          accuracyLow: d.accuracyLow, accuracyHigh: d.accuracyHigh,
+          stillUnanswered: d.unanswered || [],
+          notAQuote: "An estimate, not a bid. No agreed contingency, no site "
+                     + "walk, no firm equipment pricing."
+        };
+      })(),
+
       /* ── WHAT THE ESTIMATOR MUST BE TOLD ────────────────────────────
          Not defaults. Not nulls to be quietly filled in. An explicit list
          of the things this tool cannot know, each with why it matters, so
@@ -4242,6 +4311,14 @@
   }
 
   function downloadPacket(r) {
+    /* Price it on the way out if nobody has. The packet is what leaves this
+       tool and goes to a lender, a partner or a customer, and one that says
+       "no estimate" because a button went unpressed is a packet that gets
+       priced in a spreadsheet instead. */
+    if (!_estimates[r.id]) {
+      var e0 = computeEstimate(r);
+      if (e0) _estimates[r.id] = e0;
+    }
     var name = (r.addr || r.id).replace(/[^A-Za-z0-9]+/g, "-")
                  .replace(/^-|-$/g, "").slice(0, 60).toLowerCase();
     var blob = new Blob([JSON.stringify(sitePacket(r), null, 2)],
@@ -4273,7 +4350,155 @@
   var COST_IN = "clearsky.cost-estimate/1";
   var _estimates = {};
 
-  function costThisSite(r) {
+  /* ══════════════════════════════════════════════════════════════════
+     PRICE IT HERE, NOT IN ANOTHER TAB
+     ------------------------------------------------------------------
+     This opened the estimator in a new window and waited for a postMessage
+     back. That worked, and it meant leaving the site you were looking at,
+     landing in a second tool, and coming back — for a number the tool can
+     work out where you are standing.
+
+     It can do that now WITHOUT a second implementation of the cost model:
+     omega-cost-model.js holds the tables and the pricing loop, the estimator
+     reads the same file, and a parity test proves the two agree to the cent.
+     That file is the only reason this is safe to do inline; before it, a
+     second copy here would have been a second answer.
+
+     SIZE COMES FROM THE CIRCUIT WHEN THERE IS ONE. sizePick() already means
+     "everything the circuit will take, at 2 hours", which is the honest
+     default for a screen. When no circuit is attributed there is nothing to
+     size against, so this prices a STATED assumption and says so on the
+     result rather than refusing — a screening number somebody can argue with
+     beats a blank panel, as long as the assumption is on the page.
+     ══════════════════════════════════════════════════════════════════ */
+  var ASSUMED_KW = 1000, ASSUMED_HOURS = 2;
+
+  /* ══════════════════════════════════════════════════════════════════
+     THE ORGANISATION'S OWN SUPPLIER PRICING
+
+     A quote entered in the cost estimator lives at
+     toolData/{orgId}/tools/costestimator — per-tenant, rules-gated, and
+     the same document the estimator reads on boot. This page priced sites
+     without it, so the same site through two doors gave two numbers and
+     only one of them knew a quote existed.
+
+     Read once on sign-in, never written from here. This page is not where
+     pricing is maintained; it is a consumer of it, and a screen that could
+     quietly edit the org's battery pricing is a screen nobody should
+     trust.
+
+     Absent, unreadable, or signed out, this stays null and every estimate
+     falls back to the model's generic rates and says so in the audit. A
+     missing quote must degrade to an honest number, never to a blank
+     panel. */
+  var _orgPricing = null;     /* the selected supplier's record, or null */
+
+  function loadOrgPricing() {
+    if (!db || !ORG) return;
+    db.collection("toolData").doc(ORG).collection("tools").doc("costestimator")
+      .get()
+      .then(function (snap) {
+        if (!snap.exists) return;
+        var doc = snap.data() || {};
+        var st = doc.data || {};
+        var sel = st.sel, vendors = st.vendors;
+        if (!sel || !vendors || !vendors[sel]) return;
+        var v = vendors[sel];
+        if (!window.OmegaCostModel || !OmegaCostModel.vendorHasPrice(v)) return;
+        _orgPricing = v;
+        /* Anything already priced was priced on the generic rate, so it is
+           now wrong by exactly the amount the quote moves it. Re-price
+           rather than leave a stale figure on a card. */
+        var id;
+        for (id in _estimates) if (_estimates.hasOwnProperty(id)) {
+          var rec = ST.byId[id];
+          if (rec) { var e = computeEstimate(rec); if (e) _estimates[id] = e; }
+        }
+        try { renderCostBack(ST.sel && ST.sel.id ? ST.sel.id : ST.sel); } catch (e2) {}
+        try { render(); } catch (e3) {}
+      })
+      ["catch"](function () { /* read denied or offline: generic rates stand */ });
+  }
+
+  /* Works the estimate out and returns it, or returns null when the model
+     is not on the page. Separated from the button so the packet can price a
+     site it is about to write without going anywhere near the UI — and
+     without the fallback chain, which ends at downloadPacket and would
+     otherwise call itself. */
+  function computeEstimate(r) {
+    var CM = window.OmegaCostModel;
+    if (!CM || typeof CM.price !== "function") return null;
+
+    var pick = sizePick(r);
+    var assumed = pick.kw == null;
+    var kw = assumed ? ASSUMED_KW : pick.kw;
+    var hours = pick.hours || ASSUMED_HOURS;
+
+    /* Only what this tool actually knows. Everything else stays unanswered
+       so the estimate classes itself honestly instead of inheriting
+       defaults nobody chose. */
+    /* PHASE IS NOT VOLTAGE. This used to test for a phase key of "3p480",
+       which is not one of the three this tool stores ('1', 'split', '3'), so
+       the branch never fired and the voltage was always unknown. Removing it
+       rather than repairing it: three-phase service can be 208 V, 480 V or a
+       primary tie, and the interconnection voltage is a separate question
+       the estimator asks on its own. Guessing it from phase would have put a
+       480 V regime on sites that are nothing of the kind. */
+    /* The org's quote, translated by the shared model — the same function
+       the estimator uses, so the two pages cannot drift. */
+    var rates = CM.ratesFromVendor ? CM.ratesFromVendor(_orgPricing) : null;
+
+    var est = CM.price({
+      rates: rates,
+      kw: kw, hours: hours,
+      volt: "",
+      poiFt: null, padArea: null,
+      soil: "", ahj: "", labor: "",
+      utilityUpgrade: "", carryUpgrade: false,
+      quoteDate: ""
+    });
+    if (!est) return null;
+
+    /* Same shape the estimator posts back, so renderCostBack is unchanged. */
+    return {
+      type: COST_IN, siteId: r.id,
+      total: est.total, perKwh: est.perKwh, perKw: est.perKw,
+      kw: est.kw, kwh: est.kwh,
+      /* Priced from this page, so nothing here has been walked, quoted or
+         answered. That is a Class 5 screen and it should say Class 5. */
+      estimateClass: "Class 5 — concept screening",
+      estimateClassWhy: assumed
+        ? "No circuit is attributed to this site, so it is priced at an assumed "
+          + ASSUMED_KW.toLocaleString() + " kW for " + ASSUMED_HOURS
+          + " hours. Attribute a circuit and this re-prices against what the feeder will take."
+        : "Priced from the circuit's available " + Math.round(kw).toLocaleString()
+          + " kW at " + hours + " hours, with the site's own drivers still unanswered.",
+      accuracyLow: -0.30, accuracyHigh: 0.50,
+      unanswered: ["interconnection voltage", "distance to the POI",
+                   "utility-side upgrade", "equipment yard", "ground conditions",
+                   "AHJ", "labour basis", "equipment quote date", "duration"],
+      assumedSize: assumed, at: new Date().toISOString(), pricedBy: "sitefinder"
+    };
+  }
+
+  function priceInPlace(r) {
+    var est = computeEstimate(r);
+    /* No model on the page — the old route still works, and a rep who
+       needs a number today should get one. */
+    if (!est) { costInEstimator(r); return; }
+    _estimates[r.id] = est;
+    var host = document.getElementById("costBack");
+    if (host) host.setAttribute("data-id", r.id);
+    renderCostBack(r.id);
+    /* The card carries the figure too, so a priced site stays marked in the
+       list after the drawer is closed. */
+    try { render(); } catch (e) {}
+  }
+
+  /* The old route, kept for the cases the inline path cannot serve: the
+     model failed to load, or somebody wants the full estimator to answer the
+     nine drivers properly. */
+  function costInEstimator(r) {
     var key = "cs-packet-" + r.id + "-" + Date.now().toString(36);
     try {
       sessionStorage.setItem(key, JSON.stringify(sitePacket(r)));
@@ -4330,6 +4555,64 @@
      than one: picking a phase and asserting that somebody checked it are
      different claims, and collapsing them into a single dropdown is what
      produces confident-looking unverified data. */
+  /* ══════════════════════════════════════════════════════════════════════
+     SUGGEST THE PHASE — FROM THE LOAD, AND SAYING SO
+
+     The request was to suggest the phase from the available load, and the
+     honest version of that is narrower than it sounds, so it is worth being
+     precise about what is being claimed.
+
+     Nothing in a parcel record or a hosting-capacity layer carries the
+     SERVICE phase at a building. That has not changed and this does not
+     pretend otherwise. What the load DOES determine is the phase the
+     project would REQUIRE, and that is the more useful fact anyway: a
+     400 A, 240 V split-phase service is about 96 kVA, and single-phase pole
+     transformers are commonly stocked only to 167 kVA, so past about a
+     hundred kilowatts a utility will require a three-phase service whatever
+     is on the pole today. Below that, either is physically possible and the
+     tool must not pick one.
+
+     So the suggestion answers "what will this project need", never "what is
+     there now", and it is offered — never written. Accepting it stores an
+     UNCONFIRMED value exactly as typing it would, because a suggestion the
+     tool made is not somebody checking a meter. That distinction is the
+     whole point of this block and an auto-filled field would erase it.
+
+     The thresholds are engineering rules of thumb, not a tariff. They are
+     printed with the suggestion so a rep can disagree with the reasoning
+     rather than just the answer. */
+  var PH_3PH_KW = 100;      /* above this, three-phase is required     */
+  var PH_EITHER_KW = 50;    /* below this, split-phase is plausible    */
+
+  function phaseSuggest(r) {
+    var pick = sizePick(r);
+    var kw = pick.kw;
+    if (kw == null) return null;          /* no circuit, nothing to reason from */
+    var n = Math.round(kw).toLocaleString();
+    if (kw > PH_3PH_KW) {
+      return { phase: '3',
+        why: 'This site sizes at ' + n + ' kW. A 400 A, 240 V split-phase '
+           + 'service is about 96 kVA and single-phase pole transformers are '
+           + 'commonly stocked only to 167 kVA, so a project this size needs a '
+           + 'three-phase service \u2014 whatever is on the pole today.',
+        risk: 'If the building is actually single-phase, the cost of bringing '
+            + 'in three-phase belongs in this project, and it is not in the '
+            + 'estimate.' };
+    }
+    if (kw < PH_EITHER_KW) {
+      return { phase: '',
+        why: 'At ' + n + ' kW either service would carry this, so the load '
+           + 'does not decide it. Somebody has to look.',
+        risk: '' };
+    }
+    return { phase: '3',
+      why: 'This site sizes at ' + n + ' kW \u2014 close to the practical ceiling '
+         + 'of a 240 V split-phase service (about 96 kVA at 400 A). Three phase '
+         + 'is the likely requirement, but this one is near enough the line to '
+         + 'be worth confirming before it is priced.',
+      risk: '' };
+  }
+
   function phaseBlockHtml(r) {
     var p = phaseOf(r);
     var opts = [['', '\u2014 not recorded']].concat(
@@ -4351,6 +4634,26 @@
       '</label>' +
       '<input id="phSrc" data-noselect="1" type="text" placeholder="How it was confirmed (meter photo, bill, utility call)" ' +
         'value="' + esc((p && p.src) || '') + '"' + (p && p.confirmed ? '' : ' disabled') + '>' +
+      (function () {
+        /* Only when nobody has recorded one. Once a human has answered, a
+           machine's opinion beside their answer is noise at best and an
+           invitation to second-guess a meter photo at worst. */
+        if (p) return '';
+        var sg = phaseSuggest(r);
+        if (!sg) return '';
+        return '<div class="phSug">' +
+          '<div class="phSugHd">Suggested from the load' +
+            (sg.phase ? ': <b>' + esc(PHASES[sg.phase].label) + '</b>' : '') +
+          '</div>' +
+          '<p>' + esc(sg.why) + '</p>' +
+          (sg.risk ? '<p class="phSugRisk">' + esc(sg.risk) + '</p>' : '') +
+          (sg.phase
+            ? '<button type="button" id="phSugUse" class="phSugUse" data-noselect="1" ' +
+              'data-phsug="' + esc(sg.phase) + '" data-id="' + esc(r.id) + '">' +
+              'Use this \u2014 as an assumption</button>'
+            : '') +
+          '</div>';
+      })() +
       '<p class="note">Phase decides what can be installed here and nothing in a ' +
       'parcel record or a capacity layer carries it. Until somebody checks, it is ' +
       'an assumption \u2014 and it is labelled as one on the card, in the CSV and in ' +
@@ -5145,7 +5448,7 @@
     var pk = document.getElementById("dPacket");
     if (pk) pk.onclick = function () { downloadPacket(r); };
     var cs = document.getElementById("costSite");
-    if (cs) cs.onclick = function () { costThisSite(r); };
+    if (cs) cs.onclick = function () { priceInPlace(r); };
 
     /* Sizer. The slider and the number box are two views of one value, so
        each writes the other before committing — otherwise dragging leaves a
@@ -5196,6 +5499,15 @@
         push();
       };
       if (src) src.onchange = push;
+
+      /* Accepting the suggestion stores it exactly as typing it would: the
+         value set, the confirmation NOT set. A tool's opinion is not a meter
+         photo, and the whole point of this block is that the two never
+         render the same. */
+      var use = document.getElementById("phSugUse");
+      if (use) use.onclick = function () {
+        setPhase(r.id, use.getAttribute("data-phsug"), false, '');
+      };
     })();
     renderCostBack(r.id);
 
@@ -5393,7 +5705,17 @@
     if (cb) {
       e.preventDefault(); e.stopPropagation();
       var cr = ST.byId[cb.getAttribute("data-cost-id")];
-      if (cr) costThisSite(cr);
+      /* The card's own Price this site — same inline path as the drawer.
+         Open the card first so the number lands where a rep is already
+         reading, and only re-open when it is not the open one: select()
+         re-runs the circuit and assessor lookups, and pressing price twice
+         should not bill two verifications. ST.sel is an id for a parcel and
+         a record for an address search, so both shapes are checked. */
+      if (cr) {
+        var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+        if (selId !== cr.id) select(cr.id);
+        priceInPlace(cr);
+      }
       return;
     }
     if (e.target.closest && e.target.closest("[data-noselect]")) {
@@ -5862,6 +6184,11 @@
            Set BEFORE attach so a claim made in the first second still
            carries an identity. */
         if (L.setIdentity) L.setIdentity(u2.uid, u2.email || "");
+        /* The org's battery pricing, so a site priced here is priced on the
+           same quote the estimator would use. Fire-and-forget: nothing on
+           this page waits for it, and without it estimates fall back to the
+           model's generic rates and say so. */
+        loadOrgPricing();
         /* Fill the claim name from the account so nobody has to type one
            before their first hold. Anything typed afterwards wins. */
         seedRepFromAccount(u2);
