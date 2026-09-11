@@ -3148,12 +3148,19 @@ function showEvent(e, fromEl){
 
    Deterministic. A schedule that is different every time you look at it is a
    suggestion you cannot plan around. */
+/* Each of these carries the window it actually belongs in, not just "early"
+   or "late". He does not want to train at 6:30am — he is making his
+   daughter's breakfast, and he told me he likes it midday. A planner that
+   knows the hour but not the habit will keep producing a day nobody lives. */
 const RITUALS=[
-  { id:'animals',  need:0.5, label:'Feed the animals',          why:'before the day starts',   early:true },
-  { id:'workout',  need:0.5, label:'30 minutes — training',     why:'you asked for thirty, not an hour' },
-  { id:'family',   need:1.5, label:'Family — no screens',       why:'the block everything else gets fitted around', late:true },
-  { id:'music',    need:0.75,label:'Music',                     why:'' },
-  { id:'reflect',  need:0.5, label:'Sit and think',             why:'end of the working day', late:true }
+  { id:'animals', need:0.5,  win:[8,9.5],   label:'Feed the animals',
+    why:'after the school run, before the day closes in' },
+  { id:'workout', need:0.5,  win:[11.5,14], label:'30 minutes — training',
+    why:'midday, the way you like it — thirty, not an hour' },
+  { id:'reflect', need:0.5,  win:[16.5,18], label:'Sit and think',
+    why:'end of the working day' },
+  { id:'music',   need:0.75, win:[22,25],   label:'Music',
+    why:'after they are asleep' }
 ];
 
 function busyBlocks(evts){
@@ -3194,13 +3201,15 @@ function renderPlan(evts){
 
   const placed=[];
   RITUALS.forEach(r=>{
-    /* Early things take the first gap of the day, late things the last. */
-    const pool = r.early ? usable : r.late ? usable.slice().reverse() : usable;
-    for(const g of pool){
-      if(g.b-g.a >= r.need){
-        const at = r.late ? g.b-r.need : g.a;
-        placed.push({at, r});
-        if(r.late) g.b -= r.need; else g.a += r.need;
+    /* Only inside its own window, and only where nothing else already is.
+       If the window is full it is simply not offered — an hour it does not
+       fit in is not a suggestion, it is a lie about the day. */
+    const lo=r.win[0], hi=Math.min(r.win[1], stop);
+    for(const g of usable){
+      const a=Math.max(g.a, lo), b=Math.min(g.b, hi);
+      if(b-a >= r.need){
+        placed.push({at:a, r});
+        g.a = a + r.need;                    /* consume what it used */
         break;
       }
     }
