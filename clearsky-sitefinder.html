@@ -4712,37 +4712,99 @@
      waste; it is a longer system at the same power, which is usually worth
      more. A block that undershoots means two blocks or a smaller product,
      and that is said rather than rounded away. */
+  /* ── HOW BIG CAN THIS SITE ACTUALLY GO ────────────────────────────────
+     The circuit caps kW. It does not cap kWh at all: an eight-hour system
+     at 826 kW draws the same 826 kW as a two-hour one. So "the maximum
+     battery" has no bound from the wire, and a rule that only looked at the
+     wire would happily propose forty hours of storage.
+
+     Two bounds are used instead, and BOTH are printed on the card, because
+     a maximum is only meaningful next to what limited it:
+
+       DURATION — capped at the longest duration this tool itself offers,
+       eight hours. Past that a battery is not a demand-charge or arbitrage
+       asset any more and nobody is financing it on this basis.
+
+       UNIT COUNT — capped at four. A site takes a handful of containers,
+       not thirty cabinets. Without it the arithmetic favours whatever the
+       smallest product is, because many small units always tile closer to a
+       ceiling than one big one, and it would recommend thirty of them.
+
+     PRODUCTS COME FROM THE SUPPLIER'S DATASHEET, held on the supplier
+     record like the price. Nothing is shipped in this file. Where a vendor
+     has only a single block size on file the old behaviour still applies. */
+  var MAX_FIT_HOURS = 8, MAX_FIT_UNITS = 4;
+
+  function productsOf(v) {
+    if (v && v.products && v.products.length) return v.products;
+    if (typeof v.blockMwh === "number" && v.blockMwh > 0) {
+      return [{ model: v.model || "", kwh: v.blockMwh * 1000 }];
+    }
+    return [];
+  }
+
   function fitOptions(r) {
     if (!_orgVendors || !window.OmegaCostModel) return null;
     var pick = sizePick(r);
     if (pick.kw == null) return null;
-    var targetKwh = pick.kwh, out = [], k;
+    var targetKwh = pick.kwh;
+    var ceilKwh = pick.kw * MAX_FIT_HOURS;
+    var out = [], k;
+
     for (k in _orgVendors) {
       if (!_orgVendors.hasOwnProperty(k)) continue;
       var v = _orgVendors[k];
       if (!v || !v.name) continue;
       var priced = OmegaCostModel.vendorHasPrice(v);
-      var blockKwh = (typeof v.blockMwh === "number" && v.blockMwh > 0)
-                       ? v.blockMwh * 1000 : null;
-      if (!priced && !blockKwh) continue;
-      var o = { key:k, name:v.name, model:v.model || "", priced:priced,
-                tier: OmegaCostModel.vendorTier(v),
-                stale: OmegaCostModel.quoteStale(v) };
-      if (blockKwh) {
-        var n = Math.max(1, Math.round(targetKwh / blockKwh));
-        o.blocks = n; o.blockKwh = blockKwh;
-        o.kwh = n * blockKwh; o.hours = o.kwh / pick.kw;
-        o.overshootKwh = o.kwh - targetKwh;
-      } else {
-        o.kwh = targetKwh; o.hours = pick.hours;
+      var prods = productsOf(v);
+      if (!priced && !prods.length) continue;
+
+      var base = { key:k, name:v.name, priced:priced,
+                   tier: OmegaCostModel.vendorTier(v),
+                   stale: OmegaCostModel.quoteStale(v) };
+
+      if (!prods.length) {
+        /* Priced but no product on file: it can still say what the target
+           costs, it just cannot say what you would physically install. */
+        out.push(mergeOpt(base, { model:v.model || "", kwh:targetKwh,
+                                  hours:pick.hours, units:0 }, v, priced));
+        continue;
       }
-      if (priced) o.usd = v.dcPerKwh * o.kwh;
-      out.push(o);
+      for (var pi = 0; pi < prods.length; pi++) {
+        var P = prods[pi];
+        var unit = +P.kwh;
+        if (!isFinite(unit) || unit <= 0) continue;
+        var n = Math.floor(ceilKwh / unit);
+        if (n < 1) n = 1;                    /* one unit is the minimum sale */
+        if (n > MAX_FIT_UNITS) n = MAX_FIT_UNITS;
+        var kwh = n * unit;
+        out.push(mergeOpt(base, {
+          model: P.model || "", units: n, unitKwh: unit,
+          usableKwh: (typeof P.usableKwh === "number") ? P.usableKwh * n : null,
+          form: P.form || "", acKw: P.acKw || null,
+          kwh: kwh, hours: kwh / pick.kw,
+          overCeiling: kwh > ceilKwh
+        }, v, priced));
+      }
     }
+    /* THE BIGGEST FIRST — the question is "how large can this go", so the
+       answer leads. Fewest units breaks a tie: one container beats two
+       cabinets at the same energy, every time. */
     out.sort(function (a, b) {
-      return Math.abs(a.kwh - targetKwh) - Math.abs(b.kwh - targetKwh);
+      if (b.kwh !== a.kwh) return b.kwh - a.kwh;
+      return (a.units || 0) - (b.units || 0);
     });
-    return { target:targetKwh, kw:pick.kw, hours:pick.hours, options:out };
+    return { target:targetKwh, kw:pick.kw, hours:pick.hours,
+             ceilKwh:ceilKwh, maxHours:MAX_FIT_HOURS, maxUnits:MAX_FIT_UNITS,
+             options:out };
+  }
+
+  function mergeOpt(base, o, v, priced) {
+    var out = {}, kk;
+    for (kk in base) if (base.hasOwnProperty(kk)) out[kk] = base[kk];
+    for (kk in o) if (o.hasOwnProperty(kk)) out[kk] = o[kk];
+    if (priced) out.usd = v.dcPerKwh * out.kwh;
+    return out;
   }
 
   /* The one option a rep would pick, for the card. Same source as the

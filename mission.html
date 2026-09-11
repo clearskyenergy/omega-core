@@ -244,6 +244,49 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .noteGo{right:auto;left:5px;color:rgba(18,32,46,.62)}
 .noteGo:hover{color:#0a5c2e}
 
+
+/* ── the core as a layer ─────────────────────────────────────────────── */
+.main{position:relative}
+.coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
+           transition:opacity .5s ease}
+.coreLayer.on{opacity:1}
+.coreLayer canvas{width:100%;height:100%;display:block}
+.coreLayer .coreLabel{position:absolute;inset:0;display:flex;flex-direction:column;
+                      align-items:center;justify-content:center;gap:2px}
+/* Everything else in main rides above it. */
+.main > header,.main > .view,.main > .talkBar,.main > .authFix{position:relative;z-index:1}
+/* The hole the core used to fill: space for the burst to be seen through. */
+.coreHole{flex:1;min-height:180px;pointer-events:none}
+
+/* ── minimised panels ────────────────────────────────────────────────────
+   A panel you are not reading should not cost a rectangle. Collapsed, it
+   becomes an orb in the dock — the same object the brain draws, because a
+   thing that shrinks to a dot and a thing that IS a dot should look alike. */
+.panel > .minBtn{position:absolute;top:6px;right:30px;z-index:3;opacity:0;
+  font-size:10px;line-height:1;padding:4px 6px;min-height:0;border-radius:4px;
+  transition:opacity .14s}
+.panel:hover > .minBtn{opacity:.75}
+.panel > .minBtn:hover{opacity:1}
+.panel.min{display:none!important}
+
+.dock{display:flex;gap:9px;align-items:center;flex-wrap:wrap;flex:none;
+      padding:2px 0 0;min-height:0}
+.dock:empty{display:none}
+.orb{position:relative;width:34px;height:34px;border-radius:50%;cursor:pointer;
+     border:1px solid rgba(0,243,255,.45);background:radial-gradient(circle at 34% 30%,
+       rgba(0,243,255,.40),rgba(0,60,140,.30) 60%,rgba(0,20,50,.5));
+     box-shadow:0 0 14px rgba(0,243,255,.22);flex:none;padding:0;
+     transition:transform .16s,box-shadow .16s;
+     animation:orbIn .22s cubic-bezier(.2,.9,.25,1) both}
+.orb:hover{transform:translateY(-2px) scale(1.08);box-shadow:0 0 22px rgba(0,243,255,.45)}
+.orb .olab{position:absolute;left:50%;top:calc(100% + 5px);transform:translateX(-50%);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:1px;color:var(--dim);
+  white-space:nowrap;opacity:0;transition:opacity .14s;pointer-events:none}
+.orb:hover .olab{opacity:1}
+.orb .on{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10px;color:var(--glow-cyan)}
+@keyframes orbIn{from{transform:scale(.2);opacity:0}to{transform:none;opacity:1}}
+
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
    beside it rather than buried: search, an inspector, the hubs ranked by how
@@ -702,6 +745,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
   <!-- ───────────────────────── MAIN ───────────────────────── -->
   <main class="main">
+    <!-- The core is a LAYER, not a panel. It sits behind everything in the
+         main area and the panels float over it, which is the difference
+         between a dashboard with a picture in one cell and a dashboard that
+         is standing in front of something. Only lit on the command view. -->
+    <div class="coreLayer" id="coreLayer">
+      <canvas id="arc"></canvas>
+      <div class="coreLabel">
+        <div class="cName">J.A.R.V.I.S</div>
+        <div class="cSub">AI CORE</div>
+      </div>
+    </div>
     <header>
       <div>
         <div class="hDate" id="hDate"></div>
@@ -735,15 +789,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
 
         <div class="col">
-          <div class="panel core">
-            <div class="arcWrap">
-              <canvas id="arc"></canvas>
-              <div class="coreLabel">
-                <div class="cName">J.A.R.V.I.S</div>
-                <div class="cSub">AI CORE</div>
-              </div>
-            </div>
-          </div>
+          <div class="coreHole"></div>
           <div class="panel" style="flex:none">
             <div class="ptitle">Quick commands</div>
             <div class="quick" id="quick"></div>
