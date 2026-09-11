@@ -167,10 +167,6 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .cName{font-family:var(--mono);font-size:24px;letter-spacing:7px;color:var(--glow-cyan);
        text-shadow:0 0 18px rgba(0,243,255,.7)}
 .cSub{font-family:var(--mono);font-size:9px;letter-spacing:5px;color:var(--dim);margin-top:3px}
-.queue{position:static;transform:none;margin-top:10px;display:flex;gap:6px;
-       align-items:baseline;justify-content:center}
-.queue .n{font-family:var(--mono);font-size:15px;color:var(--glow-cyan);text-shadow:0 0 10px var(--glow-cyan)}
-.queue .l{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:2px}
 
 /* The loading screen is the same object, waiting. */
 /* An author `display` beats the browser's [hidden] rule, so without this the
@@ -299,7 +295,6 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
               <div class="coreLabel">
                 <div class="cName">J.A.R.V.I.S</div>
                 <div class="cSub">AI CORE</div>
-                <div class="queue"><span class="n" id="queueN">—</span><span class="l">IN QUEUE</span></div>
               </div>
             </div>
           </div>
@@ -695,7 +690,9 @@ async function load(){
 
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
 
-    el('queueN').textContent=num(s.counts.queued);
+    /* The queue count lives in Overview. It used to sit inside the sphere as
+       well, which made the centre of the core a number rather than a name. */
+    const qn=el('queueN'); if(qn) qn.textContent=num(s.counts.queued);
     /* Energy from the work actually outstanding, plus a lift for a loop that
        ran in the last five minutes, so a run visibly registers. */
     const q=s.counts.queued||0;
