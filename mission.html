@@ -2826,6 +2826,18 @@ window.addEventListener('resize',fitStone);
 
 function openTool(file){ window.open(file,'_blank','noopener'); }
 
+/* One place that paints a message into the stone, so the "too heavy" card and
+   the "not served" card cannot drift apart. */
+function stoneSays(wrap, open, t, big, note){
+  const old=wrap.querySelector('.stoneHeavy'); if(old) old.remove();
+  const f=el('stoneFrame'); f.hidden=true; f.removeAttribute('src');
+  const d=document.createElement('div'); d.className='stoneHeavy';
+  d.innerHTML='<div style="font-size:24px;color:var(--bad);font-family:var(--mono)">'
+    + String(big).replace(/[<>&]/g,'') + '</div>'
+    + '<div style="max-width:360px">' + String(note).replace(/[<>&]/g,'') + '</div>';
+  wrap.insertBefore(d, open);
+}
+
 function stone(t){
   const wrap=el('stoneWrap'), f=el('stoneFrame'),
         idle=el('stoneIdle'), open=el('stoneOpen');
@@ -2849,10 +2861,30 @@ function stone(t){
       + ' to open it in its own tab.</div>';
     wrap.insertBefore(d, open);
   }else{
-    f.hidden=false;
-    if(f.getAttribute('src')!==t.file) f.setAttribute('src',t.file);
-    fitStone();
+    /* Ask whether the file is actually there BEFORE framing it. An iframe
+       pointed at a missing page renders the SERVER'S error document — a bare
+       white "Error response / 404 - Nothing matches the given URI" — which
+       looks like the tool is broken rather than absent, and tells you nothing
+       about which of the two it is. One request settles it. */
+    f.hidden=true;
+    fetch(t.file,{method:'GET',cache:'no-store'}).then(r=>{
+      if(bad(t)) return;                     /* selection moved on while we waited */
+      if(r.ok){
+        f.hidden=false;
+        if(f.getAttribute('src')!==t.file) f.setAttribute('src',t.file);
+        fitStone();
+      }else{
+        stoneSays(wrap, open, t,
+          'HTTP '+r.status,
+          'This host is not serving ' + t.file + '. The file is in the repo — '
+          + 'whatever is answering on this address does not have it.');
+      }
+    }).catch(e=>{
+      if(bad(t)) return;
+      stoneSays(wrap, open, t, 'UNREACHABLE', e.message.slice(0,90));
+    });
   }
+  function bad(x){ return platPick!==x; }
   open.onclick=()=>openTool(t.file);
   wrap.onclick=()=>openTool(t.file);
 }
