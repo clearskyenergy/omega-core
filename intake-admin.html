@@ -276,6 +276,41 @@ textarea:focus,input:focus{border-color:var(--accent)}
     throw new Error('intake-admin.html loaded on a non-admin host: ' + h);
   })();
 
+  /* ── THE LIBRARY THIS PAGE IS BUILT ON IS NOT DEPLOYED ────────────────
+     /omega-intake.js 404s. It has never been in this repository and there
+     is no commit that removed it, so it arrived with the sixteen-repo
+     consolidation as a reference to a file that stayed behind.
+
+     The page served 200 the whole time and threw on the next line, where
+     OI.cfg() runs against an undefined OI. A white screen with a console
+     error is the worst way to find that out — it looks like the queue is
+     empty, or like the deployment is fine and the data is gone.
+
+     So it says what is missing. This is NOT a fallback implementation:
+     thirty-odd methods spread across statuses, staff roles, scopes,
+     deliverables, payment links and client messaging cannot be inferred
+     from their call sites, and a plausible-looking wrong one would write
+     malformed records into a live intake queue. A page that explains its
+     absence is worth more than a page that guesses at it. */
+  if (!OI || typeof OI.cfg !== 'function') {
+    document.body.innerHTML =
+      '<div style="max-width:640px;margin:12vh auto;padding:0 24px;' +
+        'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">' +
+      '<h1 style="font-size:20px;margin:8px 0 10px">The intake queue cannot start</h1>' +
+      '<p style="color:#39434E;line-height:1.6;font-size:14px">This console is built on ' +
+      '<code>/omega-intake.js</code>, and that file is not deployed — the request for ' +
+      'it returns 404. Every status, role, scope and message shape this page reads lives ' +
+      'in it.</p>' +
+      '<p style="color:#39434E;line-height:1.6;font-size:14px">Nothing is lost: the queue ' +
+      'itself is in Firestore and is untouched. The page simply has no library to read it ' +
+      'with.</p>' +
+      '<p style="color:#6B7783;font-size:13px;line-height:1.6">Deploy <code>omega-intake.js</code> ' +
+      'alongside this page. It is referenced here and by <code>/console/index.html</code>, ' +
+      'and it is not in this repository — it is most likely still in the repo this ' +
+      'console was consolidated from.</p></div>';
+    throw new Error('intake-admin.html: /omega-intake.js is not deployed');
+  }
+
   var admin = (OI.cfg().user) || window.OMEGA_USER || { email: 'admin@clearsky-usa.com' };
   $('#who').textContent = admin.email || '';
 
