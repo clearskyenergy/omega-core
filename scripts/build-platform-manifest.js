@@ -20,12 +20,31 @@
 
 var fs = require('fs');
 var path = require('path');
+var execSync = require('child_process').execSync;
 
 var ROOT = path.join(__dirname, '..');
 var OUT = path.join(ROOT, 'assets', 'platform.json');
 
-/* Not tools: the shell, the gate, and the twin's own console. */
-var SKIP = ['mission.html', 'login.html', 'index.html', 'start.html', '404.html'];
+/* Not tools: the shell, the gate, and the twin's own two surfaces. */
+var SKIP = ['mission.html', 'jarvis.html', 'login.html', 'index.html',
+            'start.html', '404.html'];
+
+/* ONLY WHAT IS ACTUALLY IN THE REPO.
+
+   Reading the directory picks up anything sitting in the working tree — a
+   scratch copy, a download, a file from another project — and puts it on the
+   map of OMEGA as though it were part of the product. Ask git instead: the
+   manifest then lists what omega-core CONTAINS, not what happens to be on
+   this laptop. */
+function trackedHtml() {
+  var out = execSync('git ls-files -- "*.html"', { cwd: ROOT, encoding: 'utf8' });
+  return out.split('\n')
+    .map(function (f) { return f.trim(); })
+    .filter(Boolean)
+    /* Root only. /tenants, /admin, /console and /shells are extensions and
+       shells, not tools on the marketplace. */
+    .filter(function (f) { return f.indexOf('/') === -1; });
+}
 
 var AREAS = [
   ['Design',    ['editor', 'ClearSky_Enlarged', 'permit', 'stencil']],
@@ -62,8 +81,8 @@ function titleOf(src, file) {
     .replace(/\s+/g, ' ').trim();
 }
 
-var rows = fs.readdirSync(ROOT)
-  .filter(function (f) { return /\.html$/i.test(f) && SKIP.indexOf(f) === -1; })
+var rows = trackedHtml()
+  .filter(function (f) { return SKIP.indexOf(f) === -1; })
   .map(function (f) {
     var p = path.join(ROOT, f);
     var src = fs.readFileSync(p, 'utf8');
@@ -88,7 +107,7 @@ fs.writeFileSync(OUT, JSON.stringify({
   tools: rows
 }, null, 2));
 
-console.log('wrote ' + OUT + '  (' + rows.length + ' tools)');
+console.log('wrote ' + OUT + '  (' + rows.length + ' tools, all tracked in omega-core)');
 var byArea = {};
 rows.forEach(function (r) { byArea[r.area] = (byArea[r.area] || 0) + 1; });
 Object.keys(byArea).forEach(function (a) { console.log('  ' + a.padEnd(11) + byArea[a]); });
