@@ -416,12 +416,41 @@ ok('a hold can be any whole kW, not a multiple of 25', function () {
    searching an address threw inside drawerHtml and the drawer half-drew.
    Address search is the front door of this tool. */
 ok('record arrays are read through a guard, never bare', function () {
-  assert(/function claimsOf\(r\)/.test(html) && /function mineOf\(r\)/.test(html),
+  /* Comments stripped: the fix is explained in one, and an explanation of a
+     bug must not read as the bug. This is the third test in this file to
+     learn that lesson. */
+  var code = html.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  assert(/function claimsOf\(r\)/.test(code) && /function mineOf\(r\)/.test(code),
     'the guards are gone');
-  assert(!/\br\.claims\.length/.test(html),
+  assert(!/\br\.claims\.length/.test(code),
     'a bare r.claims.length is back — the address lookup will throw again');
-  assert(!/\br\.mine\.length/.test(html),
+  assert(!/\br\.mine\.length/.test(code),
     'a bare r.mine.length is back');
+});
+
+ok('the address lookup is normalised the same way every other record is',
+  function () {
+    /* Guarding derived fields one at a time is losing — the next field
+       added to the drawer breaks the lookup again. It goes through enrich()
+       now, so it has cst, claims, mine and whatever comes next. */
+    var seg = html.slice(html.indexOf('circ: v.state, sz: v.size, src: "lookup"'));
+    seg = seg.slice(0, 1600);
+    assert(/try \{ rec = enrich\(rec\); \}/.test(seg),
+      'the lookup record is still handed to the drawer without enrich()');
+    assert(/catch \(eEnrich\)/.test(seg),
+      'an enrich failure would take the whole lookup down');
+  });
+
+ok('the card names the battery that fits', function () {
+  assert(/function fitBest\(r\)/.test(html), 'nothing picks a best-fit option');
+  assert(/fitLineHtml\(r\) \+/.test(html), 'the card does not render it');
+  var fn = html.slice(html.indexOf('function fitLineHtml'));
+  fn = fn.slice(0, fn.indexOf('function fitOptionsHtml'));
+  assert(/if \(!o\) return "";/.test(fn),
+    'the card line is not silent when nothing is on file — a row of ' +
+    'apologies down a list of twenty sites is worse than no row');
+  assert(/fitOptions\(r\)/.test(html.slice(html.indexOf('function fitBest'), html.indexOf('function fitLineHtml'))),
+    'the card uses a different source from the drawer, so they can disagree');
 });
 
 ok('the hand-built lookup record still lacks those fields', function () {
