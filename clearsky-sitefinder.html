@@ -493,11 +493,17 @@
   .dcn-go .dcnHead{color:#1c6b41}
   .dcn-maybe .dcnHead{color:#8a5a00}
   .dcn-no .dcnHead{color:#a3372a}
-  .dcnRow{display:flex;align-items:baseline;gap:6px;font-size:11.5px;line-height:1.5}
+  .dcnRow{display:grid;grid-template-columns:auto auto 1fr;gap:2px 6px;
+    align-items:baseline;font-size:11.5px;line-height:1.5}
   .dcnK{flex:none;width:58px;color:var(--mut);font-size:10.5px}
   .dcnV{font-weight:700}
-  .dcnX{color:var(--mut);font-size:10.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;
-    white-space:nowrap}
+  /* NOT TRUNCATED. This column carries the model number — "1x Gotion
+     ESD1267-05P760-G · 180 kW, 4.2 h" — and clipping it to one line hid
+     exactly the thing somebody is looking for, to the point of reading as
+     though the tool had not picked a product at all. It wraps now; the row
+     is a grid, so a second line costs nothing but the height it needs. */
+  .dcnX{color:var(--mut);font-size:10.5px;min-width:0;line-height:1.45;
+    overflow-wrap:anywhere}
   .dcnOpen{margin-top:4px;font-size:10.5px;color:var(--mut);line-height:1.5}
   /* The one action. Given its own line and its own weight, because a card
      a customer reads and then puts down has failed. */
@@ -4031,6 +4037,34 @@
     }
   }
 
+  /* Set while the tool is moving the map itself, so moveend can tell a
+     programmatic pan from a human one. */
+  var _panningToSite = false;
+
+  /* ── CLICK A CARD, GO THERE ───────────────────────────────────────────
+     Selecting a card highlighted its pin and left the map wherever it was,
+     so on a list of three sites across two miles the highlighted pin was
+     often off screen entirely. The card and the map are two views of one
+     site; picking it in one should move the other.
+
+     Only when the map is actually visible, and only far enough to see it —
+     a site already on screen is not re-centred, because yanking the map
+     under somebody who can already see the pin is its own annoyance. */
+  function panToSite(r) {
+    if (!r || r.lat == null || r.lon == null) return;
+    if (ST.view === "list" || ST.view === "saved" || ST.view === "ledger") return;
+    try {
+      var ll = window.L.latLng(r.lat, r.lon);
+      var z = map.getZoom();
+      if (map.getBounds().pad(-0.18).contains(ll) && z >= 14) return;
+      _panningToSite = true;
+      map.setView(ll, Math.max(z, 16), { animate: true });
+      /* If the move never fires — already there, or animation suppressed —
+         the flag must not survive to swallow the rep's next real pan. */
+      setTimeout(function () { _panningToSite = false; }, 1200);
+    } catch (e) { _panningToSite = false; }
+  }
+
   function select(id, fromMap) {
     var r = ST.byId[id]; if (!r) return;
     var prev = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
@@ -4051,6 +4085,8 @@
       el.className += " hot";
       if (fromMap) el.scrollIntoView({ block: "center" });
     }
+    /* Came from the map? It is already in view. Came from a card? Go. */
+    if (!fromMap) panToSite(r);
     openDrawer(r);
   }
 
@@ -5063,7 +5099,13 @@
     var pk = sizePick(r);
     var shownKwh = fit ? fit.kwh : (est ? est.kwh : pk.kwh);
     if (shownKwh) {
-      rows.push(["Battery", (Math.round(shownKwh / 100) / 10) + ' MWh',
+      /* Under a megawatt, say kWh. "0.8 MWh" against a model called
+         ESD1267-05P760-G reads as a mismatch and sends somebody looking
+         for an 800 kWh product that does not exist — the number on the
+         card should be the number on the nameplate. */
+      rows.push(["Battery",
+        (shownKwh < 1000 ? fmt(Math.round(shownKwh)) + ' kWh'
+                         : (Math.round(shownKwh / 100) / 10) + ' MWh'),
         (fit
           ? (fit.units ? fit.units + '\u00d7 ' : '') +
             esc(fit.name) + ' ' + esc(fit.model || '') +
@@ -6903,6 +6945,11 @@
   map.on("moveend", function () {
     refreshLayers();
     if (ST.view === "ledger" || ST.view === "list") return;
+    /* A pan the TOOL performed is not the rep moving the map. Following a
+       card to its pin would otherwise re-run the viewport search, rebuild
+       the list under them and quite possibly drop the card they just
+       clicked — the list is viewport-filtered. */
+    if (_panningToSite) { _panningToSite = false; return; }
     if (document.getElementById("fFollow").checked) run(false);
     else if (boundsKey() !== ST.lastKey) document.getElementById("mapNote").hidden = false;
   });
