@@ -30,6 +30,9 @@ header{display:flex;justify-content:space-between;align-items:center;gap:14px;
 .badge{font-size:11px;padding:5px 10px;border:var(--edge);border-radius:4px;
        background:rgba(0,243,255,.1);letter-spacing:1px}
 .badge.err{border-color:var(--bad);color:var(--bad)}
+.badge.neural{border-color:var(--glow-cyan);color:var(--glow-cyan);background:rgba(0,243,255,.14);
+              text-shadow:0 0 8px rgba(0,243,255,.55);animation:neuralPulse 3s ease-in-out infinite}
+@keyframes neuralPulse{0%,100%{box-shadow:0 0 0 rgba(0,243,255,0)}50%{box-shadow:0 0 12px rgba(0,243,255,.45)}}
 button{background:transparent;border:var(--edge);color:var(--glow-cyan);font-family:inherit;
        font-size:11px;letter-spacing:1px;padding:7px 12px;cursor:pointer;border-radius:4px}
 button:hover{background:rgba(0,243,255,.12)}
@@ -833,6 +836,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         <div class="hClock" id="hClock"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
+        <div class="badge neural" id="neural" hidden>◈ NEURAL LINK</div>
         <div class="badge" id="badge">CONNECTING</div>
         <button id="mic">🎙 VOICE OFF</button>
         <button id="refresh">REFRESH</button>
@@ -1780,6 +1784,7 @@ let lastStatus={};
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
+  probeBrain();
   try{
     const tok=await u.getIdToken();
     const res=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+tok}});
@@ -2203,14 +2208,14 @@ function coreState(text, awakeNow){
   const e=el('coreState'); if(!e) return;
   e.textContent=text; e.className='coreState'+(awakeNow?' awake':'');
 }
-function say(role, text, cost){
+function say(role, text, cost, via){
   const box=el('thread'); if(!box) return null;
   const d=document.createElement('div');
   d.className='msg '+(role==='you'?'you':'jarvis');
   d.textContent=text;
   const m=document.createElement('div'); m.className='meta';
   m.textContent=[new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),
-                 cost!=null?money(cost):''].filter(Boolean).join('  ·  ');
+                 via||'', cost!=null?money(cost):''].filter(Boolean).join('  ·  ');
   d.appendChild(m); box.appendChild(d); box.scrollTop=box.scrollHeight;
   return d;
 }
@@ -2354,6 +2359,54 @@ function modeCommand(said){
 
 /* One path for typed and spoken. A second code path for the keyboard is how
    the two drift until only one of them works. */
+/* ── the neural link ─────────────────────────────────────────────────────
+   Jarvis's brain runs on Thomas's Mac: Claude Code booted from ~/jarvis with
+   the vault, bin/twin and hands (jarvis_brain.py, port 8795, loopback only).
+   The twin keeps its reflexes — the free path answers what it can from live
+   data for nothing, captures tasks, resolves "1 and 3" — and hands the
+   THINKING here instead of to the paid model. This page relays; the twin
+   records (POST /brain), so the thread and the runs panel are the same system
+   of record they always were. Brain not running? Nothing changes: the twin
+   asks "go ahead" exactly as before. */
+const BRAIN='http://127.0.0.1:8795';
+let brainOn=false, brainInfo=null;
+async function probeBrain(){
+  const was=brainOn;
+  try{
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),1500);
+    const r=await fetch(BRAIN+'/health',{signal:c.signal}); clearTimeout(tm);
+    const j=r.ok?await r.json():null;
+    brainOn=!!(j&&j.ok); brainInfo=j;
+  }catch(_){ brainOn=false; brainInfo=null; }
+  const n=el('neural');
+  if(n){ n.hidden=!brainOn; n.title=brainOn?('Jarvis is thinking on this Mac · '+((brainInfo&&brainInfo.model)||'')):''; }
+  if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} }
+  return brainOn;
+}
+async function askBrain(said){
+  const startedAt=new Date().toISOString();
+  const r=await fetch(BRAIN+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:said})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok) throw new Error(j.error||('neural link HTTP '+r.status));
+  return Object.assign({startedAt}, j);
+}
+/* The Mac holds no credential to the twin. This page, signed in as him, is
+   the one that writes the answer to the thread. */
+async function recordBrain(b){
+  try{
+    const t=await token(); if(!t) return;
+    await fetch(CHAT+'/brain',{method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({reply:b.text, modelCostUsd:b.modelCostUsd||0, model:b.model||'', startedAt:b.startedAt})});
+  }catch(_){}
+}
+/* The face follows the voice: this page speaks, so this page says so. */
+function face(state){
+  if(!brainOn) return;
+  try{ fetch(BRAIN+'/face',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})}).catch(()=>{}); }catch(_){}
+}
+
 async function submit(said){
   said=(said||'').trim(); if(!said) return;
   say('you', said);
@@ -2370,14 +2423,28 @@ async function submit(said){
   const pending=say('jarvis','…');
   try{
     const t=await token();
-    const r=await fetch(CHAT,{method:'POST',
-      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
-      body:JSON.stringify({message:said})});
-    const j=await r.json().catch(()=>({}));
+    const hdr={Authorization:'Bearer '+t,'Content-Type':'application/json'};
+    let r=await fetch(CHAT,{method:'POST',headers:hdr,body:JSON.stringify({message:said, brain:brainOn})});
+    let j=await r.json().catch(()=>({}));
+    let via=null;
+    if(r.ok && j.needsModel){
+      /* The twin could not answer from what it knows. The brain can. */
+      coreState('neural link…', false); caps('NEURAL LINK', 'thinking…', true);
+      try{
+        const b=await askBrain(said);
+        j={reply:b.text, costUsd:0}; via='neural link'; recordBrain(b);
+      }catch(e){
+        /* The brain went away between the probe and the question. Ask the
+           twin again the old way, so "go ahead" is armed and he is told. */
+        brainOn=false; probeBrain();
+        r=await fetch(CHAT,{method:'POST',headers:hdr,body:JSON.stringify({message:said, retry:true})});
+        j=await r.json().catch(()=>({}));
+      }
+    }
     const reply=r.ok?(j.reply||'No answer.'):(j.error||('HTTP '+r.status));
-    pending.remove(); say('jarvis', reply, j.costUsd);
+    pending.remove(); say('jarvis', reply, j.costUsd, via);
     caps('JARVIS', reply, false);
-    if(r.ok && voiceOut) await speakReply(reply);
+    if(r.ok && voiceOut){ if(via) face('speaking'); await speakReply(reply); if(via) face('idle'); }
     load();
     return reply;
   }catch(e){ pending.remove(); say('jarvis', e.message); }
@@ -2607,6 +2674,12 @@ function renderConns(s){
   const creditOut = !!mb.blocked && blockedMins !== null && blockedMins < 120;
 
   const rows=[
+    /* The brain. Green means Jarvis is thinking on this Mac, on the
+       subscription; off means the twin is on its own and will ask before
+       it spends. */
+    ['Neural link', brainOn?'ok':'off',
+      brainOn?('thinking on this Mac · '+((brainInfo&&brainInfo.model)||'claude')+' · $0')
+             :'off — double-click JARVIS neural link on the Desktop'],
     ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
       mins==null?'no run recorded':('read '+mins+' min ago')],
     ['Calendar', (s.schedule||[]).length?'ok':'warn',
