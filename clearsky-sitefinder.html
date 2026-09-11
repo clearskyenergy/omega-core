@@ -2260,7 +2260,7 @@
       if (circ === "open" && r.cst.key !== "open") { cut.circ++; return false; }
       if (circ === "partial" && r.cst.key !== "partial") { cut.circ++; return false; }
       if (circ === "closed" && r.cst.key !== "closed" && r.cst.key !== "over") { cut.circ++; return false; }
-      if (circ === "mine" && !r.mine.length) { cut.circ++; return false; }
+      if (circ === "mine" && !mineOf(r).length) { cut.circ++; return false; }
       return true;
     });
     ST.cut = cut;
@@ -2988,7 +2988,7 @@
         out.kw += r.sz.kw;
         if (!out.biggest || r.sz.kw > out.biggest.sz.kw) out.biggest = r;
       }
-      if (r.mine && r.mine.length) out.claimed++;
+      if (mineOf(r).length) out.claimed++;
     }
     return out;
   }
@@ -3235,11 +3235,9 @@
        circuit was fully taken; the card said help yourself.
 
        A claim you cannot see on the thing you claimed is not a claim. */
-    var ownLive = [], oi;
-    if (r.mine) {
-      for (oi = 0; oi < r.mine.length; oi++)
-        if (!L.isExpired(r.mine[oi])) ownLive.push(r.mine[oi]);
-    }
+    var ownLive = [], mn = mineOf(r), oi;
+    for (oi = 0; oi < mn.length; oi++)
+      if (!L.isExpired(mn[oi])) ownLive.push(mn[oi]);
     var ownKw = 0;
     for (oi = 0; oi < ownLive.length; oi++) ownKw += (ownLive[oi].kw || 0);
     if (ownLive.length) {
@@ -3368,10 +3366,27 @@
       '</div></article>';
   }
 
+  /* ── A RECORD IS NOT ALWAYS AN ENRICHED ONE ───────────────────────────
+     enrich() attaches claims and mine to every row it builds, so these read
+     safely on anything that came out of a search. The ADDRESS LOOKUP builds
+     its own record by hand — no parcel, no ledger rows, just the circuit at
+     a point — and it has neither field.
+
+     So searching an address threw on the first line of liveClaims, inside
+     drawerHtml, inside showViability: the panel half-drew and the rest of
+     the drawer never appeared. Address search is the front door of this
+     tool and it has been throwing on production.
+
+     Treating a missing list as an empty one is the honest reading: a site
+     nobody has claimed and a site whose claims have not been loaded both
+     have no claims to show, and neither should take the page down. */
+  function claimsOf(r)  { return (r && r.claims) ? r.claims : []; }
+  function mineOf(r)    { return (r && r.mine) ? r.mine : []; }
+
   function liveClaims(r) {
-    var out = [], i;
-    for (i = 0; i < r.claims.length; i++)
-      if (!L.isExpired(r.claims[i])) out.push(r.claims[i]);
+    var out = [], cl = claimsOf(r), i;
+    for (i = 0; i < cl.length; i++)
+      if (!L.isExpired(cl[i])) out.push(cl[i]);
     return out;
   }
 
@@ -5696,7 +5711,7 @@
     h.push('</div>');
 
     /* -- claim form ----------------------------------------------------- */
-    var own = r.mine.length ? r.mine[0] : null;
+    var own = mineOf(r).length ? mineOf(r)[0] : null;
     h.push('<div class="sec"><h4>' + (own ? 'Your claim on this site' : 'Claim capacity here') + '</h4>');
 
     /* NO CIRCUIT, NO FORM.
@@ -6022,7 +6037,7 @@
 
     var stSel = document.getElementById("rSt");
     if (stSel && save) stSel.onchange = function () {
-      save.textContent = saveLabel(stSel.value, !!(r.mine && r.mine.length));
+      save.textContent = saveLabel(stSel.value, !!mineOf(r).length);
       say(stSel.value === "prospect"
         ? "Prospect holds no capacity \u2014 the circuit stays open to everyone."
         : L.statusOf(stSel.value).help);
