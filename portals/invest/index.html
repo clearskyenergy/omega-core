@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>OMEGA Invest · Own a share of the energy that powers compute</title>
+<meta name="description" content="Community investment in compute containers, microgrids and battery projects. Fund a project, own a percent of its PPA or compute revenue.">
+<meta name="theme-color" content="#16202B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OMEGA Invest">
+<link rel="manifest" href="/portals/invest/manifest.webmanifest">
+<link rel="icon" href="/omega-logo.png">
+<link rel="apple-touch-icon" href="/omega-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · OMEGA Invest — community investment storefront
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  WHAT THIS IS
+  A crowdfunding front door for the projects the platform already designs:
+  compute containers, microgrids, BESS, solar, EV. Each campaign offers the
+  crowd a percent of the project's distributable cash (its PPA, its compute
+  lease, or both) in units, Indiegogo-style; each investor's holdings and
+  distributions read like Fundrise. One file, ES5, no build step, installable
+  as a phone app through the manifest next to it.
+
+  WHAT IT DELIBERATELY DOES NOT LOAD
+  omega-tenant.js. That runtime routes a signed-in person to their tenant's
+  hostname and refuses hosts it does not know — right for the workspace,
+  wrong for a retail investor with a gmail address. This is its own product
+  surface, like /portals/finance/, and boots Firebase directly from
+  /config.js. Sponsors (tenant users) use sponsor.html next to this.
+
+  WHERE THE MONEY LOGIC IS
+  Not here. Projections, eligibility and pledges come from POST /api/invest
+  (api/_lib/invest-math.js). This page collects an amount and renders what
+  the server returns. cf_pledges cannot be written from a browser at all.
+
+  ROUTES (hash):  #/  explore · #/c/{id} campaign · #/portfolio · #/account
+                  #/how · ?paid={pledgeId} and ?cancelled={pledgeId} on return
+                  from Stripe Checkout.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#F5F4F0; --surface:#FFFFFF; --ink:#14171A; --sub:#5B6672; --faint:#8A94A0;
+  --line:rgba(20,23,26,.16); --line-soft:rgba(20,23,26,.09);
+  --navy:#16202B; --dark:#0F1720; --blue:#2B5FA8; --blue-hi:#3F76C4; --blue-dim:rgba(43,95,168,.10);
+  --gold:#C77A00; --gold-dim:rgba(199,122,0,.12); --green:#2E7D5B; --green-dim:rgba(46,125,91,.12);
+  --red:#D9482B; --red-dim:rgba(217,72,43,.10); --purple:#6D5BD0;
+  --r:6px; --r-sm:4px; --shadow:0 1px 0 rgba(20,23,26,.04); --shadow-lg:0 14px 34px rgba(20,23,26,.10);
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --head:'Archivo','Inter',system-ui,sans-serif;
+  --tab-h:62px;
+}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;font:400 15px/1.5 'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);
+  background-color:var(--bg);
+  background-image:linear-gradient(rgba(43,95,168,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.055) 1px,transparent 1px),
+    linear-gradient(rgba(43,95,168,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.03) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;min-height:100vh;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--head);letter-spacing:-.022em;margin:0}
+a{color:var(--blue);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--blue-hi);outline-offset:2px}
+.hide{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+/* Grid and flex children default to min-width:auto, so an auto-fit facts grid
+   or a long title can widen its column past the phone. Nothing here may. */
+.camp>*,.hero .wrap>*,.hold>*,.tiles>*,.how>*,.grid>*,.stats>*{min-width:0}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+.top{background:var(--navy);color:#fff;position:sticky;top:0;z-index:40;border-bottom:1px solid rgba(255,255,255,.08)}
+.top .wrap{display:flex;align-items:center;gap:18px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;font-family:var(--head);font-weight:800;font-size:17px;letter-spacing:-.02em}
+.brand img{width:28px;height:28px;object-fit:contain}
+.brand small{display:block;font:500 10px/1 'Inter',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:3px}
+.nav{display:flex;gap:4px;margin-left:8px}
+.nav a{color:rgba(255,255,255,.78);font-weight:600;font-size:13.5px;padding:8px 12px;border-radius:var(--r-sm)}
+.nav a:hover,.nav a.on{color:#fff;background:rgba(255,255,255,.08)}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:var(--r-sm);padding:10px 16px;font-weight:600;font-size:14px;line-height:1;transition:background .15s,border-color .15s,transform .05s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-hi)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn-ghost:hover{background:rgba(20,23,26,.04)}
+.btn-light{background:rgba(255,255,255,.10);color:#fff;border-color:rgba(255,255,255,.16)}
+.btn-light:hover{background:rgba(255,255,255,.18)}
+.btn-lg{padding:14px 22px;font-size:15px}
+.btn-block{width:100%}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid rgba(255,255,255,.25)}
+.menu{position:relative}
+.menu .dd{display:none;position:absolute;right:0;top:44px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-lg);min-width:220px;padding:6px;z-index:50}
+.menu.open .dd{display:block}
+.dd a,.dd button{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 12px;border-radius:var(--r-sm);font-size:14px;color:var(--ink);font-weight:500}
+.dd a:hover,.dd button:hover{background:rgba(20,23,26,.05)}
+.dd .who{padding:8px 12px 10px;border-bottom:1px solid var(--line-soft);margin-bottom:4px}
+.dd .who b{display:block;font-size:13.5px}
+.dd .who span{font-size:12px;color:var(--sub);word-break:break-all}
+
+/* ── hero ────────────────────────────────────────────────────────────── */
+.hero{background:radial-gradient(900px 480px at 80% -20%,rgba(63,118,196,.35),transparent 60%),radial-gradient(600px 400px at 5% 120%,rgba(199,122,0,.18),transparent 62%),var(--navy);color:#fff;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;inset:0;opacity:.35;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:linear-gradient(180deg,#000,transparent 90%);mask-image:linear-gradient(180deg,#000,transparent 90%);pointer-events:none}
+.hero .wrap{position:relative;padding:56px 20px 44px;display:grid;grid-template-columns:1.15fr .85fr;gap:36px;align-items:end}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#8FB7EA;margin-bottom:14px}
+.hero h1{font-size:44px;line-height:1.05;font-weight:800;max-width:15ch}
+.hero h1 em{font-style:normal;color:#F0B45C}
+.hero p{font-size:16px;line-height:1.6;color:rgba(255,255,255,.74);max-width:52ch;margin:16px 0 22px}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:14px 16px}
+.stat b{display:block;font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.02em}
+.stat span{font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+
+/* ── explore ─────────────────────────────────────────────────────────── */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:22px 0 14px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--sub)}
+.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.toolbar select{margin-left:auto;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-sm);padding:8px 10px;font-size:13px;font-weight:600;color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;padding-bottom:40px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;transition:box-shadow .18s,transform .18s;color:var(--ink)}
+.card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.cover{position:relative;aspect-ratio:16/9;background:var(--navy);overflow:hidden}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cover .art{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.cover .art svg{width:38%;height:auto;opacity:.9}
+.cover.t-compute{background:linear-gradient(135deg,#16202B,#2B5FA8)}
+.cover.t-microgrid{background:linear-gradient(135deg,#16202B,#2E7D5B)}
+.cover.t-bess{background:linear-gradient(135deg,#16202B,#6D5BD0)}
+.cover.t-solar{background:linear-gradient(135deg,#16202B,#C77A00)}
+.cover.t-ev{background:linear-gradient(135deg,#16202B,#3F76C4)}
+.tag{position:absolute;top:10px;left:10px;background:rgba(255,255,255,.92);color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:3px}
+.tag.right{left:auto;right:10px;background:var(--gold);color:#fff}
+.tag.sample{left:auto;right:10px;background:var(--purple);color:#fff}
+.card .body{padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;flex:1}
+.card h3{font-size:17px;line-height:1.25}
+.card .tagline{font-size:13.5px;color:var(--sub);line-height:1.45}
+.card .by{font-size:12.5px;color:var(--faint)}
+.card .by b{color:var(--sub);font-weight:600}
+.bar{height:7px;background:rgba(20,23,26,.08);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--blue);border-radius:4px;transition:width .5s}
+.bar.funded i{background:var(--green)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.row .big{font-family:var(--mono);font-size:19px;font-weight:500}
+.row .big small{font:500 12px 'Inter',sans-serif;color:var(--faint)}
+.row .pct{font-family:var(--mono);font-size:13px;color:var(--sub)}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border-top:1px solid var(--line-soft);padding-top:10px}
+.kv div{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.kv b{display:block;font-family:var(--mono);font-size:14px;font-weight:500;color:var(--ink);margin-top:2px;text-transform:none;letter-spacing:0}
+.kv b.g{color:var(--green)}
+.card .foot{margin-top:auto;padding-top:4px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:36px;text-align:center;color:var(--sub)}
+.section-h{display:flex;align-items:baseline;gap:12px;padding:26px 0 8px}
+.section-h h2{font-size:22px}
+.section-h span{font-size:13px;color:var(--faint)}
+
+/* ── campaign ────────────────────────────────────────────────────────── */
+.crumb{padding:16px 0 6px;font-size:13px;color:var(--sub)}
+.crumb a{color:var(--sub)}
+.crumb a:hover{color:var(--blue)}
+.camp{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;padding-bottom:110px}
+.gallery .cover{border-radius:var(--r);aspect-ratio:16/9}
+.thumbs{display:flex;gap:8px;margin-top:8px}
+.thumbs .cover{width:96px;aspect-ratio:16/9;border-radius:var(--r-sm);cursor:pointer;opacity:.7;border:2px solid transparent}
+.thumbs .cover.on{opacity:1;border-color:var(--blue)}
+.camp h1{font-size:30px;line-height:1.15;margin-top:18px}
+.camp .tagline{font-size:16px;color:var(--sub);margin:8px 0 14px;line-height:1.5}
+.sponsor{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font-size:13.5px}
+.sponsor .logo{width:40px;height:40px;border-radius:var(--r-sm);background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:var(--head)}
+.sponsor b{display:block}
+.sponsor span{color:var(--sub);font-size:12.5px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-top:22px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font-weight:600;font-size:14px;color:var(--sub);white-space:nowrap;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--blue)}
+.pane{padding:18px 0;font-size:15px;line-height:1.65}
+.pane p{margin:0 0 14px}
+.pane h3{font-size:17px;margin:20px 0 8px}
+.pane ul{padding-left:20px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0 18px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.fact span{display:block;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.fact b{font-family:var(--mono);font-size:16px;font-weight:500}
+.update{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+.update .meta{font-size:12px;color:var(--faint);margin-bottom:6px}
+.update h4{font-size:15px;margin-bottom:6px}
+.risk{background:var(--gold-dim);border:1px solid rgba(199,122,0,.3);border-radius:var(--r);padding:14px 16px;font-size:13.5px;line-height:1.55}
+table.yrs{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+table.yrs th,table.yrs td{padding:7px 8px;border-bottom:1px solid var(--line-soft);text-align:right;font-family:var(--mono)}
+table.yrs th{font:600 11px 'Inter',sans-serif;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+table.yrs td:first-child,table.yrs th:first-child{text-align:left}
+.bars{display:flex;align-items:flex-end;gap:4px;height:90px;margin:12px 0 4px}
+.bars i{flex:1;background:var(--blue);border-radius:2px 2px 0 0;min-height:2px;position:relative}
+.bars i.pay{background:var(--green)}
+.doc{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:14px}
+.doc small{color:var(--faint);margin-left:auto}
+
+.side{position:sticky;top:76px;align-self:start;display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+.panel .raised{font-family:var(--mono);font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1}
+.panel .raised small{font:500 13px 'Inter',sans-serif;color:var(--sub);margin-left:6px}
+.panel .bar{margin:12px 0 10px;height:9px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.trio div{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.trio b{display:block;font-family:var(--mono);font-size:16px;font-weight:500;color:var(--ink);text-transform:none;letter-spacing:0}
+.terms{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;border-top:1px solid var(--line-soft);padding-top:12px;margin-top:4px}
+.terms div{font-size:12px;color:var(--sub)}
+.terms b{display:block;font-family:var(--mono);font-weight:500;font-size:14px;color:var(--ink)}
+.calc label{display:block;font-size:12px;font-weight:600;color:var(--sub);margin-bottom:6px}
+.amt{display:flex;align-items:center;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;padding:0 12px}
+.amt span{font-family:var(--mono);color:var(--faint);font-size:18px}
+.amt input{flex:1;border:0;outline:0;padding:12px 6px;font-family:var(--mono);font-size:22px;font-weight:500;width:100%;min-width:0;background:transparent}
+.quick{display:flex;gap:6px;margin:8px 0 10px}
+.quick button{flex:1;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-sm);padding:7px 0;font-family:var(--mono);font-size:12.5px;color:var(--sub)}
+.quick button.on{background:var(--blue-dim);border-color:var(--blue);color:var(--blue)}
+input[type=range]{width:100%;accent-color:var(--blue);margin:2px 0 12px}
+.proj{background:var(--bg);border:1px solid var(--line-soft);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.proj .h{display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.proj .h em{font-style:normal;color:var(--green)}
+.proj .l{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-top:1px solid var(--line-soft);font-size:13px;color:var(--sub)}
+.proj .l:first-of-type{border-top:0}
+.proj .l b{font-family:var(--mono);font-weight:500;color:var(--ink);font-size:15px}
+.proj .l b.g{color:var(--green)}
+.proj .note{font-size:11.5px;color:var(--faint);margin-top:8px;line-height:1.45}
+.perks{display:flex;flex-direction:column;gap:8px}
+.perk{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;background:var(--surface);transition:border-color .15s}
+.perk:hover{border-color:var(--blue)}
+.perk.on{border-color:var(--blue);background:var(--blue-dim)}
+.perk .p-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.perk .p-h b{font-size:14px}
+.perk .p-h span{font-family:var(--mono);font-size:13px;color:var(--blue)}
+.perk p{margin:4px 0 0;font-size:12.5px;color:var(--sub);line-height:1.45}
+.perk .left{font-size:11px;color:var(--faint);margin-top:4px}
+.fine{font-size:11.5px;color:var(--faint);line-height:1.5;margin-top:10px}
+.pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;border-radius:3px;background:var(--blue-dim);color:var(--blue)}
+.pill.live{background:var(--green-dim);color:var(--green)}
+.pill.funded{background:var(--blue-dim);color:var(--blue)}
+.pill.closed{background:rgba(20,23,26,.08);color:var(--sub)}
+.pill.pending{background:var(--gold-dim);color:var(--gold)}
+.pill.paid{background:var(--green-dim);color:var(--green)}
+.pill.refunded,.pill.cancelled{background:var(--red-dim);color:var(--red)}
+.mobile-cta{display:none}
+
+/* ── portfolio / account ─────────────────────────────────────────────── */
+.page-h{padding:26px 0 14px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.page-h h1{font-size:28px}
+.page-h p{margin:4px 0 0;color:var(--sub)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:22px}
+.tile{background:var(--navy);color:#fff;border-radius:var(--r);padding:16px 18px}
+.tile.light{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.tile span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;opacity:.65}
+.tile b{display:block;font-family:var(--mono);font-size:26px;font-weight:500;margin-top:4px;letter-spacing:-.02em}
+.tile small{display:block;font-size:12px;opacity:.6;margin-top:3px}
+.hold{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;grid-template-columns:1.4fr repeat(4,1fr) auto;gap:12px;align-items:center;margin-bottom:10px}
+.hold h3{font-size:15px}
+.hold .sub{font-size:12.5px;color:var(--sub);margin-top:3px}
+.hold .m span{display:block;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.hold .m b{font-family:var(--mono);font-weight:500;font-size:15px}
+table.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;font-size:13.5px}
+table.tbl th,table.tbl td{padding:10px 12px;border-bottom:1px solid var(--line-soft);text-align:left}
+table.tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+table.tbl td.num,table.tbl th.num{text-align:right}
+.form{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;max-width:640px}
+.form .f{margin-bottom:14px}
+.form label{display:block;font-size:12.5px;font-weight:600;color:var(--sub);margin-bottom:5px}
+.form input[type=text],.form input[type=email],.form input[type=password],.form select,.form textarea{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;background:#fff}
+.form .chk{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.5;color:var(--ink)}
+.form .chk input{margin-top:4px}
+.msg{font-size:13px;color:var(--sub);min-height:18px;margin-top:8px}
+.msg.err{color:var(--red)}
+.msg.ok{color:var(--green)}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:8px 0 26px}
+.how .step{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.how .n{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:500;margin-bottom:10px}
+.how h3{font-size:16px;margin-bottom:6px}
+.how p{margin:0;font-size:13.5px;color:var(--sub);line-height:1.55}
+
+/* ── modal / toast / tab bar ─────────────────────────────────────────── */
+.modal{position:fixed;inset:0;background:rgba(15,23,32,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal.open{display:flex}
+.dlg{background:var(--surface);border-radius:8px;width:100%;max-width:480px;max-height:92vh;overflow:auto;box-shadow:var(--shadow-lg);padding:22px}
+.dlg h2{font-size:20px;margin-bottom:4px}
+.dlg .sub{font-size:13.5px;color:var(--sub);margin-bottom:16px;line-height:1.5}
+.dlg .x{float:right;background:none;border:0;font-size:22px;color:var(--faint);line-height:1;padding:0 4px}
+.steps{display:flex;gap:6px;margin-bottom:16px}
+.steps i{flex:1;height:4px;border-radius:2px;background:rgba(20,23,26,.1)}
+.steps i.on{background:var(--blue)}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 16px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;font-weight:600;font-size:14px}
+.or{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--faint);font-size:12px}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--line)}
+#toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 16px);transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:11px 16px;border-radius:var(--r);font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:70;max-width:92vw;box-shadow:var(--shadow-lg)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.tabbar{display:none;position:fixed;left:0;right:0;bottom:0;height:var(--tab-h);background:var(--surface);border-top:1px solid var(--line);z-index:45;padding-bottom:env(safe-area-inset-bottom)}
+.tabbar a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:600;color:var(--faint)}
+.tabbar a.on{color:var(--blue)}
+.tabbar svg{width:22px;height:22px}
+footer{border-top:1px solid var(--line);padding:26px 0 40px;font-size:12.5px;color:var(--faint);line-height:1.6}
+footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.loading{padding:60px;text-align:center;color:var(--faint)}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.loading i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--blue);margin:0 3px;animation:pulse 1.2s infinite}
+.loading i:nth-child(2){animation-delay:.2s}.loading i:nth-child(3){animation-delay:.4s}
+
+@media (max-width:900px){
+  .hero .wrap{grid-template-columns:1fr;padding:38px 20px 30px}
+  .hero h1{font-size:34px}
+  .camp{grid-template-columns:1fr}
+  .side{position:static}
+  .hold{grid-template-columns:1fr 1fr;gap:10px}
+  .hold .act{grid-column:1/-1}
+  footer .wrap{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .nav{display:none}
+  .tabbar{display:flex}
+  body{padding-bottom:var(--tab-h)}
+  .wrap{padding:0 16px}
+  .hero .wrap{padding:30px 16px 26px}
+  .stats{grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .stat{padding:10px 12px}
+  .stat b{font-size:18px}
+  .mobile-cta{display:flex;position:fixed;left:0;right:0;bottom:var(--tab-h);background:var(--surface);border-top:1px solid var(--line);padding:10px 16px;gap:12px;align-items:center;z-index:44}
+  .mobile-cta b{font-family:var(--mono);font-weight:500;font-size:15px}
+  .mobile-cta small{display:block;font-size:11px;color:var(--faint)}
+  .toolbar select{margin-left:0;width:100%}
+  .camp h1{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#/"><img src="/omega-logo.png" alt=""><span>OMEGA Invest<small>Community capital · ClearSky</small></span></a>
+    <nav class="nav" id="nav">
+      <a href="#/" data-route="explore">Explore</a>
+      <a href="#/how" data-route="how">How it works</a>
+      <a href="#/portfolio" data-route="portfolio">Portfolio</a>
+    </nav>
+    <div class="right">
+      <button class="btn btn-light" id="btnSignIn">Sign in</button>
+      <div class="menu hide" id="menu">
+        <button class="avatar" id="avatarBtn" aria-label="Account menu">?</button>
+        <div class="dd">
+          <div class="who"><b id="whoName">—</b><span id="whoEmail"></span></div>
+          <a href="#/portfolio">My portfolio</a>
+          <a href="#/account">Account &amp; eligibility</a>
+          <a href="/portals/invest/sponsor" id="sponsorLink">Sponsor console</a>
+          <button id="btnSignOut">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="view"><div class="loading"><i></i><i></i><i></i></div></main>
+
+<footer>
+  <div class="wrap">
+    <div><b>OMEGA Invest</b> is operated by ClearSky Energy Solutions LLC. Project campaigns are sponsored by independent developers and reviewed by ClearSky before listing. Projections are the sponsor's estimates, not guarantees.</div>
+    <div>Investing in energy and compute infrastructure involves risk, including the loss of principal. Distributions depend on the project being built and operated as planned. Offerings are made only through the offering documents attached to each campaign, and only to investors who meet the eligibility rules shown before investing. Nothing on this page is investment, tax or legal advice.</div>
+  </div>
+</footer>
+
+<nav class="tabbar">
+  <a href="#/" data-route="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Explore</a>
+  <a href="#/portfolio" data-route="portfolio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9M10 19V5M16 19v-8M22 19H2"/></svg>Portfolio</a>
+  <a href="#/account" data-route="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Account</a>
+</nav>
+
+<div class="modal" id="authModal">
+  <div class="dlg">
+    <button class="x" data-close="authModal" aria-label="Close">×</button>
+    <h2>Sign in to invest</h2>
+    <div class="sub">Any email works — you do not need a company account. We keep your holdings under this sign-in.</div>
+    <button class="btn-google" id="btnGoogle"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.3 30.3 0 24 0 14.6 0 6.5 5.4 2.5 13.3l7.9 6.1C12.3 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.5 2.9-2.2 5.4-4.7 7.1l7.4 5.7c4.3-4 7.1-9.9 7.1-16.8z"/><path fill="#FBBC05" d="M10.4 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.5 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.4-5.7c-2.1 1.4-4.8 2.3-8.2 2.3-6.3 0-11.7-4.1-13.6-9.9l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
+    <div class="or">or use email</div>
+    <div class="form" style="border:0;padding:0;max-width:none">
+      <div class="f"><label>Email</label><input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com"></div>
+      <div class="f"><label>Password</label><input type="password" id="authPass" autocomplete="current-password" placeholder="At least 6 characters"></div>
+      <button class="btn btn-primary btn-block" id="btnEmail">Continue</button>
+      <div class="msg" id="authMsg">New here? Enter a password and we will create your account.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="investModal">
+  <div class="dlg" id="investDlg"></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/portals/invest/samples.js"></script>
+<script>
+/* ES5 throughout — see the header comment for why. */
+(function () {
+'use strict';
+
+/* ═══════════════════ 0 · boot ══════════════════════════════════════════ */
+var cfg = window.CLEARSKY_CONFIG || {};
+var FB = { ready: false, auth: null, db: null };
+try {
+  if (typeof firebase !== 'undefined') {
+    if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+    FB.auth = firebase.auth(); FB.db = firebase.firestore(); FB.ready = true;
+  }
+} catch (e) { console.error('[invest] Firebase init failed', e); }
+
+var S = {                       /* page state */
+  user: null, profile: null, campaigns: [], closed: null, filter: 'all', sort: 'trending',
+  route: 'explore', campaign: null, quote: null, pledges: [], distributions: {}, updates: {},
+  perk: null, amount: 500, sample: false
+};
+var CATEGORIES = [['all','All projects'],['compute','Compute'],['microgrid','Microgrid'],['bess','Battery'],['solar','Solar'],['ev','EV charging']];
+var TYPE_LABEL = { compute:'Compute', microgrid:'Microgrid', bess:'Battery storage', solar:'Solar', ev:'EV charging' };
+var KIND_LABEL = { ppa:'PPA revenue', compute:'Compute revenue', hybrid:'PPA + compute' };
+var COUNTRIES = [['US','United States'],['CA','Canada'],['GB','United Kingdom'],['DE','Germany'],['MX','Mexico'],['AU','Australia'],['OTHER','Other']];
+
+/* ═══════════════════ 1 · utilities ═════════════════════════════════════ */
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function usd(n) { n = Number(n) || 0; return '$' + Math.round(n).toLocaleString('en-US'); }
+function usdC(n) { n = Number(n) || 0; return n >= 1e9 ? '$' + (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? '$' + Math.round(n/1e3) + 'K' : usd(n); }
+function pct(n, d) { n = Number(n) || 0; return n.toFixed(d == null ? 1 : d) + '%'; }
+function pctTiny(n) { n = Number(n) || 0; if (n === 0) return '0%'; if (n < 0.01) return n.toFixed(4) + '%'; if (n < 1) return n.toFixed(3) + '%'; return n.toFixed(2) + '%'; }
+function dateOf(v) { if (!v) return null; if (v.toDate) return v.toDate(); var d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+function fmtDate(v) { var d = dateOf(v); return d ? d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'; }
+function daysLeft(c) { var d = dateOf(c.deadline); if (!d) return null; return Math.max(0, Math.ceil((d.getTime() - Date.now()) / 86400000)); }
+function progressPct(c) { var g = Number(c.goal) || 0; return g > 0 ? Math.min(100, (Number(c.raised) || 0) / g * 100) : 0; }
+function debounce(fn, ms) { var t; return function () { var a = arguments, self = this; clearTimeout(t); t = setTimeout(function () { fn.apply(self, a); }, ms); }; }
+function toast(msg, ms) { var t = $('toast'); t.textContent = msg; t.className = 'show'; clearTimeout(t._t); t._t = setTimeout(function () { t.className = ''; }, ms || 3200); }
+function openModal(id) { $(id).className = 'modal open'; }
+function closeModal(id) { $(id).className = 'modal'; }
+function initials(u) { var n = (u && (u.displayName || u.email)) || '?'; return n.replace(/@.*/, '').split(/[\s._-]+/).map(function (p) { return p.charAt(0); }).join('').slice(0, 2).toUpperCase(); }
+function token() { return S.user ? S.user.getIdToken() : Promise.resolve(null); }
+function api(body) {
+  return token().then(function (tok) {
+    var h = { 'Content-Type': 'application/json' };
+    if (tok) h.Authorization = 'Bearer ' + tok;
+    return fetch('/api/invest', { method: 'POST', headers: h, body: JSON.stringify(body) });
+  }).then(function (r) { return r.json().then(function (j) { if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; } return j; }); });
+}
+function art(type) {
+  /* one stroke icon per project type, drawn inline so the cover never 404s */
+  var d = { compute: 'M3 5h18v6H3zM3 13h18v6H3zM7 8h.01M7 16h.01M11 8h6M11 16h6',
+            microgrid: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8',
+            bess: 'M4 7h14v10H4zM18 10h2v4h-2zM8 10v4M11 10v4M14 10v4',
+            solar: 'M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+            ev: 'M5 20V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14M5 20h11M16 10h2a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0V9l-2-2M11 7l-2 5h3l-2 5' }[type] || 'M4 4h16v16H4z';
+  return '<div class="art"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg></div>';
+}
+function cover(c, cls, extra) {
+  var img = c.images && c.images.length ? c.images[0] : (c.image || null);
+  return '<div class="cover t-' + esc(c.type) + ' ' + (cls || '') + '">' + (img ? '<img src="' + esc(img) + '" alt="">' : art(c.type)) + (extra || '') + '</div>';
+}
+
+/* ═══════════════════ 2 · sample listings ═══════════════════════════════
+   /portals/invest/samples.js — shown only when the live collection is empty
+   or unreachable, always marked, and seeded for real by
+   scripts/seed-invest-demo.js from the same file. */
+var SAMPLES = window.OMEGA_INVEST_SAMPLES || [];
+
+/* ═══════════════════ 3 · data ══════════════════════════════════════════ */
+function loadCampaigns() {
+  if (!FB.ready) { S.campaigns = SAMPLES.slice(); S.sample = true; return Promise.resolve(); }
+  return FB.db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().then(function (q) {
+    var out = [];
+    q.forEach(function (d) { var c = d.data(); c.id = d.id; out.push(c); });
+    if (out.length) { S.campaigns = out; S.sample = false; }
+    else { S.campaigns = SAMPLES.slice(); S.sample = true; }
+  }).catch(function (e) { console.warn('[invest] campaigns unavailable', e); S.campaigns = SAMPLES.slice(); S.sample = true; });
+}
+function loadClosed() {
+  if (S.closed) return Promise.resolve(S.closed);
+  if (!FB.ready) { S.closed = []; return Promise.resolve(S.closed); }
+  return FB.db.collection('cf_campaigns').where('status', '==', 'closed').get().then(function (q) {
+    var out = []; q.forEach(function (d) { var c = d.data(); c.id = d.id; out.push(c); }); S.closed = out; return out;
+  }).catch(function () { S.closed = []; return S.closed; });
+}
+function findCampaign(id) {
+  var all = S.campaigns.concat(S.closed || []);
+  for (var i = 0; i < all.length; i++) if (all[i].id === id || all[i].slug === id) return Promise.resolve(all[i]);
+  for (var k = 0; k < SAMPLES.length; k++) if (SAMPLES[k].id === id) return Promise.resolve(SAMPLES[k]);
+  if (!FB.ready) return Promise.resolve(null);
+  return FB.db.collection('cf_campaigns').doc(id).get().then(function (d) { if (!d.exists) return null; var c = d.data(); c.id = d.id; return c; }).catch(function () { return null; });
+}
+function loadUpdates(c) {
+  if (c.sample || !FB.ready) return Promise.resolve([]);
+  if (S.updates[c.id]) return Promise.resolve(S.updates[c.id]);
+  return FB.db.collection('cf_campaigns').doc(c.id).collection('updates').get().then(function (q) {
+    var out = []; q.forEach(function (d) { var u = d.data(); u.id = d.id; out.push(u); });
+    out.sort(function (a, b) { return (dateOf(b.createdAt) || 0) - (dateOf(a.createdAt) || 0); });
+    S.updates[c.id] = out; return out;
+  }).catch(function () { return []; });
+}
+function loadProfile() {
+  if (!S.user || !FB.ready) { S.profile = null; return Promise.resolve(null); }
+  var ref = FB.db.collection('cf_investors').doc(S.user.uid);
+  return ref.get().then(function (d) {
+    if (d.exists) { S.profile = d.data(); return S.profile; }
+    var p = { uid: S.user.uid, email: String(S.user.email || '').toLowerCase(), name: S.user.displayName || '', status: 'active', kyc: 'none', accreditedVerified: false, accredited: false, country: '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+    return ref.set(p).then(function () { S.profile = p; return p; });
+  }).catch(function (e) { console.warn('[invest] profile', e); S.profile = null; return null; });
+}
+function loadPortfolio() {
+  if (!S.user || !FB.ready) { S.pledges = []; return Promise.resolve(); }
+  return FB.db.collection('cf_pledges').where('investorUid', '==', S.user.uid).get().then(function (q) {
+    var out = []; q.forEach(function (d) { var p = d.data(); p.id = d.id; out.push(p); });
+    out.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); });
+    S.pledges = out;
+    var ids = {}; out.forEach(function (p) { if (p.status === 'paid') ids[p.campaignId] = 1; });
+    return Promise.all(Object.keys(ids).map(function (cid) {
+      return FB.db.collection('cf_distributions').where('campaignId', '==', cid).get().then(function (dq) {
+        var ds = []; dq.forEach(function (d) { var x = d.data(); x.id = d.id; ds.push(x); });
+        ds.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); });
+        S.distributions[cid] = ds;
+      }).catch(function () { S.distributions[cid] = []; });
+    }));
+  }).catch(function (e) { console.warn('[invest] portfolio', e); S.pledges = []; });
+}
+
+/* ═══════════════════ 4 · router ════════════════════════════════════════ */
+function parseRoute() {
+  var h = (location.hash || '#/').replace(/^#/, '');
+  var m;
+  if ((m = /^\/c\/([^\/?]+)/.exec(h))) return { name: 'campaign', id: decodeURIComponent(m[1]) };
+  if (/^\/portfolio/.test(h)) return { name: 'portfolio' };
+  if (/^\/account/.test(h)) return { name: 'account' };
+  if (/^\/how/.test(h)) return { name: 'how' };
+  return { name: 'explore' };
+}
+function render() {
+  var r = parseRoute(); S.route = r.name;
+  var links = document.querySelectorAll('[data-route]');
+  for (var i = 0; i < links.length; i++) links[i].className = links[i].getAttribute('data-route') === r.name ? 'on' : '';
+  var v = $('view');
+  if (r.name === 'campaign') { v.innerHTML = '<div class="loading"><i></i><i></i><i></i></div>'; return findCampaign(r.id).then(function (c) { if (!c) { v.innerHTML = '<div class="wrap"><div class="empty" style="margin:40px 0">That campaign is not listed. <a href="#/">Back to projects</a></div></div>'; return; } S.campaign = c; S.quote = null; S.perk = null; S.amount = Math.max(Number(c.minInvestment) || 100, Number(c.unitPrice) || 100) * (Number(c.unitPrice) <= 100 ? 5 : 1); renderCampaign(c); requestQuote(); loadUpdates(c).then(function () { if (S.route === 'campaign' && S.campaign === c) fillUpdates(c); }); }); }
+  if (r.name === 'portfolio') return renderPortfolio();
+  if (r.name === 'account') return renderAccount();
+  if (r.name === 'how') return renderHow();
+  return renderExplore();
+}
+
+/* ═══════════════════ 5 · explore ═══════════════════════════════════════ */
+function totals() {
+  var raised = 0, funded = 0, backers = 0;
+  S.campaigns.forEach(function (c) { raised += Number(c.raised) || 0; backers += Number(c.backers) || 0; if (c.status === 'funded') funded++; });
+  return { raised: raised, funded: funded, backers: backers };
+}
+function sortCampaigns(list) {
+  var s = S.sort;
+  return list.slice().sort(function (a, b) {
+    if (s === 'ending') { var da = daysLeft(a), db = daysLeft(b); return (da == null ? 1e9 : da) - (db == null ? 1e9 : db); }
+    if (s === 'newest') return (dateOf(b.launchedAt) || 0) - (dateOf(a.launchedAt) || 0);
+    if (s === 'yield') return ((b.headline && b.headline.targetYieldPct) || 0) - ((a.headline && a.headline.targetYieldPct) || 0);
+    var la = a.status === 'live' ? 1 : 0, lb = b.status === 'live' ? 1 : 0;
+    if (la !== lb) return lb - la;
+    return (Number(b.backers) || 0) - (Number(a.backers) || 0);
+  });
+}
+function cardHtml(c) {
+  var p = progressPct(c), dl = daysLeft(c), h = c.headline || {};
+  var funded = c.status === 'funded' || p >= 100;
+  var loc = c.location ? [c.location.city, c.location.state].filter(Boolean).join(', ') : '';
+  return '<a class="card" href="#/c/' + esc(c.slug || c.id) + '">' +
+    cover(c, '', (c.sample ? '<span class="tag sample">Sample listing</span>' : (funded ? '<span class="tag right">Funded</span>' : (dl != null && dl <= 10 && c.status === 'live' ? '<span class="tag right">Ending soon</span>' : ''))) + '<span class="tag">' + esc(TYPE_LABEL[c.type] || c.type) + '</span>') +
+    '<div class="body"><h3>' + esc(c.title) + '</h3><div class="tagline">' + esc(c.tagline || '') + '</div>' +
+    '<div class="by">by <b>' + esc(c.sponsorName || c.sponsorOrgId || '') + '</b>' + (loc ? ' · ' + esc(loc) : '') + '</div>' +
+    '<div class="bar' + (funded ? ' funded' : '') + '"><i style="width:' + p.toFixed(1) + '%"></i></div>' +
+    '<div class="row"><div class="big">' + usdC(c.raised) + ' <small>of ' + usdC(c.goal) + '</small></div><div class="pct">' + Math.round(p) + '% · ' + (c.status === 'live' ? (dl == null ? 'open' : dl + ' days left') : (c.status === 'funded' ? 'funded' : 'closed')) + '</div></div>' +
+    '<div class="kv"><div>Target yield<b class="g">' + pct(h.targetYieldPct) + '</b></div><div>Term<b>' + (h.termYears || (c.offer && c.offer.termYears) || '—') + ' yrs</b></div><div>Investors get<b>' + pct(h.sharePct || (c.offer && c.offer.sharePct), 0) + '</b></div></div>' +
+    '<div class="foot"><span class="btn btn-primary btn-block">' + (c.status === 'live' ? 'Invest from ' + usd(Math.max(Number(c.minInvestment) || 0, Number(c.unitPrice) || 0)) : 'View project') + '</span></div></div></a>';
+}
+function renderExplore() {
+  var t = totals();
+  var v = $('view');
+  v.innerHTML =
+    '<section class="hero"><div class="wrap"><div>' +
+      '<div class="eyebrow">Community investment · compute · microgrids · storage</div>' +
+      '<h1>Own a share of the <em>energy that powers compute.</em></h1>' +
+      '<p>Every project on OMEGA Invest is designed, sized and reviewed on the ClearSky platform. Fund the container or the microgrid from $' + (S.campaigns.length ? Math.min.apply(null, S.campaigns.map(function (c) { return Number(c.unitPrice) || 100; })) : 100) + ', and receive your percent of the power purchase agreement or the compute lease for the life of the term.</p>' +
+      '<div class="cta"><a class="btn btn-gold btn-lg" href="#projects">Browse projects</a><a class="btn btn-light btn-lg" href="#/how">How it works</a></div>' +
+    '</div><div class="stats"><div class="stat"><b>' + usdC(t.raised) + '</b><span>Committed</span></div><div class="stat"><b>' + t.backers.toLocaleString('en-US') + '</b><span>Investors</span></div><div class="stat"><b>' + t.funded + '</b><span>Projects funded</span></div></div></div></section>' +
+    '<div class="wrap" id="projects">' +
+      (S.sample ? '<div class="risk" style="margin-top:18px"><b>Sample listings.</b> No campaign is live yet, so these four illustrate the experience. Run <code>scripts/seed-invest-demo.js --apply</code> to publish them for real, or submit a campaign from the sponsor console.</div>' : '') +
+      '<div class="toolbar"><div class="chips" id="chips">' + CATEGORIES.map(function (c) { return '<button class="chip' + (S.filter === c[0] ? ' on' : '') + '" data-f="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '<button class="chip' + (S.filter === 'closed' ? ' on' : '') + '" data-f="closed">Closed</button></div>' +
+      '<select id="sort"><option value="trending"' + (S.sort === 'trending' ? ' selected' : '') + '>Trending</option><option value="ending"' + (S.sort === 'ending' ? ' selected' : '') + '>Ending soon</option><option value="newest"' + (S.sort === 'newest' ? ' selected' : '') + '>Newest</option><option value="yield"' + (S.sort === 'yield' ? ' selected' : '') + '>Highest target yield</option></select></div>' +
+      '<div class="grid" id="grid"></div></div>';
+  fillGrid();
+  var chips = document.querySelectorAll('#chips .chip');
+  for (var i = 0; i < chips.length; i++) chips[i].onclick = function () { S.filter = this.getAttribute('data-f'); renderExplore(); window.scrollTo(0, $('projects').offsetTop - 70); };
+  $('sort').onchange = function () { S.sort = this.value; fillGrid(); };
+}
+function fillGrid() {
+  var g = $('grid'); if (!g) return;
+  if (S.filter === 'closed') {
+    g.innerHTML = '<div class="loading"><i></i><i></i><i></i></div>';
+    loadClosed().then(function (list) { if (S.filter !== 'closed') return; g.innerHTML = list.length ? sortCampaigns(list).map(cardHtml).join('') : '<div class="empty" style="grid-column:1/-1">No closed campaigns yet.</div>'; });
+    return;
+  }
+  var list = S.campaigns.filter(function (c) { return S.filter === 'all' || c.type === S.filter; });
+  g.innerHTML = list.length ? sortCampaigns(list).map(cardHtml).join('') : '<div class="empty" style="grid-column:1/-1">Nothing in this category yet. <a href="#" data-f="all">See every project</a>.</div>';
+}
+
+/* ═══════════════════ 6 · campaign ══════════════════════════════════════ */
+function renderCampaign(c) {
+  var p = progressPct(c), dl = daysLeft(c), h = c.headline || {}, o = c.offer || {};
+  var loc = c.location ? [c.location.city, c.location.state].filter(Boolean).join(', ') : '';
+  var live = c.status === 'live' && !(dl === 0);
+  var minInv = Math.max(Number(c.minInvestment) || 0, Number(c.unitPrice) || 0);
+  var imgs = (c.images && c.images.length) ? c.images : [];
+  var v = $('view');
+  v.innerHTML =
+    '<div class="wrap"><div class="crumb"><a href="#/">Projects</a> › ' + esc(TYPE_LABEL[c.type] || c.type) + (loc ? ' › ' + esc(loc) : '') + '</div>' +
+    '<div class="camp"><div class="main">' +
+      '<div class="gallery">' + cover(c, 'main', (c.sample ? '<span class="tag sample">Sample listing</span>' : '') + '<span class="tag">' + esc(TYPE_LABEL[c.type] || c.type) + '</span>') +
+      (imgs.length > 1 ? '<div class="thumbs">' + imgs.map(function (u, i) { return '<div class="cover' + (i === 0 ? ' on' : '') + '" data-img="' + esc(u) + '"><img src="' + esc(u) + '" alt=""></div>'; }).join('') + '</div>' : '') + '</div>' +
+      '<h1>' + esc(c.title) + '</h1><div class="tagline">' + esc(c.tagline || '') + '</div>' +
+      '<div class="sponsor"><div class="logo">' + esc((c.sponsorName || c.sponsorOrgId || '?').charAt(0).toUpperCase()) + '</div><div><b>' + esc(c.sponsorName || c.sponsorOrgId || '') + '</b><span>Sponsor' + (loc ? ' · ' + esc(loc) : '') + ' · reviewed by ClearSky</span></div><span class="pill ' + esc(c.status) + '" style="margin-left:auto">' + esc(c.status) + '</span></div>' +
+      '<div class="tabs" id="tabs"><button class="on" data-t="story">Story</button><button data-t="returns">Returns</button><button data-t="updates">Updates</button><button data-t="documents">Documents</button><button data-t="faq">FAQ</button><button data-t="risks">Risks</button></div>' +
+      '<div class="pane" id="pane"></div>' +
+    '</div>' +
+    '<aside class="side"><div class="panel">' +
+      '<div class="raised">' + usd(c.raised) + '<small>raised of ' + usd(c.goal) + '</small></div>' +
+      '<div class="bar' + (p >= 100 || c.status === 'funded' ? ' funded' : '') + '"><i style="width:' + p.toFixed(1) + '%"></i></div>' +
+      '<div class="trio"><div>Funded<b>' + Math.round(p) + '%</b></div><div>Investors<b>' + (Number(c.backers) || 0).toLocaleString('en-US') + '</b></div><div>' + (c.status === 'live' ? 'Days left<b>' + (dl == null ? '—' : dl) + '</b>' : 'Status<b>' + esc(c.status) + '</b>') + '</div></div>' +
+      '<div class="terms"><div>Target yield<b class="g" style="color:var(--green)">' + pct(h.targetYieldPct) + '</b></div><div>Term<b>' + (h.termYears || o.termYears || '—') + ' years</b></div><div>Investors receive<b>' + pct(h.sharePct || o.sharePct, 0) + ' of ' + esc(KIND_LABEL[h.kind || o.kind] || 'cash flow') + '</b></div><div>Unit price<b>' + usd(c.unitPrice) + '</b></div><div>Minimum<b>' + usd(minInv) + '</b></div><div>Minimum raise<b>' + (Number(c.minRaise) ? usdC(c.minRaise) : 'goal') + '</b></div></div>' +
+    '</div>' +
+    (live ? '<div class="panel calc" id="calc"><label>Your investment</label><div class="amt"><span>$</span><input type="number" id="amt" min="' + minInv + '" step="' + (Number(c.unitPrice) || 1) + '" value="' + S.amount + '" inputmode="numeric"></div>' +
+      '<div class="quick" id="quick">' + [1, 5, 10, 50].map(function (m) { var a = Math.max(minInv, (Number(c.unitPrice) || 100) * m); return '<button data-a="' + a + '">' + usdC(a) + '</button>'; }).join('') + '</div>' +
+      '<input type="range" id="rng" min="' + minInv + '" max="' + Math.min(Math.max(minInv * 100, 25000), (Number(c.unitPrice) || 100) * Math.max(1, (Number(c.unitsTotal) || 0) - (Number(c.unitsSold) || 0))) + '" step="' + (Number(c.unitPrice) || 1) + '" value="' + S.amount + '">' +
+      '<div class="proj" id="proj"><div class="h"><span>Projected · your share</span><em id="projTag">calculating…</em></div><div class="l"><span>Units</span><b id="pUnits">—</b></div><div class="l"><span>Share of project cash</span><b id="pPct">—</b></div><div class="l"><span>Annual distribution</span><b class="g" id="pAnnual">—</b></div><div class="l"><span>Total over ' + (h.termYears || o.termYears || '—') + ' years</span><b id="pTotal">—</b></div><div class="l"><span>Projected IRR</span><b id="pIrr">—</b></div><div class="l"><span>Payback</span><b id="pPay">—</b></div><div class="note" id="pNote">Projections use the sponsor\'s model and are not guaranteed.</div></div>' +
+      (c.perks && c.perks.length ? '<label>Choose a perk</label><div class="perks" id="perks">' + c.perks.map(function (k) { return '<div class="perk" data-perk="' + esc(k.id) + '" data-min="' + (Number(k.minAmount) || 0) + '"><div class="p-h"><b>' + esc(k.title) + '</b><span>' + usd(k.minAmount) + '+</span></div><p>' + esc(k.desc || '') + '</p>' + (k.limit ? '<div class="left">' + Math.max(0, Number(k.limit) - (Number(k.claimed) || 0)) + ' of ' + k.limit + ' left</div>' : '') + '</div>'; }).join('') + '</div>' : '') +
+      '<button class="btn btn-gold btn-lg btn-block" id="btnInvest" style="margin-top:14px">Invest ' + usd(S.amount) + '</button>' +
+      '<div class="fine">You will review your details and the offering terms before anything is charged. Payments are processed by Stripe; card details never touch this site.</div></div>'
+    : '<div class="panel"><b>' + (c.status === 'funded' ? 'This project is funded.' : 'This campaign is closed.') + '</b><div class="fine" style="margin-top:6px">' + (c.status === 'funded' ? 'Investors receive updates and distributions in their portfolio. Watch the Explore page for the sponsor\'s next raise.' : 'The raise did not reach its minimum, or the sponsor withdrew it. Any payments were refunded.') + '</div></div>') +
+    '</aside></div></div>' +
+    (live ? '<div class="mobile-cta"><div><b>from ' + usd(minInv) + '</b><small>' + pct(h.targetYieldPct) + ' target yield · ' + (dl == null ? 'open' : dl + ' days left') + '</small></div><button class="btn btn-gold" style="margin-left:auto" onclick="document.getElementById(\'calc\').scrollIntoView({behavior:\'smooth\'})">Invest</button></div>' : '');
+  var tabs = document.querySelectorAll('#tabs button');
+  for (var i = 0; i < tabs.length; i++) tabs[i].onclick = function () { for (var k = 0; k < tabs.length; k++) tabs[k].className = ''; this.className = 'on'; fillPane(c, this.getAttribute('data-t')); };
+  fillPane(c, 'story');
+  var th = document.querySelectorAll('.thumbs .cover');
+  for (var j = 0; j < th.length; j++) th[j].onclick = function () { var m = document.querySelector('.gallery .cover.main img'); if (m) m.src = this.getAttribute('data-img'); for (var k = 0; k < th.length; k++) th[k].className = 'cover'; this.className = 'cover on'; };
+  if (live) {
+    var amt = $('amt'), rng = $('rng');
+    var onAmt = debounce(function () { setAmount(Number(amt.value)); }, 250);
+    amt.oninput = function () { rng.value = amt.value; onAmt(); };
+    rng.oninput = function () { amt.value = rng.value; onAmt(); };
+    var qs = document.querySelectorAll('#quick button');
+    for (var q = 0; q < qs.length; q++) qs[q].onclick = function () { amt.value = rng.value = this.getAttribute('data-a'); setAmount(Number(this.getAttribute('data-a'))); };
+    var ps = document.querySelectorAll('#perks .perk');
+    for (var r = 0; r < ps.length; r++) ps[r].onclick = function () { var on = this.className.indexOf(' on') >= 0; for (var k = 0; k < ps.length; k++) ps[k].className = 'perk'; if (on) { S.perk = null; return; } this.className = 'perk on'; S.perk = this.getAttribute('data-perk'); var min = Number(this.getAttribute('data-min')) || 0; if (S.amount < min) { amt.value = rng.value = min; setAmount(min); } };
+    $('btnInvest').onclick = startInvest;
+  }
+}
+function setAmount(a) {
+  var c = S.campaign; if (!c) return;
+  var unit = Number(c.unitPrice) || 1, minInv = Math.max(Number(c.minInvestment) || 0, unit);
+  a = Math.max(minInv, Math.floor((Number(a) || minInv) / unit) * unit);
+  S.amount = a;
+  var b = $('btnInvest'); if (b) b.textContent = 'Invest ' + usd(a);
+  var qs = document.querySelectorAll('#quick button'); for (var i = 0; i < qs.length; i++) qs[i].className = Number(qs[i].getAttribute('data-a')) === a ? 'on' : '';
+  requestQuote();
+}
+function requestQuote() {
+  var c = S.campaign; if (!c || !$('proj')) return;
+  var tag = $('projTag'); if (tag) tag.textContent = 'calculating…';
+  if (c.sample && !FB.ready) { return showQuote(null, 'Projections appear once a listing is published.'); }
+  var want = S.amount, cid = c.id;
+  api({ action: 'quote', campaignId: cid, amount: want }).then(function (q) {
+    if (S.campaign !== c || S.amount !== want) return;
+    S.quote = q; showQuote(q);
+    var rt = document.querySelector('#tabs button.on'); if (rt && rt.getAttribute('data-t') === 'returns') fillPane(c, 'returns');
+  }).catch(function (e) {
+    if (S.campaign !== c) return;
+    showQuote(null, e.status === 404 ? 'Projections appear once this listing is published.' : 'Projections are unavailable right now.');
+  });
+}
+function showQuote(q, note) {
+  if (!$('proj')) return;
+  if (!q) { $('projTag').textContent = 'sample'; $('pUnits').textContent = $('pPct').textContent = $('pAnnual').textContent = $('pTotal').textContent = $('pIrr').textContent = $('pPay').textContent = '—'; $('pNote').textContent = note || ''; return; }
+  $('projTag').textContent = q.personalized && q.eligible === false ? 'check eligibility' : 'estimate';
+  $('pUnits').textContent = q.units.toLocaleString('en-US') + ' × ' + usd(q.unitPrice);
+  $('pPct').textContent = pctTiny(q.pctOfProject * 100) + ' of ' + (KIND_LABEL[q.kind] || 'cash flow').toLowerCase();
+  $('pAnnual').textContent = usd(q.annualDistribution) + ' / yr (' + pct(q.yieldPct) + ')';
+  $('pTotal').textContent = usd(q.total) + ' (' + q.moic.toFixed(2) + '×)';
+  $('pIrr').textContent = q.irrPct == null ? '—' : pct(q.irrPct);
+  $('pPay').textContent = q.paybackYear ? 'year ' + q.paybackYear : 'beyond term';
+  var note = 'Projections use the sponsor\'s model' + (q.codMonths ? ', with distributions starting ' + q.codMonths + ' months after close' : '') + '. Not guaranteed.';
+  if (q.personalized && q.eligible === false && q.reasons && q.reasons.length) note = q.reasons[0];
+  if (q.remainingUnits != null && q.units > q.remainingUnits) note = 'Only ' + q.remainingUnits + ' units remain.';
+  $('pNote').textContent = note;
+}
+function fillPane(c, t) {
+  var el = $('pane'); if (!el) return;
+  var o = c.offer || {}, h = c.headline || {};
+  if (t === 'story') {
+    var sz = c.sizing || {};
+    var facts = [];
+    if (sz.kwIt) facts.push(['IT load', (sz.kwIt / 1000).toFixed(sz.kwIt % 1000 ? 1 : 0) + ' MW']);
+    if (sz.mw) facts.push(['Generation', sz.mw + ' MW']);
+    if (sz.kw) facts.push(['Charging', (sz.kw / 1000).toFixed(1) + ' MW']);
+    if (sz.mwh) facts.push(['Storage', sz.mwh + ' MWh']);
+    if (sz.racks) facts.push(['Racks', sz.racks]);
+    facts.push(['Investors receive', pct(o.sharePct, 0) + ' of ' + (KIND_LABEL[o.kind] || 'cash flow')]);
+    facts.push(['Term', (o.termYears || '—') + ' years']);
+    facts.push(['First distribution', o.codMonths ? '~' + o.codMonths + ' months after close' : 'on close']);
+    el.innerHTML = '<div class="facts">' + facts.map(function (f) { return '<div class="fact"><span>' + esc(f[0]) + '</span><b>' + esc(f[1]) + '</b></div>'; }).join('') + '</div>' +
+      String(c.story || 'The sponsor has not written the story yet.').split(/\n\s*\n/).map(function (para) { return '<p>' + esc(para).replace(/\n/g, '<br>') + '</p>'; }).join('');
+  } else if (t === 'returns') {
+    var q = S.quote;
+    el.innerHTML = '<p>Investors receive <b>' + pct(o.sharePct, 0) + '</b> of the project\'s distributable cash — ' + esc((KIND_LABEL[o.kind] || 'cash flow').toLowerCase()) + ' after operating costs — for <b>' + (o.termYears || '—') + ' years</b>, paid quarterly and shared pro rata by units held. The sponsor\'s model projects <b>' + usdC(o.distributableAnnual) + '</b> of distributable cash in the first full year' + (o.escalatorPct ? ', escalating ' + o.escalatorPct + '% a year' : '') + (o.degradationPct ? ' and declining ' + o.degradationPct + '% a year for degradation' : '') + '.</p>' +
+      '<div class="facts"><div class="fact"><span>Target yield</span><b>' + pct(h.targetYieldPct) + '</b></div><div class="fact"><span>Projected IRR</span><b>' + (h.irrPct == null ? '—' : pct(h.irrPct)) + '</b></div><div class="fact"><span>Multiple</span><b>' + (h.moic ? h.moic.toFixed(2) + '×' : '—') + '</b></div><div class="fact"><span>Payback</span><b>' + (h.paybackYear ? 'year ' + h.paybackYear : '—') + '</b></div></div>' +
+      (q && q.years ? '<h3>Your ' + usd(q.amount) + ', year by year</h3><div class="bars">' + q.years.map(function (y) { var max = Math.max.apply(null, q.years.map(function (z) { return z.distribution; })) || 1; return '<i class="' + (q.paybackYear && y.year >= q.paybackYear ? 'pay' : '') + '" style="height:' + Math.max(2, y.distribution / max * 100) + '%" title="Year ' + y.year + ': ' + usd(y.distribution) + '"></i>'; }).join('') + '</div><table class="yrs"><tr><th>Year</th><th>Distribution</th><th>Cumulative</th><th>Returned</th></tr>' + q.years.map(function (y) { return '<tr><td>' + y.year + '</td><td>' + usd(y.distribution) + '</td><td>' + usd(y.cumulative) + '</td><td>' + (q.amount ? Math.round(y.cumulative / q.amount * 100) : 0) + '%</td></tr>'; }).join('') + '</table>' : '<p class="fine">Set an amount in the calculator to see a year-by-year projection.</p>') +
+      '<div class="risk" style="margin-top:16px">Projections are the sponsor\'s estimates and depend on construction, interconnection, energy prices and offtaker performance. They are not a promise of any return.</div>';
+  } else if (t === 'updates') {
+    el.innerHTML = '<div id="updates"><p class="fine">Loading updates…</p></div>'; fillUpdates(c);
+  } else if (t === 'documents') {
+    var docs = c.documents || [];
+    el.innerHTML = docs.length ? docs.map(function (d) { return '<a class="doc" href="' + esc(d.url || '#') + '" target="_blank" rel="noopener">📄 ' + esc(d.name) + '<small>' + (d.url && d.url !== '#' ? 'open' : 'on request') + '</small></a>'; }).join('') : '<p>The offering documents are attached before the campaign goes live.</p>';
+  } else if (t === 'faq') {
+    var fq = (c.faq || []).concat([
+      { q: 'What exactly do I own?', a: 'A pro-rata share of the offering: the right to ' + pct(o.sharePct, 0) + ' of this project\'s distributable cash for ' + (o.termYears || '—') + ' years, divided by the ' + (Number(c.unitsTotal) || '—').toLocaleString('en-US') + ' units in the raise. Each unit is ' + usd(c.unitPrice) + '.' },
+      { q: 'How are distributions paid?', a: 'The sponsor reports revenue and operating costs each quarter; ClearSky declares the distribution and it appears in your portfolio, then pays out to the bank account on your profile.' },
+      { q: 'Can I sell my units?', a: 'Not on the platform today. Units are held for the term; a transfer facility is on the roadmap and will be announced to every holder.' },
+      { q: 'What are the fees?', a: 'The sponsor pays the platform fee out of the raise' + (o.platformFeePct ? ' (' + o.platformFeePct + '%)' : '') + '. Investors pay no fee to invest or to receive distributions.' }
+    ]);
+    el.innerHTML = fq.map(function (f) { return '<h3>' + esc(f.q) + '</h3><p>' + esc(f.a) + '</p>'; }).join('');
+  } else if (t === 'risks') {
+    el.innerHTML = '<div class="risk"><b>Read this before investing.</b> You could lose all of the money you invest. Distributions depend on the project being financed, built, interconnected and operated as planned, on energy and compute prices, and on the offtakers paying. Projections are estimates by the sponsor and have not been audited. Units are illiquid: there is no market to sell them and you should expect to hold them for the full term. Tax treatment varies; consult your adviser. This page is not an offer; any offer is made only through the offering documents attached to the campaign, to investors who meet the eligibility rules shown at checkout.</div>' +
+      '<h3>Project-specific risks</h3><ul>' + ((c.risks && c.risks.length) ? c.risks.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') : '<li>Interconnection and permitting timelines may slip, delaying the first distribution.</li><li>Equipment cost, availability and performance may differ from the model.</li><li>Offtaker credit: a tenant or PPA counterparty may default or renegotiate.</li><li>Policy: incentives such as the ITC may change before the project qualifies.</li>') + '</ul>';
+  }
+}
+function fillUpdates(c) {
+  var el = $('updates'); if (!el) return;
+  loadUpdates(c).then(function (list) {
+    if (!list.length) { el.innerHTML = '<p>No updates yet. Investors are emailed when the sponsor posts one.</p>'; return; }
+    el.innerHTML = list.map(function (u) { return '<div class="update"><div class="meta">' + fmtDate(u.createdAt) + (u.author ? ' · ' + esc(u.author) : '') + '</div><h4>' + esc(u.title || 'Update') + '</h4><div>' + esc(u.body || '').replace(/\n/g, '<br>') + '</div></div>'; }).join('');
+  });
+}
+
+/* ═══════════════════ 7 · invest flow ═══════════════════════════════════ */
+function startInvest() {
+  if (!S.user) { S._afterAuth = startInvest; openModal('authModal'); return; }
+  var c = S.campaign; if (!c) return;
+  if (c.sample && !FB.ready) { toast('This is a sample listing — publish it with the seed script to invest.'); return; }
+  var q = S.quote || {}, p = S.profile || {};
+  var perk = null; (c.perks || []).forEach(function (k) { if (k.id === S.perk) perk = k; });
+  $('investDlg').innerHTML =
+    '<button class="x" data-close="investModal" aria-label="Close">×</button><h2>Confirm your investment</h2><div class="sub">' + esc(c.title) + '</div><div class="steps"><i class="on"></i><i class="on"></i><i></i></div>' +
+    '<div class="proj"><div class="l"><span>Amount</span><b>' + usd(S.amount) + '</b></div><div class="l"><span>Units</span><b>' + (q.units != null ? q.units.toLocaleString('en-US') + ' × ' + usd(q.unitPrice) : '—') + '</b></div><div class="l"><span>Your share of project cash</span><b>' + (q.pctOfProject != null ? pctTiny(q.pctOfProject * 100) : '—') + '</b></div><div class="l"><span>Projected annual distribution</span><b class="g">' + (q.annualDistribution != null ? usd(q.annualDistribution) : '—') + '</b></div>' + (perk ? '<div class="l"><span>Perk</span><b>' + esc(perk.title) + '</b></div>' : '') + '</div>' +
+    '<div class="form" style="border:0;padding:0;max-width:none">' +
+      '<div class="f"><label>Legal name</label><input type="text" id="ivName" value="' + esc(p.name || S.user.displayName || '') + '" autocomplete="name"></div>' +
+      '<div class="f"><label>Country of residence</label><select id="ivCountry">' + COUNTRIES.map(function (k) { return '<option value="' + k[0] + '"' + ((p.country || 'US') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="f"><label class="chk"><input type="checkbox" id="ivAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor (income above $200,000, or net worth above $1M excluding my home). Optional — it raises the annual limit.</label></div>' +
+      '<div class="f"><label class="chk"><input type="checkbox" id="ivRisk"> I have read the <a href="#" data-tab="risks">risk disclosure</a> and understand I could lose my entire investment and that units cannot be sold on the platform.</label></div>' +
+      '<div class="f"><label class="chk"><input type="checkbox" id="ivTerms"> I accept the offering documents and the OMEGA Invest investor terms.</label></div>' +
+      '<button class="btn btn-gold btn-lg btn-block" id="ivGo">Continue to payment · ' + usd(S.amount) + '</button>' +
+      '<div class="msg" id="ivMsg">Card and bank payments are handled by Stripe. Nothing is charged on this page.</div>' +
+    '</div>';
+  openModal('investModal');
+  $('ivGo').onclick = submitPledge;
+}
+function submitPledge() {
+  var c = S.campaign, btn = $('ivGo'), msg = $('ivMsg');
+  if (!$('ivRisk').checked || !$('ivTerms').checked) { msg.className = 'msg err'; msg.textContent = 'Please tick both acknowledgements to continue.'; return; }
+  btn.disabled = true; btn.textContent = 'Creating your commitment…'; msg.className = 'msg'; msg.textContent = '';
+  api({ action: 'pledge', campaignId: c.id, amount: S.amount, perkId: S.perk || null,
+        attest: { name: $('ivName').value.trim(), country: $('ivCountry').value, accredited: $('ivAccredited').checked, acceptedRisk: true, acceptedTerms: true } })
+  .then(function (r) {
+    if (r.url) { msg.textContent = 'Taking you to secure checkout…'; location.href = r.url; return; }
+    $('investDlg').innerHTML = '<button class="x" data-close="investModal" aria-label="Close">×</button><h2>Commitment recorded</h2><div class="sub">' + esc(c.title) + '</div><div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i></div>' +
+      '<div class="proj"><div class="l"><span>Amount</span><b>' + usd(r.amount) + '</b></div><div class="l"><span>Units</span><b>' + r.units + '</b></div><div class="l"><span>Reference</span><b class="mono" style="font-size:12px">' + esc(r.pledgeId) + '</b></div></div>' +
+      '<p style="font-size:14px;line-height:1.55">' + esc(r.instructions || '') + '</p><a class="btn btn-primary btn-block" href="#/portfolio" onclick="document.getElementById(\'investModal\').className=\'modal\'">Go to my portfolio</a>';
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Continue to payment · ' + usd(S.amount);
+    msg.className = 'msg err'; msg.textContent = e.message || 'Could not create the commitment.';
+  });
+}
+
+/* ═══════════════════ 8 · portfolio ═════════════════════════════════════ */
+function renderPortfolio() {
+  var v = $('view');
+  if (!S.user) { v.innerHTML = '<div class="wrap"><div class="page-h"><div><h1>Your portfolio</h1><p>Sign in to see your holdings, projected income and distributions.</p></div></div><div class="empty"><button class="btn btn-primary btn-lg" id="pfSignIn">Sign in</button></div></div>'; $('pfSignIn').onclick = function () { openModal('authModal'); }; return; }
+  v.innerHTML = '<div class="loading"><i></i><i></i><i></i></div>';
+  loadPortfolio().then(function () {
+    if (S.route !== 'portfolio') return;
+    var paid = S.pledges.filter(function (p) { return p.status === 'paid'; });
+    var pending = S.pledges.filter(function (p) { return p.status === 'pending' || p.status === 'processing'; });
+    var invested = 0, pend = 0, annual = 0, received = 0, rows = [];
+    paid.forEach(function (p) { invested += Number(p.amount) || 0; annual += Number(p.projectedAnnual) || 0; });
+    pending.forEach(function (p) { pend += Number(p.amount) || 0; });
+    var byCamp = {};
+    paid.forEach(function (p) { var b = byCamp[p.campaignId] || (byCamp[p.campaignId] = { title: p.campaignTitle, units: 0, amount: 0, pct: 0, annual: 0, received: 0, id: p.campaignId, sponsorOrgId: p.sponsorOrgId }); b.units += Number(p.units) || 0; b.amount += Number(p.amount) || 0; b.pct += Number(p.pctOfProject) || 0; b.annual += Number(p.projectedAnnual) || 0; });
+    Object.keys(byCamp).forEach(function (cid) {
+      (S.distributions[cid] || []).forEach(function (d) { var mine = (Number(d.perUnit) || 0) * byCamp[cid].units; byCamp[cid].received += mine; received += mine; rows.push({ date: d.createdAt, period: d.period, title: byCamp[cid].title, perUnit: d.perUnit, units: byCamp[cid].units, amount: mine, status: d.status }); });
+    });
+    rows.sort(function (a, b) { return (dateOf(b.date) || 0) - (dateOf(a.date) || 0); });
+    var html = '<div class="wrap"><div class="page-h"><div><h1>Your portfolio</h1><p>' + esc(S.user.email) + '</p></div></div>' +
+      '<div class="tiles"><div class="tile"><span>Invested</span><b>' + usd(invested) + '</b><small>' + paid.length + ' confirmed ' + (paid.length === 1 ? 'investment' : 'investments') + '</small></div><div class="tile"><span>Projected annual income</span><b>' + usd(annual) + '</b><small>' + (invested ? pct(annual / invested * 100) + ' on invested' : 'first full year') + '</small></div><div class="tile light"><span>Distributions received</span><b>' + usd(received) + '</b><small>' + rows.length + ' declared</small></div><div class="tile light"><span>Pending</span><b>' + usd(pend) + '</b><small>' + pending.length + ' awaiting payment</small></div></div>';
+    var keys = Object.keys(byCamp);
+    html += '<div class="section-h"><h2>Holdings</h2><span>' + keys.length + '</span></div>';
+    html += keys.length ? keys.map(function (cid) { var b = byCamp[cid]; return '<div class="hold"><div><h3><a href="#/c/' + esc(cid) + '">' + esc(b.title || cid) + '</a></h3><div class="sub">' + esc(b.sponsorOrgId || '') + '</div></div><div class="m"><span>Units</span><b>' + b.units.toLocaleString('en-US') + '</b></div><div class="m"><span>Invested</span><b>' + usd(b.amount) + '</b></div><div class="m"><span>Share of project</span><b>' + pctTiny(b.pct * 100) + '</b></div><div class="m"><span>Projected / yr</span><b>' + usd(b.annual) + '</b></div><div class="act"><a class="btn btn-ghost" href="#/c/' + esc(cid) + '">Open</a></div></div>'; }).join('')
+      : '<div class="empty">No confirmed holdings yet. <a href="#/">Browse projects</a> to make your first investment.</div>';
+    if (pending.length) {
+      html += '<div class="section-h"><h2>Pending</h2><span>' + pending.length + '</span></div>' + pending.map(function (p) { return '<div class="hold"><div><h3>' + esc(p.campaignTitle || p.campaignId) + '</h3><div class="sub">' + (p.paymentProvider === 'manual' ? 'Awaiting your transfer — instructions were emailed' : 'Checkout not completed') + ' · ' + fmtDate(p.createdAt) + '</div></div><div class="m"><span>Amount</span><b>' + usd(p.amount) + '</b></div><div class="m"><span>Units</span><b>' + p.units + '</b></div><div class="m"><span>Status</span><b><span class="pill pending">' + esc(p.status) + '</span></b></div><div class="m"></div><div class="act"><button class="btn btn-ghost" data-cancel="' + esc(p.id) + '">Cancel</button></div></div>'; }).join('');
+    }
+    var others = S.pledges.filter(function (p) { return p.status === 'refunded' || p.status === 'cancelled'; });
+    html += '<div class="section-h"><h2>Distributions</h2><span>' + rows.length + '</span></div>';
+    html += rows.length ? '<div style="overflow-x:auto"><table class="tbl"><tr><th>Declared</th><th>Project</th><th>Period</th><th class="num">Per unit</th><th class="num">Units</th><th class="num">Your share</th><th>Status</th></tr>' + rows.map(function (r) { return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.title) + '</td><td>' + esc(r.period) + '</td><td class="num mono">$' + (Number(r.perUnit) || 0).toFixed(4) + '</td><td class="num mono">' + r.units + '</td><td class="num mono">' + usd(r.amount) + '</td><td><span class="pill ' + (r.status === 'paid' ? 'paid' : 'pending') + '">' + esc(r.status) + '</span></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Distributions appear here once a project you hold declares one — quarterly, after it is operating.</div>';
+    if (others.length) html += '<div class="section-h"><h2>History</h2></div><div style="overflow-x:auto"><table class="tbl"><tr><th>Date</th><th>Project</th><th class="num">Amount</th><th>Status</th></tr>' + others.map(function (p) { return '<tr><td>' + fmtDate(p.createdAt) + '</td><td>' + esc(p.campaignTitle) + '</td><td class="num mono">' + usd(p.amount) + '</td><td><span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span></td></tr>'; }).join('') + '</table></div>';
+    html += '<div style="height:30px"></div></div>';
+    v.innerHTML = html;
+    var cs = document.querySelectorAll('[data-cancel]');
+    for (var i = 0; i < cs.length; i++) cs[i].onclick = function () { var id = this.getAttribute('data-cancel'); if (!window.confirm('Cancel this pending commitment?')) return; this.disabled = true; api({ action: 'cancel', pledgeId: id }).then(function () { toast('Commitment cancelled.'); renderPortfolio(); }).catch(function (e) { toast(e.message); }); };
+  });
+}
+
+/* ═══════════════════ 9 · account ═══════════════════════════════════════ */
+function renderAccount() {
+  var v = $('view');
+  if (!S.user) { v.innerHTML = '<div class="wrap"><div class="page-h"><div><h1>Account</h1><p>Sign in to manage your investor profile.</p></div></div><div class="empty"><button class="btn btn-primary btn-lg" id="acSignIn">Sign in</button></div></div>'; $('acSignIn').onclick = function () { openModal('authModal'); }; return; }
+  var p = S.profile || {};
+  v.innerHTML = '<div class="wrap"><div class="page-h"><div><h1>Account &amp; eligibility</h1><p>' + esc(S.user.email) + '</p></div></div>' +
+    '<div class="form"><div class="f"><label>Legal name</label><input type="text" id="acName" value="' + esc(p.name || S.user.displayName || '') + '"></div>' +
+    '<div class="f"><label>Country of residence</label><select id="acCountry">' + COUNTRIES.map(function (k) { return '<option value="' + k[0] + '"' + ((p.country || 'US') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
+    '<div class="f"><label class="chk"><input type="checkbox" id="acAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor. This is a self-attestation; ClearSky may ask for verification before larger investments.</label></div>' +
+    '<div class="f"><label>Verification</label><div style="font-size:14px">Identity: <span class="pill ' + (p.kyc === 'verified' ? 'paid' : 'pending') + '">' + esc(p.kyc || 'none') + '</span> &nbsp; Accreditation: <span class="pill ' + (p.accreditedVerified ? 'paid' : 'pending') + '">' + (p.accreditedVerified ? 'verified' : 'self-attested') + '</span></div></div>' +
+    '<button class="btn btn-primary" id="acSave">Save profile</button> <button class="btn btn-ghost" id="acOut">Sign out</button><div class="msg" id="acMsg"></div></div>' +
+    '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/invest/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
+  $('acSave').onclick = function () {
+    var msg = $('acMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+    FB.db.collection('cf_investors').doc(S.user.uid).set({ name: $('acName').value.trim(), country: $('acCountry').value, accredited: $('acAccredited').checked, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+      .then(function () { msg.className = 'msg ok'; msg.textContent = 'Saved.'; return loadProfile(); })
+      .catch(function (e) { msg.className = 'msg err'; msg.textContent = 'Could not save — ' + e.message; });
+  };
+  $('acOut').onclick = signOut;
+}
+
+/* ═══════════════════ 10 · how it works ═════════════════════════════════ */
+function renderHow() {
+  $('view').innerHTML = '<div class="wrap"><div class="page-h"><div><h1>How OMEGA Invest works</h1><p>Crowdfunding for the infrastructure that powers compute — one project at a time, one unit at a time.</p></div></div>' +
+    '<div class="how"><div class="step"><div class="n">1</div><h3>Browse reviewed projects</h3><p>Every campaign is designed on the ClearSky-OMEGA platform — sized, interconnection-screened and modelled — and reviewed by ClearSky before it is listed. You see the site, the offtake, the numbers and the documents.</p></div>' +
+    '<div class="step"><div class="n">2</div><h3>Buy units of the offering</h3><p>The sponsor offers a percent of the project\'s distributable cash — its PPA, its compute lease, or both — split into units from $50 or $100. Your units are your share. Pay by card or bank through Stripe; if the raise misses its minimum, you are refunded in full.</p></div>' +
+    '<div class="step"><div class="n">3</div><h3>Get paid as the project earns</h3><p>Once the project is operating, the sponsor reports each quarter, ClearSky declares the distribution, and your share lands in your portfolio and your bank account for the length of the term.</p></div></div>' +
+    '<div class="section-h"><h2>What you own</h2></div><p style="max-width:720px">A pro-rata share of the offering. If a campaign offers 40% of a compute container\'s distributable cash for ten years in 5,000 units, one unit is 0.008% of the project\'s cash for ten years. Distributions are the crowd\'s share of revenue after power, maintenance and insurance — never a fixed coupon. The sponsor keeps the rest and carries construction.</p>' +
+    '<div class="section-h"><h2>Fees</h2></div><p style="max-width:720px">Investors pay nothing to invest or to receive distributions. The sponsor pays the platform fee out of the raise, shown on every campaign.</p>' +
+    '<div class="section-h"><h2>Eligibility</h2></div><p style="max-width:720px">Open to residents of the countries listed at checkout. Non-accredited investors are capped per year across all projects; accredited investors self-attest and may be asked for verification. Every limit is applied when you commit, not after.</p>' +
+    '<div class="risk" style="max-width:720px;margin:10px 0 40px"><b>Risk.</b> You could lose your entire investment. Units are illiquid. Projections are the sponsor\'s estimates. Nothing here is investment, tax or legal advice, and no offer is made except through a campaign\'s offering documents.</div>' +
+    '<a class="btn btn-gold btn-lg" href="#/">Browse projects</a><div style="height:40px"></div></div>';
+}
+
+/* ═══════════════════ 11 · auth ═════════════════════════════════════════ */
+function paintUser() {
+  var u = S.user;
+  $('btnSignIn').className = u ? 'btn btn-light hide' : 'btn btn-light';
+  $('menu').className = u ? 'menu' : 'menu hide';
+  if (u) { $('avatarBtn').textContent = initials(u); $('whoName').textContent = u.displayName || 'Investor'; $('whoEmail').textContent = u.email || ''; }
+}
+function signOut() { if (FB.ready) FB.auth.signOut().then(function () { location.hash = '#/'; }); }
+function authError(e) {
+  var m = { 'auth/invalid-credential': 'Incorrect email or password.', 'auth/wrong-password': 'Incorrect email or password.', 'auth/invalid-email': 'That email address is not valid.', 'auth/weak-password': 'Choose a password of at least 6 characters.', 'auth/too-many-requests': 'Too many attempts — wait a few minutes.', 'auth/popup-blocked': 'Your browser blocked the sign-in window.', 'auth/popup-closed-by-user': 'Sign-in was cancelled.', 'auth/network-request-failed': 'Cannot reach the server.' };
+  return m[e && e.code] || (e && e.message) || 'Sign-in failed.';
+}
+$('btnSignIn').onclick = function () { openModal('authModal'); };
+$('avatarBtn').onclick = function (ev) { ev.stopPropagation(); $('menu').className = $('menu').className.indexOf('open') >= 0 ? 'menu' : 'menu open'; };
+document.addEventListener('click', function (ev) {
+  if ($('menu').className.indexOf('open') >= 0 && !ev.target.closest('#menu')) $('menu').className = 'menu';
+  var cl = ev.target.closest('[data-close]'); if (cl) closeModal(cl.getAttribute('data-close'));
+  var tb = ev.target.closest('[data-tab]'); if (tb) { ev.preventDefault(); closeModal('investModal'); var b = document.querySelector('#tabs button[data-t="' + tb.getAttribute('data-tab') + '"]'); if (b) { b.click(); b.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+  var f = ev.target.closest('a[data-f]'); if (f) { ev.preventDefault(); S.filter = f.getAttribute('data-f'); renderExplore(); }
+});
+document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { closeModal('authModal'); closeModal('investModal'); } });
+$('btnSignOut').onclick = signOut;
+$('btnGoogle').onclick = function () {
+  if (!FB.ready) { toast('Sign-in is not configured on this host.'); return; }
+  var p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  FB.auth.signInWithPopup(p).then(function () { closeModal('authModal'); })['catch'](function (e) { if (e.code !== 'auth/cancelled-popup-request') { $('authMsg').className = 'msg err'; $('authMsg').textContent = authError(e); } });
+};
+$('btnEmail').onclick = function () {
+  if (!FB.ready) { toast('Sign-in is not configured on this host.'); return; }
+  var em = $('authEmail').value.trim(), pw = $('authPass').value, msg = $('authMsg');
+  if (!em || !pw) { msg.className = 'msg err'; msg.textContent = 'Email and password are required.'; return; }
+  msg.className = 'msg'; msg.textContent = 'Signing in…';
+  FB.auth.signInWithEmailAndPassword(em, pw).then(function () { closeModal('authModal'); })['catch'](function (e) {
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-login-credentials') {
+      return FB.auth.createUserWithEmailAndPassword(em, pw).then(function (c) { c.user.sendEmailVerification()['catch'](function () {}); closeModal('authModal'); toast('Account created. We sent a verification email.'); })['catch'](function (e2) { msg.className = 'msg err'; msg.textContent = authError(e2.code === 'auth/email-already-in-use' ? e : e2); });
+    }
+    msg.className = 'msg err'; msg.textContent = authError(e);
+  });
+};
+$('authPass').onkeydown = function (ev) { if (ev.key === 'Enter') $('btnEmail').click(); };
+
+/* ═══════════════════ 12 · boot ═════════════════════════════════════════ */
+window.addEventListener('hashchange', render);
+function returnFromCheckout() {
+  var q = new URLSearchParams(location.search);
+  var paid = q.get('paid'), cancelled = q.get('cancelled');
+  if (!paid && !cancelled) return;
+  history.replaceState({}, '', location.pathname + location.hash);
+  if (paid) toast('Payment received — your units are being confirmed.', 5000);
+  if (cancelled) { toast('Checkout was cancelled. Your commitment is still pending; cancel it from your portfolio if you do not want to keep it.', 6000); if (S.user) api({ action: 'cancel', pledgeId: cancelled })['catch'](function () {}); }
+}
+loadCampaigns().then(function () {
+  render();
+  if (FB.ready) {
+    FB.auth.onAuthStateChanged(function (u) {
+      S.user = u || null; paintUser();
+      loadProfile().then(function () {
+        if (u && S._afterAuth) { var f = S._afterAuth; S._afterAuth = null; f(); }
+        if (S.route === 'portfolio' || S.route === 'account') render();
+        else if (S.route === 'campaign') requestQuote();
+        returnFromCheckout();
+      });
+    });
+  } else returnFromCheckout();
+});
+})();
+</script>
+</body>
+</html>

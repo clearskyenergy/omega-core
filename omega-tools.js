@@ -206,6 +206,15 @@
       file:'https://financing.csebuilders.com/', soon:false, tier:TIER.ALL,
       icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 
+    /* OMEGA INVEST — community investment. The sponsor console for a tenant;
+       the public storefront is /invest (its own surface, no tenant runtime).
+       Root-relative so hrefFor() appends ?org=, which the console honours
+       for staff only. */
+    { key:'invest', name:'Community Investment', category:'marketplace',
+      desc:'Crowdfund a compute container, microgrid or battery — investors buy units of the PPA or compute revenue.',
+      file:'/portals/invest/sponsor.html', badge:'new', soon:false, tier:TIER.STANDARD,
+      icon:'M12 2v20M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3' },
+
     /* SILMARILLION 2.0 — the joint-development surface.
        tier:ENTERPRISE keeps it off every tenant's palette by default; JV
        members are given it through unlockedTools on their billing doc, so

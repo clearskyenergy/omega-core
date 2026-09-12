@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sponsor console · OMEGA Invest</title>
+<link rel="icon" href="/omega-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · OMEGA Invest — sponsor console
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  Where a developer (a tenant user) lists a project for community
+  investment, and where ClearSky reviews, launches, closes and declares
+  distributions. Same standalone footing as index.html next to it: no
+  omega-tenant.js, org resolved from the signed-in email with the same alias
+  fold the rules use, staff may act in any org via ?org=.
+
+  WHAT THE BROWSER MAY WRITE (firestore.rules → cf_campaigns)
+    · a DRAFT campaign, all of it, except the counters and the status
+    · narrative fields on a LIVE one (story, tagline, images, faq, documents, risks)
+    · an update post under a live campaign
+  EVERYTHING ELSE is a POST to /api/invest: submit for review, launch,
+  return, close, confirm a manual payment, refund, declare a distribution.
+  The buttons are hidden by role here as a courtesy; the server is the gate.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#F5F4F0;--surface:#fff;--ink:#14171A;--sub:#5B6672;--faint:#8A94A0;--line:rgba(20,23,26,.16);--soft:rgba(20,23,26,.09);--navy:#16202B;--blue:#2B5FA8;--blue-hi:#3F76C4;--blue-dim:rgba(43,95,168,.10);--gold:#C77A00;--gold-dim:rgba(199,122,0,.12);--green:#2E7D5B;--green-dim:rgba(46,125,91,.12);--red:#D9482B;--red-dim:rgba(217,72,43,.10);--purple:#6D5BD0;--r:6px;--rs:4px;--mono:'IBM Plex Mono',ui-monospace,monospace;--head:'Archivo','Inter',sans-serif}
+body{margin:0;font:400 14px/1.5 'Inter',system-ui,sans-serif;color:var(--ink);background:var(--bg);background-image:linear-gradient(rgba(43,95,168,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(43,95,168,.05) 1px,transparent 1px);background-size:24px 24px;min-height:100vh}
+h1,h2,h3{font-family:var(--head);letter-spacing:-.02em;margin:0}
+a{color:var(--blue);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hide{display:none!important}
+.top{background:var(--navy);color:#fff;display:flex;align-items:center;gap:14px;padding:0 20px;height:56px;position:sticky;top:0;z-index:20}
+.top .brand{display:flex;align-items:center;gap:10px;color:#fff;font-family:var(--head);font-weight:800;font-size:15px}
+.top .brand img{width:26px;height:26px}
+.top .brand small{display:block;font:500 10px/1 'Inter',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:3px}
+.top a.lnk{color:rgba(255,255,255,.75);font-weight:600;font-size:13px}
+.top .who{margin-left:auto;font-size:12.5px;color:rgba(255,255,255,.7)}
+.top .who b{color:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:var(--rs);padding:9px 14px;font-weight:600;font-size:13px;line-height:1;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-hi)}
+.btn-gold{background:var(--gold);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+.btn-ghost{background:#fff;color:var(--ink);border-color:var(--line)}.btn-ghost:hover{background:rgba(20,23,26,.04)}
+.btn-light{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.16)}
+.btn-sm{padding:6px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;max-width:1360px;margin:0 auto;padding:20px}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;align-self:start;position:sticky;top:72px;max-height:calc(100vh - 92px);display:flex;flex-direction:column}
+.list .h{padding:12px 14px;border-bottom:1px solid var(--soft);display:flex;align-items:center;gap:8px}
+.list .h h2{font-size:14px;flex:1}
+.list .items{overflow:auto;flex:1}
+.item{display:block;padding:11px 14px;border-bottom:1px solid var(--soft);cursor:pointer}
+.item:hover{background:rgba(20,23,26,.03)}
+.item.on{background:var(--blue-dim);box-shadow:inset 3px 0 0 var(--blue)}
+.item b{display:block;font-size:13.5px;line-height:1.3}
+.item .m{font-size:12px;color:var(--sub);margin-top:3px;display:flex;gap:8px;align-items:center}
+.pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:3px;background:rgba(20,23,26,.08);color:var(--sub)}
+.pill.draft{background:rgba(20,23,26,.08)}.pill.review{background:var(--gold-dim);color:var(--gold)}.pill.live{background:var(--green-dim);color:var(--green)}.pill.funded{background:var(--blue-dim);color:var(--blue)}.pill.closed{background:var(--red-dim);color:var(--red)}
+.pill.pending{background:var(--gold-dim);color:var(--gold)}.pill.paid{background:var(--green-dim);color:var(--green)}.pill.refunded,.pill.cancelled{background:var(--red-dim);color:var(--red)}.pill.processing{background:var(--blue-dim);color:var(--blue)}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--rs);overflow:hidden}
+.seg button{background:#fff;border:0;padding:6px 10px;font-size:12px;font-weight:600;color:var(--sub)}
+.seg button.on{background:var(--navy);color:#fff}
+.main{min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+.card h2{font-size:16px;margin-bottom:4px}
+.card .sub{color:var(--sub);font-size:12.5px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.grid .wide{grid-column:1/-1}
+label{display:block;font-size:11.5px;font-weight:600;color:var(--sub);margin-bottom:4px;letter-spacing:.02em}
+input[type=text],input[type=number],input[type=date],input[type=url],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--rs);background:#fff}
+textarea{min-height:90px;resize:vertical}
+.hint{font-size:11.5px;color:var(--faint);margin-top:3px;line-height:1.4}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.msg{font-size:12.5px;color:var(--sub);min-height:18px}
+.msg.err{color:var(--red)}.msg.ok{color:var(--green)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.tile{background:var(--bg);border:1px solid var(--soft);border-radius:var(--r);padding:12px}
+.tile span{display:block;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.tile b{font-family:var(--mono);font-size:19px;font-weight:500}
+.rows{border:1px solid var(--soft);border-radius:var(--rs);overflow:hidden}
+.rows .r{display:grid;grid-template-columns:2fr 1fr 3fr 1fr auto;gap:8px;padding:8px;border-bottom:1px solid var(--soft);align-items:center}
+.rows .r:last-child{border-bottom:0}
+.rows .r input{padding:6px 8px;font-size:13px}
+.rows .r.faq{grid-template-columns:1fr 2fr auto}
+.rows .r.doc{grid-template-columns:1fr 2fr auto}
+.rows .r.risk{grid-template-columns:1fr auto}
+.rows .r button{background:none;border:0;color:var(--red);font-size:16px;line-height:1}
+.add{margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--soft);text-align:left;vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+.note{background:var(--gold-dim);border:1px solid rgba(199,122,0,.3);border-radius:var(--r);padding:10px 12px;font-size:12.5px;margin-bottom:14px}
+.staff{border-color:rgba(109,91,208,.4)}
+.staff h2::before{content:'STAFF';font:700 10px 'Inter',sans-serif;letter-spacing:.1em;color:#fff;background:var(--purple);padding:3px 6px;border-radius:3px;margin-right:8px;vertical-align:middle}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.thumb{position:relative;width:120px;aspect-ratio:16/9;border-radius:var(--rs);overflow:hidden;border:1px solid var(--line);background:var(--navy)}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb button{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:3px;font-size:12px;padding:2px 6px}
+.empty{padding:40px;text-align:center;color:var(--faint);border:1px dashed var(--line);border-radius:var(--r);background:var(--surface)}
+.gate{max-width:440px;margin:60px auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:26px}
+.gate h1{font-size:22px;margin-bottom:6px}
+.gate p{color:var(--sub);font-size:13.5px;margin:0 0 16px}
+.gate input{margin-bottom:8px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}.list{position:static;max-height:none}.rows .r{grid-template-columns:1fr 1fr}.rows .r.faq,.rows .r.doc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/portals/invest/"><img src="/omega-logo.png" alt=""><span>OMEGA Invest<small>Sponsor console</small></span></a>
+  <a class="lnk" href="/portals/invest/" target="_blank" rel="noopener">Storefront ↗</a>
+  <a class="lnk" href="/" id="backPortal">Portal</a>
+  <div class="who" id="who"></div>
+  <button class="btn btn-light btn-sm hide" id="btnOut">Sign out</button>
+</header>
+
+<div id="gate" class="gate hide">
+  <h1>Sponsor sign-in</h1>
+  <p>Sign in with your ClearSky-OMEGA workspace email. Campaigns are listed under your organisation.</p>
+  <button class="btn btn-ghost" id="gGoogle" style="width:100%;margin-bottom:12px">Continue with Google</button>
+  <input type="text" id="gEmail" placeholder="you@company.com" autocomplete="email">
+  <input type="password" id="gPass" placeholder="Password" autocomplete="current-password" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--rs)">
+  <button class="btn btn-primary" id="gEmailBtn" style="width:100%">Sign in</button>
+  <div class="msg" id="gMsg"></div>
+</div>
+
+<div id="app" class="layout hide">
+  <aside class="list">
+    <div class="h"><h2 id="listTitle">My campaigns</h2><button class="btn btn-primary btn-sm" id="btnNew">+ New</button></div>
+    <div class="h hide" id="staffSeg"><div class="seg"><button class="on" data-scope="mine">Mine</button><button data-scope="review">Review queue</button><button data-scope="live">Live</button><button data-scope="all">All</button></div></div>
+    <div class="items" id="items"><div class="empty" style="border:0">Loading…</div></div>
+  </aside>
+  <main class="main" id="main"><div class="empty">Pick a campaign on the left, or start a new one.</div></main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script>
+(function () {
+'use strict';
+var cfg = window.CLEARSKY_CONFIG || {};
+/* No SDK (blocked CDN, offline kiosk) must not be a blank page: show the gate
+   and say why, instead of dying on the first `firebase.` below. */
+if (typeof firebase === 'undefined') {
+  document.getElementById('gate').className = 'gate';
+  document.getElementById('gMsg').textContent = 'Sign-in is unavailable: the Firebase SDK did not load. Check the connection and reload.';
+  document.getElementById('gMsg').className = 'msg err';
+  return;
+}
+if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
+var FV = firebase.firestore.FieldValue;
+var STAFF = ['csebuilders.com', 'clearsky-usa.com'];
+var TYPES = [['compute','Compute container / data center'],['microgrid','Microgrid'],['bess','Battery storage'],['solar','Solar'],['ev','EV charging']];
+var KINDS = [['ppa','PPA revenue'],['compute','Compute / hosting revenue'],['hybrid','PPA + compute']];
+
+var S = { user: null, org: '', staff: false, scope: 'mine', list: [], cur: null, pledges: [], dists: [], updates: [] };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function usd(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+function orgOf(e) { var d = String(e || '').toLowerCase().split('@')[1] || ''; return d === 'fenecon.de' || d === 'fenecon.us' ? 'fenecon.com' : d; }
+function val(id) { var el = $(id); return el ? el.value : ''; }
+function num(id) { var v = val(id); return v === '' ? null : Number(v); }
+function dateOf(v) { if (!v) return null; if (v.toDate) return v.toDate(); var d = new Date(v); return isNaN(d.getTime()) ? null : d; }
+function fmtDate(v) { var d = dateOf(v); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'; }
+function isoDate(v) { var d = dateOf(v); return d ? d.toISOString().slice(0, 10) : ''; }
+function msg(id, text, cls) { var m = $(id); if (!m) return; m.className = 'msg ' + (cls || ''); m.textContent = text || ''; }
+function api(body) {
+  return S.user.getIdToken().then(function (tok) {
+    return fetch('/api/invest', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+  }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); });
+}
+
+/* ── auth ─────────────────────────────────────────────────────────────── */
+$('gGoogle').onclick = function () { var p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); auth.signInWithPopup(p)['catch'](function (e) { msg('gMsg', e.message, 'err'); }); };
+$('gEmailBtn').onclick = function () { auth.signInWithEmailAndPassword(val('gEmail').trim(), $('gPass').value)['catch'](function (e) { msg('gMsg', e.message, 'err'); }); };
+$('btnOut').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+auth.onAuthStateChanged(function (u) {
+  S.user = u || null;
+  if (!u) { $('gate').className = 'gate'; $('app').className = 'layout hide'; $('btnOut').className = 'btn btn-light btn-sm hide'; $('who').textContent = ''; return; }
+  S.staff = STAFF.indexOf(orgOf(u.email)) >= 0;
+  var q = new URLSearchParams(location.search);
+  S.org = (S.staff && q.get('org')) ? String(q.get('org')).toLowerCase() : orgOf(u.email);
+  $('gate').className = 'gate hide'; $('app').className = 'layout'; $('btnOut').className = 'btn btn-light btn-sm';
+  $('who').innerHTML = '<b>' + esc(u.email) + '</b> · ' + esc(S.org) + (S.staff ? ' · ClearSky staff' : '');
+  if (S.staff) $('staffSeg').className = 'h';
+  loadList();
+});
+
+/* ── list ─────────────────────────────────────────────────────────────── */
+function loadList() {
+  var q;
+  if (S.scope === 'mine') q = db.collection('cf_campaigns').where('sponsorOrgId', '==', S.org);
+  else if (S.scope === 'review') q = db.collection('cf_campaigns').where('status', '==', 'review');
+  else if (S.scope === 'live') q = db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']);
+  else q = db.collection('cf_campaigns');
+  $('listTitle').textContent = { mine: 'My campaigns', review: 'Review queue', live: 'Live & funded', all: 'All campaigns' }[S.scope];
+  return q.get().then(function (snap) {
+    var out = []; snap.forEach(function (d) { var c = d.data(); c.id = d.id; out.push(c); });
+    out.sort(function (a, b) { return (dateOf(b.updatedAt) || 0) - (dateOf(a.updatedAt) || 0); });
+    S.list = out; paintList();
+  }).catch(function (e) { $('items').innerHTML = '<div class="empty" style="border:0">' + esc(e.message) + '</div>'; });
+}
+function paintList() {
+  $('items').innerHTML = S.list.length ? S.list.map(function (c) {
+    return '<a class="item' + (S.cur && S.cur.id === c.id ? ' on' : '') + '" data-id="' + esc(c.id) + '"><b>' + esc(c.title || 'Untitled campaign') + '</b><div class="m"><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span><span>' + usd(c.raised) + ' / ' + usd(c.goal) + '</span>' + (S.scope !== 'mine' ? '<span>' + esc(c.sponsorOrgId) + '</span>' : '') + '</div></a>';
+  }).join('') : '<div class="empty" style="border:0">Nothing here yet.</div>';
+  var its = document.querySelectorAll('.item'); for (var i = 0; i < its.length; i++) its[i].onclick = function () { open(this.getAttribute('data-id')); };
+}
+var segs = document.querySelectorAll('#staffSeg button');
+for (var si = 0; si < segs.length; si++) segs[si].onclick = function () { for (var k = 0; k < segs.length; k++) segs[k].className = ''; this.className = 'on'; S.scope = this.getAttribute('data-scope'); loadList(); };
+$('btnNew').onclick = function () {
+  S.cur = { id: null, status: 'draft', sponsorOrgId: S.org, type: 'compute', unitPrice: 100, minInvestment: 100, goal: 500000, offer: { kind: 'compute', sharePct: 40, termYears: 10, distributableAnnual: 0, escalatorPct: 2, degradationPct: 0, codMonths: 6, platformFeePct: 3 }, perks: [{ id: 'p1', title: 'Backer', minAmount: 100, desc: 'Quarterly distributions and the project update feed.' }], faq: [], documents: [], risks: [], images: [], raised: 0, unitsSold: 0, backers: 0 };
+  paintList(); renderEditor();
+};
+function open(id) {
+  for (var i = 0; i < S.list.length; i++) if (S.list[i].id === id) { S.cur = S.list[i]; break; }
+  paintList(); renderEditor();
+  if (S.cur.status !== 'draft') loadOps();
+}
+
+/* ── editor ───────────────────────────────────────────────────────────── */
+function renderEditor() {
+  var c = S.cur, o = c.offer || {}, sz = c.sizing || {}, loc = c.location || {};
+  var editable = c.status === 'draft';
+  var narrative = c.status === 'live' || c.status === 'funded';
+  var m = $('main');
+  m.innerHTML =
+    (c.reviewNote && c.status === 'draft' ? '<div class="note"><b>Returned by ClearSky:</b> ' + esc(c.reviewNote) + '</div>' : '') +
+    (c.status === 'review' ? '<div class="note">Submitted for review. ClearSky will launch it or return it with notes. Fields are locked while it is being checked.</div>' : '') +
+    '<div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="flex:1">' + (c.id ? esc(c.title || 'Untitled') : 'New campaign') + '</h2><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span>' + (c.id && c.status !== 'draft' ? '<a class="btn btn-ghost btn-sm" href="/portals/invest/#/c/' + esc(c.slug || c.id) + '" target="_blank" rel="noopener">View listing ↗</a>' : '') + '</div>' +
+    (c.status !== 'draft' ? '<div class="tiles" style="margin-top:12px"><div class="tile"><span>Raised</span><b>' + usd(c.raised) + '</b></div><div class="tile"><span>Goal</span><b>' + usd(c.goal) + '</b></div><div class="tile"><span>Units sold</span><b>' + (Number(c.unitsSold) || 0).toLocaleString('en-US') + ' / ' + (Number(c.unitsTotal) || 0).toLocaleString('en-US') + '</b></div><div class="tile"><span>Investors</span><b>' + (Number(c.backers) || 0) + '</b></div><div class="tile"><span>Target yield</span><b>' + (c.headline ? Number(c.headline.targetYieldPct).toFixed(1) + '%' : '—') + '</b></div><div class="tile"><span>Deadline</span><b style="font-size:14px">' + fmtDate(c.deadline) + '</b></div></div>' : '') + '</div>' +
+
+    '<div class="card"><h2>The project</h2><p class="sub">What investors see on the card and at the top of the page.</p><div class="grid">' +
+      '<div class="wide"><label>Title</label><input type="text" id="fTitle" value="' + esc(c.title || '') + '" placeholder="1 MW AI compute container · Joliet, IL"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div class="wide"><label>Tagline</label><input type="text" id="fTagline" value="' + esc(c.tagline || '') + '" placeholder="One sentence: what, where, who buys the output."' + (editable || narrative ? '' : ' disabled') + '></div>' +
+      '<div><label>Type</label><select id="fType"' + (editable ? '' : ' disabled') + '>' + TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (c.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div><label>Sponsor name shown</label><input type="text" id="fSponsorName" value="' + esc(c.sponsorName || '') + '" placeholder="Your company"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>City</label><input type="text" id="fCity" value="' + esc(loc.city || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>State</label><input type="text" id="fState" value="' + esc(loc.state || '') + '" maxlength="2"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>IT load (kW)</label><input type="number" id="fKwIt" value="' + (sz.kwIt || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Generation (MW)</label><input type="number" step="0.01" id="fMw" value="' + (sz.mw || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Storage (MWh)</label><input type="number" step="0.1" id="fMwh" value="' + (sz.mwh || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Charging (kW)</label><input type="number" id="fKw" value="' + (sz.kw || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Linked OMEGA project id</label><input type="text" id="fProjectId" value="' + esc(c.projectId || '') + '" placeholder="optional"' + (editable ? '' : ' disabled') + '><div class="hint">The site map / pro forma this raise is for.</div></div>' +
+    '</div></div>' +
+
+    '<div class="card"><h2>The offer</h2><p class="sub">These are the terms investors buy on. Frozen once the campaign is live. The projected yield, IRR and payback are computed server-side at launch.</p><div class="grid">' +
+      '<div><label>Goal (USD)</label><input type="number" id="fGoal" value="' + (c.goal || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Minimum raise (USD)</label><input type="number" id="fMinRaise" value="' + (c.minRaise || '') + '"' + (editable ? '' : ' disabled') + '><div class="hint">Below this the raise fails and everyone is refunded. Blank = the goal.</div></div>' +
+      '<div><label>Unit price (USD)</label><input type="number" id="fUnit" value="' + (c.unitPrice || 100) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Minimum investment (USD)</label><input type="number" id="fMinInv" value="' + (c.minInvestment || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Funding deadline</label><input type="date" id="fDeadline" value="' + isoDate(c.deadline) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Investors receive</label><select id="fKind"' + (editable ? '' : ' disabled') + '>' + KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (o.kind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div><label>Share offered to the crowd (%)</label><input type="number" step="0.5" id="fShare" value="' + (o.sharePct != null ? o.sharePct : '') + '"' + (editable ? '' : ' disabled') + '><div class="hint">Percent of distributable cash the whole raise owns.</div></div>' +
+      '<div><label>Term (years)</label><input type="number" id="fTerm" value="' + (o.termYears || 10) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Projected distributable cash, year 1 (USD)</label><input type="number" id="fDist" value="' + (o.distributableAnnual || '') + '"' + (editable ? '' : ' disabled') + '><div class="hint">Revenue less power, O&amp;M, insurance — for the WHOLE project, before the crowd\'s share. From your pro forma.</div></div>' +
+      '<div><label>Escalator (% / yr)</label><input type="number" step="0.1" id="fEsc" value="' + (o.escalatorPct != null ? o.escalatorPct : 0) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Degradation (% / yr)</label><input type="number" step="0.1" id="fDeg" value="' + (o.degradationPct != null ? o.degradationPct : 0) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Months to first distribution</label><input type="number" id="fCod" value="' + (o.codMonths != null ? o.codMonths : 6) + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Exit / buyout value at term end (USD, whole offering)</label><input type="number" id="fExit" value="' + (o.exitValue || '') + '"' + (editable ? '' : ' disabled') + '></div>' +
+      '<div><label>Platform fee (%)</label><input type="number" step="0.5" id="fFee" value="' + (o.platformFeePct != null ? o.platformFeePct : 3) + '"' + (editable && S.staff ? '' : ' disabled') + '><div class="hint">Set by ClearSky.</div></div>' +
+    '</div></div>' +
+
+    '<div class="card"><h2>Story, perks, documents</h2><p class="sub">Editable while the campaign is live — investors read the story; the terms above are what they bought.</p>' +
+      '<label>Story</label><textarea id="fStory" style="min-height:160px"' + (editable || narrative ? '' : ' disabled') + '>' + esc(c.story || '') + '</textarea><div class="hint">Blank line between paragraphs. Say what is signed, what is not, and what the raise pays for.</div>' +
+      '<label style="margin-top:12px">Cover images</label><div class="thumbs" id="thumbs"></div>' + (editable || narrative ? '<div class="bar"><input type="file" id="fImg" accept="image/*" multiple><button class="btn btn-ghost btn-sm" id="btnUpload"' + (c.id ? '' : ' disabled title="Save the draft first"') + '>Upload</button><span class="msg" id="upMsg"></span></div>' : '') +
+      '<label style="margin-top:14px">Perks</label><div class="rows" id="perks"></div>' + (editable ? '<button class="btn btn-ghost btn-sm add" id="addPerk">+ Perk</button>' : '') +
+      '<label style="margin-top:14px">FAQ</label><div class="rows" id="faq"></div>' + (editable || narrative ? '<button class="btn btn-ghost btn-sm add" id="addFaq">+ Question</button>' : '') +
+      '<label style="margin-top:14px">Documents (offering summary, term sheets, studies)</label><div class="rows" id="docs"></div>' + (editable || narrative ? '<button class="btn btn-ghost btn-sm add" id="addDoc">+ Document</button>' : '') +
+      '<label style="margin-top:14px">Project-specific risks</label><div class="rows" id="risks"></div>' + (editable || narrative ? '<button class="btn btn-ghost btn-sm add" id="addRisk">+ Risk</button>' : '') +
+    '</div>' +
+
+    '<div class="card"><div class="bar" style="margin-top:0">' +
+      (editable ? '<button class="btn btn-primary" id="btnSave">Save draft</button>' : '') +
+      (editable && c.id ? '<button class="btn btn-gold" id="btnSubmit">Submit for review</button>' : '') +
+      (narrative ? '<button class="btn btn-primary" id="btnSaveNarrative">Save story &amp; documents</button>' : '') +
+      (editable && c.id ? '<button class="btn btn-ghost" id="btnDelete" style="margin-left:auto">Delete draft</button>' : '') +
+    '</div><div class="msg" id="saveMsg"></div></div>' +
+    '<div id="ops"></div>';
+
+  paintRows(); paintThumbs();
+  if ($('btnSave')) $('btnSave').onclick = function () { saveDraft(false); };
+  if ($('btnSubmit')) $('btnSubmit').onclick = function () { saveDraft(true); };
+  if ($('btnSaveNarrative')) $('btnSaveNarrative').onclick = saveNarrative;
+  if ($('btnDelete')) $('btnDelete').onclick = function () { if (!window.confirm('Delete this draft?')) return; db.collection('cf_campaigns').doc(c.id).delete().then(function () { S.cur = null; $('main').innerHTML = '<div class="empty">Draft deleted.</div>'; loadList(); })['catch'](function (e) { msg('saveMsg', e.message, 'err'); }); };
+  if ($('addPerk')) $('addPerk').onclick = function () { c.perks = (c.perks || []).concat([{ id: 'p' + Date.now().toString(36), title: '', minAmount: c.unitPrice || 100, desc: '' }]); paintRows(); };
+  if ($('addFaq')) $('addFaq').onclick = function () { c.faq = (c.faq || []).concat([{ q: '', a: '' }]); paintRows(); };
+  if ($('addDoc')) $('addDoc').onclick = function () { c.documents = (c.documents || []).concat([{ name: '', url: '' }]); paintRows(); };
+  if ($('addRisk')) $('addRisk').onclick = function () { c.risks = (c.risks || []).concat(['']); paintRows(); };
+  if ($('btnUpload')) $('btnUpload').onclick = upload;
+}
+function paintRows() {
+  var c = S.cur, ro = !(c.status === 'draft'), nr = !(c.status === 'draft' || c.status === 'live' || c.status === 'funded');
+  $('perks').innerHTML = (c.perks || []).map(function (p, i) { return '<div class="r"><input type="text" data-k="perks.' + i + '.title" value="' + esc(p.title) + '" placeholder="Perk name"' + (ro ? ' disabled' : '') + '><input type="number" data-k="perks.' + i + '.minAmount" value="' + (p.minAmount || '') + '" placeholder="Min $"' + (ro ? ' disabled' : '') + '><input type="text" data-k="perks.' + i + '.desc" value="' + esc(p.desc) + '" placeholder="What they get"' + (ro ? ' disabled' : '') + '><input type="number" data-k="perks.' + i + '.limit" value="' + (p.limit || '') + '" placeholder="Limit"' + (ro ? ' disabled' : '') + '>' + (ro ? '<span></span>' : '<button data-rm="perks.' + i + '" title="Remove">×</button>') + '</div>'; }).join('') || '<div class="r" style="color:var(--faint)">No perks. Every investor still receives distributions; perks are the extras.</div>';
+  $('faq').innerHTML = (c.faq || []).map(function (f, i) { return '<div class="r faq"><input type="text" data-k="faq.' + i + '.q" value="' + esc(f.q) + '" placeholder="Question"' + (nr ? ' disabled' : '') + '><input type="text" data-k="faq.' + i + '.a" value="' + esc(f.a) + '" placeholder="Answer"' + (nr ? ' disabled' : '') + '>' + (nr ? '<span></span>' : '<button data-rm="faq.' + i + '">×</button>') + '</div>'; }).join('') || '<div class="r" style="color:var(--faint)">Platform FAQs are added automatically.</div>';
+  $('docs').innerHTML = (c.documents || []).map(function (d, i) { return '<div class="r doc"><input type="text" data-k="documents.' + i + '.name" value="' + esc(d.name) + '" placeholder="Document name"' + (nr ? ' disabled' : '') + '><input type="url" data-k="documents.' + i + '.url" value="' + esc(d.url) + '" placeholder="https:// (upload to Storage or paste a data-room link)"' + (nr ? ' disabled' : '') + '>' + (nr ? '<span></span>' : '<button data-rm="documents.' + i + '">×</button>') + '</div>'; }).join('') || '<div class="r" style="color:var(--faint)">An offering summary is required before launch.</div>';
+  $('risks').innerHTML = (c.risks || []).map(function (r, i) { return '<div class="r risk"><input type="text" data-k="risks.' + i + '" value="' + esc(r) + '" placeholder="e.g. Interconnection study pending"' + (nr ? ' disabled' : '') + '>' + (nr ? '<span></span>' : '<button data-rm="risks.' + i + '">×</button>') + '</div>'; }).join('') || '<div class="r" style="color:var(--faint)">Generic risks are shown automatically; add what is specific to this site.</div>';
+  var ins = document.querySelectorAll('[data-k]'); for (var i = 0; i < ins.length; i++) ins[i].onchange = function () { setPath(S.cur, this.getAttribute('data-k'), this.type === 'number' ? (this.value === '' ? null : Number(this.value)) : this.value); };
+  var rms = document.querySelectorAll('[data-rm]'); for (var k = 0; k < rms.length; k++) rms[k].onclick = function () { var p = this.getAttribute('data-rm').split('.'); S.cur[p[0]].splice(Number(p[1]), 1); paintRows(); };
+}
+function setPath(obj, path, v) { var p = path.split('.'), o = obj; for (var i = 0; i < p.length - 1; i++) o = o[p[i]]; o[p[p.length - 1]] = v; }
+function paintThumbs() {
+  var c = S.cur, imgs = c.images || [];
+  $('thumbs').innerHTML = imgs.length ? imgs.map(function (u, i) { return '<div class="thumb"><img src="' + esc(u) + '" alt="">' + (c.status === 'draft' || c.status === 'live' || c.status === 'funded' ? '<button data-img="' + i + '">×</button>' : '') + '</div>'; }).join('') : '<div class="hint">No images yet — a typed illustration is shown until you upload one. First image is the cover.</div>';
+  var bs = document.querySelectorAll('[data-img]'); for (var i = 0; i < bs.length; i++) bs[i].onclick = function () { S.cur.images.splice(Number(this.getAttribute('data-img')), 1); paintThumbs(); };
+}
+function collect() {
+  var c = S.cur;
+  if (c.status === 'draft') {
+    c.title = val('fTitle').trim(); c.tagline = val('fTagline').trim(); c.type = val('fType'); c.sponsorName = val('fSponsorName').trim();
+    c.location = { city: val('fCity').trim(), state: val('fState').trim().toUpperCase() };
+    c.sizing = { kwIt: num('fKwIt'), mw: num('fMw'), mwh: num('fMwh'), kw: num('fKw') };
+    c.projectId = val('fProjectId').trim() || null;
+    c.goal = num('fGoal'); c.minRaise = num('fMinRaise'); c.unitPrice = num('fUnit'); c.minInvestment = num('fMinInv');
+    c.deadline = val('fDeadline') ? new Date(val('fDeadline') + 'T23:59:59Z').toISOString() : null;
+    c.offer = { kind: val('fKind'), sharePct: num('fShare'), termYears: num('fTerm'), distributableAnnual: num('fDist'), escalatorPct: num('fEsc'), degradationPct: num('fDeg'), codMonths: num('fCod'), exitValue: num('fExit'), platformFeePct: num('fFee') };
+    c.unitsTotal = c.goal && c.unitPrice ? Math.floor(c.goal / c.unitPrice) : 0;
+  } else { c.tagline = val('fTagline').trim(); }
+  c.story = val('fStory');
+  return c;
+}
+function saveDraft(thenSubmit) {
+  var c = collect();
+  msg('saveMsg', 'Saving…');
+  var doc = {};
+  ['title','tagline','type','sponsorName','sponsorOrgId','location','sizing','projectId','goal','minRaise','unitPrice','minInvestment','unitsTotal','deadline','offer','story','images','perks','faq','documents','risks'].forEach(function (k) { doc[k] = c[k] === undefined ? null : c[k]; });
+  doc.status = 'draft'; doc.raised = 0; doc.unitsSold = 0; doc.backers = 0; doc.updatedAt = FV.serverTimestamp();
+  var ref = c.id ? db.collection('cf_campaigns').doc(c.id) : db.collection('cf_campaigns').doc();
+  if (!c.id) { doc.createdAt = FV.serverTimestamp(); doc.createdBy = S.user.email; }
+  ref.set(doc, { merge: true }).then(function () {
+    c.id = ref.id;
+    if (!thenSubmit) { msg('saveMsg', 'Draft saved.', 'ok'); return loadList().then(function () { open(c.id); }); }
+    if (!window.confirm('Submit for review?\n\nClearSky checks the terms and documents, then launches it. You cannot edit the terms after submitting.')) return loadList();
+    msg('saveMsg', 'Submitting…');
+    return api({ action: 'submit', campaignId: c.id }).then(function () { msg('saveMsg', 'Submitted. ClearSky has been notified.', 'ok'); return loadList().then(function () { open(c.id); }); });
+  })['catch'](function (e) { msg('saveMsg', e.message, 'err'); });
+}
+function saveNarrative() {
+  var c = collect();
+  msg('saveMsg', 'Saving…');
+  db.collection('cf_campaigns').doc(c.id).set({ story: c.story, tagline: c.tagline, images: c.images || [], faq: c.faq || [], documents: c.documents || [], risks: c.risks || [], updatedAt: FV.serverTimestamp() }, { merge: true })
+    .then(function () { msg('saveMsg', 'Saved.', 'ok'); })['catch'](function (e) { msg('saveMsg', e.message, 'err'); });
+}
+function upload() {
+  var c = S.cur, files = $('fImg').files;
+  if (!files.length) { msg('upMsg', 'Choose an image first.'); return; }
+  if (!c.id) { msg('upMsg', 'Save the draft first.'); return; }
+  msg('upMsg', 'Uploading…');
+  var jobs = Array.prototype.map.call(files, function (f) {
+    var ref = storage.ref('cf_campaigns/' + c.sponsorOrgId + '/' + c.id + '/' + Date.now() + '-' + f.name.replace(/[^A-Za-z0-9._-]/g, '_'));
+    return ref.put(f).then(function () { return ref.getDownloadURL(); }).then(function (u) { c.images = (c.images || []).concat([u]); });
+  });
+  Promise.all(jobs).then(function () { return db.collection('cf_campaigns').doc(c.id).set({ images: c.images, updatedAt: FV.serverTimestamp() }, { merge: true }); })
+    .then(function () { msg('upMsg', 'Uploaded.', 'ok'); $('fImg').value = ''; paintThumbs(); })['catch'](function (e) { msg('upMsg', e.message, 'err'); });
+}
+
+/* ── operations: investors, updates, staff actions ────────────────────── */
+function loadOps() {
+  var c = S.cur;
+  return Promise.all([
+    db.collection('cf_pledges').where('sponsorOrgId', '==', c.sponsorOrgId).where('campaignId', '==', c.id).get().then(function (q) { var o = []; q.forEach(function (d) { var p = d.data(); p.id = d.id; o.push(p); }); o.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); }); return o; })['catch'](function () { return []; }),
+    db.collection('cf_distributions').where('campaignId', '==', c.id).get().then(function (q) { var o = []; q.forEach(function (d) { var x = d.data(); x.id = d.id; o.push(x); }); o.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); }); return o; })['catch'](function () { return []; }),
+    db.collection('cf_campaigns').doc(c.id).collection('updates').get().then(function (q) { var o = []; q.forEach(function (d) { var x = d.data(); x.id = d.id; o.push(x); }); o.sort(function (a, b) { return (dateOf(b.createdAt) || 0) - (dateOf(a.createdAt) || 0); }); return o; })['catch'](function () { return []; })
+  ]).then(function (r) { if (S.cur !== c) return; S.pledges = r[0]; S.dists = r[1]; S.updates = r[2]; renderOps(); });
+}
+function renderOps() {
+  var c = S.cur, el = $('ops'); if (!el) return;
+  var paid = S.pledges.filter(function (p) { return p.status === 'paid'; }), pend = S.pledges.filter(function (p) { return p.status === 'pending' || p.status === 'processing'; });
+  var html = '';
+  if (c.status === 'live' || c.status === 'funded') {
+    html += '<div class="card"><h2>Post an update</h2><p class="sub">Investors see updates on the campaign page and in their portfolio.</p><div class="grid"><div class="wide"><input type="text" id="uTitle" placeholder="Title — e.g. Interconnection agreement executed"></div><div class="wide"><textarea id="uBody" placeholder="What happened, what is next."></textarea></div></div><div class="bar"><button class="btn btn-primary" id="btnUpdate">Post update</button><span class="msg" id="uMsg"></span></div>' +
+      (S.updates.length ? '<div style="margin-top:12px">' + S.updates.map(function (u) { return '<div style="padding:8px 0;border-top:1px solid var(--soft)"><b>' + esc(u.title) + '</b> <span style="color:var(--faint);font-size:12px">' + fmtDate(u.createdAt) + ' · ' + esc(u.author || '') + '</span><div style="font-size:13px;color:var(--sub)">' + esc(u.body).replace(/\n/g, '<br>') + '</div></div>'; }).join('') + '</div>' : '') + '</div>';
+  }
+  html += '<div class="card"><h2>Investors</h2><p class="sub">' + paid.length + ' confirmed · ' + pend.length + ' pending. Confirmed investors are the cap table; export it from here when the raise closes.</p>' +
+    (S.pledges.length ? '<div style="overflow-x:auto"><table><tr><th>Investor</th><th>Date</th><th class="num">Amount</th><th class="num">Units</th><th class="num">Share</th><th>Perk</th><th>Status</th>' + (S.staff ? '<th></th>' : '') + '</tr>' + S.pledges.map(function (p) {
+      return '<tr><td>' + esc(p.investorName || '') + '<div style="font-size:12px;color:var(--faint)">' + esc(p.investorEmail) + '</div></td><td>' + fmtDate(p.createdAt) + '</td><td class="num">' + usd(p.amount) + '</td><td class="num">' + p.units + '</td><td class="num">' + (Number(p.pctOfProject) * 100).toFixed(4) + '%</td><td>' + esc(p.perkTitle || '—') + '</td><td><span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span>' + (p.paymentProvider === 'manual' ? ' <span class="pill">manual</span>' : '') + (p.refundDue ? ' <span class="pill pending">refund due</span>' : '') + '</td>' +
+        (S.staff ? '<td>' + (p.status === 'pending' && p.paymentProvider === 'manual' ? '<button class="btn btn-green btn-sm" data-confirm="' + esc(p.id) + '">Confirm paid</button> ' : '') + (p.status === 'paid' ? '<button class="btn btn-ghost btn-sm" data-refund="' + esc(p.id) + '">Refund</button>' : '') + '</td>' : '') + '</tr>';
+    }).join('') + '</table></div><div class="bar"><button class="btn btn-ghost btn-sm" id="btnCsv">Download CSV</button></div>' : '<div class="hint">No commitments yet.</div>') + '</div>';
+  if (S.dists.length || c.status === 'funded') {
+    html += '<div class="card"><h2>Distributions</h2><p class="sub">Declared by ClearSky from the quarterly report. Per-unit is the crowd pool divided by units sold.</p>' +
+      (S.dists.length ? '<table><tr><th>Period</th><th>Declared</th><th class="num">Gross revenue</th><th class="num">Distributable</th><th class="num">Crowd pool</th><th class="num">Per unit</th><th>Status</th></tr>' + S.dists.map(function (d) { return '<tr><td>' + esc(d.period) + '</td><td>' + fmtDate(d.createdAt) + '</td><td class="num">' + (d.grossRevenue ? usd(d.grossRevenue) : '—') + '</td><td class="num">' + usd(d.distributable) + '</td><td class="num">' + usd(d.crowdPool) + '</td><td class="num">$' + Number(d.perUnit).toFixed(4) + '</td><td><span class="pill ' + esc(d.status) + '">' + esc(d.status) + '</span></td></tr>'; }).join('') + '</table>' : '<div class="hint">None declared yet.</div>') + '</div>';
+  }
+  if (S.staff) {
+    html += '<div class="card staff"><h2>Review &amp; lifecycle</h2><p class="sub">Every button here is a server action; the rules do not let a browser change status.</p><div class="grid"><div class="wide"><input type="text" id="stNote" placeholder="Note to the sponsor (optional)"></div></div><div class="bar">' +
+      (c.status === 'review' || c.status === 'draft' ? '<button class="btn btn-green" data-act="launch">Launch campaign</button><button class="btn btn-ghost" data-act="return">Return for changes</button>' : '') +
+      (c.status === 'live' ? '<button class="btn btn-primary" data-act="funded">Close as funded</button><button class="btn btn-red" data-act="failed">Close as failed &amp; refund</button>' : '') +
+      '<span class="msg" id="stMsg"></span></div></div>';
+    if (c.status === 'funded') {
+      html += '<div class="card staff"><h2>Declare a distribution</h2><p class="sub">From the sponsor\'s quarterly report. The crowd receives ' + (c.offer && c.offer.sharePct) + '% of the distributable figure, split across ' + (Number(c.unitsSold) || 0).toLocaleString('en-US') + ' units.</p><div class="grid"><div><label>Period</label><input type="text" id="dPeriod" placeholder="2027-Q1"></div><div><label>Gross revenue (USD)</label><input type="number" id="dGross"></div><div><label>Distributable cash (USD, whole project)</label><input type="number" id="dDist"></div><div class="wide"><label>Note</label><input type="text" id="dNote" placeholder="e.g. 91 days of operation, one curtailment event"></div></div><div class="bar"><button class="btn btn-primary" id="btnDist">Declare</button><span class="msg" id="dMsg"></span></div></div>';
+    }
+  }
+  el.innerHTML = html;
+  if ($('btnUpdate')) $('btnUpdate').onclick = function () {
+    var t = val('uTitle').trim(), b = val('uBody').trim(); if (!t || !b) { msg('uMsg', 'Title and body are required.', 'err'); return; }
+    db.collection('cf_campaigns').doc(c.id).collection('updates').add({ title: t, body: b, author: S.user.email, sponsorOrgId: c.sponsorOrgId, createdAt: FV.serverTimestamp() })
+      .then(function () { msg('uMsg', 'Posted.', 'ok'); loadOps(); })['catch'](function (e) { msg('uMsg', e.message, 'err'); });
+  };
+  if ($('btnCsv')) $('btnCsv').onclick = function () {
+    var rows = [['name','email','date','amount','units','pctOfProject','perk','status','provider','pledgeId']].concat(S.pledges.map(function (p) { return [p.investorName || '', p.investorEmail, fmtDate(p.createdAt), p.amount, p.units, (Number(p.pctOfProject) * 100).toFixed(6), p.perkTitle || '', p.status, p.paymentProvider || '', p.id]; }));
+    var csv = rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+    var a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = (c.slug || c.id) + '-investors.csv'; document.body.appendChild(a); a.click(); a.remove();
+  };
+  var acts = document.querySelectorAll('[data-act]'); for (var i = 0; i < acts.length; i++) acts[i].onclick = function () { staffAct(this.getAttribute('data-act')); };
+  var cf = document.querySelectorAll('[data-confirm]'); for (var k = 0; k < cf.length; k++) cf[k].onclick = function () { var id = this.getAttribute('data-confirm'); var ref = window.prompt('Payment reference (wire id, cheque number):', ''); if (ref === null) return; api({ action: 'confirm', pledgeId: id, reference: ref }).then(function () { loadOps(); refreshCur(); })['catch'](function (e) { alert(e.message); }); };
+  var rf = document.querySelectorAll('[data-refund]'); for (var j = 0; j < rf.length; j++) rf[j].onclick = function () { var id = this.getAttribute('data-refund'); var why = window.prompt('Reason for refund:', ''); if (why === null) return; api({ action: 'refund', pledgeId: id, reason: why }).then(function () { loadOps(); refreshCur(); })['catch'](function (e) { alert(e.message); }); };
+  if ($('btnDist')) $('btnDist').onclick = function () {
+    msg('dMsg', 'Declaring…');
+    api({ action: 'distribute', campaignId: c.id, period: val('dPeriod').trim(), grossRevenue: num('dGross'), distributable: num('dDist'), note: val('dNote').trim() })
+      .then(function (r) { msg('dMsg', 'Declared: ' + usd(r.crowdPool) + ' to the crowd, $' + r.perUnit.toFixed(4) + ' per unit.', 'ok'); loadOps(); refreshCur(); })['catch'](function (e) { msg('dMsg', e.message, 'err'); });
+  };
+}
+function staffAct(act) {
+  var c = S.cur, note = val('stNote').trim();
+  var body = act === 'launch' ? { action: 'review', campaignId: c.id, decision: 'launch', note: note }
+           : act === 'return' ? { action: 'review', campaignId: c.id, decision: 'return', note: note }
+           : { action: 'close', campaignId: c.id, outcome: act, note: note };
+  var warn = { launch: 'Launch this campaign? Terms freeze and it becomes visible to every investor.', 'return': 'Return it to the sponsor as a draft?', funded: 'Close as FUNDED? Units are final; distributions can be declared.', failed: 'Close as FAILED? Every paid card pledge is refunded through Stripe now.' }[act];
+  if (!window.confirm(warn)) return;
+  msg('stMsg', 'Working…');
+  api(body).then(function (r) { msg('stMsg', 'Done — status ' + r.status + '.', 'ok'); return refreshCur(); })['catch'](function (e) { msg('stMsg', e.message, 'err'); });
+}
+function refreshCur() {
+  var id = S.cur && S.cur.id; if (!id) return Promise.resolve();
+  return db.collection('cf_campaigns').doc(id).get().then(function (d) { if (!d.exists) return; var c = d.data(); c.id = d.id; S.cur = c; for (var i = 0; i < S.list.length; i++) if (S.list[i].id === id) S.list[i] = c; paintList(); renderEditor(); if (c.status !== 'draft') loadOps(); });
+}
+})();
+</script>
+</body>
+</html>

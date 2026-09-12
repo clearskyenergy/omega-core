@@ -296,6 +296,19 @@ service firebase.storage {
       allow delete: if isAdminDomain();
     }
 
+    /* -------- COMMUNITY INVESTMENT MEDIA — cf_campaigns/{sponsorOrgId}/{campaignId}/{fileName}
+       Cover images and offering documents for an OMEGA Invest listing.
+       READ IS PUBLIC on purpose: a campaign card paints before anyone signs
+       in, exactly like tenants/{orgId}/ logos above — so nothing confidential
+       goes here; the sponsor's own model stays in their workspace. Write is
+       the sponsor's org and ClearSky. The path carries the org so this rule
+       decides without a Firestore read. */
+    match /cf_campaigns/{sponsorOrgId}/{campaignId}/{fileName} {
+      allow read:   if true;
+      allow write:  if signedIn() && (isAdminDomain() || userOrg() == sponsorOrgId) && okFile();
+      allow delete: if signedIn() && (isAdminDomain() || userOrg() == sponsorOrgId);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -123,10 +123,21 @@
     {
       "source": "/finance",
       "destination": "/portals/finance/index.html"
+    },
+    {
+      "source": "/invest",
+      "destination": "/portals/invest/index.html"
+    },
+    {
+      "source": "/invest/sponsor",
+      "destination": "/portals/invest/sponsor.html"
     }
   ],
   "functions": {
     "api/grid-atlas.js": {
+      "maxDuration": 60
+    },
+    "api/invest.js": {
       "maxDuration": 60
     },
     "api/**/*.js": {

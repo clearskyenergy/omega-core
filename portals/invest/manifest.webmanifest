@@ -1,0 +1,15 @@
+{
+  "name": "OMEGA Invest",
+  "short_name": "Invest",
+  "description": "Community investment in compute containers, microgrids and battery projects. Own a percent of the PPA or the compute.",
+  "id": "/invest",
+  "start_url": "/invest",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16202B",
+  "theme_color": "#16202B",
+  "icons": [
+    { "src": "/omega-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

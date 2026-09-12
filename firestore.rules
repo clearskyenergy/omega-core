@@ -3058,5 +3058,139 @@ service cloud.firestore {
                     && request.resource.data.orgId == resource.data.orgId;
       allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       COMMUNITY INVESTMENT  —  cf_*                            (OMEGA Invest)
+       ═══════════════════════════════════════════════════════════════════════
+       /portals/invest/ — retail investors fund a percent of a project's
+       distributable cash (its PPA, its compute lease) in units, Indiegogo-
+       style. Investors sign in with ANY email, so nothing on the investor
+       side keys on userOrg(). Sponsors are tenant users: canActInOrg().
+
+       THE MONEY NEVER MOVES FROM A BROWSER. cf_pledges is write: false for
+       everyone. /api/invest creates a pledge and Stripe's webhook marks it
+       paid, both through api/_lib/invest-ledger.js, in a transaction that
+       also moves the campaign's counters. A client that could write `raised`
+       could fund a campaign with no money in it, so the counters and the
+       server-computed headline are pinned on every sponsor write below.
+
+       LIFECYCLE   draft → review → live → funded | closed
+         draft    the sponsor edits freely (these rules)
+         review   submitted via /api/invest {submit}; locked for the sponsor
+         live     ClearSky launched it via {review}; sponsor may edit the
+                  narrative only — the terms investors bought on are frozen
+         funded / closed   ClearSky, via {close}
+       Every status transition is server-side: a sponsor can write a draft
+       and can never write a status.
+
+       READ IS PUBLIC for live/funded/closed, without sign-in, the way
+       tenant_public is: a campaign card paints before there is a user.
+       Drafts and reviews are the sponsor's and ClearSky's. */
+    function cfPublic() {
+      return resource.data.get('status', '') in ['live', 'funded', 'closed'];
+    }
+    function cfSponsor() {
+      return signedIn() && canActInOrg(resource.data.get('sponsorOrgId', ''));
+    }
+    function cfCountersHeld() {
+      return request.resource.data.get('raised', 0) == resource.data.get('raised', 0)
+          && request.resource.data.get('unitsSold', 0) == resource.data.get('unitsSold', 0)
+          && request.resource.data.get('backers', 0) == resource.data.get('backers', 0)
+          && request.resource.data.get('headline', null) == resource.data.get('headline', null)
+          && request.resource.data.get('distributedTotal', 0) == resource.data.get('distributedTotal', 0);
+    }
+    match /cf_campaigns/{campaignId} {
+      allow read: if cfPublic() || isAdmin() || cfSponsor();
+      allow create: if signedIn()
+        && canActInOrg(request.resource.data.get('sponsorOrgId', ''))
+        && request.resource.data.get('status', '') == 'draft'
+        && request.resource.data.get('raised', 0) == 0
+        && request.resource.data.get('unitsSold', 0) == 0
+        && request.resource.data.get('backers', 0) == 0
+        && request.resource.data.get('headline', null) == null;
+      allow update: if isAdmin()
+        || (cfSponsor()
+            && request.resource.data.get('sponsorOrgId', '') == resource.data.get('sponsorOrgId', '')
+            && cfCountersHeld()
+            && (
+                 (resource.data.get('status', '') == 'draft'
+                   && request.resource.data.get('status', '') == 'draft')
+                 ||
+                 (resource.data.get('status', '') in ['live', 'funded']
+                   && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['story', 'tagline', 'images', 'faq', 'documents', 'risks', 'updatedAt']))
+               ));
+      allow delete: if isAdmin() || (cfSponsor() && resource.data.get('status', '') == 'draft');
+
+      /* Sponsor posts, Indiegogo "Updates". Visible to whoever can see the
+         campaign; written by the sponsor and ClearSky; never edited after. */
+      match /updates/{updateId} {
+        function cfParent() {
+          return get(/databases/$(database)/documents/cf_campaigns/$(campaignId)).data;
+        }
+        allow read: if cfParent().get('status', '') in ['live', 'funded', 'closed']
+                    || isAdmin()
+                    || (signedIn() && canActInOrg(cfParent().get('sponsorOrgId', '')));
+        allow create: if isAdmin()
+                    || (signedIn()
+                        && canActInOrg(cfParent().get('sponsorOrgId', ''))
+                        && request.resource.data.get('author', '') == request.auth.token.email.lower());
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /* One profile per investor, self-created on first sign-in. The
+       privilege fields — status, kyc, accreditedVerified — are pinned so a
+       patched page cannot verify itself; ClearSky sets them. The profile is
+       what /api/invest checks eligibility against, merged with what the
+       person attests at checkout. Never deleted: it is the record of what
+       they were told and agreed to. */
+    match /cf_investors/{uid} {
+      function cfSelf() {
+        return signedIn() && request.auth.uid == uid;
+      }
+      function cfPrivilegeHeld() {
+        return request.resource.data.get('status', 'active') == resource.data.get('status', 'active')
+            && request.resource.data.get('kyc', 'none') == resource.data.get('kyc', 'none')
+            && request.resource.data.get('accreditedVerified', false) == resource.data.get('accreditedVerified', false);
+      }
+      allow read: if cfSelf() || isAdmin();
+      allow create: if cfSelf()
+        && request.resource.data.get('uid', '') == uid
+        && request.resource.data.get('status', 'active') == 'active'
+        && request.resource.data.get('kyc', 'none') == 'none'
+        && request.resource.data.get('accreditedVerified', false) == false;
+      allow update: if isAdmin() || (cfSelf() && cfPrivilegeHeld());
+      allow delete: if false;
+    }
+
+    /* THE CAP TABLE. Server-written only. An investor reads their own; the
+       sponsor reads the pledges on their campaigns — they are the issuer and
+       need the holder list, which is why sponsorOrgId is denormalised onto
+       every pledge and why the sponsor console filters on it; ClearSky reads
+       all. */
+    match /cf_pledges/{pledgeId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.get('investorUid', '') == request.auth.uid)
+        || (signedIn() && canActInOrg(resource.data.get('sponsorOrgId', '')));
+      allow write: if false;
+    }
+
+    /* Declared distributions: campaign-level figures only (pool, per-unit,
+       period). No investor identity, so any signed-in holder may read them
+       and multiply per-unit by the units they hold. Server-written only. */
+    match /cf_distributions/{distId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    /* Platform rules — minimums, annual caps, allowed countries — read by
+       the storefront before sign-in and by /api/invest on every pledge.
+       ClearSky writes them from the console; a deploy is not needed to
+       change a limit. */
+    match /cf_settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

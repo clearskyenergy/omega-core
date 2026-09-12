@@ -58,6 +58,25 @@ live. Second person from the same domain auto-joins as member.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
 
+**OMEGA Invest (2026-09-12):** community investment / crowdfunding surface at
+`/portals/invest/` (routes `/invest`, `/invest/sponsor`). Own product surface
+like `/portals/finance/` — retail investors sign in with any email, so it
+deliberately does NOT load `omega-tenant.js`. New `cf_*` collections
+(`cf_campaigns` + `updates`, `cf_investors`, `cf_pledges`, `cf_distributions`,
+`cf_settings`) and Storage path `cf_campaigns/{org}/{id}/`; rules blocks
+appended to both files. Per the IP rule, the returns projection (yield,
+IRR, MOIC, payback, ownership %), the eligibility rules (minimums, annual
+caps, accreditation, country) and every pledge/refund/distribution
+transition live in `api/invest.js` + `api/_lib/invest-math.js` +
+`api/_lib/invest-ledger.js`; the pages only render what comes back.
+`api/invest-webhook.js` is a SECOND Stripe endpoint (own signing secret),
+separate from tenant billing. `cf_pledges` is `write: false` for every
+browser. Sponsors register the console through `omega-tools.js` key
+`invest`. Tests: `scripts/tests/tinvest.js`, `tinvest-samples.js`,
+`tinvestapi.js`. Seed: `scripts/seed-invest-demo.js`. Regulatory note in
+`portals/invest/README.md` — the platform is not a registered funding
+portal; counsel decides the exemption before real money moves.
+
 ## TODO — Claude Code sessions, in order
 
 1. **Port the AHJ research block into editor.html.** The Joules family has
