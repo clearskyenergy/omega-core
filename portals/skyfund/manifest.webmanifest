@@ -1,9 +1,9 @@
 {
-  "name": "OMEGA Invest",
+  "name": "Sky Fund",
   "short_name": "Invest",
   "description": "Community investment in compute containers, microgrids and battery projects. Own a percent of the PPA or the compute.",
-  "id": "/invest",
-  "start_url": "/invest",
+  "id": "/skyfund",
+  "start_url": "/skyfund",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

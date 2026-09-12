@@ -3,7 +3,7 @@
    scripts/seed-invest-demo.js — publish the four sample campaigns for real
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   The storefront shows portals/invest/samples.js only while cf_campaigns has
+   The storefront shows portals/skyfund/samples.js only while cf_campaigns has
    nothing live. This writes those same four as real documents (two live, one
    funded, one live) plus cf_settings/rules with the platform defaults, so
    /api/invest can quote and take pledges against them.
@@ -20,7 +20,7 @@
 var path = require('path');
 var admin = require('firebase-admin');
 var IM = require(path.join(__dirname, '..', 'api', '_lib', 'invest-math.js'));
-var SAMPLES = require(path.join(__dirname, '..', 'portals', 'invest', 'samples.js'));
+var SAMPLES = require(path.join(__dirname, '..', 'portals', 'skyfund', 'samples.js'));
 
 var APPLY = process.argv.indexOf('--apply') >= 0;
 var sa = process.env.FIREBASE_SERVICE_ACCOUNT;

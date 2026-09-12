@@ -2,7 +2,7 @@
    POST /api/invest   —  community investment: quotes, pledges, campaign lifecycle
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   The storefront (/portals/invest/) is a shop window. Every number about
+   The storefront (/portals/skyfund/) is a shop window. Every number about
    money and every decision about who may invest comes from here, because
    browser code is public and this is the IP (CLAUDE.md → IP protection).
    The engine is api/_lib/invest-math.js; state changes go through
@@ -185,8 +185,8 @@ function pledge(req, b, db, FV, caller) {
           product_data: { name: (c.title || 'Project') + ' — investment unit', description: p.pctOfProject ? ((p.pctOfProject * 100).toFixed(4) + '% of project distributions for ' + p.termYears + ' years') : undefined } } }],
         metadata: { pledgeId: pRef.id, campaignId: c.id, investorUid: caller.uid, kind: 'cf_pledge' },
         payment_intent_data: { metadata: { pledgeId: pRef.id, campaignId: c.id, kind: 'cf_pledge' }, description: 'Community investment: ' + (c.title || c.id) },
-        success_url: base + '/invest?paid=' + pRef.id + '#/portfolio',
-        cancel_url: base + '/invest?cancelled=' + pRef.id + '#/c/' + c.id,
+        success_url: base + '/skyfund?paid=' + pRef.id + '#/portfolio',
+        cancel_url: base + '/skyfund?cancelled=' + pRef.id + '#/c/' + c.id,
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60
       });
     }).then(function (session) {

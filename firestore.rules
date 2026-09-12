@@ -3060,9 +3060,9 @@ service cloud.firestore {
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       COMMUNITY INVESTMENT  —  cf_*                            (OMEGA Invest)
+       COMMUNITY INVESTMENT  —  cf_*                            (Sky Fund)
        ═══════════════════════════════════════════════════════════════════════
-       /portals/invest/ — retail investors fund a percent of a project's
+       /portals/skyfund/ — retail investors fund a percent of a project's
        distributable cash (its PPA, its compute lease) in units, Indiegogo-
        style. Investors sign in with ANY email, so nothing on the investor
        side keys on userOrg(). Sponsors are tenant users: canActInOrg().

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>OMEGA Invest · Own a share of the energy that powers compute</title>
+<title>Sky Fund · Own a share of the energy that powers compute</title>
 <meta name="description" content="Community investment in compute containers, microgrids and battery projects. Fund a project, own a percent of its PPA or compute revenue.">
 <meta name="theme-color" content="#16202B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="OMEGA Invest">
-<link rel="manifest" href="/portals/invest/manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Sky Fund">
+<link rel="manifest" href="/portals/skyfund/manifest.webmanifest">
 <link rel="icon" href="/omega-logo.png">
 <link rel="apple-touch-icon" href="/omega-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-  ClearSky-OMEGA · OMEGA Invest — community investment storefront
+  ClearSky-OMEGA · Sky Fund — community investment storefront
   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
   WHAT THIS IS
@@ -342,7 +342,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 
 <header class="top">
   <div class="wrap">
-    <a class="brand" href="#/"><img src="/omega-logo.png" alt=""><span>OMEGA Invest<small>Community capital · ClearSky</small></span></a>
+    <a class="brand" href="#/"><img src="/omega-logo.png" alt=""><span>Sky Fund<small>Community capital · ClearSky</small></span></a>
     <nav class="nav" id="nav">
       <a href="#/" data-route="explore">Explore</a>
       <a href="#/how" data-route="how">How it works</a>
@@ -356,7 +356,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
           <div class="who"><b id="whoName">—</b><span id="whoEmail"></span></div>
           <a href="#/portfolio">My portfolio</a>
           <a href="#/account">Account &amp; eligibility</a>
-          <a href="/portals/invest/sponsor" id="sponsorLink">Sponsor console</a>
+          <a href="/portals/skyfund/sponsor" id="sponsorLink">Sponsor console</a>
           <button id="btnSignOut">Sign out</button>
         </div>
       </div>
@@ -368,7 +368,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 
 <footer>
   <div class="wrap">
-    <div><b>OMEGA Invest</b> is operated by ClearSky Energy Solutions LLC. Project campaigns are sponsored by independent developers and reviewed by ClearSky before listing. Projections are the sponsor's estimates, not guarantees.</div>
+    <div><b>Sky Fund</b> is operated by ClearSky Energy Solutions LLC. Project campaigns are sponsored by independent developers and reviewed by ClearSky before listing. Projections are the sponsor's estimates, not guarantees.</div>
     <div>Investing in energy and compute infrastructure involves risk, including the loss of principal. Distributions depend on the project being built and operated as planned. Offerings are made only through the offering documents attached to each campaign, and only to investors who meet the eligibility rules shown before investing. Nothing on this page is investment, tax or legal advice.</div>
   </div>
 </footer>
@@ -405,7 +405,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
-<script src="/portals/invest/samples.js"></script>
+<script src="/portals/skyfund/samples.js"></script>
 <script>
 /* ES5 throughout — see the header comment for why. */
 (function () {
@@ -470,10 +470,10 @@ function cover(c, cls, extra) {
 }
 
 /* ═══════════════════ 2 · sample listings ═══════════════════════════════
-   /portals/invest/samples.js — shown only when the live collection is empty
+   /portals/skyfund/samples.js — shown only when the live collection is empty
    or unreachable, always marked, and seeded for real by
    scripts/seed-invest-demo.js from the same file. */
-var SAMPLES = window.OMEGA_INVEST_SAMPLES || [];
+var SAMPLES = window.SKY_FUND_SAMPLES || [];
 
 /* ═══════════════════ 3 · data ══════════════════════════════════════════ */
 function loadCampaigns() {
@@ -593,7 +593,7 @@ function renderExplore() {
     '<section class="hero"><div class="wrap"><div>' +
       '<div class="eyebrow">Community investment · compute · microgrids · storage</div>' +
       '<h1>Own a share of the <em>energy that powers compute.</em></h1>' +
-      '<p>Every project on OMEGA Invest is designed, sized and reviewed on the ClearSky platform. Fund the container or the microgrid from $' + (S.campaigns.length ? Math.min.apply(null, S.campaigns.map(function (c) { return Number(c.unitPrice) || 100; })) : 100) + ', and receive your percent of the power purchase agreement or the compute lease for the life of the term.</p>' +
+      '<p>Every project on Sky Fund is designed, sized and reviewed on the ClearSky platform. Fund the container or the microgrid from $' + (S.campaigns.length ? Math.min.apply(null, S.campaigns.map(function (c) { return Number(c.unitPrice) || 100; })) : 100) + ', and receive your percent of the power purchase agreement or the compute lease for the life of the term.</p>' +
       '<div class="cta"><a class="btn btn-gold btn-lg" href="#projects">Browse projects</a><a class="btn btn-light btn-lg" href="#/how">How it works</a></div>' +
     '</div><div class="stats"><div class="stat"><b>' + usdC(t.raised) + '</b><span>Committed</span></div><div class="stat"><b>' + t.backers.toLocaleString('en-US') + '</b><span>Investors</span></div><div class="stat"><b>' + t.funded + '</b><span>Projects funded</span></div></div></div></section>' +
     '<div class="wrap" id="projects">' +
@@ -769,7 +769,7 @@ function startInvest() {
       '<div class="f"><label>Country of residence</label><select id="ivCountry">' + COUNTRIES.map(function (k) { return '<option value="' + k[0] + '"' + ((p.country || 'US') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor (income above $200,000, or net worth above $1M excluding my home). Optional — it raises the annual limit.</label></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivRisk"> I have read the <a href="#" data-tab="risks">risk disclosure</a> and understand I could lose my entire investment and that units cannot be sold on the platform.</label></div>' +
-      '<div class="f"><label class="chk"><input type="checkbox" id="ivTerms"> I accept the offering documents and the OMEGA Invest investor terms.</label></div>' +
+      '<div class="f"><label class="chk"><input type="checkbox" id="ivTerms"> I accept the offering documents and the Sky Fund investor terms.</label></div>' +
       '<button class="btn btn-gold btn-lg btn-block" id="ivGo">Continue to payment · ' + usd(S.amount) + '</button>' +
       '<div class="msg" id="ivMsg">Card and bank payments are handled by Stripe. Nothing is charged on this page.</div>' +
     '</div>';
@@ -842,7 +842,7 @@ function renderAccount() {
     '<div class="f"><label class="chk"><input type="checkbox" id="acAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor. This is a self-attestation; ClearSky may ask for verification before larger investments.</label></div>' +
     '<div class="f"><label>Verification</label><div style="font-size:14px">Identity: <span class="pill ' + (p.kyc === 'verified' ? 'paid' : 'pending') + '">' + esc(p.kyc || 'none') + '</span> &nbsp; Accreditation: <span class="pill ' + (p.accreditedVerified ? 'paid' : 'pending') + '">' + (p.accreditedVerified ? 'verified' : 'self-attested') + '</span></div></div>' +
     '<button class="btn btn-primary" id="acSave">Save profile</button> <button class="btn btn-ghost" id="acOut">Sign out</button><div class="msg" id="acMsg"></div></div>' +
-    '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/invest/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
+    '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/skyfund/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
   $('acSave').onclick = function () {
     var msg = $('acMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
     FB.db.collection('cf_investors').doc(S.user.uid).set({ name: $('acName').value.trim(), country: $('acCountry').value, accredited: $('acAccredited').checked, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
@@ -854,7 +854,7 @@ function renderAccount() {
 
 /* ═══════════════════ 10 · how it works ═════════════════════════════════ */
 function renderHow() {
-  $('view').innerHTML = '<div class="wrap"><div class="page-h"><div><h1>How OMEGA Invest works</h1><p>Crowdfunding for the infrastructure that powers compute — one project at a time, one unit at a time.</p></div></div>' +
+  $('view').innerHTML = '<div class="wrap"><div class="page-h"><div><h1>How Sky Fund works</h1><p>Crowdfunding for the infrastructure that powers compute — one project at a time, one unit at a time.</p></div></div>' +
     '<div class="how"><div class="step"><div class="n">1</div><h3>Browse reviewed projects</h3><p>Every campaign is designed on the ClearSky-OMEGA platform — sized, interconnection-screened and modelled — and reviewed by ClearSky before it is listed. You see the site, the offtake, the numbers and the documents.</p></div>' +
     '<div class="step"><div class="n">2</div><h3>Buy units of the offering</h3><p>The sponsor offers a percent of the project\'s distributable cash — its PPA, its compute lease, or both — split into units from $50 or $100. Your units are your share. Pay by card or bank through Stripe; if the raise misses its minimum, you are refunded in full.</p></div>' +
     '<div class="step"><div class="n">3</div><h3>Get paid as the project earns</h3><p>Once the project is operating, the sponsor reports each quarter, ClearSky declares the distribution, and your share lands in your portfolio and your bank account for the length of the term.</p></div></div>' +

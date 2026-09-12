@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
-   portals/invest/samples.js — the four sample campaigns (one copy, two readers)
+   portals/skyfund/samples.js — the four sample campaigns (one copy, two readers)
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    Read by index.html (shown, clearly marked, when no campaign is live) and by
@@ -11,12 +11,12 @@
    ever reaching the browser. scripts/tests/tinvest-samples.js asserts these
    numbers still match the engine, so a change to either side fails CI.
 
-   ES5. Runs in the browser (window.OMEGA_INVEST_SAMPLES) and in node
+   ES5. Runs in the browser (window.SKY_FUND_SAMPLES) and in node
    (module.exports).
    ═══════════════════════════════════════════════════════════════════════════════ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.OMEGA_INVEST_SAMPLES = factory();
+  else root.SKY_FUND_SAMPLES = factory();
 }(typeof window !== 'undefined' ? window : this, function () {
   'use strict';
   function days(n) { return new Date(Date.now() + n * 86400000).toISOString(); }

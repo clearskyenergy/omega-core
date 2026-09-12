@@ -1,7 +1,7 @@
-# OMEGA Invest — community investment in compute & energy projects
+# Sky Fund — community investment in compute & energy projects
 
-`/portals/invest/` · routes `/invest` (storefront) and `/invest/sponsor`
-(sponsor console) · © 2025–2026 ClearSky Energy Solutions LLC.
+`/portals/skyfund/` · routes `/skyfund` (storefront) and `/skyfund/sponsor`
+(sponsor console; `/invest` and `/invest/sponsor` are kept as aliases) · © 2025–2026 ClearSky Energy Solutions LLC.
 
 Crowdfunding for the projects the platform already designs. A sponsor
 (a developer with a ClearSky-OMEGA workspace) lists a compute container, a
@@ -153,9 +153,9 @@ inventory. Oversubscription is refused at pledge time against `unitsSold`.
    `cf_campaigns` and `cfCountersHeld`.
 2. `FIREBASE_SERVICE_ACCOUNT=… node scripts/seed-invest-demo.js --apply`
    (writes the four samples as real campaigns + `cf_settings/rules`).
-3. Open `/invest`. Cards paint without sign-in; the calculator quotes.
+3. Open `/skyfund`. Cards paint without sign-in; the calculator quotes.
 4. Sign in with any email, pledge $500 → manual mode works without Stripe;
-   confirm it from `/invest/sponsor` as staff; watch `raised` move.
+   confirm it from `/skyfund/sponsor` as staff; watch `raised` move.
 5. Add Stripe keys + the webhook endpoint; repeat with a test card.
 6. In the admin console, "Import / Update Applications" so tenants see
    **Community Investment** in the marketplace palette.
@@ -187,7 +187,7 @@ point, not a reviewed document.
 node scripts/tests/tinvest.js            # the engine, by hand-worked cases
 node scripts/tests/tinvest-samples.js    # sample headlines still match the engine
 node scripts/tests/tinvestapi.js         # /api/invest with a stubbed Firestore
-node scripts/check-html-scripts.js portals/invest/index.html portals/invest/sponsor.html
+node scripts/check-html-scripts.js portals/skyfund/index.html portals/skyfund/sponsor.html
 node scripts/check-rules.js firestore.rules
 ```
 

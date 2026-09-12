@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sponsor console · OMEGA Invest</title>
+<title>Sponsor console · Sky Fund</title>
 <link rel="icon" href="/omega-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-  ClearSky-OMEGA · OMEGA Invest — sponsor console
+  ClearSky-OMEGA · Sky Fund — sponsor console
   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
   Where a developer (a tenant user) lists a project for community
@@ -117,8 +117,8 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/portals/invest/"><img src="/omega-logo.png" alt=""><span>OMEGA Invest<small>Sponsor console</small></span></a>
-  <a class="lnk" href="/portals/invest/" target="_blank" rel="noopener">Storefront ↗</a>
+  <a class="brand" href="/portals/skyfund/"><img src="/omega-logo.png" alt=""><span>Sky Fund<small>Sponsor console</small></span></a>
+  <a class="lnk" href="/portals/skyfund/" target="_blank" rel="noopener">Storefront ↗</a>
   <a class="lnk" href="/" id="backPortal">Portal</a>
   <div class="who" id="who"></div>
   <button class="btn btn-light btn-sm hide" id="btnOut">Sign out</button>
@@ -242,7 +242,7 @@ function renderEditor() {
   m.innerHTML =
     (c.reviewNote && c.status === 'draft' ? '<div class="note"><b>Returned by ClearSky:</b> ' + esc(c.reviewNote) + '</div>' : '') +
     (c.status === 'review' ? '<div class="note">Submitted for review. ClearSky will launch it or return it with notes. Fields are locked while it is being checked.</div>' : '') +
-    '<div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="flex:1">' + (c.id ? esc(c.title || 'Untitled') : 'New campaign') + '</h2><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span>' + (c.id && c.status !== 'draft' ? '<a class="btn btn-ghost btn-sm" href="/portals/invest/#/c/' + esc(c.slug || c.id) + '" target="_blank" rel="noopener">View listing ↗</a>' : '') + '</div>' +
+    '<div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="flex:1">' + (c.id ? esc(c.title || 'Untitled') : 'New campaign') + '</h2><span class="pill ' + esc(c.status) + '">' + esc(c.status) + '</span>' + (c.id && c.status !== 'draft' ? '<a class="btn btn-ghost btn-sm" href="/portals/skyfund/#/c/' + esc(c.slug || c.id) + '" target="_blank" rel="noopener">View listing ↗</a>' : '') + '</div>' +
     (c.status !== 'draft' ? '<div class="tiles" style="margin-top:12px"><div class="tile"><span>Raised</span><b>' + usd(c.raised) + '</b></div><div class="tile"><span>Goal</span><b>' + usd(c.goal) + '</b></div><div class="tile"><span>Units sold</span><b>' + (Number(c.unitsSold) || 0).toLocaleString('en-US') + ' / ' + (Number(c.unitsTotal) || 0).toLocaleString('en-US') + '</b></div><div class="tile"><span>Investors</span><b>' + (Number(c.backers) || 0) + '</b></div><div class="tile"><span>Target yield</span><b>' + (c.headline ? Number(c.headline.targetYieldPct).toFixed(1) + '%' : '—') + '</b></div><div class="tile"><span>Deadline</span><b style="font-size:14px">' + fmtDate(c.deadline) + '</b></div></div>' : '') + '</div>' +
 
     '<div class="card"><h2>The project</h2><p class="sub">What investors see on the card and at the top of the page.</p><div class="grid">' +

@@ -1,4 +1,4 @@
-/* portals/invest/samples.js carries a `headline` per sample that was COPIED
+/* portals/skyfund/samples.js carries a `headline` per sample that was COPIED
    out of api/_lib/invest-math.js so a sample card can show a target yield
    without the formula shipping to the browser. A copy drifts; this makes the
    drift a failing test instead of a wrong number on a card.
@@ -6,7 +6,7 @@
 'use strict';
 var path = require('path');
 var IM = require(path.join(__dirname, '..', '..', 'api', '_lib', 'invest-math.js'));
-var SAMPLES = require(path.join(__dirname, '..', '..', 'portals', 'invest', 'samples.js'));
+var SAMPLES = require(path.join(__dirname, '..', '..', 'portals', 'skyfund', 'samples.js'));
 
 var fails = 0;
 function ok(c, m) { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); }

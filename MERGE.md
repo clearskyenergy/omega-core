@@ -58,8 +58,8 @@ live. Second person from the same domain auto-joins as member.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
 
-**OMEGA Invest (2026-09-12):** community investment / crowdfunding surface at
-`/portals/invest/` (routes `/invest`, `/invest/sponsor`). Own product surface
+**Sky Fund (2026-09-12):** community investment / crowdfunding surface at
+`/portals/skyfund/` (routes `/skyfund`, `/skyfund/sponsor`; `/invest` kept as an alias). Own product surface
 like `/portals/finance/` — retail investors sign in with any email, so it
 deliberately does NOT load `omega-tenant.js`. New `cf_*` collections
 (`cf_campaigns` + `updates`, `cf_investors`, `cf_pledges`, `cf_distributions`,
@@ -74,7 +74,7 @@ separate from tenant billing. `cf_pledges` is `write: false` for every
 browser. Sponsors register the console through `omega-tools.js` key
 `invest`. Tests: `scripts/tests/tinvest.js`, `tinvest-samples.js`,
 `tinvestapi.js`. Seed: `scripts/seed-invest-demo.js`. Regulatory note in
-`portals/invest/README.md` — the platform is not a registered funding
+`portals/skyfund/README.md` — the platform is not a registered funding
 portal; counsel decides the exemption before real money moves.
 
 ## TODO — Claude Code sessions, in order

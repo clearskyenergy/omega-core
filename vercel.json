@@ -125,12 +125,20 @@
       "destination": "/portals/finance/index.html"
     },
     {
+      "source": "/skyfund",
+      "destination": "/portals/skyfund/index.html"
+    },
+    {
+      "source": "/skyfund/sponsor",
+      "destination": "/portals/skyfund/sponsor.html"
+    },
+    {
       "source": "/invest",
-      "destination": "/portals/invest/index.html"
+      "destination": "/portals/skyfund/index.html"
     },
     {
       "source": "/invest/sponsor",
-      "destination": "/portals/invest/sponsor.html"
+      "destination": "/portals/skyfund/sponsor.html"
     }
   ],
   "functions": {

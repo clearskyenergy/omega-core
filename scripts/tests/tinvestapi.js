@@ -244,7 +244,7 @@ Promise.resolve().then(function () {
     var s = STRIPE_CALLS[STRIPE_CALLS.length - 1][1];
     ok(s.mode === 'payment' && s.line_items[0].quantity === 10 && s.line_items[0].price_data.unit_amount === 10000, 'session: 10 units at $100.00');
     ok(s.metadata.kind === 'cf_pledge' && s.metadata.pledgeId === pid, 'session carries the pledge id');
-    ok(/\/invest\?paid=/.test(s.success_url) && /\/invest\?cancelled=/.test(s.cancel_url), 'return URLs land on the storefront');
+    ok(/\/skyfund\?paid=/.test(s.success_url) && /\/skyfund\?cancelled=/.test(s.cancel_url), 'return URLs land on the storefront');
     ok(STORE['cf_pledges/' + pid].stripeSessionId === 'cs_test_1', 'session id stored on the pledge');
     return hook({ type: 'checkout.session.completed', created: 1700000000, data: { object: { id: 'cs_test_1', payment_status: 'paid', payment_intent: 'pi_test_1', amount_total: 100000, currency: 'usd', metadata: { kind: 'cf_pledge', pledgeId: pid } } } });
   }).then(function (r) {
