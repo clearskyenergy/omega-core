@@ -2624,7 +2624,10 @@ function openBoard(){
      opened by hand is invisible to this page; the first click from here opens
      the one this page keeps reusing from then on. (Asked 2026-09-11, so the
      board stops being a tab to hunt for.) */
-  const w=window.open(BOARD+'/stage.html','jarvis-board'); if(w) w.focus();
+  /* ?v= is the cache-buster the board is served with (a plain python
+     http.server sends no cache headers, so without it Chrome can hand back a
+     stage.html from before the last edit). Thomas asked for this exact link. */
+  const w=window.open(BOARD+'/stage.html?v=81094','jarvis-board'); if(w) w.focus();
 }
 async function probeBrain(){
   probeBoard();
@@ -2708,6 +2711,15 @@ function glassHome(){
   (s.todos||[]).filter(t=>t.status==='blocked').slice(0,5).forEach(t=>out.push(gl(t.title)+' — blocked'));
   if(c.queued) out.push(c.queued+' meetings waiting to be analysed');
   out.push('', '# On this orb', 'Tasks today · Calendar · Clients · Platform · Brain · Outbox', 'Say "show me my tasks on the board" and Jarvis puts it up.');
+  /* THE BOARD'S OWN ADDRESS, in the note rather than only in the file.
+     ~/jarvis/glass is whole-folder replaced on every poll, so a line typed
+     into Command Center.md by hand is gone within thirty seconds — it has to
+     be emitted here to survive. Built from BOARD, the same constant
+     openBoard() uses, so the address in the note can never drift from the
+     one the dashboard actually opens. */
+  out.push('', '# The glass board', BOARD + '/stage.html',
+           'One tab, reused — the dashboard re-focuses it rather than opening a second.',
+           'From here: Command Center → Connections → Glass board. The row is the link.');
   return out.join('\n');
 }
 function glassTasks(){
@@ -3202,7 +3214,7 @@ function renderConns(s){
     /* The board. The row IS the quick-link: one click opens (or re-focuses)
        the glass, from the same panel that says whether it is up. */
     ['Glass board', boardOn?'ok':'off',
-      boardOn?'up on this Mac · click to open':'off — Desktop: JARVIS barehands', openBoard],
+      boardOn?'up on this Mac · OPEN ↗':'off — Desktop: JARVIS barehands · OPEN ↗', openBoard],
     ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
       mins==null?'no run recorded':('read '+mins+' min ago')],
     ['Calendar', (s.schedule||[]).length?'ok':'warn',
