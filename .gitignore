@@ -8,3 +8,4 @@ audit-*.json
 .vercel
 firebase-debug.log
 *-debug.log
+scripts/out/

@@ -181,6 +181,36 @@ point, not a reviewed document.
 
 ---
 
+## Test it on a phone — the sandbox
+
+The real storefront, with the Firebase SDK, `/api/invest` and Stripe swapped
+for a simulation that lives in the browser (`scripts/skyfund-sandbox/shim.js`).
+Sign in with any email, invest through a simulated checkout, fast-forward a
+quarter from the **Controls** sheet to see a distribution land. State stays on
+the device; nothing touches Firestore, Stripe or ClearSky. The four sample
+projects' figures were computed once by the real engine per unit at build
+time, so the engine never ships in the sandbox either.
+
+```
+node scripts/build-skyfund-sandbox.js [outDir]   # default scripts/out/skyfund-sandbox (gitignored)
+```
+
+Publish the output folder anywhere static (a claude.ai Artifact, a Vercel
+preview, `python3 -m http.server`) and open it on the phone; "Add to Home
+Screen" installs it through the bundled manifest. `scripts/tests/tskyfundsandbox.js`
+drives the shim the way the page does and runs in CI.
+
+Layers of testing, cheapest first:
+
+1. **Sandbox on a phone** (above) — every screen and flow, no backend.
+2. **Node tests** (below) — the engine, the API end to end, the sandbox shim.
+3. **Vercel preview of the branch** — `/skyfund` on the preview host serves
+   the real pages against the real Firestore. Cards paint from Firestore or
+   fall back to the samples; sign-in works only if the preview hostname is
+   in Firebase Auth → Authorized domains; the API needs the env vars above.
+4. **Real backend** — the "Go live, in order" steps above, in manual mode
+   first (no Stripe), then with Stripe test keys and card 4242 4242 4242 4242.
+
 ## Tests
 
 ```
