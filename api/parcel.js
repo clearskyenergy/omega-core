@@ -326,7 +326,7 @@ function entitle(caller) {
      caller is still a verified Firebase identity, the county layers are open
      public data, and the metered source needs the entitlement this cannot
      read — so county only, and say so in the log. */
-  if (A.isDegraded()) {
+  if (typeof A.isDegraded === 'function' && A.isDegraded()) {
     console.warn('[parcel]', caller.orgId, 'degraded — county layers only (no Firestore credential)');
     return Promise.resolve({ regrid: false, degraded: true });
   }
