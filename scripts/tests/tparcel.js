@@ -18,11 +18,37 @@ function near(a, b, rel) { return typeof a === 'number' && Math.abs(a - b) <= Ma
 
 /* ── stand in for _lib/admin so no credential is needed ──────────────── */
 let AUTH = () => Promise.resolve({ uid: 'u1', email: 'pm@concord.com', orgId: 'concordenergyusa.com', staff: false });
+/* A Firestore of plain paths: omega_orgs/<org> is the tenant record the gate
+   reads, omega_orgs/<org>/billing/current what billingOf() answers from, and
+   parcel_cache/<key> where a hit is kept. WRITES records every set(). */
+let DOCS = {};
+let WRITES = [];
+function fakeDb() {
+  const col = base => ({
+    doc: id => {
+      const p = base + '/' + id;
+      return {
+        get: () => Promise.resolve({ exists: !!DOCS[p], data: () => DOCS[p] }),
+        set: d => { WRITES.push(p); DOCS[p] = d; return Promise.resolve(); },
+        collection: name => col(p + '/' + name)
+      };
+    }
+  });
+  return { collection: name => col(name) };
+}
 const fakeAdmin = {
   handler: fn => fn,
   httpError: (s, m) => { const e = new Error(m); e.status = s; return e; },
-  authenticate: req => AUTH(req)
+  authenticate: req => AUTH(req),
+  db: fakeDb,
+  billingOf: org => {
+    const d = DOCS['omega_orgs/' + org + '/billing/current'];
+    return Promise.resolve(d || { tier: 'standard', addons: [], toolOverrides: {} });
+  }
 };
+const ACTIVE = { 'omega_orgs/concordenergyusa.com': { status: 'active' } };
+function reset(docs) { DOCS = Object.assign({}, ACTIVE, docs || {}); WRITES = []; }
+reset();
 const libPath = require.resolve(path.join(__dirname, '..', '..', 'api', '_lib', 'admin.js'));
 require.cache[libPath] = { id: libPath, filename: libPath, loaded: true, exports: fakeAdmin };
 const parcel = require(path.join(__dirname, '..', '..', 'api', 'parcel.js'));
@@ -188,7 +214,7 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
 
   /* ── 10 · outside every layer, with no key: an honest miss, no call ── */
   console.log('outside coverage');
-  SCRIPT = [];
+  reset(); SCRIPT = [];
   let out = await post({ lat: 41.8445, lng: -90.1887 });
   ok(out && out.ok === false && out.reason === 'no parcel record here', 'Clinton, Iowa: ok:false, reason "no parcel record here"');
   ok(CALLS.length === 0 && same(out.tried, []), 'and nobody upstream was asked (REGRID_TOKEN is not set in this process)');
@@ -196,7 +222,7 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
 
   /* ── 11 · a Cook point through the stubbed layer ───────────────────── */
   console.log('a Cook point');
-  SCRIPT = [{ json: COOK_HIT }];
+  reset(); SCRIPT = [{ json: COOK_HIT }];
   out = await post({ lat: '41.8781', lng: '-87.6298' });
   ok(out && out.ok === true && out.source === 'cook' && out.apn === '17-16-244-001-0000', 'ok:true from the Cook layer (numeric strings accepted)');
   ok(CALLS.length === 1 && CALLS[0].indexOf(H.PARCELS.cook.url) === 0, 'exactly one upstream call, to the Cook layer');
@@ -205,28 +231,119 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
 
   /* ── 12 · DuPage first, Cook second ────────────────────────────────── */
   console.log('a point in both boxes');
-  SCRIPT = [{ json: EMPTY }, { json: COOK_HIT }];
+  reset(); SCRIPT = [{ json: EMPTY }, { json: COOK_HIT }];
   out = await post({ lat: 41.8995, lng: -87.9403 });
   ok(out && out.ok === true && out.source === 'cook', 'DuPage answered empty, so Cook was asked and answered');
   ok(CALLS.length === 2 && CALLS[0].indexOf(H.PARCELS.dupage.url) === 0 && CALLS[1].indexOf(H.PARCELS.cook.url) === 0, 'in that order');
-  SCRIPT = [{ json: DUPAGE_HIT }];
+  reset(); SCRIPT = [{ json: DUPAGE_HIT }];
   out = await post({ lat: 41.8995, lng: -87.9403 });
   ok(out && out.source === 'dupage' && CALLS.length === 1, 'a DuPage hit stops the chain — Cook is not asked');
 
   /* ── 13 · upstream failure: skipped, named, never echoed ───────────── */
   console.log('when a layer does not answer');
-  SCRIPT = [{ status: 500 }, { abort: true }];
+  reset(); SCRIPT = [{ status: 500 }, { abort: true }];
   out = await post({ lat: 41.8995, lng: -87.9403 });
   ok(out && out.ok === false && out.reason === 'no parcel record here', 'both failed: still ok:false with the contract reason');
   ok(same(out.tried, ['dupage', 'cook']), 'tried[] names both');
   ok(/dupage did not answer/.test(out.note) && /cook timed out/.test(out.note), 'note says who failed and how (' + out.note + ')');
   ok(JSON.stringify(out).indexOf('SECRET') < 0 && JSON.stringify(out).indexOf('http') < 0, 'no upstream body and no URL in the reply');
-  SCRIPT = [{ json: ESRI_ERR }, { json: COOK_HIT }];
+  reset(); SCRIPT = [{ json: ESRI_ERR }, { json: COOK_HIT }];
   out = await post({ lat: 41.8995, lng: -87.9403 });
   ok(out && out.ok === true && out.source === 'cook' && JSON.stringify(out).indexOf('SECRET') < 0, 'an ArcGIS {error} on DuPage falls through to Cook, message not echoed');
-  SCRIPT = [{ json: { not: 'a feature collection' } }];
+  reset(); SCRIPT = [{ json: { not: 'a feature collection' } }];
   out = await post({ lat: 41.8781, lng: -87.6298 });
   ok(out && out.ok === false && same(out.tried, ['cook']) && !out.note, 'an unexpected 200 shape is a plain miss');
+
+  /* ── 14 · the tenant gate: a token is a person, omega_orgs is one of ours */
+  console.log('who may ask');
+  const COOK = { lat: 41.8781, lng: -87.6298 };
+  for (const [label, org] of [['no omega_orgs record', undefined], ['pending', { status: 'pending' }],
+                              ['suspended', { status: 'suspended' }], ['cancelled', { status: 'cancelled' }]]) {
+    reset({ 'omega_orgs/concordenergyusa.com': org }); SCRIPT = [{ json: COOK_HIT }];
+    err = null;
+    await post(COOK).catch(e => { err = e; });
+    ok(err && err.status === 403 && /not active/.test(err.message) && CALLS.length === 0,
+       label + ': 403 "tenant is not active" and nothing upstream is asked');
+  }
+  reset({ 'omega_orgs/concordenergyusa.com': { name: 'Concord' } }); SCRIPT = [{ json: COOK_HIT }];
+  out = await post(COOK);
+  ok(out && out.ok === true && CALLS.length === 1, 'a record with no status field is active — the reading omega-tenant.js gives it');
+  reset({ 'omega_orgs/concordenergyusa.com': undefined }); SCRIPT = [{ json: COOK_HIT }];
+  AUTH = () => Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true });
+  out = await post(COOK);
+  ok(out && out.ok === true && CALLS.length === 1, 'staff pass with no tenant record at all');
+  AUTH = () => Promise.resolve({ uid: 'u1', email: 'pm@concord.com', orgId: 'concordenergyusa.com', staff: false });
+  reset(); SCRIPT = [{ json: COOK_HIT }];
+  err = null;
+  await post({ lat: 'abc', lng: 1 }).catch(e => { err = e; });
+  ok(err && err.status === 400, 'a bad body is still refused before the tenant record is read');
+
+  /* ── 15 · Regrid is metered: only a tier or add-on that carries it ──── */
+  console.log('who may spend the Regrid key');
+  ok(H.regridEntitled({ tier: 'deluxe' }) && H.regridEntitled({ tier: 'enterprise' }) && H.regridEntitled({ tier: 'internal' }), 'deluxe and up');
+  ok(!H.regridEntitled({ tier: 'standard' }) && !H.regridEntitled({ tier: 'trial' }) && !H.regridEntitled({}) && !H.regridEntitled(null), 'not trial, standard or nothing');
+  ok(H.regridEntitled({ tier: 'standard', addons: ['parcels'] }), 'the parcels add-on on any tier');
+  ok(H.regridEntitled({ tier: 'trial', toolOverrides: { parcel: true } }), 'an override on');
+  ok(!H.regridEntitled({ tier: 'enterprise', toolOverrides: { parcel: false } }), 'an override off beats the tier');
+  ok(same(H.REGRID_TIERS, ['deluxe', 'enterprise', 'partner', 'internal']) && H.REGRID_ADDON === 'parcels', 'the tier names are tenant-billing.js\'s');
+  process.env.REGRID_TOKEN = 'SECRET-REGRID-TOKEN';
+  try {
+    reset(); SCRIPT = [{ json: COOK_HIT }];                       /* standard tier: no billing doc */
+    out = await post(COOK);
+    ok(out && out.ok === true && out.source === 'cook' && CALLS.length === 1 && CALLS[0].indexOf('regrid') < 0,
+       'a standard tenant with the key set goes to the county layer, never Regrid');
+    reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'deluxe' } }); SCRIPT = [{ json: REGRID_HIT }];
+    out = await post(COOK);
+    ok(out && out.ok === true && out.source === 'regrid' && CALLS.length === 1 && CALLS[0].indexOf(H.PARCELS.cook.url) < 0,
+       'a deluxe tenant is answered by Regrid first');
+    ok(JSON.stringify(out).indexOf('SECRET') < 0, 'and the token is not in the answer');
+    reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'standard', addons: ['parcels'] } }); SCRIPT = [{ status: 401 }, { json: COOK_HIT }];
+    out = await post(COOK);
+    ok(out && out.ok === true && out.source === 'cook' && CALLS.length === 2 && JSON.stringify(out).indexOf('SECRET') < 0,
+       'the add-on asks Regrid; a Regrid 401 falls through to the county, body not echoed');
+    reset({ 'omega_orgs/concordenergyusa.com': undefined }); SCRIPT = [{ json: REGRID_HIT }];
+    AUTH = () => Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true });
+    out = await post(COOK);
+    ok(out && out.source === 'regrid', 'staff may spend it');
+    AUTH = () => Promise.resolve({ uid: 'u1', email: 'pm@concord.com', orgId: 'concordenergyusa.com', staff: false });
+  } finally { delete process.env.REGRID_TOKEN; }
+
+  /* ── 16 · the cache: the same point twice costs nothing ────────────── */
+  console.log('the cache');
+  ok(H.cacheKey(41.8781, -87.6298) === '41.87810_-87.62980', 'key is lat_lng to five places');
+  ok(H.cacheKey(41.878104, -87.629796) === H.cacheKey(41.8781, -87.6298), 'a metre apart is the same key');
+  ok(H.cacheKey(41.8782, -87.6298) !== H.cacheKey(41.8781, -87.6298), 'ten metres apart is not');
+  ok(H.CACHE === 'parcel_cache' && H.CACHE_TTL_MS === 30 * 24 * 3600 * 1000, 'parcel_cache, thirty days');
+  reset(); SCRIPT = [{ json: COOK_HIT }];
+  out = await post(COOK);
+  ok(out && out.ok === true && CALLS.length === 1 && same(WRITES, ['parcel_cache/41.87810_-87.62980']), 'a hit is written to parcel_cache/{key}');
+  const row = DOCS['parcel_cache/41.87810_-87.62980'];
+  ok(row && row.hit && row.hit.source === 'cook' && row.expiresAt > Date.now() && row.expiresAt <= Date.now() + H.CACHE_TTL_MS, 'with the hit and an expiry');
+  SCRIPT = [];
+  const again = await post({ lat: 41.878104, lng: -87.629796 });
+  ok(again && again.ok === true && again.apn === out.apn && same(again.ring, out.ring) && CALLS.length === 0,
+     'the same point again is served from the cache — nobody upstream is asked');
+  ok(same(Object.keys(again).sort(), Object.keys(out).sort()), 'and comes back in the contract shape, nothing extra');
+  DOCS['parcel_cache/41.87810_-87.62980'].expiresAt = Date.now() - 1; SCRIPT = [{ json: COOK_HIT }];
+  out = await post(COOK);
+  ok(out && out.ok === true && CALLS.length === 1, 'an expired row is not served');
+  reset(); SCRIPT = [{ json: EMPTY }];
+  out = await post(COOK);
+  ok(out && out.ok === false && WRITES.length === 0, 'a miss is not cached');
+  SCRIPT = [{ json: EMPTY }];
+  out = await post(COOK);
+  ok(out && out.ok === false && CALLS.length === 1, 'so the same point is asked again');
+  reset({ 'omega_orgs/concordenergyusa.com': { status: 'suspended' },
+          'parcel_cache/41.87810_-87.62980': { hit: { ok: true, ring: [[1, 1], [1, 2], [2, 2]], source: 'cook' }, expiresAt: Date.now() + 1e6 } });
+  err = null;
+  await post(COOK).catch(e => { err = e; });
+  ok(err && err.status === 403, 'a suspended tenant is refused before the cache is read');
+  reset(); SCRIPT = [{ json: COOK_HIT }];
+  fakeAdmin.db = () => { throw new Error('no firestore'); };
+  err = null; out = null;
+  await post(COOK).then(o => { out = o; }, e => { err = e; });
+  ok(err && !out && CALLS.length === 0, 'when the tenant record cannot be read the gate fails closed — an error, and nothing upstream is asked');
+  fakeAdmin.db = fakeDb;
 
   console.log(fails ? '\n' + fails + ' FAILED' : '\nALL PASS');
   process.exit(fails ? 1 : 0);

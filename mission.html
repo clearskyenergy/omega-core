@@ -2821,6 +2821,7 @@ async function glassSync(force){
    The open runs after an awaited fetch, and from voice with no gesture at
    all, so the browser is free to refuse it. When it does — or whenever the
    turn was spoken — the row carries a button, and one click is a gesture. */
+let siteTab=null, siteTabAddress=null;
 function openAction(action, row, spoken){
   if(!action || action.kind!=='openTool') return;
   const url=action.url;
@@ -2830,10 +2831,25 @@ function openAction(action, row, spoken){
     if(meta) meta.textContent+='  ·  ignored a link off this host';
     return;
   }
+  /* The second turn. "open site map pro at 123 Elm St", then "make a bess
+     guided build": the same address, and the tab is still open, so the
+     build is asked of THAT map rather than a second tab geocoding and
+     fetching the parcel and roads again. The editor listens for this
+     only once its first run has finished. */
+  let q=null; try{ q=new URL(url).searchParams; }catch(_){ q=null; }
+  const addr=action.address || (q&&q.get('address')) || null;
+  if(q && siteTab && !siteTab.closed && addr && addr===siteTabAddress && q.get('auto')==='bess'){
+    try{
+      siteTab.postMessage({type:'OMEGA_AUTOPILOT_CMD', auto:'bess', mw:q.get('mw'), mwh:q.get('mwh'), mode:q.get('mode')}, location.origin);
+      siteTab.focus();
+      return;
+    }catch(_){}
+  }
   let w=null;
   try{ w=window.open(url,'_blank'); }catch(_){ w=null; }
+  if(w){ siteTab=w; siteTabAddress=addr; }
   if((w===null || spoken) && row){
-    bacts(row,[['OPEN SITE MAP PRO',()=>window.open(url,'_blank')]]);
+    bacts(row,[['OPEN SITE MAP PRO',()=>{ const t=window.open(url,'_blank'); if(t){ siteTab=t; siteTabAddress=addr; } }]]);
     const box=el('thread'); if(box) box.scrollTop=box.scrollHeight;
   }
 }
@@ -2920,11 +2936,16 @@ async function submit(said, spoken){
       }
     }
     const reply=r.ok?(j.reply||'No answer.'):(j.error||('HTTP '+r.status));
-    pending.remove(); const row=say('jarvis', reply, j.costUsd, via);
-    caps('JARVIS', reply, false);
+    /* A tool reply carries its URL for the phone. Here the URL is opened,
+       not read: shown in the row, the captions and the voice without it,
+       or the voice spells out "https colon slash slash" after every build.
+       The thread row on the server still has it. */
+    const shown=(r.ok&&j.action&&j.action.url)?reply.replace(j.action.url,'').replace(/\s+$/,''):reply;
+    pending.remove(); const row=say('jarvis', shown, j.costUsd, via);
+    caps('JARVIS', shown, false);
     /* Before the voice, not after: the gesture that sent this is still fresh. */
     if(r.ok) openAction(j.action, row, !!spoken);
-    if(r.ok && voiceOut){ if(via) face('speaking'); await speakReply(reply); if(via) face('idle'); }
+    if(r.ok && voiceOut){ if(via) face('speaking'); await speakReply(shown); if(via) face('idle'); }
     load();
     return reply;
   }catch(e){ pending.remove(); say('jarvis', e.message); }

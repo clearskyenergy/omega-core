@@ -155003,6 +155003,19 @@ if (root.console && console.info) {
     if (!ST.centre) { skip(['score', 'save'], 'no map'); report(stoppedAt); return Promise.resolve(); }
     return score().then(stepSave).then(function () { report(stoppedAt); });
   }
+  /* Size, build, interconnection: the tail of a run, from the first start
+     and again when the opener asks for a build on a map already open. */
+  function build() {
+    return stepSize().then(function () {
+      if (ST.stopped) return;
+      if (ST.fatal) { skip(['build', 'poi'], 'no size'); return finish('error'); }
+      return stepBuild();
+    }).then(function () {
+      if (ST.stopped || ST.finished) return;
+      if (ST.fatal) { skip(['poi'], 'build stalled'); return finish('error'); }
+      return stepPoi();
+    });
+  }
   function start() {
     if (!P || ST.started) return; ST.started = true;
     hud(); log('start ' + JSON.stringify(P));
@@ -155012,20 +155025,31 @@ if (root.console && console.info) {
       return stepParcel().then(function () { if (!ST.stopped) return stepRoads(); }).then(function () {
         if (ST.stopped) return;
         if (P.auto !== 'bess') { skip(['size', 'build', 'poi'], 'auto=map'); return finish('done'); }
-        return stepSize().then(function () {
-          if (ST.stopped) return;
-          if (ST.fatal) { skip(['build', 'poi'], 'no size'); return finish('error'); }
-          return stepBuild();
-        }).then(function () {
-          if (ST.stopped || ST.finished) return;
-          if (ST.fatal) { skip(['poi'], 'build stalled'); return finish('error'); }
-          return stepPoi();
-        });
+        return build();
       });
     }).catch(function (e) {
       ST.error = (e && e.message) || String(e); mark(ST.step, 'blocked', ST.error);
     });
   }
+  /* The opener's second turn: "open site map pro at 123 Elm St", then "make
+     a bess guided build 2 MW / 8 MWh". mission.html posts OMEGA_AUTOPILOT_CMD
+     to this tab instead of opening another, and the build runs on the map,
+     parcel and roads already here. Only from this origin, only once the
+     first run has finished, and only when it left a map to build on. The
+     size still comes from the message or from the modal - never guessed. */
+  root.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (e.origin !== root.location.origin || !d || d.type !== 'OMEGA_AUTOPILOT_CMD') return;
+    if (!P || !ST.finished || ST.stopped || ST.fatal || !ST.centre) { log('cmd ignored'); return; }
+    if (String(d.auto || '').toLowerCase() !== 'bess') return;
+    P.auto = 'bess'; P.mw = num(d.mw); P.mwh = num(d.mwh);
+    P.mode = String(d.mode || P.mode || 'BTM').toUpperCase() === 'FOM' ? 'FOM' : 'BTM';
+    ST.finished = false; ST.stoppedAt = null; ST.error = null;
+    log('cmd ' + JSON.stringify({ mw: P.mw, mwh: P.mwh, mode: P.mode }));
+    build().catch(function (err) {
+      ST.error = (err && err.message) || String(err); mark(ST.step, 'blocked', ST.error);
+    });
+  });
   function stop() {
     ST.stopped = true;
     ST.timers.forEach(function (t) { clearInterval(t); }); ST.timers = [];

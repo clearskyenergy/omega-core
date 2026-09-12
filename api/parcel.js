@@ -7,8 +7,26 @@
              source:'regrid'|'cook'|'dupage'|'lake' }
            { ok:false, reason:'no parcel record here', tried:[...], note? }
    401:    bad or missing Firebase ID token
+   403:    the caller's tenant is not active (no omega_orgs record, pending,
+           suspended, cancelled) — staff excepted
    400:    lat/lng missing, non-numeric or out of range
    405:    anything but POST
+
+   WHO MAY ASK. A valid ID token is not enough: the web config is public and
+   Google sign-in mints a token for any Google account, so the token only
+   says "a person". omega_orgs/{orgId} is what says "one of ours", and its
+   billing/current is what says how much they may cost. Every /api function
+   resolves orgId AND reads billing before doing work; this one does it before
+   the first upstream call. The county layers are open to any active tenant.
+   Regrid — metered, paid per lookup — is only asked for a tier or add-on that
+   carries it (REGRID_TIERS / the 'parcels' add-on / toolOverrides.parcel).
+
+   THE CACHE. A parcel does not move. A hit is kept in parcel_cache/{key}, key
+   = lat and lng to five places (about a metre), for CACHE_TTL_MS, and served
+   before anyone upstream is asked: the same point twice costs nothing, and a
+   loop is bounded by distinct points rather than by calls. A miss is NOT
+   cached — a layer that was down for eight seconds must not become "no
+   parcel" for thirty days. A cache write that fails is logged, not returned.
 
    WHY THIS IS A FUNCTION AND NOT A FETCH FROM THE PAGE. Regrid is a paid,
    per-lookup key: in a page it is in the source, the network tab and every
@@ -36,6 +54,13 @@
 var A = require('./_lib/admin');
 
 var TIMEOUT_MS = 8000;
+
+/* Tiers that carry the metered source. Names as api/tenant-billing.js
+   TIERS spells them; trial and standard get the county layers only. */
+var REGRID_TIERS = ['deluxe', 'enterprise', 'partner', 'internal'];
+var REGRID_ADDON = 'parcels';
+var CACHE = 'parcel_cache';
+var CACHE_TTL_MS = 30 * 24 * 3600 * 1000;
 
 /* County layers, copied from workers/comed-proxy-worker-v10.js PARCELS. The
    worker is not changed: it is a browser proxy for attributes, this is the
@@ -278,6 +303,56 @@ function getJson(url, ms) {
           function (err) { clearTimeout(timer); throw err; });
 }
 
+/* ── who may spend ──────────────────────────────────────────────────────── */
+
+/* billing/current → may this tenant ask Regrid. An override wins either
+   way, then the add-on, then the tier. */
+function regridEntitled(bill) {
+  bill = bill || {};
+  var ov = bill.toolOverrides || {};
+  if (ov.parcel === true) return true;
+  if (ov.parcel === false) return false;
+  if (Array.isArray(bill.addons) && bill.addons.indexOf(REGRID_ADDON) >= 0) return true;
+  return REGRID_TIERS.indexOf(String(bill.tier || '')) >= 0;
+}
+
+/* The tenant record, then billing. Staff pass without either. A record with
+   no status at all is active — the same reading omega-tenant.js gives it
+   (T.status = o.status || 'active'), so a tenant seeded before the field
+   existed is not locked out of its own map. */
+function entitle(caller) {
+  if (caller.staff) return Promise.resolve({ regrid: true });
+  return A.db().collection('omega_orgs').doc(caller.orgId).get().then(function (s) {
+    var org = s.exists ? (s.data() || {}) : null;
+    if (!org || (org.status || 'active') !== 'active') throw A.httpError(403, 'tenant is not active');
+    return A.billingOf(caller.orgId).then(function (bill) { return { regrid: regridEntitled(bill) }; });
+  });
+}
+
+/* ── the cache ──────────────────────────────────────────────────────────── */
+
+function cacheKey(lat, lng) { return lat.toFixed(5) + '_' + lng.toFixed(5); }
+
+/* A live hit or null. Anything wrong with the read — no Firestore in a
+   test, a malformed row — is a miss, never an error: the cache is a saving,
+   not a source. */
+function cached(key) {
+  return Promise.resolve().then(function () {
+    return A.db().collection(CACHE).doc(key).get();
+  }).then(function (s) {
+    var d = s && s.exists ? s.data() : null;
+    if (!d || !d.hit || !(d.expiresAt > Date.now())) return null;
+    return d.hit;
+  }, function () { return null; });
+}
+function remember(key, hit) {
+  return Promise.resolve().then(function () {
+    return A.db().collection(CACHE).doc(key).set({
+      hit: hit, cachedAt: new Date().toISOString(), expiresAt: Date.now() + CACHE_TTL_MS
+    });
+  }).catch(function (e) { console.warn('[parcel] cache write failed —', e && e.message); });
+}
+
 /* ── handler ────────────────────────────────────────────────────────────── */
 
 module.exports = A.handler(function (req) {
@@ -289,47 +364,68 @@ module.exports = A.handler(function (req) {
     if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180))
       throw A.httpError(400, 'lat and lng are required as finite numbers (lat -90..90, lng -180..180)');
 
-    var tried = [], notes = [];
-    function attempt(name, fn) {
-      tried.push(name);
-      return fn().catch(function (err) {
-        /* The name of the source and whether it timed out — never its body,
-           never the URL (the Regrid one has the token in it). */
-        var why = err && err.name === 'AbortError' ? 'timed out' : 'did not answer';
-        notes.push(name + ' ' + why);
-        return null;
-      });
-    }
-
-    var chain = Promise.resolve(null);
-    var token = process.env.REGRID_TOKEN;
-    if (token) {
-      chain = chain.then(function () {
-        return attempt('regrid', function () {
-          return getJson(regridUrl(lat, lng, token), TIMEOUT_MS).then(fromRegrid);
+    var key = cacheKey(lat, lng);
+    return entitle(caller).then(function (ent) {
+      return cached(key).then(function (hit) {
+        if (hit) {
+          console.log('[parcel]', caller.orgId, hit.source, 'at', lat.toFixed(4), lng.toFixed(4), 'from cache');
+          return hit;
+        }
+        return lookup(caller, ent, lat, lng).then(function (out) {
+          /* Awaited, because a serverless function may be frozen the moment
+             it answers; remember() never rejects, so it cannot fail the answer. */
+          if (!out.ok) return out;
+          return remember(key, out).then(function () { return out; });
         });
       });
-    }
-    countiesAt(lat, lng).forEach(function (key) {
-      chain = chain.then(function (hit) {
-        if (hit) return hit;
-        return attempt(key, function () {
-          return getJson(countyUrl(key, lat, lng), TIMEOUT_MS).then(function (j) { return fromEsri(j, key); });
-        });
-      });
-    });
-
-    return chain.then(function (hit) {
-      console.log('[parcel]', caller.orgId, hit ? hit.source : 'none',
-                  'at', lat.toFixed(4), lng.toFixed(4), 'tried', tried.join(',') || '-',
-                  notes.length ? '(' + notes.join('; ') + ')' : '');
-      if (hit) return hit;
-      var out = { ok: false, reason: 'no parcel record here', tried: tried };
-      if (notes.length) out.note = notes.join('; ');
-      return out;
     });
   });
 });
+
+/* The chain itself: Regrid when the key exists AND the tenant is entitled,
+   then whichever county layers cover the point, then the honest miss. */
+function lookup(caller, ent, lat, lng) {
+  var tried = [], notes = [];
+  function attempt(name, fn) {
+    tried.push(name);
+    return fn().catch(function (err) {
+      /* The name of the source and whether it timed out — never its body,
+         never the URL (the Regrid one has the token in it). */
+      var why = err && err.name === 'AbortError' ? 'timed out' : 'did not answer';
+      notes.push(name + ' ' + why);
+      return null;
+    });
+  }
+
+  var chain = Promise.resolve(null);
+  var token = process.env.REGRID_TOKEN;
+  if (token && ent.regrid) {
+    chain = chain.then(function () {
+      return attempt('regrid', function () {
+        return getJson(regridUrl(lat, lng, token), TIMEOUT_MS).then(fromRegrid);
+      });
+    });
+  }
+  countiesAt(lat, lng).forEach(function (key) {
+    chain = chain.then(function (hit) {
+      if (hit) return hit;
+      return attempt(key, function () {
+        return getJson(countyUrl(key, lat, lng), TIMEOUT_MS).then(function (j) { return fromEsri(j, key); });
+      });
+    });
+  });
+
+  return chain.then(function (hit) {
+    console.log('[parcel]', caller.orgId, hit ? hit.source : 'none',
+                'at', lat.toFixed(4), lng.toFixed(4), 'tried', tried.join(',') || '-',
+                token && !ent.regrid ? '(regrid not in tier)' : '',
+                notes.length ? '(' + notes.join('; ') + ')' : '');
+    if (hit) return hit;
+    var out = { ok: false, reason: 'no parcel record here', tried: tried };
+    if (notes.length) out.note = notes.join('; ');
+    return out;
+  });
+}
 
 /* For scripts/tests/tparcel.js — the pure parts, runnable with no network. */
 module.exports._helpers = {
@@ -337,5 +433,7 @@ module.exports._helpers = {
   ringFromEsri: ringFromEsri, ringFromGeoJson: ringFromGeoJson, ringAcres: ringAcres,
   fieldMatching: fieldMatching, acresFromAttrs: acresFromAttrs, zoningFromAttrs: zoningFromAttrs,
   fromEsri: fromEsri, fromRegrid: fromRegrid, countyUrl: countyUrl,
-  PARCELS: PARCELS, COUNTY_ORDER: COUNTY_ORDER, TIMEOUT_MS: TIMEOUT_MS
+  regridEntitled: regridEntitled, cacheKey: cacheKey,
+  PARCELS: PARCELS, COUNTY_ORDER: COUNTY_ORDER, TIMEOUT_MS: TIMEOUT_MS,
+  REGRID_TIERS: REGRID_TIERS, REGRID_ADDON: REGRID_ADDON, CACHE: CACHE, CACHE_TTL_MS: CACHE_TTL_MS
 };
