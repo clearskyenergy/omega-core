@@ -2601,7 +2601,33 @@ function modeCommand(said){
    asks "go ahead" exactly as before. */
 const BRAIN='http://127.0.0.1:8795';
 let brainOn=false, brainInfo=null;
+/* The glass board, probed beside the brain but read as PRESENCE only: the
+   barehands server (8794) sends no CORS header, so an opaque no-cors fetch
+   is the whole answer — it resolves when something is listening and throws
+   when nothing is. Loopback counts as trustworthy from an https page, which
+   is why this is allowed at all (same permission the neural link needed). */
+const BOARD='http://127.0.0.1:8794';
+let boardOn=false;
+async function probeBoard(){
+  const was=boardOn;
+  try{
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),1500);
+    await fetch(BOARD+'/config',{mode:'no-cors',cache:'no-store',signal:c.signal}); clearTimeout(tm);
+    boardOn=true;
+  }catch(_){ boardOn=false; }
+  if(was!==boardOn){ try{ renderConns(lastStatus||{}); }catch(_){} }
+}
+function openBoard(){
+  /* ONE tab, by name. Two tracker pages fight for the same server — both
+     post scenes, commands land on whichever polls first — so the link
+     re-focuses the tab it opened instead of opening another. A board tab he
+     opened by hand is invisible to this page; the first click from here opens
+     the one this page keeps reusing from then on. (Asked 2026-09-11, so the
+     board stops being a tab to hunt for.) */
+  const w=window.open(BOARD+'/stage.html','jarvis-board'); if(w) w.focus();
+}
 async function probeBrain(){
+  probeBoard();
   const was=brainOn;
   try{
     const c=new AbortController(); const tm=setTimeout(()=>c.abort(),1500);
@@ -3152,6 +3178,10 @@ function renderConns(s){
        it spends. */
     ['Neural link', brainOn?'ok':'off',
       brainOn?'on this Mac · $0':'off — Desktop: JARVIS neural link'],
+    /* The board. The row IS the quick-link: one click opens (or re-focuses)
+       the glass, from the same panel that says whether it is up. */
+    ['Glass board', boardOn?'ok':'off',
+      boardOn?'up on this Mac · click to open':'off — Desktop: JARVIS barehands', openBoard],
     ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
       mins==null?'no run recorded':('read '+mins+' min ago')],
     ['Calendar', (s.schedule||[]).length?'ok':'warn',
@@ -3178,11 +3208,12 @@ function renderConns(s){
     ['Routines', feat.routines&&feat.routines.enabled?'ok':'off',
       ((s.routines||[]).length||0)+' set up']
   ];
-  rows.forEach(([who,state,why])=>{
+  rows.forEach(([who,state,why,act])=>{
     const d=document.createElement('div'); d.className='conn';
     const dot=document.createElement('span'); dot.className='dot '+state;
     const w=document.createElement('span'); w.className='who'; w.textContent=who;
     const y=document.createElement('span'); y.className='why'; y.textContent=why;
+    if(act){ d.style.cursor='pointer'; d.title='Open the glass board'; d.setAttribute('role','link'); d.addEventListener('click',act); }
     d.appendChild(dot); d.appendChild(w); d.appendChild(y); host.appendChild(d);
   });
 }
