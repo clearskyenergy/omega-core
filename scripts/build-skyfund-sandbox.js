@@ -13,7 +13,7 @@
 
      node scripts/build-skyfund-sandbox.js [outDir]     default: scripts/out/skyfund-sandbox
 
-   Output:  index.html, samples.js, sandbox.js, manifest.webmanifest,
+   Output:  index.html, samples.js, sandbox.js, sw.js, manifest.webmanifest,
             brand/ (icon SVG + PNGs) — publish the folder as-is.
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
@@ -50,6 +50,7 @@ function transformPage(html) {
   s = s.replace(/\/portals\/skyfund\/brand\//g, 'brand/');
   s = s.replace('/portals/skyfund/manifest.webmanifest', 'manifest.webmanifest');
   s = s.replace(/\/portals\/skyfund\/sponsor/g, '#sandbox');
+  s = s.replace("var swUrl = '/portals/skyfund/sw.js', swScope = '/skyfund';", "var swUrl = 'sw.js', swScope = './';");
   s = s.replace(/<title>[^<]*<\/title>/, '<title>SkyFund Sandbox</title>');
   s = s.replace('<meta name="apple-mobile-web-app-title" content="SkyFund">', '<meta name="apple-mobile-web-app-title" content="SkyFund Sandbox">');
   if (s.indexOf('sandbox.js') < 0 || /www\.gstatic\.com\/firebasejs/.test(s) || /"\/config\.js"/.test(s)) throw new Error('transform did not take — the page changed shape; update build-skyfund-sandbox.js');
@@ -72,6 +73,7 @@ function build(outDir) {
   fs.writeFileSync(path.join(outDir, 'sandbox.js'), sandbox);
   fs.writeFileSync(path.join(outDir, 'samples.js'), fs.readFileSync(path.join(ROOT, 'portals', 'skyfund', 'samples.js')));
   fs.writeFileSync(path.join(outDir, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2) + '\n');
+  fs.writeFileSync(path.join(outDir, 'sw.js'), fs.readFileSync(path.join(ROOT, 'portals', 'skyfund', 'sw.js')));
   /* The brand folder travels with the page: icon SVG for the top bar, PNGs for the home screen. */
   var brandSrc = path.join(ROOT, 'portals', 'skyfund', 'brand'), brandOut = path.join(outDir, 'brand');
   fs.mkdirSync(brandOut, { recursive: true });

@@ -373,6 +373,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
           <a href="#/portfolio">My portfolio</a>
           <a href="#/account">Account &amp; eligibility</a>
           <a href="/portals/skyfund/sponsor" id="sponsorLink">Sponsor console</a>
+          <button id="btnInstall" class="hide">Install SkyFund app</button>
           <button id="btnSignOut">Sign out</button>
         </div>
       </div>
@@ -890,6 +891,7 @@ function renderAccount() {
     '<div class="f"><label>Verification</label><div style="font-size:14px">Identity: <span class="pill ' + (p.kyc === 'verified' ? 'paid' : 'pending') + '">' + esc(p.kyc || 'none') + '</span> &nbsp; Accreditation: <span class="pill ' + (p.accreditedVerified ? 'paid' : 'pending') + '">' + (p.accreditedVerified ? 'verified' : 'self-attested') + '</span></div></div>' +
     '<button class="btn btn-primary" id="acSave">Save profile</button> <button class="btn btn-ghost" id="acOut">Sign out</button><div class="msg" id="acMsg"></div></div>' +
     bankSectionHtml(p) +
+    installSectionHtml() +
     '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/skyfund/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
   $('acSave').onclick = function () {
     var msg = $('acMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
@@ -899,6 +901,7 @@ function renderAccount() {
   };
   $('acOut').onclick = signOut;
   if ($('acBankLink')) $('acBankLink').onclick = openBankModal;
+  if ($('acInstall')) $('acInstall').onclick = promptInstall;
   if ($('acBankRemove')) $('acBankRemove').onclick = function () {
     if (!window.confirm('Unlink this bank account? Distributions will wait until you link one again.')) return;
     api({ action: 'bankRemove' }).then(function () { toast('Bank account unlinked.'); return loadProfile(); }).then(renderAccount)['catch'](function (e) { toast(e.message); });
@@ -956,6 +959,37 @@ function withPlaid(cb, fail) {
   var s = document.createElement('script'); s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
   s.onload = cb; s.onerror = function () { fail(new Error('Could not load the bank link. Check your connection and try again.')); };
   document.head.appendChild(s);
+}
+
+/* ═══════════════════ 9c · install as an app ════════════════════════════
+   Chrome and Edge (phone and desktop) fire beforeinstallprompt when the
+   page is installable: we keep the event and show an Install button. iOS
+   Safari has no prompt; it gets instructions. Once running standalone the
+   card says so and the button hides. */
+var installEvt = null;
+function isStandalone() { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; }
+function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream; }
+function paintInstall() { var b = $('btnInstall'); if (b) b.className = (installEvt && !isStandalone()) ? '' : 'hide'; }
+function promptInstall() {
+  if (!installEvt) return;
+  installEvt.prompt();
+  installEvt.userChoice.then(function (r) { if (r && r.outcome === 'accepted') toast('SkyFund is installing. Look for it with your other apps.'); installEvt = null; paintInstall(); if (S.route === 'account') renderAccount(); })['catch'](function () {});
+}
+function installSectionHtml() {
+  var head = '<div class="section-h"><h2>Install SkyFund on this device</h2></div>';
+  if (isStandalone()) return head + '<div class="bankcard"><div class="ico">✓</div><div><b>Installed</b><span>You are using the installed app. It opens from your home screen or app list and works offline for browsing.</span></div></div>';
+  if (installEvt) return head + '<div class="bankcard"><div class="ico">⤓</div><div><b>Add SkyFund to your home screen or desktop</b><span>One tap. It opens full-screen like an app and keeps you signed in.</span></div><div class="act"><button class="btn btn-primary" id="acInstall">Install</button></div></div>';
+  if (isIOS()) return head + '<div class="bankcard"><div class="ico">⤓</div><div><b>On iPhone or iPad</b><span>Tap the Share button in Safari, then "Add to Home Screen". SkyFund opens full-screen with its own icon.</span></div></div>';
+  return head + '<div class="bankcard"><div class="ico">⤓</div><div><b>On a computer or Android</b><span>In Chrome or Edge, use the install icon at the right end of the address bar (or the browser menu → "Install SkyFund"). On Android the menu says "Add to Home screen".</span></div></div>';
+}
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; paintInstall(); if (S.route === 'account') renderAccount(); });
+window.addEventListener('appinstalled', function () { installEvt = null; paintInstall(); toast('SkyFund installed.'); });
+if ($('btnInstall')) $('btnInstall').onclick = promptInstall;
+/* The service worker makes the app installable everywhere and lets it open
+   offline. Same-origin, network-first; never touches /api/ or other origins. */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  var swUrl = '/portals/skyfund/sw.js', swScope = '/skyfund';
+  navigator.serviceWorker.register(swUrl, { scope: swScope })['catch'](function (e) { console.warn('[skyfund] service worker not registered:', e && e.message); });
 }
 
 /* ═══════════════════ 10 · how it works ═════════════════════════════════ */

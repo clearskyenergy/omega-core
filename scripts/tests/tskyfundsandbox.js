@@ -27,6 +27,7 @@ ok(page.indexOf('www.gstatic.com/firebasejs') < 0 && page.indexOf('"/config.js"'
 ok(page.indexOf('<script src="sandbox.js"></script>') > 0 && page.indexOf('<script src="samples.js"></script>') > 0, 'samples.js and sandbox.js are loaded in that order');
 ok(!/(src|href)="\/[^\/]/.test(page), 'no root-relative src or href remains (prose in comments may still name paths)');
 ok(/<title>SkyFund Sandbox<\/title>/.test(page), 'titled as the sandbox');
+ok(page.indexOf("var swUrl = 'sw.js', swScope = './';") > 0 && page.indexOf('/portals/skyfund/sw.js') < 0, 'the service worker is registered as ./sw.js');
 var P = global.SKYFUND_PROJ['sample-compute-1'];
 ok(P.perUnitYears.length === 10 && near(P.perUnitYears[1], 14.4 * 1.02, 1e-9), 'per-unit table is the engine\'s: $14.69 in year 2 for one $100 unit');
 ok(near(P.irrPct, IM.headline(global.SKY_FUND_SAMPLES[0]).irrPct, 1e-9), 'IRR carried through unchanged');
