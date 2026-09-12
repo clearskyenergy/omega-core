@@ -21,14 +21,32 @@ var admin = require('firebase-admin');
 var ORG_ALIAS = { 'fenecon.de': 'fenecon.com', 'fenecon.us': 'fenecon.com' };
 var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
 
+/* DEGRADED: no service account in the environment. A Firebase ID token can
+   still be VERIFIED with nothing but the project id (the SDK checks it against
+   Google's public keys), so identity holds; what is lost is Firestore, so
+   db() refuses with a 503 that names the missing variable instead of every
+   caller dying with a 500 "is not set". Measured 2026-09-11: production ran
+   for weeks with the variable absent and every Admin-backed function was a
+   500, discovered only when the site-map autopilot asked /api/parcel. */
+var degraded = false;
 function init() {
   if (admin.apps.length) return admin;
   var sa = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!sa) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
+  if (!sa) {
+    degraded = true;
+    console.error('[api] FIREBASE_SERVICE_ACCOUNT is not set — tokens verify, Firestore is unavailable');
+    admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'clearsky-portal' });
+    return admin;
+  }
   admin.initializeApp({ credential: admin.credential.cert(JSON.parse(sa)) });
   return admin;
 }
-function db() { return init().firestore(); }
+function isDegraded() { init(); return degraded; }
+function db() {
+  init();
+  if (degraded) throw httpError(503, 'server has no Firestore credential (FIREBASE_SERVICE_ACCOUNT is not set)');
+  return admin.firestore();
+}
 
 function orgOf(email) {
   var d = String(email || '').toLowerCase().split('@')[1] || '';
@@ -98,6 +116,6 @@ function cors(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
-module.exports = { admin: admin, init: init, db: db, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
+module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
   canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };

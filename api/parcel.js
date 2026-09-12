@@ -322,6 +322,14 @@ function regridEntitled(bill) {
    existed is not locked out of its own map. */
 function entitle(caller) {
   if (caller.staff) return Promise.resolve({ regrid: true });
+  /* No Firestore credential on the server (admin.js degraded mode): the
+     caller is still a verified Firebase identity, the county layers are open
+     public data, and the metered source needs the entitlement this cannot
+     read — so county only, and say so in the log. */
+  if (A.isDegraded()) {
+    console.warn('[parcel]', caller.orgId, 'degraded — county layers only (no Firestore credential)');
+    return Promise.resolve({ regrid: false, degraded: true });
+  }
   return A.db().collection('omega_orgs').doc(caller.orgId).get().then(function (s) {
     var org = s.exists ? (s.data() || {}) : null;
     if (!org || (org.status || 'active') !== 'active') throw A.httpError(403, 'tenant is not active');
