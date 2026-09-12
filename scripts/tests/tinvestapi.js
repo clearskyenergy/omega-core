@@ -35,6 +35,14 @@ function ref(p) {
     id: p.split('/').pop(), path: p,
     get: function () { return Promise.resolve(snapOf(p)); },
     set: function (data, opts) { writeDoc(p, data, opts && opts.merge); return Promise.resolve(); },
+    update: function (data) {
+      /* Admin SDK update(): dotted keys address nested fields. */
+      var cur = STORE[p] || {}, flat = {}, nested = {};
+      Object.keys(data).forEach(function (k) { if (k.indexOf('.') < 0) flat[k] = data[k]; else nested[k] = data[k]; });
+      writeDoc(p, flat, true);
+      Object.keys(nested).forEach(function (k) { var parts = k.split('.'), o = STORE[p]; for (var i = 0; i < parts.length - 1; i++) { o[parts[i]] = o[parts[i]] || {}; o = o[parts[i]]; } o[parts[parts.length - 1]] = nested[k]; });
+      return Promise.resolve();
+    },
     delete: function () { delete STORE[p]; return Promise.resolve(); },
     collection: function (c) { return coll(p + '/' + c); }
   };
@@ -60,7 +68,7 @@ function query(p, filters, lim) {
       var docs = Object.keys(STORE).filter(function (k) { return k.indexOf(p + '/') === 0 && k.slice(p.length + 1).indexOf('/') < 0; })
         .map(snapOf).filter(function (s) {
           var d = s.data();
-          return filters.every(function (f) { var val = d[f[0]]; if (f[1] === '==') return val === f[2]; if (f[1] === 'in') return f[2].indexOf(val) >= 0; throw new Error('op ' + f[1]); });
+          return filters.every(function (f) { var val = f[0].split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, d); if (f[1] === '==') return val === f[2]; if (f[1] === 'in') return f[2].indexOf(val) >= 0; throw new Error('op ' + f[1]); });
         });
       if (lim) docs = docs.slice(0, lim);
       return Promise.resolve({ empty: !docs.length, size: docs.length, docs: docs, forEach: function (fn) { docs.forEach(fn); } });
@@ -86,6 +94,7 @@ var ADMIN = {
     return Promise.resolve({ uid: parts[0], email: email, orgId: orgOf(email), staff: STAFF.indexOf(orgOf(email)) >= 0, claims: { name: parts[2] || '', email_verified: true } });
   },
   canActInOrg: function (caller, o) { return Promise.resolve(caller.staff || caller.orgId === o); },
+  isPlatformAdmin: function (caller) { if (caller.staff) return Promise.resolve(true); var d = STORE['omega_staff/' + caller.uid]; return Promise.resolve(!!(d && d.active !== false && d.role === 'admin')); },
   handler: function (fn) {
     return function (req, res) {
       return Promise.resolve().then(function () { return fn(req, res); })
@@ -136,6 +145,22 @@ var STAFFER = 'u-staff:ops@csebuilders.com:Ops';
 var INV1 = 'u-inv1:alice@gmail.com:Alice Investor';
 var INV2 = 'u-inv2:bob@outlook.com:Bob';
 process.env.STRIPE_SECRET_KEY = '';   /* manual mode first */
+process.env.INVEST_ACH_PROVIDER = 'mock';
+var OUTSIDER = 'u-outside:admin@partnerfirm.com:Outside Admin';
+var BANKED = 'u-banked:carol@yahoo.com:Carol Banked';
+var crypto = require('crypto');
+var ACHHOOK = require(path.join(__dirname, '..', '..', 'api', 'invest-ach-webhook.js'));
+function achHook(evt, secret) {
+  var body = JSON.stringify(evt);
+  var sig = crypto.createHmac('sha256', secret || 'whsec-test').update(body).digest('hex');
+  return new Promise(function (resolve) {
+    var handlers = {};
+    var req = { method: 'POST', headers: { 'x-request-signature-sha-256': sig }, on: function (ev, fn) { handlers[ev] = fn; } };
+    var res = { _s: 200, status: function (st) { this._s = st; return this; }, json: function (j) { resolve({ status: this._s, body: j }); }, send: function (t) { resolve({ status: this._s, body: t }); }, end: function () { resolve({ status: this._s }); } };
+    ACHHOOK(req, res);
+    handlers.data(Buffer.from(body)); handlers.end();
+  });
+}
 
 function seed() {
   STORE = {};
@@ -345,9 +370,163 @@ Promise.resolve().then(function () {
     ok(STORE['cf_pledges/' + manualPid].status === 'paid' && STORE['cf_pledges/' + manualPid].refundDue === true, 'the manual pledge is flagged refund-due, not silently flipped');
     ok(STORE['cf_pledges/' + pendingPid].status === 'cancelled', 'the pending pledge is cancelled');
     ok(c.raised === 500 && c.unitsSold === 5 && c.backers === 1, 'counters reflect only the money still held');
-    return call({ action: 'refund', pledgeId: manualPid, reason: 'wired back' }, STAFFER);
+    return call({ action: 'refund', pledgeId: manualPid, reason: 'wired back', manual: true }, STAFFER);
   }).then(function (r) {
     ok(r.status === 200 && STORE['cf_pledges/' + manualPid].status === 'refunded' && STORE['cf_campaigns/live1'].raised === 0 && STORE['cf_campaigns/live1'].backers === 0, 'manual refund recorded; everything back to zero');
+  });
+}).then(function () {
+  console.log('admin team beyond ClearSky domains');
+  seed(); process.env.STRIPE_SECRET_KEY = '';
+  return call({ action: 'settings', rules: { minInvestment: 50 } }, OUTSIDER).then(function (r) {
+    ok(r.status === 403, 'an outside domain is not admin by default');
+    STORE['omega_staff/u-outside'] = { email: 'admin@partnerfirm.com', role: 'admin', active: true };
+    return call({ action: 'settings', rules: { minInvestment: 50, allowedCountries: 'us, ca', requireKyc: true } }, OUTSIDER);
+  }).then(function (r) {
+    ok(r.status === 200 && r.body.rules.minInvestment === 50 && r.body.rules.allowedCountries.join() === 'US,CA' && r.body.rules.requireKyc === true, 'an active omega_staff admin can change the rules');
+    STORE['omega_staff/u-outside'].active = false;
+    return call({ action: 'settings', rules: { minInvestment: 10 } }, OUTSIDER);
+  }).then(function (r) {
+    ok(r.status === 403, 'a deactivated staff record loses it again');
+    return call({ action: 'settings', rules: { minInvestment: 900, maxInvestment: 100 } }, STAFFER);
+  }).then(function (r) {
+    ok(r.status === 400, 'min above max is refused');
+  });
+}).then(function () {
+  console.log('KYC gate and the investor action');
+  /* rules now require KYC (set above): a pledge is refused until an admin verifies */
+  return call({ action: 'pledge', campaignId: 'live1', amount: 500, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1).then(function (r) {
+    ok(r.status === 403 && /Identity verification/.test(r.body.error), 'requireKyc blocks an unverified investor');
+    ok(!STORE['cf_investors/u-inv1'], 'a refused pledge does not create a profile');
+    return call({ action: 'investor', uid: 'u-inv1', kyc: 'verified' }, STAFFER);
+  }).then(function (r) {
+    ok(r.status === 404, 'verifying a profile that does not exist is a 404, not a silent create');
+    STORE['cf_investors/u-inv1'] = { uid: 'u-inv1', email: 'alice@gmail.com', status: 'active', kyc: 'none', accreditedVerified: false };
+    return call({ action: 'investor', uid: 'u-inv1', kyc: 'verified', accreditedVerified: true, note: 'docs on file' }, STAFFER);
+  }).then(function (r) {
+    var d = STORE['cf_investors/u-inv1'];
+    ok(r.status === 200 && d.kyc === 'verified' && d.accreditedVerified === true && d.adminNote === 'docs on file' && d.reviewedBy === 'ops@csebuilders.com', 'admin verifies identity and accreditation, with an audit trail');
+    return call({ action: 'investor', uid: 'u-inv1', kyc: 'bogus' }, STAFFER);
+  }).then(function (r) {
+    ok(r.status === 400, 'an unknown kyc state is refused');
+    return call({ action: 'pledge', campaignId: 'live1', amount: 30000, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1);
+  }).then(function (r) {
+    ok(r.status === 200 && r.body.manual === true, 'verified + accreditation-verified investor clears the caps; no rail linked → wire');
+    return call({ action: 'investor', uid: 'u-inv1', status: 'suspended' }, STAFFER);
+  }).then(function () {
+    return call({ action: 'pledge', campaignId: 'live1', amount: 500, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1);
+  }).then(function (r) {
+    ok(r.status === 403 && /suspended/.test(r.body.error), 'a suspended investor cannot pledge');
+    return call({ action: 'settings', rules: { requireKyc: false, minInvestment: 100 } }, STAFFER);
+  });
+}).then(function () {
+  console.log('bank rail (mock): link, ACH investment, payout, refund');
+  return call({ action: 'bankStatus' }).then(function (r) {
+    ok(r.status === 200 && r.body.provider === 'mock' && r.body.stripe === false && r.body.escrowConfigured === true, 'bankStatus reports the mock rail without a token');
+    return call({ action: 'pledge', campaignId: 'live1', amount: 500, method: 'ach', attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, BANKED);
+  }).then(function (r) {
+    ok(r.status === 400 && /Link a verified bank/.test(r.body.error), 'ACH needs a linked bank first');
+    return call({ action: 'bankLinkToken' }, BANKED);
+  }).then(function (r) {
+    ok(r.status === 200 && /^mock-link-/.test(r.body.linkToken), 'a link token comes back');
+    return call({ action: 'bankLink', name: 'First Sandbox Bank', mask: '4321', identity: { firstName: 'Carol', lastName: 'Banked', address1: '1 Main St', city: 'Stamford', state: 'CT', postalCode: '06901', dateOfBirth: '1980-01-01', ssnLast4: '1234' } }, BANKED);
+  }).then(function (r) {
+    var d = STORE['cf_investors/u-banked'];
+    ok(r.status === 200 && r.body.bank.mask === '4321' && d.bank.status === 'verified', 'bank linked and verified');
+    ok(d.kyc === 'verified' && d.kycProvider === 'mock', 'the rail\'s identity check sets kyc verified');
+    ok(d.address && d.address.city === 'Stamford' && !JSON.stringify(d).match(/1234|1980-01-01/), 'address kept; SSN and date of birth never written');
+    return call({ action: 'quote', campaignId: 'live1', amount: 500 }, BANKED);
+  }).then(function (r) {
+    ok(r.body.bankReady === true, 'a personalised quote says the bank is ready');
+    return call({ action: 'pledge', campaignId: 'live1', amount: 750, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, BANKED);
+  }).then(function (r) {
+    ok(r.status === 200 && r.body.ach === true && r.body.settled === true && r.body.units === 7, 'method auto picks ACH; the mock rail settles at once');
+    var pid = r.body.pledgeId, p = STORE['cf_pledges/' + pid], c = STORE['cf_campaigns/live1'];
+    ok(p.status === 'paid' && p.paymentProvider === 'ach:mock' && /^mock-in-/.test(p.achTransferId), 'pledge paid on the ACH rail with its transfer id');
+    ok(c.raised === 700 && c.unitsSold === 7 && c.backers === 1, 'counters moved');
+    return call({ action: 'close', campaignId: 'live1', outcome: 'funded' }, STAFFER);
+  }).then(function () {
+    return call({ action: 'distribute', campaignId: 'live1', period: '2027-Q1', distributable: 10000 }, STAFFER);
+  }).then(function (r) {
+    ok(r.status === 200 && near(r.body.perUnit, 4000 / 7, 1e-6), 'distribution declared: $4,000 pool over 7 units');
+    var did = r.body.id;
+    return call({ action: 'payout', distributionId: did }, INV2).then(function (r2) {
+      ok(r2.status === 403, 'an investor cannot trigger a payout');
+      return call({ action: 'payout', distributionId: did }, STAFFER);
+    }).then(function (r2) {
+      ok(r2.status === 200 && r2.body.status === 'paid' && r2.body.payouts.length === 1 && r2.body.payouts[0].status === 'paid', 'one holder, paid over the mock rail');
+      var rows = Object.keys(STORE).filter(function (k) { return k.indexOf('cf_payouts/') === 0; });
+      ok(rows.length === 1 && near(STORE[rows[0]].amount, 4000, 0.01) && /^mock-out-/.test(STORE[rows[0]].transferId), 'the payout row carries $4,000 and its transfer id');
+      ok(STORE['cf_distributions/' + did].status === 'paid' && STORE['cf_distributions/' + did].payoutCounts.paid === 1, 'the distribution settled');
+      return call({ action: 'payout', distributionId: did }, STAFFER);
+    }).then(function (r2) {
+      ok(r2.status === 409, 'paying the same distribution twice is refused');
+    });
+  });
+}).then(function () {
+  console.log('unbanked holders and hand-paid payouts');
+  seed(); process.env.STRIPE_SECRET_KEY = '';
+  return call({ action: 'pledge', campaignId: 'live1', amount: 500, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1).then(function (r) {
+    return call({ action: 'confirm', pledgeId: r.body.pledgeId }, STAFFER);
+  }).then(function () { return call({ action: 'close', campaignId: 'live1', outcome: 'funded' }, STAFFER); })
+  .then(function () { return call({ action: 'distribute', campaignId: 'live1', period: '2027-Q2', distributable: 5000 }, STAFFER); })
+  .then(function (r) { return call({ action: 'payout', distributionId: r.body.id }, STAFFER); })
+  .then(function (r) {
+    ok(r.status === 200 && r.body.status === 'partial' && r.body.payouts[0].status === 'unbanked', 'a holder with no bank is left unbanked; the distribution is partial');
+    var pid = Object.keys(STORE).filter(function (k) { return k.indexOf('cf_payouts/') === 0; })[0].split('/')[1];
+    return call({ action: 'payoutMark', payoutId: pid, status: 'paid', reference: 'check 1042' }, STAFFER);
+  }).then(function (r) {
+    ok(r.status === 200 && r.body.distributionStatus === 'paid', 'marking the hand-paid payout settles the distribution');
+  });
+}).then(function () {
+  console.log('ACH refund when a raise fails, and the bank webhook');
+  seed();
+  return call({ action: 'bankLink', name: 'Bank', mask: '9999', identity: { firstName: 'Carol', lastName: 'B', address1: 'x', city: 'y', state: 'CT', postalCode: '06901', dateOfBirth: '1980-01-01', ssnLast4: '1234' } }, BANKED).then(function () {
+    return call({ action: 'pledge', campaignId: 'live1', amount: 1000, method: 'ach', attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } }, BANKED);
+  }).then(function (r) {
+    var pid = r.body.pledgeId;
+    return call({ action: 'cancel', pledgeId: pid }, BANKED).then(function (r2) {
+      ok(r2.status === 409, 'a settled ACH pledge is not cancellable by the investor');
+      return call({ action: 'close', campaignId: 'live1', outcome: 'failed' }, STAFFER);
+    }).then(function (r2) {
+      ok(r2.status === 200 && STORE['cf_pledges/' + pid].status === 'refunded' && /^mock-back-/.test(STORE['cf_pledges/' + pid].refund.transferId), 'a failed raise refunds the ACH pledge over the rail');
+      ok(STORE['cf_campaigns/live1'].raised === 0 && STORE['cf_campaigns/live1'].backers === 0, 'counters reversed');
+    });
+  }).then(function () {
+    /* the Dwolla-style webhook, against rows that reference a transfer id */
+    process.env.DWOLLA_WEBHOOK_SECRET = 'whsec-test';
+    STORE['cf_pledges/plx'] = { campaignId: 'live1', investorUid: 'u-banked', amount: 300, units: 3, status: 'processing', paymentProvider: 'ach:dwolla', achTransferId: 'tr-1' };
+    return achHook({ topic: 'customer_transfer_completed', resourceId: 'tr-1' }, 'wrong-secret');
+  }).then(function (r) {
+    ok(r.status === 401 && STORE['cf_pledges/plx'].status === 'processing', 'a bad signature is refused and nothing moves');
+    return achHook({ topic: 'customer_transfer_completed', resourceId: 'tr-1' });
+  }).then(function (r) {
+    ok(r.status === 200 && STORE['cf_pledges/plx'].status === 'paid' && STORE['cf_campaigns/live1'].raised === 300, 'a completed debit pays the pledge');
+    return achHook({ topic: 'customer_transfer_completed', resourceId: 'tr-1' });
+  }).then(function (r) {
+    ok(r.status === 200 && STORE['cf_campaigns/live1'].raised === 300, 'a retried event is a no-op');
+    STORE['cf_pledges/ply'] = { campaignId: 'live1', investorUid: 'u-banked', amount: 100, units: 1, status: 'processing', paymentProvider: 'ach:dwolla', achTransferId: 'tr-2' };
+    return achHook({ topic: 'customer_transfer_failed', resourceId: 'tr-2' });
+  }).then(function () {
+    ok(STORE['cf_pledges/ply'].status === 'cancelled' && STORE['cf_campaigns/live1'].raised === 300, 'a failed debit cancels the pledge without touching counters');
+    STORE['cf_pledges/plx'].refund = { transferId: 'tr-3' }; STORE['cf_pledges/plx'].status = 'refunding';
+    return achHook({ topic: 'transfer_completed', resourceId: 'tr-3' });
+  }).then(function () {
+    ok(STORE['cf_pledges/plx'].status === 'refunded' && STORE['cf_campaigns/live1'].raised === 0, 'a completed refund transfer reverses the pledge');
+    STORE['cf_distributions/d1'] = { campaignId: 'live1', status: 'paying' };
+    STORE['cf_payouts/po1'] = { distributionId: 'd1', investorUid: 'u-banked', amount: 40, status: 'processing', transferId: 'tr-4' };
+    return achHook({ topic: 'customer_transfer_completed', resourceId: 'tr-4' });
+  }).then(function () {
+    ok(STORE['cf_payouts/po1'].status === 'paid' && STORE['cf_distributions/d1'].status === 'paid', 'a completed credit pays the payout and settles the distribution');
+    STORE['cf_investors/u-banked'].bank.customerId = 'cust-9';
+    return achHook({ topic: 'customer_verification_document_needed', resourceId: 'cust-9' });
+  }).then(function (r) {
+    ok(r.status === 200 && STORE['cf_investors/u-banked'].kyc === 'document', 'a document-needed event moves kyc to document');
+    return achHook({ topic: 'customer_verified', resourceId: 'cust-9' });
+  }).then(function () {
+    ok(STORE['cf_investors/u-banked'].kyc === 'verified', 'customer_verified verifies the investor');
+    return achHook({ topic: 'transfer_completed', resourceId: 'tr-unknown' });
+  }).then(function (r) {
+    ok(r.status === 200 && /no row/.test(r.body.result.ignored), 'an unknown transfer is acknowledged, not retried');
   });
 }).then(function () {
   console.log(fails ? '\n' + fails + ' failing' : '\nall passing');

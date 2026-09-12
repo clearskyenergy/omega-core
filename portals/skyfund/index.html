@@ -251,6 +251,20 @@ input[type=range]{width:100%;accent-color:var(--blue);margin:2px 0 12px}
 .pill.pending{background:var(--gold-dim);color:var(--gold)}
 .pill.paid{background:var(--green-dim);color:var(--green)}
 .pill.refunded,.pill.cancelled{background:var(--red-dim);color:var(--red)}
+.pill.processing,.pill.paying{background:var(--blue-dim);color:var(--blue)}
+.pill.refunding,.pill.unbanked,.pill.partial,.pill.declared,.pill.document{background:var(--gold-dim);color:var(--gold)}
+.pill.failed,.pill.suspended{background:var(--red-dim);color:var(--red)}
+.pill.verified{background:var(--green-dim);color:var(--green)}
+.pay{display:flex;flex-direction:column;gap:6px;margin:2px 0 12px}
+.pay label{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;cursor:pointer;font-size:13.5px;line-height:1.4}
+.pay label.on{border-color:var(--blue);background:var(--blue-dim)}
+.pay input{margin-top:3px}
+.pay small{display:block;color:var(--sub);font-size:12px}
+.bankcard{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:var(--surface);max-width:640px}
+.bankcard .ico{width:38px;height:38px;border-radius:var(--r-sm);background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
+.bankcard b{display:block;font-size:14px}
+.bankcard span{font-size:12.5px;color:var(--sub)}
+.bankcard .act{margin-left:auto}
 .mobile-cta{display:none}
 
 /* ── portfolio / account ─────────────────────────────────────────────── */
@@ -401,6 +415,10 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
   <div class="dlg" id="investDlg"></div>
 </div>
 
+<div class="modal" id="bankModal">
+  <div class="dlg" id="bankDlg"></div>
+</div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -426,7 +444,8 @@ try {
 var S = {                       /* page state */
   user: null, profile: null, campaigns: [], closed: null, filter: 'all', sort: 'trending',
   route: 'explore', campaign: null, quote: null, pledges: [], distributions: {}, updates: {},
-  perk: null, amount: 500, sample: false
+  perk: null, amount: 500, sample: false,
+  bank: { provider: 'none', stripe: false, plaid: false }, payouts: []
 };
 var CATEGORIES = [['all','All projects'],['compute','Compute'],['microgrid','Microgrid'],['bess','Battery'],['solar','Solar'],['ev','EV charging']];
 var TYPE_LABEL = { compute:'Compute', microgrid:'Microgrid', bess:'Battery storage', solar:'Solar', ev:'EV charging' };
@@ -525,14 +544,15 @@ function loadPortfolio() {
     var out = []; q.forEach(function (d) { var p = d.data(); p.id = d.id; out.push(p); });
     out.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); });
     S.pledges = out;
-    var ids = {}; out.forEach(function (p) { if (p.status === 'paid') ids[p.campaignId] = 1; });
-    return Promise.all(Object.keys(ids).map(function (cid) {
+    var ids = {}; out.forEach(function (p) { if (p.status === 'paid' || p.status === 'refunding') ids[p.campaignId] = 1; });
+    var payouts = FB.db.collection('cf_payouts').where('investorUid', '==', S.user.uid).get().then(function (pq) { var po = []; pq.forEach(function (d) { var x = d.data(); x.id = d.id; po.push(x); }); S.payouts = po; })['catch'](function () { S.payouts = []; });
+    return Promise.all([payouts].concat(Object.keys(ids).map(function (cid) {
       return FB.db.collection('cf_distributions').where('campaignId', '==', cid).get().then(function (dq) {
         var ds = []; dq.forEach(function (d) { var x = d.data(); x.id = d.id; ds.push(x); });
         ds.sort(function (a, b) { return (b.createdAtMs || 0) - (a.createdAtMs || 0); });
         S.distributions[cid] = ds;
       }).catch(function () { S.distributions[cid] = []; });
-    }));
+    })));
   }).catch(function (e) { console.warn('[invest] portfolio', e); S.pledges = []; });
 }
 
@@ -770,22 +790,41 @@ function startInvest() {
       '<div class="f"><label>Legal name</label><input type="text" id="ivName" value="' + esc(p.name || S.user.displayName || '') + '" autocomplete="name"></div>' +
       '<div class="f"><label>Country of residence</label><select id="ivCountry">' + COUNTRIES.map(function (k) { return '<option value="' + k[0] + '"' + ((p.country || 'US') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor (income above $200,000, or net worth above $1M excluding my home). Optional — it raises the annual limit.</label></div>' +
+      payMethodsHtml(p) +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivRisk"> I have read the <a href="#" data-tab="risks">risk disclosure</a> and understand I could lose my entire investment and that units cannot be sold on the platform.</label></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivTerms"> I accept the offering documents and the SkyFund investor terms.</label></div>' +
       '<button class="btn btn-gold btn-lg btn-block" id="ivGo">Continue to payment · ' + usd(S.amount) + '</button>' +
-      '<div class="msg" id="ivMsg">Card and bank payments are handled by Stripe. Nothing is charged on this page.</div>' +
+      '<div class="msg" id="ivMsg">Nothing is charged on this page.</div>' +
     '</div>';
   openModal('investModal');
   $('ivGo').onclick = submitPledge;
 }
+function payMethodsHtml(p) {
+  var rail = S.bank || {}, bankOk = rail.provider !== 'none' && p.bank && p.bank.status === 'verified';
+  var opts = [];
+  if (bankOk) opts.push(['ach', 'Bank transfer from ' + esc(p.bank.name || 'your bank') + ' •••• ' + esc(p.bank.mask || ''), 'No fee · settles in 3–5 business days · units confirmed when it lands']);
+  if (rail.stripe) opts.push(['card', 'Card, or bank through Stripe', 'Instant · card processing fees apply']);
+  opts.push(['wire', 'Wire to the escrow account', 'ClearSky emails instructions · units reserved when it clears']);
+  var html = '<div class="f"><label>Pay by</label><div class="pay" id="payMethods">' + opts.map(function (o, i) { return '<label' + (i === 0 ? ' class="on"' : '') + '><input type="radio" name="payMethod" value="' + o[0] + '"' + (i === 0 ? ' checked' : '') + '><span>' + o[1] + '<small>' + o[2] + '</small></span></label>'; }).join('') + '</div>' +
+    (rail.provider !== 'none' && !bankOk ? '<div class="fine">Link a bank account on your <a href="#/account" data-close="investModal">Account page</a> to pay by bank transfer with no card fees.</div>' : '') + '</div>';
+  return html;
+}
+function selectedMethod() { var el = document.querySelector('input[name="payMethod"]:checked'); return el ? el.value : 'auto'; }
+document.addEventListener('change', function (ev) { if (ev.target && ev.target.name === 'payMethod') { var ls = document.querySelectorAll('#payMethods label'); for (var i = 0; i < ls.length; i++) ls[i].className = ls[i].querySelector('input').checked ? 'on' : ''; } });
 function submitPledge() {
   var c = S.campaign, btn = $('ivGo'), msg = $('ivMsg');
   if (!$('ivRisk').checked || !$('ivTerms').checked) { msg.className = 'msg err'; msg.textContent = 'Please tick both acknowledgements to continue.'; return; }
   btn.disabled = true; btn.textContent = 'Creating your commitment…'; msg.className = 'msg'; msg.textContent = '';
-  api({ action: 'pledge', campaignId: c.id, amount: S.amount, perkId: S.perk || null,
+  api({ action: 'pledge', campaignId: c.id, amount: S.amount, perkId: S.perk || null, method: selectedMethod(),
         attest: { name: $('ivName').value.trim(), country: $('ivCountry').value, accredited: $('ivAccredited').checked, acceptedRisk: true, acceptedTerms: true } })
   .then(function (r) {
     if (r.url) { msg.textContent = 'Taking you to secure checkout…'; location.href = r.url; return; }
+    if (r.ach) {
+      $('investDlg').innerHTML = '<button class="x" data-close="investModal" aria-label="Close">×</button><h2>' + (r.settled ? 'Investment confirmed' : 'Bank transfer started') + '</h2><div class="sub">' + esc(c.title) + '</div><div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i></div>' +
+        '<div class="proj"><div class="l"><span>Amount</span><b>' + usd(r.amount) + '</b></div><div class="l"><span>Units</span><b>' + r.units + '</b></div><div class="l"><span>From</span><b>' + esc((r.bank && r.bank.name) || 'your bank') + ' •••• ' + esc((r.bank && r.bank.mask) || '') + '</b></div></div>' +
+        '<p style="font-size:14px;line-height:1.55">' + (r.settled ? 'Your units are confirmed. Distributions will be paid to the same account.' : 'Bank transfers take 3–5 business days to settle. Your units are confirmed the moment it lands, and you will get an email.') + '</p><a class="btn btn-primary btn-block" href="#/portfolio" onclick="document.getElementById(\'investModal\').className=\'modal\'">Go to my portfolio</a>';
+      return;
+    }
     $('investDlg').innerHTML = '<button class="x" data-close="investModal" aria-label="Close">×</button><h2>Commitment recorded</h2><div class="sub">' + esc(c.title) + '</div><div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i></div>' +
       '<div class="proj"><div class="l"><span>Amount</span><b>' + usd(r.amount) + '</b></div><div class="l"><span>Units</span><b>' + r.units + '</b></div><div class="l"><span>Reference</span><b class="mono" style="font-size:12px">' + esc(r.pledgeId) + '</b></div></div>' +
       '<p style="font-size:14px;line-height:1.55">' + esc(r.instructions || '') + '</p><a class="btn btn-primary btn-block" href="#/portfolio" onclick="document.getElementById(\'investModal\').className=\'modal\'">Go to my portfolio</a>';
@@ -802,29 +841,35 @@ function renderPortfolio() {
   v.innerHTML = '<div class="loading"><i></i><i></i><i></i></div>';
   loadPortfolio().then(function () {
     if (S.route !== 'portfolio') return;
-    var paid = S.pledges.filter(function (p) { return p.status === 'paid'; });
+    var paid = S.pledges.filter(function (p) { return p.status === 'paid' || p.status === 'refunding'; });
     var pending = S.pledges.filter(function (p) { return p.status === 'pending' || p.status === 'processing'; });
-    var invested = 0, pend = 0, annual = 0, received = 0, rows = [];
+    var invested = 0, pend = 0, annual = 0, received = 0, declared = 0, rows = [];
+    var payoutByDist = {}; (S.payouts || []).forEach(function (po) { payoutByDist[po.distributionId] = po; });
     paid.forEach(function (p) { invested += Number(p.amount) || 0; annual += Number(p.projectedAnnual) || 0; });
     pending.forEach(function (p) { pend += Number(p.amount) || 0; });
     var byCamp = {};
     paid.forEach(function (p) { var b = byCamp[p.campaignId] || (byCamp[p.campaignId] = { title: p.campaignTitle, units: 0, amount: 0, pct: 0, annual: 0, received: 0, id: p.campaignId, sponsorOrgId: p.sponsorOrgId }); b.units += Number(p.units) || 0; b.amount += Number(p.amount) || 0; b.pct += Number(p.pctOfProject) || 0; b.annual += Number(p.projectedAnnual) || 0; });
     Object.keys(byCamp).forEach(function (cid) {
-      (S.distributions[cid] || []).forEach(function (d) { var mine = (Number(d.perUnit) || 0) * byCamp[cid].units; byCamp[cid].received += mine; received += mine; rows.push({ date: d.createdAt, period: d.period, title: byCamp[cid].title, perUnit: d.perUnit, units: byCamp[cid].units, amount: mine, status: d.status }); });
+      (S.distributions[cid] || []).forEach(function (d) {
+        var po = payoutByDist[d.id];
+        var mine = po ? Number(po.amount) || 0 : (Number(d.perUnit) || 0) * byCamp[cid].units;
+        declared += mine; if (po && po.status === 'paid') { received += mine; byCamp[cid].received += mine; }
+        rows.push({ date: d.createdAt, period: d.period, title: byCamp[cid].title, perUnit: d.perUnit, units: byCamp[cid].units, amount: mine, status: po ? po.status : 'declared', paidAt: po && po.paidAt });
+      });
     });
     rows.sort(function (a, b) { return (dateOf(b.date) || 0) - (dateOf(a.date) || 0); });
     var html = '<div class="wrap"><div class="page-h"><div><h1>Your portfolio</h1><p>' + esc(S.user.email) + '</p></div></div>' +
-      '<div class="tiles"><div class="tile"><span>Invested</span><b>' + usd(invested) + '</b><small>' + paid.length + ' confirmed ' + (paid.length === 1 ? 'investment' : 'investments') + '</small></div><div class="tile"><span>Projected annual income</span><b>' + usd(annual) + '</b><small>' + (invested ? pct(annual / invested * 100) + ' on invested' : 'first full year') + '</small></div><div class="tile light"><span>Distributions received</span><b>' + usd(received) + '</b><small>' + rows.length + ' declared</small></div><div class="tile light"><span>Pending</span><b>' + usd(pend) + '</b><small>' + pending.length + ' awaiting payment</small></div></div>';
+      '<div class="tiles"><div class="tile"><span>Invested</span><b>' + usd(invested) + '</b><small>' + paid.length + ' confirmed ' + (paid.length === 1 ? 'investment' : 'investments') + '</small></div><div class="tile"><span>Projected annual income</span><b>' + usd(annual) + '</b><small>' + (invested ? pct(annual / invested * 100) + ' on invested' : 'first full year') + '</small></div><div class="tile light"><span>Distributions received</span><b>' + usd(received) + '</b><small>' + usd(declared) + ' declared across ' + rows.length + '</small></div><div class="tile light"><span>Pending</span><b>' + usd(pend) + '</b><small>' + pending.length + ' awaiting payment</small></div></div>';
     var keys = Object.keys(byCamp);
     html += '<div class="section-h"><h2>Holdings</h2><span>' + keys.length + '</span></div>';
     html += keys.length ? keys.map(function (cid) { var b = byCamp[cid]; return '<div class="hold"><div><h3><a href="#/c/' + esc(cid) + '">' + esc(b.title || cid) + '</a></h3><div class="sub">' + esc(b.sponsorOrgId || '') + '</div></div><div class="m"><span>Units</span><b>' + b.units.toLocaleString('en-US') + '</b></div><div class="m"><span>Invested</span><b>' + usd(b.amount) + '</b></div><div class="m"><span>Share of project</span><b>' + pctTiny(b.pct * 100) + '</b></div><div class="m"><span>Projected / yr</span><b>' + usd(b.annual) + '</b></div><div class="act"><a class="btn btn-ghost" href="#/c/' + esc(cid) + '">Open</a></div></div>'; }).join('')
       : '<div class="empty">No confirmed holdings yet. <a href="#/">Browse projects</a> to make your first investment.</div>';
     if (pending.length) {
-      html += '<div class="section-h"><h2>Pending</h2><span>' + pending.length + '</span></div>' + pending.map(function (p) { return '<div class="hold"><div><h3>' + esc(p.campaignTitle || p.campaignId) + '</h3><div class="sub">' + (p.paymentProvider === 'manual' ? 'Awaiting your transfer — instructions were emailed' : 'Checkout not completed') + ' · ' + fmtDate(p.createdAt) + '</div></div><div class="m"><span>Amount</span><b>' + usd(p.amount) + '</b></div><div class="m"><span>Units</span><b>' + p.units + '</b></div><div class="m"><span>Status</span><b><span class="pill pending">' + esc(p.status) + '</span></b></div><div class="m"></div><div class="act"><button class="btn btn-ghost" data-cancel="' + esc(p.id) + '">Cancel</button></div></div>'; }).join('');
+      html += '<div class="section-h"><h2>Pending</h2><span>' + pending.length + '</span></div>' + pending.map(function (p) { return '<div class="hold"><div><h3>' + esc(p.campaignTitle || p.campaignId) + '</h3><div class="sub">' + (/^ach:/.test(p.paymentProvider || '') ? 'Bank transfer in progress — settles in 3–5 business days' : p.paymentProvider === 'manual' ? 'Awaiting your wire — instructions were emailed' : 'Checkout not completed') + ' · ' + fmtDate(p.createdAt) + '</div></div><div class="m"><span>Amount</span><b>' + usd(p.amount) + '</b></div><div class="m"><span>Units</span><b>' + p.units + '</b></div><div class="m"><span>Status</span><b><span class="pill pending">' + esc(p.status) + '</span></b></div><div class="m"></div><div class="act">' + (/^ach:/.test(p.paymentProvider || '') && p.status === 'processing' ? '' : '<button class="btn btn-ghost" data-cancel="' + esc(p.id) + '">Cancel</button>') + '</div></div>'; }).join('');
     }
     var others = S.pledges.filter(function (p) { return p.status === 'refunded' || p.status === 'cancelled'; });
     html += '<div class="section-h"><h2>Distributions</h2><span>' + rows.length + '</span></div>';
-    html += rows.length ? '<div style="overflow-x:auto"><table class="tbl"><tr><th>Declared</th><th>Project</th><th>Period</th><th class="num">Per unit</th><th class="num">Units</th><th class="num">Your share</th><th>Status</th></tr>' + rows.map(function (r) { return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.title) + '</td><td>' + esc(r.period) + '</td><td class="num mono">$' + (Number(r.perUnit) || 0).toFixed(4) + '</td><td class="num mono">' + r.units + '</td><td class="num mono">' + usd(r.amount) + '</td><td><span class="pill ' + (r.status === 'paid' ? 'paid' : 'pending') + '">' + esc(r.status) + '</span></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Distributions appear here once a project you hold declares one — quarterly, after it is operating.</div>';
+    html += rows.length ? '<div style="overflow-x:auto"><table class="tbl"><tr><th>Declared</th><th>Project</th><th>Period</th><th class="num">Per unit</th><th class="num">Units</th><th class="num">Your share</th><th>Status</th></tr>' + rows.map(function (r) { return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.title) + '</td><td>' + esc(r.period) + '</td><td class="num mono">$' + (Number(r.perUnit) || 0).toFixed(4) + '</td><td class="num mono">' + r.units + '</td><td class="num mono">' + usd(r.amount) + '</td><td><span class="pill ' + esc(r.status) + '">' + (r.status === 'paid' ? 'paid ' + fmtDate(r.paidAt) : r.status === 'unbanked' ? 'link a bank to receive' : r.status === 'processing' ? 'on its way' : esc(r.status)) + '</span></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Distributions appear here once a project you hold declares one — quarterly, after it is operating.</div>';
     if (others.length) html += '<div class="section-h"><h2>History</h2></div><div style="overflow-x:auto"><table class="tbl"><tr><th>Date</th><th>Project</th><th class="num">Amount</th><th>Status</th></tr>' + others.map(function (p) { return '<tr><td>' + fmtDate(p.createdAt) + '</td><td>' + esc(p.campaignTitle) + '</td><td class="num mono">' + usd(p.amount) + '</td><td><span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span></td></tr>'; }).join('') + '</table></div>';
     html += '<div style="height:30px"></div></div>';
     v.innerHTML = html;
@@ -844,6 +889,7 @@ function renderAccount() {
     '<div class="f"><label class="chk"><input type="checkbox" id="acAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor. This is a self-attestation; ClearSky may ask for verification before larger investments.</label></div>' +
     '<div class="f"><label>Verification</label><div style="font-size:14px">Identity: <span class="pill ' + (p.kyc === 'verified' ? 'paid' : 'pending') + '">' + esc(p.kyc || 'none') + '</span> &nbsp; Accreditation: <span class="pill ' + (p.accreditedVerified ? 'paid' : 'pending') + '">' + (p.accreditedVerified ? 'verified' : 'self-attested') + '</span></div></div>' +
     '<button class="btn btn-primary" id="acSave">Save profile</button> <button class="btn btn-ghost" id="acOut">Sign out</button><div class="msg" id="acMsg"></div></div>' +
+    bankSectionHtml(p) +
     '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/skyfund/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
   $('acSave').onclick = function () {
     var msg = $('acMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
@@ -852,6 +898,64 @@ function renderAccount() {
       .catch(function (e) { msg.className = 'msg err'; msg.textContent = 'Could not save — ' + e.message; });
   };
   $('acOut').onclick = signOut;
+  if ($('acBankLink')) $('acBankLink').onclick = openBankModal;
+  if ($('acBankRemove')) $('acBankRemove').onclick = function () {
+    if (!window.confirm('Unlink this bank account? Distributions will wait until you link one again.')) return;
+    api({ action: 'bankRemove' }).then(function () { toast('Bank account unlinked.'); return loadProfile(); }).then(renderAccount)['catch'](function (e) { toast(e.message); });
+  };
+}
+
+/* ═══════════════════ 9b · bank account ═════════════════════════════════
+   The rail is chosen server-side (api/_lib/invest-bank.js). This page only
+   knows whether one exists (S.bank.provider) and whether it uses Plaid Link
+   to verify the account. Identity details go to the API and on to the
+   payments partner; SkyFund keeps the bank name and the last four digits. */
+function bankSectionHtml(p) {
+  var b = p.bank, rail = S.bank || {};
+  var head = '<div class="section-h"><h2>Bank account</h2><span>for investing and receiving distributions</span></div>';
+  if (rail.provider === 'none') return head + '<p style="max-width:640px;color:var(--sub)">Bank transfers are not enabled yet. Investments are paid by ' + (rail.stripe ? 'card or bank through Stripe' : 'wire') + ', and distributions are paid to the account on file with ClearSky.</p>';
+  if (b && b.fundingSourceId) {
+    return head + '<div class="bankcard"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18"/></svg></div><div><b>' + esc(b.name || 'Bank account') + ' •••• ' + esc(b.mask || '') + '</b><span>' + (b.status === 'verified' ? 'Verified — you can invest by bank transfer and receive distributions here.' : 'Verification ' + esc(b.identityStatus || b.status || 'pending') + ' — you will be emailed if anything more is needed.') + '</span></div><div class="act"><button class="btn btn-ghost" id="acBankRemove">Unlink</button></div></div>';
+  }
+  return head + '<div class="bankcard"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10l9-6 9 6M5 10v9M19 10v9M9 10v9M15 10v9M3 19h18"/></svg></div><div><b>No bank account linked</b><span>Link one to invest by bank transfer with no card fees, and to receive distributions automatically.</span></div><div class="act"><button class="btn btn-primary" id="acBankLink">Link a bank account</button></div></div>';
+}
+function openBankModal() {
+  var p = S.profile || {}, rail = S.bank || {}, name = String(p.name || S.user.displayName || '').trim().split(/\s+/);
+  var a = p.address || {};
+  $('bankDlg').innerHTML = '<button class="x" data-close="bankModal" aria-label="Close">×</button><h2>Link a bank account</h2><div class="sub">' + (rail.plaid ? 'Your bank is verified through Plaid; our payments partner runs a federal identity check on the details below. SkyFund keeps only your bank\'s name and the last four digits of the account.' : 'This environment links a sandbox account. Nothing is verified and no money moves.') + '</div>' +
+    '<div class="form" style="border:0;padding:0;max-width:none">' +
+    (rail.plaid ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="f"><label>First name</label><input type="text" id="bkFirst" value="' + esc(name[0] || '') + '" autocomplete="given-name"></div><div class="f"><label>Last name</label><input type="text" id="bkLast" value="' + esc(name.slice(1).join(' ')) + '" autocomplete="family-name"></div></div>' +
+      '<div class="f"><label>Street address</label><input type="text" id="bkAddr1" value="' + esc(a.line1 || '') + '" autocomplete="address-line1"></div>' +
+      '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px"><div class="f"><label>City</label><input type="text" id="bkCity" value="' + esc(a.city || '') + '"></div><div class="f"><label>State</label><input type="text" id="bkState" value="' + esc(a.state || '') + '" maxlength="2"></div><div class="f"><label>ZIP</label><input type="text" id="bkZip" value="' + esc(a.postalCode || '') + '" inputmode="numeric"></div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="f"><label>Date of birth</label><input type="date" id="bkDob"></div><div class="f"><label>Last 4 of SSN</label><input type="text" id="bkSsn" maxlength="4" inputmode="numeric" autocomplete="off"></div></div>'
+    : '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px"><div class="f"><label>Bank name</label><input type="text" id="bkName" value="Sandbox Checking"></div><div class="f"><label>Last 4</label><input type="text" id="bkMask" value="4321" maxlength="4"></div></div>') +
+    '<button class="btn btn-primary btn-lg btn-block" id="bkGo">' + (rail.plaid ? 'Continue to your bank' : 'Link sandbox account') + '</button><div class="msg" id="bkMsg"></div></div>';
+  openModal('bankModal');
+  $('bkGo').onclick = function () {
+    var btn = $('bkGo'), msg = $('bkMsg'); msg.className = 'msg'; msg.textContent = 'One moment…'; btn.disabled = true;
+    var identity = rail.plaid ? { firstName: $('bkFirst').value.trim(), lastName: $('bkLast').value.trim(), address1: $('bkAddr1').value.trim(), city: $('bkCity').value.trim(), state: $('bkState').value.trim().toUpperCase(), postalCode: $('bkZip').value.trim(), dateOfBirth: $('bkDob').value, ssnLast4: $('bkSsn').value.trim() } : {};
+    function done(r) { closeModal('bankModal'); toast(r.bank && r.bank.status === 'verified' ? 'Bank account linked and verified.' : 'Bank account linked. Verification is pending.', 4500); loadProfile().then(renderAccount); }
+    function fail(e) { btn.disabled = false; msg.className = 'msg err'; msg.textContent = e.message || 'Could not link the account.'; }
+    api({ action: 'bankLinkToken' }).then(function (t) {
+      if (!rail.plaid) return api({ action: 'bankLink', name: $('bkName').value.trim(), mask: $('bkMask').value.trim(), identity: identity }).then(done);
+      withPlaid(function () {
+        var handler = window.Plaid.create({ token: t.linkToken,
+          onSuccess: function (publicToken, meta) {
+            var acct = (meta.accounts && meta.accounts[0]) || {};
+            msg.textContent = 'Linking…';
+            api({ action: 'bankLink', publicToken: publicToken, accountId: acct.id, name: (meta.institution && meta.institution.name) || acct.name || 'Checking', mask: acct.mask || '', identity: identity }).then(done)['catch'](fail);
+          },
+          onExit: function (err) { btn.disabled = false; msg.className = 'msg'; msg.textContent = err ? 'The bank link was not completed.' : ''; } });
+        handler.open();
+      }, fail);
+    })['catch'](fail);
+  };
+}
+function withPlaid(cb, fail) {
+  if (window.Plaid) return cb();
+  var s = document.createElement('script'); s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+  s.onload = cb; s.onerror = function () { fail(new Error('Could not load the bank link. Check your connection and try again.')); };
+  document.head.appendChild(s);
 }
 
 /* ═══════════════════ 10 · how it works ═════════════════════════════════ */
@@ -918,7 +1022,7 @@ function returnFromCheckout() {
   if (paid) toast('Payment received — your units are being confirmed.', 5000);
   if (cancelled) { toast('Checkout was cancelled. Your commitment is still pending; cancel it from your portfolio if you do not want to keep it.', 6000); if (S.user) api({ action: 'cancel', pledgeId: cancelled })['catch'](function () {}); }
 }
-loadCampaigns().then(function () {
+Promise.all([loadCampaigns(), api({ action: 'bankStatus' }).then(function (b) { if (b && b.provider) S.bank = b; })['catch'](function () {})]).then(function () {
   render();
   if (FB.ready) {
     FB.auth.onAuthStateChanged(function (u) {

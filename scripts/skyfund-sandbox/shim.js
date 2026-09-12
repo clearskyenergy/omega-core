@@ -196,7 +196,9 @@
       if (u) { var inv = store.docs['cf_investors/' + u.uid] || {}; inv = clone(inv); inv.acceptedRisk = true; var e = eligibility(inv, p.amount, c, committedThisYear(u.uid)); p.eligible = e.ok; p.reasons = e.reasons; p.minInvestment = e.minInvestment; p.maxInvestment = e.maxInvestment; }
       return p;
     }
+    if (body.action === 'bankStatus') return { provider: 'none', plaid: false, stripe: false, escrowConfigured: false, distributionConfigured: false, sandbox: true };
     if (!u) err(401, 'missing bearer token');
+    if (body.action === 'bankLinkToken' || body.action === 'bankLink' || body.action === 'bankRemove') err(400, 'Bank linking is not part of the phone sandbox; the simulated checkout stands in for every rail.');
     if (body.action === 'pledge') {
       var cc = campaign(body.campaignId); if (!cc) err(404, 'campaign not found');
       if (cc.status !== 'live') err(409, 'this campaign is not accepting investment');

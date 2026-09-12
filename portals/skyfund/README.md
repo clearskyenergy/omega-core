@@ -30,6 +30,8 @@ the same URL later without touching these files.
 | `manifest.webmanifest` | PWA manifest so the storefront installs to a home screen |
 | `../../api/invest.js` | **all money and eligibility logic** — quote, pledge, cancel, submit, review, close, confirm, refund, distribute |
 | `../../api/invest-webhook.js` | Stripe → pledge paid / cancelled / refunded (its own endpoint and secret) |
+| `../../api/invest-ach-webhook.js` | the bank rail (Dwolla) → pledges paid / refunded, payouts settled, identity events |
+| `../../api/_lib/invest-bank.js` | the ACH adapter: mock rail for tests, Dwolla + Plaid for real |
 | `../../api/_lib/invest-math.js` | the pure engine: units, ownership %, year-by-year projection, IRR, MOIC, payback, eligibility rules |
 | `../../api/_lib/invest-ledger.js` | the only code that changes a pledge's state; idempotent transactions that keep campaign counters honest |
 
@@ -78,13 +80,15 @@ cf_campaigns/{id}                 the listing. PUBLIC read when status ∈ live|
   raised, unitsSold, backers      ← LEDGER-OWNED. Pinned on every sponsor write.
   headline{…}                     ← server-computed at launch. Pinned too.
 cf_campaigns/{id}/updates/{u}     sponsor posts
-cf_investors/{uid}                profile; status/kyc/accreditedVerified pinned (ClearSky sets)
+cf_investors/{uid}                profile; status/kyc/accreditedVerified/bank pinned (server sets)
 cf_pledges/{id}                   THE CAP TABLE. write: false for every browser.
   investorUid, campaignId, sponsorOrgId (denormalised for the sponsor's read),
   amount, units, pctOfOffering, pctOfProject, projectedAnnual, perkId,
   status: pending → paid | cancelled ; paid → refunded
   paymentProvider: stripe|manual, stripeSessionId, stripePaymentIntent, attest{…}
 cf_distributions/{id}             declared payouts: period, distributable, crowdPool, perUnit, unitsSold
+cf_payouts/{id}                   one per holder per distribution: units, perUnit, amount,
+                                  status: pending|processing|paid|failed|unbanked, transferId
 cf_settings/rules                 minInvestment, maxInvestment, nonAccreditedAnnualCap,
                                   accreditedRequiredAbove, allowedCountries[], requireKyc
 Storage cf_campaigns/{org}/{id}/  cover images and documents. PUBLIC read, sponsor/staff write.
@@ -135,6 +139,88 @@ inventory. Oversubscription is refused at pledge time against `unitsSold`.
 
 ---
 
+## The admin team
+
+Who is an administrator: `isOmegaAdmin()` in the rules and `isPlatformAdmin()`
+in `api/_lib/admin.js` — ClearSky's own domains, plus any `omega_staff/{uid}`
+record with `role: 'admin'` and `active: true`. Adding an administrator from
+another company is therefore a console action on `omega_staff`, not a deploy.
+
+The sponsor console (`/skyfund/sponsor`) grows an **Admin** button for them:
+
+- **Dashboard** — raised across live and funded campaigns, campaigns by
+  status, investors, money in flight, refunds due by hand, open payouts, the
+  identity queue, and which bank rails this deployment has.
+- **Investors** — every profile with what they have invested; set identity
+  (`kyc`) and accreditation verification, suspend or reactivate. All through
+  `/api/invest` `investor`, so the audit trail records who changed what.
+- **Eligibility rules** — the `cf_settings/rules` editor (minimum, maximum,
+  non-accredited annual cap, accreditation threshold, allowed countries,
+  whether identity verification is required before investing).
+- **Distributions & payouts** — pay a declared distribution out with one
+  click, see every open payout, mark hand-paid ones, and export the year's
+  payouts as CSV for the tax preparer.
+- **Refunds due by hand** — wire and unbanked money to be returned outside
+  the rail, marked once sent.
+
+Entering projects on a developer's behalf works as before: open the console
+with `?org=<their domain>` and the draft is filed under that sponsor.
+
+## The bank rail
+
+`api/_lib/invest-bank.js` is one adapter with three movements — money into
+escrow, distributions out, refunds back — and three providers:
+
+| `INVEST_ACH_PROVIDER` | what happens |
+|---|---|
+| `none` (default) | no bank features; investments by Stripe card/bank or wire; distributions paid by hand |
+| `mock` | no network; a "Sandbox Checking" account links instantly and every transfer settles at once — the whole flow runs in tests and in a staging console without credentials |
+| `dwolla` | **Plaid Link** verifies the investor's bank account; **Dwolla** holds a Verified Customer per investor (its CIP check is the identity verification), one funding source per account, and moves money between it and the platform's escrow and distribution accounts; its webhook settles the ledger |
+
+How it plays through the app:
+
+1. **Link** — Account page → "Link a bank account". With Dwolla the page
+   asks for legal name, address, date of birth and last-4 SSN, gets a Plaid
+   Link token from the API, opens Plaid Link, then calls `bankLink`. The API
+   opens the Verified Customer, exchanges the Plaid token for a processor
+   token, adds the funding source, and writes `cf_investors.bank`
+   (customer id, funding-source id, bank name, last four) — never the SSN or
+   date of birth. A verified customer sets `kyc: 'verified'`.
+2. **Invest** — the invest sheet offers "Bank transfer" when a verified bank
+   is linked (no fee, 3–5 days), "Card or bank through Stripe" when a Stripe
+   key exists, and "Wire" always. `pledge` with `method: 'ach'` creates the
+   row as `processing`, starts the debit into escrow, and the webhook
+   (`api/invest-ach-webhook.js`) marks it paid when the transfer completes.
+3. **Pay out** — a declared distribution → `payout`: one `cf_payouts` row per
+   holder (units × per-unit); holders with a verified bank get an ACH credit
+   from the campaign's distribution source (`bank.distributionSourceUrl`,
+   set on the staff panel, or the environment default); the rest are
+   `unbanked` and marked by hand. The distribution reads `paying`, then
+   `paid` or `partial`.
+4. **Refund** — a failed raise or a staff refund reverses ACH money over the
+   rail (`refunding` → `refunded` on the webhook); Stripe money through
+   Stripe; wire money by hand, flagged `refundDue`.
+
+`cf_investors.bank` is pinned in the rules with the other privilege fields:
+it names the account a debit is pulled from, so only the server may write it.
+
+**Before the first real transfer — the Dwolla/Plaid sandbox checklist.**
+The adapter follows both APIs' published v1 shapes but was written against
+the documentation, not a live account. In Dwolla sandbox + Plaid sandbox:
+(1) `bankLink` with Plaid's test bank (`user_good` / `pass_good`) creates a
+customer, a funding source, and returns `status: 'verified'`; (2) a `pledge`
+with `method: 'ach'` creates a transfer and the webhook (register the
+subscription with your secret) flips the pledge to `paid` on
+`customer_transfer_completed`; (3) `payout` creates a credit and the webhook
+settles the payout; (4) `close` as failed refunds it. Any shape mismatch
+surfaces as a `502 Dwolla …` / `502 Plaid …` error with the provider's own
+message, in `api/_lib/invest-bank.js`.
+
+**Still outside the code:** escrow itself is a bank account and an agreement
+(with the funding-portal partner under Reg CF); OFAC screening and W-9/TIN
+collection for 1099s or K-1s are the processor's and the accountant's;
+Stripe requires written approval for securities offerings.
+
 ## Environment (Vercel)
 
 | var | needed for |
@@ -143,6 +229,12 @@ inventory. Oversubscription is refused at pledge time against `unitsSold`.
 | `STRIPE_SECRET_KEY` | card/bank checkout. Absent → manual mode. |
 | `STRIPE_INVEST_WEBHOOK_SECRET` | signing secret of the **separate** Stripe endpoint `https://<host>/api/invest-webhook` (falls back to `STRIPE_WEBHOOK_SECRET` if you reuse one). Subscribe it to `checkout.session.*` and `charge.refunded`. |
 | `INVEST_BASE_URL` | optional; success/cancel URLs default to the request origin. |
+| `INVEST_ACH_PROVIDER` | `none` / `mock` / `dwolla` — the bank rail (above). |
+| `DWOLLA_KEY`, `DWOLLA_SECRET`, `DWOLLA_ENV` | Dwolla credentials; `sandbox` (default) or `production`. |
+| `DWOLLA_ESCROW_FUNDING_SOURCE` | URL of the platform's escrow bank account in Dwolla (investments are pulled INTO it). |
+| `DWOLLA_DISTRIBUTION_FUNDING_SOURCE` | default account distributions are paid FROM; a campaign may override it. |
+| `DWOLLA_WEBHOOK_SECRET` | secret given to `POST /webhook-subscriptions` for `https://<host>/api/invest-ach-webhook`. |
+| `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV` | Plaid Link for bank-account verification (`sandbox` / `production`). |
 | `MAIL_*` | receipts and the review alert; best-effort as everywhere else. |
 
 ---

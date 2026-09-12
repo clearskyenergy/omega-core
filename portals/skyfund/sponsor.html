@@ -66,7 +66,9 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .item .m{font-size:12px;color:var(--sub);margin-top:3px;display:flex;gap:8px;align-items:center}
 .pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:3px;background:rgba(20,23,26,.08);color:var(--sub)}
 .pill.draft{background:rgba(20,23,26,.08)}.pill.review{background:var(--gold-dim);color:var(--gold)}.pill.live{background:var(--green-dim);color:var(--green)}.pill.funded{background:var(--blue-dim);color:var(--blue)}.pill.closed{background:var(--red-dim);color:var(--red)}
-.pill.pending{background:var(--gold-dim);color:var(--gold)}.pill.paid{background:var(--green-dim);color:var(--green)}.pill.refunded,.pill.cancelled{background:var(--red-dim);color:var(--red)}.pill.processing{background:var(--blue-dim);color:var(--blue)}
+.pill.pending{background:var(--gold-dim);color:var(--gold)}.pill.paid,.pill.verified,.pill.active,.pill.on{background:var(--green-dim);color:var(--green)}.pill.refunded,.pill.cancelled,.pill.failed,.pill.suspended,.pill.off{background:var(--red-dim);color:var(--red)}.pill.processing,.pill.paying{background:var(--blue-dim);color:var(--blue)}.pill.refunding,.pill.unbanked,.pill.partial,.pill.declared,.pill.document,.pill.none{background:var(--gold-dim);color:var(--gold)}
+.adm-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.adm-h h2{flex:1}.adm-h input[type=text]{width:240px}
+td .mini{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}td select{padding:4px 6px;font-size:12px;width:auto}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--rs);overflow:hidden}
 .seg button{background:#fff;border:0;padding:6px 10px;font-size:12px;font-weight:600;color:var(--sub)}
 .seg button.on{background:var(--navy);color:#fff}
@@ -136,7 +138,7 @@ td.num,th.num{text-align:right;font-family:var(--mono)}
 
 <div id="app" class="layout hide">
   <aside class="list">
-    <div class="h"><h2 id="listTitle">My campaigns</h2><button class="btn btn-primary btn-sm" id="btnNew">+ New</button></div>
+    <div class="h"><h2 id="listTitle">My campaigns</h2><button class="btn btn-ghost btn-sm hide" id="btnAdmin">Admin</button><button class="btn btn-primary btn-sm" id="btnNew">+ New</button></div>
     <div class="h hide" id="staffSeg"><div class="seg"><button class="on" data-scope="mine">Mine</button><button data-scope="review">Review queue</button><button data-scope="live">Live</button><button data-scope="all">All</button></div></div>
     <div class="items" id="items"><div class="empty" style="border:0">Loading…</div></div>
   </aside>
@@ -192,14 +194,24 @@ $('btnOut').onclick = function () { auth.signOut().then(function () { location.r
 auth.onAuthStateChanged(function (u) {
   S.user = u || null;
   if (!u) { $('gate').className = 'gate'; $('app').className = 'layout hide'; $('btnOut').className = 'btn btn-light btn-sm hide'; $('who').textContent = ''; return; }
-  S.staff = STAFF.indexOf(orgOf(u.email)) >= 0;
-  var q = new URLSearchParams(location.search);
-  S.org = (S.staff && q.get('org')) ? String(q.get('org')).toLowerCase() : orgOf(u.email);
-  $('gate').className = 'gate hide'; $('app').className = 'layout'; $('btnOut').className = 'btn btn-light btn-sm';
-  $('who').innerHTML = '<b>' + esc(u.email) + '</b> · ' + esc(S.org) + (S.staff ? ' · ClearSky staff' : '');
-  if (S.staff) $('staffSeg').className = 'h';
-  loadList();
+  /* The admin team: ClearSky's domains, or an active omega_staff admin from
+     any domain (isOmegaAdmin() in the rules; isPlatformAdmin() in the API).
+     The console mirrors that so the right buttons appear; the server decides. */
+  var domainStaff = STAFF.indexOf(orgOf(u.email)) >= 0;
+  var resolve = domainStaff ? Promise.resolve(true)
+    : db.collection('omega_staff').doc(u.uid).get().then(function (d) { return d.exists && d.data().active !== false && d.data().role === 'admin'; })['catch'](function () { return false; });
+  resolve.then(function (isStaff) {
+    S.staff = isStaff;
+    var q = new URLSearchParams(location.search);
+    S.org = (S.staff && q.get('org')) ? String(q.get('org')).toLowerCase() : orgOf(u.email);
+    $('gate').className = 'gate hide'; $('app').className = 'layout'; $('btnOut').className = 'btn btn-light btn-sm';
+    $('who').innerHTML = '<b>' + esc(u.email) + '</b> · ' + esc(S.org) + (S.staff ? ' · admin' : '');
+    if (S.staff) { $('staffSeg').className = 'h'; $('btnAdmin').className = 'btn btn-ghost btn-sm'; }
+    loadList();
+    if (S.staff && location.hash === '#admin') renderAdmin();
+  });
 });
+$('btnAdmin').onclick = function () { location.hash = '#admin'; renderAdmin(); };
 
 /* ── list ─────────────────────────────────────────────────────────────── */
 function loadList() {
@@ -369,6 +381,85 @@ function upload() {
     .then(function () { msg('upMsg', 'Uploaded.', 'ok'); $('fImg').value = ''; paintThumbs(); })['catch'](function (e) { msg('upMsg', e.message, 'err'); });
 }
 
+/* ── admin: dashboard, investors, settings, payouts, rail ─────────────── */
+function loadAdmin() {
+  function all(col) { return db.collection(col).get().then(function (q) { var o = []; q.forEach(function (d) { var x = d.data(); x.id = d.id; o.push(x); }); return o; })['catch'](function (e) { console.warn('[admin]', col, e.message); return []; }); }
+  return Promise.all([all('cf_campaigns'), all('cf_pledges'), all('cf_investors'), all('cf_distributions'), all('cf_payouts'),
+    db.collection('cf_settings').doc('rules').get().then(function (d) { return d.exists ? d.data() : {}; })['catch'](function () { return {}; }),
+    api({ action: 'bankStatus' })['catch'](function () { return { provider: 'none' }; })
+  ]).then(function (r) { S.admin = { campaigns: r[0], pledges: r[1], investors: r[2], dists: r[3], payouts: r[4], rules: r[5], rail: r[6], q: (S.admin && S.admin.q) || '' }; });
+}
+function renderAdmin() {
+  S.cur = null; paintList(); $('main').innerHTML = '<div class="empty">Loading the admin view…</div>';
+  loadAdmin().then(paintAdmin)['catch'](function (e) { $('main').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; });
+}
+function paintAdmin() {
+  var a = S.admin, m = $('main');
+  var byStatus = {}; a.campaigns.forEach(function (c) { byStatus[c.status] = (byStatus[c.status] || 0) + 1; });
+  var raised = 0; a.campaigns.forEach(function (c) { if (c.status === 'live' || c.status === 'funded') raised += Number(c.raised) || 0; });
+  var pendN = 0, pendA = 0, refundDue = [], paidBy = {};
+  a.pledges.forEach(function (p) { if (p.status === 'pending' || p.status === 'processing') { pendN++; pendA += Number(p.amount) || 0; } if (p.refundDue && p.status !== 'refunded') refundDue.push(p); if (p.status === 'paid' || p.status === 'refunding') paidBy[p.investorUid] = (paidBy[p.investorUid] || 0) + (Number(p.amount) || 0); });
+  var openPay = a.payouts.filter(function (x) { return x.status !== 'paid'; }), openPayA = 0; openPay.forEach(function (x) { openPayA += Number(x.amount) || 0; });
+  var kycQ = a.investors.filter(function (i) { return i.kyc === 'pending' || i.kyc === 'document'; });
+  var rail = a.rail || {};
+  var q = String(a.q || '').toLowerCase();
+  var invs = a.investors.filter(function (i) { return !q || (String(i.email || '') + ' ' + String(i.name || '')).toLowerCase().indexOf(q) >= 0; }).sort(function (x, y) { return (paidBy[y.uid] || 0) - (paidBy[x.uid] || 0); });
+  var years = {}; a.payouts.forEach(function (x) { var d = dateOf(x.createdAt); if (d) years[d.getFullYear()] = 1; });
+  var r = a.rules || {};
+
+  m.innerHTML =
+    '<div class="card"><div class="adm-h"><h2>SkyFund admin</h2><a class="btn btn-ghost btn-sm" href="/portals/skyfund/#/" target="_blank" rel="noopener">Storefront ↗</a></div>' +
+    '<div class="tiles" style="margin-top:12px"><div class="tile"><span>Raised (live + funded)</span><b>' + usd(raised) + '</b></div><div class="tile"><span>Campaigns</span><b style="font-size:14px">' + ['draft', 'review', 'live', 'funded', 'closed'].map(function (k) { return (byStatus[k] || 0) + ' ' + k; }).join(' · ') + '</b></div><div class="tile"><span>Investors</span><b>' + a.investors.length + '</b></div><div class="tile"><span>Pending money</span><b>' + usd(pendA) + '</b><div class="hint">' + pendN + ' commitments in flight</div></div><div class="tile"><span>Refunds due by hand</span><b>' + refundDue.length + '</b></div><div class="tile"><span>Payouts open</span><b>' + usd(openPayA) + '</b><div class="hint">' + openPay.length + ' rows</div></div><div class="tile"><span>Identity queue</span><b>' + kycQ.length + '</b></div></div></div>' +
+
+    '<div class="card"><h2>Bank rail</h2><p class="sub">Which rails this deployment can use. Set in the environment; see the README.</p><div class="mini"><span class="pill ' + (rail.provider !== 'none' ? 'on' : 'off') + '">ACH: ' + esc(rail.provider || 'none') + '</span> <span class="pill ' + (rail.escrowConfigured ? 'on' : 'off') + '">escrow account</span> <span class="pill ' + (rail.distributionConfigured ? 'on' : 'off') + '">distribution account</span> <span class="pill ' + (rail.stripe ? 'on' : 'off') + '">Stripe cards</span> <span class="pill ' + (rail.sandbox ? 'pending' : 'on') + '">' + (rail.sandbox ? 'sandbox' : 'production') + '</span></div></div>' +
+
+    '<div class="card"><div class="adm-h"><h2>Investors</h2><input type="text" id="admQ" placeholder="Search email or name" value="' + esc(a.q || '') + '"></div><p class="sub">Identity and accreditation are set here or by the rail\'s own check. Suspending stops new commitments; it does not touch holdings.</p>' +
+    (invs.length ? '<div style="overflow-x:auto"><table><tr><th>Investor</th><th>Joined</th><th class="num">Invested</th><th>Identity</th><th>Accredited</th><th>Bank</th><th>Status</th><th></th></tr>' + invs.slice(0, 200).map(function (i) {
+      return '<tr><td>' + esc(i.name || '') + '<div class="hint">' + esc(i.email || i.uid) + (i.country ? ' · ' + esc(i.country) : '') + '</div></td><td>' + fmtDate(i.createdAt) + '</td><td class="num">' + usd(paidBy[i.uid] || 0) + '</td>' +
+        '<td><select data-kyc="' + esc(i.uid) + '">' + ['none', 'pending', 'document', 'verified', 'failed'].map(function (k) { return '<option value="' + k + '"' + ((i.kyc || 'none') === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' + (i.kycProvider ? '<div class="hint">' + esc(i.kycProvider) + '</div>' : '') + '</td>' +
+        '<td><label class="mini"><input type="checkbox" data-accr="' + esc(i.uid) + '"' + (i.accreditedVerified ? ' checked' : '') + '> verified</label>' + (i.accredited ? '<div class="hint">self-attested</div>' : '') + '</td>' +
+        '<td>' + (i.bank && i.bank.fundingSourceId ? esc(i.bank.name || 'bank') + ' •••• ' + esc(i.bank.mask || '') + ' <span class="pill ' + esc(i.bank.status || 'pending') + '">' + esc(i.bank.status || 'pending') + '</span>' : '<span class="hint">none</span>') + '</td>' +
+        '<td><span class="pill ' + esc(i.status || 'active') + '">' + esc(i.status || 'active') + '</span></td>' +
+        '<td><button class="btn btn-ghost btn-sm" data-susp="' + esc(i.uid) + '" data-to="' + (i.status === 'suspended' ? 'active' : 'suspended') + '">' + (i.status === 'suspended' ? 'Reactivate' : 'Suspend') + '</button></td></tr>';
+    }).join('') + '</table></div>' : '<div class="hint">No investors match.</div>') + '</div>' +
+
+    '<div class="card"><h2>Eligibility rules</h2><p class="sub">Applied by the server on every commitment. Counsel sets the ceiling; these are the platform\'s floor.</p><div class="grid">' +
+      '<div><label>Minimum investment (USD)</label><input type="number" id="ruMin" value="' + (r.minInvestment != null ? r.minInvestment : 100) + '"></div>' +
+      '<div><label>Maximum investment (USD)</label><input type="number" id="ruMax" value="' + (r.maxInvestment != null ? r.maxInvestment : 250000) + '"></div>' +
+      '<div><label>Non-accredited annual cap (USD)</label><input type="number" id="ruCap" value="' + (r.nonAccreditedAnnualCap != null ? r.nonAccreditedAnnualCap : 2500) + '"></div>' +
+      '<div><label>Accreditation required above (USD)</label><input type="number" id="ruAcc" value="' + (r.accreditedRequiredAbove != null ? r.accreditedRequiredAbove : 25000) + '"></div>' +
+      '<div><label>Allowed countries (ISO codes)</label><input type="text" id="ruCty" value="' + esc((r.allowedCountries || ['US']).join(', ')) + '"></div>' +
+      '<div><label>Identity verification</label><label class="mini" style="margin-top:8px"><input type="checkbox" id="ruKyc"' + (r.requireKyc ? ' checked' : '') + '> required before investing</label></div>' +
+    '</div><div class="bar"><button class="btn btn-primary" id="ruSave">Save rules</button><span class="msg" id="ruMsg"></span></div></div>' +
+
+    '<div class="card"><div class="adm-h"><h2>Distributions &amp; payouts</h2>' + (Object.keys(years).length ? '<select id="csvYear">' + Object.keys(years).sort().map(function (y) { return '<option>' + y + '</option>'; }).join('') + '</select><button class="btn btn-ghost btn-sm" id="csvBtn">Export payouts CSV</button>' : '') + '</div><p class="sub">A declared distribution is paid out with one click: holders with a verified bank are paid over the rail; others are listed as unbanked and marked by hand. The CSV is the year\'s payout record for the tax preparer.</p>' +
+    (a.dists.length ? '<div style="overflow-x:auto"><table><tr><th>Project</th><th>Period</th><th>Declared</th><th class="num">Crowd pool</th><th class="num">Per unit</th><th>Status</th><th></th></tr>' + a.dists.sort(function (x, y) { return (y.createdAtMs || 0) - (x.createdAtMs || 0); }).map(function (d) { return '<tr><td>' + esc(d.campaignTitle || d.campaignId) + '</td><td>' + esc(d.period) + '</td><td>' + fmtDate(d.createdAt) + '</td><td class="num">' + usd(d.crowdPool) + '</td><td class="num">$' + Number(d.perUnit || 0).toFixed(4) + '</td><td><span class="pill ' + esc(d.status) + '">' + esc(d.status) + '</span>' + (d.payoutCounts ? ' <span class="hint" style="display:inline">' + d.payoutCounts.paid + '/' + d.payoutCounts.total + ' paid' + (d.payoutCounts.unbanked ? ', ' + d.payoutCounts.unbanked + ' unbanked' : '') + (d.payoutCounts.failed ? ', ' + d.payoutCounts.failed + ' failed' : '') + '</span>' : '') + '</td><td>' + (d.status === 'declared' ? '<button class="btn btn-green btn-sm" data-payout2="' + esc(d.id) + '">Pay out</button>' : '') + '</td></tr>'; }).join('') + '</table></div>' : '<div class="hint">Nothing declared yet.</div>') +
+    (openPay.length ? '<h2 style="margin-top:16px;font-size:14px">Open payouts</h2><div style="overflow-x:auto"><table><tr><th>Investor</th><th>Project · period</th><th class="num">Amount</th><th>Status</th><th></th></tr>' + openPay.map(function (x) { return '<tr><td>' + esc(x.investorName || '') + '<div class="hint">' + esc(x.investorEmail || x.investorUid) + '</div></td><td>' + esc(x.campaignTitle || x.campaignId) + ' · ' + esc(x.period || '') + '</td><td class="num">' + usd(x.amount) + '</td><td><span class="pill ' + esc(x.status) + '">' + esc(x.status) + '</span>' + (x.failure && x.failure.reason ? '<div class="hint">' + esc(x.failure.reason) + '</div>' : '') + '</td><td>' + (x.status === 'unbanked' || x.status === 'failed' ? '<button class="btn btn-green btn-sm" data-pmark="' + esc(x.id) + '" data-st="paid">Mark paid</button> ' : '') + (x.status !== 'failed' && x.status !== 'processing' ? '<button class="btn btn-ghost btn-sm" data-pmark="' + esc(x.id) + '" data-st="failed">Mark failed</button>' : '') + '</td></tr>'; }).join('') + '</table></div>' : '') + '</div>' +
+
+    (refundDue.length ? '<div class="card"><h2>Refunds due by hand</h2><p class="sub">Wire and unbanked money that has to be returned outside the rail. Mark each once it is sent.</p><table><tr><th>Investor</th><th>Project</th><th class="num">Amount</th><th>Note</th><th></th></tr>' + refundDue.map(function (p) { return '<tr><td>' + esc(p.investorName || '') + '<div class="hint">' + esc(p.investorEmail) + '</div></td><td>' + esc(p.campaignTitle) + '</td><td class="num">' + usd(p.amount) + '</td><td class="hint">' + esc(p.refundNote || p.refundError || '') + '</td><td>' + (p.status === 'paid' ? '<button class="btn btn-ghost btn-sm" data-refmanual="' + esc(p.id) + '">Mark refunded</button>' : '<span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span>') + '</td></tr>'; }).join('') + '</table></div>' : '');
+
+  $('admQ').oninput = function () { S.admin.q = this.value; paintAdmin(); var el = $('admQ'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); };
+  function each(sel, fn) { var els = document.querySelectorAll(sel); for (var i = 0; i < els.length; i++) fn(els[i]); }
+  each('[data-kyc]', function (el) { el.onchange = function () { api({ action: 'investor', uid: this.getAttribute('data-kyc'), kyc: this.value }).then(renderAdmin)['catch'](function (e) { alert(e.message); }); }; });
+  each('[data-accr]', function (el) { el.onchange = function () { api({ action: 'investor', uid: this.getAttribute('data-accr'), accreditedVerified: this.checked }).then(renderAdmin)['catch'](function (e) { alert(e.message); }); }; });
+  each('[data-susp]', function (el) { el.onclick = function () { var to = this.getAttribute('data-to'); if (!window.confirm((to === 'suspended' ? 'Suspend' : 'Reactivate') + ' this investor?')) return; api({ action: 'investor', uid: this.getAttribute('data-susp'), status: to }).then(renderAdmin)['catch'](function (e) { alert(e.message); }); }; });
+  $('ruSave').onclick = function () {
+    msg('ruMsg', 'Saving…');
+    api({ action: 'settings', rules: { minInvestment: num('ruMin'), maxInvestment: num('ruMax'), nonAccreditedAnnualCap: num('ruCap'), accreditedRequiredAbove: num('ruAcc'), allowedCountries: val('ruCty'), requireKyc: $('ruKyc').checked } })
+      .then(function () { msg('ruMsg', 'Saved. Applies to the next commitment.', 'ok'); })['catch'](function (e) { msg('ruMsg', e.message, 'err'); });
+  };
+  each('[data-payout2]', function (el) { el.onclick = function () { var id = this.getAttribute('data-payout2'); if (!window.confirm('Pay this distribution out to every holder now?')) return; this.disabled = true; api({ action: 'payout', distributionId: id }).then(function (r) { alert('Payouts created: ' + r.payouts.length + ' · distribution is ' + r.status + '.'); renderAdmin(); })['catch'](function (e) { alert(e.message); }); }; });
+  each('[data-pmark]', function (el) { el.onclick = function () { var st = this.getAttribute('data-st'); var ref = window.prompt(st === 'paid' ? 'Payment reference (check number, wire id):' : 'Why did it fail?', ''); if (ref === null) return; api({ action: 'payoutMark', payoutId: this.getAttribute('data-pmark'), status: st, reference: ref }).then(renderAdmin)['catch'](function (e) { alert(e.message); }); }; });
+  each('[data-refmanual]', function (el) { el.onclick = function () { var why = window.prompt('Refund reference:', 'wired back'); if (why === null) return; api({ action: 'refund', pledgeId: this.getAttribute('data-refmanual'), reason: why, manual: true }).then(renderAdmin)['catch'](function (e) { alert(e.message); }); }; });
+  if ($('csvBtn')) $('csvBtn').onclick = function () {
+    var y = Number(val('csvYear'));
+    var rows = [['investorName', 'investorEmail', 'investorUid', 'campaign', 'period', 'units', 'perUnit', 'amount', 'status', 'paidAt', 'provider', 'transferId', 'payoutId']];
+    a.payouts.forEach(function (x) { var d = dateOf(x.paidAt || x.createdAt); if (!d || d.getFullYear() !== y) return; rows.push([x.investorName || '', x.investorEmail || '', x.investorUid, x.campaignTitle || x.campaignId, x.period || '', x.units, x.perUnit, x.amount, x.status, x.paidAt ? fmtDate(x.paidAt) : '', x.provider || 'manual', x.transferId || '', x.id]); });
+    var csv = rows.map(function (r2) { return r2.map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+    var l = document.createElement('a'); l.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); l.download = 'skyfund-payouts-' + y + '.csv'; document.body.appendChild(l); l.click(); l.remove();
+  };
+}
+
 /* ── operations: investors, updates, staff actions ────────────────────── */
 function loadOps() {
   var c = S.cur;
@@ -393,13 +484,16 @@ function renderOps() {
     }).join('') + '</table></div><div class="bar"><button class="btn btn-ghost btn-sm" id="btnCsv">Download CSV</button></div>' : '<div class="hint">No commitments yet.</div>') + '</div>';
   if (S.dists.length || c.status === 'funded') {
     html += '<div class="card"><h2>Distributions</h2><p class="sub">Declared by ClearSky from the quarterly report. Per-unit is the crowd pool divided by units sold.</p>' +
-      (S.dists.length ? '<table><tr><th>Period</th><th>Declared</th><th class="num">Gross revenue</th><th class="num">Distributable</th><th class="num">Crowd pool</th><th class="num">Per unit</th><th>Status</th></tr>' + S.dists.map(function (d) { return '<tr><td>' + esc(d.period) + '</td><td>' + fmtDate(d.createdAt) + '</td><td class="num">' + (d.grossRevenue ? usd(d.grossRevenue) : '—') + '</td><td class="num">' + usd(d.distributable) + '</td><td class="num">' + usd(d.crowdPool) + '</td><td class="num">$' + Number(d.perUnit).toFixed(4) + '</td><td><span class="pill ' + esc(d.status) + '">' + esc(d.status) + '</span></td></tr>'; }).join('') + '</table>' : '<div class="hint">None declared yet.</div>') + '</div>';
+      (S.dists.length ? '<table><tr><th>Period</th><th>Declared</th><th class="num">Gross revenue</th><th class="num">Distributable</th><th class="num">Crowd pool</th><th class="num">Per unit</th><th>Status</th>' + (S.staff ? '<th></th>' : '') + '</tr>' + S.dists.map(function (d) { return '<tr><td>' + esc(d.period) + '</td><td>' + fmtDate(d.createdAt) + '</td><td class="num">' + (d.grossRevenue ? usd(d.grossRevenue) : '—') + '</td><td class="num">' + usd(d.distributable) + '</td><td class="num">' + usd(d.crowdPool) + '</td><td class="num">$' + Number(d.perUnit).toFixed(4) + '</td><td><span class="pill ' + esc(d.status) + '">' + esc(d.status) + '</span>' + (d.payoutCounts ? ' <span class="hint" style="display:inline">' + d.payoutCounts.paid + '/' + d.payoutCounts.total + ' paid</span>' : '') + '</td>' + (S.staff ? '<td>' + (d.status === 'declared' ? '<button class="btn btn-green btn-sm" data-payout="' + esc(d.id) + '">Pay out</button>' : '<a href="#admin" onclick="location.hash=\'#admin\';renderAdmin();return false;">payouts</a>') + '</td>' : '') + '</tr>'; }).join('') + '</table>' : '<div class="hint">None declared yet.</div>') + '</div>';
   }
   if (S.staff) {
     html += '<div class="card staff"><h2>Review &amp; lifecycle</h2><p class="sub">Every button here is a server action; the rules do not let a browser change status.</p><div class="grid"><div class="wide"><input type="text" id="stNote" placeholder="Note to the sponsor (optional)"></div></div><div class="bar">' +
       (c.status === 'review' || c.status === 'draft' ? '<button class="btn btn-green" data-act="launch">Launch campaign</button><button class="btn btn-ghost" data-act="return">Return for changes</button>' : '') +
       (c.status === 'live' ? '<button class="btn btn-primary" data-act="funded">Close as funded</button><button class="btn btn-red" data-act="failed">Close as failed &amp; refund</button>' : '') +
       '<span class="msg" id="stMsg"></span></div></div>';
+    if (c.status === 'live' || c.status === 'funded') {
+      html += '<div class="card staff"><h2>Bank rail for this project</h2><p class="sub">Distributions are sent FROM this funding source (the project SPV\'s account on the rail). Blank uses the platform default from the environment.</p><div class="grid"><div class="wide"><label>Distribution funding source URL</label><input type="text" id="stSrc" value="' + esc((c.bank && c.bank.distributionSourceUrl) || '') + '" placeholder="https://api.dwolla.com/funding-sources/…"></div></div><div class="bar"><button class="btn btn-ghost btn-sm" id="btnSrc">Save</button><span class="msg" id="srcMsg"></span></div></div>';
+    }
     if (c.status === 'funded') {
       html += '<div class="card staff"><h2>Declare a distribution</h2><p class="sub">From the sponsor\'s quarterly report. The crowd receives ' + (c.offer && c.offer.sharePct) + '% of the distributable figure, split across ' + (Number(c.unitsSold) || 0).toLocaleString('en-US') + ' units.</p><div class="grid"><div><label>Period</label><input type="text" id="dPeriod" placeholder="2027-Q1"></div><div><label>Gross revenue (USD)</label><input type="number" id="dGross"></div><div><label>Distributable cash (USD, whole project)</label><input type="number" id="dDist"></div><div class="wide"><label>Note</label><input type="text" id="dNote" placeholder="e.g. 91 days of operation, one curtailment event"></div></div><div class="bar"><button class="btn btn-primary" id="btnDist">Declare</button><span class="msg" id="dMsg"></span></div></div>';
     }
@@ -416,6 +510,8 @@ function renderOps() {
     var a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = (c.slug || c.id) + '-investors.csv'; document.body.appendChild(a); a.click(); a.remove();
   };
   var acts = document.querySelectorAll('[data-act]'); for (var i = 0; i < acts.length; i++) acts[i].onclick = function () { staffAct(this.getAttribute('data-act')); };
+  var pos = document.querySelectorAll('[data-payout]'); for (var q = 0; q < pos.length; q++) pos[q].onclick = function () { var id = this.getAttribute('data-payout'); if (!window.confirm('Pay this distribution out to every holder now? Holders with a verified bank are paid over the rail; the rest are listed as unbanked for hand payment.')) return; this.disabled = true; api({ action: 'payout', distributionId: id }).then(function (r) { alert('Payouts created: ' + r.payouts.length + ' · distribution is ' + r.status + '.'); loadOps(); })['catch'](function (e) { alert(e.message); }); };
+  if ($('btnSrc')) $('btnSrc').onclick = function () { var url = val('stSrc').trim(); db.collection('cf_campaigns').doc(c.id).set({ bank: { distributionSourceUrl: url || null }, updatedAt: FV.serverTimestamp() }, { merge: true }).then(function () { msg('srcMsg', 'Saved.', 'ok'); refreshCur(); })['catch'](function (e) { msg('srcMsg', e.message, 'err'); }); };
   var cf = document.querySelectorAll('[data-confirm]'); for (var k = 0; k < cf.length; k++) cf[k].onclick = function () { var id = this.getAttribute('data-confirm'); var ref = window.prompt('Payment reference (wire id, cheque number):', ''); if (ref === null) return; api({ action: 'confirm', pledgeId: id, reference: ref }).then(function () { loadOps(); refreshCur(); })['catch'](function (e) { alert(e.message); }); };
   var rf = document.querySelectorAll('[data-refund]'); for (var j = 0; j < rf.length; j++) rf[j].onclick = function () { var id = this.getAttribute('data-refund'); var why = window.prompt('Reason for refund:', ''); if (why === null) return; api({ action: 'refund', pledgeId: id, reason: why }).then(function () { loadOps(); refreshCur(); })['catch'](function (e) { alert(e.message); }); };
   if ($('btnDist')) $('btnDist').onclick = function () {

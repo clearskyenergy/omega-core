@@ -3085,7 +3085,12 @@ service cloud.firestore {
 
        READ IS PUBLIC for live/funded/closed, without sign-in, the way
        tenant_public is: a campaign card paints before there is a user.
-       Drafts and reviews are the sponsor's and ClearSky's. */
+       Drafts and reviews are the sponsor's and the admin team's.
+
+       THE ADMIN TEAM is isOmegaAdmin(): ClearSky's own domains plus any
+       active omega_staff record with role 'admin' — so an administrator
+       outside those domains is a console action, not a deploy. Mirrored
+       server-side by isPlatformAdmin() in api/_lib/admin.js. */
     function cfPublic() {
       return resource.data.get('status', '') in ['live', 'funded', 'closed'];
     }
@@ -3100,7 +3105,7 @@ service cloud.firestore {
           && request.resource.data.get('distributedTotal', 0) == resource.data.get('distributedTotal', 0);
     }
     match /cf_campaigns/{campaignId} {
-      allow read: if cfPublic() || isAdmin() || cfSponsor();
+      allow read: if cfPublic() || isOmegaAdmin() || cfSponsor();
       allow create: if signedIn()
         && canActInOrg(request.resource.data.get('sponsorOrgId', ''))
         && request.resource.data.get('status', '') == 'draft'
@@ -3108,7 +3113,7 @@ service cloud.firestore {
         && request.resource.data.get('unitsSold', 0) == 0
         && request.resource.data.get('backers', 0) == 0
         && request.resource.data.get('headline', null) == null;
-      allow update: if isAdmin()
+      allow update: if isOmegaAdmin()
         || (cfSponsor()
             && request.resource.data.get('sponsorOrgId', '') == resource.data.get('sponsorOrgId', '')
             && cfCountersHeld()
@@ -3120,7 +3125,7 @@ service cloud.firestore {
                    && request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(['story', 'tagline', 'images', 'faq', 'documents', 'risks', 'updatedAt']))
                ));
-      allow delete: if isAdmin() || (cfSponsor() && resource.data.get('status', '') == 'draft');
+      allow delete: if isOmegaAdmin() || (cfSponsor() && resource.data.get('status', '') == 'draft');
 
       /* Sponsor posts, Indiegogo "Updates". Visible to whoever can see the
          campaign; written by the sponsor and ClearSky; never edited after. */
@@ -3129,13 +3134,13 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/cf_campaigns/$(campaignId)).data;
         }
         allow read: if cfParent().get('status', '') in ['live', 'funded', 'closed']
-                    || isAdmin()
+                    || isOmegaAdmin()
                     || (signedIn() && canActInOrg(cfParent().get('sponsorOrgId', '')));
-        allow create: if isAdmin()
+        allow create: if isOmegaAdmin()
                     || (signedIn()
                         && canActInOrg(cfParent().get('sponsorOrgId', ''))
                         && request.resource.data.get('author', '') == request.auth.token.email.lower());
-        allow update, delete: if isAdmin();
+        allow update, delete: if isOmegaAdmin();
       }
     }
 
@@ -3149,18 +3154,24 @@ service cloud.firestore {
       function cfSelf() {
         return signedIn() && request.auth.uid == uid;
       }
+      /* bank is pinned with the privilege fields: it names the funding source
+         an ACH debit is pulled FROM. A browser that could write it could point
+         its own pledge at somebody else's account. /api/invest writes it after
+         the rail has verified the account belongs to this person. */
       function cfPrivilegeHeld() {
         return request.resource.data.get('status', 'active') == resource.data.get('status', 'active')
             && request.resource.data.get('kyc', 'none') == resource.data.get('kyc', 'none')
-            && request.resource.data.get('accreditedVerified', false) == resource.data.get('accreditedVerified', false);
+            && request.resource.data.get('accreditedVerified', false) == resource.data.get('accreditedVerified', false)
+            && request.resource.data.get('bank', null) == resource.data.get('bank', null);
       }
-      allow read: if cfSelf() || isAdmin();
+      allow read: if cfSelf() || isOmegaAdmin();
       allow create: if cfSelf()
         && request.resource.data.get('uid', '') == uid
         && request.resource.data.get('status', 'active') == 'active'
         && request.resource.data.get('kyc', 'none') == 'none'
-        && request.resource.data.get('accreditedVerified', false) == false;
-      allow update: if isAdmin() || (cfSelf() && cfPrivilegeHeld());
+        && request.resource.data.get('accreditedVerified', false) == false
+        && request.resource.data.get('bank', null) == null;
+      allow update: if isOmegaAdmin() || (cfSelf() && cfPrivilegeHeld());
       allow delete: if false;
     }
 
@@ -3170,7 +3181,7 @@ service cloud.firestore {
        every pledge and why the sponsor console filters on it; ClearSky reads
        all. */
     match /cf_pledges/{pledgeId} {
-      allow read: if isAdmin()
+      allow read: if isOmegaAdmin()
         || (signedIn() && resource.data.get('investorUid', '') == request.auth.uid)
         || (signedIn() && canActInOrg(resource.data.get('sponsorOrgId', '')));
       allow write: if false;
@@ -3184,13 +3195,23 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* One row per holder per distribution: what they are owed and whether
+       it was sent. An investor reads their own; the admin team reads all.
+       Server-written only — /api/invest creates them and the bank rail's
+       webhook settles them. */
+    match /cf_payouts/{payoutId} {
+      allow read: if isOmegaAdmin()
+        || (signedIn() && resource.data.get('investorUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
     /* Platform rules — minimums, annual caps, allowed countries — read by
        the storefront before sign-in and by /api/invest on every pledge.
        ClearSky writes them from the console; a deploy is not needed to
        change a limit. */
     match /cf_settings/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isOmegaAdmin();
     }
   }
 }

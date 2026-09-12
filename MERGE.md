@@ -77,6 +77,18 @@ browser. Sponsors register the console through `omega-tools.js` key
 `portals/skyfund/README.md` — the platform is not a registered funding
 portal; counsel decides the exemption before real money moves.
 
+**SkyFund admin + bank rail (2026-09-12):** the admin team is
+`isOmegaAdmin()` / `isPlatformAdmin()` (ClearSky domains + active
+`omega_staff` admins), with an Admin tab in `/skyfund/sponsor` (dashboard,
+investors, eligibility rules, payouts, hand refunds). The bank rail is one
+adapter, `api/_lib/invest-bank.js` (`none` / `mock` / `dwolla` + Plaid):
+investors link a bank on the Account page, pay by ACH into escrow, receive
+distributions as ACH credits (`cf_payouts`, server-written), and refunds go
+back over the same rail; `api/invest-ach-webhook.js` settles the ledger.
+`cf_investors.bank` is pinned in the rules. The Dwolla/Plaid calls are
+written to the published APIs and must be proven in their sandboxes before
+real money (checklist in the README).
+
 ## TODO — Claude Code sessions, in order
 
 1. **Port the AHJ research block into editor.html.** The Joules family has

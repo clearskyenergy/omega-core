@@ -103,8 +103,9 @@ Already-existing role/identity collections — use, don't duplicate:
 - `omega_users`, `omega_partner_orgs`, `deals`, `verifications` — the
   PARTNER PORTAL. Separate product surface; `p`-prefixed helpers.
 - `fin_*`, `mkt_*`, `vdc_*` — financing, distribution, VDC marketplaces.
-- `cf_*` — SkyFund (community investment). `cf_pledges` is server-
-  written only; see `portals/skyfund/README.md`.
+- `cf_*` — SkyFund (community investment). `cf_pledges` and `cf_payouts`
+  are server-written only; the admin team is `isOmegaAdmin()`; see
+  `portals/skyfund/README.md`.
 
 Rules for new collections: `firestore.rules.control-plane.addendum`
 (three paste-in blocks: helpers, omega_orgs replacement, new

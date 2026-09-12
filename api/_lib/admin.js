@@ -85,6 +85,23 @@ function isTenantAdmin(caller, orgId) {
   });
 }
 
+/* Platform administrator — SkyFund's admin team. ClearSky's own domains and
+   the 'staff' custom claim (as `caller.staff`), OR an active omega_staff
+   record with role 'admin', so an administrator outside ClearSky's domains
+   can be given the console without a deploy. Mirrors isOmegaAdmin() in the
+   rules. Resolves a boolean; a missing Firestore credential resolves false
+   rather than throwing, because a refusal is the safe answer. */
+function isPlatformAdmin(caller) {
+  if (caller.staff) return Promise.resolve(true);
+  return Promise.resolve().then(function () {
+    return db().collection('omega_staff').doc(caller.uid).get();
+  }).then(function (s) {
+    if (!s.exists) return false;
+    var d = s.data();
+    return d.active !== false && d.role === 'admin';
+  }).catch(function () { return false; });
+}
+
 function billingOf(orgId) {
   return db().collection('omega_orgs').doc(orgId).collection('billing').doc('current').get()
     .then(function (s) { return s.exists ? s.data() : { tier: 'standard', addons: [], toolOverrides: {} }; });
@@ -117,5 +134,5 @@ function cors(req, res) {
 }
 
 module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
-  canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
+  canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, isPlatformAdmin: isPlatformAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };
