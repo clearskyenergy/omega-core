@@ -24945,6 +24945,10 @@ async function saveProject(){
       /* Patch 12: terrain is project data. Samples can be a few hundred
          rows, which is well inside the 1 MB document limit. */
       terrain: (typeof S!=='undefined' && S.terrain) ? S.terrain : null,
+      /* The URL-driven build records what it did and where it stopped, so a
+         run opened from a text message (no opener to report to) still
+         leaves its result on the project. */
+      autopilot: (typeof S!=='undefined' && S.autopilot) ? S.autopilot : null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -29008,6 +29012,10 @@ function renderScorePanel(){
   if(typeof updateCostEst==='function') try{ updateCostEst(); }catch(e){}
   else if(typeof renderCostBreakdownBar==='function') renderCostBreakdownBar();
 }
+/* Called behind typeof guards by the Grid Atlas pre-screen (saveToProject)
+   and by OmegaSiteContext, and defined nowhere until now - so a fresh atlas
+   result never repainted this panel. One definition, one wrapper. */
+function _siteScoreRefresh(){ try{ renderScorePanel(); }catch(e){} }
 function openScorePanel(){
   var p=document.getElementById('scorep'); if(!p) return;
   renderScorePanel();
@@ -29028,9 +29036,23 @@ function toggleDataLayer(layer, on){
 
   if(layer==='parcel'){
     if(on){
-      // TODO: wire Regrid parcel API here (needs address→parcel lookup + token).
-      // Sample parcel until then:
-      D.parcelAcres = 2.4; D.parcelZoning = 'M-1 (Light Industrial)'; D.parcelOwner = 'Sample Holdings LLC';
+      /* The real record or nothing. The 2.4-acre sample that lived here put a
+         DATA badge on an invented number. OmegaAutopilot.parcel asks
+         /api/parcel (county assessor or Regrid, key server-side) for the
+         parcel under the map centre; the row stays empty until it answers. */
+      D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null;
+      try{
+        var g=(typeof omegaGeo==='function')?omegaGeo():null;
+        if(g && window.OmegaAutopilot && typeof OmegaAutopilot.parcel==='function'){
+          OmegaAutopilot.parcel(g.lat, g.lng).then(function(p){
+            var cb=document.getElementById('layer-parcel');
+            if(!p || (cb && !cb.checked)) return;
+            D.parcelAcres=(p.acres!=null)?p.acres:null; D.parcelZoning=p.zoning||null; D.parcelOwner=p.owner||null;
+            _renderLayerData();
+            var sp=document.getElementById('scorep'); if(sp && sp.classList.contains('scorep-open')) renderScorePanel();
+          }).catch(function(e){ console.warn('[layers] parcel:', e&&e.message); });
+        } else if(!g) console.warn('[layers] parcel: no map centre yet');
+      }catch(e){}
     } else { D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null; }
   } else if(layer==='zoning'){
     if(on){
@@ -66298,6 +66320,14 @@ function _bgbCancel(){
   if(typeof showBanner==='function') showBanner('wiz','BESS build cancelled.');
 }
 window._bgbCancel=_bgbCancel;
+/* BGB and _bgbCurKind were never exported. This block is wrapped, so a module
+   in a later block (the URL autopilot) saw typeof BGB === 'undefined' and
+   reported the guided build missing from the very page it was on.
+   An ACCESSOR, not window.BGB: fourteen `typeof BGB` guards elsewhere in this
+   file (Solar + Storage seeding among them) have been dead since the wrap,
+   and a global by that name would switch every one of them on at once.
+   That is a separate decision; this only lets a later block read the state. */
+try{ window._bgbState=function(){ return BGB; }; window._bgbCurKind=_bgbCurKind; }catch(e){}
 
 /* Enter/Backspace for BESS draw phase + live rubber-band. */
 document.addEventListener('keydown', function(e){
@@ -154466,6 +154496,559 @@ if (root.console && console.info) {
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<!-- ================= OMEGA AUTOPILOT =================
+     The editor driven by a URL. Jarvis (mission.html) or a text message
+     opens editor.html?address=...&auto=bess and this module sequences
+     what the page already knows how to do: geocode, the parcel record,
+     the roads, the BESS guided build, Grid Atlas, the site score, the
+     save. Two stops are deliberate and stay human: the system size when
+     the phrase did not carry one, and the utility point of
+     interconnection. Nothing here runs unless ?address= and ?auto= are
+     both present, and it never invents a size, a POI or a catalogue unit.
+     ==================================================== -->
+<script>
+(function (root) {
+  'use strict';
+  var TAG = '[autopilot]';
+
+  /* ── THE CONTRACT ──────────────────────────────────────────────────────
+     ?address=<street address>&auto=bess|map[&mw=&mwh=][&mode=BTM|FOM]
+     [&from=jarvis|sms][&req=<id>].  ?id= / ?project= wins over address: the
+     loaded project keeps its own map and the run starts at the parcel.
+     auto=map stops after geocode + parcel + roads (and still scores). */
+  function num(v) { var n = parseFloat(v); return (isFinite(n) && n > 0) ? n : null; }
+  function parse() {
+    var q; try { q = new URLSearchParams(root.location.search); } catch (e) { return null; }
+    var address = String(q.get('address') || '').trim();
+    var auto = String(q.get('auto') || '').trim().toLowerCase();
+    if (!address || !auto) return null;
+    return {
+      address: address, auto: auto === 'bess' ? 'bess' : 'map',
+      mw: num(q.get('mw')), mwh: num(q.get('mwh')),
+      mode: String(q.get('mode') || 'BTM').toUpperCase() === 'FOM' ? 'FOM' : 'BTM',
+      from: String(q.get('from') || '').toLowerCase(), req: String(q.get('req') || ''),
+      id: q.get('project') || q.get('id') || null
+    };
+  }
+  /* Same test as projectAddress() in the auto-map poll: a digit or a street
+     word. A bare city name must not be geocoded and built on. */
+  function looksLikeAddress(v) {
+    return /\d/.test(v) || /\b(st|street|rd|road|ave|avenue|blvd|dr|drive|ln|lane|way|hwy|route|pkwy|ct|court|pl|place)\b/i.test(v);
+  }
+
+  var P = parse();
+  var ST = { params: P, step: 'idle', log: [], stoppedAt: null, error: null, parcel: null,
+             roads: 0, centre: null, front: null, stopped: false, fatal: false, armed: false, timers: [] };
+  root.__omegaAutopilot = ST;
+
+  function log(msg) {
+    ST.log.push({ t: Date.now(), step: ST.step, msg: String(msg) });
+    try { if (root.console) console.info(TAG + ' ' + ST.step + ': ' + msg); } catch (e) {}
+  }
+
+  /* ── HUD: one line per step, top right, and a Stop that means it ──────── */
+  var STEPS = [['map', 'Map'], ['parcel', 'Parcel'], ['roads', 'Roads'], ['size', 'Size'],
+               ['build', 'Build'], ['poi', 'Interconnection'], ['score', 'Grid Atlas'], ['save', 'Save']];
+  var COL = { pending: '#4B5A6B', running: '#F59E0B', ok: '#22C55E', blocked: '#EF4444', wait: '#60A5FA', skip: '#4B5A6B' };
+  function el(tag, css, text) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; return e; }
+  function hud() {
+    if (document.getElementById('ap-hud') || !document.body) return;
+    var h = el('div', 'position:fixed;left:12px;bottom:24px;z-index:100003;width:300px;max-height:calc(100vh - 48px);overflow:auto;background:rgba(10,18,30,.94);'
+      + 'border:1px solid #26364d;border-radius:10px;padding:10px 12px;font:11px/1.5 "IBM Plex Mono",Menlo,monospace;'
+      + 'color:#CBD5E1;box-shadow:0 4px 18px rgba(0,0,0,.4)');
+    h.id = 'ap-hud';
+    var head = el('div', 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px');
+    head.appendChild(el('div', 'font-weight:800;color:#E2EEF9;letter-spacing:.6px', 'AUTOPILOT'));
+    var stop = el('button', 'background:rgba(239,68,68,.15);border:1px solid #EF4444;color:#FCA5A5;border-radius:6px;'
+      + 'padding:2px 8px;font:inherit;font-weight:700;cursor:pointer', 'Stop');
+    stop.onclick = function () { root.OmegaAutopilot.stop(); };
+    head.appendChild(stop);
+    h.appendChild(head);
+    h.appendChild(el('div', 'color:#8FA3B8;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', P.address));
+    STEPS.forEach(function (s) {
+      var row = el('div', 'display:flex;gap:7px;align-items:flex-start;margin:2px 0');
+      row.setAttribute('data-step', s[0]);
+      row.appendChild(el('span', 'flex:0 0 8px;width:8px;height:8px;border-radius:50%;margin-top:5px;background:' + COL.pending));
+      row.appendChild(el('span', 'flex:0 0 96px;color:#E2EEF9', s[1]));
+      row.appendChild(el('span', 'flex:1;color:#8FA3B8;word-break:break-word', ''));
+      h.appendChild(row);
+    });
+    document.body.appendChild(h);
+  }
+  function mark(step, state, text) {
+    log(step + ' ' + state + (text ? ' - ' + text : ''));
+    try {
+      var row = document.querySelector('#ap-hud [data-step="' + step + '"]');
+      if (!row) return;
+      row.children[0].style.background = COL[state] || COL.pending;
+      row.children[2].textContent = text || state;
+      row.children[2].style.color = state === 'blocked' ? '#FCA5A5' : state === 'wait' ? '#BFDBFE' : '#8FA3B8';
+    } catch (e) {}
+  }
+
+  /* Poll until test() is truthy. A test may return {blocked:'why'} to fail
+     early. Stop clears every timer registered here. */
+  function waitFor(test, ms, every) {
+    return new Promise(function (res) {
+      var t0 = Date.now();
+      var iv = setInterval(function () {
+        var r = null;
+        try { r = test(); } catch (e) {}
+        if (ST.stopped) { clearInterval(iv); res({ ok: false, why: 'stopped' }); return; }
+        if (r && r.blocked) { clearInterval(iv); res({ ok: false, why: r.blocked }); return; }
+        if (r) { clearInterval(iv); res({ ok: true, value: r }); return; }
+        if (Date.now() - t0 > ms) { clearInterval(iv); res({ ok: false, why: 'timed out' }); }
+      }, every || 250);
+      ST.timers.push(iv);
+    });
+  }
+
+  /* The guided-build state lives in a wrapped block; _bgbState() hands it out. */
+  var BGB = null;
+  function bgb() { if (!BGB) { try { BGB = (typeof root._bgbState === 'function') ? root._bgbState() : null; } catch (e) {} } return BGB; }
+
+  /* ── geometry helpers ─────────────────────────────────────────────────── */
+  function map() { return root._gmap || null; }
+  function centreOf() { try { var c = map().getCenter(); return c ? { lat: c.lat(), lng: c.lng() } : null; } catch (e) { return null; } }
+  function toPx(lat, lng) { try { var sz = _getCanvasSize(); return _latLngToPx(lat, lng, _liveMapState(), sz.w, sz.h); } catch (e) { return null; } }
+  function distM(a, b) {
+    var r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLng = (b[1] - a[1]) * r;
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+  function centroid(ring) {
+    var lat = 0, lng = 0, n = ring.length;
+    for (var i = 0; i < n; i++) { lat += ring[i][0]; lng += ring[i][1]; }
+    return { lat: lat / n, lng: lng / n };
+  }
+
+  /* ── STEP 1: address on the map ───────────────────────────────────────── */
+  function stepMap() {
+    ST.step = 'map'; mark('map', 'running', P.id ? 'project ' + P.id + ' owns the map' : 'geocoding');
+    if (!P.id) {
+      var key = null; try { key = (typeof _CFG !== 'undefined') ? _CFG.googleMapsKey : null; } catch (e) {}
+      if (!key || key.indexOf('REPLACE') >= 0) { ST.fatal = true; mark('map', 'blocked', 'maps key'); return Promise.resolve(); }
+      try { root.fetchMap(); } catch (e) { log('fetchMap: ' + e.message); }
+    }
+    return waitFor(function () {
+      if (root._mapsAuthFailed) return { blocked: 'maps key refused by Google (gm_authFailure)' };
+      var st = document.getElementById('gmap-status');
+      if (st && /Address not found/i.test(st.textContent || '')) return { blocked: 'address not found' };
+      if (P.id && !root._loadReady) return null;
+      var c = centreOf();
+      return (c && typeof S !== 'undefined' && S.pxPerFt > 0) ? c : null;
+    }, 60000).then(function (r) {
+      if (!r.ok) { ST.fatal = true; mark('map', 'blocked', r.why); return; }
+      ST.centre = r.value; mark('map', 'ok', r.value.lat.toFixed(5) + ', ' + r.value.lng.toFixed(5));
+    });
+  }
+
+  /* ── STEP 2: the parcel record, server-side ───────────────────────────── */
+  function token() {
+    var u = null; try { u = root._currentUser || (root.firebase && firebase.auth().currentUser); } catch (e) {}
+    return u ? u.getIdToken() : Promise.reject(new Error('signed out'));
+  }
+  var parcelCache = {};
+  /* {ring:[[lat,lng]..], apn, owner, acres, zoning, county, source} or null
+     when there is no record at that point. Rejects on a service failure. */
+  function parcel(lat, lng) {
+    var key = (+lat).toFixed(5) + ',' + (+lng).toFixed(5);
+    if (parcelCache[key]) return parcelCache[key];
+    var p = token().then(function (tok) {
+      return fetch('/api/parcel', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        body: JSON.stringify({ lat: +lat, lng: +lng }) });
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) {}
+        if (r.status === 401) throw new Error('signed out');
+        if (!r.ok || !j) throw new Error('parcel service unavailable (' + r.status + ')');
+        if (!j.ok) return null;
+        var ring = (j.ring || []).filter(function (q) { return q && isFinite(+q[0]) && isFinite(+q[1]); })
+                                 .map(function (q) { return [+q[0], +q[1]]; });
+        return { ring: ring, apn: j.apn || null, owner: j.owner || null,
+                 acres: (j.acres != null && isFinite(+j.acres)) ? +j.acres : null,
+                 zoning: j.zoning || null, county: j.county || null, source: j.source || null };
+      });
+    });
+    parcelCache[key] = p;
+    p.then(null, function () { delete parcelCache[key]; });
+    return p;
+  }
+  /* The ring becomes a closed polyline pushed exactly as finishPolyline()
+     does, then anchored and designated. Abort if ANY vertex fails to project:
+     a partial anchor flies apart on zoom (see _geoStampAll). */
+  function drawRing(ring) {
+    var m = map();
+    if (!ring || ring.length < 3 || !m || !(root.google && google.maps)) return Promise.resolve(false);
+    try {
+      var b = new google.maps.LatLngBounds();
+      ring.forEach(function (q) { b.extend(new google.maps.LatLng(q[0], q[1])); });
+      m.fitBounds(b);
+    } catch (e) { return Promise.resolve(false); }
+    return new Promise(function (res) {
+      var done = false;
+      function go() { if (done) return; done = true; setTimeout(function () { res(true); }, 350); }
+      try { google.maps.event.addListenerOnce(m, 'idle', go); } catch (e) {}
+      setTimeout(go, 4000);
+    }).then(function () {
+      var pts = [];
+      for (var i = 0; i < ring.length; i++) { var q = toPx(ring[i][0], ring[i][1]); if (!q) return false; pts.push({ x: q.x, y: q.y }); }
+      var a = pts[0], z = pts[pts.length - 1];
+      if (Math.abs(a.x - z.x) > 0.5 || Math.abs(a.y - z.y) > 0.5) pts.push({ x: a.x, y: a.y });
+      var sh = { id: uid(), kind: 'polyline', pts: pts, style: S.shapeStyle, color: SHAPE_STROKE,
+                 label: 'Parcel boundary', omegaRole: 'boundary' };
+      S.shapes.push(sh); root.renderShape(sh);
+      try { if (typeof updShapeCount === 'function') updShapeCount(); } catch (e) {}
+      try { root._geoStampAll(); } catch (e) {}
+      root.OmegaSite.setBoundary(sh.id);          /* pushHist is inside */
+      ST.centre = centroid(ring);
+      return true;
+    });
+  }
+  function stepParcel() {
+    ST.step = 'parcel'; mark('parcel', 'running', 'asking /api/parcel');
+    var c = ST.centre;
+    /* The session may still be restoring; give it a moment before calling it signed out. */
+    return waitFor(function () { return root._currentUser || null; }, 8000).then(function (r) {
+      if (!r.ok) {
+        mark('parcel', 'blocked', 'sign in to look up the parcel - draw the boundary and use Site > Set as boundary');
+        report('parcel'); return;
+      }
+      return parcel(c.lat, c.lng).then(function (p) {
+        if (!p) {
+          mark('parcel', 'blocked', 'no parcel record here - draw the boundary and use Site > Set as boundary');
+          report('parcel'); return;
+        }
+        ST.parcel = p;
+        var D = root._SITE_DATA = root._SITE_DATA || {};
+        D.parcelAcres = p.acres; D.parcelZoning = p.zoning; D.parcelOwner = p.owner;
+        try { var cb = document.getElementById('layer-parcel'); if (cb) cb.checked = true; } catch (e) {}
+        try { if (typeof _renderLayerData === 'function') _renderLayerData(); } catch (e) {}
+        return drawRing(p.ring).then(function (ok) {
+          var what = (p.apn ? p.apn + ' · ' : '') + (p.acres != null ? p.acres + ' ac · ' : '') + (p.county || '') + ' (' + (p.source || '?') + ')';
+          mark('parcel', ok ? 'ok' : 'blocked', what + (ok ? '' : ' - ring could not be projected; draw the boundary by hand'));
+          if (!ok) report('parcel');
+        });
+      }, function (e) {
+        mark('parcel', 'blocked', (e && e.message) || 'parcel service unavailable'); report('parcel');
+      });
+    });
+  }
+
+  /* ── STEP 3: roads and buildings from OpenStreetMap ───────────────────── */
+  /* The same three mirrors the building layer lists, same 9 s per mirror. */
+  var OVERPASS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.osm.ch/api/interpreter'];
+  function overpass(q) {
+    return new Promise(function (res, rej) {
+      var idx = 0, last = null;
+      function attempt() {
+        if (idx >= OVERPASS.length) return rej(new Error('no Overpass mirror answered' + (last ? ' (' + last + ')' : '')));
+        var url = OVERPASS[idx++], done = false, ctl = null;
+        try { if (typeof AbortController === 'function') ctl = new AbortController(); } catch (e) {}
+        var t = setTimeout(function () { if (done) return; done = true; last = 'timeout'; try { if (ctl) ctl.abort(); } catch (e) {} attempt(); }, 9000);
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: q, signal: ctl ? ctl.signal : undefined })
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function (j) {
+            if (done) return;
+            /* A busy mirror answers 200 with no elements and a remark about
+               its own timeout. That is not an empty neighbourhood. */
+            if (j && j.remark && !(j.elements && j.elements.length)) throw new Error(String(j.remark).slice(0, 80));
+            done = true; clearTimeout(t); res(j && j.elements ? j.elements : []);
+          })
+          .catch(function (e) { if (done) return; done = true; clearTimeout(t); last = (e && e.message) || 'unreachable'; attempt(); });
+      }
+      attempt();
+    });
+  }
+  /* Roads are named 'road <name>' so omega-site-intel's ROAD_WORDS classifies
+     them; buildings are closed rings and read as context. Imported as one GIS
+     layer, never into S.shapes. Resolves {roads, buildings, points}. */
+  function roads(lat, lng, radiusM) {
+    var R = Math.max(250, Math.round(radiusM || 0));
+    var q = '[out:json][timeout:25];(way[highway](around:' + R + ',' + lat + ',' + lng + ');'
+          + 'way[building](around:' + R + ',' + lat + ',' + lng + '););out geom;';
+    return overpass(q).then(function (els) {
+      var fc = { type: 'FeatureCollection', features: [] }, nRoad = 0, nBld = 0, pts = [];
+      (els || []).forEach(function (w) {
+        if (!w || w.type !== 'way' || !w.geometry || w.geometry.length < 2) return;
+        var tags = w.tags || {};
+        var coords = w.geometry.map(function (g) { return [+g.lon, +g.lat]; });
+        if (tags.highway) {
+          nRoad++;
+          coords.forEach(function (c) { pts.push([c[1], c[0]]); });
+          fc.features.push({ type: 'Feature', properties: { name: 'road ' + (tags.name || tags.highway), highway: tags.highway },
+                             geometry: { type: 'LineString', coordinates: coords } });
+        } else if (tags.building && coords.length >= 3) {
+          var a = coords[0], z = coords[coords.length - 1];
+          if (a[0] !== z[0] || a[1] !== z[1]) coords.push([a[0], a[1]]);
+          nBld++;
+          fc.features.push({ type: 'Feature', properties: { name: 'building ' + nBld, building: tags.building },
+                             geometry: { type: 'Polygon', coordinates: [coords] } });
+        }
+      });
+      var imported = null;
+      if (fc.features.length && root.OmegaGIS && typeof OmegaGIS.importText === 'function') {
+        imported = OmegaGIS.importText(JSON.stringify(fc), 'osm-context.geojson');
+      }
+      return { roads: nRoad, buildings: nBld, points: pts, imported: imported };
+    });
+  }
+  function stepRoads() {
+    ST.step = 'roads'; mark('roads', 'running', 'OpenStreetMap');
+    var c = ST.centre, ring = ST.parcel ? ST.parcel.ring : null, rad = 0;
+    if (ring) ring.forEach(function (q) { rad = Math.max(rad, distM([c.lat, c.lng], q)); });
+    return roads(c.lat, c.lng, rad).then(function (r) {
+      ST.roads = r.roads;
+      /* 'front' is the boundary vertex nearest any road: the side the yard
+         faces and the meter walks toward. No parcel: the road point nearest
+         the centre. No roads: null, and the build faces south. */
+      var best = null, bd = Infinity;
+      if (r.points.length) {
+        var cand = ring || [[c.lat, c.lng]];
+        cand.forEach(function (v) {
+          r.points.forEach(function (rp) { var d = distM(v, rp); if (d < bd) { bd = d; best = ring ? v : rp; } });
+        });
+      }
+      ST.front = best ? { lat: best[0], lng: best[1] } : null;
+      mark('roads', r.roads ? 'ok' : 'blocked', r.roads + ' roads · ' + r.buildings + ' buildings' + (r.roads ? '' : ' - no road found nearby, the build faces south'));
+    }, function (e) {
+      mark('roads', 'blocked', 'roads unavailable - ' + ((e && e.message) || 'Overpass failed') + '; the build faces south');
+    });
+  }
+
+  /* ── STEP 4: size gate. Seeded like Build > Solar + Storage, or the human
+     picks in the guided-build modal. Never a guessed size, never a catalogue
+     unit: BGB.cfg stays the generic placeholder until a person chooses. ──── */
+  function stepSize() {
+    ST.step = 'size';
+    if (!bgb() || typeof root._bgbStartPlacing !== 'function' || typeof root.placeBgbAt !== 'function') {
+      ST.fatal = true; mark('size', 'blocked', 'guided build is not on this page'); return Promise.resolve();
+    }
+    if (P.mw && P.mwh) {
+      BGB.kw = P.mw * 1000; BGB.kwh = P.mwh * 1000; BGB.mode = P.mode; BGB.sizeLocked = true;
+      BGB.cfg = root._bgbGenericCfg(BGB.kw, BGB.kwh);
+      root.__omegaForceMode = P.mode; root.__omegaTieFrom = null;
+      try { root._bgbSync(); } catch (e) {}
+      ST.armed = false;
+      mark('size', 'ok', P.mw + ' MW / ' + P.mwh + ' MWh · ' + P.mode);
+      return Promise.resolve();
+    }
+    BGB.mode = P.mode;
+    try { root.openBessGuidedBuild(); } catch (e) { ST.fatal = true; mark('size', 'blocked', e.message); return Promise.resolve(); }
+    ST.stoppedAt = 'size';
+    mark('size', 'wait', 'pick the system size, then press Place Configured System');
+    return stepSave().then(function () { report('size'); }).then(function () {
+      /* openBessGuidedBuild sets BGB.active itself, so the modal closing and
+         the mode flipping to bgbplace is what says Place was pressed. */
+      return waitFor(function () {
+        if (document.getElementById('bgb-modal')) return null;
+        if (BGB.active && typeof S !== 'undefined' && S.mode === 'bgbplace') return true;
+        return { blocked: 'the size modal was closed without placing' };
+      }, 30 * 60 * 1000, 500);
+    }).then(function (r) {
+      if (!r.ok) { ST.fatal = true; mark('size', 'blocked', r.why); return; }
+      ST.armed = true; ST.stoppedAt = null;
+      mark('size', 'ok', (BGB.kw / 1000) + ' MW / ' + (BGB.kwh / 1000) + ' MWh · ' + BGB.mode + ' (chosen by hand)');
+    });
+  }
+
+  /* ── STEP 5: the headless build. bess at the centre, then each node 30 ft
+     further along the axis toward the road, placed through the same
+     placeBgbAt / _bgbFinishRun pair a click would run. Stops at 'service'. */
+  function layout() {
+    if (!bgb() || !BGB.active) throw new Error('guided build is not armed');
+    if (BGB.phase !== 'poi' || BGB.stepIx !== 0) throw new Error('guided build already in progress');
+    var c = ST.centre || centreOf(); if (!c) throw new Error('no site centre');
+    var Pc = toPx(c.lat, c.lng); if (!Pc) throw new Error('site centre is off the canvas');
+    var ppf = S.pxPerFt; if (!(ppf > 0)) throw new Error('no scale yet');
+    var v = { x: 0, y: 1 };
+    if (ST.front) {
+      var Pf = toPx(ST.front.lat, ST.front.lng);
+      if (Pf) { var dx = Pf.x - Pc.x, dy = Pf.y - Pc.y, L = Math.sqrt(dx * dx + dy * dy); if (L > 1) v = { x: dx / L, y: dy / L }; }
+    }
+    var fp = root._bessFootprint(BGB.kwh, BGB.kw);
+    function place(pt) { root.placeBgbAt(root._plotUnproject({ x: pt.x, y: pt.y })); }
+    function at(ft) { return { x: Pc.x + v.x * ft * ppf, y: Pc.y + v.y * ft * ppf }; }
+    var placed = [];
+    place(Pc);
+    if (BGB.phase !== 'drawtrench' || BGB.stepIx !== 1) throw new Error('build stalled at ' + (BGB.seq[0] || 'bess'));
+    placed.push(BGB.seq[0]);
+    for (var k = 1; k < 12; k++) {
+      var kind = root._bgbCurKind();
+      if (!kind || kind === 'service') break;
+      var pt = at(fp.lf / 2 + 30 * k), ix = BGB.stepIx;
+      place(pt);                          /* trench vertex */
+      root._bgbFinishRun();               /* commit the run: phase placeon */
+      if (BGB.phase !== 'placeon') throw new Error('build stalled at ' + kind + ' (run)');
+      place(pt);                          /* the node, snapped onto that run */
+      if (BGB.stepIx !== ix + 1) throw new Error('build stalled at ' + kind);
+      placed.push(kind);
+    }
+    return placed;
+  }
+  function stepBuild() {
+    ST.step = 'build'; mark('build', 'running', 'placing');
+    try {
+      if (!ST.armed) { root._bgbStartPlacing(); ST.armed = true; }
+      var placed = layout();
+      mark('build', 'ok', placed.join(' > '));
+    } catch (e) {
+      /* The build stays armed so a person can carry on by clicking. */
+      ST.fatal = true; ST.error = e.message; mark('build', 'blocked', e.message);
+    }
+    return Promise.resolve();
+  }
+
+  /* ── STEP 7: Grid Atlas into the score, without waiting on the 2 s poll ── */
+  function score() {
+    ST.step = 'score'; mark('score', 'running', 'Grid Atlas');
+    if (typeof OmegaGridPrescreen === 'undefined') { mark('score', 'blocked', 'Grid Atlas module missing'); return Promise.resolve(); }
+    var c = ST.centre || centreOf();
+    function have() { try { return (S.grid && S.grid.score != null) ? S.grid : null; } catch (e) { return null; } }
+    var before = have(), got = null;
+    if (before && c && Math.abs(+before.lat - c.lat) < 2e-4 && Math.abs(+before.lng - c.lng) < 2e-4) got = before;   /* autoRun got here first */
+    if (!got) {
+      try {
+        OmegaGridPrescreen.run(function (j, err) {
+          if (j) { got = j; try { OmegaGridPrescreen.saveToProject(j); OmegaGridPrescreen.feedSiteScore(j); } catch (e) {} }
+          else if (err && err !== 'already running') got = { error: String(err) };
+        });
+      } catch (e) { got = { error: e.message }; }
+    }
+    return waitFor(function () { if (got) return got; var g = have(); return (g && g !== before) ? g : null; }, 30000, 500).then(function () {
+      var g = have();
+      try { root.openScorePanel(); } catch (e) {}
+      if (!g) { mark('score', 'blocked', (got && got.error) || 'no answer in 30 s'); return; }
+      var ga = (root._SITE_DATA || {}).gridAtlas || {};
+      mark('score', 'ok', 'grid ' + g.score + '/100 · ' + ((typeof S !== 'undefined' && S.prescreen && S.prescreen.verdict) || 'unscored')
+        + (ga.nearestSubstationKm != null ? ' · substation ' + ga.nearestSubstationKm + ' km' : ''));
+    });
+  }
+
+  /* ── STEP 8: persist and report ──────────────────────────────────────── */
+  function snapshot(stoppedAt) {
+    var ga = (root._SITE_DATA || {}).gridAtlas || null, p = ST.parcel, S0 = (typeof S !== 'undefined') ? S : {};
+    var o = { req: P.req, address: P.address, mw: P.mw, mwh: P.mwh, mode: P.mode,
+      parcel: p ? { apn: p.apn, acres: p.acres, county: p.county, source: p.source } : null,
+      roads: ST.roads,
+      gridScore: (S0.grid && S0.grid.score != null) ? S0.grid.score : null,
+      verdict: (S0.prescreen && S0.prescreen.verdict) || null,
+      nearestSubstationKm: (ga && ga.nearestSubstationKm != null) ? ga.nearestSubstationKm : null,
+      owner: (ga && ga.owner) || null,           /* who owns the nearest substation */
+      siteScore: null,
+      stoppedAt: stoppedAt || ST.stoppedAt || 'done' };
+    try { o.siteScore = Math.round(computeInterconnectScore().score * 100) / 100; } catch (e) {}
+    if (ST.error) o.error = ST.error;
+    return o;
+  }
+  var savePoll = null;
+  function stepSave() {
+    ST.step = 'save';
+    var snap = snapshot(); snap.from = P.from; snap.ranAt = new Date().toISOString();
+    try { S.autopilot = snap; } catch (e) {}
+    if (root._currentUser && typeof root.saveProject === 'function') {
+      mark('save', 'running', 'saving');
+      try {
+        var pn = document.getElementById('pname'); if (pn && !pn.value.trim()) pn.value = P.address;
+        return Promise.resolve(root.saveProject()).then(function () {
+          mark('save', 'ok', root._projectId ? 'project ' + root._projectId : 'saved');
+        }, function (e) { mark('save', 'blocked', (e && e.message) || 'save failed'); });
+      } catch (e) { mark('save', 'blocked', e.message); return Promise.resolve(); }
+    }
+    mark('save', 'wait', 'sign in to save this site');
+    if (!savePoll) {
+      savePoll = waitFor(function () { return root._currentUser ? true : null; }, 10 * 60 * 1000, 1000)
+        .then(function (r) { savePoll = null; if (r.ok) return stepSave(); });
+    }
+    return Promise.resolve();
+  }
+  /* The message the opener (mission.html) reads; sent at every human stop and
+     when the build finishes. Only to the same origin, only when Jarvis opened
+     the tab - a link tapped from a text has no opener and leaves the project
+     record instead. */
+  function report(stoppedAt) {
+    var msg = snapshot(stoppedAt);
+    msg.type = 'OMEGA_AUTOPILOT'; msg.projectId = root._projectId || null;
+    ST.last = msg;
+    if (P.from === 'jarvis') { try { if (root.opener) root.opener.postMessage(msg, root.location.origin); } catch (e) {} }
+    log('report ' + msg.stoppedAt);
+  }
+
+  /* ── STEP 6: the POI is a click. Score meanwhile, save, report, and wait
+     for _bgbFinish (or Escape) to flip BGB.active off. ──────────────────── */
+  function stepPoi() {
+    ST.step = 'poi'; ST.stoppedAt = 'poi';
+    var text = 'Click along the service route and press Enter, then click where the utility connection lands.';
+    mark('poi', 'wait', text);
+    try { root.showBanner('wiz', text); } catch (e) {}
+    return score().then(stepSave).then(function () { report('poi'); }).then(function () {
+      return waitFor(function () { return (bgb() && BGB.active === false) ? true : null; }, 60 * 60 * 1000, 500);
+    }).then(function (r) {
+      if (!r.ok) { mark('poi', 'blocked', r.why); return; }
+      var done = !!(BGB.placed && BGB.placed.service);
+      if (done) { ST.stoppedAt = 'done'; mark('poi', 'ok', 'interconnection placed'); }
+      else { ST.error = 'build cancelled before the interconnection point'; mark('poi', 'blocked', ST.error); }
+      return stepSave().then(function () { report(done ? 'done' : 'poi'); });
+    });
+  }
+
+  function skip(names, why) { names.forEach(function (n) { mark(n, 'skip', why); }); }
+  function finish(stoppedAt) {
+    if (ST.finished) return Promise.resolve();        /* one ending per run */
+    ST.finished = true; ST.stoppedAt = stoppedAt;
+    if (!ST.centre) { skip(['score', 'save'], 'no map'); report(stoppedAt); return Promise.resolve(); }
+    return score().then(stepSave).then(function () { report(stoppedAt); });
+  }
+  function start() {
+    if (!P || ST.started) return; ST.started = true;
+    hud(); log('start ' + JSON.stringify(P));
+    stepMap().then(function () {
+      if (ST.stopped) return;
+      if (ST.fatal) { skip(['parcel', 'roads', 'size', 'build', 'poi'], 'no map'); return finish('error'); }
+      return stepParcel().then(function () { if (!ST.stopped) return stepRoads(); }).then(function () {
+        if (ST.stopped) return;
+        if (P.auto !== 'bess') { skip(['size', 'build', 'poi'], 'auto=map'); return finish('done'); }
+        return stepSize().then(function () {
+          if (ST.stopped) return;
+          if (ST.fatal) { skip(['build', 'poi'], 'no size'); return finish('error'); }
+          return stepBuild();
+        }).then(function () {
+          if (ST.stopped || ST.finished) return;
+          if (ST.fatal) { skip(['poi'], 'build stalled'); return finish('error'); }
+          return stepPoi();
+        });
+      });
+    }).catch(function (e) {
+      ST.error = (e && e.message) || String(e); mark(ST.step, 'blocked', ST.error);
+    });
+  }
+  function stop() {
+    ST.stopped = true;
+    ST.timers.forEach(function (t) { clearInterval(t); }); ST.timers = [];
+    try { if (bgb() && BGB.active) root._bgbCancel(); } catch (e) {}
+    mark(ST.step, 'blocked', 'stopped');
+  }
+
+  root.OmegaAutopilot = { start: start, parcel: parcel, roads: roads, layout: layout, score: score, stop: stop,
+                          state: function () { return ST; } };
+
+  if (!P) return;                                   /* no ?address= and ?auto=: nothing on this page changes */
+  if (!P.id && !looksLikeAddress(P.address)) {
+    hud(); ST.fatal = true; mark('map', 'blocked', 'not a street address - nothing geocoded'); report('error'); return;
+  }
+  /* Synchronously, before the 400 ms live-map poll can recall the last site
+     or ask for an address. The chain itself waits for the DOM so every
+     wrapper later in this file is installed before the map boots. */
+  if (!P.id) {
+    try { var f = document.getElementById('addr-in'); if (f) f.value = P.address; } catch (e) {}
+    root._lastAddr = P.address;
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 

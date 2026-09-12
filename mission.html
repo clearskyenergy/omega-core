@@ -2337,7 +2337,7 @@ async function speakReply(text){
 }
 
 async function ask(said){
-  const reply = await submit(said);
+  const reply = await submit(said, true);
   if(!listening){ awake=false; return; }
 
   /* IF HE JUST ASKED A QUESTION, HE IS WAITING FOR AN ANSWER.
@@ -2781,7 +2781,85 @@ async function glassSync(force){
   }catch(_){}
 }
 
-async function submit(said){
+/* ── a reply that opens a tool ───────────────────────────────────────────
+   The twin can answer with {action:{kind:'openTool', url}} — "open site map
+   pro at 4200 W Roosevelt Rd" is one. The URL is opened only when it is on
+   THIS host; a link anywhere else is ignored and the row's meta says so, so
+   a reply can never send the browser somewhere the twin did not build it to
+   go.
+
+   No 'noopener' on purpose. The editor is same-origin and reports back to
+   its opener by postMessage (the 'message' listener below); a tab opened
+   with noopener has no one to report to.
+
+   The open runs after an awaited fetch, and from voice with no gesture at
+   all, so the browser is free to refuse it. When it does — or whenever the
+   turn was spoken — the row carries a button, and one click is a gesture. */
+function openAction(action, row, spoken){
+  if(!action || action.kind!=='openTool') return;
+  const url=action.url;
+  const mine=typeof url==='string' && url.indexOf('https://'+location.host+'/')===0;
+  if(!mine){
+    const meta=row&&row.querySelector('.meta');
+    if(meta) meta.textContent+='  ·  ignored a link off this host';
+    return;
+  }
+  let w=null;
+  try{ w=window.open(url,'_blank'); }catch(_){ w=null; }
+  if((w===null || spoken) && row){
+    bacts(row,[['OPEN SITE MAP PRO',()=>window.open(url,'_blank')]]);
+    const box=el('thread'); if(box) box.scrollTop=box.scrollHeight;
+  }
+}
+
+/* ── site map pro reports back ───────────────────────────────────────────
+   The editor tab this page opened posts {type:'OMEGA_AUTOPILOT', ...} to its
+   opener when the autopilot pauses for a human and again when the build
+   finishes. The sentence is assembled from those fields and nothing else —
+   no model composes it — and a field that did not arrive is left out rather
+   than read aloud as "undefined". It goes on the thread through /brain at
+   $0, the row a neural-link answer gets, so the phone sees it too. The same
+   pause reported twice (req + stoppedAt) is said once. */
+const autopilotSeen=new Set();
+function autopilotSentence(d){
+  const has=v=>v!=null && v!=='' && !(typeof v==='number' && isNaN(v));
+  const n=(v,p)=>{ const x=Number(v); if(isNaN(x)) return String(v);
+                   const k=Math.pow(10,p); return String(Math.round(x*k)/k); };
+  const facts=[];
+  if(has(d.mw)||has(d.mwh))
+    facts.push([has(d.mw)?n(d.mw,2)+' MW':'', has(d.mwh)?n(d.mwh,2)+' MWh':''].filter(Boolean).join(' / '));
+  const p=d.parcel;
+  if(p && typeof p==='object' && has(p.acres)){
+    const where=has(p.county)?String(p.county):(has(p.source)?String(p.source):'');
+    facts.push(n(p.acres,1)+'-acre parcel'+(where?' ('+where+')':''));
+  }
+  if(has(d.gridScore)) facts.push('grid score '+n(d.gridScore,0));
+  if(has(d.verdict)) facts.push('prescreen '+d.verdict);
+  if(has(d.nearestSubstationKm)) facts.push('nearest substation '+n(d.nearestSubstationKm,1)+' km');
+  const head='Site map'+(has(d.address)?' for '+d.address:'');
+  const tail={
+    poi:   'Waiting on you for the utility connection point.',
+    size:  'Waiting on you to pick the system size.',
+    parcel:'No parcel record here — draw the boundary.',
+    done:  'Built.',
+    error: 'Stopped'+(has(d.error)?': '+String(d.error).replace(/[.\s]+$/,''):'')+'.'
+  }[d.stoppedAt]||'';
+  return (facts.length ? head+': '+facts.join(', ')+'.' : head+'.')+(tail?' '+tail:'');
+}
+window.addEventListener('message', e=>{
+  if(e.origin!==location.origin || !e.data || e.data.type!=='OMEGA_AUTOPILOT') return;
+  const d=e.data;
+  const key=String(d.req||d.projectId||d.address||'')+'|'+String(d.stoppedAt||'');
+  if(autopilotSeen.has(key)) return;
+  autopilotSeen.add(key);
+  const text=autopilotSentence(d);
+  say('jarvis', text, 0, 'site map pro');
+  caps('JARVIS', text, false);
+  if(voiceOut) speakReply(text);
+  recordBrain({text, modelCostUsd:0, model:'site-map-pro'});
+});
+
+async function submit(said, spoken){
   said=(said||'').trim(); if(!said) return;
   say('you', said);
 
@@ -2816,8 +2894,10 @@ async function submit(said){
       }
     }
     const reply=r.ok?(j.reply||'No answer.'):(j.error||('HTTP '+r.status));
-    pending.remove(); say('jarvis', reply, j.costUsd, via);
+    pending.remove(); const row=say('jarvis', reply, j.costUsd, via);
     caps('JARVIS', reply, false);
+    /* Before the voice, not after: the gesture that sent this is still fresh. */
+    if(r.ok) openAction(j.action, row, !!spoken);
     if(r.ok && voiceOut){ if(via) face('speaking'); await speakReply(reply); if(via) face('idle'); }
     load();
     return reply;
@@ -4639,6 +4719,11 @@ function pickTool(t){
   const sub=document.createElement('div'); sub.className='cardOrg'; sub.style.textAlign='left';
   sub.textContent=t.file+'  ·  '+t.kb+'KB  ·  '+t.lines.toLocaleString()+' lines  ·  '+t.scripts+' scripts';
   h.appendChild(sub);
+  if(t.file==='editor.html'){
+    const hint=document.createElement('div'); hint.className='cardNote';
+    hint.textContent='Jarvis can open this at an address: say \u201copen site map pro at <address>\u201d';
+    h.appendChild(hint);
+  }
   host.appendChild(h);
 
   /* Anything already queued against this file. */

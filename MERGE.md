@@ -202,3 +202,69 @@ quietly, because each is a real move with a blocker attached.
       explains that it was written separately to avoid depending on five of
       the dashboard's private internals, which is the right instinct and the
       wrong conclusion: the fix is a public API, not a third copy.
+
+## Site Map Pro autopilot  (2026-09-11)
+
+`editor.html` gained one inline module, `OmegaAutopilot` (after the Patch 55
+OmegaSiteLocation block), that reads a URL contract and sequences functions
+the page already had. Nothing in it runs unless `?address=` and `?auto=` are
+both present.
+
+    /editor.html?address=<urlencoded street address>&auto=bess|map
+                [&mw=<n>&mwh=<n>][&mode=BTM|FOM][&from=jarvis|sms][&req=<id>]
+
+`?id=`/`?project=` wins over `address` (the loaded project keeps its map).
+Steps: geocode via `fetchMap()` → `POST /api/parcel` `{lat,lng}` with the
+Firebase ID token (ring becomes a closed polyline pushed as `finishPolyline()`
+does, then `_geoStampAll()` + `OmegaSite.setBoundary()`) → one Overpass query
+for `way[highway]` + `way[building]` imported through `OmegaGIS.importText` as
+`osm-context` (roads named `road <name>` so omega-site-intel classifies them)
+→ the BESS guided build seeded exactly as Build > Solar + Storage seeds it,
+driven through `_bgbStartPlacing` / `placeBgbAt` / `_bgbFinishRun` along the
+axis from the parcel centroid to the road → `OmegaGridPrescreen.run` +
+`saveToProject` + `feedSiteScore` → `openScorePanel()` → `saveProject()`.
+Reports to `window.opener` as `{type:'OMEGA_AUTOPILOT', …, stoppedAt}` on the
+same origin, only when `from=jarvis`. A fixed HUD (`#ap-hud`, bottom left)
+shows each step and carries a Stop button; `window.__omegaAutopilot` is the
+state for the console.
+
+Two stops are human by design and stay that way: the system size when the
+URL carries no `mw`/`mwh` (the guided-build modal opens; `stoppedAt:'size'`)
+and the utility point of interconnection (the build pauses in `drawtrench`
+at the meter; `stoppedAt:'poi'`). No catalogue unit is ever picked —
+`BGB.cfg` stays the `GENERIC-BESS` placeholder and `S.bessList` is untouched.
+
+Also in this change:
+
+- **Parcel lookup moved server-side.** The Site Data Layers "Parcels" checkbox
+  no longer writes the 2.4-acre "Sample Holdings LLC" stub with a DATA badge;
+  `toggleDataLayer('parcel', on)` asks `OmegaAutopilot.parcel(lat, lng)` →
+  `POST /api/parcel` (Bearer ID token; Regrid when `REGRID_TOKEN` is set,
+  else the Cook/DuPage/Lake ArcGIS layers from the worker registry). The
+  function ships separately; until it is deployed the row stays empty rather
+  than invented.
+- **`_siteScoreRefresh()` defined** (once, beside `renderScorePanel`). It was
+  called behind `typeof` guards from the Grid Atlas pre-screen and
+  OmegaSiteContext and defined nowhere, so an atlas result never repainted
+  the Site Score panel.
+- **`saveProject()` payload carries `autopilot`** (`S.autopilot`: request,
+  address, size, parcel, roads, grid score, verdict, `stoppedAt`), so a run
+  opened from a text message — no opener to report to — still leaves its
+  result on the project record.
+- **`_bgbState()` / `_bgbCurKind` exported.** The EV/BESS block is wrapped
+  (`(function(){ 'use strict';` at ~57566), so `var BGB` is not a global.
+  An accessor rather than `window.BGB` on purpose: fourteen `typeof BGB`
+  guards outside that block (9189, 10709, 13197, 14924, 42645, 42657, 70845,
+  79493, 79926 — the Solar + Storage seeding — 83731, 88885, 88939, 88956)
+  have been dead since the wrap, and a global by that name would switch all
+  of them on at once. Whether they should be live is a separate decision.
+
+Pre-existing gaps noted, not fixed here (each contradicts CLAUDE.md's
+"scoring in /api/" and "every /api function verifies the token"):
+`computeInterconnectScore()` weights live in the browser (~28834);
+`api/grid-atlas.js` checks only `GRID_ATLAS_KEY`, not a Firebase token, and
+its default CORS list omits silmarillion (same-origin there, so not in play).
+The design named the save function `_saveProject`; the file has `saveProject`
+(async, wrapped on `window` twice) — `scripts/tests/tautopilot.js` checks
+every name the module calls so the next rename is caught in node, not on a
+site.

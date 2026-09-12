@@ -34,6 +34,8 @@ actually in the file rather than a copy that can drift.
 | tpoi.js | a transformer or substation you place is the POINT OF INTERCONNECT, not campus gear — it gets its own compound and stops the yard fence stretching hundreds of feet across empty ground to reach it |
 | tsolarfence.js | each compound is fenced in its OWN angle: solar sits at the sun's angle while the campus sits at the parcel's, and one global frame inflated the solar fence |
 | tfence.js | `equipFrame` / `boxOf` — that a fence follows the equipment's angle when the equipment agrees on one, stays square when it does not, measures a block at its true size, and routes ties parallel to the fence lines |
+| tautopilot.js | the URL autopilot (`OmegaAutopilot`) — static, no extraction: the module exists once and is ES5, every global it calls is defined in `editor.html` (the design named a `_saveProject` that does not exist), it stops before the POI and never picks a catalogue unit, `_siteScoreRefresh` is defined exactly once, the Parcels layer no longer writes sample data, and `_bgbState()`/`_bgbCurKind` are exported. Prints the smoke URL; the run itself (map, parcel, roads, build, the two human stops) is checked in a browser |
+| tparcel.js | `/api/parcel.js` offline (no extract step; `_lib/admin` and `fetch` are stubbed): which county layer a point is asked of and in what order, an ArcGIS or GeoJSON ring turned into an open `[lat,lng]` ring, acres measured off it, the Cook/DuPage/Lake and Regrid answers normalised to the contract, and that a bad token, a bad body or a point outside coverage asks nobody upstream and echoes no upstream body |
 
 ## A note on angles
 
