@@ -2729,7 +2729,15 @@ async function speakReply(text){
     URL.revokeObjectURL(url);
   }catch(e){
     console.warn('[jarvis] voice out:', e.message);
-    coreState('voice: '+e.message.slice(0,60), false);
+    /* Say what happened in words he can act on, not a status code with a
+       JSON tail. The reasons that recur: the twin's ElevenLabs key rejected
+       (re-set the secret), the quota gone (top up or wait), autoplay. */
+    const m=String(e.message||'');
+    const why = /invalid_api_key|401/.test(m) ? 'ElevenLabs rejected the twin\'s key — using the browser voice'
+              : /quota|402|429/.test(m)        ? 'ElevenLabs quota is out — using the browser voice'
+              : /autoplay/.test(m)             ? 'tap the page once to unlock audio'
+              :                                  'voice: '+m.slice(0,60);
+    coreState(why, false);
     /* ElevenLabs is the good voice, not the only one. If it is out of quota
        he still gets an answer out loud from the browser's own synthesiser —
        a worse voice beats no voice, and it costs nothing. */
