@@ -509,6 +509,63 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   background:linear-gradient(90deg,rgba(11,107,47,.14),rgba(61,220,132,.08),rgba(11,107,47,.14));
   box-shadow:inset 0 0 20px rgba(11,107,47,.25)}
 
+/* ── QUANTUM MODE ────────────────────────────────────────────────────────
+   The command centre in gold. Same tokens re-pointed, so the chrome follows
+   without a second stylesheet; the handful of hard-coded cyan accents below
+   are the ones that sit on the command view and would otherwise stay blue in
+   a gold room. --good/--warn/--bad are left alone — those carry meaning. */
+:root[data-mode="quantum"]{
+  --glow-cyan:#ffc35c;
+  --glow-blue:#8a5a14;
+  --ink:#fbe9c8;
+  --dim:#c9a56e;
+  --panel:rgba(24,14,4,.62);
+  --edge:1px solid rgba(255,195,92,.32);
+  --bg:#0b0704;
+}
+:root[data-mode="quantum"] body::before{
+  background:linear-gradient(rgba(18,14,8,0) 50%,rgba(0,0,0,.14) 50%),
+             linear-gradient(90deg,rgba(255,180,60,.03),rgba(120,70,10,.02),rgba(255,180,60,.03));
+  background-size:100% 4px,6px 100%;
+}
+:root[data-mode="quantum"] .mark{border-color:var(--glow-cyan);
+  box-shadow:0 0 12px rgba(255,195,92,.4) inset}
+:root[data-mode="quantum"] .talkBar{
+  background:linear-gradient(90deg,rgba(138,90,20,.14),rgba(255,195,92,.08),rgba(138,90,20,.14));
+  box-shadow:inset 0 0 20px rgba(138,90,20,.25)}
+:root[data-mode="quantum"] .title{text-shadow:0 0 10px rgba(255,195,92,.5)}
+:root[data-mode="quantum"] .badge{background:rgba(255,195,92,.10)}
+:root[data-mode="quantum"] .badge.neural{background:rgba(255,195,92,.14);
+  text-shadow:0 0 8px rgba(255,195,92,.55);animation-name:neuralPulseQ}
+@keyframes neuralPulseQ{0%,100%{box-shadow:0 0 0 rgba(255,195,92,0)}50%{box-shadow:0 0 12px rgba(255,195,92,.45)}}
+:root[data-mode="quantum"] button:hover{background:rgba(255,195,92,.12)}
+:root[data-mode="quantum"] .rail{border-right-color:rgba(255,195,92,.14)}
+:root[data-mode="quantum"] .navItem:hover{background:rgba(255,195,92,.07)}
+:root[data-mode="quantum"] .navItem.on{background:rgba(255,195,92,.12);border-color:rgba(255,195,92,.35)}
+:root[data-mode="quantum"] .panel{background:linear-gradient(rgba(36,22,6,.44),rgba(22,13,4,.30));
+  border-color:rgba(255,195,92,.10);box-shadow:0 2px 26px rgba(60,30,0,.30)}
+:root[data-mode="quantum"] .panel::before,
+:root[data-mode="quantum"] .panel::after{border-color:rgba(255,195,92,.55)}
+:root[data-mode="quantum"] .ptitle{border-bottom-color:rgba(255,195,92,.16)}
+:root[data-mode="quantum"] .num{border-color:rgba(255,195,92,.35)}
+:root[data-mode="quantum"] .row.picked{background:rgba(255,195,92,.07)}
+:root[data-mode="quantum"] .row.picked .num{background:rgba(255,195,92,.22)}
+:root[data-mode="quantum"] .t.info{background:rgba(255,195,92,.12)}
+:root[data-mode="quantum"] .msg.you{background:rgba(138,90,20,.14);border-color:rgba(255,195,92,.35)}
+:root[data-mode="quantum"] .msg.jarvis{background:rgba(255,195,92,.06);border-color:rgba(255,195,92,.18)}
+:root[data-mode="quantum"] .cName,
+:root[data-mode="quantum"] .gName{text-shadow:0 0 18px rgba(255,195,92,.7)}
+:root[data-mode="quantum"] .scroll::-webkit-scrollbar-thumb{background:rgba(255,195,92,.3)}
+:root[data-mode="quantum"] .brand{border-bottom-color:rgba(255,195,92,.14)}
+:root[data-mode="quantum"] .railFoot{border-top-color:rgba(255,195,92,.14)}
+:root[data-mode="quantum"] .pill{background:rgba(255,195,92,.10)}
+:root[data-mode="quantum"] .quick button{border-color:rgba(255,195,92,.2)}
+/* The sphere has a nucleus of its own, and a 24px name across the middle
+   sat on top of it. In gold the label drops to the foot of the layer, just
+   under the shell, and steps back, so the centre reads as the object it is. */
+:root[data-mode="quantum"] .coreLayer .coreLabel{justify-content:flex-end;padding-bottom:3%}
+:root[data-mode="quantum"] .cName{font-size:18px;letter-spacing:5px;opacity:.75}
+
 .col{display:flex;flex-direction:column;gap:14px;min-height:0}
 /* Panels float rather than sit in boxes. The heavy version — a solid edge all
    the way round, a filled inset glow, and 2px corner braces — drew a rectangle
@@ -1377,8 +1434,10 @@ function makeBurst(id, opts){
     t += 0.0042;
     energy += (target-energy)*0.07;
     if(!W||!H){ resize(); requestAnimationFrame(frame); return; }
-    /* Doom owns the canvas in doom mode. Stand down without clearing. */
-    if(document.documentElement.dataset.mode === 'doom'){ requestAnimationFrame(frame); return; }
+    /* Doom owns the canvas in doom mode, the gold sphere in quantum. Stand
+       down without clearing. */
+    const md = document.documentElement.dataset.mode;
+    if(md === 'doom' || md === 'quantum'){ requestAnimationFrame(frame); return; }
 
     ctx.clearRect(0,0,W,H);
     const cx=W/2, cy=H/2;
@@ -1741,13 +1800,18 @@ function makeCore(id, opts) {
     const R = Math.min(W, H) * (opts.scale || 0.30);
     const yaw = t * (0.0022 + energy * 0.0024);
     const doom = doomNow;
-    const cyan = doom ? '61,220,132' : '0,243,255';
+    /* Gold on the way in when the saved mode is quantum, or the gate shows a
+       cyan globe under a gold name. The command centre has its own sphere;
+       this is only the globe agreeing with its label. */
+    const quantumNow = document.documentElement.dataset.mode === 'quantum';
+    const cyan = doom ? '61,220,132' : quantumNow ? '255,195,92' : '0,243,255';
+    const hot  = quantumNow ? '255,236,196' : '140,240,255';
     if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
     /* the halo it sits in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.1);
     g.addColorStop(0, 'rgba(' + cyan + ',' + (0.10 + energy * 0.10).toFixed(3) + ')');
-    g.addColorStop(0.45, 'rgba(0,120,220,0.05)');
+    g.addColorStop(0.45, quantumNow ? 'rgba(170,95,20,0.05)' : 'rgba(0,120,220,0.05)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(cx, cy, R * 2.1, 0, Math.PI * 2); ctx.fill();
@@ -1795,7 +1859,7 @@ function makeCore(id, opts) {
         const p = project(lat, (j / LON) * Math.PI * 2, yaw, cx, cy, R);
         if (p.z <= 0) continue;
         const a = 0.30 + 0.5 * p.z * (0.4 + energy);
-        ctx.fillStyle = 'rgba(140,240,255,' + Math.min(0.9, a).toFixed(3) + ')';
+        ctx.fillStyle = 'rgba(' + hot + ',' + Math.min(0.9, a).toFixed(3) + ')';
         ctx.fillRect(p.x, p.y, 1.4, 1.4);
       }
     }
@@ -1812,7 +1876,7 @@ function makeCore(id, opts) {
       const th = t * o.speed * (1 + energy);
       const bx = Math.cos(th) * R * o.rx, by = Math.sin(th) * R * o.ry;
       const bg = ctx.createRadialGradient(bx, by, 0, bx, by, 7);
-      bg.addColorStop(0, 'rgba(190,250,255,0.95)');
+      bg.addColorStop(0, 'rgba(' + hot + ',0.95)');
       bg.addColorStop(1, 'rgba(' + cyan + ',0)');
       ctx.fillStyle = bg;
       ctx.beginPath(); ctx.arc(bx, by, 7, 0, Math.PI * 2); ctx.fill();
@@ -1826,12 +1890,350 @@ function makeCore(id, opts) {
   return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
 }
 
+/* The gold sphere. A translucent globe of segmented light — nested bands and
+   tilted rings built from short dashes, ticks and little rectangles, loose
+   fragments floating just off the shell, a few wide arcs sweeping inside, and
+   a bright nucleus at the centre. It shares the arc canvas with the burst and
+   the Doom core and, like them, draws only when its mode is on and never
+   clears when it is off.
+
+   Budget: this page already runs a brain graph and a burst, so the sphere is
+   built ONCE as segment endpoints in each ring's own frame, moved with one
+   matrix per ring per frame and one multiply per point, and stroked in
+   twenty-four colour buckets — four tiers of light, three of depth, two
+   weights — rather than one stroke per dash. shadowBlur touches only the nucleus and
+   the sparks; the bloom on everything else is one quarter-size copy of the
+   frame blurred and drawn back, which costs one draw rather than a shadow per
+   dash. The frame is not cleared: it is faded, so a dash leaves a short trail
+   the way the film's does. */
+function makeQuantum(id, opts){
+  opts = opts || {};
+  const cv = document.getElementById(id);
+  if (!cv) return { set(){}, resize(){} };
+  const ctx = cv.getContext('2d');
+  let W=0, H=0, energy=0.15, target=0.15, yaw=0, tt=0, last=0;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  /* FOCAL is long on purpose. The film's sphere is nearly orthographic: the
+     far side is dimmer, not smaller, and a short lens made it read as a set
+     of inner rings instead of the back of the same shell. */
+  const TAU = Math.PI*2, TILT = 0.32, FOCAL = 5.5;
+  /* How much of the last frame survives into this one. Bucket alphas are
+     scaled by TRAIL so the steady-state brightness stays where it was. */
+  const KEEP = 0.45, TRAIL = 0.6;
+  const rnd = (a,b)=>a+Math.random()*(b-a);
+
+  /* 3x3 rotations as nine numbers. A Matrix class would spend more on
+     allocation than on arithmetic at a few thousand points a frame. */
+  const rotX=a=>{ const c=Math.cos(a), s=Math.sin(a); return [1,0,0, 0,c,-s, 0,s,c]; };
+  const rotY=a=>{ const c=Math.cos(a), s=Math.sin(a); return [c,0,s, 0,1,0, -s,0,c]; };
+  const rotZ=a=>{ const c=Math.cos(a), s=Math.sin(a); return [c,-s,0, s,c,0, 0,0,1]; };
+  const mul=(A,B)=>{
+    const o=new Array(9);
+    for(let r=0;r<3;r++) for(let c=0;c<3;c++)
+      o[r*3+c]=A[r*3]*B[c]+A[r*3+1]*B[3+c]+A[r*3+2]*B[6+c];
+    return o;
+  };
+  const unit=()=>{
+    for(;;){
+      const x=Math.random()*2-1, y=Math.random()*2-1, z=Math.random()*2-1;
+      const d=x*x+y*y+z*z;
+      if(d>0.0001 && d<=1){ const m=Math.sqrt(d); return [x/m,y/m,z/m]; }
+    }
+  };
+  /* Where the light comes from: upper left, and only partly toward you.
+     A light that mostly faces the viewer lights the whole front hemisphere
+     alike and the sphere has no side; this one leaves the right edge in
+     umber. Fixed in the room, not on the sphere, so the lit side stays lit
+     while the sphere turns. */
+  const L=[-0.68,0.40,0.62]; { const m=Math.hypot(L[0],L[1],L[2]); L[0]/=m; L[1]/=m; L[2]/=m; }
+
+  /* A ring lives in its own xz plane with local y as its axis; precession is
+     a spin about that axis. Segments are stored as endpoints so a frame does
+     no trig per dash. A segment is thin or heavy: most of the texture is
+     hairline, and the fifth that is not is what makes it read as circuitry
+     rather than wire. */
+  const RINGS=[];
+  function ring(o){
+    const seg=[], spark=[], heavy=[];
+    const push=(x1,y1,z1,x2,y2,z2,sp,hv)=>{ seg.push(x1,y1,z1,x2,y2,z2); spark.push(sp?1:0); heavy.push(hv?1:0); };
+    const y0=o.y||0, a0=o.span?o.span[0]:0, a1=o.span?o.span[1]:TAU;
+    const tick=o.tick||1, hf=o.heavy==null?0.18:o.heavy;
+    let a=a0;
+    while(a<a1){
+      const b=Math.min(a1, a+rnd(o.minLen||0.02, o.maxLen||0.09));
+      const kind=Math.random(), sp=Math.random()<0.1, hv=Math.random()<hf, jy=rnd(-1,1)*(o.jitter||0.006);
+      const r=o.r*(1+rnd(-1,1)*(o.jitter||0.006)*1.5);   /* in and out of the shell */
+      const ca=Math.cos(a), sa=Math.sin(a), cb=Math.cos(b), sb=Math.sin(b);
+      if(kind<0.72){
+        /* a dash; bent in two when it is long enough to show the curve */
+        if(b-a<0.06) push(r*ca,y0+jy,r*sa, r*cb,y0+jy,r*sb, sp, hv);
+        else{ const m=(a+b)/2, cm=Math.cos(m), sm=Math.sin(m);
+              push(r*ca,y0+jy,r*sa, r*cm,y0+jy,r*sm, sp, hv);
+              push(r*cm,y0+jy,r*sm, r*cb,y0+jy,r*sb, sp, hv); }
+      } else if(kind<0.88){
+        /* a tick across the ring */
+        const h=rnd(0.008,0.026)*tick;
+        push(r*ca,y0-h,r*sa, r*ca,y0+h,r*sa, sp, false);
+      } else {
+        /* a small rectangle: two heavy strokes side by side, which fills it.
+           Four hairline sides drew an outline nobody could see. */
+        const h=rnd(0.004,0.010)*tick;
+        push(r*ca,y0-h,r*sa, r*cb,y0-h,r*sb, sp, true);
+        push(r*ca,y0+h,r*sa, r*cb,y0+h,r*sb, false, true);
+      }
+      a=b+rnd(o.minGap||0.006, o.maxGap||0.024);
+    }
+    RINGS.push({ seg:new Float32Array(seg), spark, heavy, orient:o.orient||[1,0,0,0,1,0,0,0,1],
+                 rate:o.rate||0, phi:rnd(0,TAU), bright:!!o.bright });
+  }
+
+  /* latitude bands on the sphere's own axis, mirrored about the equator so
+     the lit top carries as much as the bottom. Three of them are nearly
+     continuous: the outer shell in the reference is about twice as dense as
+     the inside, and a few bands read as solid until you look closely. */
+  const DENSE={ '0.55':1, '0.05':1, '-0.3':1 };
+  [-0.78,-0.55,-0.3,0.05,0.3,0.55,0.78].forEach(y0=>{
+    const r=Math.sqrt(1-y0*y0);
+    if(DENSE[String(y0)])
+      ring({ r, y:y0, rate:rnd(-0.06,0.06), minLen:0.04, maxLen:0.14, minGap:0.004, maxGap:0.012 });
+    else
+      ring({ r, y:y0, rate:rnd(-0.06,0.06), minLen:0.012, maxLen:0.05 });
+  });
+  /* a second, sparser shell just inside — the nesting the reference has */
+  [-0.6,-0.2,0.25,0.6].forEach(y0=>{
+    const r=Math.sqrt(1-y0*y0)*0.9;
+    ring({ r, y:y0*0.9, rate:rnd(-0.08,0.08), minLen:0.01, maxLen:0.04, maxGap:0.07, tick:0.7, heavy:0.1 });
+  });
+  /* tilted great circles, a little in and out of the shell so they read as
+     nested rather than painted on; the first two ride the shell itself */
+  for(let i=0;i<8;i++){
+    ring({ r:i<2?rnd(0.98,1.02):rnd(0.96,1.04), orient:mul(rotZ(rnd(0,TAU)), rotX(rnd(0.35,1.35))),
+           rate:rnd(0.03,0.09)*(Math.random()<0.5?-1:1), minLen:0.01, maxLen:0.045 });
+  }
+  /* three wide arcs sweeping through the inside */
+  [0.4,0.55,0.68].forEach(r=>{
+    const span=rnd(2.2,3.6), s0=rnd(0,TAU);
+    ring({ r, span:[s0,s0+span], orient:mul(rotZ(rnd(0,TAU)), rotX(rnd(0.3,1.4))),
+           rate:rnd(0.10,0.22)*(Math.random()<0.5?-1:1), minLen:0.05, maxLen:0.16, tick:0.7, heavy:0.1 });
+  });
+  /* the nucleus: a small tilted torus and three concentric arcs, all bright */
+  ring({ r:0.11, orient:mul(rotZ(0.4), rotX(1.05)), rate:0.65, bright:true,
+         minLen:0.08, maxLen:0.25, tick:0.5, jitter:0.003, heavy:0 });
+  [0.06,0.095,0.14].forEach((r,i)=>{
+    const s0=rnd(0,TAU);
+    ring({ r, span:[s0,s0+rnd(3,4.6)], orient:mul(rotZ(rnd(0,TAU)), rotX(rnd(0.2,1.3))),
+           rate:(0.3+i*0.12)*(i%2?-1:1), bright:true, minLen:0.1, maxLen:0.3, tick:0.35, jitter:0.002, heavy:0 });
+  });
+  /* fine radial spokes, turning with the sphere */
+  { const seg=[], spark=[], heavy=[];
+    for(let i=0;i<40;i++){
+      const u=unit(), r0=rnd(0.78,0.92), r1=r0+rnd(0.05,0.14);
+      seg.push(u[0]*r0,u[1]*r0,u[2]*r0, u[0]*r1,u[1]*r1,u[2]*r1); spark.push(0); heavy.push(0);
+    }
+    RINGS.push({ seg:new Float32Array(seg), spark, heavy, orient:[1,0,0,0,1,0,0,0,1], rate:0, phi:0, bright:false }); }
+
+  /* loose fragments just off the shell. These sit in the room rather than on
+     the sphere: they start at the silhouette, drift outward and recycle, and
+     they crowd the lit side because that is where the light catches them.
+     A third are dots rather than dashes — motes, not more ring. */
+  const FRAG=[];
+  while(FRAG.length<400){
+    const u=unit();
+    const lit=u[0]*L[0]+u[1]*L[1]+u[2]*L[2];
+    if(lit<0 && Math.random()>0.2) continue;
+    const t0=unit();
+    /* tangent: strip the radial part so the fragment lies along the shell */
+    const k=t0[0]*u[0]+t0[1]*u[1]+t0[2]*u[2];
+    let tx=t0[0]-u[0]*k, ty=t0[1]-u[1]*k, tz=t0[2]-u[2]*k;
+    const m=Math.hypot(tx,ty,tz)||1; tx/=m; ty/=m; tz/=m;
+    FRAG.push({ u, t:[tx,ty,tz], len:rnd(0.025,0.09), base:Math.random(), sp:rnd(0.02,0.07), dot:Math.random()<0.3 });
+  }
+
+  /* twenty-four colour buckets: four tiers of light times three of depth,
+     thin and heavy. Light picks the colour AND the alpha — a shadowed dash
+     is not just browner, it is fainter — so the sphere has a lit side.
+     Depth picks the rest of the alpha and the width: front and lit is wide
+     and warm-white gold, back and dark is thin and umber. */
+  const TIERS=[[[122,74,16],[184,116,26]], [[160,102,28],[214,146,50]],
+               [[196,132,40],[238,170,72]], [[255,179,71],[255,210,122]]];
+  const LCUT=[0.42,0.6,0.78], LMUL=[0.1,0.32,0.62,1.0];
+  const DREP=[0.2,0.55,0.85], DALPHA=[0.18,0.5,0.95], DWIDTH=[0.7,1.15,1.7];
+  const HALPHA=[0.2,0.55,0.9], HWIDTH=[1.5,2.5,3.8], DDOT=[1.4,1.8,2.2];
+  const BUCKETS=[];
+  [0,1].forEach(hv=>{
+    TIERS.forEach((pair,li)=>{
+      DREP.forEach((d,di)=>{
+        const c=pair[0].map((v,i)=>Math.round(v+(pair[1][i]-v)*d));
+        const a=((hv?HALPHA[di]:DALPHA[di])*LMUL[li]*TRAIL).toFixed(3);
+        BUCKETS.push({ css:'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')', w:hv?HWIDTH[di]:DWIDTH[di], dot:DDOT[di], pts:[], dots:[] });
+      });
+    });
+  });
+  const NB=BUCKETS.length, HEAVY=NB/2;
+  const tier=lf=>lf<LCUT[0]?0:lf<LCUT[1]?1:lf<LCUT[2]?2:3;
+  const SPARK=[], NUC=[];
+  /* the bloom's scratch: a quarter-size copy of the frame */
+  const off=document.createElement('canvas'), octx=off.getContext('2d');
+
+  function resize(){
+    const r=cv.getBoundingClientRect();
+    W=Math.max(1,Math.round(r.width)); H=Math.max(1,Math.round(r.height));
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  if(window.ResizeObserver) new ResizeObserver(resize).observe(cv);
+  resize();
+
+  function strokeList(list, w){
+    if(!list.length) return;
+    ctx.lineWidth=w; ctx.beginPath();
+    for(let i=0;i<list.length;i+=4){ ctx.moveTo(list[i],list[i+1]); ctx.lineTo(list[i+2],list[i+3]); }
+    ctx.stroke();
+  }
+  function fillDots(list, s){
+    if(!list.length) return;
+    const h=s/2; ctx.beginPath();
+    for(let i=0;i<list.length;i+=2) ctx.rect(list[i]-h,list[i+1]-h,s,s);
+    ctx.fill();
+  }
+
+  function frame(ts){
+    if(!W||!H){ resize(); requestAnimationFrame(frame); return; }
+    /* Off duty in the other two modes: return without clearing, the same
+       bargain the burst and the Doom core keep. */
+    if(document.documentElement.dataset.mode !== 'quantum'){ last=ts; requestAnimationFrame(frame); return; }
+    const dt = last ? Math.min(0.05,(ts-last)/1000) : 1/60; last=ts;
+    tt += dt;
+    energy += (target-energy)*0.06;
+    yaw += dt*(0.06+energy*0.2);
+
+    /* fade rather than clear: what is left of the last frame is the trail */
+    ctx.globalCompositeOperation='destination-out';
+    ctx.fillStyle='rgba(0,0,0,'+(1-KEEP)+')';
+    ctx.fillRect(0,0,W,H);
+
+    const cx=W/2, cy=H/2;
+    const breath=1+Math.sin(tt*TAU/3.6)*0.025;
+    const R=Math.min(W,H)*(opts.scale||0.60)*0.62*breath;
+    /* the room's rotation: spin about the sphere's axis, then lean the axis */
+    const G=mul(mul(rotX(TILT), rotZ(0.16)), rotY(yaw));
+
+    for(let b=0;b<NB;b++){ BUCKETS[b].pts.length=0; BUCKETS[b].dots.length=0; }
+    SPARK.length=0; NUC.length=0;
+
+    for(let k=0;k<RINGS.length;k++){
+      const rg=RINGS[k];
+      rg.phi += dt*rg.rate*(1+energy*0.6);
+      const M=mul(G, mul(rg.orient, rotY(rg.phi)));
+      const m0=M[0],m1=M[1],m2=M[2],m3=M[3],m4=M[4],m5=M[5],m6=M[6],m7=M[7],m8=M[8];
+      const s=rg.seg, sp=rg.spark, hv=rg.heavy;
+      for(let i=0,j=0;i<s.length;i+=6,j++){
+        const x1=s[i],y1=s[i+1],z1=s[i+2],x2=s[i+3],y2=s[i+4],z2=s[i+5];
+        const wx1=m0*x1+m1*y1+m2*z1, wy1=m3*x1+m4*y1+m5*z1, wz1=m6*x1+m7*y1+m8*z1;
+        const wx2=m0*x2+m1*y2+m2*z2, wy2=m3*x2+m4*y2+m5*z2, wz2=m6*x2+m7*y2+m8*z2;
+        const mx=(wx1+wx2)*0.5, my=(wy1+wy2)*0.5, mz=(wz1+wz2)*0.5;
+        const d=(mz+1)*0.5;
+        /* perspective: the far side shrinks a little toward the centre */
+        const s1=FOCAL/(FOCAL-wz1), s2=FOCAL/(FOCAL-wz2);
+        const px1=cx+wx1*R*s1, py1=cy-wy1*R*s1, px2=cx+wx2*R*s2, py2=cy-wy2*R*s2;
+        if(rg.bright){ NUC.push(px1,py1,px2,py2); continue; }
+        const mm=Math.sqrt(mx*mx+my*my+mz*mz)||1;
+        const lf=0.5+0.5*(mx*L[0]+my*L[1]+mz*L[2])/mm;
+        const li=tier(lf), di=d<0.4?0:d<0.68?1:2;
+        BUCKETS[(hv[j]?HEAVY:0)+li*3+di].pts.push(px1,py1,px2,py2);
+        if(sp[j] && d>0.55) SPARK.push(px1,py1,px2,py2);
+      }
+    }
+
+    /* fragments: rise off the silhouette, drift out, come back at the shell */
+    const range=0.26+energy*0.12;
+    for(let i=0;i<FRAG.length;i++){
+      const f=FRAG[i];
+      const off1=(f.base+tt*f.sp*(0.6+energy))%1;
+      if(off1>0.85) continue;                         /* gone before it pops back */
+      const r=0.99+off1*range;
+      const u=f.u, t=f.t;
+      const d=(u[2]+1)*0.5;
+      const lf=0.5+0.5*(u[0]*L[0]+u[1]*L[1]+u[2]*L[2]);
+      const li=tier(lf), di=d<0.4?0:d<0.68?1:2;
+      const x1=u[0]*r, y1=u[1]*r, z1=u[2]*r;
+      const s1=FOCAL/(FOCAL-z1);
+      const bk=BUCKETS[li*3+di];
+      if(f.dot){ bk.dots.push(cx+x1*R*s1, cy-y1*R*s1); continue; }
+      const x2=x1+t[0]*f.len, y2=y1+t[1]*f.len, z2=z1+t[2]*f.len;
+      const s2=FOCAL/(FOCAL-z2);
+      bk.pts.push(cx+x1*R*s1, cy-y1*R*s1, cx+x2*R*s2, cy-y2*R*s2);
+    }
+
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineCap='butt';
+
+    /* a soft bloom behind the whole thing, sitting toward the light */
+    const hx=cx+L[0]*R*0.32, hy=cy-L[1]*R*0.32;
+    const halo=ctx.createRadialGradient(hx,hy,R*0.1,hx,hy,R*1.2);
+    halo.addColorStop(0,'rgba(255,170,60,'+((0.14+energy*0.10)*TRAIL).toFixed(3)+')');
+    halo.addColorStop(0.55,'rgba(170,95,20,'+(0.06*TRAIL).toFixed(3)+')');
+    halo.addColorStop(1,'rgba(90,40,0,0)');
+    ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(hx,hy,R*1.2,0,TAU); ctx.fill();
+
+    for(let b=0;b<NB;b++){
+      const bk=BUCKETS[b];
+      ctx.strokeStyle=bk.css; strokeList(bk.pts, bk.w);
+      ctx.fillStyle=bk.css; fillDots(bk.dots, bk.dot);
+    }
+
+    /* the bloom: the frame so far, a quarter the size, blurred, added back.
+       One draw for every dash's glow; a shadow per dash would cost the frame. */
+    { const bw=Math.max(1,Math.ceil(W/4)), bh=Math.max(1,Math.ceil(H/4));
+      if(off.width!==bw||off.height!==bh){ off.width=bw; off.height=bh; }
+      octx.clearRect(0,0,bw,bh);
+      octx.drawImage(cv,0,0,bw,bh);
+      ctx.globalAlpha=0.42; ctx.filter='blur(3px)';
+      ctx.drawImage(off,0,0,W,H);
+      ctx.filter='none'; ctx.globalAlpha=1; }
+
+    /* the glints — the few dashes that catch the light, front side only */
+    ctx.save();
+    ctx.shadowBlur=7; ctx.shadowColor='rgba(255,200,100,0.9)';
+    ctx.strokeStyle='rgba(255,244,220,'+((0.7+energy*0.25)*0.7).toFixed(3)+')';
+    strokeList(SPARK, 1.6);
+
+    /* the nucleus: glow, its little torus and arcs, and the streak. Drawn
+       after the fade and the bloom so it stays the sharpest thing here. */
+    const nb=(0.55+energy*0.45)*0.7;
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*0.22);
+    g.addColorStop(0,'rgba(255,248,230,'+(0.85*nb).toFixed(3)+')');
+    g.addColorStop(0.25,'rgba(255,205,115,'+(0.38*nb).toFixed(3)+')');
+    g.addColorStop(1,'rgba(255,160,50,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,R*0.22,0,TAU); ctx.fill();
+    ctx.shadowBlur=12; ctx.shadowColor='rgba(255,210,120,1)';
+    ctx.strokeStyle='rgba(255,240,205,'+((0.65+energy*0.35)*0.75).toFixed(3)+')';
+    strokeList(NUC, 1.5);
+    const sl=R*(0.28+energy*0.14);
+    const sg=ctx.createLinearGradient(cx-sl,cy,cx+sl,cy);
+    sg.addColorStop(0,'rgba(255,250,235,0)');
+    sg.addColorStop(0.5,'rgba(255,250,235,'+nb.toFixed(3)+')');
+    sg.addColorStop(1,'rgba(255,250,235,0)');
+    ctx.strokeStyle=sg; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(cx-sl,cy); ctx.lineTo(cx+sl,cy); ctx.stroke();
+    ctx.restore();
+
+    ctx.globalCompositeOperation='source-over';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  return { set(v){ target=Math.max(0.12,Math.min(1,v)); }, resize };
+}
+
 /* The burst for the command centre, the globe for the gate. He asked for the
    globe as the thing you see on the way in, and it still is; the core you sit
    in front of all day is the one that had to come alive. */
 const arc = makeBurst('arc', { scale: 0.60 });
 /* The Doom figure he drew, still on the same canvas, still only in doom mode. */
 const doomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+/* The gold sphere for the command centre, same canvas, only in quantum mode. */
+const quantumCore = makeQuantum('arc', { scale: 0.60 });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
 
 /* fmt() may return: { n, time, past, left, right, cls, clamp }
@@ -2156,7 +2558,7 @@ function meter(node){
     an.getByteTimeDomainData(buf);
     let sum=0; for(let i=0;i<buf.length;i++) sum+=Math.abs(buf[i]-128);
     const lvl=Math.min(1,(sum/buf.length)/30);
-    arc.set(lvl); try{ doomCore.set(lvl); }catch(_){}
+    arc.set(lvl); try{ doomCore.set(lvl); }catch(_){} try{ quantumCore.set(lvl); }catch(_){}
     requestAnimationFrame(poll);
   })();
   return ()=>{ alive=false; audioOwns=false; try{node.disconnect(an);}catch(_){} };
@@ -2558,26 +2960,45 @@ function confirmCommand(cmd){
    means it is instant and costs nothing.
 
    No number changes. A skin that edits the truth is not a skin. */
-const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
 
+/* Three skins on one page: Iron Man (the burst), Doom (the icosahedron) and
+   Quantum (the gold sphere, for the command centre). dataset.mode carries the
+   name; '' is Iron Man because that is what every rule written before there
+   were modes assumes. */
 function setMode(mode, announce){
-  const doom = mode === 'doom';        /* anything else is Iron Man mode */
-  document.documentElement.dataset.mode = doom ? 'doom' : '';
-  try{ localStorage.setItem('jarvisMode', doom ? 'doom' : 'ironman'); }catch(_){}
+  const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
+  const doom = m==='doom', quantum = m==='quantum';
+  document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  try{ localStorage.setItem('jarvisMode', m); }catch(_){}
+  const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
+  const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
   const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
-  if(n) n.textContent = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
-  if(sub) sub.textContent = doom ? 'SOVEREIGN CORE' : 'AI CORE';
+  if(n) n.textContent = name;
+  if(sub) sub.textContent = tag;
   const gn=document.querySelector('.gName'), gs=document.querySelector('.gSub');
-  if(gn) gn.textContent = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
-  if(gs) gs.textContent = doom ? 'SOVEREIGN CORE' : 'AI CORE';
+  if(gn) gn.textContent = name;
+  if(gs) gs.textContent = tag;
+  /* The canvas is shared and whichever renderer is off duty never clears it,
+     so a switch would show the last frame of the old core under the first of
+     the new one. Wipe it once here; the incoming renderer paints next frame. */
+  try{
+    const c=document.getElementById('arc');
+    if(c){ const x=c.getContext('2d'); x.save(); x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,c.width,c.height); x.restore(); }
+  }catch(_){}
+  try{ syncBoardTheme(); }catch(_){}
   if(announce){
-    const line = doom ? 'Doom mode. Same numbers, worse manners.'
-                      : 'Iron Man mode.';
+    const line = doom    ? 'Doom mode. Same numbers, worse manners.'
+               : quantum ? 'Quantum mode. Same numbers, in gold.'
+               :           'Iron Man mode.';
     say('jarvis', line, 0);
     if(voiceOut) speakReply(line);
   }
 }
-try{ setMode(localStorage.getItem('jarvisMode')==='doom' ? 'doom' : 'ironman', false); }catch(_){}
+try{
+  const savedMode = localStorage.getItem('jarvisMode');
+  setMode((savedMode==='doom'||savedMode==='quantum') ? savedMode : 'ironman', false);
+}catch(_){}
 
 function modeCommand(said){
   const m = String(said||'').trim().replace(/[.!]+$/,'').match(MODE_CMD);
@@ -2585,7 +3006,10 @@ function modeCommand(said){
   const word = m[1].toLowerCase();
   /* Bare "jarvis" is a wake word, not a mode. Only accept it with "mode". */
   if((word==='jarvis'||word==='normal'||word==='standard') && !/mode/i.test(said)) return null;
-  return (word==='doom') ? 'doom' : 'ironman';
+  /* Bare "quantum" is a word he might say about something else; it needs
+     "mode" or a verb — "go quantum" — to be an order. */
+  if(word==='quantum' && !/mode|go|switch|enter|activate/i.test(said)) return null;
+  return (word==='doom') ? 'doom' : (word==='quantum') ? 'quantum' : 'ironman';
 }
 
 /* One path for typed and spoken. A second code path for the keyboard is how
@@ -2627,7 +3051,23 @@ function openBoard(){
   /* ?v= is the cache-buster the board is served with (a plain python
      http.server sends no cache headers, so without it Chrome can hand back a
      stage.html from before the last edit). Thomas asked for this exact link. */
-  const w=window.open(BOARD+'/stage.html?v=81094','jarvis-board'); if(w) w.focus();
+  const theme = document.documentElement.dataset.mode==='quantum' ? 'quantum' : '';
+  const w=window.open(BOARD+'/stage.html?v=81094&theme='+theme,'jarvis-board'); if(w){ boardWin=w; w.focus(); }
+}
+let boardWin=null;
+/* The glass follows the mode. Two seams, both the board's own: the ring
+   tints by mood (state/mood.json — amber is gold, green is its teal), written
+   by the brain on this Mac; the page chrome takes a theme by URL or by a
+   message to the tab this page opened. Quantum = gold; everything else = the
+   board as Jared ships it. */
+function syncBoardTheme(){
+  const quantum = document.documentElement.dataset.mode==='quantum';
+  try{
+    if(brainOn) fetch(BRAIN+'/mood',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mood:quantum?'amber':'green'})}).catch(()=>{});
+  }catch(_){}
+  try{
+    if(boardWin && !boardWin.closed) boardWin.postMessage({type:'OMEGA_THEME', theme:quantum?'quantum':''}, BOARD);
+  }catch(_){}
 }
 async function probeBrain(){
   probeBoard();
@@ -2640,7 +3080,7 @@ async function probeBrain(){
   }catch(_){ brainOn=false; brainInfo=null; }
   const n=el('neural');
   if(n){ n.hidden=!brainOn; n.title=brainOn?('Jarvis is thinking on this Mac · '+((brainInfo&&brainInfo.model)||'')):''; }
-  if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} if(brainOn) glassSync(true); }
+  if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} if(brainOn){ glassSync(true); try{ syncBoardTheme(); }catch(_){} } }
   return brainOn;
 }
 /* What the twin knows right now, small enough to ride along with every
@@ -2988,6 +3428,7 @@ function showView(name){
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
+  if(name==='command') try{ quantumCore.resize(); }catch(_){}
   if(name==='clients') loadBook(false);
   /* The Outbox ranks by WHO a draft is addressed to, which needs the client
      book. Without it every row scored the same and no reason was printed —
@@ -4983,6 +5424,7 @@ function remeasure(){
     try{ window.dispatchEvent(new Event('resize')); }catch(_){}
     try{ if(arc&&arc.resize) arc.resize(); }catch(_){}
     try{ if(typeof doomCore!=='undefined'&&doomCore&&doomCore.resize) doomCore.resize(); }catch(_){}
+    try{ if(typeof quantumCore!=='undefined'&&quantumCore&&quantumCore.resize) quantumCore.resize(); }catch(_){}
     try{ fitStone(); }catch(_){}
     try{ if(BG){ balpha=Math.max(balpha,0.25); bfit(); } }catch(_){}
     try{ bdPaint(); }catch(_){}
