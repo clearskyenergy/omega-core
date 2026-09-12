@@ -1,4 +1,4 @@
-/* The Sky Fund sandbox shim, driven the way the page drives it: fake Firebase
+/* The SkyFund sandbox shim, driven the way the page drives it: fake Firebase
    calls, /api/invest through the overridden fetch, a simulated checkout, a
    fast-forwarded quarter. A dead sandbox on a phone looks like a dead product,
    so the non-DOM half is exercised here before it is published.
@@ -26,7 +26,7 @@ var page = B.transformPage(require('fs').readFileSync(path.join(__dirname, '..',
 ok(page.indexOf('www.gstatic.com/firebasejs') < 0 && page.indexOf('"/config.js"') < 0, 'Firebase SDK and /config.js tags are gone');
 ok(page.indexOf('<script src="sandbox.js"></script>') > 0 && page.indexOf('<script src="samples.js"></script>') > 0, 'samples.js and sandbox.js are loaded in that order');
 ok(!/(src|href)="\/[^\/]/.test(page), 'no root-relative src or href remains (prose in comments may still name paths)');
-ok(/<title>Sky Fund Sandbox<\/title>/.test(page), 'titled as the sandbox');
+ok(/<title>SkyFund Sandbox<\/title>/.test(page), 'titled as the sandbox');
 var P = global.SKYFUND_PROJ['sample-compute-1'];
 ok(P.perUnitYears.length === 10 && near(P.perUnitYears[1], 14.4 * 1.02, 1e-9), 'per-unit table is the engine\'s: $14.69 in year 2 for one $100 unit');
 ok(near(P.irrPct, IM.headline(global.SKY_FUND_SAMPLES[0]).irrPct, 1e-9), 'IRR carried through unchanged');

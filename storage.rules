@@ -297,7 +297,7 @@ service firebase.storage {
     }
 
     /* -------- COMMUNITY INVESTMENT MEDIA — cf_campaigns/{sponsorOrgId}/{campaignId}/{fileName}
-       Cover images and offering documents for an Sky Fund listing.
+       Cover images and offering documents for an SkyFund listing.
        READ IS PUBLIC on purpose: a campaign card paints before anyone signs
        in, exactly like tenants/{orgId}/ logos above — so nothing confidential
        goes here; the sponsor's own model stays in their workspace. Write is

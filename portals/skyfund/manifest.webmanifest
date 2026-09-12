@@ -1,7 +1,7 @@
 {
-  "name": "Sky Fund",
-  "short_name": "Invest",
-  "description": "Community investment in compute containers, microgrids and battery projects. Own a percent of the PPA or the compute.",
+  "name": "SkyFund",
+  "short_name": "SkyFund",
+  "description": "SkyFund, powered by OMEGA. Community investment in compute containers, microgrids and battery projects.",
   "id": "/skyfund",
   "start_url": "/skyfund",
   "scope": "/",
@@ -10,6 +10,23 @@
   "background_color": "#16202B",
   "theme_color": "#16202B",
   "icons": [
-    { "src": "/omega-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {
+      "src": "/portals/skyfund/brand/skyfund-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/portals/skyfund/brand/skyfund-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/portals/skyfund/brand/skyfund-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

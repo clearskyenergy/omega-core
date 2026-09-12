@@ -3060,7 +3060,7 @@ service cloud.firestore {
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       COMMUNITY INVESTMENT  —  cf_*                            (Sky Fund)
+       COMMUNITY INVESTMENT  —  cf_*                            (SkyFund)
        ═══════════════════════════════════════════════════════════════════════
        /portals/skyfund/ — retail investors fund a percent of a project's
        distributable cash (its PPA, its compute lease) in units, Indiegogo-

@@ -210,7 +210,7 @@
        the public storefront is /skyfund (its own surface, no tenant runtime).
        Root-relative so hrefFor() appends ?org=, which the console honours
        for staff only. */
-    { key:'invest', name:'Sky Fund', category:'marketplace',
+    { key:'invest', name:'SkyFund', category:'marketplace',
       desc:'Crowdfund a compute container, microgrid or battery — investors buy units of the PPA or compute revenue.',
       file:'/portals/skyfund/sponsor.html', badge:'new', soon:false, tier:TIER.STANDARD,
       icon:'M12 2v20M17 6.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3' },

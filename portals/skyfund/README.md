@@ -1,4 +1,4 @@
-# Sky Fund — community investment in compute & energy projects
+# SkyFund — community investment in compute & energy projects
 
 `/portals/skyfund/` · routes `/skyfund` (storefront) and `/skyfund/sponsor`
 (sponsor console; `/invest` and `/invest/sponsor` are kept as aliases) · © 2025–2026 ClearSky Energy Solutions LLC.
@@ -180,6 +180,27 @@ set `requireKyc: true`. The risk disclosure text on the page is a starting
 point, not a reviewed document.
 
 ---
+
+## Brand — SkyFund, powered by OMEGA
+
+`brand/` holds the app icon and lockups; `brand/index.html` is the brand
+sheet. OMEGA is the brand, SkyFund is the app: the icon is a dawn seen
+through the OMEGA glyph (the same path as `clearsky-omega-mark.svg`), the
+lockup says "powered by OMEGA" with the platform's neon gradient on navy.
+
+| file | use |
+|---|---|
+| `skyfund-icon.svg` | master, 1024 viewBox; top bars |
+| `skyfund-icon-{1024,512,192,180,32}.png`, `-maskable-512.png` | PWA / launcher / iOS home screen / favicon |
+| `skyfund-lockup-{dark,light}.svg`, `skyfund-wordmark-{dark,light}.svg` | headers, decks, documents; text outlined, no fonts needed |
+
+Everything is generated — edit the script, not the files:
+
+```
+pip install fonttools uharfbuzz pillow
+python3 scripts/skyfund-brand.py --archivo Archivo.ttf --inter Inter.ttf   # SVGs (fonts: see the script header)
+# PNGs: render skyfund-icon.svg at 1024 in headless Chromium, crop, downscale with Pillow (LANCZOS)
+```
 
 ## Test it on a phone — the sandbox
 

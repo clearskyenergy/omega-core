@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
-   scripts/skyfund-sandbox/shim.js — Sky Fund on a phone with nothing behind it
+   scripts/skyfund-sandbox/shim.js — SkyFund on a phone with nothing behind it
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    The storefront (portals/skyfund/index.html) talks to three things: the
@@ -142,7 +142,7 @@
   firebase.auth.EmailAuthProvider = { credential: function () { return {}; } };
   firebase.firestore.FieldValue = { serverTimestamp: function () { return TS; }, increment: function (n) { return n; } };
   global.firebase = firebase;
-  global.CLEARSKY_CONFIG = global.CLEARSKY_CONFIG || { firebase: { projectId: 'skyfund-sandbox' }, platformName: 'Sky Fund Sandbox' };
+  global.CLEARSKY_CONFIG = global.CLEARSKY_CONFIG || { firebase: { projectId: 'skyfund-sandbox' }, platformName: 'SkyFund Sandbox' };
 
   /* ── /api/invest, answered locally from the per-unit tables ─────────────── */
   function campaign(cid) { return store.docs['cf_campaigns/' + cid] || null; }
@@ -304,7 +304,7 @@
       '<button class="sb-btn blue" id="sbQuarter"' + (u ? '' : ' disabled') + '>Fast-forward a quarter: fund my projects &amp; pay a distribution</button>' +
       '<button class="sb-btn ghost" id="sbPayAll"' + (pend ? '' : ' disabled') + '>Mark pending commitments as paid</button>' +
       '<button class="sb-btn red" id="sbReset">Reset the sandbox</button>' +
-      '<div class="sb-note">Nothing here touches a real database, a real card, or ClearSky. Every number about money was computed by the real Sky Fund engine at build time for these four projects; the app only multiplies by your units.</div>');
+      '<div class="sb-note">Nothing here touches a real database, a real card, or ClearSky. Every number about money was computed by the real SkyFund engine at build time for these four projects; the app only multiplies by your units.</div>');
     s.querySelector('#sbQuarter').onclick = function () { var n = simulateQuarter(); closeSheet(); if (!n) { toast('Confirm an investment first, then fast-forward.'); return; } location.hash = '#/portfolio'; setTimeout(function () { location.reload(); }, 50); };
     s.querySelector('#sbPayAll').onclick = function () { var n = simulatePayPending(); closeSheet(); toast(n + ' commitment' + (n === 1 ? '' : 's') + ' marked paid.'); location.hash = '#/portfolio'; setTimeout(function () { location.reload(); }, 50); };
     s.querySelector('#sbReset').onclick = function () { if (!confirm('Reset the sandbox? Sign-in, commitments and distributions on this device are cleared.')) return; reset(); location.hash = '#/'; location.reload(); };

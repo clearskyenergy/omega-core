@@ -37,7 +37,8 @@ touching anything.
 /admin/                 master index (tools.csebuilders.com) — admin-console.js
 /console/               ops console (alpha.clearskyomega.com)
 /portals/finance/       financing marketplace (own product surface)
-/portals/skyfund/       Sky Fund: community investment / crowdfunding
+/portals/skyfund/       SkyFund (powered by OMEGA): community investment /
+                        crowdfunding
                         (own product surface; retail sign-in; cf_* collections)
 /shells/<vertical>/     dashboard shells per vertical (thin wrappers)
 /tenants/<slug>/        tenant-specific extensions ONLY: custom index.html
@@ -102,7 +103,7 @@ Already-existing role/identity collections — use, don't duplicate:
 - `omega_users`, `omega_partner_orgs`, `deals`, `verifications` — the
   PARTNER PORTAL. Separate product surface; `p`-prefixed helpers.
 - `fin_*`, `mkt_*`, `vdc_*` — financing, distribution, VDC marketplaces.
-- `cf_*` — Sky Fund (community investment). `cf_pledges` is server-
+- `cf_*` — SkyFund (community investment). `cf_pledges` is server-
   written only; see `portals/skyfund/README.md`.
 
 Rules for new collections: `firestore.rules.control-plane.addendum`

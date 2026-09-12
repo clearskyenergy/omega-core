@@ -58,7 +58,7 @@ live. Second person from the same domain auto-joins as member.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
 
-**Sky Fund (2026-09-12):** community investment / crowdfunding surface at
+**SkyFund (2026-09-12):** community investment / crowdfunding surface at
 `/portals/skyfund/` (routes `/skyfund`, `/skyfund/sponsor`; `/invest` kept as an alias). Own product surface
 like `/portals/finance/` — retail investors sign in with any email, so it
 deliberately does NOT load `omega-tenant.js`. New `cf_*` collections
