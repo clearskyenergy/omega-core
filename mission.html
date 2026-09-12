@@ -2279,7 +2279,7 @@ let lastStatus={};
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
-  probeBrain();
+  probeBrain().then(relayReminders).catch(()=>{});
   try{
     const tok=await u.getIdToken();
     const res=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+tok}});
@@ -3118,6 +3118,33 @@ async function recordBrain(b){
       headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
       body:JSON.stringify({reply:b.text, modelCostUsd:b.modelCostUsd||0, model:b.model||'', startedAt:b.startedAt})});
   }catch(_){}
+}
+/* ── reminders: from any channel to the list ──────────────────────────────
+   "Remind me" said at the terminal, to the voice line, in a text, or here all
+   land in the brain's queue (bin/remind, POST /remind). The Mac holds no
+   credential to the twin, so THIS page — signed in as him — carries each one
+   to /task, the same call the ADD button makes, and the item arrives proposed
+   like any other. Acked by cursor on the brain once the twin has it, so a
+   reload never files one twice. Standing decision 2026-09-12: a reminder is
+   a to-do on this screen, never only a line in the vault. */
+let relaying=false;
+async function relayReminders(){
+  if(!brainOn||relaying) return; relaying=true;
+  try{
+    const r=await fetch(BRAIN+'/reminders',{cache:'no-store'});
+    const j=await r.json().catch(()=>({}));
+    for(const it of (j.items||[])){
+      const t=await token(); if(!t) break;
+      const rr=await fetch(CHAT+'/task',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:it.text, urgency:it.urgency||'today'})});
+      if(!rr.ok) break;                       /* leave it queued; next poll retries */
+      await fetch(BRAIN+'/reminders/ack',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({t:it.t})}).catch(()=>{});
+      say('jarvis','On the list: '+it.text, 0);
+    }
+  }catch(_){}
+  relaying=false;
 }
 /* The face follows the voice: this page speaks, so this page says so. */
 function face(state){
