@@ -2228,7 +2228,7 @@ window.onerror = function(msg, src, line, col, err) {
      <button class="rbtn" id="rb-clearplot" onclick="clearPlot()" title="Clear the committed plot and return to the live interactive map"><span class="rb-ico">✕</span><span class="rb-lbl">Clear<br>Plot</span></button> -->
         <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
         <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Solar view — cycle individual modules → row bands → outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:#60A5FA">☷</span><span class="rb-lbl">Solar<br>Panels</span></button>
-        <button class="rbtn" id="btn-3d" onclick="omega3dSoon()" title="3D site view &mdash; tilt and orbit to inspect the site. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>View</span><span id="btn-3d-soon" style="position:absolute;top:2px;right:2px;background:#F59E0B;color:#16202B;font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
+        <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review &mdash; inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
         <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
       </div>
       <div class="rpanel-cap">Canvas</div>
@@ -2236,6 +2236,7 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rpanel">
       <div class="rpanel-body">
         
+        <button class="rbtn" onclick="openProjectIntelligence()" title="Project Intelligence — pursue / hold decision, readiness, economics and scenarios"><span class="rb-ico" style="color:#60A5FA">◆</span><span class="rb-lbl">Project<br>Intelligence</span></button>
         <button class="rbtn" onclick="openRpPanel('summary')" title="Site map summary — BESS, conduit, equipment, DER"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
         <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:#F59E0B">Ⓜ</span><span class="rb-lbl">Meters</span></button>
         <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:#00D4FF">▦</span><span class="rb-lbl">Site<br>Map</span></button>
@@ -15461,8 +15462,8 @@ function computeSitePreQual(inp){
   var avail    = Math.max(0, propArea-bldg);
   var spaces   =+inp.parkingSpaces||0;
   var pins     =+inp.pins||1;
-  var zoningOk = inp.zoningOk!==false;   /* default assume confirmed */
-  var floodOk  = inp.floodOk!==false;
+  var zoningOk = inp.zoningOk===true;    /* confirmation, never assumption */
+  var floodOk  = inp.floodOk===true;
 
   function scoreFor(sys){
     return _pqAreaScore(avail,sys) + _pqParkScore(spaces)
@@ -15486,9 +15487,13 @@ function computeSitePreQual(inp){
   var capFlag=_pqCapacityFlag(inp.hostingCapacityKw,
                               PQ_SYSTEMS.full.kw, PQ_SYSTEMS.half.kw);
 
+  var inputComplete=propArea>0;
+  var decisionTier=!inputComplete?'Incomplete — property area required'
+    :(capFlag.level==='risk'?'Hold — Grid Constraint'
+    :(capFlag.level==='pending'&&best>=65?'Conditional — Capacity Pending':_pqTier(best)));
   return {
     availableSf:avail, fullScore:full, halfScore:half, bestScore:best,
-    tier:_pqTier(best), recommend:rec, capacity:capFlag,
+    tier:decisionTier, recommend:rec, capacity:capFlag, inputComplete:inputComplete,
     breakdown:{
       area:{ full:_pqAreaScore(avail,PQ_SYSTEMS.full), half:_pqAreaScore(avail,PQ_SYSTEMS.half) },
       parking:_pqParkScore(spaces), title:_pqTitleScore(pins),
@@ -15497,8 +15502,27 @@ function computeSitePreQual(inp){
   };
 }
 
+/* Screen the system actually configured in the project. The old fixed
+   1 MW / 3.5 MWh pair made the same parcel answer appear for every design. */
+function _pqSyncLiveSystem(){
+  var list=(S&&S.bessList)||[],kw=0,kwh=0;
+  list.forEach(function(b){var q=+(b.qty||1);kw+=+(b.kw||0)*q;kwh+=+(b.kwh||0)*q});
+  if(!(kw>0&&kwh>0)){
+    PQ_SYSTEMS.full={label:'Benchmark: 1 MW / 3.5 MWh',kw:1000,kwh:3500,areaTiers:[[4000,60],[3000,45],[1500,25],[0,5]]};
+    PQ_SYSTEMS.half={label:'Benchmark: 0.5 MW / 1.75 MWh',kw:500,kwh:1750,areaTiers:[[2000,60],[1500,45],[750,25],[0,5]]};
+    return false;
+  }
+  var footprint=(typeof _estBessFootprintFt2==='function')?_estBessFootprintFt2():0;
+  var req=Math.max(1200,Math.round((footprint||kwh/4)*1.65));
+  function tiers(a){return[[a,60],[a*.75,45],[a*.38,25],[0,5]].map(function(x){return[Math.round(x[0]),x[1]]})}
+  PQ_SYSTEMS.full={label:'Configured System',kw:Math.round(kw),kwh:Math.round(kwh),areaTiers:tiers(req)};
+  PQ_SYSTEMS.half={label:'50% Alternative',kw:Math.round(kw/2),kwh:Math.round(kwh/2),areaTiers:tiers(Math.round(req/2))};
+  return true;
+}
+
 /* ── UI ────────────────────────────────────────────────────────────── */
 function openSitePreQual(){
+  _pqSyncLiveSystem();
   var host=document.getElementById('site-prequal-modal');
   if(!host){
     host=document.createElement('div');
@@ -15537,8 +15561,8 @@ function openSitePreQual(){
     +     fld('pq2-pins','Tax parcels (PINs)','1','1')
     +   '</div>'
     +   '<div style="display:flex;gap:16px;margin-bottom:12px">'
-    +     '<label style="font-size:10px;color:#B8C6D6;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="pq2-zoning" checked onchange="pqRecalc()"> Zoning permits use</label>'
-    +     '<label style="font-size:10px;color:#B8C6D6;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="pq2-flood" checked onchange="pqRecalc()"> Minimal flood hazard</label>'
+    +     '<label style="font-size:10px;color:#B8C6D6;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="pq2-zoning" onchange="pqRecalc()"> Zoning verified compatible</label>'
+    +     '<label style="font-size:10px;color:#B8C6D6;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="pq2-flood" onchange="pqRecalc()"> Flood status verified</label>'
     +   '</div>'
     +   '<div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#8FA3B8;text-transform:uppercase;margin-bottom:8px">Utility hosting capacity</div>'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:6px">'
@@ -15552,20 +15576,26 @@ function openSitePreQual(){
     +   '<div style="font-size:8px;color:#6B8299;line-height:1.5;margin-bottom:12px">ComEd bands are a benchmark. Any utility works \u2014 enter the kW their hosting-capacity map or study reports.</div>'
     +   '<div id="pq2-results" style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:8px;padding:12px 14px;font-size:11px;line-height:1.7"></div>'
     + '</div>'
-    + '<div style="padding:12px 18px;border-top:1px solid #26364d">'
-    +   '<button onclick="document.getElementById(\'site-prequal-modal\').remove()" style="width:100%;padding:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#8FA3B8;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11px">Close</button>'
+    + '<div style="padding:12px 18px;border-top:1px solid #26364d;display:flex;gap:8px">'
+    +   '<button onclick="document.getElementById(\'site-prequal-modal\').remove()" style="flex:1;padding:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#8FA3B8;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11px">Close</button>'
+    +   '<button id="pq2-save" onclick="pqSaveToProject()" style="flex:1;padding:10px;background:#4A8FD8;border:1px solid #4A8FD8;color:white;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700">Save Screening</button>'
     + '</div></div>';
 
-  /* If a utility bill was imported, prefill what it tells us: the utility
-     name context and a hosting-capacity starting point from peak demand. */
+  /* Prefill only like-for-like evidence. Peak bill demand is not hosting
+     capacity and must never be placed in that field. */
   try{
-    if(typeof S!=='undefined' && S.billImport){
-      var capEl=document.getElementById('pq2-cap');
-      if(capEl && !capEl.value && S.billImport.demandKw){
-        /* Peak demand is a floor for what the site already pulls, a useful
-           starting hint for the hosting-capacity conversation. */
-        capEl.value=S.billImport.demandKw;
-      }
+    var info=typeof _siteBoundaryInfo==='function'?_siteBoundaryInfo():null;
+    var area=document.getElementById('pq2-area'),D=window._SITE_DATA||{};
+    if(area&&info&&info.present&&!info.derived)area.value=info.sqft;
+    else if(area&&D.parcelAcres!=null)area.value=Math.round(D.parcelAcres*43560);
+    var cap=document.getElementById('pq2-cap');if(cap&&D.hostingCapacityKW!=null)cap.value=D.hostingCapacityKW;
+    var previous=S.sitePreQual;
+    if(previous){
+      [['area','propertyAreaSf'],['bldg','buildingFootprintSf'],['park','parkingSpaces'],['pins','pins'],['cap','hostingCapacityKw']].forEach(function(pair){
+        var field=document.getElementById('pq2-'+pair[0]);if(field&&previous[pair[1]]!=null)field.value=previous[pair[1]];
+      });
+      document.getElementById('pq2-zoning').checked=previous.zoningVerified===true;
+      document.getElementById('pq2-flood').checked=previous.floodVerified===true;
     }
   }catch(e){}
   pqRecalc();
@@ -15582,13 +15612,35 @@ function pqRecalc(){
   var out=document.getElementById('pq2-results'); if(!out) return;
   var g=function(id){ var e=document.getElementById(id); return e?e.value:null; };
   var chk=function(id){ var e=document.getElementById(id); return e?e.checked:true; };
+  var invalid=[];
+  [['area',1,false],['bldg',0,false],['park',0,true],['pins',1,true],['cap',0,false]].forEach(function(rule){
+    var el=document.getElementById('pq2-'+rule[0]);if(!el)return;
+    var raw=el.value.trim(),v=Number(raw),optional=rule[0]==='cap';
+    var bad=!(optional&&raw==='')&&(raw===''||!Number.isFinite(v)||v<rule[1]||(rule[2]&&!Number.isInteger(v)));
+    if(rule[0]==='bldg'&&v>Number(g('pq2-area')))bad=true;
+    el.setAttribute('aria-invalid',bad?'true':'false');
+    if(bad)invalid.push(rule[0]);
+  });
+  if(invalid.length){
+    window._PQ_LATEST=null;
+    out.innerHTML='<div role="status" style="color:#FBBF24;font-size:12px;line-height:1.6">Complete the highlighted inputs. Property area must be positive; building footprint cannot exceed it. Parking and parcel counts must be whole numbers. Enter zero for confirmed absence, not a blank. Hosting capacity is optional but cannot be negative.</div>';
+    document.getElementById('pq2-save').disabled=true;return;
+  }
   var r=computeSitePreQual({
     propertyAreaSf:g('pq2-area'), buildingFootprintSf:g('pq2-bldg'),
     parkingSpaces:g('pq2-park'), pins:g('pq2-pins'),
     zoningOk:chk('pq2-zoning'), floodOk:chk('pq2-flood'),
     hostingCapacityKw:g('pq2-cap')
   });
-  var tierColor = r.bestScore>=85 ? '#22C55E' : (r.bestScore>=65 ? '#FBBF24' : '#EF4444');
+  window._PQ_LATEST=r;
+  if(!r.inputComplete){
+    out.innerHTML='<div style="padding:8px;color:#FBBF24;font-weight:700">Property area required</div>'
+      +'<div style="font-size:9.5px;color:#8FA3B8;line-height:1.55">Designate an anchored parcel boundary, load a verified parcel record, or enter the surveyed property area. OMEGA will not issue a site verdict from blank acreage.</div>';
+    var saveBtn=document.getElementById('pq2-save');if(saveBtn)saveBtn.disabled=true;
+    return;
+  }
+  var saveBtn=document.getElementById('pq2-save');if(saveBtn)saveBtn.disabled=false;
+var tierColor = r.capacity.level==='risk' ? '#EF4444' : r.capacity.level==='pending' ? '#FBBF24' : r.bestScore>=85 ? '#22C55E' : (r.bestScore>=65 ? '#FBBF24' : '#EF4444');
   var capColor = { good:'#22C55E', ok:'#FBBF24', risk:'#EF4444', pending:'#64748B' }[r.capacity.level];
   var bar=function(l,v,max){ var pct=Math.round(v/max*100);
     return '<div style="display:flex;align-items:center;gap:8px;margin:2px 0">'
@@ -15616,6 +15668,21 @@ function pqRecalc(){
     +   '\u26a1 '+r.capacity.text+'</div>'
     + '<div style="margin-top:8px;font-size:7.5px;color:#5A6B7E;line-height:1.5">Screening proxy only \u2014 open area does not account for NFPA 855 separation, utility/AHJ setbacks, easements or below-grade utilities. Confirm with an engineering site visit before an interconnection application.</div>';
 }
+
+function pqSaveToProject(){
+  var r=window._PQ_LATEST;if(!r||!r.inputComplete)return;
+  var val=function(id){var e=document.getElementById(id);return e?e.value:''};
+  var ck=function(id){var e=document.getElementById(id);return!!(e&&e.checked)};
+  S.sitePreQual={savedAt:new Date().toISOString(),propertyAreaSf:+val('pq2-area')||0,
+    buildingFootprintSf:+val('pq2-bldg')||0,parkingSpaces:+val('pq2-park')||0,
+    pins:+val('pq2-pins')||1,zoningVerified:ck('pq2-zoning'),floodVerified:ck('pq2-flood'),
+    hostingCapacityKw:val('pq2-cap')===''?null:+val('pq2-cap'),result:r,
+    system:{full:PQ_SYSTEMS.full,half:PQ_SYSTEMS.half}};
+  try{if(typeof pushHist==='function')pushHist()}catch(e){}
+  try{if(typeof _setSaved==='function')_setSaved('unsaved')}catch(e){}
+  if(typeof showBanner==='function')showBanner('cal','Site screening saved to this project — '+r.tier+', '+r.bestScore+'/100.');
+}
+window.pqSaveToProject=pqSaveToProject;
 
 /* ══════════════════════════════════════════════════════════════════════
    UTILITY BILL PARSER (autofill from a pasted bill)
@@ -24614,7 +24681,8 @@ async function deleteProject(id, name, e) {
 function _setSaved(s){
   const el=document.getElementById('pn-saved');
   if(!el)return;
-  el.textContent=s==='saved'?'OK Saved':s==='saving'?'Saving...':'!! Save failed';
+el.textContent=s==='saved'?'Saved':s==='saving'?'Saving…':s==='unsaved'?'Unsaved changes':'Save failed';
+  el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
   /* The banner explaining WHY disappears; this does not. Without it a person
      who looked away has a red word and nothing else, and the usual next move
      is to keep working on a project that is not being persisted. */
@@ -24622,7 +24690,7 @@ function _setSaved(s){
     ? (window._lastSaveError || 'The last save was refused. Your work is still in this tab. See the console for the error.')
     : (s==='saved' ? 'Saved to the project record.' : '');
   el.style.cursor = s==='err' ? 'help' : '';
-  el.style.color=s==='saved'?'var(--green)':s==='saving'?'var(--sub)':'var(--red)';
+el.style.color=s==='saved'?'var(--green)':s==='saving'?'var(--sub)':s==='unsaved'?'#D8B96F':'var(--red)';
 }
 
 // --- STABILITY: Firestore rejects any `undefined` field and fails the ENTIRE
@@ -26435,6 +26503,11 @@ function _gpsBuildWebGLOverlay(anchorMs){
       var mat=new THREE.MeshStandardMaterial({ color:0x4285F4, opacity:0.85, transparent:true });
       var box=new THREE.Mesh(geom, mat);
       box._geo={ lat:el._geoLat, lng:el._geoLng };
+      /* WebGLOverlayView's model origin is the scene anchor. Previously every
+         box stayed at (0,0,0), so a whole project collapsed into one cube. */
+      var cos=Math.cos(anchor.lat*Math.PI/180);
+      box.position.set((el._geoLng-anchor.lng)*111320*cos,
+                       (el._geoLat-anchor.lat)*110540, 1.5);
       scene.add(box); _gpsWebGL.boxes.push(box);
     });
     _gpsWebGL.scene=scene; _gpsWebGL.camera=camera;
@@ -28859,15 +28932,16 @@ function computeInterconnectScore(){
   if(util && util.demandRate){ utilScore = Math.min(100, utilScore + Math.min(15, (util.demandRate-12))); }
   factors.push({ key:'utility', label:'Utility / ISO', score:Math.round(utilScore),
     detail: (util?util.name:'Unknown utility') + ' · ' + isoInfo.iso,
-    real: utilReal, weight:0.28 });
+    real: utilReal, source:utilReal?'data':'estimate', weight:0.28 });
 
   // 2. GRID CAPACITY HEADROOM  (STUB unless hosting-capacity wired)
-  var capScore, capDetail, capReal=false;
+  var capScore, capDetail, capReal=false, capSource='estimate';
   if(D.hostingCapacityKW!=null && sysKW>0){
     var ratio = D.hostingCapacityKW / sysKW;
     capScore = ratio>=2 ? 95 : ratio>=1.2 ? 78 : ratio>=1 ? 60 : ratio>=0.6 ? 38 : 18;
     capDetail = Math.round(D.hostingCapacityKW).toLocaleString()+' kW feeder headroom vs '+Math.round(sysKW).toLocaleString()+' kW system';
     capReal = true;
+    capSource = 'data';
   } else if(D.gridAtlas && D.gridAtlas.nearestSubstationKm!=null){
     /* A MEASURED substation distance beats a size heuristic. This is not
        hosting capacity — proximity is not headroom, and a site can sit beside
@@ -28885,12 +28959,13 @@ function computeInterconnectScore(){
               + (D.gridAtlas.nearestSubstationName ? ' (' + D.gridAtlas.nearestSubstationName + ')' : '')
               + ' — Grid Atlas. Proximity, not available headroom.';
     capReal = true;
+    capSource = 'proxy';
   } else {
     // Heuristic: smaller systems interconnect more easily (fast-track thresholds).
     capScore = sysKW<=0 ? 55 : sysKW<250 ? 82 : sysKW<1000 ? 68 : sysKW<5000 ? 50 : 34;
     capDetail = sysKW>0 ? ('~'+Math.round(sysKW).toLocaleString()+' kW · fast-track likelihood (est.)') : 'Configure BESS for capacity read';
   }
-  factors.push({ key:'capacity', label:'Grid Capacity', score:Math.round(capScore), detail:capDetail, real:capReal, weight:0.24 });
+  factors.push({ key:'capacity', label:'Grid Capacity', score:Math.round(capScore), detail:capDetail, real:capReal, source:capSource, weight:0.24 });
 
   // 3. PERMITTING DIFFICULTY (AHJ)  (STUB unless AHJ data wired)
   var permScore, permDetail, permReal=false;
@@ -28902,7 +28977,7 @@ function computeInterconnectScore(){
     permScore = 60;  // neutral until AHJ data is wired
     permDetail = (D.ahjName? D.ahjName+' · ' : '') + 'Permit timeline not yet on file (est. neutral)';
   }
-  factors.push({ key:'permit', label:'Permitting (AHJ)', score:Math.round(permScore), detail:permDetail, real:permReal, weight:0.20 });
+  factors.push({ key:'permit', label:'Permitting (AHJ)', score:Math.round(permScore), detail:permDetail, real:permReal, source:permReal?'data':'estimate', weight:0.20 });
 
   // 4. INTERCONNECTION QUEUE / TARIFF  (ISO real; queue STUB)
   var qScore, qDetail, qReal=false;
@@ -28914,7 +28989,7 @@ function computeInterconnectScore(){
     qScore = isoInfo.score;  // fall back to ISO-level friendliness
     qDetail = isoInfo.iso+' interconnection process (ISO-level est.)';
   }
-  factors.push({ key:'queue', label:'IX Queue / Tariff', score:Math.round(qScore), detail:qDetail, real:qReal, weight:0.16 });
+  factors.push({ key:'queue', label:'IX Queue / Tariff', score:Math.round(qScore), detail:qDetail, real:qReal, source:qReal?'data':'estimate', weight:0.16 });
 
   // 5. LAND / PARCEL FIT  (drawn area real; parcel STUB)
   var landScore, landDetail, landReal=false;
@@ -28929,7 +29004,7 @@ function computeInterconnectScore(){
     landScore = 65;  // neutral-positive until parcel data wired
     landDetail = footprintFt2>0 ? ('~'+Math.round(footprintFt2).toLocaleString()+' ft² equipment footprint (parcel data pending)') : 'Parcel data pending';
   }
-  factors.push({ key:'land', label:'Land / Parcel Fit', score:Math.round(landScore), detail:landDetail, real:landReal, weight:0.12 });
+  factors.push({ key:'land', label:'Land / Parcel Fit', score:Math.round(landScore), detail:landDetail, real:landReal, source:landReal?'data':'estimate', weight:0.12 });
 
   // Weighted blend → 0–5.
   var total=0, wsum=0;
@@ -28937,9 +29012,13 @@ function computeInterconnectScore(){
   var pct = wsum>0 ? total/wsum : 0;
   var stars = Math.round((pct/100*5)*10)/10;
   var anyReal = factors.some(function(f){return f.real;});
+  var dataWeight=0, proxyWeight=0;
+  factors.forEach(function(f){ if(f.source==='data') dataWeight+=f.weight; else if(f.source==='proxy') proxyWeight+=f.weight; });
+  var evidencePct=Math.round((dataWeight + proxyWeight*0.45)*100);
 
   return { score:stars, pct:Math.round(pct), factors:factors, zip:zip, state:state,
-           iso:isoInfo.iso, utility: util?util.name:'', anyReal:anyReal, sysKW:sysKW };
+           iso:isoInfo.iso, utility: util?util.name:'', anyReal:anyReal, sysKW:sysKW,
+           evidencePct:evidencePct, dataWeight:dataWeight, proxyWeight:proxyWeight };
 }
 
 // Rough equipment footprint (ft²) from placed BESS assemblies + pads.
@@ -28977,9 +29056,11 @@ function renderScorePanel(){
 
   var factorRows = r.factors.map(function(f){
     var fc = _scoreColor(f.score);
-    var badge = f.real
+    var badge = f.source==='data'
       ? '<span style="font-size:8px;color:#22C55E;background:rgba(34,197,94,.12);padding:1px 5px;border-radius:4px;margin-left:6px">DATA</span>'
-      : '<span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:6px" title="Estimated — wire a data source to make this exact">EST</span>';
+      : f.source==='proxy'
+        ? '<span style="font-size:8px;color:#60A5FA;background:rgba(96,165,250,.12);padding:1px 5px;border-radius:4px;margin-left:6px" title="Measured proxy — useful context, not direct capacity evidence">PROXY</span>'
+        : '<span style="font-size:8px;color:var(--sub);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;margin-left:6px" title="Estimated — wire a data source to make this exact">EST</span>';
     return '<div style="margin-bottom:11px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
       +   '<span style="font-size:11px;font-weight:600;color:var(--text)">'+f.label+badge+'</span>'
@@ -28998,11 +29079,12 @@ function renderScorePanel(){
     + '<div style="font-size:44px;font-weight:800;line-height:1;color:'+col+';font-family:\'IBM Plex Mono\',monospace">'+r.score.toFixed(1)+'<span style="font-size:18px;color:var(--sub)">/5</span></div>'
     + '<div style="margin:6px 0 2px">'+stars+'</div>'
     + '<div style="font-size:10px;color:var(--sub)">'+(r.utility||'Enter a site address for a full read')+(r.iso?(' · '+r.iso):'')+'</div>'
+    + '<div style="margin:9px auto 0;max-width:250px;display:flex;align-items:center;gap:8px"><span style="font-size:8px;color:var(--sub);white-space:nowrap">EVIDENCE '+r.evidencePct+'%</span><span style="height:4px;flex:1;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden"><i style="display:block;height:100%;width:'+r.evidencePct+'%;background:'+(r.evidencePct>=70?'#22C55E':r.evidencePct>=40?'#60A5FA':'#F59E0B')+'"></i></span></div>'
     + '</div>'
     + factorRows
     + '<div style="margin-top:6px;padding:9px 11px;background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px">'
     +   '<div style="font-size:9px;color:var(--sub);line-height:1.5">'
-    +     '<strong style="color:var(--text)">DATA</strong> factors use live utility/ISO tables. '
+    +     '<strong style="color:var(--text)">DATA</strong> factors use direct project/site evidence. <strong style="color:#60A5FA">PROXY</strong> is measured context (for example substation distance) that is useful but is not hosting capacity. '
     +     '<strong style="color:var(--text)">EST</strong> factors are transparent heuristics until a data source is wired '
     +     '(hosting-capacity map, AHJ permit database, interconnection queue, parcel/Regrid).'
     +   '</div>'
@@ -29040,7 +29122,7 @@ function toggleDataLayer(layer, on){
          DATA badge on an invented number. OmegaAutopilot.parcel asks
          /api/parcel (county assessor or Regrid, key server-side) for the
          parcel under the map centre; the row stays empty until it answers. */
-      D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null;
+      D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null; D.parcelStatus='loading';
       try{
         var g=(typeof omegaGeo==='function')?omegaGeo():null;
         if(g && window.OmegaAutopilot && typeof OmegaAutopilot.parcel==='function'){
@@ -29048,29 +29130,31 @@ function toggleDataLayer(layer, on){
             var cb=document.getElementById('layer-parcel');
             if(!p || (cb && !cb.checked)) return;
             D.parcelAcres=(p.acres!=null)?p.acres:null; D.parcelZoning=p.zoning||null; D.parcelOwner=p.owner||null;
+            D.parcelApn=p.apn||p.pin||p.parcelId||null; D.parcelSource=p.source||'parcel service';
+            D.parcelStatus=(D.parcelAcres!=null||D.parcelApn)?'verified':'not-found';
             _renderLayerData();
             var sp=document.getElementById('scorep'); if(sp && sp.classList.contains('scorep-open')) renderScorePanel();
-          }).catch(function(e){ console.warn('[layers] parcel:', e&&e.message); });
-        } else if(!g) console.warn('[layers] parcel: no map centre yet');
+          }).catch(function(e){ D.parcelStatus='error';_renderLayerData();console.warn('[layers] parcel:', e&&e.message); });
+        } else if(!g){D.parcelStatus='no-location';console.warn('[layers] parcel: no map centre yet');}
       }catch(e){}
-    } else { D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null; }
+    } else { D.parcelAcres=null; D.parcelZoning=null; D.parcelOwner=null; D.parcelApn=null; D.parcelStatus=null; }
   } else if(layer==='zoning'){
     if(on){
-      // TODO: wire municipal zoning GIS. Sample:
-      if(!D.parcelZoning) D.parcelZoning='M-1 (Light Industrial)';
+      /* Never invent a zoning district. A false district can reverse a site
+         decision; keep the factor pending until the parcel service or a user
+         supplies a cited record. */
+      D.zoningStatus=D.parcelZoning?'verified':'pending';
     } else if(!document.getElementById('layer-parcel').checked){ D.parcelZoning=null; }
   } else if(layer==='utility'){
     if(on){
-      // TODO: wire utility hosting-capacity map (feeder headroom). Sample scales
-      // to ~1.6x the current system so the capacity factor reads realistically.
-      var b=(S.bessList&&S.bessList[0])?+(S.bessList[0].kw||500):500;
-      D.hostingCapacityKW = Math.round(b*1.6);
-    } else { D.hostingCapacityKW=null; }
+      /* Project size is not feeder headroom. The former 1.6x multiplier made
+         every project appear to fit by construction. */
+      D.hostingCapacityKW=null; D.utilityStatus='pending';
+    } else { D.hostingCapacityKW=null; D.utilityStatus=null; }
   } else if(layer==='permit'){
     if(on){
-      // TODO: wire AHJ permit-timeline database. Sample:
-      D.ahjName = 'Sample County AHJ'; D.ahjPermitDays = 55; D.iqQueueMonths = 9;
-    } else { D.ahjName=null; D.ahjPermitDays=null; D.iqQueueMonths=null; }
+      D.ahjName=null; D.ahjPermitDays=null; D.iqQueueMonths=null; D.permitStatus='pending';
+    } else { D.ahjName=null; D.ahjPermitDays=null; D.iqQueueMonths=null; D.permitStatus=null; }
   }
   _renderLayerData();
   // Refresh the score if its panel is open.
@@ -29079,11 +29163,16 @@ function toggleDataLayer(layer, on){
 function _renderLayerData(){
   var out=document.getElementById('layer-data-out'); if(!out) return;
   var D=window._SITE_DATA||{}; var lines=[];
-  if(D.parcelAcres!=null) lines.push('<strong style="color:var(--text)">Parcel:</strong> '+D.parcelAcres+' ac'+(D.parcelOwner?(' · '+D.parcelOwner):''));
+  if(D.parcelStatus==='loading') lines.push('<strong style="color:#60A5FA">Parcel:</strong> retrieving record…');
+  else if(D.parcelStatus==='not-found'||D.parcelStatus==='no-location'||D.parcelStatus==='error') lines.push('<strong style="color:#F59E0B">Parcel:</strong> '+(D.parcelStatus==='no-location'?'load a site location first':'no verified record returned'));
+  if(D.parcelAcres!=null) lines.push('<strong style="color:var(--text)">Parcel:</strong> '+D.parcelAcres+' ac'+(D.parcelApn?(' · '+D.parcelApn):'')+(D.parcelOwner?(' · '+D.parcelOwner):'')+' <span style="color:#22C55E">DATA</span>');
   if(D.parcelZoning) lines.push('<strong style="color:var(--text)">Zoning:</strong> '+D.parcelZoning);
+  else if(D.zoningStatus==='pending') lines.push('<strong style="color:#F59E0B">Zoning:</strong> verification required');
   if(D.hostingCapacityKW!=null) lines.push('<strong style="color:var(--text)">Feeder headroom:</strong> ~'+D.hostingCapacityKW.toLocaleString()+' kW');
+  else if(D.utilityStatus==='pending') lines.push('<strong style="color:#F59E0B">Feeder headroom:</strong> hosting-capacity data required');
   if(D.ahjPermitDays!=null) lines.push('<strong style="color:var(--text)">Permit:</strong> ~'+D.ahjPermitDays+' days'+(D.ahjName?(' · '+D.ahjName):''));
   if(D.iqQueueMonths!=null) lines.push('<strong style="color:var(--text)">IX queue:</strong> ~'+D.iqQueueMonths+' mo');
+  else if(D.permitStatus==='pending') lines.push('<strong style="color:#F59E0B">Permitting:</strong> AHJ data required');
   out.innerHTML = lines.length ? lines.join('<br>') : '';
 }
 
@@ -39118,7 +39207,8 @@ window._geoRepairAndReport=_geoRepairAndReport;
    the Map ID now reaches the map (see _mapOpts), so turning 3D on is a
    one-line change -- set enabled:true here, or call Omega3D.enable() from
    the console to trial it without editing the file. */
-var OMEGA3D = { on:false, tilt:0, heading:0, prevMode:null, enabled:false };
+var OMEGA3D = { on:false, tilt:0, heading:0, prevMode:null, enabled:true,
+                overlay:null, scene:null, renderer:null, camera:null, objects:[] };
 
 /* The "coming soon" notice shown by the ribbon button and the 3 key. */
 function omega3dSoon(){
@@ -39164,12 +39254,66 @@ function _g3HasVectorId(){
   try{ return !!(_CFG && _CFG.googleMapsMapId && String(_CFG.googleMapsMapId).trim()); }catch(e){ return false; }
 }
 function _g3Layers(on){
+  document.body.classList.toggle('omega-review-3d',on);
   ['els','csvg'].forEach(function(id){
     var nd=document.getElementById(id); if(!nd) return;
     nd.style.transition='opacity .18s';
     nd.style.opacity = on ? '0.18' : '';
     nd.style.pointerEvents = on ? 'none' : '';
   });
+}
+
+/* Resolve every placeable object's ground position and a conservative massing
+   envelope. The result is review geometry, not a manufacturer BIM model. */
+function _g3Records(){
+  var out=[], ppf=(S&&S.pxPerFt)||6;
+  function center(o){
+    if(o._geoLat!=null&&o._geoLng!=null) return {lat:+o._geoLat,lng:+o._geoLng};
+    if(o._geoAnchor) return {lat:+o._geoAnchor.lat,lng:+o._geoAnchor.lng};
+    if(o._geoC) return {lat:+o._geoC.lat,lng:+o._geoC.lng};
+    if(o._geoAnchorPt) return {lat:+o._geoAnchorPt.lat,lng:+o._geoAnchorPt.lng};
+    if(o._geoPts&&o._geoPts.length){var a=o._geoPts.filter(function(g){return g&&isFinite(g.lat)&&isFinite(g.lng)});if(a.length)return{lat:a.reduce(function(s,g){return s+g.lat},0)/a.length,lng:a.reduce(function(s,g){return s+g.lng},0)/a.length}}
+    return null;
+  }
+  function add(o,kind){
+    var g=center(o);if(!g)return;
+    var ftW=+(o.wFt||o.widthFt||0),ftD=+(o.hFt||o.depthFt||0);
+    if(!ftW&&o.w)ftW=Math.abs(+o.w)/ppf;if(!ftD&&o.h)ftD=Math.abs(+o.h)/ppf;
+    ftW=Math.max(3,Math.min(160,ftW||12));ftD=Math.max(3,Math.min(160,ftD||8));
+    var id=String(o.eqId||o.kind||o.type||kind||'').toLowerCase(),h=/bess|container|assembly/.test(id)?9.5:/xfmr|transform/.test(id)?8:/charger|ev/.test(id)?6:/building|compute|pod/.test(id)?14:5;
+    var color=/bess|container|assembly/.test(id)?0x4A8FD8:/xfmr|transform/.test(id)?0xF59E0B:/charger|ev/.test(id)?0x22C55E:/building|compute|pod/.test(id)?0x94A3B8:0x38BDF8;
+    out.push({g:g,w:ftW*.3048,d:ftD*.3048,h:h*.3048,color:color,rot:+(o.rot||o.rotation||0)});
+  }
+  (S.elements||[]).forEach(function(o){add(o,'element')});
+  (S.shapes||[]).forEach(function(o){if(o&&!o.isSiteBoundary&&!/parcel|boundary|polyline|line|text|label|dimension/i.test(String(o.kind||o.type||'')))add(o,'shape')});
+  return out;
+}
+function _g3TearDown(){
+  if(OMEGA3D.overlay){try{OMEGA3D.overlay.setMap(null)}catch(e){}}
+  if(OMEGA3D.renderer){try{OMEGA3D.renderer.dispose()}catch(e){}}
+  OMEGA3D.overlay=null;OMEGA3D.scene=null;OMEGA3D.renderer=null;OMEGA3D.camera=null;OMEGA3D.objects=[];
+}
+async function _g3ShowObjects(){
+  var m=_g3map();if(!m||!OMEGA3D.on||OMEGA3D.overlay)return;
+  if(!(google.maps&&google.maps.WebGLOverlayView))return;
+  try{if(typeof _gpsEnsureThree==='function')await _gpsEnsureThree()}catch(e){if(typeof showBanner==='function')showBanner('cal','3D map is active; equipment massing could not load.');return}
+  if(!OMEGA3D.on||typeof THREE==='undefined')return;
+  var c=m.getCenter&&m.getCenter();if(!c)return;var anchor={lat:c.lat(),lng:c.lng(),altitude:0},records=_g3Records();
+  var overlay=new google.maps.WebGLOverlayView(),scene,renderer,camera;
+  overlay.onAdd=function(){
+    scene=new THREE.Scene();camera=new THREE.PerspectiveCamera();scene.add(new THREE.HemisphereLight(0xffffff,0x1b2632,1.25));
+    OMEGA3D.objects=[];var cos=Math.cos(anchor.lat*Math.PI/180);
+    records.forEach(function(r){
+      var geom=new THREE.BoxGeometry(r.w,r.d,r.h),mat=new THREE.MeshStandardMaterial({color:r.color,opacity:.92,transparent:true,roughness:.72,metalness:.08}),box=new THREE.Mesh(geom,mat);
+      box.position.set((r.g.lng-anchor.lng)*111320*cos,(r.g.lat-anchor.lat)*110540,r.h/2);box.rotation.z=-r.rot*Math.PI/180;
+      var edges=new THREE.LineSegments(new THREE.EdgesGeometry(geom),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.48}));box.add(edges);scene.add(box);OMEGA3D.objects.push(box);
+    });OMEGA3D.scene=scene;OMEGA3D.camera=camera;
+  };
+  overlay.onContextRestored=function(o){renderer=new THREE.WebGLRenderer({canvas:o.gl.canvas,context:o.gl,...o.gl.getContextAttributes()});renderer.autoClear=false;OMEGA3D.renderer=renderer};
+  overlay.onDraw=function(o){if(!renderer||!scene||!camera)return;camera.projectionMatrix=new THREE.Matrix4().fromArray(o.transformer.fromLatLngAltitude(anchor));renderer.render(scene,camera);renderer.resetState()};
+  overlay.onContextLost=function(){if(renderer){try{renderer.dispose()}catch(e){}renderer=null;OMEGA3D.renderer=null}};
+  overlay.onRemove=function(){OMEGA3D.objects=[];OMEGA3D.scene=null;OMEGA3D.camera=null};
+  overlay.setMap(m);OMEGA3D.overlay=overlay;
 }
 
 function set3D(tilt, heading){
@@ -39193,23 +39337,33 @@ function set3D(tilt, heading){
     if(typeof setMode==='function') setMode('select');
     _g3Layers(true);
   }
-  try{ m.setTilt(tilt); m.setHeading(heading); }catch(e){}
+  try{ m.setTilt(tilt); m.setHeading(heading); }catch(e){
+    if(entering){window._geoSuspend=false;_g3Layers(false);if(OMEGA3D.prevMode&&typeof setMode==='function')setMode(OMEGA3D.prevMode);OMEGA3D.prevMode=null;}
+    if(typeof showBanner==='function')showBanner('cal','Camera change failed. Return to plan view and retry.');
+    return false;
+  }
   OMEGA3D.tilt=tilt; OMEGA3D.heading=heading; OMEGA3D.on=(tilt>0);
 
   if(leaving){
+    _g3TearDown();
     window._geoSuspend=false;
     _g3Layers(false);
     try{ if(typeof _geoReprojectAll==='function') _geoReprojectAll(); }catch(e){}
     if(OMEGA3D.prevMode && typeof setMode==='function') setMode(OMEGA3D.prevMode);
     OMEGA3D.prevMode=null;
   }
+  if(entering) setTimeout(function(){_g3ShowObjects()},180);
   _g3Sync();
   return true;
 }
 function toggle3D(){ return set3D(OMEGA3D.on?0:45, OMEGA3D.heading); }
 function orbit3D(d){ return OMEGA3D.on ? set3D(OMEGA3D.tilt, OMEGA3D.heading+d) : set3D(45, OMEGA3D.heading+d); }
 function pitch3D(d){ return set3D(OMEGA3D.tilt+d, OMEGA3D.heading); }
-window.set3D=set3D; window.toggle3D=toggle3D; window.orbit3D=orbit3D; window.pitch3D=pitch3D;
+function view3D(preset){
+  var v={site:[45,0],street:[67.5,0],north:[45,0],east:[45,90],south:[45,180],west:[45,270],top:[0,0]}[preset]||[45,0];
+  return set3D(v[0],v[1]);
+}
+window.set3D=set3D; window.toggle3D=toggle3D; window.orbit3D=orbit3D; window.pitch3D=pitch3D; window.view3D=view3D;
 
 function _g3Sync(){
   var _b3=document.getElementById('btn-3d');
@@ -39250,6 +39404,8 @@ function _g3Sync(){
     d.innerHTML='<button onclick="orbit3D(-45)" title="Orbit left" style="'+btn+'">\u21ba</button>'
       +'<span id="omega3d-read" style="min-width:116px;text-align:center;letter-spacing:.4px"></span>'
       +'<button onclick="orbit3D(45)" title="Orbit right" style="'+btn+'">\u21bb</button>'
+      +'<button onclick="view3D(\'site\')" title="Site overview" style="'+btn+'">SITE</button>'
+      +'<button onclick="view3D(\'street\')" title="Street-height review" style="'+btn+'">STREET</button>'
       +'<span style="opacity:.3">|</span>'
       +'<button onclick="pitch3D(-15)" title="Lower camera" style="'+btn+'">\u2193</button>'
       +'<button onclick="pitch3D(15)" title="Raise camera" style="'+btn+'">\u2191</button>'
@@ -105217,6 +105373,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     /openSitePreQual/,
     /openScorePanel/,
     /openViabilityWorkflow/,
+    /openProjectIntelligence/,
+    /toggle3D/,
 
     /* --- what gets sent to the customer ------------------------------ */
     /openProposalExport/,
@@ -172351,6 +172509,155 @@ if (root.console && console.info) {
   }
   gate();
 })();
+</script>
+<!-- Interaction quality: scoped to project review; Pro drafting stays intact. -->
+<style id="omega-review-accessibility">
+#opi :focus-visible,#site-prequal-modal :focus-visible,#omega3d-hud :focus-visible{outline:2px solid #8ACBFF!important;outline-offset:3px}
+#opi .opi-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.45fr) minmax(0,1fr)}
+#opi .opi-card{padding:20px}#opi .opi-card h3{font-size:12px}
+#opi .opi-reason,#opi .opi-check span,#opi .opi-action p{font-size:12px;line-height:1.6;color:#B1C0CE}
+#opi .opi-check b,#opi .opi-action b{font-size:13px}
+#opi .opi-note,#opi .opi-k{font-size:11px;color:#ACBDCC}
+#opi .opi-btn,#opi .opi-close{min-height:40px;font-size:12px}
+#opi .opi-table{display:block;max-width:100%;overflow-x:auto;white-space:nowrap}
+#opi .opi-table td,#opi .opi-table th{font-size:11px;padding:12px 8px}
+#opi .opi-v{font-size:clamp(15px,1.8vw,22px);overflow-wrap:anywhere}
+#site-prequal-modal{overscroll-behavior:contain}
+#site-prequal-modal input[type=number],#site-prequal-modal select{min-height:44px!important;font-size:16px!important}
+#site-prequal-modal label{font-size:12px!important;line-height:1.5}
+#site-prequal-modal input[type=checkbox]{width:20px;height:20px;flex-shrink:0}
+#site-prequal-modal input[aria-invalid=true]{border-color:#EF8A80!important;box-shadow:0 0 0 1px #EF8A80}
+#site-prequal-modal button{min-height:40px}
+#site-prequal-modal button:disabled{opacity:.5;cursor:not-allowed}
+#omega3d-hud{pointer-events:auto!important;max-width:calc(100% - 32px);flex-wrap:wrap;z-index:450!important}
+#omega3d-hud button{min-width:40px;min-height:40px}
+body.omega-review-3d #cov{pointer-events:none!important}
+@media(max-width:1100px){#opi .opi-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}#opi .opi-metrics{grid-column:1/-1}}
+@media(max-width:680px){#opi .opi-grid{grid-template-columns:minmax(0,1fr)}#opi .opi-metrics{grid-template-columns:1fr 1fr}#opi .opi-head{height:auto;min-height:68px;padding:12px}#opi .opi-title{font-size:14px}#opi .opi-card{padding:16px}#opi .opi-btn,#opi .opi-close{min-height:44px}#site-prequal-modal{padding:8px!important}}
+@media(prefers-reduced-motion:reduce){#opi *,#site-prequal-modal *,#omega3d-hud *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+<script id="omega-review-interactions">
+(function(){
+  'use strict';
+  var stack=[];
+  function focusables(host){return Array.from(host.querySelectorAll('button,input,select,textarea,a[href],[tabindex]')).filter(function(e){return !e.disabled&&e.tabIndex>=0&&e.getClientRects().length>0;});}
+  function close(host){if(host.id==='opi')window.closeProjectIntelligence();else host.remove();}
+  function register(host){
+    if(stack.some(function(x){return x.host===host;}))return;
+    stack.push({host:host,previous:document.activeElement});
+    host.setAttribute('role','dialog');host.setAttribute('aria-modal','true');host.tabIndex=-1;
+    if(host.id==='site-prequal-modal'){
+      host.setAttribute('aria-label','Site pre-qualification');
+      host.querySelectorAll('input[type=number]').forEach(function(input){
+        var caption=input.parentElement.querySelector('span');if(caption)input.setAttribute('aria-label',caption.textContent);
+        input.min=input.id==='pq2-pins'?'1':'0';input.step=/park|pins/.test(input.id)?'1':'any';
+      });
+      var band=host.querySelector('#pq2-band');if(band)band.setAttribute('aria-label','Hosting capacity benchmark band');
+    }
+    setTimeout(function(){if(!host.isConnected)return;var first=focusables(host)[0];(first||host).focus();},0);
+  }
+  function reconcile(){
+    stack=stack.filter(function(entry){
+      var visible=entry.host.isConnected&&(entry.host.id!=='opi'||entry.host.classList.contains('open'));
+      if(!visible&&entry.previous&&entry.previous.isConnected&&(entry.host.contains(document.activeElement)||document.activeElement===document.body))entry.previous.focus();
+      return visible;
+    });
+    var opi=document.getElementById('opi');if(opi&&opi.classList.contains('open'))register(opi);
+    var pq=document.getElementById('site-prequal-modal');if(pq)register(pq);
+  }
+  document.addEventListener('keydown',function(e){
+    var entry=stack[stack.length-1];if(!entry)return;
+    if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();close(entry.host);reconcile();return;}
+    if(e.key==='Tab'){
+      var list=focusables(entry.host),i=list.indexOf(document.activeElement);
+      if(!list.length){e.preventDefault();entry.host.focus();}
+      else if(i<0||(e.shiftKey&&i===0)||(!e.shiftKey&&i===list.length-1)){e.preventDefault();list[e.shiftKey?list.length-1:0].focus();}
+    }
+  },true);
+  function boot(){
+    var queued=false;
+    new MutationObserver(function(records){
+      if(!records.some(function(r){return r.target.id==='opi'||Array.from(r.addedNodes).concat(Array.from(r.removedNodes)).some(function(n){return n.nodeType===1&&(n.id==='site-prequal-modal'||n.id==='opi');});}))return;
+      if(!queued){queued=true;queueMicrotask(function(){queued=false;reconcile();});}
+    }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+    reconcile();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+<!-- OMEGA Project Intelligence: decision surface over the existing engines. -->
+<style>
+#opi{position:fixed;inset:0;z-index:50000;background:rgba(7,12,18,.86);backdrop-filter:blur(8px);display:none;padding:18px}#opi.open{display:flex}
+.opi-shell{width:min(1440px,100%);height:100%;margin:auto;background:#111B25;border:1px solid #30404F;border-radius:14px;box-shadow:0 30px 100px #000a;display:flex;flex-direction:column;overflow:hidden}
+.opi-head{height:64px;flex:none;display:flex;align-items:center;gap:14px;padding:0 22px;background:#16202B;border-bottom:1px solid #30404F}.opi-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4A8FD8,#26568E);display:grid;place-items:center;color:#fff;font-size:18px}.opi-title{font-size:16px;font-weight:800;color:#F2F6FA}.opi-sub{font-size:10px;color:#8FA2B5;margin-top:2px}.opi-close{margin-left:auto;width:34px;height:34px;border:1px solid #3A4A59;background:#22303D;color:#C9D4DE;border-radius:8px;cursor:pointer;font-size:18px}
+.opi-scroll{overflow:auto;padding:18px 20px 28px}.opi-grid{display:grid;grid-template-columns:minmax(250px,.8fr) minmax(420px,1.5fr) minmax(260px,.9fr);gap:14px}.opi-card{background:#16202B;border:1px solid #30404F;border-radius:11px;padding:16px;min-width:0}.opi-card h3{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#8FA2B5;margin:0 0 12px}.opi-decision{font-size:27px;font-weight:800;line-height:1.05;margin:4px 0 8px}.opi-reason{font-size:11px;line-height:1.5;color:#AAB8C5}.opi-score{font:800 54px/1 'IBM Plex Mono',monospace;color:#60A5FA}.opi-score small{font-size:15px;color:#718599}.opi-bar{height:7px;background:#22303D;border-radius:5px;overflow:hidden;margin:10px 0}.opi-bar>i{display:block;height:100%;background:linear-gradient(90deg,#4A8FD8,#62C6FF)}
+.opi-metrics{grid-column:span 2;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;padding:0;overflow:hidden}.opi-metric{padding:15px;background:#16202B}.opi-metric+.opi-metric{border-left:1px solid #30404F}.opi-k{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:#8395A6}.opi-v{font:700 20px/1.25 'IBM Plex Mono',monospace;color:#ECF3F8;margin-top:6px}.opi-note{font-size:9px;color:#718599;margin-top:4px}
+.opi-check{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid #ffffff0e}.opi-check:last-child{border:0}.opi-dot{width:18px;height:18px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800}.opi-ok{background:#22c55e26;color:#4ADE80}.opi-warn{background:#f59e0b24;color:#FBBF24}.opi-check b{display:block;font-size:11px;color:#DCE6EE}.opi-check span{display:block;font-size:9px;color:#7F92A4;line-height:1.35;margin-top:2px}
+.opi-table{width:100%;border-collapse:collapse}.opi-table th{text-align:right;font-size:8px;color:#718599;text-transform:uppercase;padding:0 8px 8px}.opi-table th:first-child,.opi-table td:first-child{text-align:left}.opi-table td{text-align:right;border-top:1px solid #ffffff10;padding:10px 8px;font:600 10px 'IBM Plex Mono',monospace;color:#CFDAE3}.opi-table td:first-child{font-family:'IBM Plex Sans',sans-serif}.opi-table tr.opi-base td{background:#4a8fd817;color:#EEF7FF}.opi-tag{font-size:7px;background:#4A8FD8;color:#fff;padding:2px 5px;border-radius:8px;margin-left:5px}
+.opi-action{display:flex;gap:10px;padding:10px 0;border-top:1px solid #ffffff10}.opi-action:first-of-type{border-top:0}.opi-num{font:700 10px 'IBM Plex Mono',monospace;color:#60A5FA;background:#4a8fd81f;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none}.opi-action b{font-size:11px;color:#DCE6EE}.opi-action p{font-size:9px;line-height:1.4;color:#7F92A4;margin:2px 0 0}.opi-btns{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}.opi-btn{border:1px solid #3A4C5E;background:#22303D;color:#DCE6EE;border-radius:7px;padding:8px 10px;font:600 10px 'IBM Plex Sans',sans-serif;cursor:pointer}.opi-btn.primary{background:#4A8FD8;border-color:#4A8FD8;color:#fff}.opi-wide{grid-column:1/-1}
+@media(max-width:980px){#opi{padding:0}.opi-shell{border-radius:0;border:0}.opi-grid{grid-template-columns:1fr 1fr}.opi-metrics,.opi-wide{grid-column:1/-1}}@media(max-width:680px){.opi-scroll{padding:12px}.opi-grid{grid-template-columns:1fr}.opi-metrics{grid-column:auto;grid-template-columns:1fr 1fr}.opi-card,.opi-wide{grid-column:auto}.opi-head{padding:0 14px}}
+</style>
+<div id="opi" role="dialog" aria-modal="true" aria-labelledby="opi-title" onclick="if(event.target===this)closeProjectIntelligence()"><section class="opi-shell"><header class="opi-head"><div class="opi-mark">◆</div><div><div class="opi-title" id="opi-title">OMEGA Project Intelligence</div><div class="opi-sub" id="opi-project">Decision-grade project screen</div></div><button class="opi-close" onclick="closeProjectIntelligence()" aria-label="Close">×</button></header><div class="opi-scroll"><div class="opi-grid" id="opi-body"></div></div></section></div>
+<script>
+(function(){
+function money(n){return isFinite(n)&&n>0?'$'+Math.round(n).toLocaleString():'—'}
+function esc(v){var d=document.createElement('div');d.textContent=String(v==null?'':v);return d.innerHTML}
+function fleet(){return(((window.S&&S.bessList)||[]).reduce(function(a,b){var q=+(b.qty||1);a.kwh+=+(b.kwh||0)*q;a.kw+=+(b.kw||0)*q;return a},{kwh:0,kw:0}))}
+function readProject(){
+ try{if(typeof updateCostEst==='function')updateCostEst()}catch(e){} try{if(typeof updateRevSummary==='function')updateRevSummary()}catch(e){}
+ var f=fleet(),site=typeof computeInterconnectScore==='function'?computeInterconnectScore():null,cost=+(window._COST_TOTAL||0),rev=+(window._YR1_REV||0),net=+(window._NET_COST||cost),els=(window.S&&S.elements)||[],shapes=(window.S&&S.shapes)||[],runs=(window.S&&S.conduits)||[];
+ var addr=((document.getElementById('addr-in')||{}).value||(document.getElementById('omega-addr-in')||{}).value||'').trim();
+ var checks=[{ok:!!addr,w:12,n:'Site identified',d:addr||'Enter and load the project address'},{ok:f.kw>0&&f.kwh>0,w:16,n:'System configured',d:f.kw>0?(f.kw/1000).toFixed(2)+' MW / '+(f.kwh/1000).toFixed(2)+' MWh':'Select the BESS and operating size'},{ok:els.length+shapes.length>0,w:14,n:'Concept layout',d:els.length+shapes.length?(els.length+shapes.length)+' placed objects':'Place the primary equipment on the site'},{ok:runs.length>0,w:10,n:'Electrical routing',d:runs.length?runs.length+' conduit runs drawn':'Route equipment to the point of interconnection'},{ok:cost>0,w:14,n:'Cost model',d:cost>0?money(cost)+' installed estimate':'Run the construction cost estimate'},{ok:rev>0,w:14,n:'Revenue model',d:rev>0?money(rev)+'/year enabled':'Run or enter the applicable value stack'},{ok:!!(site&&site.anyReal),w:12,n:'Site data evidence',d:site&&site.anyReal?'Location factors include project data':'Connect parcel, capacity, AHJ or Grid Atlas data'},{ok:!!(window.S&&S._siteComplete),w:8,n:'Design verified',d:window.S&&S._siteComplete?'Site map marked complete':'Verify BOM and mark the site map complete'}];
+ var ready=checks.reduce(function(a,c){return a+(c.ok?c.w:0)},0),sp=site?site.pct:0,econ=cost&&rev?Math.max(0,Math.min(100,rev/cost*650)):0,score=Math.round(ready*.45+sp*.35+econ*.2),missing=checks.filter(function(c){return !c.ok}),decision=score>=75&&missing.length<=2?'PURSUE':score>=52?'ADVANCE WITH CONDITIONS':'HOLD & DE-RISK';
+ return{f:f,site:site,cost:cost,rev:rev,net:net,checks:checks,ready:ready,score:score,missing:missing,decision:decision,color:decision==='PURSUE'?'#4ADE80':decision==='ADVANCE WITH CONDITIONS'?'#FBBF24':'#F87171'}
+}
+function scenarios(x){return[{n:'Conservative',c:1.12,r:.78},{n:'Base case',c:1,r:1,b:1},{n:'Upside',c:.94,r:1.18}].map(function(s){var c=(x.net||x.cost)*s.c,r=x.rev*s.r;return'<tr class="'+(s.b?'opi-base':'')+'"><td>'+s.n+(s.b?'<span class="opi-tag">LIVE</span>':'')+'</td><td>'+money(c)+'</td><td>'+money(r)+'</td><td>'+(r?(c/r).toFixed(1)+' yr':'—')+'</td><td>'+(c?(r/c*100).toFixed(1)+'%':'—')+'</td></tr>'}).join('')}
+function render(){
+ var x=readProject(),s=x.site||{score:0,pct:0,factors:[],utility:'',iso:''},reason=x.missing.length?'Resolve '+x.missing.slice(0,2).map(function(b){return b.n.toLowerCase()}).join(' and ')+' before the next capital gate.':'Core evidence is present; move the project into diligence.';
+ var checks=x.checks.map(function(c){return'<div class="opi-check"><div class="opi-dot '+(c.ok?'opi-ok':'opi-warn')+'">'+(c.ok?'✓':'!')+'</div><div><b>'+esc(c.n)+'</b><span>'+esc(c.d)+'</span></div></div>'}).join('');
+ var actions=x.missing.slice(0,3).map(function(b,i){return'<div class="opi-action"><div class="opi-num">0'+(i+1)+'</div><div><b>'+esc(b.n)+'</b><p>'+esc(b.d)+'. This is suppressing readiness by '+b.w+' points.</p></div></div>'}).join('')||'<div class="opi-action"><div class="opi-num">✓</div><div><b>Ready for diligence</b><p>Export the report and begin interconnection / AHJ validation.</p></div></div>';
+ document.getElementById('opi-project').textContent=((document.getElementById('pname')||{}).value||'Current project')+' · '+(s.utility||'utility pending')+(s.iso?' · '+s.iso:'');
+ document.getElementById('opi-body').innerHTML='<article class="opi-card"><h3>Development decision</h3><div class="opi-decision" style="color:'+x.color+'">'+x.decision+'</div><div class="opi-reason">'+esc(reason)+'</div><div class="opi-btns"><button class="opi-btn primary" onclick="opiOpenReport()">Open report</button><button class="opi-btn" onclick="opiRefresh()">Refresh</button></div></article><article class="opi-card"><h3>Investability</h3><div class="opi-score">'+x.score+'<small>/100</small></div><div class="opi-bar"><i style="width:'+x.score+'%"></i></div><div class="opi-reason">Readiness 45% · site quality 35% · economics 20%</div></article><article class="opi-card"><h3>Site screen</h3><div class="opi-score" style="font-size:40px">'+(s.score?s.score.toFixed(1):'—')+'<small>/5</small></div><div class="opi-bar"><i style="width:'+s.pct+'%"></i></div><div class="opi-reason">'+esc((s.utility||'Utility pending')+(s.iso?' · '+s.iso:''))+'<br>'+s.factors.filter(function(f){return f.real}).length+' of '+s.factors.length+' factors backed by project data.</div></article><section class="opi-card opi-metrics"><div class="opi-metric"><div class="opi-k">System</div><div class="opi-v">'+(x.f.kw?(x.f.kw/1000).toFixed(2)+' MW':'—')+'</div><div class="opi-note">'+(x.f.kwh?(x.f.kwh/1000).toFixed(2)+' MWh':'Not configured')+'</div></div><div class="opi-metric"><div class="opi-k">Installed cost</div><div class="opi-v">'+money(x.cost)+'</div><div class="opi-note">Current estimate</div></div><div class="opi-metric"><div class="opi-k">Year-one value</div><div class="opi-v">'+money(x.rev)+'</div><div class="opi-note">Enabled streams</div></div><div class="opi-metric"><div class="opi-k">Simple payback</div><div class="opi-v">'+(x.rev&&x.net?(x.net/x.rev).toFixed(1)+' yr':'—')+'</div><div class="opi-note">Net cost ÷ annual value</div></div></section><article class="opi-card"><h3>Readiness · '+x.ready+'%</h3>'+checks+'</article><article class="opi-card"><h3>Scenario comparator</h3><table class="opi-table"><thead><tr><th>Case</th><th>Net cost</th><th>Annual value</th><th>Payback</th><th>Yield</th></tr></thead><tbody>'+scenarios(x)+'</tbody></table><div class="opi-reason" style="margin-top:10px">Conservative: +12% cost / −22% value. Upside: −6% cost / +18% value. Base reads the live model.</div></article><article class="opi-card"><h3>Next best actions</h3>'+actions+'<div class="opi-btns"><button class="opi-btn" onclick="opiSiteScore()">Site score</button><button class="opi-btn" onclick="opiCost()">Cost & ROI</button></div></article><article class="opi-card opi-wide"><h3>Decision boundary</h3><div class="opi-reason">Development triage only—not an interconnection study, stamped design, legal opinion, or investment guarantee. Estimated inputs remain penalized until project evidence replaces them.</div></article>'
+}
+window.openProjectIntelligence=function(){render();document.getElementById('opi').classList.add('open')};window.closeProjectIntelligence=function(){document.getElementById('opi').classList.remove('open')};window.opiRefresh=render;window.opiOpenReport=function(){closeProjectIntelligence();if(typeof openRpPanel==='function')openRpPanel('summary')};window.opiSiteScore=function(){closeProjectIntelligence();if(typeof openScorePanel==='function')openScorePanel()};window.opiCost=function(){closeProjectIntelligence();if(typeof openRpPanel==='function')openRpPanel('cost')};document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.getElementById('opi').classList.contains('open'))closeProjectIntelligence()})
+})();
+</script>
+
+<!-- OMEGA EDITOR QUALITY PASS 2026-09-12 -->
+<style id="omega-editor-quality-pass">
+/* Keyboard visibility and predictable focus across the drafting shell. */
+.rbtn:focus-visible,.rsbtn:focus-visible,.menu-item:focus-visible,.rb-fly-item:focus-visible,.sb-toggle:focus-visible,.sb-tab:focus-visible,.e3-btn:focus-visible,.opi-btn:focus-visible,.btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #8ACBFF!important;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
+@media (pointer:coarse){.rbtn,.rsbtn,.menu-item,.rb-fly-item,.e3-btn,.opi-btn{min-height:44px}.op-bar button,.e3-x,#lp-float-close,#rp-float-close,#scorep-float-close{min-width:44px;min-height:44px}}
+/* Review mode is deliberately read-only. Make that visual contract unmistakable. */
+body.omega-review-3d #omega3d-hud{box-shadow:0 10px 28px rgba(0,0,0,.45)}
+body.omega-review-3d #cw::after{content:'3D REVIEW · RETURN TO 2D TO EDIT';position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:125;pointer-events:none;padding:5px 9px;border:1px solid rgba(96,165,250,.45);background:rgba(8,14,26,.88);color:#B9DCFF;border-radius:5px;font:700 9px/1 'IBM Plex Mono',monospace;letter-spacing:.06em}
+</style>
+<script>
+/* A lightweight, user-safe health model for the editor. This does not change
+   project data; it gives support and QA one deterministic place to inspect the
+   current session instead of relying on scattered console probes. */
+(function(root){
+  'use strict';
+  function byId(id){return document.getElementById(id)}
+  function countDupIds(){var seen={},dups=[];document.querySelectorAll('[id]').forEach(function(n){if(seen[n.id])dups.push(n.id);else seen[n.id]=1});return dups}
+  function check(){
+    var st=root.S||null, score=null, caps=null;
+    try{score=typeof root.computeInterconnectScore==='function'?root.computeInterconnectScore():null}catch(e){}
+    try{caps=root.Omega3D&&typeof root.Omega3D.status==='function'?root.Omega3D.status():null}catch(e){}
+    var required=['cw','sc','els','csvg','ribbon','statusbar','pname'];
+    var missing=required.filter(function(id){return !byId(id)});
+    return {
+      ok:!missing.length&&!countDupIds().length,
+      missingDom:missing, duplicateIds:countDupIds(),
+      project:{id:root._projectId||null,dirty:!!root._workDirty,saveInFlight:!!root._saveInFlight,loadReady:typeof root._loadReady==='undefined'?null:!!root._loadReady},
+      drawing:st?{elements:(st.elements||[]).length,shapes:(st.shapes||[]).length,conduits:(st.conduits||[]).length,history:(st.history||[]).length,scale:st.pxPerFt||null}:null,
+      screening:score?{score:score.score,pct:score.pct,evidencePct:score.evidencePct||0,utility:score.utility||'',iso:score.iso||'',factors:score.factors.map(function(f){return{key:f.key,score:f.score,source:f.source|| (f.real?'data':'estimate')}})}:null,
+      view3d:caps, mode:document.body.classList.contains('omg-designer')?'designer':'pro'
+    };
+  }
+  root.OmegaEditorQA={check:check,log:function(){var r=check();if(root.console){console.group('[OMEGA Editor QA]');console.log(r);console.groupEnd()}return r}};
+})(window);
 </script>
 </body>
 </html>
