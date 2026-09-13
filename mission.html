@@ -2415,7 +2415,29 @@ async function load(){
    with it for attention. */
 const CHAT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const WAKE = /\bjarvis\b/i;
+/* THE WAKE WORD, and what the recogniser actually hears.
+   The browser's SpeechRecognition has no custom-vocabulary hook, so "Jarvis"
+   cannot be biased into the model the way whisper's initial_prompt can. It
+   comes back as "Travis" often enough that Thomas reported it as a bug
+   (2026-09-11), and a wake word that fails a fraction of the time is a wake
+   word you stop trusting.
+
+   So the near-misses are accepted — but ONLY as a prefix. "Travis" at the
+   start of an utterance is overwhelmingly the recogniser mangling his name;
+   "text Travis about the invoice" is a sentence about a person, and matching
+   that as a wake word would be a worse bug than the one being fixed. Real
+   "jarvis" still matches anywhere, exactly as before. */
+const WAKE_ALT = /^\s*(?:hey\s+|hi\s+|ok\s+)?(travis|jervis|jarvus|charvis|jarvace|service)\b/i;
+const WAKE_RE  = /\bjarvis\b/i;
+const WAKE = { test: t => WAKE_RE.test(t) || WAKE_ALT.test(t) };
+/* Strip whichever form actually woke it, so the command that reaches the twin
+   never carries the mis-heard name as its first word. */
+function stripWake(t){
+  const s = String(t || '');
+  if (WAKE_RE.test(s)) return s.replace(/^.*?\bjarvis\b[\s,.:-]*/i, '').trim();
+  const m = s.match(WAKE_ALT);
+  return m ? s.slice(m[0].length).replace(/^[\s,.:-]*/, '').trim() : s.trim();
+}
 let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
 
 /* What "Waiting to go out" is currently showing, in the order it is showing
@@ -2857,7 +2879,7 @@ function startVoice(){
     if(!awake){
       if(WAKE.test(heard)){
         awake=true;
-        const after=heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i,'').trim();
+        const after=stripWake(heard);
         caps('AWAKE — go ahead', after||heard, true); coreState('awake — go ahead', true);
         /* "Hi Jarvis" leaves NOTHING after the wake word, and the old guard
            (`if final && after`) then asked nothing at all — he greeted the
