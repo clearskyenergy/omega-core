@@ -10,7 +10,15 @@ const api=c.OmegaEditablePlotPPT,m={a:1,b:0,c:0,d:1,e:0,f:0};
 const p=api.path('M 10 20 l 30 0 v 25 h -30 z M 60 60 Q 70 40 80 60 C 90 80 100 40 110 60',m);
 assert.equal(p[1].x,40);assert.equal(p[2].y,45);assert(p[4].close);assert(p[5].moveTo);
 assert.equal(p[6].curve.type,'quadratic');assert.equal(p[7].curve.type,'cubic');
-assert.throws(()=>api.path('M 0 0 A 5 5 0 0 0 10 10',m),/Unsupported/);
+/* Arcs used to be refused here. They are converted now — the sheet
+   generators emit nine of them and a refusal stopped the whole export — so
+   this asserts the conversion instead: an arc becomes cubics that land on
+   the arc's own endpoint. An unimplemented command still refuses. */
+const arc=api.path('M 0 0 A 5 5 0 0 0 10 10',m);
+assert(arc.length>1&&arc.every(v=>v.close||isFinite(v.x)));
+assert(arc.slice(1).every(v=>v.curve&&v.curve.type==='cubic'));
+assert(Math.abs(arc[arc.length-1].x-10)<0.01&&Math.abs(arc[arc.length-1].y-10)<0.01);
+assert.throws(()=>api.path('M 0 0 B 1 1',m),/Unsupported/);
 assert.throws(()=>api.path('M 0',m),/Invalid/);
 const moved=api.path('M 1 2 L 3 4',{a:0,b:1,c:-1,d:0,e:20,f:10});
 assert.equal(moved[0].x,18);assert.equal(moved[0].y,11);

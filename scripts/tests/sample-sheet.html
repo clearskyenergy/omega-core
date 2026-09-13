@@ -1,0 +1,76 @@
+<!doctype html><meta charset="utf-8"><title>OMEGA sample sheet compile</title>
+<body style="background:#fff"><div id="s"></div>
+<script src="/omega-plot-editable.js"></script>
+<script>
+/* A representative plot plan in the shape editor.html's generators produce:
+   a clipped map photo, equipment with IDs, fence with gates, a ground ring
+   with rods, dimension strings with arrowheads, labels, and a title block.
+   Every object here must survive as its own PowerPoint object. */
+var PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAJUlEQVR4AWMwtvb5jwszDDMFj55/+I8LMwyzMBhVMKpgVAEDAwB9zSPltAmhTQAAAABJRU5ErkJggg==';
+function eq(id,x,y,w,h,label){
+  return '<g data-omega-layer="Equipment"><rect data-omega-name="'+id+' outline" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="4" fill="none" stroke="#111" stroke-width="1.5"/>'
+   +'<text data-omega-name="'+id+' tag" x="'+(x+6)+'" y="'+(y+16)+'" font-size="11" font-family="Arial" fill="#111">'+id+'</text>'
+   +'<text data-omega-name="'+id+' rating" x="'+(x+6)+'" y="'+(y+30)+'" font-size="8" font-family="Arial" fill="#444">'+label+'</text></g>';
+}
+function dim(x1,y1,x2,y2,txt){
+  return '<g data-omega-layer="Dimensions"><line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#0057B8" stroke-width="0.8" marker-start="url(#dimarrow)" marker-end="url(#dimarrow)"/>'
+   +'<text x="'+((x1+x2)/2)+'" y="'+(y1-4)+'" font-size="8" font-family="Arial" fill="#0057B8" text-anchor="middle">'+txt+'</text></g>';
+}
+var defs='<clipPath id="mapclip"><rect x="40" y="60" width="700" height="380"/></clipPath>'
+ +'<marker id="dimarrow" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6 z" fill="#0057B8"/></marker>'
+ +'<symbol id="sym-xfmr" viewBox="0 0 60 40"><circle cx="22" cy="20" r="14" fill="none" stroke="#111" stroke-width="1.5"/><circle cx="38" cy="20" r="14" fill="none" stroke="#111" stroke-width="1.5"/></symbol>'
+ +'<symbol id="sym-gnd" viewBox="0 0 20 20"><line x1="10" y1="0" x2="10" y2="9" stroke="#111"/><line x1="3" y1="10" x2="17" y2="10" stroke="#111"/><line x1="6" y1="14" x2="14" y2="14" stroke="#111"/><line x1="8" y1="17" x2="12" y2="17" stroke="#111"/></symbol>';
+
+var body=''
+ +'<g data-omega-layer="Aerial imagery" clip-path="url(#mapclip)"><image href="'+PNG+'" x="40" y="60" width="700" height="380" preserveAspectRatio="none"/></g>'
+ +'<g data-omega-layer="Property line"><rect x="50" y="70" width="680" height="360" fill="none" stroke="#8B5E00" stroke-width="1.2" stroke-dasharray="8 4"/></g>'
+ +'<g data-omega-layer="Fence">'
+ +  '<polyline data-omega-name="Fence run N" points="90,110 640,110" fill="none" stroke="#333" stroke-width="1.6"/>'
+ +  '<polyline data-omega-name="Fence run E" points="640,110 640,390" fill="none" stroke="#333" stroke-width="1.6"/>'
+ +  '<polyline data-omega-name="Fence run S" points="640,390 90,390" fill="none" stroke="#333" stroke-width="1.6"/>'
+ +  '<polyline data-omega-name="Fence run W" points="90,390 90,110" fill="none" stroke="#333" stroke-width="1.6"/>'
+ +  '<rect data-omega-name="Gate G-01 (24 ft double swing)" x="330" y="384" width="72" height="12" rx="2" fill="none" stroke="#B45400" stroke-width="1.6"/>'
+ + '</g>'
+ + eq('BESS-01',140,160,150,90,'GOTION 3.44 MWh / 1720 kW')
+ + eq('BESS-02',320,160,150,90,'GOTION 3.44 MWh / 1720 kW')
+ + eq('PCS-01', 140,290,110,70,'1500 kVA inverter')
+ +'<g data-omega-layer="Equipment"><use data-omega-name="XFMR-01 symbol" href="#sym-xfmr" x="330" y="295" width="90" height="60"/>'
+ +'<text data-omega-name="XFMR-01 tag" x="330" y="370" font-size="11" font-family="Arial" fill="#111">XFMR-01  2500 kVA 12.47kV</text></g>'
+ +'<g data-omega-layer="Grounding">'
+ +  '<rect data-omega-name="Ground ring" x="120" y="140" width="380" height="240" rx="10" fill="none" stroke="#0A7B34" stroke-width="1" stroke-dasharray="4 3"/>'
+ +  '<use data-omega-name="Ground rod GR-01" href="#sym-gnd" x="112" y="132" width="18" height="18"/>'
+ +  '<use data-omega-name="Ground rod GR-02" href="#sym-gnd" x="492" y="132" width="18" height="18"/>'
+ +  '<use data-omega-name="Ground rod GR-03" href="#sym-gnd" x="112" y="372" width="18" height="18"/>'
+ +  '<use data-omega-name="Ground rod GR-04" href="#sym-gnd" x="492" y="372" width="18" height="18"/>'
+ + '</g>'
+ +'<g data-omega-layer="Connections">'
+ +  '<path data-omega-name="Feeder BESS-01 to PCS-01" d="M 215 250 L 215 270 A 8 8 0 0 1 207 278 L 195 290" fill="none" stroke="#C00" stroke-width="1.4" marker-end="url(#dimarrow)"/>'
+ +  '<path data-omega-name="Feeder PCS-01 to XFMR-01" d="M 250 325 L 330 325" fill="none" stroke="#C00" stroke-width="1.4" marker-end="url(#dimarrow)"/>'
+ + '</g>'
+ + dim(140,140,470,140,"330'-0\"")
+ + dim(90,405,640,405,"550'-0\"")
+ +'<g data-omega-layer="Title block">'
+ +  '<rect x="560" y="450" width="220" height="90" fill="#fff" stroke="#111" stroke-width="1"/>'
+ +  '<line x1="560" y1="472" x2="780" y2="472" stroke="#111"/>'
+ +  '<text x="566" y="466" font-size="10" font-family="Arial" fill="#111">CLEARSKY OMEGA — PLOT PLAN</text>'
+ +  '<text x="566" y="488" font-size="8" font-family="Arial" fill="#111">PROJECT: SAMPLE BESS SITE</text>'
+ +  '<text x="566" y="502" font-size="8" font-family="Arial" fill="#111">SCALE: 1" = 40\'   SHEET C-101</text>'
+ +  '<text x="566" y="516" font-size="8" font-family="Arial" fill="#C00">NOT FOR CONSTRUCTION — REVIEW SET</text>'
+ +  '<text x="566" y="530" font-size="7" font-family="Arial" fill="#444">Rev A — engineering review pending</text>'
+ + '</g>';
+
+/* Letter landscape at the exporter's own PP_DPI of 96: 11in x 8.5in is
+   1056 x 816. Getting this wrong is not cosmetic — the sheet would land in
+   PowerPoint at the wrong physical size and every scaled dimension on it
+   would be a lie. The body was laid out in a 792-wide frame, so it is scaled
+   into the real sheet rather than sitting in one corner of it. */
+var K=1056/792;
+var svg='<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1056 816">'
+  +'<defs>'+defs+'</defs><g transform="scale('+K+')">'+body+'</g></svg>';
+document.getElementById('s').innerHTML=svg;
+try{
+  var scene=window.OmegaEditablePlotPPT.compile(svg);
+  window.__SCENE=scene;
+  document.title='OK '+scene.objects.length;
+}catch(e){ window.__ERR=e.message; document.title='ERR'; }
+</script>
