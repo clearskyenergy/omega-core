@@ -139808,7 +139808,7 @@ var ARCH_GROUPS = [
 var ARCH_ORDER = ['solar-ground','solar-tracker','solar-roof','solar-carport',
   'compute-pod','bess-container','bess-cabinet','pcs','ems',
   'xfmr','switchgear','meter','panel','disco','jbox','genset','ups','pole',
-  'building','pad','fence','compound','bollard','parking','tree','hydrant','camera',
+  'building','pad','fence','compound','road','bollard','parking','tree','hydrant','camera',
   'substation','charger','ignore'];
 
 /* ---- SCALE ----------------------------------------------------------
@@ -140124,6 +140124,10 @@ function classifyShape(sh, ctx){
   var k = String(sh.kind||'');
   if(k==='dersolar' || k==='solar') return classifySolar(sh, ctx);
   if(SHAPE_ARCH[k]) return { arch:SHAPE_ARCH[k], why:'authored' };
+  /* A rectangle that encloses everything else on the drawing is the
+     property line, not a warehouse. readSite flags it (see the context
+     pass); an explicit override above still wins. */
+  if(sh.__visBoundary) return { arch:'ignore', why:'inferred' };
 
   /* rect / circle / polygon are generic. A labelled one usually says what
      it is; an unlabelled one is a building only if it is big enough to be
@@ -140201,12 +140205,58 @@ function readSite(){
      buildings are before it can decide what any array is sitting on, so
      the cheap kinds get boxed first. */
   var ctx = [], i, sh, b;
+
+  /* THE PROPERTY LINE IS NOT A BUILDING.
+     A big unlabelled rectangle used to be boxed as a building here
+     regardless of what classifyShape would later call it. A parcel
+     outline drawn around the site therefore made every ground array
+     "sit on a building" (so they rendered as rooftop) and drew a 22 ft
+     mass over the whole site. A rect that encloses every other thing
+     drawn, at least one of which lives at grade (a ground array, a BESS
+     pad, a transformer), is the site boundary and is left out. */
+  var ctxPts = [];
+  for(i=0;i<shapes.length;i++){
+    sh = shapes[i]; if(!sh) continue;
+    b = placedBox(sh); if(!b) continue;
+    var gk = String(sh.kind||'');
+    ctxPts.push({ ref:sh, x:b.x+b.w/2, y:b.y+b.h/2,
+      grade: (gk==='dersolar'||gk==='solar')
+               ? (sh.mount==='ground' || /ground|tracker/.test(String(sh.presetKey||'')))
+               : (gk==='bespad'||gk==='assembly'||gk==='parking') });
+  }
+  for(i=0;i<elements.length;i++){
+    var ee = elements[i]; if(!ee) continue;
+    var eew = +ee.w||40;
+    ctxPts.push({ ref:ee, x:(+ee.x||0)+eew/2, y:(+ee.y||0)+eew/2,
+                  grade:(ee.type==='eq'||ee.type==='evgear') });
+  }
+  var isSiteBoundary = function(shape, box){
+    var n=0, g=0, tot=0, j, q;
+    for(j=0;j<ctxPts.length;j++){
+      q = ctxPts[j]; if(q.ref===shape) continue; tot++;
+      if(q.x>=box.x && q.x<=box.x+box.w && q.y>=box.y && q.y<=box.y+box.h){ n++; if(q.grade) g++; }
+    }
+    return tot>=3 && n===tot && g>0;
+  };
+  var boundaryFound = false;
+
   for(i=0;i<shapes.length;i++){
     sh = shapes[i]; if(!sh) continue;
     var k = String(sh.kind||'');
-    var kind = (k==='parking') ? 'parking'
-             : (k==='rect'||k==='polygon'||k==='poly'||k==='boundary') ? 'building'
-             : null;
+    var kind = null;
+    if(k==='parking') kind = 'parking';
+    else if(k==='rect'||k==='polygon'||k==='poly'||k==='boundary'||k==='area'){
+      b = placedBox(sh); if(!b) continue;
+      sh.__visBoundary = false;
+      if(!sh._visArch && !sh.omegaCampus && !sh.omegaFence && isSiteBoundary(sh, b)){
+        sh.__visBoundary = true; boundaryFound = true; continue;
+      }
+      /* The same rules the item pass applies: a rect labelled "parking
+         lot" is parking, a 900 sq ft one is a pad, and neither is a
+         building for an array to sit on. */
+      var cc = classifyShape(sh, null);
+      kind = (cc.arch==='building') ? 'building' : (cc.arch==='parking') ? 'parking' : null;
+    }
     if(!kind) continue;
     /* An explicit override re-labels the context too, so overriding a
        rectangle to "Parking" immediately makes arrays on it read as
@@ -140219,6 +140269,11 @@ function readSite(){
     ctx.push({ sh:sh, box:b, kind:kind });
   }
 
+  if(boundaryFound){
+    out.warnings.push('A rectangle enclosing the whole site is treated as the property '
+      + 'line and not drawn. If it is a building, set it to Building in the list below.');
+  }
+
   /* --- bounds -------------------------------------------------------- */
   var minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
   function grow(x,y,w,h){
@@ -140229,7 +140284,9 @@ function readSite(){
   for(i=0;i<shapes.length;i++){ b=placedBox(shapes[i]); if(b) grow(b.x,b.y,b.w,b.h); }
   for(i=0;i<elements.length;i++){
     var e=elements[i]; if(!e) continue;
-    var ew=+e.w||40; grow(+e.x||0, +e.y||0, ew, ew);
+    var ew=+e.w||40;
+    var eh=(e.type==='evgear') ? (+e.h || Math.round(ew*(e.aspect||0.72))) : ew;
+    grow(+e.x||0, +e.y||0, ew, eh);
   }
   if(!isFinite(minx)){ minx=0;miny=0;maxx=600;maxy=400; }
   var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
@@ -140251,6 +140308,17 @@ function readSite(){
       continue;
     }
     b = placedBox(sh); if(!b) continue;
+    /* placedBox folds the live translate/scale into the CENTRE. The tables
+       and the outline below are read from the authored geometry, so they
+       must go through the same transform or a dragged array clips its
+       rows against an outline that stayed behind. */
+    var b0 = shapeBox(sh);
+    var scF = (+sh.scale > 0) ? +sh.scale : 1, txF = +sh.tx||0, tyF = +sh.ty||0;
+    var b0cx = b0 ? b0.x + b0.w/2 : 0, b0cy = b0 ? b0.y + b0.h/2 : 0;
+    var tfPt = function(x, y){
+      if(scF !== 1){ x = b0cx + (x - b0cx)*scF; y = b0cy + (y - b0cy)*scF; }
+      return { x: x + txF, y: y + tyF };
+    };
     var it = mkItem(sh, 'shape', c, {
       x: fx(b.x + b.w/2), z: fz(b.y + b.h/2),
       wf: b.w/p, lf: b.h/p,
@@ -140305,14 +140373,15 @@ function readSite(){
     if(ftT && sh.pts && sh.pts[0]){
       var o3 = sh.pts[0];
       it.tables = ftT.map(function(t){
-        return { x: fx(o3.x + (t.x + (t.w||0)/2)*p),
-                 z: fz(o3.y + (t.y + (t.h||0)/2)*p),
-                 wf: (t.w||0), lf: (t.h||0), a: t.a||0 };
+        var q = tfPt(o3.x + (t.x + (t.w||0)/2)*p, o3.y + (t.y + (t.h||0)/2)*p);
+        return { x: fx(q.x), z: fz(q.y),
+                 wf: (t.w||0)*scF, lf: (t.h||0)*scF, a: t.a||0 };
       });
     } else if(sh.tables && sh.tables.length){
       it.tables = sh.tables.map(function(t){
-        return { x:fx(t.x + (t.w||0)/2), z:fz(t.y + (t.h||0)/2),
-                 wf:(t.w||0)/p, lf:(t.h||0)/p, a:t.a||0 };
+        var q = tfPt(t.x + (t.w||0)/2, t.y + (t.h||0)/2);
+        return { x:fx(q.x), z:fz(q.y),
+                 wf:(t.w||0)/p*scF, lf:(t.h||0)/p*scF, a:t.a||0 };
       });
     }
     /* THE OUTLINE, AND IT MUST COME FROM THE SAME SOURCE AS THE SIZE.
@@ -140335,7 +140404,7 @@ function readSite(){
     else if(sh.boundary && sh.boundary.length > 2) ring = sh.boundary;
     else if(sh.pts && sh.pts.length > 2)           ring = sh.pts;
     if(ring){
-      it.poly = ring.map(function(q){ return { x:fx(q.x), z:fz(q.y) }; });
+      it.poly = ring.map(function(q){ var r = tfPt(q.x, q.y); return { x:fx(r.x), z:fz(r.y) }; });
     }
     if(sh.kind==='bespad' || sh.kind==='assembly'){
       it.wf = (+sh.lf||20); it.lf = (+sh.wf||8);
@@ -140356,9 +140425,13 @@ function readSite(){
     var ele = elements[i]; if(!ele) continue;
     var ce = classifyElement(ele);
     var wpx = +ele.w || 40;
+    /* Guided-build kit is drawn w x h (h = w * aspect, see the evgear
+       renderer); everything else is square. Using w for both axes put
+       every BESS from a guided build in a square and shifted it north. */
+    var hpx = (ele.type==='evgear') ? (+ele.h || Math.round(wpx*(ele.aspect||0.72))) : wpx;
     /* Real footprints where the app knows them, so a transformer is 6x5 ft
        and not a 60 px square that happens to be whatever the drop size was. */
-    var fw = wpx/p, fl = wpx/p;
+    var fw = wpx/p, fl = hpx/p;
     try{
       var gf = (typeof EQ_FOOTPRINT_FT!=='undefined') ? EQ_FOOTPRINT_FT[ele.eqId] : null;
       var dc = (typeof DC_CATALOG!=='undefined') ? DC_CATALOG[ele.eqId] : null;
@@ -140366,7 +140439,7 @@ function readSite(){
       else if(gf){ fw = gf.lf; fl = gf.wf; }
     }catch(e2){}
     out.items.push(mkItem(ele, 'element', ce, {
-      x: fx((+ele.x||0) + wpx/2), z: fz((+ele.y||0) + wpx/2),
+      x: fx((+ele.x||0) + wpx/2), z: fz((+ele.y||0) + hpx/2),
       wf: fw, lf: fl, rot: +ele.rot||0
     }));
   }
@@ -140792,15 +140865,18 @@ function pvTable(wf, df, tiltDeg, clearFt){
   var pv = new THREE.Mesh(new THREE.BoxGeometry(wf, 0.22, planeD),
                           panelMat(wf, planeD));
   pv.castShadow = true; pv.receiveShadow = true;
-  /* rotate about X so the table leans back along +Z (north-facing rows
-     run east-west, which is how a fixed-tilt row is built) */
-  pv.rotation.x = -tilt;
+  /* World +Z is SOUTH (see the AXES note in the site reader) and the sun
+     sits at +Z at noon. Rotating by +tilt about X drops the +Z (south)
+     edge and raises the -Z (north) edge, so the module normal points
+     south, at the sun. The original -tilt did the opposite: every row
+     faced north and the shading study lit the module backs. */
+  pv.rotation.x = tilt;
   pv.position.y = clearFt + Math.sin(tilt)*planeD/2;
   g.add(pv);
 
-  /* posts: front pair low, back pair at the raised edge */
+  /* posts: south pair low, north pair at the raised edge */
   var rise = Math.sin(tilt) * planeD;
-  var zf = -Math.cos(tilt)*planeD/2, zb = Math.cos(tilt)*planeD/2;
+  var zf = Math.cos(tilt)*planeD/2, zb = -Math.cos(tilt)*planeD/2;
   var px = wf/2 - 0.6;
   [[-px,zf,clearFt],[px,zf,clearFt],[-px,zb,clearFt+rise],[px,zb,clearFt+rise]]
     .forEach(function(p){
@@ -141018,7 +141094,7 @@ function buildSolarRoof(it, arch, roofY, implied){
         new THREE.BoxGeometry(Math.max(1,t.wf||tW), 0.18,
                               Math.max(1,t.lf||rowD)/Math.cos(tiltR)),
         panelMat(Math.max(1,t.wf||tW), Math.max(1,t.lf||rowD)));
-      pvT.rotation.x = -tiltR;
+      pvT.rotation.x = tiltR;
       if(t.a) pvT.rotation.y = -t.a;
       pvT.position.set(t.x - it.x, stand + Math.sin(tiltR)*(t.lf||rowD)/2, t.z - it.z);
       pvT.castShadow = true; pvT.receiveShadow = true;
@@ -141052,7 +141128,7 @@ function buildSolarRoof(it, arch, roofY, implied){
       if(spent >= budget) break;
       var pv = new THREE.Mesh(
         new THREE.BoxGeometry(tW*0.96, 0.18, rowD/Math.cos(tiltR)), pm);
-      pv.rotation.x = -tiltR;
+      pv.rotation.x = tiltR;
       pv.rotation.y = -ang;
       pv.position.set(wx, stand + Math.sin(tiltR)*rowD/2, wz);
       pv.castShadow = true; pv.receiveShadow = true;
@@ -141204,14 +141280,14 @@ function buildCarport(it, arch){
 
       var deck = new THREE.Mesh(
         new THREE.BoxGeometry(tw, 0.34, tl/Math.cos(TILT)), panelMat(tw, tl));
-      deck.rotation.x = -TILT;
+      deck.rotation.x = TILT;
       deck.position.y = CLEAR + riseT/2;
       deck.castShadow = true; deck.receiveShadow = true;
       bay.add(deck);
 
       /* corrugated substrate just proud of the modules */
       var sub0 = box(tw + 0.9, 0.24, tl/Math.cos(TILT) + 1.0, MAT.galv);
-      sub0.rotation.x = -TILT;
+      sub0.rotation.x = TILT;
       sub0.position.y = CLEAR + riseT/2 - 0.28;
       bay.add(sub0);
 
@@ -141360,14 +141436,14 @@ function buildCarport(it, arch){
          substrate showing past the panels is what says "roof". */
       var slope = DECK_D/Math.cos(TILT);
       var sub = box(len + 1.6, 0.35, slope + 1.8, MAT.galv);
-      sub.rotation.x = -TILT;
+      sub.rotation.x = TILT;
       sub.position.set(cx, deckMid - 0.32, zc);
       g.add(sub);
 
       var deck = new THREE.Mesh(
         new THREE.BoxGeometry(len, 0.32, slope),
         panelMat(len, DECK_D));
-      deck.rotation.x = -TILT;
+      deck.rotation.x = TILT;
       deck.position.set(cx, deckMid, zc);
       deck.castShadow = true; deck.receiveShadow = true;
       g.add(deck);
@@ -141377,7 +141453,7 @@ function buildCarport(it, arch){
       for(var p2=0; p2<=nPur; p2++){
         var px = cx - len/2 + (len/nPur)*p2;
         var pur = box(0.35, 0.35, DECK_D/Math.cos(TILT), MAT.darkSteel);
-        pur.rotation.x = -TILT;
+        pur.rotation.x = TILT;
         pur.position.set(px, deckMid - 0.45, zc);
         g.add(pur);
       }
@@ -142254,8 +142330,47 @@ function initRenderer(canvas){
   return r;
 }
 
+/* Free the previous scene before building the next one. open() used to
+   assign fresh root/ground/sun groups over the old ones without disposing
+   anything, so every open/close cycle left a whole site's buffers on the
+   GPU. */
+function teardownScene(){
+  var old = V.scene;
+  try{ if(window.OmegaContextBuildings) window.OmegaContextBuildings.clear(V); }catch(e){}
+  try{
+    if(V.root){ while(V.root.children.length){ var c0=V.root.children[0]; disposeTree(c0); V.root.remove(c0); } }
+  }catch(e){}
+  try{
+    if(V.groundGrp){
+      while(V.groundGrp.children.length){
+        var g0 = V.groundGrp.children[0];
+        if(g0.material && (g0.material !== MAT.ground || g0._ownMat)){
+          try{ if(g0.material.map) g0.material.map.dispose(); }catch(e1){}
+          try{ g0.material.dispose(); }catch(e2){}
+        }
+        try{ if(g0.geometry) g0.geometry.dispose(); }catch(e3){}
+        V.groundGrp.remove(g0);
+      }
+    }
+  }catch(e){}
+  try{ if(old && old.background && old.background.dispose) old.background.dispose(); }catch(e){}
+  try{ if(V.sun && V.sun.shadow && V.sun.shadow.map){ V.sun.shadow.map.dispose(); V.sun.shadow.map = null; } }catch(e){}
+  V.scene = null; V.root = null; V.groundGrp = null; V.sun = null;
+}
+
+/* The buildings layer lives in V.root, which populate() empties on every
+   rebuild. Put it back when it is switched on, from the module's own
+   cache, so the checkbox and the scene agree. */
+function reattachBuildings(site){
+  var CB = window.OmegaContextBuildings;
+  if(!V.opts.buildings || !CB) return;
+  try{ CB.load(V, THREE, site, function(){ V.needsRender = true; }); }catch(e){}
+}
+
 function buildScene(site){
+  teardownScene();
   var sc = new THREE.Scene();
+  V.scene = sc;                 /* before applySun, which paints the sky on it */
   V.site = site;
 
   var span = Math.max(60, Math.max(site.sizeFt.w, site.sizeFt.h));
@@ -142294,8 +142409,8 @@ function buildScene(site){
 
   buildGround(site, span);
   populate(site);
+  reattachBuildings(site);
 
-  V.scene = sc;
   return sc;
 }
 
@@ -142351,6 +142466,9 @@ function buildGround(site, span){
     try{ if(g0.geometry) g0.geometry.dispose(); }catch(e){}
     V.groundGrp.remove(g0);
   }
+  /* Per build. Left set from an earlier success, a later failed request
+     never fell back to the capture plane and the ground stayed bare. */
+  V.__wideGroundOk = false;
 
   /* ── THE GROUND HAS TO REACH AS FAR AS THE EYE ──────────────────────
      span*14 is sized from the SITE, so orbiting out past it ran the camera
@@ -142380,8 +142498,12 @@ function buildGround(site, span){
   }catch(e){}
   if(!src || !scEl) return;
 
+  /* #sc carries a CSS translate/scale (pinch zoom, Recenter), so its
+     bounding rect is the SCREEN size. The backdrop and every shape are in
+     the element's own, untransformed pixels: clientWidth/Height. */
   var rect;
-  try{ rect = scEl.getBoundingClientRect(); }catch(e){ return; }
+  try{ rect = { width: scEl.clientWidth || scEl.offsetWidth || 0,
+                height: scEl.clientHeight || scEl.offsetHeight || 0 }; }catch(e){ return; }
   if(!rect || rect.width<10) return;
 
   /* The backdrop is stretched to fill #sc, so it spans canvas px
@@ -142744,6 +142866,10 @@ function populate(site){
       case 'solar-carport': g = buildCarport(it, arch); break;
       case 'solar-roof':
         var ru = roofUnder(it, buildings);
+        /* A hand-set elevation IS the roof height for a roof array. The
+           builder lifts to ru.y itself, so the wrapper below must not
+           lift it again (22 ft became 44 ft). */
+        if(it.elevFt != null && isFinite(+it.elevFt)) ru = { y:+it.elevFt, implied:ru.implied };
         it._impliedRoof = ru.implied;
         g = buildSolarRoof(it, arch, ru.y, ru.implied); break;
       case 'bess-container': g = buildContainer(it, arch); break;
@@ -142802,9 +142928,11 @@ function populate(site){
        knows the number; inferred from the building underneath where they
        do not. */
     var elev = 0;
-    if(it.elevFt != null && isFinite(+it.elevFt)) {
+    if(it.arch === 'solar-roof') {
+      elev = 0;                       /* handled inside buildSolarRoof */
+    } else if(it.elevFt != null && isFinite(+it.elevFt)) {
       elev = +it.elevFt;
-    } else if(it.arch !== 'solar-roof' && it.onRoof) {
+    } else if(it.onRoof) {
       /* Flagged as rooftop but not a roof array — sit it on whatever
          building it overlaps rather than at grade. */
       var ru2 = roofUnder(it, buildings);
@@ -142883,6 +143011,10 @@ function attachControls(dom){
   var mode = null, lx = 0, ly = 0, pinch = 0;
 
   function down(e){
+    /* Browsers with pointer events fire pointerdown AND touchstart for a
+       finger; letting both through doubled every orbit delta and jittered
+       a pinch. Touch goes through the touch listeners only. */
+    if(e.pointerType === 'touch') return;
     var t = e.touches;
     if(t && t.length === 2){
       pinch = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
@@ -142897,6 +143029,7 @@ function attachControls(dom){
   }
   function move(e){
     if(!mode) return;
+    if(e.pointerType === 'touch') return;
     var t = e.touches;
     if(mode === 'pinch' && t && t.length === 2){
       var d = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
@@ -142920,7 +143053,7 @@ function attachControls(dom){
     updateCamera();
     if(e.preventDefault) e.preventDefault();
   }
-  function up(){ mode = null; pinch = 0; }
+  function up(e){ if(e && e.pointerType === 'touch') return; mode = null; pinch = 0; }
 
   dom.addEventListener('pointerdown', down);
   window.addEventListener('pointermove', move);
@@ -143001,7 +143134,7 @@ function resize(){
  * ═══════════════════════════════════════════════════════════════════════ */
 var CSS_ID = 'omega-vis-css';
 var CSS = ''
-+ '#ovis{position:fixed;inset:0;z-index:9000;background:#141416;display:none;'
++ '#ovis{position:fixed;inset:0;z-index:100050;background:#141416;display:none;'
 +   'flex-direction:column;font-family:"IBM Plex Sans",sans-serif;color:#E0E0E0}'
 + '#ovis.on{display:flex}'
 + '#ovis .ov-bar{height:44px;flex-shrink:0;background:#16202B;border-bottom:1px solid #30404F;'
@@ -143436,6 +143569,9 @@ function paintCompass(){
   c.style.transform = 'rotate(' + (V.sph.theta * 180/Math.PI) + 'deg)';
 }
 
+/* NodeList.forEach is missing in older embedded browsers; this is not. */
+function each(list, fn){ Array.prototype.forEach.call(list, fn); }
+
 function fmtHour(v){
   var hh = Math.floor(v), mm = Math.round((v - hh) * 60);
   var ap = hh >= 12 ? 'PM' : 'AM';
@@ -143446,7 +143582,7 @@ function fmtHour(v){
 function wireSide(){
   var side = el('ov-side'); if(!side) return;
 
-  side.querySelectorAll('[data-view]').forEach(function(b){
+  each(side.querySelectorAll('[data-view]'), function(b){
     b.onclick = function(){ setView(b.getAttribute('data-view')); };
   });
 
@@ -143475,7 +143611,7 @@ function wireSide(){
     var lbl = el('ov-dayv'); if(lbl) lbl.textContent = fmtDay(V.opts.day);
     applySun(); paintSun();
   };
-  side.querySelectorAll('[data-day]').forEach(function(b){
+  each(side.querySelectorAll('[data-day]'), function(b){
     b.onclick = function(){
       V.opts.day = +b.getAttribute('data-day');
       if(dy) dy.value = V.opts.day;
@@ -143530,7 +143666,7 @@ function wireSide(){
     });
   };
 
-  side.querySelectorAll('.ov-lyr').forEach(function(c){
+  each(side.querySelectorAll('.ov-lyr'), function(c){
     c.onchange = function(){
       var g = V.layers[c.getAttribute('data-g')];
       if(g){ g.visible = c.checked; V.needsRender = true; }
@@ -143540,7 +143676,7 @@ function wireSide(){
   /* Reclassifying rebuilds the model. It is fast enough to do on change
      rather than behind an Apply button, and an Apply button on a
      classification list is where mistakes hide. */
-  side.querySelectorAll('[data-q]').forEach(function(b){
+  each(side.querySelectorAll('[data-q]'), function(b){
     b.onclick = function(){
       V.opts.quality = b.getAttribute('data-q');
       applyQuality();
@@ -143548,7 +143684,7 @@ function wireSide(){
     };
   });
 
-  side.querySelectorAll('[data-undo]').forEach(function(b){
+  each(side.querySelectorAll('[data-undo]'), function(b){
     b.onclick = function(){
       var id = b.getAttribute('data-undo');
       for(var i=0;i<V.site.items.length;i++){
@@ -143566,7 +143702,7 @@ function wireSide(){
     try{ if(typeof pushHist === 'function') pushHist(); }catch(e){}
   };
 
-  side.querySelectorAll('input[data-elev]').forEach(function(inp){
+  each(side.querySelectorAll('input[data-elev]'), function(inp){
     inp.onchange = function(){
       var id = inp.getAttribute('data-elev');
       var it = null;
@@ -143596,7 +143732,7 @@ function wireSide(){
     };
   });
 
-  side.querySelectorAll('select[data-item]').forEach(function(sel){
+  each(side.querySelectorAll('select[data-item]'), function(sel){
     sel.onchange = function(){
       var id = sel.getAttribute('data-item');
       var it = null;
@@ -143764,6 +143900,7 @@ function reload(){
   var span = Math.max(60, Math.max(site.sizeFt.w, site.sizeFt.h));
   buildGround(site, span);
   populate(site);
+  reattachBuildings(site);
   applySun(span);
   paintSide();
   updScaleLine();
@@ -149559,8 +149696,32 @@ var state = {
   progress: null,
   startedAt: null,
   abort: null,
-  lastProj: null
+  lastProj: null,
+  /* Bumped by clear(); a fetch started under an older generation must not
+     render when it lands. */
+  gen: 0
 };
+
+var _mats = null;
+function mats(THREE){
+  if (_mats) return _mats;
+  /* Two materials, so the difference between a measured height and a
+     guessed one is visible in the render rather than buried in a tooltip.
+     Solid concrete for buildings whose height is known or derived from a
+     storey count; a paler, flatter surface for the ones we assumed. Made
+     once: they were allocated per render and never disposed. */
+  _mats = {
+    known: new THREE.MeshStandardMaterial({ color: 0xb9bcc0, roughness: 0.93, metalness: 0.0 }),
+    guess: new THREE.MeshStandardMaterial({ color: 0xd3d6da, roughness: 0.98, metalness: 0.0,
+                                            transparent: true, opacity: 0.82 })
+  };
+  return _mats;
+}
+function noFootprintsMsg(){
+  return 'OpenStreetMap has no building footprints mapped around this site. ' +
+         'That is common on greenfield and rural parcels \u2014 it means the data is absent, ' +
+         'not that the site is empty.';
+}
 
 /* ── projection: lat/lon → the visualizer's world feet ────────────────
    The scene works in FEET, x east and z south, with the origin at
@@ -149583,10 +149744,12 @@ function projector(site){
      origin is the bounding-box centre of what has been drawn, which is
      somewhere else entirely. Conflating the two is a silent translation
      error that puts every building a plot-width off. */
+  /* Untransformed size: #sc carries a CSS translate/scale after a pinch
+     or Recenter, and the shapes are in its own pixels, not the screen's. */
   var rect = null;
   try {
     var sc = document.getElementById('sc');
-    if (sc) rect = sc.getBoundingClientRect();
+    if (sc) rect = { width: sc.clientWidth || sc.offsetWidth || 0, height: sc.clientHeight || sc.offsetHeight || 0 };
   } catch (e) {}
   if (!rect || rect.width < 10) return null;
 
@@ -149744,6 +149907,11 @@ function fetchBuildings(bb, cb){
       }).catch(function (e) {
         if (done) return;
         done = true; clearTimeout(t);
+        /* Aborted from outside (the layer was switched off): stop. The
+           timeout path aborts too, but it sets done first, so an
+           AbortError seen here is always the user's. It used to advance
+           to the next mirror and render on a layer nobody wanted. */
+        if (e && e.name === 'AbortError') return cb(null, 'cancelled');
         lastErr = (e && e.message) || 'unreachable';
         attempt();
       });
@@ -149820,6 +149988,7 @@ function buildMesh(THREE, ring, heightFt, mat){
 function clear(V){
   /* Toggling off mid-fetch should stop the fetch, not leave it to land on
      a layer nobody is looking at any more. */
+  state.gen = (state.gen || 0) + 1;
   try { if (state.abort) state.abort.abort(); } catch (e) {}
   state.abort = null; state.loading = false; state.progress = null; state.startedAt = null;
   if (!state.group) return;
@@ -149841,13 +150010,7 @@ function render(V, THREE, site, elements, proj){
      guessed one is visible in the render rather than buried in a tooltip.
      Solid concrete for buildings whose height is known or derived from a
      storey count; a paler, flatter surface for the ones we assumed. */
-  var matKnown = new THREE.MeshStandardMaterial({
-    color: 0xb9bcc0, roughness: 0.93, metalness: 0.0
-  });
-  var matGuess = new THREE.MeshStandardMaterial({
-    color: 0xd3d6da, roughness: 0.98, metalness: 0.0,
-    transparent: true, opacity: 0.82
-  });
+  var mm = mats(THREE), matKnown = mm.known, matGuess = mm.guess;
 
   /* Footprints the user has already drawn are modelled properly by the
      visualizer. Rendering the OSM copy on top of them produces z-fighting
@@ -149954,7 +150117,12 @@ function load(V, THREE, site, cb){
   var key = bb.map(function (v) { return v.toFixed(4); }).join(',');
 
   /* In-memory first (this session), then disk (any previous session).
-     Only if both miss does the network get involved. */
+     Only if both miss does the network get involved. An empty answer is
+     cached too, and says so rather than "No buildings loaded". */
+  if (state.cache[key] && !state.cache[key].length) {
+    state.error = noFootprintsMsg();
+    return cb(null, state.error);
+  }
   if (state.cache[key]) {
     var s = render(V, THREE, site, state.cache[key], proj);
     state.error = null;
@@ -149974,7 +150142,9 @@ function load(V, THREE, site, cb){
   state.error = null;
   state.startedAt = Date.now();
   state.progress = 'Contacting OpenStreetMap\u2026';
+  var gen = state.gen || 0;
   fetchBuildings(bb, function (els, err) {
+    if (gen !== (state.gen || 0)) return;      /* switched off meanwhile */
     state.loading = false;
     state.progress = null;
     state.abort = null;
@@ -149987,9 +150157,7 @@ function load(V, THREE, site, cb){
       return cb(null, state.error);
     }
     if (!els.length) {
-      state.error = 'OpenStreetMap has no building footprints mapped around this site. ' +
-                    'That is common on greenfield and rural parcels \u2014 it means the data is absent, ' +
-                    'not that the site is empty.';
+      state.error = noFootprintsMsg();
       state.cache[key] = [];
       return cb(null, state.error);
     }
@@ -152612,6 +152780,27 @@ if (root.console && console.info) {
  * ══════════════════════════════════════════════════════════════════════ */
 var OMEGA_RENDER_SERVICE = 'https://clearsky-portal.vercel.app/api/render';
 
+/* A render is a paid call that can run for most of a minute. Give it that
+   long, then stop waiting rather than leaving the button stuck. */
+var RENDER_TIMEOUT_MS = 90000;
+
+/* The signed-in user's ID token, or null. /api/render refuses without it. */
+function idToken(){
+  var u = null;
+  try { u = root._currentUser || (root.firebase && firebase.auth && firebase.auth().currentUser); } catch (e) {}
+  if (!u || typeof u.getIdToken !== 'function') return Promise.resolve(null);
+  return u.getIdToken().catch(function(){ return null; });
+}
+
+/* What may be shown as the result. A data URL of an image, or an https
+   URL. Anything else came from a misconfigured or hostile endpoint and is
+   never written into the page. */
+function safeImage(u){
+  u = String(u || '');
+  return /^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+\/=]+$/.test(u)
+      || /^https:\/\/[^\s"'<>]+$/.test(u);
+}
+
 function cfg(){
   var explicit = '';
   try { explicit = localStorage.getItem('omega.render.endpoint') || ''; } catch (e) {}
@@ -153085,28 +153274,27 @@ function render(style, cb, aspect){
   var list = C.candidates || [C.url];
   var idx = 0, target = list[0];
 
-  /* Tenant key first when they have one: no service, no shared budget,
-     and it is the credential they already manage in Settings. */
-  if (tenantKey()) {
-    viaTenantKey(view, prompt, function (url, err) {
-      if (url) { label(url, f).then(function (u) { cb(u, null); }); return; }
-      if (err === 'no-key' || err === 'bad-image') { attempt(); return; }
-      /* A real failure on their own key is theirs to see, not something to
-         silently bill to the shared service. */
-      cb(null, err);
-    }, satellite);
-    return;
-  }
-
+  /* SERVER FIRST. The key on the server is the posture this app is built
+     on; the tenant's own browser-held key is a fallback for a deployment
+     that has no render service at all, not the default path. */
   function attempt(){
-  fetch(target, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: view, satellite: satellite || null,
-      prompt: prompt, style: style || 'day', aspectRatio: aspect || '16:9',
-      site: { address: f.addr, lat: f.lat, lng: f.lng,
-              arrays: f.arrays, kwdc: Math.round(f.kwdc), storage: f.storage }
-    })
+  var ctl = null;
+  try { if (typeof AbortController === 'function') ctl = new AbortController(); } catch (e) {}
+  var timer = ctl ? setTimeout(function(){ try { ctl.abort(); } catch (e) {} }, RENDER_TIMEOUT_MS) : null;
+
+  idToken().then(function (tok) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    return fetch(target, {
+      method: 'POST', headers: headers,
+      signal: ctl ? ctl.signal : undefined,
+      body: JSON.stringify({
+        image: view, satellite: satellite || null,
+        prompt: prompt, style: style || 'day', aspectRatio: aspect || '16:9',
+        site: { address: f.addr, lat: f.lat, lng: f.lng,
+                arrays: f.arrays, kwdc: Math.round(f.kwdc), storage: f.storage }
+      })
+    });
   })
   .then(function (r) {
     return r.json().catch(function(){ return null; }).then(function (j) {
@@ -153115,28 +153303,44 @@ function render(style, cb, aspect){
         if (r.status === 413) m = 'The view was too large for the render service. It is '
           + 'scaled before sending now \u2014 reload the editor and try again. If it persists, '
           + 'drop Quality from High to Medium in the visualizer.';
-        if (r.status === 404) m = 'No render service at ' + C.url + '. Set one with '
+        if (r.status === 404) m = 'No render service at ' + target + '. Set one with '
           + 'OmegaRender.setEndpoint(\'https://\u2026/api/render\').';
-        throw new Error(m);
+        if (r.status === 401) m = 'Sign in to render \u2014 the render service needs your account.';
+        var err = new Error(m);
+        err.status = r.status;
+        /* "No service here" is the only reason to try the next candidate:
+           a real 404, or a deployed function with no credential behind it. */
+        err.noService = (r.status === 404) || (r.status === 500 && /not set on this deployment/i.test(m));
+        throw err;
       }
       return j;
     });
   })
   .then(function (j) {
     var out = j && (j.image || j.dataUrl || j.url);
-    if (!out) throw new Error('the service returned no image');
+    if (!safeImage(out)) throw new Error('the service returned no image');
     remember(target);
     return label(out, f);
   })
-  .then(function (finalUrl) { cb(finalUrl, null); })
+  .then(function (finalUrl) { if (timer) clearTimeout(timer); cb(finalUrl, null); })
   .catch(function (e) {
-    /* A same-origin 404 just means this tenant does not carry its own copy.
-       That is not an error worth showing anybody — it is the reason the
-       portal fallback exists. Try the next one first. */
+    if (timer) clearTimeout(timer);
     var m = (e && e.message) || '';
-    if (idx + 1 < list.length && /404|no render service|failed to fetch/i.test(m)) {
+    if (e && e.name === 'AbortError') m = 'The render service did not answer within '
+      + Math.round(RENDER_TIMEOUT_MS / 1000) + ' seconds. Try again \u2014 nothing was shown because nothing came back.';
+    /* Only "no service here" moves on. A network failure or a timeout
+       must NOT: the first call may still be running and billing, and a
+       second one would spend twice for one picture. */
+    if (e && e.noService && idx + 1 < list.length) {
       idx++; target = list[idx];
       return attempt();
+    }
+    if (e && e.noService && tenantKey()) {
+      viaTenantKey(view, prompt, function (url, err) {
+        if (url) { label(url, f).then(function (u) { cb(u, null); }); return; }
+        cb(null, (err === 'no-key' || err === 'bad-image') ? m : err);
+      }, satellite);
+      return;
     }
     cb(null, m || 'render failed');
   });
@@ -153249,8 +153453,13 @@ function enhance(dataUrl){
    is only as good as the view it is given — if the camera is badly placed
    or the ground texture is torn, that is worth seeing BEFORE a paid call,
    not after. */
+var inFlight = false;
+
 function openDialog(){
   var old = document.getElementById('omega-render-modal');
+  /* Reopening mid-render used to build a fresh, enabled button while the
+     first call was still running and billing. Bring the live one back. */
+  if (old && inFlight) { old.style.display = ''; return; }
   if (old) old.remove();
 
   var view = grabView();
@@ -153439,12 +153648,16 @@ function openDialog(){
   var go = document.getElementById('omr-go');
   if (!go) return;
   go.onclick = function(){
+    if (inFlight) return;
     var msg = document.getElementById('omr-msg');
     var out = document.getElementById('omr-out');
+    inFlight = true;
     go.disabled = true; go.style.opacity = '.65'; go.textContent = 'Rendering\u2026';
     msg.textContent = 'This takes 20\u201360 seconds at high quality.';
     out.innerHTML = '';
     render(document.getElementById('omr-style').value, function (url, err) {
+      inFlight = false;
+      if (!document.body.contains(go)) return;      /* dialog was closed */
       go.disabled = false; go.style.opacity = '1'; go.textContent = '\u2726 Render';
       if (err) {
         msg.innerHTML = '<span style="color:#FDBA74">' + esc(err) + '</span>';
@@ -153458,8 +153671,13 @@ function openDialog(){
       }
       msg.textContent = 'Done.';
       out.innerHTML = '<div style="font-size:9px;color:#64748B;text-transform:uppercase;'
-        + 'letter-spacing:.8px;font-weight:700;margin-bottom:6px">Result</div>'
-        + '<img src="' + url + '" style="width:100%;border-radius:8px;border:1px solid #1E3A5F;display:block">';
+        + 'letter-spacing:.8px;font-weight:700;margin-bottom:6px">Result</div>';
+      /* Built as a node, never as markup: the URL came from a service the
+         user can point anywhere. */
+      var im = document.createElement('img');
+      im.src = url;
+      im.style.cssText = 'width:100%;border-radius:8px;border:1px solid #1E3A5F;display:block';
+      out.appendChild(im);
       var a = document.createElement('a');
       a.href = url;
       a.download = (f.addr ? f.addr.replace(/[^\w\-]+/g,'-').toLowerCase().slice(0,50) : 'site') + '-render.png';
