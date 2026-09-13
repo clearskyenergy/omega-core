@@ -2,8 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>JARVIS // Mission Control</title>
+
+<!-- Home-screen install. Added to the Home Screen without these, iOS uses a
+     screenshot of the page as the icon and opens it in Safari with the address
+     bar and tab bar still there. apple-mobile-web-app-capable is the one that
+     drops the browser chrome; the rest make it look like it belongs.
+
+     The icon is opaque on purpose: iOS composites a transparent icon over
+     black and applies its own rounded mask, so the white-on-transparent mark
+     cannot be shipped directly. scripts/make-app-icons.js flattens it onto
+     --bg, which is why the icon is the colour of the app it opens.
+
+     status-bar-style is `black` rather than `black-translucent`: translucent
+     puts the page under the clock, and this layout has a header there. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<meta name="theme-color" content="#020813">
+<link rel="apple-touch-icon" href="/icons/omega-180.png">
+<link rel="manifest" href="/mission.webmanifest">
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
       --ink:#dceefc;--dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
@@ -918,6 +938,16 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   .vaultDoc b{color:var(--ink)}
   .vaultDoc .vp{padding:4px 0;opacity:.8}
 :root[data-mode="quantum"] .vaultDoc .vh{color:var(--glow-gold,#ffc35c)}
+/* Installed, there is no browser chrome between the page and the hardware, so
+   the page owns the home indicator and the rounded corners. Scoped to
+   standalone: in a browser tab Safari still handles all of this, and applying
+   it there would just add padding nobody asked for. */
+@media (display-mode:standalone),(display-mode:fullscreen){
+  body{padding-left:max(16px,env(safe-area-inset-left));
+       padding-right:max(16px,env(safe-area-inset-right));
+       padding-bottom:max(16px,env(safe-area-inset-bottom))}
+}
+
 </style>
 </head>
 <body>
