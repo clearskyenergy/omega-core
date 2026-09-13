@@ -168,6 +168,20 @@ quietly, because each is a real move with a blocker attached.
       write, and the rules deny the caller that write by design, so the
       read-only path above cannot substitute.
 
+- [x] **AI render (`api/render.js` + OMEGA AI RENDER in `editor.html`)**
+      (2026-09-12). The function took any POST that passed CORS and spent the
+      shared `GOOGLE_AI_KEY`; it now runs `authenticate()`, refuses a
+      non-active tenant and honours `billing.toolOverrides.render === false`
+      (staff bypass, degraded mode passes a verified identity through). The
+      editor sends the ID token, tries the server FIRST and only falls back to
+      the tenant's browser-held Gemini key when no service answers, retries
+      only on a real 404 (never on a timeout, which could bill twice), and
+      renders the result as a DOM node after a data-URL/https check.
+      **Still open:** the response is base64 PNG inside JSON and can exceed
+      Vercel's 4.5 MB reply limit at high quality — re-encode to JPEG or
+      return a Storage URL. The browser-held Gemini key (`clearsky_gemini_key`,
+      Settings › AI Keys) is an app-wide posture, not a render-specific one.
+
 ## Also outstanding  (2026-09-06)
 
 - [ ] `/omega-settings.js` 404s on seven tools; `/omega-intake.js` on one.
@@ -268,3 +282,49 @@ The design named the save function `_saveProject`; the file has `saveProject`
 (async, wrapped on `window` twice) — `scripts/tests/tautopilot.js` checks
 every name the module calls so the next rename is caught in node, not on a
 site.
+
+## Site agent v0.1 installed  (2026-09-12)
+
+The bundle from `~/Desktop/omega-site-agent` is now in core: subagent in
+`.claude/agents/`, planner in `api/_lib/site-agent-planner.js`, MCP server
+and editor bridge in `scripts/site-agent/`, test in `scripts/tests/`.
+Checksums verified before the copy. Offline tests pass from the repo.
+
+**IP placement.** The planner went to `api/_lib/` and not the browser,
+per the IP section above: placement search, clearance enforcement and the
+A* conduit route are site-layout logic. `scripts/` is in `.vercelignore`,
+so the MCP server and Playwright never deploy; the planner does, as a
+library. It is not yet behind an HTTP endpoint with a token and a
+`billing/current` read — it is called in-process by the local MCP server.
+Wrapping it as `/api/site-plan` is the move that makes it tenant-safe.
+
+**Two edits to the bundle as shipped.**
+- `server.js` hard-required a `/editor.html` pathname. `vercel.json` sets
+  `cleanUrls`, so the live editor 308s to `/editor` and the check refused
+  it. Both spellings now pass.
+- The README's host, `staging.clearskyomega.com`, is NXDOMAIN. `.mcp.json`
+  points at `silmarillion.clearskyomega.com` instead. Either restore the
+  staging DNS record or retire the hostname from CLAUDE.md and the README.
+
+**Measured against the real deliverable.** `SAMPLE — 800 Progress Dr`
+(Frederick MD, Gotion Grid 3.42 MWh / 1.71 MW, 480 V 3Ø) is a 12-sheet
+permit set OMEGA already exports from a drawn site: cover, plot plan,
+enlarged plot, demolition, one-line, signage, POI signage, equipment and
+conduit schedule, BESS and gear pad details, grounding, fencing. The
+sheets are not the bottleneck. The layout is, and that is what the agent
+automates. What it does not yet reach on that sample:
+
+| the sample has | the planner does |
+|---|---|
+| 4 equipment elements (BESS, switchgear/MDP, revenue meter, utility POI) | 2 (battery, switchgear) |
+| 3 conduit runs (86 ft feeder, 15 ft metering, 26 ft service) | 1 |
+| 127.3 ft of trench across those runs | one corridor, one surface |
+| transformer and PCS nodes on the one-line | neither is placed |
+
+So the v0.1 gap is not accuracy, it is topology: a meter and a POI node,
+and a route graph over more than two endpoints. Those two extensions turn
+the agent from a demo into the thing that drafts this set.
+
+**Still unproven.** No signed-in editor run has happened. Geocoding, map
+alignment, `_evAdd` placement, read-back and save are untested against the
+live editor. Do that on a surveyed site before anyone relies on it.
