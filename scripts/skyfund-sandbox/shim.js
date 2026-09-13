@@ -24,6 +24,9 @@
   var PROJ = global.SKYFUND_PROJ || {};
   var SAMPLES = global.SKY_FUND_SAMPLES || [];
   var RULES = { minInvestment: 100, maxInvestment: 250000, nonAccreditedAnnualCap: 2500, accreditedRequiredAbove: 25000, allowedCountries: ['US'] };
+  /* Same menu the page and api/invest.js accept: an off-menu share is none. */
+  var GIVE_PCTS = [0, 5, 10, 25], PROGRAMS = ['energy-relief', 'stem-trades', 'resilience', 'habitat'];
+  function giveBackOf(g) { g = g || {}; var pct = Number(g.pct) || 0; if (GIVE_PCTS.indexOf(pct) < 0) pct = 0; var pr = PROGRAMS.indexOf(g.program) >= 0 ? g.program : PROGRAMS[0]; return { pct: pct, program: pct ? pr : null }; }
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function now() { return new Date().toISOString(); }
@@ -40,6 +43,7 @@
       docs['cf_campaigns/' + c.id + '/updates/u1'] = { title: 'Campaign is live', body: 'Thanks for looking. Questions go to the sponsor through the platform; every investor is emailed when there is news.', author: c.sponsorName, createdAt: now(), createdAtMs: Date.now() - 86400000 * 3 };
     });
     docs['cf_settings/rules'] = clone(RULES);
+    docs['cf_settings/impact'] = { givenToCommunity: 41250, investorsGiving: 388, programs: 4, sample: true };
     return { docs: docs, users: {}, session: null, createdAt: now() };
   }
   function load() {
@@ -197,12 +201,19 @@
       return p;
     }
     if (body.action === 'bankStatus') return { provider: 'none', plaid: false, stripe: false, escrowConfigured: false, distributionConfigured: false, sandbox: true };
+    if (body.action === 'allocationRequest') {
+      var nm = String(body.name || '').trim(), em = String(body.email || '').trim().toLowerCase();
+      if (!nm || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) err(400, 'Your name and a working email are needed.');
+      var aid = id('al');
+      store.docs['cf_allocation_requests/' + aid] = { name: nm, email: em, org: String(body.org || '').trim(), type: String(body.type || 'other'), size: String(body.size || ''), note: String(body.note || '').slice(0, 2000), investorUid: u ? u.uid : null, status: 'new', createdAt: now(), createdAtMs: Date.now() };
+      save(); return { ok: true, id: aid };
+    }
     if (!u) err(401, 'missing bearer token');
     if (body.action === 'bankLinkToken' || body.action === 'bankLink' || body.action === 'bankRemove') err(400, 'Bank linking is not part of the phone sandbox; the simulated checkout stands in for every rail.');
     if (body.action === 'pledge') {
       var cc = campaign(body.campaignId); if (!cc) err(404, 'campaign not found');
       if (cc.status !== 'live') err(409, 'this campaign is not accepting investment');
-      var at = body.attest || {};
+      var at = body.attest || {}, gb = giveBackOf(body.giveBack);
       var units = Math.floor((Number(body.amount) || 0) / cc.unitPrice); if (units < 1) err(400, 'the minimum is one unit of ' + usd(cc.unitPrice));
       var remaining = Math.max(0, (Number(cc.unitsTotal) || 0) - (Number(cc.unitsSold) || 0)); if (units > remaining) err(409, 'only ' + remaining + ' units remain');
       var amount = units * cc.unitPrice;
@@ -216,9 +227,9 @@
       var pr = projection(cc, units), pid = id('pl');
       store.docs['cf_pledges/' + pid] = { campaignId: cc.id, campaignTitle: cc.title, sponsorOrgId: cc.sponsorOrgId, investorUid: u.uid, investorEmail: u.email, investorName: at.name || u.displayName,
         amount: amount, units: units, unitPrice: cc.unitPrice, pctOfOffering: pr.pctOfOffering, pctOfProject: pr.pctOfProject, projectedAnnual: pr.annualDistribution, projectedTotal: pr.total,
-        perkId: perk ? perk.id : null, perkTitle: perk ? perk.title : null, status: 'pending', paymentProvider: 'sandbox', createdAt: now(), createdAtMs: Date.now() };
+        perkId: perk ? perk.id : null, perkTitle: perk ? perk.title : null, giveBackPct: gb.pct, giveBackProgram: gb.program, status: 'pending', paymentProvider: 'sandbox', createdAt: now(), createdAtMs: Date.now() };
       var pp = store.docs['cf_investors/' + u.uid] || { uid: u.uid, email: u.email, status: 'active', kyc: 'none', accreditedVerified: false, createdAt: now() };
-      pp.name = at.name || pp.name || u.displayName; pp.country = merged.country; pp.accredited = merged.accredited; store.docs['cf_investors/' + u.uid] = pp; save();
+      pp.name = at.name || pp.name || u.displayName; pp.country = merged.country; pp.accredited = merged.accredited; pp.giveBack = { pct: gb.pct, program: gb.program }; store.docs['cf_investors/' + u.uid] = pp; save();
       return { pledgeId: pid, url: '#/sandbox-checkout/' + pid, amount: amount, units: units };
     }
     if (body.action === 'cancel') { var cp = store.docs['cf_pledges/' + body.pledgeId]; if (!cp) err(404, 'pledge not found'); if (cp.investorUid !== u.uid) err(403, 'not your pledge'); markCancelled(body.pledgeId); return { ok: true }; }
@@ -301,7 +312,7 @@
     var u = currentUser();
     var pend = 0, paid = 0; Object.keys(store.docs).forEach(function (k) { if (k.indexOf('cf_pledges/') !== 0) return; var st = store.docs[k].status; if (st === 'pending') pend++; if (st === 'paid') paid++; });
     var s = openSheet('<div class="sb-head"><i></i>Sandbox controls<span>state lives on this device</span></div>' +
-      '<h2>What to try</h2><ol class="sb-list"><li>Browse projects, open one, move the slider — the projection updates.</li><li>Tap <b>Invest</b>, sign in with any email (no password check), confirm, pay with the test card.</li><li>Open <b>Portfolio</b>: units, share of project, projected income.</li><li>Come back here and <b>fast-forward a quarter</b> to see a distribution land.</li></ol>' +
+      '<h2>What to try</h2><ol class="sb-list"><li>Browse projects, open one, move the slider — the projection updates.</li><li>Tap <b>Invest</b>, sign in with any email (no password check), confirm, pay with the test card.</li><li>Open <b>Portfolio</b>: units, share of project, projected income.</li><li>Come back here and <b>fast-forward a quarter</b> to see a distribution land.</li><li>On the confirm screen pick a <b>give-back</b> share — the portfolio then shows what each distribution sends to the community.</li><li>The front page ends with the <b>family office &amp; institutions</b> card; the request form works too.</li></ol>' +
       '<div class="row" style="margin-top:12px"><span>Signed in as</span><b style="font-family:Inter">' + (u ? esc(u.email) : 'nobody') + '</b></div><div class="row"><span>Commitments</span><b>' + paid + ' paid · ' + pend + ' pending</b></div>' +
       '<button class="sb-btn blue" id="sbQuarter"' + (u ? '' : ' disabled') + '>Fast-forward a quarter: fund my projects &amp; pay a distribution</button>' +
       '<button class="sb-btn ghost" id="sbPayAll"' + (pend ? '' : ' disabled') + '>Mark pending commitments as paid</button>' +

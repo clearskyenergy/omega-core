@@ -61,6 +61,17 @@ var M = require('./_lib/mail');
 
 var TERMS_VERSION = '2026-09-1';
 var RISK_VERSION = '2026-09-1';
+
+/* Give back — the menu the storefront offers. An off-menu share is none, so
+   a tampered body cannot route 100% of a stranger's distribution anywhere. */
+var GIVE_PCTS = [0, 5, 10, 25];
+var GIVE_PROGRAMS = ['energy-relief', 'stem-trades', 'resilience', 'habitat'];
+function giveBackOf(g) {
+  g = (g && typeof g === 'object') ? g : {};
+  var pct = Number(g.pct) || 0; if (GIVE_PCTS.indexOf(pct) < 0) pct = 0;
+  var program = GIVE_PROGRAMS.indexOf(g.program) >= 0 ? g.program : GIVE_PROGRAMS[0];
+  return { pct: pct, program: pct ? program : null };
+}
 var OFFER_KINDS = ['ppa', 'compute', 'hybrid'];
 var PROJECT_TYPES = ['compute', 'microgrid', 'bess', 'solar', 'ev'];
 var KYC_STATES = ['none', 'pending', 'document', 'verified', 'failed'];
@@ -156,7 +167,7 @@ function bankRemove(b, db, FV, caller) {
 
 /* ── pledge ────────────────────────────────────────────────────────────── */
 function pledge(req, b, db, FV, caller) {
-  var at = b.attest || {};
+  var at = b.attest || {}, gb = giveBackOf(b.giveBack);
   return Promise.all([loadCampaign(db, b.campaignId), loadRules(db), loadInvestor(db, caller.uid), L.committedThisYear(caller.uid)]).then(function (r) {
     var c = r[0], rules = r[1], inv = r[2], prior = r[3];
     if (c.status !== 'live') throw A.httpError(409, 'this campaign is not accepting investment');
@@ -206,6 +217,7 @@ function pledge(req, b, db, FV, caller) {
       pctOfOffering: p.pctOfOffering, pctOfProject: p.pctOfProject,
       projectedAnnual: p.annualDistribution, projectedTotal: p.total,
       perkId: perk ? perk.id : null, perkTitle: perk ? perk.title : null,
+      giveBackPct: gb.pct, giveBackProgram: gb.program,
       status: 'pending', paymentProvider: method === 'ach' ? 'ach:' + rail : (method === 'card' ? 'stripe' : 'manual'), method: method,
       attest: { name: at.name || null, country: merged.country, accredited: merged.accredited, acceptedRisk: true, acceptedTerms: true, termsVersion: TERMS_VERSION, riskVersion: RISK_VERSION, ip: req.headers['x-forwarded-for'] || null, userAgent: req.headers['user-agent'] || null },
       createdAt: FV.serverTimestamp(), createdAtMs: Date.now(), updatedAt: FV.serverTimestamp()
@@ -214,7 +226,7 @@ function pledge(req, b, db, FV, caller) {
        starts from it. Privilege fields (kyc, accreditedVerified, status,
        bank) are never taken from the body. */
     var profilePatch = { email: doc.investorEmail, name: doc.investorName || inv.name || '', country: merged.country, accredited: merged.accredited,
-      acceptedRiskVersion: RISK_VERSION, acceptedTermsVersion: TERMS_VERSION, lastPledgeAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() };
+      acceptedRiskVersion: RISK_VERSION, acceptedTermsVersion: TERMS_VERSION, giveBack: { pct: gb.pct, program: gb.program }, lastPledgeAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() };
     if (!inv.__exists) { profilePatch.uid = caller.uid; profilePatch.status = 'active'; profilePatch.kyc = 'none'; profilePatch.accreditedVerified = false; profilePatch.createdAt = FV.serverTimestamp(); }
     var write = db.batch().set(pRef, doc).set(db.collection('cf_investors').doc(caller.uid), profilePatch, { merge: true }).commit();
 
@@ -509,12 +521,32 @@ function settings(b, db, FV, caller) {
   return db.collection('cf_settings').doc('rules').set(out, { merge: true }).then(function () { return loadRules(db); }).then(function (rules) { return { ok: true, rules: rules }; });
 }
 
+/* ── allocation request: family offices and institutions ──────────────────
+   A lead, not a pledge: no sign-in, nothing reserved, nothing priced. Stored
+   under cf_allocation_requests (server-only, like cf_pledges) and mailed to
+   the platform inbox so somebody calls back. */
+function allocationRequest(req, b, db, FV) {
+  var name = String(b.name || '').trim().slice(0, 120), email = String(b.email || '').trim().toLowerCase().slice(0, 200);
+  if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw A.httpError(400, 'Your name and a working email are needed.');
+  var doc = { name: name, email: email, org: String(b.org || '').trim().slice(0, 160), type: String(b.type || 'other').slice(0, 40), size: String(b.size || '').slice(0, 40), note: String(b.note || '').slice(0, 2000),
+    status: 'new', ip: req.headers['x-forwarded-for'] || null, userAgent: req.headers['user-agent'] || null, createdAt: FV.serverTimestamp(), createdAtMs: Date.now() };
+  var ref = db.collection('cf_allocation_requests').doc();
+  return ref.set(doc).then(function () {
+    try {
+      M.send(process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com', 'Allocation request: ' + name + (doc.org ? ' · ' + doc.org : ''), M.layout('Allocation request',
+        '<table>' + M.row('Name', M.esc(name)) + M.row('Organization', M.esc(doc.org || '—')) + M.row('Type', M.esc(doc.type)) + M.row('Allocation', M.esc(doc.size || '—')) + M.row('Email', M.esc(email)) + M.row('Note', M.esc(doc.note || '—')) + '</table>'));
+    } catch (e) { console.warn('[invest] allocation mail', e && e.message); }
+    return { ok: true, id: ref.id };
+  });
+}
+
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
   var db = A.db(), FV = A.FieldValue();
   if (b.action === 'quote') return quote(req, b, db);
   if (b.action === 'bankStatus') return Promise.resolve(BK.status());
+  if (b.action === 'allocationRequest') return allocationRequest(req, b, db, FV);
   return A.authenticate(req).then(function (caller) {
     switch (b.action) {
       case 'pledge':        return pledge(req, b, db, FV, caller);

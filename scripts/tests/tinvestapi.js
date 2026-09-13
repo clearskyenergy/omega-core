@@ -191,6 +191,23 @@ Promise.resolve().then(function () {
     ok(r.body.eligible === false && /accredited/i.test(r.body.reasons.join(' ')), '$30,000 needs accreditation (' + r.body.reasons[0] + ')');
   });
 }).then(function () {
+  console.log('allocation requests — the institutional door');
+  return call({ action: 'allocationRequest', name: 'Pat Chen', email: 'Pat@FamilyOffice.com', org: 'Chen Family Office', type: 'family-office', size: '1m-5m', note: 'compute in the Midwest' }).then(function (r) {
+    var k = Object.keys(STORE).filter(function (x) { return x.indexOf('cf_allocation_requests/') === 0; });
+    var d = STORE[k[0]];
+    ok(r.status === 200 && k.length === 1, 'an allocation request is taken with NO sign-in');
+    ok(d.email === 'pat@familyoffice.com' && d.org === 'Chen Family Office' && d.status === 'new', 'it is stored lower-cased and unworked');
+    ok(MAILS.length === 1 && /Allocation request: Pat Chen/.test(MAILS[0].subject), 'the platform inbox is told');
+    return call({ action: 'allocationRequest', name: '', email: 'pat@familyoffice.com' });
+  }).then(function (r) {
+    ok(r.status === 400, 'a request with no name is refused');
+    return call({ action: 'allocationRequest', name: 'Pat Chen', email: 'not-an-email' });
+  }).then(function (r) {
+    ok(r.status === 400, 'a request with a broken email is refused');
+    ok(Object.keys(STORE).filter(function (x) { return x.indexOf('cf_allocation_requests/') === 0; }).length === 1, 'neither refusal wrote a row');
+    MAILS.length = 0;
+  });
+}).then(function () {
   console.log('pledge — refusals');
   return call({ action: 'pledge', campaignId: 'live1', amount: 500 }).then(function (r) {
     ok(r.status === 401, 'no token → 401');
@@ -226,13 +243,14 @@ Promise.resolve().then(function () {
 }).then(function () {
   console.log('pledge — manual mode, then paid');
   var pid;
-  return call({ action: 'pledge', campaignId: 'live1', amount: 550, attest: { name: 'Alice Q', acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1).then(function (r) {
+  return call({ action: 'pledge', campaignId: 'live1', amount: 550, giveBack: { pct: 10, program: 'stem-trades' }, attest: { name: 'Alice Q', acceptedRisk: true, acceptedTerms: true, country: 'US' } }, INV1).then(function (r) {
     ok(r.status === 200 && r.body.manual === true, 'without Stripe the pledge is manual');
     ok(r.body.amount === 500 && r.body.units === 5, '$550 buys 5 whole units for $500');
     pid = r.body.pledgeId;
     var p = STORE['cf_pledges/' + pid];
     ok(p && p.status === 'pending' && p.investorUid === 'u-inv1' && p.sponsorOrgId === 'concordenergyusa.com', 'pending row carries investor and sponsor org');
     ok(near(p.pctOfProject, 0.0004), '5 of 5,000 units × 40% = 0.04% of the project');
+    ok(p.giveBackPct === 10 && p.giveBackProgram === 'stem-trades' && STORE['cf_investors/u-inv1'].giveBack.pct === 10, 'the give-back share rides on the pledge and the profile');
     ok(STORE['cf_investors/u-inv1'] && STORE['cf_investors/u-inv1'].country === 'US' && STORE['cf_investors/u-inv1'].kyc === 'none', 'profile created from the attestation, kyc untouched');
     ok(STORE['cf_campaigns/live1'].raised === 0, 'counters do not move on a pending pledge');
     ok(MAILS.length === 1 && MAILS[0].to === 'alice@gmail.com', 'receipt emailed');

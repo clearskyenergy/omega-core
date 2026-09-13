@@ -123,6 +123,11 @@ input,select,textarea{font-family:inherit;font-size:15px}
 .stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:var(--r);padding:14px 16px}
 .stat b{display:block;font-family:var(--mono);font-size:24px;font-weight:500;letter-spacing:-.02em}
 .stat span{font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.stats.four{grid-template-columns:repeat(2,1fr)}
+.give .chips{margin-top:2px}.give select{margin-top:8px}.give .fine{margin-top:8px}.form label .opt{font-weight:500;color:var(--faint);margin-left:6px}
+.inst{background:var(--navy);color:#fff;border-radius:var(--r);padding:26px 24px;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;margin-top:8px}
+.inst .eyebrow{margin-bottom:6px}.inst h2{font-size:22px;margin:0 0 8px;color:#fff}.inst p{margin:0;color:rgba(255,255,255,.74);font-size:14px;line-height:1.55;max-width:60ch}
+@media(max-width:700px){.inst{grid-template-columns:1fr}}
 
 /* ── explore ─────────────────────────────────────────────────────────── */
 .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:22px 0 14px}
@@ -420,6 +425,10 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
   <div class="dlg" id="bankDlg"></div>
 </div>
 
+<div class="modal" id="allocModal">
+  <div class="dlg" id="allocDlg"></div>
+</div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -445,13 +454,29 @@ try {
 var S = {                       /* page state */
   user: null, profile: null, campaigns: [], closed: null, filter: 'all', sort: 'trending',
   route: 'explore', campaign: null, quote: null, pledges: [], distributions: {}, updates: {},
-  perk: null, amount: 500, sample: false,
+  perk: null, amount: 500, sample: false, give: null, impact: null,
   bank: { provider: 'none', stripe: false, plaid: false }, payouts: []
 };
 var CATEGORIES = [['all','All projects'],['compute','Compute'],['microgrid','Microgrid'],['bess','Battery'],['solar','Solar'],['ev','EV charging']];
 var TYPE_LABEL = { compute:'Compute', microgrid:'Microgrid', bess:'Battery storage', solar:'Solar', ev:'EV charging' };
 var KIND_LABEL = { ppa:'PPA revenue', compute:'Compute revenue', hybrid:'PPA + compute' };
 var COUNTRIES = [['US','United States'],['CA','Canada'],['GB','United Kingdom'],['DE','Germany'],['MX','Mexico'],['AU','Australia'],['OTHER','Other']];
+/* Give back: a share of every distribution set aside for a community program
+   near the projects an investor holds. Chosen at commit (rides on the pledge)
+   and changeable on the Account page (rides on the profile). The server
+   validates the same menu (api/invest.js giveBackOf). Program partners are
+   named at each program's launch; contributions are routed by ClearSky. */
+var GIVE_PCTS = [0, 5, 10, 25];
+var PROGRAMS = [
+  ['energy-relief', 'Community energy relief', 'Helps households near each project with their power bills, through local assistance agencies.'],
+  ['stem-trades', 'STEM & trades scholarships', 'Scholarships and apprenticeships for students in the project\'s county — the people who will run these sites.'],
+  ['resilience', 'Local resilience fund', 'Backup power for shelters, clinics and schools in the communities that host the projects.'],
+  ['habitat', 'Land & habitat restoration', 'Native planting and habitat work on and around project sites.']
+];
+var ALLOC_TYPES = [['family-office', 'Family office'], ['ria', 'RIA or wealth manager'], ['fund', 'Fund or institution'], ['corporate', 'Corporate or strategic'], ['other', 'Other']];
+var ALLOC_SIZES = [['250k-1m', '$250,000 – $1M'], ['1m-5m', '$1M – $5M'], ['5m+', '$5M and above']];
+function programOf(id) { for (var i = 0; i < PROGRAMS.length; i++) if (PROGRAMS[i][0] === id) return PROGRAMS[i]; return PROGRAMS[0]; }
+function giveOf(p) { var g = (p && p.giveBack) || {}; var pct = Number(g.pct) || 0; if (GIVE_PCTS.indexOf(pct) < 0) pct = 0; return { pct: pct, program: programOf(g.program)[0] }; }
 
 /* ═══════════════════ 1 · utilities ═════════════════════════════════════ */
 function $(id) { return document.getElementById(id); }
@@ -539,6 +564,12 @@ function loadProfile() {
     return ref.set(p).then(function () { S.profile = p; return p; });
   }).catch(function (e) { console.warn('[invest] profile', e); S.profile = null; return null; });
 }
+function loadImpact() {
+  /* cf_settings/impact — what SkyFund investors have given so far, kept by
+     ClearSky. Absent or zero: the hero shows three stats, not four. */
+  if (!FB.ready) { S.impact = null; return Promise.resolve(); }
+  return FB.db.collection('cf_settings').doc('impact').get().then(function (d) { var x = d.exists ? d.data() : null; S.impact = (x && Number(x.givenToCommunity) > 0) ? x : null; })['catch'](function () { S.impact = null; });
+}
 function loadPortfolio() {
   if (!S.user || !FB.ready) { S.pledges = []; return Promise.resolve(); }
   return FB.db.collection('cf_pledges').where('investorUid', '==', S.user.uid).get().then(function (q) {
@@ -614,17 +645,18 @@ function renderExplore() {
   var v = $('view');
   v.innerHTML =
     '<section class="hero"><div class="wrap"><div>' +
-      '<div class="eyebrow">Community investment · compute · microgrids · storage</div>' +
+      '<div class="eyebrow">Community investment · decentralized compute · microgrids · storage</div>' +
       '<h1>Own a share of the <em>energy that powers compute.</em></h1>' +
-      '<p>Every project on SkyFund is designed, sized and reviewed on the ClearSky platform. Fund the container or the microgrid from $' + (S.campaigns.length ? Math.min.apply(null, S.campaigns.map(function (c) { return Number(c.unitPrice) || 100; })) : 100) + ', and receive your percent of the power purchase agreement or the compute lease for the life of the term.</p>' +
+      '<p>Decentralized compute and energy, built where the power is and owned by the people around it. Every project is designed, sized and reviewed on the ClearSky platform. Fund a container or a microgrid from $' + (S.campaigns.length ? Math.min.apply(null, S.campaigns.map(function (c) { return Number(c.unitPrice) || 100; })) : 100) + ', receive your percent of the power purchase agreement or the compute lease for the life of the term — and give a share back to the community that hosts it, if you choose.</p>' +
       '<div class="cta"><a class="btn btn-gold btn-lg" href="#projects">Browse projects</a><a class="btn btn-light btn-lg" href="#/how">How it works</a></div>' +
-    '</div><div class="stats"><div class="stat"><b>' + usdC(t.raised) + '</b><span>Committed</span></div><div class="stat"><b>' + t.backers.toLocaleString('en-US') + '</b><span>Investors</span></div><div class="stat"><b>' + t.funded + '</b><span>Projects funded</span></div></div></div></section>' +
+    '</div><div class="stats' + (S.impact ? ' four' : '') + '"><div class="stat"><b>' + usdC(t.raised) + '</b><span>Committed</span></div><div class="stat"><b>' + t.backers.toLocaleString('en-US') + '</b><span>Investors</span></div><div class="stat"><b>' + t.funded + '</b><span>Projects funded</span></div>' + (S.impact ? '<div class="stat"><b>' + usdC(S.impact.givenToCommunity) + '</b><span>Given to community</span></div>' : '') + '</div></div></section>' +
     '<div class="wrap" id="projects">' +
       (S.sample ? '<div class="risk" style="margin-top:18px"><b>Sample listings.</b> No campaign is live yet, so these four illustrate the experience. Run <code>scripts/seed-invest-demo.js --apply</code> to publish them for real, or submit a campaign from the sponsor console.</div>' : '') +
       '<div class="toolbar"><div class="chips" id="chips">' + CATEGORIES.map(function (c) { return '<button class="chip' + (S.filter === c[0] ? ' on' : '') + '" data-f="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '<button class="chip' + (S.filter === 'closed' ? ' on' : '') + '" data-f="closed">Closed</button></div>' +
       '<select id="sort"><option value="trending"' + (S.sort === 'trending' ? ' selected' : '') + '>Trending</option><option value="ending"' + (S.sort === 'ending' ? ' selected' : '') + '>Ending soon</option><option value="newest"' + (S.sort === 'newest' ? ' selected' : '') + '>Newest</option><option value="yield"' + (S.sort === 'yield' ? ' selected' : '') + '>Highest target yield</option></select></div>' +
-      '<div class="grid" id="grid"></div></div>';
+      '<div class="grid" id="grid"></div></div>' + whySectionHtml();
   fillGrid();
+  $('btnAlloc').onclick = openAlloc;
   var chips = document.querySelectorAll('#chips .chip');
   for (var i = 0; i < chips.length; i++) chips[i].onclick = function () { S.filter = this.getAttribute('data-f'); renderExplore(); window.scrollTo(0, $('projects').offsetTop - 70); };
   $('sort').onchange = function () { S.sort = this.value; fillGrid(); };
@@ -791,6 +823,7 @@ function startInvest() {
       '<div class="f"><label>Legal name</label><input type="text" id="ivName" value="' + esc(p.name || S.user.displayName || '') + '" autocomplete="name"></div>' +
       '<div class="f"><label>Country of residence</label><select id="ivCountry">' + COUNTRIES.map(function (k) { return '<option value="' + k[0] + '"' + ((p.country || 'US') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor (income above $200,000, or net worth above $1M excluding my home). Optional — it raises the annual limit.</label></div>' +
+      giveHtml('iv', (S.give = giveOf(p)), q.annualDistribution) +
       payMethodsHtml(p) +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivRisk"> I have read the <a href="#" data-tab="risks">risk disclosure</a> and understand I could lose my entire investment and that units cannot be sold on the platform.</label></div>' +
       '<div class="f"><label class="chk"><input type="checkbox" id="ivTerms"> I accept the offering documents and the SkyFund investor terms.</label></div>' +
@@ -799,6 +832,7 @@ function startInvest() {
     '</div>';
   openModal('investModal');
   $('ivGo').onclick = submitPledge;
+  wireGive('iv', S.give, q.annualDistribution);
 }
 function payMethodsHtml(p) {
   var rail = S.bank || {}, bankOk = rail.provider !== 'none' && p.bank && p.bank.status === 'verified';
@@ -816,7 +850,7 @@ function submitPledge() {
   var c = S.campaign, btn = $('ivGo'), msg = $('ivMsg');
   if (!$('ivRisk').checked || !$('ivTerms').checked) { msg.className = 'msg err'; msg.textContent = 'Please tick both acknowledgements to continue.'; return; }
   btn.disabled = true; btn.textContent = 'Creating your commitment…'; msg.className = 'msg'; msg.textContent = '';
-  api({ action: 'pledge', campaignId: c.id, amount: S.amount, perkId: S.perk || null, method: selectedMethod(),
+  api({ action: 'pledge', campaignId: c.id, amount: S.amount, perkId: S.perk || null, method: selectedMethod(), giveBack: { pct: S.give ? S.give.pct : 0, program: S.give ? S.give.program : null },
         attest: { name: $('ivName').value.trim(), country: $('ivCountry').value, accredited: $('ivAccredited').checked, acceptedRisk: true, acceptedTerms: true } })
   .then(function (r) {
     if (r.url) { msg.textContent = 'Taking you to secure checkout…'; location.href = r.url; return; }
@@ -833,6 +867,60 @@ function submitPledge() {
     btn.disabled = false; btn.textContent = 'Continue to payment · ' + usd(S.amount);
     msg.className = 'msg err'; msg.textContent = e.message || 'Could not create the commitment.';
   });
+}
+
+/* ═══════════════════ 7b · give back · allocations ══════════════════════ */
+function giveHtml(prefix, g, annual) {
+  return '<div class="f"><label>Give back <span class="opt">optional</span></label><div class="give" id="' + prefix + 'Give">' +
+    '<div class="chips">' + GIVE_PCTS.map(function (n) { return '<button type="button" class="chip' + (g.pct === n ? ' on' : '') + '" data-g="' + n + '">' + (n ? n + '%' : 'None') + '</button>'; }).join('') + '</div>' +
+    '<select id="' + prefix + 'GiveProgram">' + PROGRAMS.map(function (pr) { return '<option value="' + pr[0] + '"' + (g.program === pr[0] ? ' selected' : '') + '>' + pr[1] + '</option>'; }).join('') + '</select>' +
+    '<div class="fine" id="' + prefix + 'GiveNote"></div></div></div>';
+}
+function wireGive(prefix, g, annual) {
+  var box = $(prefix + 'Give'), sel = $(prefix + 'GiveProgram'), note = $(prefix + 'GiveNote');
+  function paint() {
+    var chips = box.querySelectorAll('.chip'); for (var i = 0; i < chips.length; i++) chips[i].className = 'chip' + (Number(chips[i].getAttribute('data-g')) === g.pct ? ' on' : '');
+    sel.disabled = !g.pct;
+    var pr = programOf(g.program);
+    note.textContent = g.pct ? (g.pct + '% of every distribution goes to ' + pr[1] + (annual ? ' — about ' + usd(annual * g.pct / 100) + ' a year on this investment' : '') + '. ' + pr[2] + ' Change it any time on your Account page.') : 'Set aside a share of each distribution for a community program near the projects you hold. Start or change it any time.';
+  }
+  var chips = box.querySelectorAll('.chip'); for (var i = 0; i < chips.length; i++) chips[i].onclick = function () { g.pct = Number(this.getAttribute('data-g')) || 0; paint(); };
+  sel.onchange = function () { g.program = sel.value; paint(); };
+  paint();
+}
+function giveSectionHtml(p) {
+  return '<div class="section-h"><h2>Give back</h2><span>a share of each distribution, to a program near your projects</span></div>' +
+    '<div class="form">' + giveHtml('ac', (S.give = giveOf(p)), 0) + '<button class="btn btn-primary" id="acGiveSave">Save give-back</button><div class="msg" id="acGiveMsg"></div></div>';
+}
+function whySectionHtml() {
+  return '<div class="wrap"><div class="section-h"><h2>Why decentralized</h2><span>better for the grid, the community and the ground it stands on</span></div>' +
+    '<div class="how"><div class="step"><h3>Built where the power is</h3><p>Compute and generation share a site, so no new transmission line is needed and less is lost on the wire. The load is flexible: it eases off when the neighbourhood needs the power and soaks up renewable energy that would otherwise be curtailed.</p></div>' +
+    '<div class="step"><h3>Owned by the people around it</h3><p>Units start at $50 or $100, so the people near a project can own part of it instead of only hosting it — and every campaign shows the site, the offtake and the numbers before anyone commits.</p></div>' +
+    '<div class="step"><h3>Give back, built in</h3><p>Set aside 5, 10 or 25% of every distribution for a program in the community that hosts your projects — energy relief, scholarships, resilience, habitat. It shows in your portfolio, distribution by distribution.</p></div></div>' +
+    '<div class="inst"><div><div class="eyebrow">Family offices &amp; institutions</div><h2>Larger allocations. Same projects, same reporting.</h2><p>Allocations from $250,000 sit alongside the community in the same offering, or take a direct position in the project under a separate agreement. Reviewed sites, quarterly reporting and one point of contact at ClearSky.</p></div><div><button class="btn btn-gold btn-lg" id="btnAlloc">Request an allocation</button></div></div><div style="height:34px"></div></div>';
+}
+function openAlloc() {
+  var p = S.profile || {};
+  $('allocDlg').innerHTML = '<button class="x" data-close="allocModal" aria-label="Close">×</button><h2>Request an allocation</h2><div class="sub">For family offices, advisers, funds and strategics. ClearSky replies within one business day.</div>' +
+    '<div class="form" style="border:0;padding:0;max-width:none">' +
+    '<div class="f"><label>Your name</label><input type="text" id="alName" value="' + esc(p.name || (S.user && S.user.displayName) || '') + '" autocomplete="name"></div>' +
+    '<div class="f"><label>Organization</label><input type="text" id="alOrg" autocomplete="organization"></div>' +
+    '<div class="f"><label>You are</label><select id="alType">' + ALLOC_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('') + '</select></div>' +
+    '<div class="f"><label>Allocation you have in mind</label><select id="alSize">' + ALLOC_SIZES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join('') + '</select></div>' +
+    '<div class="f"><label>Email</label><input type="email" id="alEmail" value="' + esc((S.user && S.user.email) || '') + '" autocomplete="email"></div>' +
+    '<div class="f"><label>Anything we should know <span class="opt">optional</span></label><textarea id="alNote" rows="3" placeholder="Project types, geographies, structure preferences…"></textarea></div>' +
+    '<button class="btn btn-gold btn-lg btn-block" id="alGo">Send request</button><div class="msg" id="alMsg">No commitment. This starts a conversation, not an investment.</div></div>';
+  openModal('allocModal');
+  $('alGo').onclick = function () {
+    var btn = $('alGo'), msg = $('alMsg');
+    var body = { action: 'allocationRequest', name: $('alName').value.trim(), org: $('alOrg').value.trim(), type: $('alType').value, size: $('alSize').value, email: $('alEmail').value.trim(), note: $('alNote').value.trim() };
+    if (!body.name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) { msg.className = 'msg err'; msg.textContent = 'Your name and a working email are needed.'; return; }
+    var sizeLabel = body.size; ALLOC_SIZES.forEach(function (s) { if (s[0] === body.size) sizeLabel = s[1]; });
+    btn.disabled = true; btn.textContent = 'Sending…'; msg.className = 'msg'; msg.textContent = '';
+    api(body).then(function () {
+      $('allocDlg').innerHTML = '<button class="x" data-close="allocModal" aria-label="Close">×</button><h2>Request received</h2><div class="sub">Thank you, ' + esc(body.name) + '.</div><p style="font-size:14px;line-height:1.55">ClearSky will reach out at <b>' + esc(body.email) + '</b> within one business day with the current allocation book and the projects that fit ' + esc(sizeLabel) + '.</p><button class="btn btn-primary btn-block" data-close="allocModal">Done</button>';
+    }).catch(function (e) { btn.disabled = false; btn.textContent = 'Send request'; msg.className = 'msg err'; msg.textContent = e.message || 'Could not send.'; });
+  };
 }
 
 /* ═══════════════════ 8 · portfolio ═════════════════════════════════════ */
@@ -859,8 +947,10 @@ function renderPortfolio() {
       });
     });
     rows.sort(function (a, b) { return (dateOf(b.date) || 0) - (dateOf(a.date) || 0); });
+    var give = giveOf(S.profile), giveTotal = 0;
+    rows.forEach(function (r) { r.given = r.amount * give.pct / 100; giveTotal += r.given; });
     var html = '<div class="wrap"><div class="page-h"><div><h1>Your portfolio</h1><p>' + esc(S.user.email) + '</p></div></div>' +
-      '<div class="tiles"><div class="tile"><span>Invested</span><b>' + usd(invested) + '</b><small>' + paid.length + ' confirmed ' + (paid.length === 1 ? 'investment' : 'investments') + '</small></div><div class="tile"><span>Projected annual income</span><b>' + usd(annual) + '</b><small>' + (invested ? pct(annual / invested * 100) + ' on invested' : 'first full year') + '</small></div><div class="tile light"><span>Distributions received</span><b>' + usd(received) + '</b><small>' + usd(declared) + ' declared across ' + rows.length + '</small></div><div class="tile light"><span>Pending</span><b>' + usd(pend) + '</b><small>' + pending.length + ' awaiting payment</small></div></div>';
+      '<div class="tiles"><div class="tile"><span>Invested</span><b>' + usd(invested) + '</b><small>' + paid.length + ' confirmed ' + (paid.length === 1 ? 'investment' : 'investments') + '</small></div><div class="tile"><span>Projected annual income</span><b>' + usd(annual) + '</b><small>' + (invested ? pct(annual / invested * 100) + ' on invested' : 'first full year') + '</small></div><div class="tile light"><span>Distributions received</span><b>' + usd(received) + '</b><small>' + usd(declared) + ' declared across ' + rows.length + '</small></div><div class="tile light"><span>Pending</span><b>' + usd(pend) + '</b><small>' + pending.length + ' awaiting payment</small></div><div class="tile light"><span>Given to community</span><b>' + usd(giveTotal) + '</b><small>' + (give.pct ? give.pct + '% of each distribution · ' + esc(programOf(give.program)[1]) : '<a href="#/account">Set a give-back share</a>') + '</small></div></div>';
     var keys = Object.keys(byCamp);
     html += '<div class="section-h"><h2>Holdings</h2><span>' + keys.length + '</span></div>';
     html += keys.length ? keys.map(function (cid) { var b = byCamp[cid]; return '<div class="hold"><div><h3><a href="#/c/' + esc(cid) + '">' + esc(b.title || cid) + '</a></h3><div class="sub">' + esc(b.sponsorOrgId || '') + '</div></div><div class="m"><span>Units</span><b>' + b.units.toLocaleString('en-US') + '</b></div><div class="m"><span>Invested</span><b>' + usd(b.amount) + '</b></div><div class="m"><span>Share of project</span><b>' + pctTiny(b.pct * 100) + '</b></div><div class="m"><span>Projected / yr</span><b>' + usd(b.annual) + '</b></div><div class="act"><a class="btn btn-ghost" href="#/c/' + esc(cid) + '">Open</a></div></div>'; }).join('')
@@ -870,7 +960,7 @@ function renderPortfolio() {
     }
     var others = S.pledges.filter(function (p) { return p.status === 'refunded' || p.status === 'cancelled'; });
     html += '<div class="section-h"><h2>Distributions</h2><span>' + rows.length + '</span></div>';
-    html += rows.length ? '<div style="overflow-x:auto"><table class="tbl"><tr><th>Declared</th><th>Project</th><th>Period</th><th class="num">Per unit</th><th class="num">Units</th><th class="num">Your share</th><th>Status</th></tr>' + rows.map(function (r) { return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.title) + '</td><td>' + esc(r.period) + '</td><td class="num mono">$' + (Number(r.perUnit) || 0).toFixed(4) + '</td><td class="num mono">' + r.units + '</td><td class="num mono">' + usd(r.amount) + '</td><td><span class="pill ' + esc(r.status) + '">' + (r.status === 'paid' ? 'paid ' + fmtDate(r.paidAt) : r.status === 'unbanked' ? 'link a bank to receive' : r.status === 'processing' ? 'on its way' : esc(r.status)) + '</span></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Distributions appear here once a project you hold declares one — quarterly, after it is operating.</div>';
+    html += rows.length ? '<div style="overflow-x:auto"><table class="tbl"><tr><th>Declared</th><th>Project</th><th>Period</th><th class="num">Per unit</th><th class="num">Units</th><th class="num">Your share</th>' + (give.pct ? '<th class="num">Given</th>' : '') + '<th>Status</th></tr>' + rows.map(function (r) { return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.title) + '</td><td>' + esc(r.period) + '</td><td class="num mono">$' + (Number(r.perUnit) || 0).toFixed(4) + '</td><td class="num mono">' + r.units + '</td><td class="num mono">' + usd(r.amount) + '</td>' + (give.pct ? '<td class="num mono">' + usd(r.given) + '</td>' : '') + '<td><span class="pill ' + esc(r.status) + '">' + (r.status === 'paid' ? 'paid ' + fmtDate(r.paidAt) : r.status === 'unbanked' ? 'link a bank to receive' : r.status === 'processing' ? 'on its way' : esc(r.status)) + '</span></td></tr>'; }).join('') + '</table></div>' : '<div class="empty">Distributions appear here once a project you hold declares one — quarterly, after it is operating.</div>';
     if (others.length) html += '<div class="section-h"><h2>History</h2></div><div style="overflow-x:auto"><table class="tbl"><tr><th>Date</th><th>Project</th><th class="num">Amount</th><th>Status</th></tr>' + others.map(function (p) { return '<tr><td>' + fmtDate(p.createdAt) + '</td><td>' + esc(p.campaignTitle) + '</td><td class="num mono">' + usd(p.amount) + '</td><td><span class="pill ' + esc(p.status) + '">' + esc(p.status) + '</span></td></tr>'; }).join('') + '</table></div>';
     html += '<div style="height:30px"></div></div>';
     v.innerHTML = html;
@@ -890,6 +980,7 @@ function renderAccount() {
     '<div class="f"><label class="chk"><input type="checkbox" id="acAccredited"' + (p.accredited ? ' checked' : '') + '> I am an accredited investor. This is a self-attestation; ClearSky may ask for verification before larger investments.</label></div>' +
     '<div class="f"><label>Verification</label><div style="font-size:14px">Identity: <span class="pill ' + (p.kyc === 'verified' ? 'paid' : 'pending') + '">' + esc(p.kyc || 'none') + '</span> &nbsp; Accreditation: <span class="pill ' + (p.accreditedVerified ? 'paid' : 'pending') + '">' + (p.accreditedVerified ? 'verified' : 'self-attested') + '</span></div></div>' +
     '<button class="btn btn-primary" id="acSave">Save profile</button> <button class="btn btn-ghost" id="acOut">Sign out</button><div class="msg" id="acMsg"></div></div>' +
+    giveSectionHtml(p) +
     bankSectionHtml(p) +
     installSectionHtml() +
     '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/portals/skyfund/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
@@ -900,6 +991,13 @@ function renderAccount() {
       .catch(function (e) { msg.className = 'msg err'; msg.textContent = 'Could not save — ' + e.message; });
   };
   $('acOut').onclick = signOut;
+  wireGive('ac', S.give, 0);
+  $('acGiveSave').onclick = function () {
+    var msg = $('acGiveMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+    FB.db.collection('cf_investors').doc(S.user.uid).set({ giveBack: { pct: S.give.pct, program: S.give.pct ? S.give.program : null }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+      .then(function () { msg.className = 'msg ok'; msg.textContent = S.give.pct ? 'Saved — ' + S.give.pct + '% of each distribution goes to ' + programOf(S.give.program)[1] + '.' : 'Saved — no give-back set.'; return loadProfile(); })
+      .catch(function (e) { msg.className = 'msg err'; msg.textContent = 'Could not save — ' + e.message; });
+  };
   if ($('acBankLink')) $('acBankLink').onclick = openBankModal;
   if ($('acInstall')) $('acInstall').onclick = promptInstall;
   if ($('acBankRemove')) $('acBankRemove').onclick = function () {
@@ -997,12 +1095,16 @@ function renderHow() {
   $('view').innerHTML = '<div class="wrap"><div class="page-h"><div><h1>How SkyFund works</h1><p>Crowdfunding for the infrastructure that powers compute — one project at a time, one unit at a time.</p></div></div>' +
     '<div class="how"><div class="step"><div class="n">1</div><h3>Browse reviewed projects</h3><p>Every campaign is designed on the ClearSky-OMEGA platform — sized, interconnection-screened and modelled — and reviewed by ClearSky before it is listed. You see the site, the offtake, the numbers and the documents.</p></div>' +
     '<div class="step"><div class="n">2</div><h3>Buy units of the offering</h3><p>The sponsor offers a percent of the project\'s distributable cash — its PPA, its compute lease, or both — split into units from $50 or $100. Your units are your share. Pay by card or bank through Stripe; if the raise misses its minimum, you are refunded in full.</p></div>' +
-    '<div class="step"><div class="n">3</div><h3>Get paid as the project earns</h3><p>Once the project is operating, the sponsor reports each quarter, ClearSky declares the distribution, and your share lands in your portfolio and your bank account for the length of the term.</p></div></div>' +
+    '<div class="step"><div class="n">3</div><h3>Get paid as the project earns</h3><p>Once the project is operating, the sponsor reports each quarter, ClearSky declares the distribution, and your share lands in your portfolio and your bank account for the length of the term.</p></div>' +
+    '<div class="step"><div class="n">4</div><h3>Give back, if you choose</h3><p>Set aside 5, 10 or 25% of every distribution for a community program near the projects you hold — energy relief, scholarships, resilience or habitat. It is applied when each distribution is paid and shown in your portfolio, line by line.</p></div></div>' +
     '<div class="section-h"><h2>What you own</h2></div><p style="max-width:720px">A pro-rata share of the offering. If a campaign offers 40% of a compute container\'s distributable cash for ten years in 5,000 units, one unit is 0.008% of the project\'s cash for ten years. Distributions are the crowd\'s share of revenue after power, maintenance and insurance — never a fixed coupon. The sponsor keeps the rest and carries construction.</p>' +
     '<div class="section-h"><h2>Fees</h2></div><p style="max-width:720px">Investors pay nothing to invest or to receive distributions. The sponsor pays the platform fee out of the raise, shown on every campaign.</p>' +
     '<div class="section-h"><h2>Eligibility</h2></div><p style="max-width:720px">Open to residents of the countries listed at checkout. Non-accredited investors are capped per year across all projects; accredited investors self-attest and may be asked for verification. Every limit is applied when you commit, not after.</p>' +
+    '<div class="section-h"><h2>Why decentralized</h2></div><p style="max-width:720px">Compute and generation share a site, so no new transmission line is needed and less is lost on the wire. The load is flexible — it eases off when the neighbourhood needs the power and soaks up renewable energy that would otherwise be curtailed — and the ownership is local, one unit at a time.</p>' +
+    '<div class="section-h"><h2>Family offices and institutions</h2></div><p style="max-width:720px">Allocations from $250,000 sit alongside the community in the same offering, or take a direct position in the project under a separate agreement — the same reviewed sites, quarterly reporting and one point of contact at ClearSky. <a href="#" id="howAlloc">Request an allocation</a>.</p>' +
     '<div class="risk" style="max-width:720px;margin:10px 0 40px"><b>Risk.</b> You could lose your entire investment. Units are illiquid. Projections are the sponsor\'s estimates. Nothing here is investment, tax or legal advice, and no offer is made except through a campaign\'s offering documents.</div>' +
     '<a class="btn btn-gold btn-lg" href="#/">Browse projects</a><div style="height:40px"></div></div>';
+  $('howAlloc').onclick = function (e) { e.preventDefault(); openAlloc(); };
 }
 
 /* ═══════════════════ 11 · auth ═════════════════════════════════════════ */
@@ -1056,7 +1158,7 @@ function returnFromCheckout() {
   if (paid) toast('Payment received — your units are being confirmed.', 5000);
   if (cancelled) { toast('Checkout was cancelled. Your commitment is still pending; cancel it from your portfolio if you do not want to keep it.', 6000); if (S.user) api({ action: 'cancel', pledgeId: cancelled })['catch'](function () {}); }
 }
-Promise.all([loadCampaigns(), api({ action: 'bankStatus' }).then(function (b) { if (b && b.provider) S.bank = b; })['catch'](function () {})]).then(function () {
+Promise.all([loadCampaigns(), loadImpact(), api({ action: 'bankStatus' }).then(function (b) { if (b && b.provider) S.bank = b; })['catch'](function () {})]).then(function () {
   render();
   if (FB.ready) {
     FB.auth.onAuthStateChanged(function (u) {

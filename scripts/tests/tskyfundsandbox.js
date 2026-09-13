@@ -38,6 +38,7 @@ function api(body) { return global.fetch('/api/invest', { method: 'POST', body: 
 console.log('firestore look-alike');
 db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().then(function (q) {
   ok(q.size === 4, 'four seeded campaigns answer the storefront query');
+  ok(global.SKYFUND_SANDBOX.store().docs['cf_settings/impact'].givenToCommunity > 0, 'the impact figure is seeded for the hero');
   var live = []; q.forEach(function (d) { if (d.data().status === 'live') live.push(d.id); });
   ok(live.length === 3 && !q.docs[0].data().sample, 'three live, none flagged as a sample inside the sandbox');
   return db.collection('cf_campaigns').doc('sample-compute-1').collection('updates').get();
@@ -52,6 +53,13 @@ db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().th
   return api({ action: 'pledge', campaignId: 'sample-compute-1', amount: 500, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } });
 }).then(function (j) {
   ok(j.__status === 401, 'a pledge needs sign-in');
+  return api({ action: 'allocationRequest', name: 'Pat Family Office', email: 'Pat@Example.com', org: 'Pat FO', type: 'family-office', size: '1m-5m', note: 'compute in IL' });
+}).then(function (j) {
+  var a = j.id && global.SKYFUND_SANDBOX.store().docs['cf_allocation_requests/' + j.id];
+  ok(j.__status === 200 && a && a.status === 'new' && a.email === 'pat@example.com' && a.investorUid === null, 'an allocation request is stored without sign-in');
+  return api({ action: 'allocationRequest', name: 'x', email: 'nope' });
+}).then(function (j) {
+  ok(j.__status === 400, 'an allocation request needs a working email');
   console.log('auth look-alike');
   var seen = [];
   auth.onAuthStateChanged(function (u) { seen.push(u ? u.email : null); });
@@ -69,10 +77,12 @@ db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().th
 }).then(function (j) {
   ok(j.personalized === true && j.eligible === false && /per year/.test(j.reasons[0]), 'personalised quote applies the annual cap');
   console.log('pledge → checkout → paid');
-  return api({ action: 'pledge', campaignId: 'sample-compute-1', amount: 550, attest: { name: 'T. Ester', acceptedRisk: true, acceptedTerms: true, country: 'US' } });
+  return api({ action: 'pledge', campaignId: 'sample-compute-1', amount: 550, giveBack: { pct: 10, program: 'stem-trades' }, attest: { name: 'T. Ester', acceptedRisk: true, acceptedTerms: true, country: 'US' } });
 }).then(function (j) {
   ok(j.__status === 200 && j.units === 5 && j.amount === 500 && /^#\/sandbox-checkout\//.test(j.url), '$550 buys 5 units; the page is sent to the sandbox checkout');
   var pid = j.pledgeId;
+  var pl = global.SKYFUND_SANDBOX.store().docs['cf_pledges/' + pid], prof = global.SKYFUND_SANDBOX.store().docs['cf_investors/' + auth.currentUser.uid];
+  ok(pl.giveBackPct === 10 && pl.giveBackProgram === 'stem-trades' && prof.giveBack.pct === 10 && prof.giveBack.program === 'stem-trades', 'give-back rides on the pledge and the profile');
   var before = global.SKYFUND_SANDBOX.store().docs['cf_campaigns/sample-compute-1'];
   ok(before.raised === 187300 && before.backers === 214, 'nothing moves while pending');
   global.SKYFUND_SANDBOX.pay(pid);
@@ -83,10 +93,11 @@ db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().th
   return db.collection('cf_pledges').where('investorUid', '==', auth.currentUser.uid).get();
 }).then(function (q) {
   ok(q.size === 1 && q.docs[0].data().status === 'paid' && q.docs[0].data().projectedAnnual > 0, 'the portfolio query finds the paid pledge');
-  return api({ action: 'pledge', campaignId: 'sample-compute-1', amount: 300, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } });
+  return api({ action: 'pledge', campaignId: 'sample-compute-1', amount: 300, giveBack: { pct: 7, program: 'nope' }, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } });
 }).then(function (j) {
   global.SKYFUND_SANDBOX.cancel(j.pledgeId);
   var p = global.SKYFUND_SANDBOX.store().docs['cf_pledges/' + j.pledgeId];
+  ok(p.giveBackPct === 0 && p.giveBackProgram === null, 'an off-menu give-back share is treated as none');
   ok(p.status === 'cancelled' && global.SKYFUND_SANDBOX.store().docs['cf_campaigns/sample-compute-1'].raised === 187800, 'cancelling a checkout releases it without touching counters');
   return api({ action: 'pledge', campaignId: 'sample-bess-1', amount: 500, attest: { acceptedRisk: true, acceptedTerms: true, country: 'US' } });
 }).then(function (j) {

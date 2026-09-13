@@ -3213,5 +3213,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isOmegaAdmin();
     }
+
+    /* Allocation requests — family offices, advisers, funds and strategics
+       asking for a larger position. A LEAD, not a pledge: nothing is
+       reserved and nothing is priced, so /api/invest takes it without a
+       sign-in (the person may not have an account yet). It carries a name,
+       an email and an organisation, which is why read is the admin team
+       only and never the sponsor: a sponsor learning who is circling the
+       book is not part of this. Write is server-only like cf_pledges. */
+    match /cf_allocation_requests/{reqId} {
+      allow read: if isOmegaAdmin();
+      allow write: if false;
+    }
   }
 }
