@@ -278,5 +278,10 @@ tenant. Treat it that way.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
 - Branding assets: OMEGA mark is white-on-transparent; verify on the navy
   topbar, never by opening the PNG directly.
-- Staging: `staging.clearskyomega.com`. Tenant docs may carry
+- Staging: Vercel's own `*.vercel.app` preview URLs. They are on the
+  `PREVIEW_SUFFIXES` allowlist in `omega-tenant.js` and they resolve.
+  `staging.clearskyomega.com` and `next.clearskyomega.com` are on that
+  same allowlist but have never had DNS records — they are reservations,
+  not hosts, so do not send a tool or a teammate at either one. The public
+  front door is `silmarillion.clearskyomega.com`. Tenant docs may carry
   `preview: true` to canary a build.
