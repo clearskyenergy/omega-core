@@ -143,6 +143,26 @@ button{font-family:inherit}
 .stat .s{font-size:11.5px;color:var(--ink-2);margin-top:3px;line-height:1.45}
 .stat.money .v{color:var(--money)}
 .stat.alert .v{color:var(--bad)}
+/* The referral flow. One strip, six steps, left to right, because the whole
+   point is that somebody can see whose move it is without reading a table. */
+.jdflow{display:flex;gap:0;overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);margin-bottom:18px}
+.jdf{flex:1 1 0;min-width:118px;padding:12px 13px;border-right:1px solid var(--line);
+  background:none;text-align:left;cursor:pointer;font:inherit;position:relative}
+.jdf:last-child{border-right:0}
+.jdf:hover{background:var(--accent-soft)}
+.jdf.on{background:var(--accent-soft);box-shadow:inset 0 -3px 0 var(--accent)}
+.jdf.zero{opacity:.5}
+.jdf .n{font-size:22px;font-weight:500;color:var(--navy);letter-spacing:-.5px;line-height:1.1}
+.jdf.on .n{color:var(--accent)}
+.jdf .l{font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--ink-3);margin-top:4px}
+.jdf .h{font-size:11px;color:var(--ink-2);margin-top:3px;line-height:1.4}
+.jdf-gate{box-shadow:inset 3px 0 0 var(--accent),inset -3px 0 0 var(--accent)}
+.jdf-note{font-size:11.5px;color:var(--ink-2);margin:-8px 0 16px;line-height:1.5}
+.nxt{font-size:11.5px;color:var(--navy);line-height:1.4}
+.nxt.wait{color:var(--ink-2)}
+.nxt .w{display:block;font-size:10.5px;color:var(--ink-2);margin-top:2px}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   box-shadow:var(--shadow);margin-bottom:16px}
@@ -630,8 +650,11 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
        for invitation URLs; osaUrl() carries that note.
        The fallback is now the workspace on THIS host, which always exists.
        via=omega-gateway is what tells it to show the workspace rather than
-       bounce back to the sign-in chooser. -->
-  <a href="/?via=omega-gateway" id="tb-home" class="tb-logo"
+       bounce back to the sign-in chooser. portal=1 says the person asked for
+       the portal deliberately: on the OSA host / is the verifier portal, which
+       now sends staff here, and without that flag the two pages would bounce
+       each other forever. -->
+  <a href="/?via=omega-gateway&amp;portal=1" id="tb-home" class="tb-logo"
      title="Back to your workspace">
     <img src="/omega-logo.png" alt="" onerror="this.style.display='none'">
     <span class="tb-logo-txt">ClearSky OMEGA</span></a>
@@ -645,7 +668,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
          on its own host, so browser Back is whatever the person did before
          rather than a way out. Href is resolved at runtime to the signed-in
          person's OWN tenant — see resolveHome(). -->
-    <a class="btn-sm" href="/?via=omega-gateway" id="btn-portal"
+    <a class="btn-sm" href="/?via=omega-gateway&amp;portal=1" id="btn-portal"
        title="Back to your workspace">&#8592; Portal</a>
     <button class="btn-sm pri" id="btn-new" onclick="openNew()">+ New project</button>
     <button class="btn-sm" onclick="refresh(true)" id="btn-refresh">Refresh</button>
@@ -1101,6 +1124,8 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
      page with no API and the OGI endpoint is not configured, so this is the
      only grid measurement the console can currently make on its own. -->
 <script src="/omega-site-intel.js?v=1"></script>
+<!-- The referral flow is core, not OSA's: every JD org runs these six steps. -->
+<script src="/omega-jd-flow.js?v=1"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
    OMEGA PORTFOLIO CONSOLE (v1)
@@ -1114,7 +1139,7 @@ var F = Portfolio, A = OmegaAccess, IN = window.Ingest;
 var auth, db, ME = null;
 var S = { deals:[], users:[], loaded:false, demo:false, view:'dash',
           pipeFilter:'live', userFilter:'pending', supplyFilter:'all',
-          openId:null, tab:'overview', partnerOpen:'',
+          openId:null, tab:'overview', partnerOpen:'', jdOpen:'', jdStep:'',
           inbox:[], inboxErrors:[], inboxFilter:'new', inboxLoaded:false,
           imp:null, verifications:[], verifyFilter:'open', marketNews:[], pendingRescore:null,
           boardQ:'', boardOrg:'', boardPrefs:null, pinned:{}, pendingMove:null,
@@ -1661,10 +1686,24 @@ function renderJD(){
   host.innerHTML = open ? jdDetailHtml(open) : jdListHtml(rows);
 }
 
+/* OmegaJDFlow is core and knows nothing about OSA's stage table. This is the
+   only place the two meet: the ladder goes in, the flow comes out. A tenant
+   with different stage keys writes this function and gets the same six steps. */
+function jdCtx(r){
+  var h = r.jd.handoff;
+  return { handoffRank : h ? jdRank(h) : 0,
+           handoffLabel: h ? F.stageOf(h).label : '',
+           gateRank    : jdRank('qualified'),
+           rankOf      : jdRank,
+           isExit      : F.isExit };
+}
+
+/* Ready is now the flow's answer rather than a second opinion. It stays empty
+   when no handoff stage is set: calling a project ready for a partner whose
+   finish line nobody recorded is a guess dressed as a number. */
 function jdReady(r){
-  var need = r.jd.handoff ? jdRank(r.jd.handoff) : 0;
-  return { need:need, list: need ? r.deals.filter(function(d){
-    return jdRank(d.stage) >= need && !F.isExit(d.stage); }) : [] };
+  var ctx = jdCtx(r);
+  return { need:ctx.handoffRank, list:OmegaJDFlow.readyFor(r.deals, ctx) };
 }
 
 /* The accounts. One line each, because the only question at this level is
@@ -1694,6 +1733,29 @@ function jdListHtml(rows){
 function openJD(orgId){ S.jdOpen = orgId; renderJD(); window.scrollTo(0,0); }
 function closeJD(){ S.jdOpen = ''; renderJD(); }
 
+/* The strip. Clicking a step filters the roster under it, so "who is waiting
+   on us" is one click rather than a read of every row. */
+function jdFlowHtml(r){
+  var ctx = jdCtx(r), steps = OmegaJDFlow.funnel(r.deals, ctx),
+      tot  = OmegaJDFlow.funnelTotals(r.deals, ctx);
+  var h = '<div class="jdflow">' + steps.map(function(st){
+    return '<button class="jdf' + (S.jdStep===st.key ? ' on' : '')
+      + (st.count ? '' : ' zero') + (st.key==='gate' ? ' jdf-gate' : '') + '"'
+      + ' title="' + esc(st.hint) + '"'
+      + ' onclick="jdStep(\'' + esc(st.key) + '\')">'
+      + '<div class="n mono">' + st.count + '</div>'
+      + '<div class="l">' + esc(st.label) + '</div>'
+      + '<div class="h">' + esc(st.hint) + '</div></button>'; }).join('') + '</div>';
+  var note = [];
+  if (!ctx.handoffRank)
+    note.push('No handoff stage set for this partner, so nothing can be called ready. Set it below.');
+  if (tot.dead) note.push(tot.dead + ' closed project' + (tot.dead>1?'s are':' is') + ' not counted above.');
+  if (S.jdStep) note.push('Showing <b>' + esc((OmegaJDFlow.stepOf(S.jdStep)||{}).label||'')
+    + '</b> only. <button class="btn-x" onclick="jdStep(\'\')">Show all</button>');
+  return h + (note.length ? '<div class="jdf-note">' + note.join(' ') + '</div>' : '');
+}
+function jdStep(k){ S.jdStep = (S.jdStep===k ? '' : k); renderJD(); }
+
 /* One partnership: what it is, what is in it, and the way out to the room. */
 function jdDetailHtml(r){
   var oid = esc(r.stats.orgId), name = A.orgName(r.stats.orgId);
@@ -1701,7 +1763,8 @@ function jdDetailHtml(r){
   var rd = jdReady(r);
   var admin=false; try{ admin=A.can('approve_any'); }catch(e){}
 
-  var h = '<div class="card"><div class="card-h">'
+  var h = jdFlowHtml(r)
+    + '<div class="card"><div class="card-h">'
     + '<button class="btn-x" onclick="closeJD()">← All accounts</button>'
     + '<h2 style="margin-left:8px">' + esc(name) + '</h2>'
     + '<span class="sub">' + esc(r.stats.orgId) + (kind ? ' · ' + esc(kind) : '') + '</span>'
@@ -1733,18 +1796,28 @@ function jdDetailHtml(r){
     return h + '<div class="card-b"><div class="empty">Nothing on the roster yet. Add '
       + esc(r.stats.orgId) + ' to a project’s partners and it appears here.</div></div></div>';
   }
-  h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th><th>Ready</th>'
+  /* "Next" replaces the old Ready column. Ready was one bit; the useful thing
+     is whose move it is, which the flow already worked out for the strip. */
+  var ctx = jdCtx(r);
+  var shown = S.jdStep
+    ? r.deals.filter(function(d){ return OmegaJDFlow.stepFor(d, ctx) === S.jdStep; })
+    : r.deals;
+  if (!shown.length){
+    return h + '<div class="card-b"><div class="empty">Nothing on this step. '
+      + '<button class="btn-x" onclick="jdStep(\'\')">Show the whole roster</button>'
+      + '</div></div></div>';
+  }
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Stage</th><th>Next</th>'
     + '<th class="num">Size</th><th>Design</th><th>Drawing</th><th></th></tr></thead><tbody>';
-  r.deals.forEach(function (d){
+  shown.forEach(function (d){
     var st = F.stageOf(d.stage);
-    var isReady = rd.need && jdRank(d.stage) >= rd.need && !F.isExit(d.stage);
+    var nx = OmegaJDFlow.nextAction(d, ctx);
     h += '<tr><td><div class="t-name">' + esc(d.name || d.id) + '</div>'
       + '<div class="t-sub">' + esc(d.address || '') + '</div></td>'
       + '<td><span class="tag" style="background:' + esc(st.color||'#6B7280') + '22;color:'
       + esc(st.color||'#6B7280') + '">' + esc(st.label) + '</span></td>'
-      + '<td>' + (!rd.need ? '<span class="sub">—</span>'
-                 : isReady ? '<span class="tag" style="background:#12805C22;color:#12805C">Ready</span>'
-                           : '<span class="sub">not yet</span>') + '</td>'
+      + '<td><div class="nxt' + (nx.blocked ? ' wait' : '') + '">'
+      +   esc(nx.label) + '<span class="w">' + esc(nx.why) + '</span></div></td>'
       + '<td class="num mono">' + esc(F.mw(d.sizeMw)) + '</td>'
       + '<td>' + jdDesignCell(d) + '</td>'
       + '<td>' + (d.projectId

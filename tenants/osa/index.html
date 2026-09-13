@@ -581,6 +581,30 @@ function ready(){
   setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 320);
 }
 
+/* Where this account's work actually is.
+
+   This page is the VERIFIER portal: assignments, packets, signed verdicts. It
+   is the right landing page for a retained verifier and the wrong one for
+   everybody else, who used to arrive here and then click Portfolio — a hop
+   through a page that had nothing on it for them.
+
+   Two kinds of people are sent straight through. ClearSky staff resolve to an
+   internal observer with nothing assigned and never anything to sign. A partner
+   who is not retained as a verifier has no queue either; this file already told
+   them so in a banner reading "the portfolio console is where your deals live",
+   which is an instruction a redirect can carry out.
+
+   A retained verifier stays. So does anyone who asked for this page on purpose:
+   the portfolio's own Portal button carries ?portal=1, and without that
+   exemption the two pages would bounce a staff user between them forever. */
+var PORTFOLIO_PATH = '/tenants/osa/portfolio';
+function sendToPortfolio(actor){
+  if (/[?&]portal=1\b/.test(location.search)) return false;
+  if (!actor) return false;
+  if (actor.kind === 'internal') return true;
+  return actor.kind === 'partner' && !actor.retained;
+}
+
 (function boot(){
   if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG){ setTimeout(boot, 120); return; }
   try { firebase.initializeApp(window.CLEARSKY_CONFIG.firebase); }
@@ -598,12 +622,17 @@ function ready(){
     OmegaAccess.resolve(db, user).then(function(rec){
       ready();
       if (rec.status !== 'active'){
-        location.replace('/portfolio.html');
+        /* PORTFOLIO_PATH, not /portfolio.html — see the sidebar comment: that
+           path only resolves on osa.clearskyomega.com and 404s everywhere
+           else, which sent pending users to a dead page instead of the
+           waiting screen that exists to explain their status. */
+        location.replace(PORTFOLIO_PATH);
         return;
       }
       var a = P.resolveActor(rec);
       /* Refusal, not eviction — auth is shared across tabs; see console/. */
       if (!a){ showAuthErr(P.accessMessage(user.email||'')); showLogin(); return; }
+      if (sendToPortfolio(a)){ location.replace(PORTFOLIO_PATH + '#/jd'); return; }
       ACTOR = a;
       ME.email = rec.email; ME.uid = user.uid; ME.name = rec.name;
       P.init(db, ME, ACTOR);
