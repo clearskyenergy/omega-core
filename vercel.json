@@ -148,7 +148,7 @@
     },
     {
       "source": "/skyfund-sandbox",
-      "destination": "/portals/skyfund-sandbox/index.html"
+      "destination": "/portals/skyfund-sandbox"
     },
     {
       "source": "/skyfund-sandbox/(.*)",
@@ -157,6 +157,9 @@
   ],
   "functions": {
     "api/grid-atlas.js": {
+      "maxDuration": 60
+    },
+    "api/render.js": {
       "maxDuration": 60
     },
     "api/**/*.js": {
