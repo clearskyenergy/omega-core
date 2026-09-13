@@ -181,6 +181,16 @@
       "source": "/dealroom/:path*",
       "destination": "/portals/finance/dealroom",
       "permanent": false
+    },
+    {
+      "source": "/demo",
+      "destination": "/skyfund-sandbox",
+      "permanent": false
+    },
+    {
+      "source": "/demo/sponsor",
+      "destination": "/skyfund-sandbox/sponsor",
+      "permanent": false
     }
   ]
 }
