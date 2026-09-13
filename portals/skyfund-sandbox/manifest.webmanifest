@@ -1,0 +1,31 @@
+{
+  "name": "SkyFund Sandbox",
+  "short_name": "SkyFund",
+  "description": "Try the SkyFund investor app. Nothing is real.",
+  "start_url": "/skyfund-sandbox",
+  "scope": "/skyfund-sandbox",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16202B",
+  "theme_color": "#16202B",
+  "icons": [
+    {
+      "src": "/skyfund-sandbox/brand/skyfund-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/skyfund-sandbox/brand/skyfund-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/skyfund-sandbox/brand/skyfund-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

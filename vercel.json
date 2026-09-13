@@ -46,6 +46,19 @@
           "value": "application/manifest+json; charset=utf-8"
         }
       ]
+    },
+    {
+      "source": "/skyfund-sandbox/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/skyfund-sandbox"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -132,6 +145,14 @@
     {
       "source": "/finance",
       "destination": "/portals/finance/index.html"
+    },
+    {
+      "source": "/skyfund-sandbox",
+      "destination": "/portals/skyfund-sandbox/index.html"
+    },
+    {
+      "source": "/skyfund-sandbox/(.*)",
+      "destination": "/portals/skyfund-sandbox/$1"
     }
   ],
   "functions": {
