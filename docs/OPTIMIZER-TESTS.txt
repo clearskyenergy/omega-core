@@ -1,0 +1,62 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> omega-core@5.0.0 test:optimizer
+> node scripts/test-bess-sizer.js && node scripts/test-model-sizing-fiber.js && node scripts/test-native-model.js && node scripts/test-sizing-api.js && node scripts/test-sizer-render-contract.js && node scripts/check-html-scripts.js editor.html battery-sizer.html grid-atlas.html
+
+
+BESS sizer — 8760 hourly intervals, 1150 kW peak
+
+  ok   sizes with a TOU spread
+  ok   no candidate arbitrages more than one cycle a day
+  ok   arbitrage competes with demand shaving rather than adding to it
+  ok   sizes on a plain demand tariff
+  ok   no candidate exceeds a day of storage at full site peak
+  ok   recommends on a tariff that pays
+  ok   meets the payback target when the tariff supports it
+  ok   the recommended system holds its target in every interval of the year
+  ok   a tariff worth more buys at least as much battery
+  ok   the sized energy is never below what the analytic method asked for
+  ok   the sweep reaches depths some months cannot take
+  ok   a capped month is billed more than the swept shave would imply
+  ok   reported savings come off the metered peak, not off the target
+  ok   no month is credited with more shave than it was asked to deliver
+  ok   sizes with and without a ratchet
+  ok   a ratchet raises the baseline bill it is measured against
+  ok   capex, C-rate and savings all price the same kW
+  ok   refuses to size from three readings
+  ok   an independently written dispatch agrees with the reported savings
+
+  ok   start month — ISO timestamp
+  ok   start month — US M/D/Y, no day over 12
+  ok   start month — US M/D/Y, a day over 12
+  ok   start month — EU D/M/Y, a day over 12
+  ok   start month — month name
+  ok   start month — contradictory orders
+  ok   start month — no date anywhere
+  ok   a leap year is read to its last interval
+  ok   a July start rotates the calendar rather than mislabelling it
+  ok   a January start still gives January 744 hours
+
+all 29 checks passed
+
+ok monthly candidates carry finite power, capex, savings and C-rate
+ok invalid loads, interval duration and tariff fail closed
+ok zero-load month retains dispatch alignment
+ok February receives leap day and near-year gaps are rejected
+ok meter includes charging and complete round-trip losses
+ok ratchet never bills against future peaks
+ok unscheduled arbitrage is excluded from payback
+ok rectangular 2D equipment retains its height in 3D
+ok fiber accepts route geometry and rejects coverage polygons and invalid coordinates
+ok fiber source selection includes licensed routes and excludes subsea
+ok standalone dispatch is continuous and reports finite economics
+ok CSV import keeps invalid load rows and detects 5-minute leap years
+12 focused regression checks passed
+5 native model checks passed: shared element transform, shared shape transform, invalid-input atomicity, calibration gate, no Blender export
+6 sizing API authorization/input contract checks passed
+tool-interval rendered 10692 characters OK
+tool-monthly rendered 12145 characters OK
+✓ 3 HTML files — every inline script parses and every script src resolves.
+
+Final source smoke check: 233 current inline classic scripts compile.
+Latest native-model and focused geometry tests rechecked after preserving untouched height/color fields.

@@ -581,10 +581,15 @@ var LAYERS = {
     meta:function(a){return (a.mw?Math.round(a.mw)+" MW · ":"")+(a.techLabel||a.tech||"");}
   },
   fiber: {
-    name:"Fiber Routes", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
-    url:"__OSMGEOM__", osmTag:'["communication"="line"]',
+    name:"OSM Fiber Routes (partial)", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
+    url:"__OSMGEOM__", osmTag:'["telecom:medium"="fibre"]["location"!="underwater"]["submarine"!="yes"]',
     label:function(a){return a.operator||a.name||"Fiber route";},
     meta:function(a){return (a["telecom:medium"]==="fibre"?"fibre":(a["telecom:medium"]||"comm line"))+(a.submarine==="yes"?" · submarine":"");}
+  },
+  fiber_import: {
+    name:"Imported Fiber Routes", color:"#F59E0B", on:false, geom:"line", role:"connectivity", url:"__LOCAL__",
+    label:function(a){return a.name||a.operator||"Imported route";},
+    meta:function(a){return a.omegaSource||"User-supplied geometry; carrier confirmation required";}
   },
   fiber_cls: {
     name:"Cable Landings", color:"#00E0C6", on:false, geom:"point", role:"connectivity",
@@ -626,10 +631,10 @@ var LAYERS = {
     meta:function(a){return a.operator||a.network||"terrestrial backbone";}
   },
   fiber_verified: {
-    name:"Fiber Routes (verified)", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
+    name:"Fiber Routes (aggregator, unverified)", color:"#00E0C6", on:false, geom:"line", role:"connectivity",
     url:"__STATIC__", staticFile:"https://static.geodataviewer.com/datasets/fiber-routes-verified.geojson",
     label:function(a){return a.name||a.operator||"Fiber route";},
-    meta:function(a){return (a.operator||a.carrier||"terrestrial fiber")+" · verified";}
+    meta:function(a){return (a.operator||a.carrier||"terrestrial fiber")+" · source verification required";}
   },
   fiber_estimated: {
     name:"Fiber Routes (est.)", color:"#0E8C82", on:false, geom:"line", role:"connectivity",
@@ -640,8 +645,8 @@ var LAYERS = {
   /* ── LICENSED fiber (FiberLocator/GeoTel) via serverless proxy ──
      Inert until CLEARSKY_CONFIG.fiberProxyUrl is set to your Vercel proxy path.
      The proxy holds the vendor key server-side and returns GeoJSON for the map view.
-     This is the ONE layer that gives carrier-complete US routes — and it's licensed,
-     so it's yours to show tenants. Never put the vendor key in the browser. */
+     Coverage depends on the licensed carrier dataset and subscription;
+     confirm permitted redistribution. Never put the vendor key in the browser. */
   fiber_licensed: {
     name:"Fiber (licensed)", color:"#FF9F1C", on:false, geom:"line", role:"connectivity",
     url:"__PROXY__", proxyKey:"fiber",
@@ -724,7 +729,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_cls","backbone","fiber_ca","subsea","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -868,9 +873,10 @@ function fetchOSM(key,cb){
     q="[out:json][timeout:25];(node"+L2.osmTag+"("+bbox+");way"+L2.osmTag+"("+bbox+"););out center 600;";
   }
   ajax("https://overpass-api.de/api/interpreter?data="+encodeURIComponent(q),function(err,json){
-    if(err||!json){ cb([]); return; }
+    if(err||!json){ cb([],"Source unavailable"); return; }
     var feats=(json.elements||[]).map(function(e){
       if(wantGeom&&e.geometry){
+        if(key==='fiber' && (!e.tags || (e.tags.communication!=='line' && e.tags.telecom!=='cable' && e.tags.telecom!=='line')))return null;
         var coords=e.geometry.map(function(p){return [p.lon,p.lat];});
         return {props:e.tags||{}, geom:{type:"LineString",coordinates:coords}};
       }
@@ -951,18 +957,18 @@ function fetchPeeringDB(key,cb){
 function fetchProxy(key,cb){
   var L2=LAYERS[key], cfg=window.CLEARSKY_CONFIG||{};
   var base=cfg.fiberProxyUrl||"";
-  if(!base){ status(L2.name+": needs a license — set fiberProxyUrl in config.js",false); cb([]); return; }
+  if(!base){ status(L2.name+": licensed data not connected",false); cb([],"Licensed data not connected"); return; }
   var b=map.getBounds();
   var bbox=b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth();
   var url=base+(base.indexOf("?")>=0?"&":"?")+"layer="+encodeURIComponent(L2.proxyKey||"fiber")+"&bbox="+encodeURIComponent(bbox);
-  ajax(url,function(err,json){
-    if(err||!json){ status(L2.name+": proxy unavailable",false); cb([]); return; }
-    var raw=json.features?json.features:(json.length!=null?json:[]);
-    var feats=[];
-    for(var i=0;i<raw.length;i++){ var f=raw[i]; if(!f||!f.geometry) continue;
-      feats.push({props:f.properties||{}, geom:f.geometry}); }
-    cb(feats);
-  });
+  var user=window.firebase&&firebase.auth().currentUser;
+  if(!user){cb([],"Sign in to load licensed fiber");return;}
+  if(new URL(url,location.href).origin!==location.origin){cb([],"Licensed proxy must use this site's origin");return;}
+  user.getIdToken().then(function(token){return fetch(url,{headers:{Authorization:'Bearer '+token}});}).then(function(r){
+    return r.json().then(function(json){if(!r.ok)throw new Error(json.error||'Licensed source unavailable');return json;});
+  }).then(function(json){
+    var feats=validateFiberGeoJSON(json);cb(feats);
+  }).catch(function(e){cb([],e.message||'Licensed source unavailable');});
 }
 
 /* ---------- Static GeoJSON loader (InterTubes backbone, or any bundled geo) ----------
@@ -970,7 +976,7 @@ function fetchProxy(key,cb){
 function fetchStatic(key,cb){
   var L2=LAYERS[key];
   ajax(L2.staticFile,function(err,json){
-    if(err||!json){ status(L2.name+": no data available for this source",false); cb([]); return; }
+    if(err||!json){ status(L2.name+": no data available for this source",false); cb([],"Source unavailable"); return; }
     var raw = json.features ? json.features : (json.length!=null ? json : []);
     var feats=[];
     for(var i=0;i<raw.length;i++){ var f=raw[i]; if(!f||!f.geometry) continue;
@@ -986,6 +992,7 @@ function fetchStatic(key,cb){
 }
 
 function ajax(url,cb){
+  var complete=false,callback=cb;cb=function(err,json){if(complete)return;complete=true;callback(err,json);};
   var x=new XMLHttpRequest();
   x.open("GET",url,true); x.timeout=28000;
   x.onreadystatechange=function(){
@@ -1070,7 +1077,9 @@ function esc(s){ s=(s==null?"":""+s); return s.replace(/[&<>]/g,function(c){retu
 
 /* ---------- Load visible layers on move ---------- */
 var loadTimer;
+var atlasLoadGeneration=0, layerHealth={};
 function loadVisible(){
+  var generation=++atlasLoadGeneration;
   if(map.getZoom()<5){ status("Zoom in to load grid features",false); return; }
   var todo=ORDER.filter(function(k){return LAYERS[k].on;});
   if(!todo.length){ status("No layers active",false); return; }
@@ -1078,11 +1087,14 @@ function loadVisible(){
   status("Loading "+todo.length+" layer"+(todo.length>1?"s":"")+"…",true);
   todo.forEach(function(k){
     var isOSM=(LAYERS[k].url==="__OSM__"||LAYERS[k].url==="__OSMGEOM__");
-    var fn=LAYERS[k].url==="__PEERINGDB__"?fetchPeeringDB:
+    var fn=LAYERS[k].url==="__LOCAL__"?function(key,cb){cb(cache[key]||[]);}:LAYERS[k].url==="__PEERINGDB__"?fetchPeeringDB:
            (LAYERS[k].url==="__PROXY__"?fetchProxy:
            (LAYERS[k].url==="__STATIC__"?fetchStatic:
            (LAYERS[k].url==="__EIA__"?fetchEIA:(isOSM?fetchOSM:fetchArc))));
-    fn(k,function(feats){
+    layerHealth[k]={state:'loading'};
+    fn(k,function(feats,error){
+      if(generation!==atlasLoadGeneration || !LAYERS[k].on) return;
+      layerHealth[k]={state:error?'unavailable':(feats.length?'loaded':'empty'),message:error||'',checkedAt:new Date().toISOString()};
       renderLayer(k,feats); if(feats.length) any=true;
       updateRailCounts();
       if(--pending===0){
@@ -1099,6 +1111,37 @@ function countAll(){ var n=0; ORDER.forEach(function(k){ if(cache[k])n+=cache[k]
 
 /* ---------- Layer rail UI ---------- */
 var layersEl=document.getElementById("layers");
+var importButton=document.createElement('button');importButton.textContent='Import fiber GeoJSON';importButton.className='btn';
+layersEl.parentNode.insertBefore(importButton,layersEl);
+var fiberInput=document.createElement('input');fiberInput.type='file';fiberInput.accept='.geojson,.json';fiberInput.style.display='none';document.body.appendChild(fiberInput);
+importButton.onclick=function(){fiberInput.click();};
+function validateFiberGeoJSON(json){
+ if(!json || json.type!=='FeatureCollection' || !Array.isArray(json.features) || json.features.length>20000) throw new Error('Use a GeoJSON FeatureCollection with at most 20,000 routes.');
+ return json.features.map(function(f){
+  var g=f&&f.geometry;
+  if(!g || ['LineString','MultiLineString'].indexOf(g.type)<0) throw new Error('Fiber routes must be LineString or MultiLineString geometry.');
+  var lines=g.type==='LineString'?[g.coordinates]:g.coordinates;
+  if(!Array.isArray(lines)||!lines.length) throw new Error('Empty route geometry.');
+  lines.forEach(function(line){
+   if(!Array.isArray(line)||line.length<2) throw new Error('Each route needs at least two coordinates.');
+   line.forEach(function(q){if(!Array.isArray(q)||typeof q[0]!=='number'||typeof q[1]!=='number'||!isFinite(q[0])||!isFinite(q[1])||Math.abs(q[0])>180||Math.abs(q[1])>90) throw new Error('Use WGS84 longitude, latitude coordinates.');});
+  });
+  return {props:f.properties||{},geom:g};
+ });
+}
+fiberInput.onchange=function(){
+ var file=fiberInput.files[0];if(!file)return;
+ if(file.size>20*1024*1024){alert('Choose a GeoJSON file under 20 MB.');return;}
+ var reader=new FileReader();reader.onload=function(){try{
+  var feats=validateFiberGeoJSON(JSON.parse(reader.result));
+  feats.forEach(function(f){f.props.omegaSource=String(f.props.source||file.name)+' · imported; verify route status';});
+  LAYERS.fiber_import.on=true;groups.fiber_import.addTo(map);renderLayer('fiber_import',feats);
+  layerHealth.fiber_import={state:feats.length?'loaded':'empty',checkedAt:new Date().toISOString()};
+  buildRail();updateRailCounts();if(pinLatLng)analyze(pinLatLng);
+  status('Imported '+feats.length+' fiber routes. Session-only: keep the original GeoJSON for reload.',false);
+ }catch(e){alert(e.message);}fiberInput.value='';};reader.onerror=function(){alert('Could not read the fiber file.');};reader.readAsText(file);
+};
+
 /* Category grouping by layer role */
 var CATS=[
   {key:"interconnect", name:"Grid · Interconnect"},
@@ -1123,7 +1166,7 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_verified","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_licensed","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]}
@@ -1348,11 +1391,12 @@ function analyze(ll){
   var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
   var dcN=within(ll,cache.datacenters,40);
   var evN=within(ll,cache.ev,15);
-  var fiberSets=[cache.fiber_verified,cache.ll_backbone,cache.fiber_ca,cache.fiber,cache.fiber_estimated,cache.subsea];
+  var fiberKeys=['fiber_licensed','fiber_import','backbone','fiber_ca','fiber','fiber_verified','ll_backbone','fiber_estimated'];
+  var fiberSets=fiberKeys.map(function(key){return LAYERS[key] && LAYERS[key].on ? cache[key] : [];});
   var fiber=null;
   for(var fi=0;fi<fiberSets.length;fi++){
     var cand=nearestLine(ll,fiberSets[fi]);
-    if(cand&&(!fiber||cand.km<fiber.km)) fiber=cand;
+    if(cand&&(!fiber||cand.km<fiber.km)){ cand.sourceKey=fiberKeys[fi]; fiber=cand; }
   }
 
   // interconnect score: closer substation + higher-voltage nearby line = better
@@ -1390,6 +1434,11 @@ function analyze(ll){
   h+=infoRow(LAYERS.ev.color,"EV charging sites","within 15 km"+(LAYERS.ev.on?"":" · layer off"),String(evN));
 
   h+='<div class="sec">Connectivity</div>';
+  fiberKeys.forEach(function(key){
+    if(!LAYERS[key] || !LAYERS[key].on) return;
+    var health=layerHealth[key];
+    if(health && health.state!=='loaded') h+='<div class="hint">'+esc(LAYERS[key].name)+': '+esc(health.message||health.state)+'. No route result does not establish absence of fiber.</div>';
+  });
   // ── Fiber Confidence — blends every free signal into one screening read ──
   var fcRoute=fiber?Math.max(0,100-fiber.km*7):0;
   var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
@@ -1406,14 +1455,14 @@ function analyze(ll){
   h+='<div class="bar"><span style="width:'+fcScore+'%;background:'+fcBand+'"></span></div>';
   h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
   h+=infoRow(LAYERS.fiber.color, fiber?"Nearest fiber route":"No route in view",
-        fiber?"across all route layers":"enable fiber layers",
+        fiber?LAYERS[fiber.sourceKey].name+" · mapped proximity only":"enable fiber layers",
         fiber?fmtKm(fiber.km):"—");
   h+=infoRow(LAYERS.ixp.color,"Internet exchanges","within 60 km"+(LAYERS.ixp.on?"":" · layer off"),String(ixpN));
   h+=infoRow(LAYERS.colo.color,"Colo facilities","within 60 km"+(LAYERS.colo.on?"":" · layer off"),String(coloN));
   h+=infoRow(LAYERS.fcc_fiber.color,"FCC fiber service",fccCov?"reported at this point":(LAYERS.fcc_fiber.on?"none mapped here":"enable FCC Fiber Coverage"),fccCov?"✓":"—");
   h+='<div id="bbRow"></div>'; // live FCC broadband-at-point, filled async
   if(fiber){
-    var fv=fiber.km<=2?"On-net — minimal lateral build":fiber.km<=8?"Near backbone — modest lateral":"Fiber build is a cost driver";
+    var fv=fiber.km<=2?"Route within 2 km — carrier serviceability unconfirmed":fiber.km<=8?"Mapped route nearby — lateral route and cost unconfirmed":"Fiber build is a cost driver";
     h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. Confidence blends routes, peering/colo, and FCC service coverage — screening only; no free source maps every carrier conduit.</div>';
   }
 

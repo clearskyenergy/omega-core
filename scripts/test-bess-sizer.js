@@ -3,8 +3,8 @@
    scripts/test-bess-sizer.js — invariants for the BESS sizing engine
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   The engine lives inside editor.html, so this extracts the IIFE and runs it
-   in node. Testing the shipped source rather than a copy is the whole point:
+   The sizing engine now lives in api/_lib/bess-engine.js and is loaded
+   directly in node; editor import helpers are still extracted from HTML. Testing the shipped source rather than a copy is the whole point:
    a copy drifts, and every bug below was in code that read correctly.
 
    These are not unit tests of arithmetic. They are the four things that were
@@ -29,16 +29,7 @@ var fs = require('fs'), path = require('path'), vm = require('vm');
 
 var HTML = path.join(__dirname, '..', 'editor.html');
 var src = fs.readFileSync(HTML, 'utf8');
-var i = src.indexOf('  if (window.OmegaBessSizerEngine) return;');
-if (i < 0) { console.error('FAIL: the sizer engine is not in editor.html any more'); process.exit(1); }
-i = src.lastIndexOf('(function () {', i);
-var j = src.indexOf('window.OmegaBessSizerEngine =', i);
-var k = src.indexOf('})();', j);
-var sandbox = { window: {}, console: console };
-sandbox.window.window = sandbox.window;
-vm.createContext(sandbox);
-vm.runInContext('var window = this.window;\n' + src.slice(i, k + 5), sandbox);
-var E = sandbox.window.OmegaBessSizerEngine;
+var E = require('../api/_lib/bess-engine');
 
 var fails = 0, checks = 0;
 function ok(cond, name, detail) {
@@ -181,7 +172,7 @@ ok(E.sizeFromInterval([1, 2, 3], {}).ok === false, 'refuses to size from three r
 (function () {
   var c = strong.recommended, D2 = E.derate(), hrs = 1, rte = 0.88;
   var spans = E.monthSpans(vals.length, 60, 0);
-  var soc = c.nameplateKwh * D2, eff = Math.sqrt(rte), billed = [];
+  var soc = 0, eff = rte, billed = [];
   spans.forEach(function (sp, k) {
     var thr = c.months[k].thresholdKw, metered = 0;
     for (var i = sp.a; i < sp.b; i++) {
@@ -190,8 +181,9 @@ ok(E.sizeFromInterval([1, 2, 3], {}).ok === false, 'refuses to size from three r
         var give = Math.min(load - thr, c.powerKw, soc / hrs);
         soc -= give * hrs; net = load - give;
       } else {
-        var room = Math.min(c.powerKw, thr - load, (c.nameplateKwh * D2 - soc) / hrs);
+        var room = Math.min(c.powerKw, thr - load, (c.nameplateKwh * D2 - soc) / (hrs*eff));
         if (room > 0) soc = Math.min(c.nameplateKwh * D2, soc + room * hrs * eff);
+        net += room;
       }
       if (net > metered) metered = net;
     }

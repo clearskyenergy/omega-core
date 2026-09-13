@@ -1,0 +1,82 @@
+[
+  {
+    "path": "MERGE.md",
+    "change": "modified",
+    "sha256": "f9029561dfd49eaf28793604b4a14213418ded78888c61e033eaa11f99ab062c"
+  },
+  {
+    "path": "api/_lib/battery-tool-engine.js",
+    "change": "added",
+    "sha256": "f490f2cebc3cc1067c84b43999e80e7ea03acdbd9d614e9ba4c8095425a90e22"
+  },
+  {
+    "path": "api/_lib/bess-engine.js",
+    "change": "added",
+    "sha256": "e7798c6e09a284b6642f85719afe59111e78ca97d1b0f5ff3064fa149908ed4b"
+  },
+  {
+    "path": "api/bess-size.js",
+    "change": "added",
+    "sha256": "730e1a23c2cac14d863774c2b14c939d2a65dac20968f9ef272f616161ec4068"
+  },
+  {
+    "path": "api/fiber-proxy.js",
+    "change": "modified",
+    "sha256": "b911a8e201dfb386a057e015a08513fde33ad61a782cb5363d2fe67309dcf717"
+  },
+  {
+    "path": "battery-sizer.html",
+    "change": "modified",
+    "sha256": "47d44cce44d8593fbffa830d21e5e30df449f305441249a41be62fbaf65b370a"
+  },
+  {
+    "path": "docs/OPTIMIZATION-REVIEW.md",
+    "change": "added",
+    "sha256": "908b97348959995c6cae175ce8a428d9fd25de7430b2bf64ff70546b8af135cf"
+  },
+  {
+    "path": "docs/OPTIMIZER-TESTS.txt",
+    "change": "added",
+    "sha256": "e3e8246bae7ec3b34478d8ab73e6d17900d6a34063e74a0f9ef1c722ec5e06f7"
+  },
+  {
+    "path": "editor.html",
+    "change": "modified",
+    "sha256": "3e5cdf48e5fc2daf1dd48579dfca22e903fb130e69bd65f1b4f204ad44c7b8ec"
+  },
+  {
+    "path": "grid-atlas.html",
+    "change": "modified",
+    "sha256": "40d8ccbad6ec41c22ec25d8c37675ed4e455419a01d0220d24d28482a14149a8"
+  },
+  {
+    "path": "package.json",
+    "change": "modified",
+    "sha256": "b26bec25c5df35e8222207bf55e89bdd8a19b3e0893ffe665b579c65c5a62f0e"
+  },
+  {
+    "path": "scripts/test-bess-sizer.js",
+    "change": "modified",
+    "sha256": "d7674651bfa06f11993a680f66a5bb172912a411e29328dcf8b4cb7879f887e6"
+  },
+  {
+    "path": "scripts/test-model-sizing-fiber.js",
+    "change": "added",
+    "sha256": "235fa9ee3a4b696763010a37974646476cff63017cb2da38cf998b491f6dacb1"
+  },
+  {
+    "path": "scripts/test-native-model.js",
+    "change": "added",
+    "sha256": "aba7c5ae472fdf46f38631ba741bda868bf562dc74903a54e42375f13fd69a59"
+  },
+  {
+    "path": "scripts/test-sizer-render-contract.js",
+    "change": "added",
+    "sha256": "60a122c0928d5857232102fdea5288465ade570a2aff441211352610b937eebb"
+  },
+  {
+    "path": "scripts/test-sizing-api.js",
+    "change": "added",
+    "sha256": "484cbfa63b4214098317ac97b47a1ea93d9d32ecadf57eebaee0feb475caa5da"
+  }
+]

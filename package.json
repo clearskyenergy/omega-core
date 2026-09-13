@@ -19,6 +19,7 @@
     "test:sizer": "node scripts/test-bess-sizer.js",
     "test:siteintel": "node scripts/test-site-intel.js",
     "test:caps": "node scripts/test-caps.js",
-    "test": "node scripts/test-caps.js && node scripts/test-bess-sizer.js && node scripts/test-site-intel.js && node scripts/check-html-scripts.js"
+    "test": "node scripts/test-caps.js && node scripts/test-bess-sizer.js && node scripts/test-site-intel.js && node scripts/check-html-scripts.js",
+    "test:optimizer": "node scripts/test-bess-sizer.js && node scripts/test-model-sizing-fiber.js && node scripts/test-native-model.js && node scripts/test-sizing-api.js && node scripts/test-sizer-render-contract.js && node scripts/check-html-scripts.js editor.html battery-sizer.html grid-atlas.html"
   }
 }

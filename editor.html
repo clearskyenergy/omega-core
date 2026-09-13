@@ -8495,7 +8495,7 @@ async function exportSpecsForCADTool() {
     } else {
       // Square icon footprint: w x w
       lengthFt = +(wPx / pxPerFt).toFixed(2);
-      widthFt  = +(wPx / pxPerFt).toFixed(2);
+      widthFt = +((el.type === 'evgear' ? (el.h || Math.round(wPx * (el.aspect || 0.72))) : wPx) / pxPerFt).toFixed(2);
     }
 
     label = el.label || (EQ.find(function(e){return e.id===el.eqId;}) || {}).label || cadType;
@@ -114452,21 +114452,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
  *  Console: OmegaBessSizer.open(), .engine.sizeFromInterval(...)          *
  * ====================================================================== */
 (function () {
-  'use strict';
-  if (window.OmegaBessSizerEngine) return;
-
-  /* Nameplate is not usable energy: depth of discharge limits what can be
-     taken out, and round-trip efficiency limits what reaches the meter.
-     Read the app's constants when they exist so one change moves both. */
-  function derate() {
-    var dod = (typeof window.BESS_DOD === 'number') ? window.BESS_DOD : 0.95;
-    var rte = (typeof window.BESS_RTE === 'number') ? window.BESS_RTE : 0.88;
-    return dod * rte;
-  }
-
-  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
+'use strict';
   function defaultTariff() {
     return {
       demandChargePerKw: 18,      /* $/kW-month                            */
@@ -114480,516 +114466,6 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     };
   }
 
-  /* ================================================================== *
-   *  1.  INTERVAL DATA — the measured answer                           *
-   * ================================================================== */
-
-  /* Contiguous runs above a threshold, merging brief dips: a battery that
-     is discharging does not get to recover during a two-interval dip, so
-     two runs separated by less than the tolerance are one event. */
-  function eventsAbove(vals, hrs, thr, dipTol) {
-    dipTol = dipTol == null ? Math.max(1, Math.round(0.5 / hrs)) : dipTol;
-    var out = [], cur = null, below = 0, i;
-    for (i = 0; i < vals.length; i++) {
-      if (vals[i] > thr) {
-        if (!cur) cur = { a: i, b: i, energyKwh: 0, peakKw: 0 };
-        else if (below) {
-          /* absorb the dip we just walked through */
-          for (var k = cur.b + 1; k < i; k++) cur.energyKwh += Math.max(0, vals[k] - thr) * hrs;
-        }
-        cur.b = i; below = 0;
-        cur.energyKwh += (vals[i] - thr) * hrs;
-        if (vals[i] > cur.peakKw) cur.peakKw = vals[i];
-      } else if (cur) {
-        below++;
-        if (below > dipTol) {
-          cur.hours = (cur.b - cur.a + 1) * hrs;
-          out.push(cur); cur = null; below = 0;
-        }
-      }
-    }
-    if (cur) { cur.hours = (cur.b - cur.a + 1) * hrs; out.push(cur); }
-    return out;
-  }
-
-  /* Rough month boundaries for a full year of evenly spaced intervals.
-     A partial series is evaluated as one block and says so. */
-  /* startMonth is the calendar month row zero falls in. A utility export
-     usually begins at the BILLING CYCLE rather than on 1 January, and
-     demand charges are billed per month — so assuming January on a file
-     that starts in July attributes every peak to the wrong month and sizes
-     against the wrong one. The caller reads it off a timestamp column when
-     the file has one and passes 0 when it does not, saying so. */
-  function monthSpans(n, intervalMin, startMonth) {
-    var perDay = Math.round(24 * 60 / intervalMin);
-    if (Math.abs(n - perDay * 365) > perDay * 40) return null;
-    var days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], out = [], at = 0;
-    var s0 = (startMonth == null ? 0 : ((startMonth % 12) + 12) % 12);
-    for (var i = 0; i < 12; i++) {
-      var m = (s0 + i) % 12;
-      /* The last span runs to the end of the series: a leap year is 24 h
-         longer than the table and those hours were never examined. */
-      var b = (i === 11) ? n : Math.min(n, at + days[m] * perDay);
-      out.push({ a: at, b: b, month: m });
-      at = b;
-    }
-    return out;
-  }
-
-  /* ══════════════════════════════════════════════════════════════════════
-     DISPATCH — the only thing that knows whether a battery can do the job
-
-     Everything above this line sizes ANALYTICALLY: measure the energy above
-     a line, divide by the derate, check the gap between events against a
-     recharge time. It is fast, it is readable, and on a real load shape it
-     is wrong in the direction that costs the customer money.
-
-     Measured on a 1,150 kW two-peak profile: the analytic sizer recommended
-     537 kW / 1,927 kWh and promised $107,069 a year. Dispatching that exact
-     system hour by hour against the same load, it failed to hold the target
-     in 591 of 8,760 hours and delivered $41,424 — a 61% overstatement.
-
-     The reason is a constraint the analytic form cannot express. The
-     threshold in every month had landed on that month's average, which is
-     what the "you cannot shave into the baseline" cap allows. But the cap is
-     about the wrong quantity: what matters is not whether the threshold sits
-     above the baseline, it is whether the energy discharged in a day can be
-     PUT BACK in that day's off-peak hours at the headroom that is left. At a
-     threshold equal to the average there was 52-213 kW of charge room
-     against a 100-537 kW shave. No arrangement of the analytic terms sees
-     that; a simulation sees it immediately.
-
-     So the simulation is now the sizer, not a checker. It runs a greedy
-     peak-shaving policy with a real state of charge:
-       discharge to hold the month's threshold, limited by power and by what
-       is in the battery;
-       charge whenever the load is under the threshold, limited by power, by
-       the headroom UNDER the threshold — a charge that creates a new peak is
-       not shaving — and by what the pack still has room for;
-       round-trip losses are taken on the way in.
-
-     It reports the peak the meter ACTUALLY sees each month. That number, not
-     the target, is what the utility bills, so that number is what the
-     savings are computed from. A battery that misses its target still gets
-     credit for what it did achieve, and never for what it did not.
-     ══════════════════════════════════════════════════════════════════════ */
-  function dispatchYear(vals, blocks, thresholds, powerKw, usableKwh, hrs, rte) {
-    var soc = usableKwh, chargeEff = Math.sqrt(rte > 0 ? rte : 0.88);
-    var billed = [], breaches = 0, shortfallKwh = 0, worstBreachKw = 0, dischargeKwh = 0;
-    for (var b = 0; b < blocks.length; b++) {
-      var sp = blocks[b], thr = thresholds[b], metered = 0;
-      for (var i = sp.a; i < sp.b; i++) {
-        var load = vals[i], net = load;
-        if (load > thr) {
-          var give = Math.min(load - thr, powerKw, soc / hrs);
-          if (give > 0) { soc -= give * hrs; dischargeKwh += give * hrs; net = load - give; }
-          if (net > thr + 1e-6) {
-            breaches++;
-            shortfallKwh += (net - thr) * hrs;
-            if (net - thr > worstBreachKw) worstBreachKw = net - thr;
-          }
-        } else {
-          var room = Math.min(powerKw, thr - load, (usableKwh - soc) / hrs);
-          if (room > 0) soc = Math.min(usableKwh, soc + room * hrs * chargeEff);
-        }
-        if (net > metered) metered = net;
-      }
-      billed.push(metered);
-    }
-    return { billedPeaks: billed, breaches: breaches, shortfallKwh: shortfallKwh,
-             worstBreachKw: worstBreachKw, dischargeKwh: dischargeKwh };
-  }
-
-  /* The smallest usable energy that lets the dispatch hold every threshold.
-     Doubling to find a working size, then bisecting for the edge — a search
-     rather than a formula, because the feasible point depends on where the
-     off-peak hours fall relative to the peaks, which is exactly the thing a
-     formula cannot carry. Bounded: past a day of storage at full power the
-     answer is "this shave is not reachable", not a bigger battery. */
-  function solveEnergy(vals, blocks, thresholds, powerKw, hrs, rte, seedKwh) {
-    var ceiling = powerKw * 24;
-    var lo = 0, hi = Math.max(1, Math.min(ceiling, seedKwh || powerKw * 2));
-    var res = dispatchYear(vals, blocks, thresholds, powerKw, hi, hrs, rte);
-    var guard = 0;
-    while (res.breaches > 0 && hi < ceiling && ++guard < 20) {
-      lo = hi; hi = Math.min(ceiling, hi * 2);
-      res = dispatchYear(vals, blocks, thresholds, powerKw, hi, hrs, rte);
-    }
-    if (res.breaches > 0) {
-      /* Not reachable at this power. Return the ceiling and the damage, so
-         the caller can still price what it DOES achieve. */
-      return { usableKwh: hi, feasible: false, sim: res };
-    }
-    for (var k = 0; k < 18 && hi - lo > Math.max(1, hi * 0.01); k++) {
-      var mid = (lo + hi) / 2;
-      var r = dispatchYear(vals, blocks, thresholds, powerKw, mid, hrs, rte);
-      if (r.breaches > 0) lo = mid; else { hi = mid; res = r; }
-    }
-    return { usableKwh: hi, feasible: true, sim: res };
-  }
-
-  function sizeFromInterval(vals, opts) {
-    /* The 24-value floor lived only in the dialog, so a direct call —
-       which the console API openly invites — would size a battery from
-       three numbers and report it with the same confidence as a year of
-       data. The guard belongs on the engine. */
-    if (!vals || vals.length < 24) {
-      return { ok: false, error: 'Interval sizing needs at least 24 readings; ' +
-               'got ' + ((vals && vals.length) || 0) + '. Paste a load column in kW.' };
-    }
-    opts = opts || {};
-    var tariff = merge(defaultTariff(), opts.tariff);
-    var intervalMin = +opts.intervalMin || 60;
-    var hrs = intervalMin / 60;
-    var spans = monthSpans(vals.length, intervalMin, opts.startMonth);
-    var blocks = spans || [{ a: 0, b: vals.length, month: null }];
-    var D = derate();
-    var RTE = (typeof window.BESS_RTE === 'number') ? window.BESS_RTE : 0.88;
-
-    var peaks = blocks.map(function (sp) {
-      var p = 0, sum = 0;
-      for (var i = sp.a; i < sp.b; i++) { if (vals[i] > p) p = vals[i]; sum += vals[i]; }
-      return { month: sp.month, peakKw: p, avgKw: (sp.b > sp.a) ? sum / (sp.b - sp.a) : 0,
-               kwh: sum * hrs, a: sp.a, b: sp.b };
-    }).filter(function (m) { return m.peakKw > 0; });
-
-    var annualPeak = peaks.reduce(function (m, p) { return Math.max(m, p.peakKw); }, 0);
-    var annualKwh = peaks.reduce(function (s, p) { return s + p.kwh; }, 0);
-
-    /* Evaluate one candidate shave depth across every month. Each month
-       bills its own peak, so each month gets its own threshold. */
-    /* Energy above the threshold in the worst single DAY of a span. Two
-       peaks in one day with an hour between them is the ordinary shape of a
-       facility with a shift change, and a battery that cannot get back up in
-       that hour has to carry both. */
-    function worstDayKwh(a, b, thr) {
-      var per = Math.max(1, Math.round(24 / hrs)), worst = 0;
-      for (var d = a; d < b; d += per) {
-        var e = 0, lim = Math.min(b, d + per);
-        for (var i = d; i < lim; i++) if (vals[i] > thr) e += (vals[i] - thr) * hrs;
-        if (e > worst) worst = e;
-      }
-      return worst;
-    }
-
-    function evaluate(shaveKw) {
-      var worstHours = 0, events = 0, months = [], thresholds = [], analytic = 0;
-      var minGapH = Infinity;
-
-      peaks.forEach(function (m) {
-        /* The threshold is still capped at peak-minus-average: below the
-           month's own average the meter can never come back under the line,
-           so there is no off-peak at all and nothing to recharge from. That
-           cap is necessary and it is NOT sufficient — see dispatchYear. */
-        var applied = Math.min(shaveKw, Math.max(0, m.peakKw - m.avgKw));
-        var thr = Math.max(0, m.peakKw - applied);
-        thresholds.push(thr);
-
-        var ev = eventsAbove(vals, hrs, thr, Math.max(1, Math.round(0.5 / hrs)));
-        ev = ev.filter(function (e) { return e.a >= m.a && e.a < m.b; });
-        var worst = 0, prevEnd = null;
-        ev.forEach(function (e) {
-          if (e.energyKwh > worst) worst = e.energyKwh;
-          if (e.hours > worstHours) worstHours = e.hours;
-          if (prevEnd != null) {
-            var gap = (e.a - prevEnd) * hrs;
-            if (gap < minGapH) minGapH = gap;
-          }
-          prevEnd = e.b;
-        });
-        events += ev.length;
-        if (worst > analytic) analytic = worst;
-        months.push({ month: m.month, peakKw: m.peakKw, thresholdKw: thr,
-                      shaveKw: applied, capped: applied < shaveKw,
-                      eventKwh: worst, events: ev.length });
-      });
-
-      var powerKw = months.length
-        ? months.reduce(function (mx, m) { return Math.max(mx, m.shaveKw); }, 0)
-        : shaveKw;
-      if (!(powerKw > 0)) return null;
-
-      /* SIZED BY SIMULATION. The analytic worst-event figure is kept only as
-         the search seed and as something to report against — it is what the
-         old sizer would have answered, and on the test profile it was 61%
-         optimistic. */
-      var sol = solveEnergy(vals, blocks, thresholds, powerKw, hrs, RTE,
-                            (analytic / D) || powerKw * 2);
-      var sim = sol.sim;
-
-      /* The meter's own peaks, which is what the utility bills. A battery
-         that misses its target is credited with what it did achieve. */
-      var achieved = months.map(function (m, k) {
-        return Math.max(0, m.peakKw - (sim.billedPeaks[k] != null ? sim.billedPeaks[k] : m.peakKw));
-      });
-      months.forEach(function (m, k) {
-        m.billedKw = sim.billedPeaks[k];
-        m.achievedKw = achieved[k];
-        m.heldTarget = sim.billedPeaks[k] <= m.thresholdKw + 1e-6;
-      });
-
-      var nameplateKwh = sol.usableKwh / D;
-      return {
-        shaveKw: shaveKw, powerKw: powerKw,
-        usableKwh: sol.usableKwh, nameplateKwh: nameplateKwh,
-        analyticKwh: analytic / D,
-        achievedShave: achieved,
-        durationH: powerKw > 0 ? sol.usableKwh / powerKw : 0,
-        events: events, worstEventH: worstHours,
-        throughputKwh: sim.dischargeKwh,
-        cyclesYr: sol.usableKwh > 0 ? sim.dischargeKwh / sol.usableKwh : 0,
-        breaches: sim.breaches, shortfallKwh: sim.shortfallKwh,
-        worstBreachKw: sim.worstBreachKw,
-        feasible: sol.feasible,
-        rechargeH: powerKw > 0 ? sol.usableKwh / powerKw : 0,
-        minGapH: isFinite(minGapH) ? minGapH : null,
-        rechargeTight: !sol.feasible,
-        monthsCapped: months.filter(function (m) { return m.capped; }).length,
-        months: months, basis: spans ? 'interval-12mo-dispatch' : 'interval-partial-dispatch'
-      };
-    }
-
-    return sweep(evaluate, annualPeak, peaks, tariff, {
-      basis: spans ? 'interval' : 'interval-partial',
-      confidence: spans ? 'measured' : 'measured (partial year)',
-      startMonth: spans ? spans[0].month : null,
-      startAssumed: opts.startMonth == null,
-      annualPeak: annualPeak, annualKwh: annualKwh, peaks: peaks,
-      loadFactor: annualPeak > 0 ? (annualKwh / (annualPeak * 8760)) : 0,
-      intervalMin: intervalMin
-    });
-  }
-
-  /* ================================================================== *
-   *  2.  TWELVE MONTHLY BILLS — real peaks, assumed shape              *
-   * ================================================================== */
-  function sizeFromMonthly(rows, opts) {
-    opts = opts || {};
-    var tariff = merge(defaultTariff(), opts.tariff);
-    var D = derate();
-    var peaks = rows.filter(function (r) { return +r.demandKw > 0; }).map(function (r, i) {
-      var kwh = +r.kwh || 0, peak = +r.demandKw;
-      var hoursInMonth = +r.hours || 730;
-      return { month: (r.month != null ? r.month : i), peakKw: peak, kwh: kwh,
-               avgKw: kwh > 0 ? kwh / hoursInMonth : 0,
-               loadFactor: kwh > 0 ? Math.min(1, kwh / (peak * hoursInMonth)) : null };
-    });
-    if (!peaks.length) return { ok: false, error: 'No months with a billed demand value.' };
-
-    var annualPeak = peaks.reduce(function (m, p) { return Math.max(m, p.peakKw); }, 0);
-    var annualKwh = peaks.reduce(function (s, p) { return s + p.kwh; }, 0);
-    var lf = peaks.filter(function (p) { return p.loadFactor != null; });
-    var avgLf = lf.length ? lf.reduce(function (s, p) { return s + p.loadFactor; }, 0) / lf.length : null;
-
-    /* A monthly bill has no shape, so peak DURATION has to be assumed.
-       Rather than bury one number, the assumption is explicit, defaults
-       from load factor, and the answer is reported across a band. */
-    var assumedH = +opts.peakHours || defaultPeakHours(avgLf);
-
-    function evaluate(shaveKw) {
-      var needKwh = 0, months = [];
-      peaks.forEach(function (m) {
-        /* You cannot shave below the month's average demand and still
-           recharge; that bound keeps the sweep physical. */
-        var maxShave = Math.max(0, m.peakKw - m.avgKw);
-        var applied = Math.min(shaveKw, maxShave);
-        var e = applied * assumedH;
-        if (e > needKwh) needKwh = e;
-        months.push({ month: m.month, peakKw: m.peakKw, thresholdKw: m.peakKw - applied,
-                      shaveKw: applied, eventKwh: e, capped: applied < shaveKw });
-      });
-      var nameplate = needKwh / D;
-      return {
-        shaveKw: shaveKw, usableKwh: needKwh, nameplateKwh: nameplate,
-        durationH: assumedH, assumedDuration: true,
-        events: null, worstEventH: assumedH,
-        throughputKwh: needKwh * 250,           /* nominal weekday cycling */
-        cyclesYr: 250, rechargeH: shaveKw > 0 ? nameplate / shaveKw : 0,
-        minGapH: null, rechargeTight: false,
-        months: months, basis: '12-month bills'
-      };
-    }
-
-    var res = sweep(evaluate, annualPeak, peaks, tariff, {
-      basis: rows.length >= 6 ? 'monthly' : 'single-bill',
-      confidence: rows.length >= 6 ? 'billed peaks, assumed duration' : 'single bill, low confidence',
-      annualPeak: annualPeak, annualKwh: annualKwh, peaks: peaks,
-      loadFactor: avgLf, assumedPeakHours: assumedH
-    });
-
-    /* Duration sensitivity: the same shave at 1, 2, 3 and 4 hours. This is
-       the honest way to present an assumed number — as a range whose width
-       is the cost of not having interval data. */
-    if (res.ok && res.recommended) {
-      res.sensitivity = [1, 2, 3, 4].map(function (h) {
-        var kwh = res.recommended.shaveKw * h / D;
-        return { hours: h, nameplateKwh: Math.round(kwh),
-                 capex: Math.round(kwh * tariff.capexPerKwh +
-                                   res.recommended.shaveKw * tariff.capexPerKw) };
-      });
-    }
-    return res;
-  }
-
-  function defaultPeakHours(lf) {
-    if (lf == null) return 2;
-    if (lf < 0.30) return 3;      /* spiky: short, sharp peaks but deep     */
-    if (lf < 0.50) return 2.5;
-    if (lf < 0.70) return 2;
-    return 1.5;                   /* flat load: the peak is barely a peak   */
-  }
-
-  /* ================================================================== *
-   *  3.  SWEEP AND RECOMMEND                                           *
-   *  Rather than picking a shave fraction out of the air, walk the      *
-   *  depth from shallow to deep and let the economics choose.           *
-   * ================================================================== */
-  /* `shave` is either one kW figure or a per-month array.
-     PER-MONTH MATTERS. A sweep step asks for, say, 690 kW, but a shoulder
-     month can only give up peak-minus-baseline before the battery has
-     nothing to recharge from — so evaluate() caps each month separately.
-     Crediting the full 690 kW against EVERY month bills the customer's
-     savings for a shave that month physically cannot take, and on the test
-     profile twelve of twelve months were capped while the savings line
-     claimed the deep number for all of them. */
-  function billedDemand(peaks, shave, ratchetPct) {
-    var per = Array.isArray(shave);
-    /* Ratchet: the billed demand is the greater of this month's peak and
-       a percentage of the highest peak in the trailing months. Sizing that
-       ignores a ratchet promises savings the tariff will not pay, because
-       one un-shaved peak sets the floor for a year. */
-    var after = peaks.map(function (p, i) {
-      var sh = per ? (+shave[i] || 0) : shave;
-      return Math.max(0, p.peakKw - sh);
-    });
-    if (!ratchetPct) return after;
-    var out = [];
-    for (var i = 0; i < after.length; i++) {
-      var hi = 0;
-      for (var j = 0; j < after.length; j++) if (j !== i && after[j] > hi) hi = after[j];
-      out.push(Math.max(after[i], hi * ratchetPct));
-    }
-    return out;
-  }
-
-  function sweep(evaluate, annualPeak, peaks, tariff, meta) {
-    var D = derate();
-    var baseBilled = billedDemand(peaks, 0, tariff.ratchetPct);
-    var baseDemandCost = baseBilled.reduce(function (s, kw) { return s + kw * tariff.demandChargePerKw; }, 0);
-
-    var candidates = [];
-    var steps = 24;
-    for (var i = 1; i <= steps; i++) {
-      var shaveKw = Math.round(annualPeak * (i / steps) * 0.6);   /* up to 60% of peak */
-      if (!shaveKw) continue;
-      if (candidates.length && candidates[candidates.length - 1].shaveKw === shaveKw) continue;
-      var c = evaluate(shaveKw);
-      if (!c) continue;
-
-      /* C-rate limit: a battery cannot deliver more power than its energy
-         and chemistry allow. If the sweep asks for it, grow the energy. */
-      var minKwhForPower = c.powerKw / tariff.maxC;
-      if (c.nameplateKwh < minKwhForPower) {
-        c.nameplateKwh = minKwhForPower;
-        c.usableKwh = c.nameplateKwh * D;
-        c.cRateLimited = true;
-      }
-
-      /* ── SAVINGS COME OFF THE METER, NOT OFF THE TARGET ───────────────
-         This used to bill against the shave the sweep ASKED for. The
-         dispatch reports the peak the meter actually saw in each month, and
-         that is what the utility charges on — so a system that misses its
-         target is credited with what it achieved and never with what it
-         intended. On the profile that exposed this, the difference between
-         those two readings was $107,069 promised against $41,424 real. */
-      var after = billedDemand(peaks, c.achievedShave, tariff.ratchetPct);
-      var afterCost = after.reduce(function (s, kw) { return s + kw * tariff.demandChargePerKw; }, 0);
-      c.demandSavingsYr = baseDemandCost - afterCost;
-
-      /* ── ARBITRAGE CANNOT EXCEED ONE CYCLE A DAY, AND IT COMPETES ─────
-         This multiplied the battery's usable energy by cyclesYr — a number
-         derived from DEMAND-SHAVING throughput, which on a peaky site
-         legitimately exceeds 365 equivalent cycles because a battery sized
-         for the worst event discharges partially on many smaller ones.
-         Feeding that back in as an arbitrage cycle count credited 455
-         cycles a year: 1.25x the physical ceiling, and it moved payback
-         from 7.8 years to 4.4, which is the number a customer signs on.
-
-         Two things are true and neither was modelled. A battery cannot
-         deliver more than one full cycle a day without a second cycle's
-         degradation and a tariff that pays for it. And arbitrage COMPETES
-         with demand shaving for the same stored energy rather than adding
-         to it — a battery working hard on demand charges has less room to
-         trade, not more.
-
-         So: an annual discharge ceiling of one cycle a day, minus what
-         demand shaving has already committed, priced at the spread. It is
-         a simple model and it is bounded by physics, which the old one was
-         not. */
-      var annualCeilingKwh = c.nameplateKwh * D * 365;
-      c.arbitrageKwh = (tariff.touSpread > 0)
-        ? Math.max(0, annualCeilingKwh - (c.throughputKwh || 0))
-        : 0;
-      c.arbitrageCycles = c.nameplateKwh > 0 ? c.arbitrageKwh / (c.nameplateKwh * D) : 0;
-      c.arbitrageYr = c.arbitrageKwh * tariff.touSpread;
-      c.savingsYr = c.demandSavingsYr + c.arbitrageYr;
-      c.capex = c.nameplateKwh * tariff.capexPerKwh + c.powerKw * tariff.capexPerKw;
-      c.paybackYr = c.savingsYr > 0 ? c.capex / c.savingsYr : null;
-      c.savingsPerCapex = c.capex > 0 ? c.savingsYr / c.capex : 0;
-      candidates.push(c);
-    }
-    if (!candidates.length) return { ok: false, error: 'Not enough load data to size anything.' };
-
-    /* Choosing the size.
-       Savings and cost both scale with depth, so "best return per dollar"
-       degenerates to "smallest battery" on a linear tariff — it would
-       recommend a token system on every site. What a developer actually
-       wants is the DEEPEST shave the tariff still pays for: maximum
-       absolute savings, subject to the payback target and to the battery
-       being able to recharge between events. Return per dollar is carried
-       alongside so the trade is visible rather than hidden. */
-    /* rechargeTight is NOT a veto any more. evaluate() now grows the battery
-       to carry the whole day when it cannot get back up between two events,
-       so a tight duty cycle is a fact about the system that was sized, not a
-       reason there is no system. Leaving it in this filter is what emptied
-       the eligible list on every two-peak site and sent the recommendation
-       to the smallest candidate in the sweep. */
-    var eligible = candidates.filter(function (c) {
-      return c.paybackYr != null && c.paybackYr <= tariff.targetPaybackYr;
-    });
-    var best = null;
-    if (eligible.length) {
-      eligible.forEach(function (c) { if (!best || c.savingsYr > best.savingsYr) best = c; });
-    } else {
-      /* Nothing meets the target. Show the best return anyway and say so,
-         rather than recommending nothing or pretending the target was met. */
-      /* BEST PAYBACK, NOT BEST RATIO. On a linear tariff "return per dollar"
-         is monotonically best at the smallest battery, so this branch used to
-         recommend a token system whenever the target was missed — the exact
-         degeneracy the eligible branch was written to avoid, reproduced in
-         its fallback. The honest answer when nothing hits the target is the
-         size that comes CLOSEST to hitting it. */
-      candidates.forEach(function (c) {
-        if (c.paybackYr == null) return;
-        if (!best || c.paybackYr < best.paybackYr) best = c;
-      });
-      if (!best) candidates.forEach(function (c) {
-        if (!best || c.savingsPerCapex > best.savingsPerCapex) best = c;
-      });
-    }
-
-    return {
-      ok: true, meta: meta, tariff: tariff, derate: D,
-      candidates: candidates, recommended: best,
-      metTarget: eligible.length > 0,
-      baseDemandCostYr: baseDemandCost,
-      annualPeak: annualPeak
-    };
-  }
-
-  /* ================================================================== *
-   *  4.  PARSERS AND HELPERS                                           *
-   * ================================================================== */
   function merge(a, b) {
     var o = {}, k;
     for (k in a) o[k] = a[k];
@@ -115016,24 +114492,23 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
   }
 
   function parseInterval(text) {
-    var lines = String(text || '').split(/[\r\n]+/), vals = [];
-    lines.forEach(function (ln) {
-      if (!ln.trim()) return;
-      var parts = splitRow(ln);
-      for (var i = parts.length - 1; i >= 0; i--) {
-        var v = parseFloat(String(parts[i]).replace(/[$,"\s]/g, ''));
-        if (isFinite(v)) { vals.push(v); return; }
+    var lines=String(text||'').split(/[\r\n]+/),vals=[],column=null;
+    function number(value){var clean=String(value==null?'':value).replace(/[$,"\s]/g,'');return clean!=='' && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(clean)?Number(clean):NaN;}
+    lines.forEach(function(line){
+      if(!line.trim())return;
+      var parts=splitRow(line);
+      if(column==null){
+        for(var i=parts.length-1;i>=0;i--){if(isFinite(number(parts[i]))){column=i;break;}}
+        if(column==null)return; // leading nonnumeric header
       }
-    });
-    return vals;
+      vals.push(number(parts[column])); // invalid data stays invalid; never substitute a timestamp
+    });return vals;
   }
 
   function detectInterval(n) {
-    /* 35,040 = 15-minute year, 8,760 = hourly year. */
-    if (Math.abs(n - 35040) < 400) return 15;
-    if (Math.abs(n - 8760) < 200) return 60;
-    if (Math.abs(n - 17520) < 300) return 30;
-    return n > 20000 ? 15 : 60;
+    var steps=[5,10,15,20,30,60];
+    for(var i=0;i<steps.length;i++){var per=1440/steps[i];if(n===365*per||n===366*per)return steps[i];}
+    return 60; // annual engine rejects incomplete data; standalone tool accepts explicit interval lengths
   }
 
   /* Round to something orderable rather than a calculated decimal. */
@@ -115076,19 +114551,14 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     };
   }
 
-  window.OmegaBessSizerEngine = {
-    MONTHS: MONTHS, defaultTariff: defaultTariff, derate: derate,
-    eventsAbove: eventsAbove, monthSpans: monthSpans,
-    sizeFromInterval: sizeFromInterval, sizeFromMonthly: sizeFromMonthly,
-    billedDemand: billedDemand, defaultPeakHours: defaultPeakHours,
-    parseInterval: parseInterval, splitRow: splitRow, detectInterval: detectInterval,
-    roundProduct: roundProduct, summarize: summarize,
-    /* Exported so the sizing can be checked from outside the thing that did
-       it — the regression suite re-dispatches the recommendation through a
-       separately written loop, which is the only test that would catch the
-       engine agreeing with itself. */
-    dispatchYear: dispatchYear, solveEnergy: solveEnergy
-  };
+
+function request(mode, data, opts) {
+ var user=window.firebase && firebase.auth().currentUser;
+ if(!user) return Promise.reject(new Error('Sign in to run battery sizing.'));
+ return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({mode:mode,data:data,opts:opts})});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Sizing service unavailable');return j;});});
+}
+window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],defaultTariff:defaultTariff,parseInterval:parseInterval,splitRow:splitRow,detectInterval:detectInterval,roundProduct:roundProduct,summarize:summarize,
+ sizeFromInterval:function(v,o){return request('interval',v,o);},sizeFromMonthly:function(v,o){return request('monthly',v,o);}};
 })();
 /* ====================================================================== *
  *  OMEGA BESS SIZER  —  UI layer                                         *
@@ -115272,7 +114742,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     }).join('');
 
     var sweepRows = r.candidates.map(function (c) {
-      var on = c === r.recommended;
+      var on = c.shaveKw === r.recommended.shaveKw;
       return '<tr' + (on ? ' style="background:var(--hl-dim)"' : '') + '>' +
         '<td class="e3-num">' + n0(c.shaveKw) + '</td>' +
         '<td class="e3-num">' + n0(c.nameplateKwh) + '</td>' +
@@ -115292,6 +114762,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
         '<div class="e5-stat"><label>Demand cost, no battery</label><b>' + money(r.baseDemandCostYr) + '</b></div>' +
         '<div class="e5-stat"><label>Basis</label><b style="font-size:11px">' + esc(m.confidence) + '</b></div>' +
       '</div>' +
+      '<div class="e3-note info">Dispatch starts empty. Arbitrage is excluded without a time-of-use schedule. Ratchets use observed prior months only. Monthly-bill results assume peak duration.</div>' +
       '<div class="d4-grp" style="margin-top:12px">By month</div>' +
       '<div class="e3-tblwrap" style="max-height:26vh"><table class="e3-tbl"><thead><tr>' +
       '<th>Month</th><th>Peak kW</th><th>kWh</th><th>Avg kW</th><th>LF</th>' +
@@ -115415,7 +114886,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
     if (ta) ta.addEventListener('change', function () { S.intervalText = ta.value; render(); });
   }
 
-  function run() {
+  async function run() {
     try {
       if (S.mode === 'interval') {
         var vals = E.parseInterval(S.intervalText);
@@ -115429,7 +114900,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
            under the wrong month, and demand charges are billed monthly. */
         var start = (typeof _detect8760Start === 'function')
           ? _detect8760Start(S.intervalText) : null;
-        S.result = E.sizeFromInterval(vals, {
+        S.result = await E.sizeFromInterval(vals, {
           intervalMin: E.detectInterval(vals.length), tariff: S.tariff,
           startMonth: start ? start.month : null
         });
@@ -115438,7 +114909,7 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
         var rows = S.rows.filter(function (r) { return +r.demandKw > 0; });
         if (S.mode === 'single') rows = rows.slice(0, 1);
         if (!rows.length) { alert('Enter at least one month with a billed demand in kW.'); return; }
-        S.result = E.sizeFromMonthly(rows, { tariff: S.tariff, peakHours: S.peakHours });
+        S.result = await E.sizeFromMonthly(rows, { tariff: S.tariff, peakHours: S.peakHours });
       }
       if (!S.result.ok) { alert(S.result.error || 'Could not size from this data.'); return; }
       S.tab = 'size';
@@ -140159,6 +139630,12 @@ function classifyShape(sh, ctx){
  *  −θ; getting that sign wrong mirrors every rotated table on the site.
  * ═══════════════════════════════════════════════════════════════════════ */
 
+function elementBox(e){
+  var w=+e.w||60, h=w;
+  if(e.type==='evgear') h=+e.h||Math.round(w*(+e.aspect||0.72));
+  else if(e.type==='bess-asm') h=Math.round(w*0.55);
+  return {x:+e.x||0,y:+e.y||0,w:w,h:h};
+}
 function readSite(){
   var p = ppf();
   var out = { items:[], calibrated:isCalibrated(), ppf:p,
@@ -140229,7 +139706,7 @@ function readSite(){
   for(i=0;i<shapes.length;i++){ b=placedBox(shapes[i]); if(b) grow(b.x,b.y,b.w,b.h); }
   for(i=0;i<elements.length;i++){
     var e=elements[i]; if(!e) continue;
-    var ew=+e.w||40; grow(+e.x||0, +e.y||0, ew, ew);
+    var eb=elementBox(e); grow(eb.x, eb.y, eb.w, eb.h);
   }
   if(!isFinite(minx)){ minx=0;miny=0;maxx=600;maxy=400; }
   var cx=(minx+maxx)/2, cy=(miny+maxy)/2;
@@ -140338,8 +139815,8 @@ function readSite(){
       it.poly = ring.map(function(q){ return { x:fx(q.x), z:fz(q.y) }; });
     }
     if(sh.kind==='bespad' || sh.kind==='assembly'){
-      it.wf = (+sh.lf||20); it.lf = (+sh.wf||8);
-      if(sh.cx!=null){ it.x = fx(sh.cx); it.z = fz(sh.cy); }
+      it.wf = (+sh.lf||20)*(+sh.scale||1); it.lf = (+sh.wf||8)*(+sh.scale||1);
+      if(sh.cx!=null){ it.x = fx(sh.cx+(+sh.tx||0)); it.z = fz(sh.cy+(+sh.ty||0)); }
     }
     out.items.push(it);
     /* Compute is a LOAD. Adding its nameplate to the generation total is
@@ -140355,22 +139832,34 @@ function readSite(){
   for(i=0;i<elements.length;i++){
     var ele = elements[i]; if(!ele) continue;
     var ce = classifyElement(ele);
-    var wpx = +ele.w || 40;
+    var eb = elementBox(ele), wpx = eb.w;
     /* Real footprints where the app knows them, so a transformer is 6x5 ft
        and not a 60 px square that happens to be whatever the drop size was. */
-    var fw = wpx/p, fl = wpx/p;
+    var fw = wpx/p, fl = eb.h/p;
     try{
       var gf = (typeof EQ_FOOTPRINT_FT!=='undefined') ? EQ_FOOTPRINT_FT[ele.eqId] : null;
       var dc = (typeof DC_CATALOG!=='undefined') ? DC_CATALOG[ele.eqId] : null;
-      if(dc){ fw = dc.lf; fl = dc.wf; }
-      else if(gf){ fw = gf.lf; fl = gf.wf; }
+      if(dc){ fw = dc.lf*(+ele._modelScale||1); fl = dc.wf*(+ele._modelScale||1); }
+      else if(gf){ fw = gf.lf*(+ele._modelScale||1); fl = gf.wf*(+ele._modelScale||1); }
     }catch(e2){}
     out.items.push(mkItem(ele, 'element', ce, {
-      x: fx((+ele.x||0) + wpx/2), z: fz((+ele.y||0) + wpx/2),
+      x: fx(eb.x + eb.w/2), z: fz(eb.y + eb.h/2),
       wf: fw, lf: fl, rot: +ele.rot||0
     }));
   }
 
+  /* Apply the same shape translation/scale to authored outlines and tables.
+     Rotation remains on the placement wrapper, so it is applied once. */
+  out.items.forEach(function(item){
+    if(item.src!=='shape')return;
+    var ref=item.ref,scale=+ref.scale||1,tx=+ref.tx||0,ty=+ref.ty||0;
+    if(scale===1&&!tx&&!ty)return;
+    var raw=shapeBox(ref);if(!raw)return;
+    var ox=raw.x+raw.w/2,oy=raw.y+raw.h/2;
+    function point(q){return {x:fx(ox+(q.x*p+cx-ox)*scale+tx),z:fz(oy+(q.z*p+cy-oy)*scale+ty)};}
+    if(item.poly)item.poly=item.poly.map(point);
+    if(item.tables)item.tables=item.tables.map(function(t){var q=point(t);q.wf=t.wf*scale;q.lf=t.lf*scale;q.a=t.a;return q;});
+  });
   /* --- conduits ------------------------------------------------------ */
   out.conduits = [];
   var cds = S_.conduits || [];
@@ -140460,11 +139949,10 @@ function readSite(){
         var ba = { x:A.x-A.wf/2, y:A.z-A.lf/2, w:A.wf, h:A.lf };
         var bb = { x:B.x-B.wf/2, y:B.z-B.lf/2, w:B.wf, h:B.lf };
         if(overlapFrac(ba, bb) > 0.6 && overlapFrac(bb, ba) > 0.6){
-          B.hidden = true;
+          B.overlapReview = true;
           B.dupeOf = A.label || A.kind;
           out.warnings.push('"' + (B.label||B.kind) + '" sits on top of "'
-            + (A.label||A.kind) + '" and looks like a duplicate of it, so it '
-            + 'is hidden. Turn it back on in the list below if both are real.');
+            + (A.label||A.kind) + '". Both remain visible; review whether this is an intentional overlap or a duplicate.');
         }
       }
     }
@@ -140518,6 +140006,7 @@ function mkItem(ref, src, c, geo){
      shapes and elements come through this one funnel, so carrying it here
      covers both rather than needing the same line in two places. */
   if(ref && ref.elevFt != null && isFinite(+ref.elevFt)) it.elevFt = +ref.elevFt;
+  if(ref && ref._modelHeightFt>0)it.heightFt=+ref._modelHeightFt;
 
   if(!it.label) it.label = ARCH[it.arch] ? ARCH[it.arch].label : it.arch;
   return it;
@@ -141716,7 +141205,7 @@ function buildSwitchgear(it, arch){
 /* ---- CIVIL ---------------------------------------------------------- */
 function buildBuilding(it, arch){
   var g = new THREE.Group();
-  var w = Math.max(6, it.wf), d = Math.max(6, it.lf);
+  var w = Math.max(0.1, it.wf), d = Math.max(0.1, it.lf);
   var h = it.heightFt || arch.h;
   var b = box(w, h, d, MAT.wall); b.position.y = h/2; g.add(b);
   var parapet = box(w+0.4, 0.9, d+0.4, MAT.roofDeck); parapet.position.y = h+0.3; g.add(parapet);
@@ -142815,6 +142304,14 @@ function populate(site){
     var wrap = new THREE.Group();
     wrap.position.set(it.x, elev, it.z);
     wrap.rotation.y = -(it.rot||0) * Math.PI/180;   /* screen-clockwise -> -Y */
+    if(it.ref._modelHeightFt>0 && it.arch!=='building'){
+      var bounds=new THREE.Box3().setFromObject(g),height=bounds.max.y-bounds.min.y;
+      if(height>0)g.scale.y*=it.ref._modelHeightFt/height;
+    }
+    if(it.ref._modelColor){g.traverse(function(mesh){if(mesh.isMesh&&mesh.material){
+      function tint(material){var m=material.clone();if(m.color)m.color.set(it.ref._modelColor);return m;}
+      mesh.material=Array.isArray(mesh.material)?mesh.material.map(tint):tint(mesh.material);
+    }});}
     wrap.add(g);
     wrap.userData.itemId = it.id;
     var lg = V.layers[arch.group] || V.root;
@@ -142880,16 +142377,21 @@ function updateCamera(){
 }
 
 function attachControls(dom){
-  var mode = null, lx = 0, ly = 0, pinch = 0;
+  var mode = null, lx = 0, ly = 0, pinch = 0, sx=0,sy=0,dragObject=null,dragStart=null,dragBase=null,dragEnd=null;
 
   function down(e){
+    if(mode==='model'&&e.touches){e.preventDefault();return;}
     var t = e.touches;
     if(t && t.length === 2){
       pinch = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
       mode = 'pinch'; return;
     }
     var p = t ? t[0] : e;
-    lx = p.clientX; ly = p.clientY;
+    lx = p.clientX; ly = p.clientY;sx=lx;sy=ly;
+    if(!t && e.button===0 && V.modelMove){
+      dragObject=pickModelObject(e);dragStart=modelGroundPoint(e);
+      if(dragObject&&dragStart){dragBase=dragObject.position.clone();dragEnd=dragStart;mode='model';if(dom.setPointerCapture)dom.setPointerCapture(e.pointerId);return;}
+    }
     mode = (e.button === 2 || e.shiftKey || (t && t.length === 3)) ? 'pan' : 'orbit';
     if(!t && dom.setPointerCapture && e.pointerId != null){
       try{ dom.setPointerCapture(e.pointerId); }catch(err){}
@@ -142897,6 +142399,9 @@ function attachControls(dom){
   }
   function move(e){
     if(!mode) return;
+    if(mode==='model'){
+      var point=modelGroundPoint(e);if(point){dragEnd=point;dragObject.position.set(dragBase.x+point.x-dragStart.x,dragBase.y,dragBase.z+point.z-dragStart.z);highlightModel();}e.preventDefault();return;
+    }
     var t = e.touches;
     if(mode === 'pinch' && t && t.length === 2){
       var d = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
@@ -142920,8 +142425,13 @@ function attachControls(dom){
     updateCamera();
     if(e.preventDefault) e.preventDefault();
   }
-  function up(){ mode = null; pinch = 0; }
+  function up(event){
+    if(mode==='model'&&dragEnd&&dragStart){try{applyModelEdit(V.selectedModel,{east:dragEnd.x-dragStart.x,north:dragStart.z-dragEnd.z});}catch(e){alert(e.message);reload();}}
+    else if(mode==='orbit'&&event&&Math.hypot(event.clientX-sx,event.clientY-sy)<5)pickModelObject(event);
+    mode=null;pinch=0;dragObject=null;dragStart=null;dragEnd=null;
+  }
 
+  dom.addEventListener('pointercancel',function(){if(mode==='model')reload();mode=null;dragStart=null;dragEnd=null;});
   dom.addEventListener('pointerdown', down);
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
@@ -143144,6 +142654,7 @@ function shell(){
   };
 
   el('ov-close').onclick   = close;
+  var ab=document.createElement('button');ab.className='ov-b';ab.textContent='Model checks';ab.onclick=showModelAudit;el('ov-refresh').parentNode.insertBefore(ab,el('ov-refresh'));
   el('ov-refresh').onclick = function(){ reload(); };
   el('ov-snap').onclick    = snapshot;
   el('ov-airender').onclick = function(){
@@ -143352,7 +142863,7 @@ function paintSide(){
     }
     if(it.dupeOf){
       h += '<div class="ov-im" style="margin-top:3px;color:#E0B45C">'
-        +  'Hidden: overlaps \u201c' + esc(it.dupeOf) + '\u201d</div>';
+        +  'Review overlap with \u201c' + esc(it.dupeOf) + '\u201d</div>';
     }
     /* Show what was actually built against what the kW calls for, so the
        coverage can be checked at a glance instead of eyeballed. */
@@ -143376,8 +142887,9 @@ function paintSide(){
     h += '</div>';
   });
 
-  side.innerHTML = h;
+  side.innerHTML = modelInspector()+h;
   wireSide();
+  wireModelInspector();
 }
 
 /* Day-of-year -> a readable date. Matches the app's own cumulative-days
@@ -143767,6 +143279,7 @@ function reload(){
   applySun(span);
   paintSide();
   updScaleLine();
+  highlightModel();
   V.needsRender = true;
 }
 
@@ -143864,6 +143377,9 @@ function injectButton(){
       if(typeof rbRun === 'function') rbRun(open); else open();
     };
     body.appendChild(b);
+    var auditButton=document.createElement('button');auditButton.className='rbtn';auditButton.id='ov-model-checks';
+    auditButton.innerHTML='<span class="rb-ico">&#10003;</span><span class="rb-lbl">2D / 3D<br>Model Checks</span>';
+    auditButton.onclick=showModelAudit;body.appendChild(auditButton);
     return true;
   }catch(e){ return false; }
 }
@@ -143891,6 +143407,152 @@ if(document.readyState === 'loading')
 else watchRibbon();
 
 /* Public surface. */
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+function modelAudit(){
+  var site=readSite(), problems=[];
+  if(!site.calibrated) problems.push('Map scale is uncalibrated.');
+  site.items.forEach(function(it){
+    if(it.hidden) return;
+    var name=it.label||it.id;
+    if(!isFinite(it.x)||!isFinite(it.z)||!(it.wf>0)||!(it.lf>0)) problems.push(name+': invalid geometry.');
+    if(it.approx) problems.push(name+': footprint uses an approximate bounding box.');
+    if(it.src==='element'){
+      var b=elementBox(it.ref), dw=b.w/site.ppf, dh=b.h/site.ppf;
+      if(Math.abs(dw-it.wf)>0.1||Math.abs(dh-it.lf)>0.1) problems.push(name+': 2D symbol '+dw.toFixed(2)+' x '+dh.toFixed(2)+' ft differs from 3D footprint '+it.wf.toFixed(2)+' x '+it.lf.toFixed(2)+' ft.');
+    }
+  });
+  var st=typeof S!=='undefined'?S:null;
+  if(st){
+    (st.elements||[]).forEach(function(e){
+      if(!isFinite(+e.x)||!isFinite(+e.y)||!(+e.w>0))problems.push((e.label||e.id)+': invalid stored 2D position or width.');
+    });
+    (st.conduits||[]).forEach(function(c){
+      var pts=c.pts||[],length=0;
+      if(pts.length<2)problems.push('Conduit '+c.id+': fewer than two route points.');
+      for(var i=0;i<pts.length;i++){
+        if(!isFinite(+pts[i].x)||!isFinite(+pts[i].y))problems.push('Conduit '+c.id+': invalid route coordinate.');
+        if(i)length+=Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y);
+      }
+      if(pts.length>=2&&length===0)problems.push('Conduit '+c.id+': zero-length route.');
+    });
+  }
+  return {calibrated:site.calibrated,items:site.items.length,issues:problems,warnings:site.warnings,
+    scope:'Geometry consistency only. Check dimensions, heights, clearances, electrical design and source data before engineering review.'};
+}
+function showModelAudit(){
+ var result=modelAudit();
+ alert('Model checks: '+result.items+' items\n\n'+(result.issues.length?result.issues.join('\n'):'No issues in the geometry checks performed.')+'\n\n'+result.scope);
+}
+
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+/* Native model edits operate on the existing drawing objects. */
+function selectedModelItem(){
+ var site=readSite();return site.items.filter(function(it){return it.id===V.selectedModel;})[0]||null;
+}
+function applyModelEdit(id,change){
+ var site=readSite();
+ if(!site.calibrated)throw new Error('Calibrate the site map before editing in feet.');
+ var item=site.items.filter(function(it){return it.id===id;})[0];
+ if(!item)throw new Error('Select an object first.');
+ var ref=item.ref,p=site.ppf;
+ ['east','north','rotation','scale','height','elevation'].forEach(function(k){if(change[k]!=null&&!isFinite(change[k]))throw new Error('Enter a finite '+k+'.');});
+ if(change.scale!=null&&(change.scale<=0||change.scale>100))throw new Error('Scale must be greater than zero and at most 100.');
+ if(change.height!=null&&(change.height<=0||change.height>3000))throw new Error('Model height must be greater than zero and below 3,000 ft.');
+ if(change.elevation!=null&&change.elevation<0)throw new Error('Base elevation cannot be negative.');
+ if(change.color!=null&&!/^#[0-9a-f]{6}$/i.test(change.color))throw new Error('Choose a valid color.');
+ if(!S.history||!S.history.length){if(typeof pushHist==='function')pushHist();}
+ var dx=(change.east||0)*p,dy=-(change.north||0)*p;
+ if(item.src==='element'){
+  var old=elementBox(ref), factor=change.scale==null?1:change.scale;
+  ref.w=old.w*factor;
+  if(ref.type==='evgear')ref.h=old.h*factor;
+  ref.x=old.x+dx+(old.w-ref.w)/2;
+  ref.y=old.y+dy+(old.h-elementBox(ref).h)/2;
+  // Catalog-based 3D dimensions scale from their original footprint.
+  ref._modelScale=(+ref._modelScale||1)*factor;
+ }else{
+  ref.tx=(+ref.tx||0)+dx;ref.ty=(+ref.ty||0)+dy;
+  if(change.scale!=null)ref.scale=(+ref.scale||1)*change.scale;
+ }
+ if(change.rotation!=null)ref.rot=((change.rotation%360)+360)%360;
+ if(change.height!=null)ref._modelHeightFt=change.height;
+ if(change.elevation!=null)ref.elevFt=change.elevation;
+ if(change.color!=null)ref._modelColor=change.color;
+ // Preserve map anchors and bonded conduit endpoints using the editor paths.
+ if(item.src==='element'){
+  if(typeof renderEl==='function')renderEl(ref);
+  if(typeof _geoStampElement==='function')_geoStampElement(ref);
+ }else{
+  if(typeof renderShape==='function')renderShape(ref);
+  if(typeof _geoStampShape==='function')_geoStampShape(ref);
+ }
+ if(typeof updateAttached==='function')updateAttached(ref.id);
+ if(typeof _geoStampAll==='function')_geoStampAll();
+ if(typeof pushHist==='function')pushHist();
+ if(typeof _setSaved==='function')_setSaved('unsaved');
+ reload();return ref;
+}
+function pickModelObject(event){
+ if(!V.camera||!V.root)return null;
+ var rect=V.renderer.domElement.getBoundingClientRect(), ray=new THREE.Raycaster();
+ ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),V.camera);
+ var hits=ray.intersectObjects(V.root.children,true);
+ for(var i=0;i<hits.length;i++){
+  var obj=hits[i].object;
+  while(obj&&!obj.userData.itemId)obj=obj.parent;
+  if(obj){V.selectedModel=obj.userData.itemId;paintSide();highlightModel();return obj;}
+ }
+ return null;
+}
+function highlightModel(){
+ if(V.modelOutline && V.modelOutlineId===V.selectedModel){
+  var target=null;V.root.traverse(function(o){if(o.userData.itemId===V.selectedModel)target=o;});
+  if(target){V.modelOutline.setFromObject(target);V.needsRender=true;return;}
+ }
+ if(V.modelOutline){V.scene.remove(V.modelOutline);V.modelOutline.geometry.dispose();V.modelOutline.material.dispose();V.modelOutline=null;}
+ if(!V.root||!V.selectedModel)return;
+ V.root.traverse(function(o){if(o.userData.itemId===V.selectedModel){V.modelOutline=new THREE.BoxHelper(o,0x60a5fa);V.scene.add(V.modelOutline);V.modelOutlineId=V.selectedModel;}});
+ V.needsRender=true;
+}
+function modelGroundPoint(event){
+ event=event.touches&&event.touches.length?event.touches[0]:event;
+ var rect=V.renderer.domElement.getBoundingClientRect(),ray=new THREE.Raycaster();
+ ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),V.camera);
+ return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),new THREE.Vector3());
+}
+function modelInspector(){
+ var it=selectedModelItem(),h='<div class="ov-h">Modeling</div>';
+ h+='<div class="ov-vb"><button class="ov-b" id="ov-model-undo">Undo</button><button class="ov-b" id="ov-model-redo">Redo</button><button class="ov-b" id="ov-add-block">Add block</button><button class="ov-b" id="ov-model-move">'+(V.modelMove?'Move: on':'Move: off')+'</button></div>';
+ h+='<div class="ov-hint">Click an object to select it. Turn Move on to drag on the ground plane. Rotate, scale and change height below. Edits update the 2D drawing.</div>';
+ if(!it)return h+'<div class="ov-hint">No object selected.</div>';
+ h+='<div style="color:#93c5fd;margin:8px 0">'+esc(it.label||it.id)+'</div><div class="ov-im">'+it.wf.toFixed(2)+' × '+it.lf.toFixed(2)+' ft footprint</div>';
+ function field(id,label,value,step){return '<label class="ov-row">'+label+'<input id="'+id+'" type="number" step="'+(step||.1)+'" value="'+value+'" style="width:80px;margin-left:auto;color:#fff;background:#23252b;border:1px solid #555;padding:5px"></label>';}
+ h+=field('ov-m-east','Move east (ft)',0)+field('ov-m-north','Move north (ft)',0)+field('ov-m-rot','Rotation (degrees)',it.rot,1)+field('ov-m-scale','Uniform scale',1,.05)+field('ov-m-height','Model height (ft)',it.ref._modelHeightFt||ARCH[it.arch].h||10)+field('ov-m-elev','Base elevation (ft)',it.elevFt||0);
+ h+='<label class="ov-row">Object color<input id="ov-m-color" type="color" value="'+(it.ref._modelColor||'#94a3b8')+'" style="margin-left:auto"></label>';
+ h+='<button class="ov-b" id="ov-model-apply" style="width:100%;margin:8px 0">Apply to 2D + 3D</button>';
+ return h;
+}
+function wireModelInspector(){
+ var u=el('ov-model-undo');if(u)u.onclick=function(){if(typeof undoLast==='function')undoLast();reload();};
+ var r=el('ov-model-redo');if(r)r.onclick=function(){if(window.OmegaEdit)window.OmegaEdit.redo();reload();};
+ var add=el('ov-add-block');if(add)add.onclick=function(){
+  var site=readSite();if(!site.calibrated){alert('Calibrate the map first.');return;}
+  var p=site.ppf,x=site.originPx.x,y=site.originPx.y;
+  var sh={id:typeof uid==='function'?uid():'model-'+Date.now(),kind:'rect',pts:[{x:x,y:y},{x:x+10*p,y:y+10*p}],rot:0,scale:1,tx:0,ty:0,label:'Model block',_visArch:'building',_modelHeightFt:10,_modelPrimitive:true};
+  S.shapes.push(sh);renderShape(sh);if(typeof _geoStampShape==='function')_geoStampShape(sh);if(typeof pushHist==='function')pushHist();if(typeof _setSaved==='function')_setSaved('unsaved');V.selectedModel=sh.id;reload();
+ };
+ var move=el('ov-model-move');if(move)move.onclick=function(){V.modelMove=!V.modelMove;paintSide();};
+ ['ov-m-height','ov-m-elev','ov-m-color'].forEach(function(id){var input=el(id);if(input)input.onchange=function(){input.setAttribute('data-changed','yes');};});
+ var apply=el('ov-model-apply');if(apply)apply.onclick=function(){try{
+  function n(id){return Number(el(id).value);}
+  var change={east:n('ov-m-east'),north:n('ov-m-north'),rotation:n('ov-m-rot'),scale:n('ov-m-scale')};
+  if(el('ov-m-height').getAttribute('data-changed')==='yes')change.height=n('ov-m-height');
+  if(el('ov-m-elev').getAttribute('data-changed')==='yes')change.elevation=n('ov-m-elev');
+  if(el('ov-m-color').getAttribute('data-changed')==='yes')change.color=el('ov-m-color').value;
+  applyModelEdit(V.selectedModel,change);
+ }catch(e){alert(e.message);}};
+}
+
 window.OmegaSiteVis = {
   open: open,
   close: close,
@@ -143902,6 +143564,9 @@ window.OmegaSiteVis = {
   refresh: reload,
   snapshot: snapshot,
   read: readSite,
+  modelAudit: modelAudit,
+  applyModelEdit: applyModelEdit,
+  elementBox: elementBox,
   /* Inspect what the classifier decided and why, without opening the view. */
   audit: function(){
     var s = readSite(), rows = [];

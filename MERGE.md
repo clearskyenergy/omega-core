@@ -268,3 +268,35 @@ The design named the save function `_saveProject`; the file has `saveProject`
 (async, wrapped on `window` twice) — `scripts/tests/tautopilot.js` checks
 every name the module calls so the next rename is caught in node, not on a
 site.
+
+## Editor, battery sizing and fiber optimization — 2026-09-13
+
+The editor in this snapshot incorporates the supplied September 12
+`OMEGA-editor-full-pass.html` before applying this pass. The repository ZIP
+remains the integration baseline for all other files.
+
+- Native Site Visualizer changes operate on the existing drawing state:
+  selection, move, rotation, uniform scale, model height/elevation/color,
+  a native rectangular model block, and existing undo/redo controls.
+  No Blender export is included. See `docs/OPTIMIZATION-REVIEW.md` for scope.
+- Rectangular equipment uses its actual rendered height for 3D centering;
+  shape outlines/table positions follow the same translation and scale as 2D.
+  Overlap detection reports conflicts instead of hiding potentially real objects.
+- The dedicated editor BESS engine moved from browser code to
+  `api/_lib/bess-engine.js`. The standalone Battery Sizer's optimization,
+  dispatch, economics, and associated report calculations moved to
+  `api/_lib/battery-tool-engine.js`. Both use `POST /api/bess-size` with
+  Firebase authentication and billing access matching the Battery Sizer's
+  existing Standard tool tier. Deploy the API and both HTML pages together.
+- Legacy claim-checking and ancillary finance calculations elsewhere in the
+  editor/other finance tools are outside this pass. The pre-existing broader
+  browser-logic migration backlog above is not marked complete.
+- Grid Atlas includes licensed/imported routes in nearest terrestrial fiber
+  analysis. GeoJSON import, source health, stale-response guards, fiber-specific
+  OSM tags, and an authenticated same-origin licensed proxy were added/fixed.
+  No national licensed route dataset is bundled. Existing Grid Atlas heuristic
+  scoring remains a separate migration/validation item; proximity is not serviceability.
+
+Run `npm run test:optimizer`. No database migration, live deployment, or
+production writes were performed. Live browser and carrier-source acceptance
+remain required. The older finance-portal copy of Battery Sizer is unchanged.
