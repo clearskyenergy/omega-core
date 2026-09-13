@@ -3573,21 +3573,30 @@ function mdInline(t){
 }
 async function loadVaultDoc(file, elId, countId){
   const host=el(elId); if(!host) return;
-  if(!brainOn){
-    host.innerHTML='<div class="vp">The neural link is off, so the vault '
-      +'cannot be read from here. Start JARVIS on the Mac.</div>';
-    if(el(countId)) el(countId).textContent='';
-    return;
-  }
+  /* Ask the brain directly rather than trusting `brainOn`. That flag is set by
+     the status poll, which needs a signed-in session — so on any page where
+     the poll has not run yet it reads false while the link is perfectly up,
+     and this panel would report "the neural link is off" to someone looking
+     straight at a running one. A panel that can check for itself should. */
   try{
-    const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(file),{cache:'no-store'});
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),4000);
+    const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(file),
+                        {cache:'no-store',signal:c.signal});
+    clearTimeout(tm);
     const j=await r.json();
     if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
     host.innerHTML=vaultRender(j.text);
     const open=(j.text.match(/^\s*-\s*\[ \]/gm)||[]).length;
     if(el(countId)) el(countId).textContent=open?(open+' open'):'';
   }catch(e){
-    host.innerHTML='<div class="vp">Could not read it: '+esc(e.message||e)+'</div>';
+    /* Unreachable and "note missing" are different problems with different
+       fixes, so they get different sentences. */
+    const dead=/abort|failed|networkerror|load failed/i.test(String(e&&e.message||e));
+    host.innerHTML='<div class="vp">'+(dead
+      ? 'The neural link is not answering on this machine, so the vault cannot '
+        +'be read from here. Start JARVIS on the Mac.'
+      : 'Could not read it: '+esc(e.message||e))+'</div>';
+    if(el(countId)) el(countId).textContent='';
   }
 }
 function loadOpenWork(){
