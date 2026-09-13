@@ -19,6 +19,7 @@ global.localStorage = { getItem: function (k) { return LS.hasOwnProperty(k) ? LS
 global.location = { hash: '', pathname: '/', href: '' };
 global.SKY_FUND_SAMPLES = require(path.join(__dirname, '..', '..', 'portals', 'skyfund', 'samples.js'));
 global.SKYFUND_PROJ = B.buildProj();
+global.SKYFUND_DRAFT = B.DRAFT;
 require(path.join(__dirname, '..', 'skyfund-sandbox', 'shim.js'));
 
 console.log('build');
@@ -28,6 +29,10 @@ ok(page.indexOf('<script src="sandbox.js"></script>') > 0 && page.indexOf('<scri
 ok(!/(src|href)="\/[^\/]/.test(page), 'no root-relative src or href remains (prose in comments may still name paths)');
 ok(/<title>SkyFund Sandbox<\/title>/.test(page), 'titled as the sandbox');
 ok(page.indexOf("var swUrl = 'sw.js', swScope = './';") > 0 && page.indexOf('/portals/skyfund/sw.js') < 0, 'the service worker is registered as ./sw.js');
+var sponsorPage = B.transformSponsor(require('fs').readFileSync(path.join(__dirname, '..', '..', 'portals', 'skyfund', 'sponsor.html'), 'utf8'));
+ok(sponsorPage.indexOf('<script src="sandbox.js"></script>') > 0 && !/www\.gstatic\.com\/firebasejs/.test(sponsorPage), 'the sponsor console boots on the shim, not the SDK');
+ok(!/\/portals\/skyfund\//.test(sponsorPage) && sponsorPage.indexOf('href="index.html"') > 0, 'its links point inside the folder');
+ok(global.SKYFUND_PROJ[B.DRAFT.id] && B.DRAFT.status === 'draft', 'the fifth listing is priced at build time and ships as a draft');
 var P = global.SKYFUND_PROJ['sample-compute-1'];
 ok(P.perUnitYears.length === 10 && near(P.perUnitYears[1], 14.4 * 1.02, 1e-9), 'per-unit table is the engine\'s: $14.69 in year 2 for one $100 unit');
 ok(near(P.irrPct, IM.headline(global.SKY_FUND_SAMPLES[0]).irrPct, 1e-9), 'IRR carried through unchanged');
@@ -38,6 +43,7 @@ function api(body) { return global.fetch('/api/invest', { method: 'POST', body: 
 console.log('firestore look-alike');
 db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().then(function (q) {
   ok(q.size === 4, 'four seeded campaigns answer the storefront query');
+  ok(!!global.SKYFUND_SANDBOX.store().docs['cf_campaigns/' + B.DRAFT.id], 'the draft is seeded too — and is NOT one of the four');
   ok(global.SKYFUND_SANDBOX.store().docs['cf_settings/impact'].givenToCommunity > 0, 'the impact figure is seeded for the hero');
   var live = []; q.forEach(function (d) { if (d.data().status === 'live') live.push(d.id); });
   ok(live.length === 3 && !q.docs[0].data().sample, 'three live, none flagged as a sample inside the sandbox');
@@ -111,6 +117,48 @@ db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get().th
   ok(q.size === 1 && near(d.distributable, 45000) && near(d.crowdPool, 18000) && near(d.perUnit, 18000 / 1878, 1e-6), 'a quarter of $180k, 40% to the crowd, per unit over 1,878 units');
   ok(global.SKYFUND_SANDBOX.store().docs['cf_campaigns/sample-compute-1'].status === 'funded', 'the campaign is now funded');
   ok(JSON.parse(LS.skyfund_sandbox_v2).docs['cf_distributions/' + q.docs[0].id], 'state persisted to localStorage');
+  ok(Object.keys(global.SKYFUND_SANDBOX.store().docs).filter(function (k) { return k.indexOf('cf_payouts/') === 0; }).length === 1, 'the fast-forward pays the distribution out, so the portfolio shows money received');
+
+  console.log('sponsor console — list, submit, launch');
+  return auth.signInWithEmailAndPassword('partner@northgatecompute.com', 'anything');
+}).then(function () {
+  return api({ action: 'review', campaignId: B.DRAFT.id, decision: 'launch' });
+}).then(function (j) {
+  ok(j.__status === 403 && /admin only/.test(j.error), 'a sponsor cannot launch their own campaign');
+  return api({ action: 'submit', campaignId: 'sample-compute-1' });
+}).then(function (j) {
+  ok(j.__status === 403, "a sponsor cannot submit another org's campaign");
+  return api({ action: 'submit', campaignId: B.DRAFT.id });
+}).then(function (j) {
+  ok(j.__status === 200 && global.SKYFUND_SANDBOX.store().docs['cf_campaigns/' + B.DRAFT.id].status === 'review', 'the partner submits their listing for review');
+  return db.collection('cf_campaigns').doc('new-one').set({ title: 'A site invented on the phone', type: 'compute', status: 'draft', sponsorOrgId: 'northgatecompute.com', goal: 100000, unitPrice: 100, unitsTotal: 1000, minRaise: 50000, raised: 0, unitsSold: 0, backers: 0, deadline: new Date(Date.now() + 30 * 86400000).toISOString(), offer: { kind: 'compute', sharePct: 40, termYears: 10, distributableAnnual: 50000, codMonths: 6, escalatorPct: 2 } });
+}).then(function () {
+  return api({ action: 'submit', campaignId: 'new-one' });
+}).then(function (j) {
+  ok(j.__status === 200, 'a campaign invented in the console can be drafted and submitted');
+  return auth.signInWithEmailAndPassword('demo@csebuilders.com', 'anything');
+}).then(function () {
+  return db.collection('cf_campaigns').where('status', '==', 'review').get();
+}).then(function (q) {
+  ok(q.size === 2, "ClearSky's review queue holds both submissions");
+  return api({ action: 'review', campaignId: 'new-one', decision: 'launch' });
+}).then(function (j) {
+  ok(j.__status === 400 && /returns engine/.test(j.error), 'the sandbox refuses to PRICE a campaign it has no build-time table for, and says why');
+  return api({ action: 'review', campaignId: B.DRAFT.id, decision: 'launch' });
+}).then(function (j) {
+  var c = global.SKYFUND_SANDBOX.store().docs['cf_campaigns/' + B.DRAFT.id];
+  var real = IM.headline(B.DRAFT);
+  ok(j.__status === 200 && c.status === 'live', 'ClearSky launches the seeded listing');
+  ok(near(c.headline.targetYieldPct, real.targetYieldPct, 1e-9) && near(c.headline.irrPct, real.irrPct, 1e-9) && c.headline.paybackYear === real.paybackYear, "its headline is the engine's own figures, carried from build time");
+  return db.collection('cf_campaigns').where('status', 'in', ['live', 'funded']).get();
+}).then(function (q) {
+  ok(q.size === 5, 'the storefront now lists five projects');
+  return api({ action: 'close', campaignId: B.DRAFT.id, outcome: 'funded' });
+}).then(function (j) {
+  ok(j.__status === 200, 'ClearSky closes it as funded');
+  return api({ action: 'distribute', campaignId: B.DRAFT.id, period: '2027-Q1', grossRevenue: 90000, distributable: 67500 });
+}).then(function (j) {
+  ok(j.__status === 409, 'a distribution needs units actually held');
   return auth.signOut();
 }).then(function () {
   ok(auth.currentUser === null, 'sign-out');
