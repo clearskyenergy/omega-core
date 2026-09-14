@@ -28907,14 +28907,58 @@ function _isoForState(state){
   if(SPP.indexOf(state)>=0)return'SPP'; return'OTHER';
 }
 
+/* ── WHERE THE SITE IS ──────────────────────────────────────────────────
+   A STREET NUMBER IS NOT A ZIP. This used to take the address, and when it
+   found no five-digit ZIP in it, strip every non-digit and keep the first
+   five. "225 Cesar Chavez Blvd, Calexico, CA" became ZIP 225 — Fredericksburg,
+   Virginia — so the site screen named Dominion Energy Virginia as the serving
+   utility for a project in Imperial County, California, and every rate
+   downstream of it was Virginia's. It was reported as a fact, in two places,
+   with no hint that it had been guessed from a house number.
+
+   A ZIP is a five-digit token standing on its own, optionally with a +4.
+   Anything else is not a ZIP. Without one the STATE can still be read from
+   the address text, which is enough to name the ISO and to offer a clearly
+   labelled state-level estimate. When neither is there the answer is "not
+   identified", which the panel says instead of inventing one.
+
+   The ZIP→state table this used (Z3S) is a `const` inside another IIFE and
+   has never been visible from here: `typeof Z3S` is 'undefined' on every
+   load, so `state` was ALWAYS empty, the ISO was ALWAYS "OTHER" — Chicago
+   included — and the utility factor could never count as evidence. The
+   lookup below is _fomStateForZip, which is a real global. */
+var _IX_STATE_NAMES = {'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA','colorado':'CO','connecticut':'CT','delaware':'DE','district of columbia':'DC','florida':'FL','georgia':'GA','hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM','new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK','oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC','south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT','virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY'};
+var _IX_STATE_ABBR = {};
+(function(){ for(var k in _IX_STATE_NAMES) if(_IX_STATE_NAMES.hasOwnProperty(k)) _IX_STATE_ABBR[_IX_STATE_NAMES[k]]=1; })();
+function _ixSiteLocation(text){
+  text = String(text||'');
+  var zm = text.match(/\b(\d{5})(?:-\d{4})?\b/);
+  var zip = zm ? zm[1] : '';
+  var state = '';
+  if(zip && typeof _fomStateForZip==='function') state = _fomStateForZip(zip) || '';
+  if(!state){
+    /* "…, CA" or "…, CA 92231" — a two-letter token in the state position. */
+    var sm = text.match(/,\s*([A-Za-z]{2})\s*(?:\d{5}(?:-\d{4})?)?\s*$/);
+    if(sm && _IX_STATE_ABBR[sm[1].toUpperCase()]) state = sm[1].toUpperCase();
+  }
+  if(!state){
+    var fm = text.toLowerCase().match(/,\s*([a-z][a-z\s]{2,19}?)\s*(?:\d{5}(?:-\d{4})?)?\s*$/);
+    if(fm && _IX_STATE_NAMES[fm[1].trim()]) state = _IX_STATE_NAMES[fm[1].trim()];
+  }
+  return { zip: zip, state: state };
+}
+
 // Compute the full interconnection-ease score for the current site.
 function computeInterconnectScore(){
-  var zip = (document.getElementById('addr-in')||{}).value || '';
-  // pull zip out of a free-form address if needed
-  var zm = (zip.match(/\b(\d{5})\b/)); zip = zm ? zm[1] : (zip.replace(/\D/g,'').slice(0,5));
-  var pfx = zip.slice(0,3);
-  var state = (typeof Z3S!=='undefined' && Z3S[pfx]) ? Z3S[pfx] : '';
-  var util = (typeof _fomGetUtility==='function' && zip.length>=3) ? _fomGetUtility(zip) : null;
+  var _loc = _ixSiteLocation((document.getElementById('addr-in')||{}).value || '');
+  var zip = _loc.zip, state = _loc.state;
+  /* A ZIP resolves the serving utility from the rate tables. A state alone
+     resolves only that state's PRIMARY utility, which is a different claim:
+     California's is PG&E, and Calexico is Imperial Irrigation District. It is
+     offered, and it is labelled, and it never counts as evidence. */
+  var util = null;
+  if(typeof _fomGetUtility==='function' && zip) util = _fomGetUtility(zip);
+  else if(typeof _fomUtilityFromState==='function' && state) util = _fomUtilityFromState(state, '');
   var D = window._SITE_DATA || {};
 
   // System size drives capacity + queue expectations.
@@ -28926,12 +28970,19 @@ function computeInterconnectScore(){
   // 1. UTILITY / ISO FRIENDLINESS  (REAL where zip resolves)
   var isoInfo = _ixIsoScore(state);
   var utilScore = isoInfo.score;
-  var utilReal = !!(state && util && !util._fallback);
+  /* Evidence means the ZIP matched a utility in the rate tables. A state
+     default and a ComEd fallback are estimates wearing the same shape. */
+  var utilReal = !!(zip && util && !util._fallback && !util._stateResolved);
+  var utilEst = !!(util && (util._fallback || util._stateResolved));
   // Nudge by demand-charge richness (higher demand $ = better BESS econ = utility
   // more used to storage interconnects).
   if(util && util.demandRate){ utilScore = Math.min(100, utilScore + Math.min(15, (util.demandRate-12))); }
+  var utilNote = !util ? ' — add the site ZIP to identify it'
+               : util._fallback ? ' — no utility on file for this ZIP, defaults shown'
+               : util._stateResolved ? ' — ' + state + ' state default, confirm the serving utility'
+               : '';
   factors.push({ key:'utility', label:'Utility / ISO', score:Math.round(utilScore),
-    detail: (util?util.name:'Unknown utility') + ' · ' + isoInfo.iso,
+    detail: (util?util.name:'Utility not identified') + utilNote + ' · ' + isoInfo.iso,
     real: utilReal, source:utilReal?'data':'estimate', weight:0.28 });
 
   // 2. GRID CAPACITY HEADROOM  (STUB unless hosting-capacity wired)
@@ -29017,7 +29068,7 @@ function computeInterconnectScore(){
   var evidencePct=Math.round((dataWeight + proxyWeight*0.45)*100);
 
   return { score:stars, pct:Math.round(pct), factors:factors, zip:zip, state:state,
-           iso:isoInfo.iso, utility: util?util.name:'', anyReal:anyReal, sysKW:sysKW,
+           iso:isoInfo.iso, utility: util?util.name:'', utilityEstimated: utilEst, anyReal:anyReal, sysKW:sysKW,
            evidencePct:evidencePct, dataWeight:dataWeight, proxyWeight:proxyWeight };
 }
 
@@ -29113,8 +29164,9 @@ function closeScorePanel(){ var p=document.getElementById('scorep'); if(p) p.cla
 // ══════════════════════════════════════════════════════════════════════
 function toggleDataLayer(layer, on){
   var D = window._SITE_DATA = window._SITE_DATA || {};
-  var zip = (document.getElementById('addr-in')||{}).value || '';
-  var zm = zip.match(/\b(\d{5})\b/); zip = zm?zm[1]:zip.replace(/\D/g,'').slice(0,5);
+  /* Same reader as the site screen: a house number must not become a ZIP
+     and send these lookups to another state. */
+  var zip = _ixSiteLocation((document.getElementById('addr-in')||{}).value || '').zip;
 
   if(layer==='parcel'){
     if(on){
@@ -172577,11 +172629,12 @@ function readProject(){
 }
 function scenarios(x){return[{n:'Conservative',c:1.12,r:.78},{n:'Base case',c:1,r:1,b:1},{n:'Upside',c:.94,r:1.18}].map(function(s){var c=(x.net||x.cost)*s.c,r=x.rev*s.r;return'<tr class="'+(s.b?'opi-base':'')+'"><td>'+s.n+(s.b?'<span class="opi-tag">LIVE</span>':'')+'</td><td>'+money(c)+'</td><td>'+money(r)+'</td><td>'+(r?(c/r).toFixed(1)+' yr':'—')+'</td><td>'+(c?(r/c*100).toFixed(1)+'%':'—')+'</td></tr>'}).join('')}
 function render(){
- var x=readProject(),s=x.site||{score:0,pct:0,factors:[],utility:'',iso:''},reason=x.missing.length?'Resolve '+x.missing.slice(0,2).map(function(b){return b.n.toLowerCase()}).join(' and ')+' before the next capital gate.':'Core evidence is present; move the project into diligence.';
+ var x=readProject(),s=x.site||{score:0,pct:0,factors:[],utility:'',iso:''},
+ evid=s.factors.filter(function(f){return f.real}).length,reason=x.missing.length?'Resolve '+x.missing.slice(0,2).map(function(b){return b.n.toLowerCase()}).join(' and ')+' before the next capital gate.':'Core evidence is present; move the project into diligence.';
  var checks=x.checks.map(function(c){return'<div class="opi-check"><div class="opi-dot '+(c.ok?'opi-ok':'opi-warn')+'">'+(c.ok?'✓':'!')+'</div><div><b>'+esc(c.n)+'</b><span>'+esc(c.d)+'</span></div></div>'}).join('');
  var actions=x.missing.slice(0,3).map(function(b,i){return'<div class="opi-action"><div class="opi-num">0'+(i+1)+'</div><div><b>'+esc(b.n)+'</b><p>'+esc(b.d)+'. This is suppressing readiness by '+b.w+' points.</p></div></div>'}).join('')||'<div class="opi-action"><div class="opi-num">✓</div><div><b>Ready for diligence</b><p>Export the report and begin interconnection / AHJ validation.</p></div></div>';
- document.getElementById('opi-project').textContent=((document.getElementById('pname')||{}).value||'Current project')+' · '+(s.utility||'utility pending')+(s.iso?' · '+s.iso:'');
- document.getElementById('opi-body').innerHTML='<article class="opi-card"><h3>Development decision</h3><div class="opi-decision" style="color:'+x.color+'">'+x.decision+'</div><div class="opi-reason">'+esc(reason)+'</div><div class="opi-btns"><button class="opi-btn primary" onclick="opiOpenReport()">Open report</button><button class="opi-btn" onclick="opiRefresh()">Refresh</button></div></article><article class="opi-card"><h3>Investability</h3><div class="opi-score">'+x.score+'<small>/100</small></div><div class="opi-bar"><i style="width:'+x.score+'%"></i></div><div class="opi-reason">Readiness 45% · site quality 35% · economics 20%</div></article><article class="opi-card"><h3>Site screen</h3><div class="opi-score" style="font-size:40px">'+(s.score?s.score.toFixed(1):'—')+'<small>/5</small></div><div class="opi-bar"><i style="width:'+s.pct+'%"></i></div><div class="opi-reason">'+esc((s.utility||'Utility pending')+(s.iso?' · '+s.iso:''))+'<br>'+s.factors.filter(function(f){return f.real}).length+' of '+s.factors.length+' factors backed by project data.</div></article><section class="opi-card opi-metrics"><div class="opi-metric"><div class="opi-k">System</div><div class="opi-v">'+(x.f.kw?(x.f.kw/1000).toFixed(2)+' MW':'—')+'</div><div class="opi-note">'+(x.f.kwh?(x.f.kwh/1000).toFixed(2)+' MWh':'Not configured')+'</div></div><div class="opi-metric"><div class="opi-k">Installed cost</div><div class="opi-v">'+money(x.cost)+'</div><div class="opi-note">Current estimate</div></div><div class="opi-metric"><div class="opi-k">Year-one value</div><div class="opi-v">'+money(x.rev)+'</div><div class="opi-note">Enabled streams</div></div><div class="opi-metric"><div class="opi-k">Simple payback</div><div class="opi-v">'+(x.rev&&x.net?(x.net/x.rev).toFixed(1)+' yr':'—')+'</div><div class="opi-note">Net cost ÷ annual value</div></div></section><article class="opi-card"><h3>Readiness · '+x.ready+'%</h3>'+checks+'</article><article class="opi-card"><h3>Scenario comparator</h3><table class="opi-table"><thead><tr><th>Case</th><th>Net cost</th><th>Annual value</th><th>Payback</th><th>Yield</th></tr></thead><tbody>'+scenarios(x)+'</tbody></table><div class="opi-reason" style="margin-top:10px">Conservative: +12% cost / −22% value. Upside: −6% cost / +18% value. Base reads the live model.</div></article><article class="opi-card"><h3>Next best actions</h3>'+actions+'<div class="opi-btns"><button class="opi-btn" onclick="opiSiteScore()">Site score</button><button class="opi-btn" onclick="opiCost()">Cost & ROI</button></div></article><article class="opi-card opi-wide"><h3>Decision boundary</h3><div class="opi-reason">Development triage only—not an interconnection study, stamped design, legal opinion, or investment guarantee. Estimated inputs remain penalized until project evidence replaces them.</div></article>'
+ document.getElementById('opi-project').textContent=((document.getElementById('pname')||{}).value||'Current project')+' · '+(s.utility?(s.utility+(s.utilityEstimated?' (estimate)':'')):'utility not identified')+(s.iso?' · '+s.iso:'');
+ document.getElementById('opi-body').innerHTML='<article class="opi-card"><h3>Development decision</h3><div class="opi-decision" style="color:'+x.color+'">'+x.decision+'</div><div class="opi-reason">'+esc(reason)+'</div><div class="opi-btns"><button class="opi-btn primary" onclick="opiOpenReport()">Open report</button><button class="opi-btn" onclick="opiRefresh()">Refresh</button></div></article><article class="opi-card"><h3>Investability</h3><div class="opi-score">'+x.score+'<small>/100</small></div><div class="opi-bar"><i style="width:'+x.score+'%"></i></div><div class="opi-reason">Weighting: readiness 45% · site quality 35% · economics 20%.'+(evid?'':' <b style="color:#FBBF24">Site quality is an estimate</b> until project data is connected, and it carries 35 of these points.')+'</div></article><article class="opi-card"><h3>Site screen</h3><div class="opi-score" style="font-size:40px;color:'+(evid?'#60A5FA':'#8FA2B5')+'">'+(s.score?s.score.toFixed(1):'—')+'<small>/5</small></div><div class="opi-bar"><i style="width:'+s.pct+'%'+(evid?'':';background:#5B6672')+'"></i></div><div class="opi-reason">'+esc((s.utility||'Utility not identified')+(s.utilityEstimated?' (estimate)':'')+(s.iso?' · '+s.iso:''))+'<br>'+evid+' of '+s.factors.length+' factors backed by project data.'+(evid?'':' <b style="color:#FBBF24">This score is the neutral default for an unknown site</b>, not a reading of this one.')+'</div></article><section class="opi-card opi-metrics"><div class="opi-metric"><div class="opi-k">System</div><div class="opi-v">'+(x.f.kw?(x.f.kw/1000).toFixed(2)+' MW':'—')+'</div><div class="opi-note">'+(x.f.kwh?(x.f.kwh/1000).toFixed(2)+' MWh':'Not configured')+'</div></div><div class="opi-metric"><div class="opi-k">Installed cost</div><div class="opi-v">'+money(x.cost)+'</div><div class="opi-note">'+(x.cost&&!x.f.kw?'<b style="color:#FBBF24">No system configured</b> — covers what is drawn':'Current estimate')+'</div></div><div class="opi-metric"><div class="opi-k">Year-one value</div><div class="opi-v">'+money(x.rev)+'</div><div class="opi-note">Enabled streams</div></div><div class="opi-metric"><div class="opi-k">Simple payback</div><div class="opi-v">'+(x.rev&&x.net?(x.net/x.rev).toFixed(1)+' yr':'—')+'</div><div class="opi-note">Net cost ÷ annual value</div></div></section><article class="opi-card"><h3>Readiness · '+x.ready+'%</h3>'+checks+'</article><article class="opi-card"><h3>Scenario comparator</h3><table class="opi-table"><thead><tr><th>Case</th><th>Net cost</th><th>Annual value</th><th>Payback</th><th>Yield</th></tr></thead><tbody>'+scenarios(x)+'</tbody></table><div class="opi-reason" style="margin-top:10px">Conservative: +12% cost / −22% value. Upside: −6% cost / +18% value. Base reads the live model.</div></article><article class="opi-card"><h3>Next best actions</h3>'+actions+'<div class="opi-btns"><button class="opi-btn" onclick="opiSiteScore()">Site score</button><button class="opi-btn" onclick="opiCost()">Cost & ROI</button></div></article><article class="opi-card opi-wide"><h3>Decision boundary</h3><div class="opi-reason">Development triage only—not an interconnection study, stamped design, legal opinion, or investment guarantee. Estimated inputs remain penalized until project evidence replaces them.'+(evid?'':'<br><b style="color:#FBBF24">Nothing on the site screen is project data yet.</b> The utility, the grid headroom, the permitting timeline, the queue and the parcel are all defaults, so treat this investability score as a placeholder until the address, the parcel and the capacity data are connected.')+'</div></article>'
 }
 window.openProjectIntelligence=function(){render();document.getElementById('opi').classList.add('open')};window.closeProjectIntelligence=function(){document.getElementById('opi').classList.remove('open')};window.opiRefresh=render;window.opiOpenReport=function(){closeProjectIntelligence();if(typeof openRpPanel==='function')openRpPanel('summary')};window.opiSiteScore=function(){closeProjectIntelligence();if(typeof openScorePanel==='function')openScorePanel()};window.opiCost=function(){closeProjectIntelligence();if(typeof openRpPanel==='function')openRpPanel('cost')};document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.getElementById('opi').classList.contains('open'))closeProjectIntelligence()})
 })();
