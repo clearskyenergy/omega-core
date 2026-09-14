@@ -77,6 +77,12 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .bsub{font-family:var(--mono);font-size:8px;letter-spacing:1.6px;color:var(--dim)}
 
 #nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow-y:auto}
+.glassBar{display:flex;gap:8px;align-items:center;padding:8px 10px;
+          border-bottom:1px solid rgba(0,243,255,.14);flex-wrap:wrap}
+.glassBar input{flex:1;min-width:150px;font-size:16px;min-height:44px;
+                background:rgba(0,0,0,.3);color:var(--ink);
+                border:1px solid rgba(0,243,255,.22);border-radius:6px;padding:0 10px}
+.glassBar button{min-height:44px;padding:0 14px;white-space:nowrap}
 .navItem{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
          border:1px solid transparent;background:transparent;color:var(--dim);
          font-family:var(--ui);font-size:13px;letter-spacing:0;padding:8px 9px;border-radius:6px}
@@ -948,6 +954,17 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
        padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }
 
+@media (max-width:700px){
+  /* HIS RULE, 2026-09-13: on the phone, Jarvis is something you TALK to.
+     Thirteen tabs is thirteen things to poke at on a screen with room for
+     one, and asking for a screen is faster than hunting for it — so the
+     strip goes and navigation becomes a sentence (see viewCommand()). The
+     tabs stay on every larger screen, where there is room for them and a
+     mouse to use them. */
+  #nav{display:none}
+  .brand{padding-bottom:4px}
+  .rail{flex:none;padding-bottom:6px}
+}
 </style>
 </head>
 <body>
@@ -1154,6 +1171,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
           <button id="bdAdd">+ NOTE</button>
           <span class="bdPal" id="bdPal"></span>
           <span class="live" id="bdState">—</span>
+        </div>
+        <!-- TO THE GLASS, FROM ANYWHERE. The hand-tracked board and the brain
+             are loopback-only and stay that way; this does not reach them. It
+             writes to the twin, and the Mac pulls. See jarvis_boardrelay.py. -->
+        <div class="glassBar">
+          <input id="glassMsg" type="text" maxlength="400"
+                 placeholder="Put something on the glass board…">
+          <button id="glassSend">→ GLASS</button>
+          <span class="live" id="glassState"></span>
         </div>
         <div class="boardSurface" id="boardSurface"></div>
       </div>
@@ -2469,6 +2495,7 @@ function stripWake(t){
   return m ? s.slice(m[0].length).replace(/^[\s,.:-]*/, '').trim() : s.trim();
 }
 let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
+let voiceRetries=0;   /* see rec.onend — bounded backoff, not a tight loop */
 
 /* What "Waiting to go out" is currently showing, in the order it is showing
    it. The numbers on screen are the handles he speaks. */
@@ -2885,9 +2912,36 @@ async function ask(said){
   }, FOLLOW_MS + 200);
 }
 
+/* WHAT ACTUALLY HAS SpeechRecognition, which is not what the old check said.
+   Every browser on iOS is WebKit — Chrome for iOS is Safari in a different
+   coat — so "Voice needs Chrome" was advice that could not be followed on the
+   one device it fired on. What is true: iOS Safari HAS had
+   webkitSpeechRecognition since 14.5, and the third-party iOS browsers do not
+   expose it. So on his iPhone the feature works in Safari and nowhere else,
+   and the honest message names Safari and the Home Screen, not Chrome. */
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function voiceUnavailableMsg(){
+  if(IS_IOS) return 'Voice input needs Safari on iOS — every iOS browser is WebKit, '
+                  + 'but only Safari exposes speech recognition. Open this page in '
+                  + 'Safari (or from the Home Screen) and tap the mic again. '
+                  + 'Typing works here in any browser.';
+  return 'This browser has no speech recognition. Chrome, Edge or Safari have it; '
+       + 'typing works here in any browser.';
+}
 function startVoice(){
-  if(!SR){ alert('Voice needs Chrome.'); return; }
-  rec=new SR(); rec.continuous=true; rec.interimResults=true; rec.lang='en-US';
+  if(!SR){
+    /* say() takes (role, text) — the message belongs in the thread as Jarvis,
+       and the cursor goes to the box he can still type in. */
+    say('jarvis', voiceUnavailableMsg());
+    const box = el('ask'); if(box){ try{ box.focus(); }catch(_){} }
+    return;
+  }
+  rec=new SR();
+  /* iOS ignores `continuous` and ends the session after each utterance — the
+     onend restart below is what makes it behave like a continuous mic there,
+     so this stays true for the desktop and is simply not honoured on iOS. */
+  rec.continuous=true; rec.interimResults=true; rec.lang='en-US';
   rec.onresult=ev=>{
     if(speaking) return;
     let interim='', final='';
@@ -2925,8 +2979,39 @@ function startVoice(){
     caps('AWAKE — go ahead', heard, true);
     if(final&&heard) ask(heard);
   };
-  rec.onerror=e=>{ if(e.error==='not-allowed'){ alert('Chrome blocked the microphone.'); stopVoice(); } };
-  rec.onend=()=>{ if(listening&&!speaking){ try{rec.start();}catch(_){} } };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed' || e.error==='service-not-allowed'){
+      say('jarvis', IS_IOS
+        ? 'iOS blocked the microphone. Settings → Safari → Microphone → Allow, '
+          + 'then reload and tap the mic again.'
+        : 'The browser blocked the microphone. Allow it for this site, then tap the mic again.');
+      stopVoice(); return;
+    }
+    /* 'no-speech' and 'aborted' are how a quiet room and a normal stop report
+       themselves. Tearing the mic down on those is why it used to die after a
+       pause; onend restarts it instead. */
+    if(e.error==='audio-capture'){ say('jarvis','No microphone available.'); stopVoice(); }
+  };
+  /* THE RESTART, and why it is delayed. iOS ends recognition after every
+     utterance, so this is the only thing keeping the mic alive there — but
+     calling start() synchronously inside onend throws InvalidStateError on
+     WebKit, and a throw here used to end listening silently. Backing off a
+     beat makes the restart reliable, and the retry counter stops a browser
+     that refuses to start from spinning in a tight loop forever. */
+  rec.onend=()=>{
+    if(!listening || speaking) return;
+    const wait = Math.min(1200, 120 * Math.pow(2, voiceRetries));
+    setTimeout(()=>{
+      if(!listening || speaking) return;
+      try{ rec.start(); voiceRetries = 0; }
+      catch(_){
+        if(++voiceRetries > 6){
+          say('jarvis','Voice kept stopping and could not restart — tap the mic to try again.');
+          stopVoice();
+        }
+      }
+    }, wait);
+  };
   rec.start(); listening=true;
   el('mic').classList.add('on'); el('mic').textContent='🎙 LISTENING';
   el('micBig').classList.add('on'); el('micBig').textContent='⏹ STOP';
@@ -3492,6 +3577,53 @@ window.addEventListener('message', e=>{
   recordBrain({text, modelCostUsd:0, model:'site-map-pro'});
 });
 
+const VIEW_WORDS = {
+  command:  ['command center','command centre','command','home','the core','core','dashboard','main'],
+  tasks:    ['tasks','task list','my tasks','the tasks','to do list','todo list'],
+  outbox:   ['outbox','out box','the outbox','email','emails','mail','drafts','waiting to go out'],
+  calendar: ['calendar','my calendar','the calendar','schedule','my schedule','agenda','diary'],
+  routines: ['routines','the routines','routine'],
+  clients:  ['clients','my clients','the clients','customers','accounts'],
+  platform: ['platform','the platform','omega'],
+  board:    ['board','the board','whiteboard','white board'],
+  openwork: ['open work','openwork','open items','the open work','work'],
+  index:    ['index','the index'],
+  brain:    ['brain','the brain','brain graph','graph'],
+  people:   ['people','contacts','the people'],
+  system:   ['system','settings','the system']
+};
+/* NAVIGATION IS NOT A QUESTION, and it is not worth a model call. "bring up my
+   calendar" is a verb and a place; sending it away to be told it means
+   "calendar" would spend money to be told what it plainly says and put two
+   seconds in front of something that should be instant.
+
+   THE GUARD IS A FULL MATCH. After an optional navigation verb and article,
+   what REMAINS must be exactly a view's name — nothing more. That is what
+   keeps "email the client about the invoice" and "add a task for today" from
+   yanking the screen somewhere he did not ask to go. A trailing question mark
+   also disqualifies: "what's on my calendar?" is a question for the twin. */
+const NAV_VERB = /^(?:please\s+)?(?:can you\s+|could you\s+)?(?:bring up|pull up|take me to|switch to|jump to|go to|show me|show|open|display|let me see|see|view)\s+/i;
+function viewCommand(said){
+  let s = String(said||'').toLowerCase().trim().replace(/[.!,]+$/,'');
+  if (/\?\s*$/.test(s)) return null;
+  const hadVerb = NAV_VERB.test(s);
+  s = s.replace(NAV_VERB,'').replace(/^(?:the|my)\s+/,'').trim();
+  if (!s) return null;
+  for (const [view, words] of Object.entries(VIEW_WORDS)){
+    for (const w of words){
+      if (s === w) {
+        /* A bare single word navigates only if it is unmistakably a place.
+           "work" or "mail" alone is ambiguous enough that it needs the verb. */
+        const weak = ['work','mail','email','emails','core','main','graph','home','settings','accounts'];
+        if (!hadVerb && weak.includes(s)) return null;
+        return view;
+      }
+    }
+  }
+  return null;
+}
+
+
 async function submit(said, spoken){
   said=(said||'').trim(); if(!said) return;
   say('you', said);
@@ -3499,6 +3631,18 @@ async function submit(said, spoken){
   /* A skin change never leaves the browser. */
   const mode=modeCommand(said);
   if(mode){ setMode(mode, true); return; }
+
+  /* Neither does a change of screen. Same rule as the skin above: resolved
+     here, instantly, for nothing. */
+  const view=viewCommand(said);
+  if(view){
+    showView(view);
+    const label=(document.querySelector('.navItem[data-view="'+view+'"]')||{}).textContent||view;
+    const name=String(label).replace(/^[^A-Za-z]*/,'').replace(/\s*\d+\s*$/,'').trim()||view;
+    say('jarvis', name+'.');
+    coreState(name.toLowerCase(), false);
+    return;
+  }
 
   /* Resolved on this side of the wire, for nothing. */
   const cmd=asCommand(said);
@@ -6709,6 +6853,47 @@ authMod.onAuthStateChanged(auth,u=>{
   if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
          load(); loadThread(); setInterval(load,30000); }
 });
+
+/* ── THE GLASS BOARD, FROM HIS PHONE ──────────────────────────────────────
+   The board (8794) and the brain (8795) are loopback-only, and the standing
+   decision is that they stay that way — so this does NOT reach the Mac. It
+   posts to the twin, which is already authenticated by the same Firebase
+   token as everything else on this page, and the Mac PULLS the queue and
+   applies it locally (jarvis_boardrelay.py). Outbound only, nothing exposed,
+   and no second approval path: the gate is the one that was already there. */
+async function sendToGlass(){
+  const box = el('glassMsg'); if(!box) return;
+  const text = String(box.value || '').trim();
+  const st = el('glassState');
+  if(!text){ box.focus(); return; }
+  const setState = m => { if(st) st.textContent = m; };
+  setState('sending…');
+  try{
+    const t = await token();
+    if(!t){ setState('sign in first'); return; }
+    const r = await fetch(CHAT+'/board',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+      body:JSON.stringify({cmd:{a:'present',title:'From the phone',body:text}})
+    });
+    if(r.status===404){
+      /* Honest about the one piece that is not live yet, rather than a
+         generic failure that sends him looking in the wrong place. */
+      setState('the twin has no /board route deployed yet');
+      return;
+    }
+    if(!r.ok){ setState('twin said '+r.status); return; }
+    box.value='';
+    setState('queued — the Mac applies it within a few seconds');
+    setTimeout(()=>setState(''), 6000);
+  }catch(e){ setState('could not reach the twin'); }
+}
+(function(){
+  const b = el('glassSend'), i = el('glassMsg');
+  if(b) b.addEventListener('click', sendToGlass);
+  if(i) i.addEventListener('keydown', e=>{ if(e.key==='Enter') sendToGlass(); });
+})();
+
 </script>
 </body>
 </html>
