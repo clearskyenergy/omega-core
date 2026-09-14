@@ -161,6 +161,22 @@
     var ws = global.OMEGA_WORKSPACE ||
              (global.CLEARSKY_CONFIG && global.CLEARSKY_CONFIG.tenant);
     if (!ws) return 'unknown';                       /* not resolved yet */
+
+    /* A FINANCING ACCOUNT NEVER RECEIVES REFERRALS.
+       A referral is a quote request — somebody with a site wanting a price.
+       A capital partner is not asked for a price; deals are referred to them
+       in their deal room, which is a different inbox with a different shape.
+       Helios opened on "No referrals yet · Send a referral", inviting them to
+       do the one thing that surface is not for.
+
+       The flag is stamped onto the workspace by omega-jd-nav.js, which reads
+       the tenant record for the nav anyway. Wait for that read rather than
+       guessing: _tenantFlagsAt absent means not answered yet, which is not
+       the same as answered no — and mount() only polls while this says
+       'unknown', so answering early is answering wrong permanently. If that
+       module is not on the page at all there is nothing to wait for. */
+    if (global.OmegaJdNav && !ws._tenantFlagsAt) return 'unknown';
+    if (ws.financeOrgKey) return false;
     var v = String(ws.vertical || '').toLowerCase();
     /* Resolved, but no vertical recorded. Show it — that is how this behaved
        before the gate existed, and nobody should lose an inbox they are

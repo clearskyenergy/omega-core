@@ -3,6 +3,34 @@
    Offline. No Firebase, no network. */
 'use strict';
 var assert = require('assert');
+var path = require('path');
+
+/* STAND IN FOR _lib/admin, THE WAY tparcel.js AND tprequal.js DO.
+
+   api/site-plan.js requires it, and it requires firebase-admin. CI has no
+   install step on purpose — these tests are pure functions with nothing to
+   fetch, which is the whole reason they run on every push — so the module is
+   not there and this file threw "Cannot find module 'firebase-admin'" before
+   a single assertion ran. It passed on any laptop that happened to have
+   node_modules, which is the worst way for a test to fail: green where it is
+   written, red where it is the gate.
+
+   firebase-admin is not what is under test here. The helpers are. */
+var libPath = require.resolve(path.join(__dirname, '..', '..', 'api', '_lib', 'admin.js'));
+require.cache[libPath] = { id: libPath, filename: libPath, loaded: true, exports: {
+  handler: function (fn) { return fn; },
+  httpError: function (st, m) { var e = new Error(m); e.status = st; return e; },
+  authenticate: function () { return Promise.resolve({ uid: 'u1', email: 'pm@concord.com',
+                                                       orgId: 'concordenergyusa.com', staff: false }); },
+  db: function () { return { collection: function () { return { doc: function () {
+        return { get: function () { return Promise.resolve({ exists: false, data: function () { return {}; } }); },
+                 set: function () { return Promise.resolve(); },
+                 collection: function () { return this; } }; } }; } }; },
+  billingOf: function () { return Promise.resolve({ tier: 'pro', addons: [], toolOverrides: {} }); },
+  init: function () { return { auth: function () { return {}; } }; },
+  admin: { firestore: { FieldValue: { serverTimestamp: function () { return 'TS'; } } } }
+} };
+
 var api = require('../../api/site-plan.js');
 var planner = require('../../api/_lib/site-agent-planner.js');
 var H = api._helpers;

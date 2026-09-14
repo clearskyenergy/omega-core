@@ -107,12 +107,30 @@ console.log('\nthe deal room is a workspace for a financing tenant');
 ok(/dealroom:\s*'sn-dealroom'/.test(jdSrc), 'the shared rule knows the id');
 ok(/if \(f\.finance\) show\(IDS\.dealroom\)/.test(jdSrc),
    'and reveals it for a financing tenant');
-ok(/typeof o\.financeOrgKey === 'string' && o\.financeOrgKey !== ''/.test(jdSrc),
-   'on a non-empty financeOrgKey — a key, not a switch');
+/* Assert the property, not the phrasing: the key must be a NON-EMPTY STRING.
+   A truthy test would let a stray `true` or a 1 open a deal room, and an
+   empty-string key would scope a partner's queries to nothing. */
+ok(/typeof o\.financeOrgKey === 'string'/.test(jdSrc) && /key !== ''/.test(jdSrc),
+   'the finance flag is a non-empty string key, not a truthy switch');
 ok(/function readTenantFlags/.test(jdSrc) && !/function readJdFlag/.test(jdSrc),
    'both answers come from one tenant read, not two round trips for one row');
 ok(/href="\/portals\/finance\/"/.test(read('index.html')),
    'and it opens the financing portal');
+
+console.log('\na financing account is not a referral inbox');
+/* A referral is a quote request. A capital partner is never asked for a
+   price — deals are referred to them in their deal room. Helios opened on
+   "No referrals yet · Send a referral", inviting them to do the one thing
+   that surface is not for. */
+const refSrc = code('omega-referrals.js');
+ok(/if \(ws\.financeOrgKey\) return false;/.test(refSrc),
+   'a tenant with a finance org key never mounts the referral inbox');
+ok(/if \(global\.OmegaJdNav && !ws\._tenantFlagsAt\) return 'unknown';/.test(refSrc),
+   'and it waits for the flag rather than guessing — mount() only polls while this is unknown');
+ok(/_tenantFlagsAt = Date\.now\(\)/.test(jdSrc),
+   'the nav read stamps when the tenant flags were answered');
+ok(/w\.financeOrgKey = f\.financeOrgKey/.test(jdSrc),
+   'and stamps the key itself, so other modules stop guessing');
 
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

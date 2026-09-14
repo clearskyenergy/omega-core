@@ -63,7 +63,7 @@
      Firestore is unreachable is a nav item that appears for everyone the
      moment Firestore is unreachable. */
   function readTenantFlags(orgId) {
-    var none = { jd: false, finance: false };
+    var none = { jd: false, finance: false, financeOrgKey: '' };
     try {
       if (typeof root.firebase === 'undefined' || !root.firebase.apps || !root.firebase.apps.length)
         return Promise.resolve(none);
@@ -74,8 +74,8 @@
              string, because it is a key rather than a switch — a tenant that
              has one IS a financing account and there is nothing else it could
              mean. */
-          return { jd: o.jdPartner === true,
-                   finance: typeof o.financeOrgKey === 'string' && o.financeOrgKey !== '' };
+          var key = typeof o.financeOrgKey === 'string' ? o.financeOrgKey : '';
+          return { jd: o.jdPartner === true, finance: key !== '', financeOrgKey: key };
         })['catch'](function () { return none; });
     } catch (e) { return Promise.resolve(none); }
   }
@@ -92,6 +92,22 @@
     if (osa) { show(IDS.divider); show(IDS.label); show(IDS.osa); show(IDS.jda); }
 
     return readTenantFlags(orgId).then(function (f) {
+      /* Stamp the answers onto the workspace object. Other modules need the
+         same two facts and were each guessing: omega-referrals.js decides
+         whether to mount a quote inbox, and it had no way to ask whether this
+         is a financing account, so a capital partner got one. The workspace
+         object is built from the client-side registry and carries nothing
+         from omega_orgs, so this read is the only place the answer exists.
+         _tenantFlagsAt is the marker that it HAS been answered — absent is
+         "not yet", which is different from "no". */
+      try {
+        var w = root.OMEGA_WORKSPACE;
+        if (w) {
+          if (f.financeOrgKey) w.financeOrgKey = f.financeOrgKey;
+          w.jdPartner = f.jd;
+          w._tenantFlagsAt = Date.now();
+        }
+      } catch (e) {}
       var jd = osa || f.jd;
       if (jd) { show(IDS.divider); show(IDS.label); show(IDS.jda); }
       /* A financing tenant works out of its deal room, so it belongs in

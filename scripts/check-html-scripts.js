@@ -74,6 +74,48 @@ function isModule(attrs) { return /type\s*=\s*["']module["']/i.test(attrs); }
 const findings = [];
 
 function checkFile(file) {
+/* A ROOT-ABSOLUTE PATH IS NOT ALWAYS A FILE PATH.
+
+   vercel.json rewrites /skyfund-sandbox to /portals/skyfund-sandbox, so
+   `/skyfund-sandbox/sandbox.js` is a correct reference to a file that does
+   live in this repo — just not at that path. Checking the filesystem alone
+   reported it as a 404 on every run, which is why the audit job had been red
+   for so long that a real failure would have been invisible in it.
+
+   Read the rewrites and try them before calling anything missing. A stale or
+   unreadable vercel.json means no rewrites, so the check simply goes back to
+   the filesystem rather than passing everything. */
+let REWRITES = null;
+function rewrites() {
+  if (REWRITES) return REWRITES;
+  REWRITES = [];
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+    (cfg.rewrites || []).forEach(r => {
+      /* Only the plain prefix rewrites. A :param or a regex source would need
+         the router's own matcher, and guessing at one would turn this check
+         into a source of false passes — the opposite of the problem. */
+      if (typeof r.source === 'string' && typeof r.destination === 'string'
+          && !/[:*(){}\[\]]/.test(r.source) && !/[:*(){}\[\]]/.test(r.destination)
+          && !r.has && !r.missing) {
+        REWRITES.push([r.source.replace(/\/$/, ''), r.destination.replace(/\/$/, '')]);
+      }
+    });
+    /* Longest source first: /a/b must win over /a. */
+    REWRITES.sort((x, y) => y[0].length - x[0].length);
+  } catch (e) { REWRITES = []; }
+  return REWRITES;
+}
+function resolvesByRewrite(u) {
+  if (!u.startsWith('/')) return false;
+  const clean = u.split(/[?#]/)[0];
+  return rewrites().some(([from, to]) => {
+    if (clean !== from && clean.indexOf(from + '/') !== 0) return false;
+    const mapped = to + clean.slice(from.length);
+    return fs.existsSync(path.join(ROOT, mapped.replace(/^\//, '')));
+  });
+}
+
   const src = fs.readFileSync(file, 'utf8');
   const rel = path.relative(ROOT, file);
   const re = /<script([^>]*)>([\s\S]*?)<\/script\s*>/gi;
@@ -92,7 +134,7 @@ function checkFile(file) {
       const target = u.startsWith('/')
         ? path.join(ROOT, u.replace(/^\//, '').split(/[?#]/)[0])
         : path.join(path.dirname(file), u.split(/[?#]/)[0]);
-      if (!fs.existsSync(target)) {
+      if (!fs.existsSync(target) && !resolvesByRewrite(u)) {
         findings.push({ file: rel, line, kind: '404',
           msg: 'script src does not exist: ' + u });
       }
