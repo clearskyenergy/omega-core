@@ -72,6 +72,14 @@
   ],
   "rewrites": [
     {
+      "source": "/osa",
+      "destination": "/tenants/osa/index.html"
+    },
+    {
+      "source": "/osa/portfolio",
+      "destination": "/tenants/osa/portfolio.html"
+    },
+    {
       "source": "/",
       "has": [
         {
