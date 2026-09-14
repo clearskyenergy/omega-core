@@ -140,6 +140,23 @@ scoring** among the examples that must be server-side. Three engines added or
 touched this session do not yet comply. Recorded here rather than fixed
 quietly, because each is a real move with a blocker attached.
 
+- [ ] **`computeInterconnectScore()` and the Project Intelligence panel
+      (editor.html) — the site screen and the investability score.** Added to
+      this list 2026-09-14 while fixing what they reported. The five factor
+      weights (0.28 / 0.24 / 0.20 / 0.16 / 0.12), every scoring ladder behind
+      them (hosting-capacity ratio bands, substation distance bands, permit-day
+      bands, queue-month bands, parcel-fit bands), the 45/35/20 investability
+      blend, the PURSUE / ADVANCE / HOLD thresholds and the economics term
+      `rev / cost × 650` are all in the page. That is site viability scoring and
+      financial modelling, both named in the rule.
+      **The split:** the readiness checklist stays client-side — it only asks
+      what the open project contains, and it needs no secrets. `/api/site-score`
+      takes the ZIP, the state, the system size and whatever of `_SITE_DATA` is
+      real, and returns the factors, the score and the decision. **Blocker:** the
+      editor is expected to work with a dead network, so the API needs a
+      graceful answer the page can render as "score unavailable" rather than a
+      silent fall back to a local copy of the model, which would defeat the move.
+
 - [ ] **`omega-site-intel.js` — the grid score.** The whole model ships to the
       browser: the 35/25/15/15/10 component weights, the voltage-to-MW capacity
       ladder, the distance bands and the hazard setback formula. Any tenant can
