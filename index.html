@@ -1275,6 +1275,30 @@ body.dash-editing #edit-bar{opacity:1 !important;pointer-events:auto !important;
 .sn-subnav.sn-dm-list.open{max-height:400px;overflow-y:auto}
 
 /* ═══════════ IN-PLACE DASHBOARD EDIT ═══════════ */
+/* Capital-partner panels. Deliberately plain: this is a worklist, and a
+   worklist that looks like a dashboard gets skimmed instead of worked. */
+.fin-panel{font-size:13px;line-height:1.5}
+.fin-empty{padding:18px 4px;color:#64748B;font-size:12.5px;line-height:1.6}
+.fin-lead{padding:2px 0 10px;color:#0F172A;font-size:13px}
+.fin-lead b{font-size:19px;font-weight:700;letter-spacing:-.4px}
+.fin-hot{color:#B45309;font-weight:600}
+.fin-list{list-style:none;margin:0;padding:0;border-top:1px solid #E7EDF3}
+.fin-list li{border-bottom:1px solid #E7EDF3}
+.fin-list a{display:flex;align-items:center;gap:10px;padding:9px 2px;text-decoration:none;color:inherit}
+.fin-list a:hover{background:#F6F9FC}
+.fin-name{flex:1 1 auto;min-width:0;font-weight:600;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fin-meta{flex:0 0 auto;color:#64748B;font-size:11.5px;font-variant-numeric:tabular-nums}
+.fin-tag{flex:0 0 auto;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px}
+.fin-tag.hot{background:#FEF3C7;color:#92400E}
+.fin-tag.ok{background:#DCFCE7;color:#166534}
+.fin-more{padding:9px 2px 0}
+.fin-more a{color:#2563EB;font-weight:600;font-size:12px;text-decoration:none}
+.fin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:4px 0 10px}
+.fin-stats>div{display:flex;flex-direction:column;gap:2px}
+.fin-n{font-size:21px;font-weight:700;color:#0F172A;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.fin-k{font-size:10.5px;color:#64748B;text-transform:uppercase;letter-spacing:.4px}
+@media(max-width:640px){.fin-stats{grid-template-columns:1fr 1fr}}
 body.dash-edit-on .dash-block{position:relative;outline:1.5px dashed transparent;border-radius:12px;transition:outline-color .12s}
 body.dash-edit-on .dash-block{outline-color:#CFD9E4;padding:6px;margin-bottom:6px;cursor:default}
 body.dash-edit-on .dash-block:hover{outline-color:var(--sap-blue,#2B5FA8)}
@@ -1585,21 +1609,24 @@ window._omegaReady = function(){
            app; the partners page below lives here because the agreement, the
            roster and the responsibilities are about projects in THIS database.
 
-           ⚠ THE CODE IS HERE, THE DOMAIN IS NOT. tenants/osa/ in omega-core is
-           the canonical OSA console and is ahead of what osa.clearskyomega.com
-           serves — that hostname is still attached to the old Vercel project
-           (checked 2026-09-06: it 404s the whole /api tree, which this one
-           answers). vercel.json already rewrites the host's /, /portfolio and
-           /portfolio.html into tenants/osa/, so moving the domain onto
-           omega-core is a dashboard action with no code change and no dead URL.
+           ⚠ NEVER POINT THIS AT osa.clearskyomega.com. That hostname is still
+           attached to the OLD Vercel project — a separate deployment of the
+           legacy cse.builders repo. Checked 2026-09-14: it 404s /omega-tenant.js,
+           which every page of this build loads, and it serves a console titled
+           "ClearSky-OMEGA · Verification Console" against the pre-Silmarillion
+           build. A click from this sidebar landed a signed-in user on that old
+           app and asked them to sign in again. Same-origin only, for every
+           account, until the domain is moved onto omega-core in the Vercel
+           dashboard — vercel.json already carries the host rewrites for /,
+           /index.html, /portfolio and /portfolio.html, so that move is a
+           dashboard action with no code change and no dead URL.
 
-           The href stays on the branded host on purpose. Pointing it at
-           /tenants/osa/portfolio would put whoever clicks from here on a
-           different build from the colleague who used their bookmark, and the
-           invitation emails name the branded address. One address, or none. -->
+           login.html reached the same conclusion first (SURFACES→osa) and
+           tenants/osa/index.html links its own /tenants/osa/portfolio, so the
+           whole product now agrees on one address: this one. -->
       <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
       <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
-      <a class="sn-item" data-sn="osa" id="sn-osa" href="https://osa.clearskyomega.com/" style="display:none">
+      <a class="sn-item" data-sn="osa" id="sn-osa" href="/tenants/osa" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>OSA Workspace</span>
       </a>
@@ -5889,6 +5916,19 @@ var DASH = (function(){
      for `tools`, so adding a widget is a console action rather than a deploy.
      Kept as a seed so a cold database still shows a working palette. */
   var ADDABLE = [
+    /* ── CAPITAL PARTNER ──────────────────────────────────────────────────
+       For a tenant whose product surface is the financing portal rather than
+       the project workspace. These three read fin_projects and the partner's
+       own offers, NOT projects, so they are blank and say so on a developer's
+       board rather than drawing a chart of somebody else's pipeline.
+
+       They render HTML, not a chart. A capital partner opening their board
+       wants to know WHICH deals arrived overnight and what they owe an answer
+       on — a bar chart of a count answers neither. */
+    { key:'w-finroom',   type:'finroom',   name:'Deal Room — new arrivals', verticals:[] },
+    { key:'w-finoffers', type:'finoffers', name:'Offers I have made',       verticals:[] },
+    { key:'w-fininvest', type:'fininvest', name:'Investments',              verticals:[] },
+
     { key:'w-stage',  type:'stage',  name:'Projects by Stage',      verticals:[] },
     { key:'w-ptype',  type:'ptype',  name:'Projects by Type',       verticals:[] },
     { key:'w-capex',  type:'capex',  name:'Top CapEx',              verticals:[] },
@@ -5928,8 +5968,14 @@ var DASH = (function(){
      ignored rather than producing an empty card nobody can remove.
      verticals[] empty means every vertical; otherwise the tenant's vertical
      must be in it. */
+  /* Chart widgets draw into a canvas; panel widgets write HTML. Keeping the
+     two lists separate is what lets _makeWidgetBlock build the right shell —
+     a panel widget given a canvas renders nothing at all, silently. */
+  var _PANEL_TYPES = ['finroom','finoffers','fininvest'];
+  function _isPanelType(t){ return _PANEL_TYPES.indexOf(t) >= 0; }
   function _drawableTypes(){
-    return ['stage','ptype','capex','owner','storage','pl','plproj','incent','matrix','funnel','fleet'];
+    return ['stage','ptype','capex','owner','storage','pl','plproj','incent','matrix','funnel','fleet']
+             .concat(_PANEL_TYPES);
   }
   function hydrateWidgets(cb){
     if (typeof db==='undefined' || !db){ cb&&cb(); return; }
@@ -5987,14 +6033,214 @@ var DASH = (function(){
     ADDABLE.forEach(function(a){ names[a.type]=a.name; });
     var div=document.createElement('div');
     div.className='dash-block'; div.setAttribute('data-block',key); div.setAttribute('data-added','1');
-    div.innerHTML='<div class="block-head"><div><div class="block-title">'+(names[type]||type)+'</div></div></div>'+
+    var head='<div class="block-head"><div><div class="block-title">'+(names[type]||type)+'</div></div></div>';
+    if (_isPanelType(type)){
+      div.innerHTML=head+'<div class="an-card" style="margin-top:8px"><div id="wp-'+key+'" class="fin-panel">'
+        +'<div class="fin-empty">Loading\u2026</div></div></div>';
+      return div;
+    }
+    div.innerHTML=head+
       '<div class="an-card" style="margin-top:8px"><div class="an-chartwrap"><canvas id="wc-'+key+'"></canvas></div></div>';
     return div;
   }
 
+  /* ── CAPITAL PARTNER PANELS ───────────────────────────────────────────────
+     Everything below reads the financing collections and nothing else. It is
+     deliberately read-only and deliberately incurious: a partner's board
+     shows what arrived and what they owe an answer on, and every action is a
+     link into the financing portal where the rules and the audit trail live.
+
+     THE ORG KEY IS THE WHOLE SCOPE. fin_projects carry room.forOrg, offers
+     are keyed by uid, and fin_orgs is keyed by orgKey. A widget that asked
+     for anything wider would be refused by the rules, and should be — so the
+     panels ask for exactly their own row and say plainly when they cannot
+     get it, rather than rendering an empty card that reads as "no deals". */
+  var _FIN = { key:null, loaded:false, room:[], offers:[], err:null };
+
+  /* The workspace object is built from the client-side registry, which does
+     not necessarily carry fields written to omega_orgs by provisioning. So:
+     use it if it is there, otherwise ask Firestore once. Resolving this wrong
+     is the difference between a partner seeing their deal room and seeing
+     "not registered as a capital partner", so it does not guess. */
+  function _finOrgKeyNow(){
+    var ws = window.OMEGA_WORKSPACE || window._PORTAL_WS || {};
+    return ws.financeOrgKey || ws.finOrgKey || null;
+  }
+  function _finOrgKey(cb){
+    var k = _finOrgKeyNow();
+    if (k) { cb(k); return; }
+    var ws = window.OMEGA_WORKSPACE || {};
+    var org = ws.orgId || (typeof currentOrg !== 'undefined' ? currentOrg : '');
+    if (!org || typeof db === 'undefined' || !db) { cb(null); return; }
+    db.collection('omega_orgs').doc(org).get().then(function (d) {
+      cb((d && d.exists && (d.data() || {}).financeOrgKey) || null);
+    })['catch'](function () { cb(null); });
+  }
+  function _finMoney(n){
+    n = Number(n); if(!isFinite(n) || !n) return '\u2014';
+    if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+    if (Math.abs(n) >= 1e3) return '$' + Math.round(n/1e3) + 'k';
+    return '$' + Math.round(n);
+  }
+  function _finEsc(v){ var d=document.createElement('div'); d.textContent=String(v==null?'':v); return d.innerHTML; }
+  function _finWhen(v){
+    var ms = v && v.toMillis ? v.toMillis() : Number(v);
+    if(!isFinite(ms) || !ms) return '';
+    var days = Math.floor((Date.now()-ms)/86400000);
+    return days<=0 ? 'today' : days===1 ? 'yesterday' : days+' days ago';
+  }
+
+  /* One read per board, shared by the three panels. */
+  function _finLoad(cb){
+    if(_FIN.loaded){ cb&&cb(); return; }
+    if(typeof db==='undefined' || !db){ _FIN.loaded=true; _FIN.err='nodb'; cb&&cb(); return; }
+    _finOrgKey(function(key){
+    if(!key){ _FIN.loaded=true; _FIN.err='nokey'; cb&&cb(); return; }
+    _FIN.key=key;
+    var uid=(typeof auth!=='undefined'&&auth.currentUser)?auth.currentUser.uid:null;
+
+    var roomQ = db.collection('fin_projects')
+                  .where('room.forOrg','==',key)
+                  .where('room.state','==','delivered')
+                  .get()
+      .then(function(sn){ _FIN.room = sn.docs.map(function(d){
+              return Object.assign({docId:d.id}, d.data()); }); })
+      ['catch'](function(e){ _FIN.err=_FIN.err||e; });
+
+    /* MY OFFERS, WITHOUT A COLLECTION-GROUP QUERY.
+
+       An offer lives at fin_projects/{deal}/offers/{uid} and the uid is the
+       DOCUMENT ID — the portal synthesises it with {uid: d.id} and never
+       stores it as a field. So collectionGroup('offers').where('uid','==',…)
+       matches nothing at all, and would have reported "no offers" to a
+       partner who had made ten. It would also have needed a new rule and a
+       composite index, neither of which is deployed.
+
+       Reading offers/{myUid} under each deal already in the room needs
+       neither: the existing nested rule allows exactly `isPartner() &&
+       offerId == request.auth.uid`. The cost is one small read per delivered
+       deal, which is the right size of query for a worklist.
+
+       LIMIT, STATED: this counts offers on deals in THIS partner's deal room.
+       An offer made on an open marketplace deal that was never delivered to
+       them is not counted. Covering those needs the uid written as a field
+       plus a collection-group rule — see docs/finance-partner-setup.md. */
+    var offerQ = (!uid) ? Promise.resolve() : roomQ.then(function(){
+      return Promise.all(_FIN.room.map(function(d){
+        return db.collection('fin_projects').doc(d.docId)
+                 .collection('offers').doc(uid).get()
+          .then(function(o){
+            if(o && o.exists) _FIN.offers.push(Object.assign(
+              { ref:'fin_projects/'+d.docId+'/offers/'+uid, dealId:d.docId,
+                dealName:d.name||d.docId }, o.data()));
+          })['catch'](function(e){ _FIN.offersErr=_FIN.offersErr||e; });
+      }));
+    });
+
+    Promise.all([roomQ, offerQ]).then(function(){ _FIN.loaded=true; cb&&cb(); });
+    });
+  }
+
+  function _finNote(msg){ return '<div class="fin-empty">'+msg+'</div>'; }
+
+  function _drawPanelInto(host, type){
+    host.innerHTML=_finNote('Loading\u2026');
+    _finLoad(function(){
+      if(_FIN.err==='nokey'){
+        host.innerHTML=_finNote('This workspace is not registered as a capital partner, '
+          +'so there is no deal room to show.');
+        return;
+      }
+      if(_FIN.err==='nodb'){ host.innerHTML=_finNote('Not connected.'); return; }
+      try{
+        if(type==='finroom')   host.innerHTML=_finRoomHtml();
+        else if(type==='finoffers') host.innerHTML=_finOffersHtml();
+        else if(type==='fininvest') host.innerHTML=_finInvestHtml();
+      }catch(e){ host.innerHTML=_finNote('Could not draw this panel.'); }
+    });
+  }
+
+  /* 1. What arrived. The reason a capital partner opens this board at all. */
+  function _finRoomHtml(){
+    if(_FIN.err) return _finNote('Your deal room could not be read. Contact your account administrator.');
+    var rows=_FIN.room.slice();
+    if(!rows.length) return _finNote('Nothing new in your deal room. '
+      +'Deals appear here the moment ClearSky delivers one.');
+    var answered={}; _FIN.offers.forEach(function(o){ if(o.dealId) answered[o.dealId]=o; });
+    rows.sort(function(a,b){
+      var A=(a.room&&a.room.deliveredAt&&a.room.deliveredAt.toMillis)?a.room.deliveredAt.toMillis():0;
+      var B=(b.room&&b.room.deliveredAt&&b.room.deliveredAt.toMillis)?b.room.deliveredAt.toMillis():0;
+      return B-A; });
+    var waiting=rows.filter(function(d){ return !answered[d.docId]; }).length;
+    var h='<div class="fin-lead"><b>'+rows.length+'</b> in your deal room'
+      + (waiting ? ' \u00b7 <span class="fin-hot">'+waiting+' awaiting your answer</span>' : ' \u00b7 all answered')
+      + '</div><ul class="fin-list">';
+    rows.slice(0,6).forEach(function(d){
+      var mine=answered[d.docId];
+      h+='<li><a href="/portals/finance/dealroom.html?p='+encodeURIComponent(d.docId)+'">'
+        + '<span class="fin-name">'+_finEsc(d.name||d.docId)+'</span>'
+        + '<span class="fin-meta">'+(d.mw?_finEsc(d.mw)+' MW \u00b7 ':'')
+        + (d.capexUsd?_finMoney(d.capexUsd)+' \u00b7 ':'')
+        + _finEsc(_finWhen(d.room&&d.room.deliveredAt))+'</span>'
+        + '<span class="fin-tag '+(mine?'ok':'hot')+'">'+(mine?'offered':'needs answer')+'</span>'
+        + '</a></li>';
+    });
+    h+='</ul>';
+    if(rows.length>6) h+='<div class="fin-more"><a href="/portals/finance/">All '+rows.length+' deals \u203a</a></div>';
+    return h;
+  }
+
+  /* 2. What we have offered, and what came back. */
+  function _finOffersHtml(){
+    if(_FIN.offersErr) return _finNote('Your offers could not be read. '
+      +'This usually means the collection-group rule or index has not been deployed yet. '
+      +'Contact your account administrator.');
+    var o=_FIN.offers;
+    if(!o.length) return _finNote('No offers made yet.');
+    var by=function(st){ return o.filter(function(x){ return x.status===st; }).length; };
+    var live=by('submitted'), won=by('accepted'), lost=by('declined');
+    var total=o.reduce(function(a,x){ return a+(Number(x.amountUsd||x.amount||0)||0); },0);
+    var h='<div class="fin-stats">'
+      + '<div><span class="fin-n">'+o.length+'</span><span class="fin-k">offers made</span></div>'
+      + '<div><span class="fin-n">'+live+'</span><span class="fin-k">awaiting decision</span></div>'
+      + '<div><span class="fin-n">'+won+'</span><span class="fin-k">accepted</span></div>'
+      + '<div><span class="fin-n">'+lost+'</span><span class="fin-k">declined</span></div>'
+      + '</div>';
+    if(total>0) h+='<div class="fin-lead">'+_finMoney(total)+' offered in total</div>';
+    return h+'<div class="fin-more"><a href="/portals/finance/">Open the financing portal \u203a</a></div>';
+  }
+
+  /* 3. What we actually own. An accepted offer is an investment; nothing
+        else is, and a pipeline number presented as a position is a lie. */
+  function _finInvestHtml(){
+    if(_FIN.offersErr) return _finNote('Your positions could not be read. Contact your account administrator.');
+    var won=_FIN.offers.filter(function(x){ return x.status==='accepted'; });
+    if(!won.length) return _finNote('No accepted offers yet. '
+      +'An investment appears here when a sponsor accepts one of your offers.');
+    var total=won.reduce(function(a,x){ return a+(Number(x.amountUsd||x.amount||0)||0); },0);
+    var h='<div class="fin-lead"><b>'+won.length+'</b> position'+(won.length===1?'':'s')
+      + (total>0 ? ' \u00b7 '+_finMoney(total)+' committed' : '')+'</div><ul class="fin-list">';
+    won.slice(0,6).forEach(function(x){
+      h+='<li><a href="/portals/finance/dealroom.html?p='+encodeURIComponent(x.dealId||'')+'">'
+        + '<span class="fin-name">'+_finEsc(x.dealName||x.dealId||'Deal')+'</span>'
+        + '<span class="fin-meta">'+(x.amountUsd||x.amount?_finMoney(x.amountUsd||x.amount):'')
+        + (x.rate?' \u00b7 '+_finEsc(x.rate)+'%':'')+'</span></a></li>';
+    });
+    return h+'</ul>';
+  }
+
   function _drawAdded(){
+    /* Panel widgets do not need Chart.js and must not be gated behind the
+       project aggregate: a capital partner has no projects, so _lastAgg is
+       empty for exactly the tenant these were built for. */
+    state.added.forEach(function(a){
+      if(!_isPanelType(a.type)) return;
+      var host=document.getElementById('wp-'+a.key); if(!host) return;
+      _drawPanelInto(host, a.type);
+    });
     if(typeof Chart==='undefined' || !window._lastAgg) return;
     state.added.forEach(function(a){
+      if(_isPanelType(a.type)) return;
       var el=document.getElementById('wc-'+a.key); if(!el) return;
       _drawChartInto(el, a.type, window._lastAgg);
     });

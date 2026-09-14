@@ -2090,11 +2090,22 @@ function askDealRoom(dealId, preferOrg){
         + 'partner on Partners and set its role to Investor.', true);
     return;
   }
-  if (opts.length === 1){ sendToDealRoom(dealId, opts[0].stats.orgId); return; }
+  /* ALWAYS ASK, EVEN WITH ONE PARTNER.
+
+     This used to send straight through when only one capital partner was set
+     up. That made "Send to deal room" a single click with no statement of
+     where it was going — and the action is outward-facing and hard to take
+     back: it emails the partner's analysts and puts the project in front of
+     an outside firm. It was also silently wrong the moment a second partner
+     existed, because the habit built on one button became a mis-send.
+
+     With one option the dialog is a confirmation naming the recipient, which
+     is the least it should be. */
   var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
   Forms.open({
-    title: 'Send to a deal room',
-    intro: (d && d.name) || dealId,
+    title: opts.length === 1 ? 'Send to their deal room' : 'Send to a deal room',
+    intro: ((d && d.name) || dealId)
+      + ' \u2014 this emails their analysts and opens the project to them.',
     fields: [{ key:'orgId', type:'radio', label:'Which capital partner', required:true,
       value: preferOrg || opts[0].stats.orgId,
       /* The hint is the reason a radio beats a dropdown here: each choice
@@ -2105,7 +2116,8 @@ function askDealRoom(dealId, preferOrg){
         return { value:r.stats.orgId, label:A.orgName(r.stats.orgId),
                  hint: (hand ? 'Takes projects at ' + hand : 'No handoff stage set')
                      + ' · ' + r.deals.length + ' on their roster' }; }) }],
-    submitLabel: 'Send'
+    submitLabel: opts.length === 1
+      ? 'Send to ' + A.orgName(opts[0].stats.orgId) : 'Send'
   }).then(function(v){ if (v && v.orgId) sendToDealRoom(dealId, v.orgId); });
 }
 

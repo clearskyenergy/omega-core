@@ -1,0 +1,24 @@
+{
+  "orgId": "heliosnrgy.com",
+  "name": "Helios Energy",
+  "domains": [
+    "helios.clearskyomega.com"
+  ],
+  "vertical": "developer",
+  "tier": "partner",
+  "shell": "default",
+  "logoUrl": "",
+  "status": "active",
+  "receivesFullBom": false,
+  "requiredTools": [
+    "financing"
+  ],
+  "financePartner": {
+    "orgKey": "helios",
+    "orgName": "Helios Energy",
+    "role": "partner",
+    "kind": "investor",
+    "jdActive": true
+  },
+  "_note": "Helios Energy (heliosnrgy.com) is a CAPITAL PARTNER, not a developer tenant. Their product surface is the financing portal: requiredTools pins 'financing' so it is preloaded and cannot be removed from the dashboard (omega-tool.js honours requiredTools), and the finance widgets on their board read fin_projects rather than projects. vertical is 'developer' because that is the key the verticals collection uses for 'Developers, owners & capital' \u2014 there is no separate financier vertical today, and inventing one would need verticals/{v} seeded before their board would draw anything. financePartner.orgKey is the key used by fin_orgs/{orgKey}, fin_profiles.orgKey and room.forOrg on a delivered deal; it is short and stable on purpose, because it is written into deal documents and renaming it later would orphan every delivery. Accounts are NOT created by the seed script \u2014 see scripts/provision-finance-partner.js. financePartner.kind='investor' and jdActive put them in omega_partner_orgs so they appear in the OSA portfolio's 'Send to deal room' chooser \u2014 capitalPartners() filters jdOrgs() on kind==='investor', so a partner missing either flag is invisible to the person trying to send them a deal."
+}
