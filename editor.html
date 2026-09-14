@@ -131,6 +131,15 @@ function openFinancingApply(){
      needs the grid fetched rather than read. Same client the site finder uses. -->
 <script src="/omega-grid-atlas-client.js"></script>
 <script src="/omega-parcel-report.js"></script>
+<!-- The autopilot below runs only when the page is opened with ?address= and
+     ?auto=, which mission.html does and a person sitting in the editor cannot.
+     This is the button that gives it a way in, plus the honest labelling: the
+     autopilot's layout() spaces equipment along a line from the site centre and
+     knows nothing about the building, the setbacks or an easement, so it is
+     presented as a SKETCH. The constrained planner it hands off to lives in
+     /api/site-plan, not here — placement rules in the page are readable by
+     every tenant. -->
+<script src="/omega-design-ai.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
