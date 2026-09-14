@@ -45,7 +45,8 @@
      nav that disagrees with the rules sends them to a page that refuses. */
   var ORG_ALIAS = { 'fenecon.de': 'fenecon.com', 'fenecon.us': 'fenecon.com' };
 
-  var IDS = { divider: 'sn-jv-divider', label: 'sn-jv-label', osa: 'sn-osa', jda: 'sn-jda' };
+  var IDS = { divider: 'sn-jv-divider', label: 'sn-jv-label', osa: 'sn-osa', jda: 'sn-jda',
+             dealroom: 'sn-dealroom' };
 
   function orgOf(email) {
     var d = String(email || '').toLowerCase().split('@')[1] || '';
@@ -55,19 +56,28 @@
 
   function isOsaOrg(orgId) { return OSA_ORGS.indexOf(orgId) >= 0; }
 
-  /* The flag, and only the flag. Any failure to read it is a no: a nav item
-     that appears when Firestore is unreachable is a nav item that appears for
-     everyone the moment Firestore is unreachable. */
-  function readJdFlag(orgId) {
+  /* ONE READ, TWO ANSWERS. Both nav decisions live on the same tenant
+     document, and asking for it twice would be two round trips for one row.
+
+     Any failure is a no on both counts: a nav item that appears when
+     Firestore is unreachable is a nav item that appears for everyone the
+     moment Firestore is unreachable. */
+  function readTenantFlags(orgId) {
+    var none = { jd: false, finance: false };
     try {
       if (typeof root.firebase === 'undefined' || !root.firebase.apps || !root.firebase.apps.length)
-        return Promise.resolve(false);
+        return Promise.resolve(none);
       return root.firebase.firestore().collection('omega_orgs').doc(orgId).get()
         .then(function (doc) {
           var o = (doc && doc.exists) ? (doc.data() || {}) : {};
-          return o.jdPartner === true;
-        })['catch'](function () { return false; });
-    } catch (e) { return Promise.resolve(false); }
+          /* jdPartner is identity-compared; financeOrgKey is a non-empty
+             string, because it is a key rather than a switch — a tenant that
+             has one IS a financing account and there is nothing else it could
+             mean. */
+          return { jd: o.jdPartner === true,
+                   finance: typeof o.financeOrgKey === 'string' && o.financeOrgKey !== '' };
+        })['catch'](function () { return none; });
+    } catch (e) { return Promise.resolve(none); }
   }
 
   /* Reveal whichever of the two applies. Returns a promise resolving to
@@ -81,10 +91,16 @@
        makes the section flicker in after the page has settled. */
     if (osa) { show(IDS.divider); show(IDS.label); show(IDS.osa); show(IDS.jda); }
 
-    return readJdFlag(orgId).then(function (flagged) {
-      var jd = osa || flagged;
+    return readTenantFlags(orgId).then(function (f) {
+      var jd = osa || f.jd;
       if (jd) { show(IDS.divider); show(IDS.label); show(IDS.jda); }
-      return { orgId: orgId, osa: osa, jd: jd };
+      /* A financing tenant works out of its deal room, so it belongs in
+         Workspace beside To-Dos and Team rather than behind My Applications.
+         Same rule on every shell, for the same reason the JD section is: a
+         nav item that appears on one page and not another reads as the
+         platform being broken. */
+      if (f.finance) show(IDS.dealroom);
+      return { orgId: orgId, osa: osa, jd: jd, finance: f.finance };
     });
   }
 

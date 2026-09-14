@@ -96,5 +96,23 @@ ok(/o\.jdPartner === true/.test(jdSrc), 'jdPartner is compared with ===, not coe
 ok(!/isStaffEmail|staff\s*\|\|/.test(jdSrc),
    'there is no staff fallback — one way in, so a leak has one cause');
 
+console.log('\nthe deal room is a workspace for a financing tenant');
+/* Same failure mode as the JD section: a nav item present on one shell and
+   absent on another reads as the platform being broken. */
+['index.html', 'projects.html', 'marketplace.html'].forEach(f => {
+  ok(/id="sn-dealroom"/.test(read(f)), f + ' carries the Deal Room item');
+  ok(/id="sn-dealroom"[^>]*style="display:none"/.test(read(f)),
+     f + ' hides it by default — it is revealed, never shown to everyone');
+});
+ok(/dealroom:\s*'sn-dealroom'/.test(jdSrc), 'the shared rule knows the id');
+ok(/if \(f\.finance\) show\(IDS\.dealroom\)/.test(jdSrc),
+   'and reveals it for a financing tenant');
+ok(/typeof o\.financeOrgKey === 'string' && o\.financeOrgKey !== ''/.test(jdSrc),
+   'on a non-empty financeOrgKey — a key, not a switch');
+ok(/function readTenantFlags/.test(jdSrc) && !/function readJdFlag/.test(jdSrc),
+   'both answers come from one tenant read, not two round trips for one row');
+ok(/href="\/portals\/finance\/"/.test(read('index.html')),
+   'and it opens the financing portal');
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

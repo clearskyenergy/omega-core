@@ -689,7 +689,10 @@ window._omegaReady = function(){
            Plain links, so they need no page-specific handler. -->
       <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
       <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
-      <a class="sn-item" id="sn-osa" href="https://osa.clearskyomega.com/" style="display:none">
+      <!-- Same-origin, never osa.clearskyomega.com — that host is the old Vercel
+           project and a click there drops the user onto the legacy build. See
+           the long note in index.html beside the same link. -->
+      <a class="sn-item" id="sn-osa" href="/tenants/osa" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>OSA Workspace</span>
       </a>
@@ -725,6 +728,13 @@ window._omegaReady = function(){
            a different nav". -->
       <div class="sn-divider"></div>
       <div class="sn-section-label">Workspace</div>
+      <!-- A financing tenant's deal room. Hidden by default and revealed by
+           OmegaJdNav.reveal() when omega_orgs/{org}.financeOrgKey is set, from
+           the same read that decides the Joint Development section. -->
+      <a class="sn-item" data-sn="dealroom" id="sn-dealroom" href="/portals/finance/" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 12h20"/></svg>
+        <span>Deal Room</span>
+      </a>
       <a class="sn-item" data-sn="todos" href="/#todos">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         <span>To-Dos</span>
