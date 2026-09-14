@@ -348,13 +348,39 @@ function sendToPartner(i){
       + 'anything attached, and take it into their pipeline.')) return;
   var btn=document.getElementById('send'+i); if(btn) btn.disabled=true;
   setMsg('m'+i,'Sending…');
+  /* THE SILENT NO-OP THIS USED TO BE.
+
+     partnerOrg is the ONLY thing that actually grants the partner access:
+     adding it to orgsInvolved is what isCollaborator() in firestore.rules
+     tests, and what Storage gates projects/{id}/** on. jd.offeredAt is a
+     label; the array is the grant.
+
+     It was guarded with `if(partnerOrg)` and nothing else — so when
+     omega_orgs/{org}.jdPartnerOrg was unset, or when omega-tenant.js's async
+     entitlements pass simply had not published OMEGA_WORKSPACE yet at the
+     moment of the click, the arrayUnion was skipped, two timestamps were
+     stamped on a document nobody else could read, and the page said "Sent.
+     It is in their inbox for review."
+
+     A send that grants nothing must not report success. Refuse instead, and
+     say which of the two it is so it can be fixed rather than retried. */
   var partnerOrg = (window.OMEGA_WORKSPACE&&OMEGA_WORKSPACE.jdPartnerOrg) || '';
+  if(!partnerOrg){
+    if(btn) btn.disabled=false;
+    var ready = !!(window.OMEGA_WORKSPACE && OMEGA_WORKSPACE.orgId);
+    setMsg('m'+i, ready
+      ? 'Not sent — this workspace has no partner organisation set, so they would '
+        + 'not be able to open it. Ask ClearSky to set the workspace you co-develop with.'
+      : 'Not sent — still loading your workspace. Try again in a moment.', true);
+    return;
+  }
   var patch = {
     'jd.offeredAt': new Date().toISOString(),
     'jd.offeredBy': ME.email,
-    updatedAt: new Date().toISOString()
+    'jd.offeredTo': partnerOrg,
+    updatedAt: new Date().toISOString(),
+    orgsInvolved: firebase.firestore.FieldValue.arrayUnion(partnerOrg)
   };
-  if(partnerOrg) patch.orgsInvolved = firebase.firestore.FieldValue.arrayUnion(partnerOrg);
   db.collection('projects').doc(r.id).update(patch).then(function(){
     setMsg('m'+i,'Sent. It is in '+PARTNER+'\u2019s inbox for review.');
     load();

@@ -504,15 +504,44 @@ function renderSettings(){
   var c = S.cfg || {}, orgsMap = c.orgs || {};
   var partners = (S.finOrgs || []).slice();
 
-  /* A partner named on a room but absent from fin_orgs still needs a box —
-     otherwise its recipients are unreachable and invisible. */
+  /* AN ORG KEY, NOT A DISPLAY NAME.
+
+     room.forOrg is supposed to be a key like 'amperage-capital'. The settings
+     panel this replaced had a free-text "Default partner" box that wrote
+     whatever was typed into defaultOrg, and dealroom-send.js reads
+     `room.forOrg || cfg.defaultOrg` — so "Amperage Capital", the display
+     name, ended up in the key position. Rendering it produced a SECOND
+     Amperage box, which is one partner with two inboxes and a coin flip over
+     which analysts hear about a deal.
+
+     Keys are slugs. Anything with a space or a capital is a display name that
+     leaked into the wrong field, and giving it its own box makes the mess
+     permanent by inviting somebody to fill it in. */
+  var isKey = function (k){ return typeof k === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(k); };
+
+  /* Both capital partners, always offered, so a list can be set before the
+     fin_orgs row exists — which matters because creating one needs a write
+     nobody may have made yet. A real fin_orgs row overrides the label. */
+  var SEEDED = [{ key:'amperage-capital', name:'Amperage Capital' },
+                { key:'helios',           name:'Helios Energy Advisors' }];
+
   var known = {}; partners.forEach(function (p){ known[p.key] = 1; });
+  SEEDED.forEach(function (p){ if (!known[p.key]) { partners.push(p); known[p.key] = 1; } });
   Object.keys(orgsMap).forEach(function (k){
-    if (!known[k]) { partners.push({ key:k, name:k }); known[k] = 1; }
+    if (isKey(k) && !known[k]) { partners.push({ key:k, name:k }); known[k] = 1; }
   });
   (S.rooms || []).forEach(function (d){
     var k = (d.room && d.room.forOrg) || d.firstLookOrgKey;
-    if (k && !known[k]) { partners.push({ key:k, name:(d.firstLookOrgName || k) }); known[k] = 1; }
+    if (isKey(k) && !known[k]) { partners.push({ key:k, name:(d.firstLookOrgName || k) }); known[k] = 1; }
+  });
+
+  /* Say so rather than hiding it: a room addressed to a display name will not
+     match any list here and falls through to the fallback, which is a real
+     mis-delivery waiting to happen. */
+  var strays = {};
+  (S.rooms || []).forEach(function (d){
+    var k = (d.room && d.room.forOrg) || '';
+    if (k && !isKey(k)) strays[k] = (strays[k] || 0) + 1;
   });
 
   var rows = partners.map(function (p){
@@ -529,6 +558,14 @@ function renderSettings(){
     + 'partner has their own list \u2014 configuration rather than code, because a partner '
     + 'changes analysts more often than we deploy.</p>'
     + (rows || '<p class="sub">No capital partners registered yet.</p>')
+    + (Object.keys(strays).length
+        ? '<div class="note warn" style="margin-top:12px">'
+          + Object.keys(strays).map(function(k){
+              return esc(k) + ' (' + strays[k] + ' room' + (strays[k]>1?'s':'') + ')'; }).join(', ')
+          + ' \u2014 addressed to a display name rather than a partner key, so no list here '
+          + 'matches and delivery falls through to the fallback. Set the room\u2019s partner '
+          + 'to a key on the room itself.</div>'
+        : '')
     + '<div class="fld" style="margin-top:14px"><label for="cfgTo">Fallback \u2014 '
       + 'used when a room\u2019s partner has no list above</label>'
       + '<textarea id="cfgTo" rows="2">' + esc((c.recipients||[]).join('\n')) + '</textarea></div>'

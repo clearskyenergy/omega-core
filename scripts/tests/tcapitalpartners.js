@@ -79,5 +79,38 @@ ok(/db\.collection\('projects'\)\.doc\(r\.id\)\.update\(patch\)/.test(jw),
    'the send is a direct project write, not an API call');
 ok(/'jd\.offeredAt'/.test(jw), 'and it stamps what the other side now reads');
 
+/* THE SILENT NO-OP. orgsInvolved is the grant — isCollaborator() tests it and
+   Storage gates on it; jd.offeredAt is only a label. The arrayUnion used to be
+   guarded by `if(partnerOrg)` with no else, so an unset jdPartnerOrg, or an
+   entitlements pass that had simply not landed yet, stamped two timestamps on
+   a document nobody else could read and reported "Sent". */
+ok(/if\(!partnerOrg\)\{/.test(jw),
+   'a send with no partner org is refused, not silently downgraded');
+ok(/Not sent \u2014|Not sent —/.test(jw),
+   'and it says "Not sent", so success is never reported for a grant that did not happen');
+ok(/orgsInvolved: firebase\.firestore\.FieldValue\.arrayUnion\(partnerOrg\)/.test(jw)
+   && !/if\(partnerOrg\) patch\.orgsInvolved/.test(jw),
+   'the grant is unconditional once past that check, not an optional extra');
+ok(/still loading your workspace/.test(jw),
+   'and it distinguishes "not configured" from "not loaded yet" — different fixes');
+
+console.log('\nthe deal-room recipient lists');
+const dr = code('portals/finance/dealroom.html');
+/* room.forOrg is a KEY. The settings panel this replaced had a free-text
+   "Default partner" box, and dealroom-send reads `room.forOrg || defaultOrg`,
+   so a display name reached the key position and produced a second Amperage
+   box — one partner, two inboxes, a coin flip over who hears about a deal. */
+ok(/\/\^\[a-z0-9\]\[a-z0-9-\]\*\$\//.test(dr),
+   'partner keys must be slugs, so a display name never becomes its own partner');
+ok(/if \(isKey\(k\) && !known\[k\]\)/.test(dr),
+   'and the check is applied to both the saved map and the rooms');
+ok(/key:'amperage-capital'/.test(dr) && /key:'helios'/.test(dr),
+   'both capital partners are always offered, before any fin_orgs row exists');
+ok(/addressed to a display name rather than a partner key/.test(read('portals/finance/dealroom.html')),
+   'a room addressed to a display name is reported, not silently dropped');
+ok(/cfg\.orgs\[forOrg\]/.test(read('api/dealroom-send.js'))
+   || /cfg\.orgs && forOrg/.test(read('api/dealroom-send.js')),
+   'the sender still reads the per-partner map these lists fill');
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);
