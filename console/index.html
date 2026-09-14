@@ -778,6 +778,7 @@ button{font-family:inherit}
      the new page runs against the old data layer, which fails as "Accounts is
      blank" rather than as a load error. Bump on every change to either. -->
 <script src="/config.js?v=4"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
 <script src="/omega-brand.js"></script>
 <script src="/console/ops-data.js?v=4"></script>
 <script>
@@ -926,7 +927,7 @@ function signInWithGoogle(){
   var hint = OmegaBrand.googleHint(WORKSPACES);
   if (hint) params.hd = hint;
   p.setCustomParameters(params);
-  auth.signInWithPopup(p)['catch'](function(err){ showAuthErr(err.message); });
+  auth.signInWithPopup(p)['catch'](function(err){ showAuthErr(OmegaAuthError.text(err)); });
 }
 function emailAuth(){
   clearAuthMsg();
@@ -945,7 +946,7 @@ function emailAuth(){
       showAuthErr('That email and password don\u2019t match an account.');
     else if (c === 'auth/too-many-requests')
       showAuthErr('Too many attempts. Wait a few minutes and try again.');
-    else showAuthErr((err && err.message) || 'Sign-in failed.');
+    else showAuthErr(OmegaAuthError.text(err));
   });
 }
 function signOut(){ auth.signOut(); }

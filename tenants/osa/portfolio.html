@@ -1123,6 +1123,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <!-- Scores a site from the KMZ the site team already drew. Grid Atlas is a
      page with no API and the OGI endpoint is not configured, so this is the
      only grid measurement the console can currently make on its own. -->
+<script src="/omega-auth-errors.js?v=1"></script>
 <script src="/omega-site-intel.js?v=1"></script>
 <!-- The referral flow is core, not OSA's: every JD org runs these six steps. -->
 <script src="/omega-jd-flow.js?v=1"></script>
@@ -1235,7 +1236,7 @@ function saveGateProfile(){
     orgName: document.getElementById('gate-org').value.trim(),
     title: document.getElementById('gate-title').value.trim()
   }).then(function(){ toast('Saved \u2014 an administrator will see this'); })
-   ['catch'](function(e){ toast((e&&e.message)||'Could not save',true); });
+   ['catch'](function(e){ toast(OmegaAuthError.opText(e,'Saving'),true); });
 }
 function showAuthErr(m){ var el=document.getElementById('auth-err');
   el.textContent=m; el.style.display='block';
@@ -1279,7 +1280,7 @@ function hideNav(v){
 function signInWithGoogle(){ clearAuthMsg();
   var b=document.getElementById('google-signin-btn'); b.disabled=true;
   var p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'});
-  auth.signInWithPopup(p)['catch'](function(e){ showAuthErr(e.message); }); }
+  auth.signInWithPopup(p)['catch'](function(e){ showAuthErr(OmegaAuthError.text(e)); }); }
 function emailAuth(){ clearAuthMsg();
   var e=document.getElementById('auth-email').value.trim(), p=document.getElementById('auth-pass').value;
   if(!e||!p){ showAuthErr('Enter your email and password.'); return; }
@@ -1289,7 +1290,7 @@ function emailAuth(){ clearAuthMsg();
     if(c==='auth/invalid-credential'||c==='auth/wrong-password'||c==='auth/user-not-found')
       showAuthErr('That email and password don\u2019t match an account.');
     else if(c==='auth/too-many-requests') showAuthErr('Too many attempts. Wait a few minutes.');
-    else showAuthErr((err&&err.message)||'Sign-in failed.'); }); }
+    else showAuthErr(OmegaAuthError.text(err)); }); }
 function resetPassword(){ clearAuthMsg();
   var e=document.getElementById('auth-email').value.trim();
   if(!e){ showAuthErr('Enter your email address first.'); return; }
@@ -3329,7 +3330,7 @@ function doSendToVerify(){
         {type:'verification',message:'Sent to '+org.name+' for '+v.scopes.join(' + ')});
     }).then(function(){ toast('Sent to '+org.name);
       return Promise.all([refresh(),loadVerifications()]).then(render); })
-     ['catch'](function(e){ toast((e&&e.message)||'Could not send',true); });
+     ['catch'](function(e){ toast(OmegaAuthError.opText(e,'Sending'),true); });
   });
 }
 
@@ -4063,7 +4064,7 @@ function doEditProfile(){
       ME.name=v.name; ME.title=v.title; ME.phone=v.phone; ME.orgName=v.orgName;
       document.getElementById('tb-name').textContent=ME.name;
       toast('Saved'); render();
-    })['catch'](function(e){ toast((e&&e.message)||'Could not save',true); });
+    })['catch'](function(e){ toast(OmegaAuthError.opText(e,'Saving'),true); });
   });
 }
 
@@ -4730,7 +4731,7 @@ function doPrescreen(deal){
       if(v.verdict==='park') return F.park(d,v.reason);
       if(v.verdict==='fail') return F.markDead(d,'Other',v.reason);
     }).then(function(){ toast('Prescreen saved'); return refresh(); })
-     ['catch'](function(e){ toast((e&&e.message)||'Could not save',true); });
+     ['catch'](function(e){ toast(OmegaAuthError.opText(e,'Saving'),true); });
   });
 }
 

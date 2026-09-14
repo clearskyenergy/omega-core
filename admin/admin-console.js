@@ -176,7 +176,7 @@ function signInWithGoogle(){
     }
   })['catch'](function(err){
     justSignedIn = false;
-    showAuthErr(err.message);
+    showAuthErr(OmegaAuthError.text(err));
     btn.disabled = false;
     btn.textContent = 'Sign in with Google';
   });
@@ -1249,7 +1249,7 @@ function pushTierToBilling(orgId, crmTier){
         });
       });
   }).then(function(){ loadTenants(); })
-   .catch(function(e){ window.alert('Could not set the tier:\n\n' + (e.message||e)); });
+   .catch(function(e){ window.alert(OmegaAuthError.opText(e, 'Setting the tier')); });
 }
 
 function crmKeyOf(c){
@@ -1796,7 +1796,7 @@ function openBroadcast(orgId){
   });
   batch.commit()
     .then(function(){ window.alert('Sent to '+targets.length+' tenant'+(targets.length===1?'':'s')+'.'); })
-    .catch(function(e){ window.alert('Could not send:\n\n'+(e.message||e)); });
+    .catch(function(e){ window.alert(OmegaAuthError.opText(e, 'Sending')); });
 }
 
 function tenantAction(orgId, action){
@@ -1807,7 +1807,7 @@ function tenantAction(orgId, action){
       !window.confirm('This will '+verb+' '+orgId+' for every user on it. Continue?')) return;
   _authedPost('/api/tenant-approve', { orgId:orgId, action:action })
     .then(function(){ loadTenants(); })
-    .catch(function(e){ window.alert('Could not '+action+' '+orgId+':\n\n'+(e.message||e)); });
+    .catch(function(e){ window.alert(OmegaAuthError.opText(e, 'The ' + action + ' on ' + orgId)); });
 }
 
 /* ── TENANT DETAIL ────────────────────────────────────────────────────────

@@ -728,6 +728,8 @@ window._omegaReady = function(){
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
 <!-- The My Applications submenu is built from OMEGATools' public API, and
@@ -1190,7 +1192,6 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
    should become omega-nav.js instead of a third copy.
    Showing a link grants nothing — /admin/ and OSA both gate independently. */
 (function () {
-  var OSA_ORGS = ['clearsky-usa.com', 'sunesol.com', 'ogisolar.com'];
   var ADMIN_NAV_DOMAINS = ['clearsky-usa.com'];
   function show(id){ var el = document.getElementById(id); if (el) el.style.display = ''; }
   function orgOf(e){ return String(e || '').toLowerCase().split('@')[1] || ''; }
@@ -1201,17 +1202,10 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
     if (ADMIN_NAV_DOMAINS.indexOf(d) >= 0) {
       show('sn-adm-divider'); show('sn-adm-label'); show('sn-admin'); show('sn-ops');
     }
-    var staff = (d === 'clearsky-usa.com' || d === 'csebuilders.com');
-    if (typeof firebase === 'undefined' || !firebase.apps.length) return;
-    firebase.firestore().collection('omega_orgs').doc(d).get().then(function (doc) {
-      var o = (doc && doc.exists) ? doc.data() : {};
-      var isOsa = staff || o.osaMember === true || OSA_ORGS.indexOf(d) >= 0;
-      var isJd  = isOsa || o.jdPartner === true;
-      if (!isOsa && !isJd) return;
-      show('sn-jv-divider'); show('sn-jv-label');
-      if (isOsa) show('sn-osa');
-      if (isJd)  show('sn-jda');
-    }).catch(function () { /* fail closed */ });
+    /* One rule, in omega-jd-nav.js. This page and marketplace.html read the
+       jdPartner flag while index.html kept a hardcoded list, so a tenant set
+       up as a JD partner saw the section here and not on the Dashboard. */
+    if (typeof OmegaJdNav !== 'undefined') OmegaJdNav.reveal(email);
   }
 
   function start(){
