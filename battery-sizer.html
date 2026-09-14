@@ -1314,10 +1314,23 @@ function clearPaste(){
 /* ---------- synthetic sample 8760 ---------- */
 function loadSample(){
   var lines = ['Timestamp,kW'], i;
-  var base = new Date(2025,0,1,0,0,0);
+  /* UTC THROUGHOUT, AND IT HAS TO BE.
+
+     This built a LOCAL date and then added exact 3,600,000 ms steps while
+     printing local clock components. In any zone that observes daylight
+     saving those two things disagree twice a year: the fall-back hour is
+     printed twice and the spring-forward hour is skipped. In America/Chicago
+     that put a duplicate '2025-11-02 01:00' at row 7322.
+
+     The importer is right to refuse that — duplicated and out-of-order
+     intervals are exactly what it now checks for. But it meant "Load sample"
+     produced a file the tool would not size, so the first thing a new user
+     clicked was a dead end, in most of the United States and nowhere else.
+     UTC has no discontinuity, so the 8,760 stamps are strictly hourly. */
+  var base = Date.UTC(2025,0,1,0,0,0);
   for(i=0;i<8760;i++){
-    var d = new Date(base.getTime()+i*3600000);
-    var mo = d.getMonth(), hr = d.getHours(), dow = d.getDay();
+    var d = new Date(base+i*3600000);
+    var mo = d.getUTCMonth(), hr = d.getUTCHours(), dow = d.getUTCDay();
     var seasonal = 1 + 0.30*Math.cos((mo-6)/12*2*Math.PI);         /* summer heavy */
     var work = (dow===0||dow===6) ? 0.42 : 1.0;
     var shape = 0.36 + 0.64*Math.exp(-Math.pow((hr-14)/4.4,2));    /* midday peak */
@@ -1329,8 +1342,9 @@ function loadSample(){
   handleText(lines.join('\n'));
 }
 function fmtDate(d){
+  /* Reads the same clock loadSample() builds on: UTC. */
   function p(n){ return (n<10?'0':'')+n; }
-  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  return d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+p(d.getUTCHours())+':'+p(d.getUTCMinutes());
 }
 
 
