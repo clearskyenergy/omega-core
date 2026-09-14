@@ -404,7 +404,48 @@ function deliver(d){
       ? 'Marked delivered, but no mailbox is configured on this deployment so no email went out.'
       : 'Delivered. ' + ((j.delivered||[]).join(', ') || 'The partner') + ' has been emailed.');
   }).catch(function (e){
-    flash('err', 'Could not deliver: ' + (e.message || 'unknown error'));
+    /* THE EMAIL NEEDS A SERVER. THE TRACKER DOES NOT.
+
+       When the deployment has no Firestore credential the endpoint refuses
+       before it does anything, and the room stayed on "quality check" — so
+       the state of the work and the state of the deployment became the same
+       thing, and a delivery that had really been decided could not be
+       recorded at all.
+
+       An administrator may write room.* directly: the fin_projects update
+       rule grants isAdmin() || isFinAdmin() any change that leaves
+       developerUid and awardedTo alone, which a delivery does. So the
+       tracker advances here and the email is reported as NOT sent, in those
+       words. Nothing is bypassed — the rules were always the boundary, and
+       they still decide. A sponsor gets the same refusal they always did.
+
+       Only the no-credential case falls back. Any other failure is a real
+       error and stays one, because silently marking a room delivered after a
+       genuine failure is worse than the failure. */
+    var msg = (e && e.message) || 'unknown error';
+    var noServer = /FIREBASE_SERVICE_ACCOUNT|no Firestore credential|503/i.test(msg);
+    if (!noServer || !isAdmin()){
+      flash('err', 'Could not deliver: ' + msg);
+      S.busy = false; var b0 = $('deliver'); if (b0){ b0.disabled = false; b0.textContent = 'Deliver to partner'; }
+      return;
+    }
+    var hist = (room(d).history || []).slice(-40);
+    hist.push({ state:'delivered', at: Date.now(), by: (S.me && S.me.email) || 'clearsky',
+                emailed:false });
+    return db.collection('fin_projects').doc(d.docId).update({
+      'room.state': 'delivered',
+      'room.deliveredAt': firebase.firestore.FieldValue.serverTimestamp(),
+      'room.deliveredBy': (S.me && S.me.email) || null,
+      'room.emailSent': false,
+      'room.history': hist
+    }).then(function(){
+      flash('warn', 'Marked delivered — but NO EMAIL WAS SENT. The server has no Firestore '
+        + 'credential (FIREBASE_SERVICE_ACCOUNT is not set), so notifications are off. '
+        + 'Tell the partner yourself, or set the variable and deliver again to send it.');
+    }).catch(function (e2){
+      flash('err', 'Could not deliver: ' + msg + ' — and the room could not be updated either: '
+        + permMsg(e2));
+    });
   }).then(function(){
     S.busy = false; var b = $('deliver'); if (b){ b.disabled = false; b.textContent = 'Deliver to partner'; }
   });
