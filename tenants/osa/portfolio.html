@@ -2079,8 +2079,32 @@ function fundable(d){
 
 /* Who it goes to, asked at the point of sending. Capital partners only —
    sending a fundable project to an EPC partnership is not a thing. */
+/* WHO CAN RECEIVE A DEAL — AN INVESTOR, NOT A CO-DEVELOPER.
+
+   This was jdOrgs().filter(kind === 'investor'), and jdOrgs() filters on
+   jd.active === true. So an organisation registered as an Investor did not
+   appear here until somebody ALSO ticked "Co-develop with them" on the
+   Partners screen — and nothing told you that. Helios was added as an
+   Investor and stayed invisible for exactly this reason.
+
+   The two are different relationships. A joint development is a partnership
+   we build inside; a capital partner is somebody we send a finished project
+   to. An investor can be either, both, or neither, and needing the JD tick to
+   send them a deal is a coupling nobody asked for.
+
+   So: kind === 'investor' and not switched off. The JD flag still drives the
+   JD tab, which is what it is for. */
 function capitalPartners(){
-  return jdOrgs().filter(function(r){ return r.org.kind === 'investor'; });
+  var orgs = A.orgs() || {};
+  return partnerRows()
+    .map(function (st){
+      var o = orgs[st.orgId] || {};
+      return { stats: st, org: o, jd: o.jd || {},
+               deals: S.deals.filter(function (d){
+                 return (F.orgsInvolved ? F.orgsInvolved(d) : (d.orgsInvolved||[]))
+                          .indexOf(st.orgId) !== -1; }) };
+    })
+    .filter(function (r){ return r.org.kind === 'investor' && r.org.active !== false; });
 }
 
 function askDealRoom(dealId, preferOrg){
@@ -2095,7 +2119,7 @@ function askDealRoom(dealId, preferOrg){
       ? 'The organisation registry could not be read (' + regErr + '), so no capital '
         + 'partner can be listed. This is an access problem, not a missing setup.'
       : 'No capital partner set up yet — add the organisation on the Organisations '
-        + 'screen with kind Investor, then tick “Co-develop with them” on Partners.',
+        + 'screen and set “What kind of partner” to Investor. That is all it takes.',
       true);
     return;
   }
@@ -2112,7 +2136,7 @@ function askDealRoom(dealId, preferOrg){
      is the least it should be. */
   var d = S.deals.filter(function(x){ return x.id===dealId; })[0];
   Forms.open({
-    title: opts.length === 1 ? 'Send to their deal room' : 'Send to a deal room',
+    title: 'Send to a deal room',
     intro: ((d && d.name) || dealId)
       + ' \u2014 this emails their analysts and opens the project to them.',
     fields: [{ key:'orgId', type:'radio', label:'Which capital partner', required:true,
@@ -2122,11 +2146,16 @@ function askDealRoom(dealId, preferOrg){
          exactly what you want in front of you while picking one. */
       options: opts.map(function(r){
         var hand = r.jd.handoff ? F.stageOf(r.jd.handoff).label : null;
+        /* A handoff stage belongs to a joint development. For a capital
+           partner who is not one, saying "No handoff stage set" reads as a
+           misconfiguration when nothing is wrong. */
+        var bits = [];
+        if (r.jd.active === true) bits.push(hand ? 'Takes projects at ' + hand
+                                                 : 'No handoff stage set');
+        bits.push(r.deals.length + ' on their roster');
         return { value:r.stats.orgId, label:A.orgName(r.stats.orgId),
-                 hint: (hand ? 'Takes projects at ' + hand : 'No handoff stage set')
-                     + ' · ' + r.deals.length + ' on their roster' }; }) }],
-    submitLabel: opts.length === 1
-      ? 'Send to ' + A.orgName(opts[0].stats.orgId) : 'Send'
+                 hint: bits.join(' · ') }; }) }],
+    submitLabel: 'Send to deal room'
   }).then(function(v){ if (v && v.orgId) sendToDealRoom(dealId, v.orgId); });
 }
 

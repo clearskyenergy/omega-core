@@ -76,6 +76,9 @@
   .btn:disabled{opacity:.45;cursor:not-allowed}
   .btn.ghost{background:transparent;color:var(--cs-ink);border:1.5px solid var(--cs-line)}
   .btn.go{background:linear-gradient(135deg,#006F9A,#00A9A4)}
+  /* Destructive-adjacent, not destructive: it removes a packaging, not a deal. */
+  .btn.warn{background:#fff;border-color:#E3C08A;color:#7A4E00}
+  .btn.warn:hover{background:#FFF8EC}
   input[type=text],input[type=url],textarea,select{
     width:100%;padding:10px 12px;border:1.5px solid var(--cs-line);border-radius:9px;
     font:400 14px Inter,sans-serif;color:var(--cs-ink);background:#fff;outline:none}
@@ -197,7 +200,7 @@ function callApi(path, body, tok){
   });
 }
 
-var S = { me:null, profile:null, rooms:[], openId:null, cfg:null, busy:false, msg:null };
+var S = { me:null, profile:null, rooms:[], openId:null, cfg:null, busy:false, msg:null, finOrgs:[] };
 var db = firebase.firestore(), auth = firebase.auth();
 
 function $(id){ return document.getElementById(id); }
@@ -329,6 +332,13 @@ function renderDetail(){
         + '<button class="btn" id="saveStage">Save stage</button>'
         + '<button class="btn go" id="deliver"' + (r.dataRoomUrl ? '' : ' disabled') + '>'
         + (st === 'delivered' || st === 'funded' ? 'Deliver again' : 'Deliver to partner') + '</button>'
+        /* TAKING A ROOM OFF THIS PAGE IS NOT DELETING THE DEAL.
+           A duplicate room and a duplicate deal are different things, and only
+           one of them is recoverable. Removing clears the room block, so the
+           deal keeps its history, its offers and its place in the marketplace
+           and simply stops being packaged. That is what a duplicate room
+           needs. Deleting the deal outright is a separate, louder action. */
+        + '<button class="btn warn" id="unroom" style="margin-left:auto">Remove from deal rooms</button>'
       + '</div>';
     if (r.notifiedTo && r.notifiedTo.length){
       h += '<p class="muted" style="font-size:12.5px;margin:12px 0 0">Last delivered to '
@@ -354,6 +364,7 @@ function renderDetail(){
   if ($('saveRoom')) $('saveRoom').onclick = function(){ saveRoom(d); };
   if ($('saveStage')) $('saveStage').onclick = function(){ saveStage(d); };
   if ($('deliver')) $('deliver').onclick = function(){ deliver(d); };
+  var ur = $('unroom'); if (ur) ur.onclick = function(){ unroom(d); };
 }
 
 function flash(kind, text){
@@ -451,6 +462,24 @@ function deliver(d){
   });
 }
 
+/* Clear the room, keep the deal. Admin only — the same people who may deliver.
+   A confirm because the tracker history goes with it, and that is the part
+   nobody can reconstruct from memory. */
+function unroom(d){
+  if (!isAdmin()) return;
+  var name = d.name || d.docId;
+  if (!window.confirm('Remove "' + name + '" from Deal rooms?\n\n'
+      + 'The deal itself is kept — its offers, its marketplace listing and its '
+      + 'history all stay. It stops being packaged for a partner, and the tracker '
+      + 'for this room is discarded.\n\nThis does not delete the deal.')) return;
+  db.collection('fin_projects').doc(d.docId).update({
+    room: firebase.firestore.FieldValue.delete()
+  }).then(function(){
+    if (S.openId === d.docId) S.openId = null;
+    flash('ok', 'Removed from deal rooms. The deal is untouched.');
+  }).catch(function(e){ flash('err', permMsg(e)); });
+}
+
 function permMsg(e){
   return (e && e.code === 'permission-denied')
     ? 'You do not have permission to change this room.'
@@ -458,35 +487,99 @@ function permMsg(e){
 }
 
 /* ── settings (administrators) ───────────────────────────────────────── */
+/* WHO GETS TOLD — ONE LIST PER PARTNER, NOT ONE LIST.
+
+   This was a single free-text "Default partner" plus one recipients box, so
+   every delivery went to the same analysts whoever the deal was actually for.
+   dealroom-send.js has always read cfg.orgs[forOrg] first and fallen back to
+   cfg.recipients — the per-partner map existed in the sender and had no way
+   to be filled in. Adding a second capital partner made that gap load-bearing:
+   Helios would have been emailed Amperage's analysts.
+
+   Partners come from fin_orgs, which an administrator may read. The fallback
+   list stays, for a room whose partner has no addresses of their own. */
 function renderSettings(){
   var el = $('settings'); if (!el) return;
   if (!isAdmin()){ el.innerHTML = ''; return; }
-  var c = S.cfg || {};
+  var c = S.cfg || {}, orgsMap = c.orgs || {};
+  var partners = (S.finOrgs || []).slice();
+
+  /* A partner named on a room but absent from fin_orgs still needs a box —
+     otherwise its recipients are unreachable and invisible. */
+  var known = {}; partners.forEach(function (p){ known[p.key] = 1; });
+  Object.keys(orgsMap).forEach(function (k){
+    if (!known[k]) { partners.push({ key:k, name:k }); known[k] = 1; }
+  });
+  (S.rooms || []).forEach(function (d){
+    var k = (d.room && d.room.forOrg) || d.firstLookOrgKey;
+    if (k && !known[k]) { partners.push({ key:k, name:(d.firstLookOrgName || k) }); known[k] = 1; }
+  });
+
+  var rows = partners.map(function (p){
+    return '<div class="fld"><label for="cfgTo-' + esc(p.key) + '">' + esc(p.name)
+      + ' <span class="muted" style="font-weight:400">· ' + esc(p.key) + '</span></label>'
+      + '<textarea id="cfgTo-' + esc(p.key) + '" rows="2" data-orgkey="' + esc(p.key) + '" '
+      + 'placeholder="deals@' + esc(p.key) + '.com">'
+      + esc((orgsMap[p.key] || []).join('\n')) + '</textarea></div>';
+  }).join('');
+
   el.innerHTML = '<div class="card"><h2>Who gets told</h2>'
-    + '<p class="sub">Where the “ready to fund” email goes. One address per line. '
-    + 'Configuration rather than code, because a partner changes analysts more often than we deploy.</p>'
-    + '<div class="grid">'
-      + '<div class="fld"><label for="cfgOrg">Default partner</label>'
-        + '<input id="cfgOrg" type="text" placeholder="Amperage Capital" value="' + esc(c.defaultOrg||'') + '"></div>'
-      + '<div class="fld"><label for="cfgTo">Recipients</label>'
-        + '<textarea id="cfgTo" rows="3" placeholder="deals@amperagecapital.com">'
-        + esc((c.recipients||[]).join('\n')) + '</textarea></div>'
-    + '</div>'
+    + '<p class="sub">Where the \u201cready to fund\u201d email goes, per capital partner. '
+    + 'One address per line. A room is delivered to the partner it was packaged for, so each '
+    + 'partner has their own list \u2014 configuration rather than code, because a partner '
+    + 'changes analysts more often than we deploy.</p>'
+    + (rows || '<p class="sub">No capital partners registered yet.</p>')
+    + '<div class="fld" style="margin-top:14px"><label for="cfgTo">Fallback \u2014 '
+      + 'used when a room\u2019s partner has no list above</label>'
+      + '<textarea id="cfgTo" rows="2">' + esc((c.recipients||[]).join('\n')) + '</textarea></div>'
     + '<button class="btn" id="saveCfg">Save recipients</button>'
     + '<span class="muted" id="cfgMsg" style="margin-left:10px;font-size:13px"></span>'
     + '</div>';
+
   $('saveCfg').onclick = function(){
-    var list = (($('cfgTo')||{}).value||'').split(/[\n,;]+/)
-      .map(function(x){ return x.trim(); }).filter(function(x){ return /.+@.+\..+/.test(x); });
+    var addrs = function (v){
+      return String(v||'').split(/[\n,;]+/).map(function(x){ return x.trim(); })
+             .filter(function(x){ return /.+@.+\..+/.test(x); });
+    };
+    var next = {}, total = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-orgkey]'), function (t){
+      var list = addrs(t.value);
+      if (list.length) { next[t.getAttribute('data-orgkey')] = list; total += list.length; }
+    });
+    var fallback = addrs(($('cfgTo')||{}).value);
     db.collection('fin_settings').doc('dealroom').set({
-      defaultOrg: (($('cfgOrg')||{}).value||'').trim(),
-      recipients: list,
+      orgs: next,
+      recipients: fallback,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge:true })
-      .then(function(){ $('cfgMsg').textContent = 'Saved — ' + list.length + ' recipient(s).'; })
+      .then(function(){
+        $('cfgMsg').textContent = 'Saved \u2014 ' + total + ' address(es) across '
+          + Object.keys(next).length + ' partner(s)'
+          + (fallback.length ? ', plus ' + fallback.length + ' fallback.' : '.');
+      })
       .catch(function(e){ $('cfgMsg').textContent = permMsg(e); });
   };
 }
+
+/* The capital partners an administrator may configure. fin_orgs is the
+   finance-side registry; a refusal leaves the list empty rather than throwing,
+   and the rooms themselves still contribute their own partner keys above. */
+function loadFinOrgs(){
+  return db.collection('fin_orgs').get().then(function (snap){
+    var out = [];
+    snap.forEach(function (d){
+      var v = d.data() || {};
+      if (v.active === false) return;
+      out.push({ key: d.id, name: v.name || d.id });
+    });
+    out.sort(function (a,b){ return String(a.name).localeCompare(String(b.name)); });
+    S.finOrgs = out;
+  }).catch(function (e){
+    S.finOrgs = [];
+    try { console.warn('[dealroom] fin_orgs:', e && e.code); } catch(_e){}
+  });
+}
+
 
 /* ── data ────────────────────────────────────────────────────────────── */
 function watch(){
@@ -606,8 +699,9 @@ auth.onAuthStateChanged(function (u){
         $('lede').textContent = 'Projects held exclusively for you. Each has been through '
           + 'pre-development and carries a full data room.';
       }
-      renderSettings();
-      watch();
+      /* Partners first, so the recipients panel paints with its boxes rather
+         than painting empty and filling in after somebody has started typing. */
+      loadFinOrgs().then(function(){ renderSettings(); watch(); });
     });
 });
 </script>
