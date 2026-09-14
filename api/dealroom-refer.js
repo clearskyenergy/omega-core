@@ -72,6 +72,12 @@ module.exports = A.handler(function (req) {
   return A.authenticate(req).then(function (caller) {
     if (!caller.staff) throw A.httpError(403, 'ClearSky staff only');
 
+    /* See provision-partner: a token verifies without a service account, so
+       without this the call dies on the write with a message about Firestore
+       rather than about the credential that is missing. */
+    if (typeof A.isDegraded === 'function' && A.isDegraded())
+      throw A.httpError(503, 'FIREBASE_SERVICE_ACCOUNT is not set on the server, so Firestore is unreachable and nothing can be written. Set it in the Vercel project environment and redeploy. Nothing was changed.');
+
     var orgKey = clean(b.orgKey, 60).toLowerCase();
     if (!/^[a-z0-9-]{2,60}$/.test(orgKey)) throw A.httpError(400, 'a valid orgKey is required');
     var days = Math.max(1, Math.min(90, Number(b.days) || 14));

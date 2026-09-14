@@ -449,18 +449,59 @@ function renderSettings(){
 
 /* ── data ────────────────────────────────────────────────────────────── */
 function watch(){
-  /* Every audience reads the same collection; the rules decide what comes
-     back. An administrator gets everything with a room on it, a sponsor gets
-     their own, a partner gets the ones held for them. Rather than write three
-     queries that each need their own index, read what this account can see
-     and filter for rooms in the client — the rule has already done the
-     security part, and the volume here is a book of deals, not a feed. */
-  db.collection('fin_projects').onSnapshot(function (snap){
-    var out = [];
-    snap.forEach(function (doc){
-      var d = doc.data() || {}; d.docId = doc.id;
-      if (d.room && d.room.state) out.push(d);
+  /* ASK ONLY FOR WHAT THIS ACCOUNT MAY READ.
+
+     This used to be one unfiltered read of fin_projects, on the premise that
+     "the rules decide what comes back". They do not. Firestore does not
+     filter a query by the rules — it refuses the WHOLE query unless the rules
+     can prove every document it could return is readable. So a partner asking
+     for the collection got permission-denied and this page told them "You do
+     not have access to deal rooms on this account", which was not true: they
+     had rooms, and the request was simply one nobody is allowed to make.
+
+     Three scoped queries instead, matching the three read paths the rules
+     actually grant, merged by document id. An administrator may read the
+     collection, so they still get one. It is the same shape watchDeals() in
+     index.html already uses, and for the same reason. */
+  var col = db.collection('fin_projects');
+  var uid = S.me && S.me.uid;
+  var myOrg = (S.profile && S.profile.orgKey) || '';
+  var queries = [];
+  if (isAdmin()) {
+    queries.push(['all', col]);
+  } else {
+    /* Held for them, and won by them — the two ways a capital partner reaches
+       a deal. A sponsor reaches their own by org or by having filed it. */
+    if (uid) queries.push(['held', col.where('firstLookUids', 'array-contains', uid)]);
+    if (uid) queries.push(['won',  col.where('awardedTo', '==', uid)]);
+    if (myOrg) queries.push(['org', col.where('orgKey', '==', myOrg)]);
+    if (uid) queries.push(['own',  col.where('developerUid', '==', uid)]);
+  }
+  if (!queries.length) {
+    $('list').innerHTML = '<div class="empty">This account has no deal-room access yet. '
+      + 'Ask ClearSky to finish setting it up.</div>';
+    return;
+  }
+
+  /* One bucket per query. A refusal on ONE of them must not empty the page:
+     a partner with no sponsor org legitimately has nothing to return from the
+     org query, and that is not an error worth showing over the rooms they do
+     have. Only report a problem when every query failed. */
+  var buckets = {}, failures = {}, fired = {};
+  function emit(){
+    var merged = {};
+    Object.keys(buckets).forEach(function (k){
+      (buckets[k] || []).forEach(function (d){ merged[d.docId] = d; });
     });
+    var out = Object.keys(merged).map(function (k){ return merged[k]; })
+                    .filter(function (d){ return d.room && d.room.state; });
+    if (!out.length && Object.keys(failures).length === queries.length){
+      var denied = Object.keys(failures).every(function(k){ return failures[k] === 'permission-denied'; });
+      $('list').innerHTML = '<div class="empty">'
+        + (denied ? 'You do not have access to deal rooms on this account.'
+                  : 'Could not load deal rooms.') + '</div>';
+      return;
+    }
     out.sort(function (a,b){ return (IDX[stateOf(b)]||0) - (IDX[stateOf(a)]||0)
       || String(a.name||'').localeCompare(String(b.name||'')); });
     S.rooms = out;
@@ -470,12 +511,22 @@ function watch(){
       else if (out.length) S.openId = out[0].docId;
     }
     renderList(); renderDetail();
-  }, function (e){
-    $('list').innerHTML = '<div class="empty">' +
-      (e && e.code === 'permission-denied'
-        ? 'You do not have access to deal rooms on this account.'
-        : 'Could not load deal rooms.') + '</div>';
-    try { console.error('[dealroom]', e); } catch(_e){}
+  }
+
+  queries.forEach(function (q){
+    var key = q[0];
+    q[1].onSnapshot(function (snap){
+      var rows = [];
+      snap.forEach(function (doc){ var d = doc.data() || {}; d.docId = doc.id; rows.push(d); });
+      buckets[key] = rows; delete failures[key]; fired[key] = 1; emit();
+    }, function (e){
+      /* Record and carry on. One refused query out of four is normal — a
+         capital partner has no sponsor org — and emptying the page over it
+         would hide the rooms the other queries did return. */
+      failures[key] = (e && e.code) || 'error'; buckets[key] = []; fired[key] = 1;
+      try { console.warn('[dealroom] ' + key + ':', e && e.code); } catch(_e){}
+      emit();
+    });
   });
 
   db.collection('fin_settings').doc('dealroom').onSnapshot(function (s){

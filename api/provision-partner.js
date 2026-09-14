@@ -46,6 +46,15 @@ module.exports = A.handler(function (req) {
   return A.authenticate(req).then(function (caller) {
     if (!caller.staff) throw A.httpError(403, 'ClearSky staff only');
 
+    /* FAIL HERE, NOT HALFWAY. Without a service account a token still
+       verifies — the SDK checks it against Google's public keys — so this
+       gets all the way past auth and then dies on the first write, which
+       reads as "provisioning is broken" rather than "the server has no
+       credential". Creating three accounts and failing before the profiles
+       are written would also leave people who can sign in and see nothing. */
+    if (typeof A.isDegraded === 'function' && A.isDegraded())
+      throw A.httpError(503, 'FIREBASE_SERVICE_ACCOUNT is not set on the server, so Firestore is unreachable and nothing can be written. Set it in the Vercel project environment and redeploy. Nothing was changed.');
+
     var orgId  = clean(b.orgId).toLowerCase();
     var name   = clean(b.name);
     var orgKey = clean(b.orgKey, 60).toLowerCase();
