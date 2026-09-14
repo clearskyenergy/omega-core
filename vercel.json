@@ -72,14 +72,6 @@
   ],
   "rewrites": [
     {
-      "source": "/osa",
-      "destination": "/tenants/osa/index.html"
-    },
-    {
-      "source": "/osa/portfolio",
-      "destination": "/tenants/osa/portfolio.html"
-    },
-    {
       "source": "/",
       "has": [
         {
@@ -87,7 +79,7 @@
           "value": "app.clearskyomega.com"
         }
       ],
-      "destination": "/start.html"
+      "destination": "/start"
     },
     {
       "source": "/",
@@ -97,7 +89,7 @@
           "value": "alpha.clearskyomega.com"
         }
       ],
-      "destination": "/console/index.html"
+      "destination": "/console"
     },
     {
       "source": "/",
@@ -107,7 +99,7 @@
           "value": "tools.csebuilders.com"
         }
       ],
-      "destination": "/admin/index.html"
+      "destination": "/admin"
     },
     {
       "source": "/",
@@ -117,7 +109,7 @@
           "value": "osa.clearskyomega.com"
         }
       ],
-      "destination": "/tenants/osa/index.html"
+      "destination": "/tenants/osa"
     },
     {
       "source": "/portfolio",
@@ -127,7 +119,7 @@
           "value": "osa.clearskyomega.com"
         }
       ],
-      "destination": "/tenants/osa/portfolio.html"
+      "destination": "/tenants/osa/portfolio"
     },
     {
       "source": "/portfolio.html",
@@ -137,7 +129,7 @@
           "value": "osa.clearskyomega.com"
         }
       ],
-      "destination": "/tenants/osa/portfolio.html"
+      "destination": "/tenants/osa/portfolio"
     },
     {
       "source": "/index.html",
@@ -147,7 +139,7 @@
           "value": "osa.clearskyomega.com"
         }
       ],
-      "destination": "/tenants/osa/index.html"
+      "destination": "/tenants/osa"
     },
     {
       "source": "/",
@@ -157,19 +149,27 @@
           "value": "solela.csebuilders.com"
         }
       ],
-      "destination": "/tenants/solela/index.html"
+      "destination": "/tenants/solela"
+    },
+    {
+      "source": "/osa",
+      "destination": "/tenants/osa"
+    },
+    {
+      "source": "/osa/portfolio",
+      "destination": "/tenants/osa/portfolio"
     },
     {
       "source": "/finance",
-      "destination": "/portals/finance/index.html"
+      "destination": "/portals/finance"
     },
     {
       "source": "/skyfund-sandbox",
       "destination": "/portals/skyfund-sandbox"
     },
     {
-      "source": "/skyfund-sandbox/(.*)",
-      "destination": "/portals/skyfund-sandbox/$1"
+      "source": "/skyfund-sandbox/:path*",
+      "destination": "/portals/skyfund-sandbox/:path*"
     }
   ],
   "functions": {
