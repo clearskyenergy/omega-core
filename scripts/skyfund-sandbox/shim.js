@@ -482,7 +482,73 @@
     '.sb-sheet .field{border:1px solid rgba(20,23,26,.16);border-radius:4px;padding:10px 12px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:15px;color:#14171A;background:#F5F4F0;margin-bottom:8px;display:flex;justify-content:space-between}.sb-sheet .field small{font:500 11px Inter,sans-serif;color:#8A94A0;text-transform:uppercase;letter-spacing:.06em}' +
     '.sb-btn{display:block;width:100%;border:1px solid transparent;border-radius:4px;padding:13px 16px;font:600 15px Inter,sans-serif;cursor:pointer;margin-top:10px}.sb-btn.gold{background:#C77A00;color:#fff}.sb-btn.blue{background:#2B5FA8;color:#fff}.sb-btn.ghost{background:#fff;color:#14171A;border-color:rgba(20,23,26,.16)}.sb-btn.red{background:#fff;color:#D9482B;border-color:rgba(217,72,43,.4)}' +
     '.sb-head{background:#16202B;color:#fff;margin:-20px -20px 16px;padding:14px 20px;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;font:600 13px Inter,sans-serif}.sb-head i{width:8px;height:8px;border-radius:50%;background:#F0B45C;display:inline-block}.sb-head span{opacity:.7;font-weight:500;margin-left:auto}' +
+    '.sb-add{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:75;background:#16202B;color:#fff;border:1px solid #3A4C5E;border-radius:12px;padding:13px 14px;box-shadow:0 14px 40px rgba(7,12,18,.55);font:400 13px/1.45 Inter,system-ui,sans-serif;display:flex;gap:11px;align-items:flex-start}' +
+    '@media(min-width:700px){.sb-add{left:auto;right:16px;bottom:16px;max-width:360px}}' +
+    '.sb-add img{width:38px;height:38px;border-radius:9px;flex:none}' +
+    '.sb-add b{display:block;font:700 13px Archivo,Inter,sans-serif;margin-bottom:2px}' +
+    /* the rule above is for the heading; the bolded words inside the sentence
+       are inline, or "tap Share, then Add to Home Screen" arrives as four
+       separate lines with a full stop of its own. */
+    '.sb-add p b{display:inline;font:inherit;font-weight:700;color:#E3EDF6;margin:0}' +
+    '.sb-add p{margin:0;color:#AEBECD;font-size:12px;line-height:1.45}' +
+    '.sb-add .sb-add-x{margin-left:auto;background:none;border:0;color:#7F92A4;font-size:20px;line-height:1;cursor:pointer;padding:0 2px;flex:none}' +
+    '.sb-add .sb-add-go{margin-top:9px;background:#C77A00;border:0;color:#fff;border-radius:6px;padding:9px 13px;font:600 12.5px Inter,sans-serif;cursor:pointer}' +
     '.sb-note{background:rgba(109,91,208,.1);border:1px solid rgba(109,91,208,.35);border-radius:6px;padding:10px 12px;font-size:12.5px;line-height:1.5;margin-top:12px}.sb-list{margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.6;color:#14171A}';
+
+  /* ── "PUT IT ON YOUR PHONE" ────────────────────────────────────────────
+     This build gets sent to people as a link, and the thing they are being
+     asked to do — add it to the home screen — is the one thing no browser
+     offers by itself on an iPhone. The storefront already explains it on the
+     Account page, which a first-time visitor has no reason to open. So the
+     sandbox asks once, on first open, in the words of the device in hand,
+     and remembers being dismissed.
+
+     Chrome and Edge hand us a real prompt through beforeinstallprompt. The
+     page keeps its own reference for the Account card; listeners do not
+     compete, so we keep one too. Safari has no prompt and never will, so
+     iOS gets the two taps spelled out instead. */
+  var addEvt = null;
+  try {
+    global.addEventListener('beforeinstallprompt', function (e) { addEvt = e; });
+    global.addEventListener('appinstalled', function () { addEvt = null; closeAdd(); try { global.localStorage.setItem(ADD_KEY, 'installed'); } catch (x) {} });
+  } catch (e) {}
+  var ADD_KEY = 'skyfund_sandbox_add_prompt';
+  var addBar = null;
+  function standalone() {
+    try {
+      return (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches) || global.navigator.standalone === true;
+    } catch (e) { return false; }
+  }
+  function isIOS() { return /iPhone|iPad|iPod/.test(global.navigator.userAgent || '') && !global.MSStream; }
+  function closeAdd() { if (addBar && addBar.parentNode) addBar.parentNode.removeChild(addBar); addBar = null; }
+  function offerAdd() {
+    if (onSponsor() || standalone() || addBar) return;
+    try { if (global.localStorage.getItem(ADD_KEY)) return; } catch (e) {}
+    var body = addEvt
+      ? '<b>Put SkyFund on your home screen</b><p>It opens full screen with its own icon, and works offline once loaded.</p><button class="sb-add-go" type="button">Install</button>'
+      : isIOS()
+        ? '<b>Put SkyFund on your home screen</b><p>Tap <b>Share</b> at the bottom of Safari, then <b>Add to Home Screen</b>. It opens full screen with its own icon.</p>'
+        : '<b>Put SkyFund on your home screen</b><p>In your browser menu choose <b>Install</b> or <b>Add to Home screen</b>. It opens full screen with its own icon.</p>';
+    addBar = el('div', 'sb-add', '<img src="brand/skyfund-icon-180.png" alt=""><div>' + body + '</div><button class="sb-add-x" type="button" aria-label="Not now">\u00d7</button>');
+    document.body.appendChild(addBar);
+    /* The phone layout puts Explore / Portfolio / Account along the bottom.
+       Sit above it rather than on top of it — measured, because the bar is
+       only shown at narrow widths and its height is set in the page. */
+    try {
+      var tb = document.querySelector('.tabbar');
+      if (tb && global.getComputedStyle(tb).display !== 'none' && tb.offsetHeight) {
+        addBar.style.bottom = 'calc(' + (tb.offsetHeight + 10) + 'px + env(safe-area-inset-bottom))';
+      }
+    } catch (e) {}
+    addBar.querySelector('.sb-add-x').onclick = function () { try { global.localStorage.setItem(ADD_KEY, 'dismissed'); } catch (e) {} closeAdd(); };
+    var go = addBar.querySelector('.sb-add-go');
+    if (go) go.onclick = function () {
+      if (!addEvt) return;
+      addEvt.prompt();
+      try { addEvt.userChoice.then(function () { try { global.localStorage.setItem(ADD_KEY, 'asked'); } catch (e) {} closeAdd(); }); }
+      catch (e) { closeAdd(); }
+    };
+  }
 
   var sheet = null;
   function closeSheet() { if (sheet && sheet.parentNode) sheet.parentNode.removeChild(sheet); sheet = null; }
@@ -529,11 +595,18 @@
       '<div class="row" style="margin-top:12px"><span>Signed in as</span><b style="font-family:Inter">' + (u ? esc(u.email) : 'nobody') + '</b></div><div class="row"><span>Commitments</span><b>' + paid + ' paid · ' + pend + ' pending</b></div>' +
       '<button class="sb-btn blue" id="sbQuarter"' + (u ? '' : ' disabled') + '>Fast-forward a quarter: fund my projects &amp; pay a distribution</button>' +
       '<button class="sb-btn ghost" id="sbPayAll"' + (pend ? '' : ' disabled') + '>Mark pending commitments as paid</button>' +
+      '<button class="sb-btn ghost" id="sbAdd">Put it on the home screen</button>' +
       '<button class="sb-btn ghost" id="sbSponsor">Open the sponsor console (the partner\'s side)</button>' +
       '<button class="sb-btn red" id="sbReset">Reset the sandbox</button>' +
       '<div class="sb-note">Nothing here touches a real database, a real card, or ClearSky. Every number about money was computed by the real SkyFund engine at build time for these four projects; the app only multiplies by your units.</div>');
     s.querySelector('#sbQuarter').onclick = function () { var n = simulateQuarter(); closeSheet(); if (!n) { toast('Confirm an investment first, then fast-forward.'); return; } location.hash = '#/portfolio'; setTimeout(function () { location.reload(); }, 50); };
     s.querySelector('#sbPayAll').onclick = function () { var n = simulatePayPending(); closeSheet(); toast(n + ' commitment' + (n === 1 ? '' : 's') + ' marked paid.'); location.hash = '#/portfolio'; setTimeout(function () { location.reload(); }, 50); };
+    s.querySelector('#sbAdd').onclick = function () {
+      try { global.localStorage.removeItem(ADD_KEY); } catch (e) {}
+      closeSheet();
+      if (standalone()) { toast('You are already using the installed app.'); return; }
+      offerAdd();
+    };
     s.querySelector('#sbSponsor').onclick = function () { location.href = 'sponsor.html'; };
     s.querySelector('#sbReset').onclick = function () { if (!confirm('Reset the sandbox? Sign-in, commitments and distributions on this device are cleared.')) return; reset(); location.hash = '#/'; location.reload(); };
   }
@@ -551,6 +624,8 @@
     document.addEventListener('click', function (ev) { var a = ev.target.closest && ev.target.closest('a[href="#sandbox"]'); if (a) { ev.preventDefault(); controls(); } }, true);
     global.addEventListener('hashchange', route);
     route();
+    /* After the first paint, so the offer lands on a page that has drawn. */
+    setTimeout(offerAdd, 2500);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install();
 }(typeof window !== 'undefined' ? window : this));
