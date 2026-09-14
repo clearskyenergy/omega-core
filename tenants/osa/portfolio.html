@@ -1734,6 +1734,54 @@ function jdListHtml(rows){
 function openJD(orgId){ S.jdOpen = orgId; renderJD(); window.scrollTo(0,0); }
 function closeJD(){ S.jdOpen = ''; renderJD(); }
 
+/* WHAT THIS PARTNER HAS ACTUALLY SENT US.
+
+   The roster below lists DEALS whose orgsInvolved carries the partner. The
+   JD workspace's "Send" button writes to a PROJECT — it stamps jd.offeredAt
+   and adds our org to the project's roster. The two never met, so a partner
+   pressed Send, saw "it is in their inbox for review", and nothing appeared
+   anywhere on this side. That is the gap; this is the missing half.
+
+   Read from S.design, which is every editor project and is already loaded for
+   the Design tab, so this costs no extra read. A project counts as sent when
+   it carries jd.offeredAt and belongs to — or lists — this partner. */
+function jdSentProjects(orgId){
+  var rows = (S.design || []).filter(function (p){
+    if (!p.jd || !p.jd.offeredAt) return false;
+    if (p.orgId === orgId) return true;
+    return (p.orgsInvolved || []).indexOf(orgId) !== -1;
+  });
+  rows.sort(function (a,b){
+    return String((b.jd&&b.jd.offeredAt)||'').localeCompare(String((a.jd&&a.jd.offeredAt)||''));
+  });
+  return rows;
+}
+
+function jdSentHtml(orgId){
+  var rows = jdSentProjects(orgId);
+  if (!rows.length) return '';
+  var when = function (iso){
+    if (!iso) return '';
+    var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString();
+  };
+  var h = '<div class="card"><div class="card-h"><h2>Sent to us</h2>'
+    + '<span class="sub">' + rows.length + ' project'+(rows.length===1?'':'s')
+    + ' this partner pressed Send on \u2014 straight from their JD workspace</span></div>'
+    + '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Sent</th>'
+    + '<th>By</th><th>Files</th><th></th></tr></thead><tbody>';
+  rows.forEach(function (p){
+    h += '<tr><td><div class="t-name">' + esc(p.name || p.id) + '</div>'
+      +   '<div class="t-sub">' + esc(p.address || '') + '</div></td>'
+      + '<td>' + esc(when(p.jd && p.jd.offeredAt)) + '</td>'
+      + '<td class="t-sub">' + esc((p.jd && p.jd.offeredBy) || '') + '</td>'
+      + '<td class="num mono">' + ((p.files && p.files.length) || 0) + '</td>'
+      + '<td style="white-space:nowrap">'
+      +   '<button class="btn-x" onclick="openEditor(\'' + esc(p.id) + '\')">Open drawing</button>'
+      + '</td></tr>';
+  });
+  return h + '</tbody></table></div></div>';
+}
+
 /* The strip. Clicking a step filters the roster under it, so "who is waiting
    on us" is one click rather than a read of every row. */
 function jdFlowHtml(r){
@@ -1791,11 +1839,17 @@ function jdDetailHtml(r){
   }
   h += '</div></div>';
 
+  h += jdSentHtml(r.stats.orgId);
+
   h += '<div class="card"><div class="card-h"><h2>Projects</h2>'
     + '<span class="sub">Everything on this partnership’s roster</span></div>';
   if (!r.deals.length){
-    return h + '<div class="card-b"><div class="empty">Nothing on the roster yet. Add '
-      + esc(r.stats.orgId) + ' to a project’s partners and it appears here.</div></div></div>';
+    var sentN = jdSentProjects(r.stats.orgId).length;
+    return h + '<div class="card-b"><div class="empty">No DEALS on the roster yet.'
+      + (sentN ? ' ' + sentN + ' project' + (sentN===1?' they have':'s they have')
+                 + ' sent is listed above \u2014 a deal is created when it is taken into the pipeline.'
+               : ' Add ' + esc(r.stats.orgId) + ' to a project’s partners and it appears here.')
+      + '</div></div></div>';
   }
   /* "Next" replaces the old Ready column. Ready was one bit; the useful thing
      is whose move it is, which the flow already worked out for the strip. */

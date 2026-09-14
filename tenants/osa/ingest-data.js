@@ -526,6 +526,12 @@
           name: v.name || 'Untitled',
           address: v.address || (v.mapState && v.mapState.address) || '',
           orgId: lower(v.orgId || ''),
+          /* The JD handoff. jd.offeredAt is stamped by jd-workspace.html when
+             a partner presses "Send"; without it here the OSA portfolio has
+             no way to tell a project that was SENT from one that merely
+             exists, which is why a send appeared to go nowhere. */
+          jd: v.jd || null,
+          orgsInvolved: (v.orgsInvolved || []).map(lower),
           wizMode: v.wizMode || '',
           customer: v.customer || '',
           updatedAt: v.updatedAt || v.createdAt || null,
