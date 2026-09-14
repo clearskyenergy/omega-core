@@ -306,15 +306,26 @@ body.signed-out #app-body{display:none !important}
 .wg-feed-empty{padding:40px 18px;text-align:center;color:var(--sap-ink-2);font-size:12.5px}
 
 /* ── TWO-COLUMN: TABLE + NEXT ACTIONS ── */
-.dash-cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}  /* minmax(0,1fr), never a bare 1fr: 1fr floors at min-content, so the ten-column
+/* ONE COLUMN. This was `minmax(0,1fr) 320px` to hold a "Next Actions" panel
+   beside the table. That panel was four hardcoded lines — create a site map,
+   run a pro forma, build a proposal, generate a permit set — with no click
+   handlers and no state: the checkboxes were bare divs that could never be
+   ticked, so it promised progress tracking that did not exist. It was also
+   simply wrong for any tenant that does not develop sites; a capital partner
+   was told to go generate a permit set.
+   Removed rather than made conditional: a checklist nothing can complete is
+   not worth keeping for anyone. The table takes the width back. */
+.dash-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}  /* minmax(0,1fr), never a bare 1fr: 1fr floors at min-content, so the ten-column
      table widened its own grid track and ran off the card instead of scrolling. */
 
 /* ── PORTFOLIO TABLE ── */
 .table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05)}
 /* Scroll BOTH ways, on an inner element so .table-wrap keeps its rounded
-   corners. max-height matches the Next Actions card beside it, so the two
-   line up instead of one running twice as long as the other. */
-.table-scroll{overflow-x:auto;overflow-y:auto;max-height:392px;-webkit-overflow-scrolling:touch}
+   corners. The 392px cap existed to match the height of the Next Actions card
+   beside it; with that card gone there is nothing to line up against, and a
+   cap that short turned a full portfolio into a scroll-within-a-scroll. Keep
+   a ceiling so the table cannot run the whole page, but a useful one. */
+.table-scroll{overflow-x:auto;overflow-y:auto;max-height:70vh;-webkit-overflow-scrolling:touch}
 .table-scroll .ptable{min-width:920px}  /* narrower than this the columns crush rather than scroll */
 .table-scroll thead th{position:sticky;top:0;z-index:2}
 .ptable{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -338,15 +349,6 @@ body.signed-out #app-body{display:none !important}
 .table-foot a{color:var(--sap-blue);text-decoration:none;font-weight:600}
 
 /* ── NEXT ACTIONS PANEL ── */
-.actions-panel{background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
-.ap-head{font-size:14px;font-weight:700;color:var(--cs-navy);margin-bottom:4px}
-.ap-sub{font-size:11px;color:var(--cs-sub);margin-bottom:16px}
-.ap-item{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--cs-border);align-items:flex-start}
-.ap-item:last-child{border-bottom:none}
-.ap-check{width:16px;height:16px;border:2px solid var(--cs-border);border-radius:5px;flex-shrink:0;margin-top:1px}
-.ap-item.pri .ap-check{border-color:var(--sap-blue);background:rgba(0,112,242,.1)}
-.ap-txt{font-size:12.5px;color:var(--cs-text);line-height:1.4}
-.ap-meta{font-size:10.5px;color:var(--cs-sub);margin-top:2px}
 
 /* ── ACTION CARDS (Platform Tools — moved lower, unchanged links) ── */
 .action-cards{background:#fff;border:1px solid var(--cs-border);border-radius:14px;margin-top:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
@@ -782,9 +784,7 @@ body{background:#F4F6F8}
 .kpi-val{font-size:23px !important;letter-spacing:-.6px;margin-top:4px !important}
 
 /* ── Widget cards + pipeline + tables: unified soft depth + hover ── */
-.wg-card,.pipeline,.table-wrap,.th-card,.pp-dev-card,.actions-panel{
-  border:1px solid var(--pol-border) !important;box-shadow:var(--pol-shadow) !important}
-.wg-card,.pp-dev-card{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
+.wg-card,.pipeline,.table-wrap,.th-card,.pp-dev-card,.wg-card,.pp-dev-card{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease}
 .wg-card:hover,.pp-dev-card:hover{transform:translateY(-2px);
   box-shadow:var(--pol-shadow-hover) !important;border-color:var(--pol-border-strong) !important}
 .wg-card{min-height:280px !important}
@@ -2293,14 +2293,6 @@ window._omegaReady = function(){
         <div class="table-foot">Showing portfolio sites · <a onclick="goToProjects()">Open full project list ›</a></div>
       </div>
 
-      <!-- NEXT ACTIONS PANEL -->
-      <div class="actions-panel">
-        <div class="ap-head">Next Actions</div>
-        <div class="ap-sub">Getting started</div>
-        <div class="ap-item pri"><div class="ap-check"></div><div><div class="ap-txt">Create your first site map</div><div class="ap-meta">Site development</div></div></div>
-        <div class="ap-item"><div class="ap-check"></div><div><div class="ap-txt">Run a BESS pro forma</div><div class="ap-meta">Project economics</div></div></div>
-        <div class="ap-item"><div class="ap-check"></div><div><div class="ap-txt">Build a sales proposal</div><div class="ap-meta">Customer-facing</div></div></div>
-        <div class="ap-item"><div class="ap-check"></div><div><div class="ap-txt">Generate a permit set</div><div class="ap-meta">Permitting</div></div></div>
       </div>
     </div>
 
