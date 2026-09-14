@@ -25046,7 +25046,15 @@ async function saveProject(){
         if (window._frozenMapStencil) _lsSetImage('cs_stencil_map_' + _projectId, window._frozenMapStencil, 0.7, 1400, 'Stencil');
       } catch(imgErr){ console.warn('Post-create image save failed:', imgErr && imgErr.message); }
     } else {
-      payload.orgId = ((typeof _projOrgId==='function') ? _projOrgId() : null) || 'clearsky.com';
+      /* OWNERSHIP IS SET ON CREATE AND NEVER MOVES. This branch used to write
+         payload.orgId = _projOrgId() on every save, i.e. the org of whoever
+         is saving. A ClearSky user opened a NextNRG project that NextNRG had
+         just sent us, the editor autosaved, and the project's owner became
+         clearsky-usa.com — it vanished from NextNRG's workspace and from our
+         "Sent to us" list in the same instant. CLAUDE.md: "projects.orgId —
+         the OWNER. never moves." A legacy doc with no orgId is the backfill
+         script's job, not something to guess at from the current session. */
+      delete payload.orgId;
       _shedIfOversize(payload);
       await _db.collection('projects').doc(_projectId).update(payload);
     }
@@ -70619,9 +70627,14 @@ function _evTenantHost(h){
   h=String(h||'').toLowerCase();
   return /(^|\.)(csebuilders|clearskyomega)\.com$/.test(h) && h.split('.').length>=3;
 }
-/* The workbook lives on the shared tools host with everything else, and the
-   console has no rewrite for it — so this is an absolute URL. */
-var _EV_WB_ORIGIN = 'https://tools.csebuilders.com';
+/* ev-cost-workbook.html lives in THIS repo, so the workbook is same-origin.
+   It used to be opened from https://tools.csebuilders.com — a separate Vercel
+   project running the legacy build — which meant the editor handed its estimate
+   to the OLD workbook and every fix made here was invisible. This origin is also
+   the postMessage target, so a stale host here silently ships a tenant's cost
+   estimate to another deployment. location.origin keeps both ends on the host
+   the user is actually signed in to. */
+var _EV_WB_ORIGIN = location.origin;
 var _EV_WB_URL    = _EV_WB_ORIGIN + '/ev-cost-workbook.html';
 window._elecWorkbookHost = function(){
   var h = String(location.hostname||'').toLowerCase(), i;
@@ -71475,8 +71488,13 @@ function _aiSyncLegacy(store, val){
 (function(){
 'use strict';
 
-/* ---- serverless proxy that holds each org's CRM credentials server-side ---- */
-var CRM_PROXY_URL = "https://tools.csebuilders.com/api/crm-sync";
+/* ---- serverless proxy that holds each org's CRM credentials server-side ----
+   Same-origin. This endpoint receives CRM API TOKENS, and it used to post them
+   to https://tools.csebuilders.com — a separate Vercel project running the
+   legacy build — so the editor was handing a tenant's credentials to a
+   deployment that is not this one. api/crm-sync.js lives in omega-core; the
+   relative path keeps the secret on the origin the user is signed in to. */
+var CRM_PROXY_URL = "/api/crm-sync";
 
 /* Supported CRMs and the credential fields each needs.
    'secret:true' fields go to the proxy and are never persisted client-side. */
@@ -150701,7 +150719,7 @@ function cfg(){
        gives for the page URL. Override with OmegaGridPrescreen.setService(). */
     serviceUrl: candidates()[0],
     candidates: candidates(),
-    pageUrl:    c.url || 'https://tools.csebuilders.com/grid-atlas.html',
+    pageUrl:    c.url || '/grid-atlas.html',   /* in-repo; not the legacy host */
     org:        c.org || 'clearsky-usa.com',
     threshold:  c.prescreenThreshold == null ? 35 : c.prescreenThreshold,
     /* config.js turns this on for the console at screening; the editor's
@@ -150728,16 +150746,18 @@ function candidates(){
   try { c = ((root.CLEARSKY_CONFIG || {}).portfolio || {}).gridAtlas || {}; } catch (e) {}
   var out = [], remembered = localGet('omega.gridatlas.worked');
   if (remembered) out.push(remembered);
-  /* Same origin first: no CORS step at all if this host carries its own
-     copy. Then the hosts Grid Atlas is actually deployed on. The page lives
-     at tools.csebuilders.com per config.js, so the function most likely
-     ships beside it; the portal and OPS follow. Order is cheapest-to-
-     most-likely-to-fail, and whichever answers is remembered. */
+  /* Same origin only, plus whatever a tenant's own config names. omega-core
+     carries api/grid-atlas.js, so the first candidate answers and there is no
+     CORS step at all. */
+  /* omega-core serves /api/grid-atlas itself (verified 2026-09-14), so the
+     same-origin candidate answers and nothing below it is ever reached. The
+     old fallback hosts are kept OUT deliberately: tools.csebuilders.com and
+     clearsky-portal.vercel.app both 404 this route, and osa.clearskyomega.com
+     answers it from the legacy Vercel project — a silent cross-origin call
+     into a build that is not this one. A dead list that looks like resilience
+     is worse than no list. */
   ['/api/grid-atlas',
-   c.serviceUrl,
-   'https://tools.csebuilders.com/api/grid-atlas',
-   'https://clearsky-portal.vercel.app/api/grid-atlas',
-   'https://osa.clearskyomega.com/api/grid-atlas'
+   c.serviceUrl
   ].forEach(function (u) { if (u && out.indexOf(u) < 0) out.push(u); });
   return out;
 }
@@ -152499,7 +152519,10 @@ if (root.console && console.info) {
  *  Same-origin comes before the portal so a tenant that DOES carry its own
  *  copy keeps using it — one tenant can be moved without touching the rest.
  * ══════════════════════════════════════════════════════════════════════ */
-var OMEGA_RENDER_SERVICE = 'https://clearsky-portal.vercel.app/api/render';
+/* Same-origin. This pointed at https://clearsky-portal.vercel.app/api/render,
+   which 404s the route entirely (checked 2026-09-14) — the render simply
+   failed. api/render.js ships in omega-core and answers here. */
+var OMEGA_RENDER_SERVICE = '/api/render';
 
 /* A render is a paid call that can run for most of a minute. Give it that
    long, then stop waiting rather than leaving the button stuck. */

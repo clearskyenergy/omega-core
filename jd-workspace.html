@@ -378,6 +378,7 @@ function sendToPartner(i){
     'jd.offeredAt': new Date().toISOString(),
     'jd.offeredBy': ME.email,
     'jd.offeredTo': partnerOrg,
+    'jd.offeredFromOrg': MYORG,
     updatedAt: new Date().toISOString(),
     orgsInvolved: firebase.firestore.FieldValue.arrayUnion(partnerOrg)
   };

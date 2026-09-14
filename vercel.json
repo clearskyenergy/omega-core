@@ -21,7 +21,7 @@
       ]
     },
     {
-      "source": "/(omega-.*\\.js|.*\\.html)",
+      "source": "/(omega-.*\\.js|tenants/.*/config\\.js|.*\\.html)",
       "headers": [
         {
           "key": "Cache-Control",

@@ -422,7 +422,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
          vercel.json has a host-scoped redirect for it. Served from
          silmarillion it is a 308 to /portfolio and then a 404. The real
          path works on every host of this deployment. -->
-    <a class="sn-item" href="/tenants/osa/portfolio">
+    <a class="sn-item" href="/osa/portfolio">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
       <span>Portfolio</span></a>
 
@@ -552,7 +552,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
      tenants/osa/config.js and have no equivalent in the root config, so a
      copy of this page served from omega-core loaded a file with no `access`
      block at all: the owner pin silently evaporated. -->
-<script src="/tenants/osa/config.js?v=15"></script>
+<script src="/tenants/osa/config.js?v=16"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
 <script src="/tenants/osa/partner-data.js?v=2"></script>
 <script>
@@ -598,7 +598,7 @@ function ready(){
    A retained verifier stays. So does anyone who asked for this page on purpose:
    the portfolio's own Portal button carries ?portal=1, and without that
    exemption the two pages would bounce a staff user between them forever. */
-var PORTFOLIO_PATH = '/tenants/osa/portfolio';
+var PORTFOLIO_PATH = '/osa/portfolio';
 function sendToPortfolio(actor){
   if (/[?&]portal=1\b/.test(location.search)) return false;
   if (!actor) return false;

@@ -1111,7 +1111,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <!-- THE OSA CONSOLE'S OWN CONFIG — see tenants/osa/index.html. The root
      /config.js carries no `access` block, so loading it here left
      ownerEmail() empty and unpinned the owner account. -->
-<script src="/tenants/osa/config.js?v=15"></script>
+<script src="/tenants/osa/config.js?v=16"></script>
 <script src="/tenants/osa/forms.js?v=4"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
 <script src="/tenants/osa/portfolio-data.js?v=25"></script>
@@ -1749,7 +1749,12 @@ function jdSentProjects(orgId){
   var rows = (S.design || []).filter(function (p){
     if (!p.jd || !p.jd.offeredAt) return false;
     if (p.orgId === orgId) return true;
-    return (p.orgsInvolved || []).indexOf(orgId) !== -1;
+    if ((p.orgsInvolved || []).indexOf(orgId) !== -1) return true;
+    /* The sender's own org, from the send itself. orgId can be rewritten by a
+       save from another org (it was, once), but who pressed Send cannot. */
+    if (p.jd.offeredFromOrg === orgId) return true;
+    var by = String(p.jd.offeredBy || '').toLowerCase().split('@')[1] || '';
+    return by === orgId;
   });
   rows.sort(function (a,b){
     return String((b.jd&&b.jd.offeredAt)||'').localeCompare(String((a.jd&&a.jd.offeredAt)||''));
