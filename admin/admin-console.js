@@ -1058,9 +1058,11 @@ function _tnStatusChip(st){
    Hand each person their own link. */
 var PARTNER_PRESETS = {
   helios: {
-    orgId: 'heliosnrgy.com', name: 'Helios Energy', orgKey: 'helios',
+    orgId: 'heliosnrgy.com', name: 'Helios Energy Advisors', orgKey: 'helios',
     kind: 'investor', tier: 'partner', vertical: 'developer',
     domains: ['helios.clearskyomega.com'], requiredTools: ['financing'],
+    /* The board they land on: deal-room arrivals, offers made, investments. */
+    widgets: ['finroom', 'finoffers', 'fininvest'],
     people: [
       { email: 'tye.dawson@heliosnrgy.com',    name: 'Tye Dawson',    role: 'partner' },
       { email: 'jack.degiulio@heliosnrgy.com', name: 'Jack DeGiulio', role: 'partner' },

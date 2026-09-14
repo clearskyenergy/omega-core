@@ -6567,22 +6567,51 @@ var TC={bess:'#2B5FA8',dcfc:'#2B5FA8',solar:'#F0A030',
         var had=false;
         if(doc&&doc.exists){ try{ var st=JSON.parse(doc.data().state); state.order=st.order||[]; state.hidden=st.hidden||[]; state.added=st.added||[]; state.sizes=st.sizes||{}; had=true; }catch(e){} }
         if (had){ cb&&cb(); return; }
-        _seedFromVertical(function(){ cb&&cb(); });
+        _seedStarterBoard(function(){ cb&&cb(); });
       }).catch(function(){ cb&&cb(); });
     });
   }
-  function _seedFromVertical(done){
-    var v = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.vertical) || '';
-    if (!v || typeof db==='undefined' || !db){ done&&done(); return; }
-    db.collection('verticals').doc(v).get().then(function(d){
-      var list = (d && d.exists && (d.data()||{}).defaultWidgets) || [];
-      var ok=_drawableTypes();
-      list.slice(0,6).forEach(function(t){
-        if (ok.indexOf(t)<0) return;
-        state.added.push({ key:'w-'+t+'-'+Math.random().toString(36).slice(2,6), type:t });
-      });
-      done&&done();
-    }).catch(function(){ done&&done(); });
+  function _addStarter(list){
+    var ok=_drawableTypes(), n=0;
+    (list||[]).slice(0,6).forEach(function(t){
+      if (ok.indexOf(t)<0) return;
+      state.added.push({ key:'w-'+t+'-'+Math.random().toString(36).slice(2,6), type:t });
+      n++;
+    });
+    return n;
+  }
+
+  /* THE STARTER BOARD, FOR SOMEBODY WHO HAS NEVER ARRANGED ONE.
+
+     Two sources, most specific first. omega_orgs/{org}/layouts/default is the
+     tenant's own starter set; CLAUDE.md has described it since the control
+     plane was designed and nothing read it, so every tenant fell through to
+     its vertical. That is wrong for any tenant whose board is not the
+     vertical's board — a capital partner seeded from 'developer' opens on a
+     project pipeline they do not have, which is the same as opening on
+     nothing.
+
+     verticals/{v}.defaultWidgets stays the fallback, so nothing changes for a
+     tenant without its own layout. */
+  function _seedStarterBoard(done){
+    var ws = window.OMEGA_WORKSPACE || {};
+    var org = ws.orgId || (typeof currentOrg !== 'undefined' ? currentOrg : '');
+    if (typeof db==='undefined' || !db){ done&&done(); return; }
+    var byVertical = function(){
+      var v = ws.vertical || '';
+      if (!v){ done&&done(); return; }
+      db.collection('verticals').doc(v).get().then(function(d){
+        _addStarter((d && d.exists && (d.data()||{}).defaultWidgets) || []);
+        done&&done();
+      })['catch'](function(){ done&&done(); });
+    };
+    if (!org){ byVertical(); return; }
+    db.collection('omega_orgs').doc(org).collection('layouts').doc('default').get()
+      .then(function(d){
+        var list = (d && d.exists && (d.data()||{}).widgets) || [];
+        if (_addStarter(list) > 0){ done&&done(); return; }
+        byVertical();
+      })['catch'](byVertical);
   }
 
   return {

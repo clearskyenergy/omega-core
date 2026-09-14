@@ -131,5 +131,23 @@ ok(/_FIN\.err==='nokey'/.test(idx), 'an unresolved org key is reported, not rend
 ok(/not registered as a capital partner/.test(read('index.html')),
    'and it says why in words');
 
+console.log('\nthe starter board');
+/* omega_orgs/{org}/layouts/default has been in CLAUDE.md since the control
+   plane was designed and nothing read it, so every tenant fell through to its
+   vertical — and a capital partner seeded from 'developer' opens on a project
+   pipeline it does not have, which is the same as opening on nothing. */
+ok(/collection\('layouts'\)\.doc\('default'\)/.test(idx),
+   'the dashboard reads the org-level starter board');
+ok(/function _seedStarterBoard/.test(idx), 'through one seeding function');
+ok(/byVertical/.test(idx),
+   'and still falls back to the vertical, so nothing changes for a tenant without one');
+const provApi = code('api/provision-partner.js');
+ok(/collection\('layouts'\)\.doc\('default'\)/.test(provApi),
+   'provisioning writes that board, so the first sign-in already looks right');
+ok(/had\.name \|\| name/.test(provApi),
+   'and keeps the name a self-signed-up tenant typed for itself');
+ok(/status: 'active'/.test(provApi),
+   'provisioning approves the tenant — otherwise it is half a job');
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

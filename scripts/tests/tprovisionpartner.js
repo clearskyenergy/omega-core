@@ -127,6 +127,23 @@ Promise.resolve()
        'pre-approved — a self-signed-up profile sees nothing until somebody approves it');
     ok(profiles.every(k => DOCS[k].orgKey === 'helios'), 'all scoped to the finance orgKey');
     ok(DOCS['fin_profiles/uid_2'].role === 'admin', 'the admin account keeps its admin role');
+    /* The board they land on. Without it a capital partner opens on their
+       vertical's project pipeline and has to add three widgets by name. */
+    var board = DOCS['omega_orgs/heliosnrgy.com/layouts/default'];
+    ok(board && board.widgets.join(',') === 'finroom,finoffers,fininvest',
+       'the starter board is the three financing panels');
+    ok(DOCS['omega_orgs/heliosnrgy.com'].status === 'active',
+       'provisioning also approves — leaving them on the waiting screen would be half a job');
+  })
+
+  .then(function(){ console.log('\na tenant that signed itself up keeps its own name');
+    reset();
+    DOCS['omega_orgs/heliosnrgy.com'] = { name: 'Helios Energy Advisors', status: 'pending' };
+    return call(HELIOS); })
+  .then(function(){
+    ok(DOCS['omega_orgs/heliosnrgy.com'].name === 'Helios Energy Advisors',
+       'the name their own people typed survives provisioning');
+    ok(DOCS['omega_orgs/heliosnrgy.com'].status === 'active', 'and pending flips to active');
   })
 
   .then(() => { console.log('\nre-running is safe'); return call(HELIOS); })

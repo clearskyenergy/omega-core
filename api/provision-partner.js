@@ -76,16 +76,40 @@ module.exports = A.handler(function (req) {
     }, { merge: true })
 
     .then(function () {
-      return db.collection('omega_orgs').doc(orgId).set({
-        name: name, domains: Array.isArray(b.domains) ? b.domains : [],
-        vertical: clean(b.vertical, 30) || 'developer', shell: 'default',
-        status: 'active', financeOrgKey: orgKey,
-        requiredTools: Array.isArray(b.requiredTools) ? b.requiredTools : []
-      }, { merge: true });
+      /* A tenant that signed itself up already has a name its own people
+         typed, and a merge would overwrite it with whatever the preset says.
+         Keep theirs. status goes active here, which is also the approval —
+         provisioning a partner and leaving them on the waiting screen would
+         be two jobs where there is one. */
+      return db.collection('omega_orgs').doc(orgId).get().then(function (snap) {
+        var had = snap.exists ? (snap.data() || {}) : {};
+        return db.collection('omega_orgs').doc(orgId).set({
+          name: had.name || name,
+          domains: Array.isArray(b.domains) ? b.domains : (had.domains || []),
+          vertical: clean(b.vertical, 30) || had.vertical || 'developer',
+          shell: had.shell || 'default',
+          status: 'active', approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          approvedBy: caller.email || 'clearsky',
+          financeOrgKey: orgKey,
+          requiredTools: Array.isArray(b.requiredTools) ? b.requiredTools : []
+        }, { merge: true });
+      });
     })
     .then(function () {
       return db.collection('omega_orgs').doc(orgId).collection('billing').doc('current')
         .set({ tier: tier, addons: [], toolOverrides: {}, paymentProvider: 'manual' }, { merge: true });
+    })
+    .then(function () {
+      /* THE STARTER BOARD. Without this the partner opens on their vertical's
+         board — a project pipeline they do not have — and would have to know
+         to click Edit Dashboard and add three widgets by name. The point of
+         provisioning is that the first sign-in already looks right. */
+      var board = Array.isArray(b.widgets) && b.widgets.length
+        ? b.widgets : ['finroom', 'finoffers', 'fininvest'];
+      return db.collection('omega_orgs').doc(orgId).collection('layouts').doc('default')
+        .set({ widgets: board,
+               setBy: caller.email || 'clearsky',
+               setAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     })
     .then(function () {
       if (!b.kind) return null;
