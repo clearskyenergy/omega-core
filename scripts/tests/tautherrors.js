@@ -105,7 +105,7 @@ console.log('\nthe deal room is a workspace for a financing tenant');
      f + ' hides it by default — it is revealed, never shown to everyone');
 });
 ok(/dealroom:\s*'sn-dealroom'/.test(jdSrc), 'the shared rule knows the id');
-ok(/if \(f\.finance\) show\(IDS\.dealroom\)/.test(jdSrc),
+ok(/if \(f\.finance\) \{ show\(IDS\.dealroom\)/.test(jdSrc),
    'and reveals it for a financing tenant');
 /* Assert the property, not the phrasing: the key must be a NON-EMPTY STRING.
    A truthy test would let a stray `true` or a 1 open a deal room, and an
@@ -116,6 +116,22 @@ ok(/function readTenantFlags/.test(jdSrc) && !/function readJdFlag/.test(jdSrc),
    'both answers come from one tenant read, not two round trips for one row');
 ok(/href="\/portals\/finance\/"/.test(read('index.html')),
    'and it opens the financing portal');
+
+console.log('\nmarketplace means the financing one for a financing tenant');
+/* /marketplace.html is the EQUIPMENT marketplace — SKUs, vendors, quotes. A
+   capital partner has no use for it. Sending them there under a label reading
+   "Marketplace" is the wrong destination behind a word they were right to
+   trust. */
+ok(/function pointMarketplaceAtFinance/.test(jdSrc), 'the shared rule retargets it');
+ok(/if \(f\.finance\) \{ show\(IDS\.dealroom\); pointMarketplaceAtFinance\(\); \}/.test(jdSrc),
+   'from the same tenant read that reveals the deal room');
+ok(/querySelectorAll\('\[data-sn="marketplace"\]'\)/.test(jdSrc),
+   'every entry point, not just the sidebar — the topbar tab and the apps submenu share the tag');
+ok(/href\.indexOf\('\/marketplace'\) !== 0/.test(jdSrc),
+   'and it is idempotent, so re-applying cannot walk a link somewhere else');
+['index.html', 'projects.html', 'marketplace.html'].forEach(f => {
+  ok(/data-sn="marketplace"/.test(read(f)), f + ' tags its marketplace links so they can be retargeted');
+});
 
 console.log('\na financing account is not a referral inbox');
 /* A referral is a quote request. A capital partner is never asked for a

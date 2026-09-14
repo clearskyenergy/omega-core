@@ -1047,6 +1047,27 @@ function _tnStatusChip(st){
        : st==='suspended' ? 'bad' : st==='cancelled' ? 'bad' : 'neutral';
 }
 
+/* ── SAYING WHY, IN THE ONE PLACE THAT NEEDS IT ────────────────────────────
+   "Contact your account administrator" is the right answer on a customer's
+   sign-in screen. It is the wrong answer here: this console IS the account
+   administrator, and telling them to contact themselves hides the only fact
+   that would let them act. The first provisioning failure said exactly that
+   and nobody could tell whether it was a permission, a bad field or a
+   timeout.
+
+   So: the reason, verbatim — these endpoints answer in their own plain words
+   ("ClearSky staff only", "orgId must be an email domain"), not in vendor
+   codes. scrub() is still applied, so if an unexpected 500 surfaces a
+   Firebase string it is replaced rather than printed. The rule was never
+   "hide the cause"; it was "never show the vendor's words to a customer". */
+function adminFail(what, e){
+  var why = (e && e.message) ? String(e.message) : '';
+  if (typeof OmegaAuthError !== 'undefined') why = OmegaAuthError.scrub(why);
+  window.alert('Could not ' + what + '.\n\n' + (why || 'No reason was returned.')
+    + '\n\nNothing was changed. The console log has the full response.');
+  try { console.error('[admin] ' + what + ' failed:', e); } catch(_){}
+}
+
 /* ── STAND UP A CAPITAL PARTNER ────────────────────────────────────────────
    The whole provisioning run — tenant, billing, finance org, partner org,
    accounts and pre-approved profiles — from the console, so the service
@@ -1084,12 +1105,25 @@ function provisionPartner(preset){
     window.alert('Done — ' + cfg.name + '.\n\nGive each person their own link:\n\n'
                  + lines.join('\n\n'));
     try { console.log('[provision] ' + cfg.name, r); } catch(e){}
-  })['catch'](function(e){
-    window.alert('Could not provision ' + cfg.name + '.\n\n'
-      + (typeof OmegaAuthError !== 'undefined' ? OmegaAuthError.opText(e, 'Provisioning') : 'Contact your account administrator.'));
-  });
+  })['catch'](function(e){ adminFail('provision ' + cfg.name, e); });
 }
 window.provisionPartner = provisionPartner;
+
+/* WHAT THE SERVER ACTUALLY HAS. "missing bearer token" comes back whether or
+   not Firestore is reachable — a Firebase ID token verifies against Google's
+   public keys with only a project id — so probing an endpoint proves nothing
+   about the database. This asks. */
+function serverHealth(){
+  _authedPost('/api/health', {}).then(function(r){
+    var miss = Object.keys(r.env || {}).filter(function(k){ return !r.env[k]; });
+    window.alert('Server health\n\n'
+      + r.summary + '\n\n'
+      + 'Firestore: ' + r.firestore + (r.firestoreError ? ' (' + r.firestoreError + ')' : '') + '\n'
+      + 'Missing configuration:\n  ' + (miss.length ? miss.join('\n  ') : 'none'));
+    try { console.log('[health]', r); } catch(e){}
+  })['catch'](function(e){ adminFail('read server health', e); });
+}
+window.serverHealth = serverHealth;
 
 /* ── PUT A DEAL IN A PARTNER'S DEAL ROOM ───────────────────────────────────
    A referral is a FIRST-LOOK HOLD, not a label: the partner's portal reads
@@ -1121,12 +1155,7 @@ function referDeal(preset, orgKey){
     window.alert('Referred.\n\n' + r.name + '\nheld for ' + r.orgKey
       + ' until ' + r.until + '\n\nVisible to:\n  ' + (r.partners||[]).join('\n  '));
     try { console.log('[refer]', r); } catch(e){}
-  })['catch'](function(e){
-    window.alert('Could not refer the deal.\n\n'
-      + (typeof OmegaAuthError !== 'undefined' ? OmegaAuthError.opText(e, 'The referral')
-                                               : 'Contact your account administrator.')
-      + '\n\n' + (e && e.message ? e.message : ''));
-  });
+  })['catch'](function(e){ adminFail('refer the deal', e); });
 }
 window.referDeal = referDeal;
 

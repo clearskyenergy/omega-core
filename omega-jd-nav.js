@@ -115,12 +115,48 @@
          Same rule on every shell, for the same reason the JD section is: a
          nav item that appears on one page and not another reads as the
          platform being broken. */
-      if (f.finance) show(IDS.dealroom);
+      if (f.finance) { show(IDS.dealroom); pointMarketplaceAtFinance(); }
       return { orgId: orgId, osa: osa, jd: jd, finance: f.finance };
     });
   }
 
+  /* MARKETPLACE MEANS SOMETHING ELSE TO A FINANCING TENANT.
+
+     /marketplace.html is the EQUIPMENT marketplace — SKUs, vendors, quotes.
+     A capital partner has no use for it and never will; their marketplace is
+     the financing one, where sponsors post projects and partners price them.
+     Sending them to the equipment catalogue under a label that reads
+     "Marketplace" is not a missing feature, it is the wrong destination
+     behind a word they were right to trust.
+
+     Every entry point is retargeted, not just the sidebar: the topbar tab and
+     the "Browse marketplace" link under My Applications carry the same
+     data-sn, and leaving either pointing at the equipment catalogue is how
+     somebody ends up there wondering what they did wrong. The submenu is
+     rendered after this runs on some shells, so it is re-applied on a short
+     delay rather than assumed present. */
+  function pointMarketplaceAtFinance() {
+    var apply = function () {
+      var links = root.document.querySelectorAll('[data-sn="marketplace"]');
+      Array.prototype.forEach.call(links, function (a) {
+        if (!a.getAttribute) return;
+        var href = a.getAttribute('href') || '';
+        if (href.indexOf('/marketplace') !== 0) return;   /* already retargeted */
+        a.setAttribute('href', '/portals/finance/');
+        /* Relabel only where the text IS the word — a card's "Browse
+           Marketplace ›" keeps its own wording and its own arrow. */
+        var t = (a.textContent || '').trim();
+        if (t === 'Marketplace') a.textContent = 'Financing Marketplace';
+        else if (/^Browse marketplace/i.test(t)) a.textContent = 'Browse financing marketplace';
+      });
+    };
+    apply();
+    root.setTimeout(apply, 400);
+    root.setTimeout(apply, 1500);
+  }
+
   root.OmegaJdNav = { reveal: reveal, orgOf: orgOf, isOsaOrg: isOsaOrg,
+                      pointMarketplaceAtFinance: pointMarketplaceAtFinance,
                       OSA_ORGS: OSA_ORGS, IDS: IDS };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
