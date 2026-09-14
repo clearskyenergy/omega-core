@@ -3601,7 +3601,22 @@ async function sendOffer(dealId) {
     notes: $('#ofNotes').value.trim(),
     docs: links,
     status: 'submitted',
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    /* THE UID AS A FIELD, NOT ONLY AS THE DOCUMENT ID.
+
+       This document is written at offers/{currentUser.uid}, and the portal
+       recovers the uid in memory with {uid: d.id} when it reads a deal's
+       offers. That works here and nowhere else: a collection-group query
+       cannot filter on a document id, so "every offer I have made, across
+       every deal" had no way to be asked. A partner dashboard asking it got
+       nothing back and reported zero offers to people who had made several.
+
+       Stored as a field it is queryable. dealId and dealName ride along for
+       the same reason — a group query returns the offer without its parent,
+       and re-reading every parent deal to get a name defeats the point. */
+    uid: FB.auth.currentUser.uid,
+    dealId: d.docId,
+    dealName: d.name || d.docId
   };
   if (!myOffer()) body.createdAt = Date.now();
 

@@ -86,32 +86,44 @@ say so, rather than charting somebody else's pipeline.
 Investments counts **accepted offers only**. A pipeline number presented as a
 position is a lie, and this is a board a capital partner will read as one.
 
-### Why offers are read per-deal and not with a collection group
+### Offers: the group query, and what it needed
 
 An offer lives at `fin_projects/{deal}/offers/{uid}` where the uid is the
-**document id**. The portal synthesises it in memory with `{uid: d.id}` and
-never stores it as a field, so `collectionGroup('offers').where('uid','==',…)`
-matches nothing — it would have reported "no offers" to a partner who had made
-ten. It would also have needed a new rule and a composite index, neither of
-which is deployed.
+**document id**. The portal recovered it in memory with `{uid: d.id}` and
+never stored it as a field, so `collectionGroup('offers').where('uid','==',…)`
+matched nothing — it reported "no offers" to a partner who had made several.
 
-Reading `offers/{myUid}` under each delivered deal needs neither: the existing
-nested rule already allows `isPartner() && offerId == request.auth.uid`.
+Three things closed that, and all three must be deployed together:
 
-**Stated limit:** this counts offers on deals **in that partner's deal room**.
-An offer made on an open marketplace deal that was never delivered to them is
-not counted. Closing that gap needs two things, in this order:
+1. **The field.** `portals/finance/index.html` now writes `uid`, `dealId` and
+   `dealName` into the offer body. The last two ride along because a group
+   query returns the offer without its parent, and re-reading every parent
+   deal to get a name defeats the point of the query.
+2. **The backfill**, for offers written before that:
+   ```bash
+   FIREBASE_SERVICE_ACCOUNT="$(cat sa.json)" node scripts/backfill-offer-uid.js          # dry run
+   FIREBASE_SERVICE_ACCOUNT="$(cat sa.json)" node scripts/backfill-offer-uid.js --apply
+   ```
+   It derives the uid from the document id, which is what it always was, and
+   never overwrites a field that already has a value.
+3. **The rule**, in `firestore.rules`. The nested
+   `fin_projects/{projectId}/offers/{offerId}` match does **not** cover a group
+   query: at the group path there is no `projectId` to bind, so its parent
+   lookups cannot run and the query is refused outright. The new rule is the
+   narrowest one that works, and is read-only — writing an offer still goes
+   through the nested checks:
 
-1. write `uid` as a field in the offer body (`portals/finance/index.html`,
-   the `submitOffer` write) and backfill existing offers;
-2. add a collection-group rule, which the nested `match` does **not** cover:
+   ```
+   match /{path=**}/offers/{offerId} {
+     allow read: if signedIn() && offerId == request.auth.uid;
+     allow write: if false;
+   }
+   ```
 
-```
-match /{path=**}/offers/{offerId} {
-  allow read: if request.auth != null && offerId == request.auth.uid;
-}
-```
+   Deploy it, then add the single-field index on the `offers` collection group
+   that Firestore prompts for on first use.
 
-plus the single-field index Firestore will prompt for. Until both are done the
-panel is correct about the deal room and silent about the marketplace — which
-is why it is labelled "Offers I have made" against deals in the room.
+**Until all three are live the panel still works.** A refused group query falls
+back to reading `offers/{myUid}` under each delivered deal — which the nested
+rule has always allowed — and the panel labels that narrower scope on screen.
+A refusal must never read as "no offers" to somebody who has made ten.

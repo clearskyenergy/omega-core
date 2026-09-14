@@ -1126,6 +1126,34 @@ service cloud.firestore {
        separately. Named fin_views rather than views precisely because this
        wildcard reaches across the whole shared database.
        ============================================================ */
+    /* ============================================================
+       MY OFFERS, ACROSS EVERY DEAL  —  collectionGroup('offers')
+
+       The nested match under fin_projects/{projectId}/offers/{offerId} does
+       NOT cover a collection-group query: at the group path there is no
+       projectId to bind, so none of its parent() lookups can run and the
+       query is refused outright.
+
+       A capital partner's dashboard has to answer "what have I offered on"
+       without walking every deal in the database, and that is a group query
+       or nothing. This is the narrowest rule that allows it: the offer
+       document id IS the partner's uid — the portal writes
+       .collection('offers').doc(currentUser.uid) — so `offerId ==
+       request.auth.uid` returns a partner exactly their own offers and
+       nothing else, on any deal, without reading the parent at all.
+
+       Deliberately read-only. Writing an offer still goes through the nested
+       rule, which checks the deal is open, held for them, or theirs to
+       revise. Nothing here widens what may be WRITTEN.
+
+       Requires the single-field index on the `offers` collection group that
+       Firestore prompts for on first use.
+       ============================================================ */
+    match /{path=**}/offers/{offerId} {
+      allow read: if signedIn() && offerId == request.auth.uid;
+      allow write: if false;
+    }
+
     match /{path=**}/fin_views/{orgKey} {
       allow read: if isAdmin()
                   || (hasFinProfile() && isFinAdmin())

@@ -1292,6 +1292,7 @@ body.dash-editing #edit-bar{opacity:1 !important;pointer-events:auto !important;
   padding:2px 7px;border-radius:999px}
 .fin-tag.hot{background:#FEF3C7;color:#92400E}
 .fin-tag.ok{background:#DCFCE7;color:#166534}
+.fin-note{margin-top:8px;font-size:11px;color:#94A3B8;line-height:1.45}
 .fin-more{padding:9px 2px 0}
 .fin-more a{color:#2563EB;font-weight:600;font-size:12px;text-decoration:none}
 .fin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:4px 0 10px}
@@ -6107,35 +6108,40 @@ var DASH = (function(){
               return Object.assign({docId:d.id}, d.data()); }); })
       ['catch'](function(e){ _FIN.err=_FIN.err||e; });
 
-    /* MY OFFERS, WITHOUT A COLLECTION-GROUP QUERY.
+    /* MY OFFERS, ACROSS EVERY DEAL — WITH A FALLBACK.
 
-       An offer lives at fin_projects/{deal}/offers/{uid} and the uid is the
-       DOCUMENT ID — the portal synthesises it with {uid: d.id} and never
-       stores it as a field. So collectionGroup('offers').where('uid','==',…)
-       matches nothing at all, and would have reported "no offers" to a
-       partner who had made ten. It would also have needed a new rule and a
-       composite index, neither of which is deployed.
+       The group query is the right one: it returns every offer this partner
+       has made, including on marketplace deals that were never delivered into
+       their room. It needs three things deployed — the uid stored as a field
+       (portals/finance writes it now), the collection-group rule in
+       firestore.rules, and the index Firestore prompts for.
 
-       Reading offers/{myUid} under each deal already in the room needs
-       neither: the existing nested rule allows exactly `isPartner() &&
-       offerId == request.auth.uid`. The cost is one small read per delivered
-       deal, which is the right size of query for a worklist.
-
-       LIMIT, STATED: this counts offers on deals in THIS partner's deal room.
-       An offer made on an open marketplace deal that was never delivered to
-       them is not counted. Covering those needs the uid written as a field
-       plus a collection-group rule — see docs/finance-partner-setup.md. */
-    var offerQ = (!uid) ? Promise.resolve() : roomQ.then(function(){
-      return Promise.all(_FIN.room.map(function(d){
-        return db.collection('fin_projects').doc(d.docId)
-                 .collection('offers').doc(uid).get()
-          .then(function(o){
-            if(o && o.exists) _FIN.offers.push(Object.assign(
-              { ref:'fin_projects/'+d.docId+'/offers/'+uid, dealId:d.docId,
-                dealName:d.name||d.docId }, o.data()));
-          })['catch'](function(e){ _FIN.offersErr=_FIN.offersErr||e; });
-      }));
-    });
+       Until all three are live the query is refused, and a refusal must not
+       read as "no offers" to somebody who has made ten. So a refusal falls
+       back to reading offers/{myUid} under each delivered deal, which the
+       existing nested rule has always allowed. That covers the deal room and
+       misses the marketplace — narrower, but true — and the panel says which
+       of the two it is looking at rather than presenting them as the same. */
+    function _offersPerDeal(){
+      _FIN.offersScope = 'room';
+      return roomQ.then(function(){
+        return Promise.all(_FIN.room.map(function(d){
+          return db.collection('fin_projects').doc(d.docId)
+                   .collection('offers').doc(uid).get()
+            .then(function(o){
+              if(o && o.exists) _FIN.offers.push(Object.assign(
+                { dealId:d.docId, dealName:d.name||d.docId }, o.data()));
+            })['catch'](function(e){ _FIN.offersErr=_FIN.offersErr||e; });
+        }));
+      });
+    }
+    var offerQ = (!uid) ? Promise.resolve()
+      : db.collectionGroup('offers').where('uid','==',uid).get()
+          .then(function(sn){
+            _FIN.offers = sn.docs.map(function(d){
+              return Object.assign({ dealId:null }, d.data()); });
+            _FIN.offersScope = 'all';
+          })['catch'](function(){ return _offersPerDeal(); });
 
     Promise.all([roomQ, offerQ]).then(function(){ _FIN.loaded=true; cb&&cb(); });
     });
@@ -6207,6 +6213,10 @@ var DASH = (function(){
       + '<div><span class="fin-n">'+lost+'</span><span class="fin-k">declined</span></div>'
       + '</div>';
     if(total>0) h+='<div class="fin-lead">'+_finMoney(total)+' offered in total</div>';
+    /* Never let a narrower read pass as the whole picture. */
+    if(_FIN.offersScope==='room')
+      h+='<div class="fin-note">Counting offers on deals in your deal room. '
+        +'Marketplace offers appear once the offers index is deployed.</div>';
     return h+'<div class="fin-more"><a href="/portals/finance/">Open the financing portal \u203a</a></div>';
   }
 

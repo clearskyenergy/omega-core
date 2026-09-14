@@ -97,10 +97,31 @@ ok(/collection\('fin_projects'\)[\s\S]{0,120}room\.forOrg/.test(idx),
    'the deal room is scoped by room.forOrg');
 ok(/room\.state['"]?,\s*'==',\s*'delivered'/.test(idx),
    'and only delivered deals appear');
-ok(!/collectionGroup\('offers'\)/.test(idx),
-   'no collection-group offers query — the uid is a document id, not a field, so it would match nothing');
-ok(/collection\('offers'\)\.doc\(uid\)/.test(idx),
-   'offers are read per-deal at offers/{myUid}, which the existing rule already allows');
+/* The uid is now stored as a field, so the group query works and returns
+   marketplace offers too. What must never happen is a refusal reading as
+   "no offers" — hence the fallback and the scope label. */
+ok(/collectionGroup\('offers'\)\.where\('uid','==',uid\)/.test(idx),
+   'offers are read with a collection group, so marketplace offers count too');
+ok(/\['catch'\]\(function\(\)\{ return _offersPerDeal\(\); \}\)/.test(idx),
+   'and a refused group query falls back to the per-deal read rather than reporting zero');
+ok(/_FIN\.offersScope\s*=\s*'room'/.test(idx) && /_FIN\.offersScope\s*=\s*'all'/.test(idx),
+   'the panel records which of the two scopes it actually got');
+ok(/offersScope==='room'/.test(idx),
+   'and says so on screen, so a narrower read never passes as the whole picture');
+
+const fin = read('portals/finance/index.html');
+ok(/uid:\s*FB\.auth\.currentUser\.uid/.test(fin),
+   'the portal stores uid as a field — without it the group query matches nothing');
+ok(/dealId:\s*d\.docId/.test(fin) && /dealName:\s*d\.name/.test(fin),
+   'and dealId/dealName ride along, since a group query returns no parent');
+
+const rules = read('firestore.rules');
+ok(/match \/\{path=\*\*\}\/offers\/\{offerId\}/.test(rules),
+   'a collection-group rule exists — the nested match cannot cover a group query');
+ok(/allow read: if signedIn\(\) && offerId == request\.auth\.uid;/.test(rules),
+   'and it returns a partner exactly their own offers, on any deal');
+ok(/match \/\{path=\*\*\}\/offers\/\{offerId\} \{[\s\S]{0,200}allow write: if false;/.test(rules),
+   'the group rule is read-only — writing still goes through the nested checks');
 ok(/status===['"]accepted['"]/.test(idx),
    'investments count accepted offers only, not pipeline');
 
