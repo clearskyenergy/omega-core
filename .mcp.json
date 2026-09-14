@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "omega": {
+      "command": "node",
+      "args": ["scripts/site-agent/server.js"],
+      "env": {
+        "OMEGA_EDITOR_URL": "https://silmarillion.clearskyomega.com/editor",
+        "OMEGA_CDP_URL": "http://127.0.0.1:9222"
+      }
+    }
+  }
+}

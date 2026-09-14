@@ -37,6 +37,28 @@
           "value": "public, max-age=86400"
         }
       ]
+    },
+    {
+      "source": "/(.*)\\.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/skyfund-sandbox/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/skyfund-sandbox"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -123,10 +145,21 @@
     {
       "source": "/finance",
       "destination": "/portals/finance/index.html"
+    },
+    {
+      "source": "/skyfund-sandbox",
+      "destination": "/portals/skyfund-sandbox"
+    },
+    {
+      "source": "/skyfund-sandbox/(.*)",
+      "destination": "/portals/skyfund-sandbox/$1"
     }
   ],
   "functions": {
     "api/grid-atlas.js": {
+      "maxDuration": 60
+    },
+    "api/render.js": {
       "maxDuration": 60
     },
     "api/**/*.js": {

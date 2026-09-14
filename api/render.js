@@ -45,7 +45,8 @@
    reason this file exists rather than the editor calling OpenAI directly.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const BUILD    = '2026-09-02.googleai-default';
+const BUILD    = '2026-09-12.auth-gated';
+const A        = require('./_lib/admin.js');
 /* Google by default. It needs no organisation verification, it bills to the
    Cloud project the Maps key already runs on, and it is therefore the one
    that can be working tonight. Set RENDER_PROVIDER=openai to switch once
@@ -66,7 +67,7 @@ function applyCors(req, res) {
     res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
@@ -253,11 +254,40 @@ async function viaVertex(b64img, prompt, aspect) {
   return { image: 'data:image/png;base64,' + out, model: model };
 }
 
+/* WHO MAY SPEND THE KEY.
+   This function used to take any POST from any origin that passed CORS —
+   and CORS only gates browsers, so a curl from anywhere billed the shared
+   key. Every /api function verifies the ID token, resolves the org and
+   reads billing before doing work; this one now does the same. A
+   suspended tenant, or an org whose billing carries
+   toolOverrides.render === false, is refused before the provider is
+   called. In degraded mode (no Firestore credential on the server) the
+   caller is still a verified Firebase identity, so the render proceeds. */
+async function entitled(req) {
+  const caller = await A.authenticate(req);          // throws 401
+  if (typeof A.isDegraded === 'function' && A.isDegraded()) return caller;
+  if (caller.staff) return caller;
+  const snap = await A.db().collection('omega_orgs').doc(caller.orgId).get();
+  const org = snap.exists ? (snap.data() || {}) : null;
+  if (!org || (org.status || 'active') !== 'active') throw A.httpError(403, 'tenant is not active');
+  const bill = await A.billingOf(caller.orgId);
+  if (bill && bill.toolOverrides && bill.toolOverrides.render === false)
+    throw A.httpError(403, 'AI render is switched off for this organisation');
+  return caller;
+}
+
 module.exports = async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   if (req.method === 'GET') {
+    /* Reachability is public (the editor's endpoint test has no token);
+       the credential probe is for signed-in callers only, so an anonymous
+       GET learns nothing about what is configured here. */
+    let signedIn = false;
+    try { await A.authenticate(req); signedIn = true; } catch (e) {}
+    if (!signedIn) return res.status(200).json({ ok: true, build: BUILD, provider: PROVIDER });
+
     /* Probe the credential rather than asserting it is fine. */
     let cred = 'not attempted';
     if (PROVIDER === 'openai') {
@@ -281,6 +311,14 @@ module.exports = async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST.' });
 
+  let caller;
+  try {
+    caller = await entitled(req);
+  } catch (e) {
+    return res.status((e && e.status) || 401).json({ build: BUILD,
+      error: (e && e.status === 403) ? e.message : 'Sign in to render.' });
+  }
+
   const body = (req.body && typeof req.body === 'object') ? req.body : {};
   const img = stripDataUrl(body.image);
   /* The aerial photograph, when the editor has one. It is what stops the
@@ -297,6 +335,7 @@ module.exports = async function handler(req, res) {
     const out = PROVIDER === 'vertex'  ? await viaVertex(img, prompt, body.aspectRatio)
               : PROVIDER === 'openai'  ? await viaOpenAI(img, prompt, body.aspectRatio)
               :                          await viaGoogleAI(img, prompt, sat);
+    console.log('[render]', caller.orgId, caller.email, PROVIDER, out.model);
     return res.status(200).json({ build: BUILD, provider: PROVIDER, model: out.model,
                                   image: out.image, prompt: prompt });
   } catch (e) {

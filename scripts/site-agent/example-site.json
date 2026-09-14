@@ -1,0 +1,15 @@
+{
+  "description":"SYNTHETIC TEST SITE ONLY. Replace every field from reviewed site evidence; these are not engineering defaults.",
+  "origin":{"lat":40,"lng":-88},
+  "geometrySource":"Synthetic test geometry",
+  "equipmentSource":"Synthetic test equipment",
+  "parcel":[{"x":0,"y":0},{"x":120,"y":0},{"x":120,"y":120},{"x":0,"y":120}],
+  "building":{"x":70,"y":70,"w":30,"h":30},
+  "service":{"wall":"west","offsetFt":15,"confirmed":true,"source":"Synthetic test service location"},
+  "battery":{"model":"SYNTHETIC BATTERY","widthFt":20,"depthFt":8,"kw":500,"kwh":1000,"connectionSide":"east"},
+  "switchgear":{"model":"SYNTHETIC GEAR","widthFt":6,"depthFt":3,"mounting":"ground-adjacent"},
+  "constraints":{"batteryClearanceFt":5,"parcelSetbackFt":5,"workingClearanceFt":5,"routeWidthFt":2,"gridFt":10,"basis":"Synthetic regression fixture; not a code or product specification"},
+  "obstaclesReviewed":true,
+  "obstacles":[{"x":45,"y":50,"w":5,"h":30,"label":"Synthetic no-dig area"}],
+  "surface":"soil"
+}

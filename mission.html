@@ -2,8 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>JARVIS // Mission Control</title>
+
+<!-- Home-screen install. Added to the Home Screen without these, iOS uses a
+     screenshot of the page as the icon and opens it in Safari with the address
+     bar and tab bar still there. apple-mobile-web-app-capable is the one that
+     drops the browser chrome; the rest make it look like it belongs.
+
+     The icon is opaque on purpose: iOS composites a transparent icon over
+     black and applies its own rounded mask, so the white-on-transparent mark
+     cannot be shipped directly. scripts/make-app-icons.js flattens it onto
+     --bg, which is why the icon is the colour of the app it opens.
+
+     status-bar-style is `black` rather than `black-translucent`: translucent
+     puts the page under the clock, and this layout has a header there. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<meta name="theme-color" content="#020813">
+<link rel="apple-touch-icon" href="/icons/omega-180.png">
+<link rel="manifest" href="/mission.webmanifest">
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
       --ink:#dceefc;--dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
@@ -903,6 +923,31 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   .arcWrap{min-height:190px}
   .panel .scroll{max-height:70vh}
 }
+  /* The vault rendered as a document, not as a table: headings, done/open
+     boxes, and enough line height to read 80 lines without squinting. */
+  .vaultDoc{font-family:var(--ui);font-size:13px;line-height:1.55;padding:4px 2px 18px}
+  .vaultDoc .vh{color:var(--glow-cyan);letter-spacing:.08em;text-transform:uppercase;
+    font-size:11px;margin:16px 0 7px;padding-bottom:4px;
+    border-bottom:1px solid rgba(255,255,255,.09)}
+  .vaultDoc .vh:first-child{margin-top:2px}
+  .vaultDoc .vrow{display:flex;gap:9px;padding:4px 0;align-items:flex-start}
+  .vaultDoc .vbox{flex:0 0 auto;width:13px;opacity:.75}
+  .vaultDoc .vrow.done{opacity:.45}
+  .vaultDoc .vrow.done .vtx{text-decoration:line-through}
+  .vaultDoc .vtx{flex:1;min-width:0;word-wrap:break-word}
+  .vaultDoc b{color:var(--ink)}
+  .vaultDoc .vp{padding:4px 0;opacity:.8}
+:root[data-mode="quantum"] .vaultDoc .vh{color:var(--glow-gold,#ffc35c)}
+/* Installed, there is no browser chrome between the page and the hardware, so
+   the page owns the home indicator and the rounded corners. Scoped to
+   standalone: in a browser tab Safari still handles all of this, and applying
+   it there would just add padding nobody asked for. */
+@media (display-mode:standalone),(display-mode:fullscreen){
+  body{padding-left:max(16px,env(safe-area-inset-left));
+       padding-right:max(16px,env(safe-area-inset-right));
+       padding-bottom:max(16px,env(safe-area-inset-bottom))}
+}
+
 </style>
 </head>
 <body>
@@ -943,6 +988,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
+      <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
@@ -956,6 +1002,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div style="display:flex;gap:6px;margin-top:6px">
         <button id="focusInput" style="flex:1">⌨ TYPE</button>
         <button id="mute" style="flex:1">🔊 ON</button>
+        <button id="engine" style="flex:1" title="Free = the browser's own voice, costs nothing. ElevenLabs = the premium voice, spends credits.">🆓 FREE VOICE</button>
       </div>
     </div>
   </aside>
@@ -1120,6 +1167,24 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
           <button id="bdRead" title="Read the whole board first">READ THE BOARD</button>
         </div>
       </div>
+      </div>
+    </section>
+
+    <!-- ========== OPEN WORK ========== -->
+    <!-- The vault's own open-work log, on the dashboard. It is READ here and
+         edited in Obsidian or at the terminal: one author for his memory, not
+         two. The text comes from the neural link (GET /vault), because the
+         vault is on the Mac and this page is served from silmarillion. -->
+    <section class="view" data-view="openwork">
+      <div class="cmdGrid" style="grid-template-columns:1fr 1fr">
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">Active Priorities<span class="live" id="apN"></span></div>
+          <div class="scroll vaultDoc" id="apDoc"></div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="ptitle">Decisions<span class="live" id="dcN"></span></div>
+          <div class="scroll vaultDoc" id="dcDoc"></div>
+        </div>
       </div>
     </section>
 
@@ -2380,7 +2445,29 @@ async function load(){
    with it for attention. */
 const CHAT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const WAKE = /\bjarvis\b/i;
+/* THE WAKE WORD, and what the recogniser actually hears.
+   The browser's SpeechRecognition has no custom-vocabulary hook, so "Jarvis"
+   cannot be biased into the model the way whisper's initial_prompt can. It
+   comes back as "Travis" often enough that Thomas reported it as a bug
+   (2026-09-11), and a wake word that fails a fraction of the time is a wake
+   word you stop trusting.
+
+   So the near-misses are accepted — but ONLY as a prefix. "Travis" at the
+   start of an utterance is overwhelmingly the recogniser mangling his name;
+   "text Travis about the invoice" is a sentence about a person, and matching
+   that as a wake word would be a worse bug than the one being fixed. Real
+   "jarvis" still matches anywhere, exactly as before. */
+const WAKE_ALT = /^\s*(?:hey\s+|hi\s+|ok\s+)?(travis|jervis|jarvus|charvis|jarvace|service)\b/i;
+const WAKE_RE  = /\bjarvis\b/i;
+const WAKE = { test: t => WAKE_RE.test(t) || WAKE_ALT.test(t) };
+/* Strip whichever form actually woke it, so the command that reaches the twin
+   never carries the mis-heard name as its first word. */
+function stripWake(t){
+  const s = String(t || '');
+  if (WAKE_RE.test(s)) return s.replace(/^.*?\bjarvis\b[\s,.:-]*/i, '').trim();
+  const m = s.match(WAKE_ALT);
+  return m ? s.slice(m[0].length).replace(/^[\s,.:-]*/, '').trim() : s.trim();
+}
 let rec=null, listening=false, awake=false, speaking=false, audioOwns=false;
 
 /* What "Waiting to go out" is currently showing, in the order it is showing
@@ -2667,6 +2754,17 @@ async function browserSpeak(text){
    a reply he has to read is not an assistant answering him. Persisted, so the
    choice survives a reload. */
 let voiceOut = (()=>{ try{ return localStorage.getItem('jarvisVoiceOut')!=='0'; }catch(_){ return true; } })();
+/* WHICH VOICE. ElevenLabs burned a month's credits in two days of replies
+   (2026-09-12, quota_exceeded read as a 401), so the free browser voice is
+   the default and the premium one is a choice he makes, per browser, that
+   survives a reload. Nothing about ElevenLabs is removed: flip the button
+   and speakReply goes back to /speak first, browser voice as the floor. */
+let voiceEngine = (()=>{ try{ return localStorage.getItem('jarvisVoiceEngine')||'free'; }catch(_){ return 'free'; } })();
+function setVoiceEngine(v){
+  voiceEngine = v==='premium' ? 'premium' : 'free';
+  try{ localStorage.setItem('jarvisVoiceEngine', voiceEngine); }catch(_){}
+  const b=el('engine'); if(b) b.textContent = voiceEngine==='premium' ? '✨ ELEVENLABS' : '🆓 FREE VOICE';
+}
 function setVoiceOut(on){
   voiceOut=on;
   try{ localStorage.setItem('jarvisVoiceOut', on?'1':'0'); }catch(_){}
@@ -2676,6 +2774,12 @@ function setVoiceOut(on){
 
 async function speakReply(text){
   speaking=true; try{ if(rec) rec.stop(); }catch(_){}
+  if(voiceEngine!=='premium'){
+    /* the free voice, by choice — no credits, no network, no key to run out */
+    try{ await browserSpeak(text); }catch(_){}
+    speaking=false; if(listening){ try{rec.start();}catch(_){} }
+    return;
+  }
   try{
     const t=await token();
     const r=await fetch(CHAT+'/speak',{method:'POST',
@@ -2729,7 +2833,15 @@ async function speakReply(text){
     URL.revokeObjectURL(url);
   }catch(e){
     console.warn('[jarvis] voice out:', e.message);
-    coreState('voice: '+e.message.slice(0,60), false);
+    /* Say what happened in words he can act on, not a status code with a
+       JSON tail. The reasons that recur: the twin's ElevenLabs key rejected
+       (re-set the secret), the quota gone (top up or wait), autoplay. */
+    const m=String(e.message||'');
+    const why = /invalid_api_key|401/.test(m) ? 'ElevenLabs rejected the twin\'s key — using the browser voice'
+              : /quota|402|429/.test(m)        ? 'ElevenLabs quota is out — using the browser voice'
+              : /autoplay/.test(m)             ? 'tap the page once to unlock audio'
+              :                                  'voice: '+m.slice(0,60);
+    coreState(why, false);
     /* ElevenLabs is the good voice, not the only one. If it is out of quota
        he still gets an answer out loud from the browser's own synthesiser —
        a worse voice beats no voice, and it costs nothing. */
@@ -2797,7 +2909,7 @@ function startVoice(){
     if(!awake){
       if(WAKE.test(heard)){
         awake=true;
-        const after=heard.replace(/^.*?\bjarvis\b[\s,.:-]*/i,'').trim();
+        const after=stripWake(heard);
         caps('AWAKE — go ahead', after||heard, true); coreState('awake — go ahead', true);
         /* "Hi Jarvis" leaves NOTHING after the wake word, and the old guard
            (`if final && after`) then asked nothing at all — he greeted the
@@ -3437,6 +3549,8 @@ el('ask').addEventListener('keydown',e=>{
 el('focusInput').addEventListener('click',()=>el('ask').focus());
 el('mute').addEventListener('click',()=>setVoiceOut(!voiceOut));
 setVoiceOut(voiceOut);
+el('engine').addEventListener('click',()=>{ setVoiceEngine(voiceEngine==='premium'?'free':'premium'); browserSpeak(voiceEngine==='premium' ? 'Premium voice on.' : 'Free voice on.'); });
+setVoiceEngine(voiceEngine);
 el('micBig').addEventListener('click',()=>listening?stopVoice():startVoice());
 el('mic').addEventListener('click',()=>listening?stopVoice():startVoice());
 
@@ -3450,6 +3564,76 @@ el('signin').addEventListener('click',async()=>{
    Hidden rather than unmounted: the canvas keeps its measured size and the
    conversation keeps its scroll position, so coming back to a view is
    instant and looks like you never left. */
+/* ── open work: the vault's log, read through the neural link ────────────
+   Read-only by design. The vault is his memory and it has one author; a page
+   that could write it would be a second, and the two would disagree the first
+   time both were open. Rendered rather than dumped: a checkbox list is the
+   shape this document actually has, and reading 80 lines of raw markdown on a
+   dashboard is worse than opening Obsidian, which defeats the point. */
+function vaultRender(md){
+  const out=[];
+  String(md||'').split('\n').forEach(l=>{
+    if(/^---\s*$/.test(l)) return;                       /* frontmatter fence */
+    if(/^(status|project|type):/.test(l)) return;
+    const h=l.match(/^#{1,6}\s+(.*)$/);
+    if(h){ out.push('<div class="vh">'+esc(h[1])+'</div>'); return; }
+    const t=l.match(/^\s*-\s*\[( |x|X)\]\s*(.*)$/);
+    if(t){
+      const done=t[1].toLowerCase()==='x';
+      out.push('<div class="vrow'+(done?' done':'')+'">'
+        +'<span class="vbox">'+(done?'✓':'○')+'</span>'
+        +'<span class="vtx">'+mdInline(t[2])+'</span></div>');
+      return;
+    }
+    if(/^\s*[-*]\s+/.test(l)){
+      out.push('<div class="vrow"><span class="vbox">·</span>'
+        +'<span class="vtx">'+mdInline(l.replace(/^\s*[-*]\s+/,''))+'</span></div>');
+      return;
+    }
+    if(l.trim()) out.push('<div class="vp">'+mdInline(l)+'</div>');
+  });
+  return out.join('')||'<div class="vp">(empty)</div>';
+}
+/* Escape FIRST, then re-introduce only bold and strip wikilink brackets. Doing
+   it the other way round would let a note's own text inject markup. */
+function mdInline(t){
+  return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+               .replace(/`([^`]+)`/g,'<b>$1</b>')
+               .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,'$1');
+}
+async function loadVaultDoc(file, elId, countId){
+  const host=el(elId); if(!host) return;
+  /* Ask the brain directly rather than trusting `brainOn`. That flag is set by
+     the status poll, which needs a signed-in session — so on any page where
+     the poll has not run yet it reads false while the link is perfectly up,
+     and this panel would report "the neural link is off" to someone looking
+     straight at a running one. A panel that can check for itself should. */
+  try{
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),4000);
+    const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(file),
+                        {cache:'no-store',signal:c.signal});
+    clearTimeout(tm);
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
+    host.innerHTML=vaultRender(j.text);
+    const open=(j.text.match(/^\s*-\s*\[ \]/gm)||[]).length;
+    if(el(countId)) el(countId).textContent=open?(open+' open'):'';
+  }catch(e){
+    /* Unreachable and "note missing" are different problems with different
+       fixes, so they get different sentences. */
+    const dead=/abort|failed|networkerror|load failed/i.test(String(e&&e.message||e));
+    host.innerHTML='<div class="vp">'+(dead
+      ? 'The neural link is not answering on this machine, so the vault cannot '
+        +'be read from here. Start JARVIS on the Mac.'
+      : 'Could not read it: '+esc(e.message||e))+'</div>';
+    if(el(countId)) el(countId).textContent='';
+  }
+}
+function loadOpenWork(){
+  loadVaultDoc('Active Priorities.md','apDoc','apN');
+  loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
+}
+
 function showView(name){
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
@@ -3466,6 +3650,7 @@ function showView(name){
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
+  if(name==='openwork'){ loadOpenWork(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
   /* The core burns behind the command centre and nowhere else — a graph or a
@@ -5495,6 +5680,7 @@ const IX_VIEWS=[
   ['platform','Platform','OMEGA, and the stone'],
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
+  ['openwork','Open work','Active Priorities and Decisions, from the vault'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
 ];
