@@ -93,10 +93,18 @@ ok(/_drawPanelInto/.test(panelBlock),
    'panels are drawn before the _lastAgg guard — a partner has no projects');
 
 console.log('\nscope: a partner board reads the financing collections only');
-ok(/collection\('fin_projects'\)[\s\S]{0,120}room\.forOrg/.test(idx),
-   'the deal room is scoped by room.forOrg');
-ok(/room\.state['"]?,\s*'==',\s*'delivered'/.test(idx),
-   'and only delivered deals appear');
+/* THE QUERY MUST BE ONE THE RULES ALLOW.
+   A partner reads fin_projects three ways — status == 'open', awardedTo, and
+   firstLookUids array-contains — and Firestore refuses the WHOLE query the
+   moment one returned document fails. The panel asked on room.forOrg, which
+   matches none of them: it would have errored or shown nothing on every load,
+   for the only tenant it was built for. room.forOrg is the delivery label;
+   the uid array is the grant. */
+ok(/where\('firstLookUids','array-contains',uid\)/.test(idx),
+   'the deal room reads the deals held for this partner');
+ok(/where\('awardedTo','==',uid\)/.test(idx), 'and the ones they have won');
+ok(!/where\('room\.forOrg'/.test(idx),
+   'and never queries room.forOrg, which no rule permits');
 /* The uid is now stored as a field, so the group query works and returns
    marketplace offers too. What must never happen is a refusal reading as
    "no offers" — hence the fallback and the scope label. */

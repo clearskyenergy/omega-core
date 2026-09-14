@@ -57,10 +57,13 @@ PAGES.forEach(p => {
   const re = /<a\s[^>]*class="sn-item[^"]*"[^>]*href="([^"]+)"/g;
   let m; while ((m = re.exec(s.slice(i, j)))) (hrefs[m[1]] = hrefs[m[1]] || []).push(p);
 });
+/* Through the shared resolver, because a nav href is a ROUTE and not always
+   a file path: vercel.json rewrites /osa to /tenants/osa, so the sidebar's
+   OSA link was reported as a dead end for as long as it has been correct. */
+const ROUTES = require('../_routes.js');
 Object.keys(hrefs).forEach(h => {
   if (/^https?:|^#|^\/#/.test(h)) return;                 /* external or hash */
-  const f = h.replace(/^\//, '').replace(/\/$/, '/index.html') || 'index.html';
-  ok(fs.existsSync(path.join(ROOT, f)), h + ' resolves to a file that exists');
+  ok(ROUTES.resolvesToFile(h), h + ' resolves to a file that exists');
 });
 
 /* The design-partner surface: one nav item, hidden until there is work, and
