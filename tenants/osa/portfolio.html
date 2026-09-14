@@ -3465,6 +3465,7 @@ function loadInbox(manual){
 function inboxBase(k){
   return S.inbox.filter(function(c){
     if(k==='all') return true;
+    if(k==='offered') return !!c.offeredAt && !c.linkedDeal;
     if(k==='new') return !c.linkedDeal && !c.skipByDefault;
     if(k==='drafts') return c.skipByDefault && !c.linkedDeal;
     if(k==='linked') return !!c.linkedDeal;
@@ -3496,7 +3497,11 @@ function selectedInbox(){
 
 function renderInbox(){
   var host=document.getElementById('inbox-rows'); if(!host) return;
-  var defs=[{k:'new',l:'To adopt'},{k:'dupes',l:'Possible duplicates'},
+  /* "Sent to us" first, because it is the only bucket where somebody on the
+     other side is waiting for an answer. The rest of this inbox is material we
+     scanned; this is material we were handed. */
+  var defs=[{k:'offered',l:'Sent to us'},
+            {k:'new',l:'To adopt'},{k:'dupes',l:'Possible duplicates'},
             {k:'drafts',l:'Drafts'},{k:'linked',l:'Already linked'},{k:'all',l:'All'}];
   document.getElementById('inbox-chips').innerHTML = defs.map(function(d){
     return '<button class="chip'+(S.inboxFilter===d.k?' on':'')+'" onclick="setInbox(\''+d.k+'\')">'

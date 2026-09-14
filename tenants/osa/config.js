@@ -262,7 +262,21 @@ window.CLEARSKY_CONFIG = {
       'ogisolar.com':     { name:'OGI Solar',      kind:'developer',
         note:'Development partner. Assignable for verification, pre-dev and design.' },
       'sunesol.com':      { name:'Sunesol Energy', kind:'developer',
-        note:'Development partner. Assignable for verification, pre-dev and design.' }
+        note:'Development partner. Assignable for verification, pre-dev and design.' },
+      /* CAPITAL PARTNERS. kind:'investor' is the whole qualification for
+         appearing in "Send to a deal room" — capitalPartners() selects on it
+         and nothing else, so an org seeded here is selectable without a
+         Firestore write. That was not true until the JD-partner requirement
+         was removed from that selector: a config-seeded org carries no jd
+         map, so it could never satisfy jd.active === true and this list was
+         useless for capital partners.
+         A registry row written in the console still wins over anything here
+         (orgs() layers _orgs on top), so adding one later overrides this
+         without a deploy. */
+      'amperagecapital.com': { name:'Amperage Capital', kind:'investor',
+        note:'Capital partner. Receives packaged projects in their deal room.' },
+      'heliosnrgy.com':      { name:'Helios Energy Advisors', kind:'investor',
+        note:'Capital partner. Receives packaged projects in their deal room.' }
     },
 
     /* Shown on the pending screen so a waiting partner knows who to chase. */
@@ -506,7 +520,7 @@ window.CLEARSKY_CONFIG = {
       /* Grid Atlas lives in the OPS deployment, not this one \u2014 a relative
          path 404s from osa.clearskyomega.com. Absolute, so it works from
          whichever host the console is served on. */
-      url: 'https://tools.csebuilders.com/grid-atlas.html',
+      url: '/grid-atlas.html',
       /* Passed through so the tool knows who is asking and where to send them
          back. It ignores parameters it does not recognise, so several spellings
          of the address are sent rather than guessing which one it reads. */

@@ -176,6 +176,13 @@
       categories: guessCategories(d),
       createdAt: d.createdAt || d.savedAt || null,
       dealId:    d.dealId || '',
+      /* THE SEND. jd.offeredAt is stamped by jd-workspace.html when a JD
+         partner presses "Send". Without it here a project somebody
+         deliberately handed us looked exactly like the other two hundred in
+         this inbox, which is why a send appeared to go nowhere: it was
+         present and unfindable. */
+      offeredAt: (d.jd && d.jd.offeredAt) || '',
+      offeredBy: (d.jd && d.jd.offeredBy) || '',
       suggestStage: 'pre_dev',
       _raw: d
     };
