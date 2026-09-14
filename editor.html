@@ -168736,40 +168736,108 @@ if (root.console && console.info) {
          comment. A panel whose body is empty of controls AND of text is not
          a readout; it is a leftover. */
       var isReadout = !btns.length && !!(body.textContent || '').replace(/\s+/g, '');
+      /* A panel this module has given up on is left exactly as the other
+         module wants it. See the stand-down note above flips(). */
+      if (p.__ribbonYield) continue;
       if (!any && !isReadout) {
-        if (p.style.display !== 'none') { p.style.display = 'none'; p.setAttribute(FLAG, '1'); hid++; }
+        if (p.style.display !== 'none') { p.style.display = 'none'; p.setAttribute(FLAG, '1'); hid++; flip(p, 'hidden'); }
       } else if (p.getAttribute(FLAG) && any) {
-        p.style.display = ''; p.removeAttribute(FLAG); shown++;
+        p.style.display = ''; p.removeAttribute(FLAG); shown++; flip(p, 'shown');
       }
     }
     return { hidden: hid, restored: shown };
   }
 
+  /* ── the stand-down ───────────────────────────────────────────────────
+     Populating a ribbon and fighting over one look identical to a counter
+     that only asks "did anything change": injectors arrive over the first
+     twenty seconds and every panel they fill is a legitimate hide or show.
+
+     What tells them apart is REPETITION ON THE SAME PANEL. Hiding forty
+     different panels once each is a healthy startup. Hiding ONE panel six
+     times means something restored it five times, and the person watching
+     sees it blink. Counting our own direction changes is not enough,
+     because the other module's write is invisible to us — we only ever
+     see that the panel we hid needs hiding again.
+
+     Measured before the fix below: 240 hide/restore writes every five
+     seconds for the first twenty-two seconds of every load, on an editor
+     with no project open. Losing a layout argument is cosmetic. Flashing
+     the ribbon at somebody trying to draw is not. */
+  var YIELD_AT = 6;
+  function flip(p, dir) {
+    var k = dir === 'hidden' ? '__ribbonHides' : '__ribbonShows';
+    p[k] = (p[k] || 0) + 1;
+    if (p[k] < YIELD_AT) return;
+    p.__ribbonYield = true;
+    if (root.console) {
+      var cap = p.querySelector('.rpanel-cap');
+      console.warn(TAG + ' standing down on "' + (cap ? cap.textContent.trim() : 'unnamed group')
+        + '" \u2014 ' + dir + ' it ' + p[k] + ' times and something keeps putting it back.'
+        + ' Left as that module wants it; OmegaRibbon.rearm() to try again.');
+    }
+  }
+
+  /* sweep() writes `style` on panels INSIDE #ribbon, and the observer below
+     watches `style` on that subtree — so every pass scheduled another pass
+     150 ms later and each real change was amplified into a run of them.
+     The ribbon mover two modules down had the same fault and the same cure:
+     go deaf across our own writes and drop what they queued. */
+  var obs = null, sweeping = false;
+  function sweepQuiet() {
+    if (sweeping) return { hidden: 0, restored: 0 };
+    sweeping = true;
+    try {
+      if (obs) obs.disconnect();
+      return sweep();
+    } finally {
+      if (obs) { try { obs.takeRecords(); } catch (e) {} try { obs.observe(RB, OBS_OPTS); } catch (e) {} }
+      sweeping = false;
+    }
+  }
+
   var pending = null;
   function later() {
     clearTimeout(pending);
-    pending = setTimeout(function () { try { sweep(); } catch (e) {} }, 150);
+    pending = setTimeout(function () { try { sweepQuiet(); } catch (e) {} }, 150);
   }
 
+  var RB = null;
+  var OBS_OPTS = { childList: true, subtree: true, attributes: true,
+                   attributeFilter: ['style', 'hidden', 'class'] };
+
   function boot() {
-    var rb = document.getElementById('ribbon');
-    if (!rb) { setTimeout(boot, 500); return; }
+    RB = document.getElementById('ribbon');
+    if (!RB) { setTimeout(boot, 500); return; }
     sweep();
     /* Panels are repopulated at runtime by mode switches and by the
        expand() calls on the consolidated buttons, so this watches
        rather than running once. */
     try {
-      new MutationObserver(later).observe(rb, {
-        childList: true, subtree: true, attributes: true,
-        attributeFilter: ['style', 'hidden', 'class']
-      });
+      obs = new MutationObserver(later);
+      obs.observe(RB, OBS_OPTS);
     } catch (e) {}
-    var n = 0, iv = setInterval(function () { sweep(); if (++n > 20) clearInterval(iv); }, 1000);
+    var n = 0, iv = setInterval(function () { sweepQuiet(); if (++n > 20) clearInterval(iv); }, 1000);
     if (root.console) console.info(TAG + ' empty ribbon groups hidden \u2014 OmegaRibbon.audit()');
   }
 
   root.OmegaRibbon = {
-    sweep: sweep,
+    sweep: function () { return sweepQuiet(); },
+    /* Exported because a second module (Patch 114's repair()) decides the
+       same question and used to decide it differently — see its comment.
+       One definition of "visible" is what stops the two arguing. */
+    visible: visible,
+    /* Re-arm every panel this module gave up on, for when the module it was
+       arguing with has been fixed and somebody wants to check. */
+    rearm: function () {
+      var ps = document.querySelectorAll('#ribbon .rpanel'), n = 0;
+      for (var i = 0; i < ps.length; i++) {
+        if (ps[i].__ribbonYield) n++;
+        ps[i].__ribbonYield = false; ps[i].__ribbonFlips = 0; ps[i].__ribbonDir = null;
+      }
+      sweepQuiet();
+      return n;
+    },
     audit: function () {
       var rows = [];
       var panels = document.querySelectorAll('#ribbon .rpanel');
@@ -169285,6 +169353,24 @@ if (root.console && console.info) {
      an inline display:none, so Designer mode (which hides by CLASS) and
      Compute mode (skipped above, and it hides panels on purpose) are
      both left alone. */
+  /* ── WHAT "LIVE" MEANS HAS TO MATCH WHAT THE OTHER SWEEP MEANS ───────
+     This read `bs[j].style.display !== 'none'` — INLINE styles only. The
+     comment above says Designer mode is left alone because it hides by
+     CLASS, but the opposite followed: a button hidden by a class has no
+     inline style, so every one of them read as live here, and this
+     restored the very panels Designer had just emptied. Patch 94's sweep
+     reads computed style, saw them empty, and hid them again — 240
+     hide/restore writes every five seconds, measured, on a default load,
+     because the editor boots in Designer.
+
+     Both modules now ask the same question through the same function.
+     Falls back to the old inline test if Patch 94 is not present. */
+  function liveBtn(b) {
+    try {
+      if (root.OmegaRibbon && typeof root.OmegaRibbon.visible === 'function') return root.OmegaRibbon.visible(b);
+    } catch (e) {}
+    return b.style.display !== 'none';
+  }
   function repair() {
     var fixed = 0;
     try {
@@ -169293,14 +169379,14 @@ if (root.console && console.info) {
         var p = pnls[i];
         if (p.style.display !== 'none') continue;
         var bs = p.querySelectorAll('.rbtn'), live = 0;
-        for (var j = 0; j < bs.length; j++) if (bs[j].style.display !== 'none') { live++; break; }
+        for (var j = 0; j < bs.length; j++) if (liveBtn(bs[j])) { live++; break; }
         if (live) { p.style.display = ''; p.removeAttribute('data-omega-empty'); fixed++; }
       }
       var pages = document.querySelectorAll('#ribbon .ribbon-page');
       for (var k = 0; k < pages.length; k++) {
         var name = pages[k].getAttribute('data-page');
         var any = pages[k].querySelectorAll('.rbtn'), on = 0;
-        for (var m = 0; m < any.length; m++) if (any[m].style.display !== 'none') { on++; break; }
+        for (var m = 0; m < any.length; m++) if (liveBtn(any[m])) { on++; break; }
         if (!on) continue;
         var tab = document.querySelector('#ribbon-tabs .rtab[data-page="' + name + '"]');
         if (tab && tab.style.display === 'none') { tab.style.display = ''; fixed++; }
