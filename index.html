@@ -1622,12 +1622,20 @@ window._omegaReady = function(){
            /index.html, /portfolio and /portfolio.html, so that move is a
            dashboard action with no code change and no dead URL.
 
-           login.html reached the same conclusion first (SURFACES→osa) and
-           tenants/osa/index.html links its own /tenants/osa/portfolio, so the
-           whole product now agrees on one address: this one. -->
+           /osa IS THE ADDRESS — not /tenants/osa. The app lives in
+           tenants/osa/ and its script-src paths still name that folder,
+           because that is where the files are; but nothing NAVIGATES there.
+           vercel.json rewrites /osa and /osa/portfolio, which is the same
+           shape the branded host serves (/ and /portfolio), so attaching
+           osa.clearskyomega.com changes no link and leaves no second address.
+
+           Everything agrees on it: login.html SURFACES, omega-tools.js
+           osaportal, the projects and marketplace sidebars, the workspace's
+           own nav, and the invitation email in api/invite-send.js. If you add
+           a sixth, use /osa. -->
       <div class="sn-divider" id="sn-jv-divider" style="display:none"></div>
       <div class="sn-section-label" id="sn-jv-label" style="display:none">Joint development</div>
-      <a class="sn-item" data-sn="osa" id="sn-osa" href="/tenants/osa" style="display:none">
+      <a class="sn-item" data-sn="osa" id="sn-osa" href="/osa" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>OSA Workspace</span>
       </a>
@@ -6099,13 +6107,28 @@ var DASH = (function(){
     _FIN.key=key;
     var uid=(typeof auth!=='undefined'&&auth.currentUser)?auth.currentUser.uid:null;
 
-    var roomQ = db.collection('fin_projects')
-                  .where('room.forOrg','==',key)
-                  .where('room.state','==','delivered')
-                  .get()
-      .then(function(sn){ _FIN.room = sn.docs.map(function(d){
-              return Object.assign({docId:d.id}, d.data()); }); })
-      ['catch'](function(e){ _FIN.err=_FIN.err||e; });
+    /* WHAT "IN MY DEAL ROOM" IS, IN QUERY TERMS.
+
+       Not room.forOrg. The rules let a partner read fin_projects three ways:
+       status == 'open', awardedTo == me, and firstLookUids array-contains me.
+       A room.forOrg query matches none of them, and Firestore refuses the
+       WHOLE query the moment one returned document fails the rules — so this
+       panel would have shown an error, or nothing, on every load. room.forOrg
+       is the delivery label; the uid array is the grant.
+
+       A deal referred to this partner is a first-look hold, which is exactly
+       what Amperage Capital has: held for them, off the market, with a clock.
+       awardedTo picks up anything they have since won. */
+    var roomQ = !uid ? Promise.resolve() : Promise.all([
+      db.collection('fin_projects').where('firstLookUids','array-contains',uid).get(),
+      db.collection('fin_projects').where('awardedTo','==',uid).get()
+    ]).then(function(snaps){
+      var seen = {};
+      snaps.forEach(function(sn){ sn.docs.forEach(function(d){
+        if (seen[d.id]) return; seen[d.id] = 1;
+        _FIN.room.push(Object.assign({docId:d.id}, d.data()));
+      }); });
+    })['catch'](function(e){ _FIN.err=_FIN.err||e; });
 
     /* MY OFFERS, ACROSS EVERY DEAL — WITH A FALLBACK.
 
@@ -6172,10 +6195,11 @@ var DASH = (function(){
     if(!rows.length) return _finNote('Nothing new in your deal room. '
       +'Deals appear here the moment ClearSky delivers one.');
     var answered={}; _FIN.offers.forEach(function(o){ if(o.dealId) answered[o.dealId]=o; });
-    rows.sort(function(a,b){
-      var A=(a.room&&a.room.deliveredAt&&a.room.deliveredAt.toMillis)?a.room.deliveredAt.toMillis():0;
-      var B=(b.room&&b.room.deliveredAt&&b.room.deliveredAt.toMillis)?b.room.deliveredAt.toMillis():0;
-      return B-A; });
+    var when=function(d){
+      if(d.room&&d.room.deliveredAt&&d.room.deliveredAt.toMillis) return d.room.deliveredAt.toMillis();
+      return +d.firstLookStartedAt || +d.createdAt || 0;
+    };
+    rows.sort(function(a,b){ return when(b)-when(a); });
     var waiting=rows.filter(function(d){ return !answered[d.docId]; }).length;
     var h='<div class="fin-lead"><b>'+rows.length+'</b> in your deal room'
       + (waiting ? ' \u00b7 <span class="fin-hot">'+waiting+' awaiting your answer</span>' : ' \u00b7 all answered')
@@ -6186,7 +6210,7 @@ var DASH = (function(){
         + '<span class="fin-name">'+_finEsc(d.name||d.docId)+'</span>'
         + '<span class="fin-meta">'+(d.mw?_finEsc(d.mw)+' MW \u00b7 ':'')
         + (d.capexUsd?_finMoney(d.capexUsd)+' \u00b7 ':'')
-        + _finEsc(_finWhen(d.room&&d.room.deliveredAt))+'</span>'
+        + _finEsc(_finWhen((d.room&&d.room.deliveredAt)||d.firstLookStartedAt))+'</span>'
         + '<span class="fin-tag '+(mine?'ok':'hot')+'">'+(mine?'offered':'needs answer')+'</span>'
         + '</a></li>';
     });

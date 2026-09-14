@@ -1091,6 +1091,45 @@ function provisionPartner(preset){
 }
 window.provisionPartner = provisionPartner;
 
+/* ── PUT A DEAL IN A PARTNER'S DEAL ROOM ───────────────────────────────────
+   A referral is a FIRST-LOOK HOLD, not a label: the partner's portal reads
+   fin_projects by status=='open', awardedTo and firstLookUids, and the rules
+   allow exactly those. Holding it for them is what Amperage Capital has —
+   off the market, theirs to look at, with a clock. */
+var DEAL_PRESETS = {
+  calexico: {
+    orgName: 'Helios Energy Advisors', days: 14,
+    deal: {
+      name: '225 Cesar Chavez Blvd — Calexico',
+      address: '225 Cesar Chavez Blvd, Calexico, CA',
+      city: 'Calexico', state: 'CA',
+      developer: 'NextNRG',
+      utility: 'Imperial Irrigation District'
+    }
+  }
+};
+function referDeal(preset, orgKey){
+  var cfg = DEAL_PRESETS[preset];
+  if (!cfg) { window.alert('No deal preset named ' + preset); return; }
+  var key = orgKey || 'helios';
+  if (!window.confirm('Refer "' + cfg.deal.name + '" to ' + key + '?\n\n'
+      + 'Holds it exclusively for them for ' + cfg.days + ' days. It leaves the open\n'
+      + 'marketplace for that window and appears in their deal room.')) return;
+  _authedPost('/api/dealroom-refer', {
+    orgKey: key, orgName: cfg.orgName, days: cfg.days, deal: cfg.deal
+  }).then(function(r){
+    window.alert('Referred.\n\n' + r.name + '\nheld for ' + r.orgKey
+      + ' until ' + r.until + '\n\nVisible to:\n  ' + (r.partners||[]).join('\n  '));
+    try { console.log('[refer]', r); } catch(e){}
+  })['catch'](function(e){
+    window.alert('Could not refer the deal.\n\n'
+      + (typeof OmegaAuthError !== 'undefined' ? OmegaAuthError.opText(e, 'The referral')
+                                               : 'Contact your account administrator.')
+      + '\n\n' + (e && e.message ? e.message : ''));
+  });
+}
+window.referDeal = referDeal;
+
 /* Staff-only endpoints want a bearer token. Kept in one place so a missing
    sign-in fails loudly here rather than as a 401 with no explanation. */
 function _authedPost(path, body){
