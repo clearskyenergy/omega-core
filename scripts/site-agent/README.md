@@ -40,11 +40,16 @@ credentials. Open exactly one tab at your trusted editor URL. Use a fresh empty
 canvas for this prototype; it refuses to overwrite existing drawings.
 
 Register the server from the OMEGA checkout in Claude Code. Replace the URL
-below if your authorized staging editor uses a different host or query string.
+below if your authorized editor uses a different host or query string.
 The URL must match the open browser tab exactly, including query parameters.
+`vercel.json` sets `cleanUrls`, so the live editor is served at `/editor` and
+`/editor.html` redirects to it; the server accepts either spelling but the tab
+and this variable must agree. The repo already ships `.mcp.json` with this
+server registered, so in a normal checkout you can skip the `claude mcp add`
+line entirely.
 
 ```sh
-claude mcp add --transport stdio --env OMEGA_EDITOR_URL=https://staging.clearskyomega.com/editor.html --env OMEGA_CDP_URL=http://127.0.0.1:9222 omega -- node scripts/site-agent/server.js
+claude mcp add --transport stdio --env OMEGA_EDITOR_URL=https://silmarillion.clearskyomega.com/editor --env OMEGA_CDP_URL=http://127.0.0.1:9222 omega -- node scripts/site-agent/server.js
 claude mcp list
 claude
 ```

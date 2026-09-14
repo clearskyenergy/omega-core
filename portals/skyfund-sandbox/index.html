@@ -377,7 +377,7 @@ footer .wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px}
           <div class="who"><b id="whoName">—</b><span id="whoEmail"></span></div>
           <a href="#/portfolio">My portfolio</a>
           <a href="#/account">Account &amp; eligibility</a>
-          <a href="#sandbox" id="sponsorLink">Sponsor console</a>
+          <a href="/skyfund-sandbox/sponsor" id="sponsorLink">Sponsor console</a>
           <button id="btnInstall" class="hide">Install SkyFund app</button>
           <button id="btnSignOut">Sign out</button>
         </div>
@@ -980,7 +980,7 @@ function renderAccount() {
     giveSectionHtml(p) +
     bankSectionHtml(p) +
     installSectionHtml() +
-    '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="#sandbox">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
+    '<div class="section-h"><h2>Sponsoring a project?</h2></div><p style="max-width:640px;color:var(--sub)">Developers with a ClearSky-OMEGA workspace list campaigns from the <a href="/skyfund-sandbox/sponsor">sponsor console</a>. A campaign is reviewed by ClearSky before it goes live.</p><div style="height:30px"></div></div>';
   $('acSave').onclick = function () {
     var msg = $('acMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
     FB.db.collection('cf_investors').doc(S.user.uid).set({ name: $('acName').value.trim(), country: $('acCountry').value, accredited: $('acAccredited').checked, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
