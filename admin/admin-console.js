@@ -1047,6 +1047,48 @@ function _tnStatusChip(st){
        : st==='suspended' ? 'bad' : st==='cancelled' ? 'bad' : 'neutral';
 }
 
+/* ── STAND UP A CAPITAL PARTNER ────────────────────────────────────────────
+   The whole provisioning run — tenant, billing, finance org, partner org,
+   accounts and pre-approved profiles — from the console, so the service
+   account never has to be copied onto anybody's laptop.
+
+   It returns a single-use password-reset link per account and never takes a
+   password. An initial password somebody else picks has to be communicated,
+   which puts it in a chat log; a link the account holder uses once does not.
+   Hand each person their own link. */
+var PARTNER_PRESETS = {
+  helios: {
+    orgId: 'heliosnrgy.com', name: 'Helios Energy', orgKey: 'helios',
+    kind: 'investor', tier: 'partner', vertical: 'developer',
+    domains: ['helios.clearskyomega.com'], requiredTools: ['financing'],
+    people: [
+      { email: 'tye.dawson@heliosnrgy.com',    name: 'Tye Dawson',    role: 'partner' },
+      { email: 'jack.degiulio@heliosnrgy.com', name: 'Jack DeGiulio', role: 'partner' },
+      { email: 'admin@heliosnrgy.com',         name: 'Helios Admin',  role: 'admin'   }
+    ]
+  }
+};
+function provisionPartner(preset){
+  var cfg = PARTNER_PRESETS[preset];
+  if (!cfg) { window.alert('No preset named ' + preset); return; }
+  var who = cfg.people.map(function(p){ return p.email; }).join('\n  ');
+  if (!window.confirm('Stand up ' + cfg.name + ' (' + cfg.orgId + ')?\n\n'
+      + 'Creates sign-in accounts for:\n  ' + who
+      + '\n\nEach gets a one-time password-reset link. No password is set here.')) return;
+  _authedPost('/api/provision-partner', cfg).then(function(r){
+    var lines = (r.accounts || []).map(function(a){
+      return a.email + '  [' + a.status + ']\n    ' + (a.resetLink || a.note || '');
+    });
+    window.alert('Done — ' + cfg.name + '.\n\nGive each person their own link:\n\n'
+                 + lines.join('\n\n'));
+    try { console.log('[provision] ' + cfg.name, r); } catch(e){}
+  })['catch'](function(e){
+    window.alert('Could not provision ' + cfg.name + '.\n\n'
+      + (typeof OmegaAuthError !== 'undefined' ? OmegaAuthError.opText(e, 'Provisioning') : 'Contact your account administrator.'));
+  });
+}
+window.provisionPartner = provisionPartner;
+
 /* Staff-only endpoints want a bearer token. Kept in one place so a missing
    sign-in fails loudly here rather than as a 401 with no explanation. */
 function _authedPost(path, body){
@@ -1851,6 +1893,12 @@ function openTenantDetail(orgId){
   ]).then(function(r){
     var bill=r[0], members=r[1], projects=r[2], seen=r[3];
     cell.innerHTML = _tnDetailHtml(orgId, org, bill, members, projects, seen);
+    /* The shared-projects panel needs a query of its own, against the PARTNER
+       workspace rather than this tenant, so it fills in after the card paints
+       instead of holding the whole card on a read most tenants never need. */
+    if (org.jdPartner === true){
+      try { jdShareLoad(orgId, org.jdPartnerOrg || '', org.jdRole || 'design'); } catch(e){}
+    }
   }).catch(function(e){
     cell.innerHTML='<div class="sub-txt">Could not load '+esc(orgId)+' — '+esc(e.message||'denied')+'</div>';
   });
@@ -2147,14 +2195,69 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
                   and their own side of it, and does NOT see OSA.
      Every OSA member is implicitly a JD partner; the reverse is not true.
      These were one test once, which is why a tenant with no JV relationship
-     was shown the OSA link. */
+     was shown the OSA link.
+
+     ⚠ THE FLAG WAS NEVER THE WHOLE RELATIONSHIP. jdPartner:true reveals a nav
+     item (omega-jd-nav.js) and nothing else. The two pages behind that item
+     read THREE more fields, and nothing on this console has ever written one
+     of them:
+
+       jdPartnerOrg  the workspace they co-develop WITH. The org whose
+                     projects are shared with them, below.
+       jdPartnerOf   what that workspace is CALLED on their screen. Unset,
+                     jd-workspace.html greets them as "the partner workspace".
+       jdRole        which end of it they are on. design = work handed TO them
+                     to draw; originator = projects they bring over. That one
+                     field decides which page jd-workspace.html is.
+
+     So ticking the box left a half-configured partner and said nothing about
+     it; finishing the job meant editing Firestore by hand. All four fields
+     are written together now, and the partner workspace is required — a JD
+     partner with nobody to partner with is exactly the state this ends. */
+  var jdOrgs = [], jdSeen = {};
+  (STATE.tenants||[]).forEach(function(t){
+    if (!t._id || t._id === orgId || jdSeen[t._id]) return;
+    jdSeen[t._id] = 1; jdOrgs.push({ id:t._id, name:t.name||t._id });
+  });
+  /* A stored partner that is no longer in omega_orgs still has to appear, or
+     saving anything else on this card silently re-points the relationship. */
+  if (org.jdPartnerOrg && !jdSeen[org.jdPartnerOrg])
+    jdOrgs.unshift({ id:org.jdPartnerOrg, name:org.jdPartnerOrg + ' (not in omega_orgs)' });
+  jdOrgs.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+
   h+='<div class="block-title" style="font-size:13px;margin:16px 0 8px">Relationship</div>';
   h+='<label class="sub-txt" style="display:block;margin-bottom:6px">'
    + '<input type="checkbox" id="tb-osa-'+esc(orgId)+'"'+(org.osaMember===true?' checked':'')+'> '
-   + 'OSA member \u2014 may enter the OSA workspace</label>';
+   + 'OSA member — may enter the OSA workspace</label>';
   h+='<label class="sub-txt" style="display:block;margin-bottom:8px">'
-   + '<input type="checkbox" id="tb-jd-'+esc(orgId)+'"'+(org.jdPartner===true?' checked':'')+'> '
-   + 'JD partner \u2014 joint development agreement, sees JD Partners only</label>';
+   + '<input type="checkbox" id="tb-jd-'+esc(orgId)+'"'+(org.jdPartner===true?' checked':'')+' '
+   + 'onchange="jdToggleBox(&quot;'+esc(orgId)+'&quot;)"> '
+   + 'JD partner — joint development agreement, sees JD Partners only</label>';
+
+  h+='<div id="tb-jdbox-'+esc(orgId)+'" style="'+(org.jdPartner===true?'':'display:none;')
+   + 'margin:0 0 10px;padding:10px 11px;border:1px solid var(--cs-border,#E1E6EC);border-radius:8px;background:#FBFCFD">';
+  h+='<label class="sub-txt" style="display:block;margin-bottom:8px">They co-develop with'
+   + '<select id="tb-jdorg-'+esc(orgId)+'" onchange="jdPartnerPicked(&quot;'+esc(orgId)+'&quot;)"'
+   + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + '<option value="">— pick a workspace —</option>'
+   + jdOrgs.map(function(o){
+       return '<option value="'+esc(o.id)+'"'+(org.jdPartnerOrg===o.id?' selected':'')+'>'
+            + esc(o.name)+' · '+esc(o.id)+'</option>'; }).join('')
+   + '</select></label>';
+  h+=_tnField('Called, on their screen','tb-jdlabel-'+esc(orgId),org.jdPartnerOf||'','text','OSA');
+  h+='<label class="sub-txt" style="display:block;margin-bottom:6px">Their side of it'
+   + '<select id="tb-jdrole-'+esc(orgId)+'"'
+   + ' style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + '<option value="design"'+(org.jdRole!=='originator'?' selected':'')+'>'
+   +   'design — they draw what is handed to them</option>'
+   + '<option value="originator"'+(org.jdRole==='originator'?' selected':'')+'>'
+   +   'originator — they bring projects over</option>'
+   + '</select></label>';
+  h+='<div class="sub-txt" style="margin-top:2px">Takes effect at their next page load. '
+   + 'It opens two pages for them: <span class="mono">/jda</span> (the responsibilities matrix) '
+   + 'and <span class="mono">/jd-workspace.html</span> (the queue).</div>';
+  h+='</div>';
+
   h+='<button onclick="saveTenantRelationship(&quot;'+esc(orgId)+'&quot;)">Save relationship</button>';
   h+=' <span id="tbrel-msg-'+esc(orgId)+'" class="sub-txt"></span>';
   h+='<div style="display:flex;gap:18px;margin-top:14px">'
@@ -2164,6 +2267,37 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '</div>';
   h+='<div class="sub-txt" style="margin-top:10px">Hostnames: '+esc((org.domains||[]).join(', ')||'—')+'</div>';
   h+='</div></div>';
+
+  /* ── PROJECTS SHARED WITH THEM ────────────────────────────────────────
+     THE FLAG IS NOT THE ACCESS. firestore.rules grants a partner read and
+     update on a project through ONE clause — `userOrg() in orgsInvolved[]`,
+     the Silmarillion JDA roster — and nothing else. No relationship field
+     opens a project; no tier does. So marking somebody a JD partner and
+     expecting them to see the other workspace's pipeline was always going to
+     show them an empty page, correctly.
+
+     Until now the only thing that put an org on a roster was OSA's own
+     per-deal design handoff (tenants/osa/portfolio-data.js), one project at a
+     time, from inside OSA's console. This is the same write, in bulk, from
+     the place where the partnership is set up in the first place.
+
+     DELIBERATELY A PICKER AND NOT A SWITCH. "Every project this workspace
+     owns" was the other way to build it and it is one forgotten tick away
+     from handing a partner the whole book, including sites signed under a
+     different NDA and every project created after the decision was made.
+     Sharing stays a thing somebody chose, site by site. */
+  h+='<div class="block-title" style="font-size:13px;margin:18px 0 6px">Projects shared with them</div>';
+  if (org.jdPartner !== true){
+    h+='<div class="sub-txt">Not a joint-development partner. Tick <b>JD partner</b> above, '
+     + 'pick the workspace they co-develop with, and save — then the projects to share appear here.</div>';
+  } else {
+    h+='<div class="sub-txt" style="margin-bottom:8px">Ticking a project puts <span class="mono">'
+     + esc(orgId)+'</span> on its roster (<span class="mono">orgsInvolved</span>). That is what opens it '
+     + 'to them: the responsibilities matrix on <span class="mono">/jda</span>, the shared task board, '
+     + 'the documents, and update rights on the project itself. Unticking takes it back — the project '
+     + 'stays exactly as it is, they simply stop seeing it.</div>';
+    h+='<div id="tb-jdshare-'+esc(orgId)+'"><div class="sub-txt">Loading…</div></div>';
+  }
 
   /* ── People ── */
   h+='<div class="block-title" style="font-size:13px;margin:6px 0 8px">People</div>';
@@ -2331,17 +2465,198 @@ function saveTenantBilling(orgId){
    which doors to show; the doors themselves are gated by omega_users and by
    what the caller can already read, so a wrong tick shows somebody a link
    rather than handing them data. */
+/* ── SAVING THE RELATIONSHIP ──────────────────────────────────────────────
+   Four fields, written together, because three of them were never written at
+   all and the fourth on its own is a half-configured partner: the nav item
+   appears, the pages behind it do not know who the partner is, and the only
+   way to finish the setup was a hand edit in the Firestore console.
+
+   UNMARKING CLEARS THE OTHER THREE. Left behind, jdPartnerOf keeps painting
+   the JD Workspace entry in their sidebar (omega-tenant.js reveals it on that
+   field alone, count or no count) — so a partner you had un-partnered would
+   still see the door. Deleting the fields is not deleting their work: the
+   rosters, the projects and the boards are untouched, and re-ticking the box
+   restores the relationship in one save. */
 function saveTenantRelationship(orgId){
-  var msg=document.getElementById('tbrel-msg-'+orgId);
-  var osa=document.getElementById('tb-osa-'+orgId);
-  var jd =document.getElementById('tb-jd-'+orgId);
-  if(msg) msg.textContent='Saving...';
-  db.collection('omega_orgs').doc(orgId).set({
-    osaMember: !!(osa&&osa.checked),
-    jdPartner: !!(jd&&jd.checked)
-  }, { merge:true })
-    .then(function(){ if(msg) msg.textContent='Saved - takes effect at their next sign-in.'; loadTenants(); })
-    .catch(function(e){ if(msg) msg.textContent='Failed - '+(e.message||e); });
+  var FV  = firebase.firestore.FieldValue;
+  var msg = document.getElementById('tbrel-msg-'+orgId);
+  var osa = document.getElementById('tb-osa-'+orgId);
+  var jd  = document.getElementById('tb-jd-'+orgId);
+  function say(t){ if(msg) msg.textContent=t; }
+
+  var body = { osaMember: !!(osa&&osa.checked), jdPartner: !!(jd&&jd.checked) };
+
+  if (body.jdPartner){
+    var selOrg = document.getElementById('tb-jdorg-'+orgId);
+    var selRol = document.getElementById('tb-jdrole-'+orgId);
+    var fLabel = document.getElementById('tb-jdlabel-'+orgId);
+    var pOrg   = (selOrg && selOrg.value) || '';
+    if (!pOrg){ say('Pick the workspace they co-develop with — a JD partner with nobody to partner with sees an empty page.'); return; }
+    if (pOrg === orgId){ say('That is the same organisation.'); return; }
+    body.jdPartnerOrg = pOrg;
+    body.jdRole       = (selRol && selRol.value === 'originator') ? 'originator' : 'design';
+    body.jdPartnerOf  = String((fLabel && fLabel.value) || '').trim() || jdOrgLabel(pOrg);
+  } else {
+    body.jdPartnerOrg = FV.delete();
+    body.jdRole       = FV.delete();
+    body.jdPartnerOf  = FV.delete();
+  }
+
+  say('Saving...');
+  db.collection('omega_orgs').doc(orgId).set(body, { merge:true })
+    .then(function(){
+      say(body.jdPartner
+            ? 'Saved — ' + orgId + ' co-develops with ' + body.jdPartnerOrg
+              + ' as ' + body.jdRole + '. Share projects below.'
+            : 'Saved — takes effect at their next sign-in.');
+      /* The share panel keys off the partner org that was just chosen, so it
+         reloads here rather than waiting for the card to be reopened. */
+      try { jdShareLoad(orgId, body.jdPartner ? body.jdPartnerOrg : '',
+                        body.jdPartner ? body.jdRole : ''); } catch(e){}
+      loadTenants();
+    })
+    .catch(function(e){ say('Failed - '+(e.message||e)); });
+}
+
+/* The name somebody typed, not the domain — the same reason omega-tenant.js
+   prefers omega_orgs.name over the derived one. */
+function jdOrgLabel(orgId){
+  var t = (STATE.tenants||[]).filter(function(x){ return x._id===orgId; })[0];
+  return (t && t.name) || String(orgId||'').toUpperCase();
+}
+
+function jdToggleBox(orgId){
+  var jd  = document.getElementById('tb-jd-'+orgId);
+  var box = document.getElementById('tb-jdbox-'+orgId);
+  if (box) box.style.display = (jd && jd.checked) ? '' : 'none';
+}
+
+/* Filling the label from the chosen workspace, but only while it is empty —
+   overwriting a label somebody typed because they changed the org underneath
+   it is the kind of helpfulness that loses work. */
+function jdPartnerPicked(orgId){
+  var selOrg = document.getElementById('tb-jdorg-'+orgId);
+  var fLabel = document.getElementById('tb-jdlabel-'+orgId);
+  var pOrg   = (selOrg && selOrg.value) || '';
+  if (fLabel && !String(fLabel.value||'').trim() && pOrg) fLabel.value = jdOrgLabel(pOrg);
+  var selRol = document.getElementById('tb-jdrole-'+orgId);
+  jdShareLoad(orgId, pOrg, (selRol && selRol.value) || 'design');
+}
+
+/* ── THE ROSTER, AS A LIST OF TICKS ───────────────────────────────────────
+   Reads the partner workspace's own projects — this console is ClearSky
+   staff, so isOmegaStaff() already grants that read — and shows which of them
+   name this org on their roster. One query per opened card, not per render.
+
+   ⚠ It lists what the PARTNER WORKSPACE owns (projects.orgId == their org),
+   not everything they can see. A project OSA is itself a collaborator on
+   belongs to somebody else, and re-sharing another tenant's project out of
+   this panel would be ClearSky quietly widening an agreement it is not a
+   party to. */
+function jdShareLoad(orgId, partnerOrg, role){
+  var host = document.getElementById('tb-jdshare-'+orgId);
+  if (!host) return;
+  if (!partnerOrg){
+    host.innerHTML = '<div class="sub-txt">Pick the workspace they co-develop with above and save — '
+                   + 'its projects appear here to share.</div>';
+    return;
+  }
+  host.innerHTML = '<div class="sub-txt">Reading '+esc(partnerOrg)+'’s projects…</div>';
+  db.collection('projects').where('orgId','==',partnerOrg).get().then(function(sn){
+    var rows=[];
+    sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; rows.push(v); });
+    rows.sort(function(a,b){
+      return String(a.name||a.address||a._id).localeCompare(String(b.name||b.address||b._id)); });
+    if (!rows.length){
+      host.innerHTML = '<div class="sub-txt">'+esc(partnerOrg)+' owns no projects yet, so there is '
+                     + 'nothing to share. Projects created there appear here.</div>';
+      return;
+    }
+    var on = 0, h = '';
+    /* THE ROSTER OPENS THE PROJECT; IT DOES NOT ASK FOR ANYTHING. A design
+       partner's queue (jd-workspace.html) lists projects carrying a design
+       handoff — design.status — because "shared with you" and "please draw
+       this" are different statements and only the second one belongs in a
+       queue with a due date. Ticking this makes the share the second one. */
+    if (role !== 'originator'){
+      h += '<label class="sub-txt" style="display:block;margin-bottom:8px">'
+         + '<input type="checkbox" id="tb-jddraw-'+esc(orgId)+'" checked> '
+         + 'Also put newly shared projects in their draw queue — they appear on their '
+         + 'JD Workspace as <b>To draw</b>. Projects that already carry a design handoff are left alone.'
+         + '</label>';
+    }
+    h += '<div style="max-height:260px;overflow:auto;border:1px solid var(--cs-border,#E1E6EC);'
+       + 'border-radius:8px;padding:8px 10px;background:#fff">';
+    rows.forEach(function(p){
+      var shared = (p.orgsInvolved||[]).indexOf(orgId) >= 0;
+      if (shared) on++;
+      var dz = p.design || {};
+      h += '<label class="sub-txt" style="display:block;margin:4px 0">'
+         + '<input type="checkbox" data-jdp="'+esc(p._id)+'" data-was="'+(shared?'1':'0')+'"'
+         +   ' data-design="'+(dz && dz.status ? '1':'0')+'"'+(shared?' checked':'')+'> '
+         + esc(p.name||p.address||p._id)
+         + (dz.status ? ' <span style="opacity:.65">· '+esc(dz.status)+'</span>' : '')
+         + '</label>';
+    });
+    h += '</div>';
+    h += '<div style="margin-top:9px">'
+       + '<button onclick="jdShareSave(&quot;'+esc(orgId)+'&quot;,&quot;'+esc(partnerOrg)+'&quot;)">'
+       +   'Save shared projects</button>'
+       + ' <span id="tb-jdshare-msg-'+esc(orgId)+'" class="sub-txt">'
+       +   on+' of '+rows.length+' shared</span></div>';
+    host.innerHTML = h;
+  }).catch(function(e){
+    host.innerHTML = '<div class="sub-txt">Could not read '+esc(partnerOrg)+'’s projects — '
+                   + esc(e.message||'denied')+'</div>';
+  });
+}
+
+/* ONLY WHAT CHANGED. A batch that rewrote every roster would touch projects
+   nobody edited, and arrayUnion/arrayRemove on the one field keeps a partner
+   added by OSA's own handoff from being dropped by a stale copy of this list
+   — the same reason jda.html refuses to write orgsInvolved from its own
+   in-memory copy. */
+function jdShareSave(orgId, partnerOrg){
+  var host = document.getElementById('tb-jdshare-'+orgId); if (!host) return;
+  var msg  = document.getElementById('tb-jdshare-msg-'+orgId);
+  var FV   = firebase.firestore.FieldValue;
+  var draw = document.getElementById('tb-jddraw-'+orgId);
+  var wantDraw = !!(draw && draw.checked);
+  var stamp = new Date().toISOString();
+  var batch = db.batch(), added = 0, removed = 0;
+
+  Array.prototype.forEach.call(host.querySelectorAll('input[data-jdp]'), function(b){
+    var was = b.getAttribute('data-was') === '1';
+    if (was === b.checked) return;
+    var ref = db.collection('projects').doc(b.getAttribute('data-jdp'));
+    if (b.checked){
+      var body = { orgsInvolved: FV.arrayUnion(orgId), updatedAt: stamp };
+      /* Never over an existing handoff: that object carries the brief, the
+         due date and who asked, and replacing it with a blank one loses the
+         instructions the drawing was supposed to follow. */
+      if (wantDraw && b.getAttribute('data-design') !== '1'){
+        body.design = { status:'in_design', fromOrg:partnerOrg, assignedOrgs:[orgId],
+                        assignees:[], lead:'', dueAt:null, brief:'',
+                        sentAt:stamp, sentBy:(currentUser&&currentUser.email)||'ClearSky' };
+      }
+      batch.update(ref, body); added++;
+    } else {
+      /* The roster only. design.status stays where it is — flag, don't drop:
+         the work was really sent, and OSA's own views read that field. */
+      batch.update(ref, { orgsInvolved: FV.arrayRemove(orgId), updatedAt: stamp });
+      removed++;
+    }
+  });
+
+  if (!added && !removed){ if (msg) msg.textContent = 'Nothing changed.'; return; }
+  if (msg) msg.textContent = 'Saving…';
+  batch.commit().then(function(){
+    if (msg) msg.textContent = 'Saved — '+added+' shared, '+removed+' taken back.';
+    var selRol = document.getElementById('tb-jdrole-'+orgId);
+    jdShareLoad(orgId, partnerOrg, (selRol && selRol.value) || 'design');
+  }).catch(function(e){
+    if (msg) msg.textContent = 'Failed — '+(e.message||e);
+  });
 }
 
 /* WRITES DIRECT, FOR THE SAME REASON saveTenantBilling DOES.

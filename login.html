@@ -363,7 +363,8 @@
     <div class="sub">ClearSky OMEGA</div>
   </div>
 
-  <script src="/site-assets/omega.js"></script>
+  <script src="/omega-auth-errors.js?v=1"></script>
+<script src="/site-assets/omega.js"></script>
 
   <script type="module">
   /* ==========================================================================
@@ -959,7 +960,12 @@
       if (c.indexOf("network-request-failed") > -1) return "Can't reach OMEGA. Check your connection and try again.";
       if (c.indexOf("popup-closed") > -1 || c.indexOf("cancelled-popup") > -1) return "";
       if (c.indexOf("popup-blocked") > -1)          return "Your browser blocked the Google window. Allow pop-ups, or use your email and password.";
-      return "Something went wrong signing in. Try again, or email dev@clearsky-usa.com.";
+      /* Anything unmapped goes to the shared mapper, whose fallback names the
+         account administrator. Its scrub() also catches a vendor string that
+         reached here some other way — no Firebase code ever reaches a screen. */
+      return (typeof OmegaAuthError !== 'undefined')
+        ? OmegaAuthError.text(err)
+        : "Sign-in didn't work. Contact your account administrator.";
     }
 
     /* ---- Wiring ----------------------------------------------------------- */

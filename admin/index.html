@@ -677,6 +677,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <span id="tn-refresh-note" style="font-size:12px;color:#5B6672;margin-right:10px"></span>
+          <!-- Stands up a capital partner end to end: tenant, billing, finance
+               org, partner org, accounts and pre-approved profiles. Returns a
+               one-time reset link per person; no password is set here. -->
+          <button class="btn-ghost" id="tn-prov-helios" onclick="provisionPartner('helios')"
+                  title="Create the Helios Energy tenant and its three sign-in accounts">&#9889; Provision Helios Energy</button>
           <button class="btn-ghost" id="tn-new-toggle" onclick="toggleNewTenant()">+ New tenant</button>
           <button class="btn-ghost" id="tn-refresh" onclick="loadTenants()">&#8635; Refresh</button>
         </div>
