@@ -2086,8 +2086,17 @@ function capitalPartners(){
 function askDealRoom(dealId, preferOrg){
   var opts = capitalPartners();
   if (!opts.length){
-    toast('No capital partner set up yet — tick one as a joint development '
-        + 'partner on Partners and set its role to Investor.', true);
+    /* Two different problems used to read as one. If the registry read was
+       REFUSED, the list is empty for a reason no amount of ticking boxes on
+       the Partners screen will fix, and sending somebody there to do that is
+       advice for a problem they do not have. */
+    var regErr = null; try { regErr = A.orgsError && A.orgsError(); } catch(e){}
+    toast(regErr
+      ? 'The organisation registry could not be read (' + regErr + '), so no capital '
+        + 'partner can be listed. This is an access problem, not a missing setup.'
+      : 'No capital partner set up yet — add the organisation on the Organisations '
+        + 'screen with kind Investor, then tick “Co-develop with them” on Partners.',
+      true);
     return;
   }
   /* ALWAYS ASK, EVEN WITH ONE PARTNER.
@@ -2228,7 +2237,7 @@ function sendToDealRoomDirect(dealId, orgId, partner, u){
         var el=document.getElementById('dr-'+dealId);
         toast('Packaging needs the server, and it is not configured yet. In the meantime a '
             + 'financing-portal account works — same sign-in, pick Developer.', true);
-        if (el) el.innerHTML = ' <a href="https://financing.csebuilders.com" target="_blank" '
+        if (el) el.innerHTML = ' <a href="/finance" target="_blank" '
           + 'rel="noopener">Create a financing-portal account →</a>';
         return;
       }
@@ -2243,7 +2252,16 @@ function saveJD(orgId){
   if (msg) msg.textContent = 'Saving…';
   A.saveOrg(orgId, { jd: { handoff: sel.value || '', updatedAt: F.stamp() } })
     .then(function(){
-      var o = A.orgs()[orgId]; if (o) o.jd = { handoff: sel.value || '' };
+      /* MERGE, DO NOT REPLACE. Firestore is fine — saveOrg uses
+         set(..., {merge:true}), which deep-merges the jd map, so the stored
+         jd.active survives. The LOCAL object did not: assigning a fresh
+         {handoff} dropped jd.active, and jdOrgs() filters on
+         jd.active === true. So setting a partner's handoff stage made that
+         partner vanish from the JD tab and from the "Send to their deal
+         room" chooser until the page was reloaded — the one action most
+         likely to be taken right before trying to send them something. */
+      var o = A.orgs()[orgId];
+      if (o) { o.jd = o.jd || {}; o.jd.handoff = sel.value || ''; }
       if (msg) msg.textContent = 'Saved.';
       renderJD();
     })

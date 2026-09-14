@@ -539,6 +539,11 @@
      should not: what kind of partner they are, and what the referral
      arrangement is. Those belong to the company, not to whoever from it
      happens to be logged in.                                               */
+  /* Set when the last registry read was REFUSED rather than empty. The two
+     were indistinguishable, and the callers assumed the second. */
+  var _orgsError = null;
+  function orgsError() { return _orgsError; }
+
   function loadOrgs() {
     if (!_db) return Promise.resolve({});
     return _db.collection(ORGS).get().then(function (snap) {
@@ -566,6 +571,14 @@
       _orgs = map;
       return map;
     })['catch'](function (e) {
+      /* A REFUSED READ IS NOT AN EMPTY REGISTRY.
+
+         Returning {} here made a permission problem indistinguishable from
+         "nobody has set any partners up", and the callers say the latter:
+         askDealRoom() tells you to "tick one as a joint development partner
+         on Partners", which is advice for a problem you do not have and
+         cannot act on. Record why, so a caller can say the true thing. */
+      _orgsError = (e && (e.code || e.message)) || 'unreadable';
       console.warn('[access] org registry unreadable:', e && e.message);
       return {};
     });
@@ -730,7 +743,7 @@
     setRole:setRole, setManagedOrgs:setManagedOrgs, updateSelf:updateSelf,
     loadUsers:loadUsers, users:users, pendingCount:pendingCount, loadStaff:loadStaff,
     loadInvites:loadInvites, invites:invites, invite:invite, revokeInvite:revokeInvite,
-    loadOrgs:loadOrgs, orgs:orgs, orgName:orgName, saveOrg:saveOrg,
+    loadOrgs:loadOrgs, orgs:orgs, orgsError:orgsError, orgName:orgName, saveOrg:saveOrg,
     deleteOrg:deleteOrg, setOrgActive:setOrgActive, validateDomain:validateDomain,
     pendingMessage:pendingMessage, blockedMessage:blockedMessage,
     COLLECTION:COLLECTION, ORGS:ORGS
