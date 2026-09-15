@@ -7160,6 +7160,7 @@ function applyRouteToAll(scope){
 // Cycle a single conduit's routing method (surface -> ground -> concrete).
 function cycleConduitRoute(id){
   var c=S.conduits.find(function(x){return x.id===id;}); if(!c) return;
+  c.routeExplicit=true;   /* chosen by hand: _normalizeConduitRoutes leaves it alone */
   var cur = c.route==='trench'
               ? (c.trenchIn==='concrete' ? 'trench-concrete'
                : c.trenchIn==='asphalt'  ? 'trench-asphalt'
@@ -18060,7 +18061,27 @@ function fmtLen(val){
   return`${(+val).toFixed(1)} ${u}`;
 }
 
+/* A guided-build leg whose conduit is interior (the Level 2 service->panel
+   feed) was stamped route:'trench' by the build, never chosen by anyone, so
+   projects saved before 2026-09-15 still carry it. Move those to a surface
+   route so the schedule, the callout, the estimate, the permit notes and
+   every trench total agree that nothing is dug for it. Only a leg the build
+   laid (evRun) and only while the user has not set its route by hand
+   (routeExplicit, see cycleConduitRoute). Returns how many it changed. */
+function _normalizeConduitRoutes(){
+  var n=0;
+  try{
+    if(typeof _condIsIndoor!=='function') return 0;
+    (S.conduits||[]).forEach(function(c){
+      if(!c || !c.evRun || c.routeExplicit || c.route!=='trench' || !_condIsIndoor(c)) return;
+      c.route='surface'; delete c.trenchIn; n++;
+    });
+  }catch(e){}
+  return n;
+}
+try{ window._normalizeConduitRoutes=_normalizeConduitRoutes; }catch(e){}
 function updCondStat(){
+  try{ if(_normalizeConduitRoutes()>0 && typeof _refreshConduitStyle==='function') _refreshConduitStyle(); }catch(e){}
   document.getElementById('ccnt').textContent=S.conduits.length;
   if(S.pxPerFt){const t=S.conduits.reduce((s,c)=>s+ +c.ftLen,0);document.getElementById('tot-c').textContent=`${t.toFixed(1)} ${S.unitLabel||'ft'}`;}
   else document.getElementById('tot-c').textContent=S.conduits.length?'  Calibrate':'--';
@@ -65608,12 +65629,18 @@ function _dcfcRenderTrenches(){
   for(var r=0;r<runs.length;r++){
     var t=runs[r]; if(!t.pts||t.pts.length<2) continue;
     var ptStr=t.pts.map(function(p){return p.x+','+p.y;}).join(' ');
-    var band=document.createElementNS(NS,'polyline');
-    band.setAttribute('points',ptStr);
-    band.setAttribute('stroke', t.in==='concrete'?'rgba(160,160,165,.35)':'rgba(120,80,40,.35)');
-    band.setAttribute('stroke-width','16'); band.setAttribute('fill','none');
-    band.setAttribute('stroke-linecap','round'); band.setAttribute('stroke-linejoin','round');
-    band.setAttribute('stroke-dasharray', t.in==='concrete'?'none':'3 7'); g.appendChild(band);
+    /* The band is the excavation. A run that carries only interior conduit
+       (the Level 2 service->panel feed) is a path through a building, so it
+       keeps its centreline and vertices but shows no dig. */
+    var _dug=!(typeof _trenchRunIsIndoor==='function' && _trenchRunIsIndoor(t));
+    if(_dug){
+      var band=document.createElementNS(NS,'polyline');
+      band.setAttribute('points',ptStr);
+      band.setAttribute('stroke', t.in==='concrete'?'rgba(160,160,165,.35)':'rgba(120,80,40,.35)');
+      band.setAttribute('stroke-width','16'); band.setAttribute('fill','none');
+      band.setAttribute('stroke-linecap','round'); band.setAttribute('stroke-linejoin','round');
+      band.setAttribute('stroke-dasharray', t.in==='concrete'?'none':'3 7'); g.appendChild(band);
+    }
     var mid=document.createElementNS(NS,'polyline');
     mid.setAttribute('points',ptStr);
     mid.setAttribute('stroke', legColor(t.leg)); mid.setAttribute('stroke-width','1.2');
@@ -65678,10 +65705,18 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
      zoom level, and this division is what the callout prints. */
   var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;
   if(!(_ppfLeg>0)) _ppfLeg=((typeof S!=='undefined'&&S.pxPerFt)||6);
+  /* THE ROUTE FOLLOWS THE CONDUIT, NOT THE TOOL. Every leg here was stamped
+     route:'trench' because it was laid along a drawn run — including the
+     Level 2 interior feed (L2-INT, EMT inside the building), which then
+     read "TRENCH, IN-GROUND" on the schedule, wore a trench band on the
+     sheet, and was counted by every trench total that keys on the route.
+     It should not count at all. An interior conduit is surface-routed. */
+  var _indoorLeg=(typeof _condIsIndoor==='function') && _condIsIndoor({ condType:condType, label:label||'' });
   var c={ id:uid(), condType:condType, pts:pts, pxLen:_polyLen(pts),
           ftLen:+(_polyLen(pts)/_ppfLeg).toFixed(1),
-          fromId:el.id, toId:null, route:'trench', trenchIn:run.in||'soil',
+          fromId:el.id, toId:null, route:(_indoorLeg?'surface':'trench'),
           evRun:run.id, evRole:condType, label:label||'', labelDx:50, labelDy:-28 };
+  if(!_indoorLeg) c.trenchIn=run.in||'soil';
   /* BOND THE FAR END, AND ANCHOR IT NOW.
 
      Every run the guided build created was pushed with toId:null and no

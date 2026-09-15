@@ -431,3 +431,16 @@ adds EMT for pricing, since EMT is never buried). `_trenchRunDugFt(t)` is
 zero for a drawn run whose every leg is interior; the right panel, both BOM
 figures and the permit sheet measure drawn runs through it. The trench line
 is now what was asked for: the panel to the EVSE units, dug once.
+
+**And it does not count at all.** The build stamped every leg it laid with
+`route:'trench'`, the interior feed included, so the schedule printed
+"TRENCH, IN-GROUND" for it, the callout said TRENCH, the permit notes'
+trenching schedule and the PE CSV summed it, `conduitEstimate` bucketed it as
+in-ground trench, and the sheet drew an excavation band under its run.
+`_dcfcConduitAlongRun` now routes an interior conduit as `surface` (no
+`trenchIn`); `_normalizeConduitRoutes()`, run from `updCondStat`, moves legs
+saved with the old default the same way, leaving hand-drawn conduits and
+any route the user cycled by hand (`routeExplicit`, set in
+`cycleConduitRoute`) alone; `_dcfcRenderTrenches` paints no band under a
+run whose only conduit is interior. Every consumer that keys on the route
+is right without being touched.

@@ -303,6 +303,31 @@ console.log('\ninterior conduit is not excavation');
   S.conduits = []; delete global._buildCorridors;
 }
 
+console.log('\nan interior leg is never routed in a trench');
+{
+  global._liveMapState = () => null; S.pxPerFt = PPF19; S.conduits = [];
+  const run = { id: 'feedrun', in: 'soil', pts: [{ x: -10, y: 0 }, { x: 0, y: 0 }] };
+  const snap = _dcfcNearestOnPoly(run.pts, { x: 0, y: 0 });
+  const feed = _dcfcConduitAlongRun({ id: 'panel', x: 0, y: 0 }, run, snap, 'L2-INT', 'Interior feed (service→panel)');
+  chk('the Level 2 service->panel feed is surface-routed at creation', feed.route === 'surface' && feed.trenchIn === undefined, feed.route + '/' + feed.trenchIn);
+  const branch = _dcfcConduitAlongRun({ id: 'evse', x: 0, y: 0 }, run, snap, 'L2-TRENCH', 'Branch trench (panel→EVSE)');
+  chk('an EVSE branch is still trenched, in the run\'s surface', branch.route === 'trench' && branch.trenchIn === 'soil');
+
+  (0, eval)(grabFn('_normalizeConduitRoutes'));
+  const saved   = { id: 's1', condType: 'L2-INT', label: 'Interior feed (service→panel)', route: 'trench', trenchIn: 'soil', evRun: 'feedrun', ftLen: 7 };
+  const chosen  = { id: 's2', condType: 'L2-INT', route: 'trench', trenchIn: 'soil', evRun: 'feedrun', routeExplicit: true, ftLen: 7 };
+  const byHand  = { id: 's3', condType: 'L2-INT', route: 'trench', trenchIn: 'soil', ftLen: 7 };
+  const branchS = { id: 's4', condType: 'L2-TRENCH', route: 'trench', trenchIn: 'soil', evRun: 'run', ftLen: 86 };
+  S.conduits = [saved, chosen, byHand, branchS];
+  const n = _normalizeConduitRoutes();
+  chk('a saved interior build leg is moved to a surface route', n === 1 && saved.route === 'surface' && saved.trenchIn === undefined, String(n));
+  chk('a route the user set by hand is kept', chosen.route === 'trench' && chosen.trenchIn === 'soil');
+  chk('a hand-drawn conduit is not the build\'s to change', byHand.route === 'trench');
+  chk('the EVSE branch is untouched', branchS.route === 'trench' && branchS.trenchIn === 'soil');
+  chk('running it again changes nothing', _normalizeConduitRoutes() === 0);
+  S.conduits = [];
+}
+
 console.log('\nwiring in editor.html');
 {
   const uses = (SRC.match(/_trenchRunFt\(/g) || []).length;
@@ -312,7 +337,10 @@ console.log('\nwiring in editor.html');
   chk('a leg along a run asks the view for its scale', SRC.indexOf("var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;") > 0);
   chk('the rubber band is unprojected like the clicks', SRC.indexOf("_dcfcDrawMove((typeof _plotUnproject==='function') ? _plotUnproject(_raw) : _raw);") > 0);
   chk('undo consults the view before touching the scale', SRC.indexOf('var _histOwnsScale = !(typeof _viewOwnsScale === \'function\' && _viewOwnsScale());') > 0);
-  chk('each helper is defined once', ['_groundPolyFt', '_viewOwnsScale', '_viewPxPerFt', '_trenchRunFt'].every(n => (SRC.match(new RegExp('function ' + n + '\\(', 'g')) || []).length === 1));
+  chk('updCondStat normalises routes before it counts', SRC.indexOf("function updCondStat(){\n  try{ if(_normalizeConduitRoutes()>0") > 0);
+  chk('cycling a route by hand marks it explicit', SRC.indexOf("c.routeExplicit=true;   /* chosen by hand") > 0);
+  chk('no excavation band is painted under an interior run', SRC.indexOf("var _dug=!(typeof _trenchRunIsIndoor==='function' && _trenchRunIsIndoor(t));") > 0);
+  chk('each helper is defined once', ['_groundPolyFt', '_viewOwnsScale', '_viewPxPerFt', '_trenchRunFt', '_condIsIndoor', '_trenchRunIsIndoor', '_trenchRunDugFt', '_normalizeConduitRoutes'].every(n => (SRC.match(new RegExp('function ' + n + '\\(', 'g')) || []).length === 1));
 }
 
 console.log(all ? '\nALL PASS' : '\nFAILURES');
