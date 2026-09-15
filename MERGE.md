@@ -420,3 +420,14 @@ in trench" on the material rows and "dug once · 6 conduits share it" on the
 excavation line, and the permit sheet measures drawn runs through
 `_trenchRunFt`. `_evTakeoff` already took `min(trench, dug)` for the cost
 sheet, so the EV estimate follows without change.
+
+**The interior feed is conduit, not a dig.** The Level 2 feed from the
+service to the panel is `L2-INT` (EMT, inside the building) but it rides a
+drawn run, so its 7 ft sat in the trench total, the drawn-trench footage on
+the right panel and the BOM, and the permit sheet's corridor count. One rule
+now, `_condIsIndoor(c)` (type contains INT, or the label says interior or
+indoor), read by `trenchTotals`, the legend, and `_evFeetFromCanvas` (which
+adds EMT for pricing, since EMT is never buried). `_trenchRunDugFt(t)` is
+zero for a drawn run whose every leg is interior; the right panel, both BOM
+figures and the permit sheet measure drawn runs through it. The trench line
+is now what was asked for: the panel to the EVSE units, dug once.

@@ -274,10 +274,40 @@ console.log('\ntrench once, cable many times');
   S.conduits = []; delete global._buildCorridors;
 }
 
+console.log('\ninterior conduit is not excavation');
+{
+  (0, eval)(grabFn('_condIsIndoor'));
+  (0, eval)(grabFn('_trenchRunIsIndoor'));
+  (0, eval)(grabFn('_trenchRunDugFt'));
+  chk('L2-INT is interior', _condIsIndoor({ condType: 'L2-INT' }) === true);
+  chk('a leg labelled interior is interior', _condIsIndoor({ condType: 'custom', label: 'Interior feed (service→panel)' }) === true);
+  chk('the branch to the EVSE is not', _condIsIndoor({ condType: 'L2-TRENCH', label: 'Branch trench (panel→EVSE)' }) === false);
+  chk('a BESS data run in the shared trench is not', _condIsIndoor({ condType: 'EMT-BMS' }) === false);
+
+  global.__groups = []; global._buildCorridors = () => global.__groups;
+  const leg = (id, ft, x0) => ({ id, condType: 'L2-TRENCH', route: 'trench', evRun: 'run', ftLen: ft, pts: [{ x: x0, y: 0 }, { x: x0, y: 0 }, { x: 0, y: 0 }] });
+  const feed = { id: 'feed', condType: 'L2-INT', label: 'Interior feed (service→panel)', route: 'trench', evRun: 'feedrun', ftLen: 7,
+                 pts: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: -10, y: 0 }] };
+  S.conduits = [leg('a1', 10, 14), leg('a2', 10, 14), leg('b1', 45, 62), leg('b2', 45, 62), leg('c1', 86, 118), leg('c2', 86, 118), feed];
+  global.__groups = [{ pts: S.conduits[0].pts, members: [S.conduits[0], S.conduits[1]] }, { pts: S.conduits[2].pts, members: [S.conduits[2], S.conduits[3]] }, { pts: S.conduits[4].pts, members: [S.conduits[4], S.conduits[5]] }];
+  const t = trenchTotals();
+  chk('the trench is panel to the EVSE units only: 86 ft, the 7 ft interior feed is not dug', near(t.ft, 86) && t.corridors === 1, String(t.ft) + '/' + t.corridors);
+  chk('the feed still counts as conduit', S.conduits.reduce((s, c) => s + c.ftLen, 0) === 289);
+
+  const feedRun   = { id: 'feedrun', pts: [{ x: -10, y: 0 }, { x: 0, y: 0 }], _geoPts: [{ lat: LAT, lng: LNG }, { lat: LAT, lng: LNG + lngOff(7) }] };
+  const branchRun = { id: 'run',     pts: [{ x: 0, y: 0 }, { x: 118, y: 0 }], _geoPts: [{ lat: LAT, lng: LNG }, { lat: LAT, lng: LNG + lngOff(86) }] };
+  const emptyRun  = { id: 'new',     pts: [{ x: 0, y: 0 }, { x: 50, y: 0 }],  _geoPts: [{ lat: LAT, lng: LNG }, { lat: LAT, lng: LNG + lngOff(36) }] };
+  chk('a drawn run carrying only the interior feed is not dug', _trenchRunIsIndoor(feedRun) === true && _trenchRunDugFt(feedRun) === 0);
+  chk('the branch run is dug for its ground length', _trenchRunIsIndoor(branchRun) === false && near(_trenchRunDugFt(branchRun), 86));
+  chk('a run with no legs yet is a trench being drawn', _trenchRunIsIndoor(emptyRun) === false && near(_trenchRunDugFt(emptyRun), 36));
+  S.conduits = []; delete global._buildCorridors;
+}
+
 console.log('\nwiring in editor.html');
 {
   const uses = (SRC.match(/_trenchRunFt\(/g) || []).length;
-  chk('the right panel, the BOM civil lines, the BOM summary and the permit sheet all measure runs through _trenchRunFt (4 + its definition)', uses === 5, String(uses));
+  chk('the drawn-run consumers measure DUG feet: right panel, BOM civil, BOM summary, permit sheet (4 + the helper)', (SRC.match(/_trenchRunDugFt\(/g) || []).length === 5, String((SRC.match(/_trenchRunDugFt\(/g) || []).length));
+  chk('_trenchRunFt itself is reached only through that helper', uses === 2, String(uses));
   chk('no consumer divides a run\'s pixels by the cache any more', SRC.indexOf('_trFt+=_polyLen(t.pts)/S.pxPerFt') < 0 && SRC.indexOf('var _tft=(S.pxPerFt ? _tpx/S.pxPerFt : 0);') < 0);
   chk('a leg along a run asks the view for its scale', SRC.indexOf("var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;") > 0);
   chk('the rubber band is unprojected like the clicks', SRC.indexOf("_dcfcDrawMove((typeof _plotUnproject==='function') ? _plotUnproject(_raw) : _raw);") > 0);
