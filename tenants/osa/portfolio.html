@@ -772,6 +772,22 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       </div>
       <div id="mx-host"></div>
       <div id="mx-unscored"></div>
+
+      <!-- THE PIPELINE, BESIDE THE MATRIX (Thomas, 2026-09-14).
+           The matrix answers "which sites are good"; this answers "where is
+           everything, and what is stuck". They were two separate pages and
+           reading one meant losing sight of the other. The widget is
+           /omega-pipeline.js — core, not OSA — and it is fed the same STAGES
+           the gates are defined from, so the strip can never describe a
+           pipeline the backend does not enforce. `stuck` is a deal that
+           cannot pass the gate into the next stage: the actionable number. -->
+      <div class="card" style="margin-top:18px">
+        <div class="card-h"><h2>Pipeline</h2>
+          <span class="sub">Where every live deal sits. A stage with a ▲ has deals that
+            cannot pass its gate yet — click it to see which.</span>
+          <button class="btn-x" style="margin-left:auto" onclick="go('pipeline')">Full table</button></div>
+        <div class="card-b"><div id="mx-pipeline"></div></div>
+      </div>
     </section>
 
 
@@ -1124,6 +1140,10 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
      page with no API and the OGI endpoint is not configured, so this is the
      only grid measurement the console can currently make on its own. -->
 <script src="/omega-auth-errors.js?v=1"></script>
+<!-- The reusable half of this console. Both are core modules, not OSA files:
+     any tenant with stages and a create dialog can load the same two. -->
+<script src="/omega-pipeline.js?v=1"></script>
+<script src="/omega-quickadd.js?v=1"></script>
 <script src="/omega-site-intel.js?v=1"></script>
 <!-- The referral flow is core, not OSA's: every JD org runs these six steps. -->
 <script src="/omega-jd-flow.js?v=1"></script>
@@ -1361,7 +1381,7 @@ function render(){
   if(!S.loaded) return;
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
-  renderMatrix(); renderBoard(); renderVerify(); renderDesign();
+  renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
   renderSettings(); renderStaff(); renderInvites();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
@@ -1621,6 +1641,69 @@ function renderPipeline(){
       + '</tr>'; }).join('');
 }
 function setPipe(k){ S.pipeFilter=k; render(); }
+
+/* ── The pipeline widget on the matrix view ────────────────────────────────
+   Feeds /omega-pipeline.js the same STAGES the gates come from, and defines
+   "stuck" as: this deal cannot pass the gate into its next stage. That is the
+   number worth putting on a dashboard — "eleven in pre-development" is a
+   census, "three of them cannot move" is a morning's work. Clicking a segment
+   opens the stage in the widget; clicking a deal inside opens the deal. */
+/* Built from the same gates the pipeline widget reads. One definition of
+   "what this deal still needs", used by the strip and by the drawer. */
+function routeSteps(d){
+  var here=F.stageOf(d.stage).rank, out=[];
+  F.STAGES.forEach(function(st){
+    if(st.rank<=here){ out.push({key:st.key,label:st.label,done:true}); return; }
+    var miss=F.missingFor(d,st.key)||[];
+    out.push({
+      key:st.key, label:st.label, done:false,
+      why: miss.length
+        ? miss.map(function(m){ return fieldLabel(m); }).join(' \u00b7 ')
+        : 'Ready \u2014 nothing is missing',
+      cta: miss.length ? null : 'Move here',
+      action: miss.length ? null : function(){ doAdvance(st.key); }
+    });
+  });
+  return out;
+}
+function renderRoute(d){
+  var host=document.getElementById('dr-route');
+  if(!host||!window.OmegaQuickAdd) return;
+  OmegaQuickAdd.checklist(host,{
+    title:'Route to funded',
+    steps:routeSteps(d)
+  });
+}
+
+function renderPipelineWidget(){
+  var host=document.getElementById('mx-pipeline');
+  if(!host || !window.OmegaPipeline || !S.loaded) return;
+  var live=S.deals.filter(function(d){ return !F.isExit(d.stage); });
+  OmegaPipeline.render(host,{
+    title:'Live deals',
+    stages:F.STAGES,
+    records:live,
+    selected:S.plStage||null,
+    stageOf:function(d){ return d.stage; },
+    valueOf:function(d){ return d.capexUsd; },
+    money:function(v){ return F.money(v,true); },
+    nameOf:function(d){ return d.name; },
+    /* The gate, read straight from the model. A deal at the last stage has
+       nowhere to advance to and is never "stuck". */
+    stuckOf:function(d){
+      var nx=nextStage(d); if(!nx) return null;
+      var miss=F.missingFor(d,nx.key)||[];
+      if(!miss.length) return null;
+      return miss.length===1 ? String(miss[0]).replace(/\.$/,'')
+                             : miss.length+' missing';
+    },
+    onStage:function(key){
+      S.plStage = (S.plStage===key ? null : key);
+      renderPipelineWidget();
+    },
+    onRecord:function(d){ openDeal(d.id); }
+  });
+}
 
 /* ── Partners ─────────────────────────────────────────────────────────── */
 /* ── JOINT DEVELOPMENT ──────────────────────────────────────────────────
@@ -4753,56 +4836,79 @@ function doToggleOrg(k,on){
 }
 
 function openNew(){
-  Forms.open({
+  /* THREE FIELDS, THEN THE DOOR (Thomas, 2026-09-14: "much easier workflow
+     for a dev to add a project").
+
+     What was here asked thirteen questions across four sections before it
+     would take anything. Every one was individually justified and the wall
+     was still a wall: a rep standing on a site with a phone either does not
+     file the deal or types guesses into it, and a guess in a required field
+     is indistinguishable from a decision a week later.
+
+     So: the three things that are true the moment a deal exists — what it is
+     called, what we are building, and who brought it — and everything else
+     behind one optional fold. Nothing was deleted; the energy fields and the
+     site notes are still here, still write to the same places. They are just
+     no longer standing between a rep and a saved record.
+
+     THE GATES ARE UNTOUCHED. This only changes what is asked at minute zero.
+     A deal still cannot reach Qualified without a score, or Pre-development
+     without a rep — F.missingFor() decides that, and the deal drawer now
+     opens on a checklist built from those same gates, so "build it out" is a
+     visible sequence rather than a form the reader has to know to go find.
+
+     The dialog is /omega-quickadd.js — core, not OSA, because every console
+     in the platform has grown this same wall. */
+  OmegaQuickAdd.open({
     title:'New project',
-    intro:'Only what you can actually know today. Everything else is asked at the '
-        + 'stage it becomes knowable.',
+    lede:'Three things now. Everything else is asked at the stage it becomes '
+       + 'knowable \u2014 and the deal will tell you what it needs next.',
     fields:[
-      {key:'name',type:'text',label:'Site name',required:true,autofocus:true,
+      {key:'name',label:'Site name',required:true,autofocus:true,
         placeholder:'e.g. Hillside Bottling Factory'},
-      {key:'projectType',type:'radio',label:'What are we building',required:true,
-        options:optTypes(),
-        hint:'Sets the technology tags, which screening tool runs it, and which '
+      {key:'projectType',type:'choice',label:'What are we building',required:true,
+        options:optTypes().map(function(o){
+          return {value:o.value,label:o.label,hint:o.hint||''}; }),
+        note:'Sets the technology tags, which screening tool runs it, and which '
            + 'BOM lines appear later.'},
-      {key:'address',type:'text',label:'Full address',
+      {key:'partnerOrg',type:'select',label:'Who brought it',required:true,
+        placeholder:'Choose an organisation\u2026',
+        options:optOrgs().map(function(o){
+          return {value:o.value,label:o.label}; }),
+        requiredMsg:'Required \u2014 the one field that cannot be filled in later '
+                  + 'without an owner\u2019s approval.',
+        note:'Locks as soon as the deal advances, because it decides who gets paid.'}
+    ],
+    more:[
+      {key:'address',label:'Full address',
         placeholder:'600 N Union Ave, Hillside, NJ 07205',
         validate:function(v){
           return (!v || placeable(v)) ? null
-            : 'Add the city and state (or ZIP). Without them Grid Atlas cannot tell this '
-            + 'street from every other one of the same name — it will match the wrong '
-            + 'state rather than admit it does not know.'; },
-        hint:'City and state or ZIP matter: they are what Grid Atlas uses to place the site.'},
-
-      {type:'divider',label:'Who'},
-      {key:'clientOrgId',type:'orgpick',label:'Client',options:optOrgs(),
-        hint:'Whose site it is.'},
-      {key:'partnerOrg',type:'orgpick',label:'Who brought it',required:true,
-        options:optOrgs(),
-        requiredMsg:'Required \u2014 the one field that cannot be filled in later without '
-                  + 'an owner\u2019s approval.',
-        hint:'Locks as soon as the deal advances, because it decides who gets paid.'},
-
-      {type:'divider',label:'What you saw'},
-      {key:'siteNotes',type:'textarea',label:'Site notes',rows:5,
-        placeholder:'Roof condition, switchgear, where the meters are, who you spoke to, '
-                  + 'anything that struck you\u2026',
-        hint:'Free text, and it travels with the project the whole way through. The '
-           + 'screening tool reads it too, so what you noticed on site is worth typing.'},
-
-      {type:'divider',label:'Energy, if you have it'},
-      {type:'static',html:'Before a design exists there is no capex and often no MW \u2014 '
-        + 'but there is usually <b>a bill and a meter count</b>. Those are what screening '
-        + 'actually runs on. Leave anything you do not have blank; blank is treated as '
-        + 'unknown rather than zero.'},
-      {key:'monthlyBillUsd',type:'money',label:'Monthly electricity bill'},
+            : 'Add the city and state (or ZIP). Without them Grid Atlas cannot tell '
+            + 'this street from every other one of the same name \u2014 it will match '
+            + 'the wrong state rather than admit it does not know.'; },
+        note:'City and state or ZIP are what Grid Atlas uses to place the site.'},
+      {key:'clientOrgId',type:'select',label:'Client',
+        placeholder:'\u2014',
+        options:optOrgs().map(function(o){ return {value:o.value,label:o.label}; }),
+        note:'Whose site it is.'},
+      {key:'siteNotes',type:'textarea',label:'Site notes',rows:4,
+        placeholder:'Roof condition, switchgear, where the meters are, who you spoke to\u2026',
+        note:'Travels with the project the whole way through. The screening tool '
+           + 'reads it too, so what you noticed on site is worth typing.'},
+      {key:'monthlyBillUsd',type:'number',label:'Monthly electricity bill ($)',step:'any',
+        note:'Before a design exists there is no capex and often no MW \u2014 but there '
+           + 'is usually a bill and a meter count, and those are what screening runs on. '
+           + 'Blank is treated as unknown, never as zero.'},
       {key:'annualKwh',type:'number',label:'Annual kWh',step:'any'},
-      {key:'meters',type:'number',label:'How many meters',step:'1',min:0},
+      {key:'meters',type:'number',label:'How many meters',step:'1'},
       {key:'loadKw',type:'number',label:'Peak load (kW)',step:'any'},
       {key:'sizeMw',type:'number',label:'Target size (MW), if known',step:'0.01',
-        hint:'A target, not a commitment. The real number comes out of the design.'}
+        note:'A target, not a commitment. The real number comes out of the design.'}
     ],
-    submitLabel:'Save as a referral',
-    footNote:'Saves to Referred \u2014 an administrator assigns it for screening next'
+    moreLabel:'Add what you already know (optional)',
+    submitLabel:'Create',
+    footNote:'Saves to Referred. An administrator assigns it for screening next.'
   }).then(function(v){
     if(!v) return;
     var t=F.typeOf(v.projectType)||{};
@@ -4829,12 +4935,6 @@ function openNew(){
     })['catch'](function(e){ toast((e&&e.message)||'Could not create',true); });
   });
 }
-
-/* ── Prescreen ──/* ── Prescreen ─────────────────────────────────────────────────────────────
-   The fast look. Four questions and a verdict, before anybody spends an hour
-   on a full viability score. A pass moves the deal to Screening automatically;
-   a fail parks it with the reason attached rather than leaving it to rot in
-   the pipeline pretending to be live. */
 function doPrescreen(deal){
   var d=deal||guard(); if(!d) return;
   var pre=d.prescreen||{};
@@ -5004,6 +5104,7 @@ function renderDrawer(){
   if(S.tab==='people')   h=tabPeople(d);
   if(S.tab==='history')  h=tabHistory(d);
   document.getElementById('dr-body').innerHTML=h;
+  if(S.tab==='overview') renderRoute(d);
   paintDesignBack(d);
 
   var foot='';
@@ -5038,6 +5139,14 @@ function nextStage(d){
 function tabOverview(d){
   var next=nextStage(d), miss=next?F.missingFor(d,next.key):[];
   var h='';
+  /* THE ROUTE, NOT JUST THE NEXT BLOCKER (2026-09-14).
+     "Not ready for X" below tells a dev what is missing right now; it does not
+     tell them how far the project has to go or how much of it is already done,
+     so building a project out felt like being handed one error at a time. The
+     checklist is every remaining gate, in stage order, with what each one is
+     waiting on — drawn from F.missingFor(), so it cannot promise a route the
+     backend will not honour. Deals that have exited get none of it. */
+  if(!F.isExit(d.stage)) h+='<div id="dr-route" class="card-b" style="padding:0 0 14px"></div>';
   if(next && miss.length){
     h+='<div class="problems"><b>Not ready for '+esc(next.label)+'</b><ul>'
       + miss.map(function(m){
