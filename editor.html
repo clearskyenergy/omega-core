@@ -6753,6 +6753,9 @@ function _restoreCanvas(snap){
   _clearCanvasDOM();
   S.elements=[]; S.conduits=[]; S.shapes=[]; S.sel=null;
   S._trenches = clone(snap.trenches);
+  /* _clearCanvasDOM emptied #csvg, taking the marker <defs> the dimension
+     arrows reference; recreate them before anything renders. */
+  try{ if(typeof _ensureDimArrows==='function') _ensureDimArrows(); }catch(e){}
   S.bessList = clone(snap.bessList);
   try{ S.vendorOverride = JSON.parse(JSON.stringify(snap.vendorOverride||{})); }
   catch(e){ S.vendorOverride = {}; }
@@ -7291,6 +7294,12 @@ function toggleBollards(){
   if(typeof renderShape==='function' && S.shapes){
     var svg=document.getElementById('csvg'); if(svg) svg.innerHTML='';
     S.shapes.forEach(function(sh){ renderShape(sh); });
+    /* The wipe above also took every conduit, the guided-build trench layer,
+       the marker <defs> and the terrain group. Put back what is model-backed. */
+    try{ if(typeof _ensureDimArrows==='function') _ensureDimArrows(); }catch(e){}
+    try{ (S.conduits||[]).forEach(function(c){ if(typeof renderConduit==='function') renderConduit(c); }); }catch(e){}
+    try{ if(S._trenches && S._trenches.length && typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches(); }catch(e){}
+    try{ if(typeof tlRender==='function') tlRender(); }catch(e){}
   }
   if(typeof showBanner==='function') showBanner('wiz', window._hideBollards?'  Bollards hidden on the map (still shown in permit exports).':'  Bollards shown.');
 }
@@ -7423,6 +7432,11 @@ function _setScaleFromZoomLat(zoom, lat){
   if(S.conduits){ S.conduits.forEach(function(c){
     if(!c._geoPts && !(_prevPpf > 0)) c.ftLen=+(c.pxLen/S.pxPerFt).toFixed(1);  /* see _gmapAutoScale */
     var el=document.querySelector('[data-cid="'+c.id+'"]'); if(el) el.remove(); renderConduit(c); }); }
+  /* The wipe above also took the marker <defs>, the guided-build trench
+     layer and the terrain group; put back what is model-backed. */
+  try{ if(typeof _ensureDimArrows==='function') _ensureDimArrows(); }catch(e){}
+  try{ if(S._trenches && S._trenches.length && typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches(); }catch(e){}
+  try{ if(typeof tlRender==='function') tlRender(); }catch(e){}
   if(typeof updCondStat==='function') updCondStat();
   if(typeof updateRuler==='function') updateRuler();
 }
@@ -9028,6 +9042,10 @@ function removeEl(id){
 
 function selEl(id){
   var _prev=S.sel;
+  /* Picking an element supersedes a conduit picked earlier. The Delete key
+     checks _selCondId FIRST and only Esc cleared it, so Delete on a selected
+     charger removed the last right-clicked conduit instead. */
+  if(id && typeof clearConduitSel==='function'){ try{ clearConduitSel(); }catch(e){} }
   document.querySelectorAll('.cel').forEach(e=>e.classList.remove('sel'));
   S.sel=id;
   if(id){document.querySelector(`[data-elid="${id}"]`)?.classList.add('sel');showProps(id);}
@@ -22622,6 +22640,11 @@ document.addEventListener('keydown',e=>{
   }
   var _shapeMode = (typeof SHAPE_MODES!=='undefined' && SHAPE_MODES[S.mode]);
   if(e.key==='Escape'){
+    /* DCFC is local to the EV block (IIFE at 57892, 'use strict'), so the
+       guard below is never true here. Reach the build through its exported
+       accessor and let the block's own cancel do the teardown. */
+    try{ var _evK=(typeof _dcfcState==='function')?_dcfcState():null;
+         if(_evK && _evK.active && typeof _dcfcCancel==='function'){ _dcfcCancel(); return; } }catch(_e){}
     if(typeof DCFC!=='undefined' && DCFC.active){
       // If nodes+at least one charger are down, finish; else cancel cleanly.
       if(DCFC.phase==='place' && DCFC.stepIx>=DCFC.seq.length && DCFC.chargerEls && DCFC.chargerEls.length>0){ if(typeof _dcfcFinish==='function'){ _dcfcFinish(); return; } }
@@ -24789,6 +24812,9 @@ async function deleteProject(id, name, e) {
 // Auto-save every 60 seconds
 // -- SAVE / LOAD -----------------------------------------------
 function _setSaved(s){
+  /* Anything that reports 'unsaved' is dirty for the autosave gate and the
+     unsaved-work prompt too. */
+  if(s==='unsaved'){ try{ window._workDirty=true; }catch(e){} }
   const el=document.getElementById('pn-saved');
   if(!el)return;
 el.textContent=s==='saved'?'Saved':s==='saving'?'Saving…':s==='unsaved'?'Unsaved changes':'Save failed';
@@ -25849,7 +25875,11 @@ async function _loadProject(id){
           }catch(e){}
         }).catch(function(e){ console.warn('View restore failed, falling back:', e&&e.message); });
       }, 200);
-      _loadReady = true;
+      /* doRender() flips _loadReady once the canvas is actually populated
+         (25628). Flipping it here opened a window in which the autosave
+         wrote an EMPTY canvas over the project whenever the map was slow
+         or never loaded, because the .catch above does not fall back to
+         doRender(). */
       return; // handled -- skip the branch chain below
     }
 
@@ -26034,8 +26064,11 @@ async function _loadProject(id){
       }
     }
   }catch(e){
-  // Load failed -- unlock saving so the user isn't permanently blocked.
-  _loadReady = true;
+  /* Load failed -- the canvas is EMPTY. Unlocking saves here let the 60 s
+     autosave write that empty canvas over the real project (and with
+     offline persistence on, deliver it once the connection came back).
+     Keep saves blocked; a reload retries the load. */
+  _loadReady = false;
   console.error('Load error:',e);
   const pt=document.getElementById('pn-title');
   if(pt) pt.textContent='Load failed -- '+e.message;
@@ -26043,7 +26076,17 @@ async function _loadProject(id){
 }
 }
 
-setInterval(()=>{ if(_currentUser && _projectId && _loadReady) saveProject(); }, 60000);
+/* Autosave only from a window someone is actually working in. An idle second
+   window holding an older copy of the project (left open in another profile
+   or on another machine) used to overwrite the newer save every 60 s: last
+   write wins, no version check. A window counts as in use once it carries an
+   unsaved change or the person has touched it at all since it loaded; a
+   window nobody has touched never writes. Two windows both being worked in
+   still race — that needs a version guard on the record, not a timer. */
+window._userTouched=false;
+document.addEventListener('pointerdown', function(){ window._userTouched=true; }, true);
+document.addEventListener('keydown',     function(){ window._userTouched=true; }, true);
+setInterval(()=>{ if(_currentUser && _projectId && _loadReady && (window._workDirty || window._userTouched)) saveProject(); }, 60000);
 
 // == GOOGLE MAPS JS API ---------------------------------------
 let _gmap=null,_gmapMarkers=[],_gmapLoaded=false,_gmapLoading=false;
@@ -58418,7 +58461,11 @@ function _dcfcModels(){
 
 /* Entry point — opens the standalone DCFC dialog. */
 function openDcfcBuild(){
-  DCFC.active=true; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
+  /* Not active until Start Placing (_dcfcStartPlacing sets it). Marking the
+     build active at dialog-open left it stuck when the dialog was closed:
+     the inline × handler cannot reach the block-local DCFC, and the stuck
+     flag paused Cmd+Z for the rest of the session via omegaBuildUndoPoint. */
+  DCFC.active=false; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
   /* Never inherit a stale Level 2 session — these are separate builds. */
   DCFC.level2=false; DCFC.seq=['service','xfmr','panel'];
   /* A DCFC build makes this a DCFC project, unless it is already an EV type. */
@@ -58439,7 +58486,7 @@ function openDcfcBuild(){
     +'<div style="background:#0F1D30;border:1px solid #F5A623;border-radius:14px;max-width:560px;width:100%;max-height:90vh;overflow:auto">'
     +'<div style="padding:16px 20px;border-bottom:1px solid #26364d;display:flex;align-items:center;justify-content:space-between">'
       +'<div style="font-size:16px;font-weight:800;color:#F5A623">\ud83d\ude97 DCFC Site \u2014 Guided Build</div>'
-      +'<button onclick="document.getElementById(\'dcfc-modal\').remove();DCFC.active=false" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">\u00d7</button>'
+      +'<button onclick="document.getElementById(\'dcfc-modal\').remove();try{_dcfcState().active=false}catch(e){}" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">\u00d7</button>'
     +'</div>'
     +'<div style="padding:16px 20px">'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Site Type</div>'
@@ -65138,7 +65185,8 @@ function _l2Svc(){ return L2_SERVICE[DCFC.l2Service] || L2_SERVICE.existing; }
 window._l2Svc=_l2Svc;
 
 function openLevel2Build(){
-  DCFC.active=true; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
+  /* Not active until Start Placing — see openDcfcBuild. */
+  DCFC.active=false; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
   DCFC.level2=true; DCFC.siteType='multifamily';
   /* Running the Level 2 build makes this a Level 2 project, unless it is
      already an EV type. The type rides to the project record on save. */
@@ -65163,7 +65211,7 @@ function openLevel2Build(){
     +'<div style="background:#0F1D30;border:1px solid #22D3EE;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto">'
     +'<div style="padding:16px 20px;border-bottom:1px solid #26364d;display:flex;align-items:center;justify-content:space-between">'
       +'<div style="font-size:16px;font-weight:800;color:#22D3EE">\u26a1 Level 2 EV Charging \u2014 Guided Build</div>'
-      +'<button onclick="document.getElementById(\'l2-modal\').remove();DCFC.active=false;DCFC.level2=false" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">\u00d7</button>'
+      +'<button onclick="document.getElementById(\'l2-modal\').remove();try{var _d=_dcfcState();_d.active=false;_d.level2=false}catch(e){}" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">\u00d7</button>'
     +'</div>'
     +'<div style="padding:16px 20px">'
       +'<div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#8FA3B8;margin-bottom:6px">Charger Model</div>'
@@ -72466,6 +72514,11 @@ window._crmToastModal=_crmToastModal;
       if(!elsHost || !svgHost) return;
       if(typeof renderEl!=='function') return;
       elsHost.innerHTML=''; svgHost.innerHTML='';
+      /* innerHTML='' also took the marker <defs> and the guided-build
+         trench layer (#dcfc-trenches). Both are model-backed; redraw them
+         as undoLast does, or every load erases the drawn runs. */
+      try{ if(typeof _ensureDimArrows==='function') _ensureDimArrows(); }catch(e){}
+      try{ if(S._trenches && S._trenches.length && typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches(); }catch(e){}
       (S.elements||[]).forEach(function(el){ try{ renderEl(el); }catch(e){} });
       if(typeof renderConduit==='function'){
         (S.conduits||[]).forEach(function(c){ try{ renderConduit(c); }catch(e){} });
@@ -78173,6 +78226,25 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
           }
         });
       });
+      /* The stock reprojector this engine stood down also moved the
+         guided-build runs (S._trenches, Patch 24) and redrew their layer.
+         Nothing else does now, so the bands stayed at the pixels they were
+         drawn at while the map moved, and the load-time repair pass then
+         re-anchored them there. Move them from their anchors here. */
+      var trMoved=false;
+      if(typeof _latLngToPx==='function'){
+        (s._trenches||[]).forEach(function(t){
+          if(!t || !t.pts || !t._geoPts || t._geoPts.length!==t.pts.length) return;
+          for(var ti=0; ti<t.pts.length; ti++){
+            var tg=t._geoPts[ti]; if(!tg || tg.lat==null) continue;
+            var tp=_latLngToPx(tg.lat, tg.lng, ms, sz.w, sz.h); if(!tp) continue;
+            if(Math.abs(tp.x-t.pts[ti].x)>0.01 || Math.abs(tp.y-t.pts[ti].y)>0.01){ t.pts[ti].x=tp.x; t.pts[ti].y=tp.y; trMoved=true; changed++; }
+          }
+          try{ if(trMoved && typeof window.__omegaCondPxSig==='function') t._geoSig=window.__omegaCondPxSig(t); }catch(e){}
+        });
+      }
+      if((s._trenches||[]).length && typeof _dcfcRenderTrenches==='function'
+         && (trMoved || !document.getElementById('dcfc-trenches'))){ try{ _dcfcRenderTrenches(); }catch(e){} }
       dedupeElements();
     } finally { busy=false; }
     return changed;
@@ -94099,6 +94171,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           }
         });
         if (S._trench && typeof renderTrenchSpine === 'function') renderTrenchSpine();
+        if (S._trenches && S._trenches.length && typeof _dcfcRenderTrenches === 'function') _dcfcRenderTrenches();
+        try { if (typeof tlRender === 'function') tlRender(); } catch (e) {}
         if (typeof updCondStat === 'function') updCondStat();
         if (typeof _updateConduitSchedule === 'function') _updateConduitSchedule();
       } catch (e) {}
