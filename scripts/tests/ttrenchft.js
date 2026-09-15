@@ -224,10 +224,60 @@ console.log('\nswitching tabs re-derives a live map\'s scale');
   delete global._gmapAutoScale;
 }
 
+console.log('\ntrench once, cable many times');
+{
+  (0, eval)(grabFn('trenchTotals'));
+  global.__groups = [];
+  global._buildCorridors = () => global.__groups;
+  /* the 160 S Main St sheet: one drawn run from the panel, six EVSEs in three
+     side-by-side pairs at 10, 45 and 86 ft along it. Each pair's two legs
+     coincide, so _buildCorridors reports three corridors. */
+  const leg = (id, ft, px, x0) => ({ id, condType: 'L2-TRENCH', route: 'trench', evRun: 'run', ftLen: ft,
+                                    pts: [{ x: x0, y: 0 }, { x: x0, y: 0 }, { x: 0, y: 0 }] });
+  const a1 = leg('a1', 10, 14, 14), a2 = leg('a2', 10, 14, 14);
+  const b1 = leg('b1', 45, 62, 62), b2 = leg('b2', 45, 62, 62);
+  const c1 = leg('c1', 86, 118, 118), c2 = leg('c2', 86, 118, 118);
+  S.conduits = [a1, a2, b1, b2, c1, c2];
+  global.__groups = [{ pts: a1.pts, members: [a1, a2] }, { pts: b1.pts, members: [b1, b2] }, { pts: c1.pts, members: [c1, c2] }];
+  let t = trenchTotals();
+  chk('six legs in three pairs on one run dig one trench, the longest leg', near(t.ft, 86), String(t.ft) + ' (was 141: 10 + 45 + 86)');
+  chk('reported as one shared corridor, not three', t.corridors === 1, String(t.corridors));
+  const materials = S.conduits.reduce((s, c) => s + c.ftLen, 0);
+  chk('the conduit and cable footage stays per run', near(materials, 282), String(materials));
+
+  /* a charger dragged 6 ft off the run: its lateral is a real dig, added once */
+  const d = leg('d', 92, 126, 118); d.pts[0] = { x: 118, y: 8.2 };   /* 8.2 px of 126 ≈ 6 ft */
+  S.conduits = [a1, a2, b1, b2, c1, c2, d]; global.__groups = [{ pts: a1.pts, members: [a1, a2] }, { pts: b1.pts, members: [b1, b2] }, { pts: c1.pts, members: [c1, c2] }];
+  t = trenchTotals();
+  chk('a lateral out to a dragged device is added to the run once', near(t.ft, 86 + 6, 0.2), String(t.ft));
+
+  /* centring noise is not a dig */
+  const e = leg('e', 86, 118, 118); e.pts[0] = { x: 118, y: 0.6 };
+  S.conduits = [e]; global.__groups = [];
+  chk('a sub-foot offset from the run is ignored', near(trenchTotals().ft, 86), String(trenchTotals().ft));
+
+  /* a free leg coinciding with a run's leg is in the same dig */
+  const free = { id: 'f', route: 'trench', ftLen: 86, pts: c1.pts.slice() };
+  S.conduits = [c1, free]; global.__groups = [{ pts: c1.pts, members: [c1, free] }];
+  t = trenchTotals();
+  chk('a hand-drawn conduit lying in a run\'s trench is not a second trench', near(t.ft, 86) && t.corridors === 0, String(t.ft) + '/' + t.corridors);
+
+  /* hand-drawn corridors and solo legs behave as before */
+  const h1 = { id: 'h1', route: 'trench', ftLen: 30, pts: [{ x: 0, y: 0 }, { x: 40, y: 0 }] };
+  const h2 = { id: 'h2', route: 'trench', ftLen: 30, pts: [{ x: 0, y: 0 }, { x: 40, y: 0 }] };
+  const solo = { id: 's', route: 'trench', ftLen: 7 };
+  const surf = { id: 'x', route: 'surface', ftLen: 99 };
+  S.conduits = [h1, h2, solo, surf]; global.__groups = [{ pts: h1.pts, members: [h1, h2] }];
+  t = trenchTotals();
+  chk('two coinciding hand-drawn runs are one corridor, a solo leg adds its own, surface adds nothing', near(t.ft, 37) && t.corridors === 1, String(t.ft) + '/' + t.corridors);
+  chk('the corridor memo cache is not mutated', global.__groups.length === 1 && global.__groups[0].members.length === 2);
+  S.conduits = []; delete global._buildCorridors;
+}
+
 console.log('\nwiring in editor.html');
 {
   const uses = (SRC.match(/_trenchRunFt\(/g) || []).length;
-  chk('the right panel, the BOM civil lines and the BOM summary all measure runs through _trenchRunFt (3 + its definition)', uses === 4, String(uses));
+  chk('the right panel, the BOM civil lines, the BOM summary and the permit sheet all measure runs through _trenchRunFt (4 + its definition)', uses === 5, String(uses));
   chk('no consumer divides a run\'s pixels by the cache any more', SRC.indexOf('_trFt+=_polyLen(t.pts)/S.pxPerFt') < 0 && SRC.indexOf('var _tft=(S.pxPerFt ? _tpx/S.pxPerFt : 0);') < 0);
   chk('a leg along a run asks the view for its scale', SRC.indexOf("var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;") > 0);
   chk('the rubber band is unprojected like the clicks', SRC.indexOf("_dcfcDrawMove((typeof _plotUnproject==='function') ? _plotUnproject(_raw) : _raw);") > 0);
