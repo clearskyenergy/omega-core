@@ -328,6 +328,35 @@ console.log('\nan interior leg is never routed in a trench');
   S.conduits = [];
 }
 
+console.log('\none trench, one line');
+{
+  (0, eval)(grabFn('_corridorCenterline'));
+  (0, eval)(grabFn('_bankedPts'));
+  (0, eval)(grabFn('renderTrenchCorridors'));
+  const svg = document.getElementById('csvg'); svg.children = [];
+  const pts = () => [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 80 }];
+  /* the two legs of a charger pair, laid by the build along one drawn run */
+  const p1 = { id: 'p1', route: 'trench', evRun: 'run', pts: pts() }, p2 = { id: 'p2', route: 'trench', evRun: 'run', pts: pts() };
+  S.conduits = [p1, p2];
+  global._buildCorridors = () => [{ pts: p1.pts, members: [p1, p2] }];
+  renderTrenchCorridors();
+  const corr = svg.children.filter(n => n.id === 'trench-corridors')[0];
+  chk('a pair of legs in a drawn run is not banked apart', !p1._inCorridor && !p2._inCorridor && p1._bankSlot === undefined);
+  chk('no second trench band is painted under them', !!corr && corr.children.length === 0, corr ? String(corr.children.length) : 'no layer');
+  const d1 = _bankedPts(p1), d2 = _bankedPts(p2);
+  chk('both legs draw on the run\'s centreline: one line', d1.every((q, i) => q.x === p1.pts[i].x && q.y === p1.pts[i].y) && d2.every((q, i) => q.x === p2.pts[i].x && q.y === p2.pts[i].y));
+
+  /* two hand-drawn conduits sharing a route still bank inside their corridor */
+  const h1 = { id: 'h1', route: 'trench', pts: pts() }, h2 = { id: 'h2', route: 'trench', pts: pts() };
+  S.conduits = [h1, h2]; svg.children = [];
+  global._buildCorridors = () => [{ pts: h1.pts, members: [h1, h2] }];
+  renderTrenchCorridors();
+  const corr2 = svg.children.filter(n => n.id === 'trench-corridors')[0];
+  chk('hand-drawn coinciding conduits still get a corridor and bank slots', h1._inCorridor === true && h2._inCorridor === true && h1._bankSlot === -0.5 && h2._bankSlot === 0.5 && corr2.children.length === 2);
+  chk('and are offset to opposite sides of it', Math.abs(_bankedPts(h1)[0].y - _bankedPts(h2)[0].y) > 8);
+  S.conduits = []; delete global._buildCorridors;
+}
+
 console.log('\nwiring in editor.html');
 {
   const uses = (SRC.match(/_trenchRunFt\(/g) || []).length;
@@ -340,6 +369,7 @@ console.log('\nwiring in editor.html');
   chk('updCondStat normalises routes before it counts', SRC.indexOf("function updCondStat(){\n  try{ if(_normalizeConduitRoutes()>0") > 0);
   chk('cycling a route by hand marks it explicit', SRC.indexOf("c.routeExplicit=true;   /* chosen by hand") > 0);
   chk('no excavation band is painted under an interior run', SRC.indexOf("var _dug=!(typeof _trenchRunIsIndoor==='function' && _trenchRunIsIndoor(t));") > 0);
+  chk('a leg in a drawn run paints no band of its own', SRC.indexOf("if(c.route === 'trench' && !c._inCorridor && !c.evRun){") > 0);
   chk('each helper is defined once', ['_groundPolyFt', '_viewOwnsScale', '_viewPxPerFt', '_trenchRunFt', '_condIsIndoor', '_trenchRunIsIndoor', '_trenchRunDugFt', '_normalizeConduitRoutes'].every(n => (SRC.match(new RegExp('function ' + n + '\\(', 'g')) || []).length === 1));
 }
 

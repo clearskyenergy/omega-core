@@ -13808,6 +13808,15 @@ function renderTrenchCorridors(){
 
   for(var k=0;k<groups.length;k++){
     var grp=groups[k];
+    /* LEGS THE GUIDED BUILD LAID IN A DRAWN RUN ALREADY HAVE THEIR TRENCH:
+       the run's own band, painted by _dcfcRenderTrenches. Only the two legs
+       of a charger pair coincide vertex-for-vertex, so only they formed a
+       corridor here, and banking them 9 px apart drew every run as TWO
+       parallel lines with the other four legs hidden underneath: "it's
+       like you ran two lines" (145 West St, 2026-09-15). One trench, one
+       line; the legend and the callouts carry the conduit count. A group
+       that mixes a hand-drawn conduit into a run's leg still banks. */
+    if(grp.members.length && grp.members.every(function(m){ return m && m.evRun; })) continue;
     var center=_corridorCenterline(grp);
     var pts=center.map(function(p){ return p.x+','+p.y; }).join(' ');
     var n=grp.members.length;
@@ -17402,7 +17411,10 @@ function renderConduit(c){
   else if(ct.dash) pl.setAttribute('stroke-dasharray',ct.dash);
   // Trenched (underground) runs get a wider translucent "trench band" underlay
   // so they read as buried; surface runs render as-is.
-  if(c.route === 'trench' && !c._inCorridor){
+  /* A leg laid in a drawn run (evRun) does not paint its own band either:
+     six legs stacking six translucent bands on the run read as a darker,
+     wider dig than the one the run's band already shows. */
+  if(c.route === 'trench' && !c._inCorridor && !c.evRun){
     const band=document.createElementNS('http://www.w3.org/2000/svg','polyline');
     band.setAttribute('points',c.pts.map(p=>`${p.x},${p.y}`).join(' '));
     band.setAttribute('stroke', _eng ? 'rgba(0,0,0,.16)'
