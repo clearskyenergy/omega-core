@@ -9956,7 +9956,16 @@ function watchDeals() {
   const queries = SESSION.role === 'admin'   ? [['all',  col]]
                 : SESSION.role === 'partner' ? [['open', col.where('status', '==', 'open')],
                                                ['mine', col.where('awardedTo', '==', uid)],
-                                               ['first', col.where('firstLookUids', 'array-contains', uid)]]
+                                               ['first', col.where('firstLookUids', 'array-contains', uid)],
+                                               /* THE DEALS ROOM (2026-09-14). Everything ClearSky has
+                                                  fielded to this partner's organisation, whatever its
+                                                  marketplace status. Until the matching rule existed
+                                                  (deliveredToMyOrg in firestore.rules) a partner could
+                                                  only see a delivered deal if it was also open to
+                                                  everyone, so "the deals sent to us" was not a view
+                                                  anyone could build. Matches that rule exactly, because
+                                                  Firestore refuses the whole query otherwise. */
+                                               ['room', col.where('room.forOrgId', '==', myOrgId())]]
                 : [['org', col.where('orgKey', '==', myOrgKey())],
                    ['own', col.where('developerUid', '==', uid)]];
 
@@ -10505,6 +10514,13 @@ const orgKeyOf = name => String(name || '')
   .trim()
   .replace(/\s+/g, '-');
 const myOrgKey = () => (SESSION && SESSION.orgKey) || orgKeyOf(SESSION && SESSION.org);
+/* THE OTHER identifier. orgKey is the finance slug ('helios'); orgId is the
+   OMEGA org id ('heliosnrgy.com'), which is what a delivery is addressed to.
+   They are different strings for the same organisation and confusing them is
+   why a deal room could look empty — see deliveredToMyOrg in firestore.rules.
+   Empty when a partner was provisioned before profiles carried orgId; the
+   query then matches nothing rather than matching everything. */
+const myOrgId = () => (SESSION && SESSION.orgId) || '';
 
 function isOwnerOf(d) {
   if (!d || !SESSION) return false;
@@ -10961,7 +10977,7 @@ $('#registerBtn').addEventListener('click', async () => {
     badge.innerHTML = '<i></i>Not connected — running locally';
     const isFile = FB.err === 'file';
     const detail = isFile
-      ? 'This page was opened directly from your computer, so it has no web address for the sign-in service to trust. Upload it and open it from <b>https://financing.csebuilders.com</b> instead.'
+      ? 'This page was opened directly from your computer, so it has no web address for the sign-in service to trust. Upload it and open it from <b>https://silmarillion.clearskyomega.com/finance</b> instead.'
       : FB.err === 'sdk'
       ? 'The authentication service could not be reached from this page. A network policy or content-security header may be blocking it.'
       : FB.err === 'placeholder' || FB.err === 'config'

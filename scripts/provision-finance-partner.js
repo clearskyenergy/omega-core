@@ -109,6 +109,17 @@ function writeProfile(u, p) {
   return db.collection('fin_profiles').doc(u.uid).set({
     email: p.email, emailLower: p.email.toLowerCase(), name: p.name,
     role: p.role, orgKey: FP.orgKey, org: FP.orgName || T.name,
+    /* THE OMEGA ORG ID, alongside the finance slug (2026-09-14).
+       A delivery is addressed with room.forOrgId — the OMEGA org id that
+       api/dealroom-open.js is handed — while a finance profile only carried
+       orgKey, the finance slug. They are different strings for the same
+       organisation, so "deals fielded to my org" could not be expressed:
+       the rule had nothing on the profile to compare a delivery against.
+       Writing both here is what makes deliveredToMyOrg in firestore.rules
+       resolvable. Partners provisioned before this need a re-run; without
+       orgId their deal room is empty rather than wrong, which is the safe
+       direction. */
+    orgId: T.orgId,
     approved: true, suspended: false,
     provisionedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true }).then(function () { console.log('     fin_profiles/' + u.uid + ' → ' + p.role); });

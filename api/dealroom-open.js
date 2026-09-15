@@ -115,6 +115,11 @@ module.exports = A.handler(function (req) {
           sourceWorkspace:  jvKey,
           room: {
             state:       'ordered',
+            /* forOrg is the DISPLAY NAME and forOrgId is the identifier.
+               Only forOrgId is matchable: firestore.rules scopes a partner's
+               deal room on it (deliveredToMyOrg), and the deal-room console
+               warns when a display name has leaked into a key position. Keep
+               them distinct — collapsing them empties somebody's room. */
             forOrg:      forOrgName,
             forOrgId:    forOrgId,
             dataRoomUrl: '',

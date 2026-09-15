@@ -908,6 +908,57 @@ service cloud.firestore {
           && resource.data.get('orgKey', '') != ''
           && resource.data.get('orgKey', '') == myOrgKey();
       }
+      /* ── A DEAL FIELDED TO A CAPITAL PARTNER'S ORGANISATION ──────────────
+         (2026-09-14.) isOrgMate above is the SPONSOR axis: colleagues at the
+         firm that filed a deal. This is the other side of the market, and it
+         had no rule at all — the same bug one level over, and the one that
+         matters for a partner's deal room.
+
+         WHAT WAS ACTUALLY BROKEN, measured before this was written:
+
+           · No rule granted a read on a delivery, so a partner could see a
+             deal fielded to them only if it was ALSO status=='open' — visible
+             to every other partner — or if their individual uid had been put
+             in firstLookUids. "The deals sent to us" was not expressible.
+           · watchDeals() swallows a per-query failure by design, so the
+             symptom is an empty room rather than an error. Exactly the
+             failure the finance portal's README documents for sponsors.
+
+         WHICH FIELD. api/dealroom-open.js writes BOTH `room.forOrg` (the
+         partner's DISPLAY NAME — "Helios Energy Advisors") and
+         `room.forOrgId` (their OMEGA org id, lowercased — heliosnrgy.com).
+         Only the second is an identifier, so only the second can be matched.
+         A rule written against room.forOrg matches nothing, which is why the
+         deal-room console already warns about display names in the key
+         position.
+
+         AND AGAINST WHAT. A finance profile carries `orgKey` — the finance
+         slug, 'helios' — which is NOT the org id. scripts/provision-finance-
+         partner.js now also writes `orgId` onto the profile so the two sides
+         of this comparison are the same kind of thing. A partner provisioned
+         before that change has no orgId, myOrgId() returns '', and the
+         clause below is false: they see no deliveries, which is the safe
+         direction to fail.
+
+         THE QUERY AND THIS RULE MUST AGREE EXACTLY — Firestore refuses a
+         whole query the moment one returned document fails the rules. The
+         partner side runs:
+
+             col.where('room.forOrgId', '==', myOrgId())
+
+         Deliberately NOT time-boxed the way a first-look hold is. A hold is a
+         temporary exclusive that expires; a delivery is a hand-off that
+         happened, and revoking a partner's ability to read what they were
+         sent the moment a clock ran out would take the deal off their desk
+         mid-diligence. Clearing room.forOrgId is how a delivery is withdrawn. */
+      function myOrgId() {
+        return myProfile().get('orgId', '');
+      }
+      function deliveredToMyOrg() {
+        return isPartner()
+          && myOrgId() != ''
+          && resource.data.get('room', {}).get('forOrgId', '') == myOrgId();
+      }
       allow read: if !blocked()
                   && (isOwner()
                   || isOrgMate()
@@ -915,6 +966,7 @@ service cloud.firestore {
                   || isFinAdmin()
                   || (isPartner() && isBrowsable())
                   || isFirstLook()
+                  || deliveredToMyOrg()
                   || (isPartner() && isAwardee()));
       /* ⚠ WITHOUT 'review' IN THIS LIST EVERY GATED SUBMISSION IS REFUSED
          with permission-denied, and the intake gate cannot work at all.
@@ -1818,7 +1870,7 @@ service cloud.firestore {
          factory is server work, and a browser's version of it is a guess. */
       function ownRfqCreate() {
         return signedIn()
-            && canActInOrg(request.resource.data.get('sourceOrgId', ' '))
+            && canActInOrg(request.resource.data.get('sourceOrgId', '\u0000'))
             && request.resource.data.get('createdByUid', '') == request.auth.uid
             && request.resource.data.get('status', '') == 'open'
             && !('contact' in request.resource.data)
