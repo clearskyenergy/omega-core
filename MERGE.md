@@ -404,3 +404,19 @@ Not changed: the dimension tool already measures from the ground when the
 map is live; on a committed plot it divides pixels by the scale fixed at
 capture, which is correct as long as the scale is never rolled back, which
 is what this closes.
+
+**Trench once, cable many times** (same day, from the 160 S Main St sheet).
+The legend read "Trench (panel→EVSE) 6 runs · 247.2 ft" and "Trench 138.5 ft ·
+3 shared corridors" for a run Google Earth measures at 86 ft. The first is
+materials and was right: six legs, each its own length back to the panel,
+each carrying its own conduit and cable. The second was the excavation and
+was wrong: `trenchTotals()` ran the corridor pass first, and two chargers
+side by side make two coinciding legs, so each pair counted as its own dig
+(10 + 45 + 86). The drawn-run pass now runs first: a run is one excavation,
+the longest leg along it plus any lateral out to a device that was dragged
+off it; coinciding legs already inside a run add nothing; hand-drawn
+corridors and solo legs count as before. The legend now says "of conduit ·
+in trench" on the material rows and "dug once · 6 conduits share it" on the
+excavation line, and the permit sheet measures drawn runs through
+`_trenchRunFt`. `_evTakeoff` already took `min(trench, dug)` for the cost
+sheet, so the EV estimate follows without change.
