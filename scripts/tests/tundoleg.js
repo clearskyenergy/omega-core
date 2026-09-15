@@ -141,8 +141,8 @@ const branch = S.conduits.filter(c => c.condType === 'L2-TRENCH')[0];
 all &= chk('one charger reconnected', res.count === 1);
 all &= chk('a Level 2 branch conduit now exists', !!branch);
 all &= chk('it was laid along the drawn branch run, not straight', res.items[0].along === true);
-all &= chk('it starts at the charger and ends welded to the panel',
-  branch && branch.fromId === 'evse1' && branch.toId === 'panel' && branch.pts[branch.pts.length - 1].elId === 'panel' && branch.pts[0].elId === 'evse1');
+all &= chk('it starts at the charger and leaves the far end unbonded, as the build does',
+  branch && branch.fromId === 'evse1' && branch.fromElId === 'evse1' && branch.toId == null && branch.pts[0].elId === 'evse1' && !branch.pts[branch.pts.length - 1].elId);
 all &= chk('it follows the run back to the panel end', branch && Math.abs(branch.pts[branch.pts.length - 1].x - 12) < 1 && branch.pts.length >= 3, branch ? `${branch.pts.length} pts` : '');
 all &= chk('it is labelled as the build labels it', branch && /panel→EVSE 1/.test(branch.label), branch && branch.label);
 all &= chk('the odd pedestal got its bollard back', S.elements.filter(e => e.eqId === 'bollard').length === 1 && res.items[0].bollard === true);

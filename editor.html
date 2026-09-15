@@ -173537,10 +173537,13 @@ function reconnect(o){
     try{ c=_dcfcConduitAlongRun(ch, br.run, br.snap, type, label); along=!!c; }catch(e){ c=null; }
   }
   if(c){
-    /* The build leaves the far end unbonded (toId:null). A rebuilt leg is
-       welded to the panel it feeds from, so it follows when the panel moves. */
-    c.toId=panel.id; c.toElId=panel.id; c.fromElId=ch.id;
-    try{ if(c.pts && c.pts.length) c.pts[c.pts.length-1].elId=panel.id; }catch(e){}
+    /* Leave the far end unbonded, exactly as _dcfcConduitAlongRun does. A
+       chained run starts where the PREVIOUS run ended, which is not where the
+       panel necessarily sits on it, and the ENDPOINT WELD moves any
+       elId-tagged vertex to its element's centre — so bonding the far end to
+       the panel would drag the rebuilt leg off the drawn run into a diagonal.
+       Only the charger end belongs to an element. */
+    c.fromElId=ch.id;
   } else {
     var a=box(ch), b=box(panel);
     var pts=[{x:a.cx, y:a.cy, elId:ch.id},{x:b.cx, y:b.cy, elId:panel.id}];
