@@ -140,6 +140,8 @@ function openFinancingApply(){
      /api/site-plan, not here — placement rules in the page are readable by
      every tenant. -->
 <script src="/omega-design-ai.js"></script>
+<!-- Ask Jarvis: the in-editor help window. Needs the palette export (OmegaCommands) below. -->
+<script src="/omega-jarvis-help.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -13679,19 +13681,36 @@ function _buildCorridors(){
    disagree — they previously duplicated this logic.
    Returns {ft, corridors}. */
 function trenchTotals(){
-  var ft=0, seen={}, groups=[];
+  var ft=0, seen={}, groups=[], corridors=0;
   try{
     groups=(typeof _buildCorridors==='function')?_buildCorridors():[];
+    corridors=groups.length;   /* never push into groups: it is the memo cache */
     groups.forEach(function(g){
       ft+=(+g.members[0].ftLen||0);
       g.members.forEach(function(m){ seen[m.id]=true; });
     });
     var list=(typeof S!=='undefined' && S.conduits)?S.conduits:[];
+    /* Legs laid in the same drawn trench run (evRun) overlap along it, each
+       from its tap back to the run's start. The excavation is the longest
+       of them, not their sum — four chargers on one run were billing four
+       trenches. A run with two or more legs is a shared corridor too. */
+    var byRun={}, byRunN={};
     list.forEach(function(c){
-      if(!seen[c.id] && c.route==='trench') ft+=(+c.ftLen||0);
+      if(seen[c.id] || c.route!=='trench') return;
+      if(c.evRun){
+        byRun[c.evRun]=Math.max(byRun[c.evRun]||0, +c.ftLen||0);
+        byRunN[c.evRun]=(byRunN[c.evRun]||0)+1;
+        return;
+      }
+      ft+=(+c.ftLen||0);
     });
+    for(var k in byRun){
+      if(!byRun.hasOwnProperty(k)) continue;
+      ft+=byRun[k];
+      if(byRunN[k]>1) corridors++;
+    }
   }catch(e){}
-  return { ft:ft, corridors:groups.length };
+  return { ft:ft, corridors:corridors };
 }
 
 /* Average the member routes so the corridor centerline sits between them
@@ -17925,6 +17944,29 @@ function updateAttached(elId){
   const center=getCenter(elId);if(!center)return;
   S.conduits.forEach(c=>{
     let ch=false;
+    /* A guided-build branch follows the trench RUN it was laid in (evRun).
+       When its device is dragged, put the device end back on that run — a
+       short lateral to the nearest point on the run, then the run back to
+       its start — instead of stretching the first segment into a diagonal
+       across the lot. Four chargers dragged off one short run drew four
+       diagonals from the panel (Thomas, 30 Mass Ave, 2026-09-15). When the
+       run no longer exists, fall through to the plain endpoint follow. */
+    if(c.evRun && c.pts && c.pts.length>1 && c.pts[0] && c.pts[0].elId===elId && typeof _dcfcNearestOnPoly==='function'){
+      const run=(S._trenches||[]).find(t=>t && t.id===c.evRun);
+      if(run && run.pts && run.pts.length>1){
+        const sn=_dcfcNearestOnPoly(run.pts, center);
+        if(sn){
+          const tail=c.pts[c.pts.length-1];
+          const np=[{...c.pts[0], x:center.x, y:center.y},{x:sn.x, y:sn.y}];
+          for(let i=sn.seg-1;i>=0;i--) np.push({x:run.pts[i].x, y:run.pts[i].y});
+          if(tail && tail.elId) np[np.length-1]={...np[np.length-1], elId:tail.elId};
+          c.pts=np; ch=true;
+          /* The vertex count changed; the anchor below is re-cut from the
+             new vertices rather than left half-matching the old ones. */
+          if(c._geoPts!==undefined) c._geoPts=[];
+        }
+      }
+    }
     // Update any point tagged with this elId
     c.pts=c.pts.map(p=>{if(p.elId===elId){ch=true;return{...p,x:center.x,y:center.y};}return p;});
     // Also update first/last point if fromElId/toElId matches
@@ -22502,7 +22544,57 @@ function placeSLDElement(type) {
 }
 
 // == UNDO ====================================================
-function pushHist(){try{if(typeof _geoStampAll==='function')_geoStampAll();}catch(e){}S.history.push({els:JSON.parse(JSON.stringify(S.elements)),conds:JSON.parse(JSON.stringify(S.conduits)),shps:JSON.parse(JSON.stringify(S.shapes||[]))});if(S.history.length>30)S.history.shift();window._workDirty=true;try{omegaSetStale(true);}catch(e){}/* Patch 8: the blanket restamp that used to live here re-anchored EVERY object on every pushHist, including the one the native layer fires straight after setting a correct anchor. Restamping is now done by whichever handler actually moved something. */}
+var _omHistHold=0;
+function pushHist(){if(_omHistHold>0){window._workDirty=true;try{omegaSetStale(true);}catch(e){}return;}try{if(typeof _geoStampAll==='function')_geoStampAll();}catch(e){}S.history.push({els:JSON.parse(JSON.stringify(S.elements)),conds:JSON.parse(JSON.stringify(S.conduits)),shps:JSON.parse(JSON.stringify(S.shapes||[]))});if(S.history.length>30)S.history.shift();window._workDirty=true;try{omegaSetStale(true);}catch(e){}/* Patch 8: the blanket restamp that used to live here re-anchored EVERY object on every pushHist, including the one the native layer fires straight after setting a correct anchor. Restamping is now done by whichever handler actually moved something. */}
+/* ── ONE UNDO ENTRY PER GUIDED-BUILD LEG ──────────────────────────────
+   Placing a charger in the Level 2 build is three writes: addEl(charger)
+   → pushHist, the branch conduit pushed straight onto S.conduits with NO
+   history entry, then addEl(bollard) → pushHist. So the undo stack held
+   [charger] then [charger + conduit + bollard], and ONE Cmd+Z restored the
+   first: the charger stayed, the blue branch trench and the bollard were
+   gone, and the drawing looked like the trench had simply disappeared
+   (Thomas, 30 Mass Ave, 2026-09-15). Every guided build has the same
+   shape, so the leg is batched: pushHist is held while a leg is placed
+   and fires once when it is complete. Undo then removes the whole leg or
+   nothing. */
+function omegaHistBatch(fn){
+  _omHistHold++;
+  var r;
+  try{ r=fn(); }
+  finally{ _omHistHold--; if(_omHistHold<0) _omHistHold=0; }
+  if(_omHistHold===0) pushHist();
+  return r;
+}
+window.omegaHistBatch=omegaHistBatch;
+
+/* Cmd+Z while a guided build is running. While a trench is being drawn
+   it means "take back the last point" (what Backspace does) — not "throw
+   away the last placed leg", which is what a full undo did, and which left
+   the build's own bookkeeping (placed nodes, chargers left) pointing at
+   objects that no longer existed. Between runs there is nothing safe to
+   undo, so say so rather than doing it. Returns true when handled. */
+function omegaBuildUndoPoint(){
+  var which=null, drawing=false;
+  /* DCFC, _dcfcDraw and CGC live inside a wrapped block; only the accessors
+     exported next to them can be seen from here. */
+  try{ var _d=(typeof _dcfcDrawState==='function')?_dcfcDrawState():null; drawing=!!(_d && _d.pts && _d.pts.length); }catch(e){}
+  try{ var _ev=(typeof _dcfcState==='function')?_dcfcState():null; if(_ev && _ev.active) which='ev'; }catch(e){}
+  try{ if(!which && typeof _bgbState==='function'){ var _b=_bgbState(); if(_b && _b.active) which='bess'; } }catch(e){}
+  try{ if(!which && typeof _cgcState==='function'){ var _c=_cgcState(); if(_c && _c.active) which='compute'; } }catch(e){}
+  if(!which) return false;
+  if(drawing){
+    try{
+      if(which==='ev' && typeof _dcfcDrawUndoPt==='function') _dcfcDrawUndoPt();
+      else if(which==='bess' && typeof _bgbDrawUndoPt==='function') _bgbDrawUndoPt();
+      else if(which==='compute' && typeof _cgcDrawUndoPt==='function') _cgcDrawUndoPt();
+    }catch(e){}
+    return true;
+  }
+  try{ showBanner('shape','Undo is paused during a guided build — Backspace removes the last trench point; press Enter to finish or Esc to cancel the build before undoing whole steps.'); }catch(e){}
+  return true;
+}
+window.omegaBuildUndoPoint=omegaBuildUndoPoint;
+
 function undoLast(){
   if(S.history.length<2)return;S.history.pop();const prev=S.history[S.history.length-1];
   document.getElementById('els').innerHTML='';document.getElementById('csvg').innerHTML='';
@@ -22510,6 +22602,11 @@ function undoLast(){
   if(typeof _selShapeId!=='undefined') _selShapeId=null;
   S.elements.forEach(el=>renderEl(el));S.conduits.forEach(c=>renderConduit(c));
   if(S._trench && typeof renderTrenchSpine==='function') renderTrenchSpine();
+  /* #csvg was emptied above, which also took the guided-build trench runs
+     (#dcfc-trenches) and the marker <defs>. Both are model-backed, neither
+     was redrawn, so every undo made the drawn runs vanish until a reload. */
+  try{ if(typeof _ensureDimArrows==='function') _ensureDimArrows(); }catch(e){}
+  try{ if(S._trenches && S._trenches.length && typeof _dcfcRenderTrenches==='function') _dcfcRenderTrenches(); }catch(e){}
   if(typeof renderShape==='function') S.shapes.forEach(function(sh){renderShape(sh);});
   showProps(null);updCount();updCondStat();renderLegend();
   if(typeof updShapeCount==='function') updShapeCount();
@@ -22570,7 +22667,11 @@ document.addEventListener('keydown',e=>{
     else if(typeof _selShapeId!=='undefined' && _selShapeId){ deleteSelectedShape(); }
     else delSel();
   }
-  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();undoLast();}
+  if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){
+    e.preventDefault();
+    if(typeof omegaBuildUndoPoint==='function' && omegaBuildUndoPoint()) return;
+    undoLast();
+  }
   // Copy / Paste selected element
   if((e.ctrlKey||e.metaKey)&&(e.key==='c'||e.key==='C')&&S.sel){
     e.preventDefault();
@@ -24970,6 +25071,14 @@ async function saveProject(){
 
     const payload = {
       name, address,
+      /* The project type chosen in the editor (Design with AI dropdown, the
+         project panel, a URL ptype, or a guided build) was kept only in
+         memory and the browser's localStorage, so the projects list kept
+         showing the type the record was created with — "bess" on a Level 2
+         job (Thomas, 30 Mass Ave, 2026-09-15). Written only when a type was
+         actually chosen for this project; undefined is stripped below, so a
+         record's existing type is never overwritten by a browser default. */
+      type:      (S && S.projectType) ? S.projectType : undefined,
       elements:  S.elements,
       conduits:  S.conduits,
       shapes:    S.shapes || [],
@@ -25290,6 +25399,11 @@ async function _loadProject(id){
     if(pname) pname.value=d.name||'';
     const ptitle=document.getElementById('pn-title');
     if(ptitle) ptitle.textContent=d.name||'Untitled';
+
+    // -- Project type: the record's type wins over the browser's last choice --
+    try{
+      if(d.type && window.OmegaProjectTypes && typeof OmegaProjectTypes.set==='function') OmegaProjectTypes.set(d.type);
+    }catch(e){}
 
     // -- Address -> satellite bar -------------------------------
     const addr=document.getElementById('addr-in');
@@ -58307,6 +58421,13 @@ function openDcfcBuild(){
   DCFC.active=true; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
   /* Never inherit a stale Level 2 session — these are separate builds. */
   DCFC.level2=false; DCFC.seq=['service','xfmr','panel'];
+  /* A DCFC build makes this a DCFC project, unless it is already an EV type. */
+  try{
+    if(window.OmegaProjectTypes && typeof OmegaProjectTypes.get==='function'){
+      var _pt=OmegaProjectTypes.get();
+      if(_pt!=='ev' && _pt!=='evl2') OmegaProjectTypes.set('ev');
+    }
+  }catch(e){}
   var models=_dcfcModels();
   if(!DCFC.modelId || !models.some(function(m){return m.id===DCFC.modelId;})) DCFC.modelId=models[0]?models[0].id:'autel_dh480';
   var mOpts=models.map(function(m){ return '<option value="'+m.id+'"'+(m.id===DCFC.modelId?' selected':'')+'>'+m.label+' \u2014 '+m.kw+'kW / '+m.ports+' ports</option>'; }).join('');
@@ -65019,6 +65140,14 @@ window._l2Svc=_l2Svc;
 function openLevel2Build(){
   DCFC.active=true; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[];
   DCFC.level2=true; DCFC.siteType='multifamily';
+  /* Running the Level 2 build makes this a Level 2 project, unless it is
+     already an EV type. The type rides to the project record on save. */
+  try{
+    if(window.OmegaProjectTypes && typeof OmegaProjectTypes.get==='function'){
+      var _pt=OmegaProjectTypes.get();
+      if(_pt!=='evl2' && _pt!=='ev') OmegaProjectTypes.set('evl2');
+    }
+  }catch(e){}
   var l2models=_l2Models();
   if(!DCFC.l2ModelId || !l2models.some(function(m){return m.id===DCFC.l2ModelId;})){
     DCFC.l2ModelId = (typeof _evL2Id!=='undefined' && _evL2Id) ? _evL2Id : (l2models[0]?l2models[0].id:null);
@@ -65200,6 +65329,45 @@ function _dcfcNearestOnPoly(pts, p){
   return best;
 }
 
+/* ── A CLICK PAST THE END OF THE RUN EXTENDS THE RUN ──────────────────
+   _dcfcNearestOnPoly clamps to the polyline, so every charger clicked
+   beyond the last vertex landed ON that vertex. Draw the trench to the
+   first stall, click the next three stalls, and four EVSEs sat stacked on
+   one point; drag them apart and each branch became a straight diagonal
+   back to the panel — the fan of four lines (Thomas, 30 Mass Ave,
+   2026-09-15). The trench should keep going to the stall that was clicked:
+   the run gains a vertex at the click, the device lands where the click
+   was, and its conduit follows the run back like every other leg. A click
+   beside the run still snaps onto it. `st` is the build state whose
+   _lastEnd chains the next run from the end of this one. */
+function _dcfcSnapOrExtend(run, p, st){
+  var snap=_dcfcNearestOnPoly(run.pts, p);
+  if(!snap || !run.pts || run.pts.length<2) return snap;
+  var last=run.pts[run.pts.length-1];
+  var onEnd = snap.seg===run.pts.length-1 && Math.hypot(snap.x-last.x, snap.y-last.y)<0.5;
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
+  var beyond=Math.hypot(p.x-last.x, p.y-last.y);
+  if(!onEnd || beyond < Math.max(8, ppf*1.5)) return snap;
+  run.pts.push({ x:p.x, y:p.y });
+  /* The run's ground anchor no longer matches its vertices. Re-cut it from
+     the pixels now, so the next map idle does not pull the new leg back.
+     If it cannot be re-cut here (no live map state, or mid-reproject),
+     drop the stale anchor: _geoStampAll re-cuts an unanchored run on the
+     next pushHist, but skips one that still has an anchor, and the
+     reprojector moves only as many vertices as the anchor has. */
+  try{
+    if(run._geoPts!==undefined){
+      if(typeof _geoRestampOne==='function') _geoRestampOne(run);
+      if(!(run._geoPts && run._geoPts.length===run.pts.length)) delete run._geoPts;
+    }
+  }catch(e){ try{ delete run._geoPts; }catch(e2){} }
+  if(st && st._lastEnd) st._lastEnd={ x:p.x, y:p.y };
+  try{ _dcfcRenderTrenches(); }catch(e){}
+  var a=run.pts[run.pts.length-2], dx=p.x-a.x, dy=p.y-a.y, L=Math.hypot(dx,dy)||1;
+  return { x:p.x, y:p.y, dist:0, nx:-dy/L, ny:dx/L, seg:run.pts.length-1, extended:true };
+}
+try{ window._dcfcSnapOrExtend=_dcfcSnapOrExtend; }catch(e){}
+
 var _dcfcDraw = null;   // { pts:[...], preview:{x,y}, leg } while drawing
 
 function _dcfcRenderTrenches(){
@@ -65349,10 +65517,20 @@ function _dcfcDrawUndoPt(){
   if(_dcfcDraw&&_dcfcDraw.pts.length){ _dcfcDraw.pts.pop(); _dcfcRenderTrenches(); _dcfcGuideRender(); }
 }
 window._dcfcDrawUndoPt=_dcfcDrawUndoPt;
+/* This block is wrapped, so DCFC, the run being drawn and the trench helpers
+   are invisible to any later block: typeof DCFC === 'undefined' from the
+   core's undo guard and from the reconnect module. Read-only accessors and
+   the two helpers, same pattern as _bgbState(). */
+try{
+  window._dcfcState=function(){ return DCFC; };
+  window._dcfcDrawState=function(){ return _dcfcDraw; };
+  window._dcfcNearestOnPoly=_dcfcNearestOnPoly;
+  window._dcfcConduitAlongRun=_dcfcConduitAlongRun;
+}catch(e){}
 
 function _dcfcFinishRun(){
   if(!_dcfcDraw || _dcfcDraw.pts.length<2){ _evBanner('\u26a0 Click at least two points, then press Enter to finish the trench run.'); return; }
-  var run={ id:uid(), pts:_dcfcDraw.pts.slice(), in:(DCFC._surface||'soil'), leg:_dcfcDraw.leg };
+  var run={ id:uid(), pts:_dcfcDraw.pts.slice(), in:(DCFC._surface||'soil'), leg:_dcfcDraw.leg, build:DCFC._buildId||null };
   if(!S._trenches) S._trenches=[];
   S._trenches.push(run);
   DCFC._activeRun=run;
@@ -65384,10 +65562,22 @@ _dcfcStartPlacing=function(){
   DCFC.phase='poi'; DCFC.stepIx=0; DCFC.placed={}; DCFC.chargerEls=[]; DCFC.chargersLeft=DCFC.chargers;
   DCFC.lastEl=null; DCFC._surface='soil'; DCFC._activeRun=null; DCFC._lastEnd=null;
   _dcfcDraw=null;
-  if(typeof S!=='undefined'){ S._trench=null; S._trenches=[]; }
+  /* KEEP THE RUNS ALREADY ON THE DRAWING. This emptied S._trenches and
+     removed #dcfc-trenches, so starting a second build on a map that
+     already carried one erased every trench band the first build drew,
+     while its conduits stayed — "the trenching is disappearing" (Thomas,
+     30 Mass Ave, 2026-09-15) — and the next autosave persisted the loss.
+     Only the single-spine state and this build's own bookkeeping reset.
+     Runs this build draws are tagged with its id so a cancel removes just
+     those, never a finished build's. */
+  if(typeof S!=='undefined'){
+    S._trench=null;
+    S._trenches=(S._trenches||[]).filter(function(t){ return t && t.pts && t.pts.length>1; });
+  }
+  DCFC._buildId=(typeof uid==='function') ? uid() : ('b'+Math.random().toString(36).slice(2,10));
   if(typeof _dcfcGuidePos!=='undefined') _dcfcGuidePos=null;
-  var oldT=document.getElementById('dcfc-trenches'); if(oldT&&oldT.parentNode) oldT.parentNode.removeChild(oldT);
   var oldS=document.getElementById('trench-spine'); if(oldS&&oldS.parentNode) oldS.parentNode.removeChild(oldS);
+  try{ _dcfcRenderTrenches(); }catch(e){}
   if(typeof setMode==='function') setMode('dcfcplace'); else S.mode='dcfcplace';
   _dcfcGuideRender(); _dcfcPrompt();
 };
@@ -65411,7 +65601,12 @@ placeDcfcAt=function(p){
   if(DCFC.phase==='drawtrench'){ _dcfcDrawClick(p); return; }
   if(DCFC.phase==='placeon'){
     var run=DCFC._activeRun; if(!run){ DCFC.phase='drawtrench'; return; }
-    var snap=_dcfcNearestOnPoly(run.pts, p); if(!snap){ return; }
+    /* A click past the end of the run extends the run to the click; a click
+       beside it snaps onto it. See _dcfcSnapOrExtend. */
+    var snap=_dcfcSnapOrExtend(run, p, DCFC); if(!snap){ return; }
+    /* The whole leg — node or charger, its conduit, its bollards — lands as
+       ONE undo entry. See omegaHistBatch. */
+    omegaHistBatch(function(){
     var kind=_dcfcCurKind();
     if(kind!=='charger'){
       var n=DCFC_NODES[kind]; var spec='';
@@ -65463,6 +65658,7 @@ placeDcfcAt=function(p){
       else { _dcfcFinish(); }
       if(typeof updateSummaryPanel==='function') updateSummaryPanel();
     }
+    }); /* end omegaHistBatch */
     return;
   }
 };
@@ -65535,7 +65731,7 @@ _dcfcGuideRender=function(){
       +'<button onclick="_dcfcToggleSurface2()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((DCFC._surface==='concrete')?'sawcut concrete':'in-ground')+'</button>';
   } else if(phase==='placeon'){
     if(kind==='charger'){
-      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
+      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. Click <strong>past its end</strong> and the trench extends to that stall. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
     } else {
       hint='Click <strong>anywhere on the '+legName+' trench</strong> to place the <strong style="color:'+legCol+'">'+(nodeLabels[kind]||kind)+'</strong>. It snaps to the line; the '+legName.toLowerCase()+' conduit routes through the trench.';
     }
@@ -65572,7 +65768,7 @@ _dcfcPrompt=function(){
   if(DCFC.phase==='poi'){ _evBanner('\u2b1c Click the map to place the '+(DCFC.level2?_l2Svc().node:'Utility Service (POI)')+'.'); }
   else if(DCFC.phase==='drawtrench'){ var k=_dcfcCurKind(); var nm=(k==='xfmr'?'MAIN':k==='panel'?'FEEDER':'BRANCH'); _evBanner('\u270f\ufe0f Draw the '+nm+' trench: click points to route it, then Enter. Backspace undoes a point.'); }
   else if(DCFC.phase==='placeon'){ var k2=_dcfcCurKind();
-    if(k2==='charger'){ _evBanner('\u2b1c Click on the branch trench to drop each charger ('+DCFC.chargersLeft+' left). Enter finishes.'); }
+    if(k2==='charger'){ _evBanner('\u2b1c Click on the branch trench to drop each charger ('+DCFC.chargersLeft+' left) \u2014 click past its end to extend it. Enter finishes.'); }
     else { var n=DCFC_NODES[k2]; _evBanner('\u2b1c Click on the trench to place '+(n?n.label:k2)+' \u2014 snaps to the line. F=flip, R=rotate.'); }
   }
 };
@@ -65595,7 +65791,23 @@ _dcfcCancel=function(){
   _dcfcDraw=null; DCFC._activeRun=null; DCFC.active=false;
   if(typeof setMode==='function') setMode('select'); else S.mode='select';
   _dcfcGuideHide();
-  var oldT=document.getElementById('dcfc-trenches'); if(oldT&&oldT.parentNode) oldT.parentNode.removeChild(oldT);
+  /* Esc keeps what was placed. This removed the whole trench layer from
+     the drawing — every run on the map, finished builds included — and
+     nothing redrew it until a reload or an undo. Drop only the runs THIS
+     build drew that carry no conduit yet (an abandoned draw), then redraw
+     the layer from the model. */
+  try{
+    if(typeof S!=='undefined' && S._trenches && S._trenches.length){
+      var _bid=DCFC._buildId||null;
+      S._trenches=S._trenches.filter(function(t){
+        if(!t || !t.pts || t.pts.length<2) return false;
+        if(!_bid || t.build!==_bid) return true;
+        return (S.conduits||[]).some(function(c){ return c && c.evRun===t.id; });
+      });
+    }
+    var oldT=document.getElementById('dcfc-trenches'); if(oldT&&oldT.parentNode) oldT.parentNode.removeChild(oldT);
+    if(typeof S!=='undefined' && S._trenches && S._trenches.length) _dcfcRenderTrenches();
+  }catch(e){}
   if(typeof showBanner==='function') showBanner('wiz','EV build cancelled.');
 };
 window._dcfcCancel=_dcfcCancel;
@@ -66174,9 +66386,14 @@ function _bgbStartPlacing(){
   BGB._surface='soil'; BGB._activeRun=null; BGB._lastEnd=null;
   BGB.seq=_bgbSeq().slice();
   if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
-  if(typeof S!=='undefined'){ S._trench=null; S._trenches=[]; }
+  /* Keep the runs already on the drawing — see _dcfcStartPlacing. Emptying
+     S._trenches here erased every trench band an earlier build had drawn. */
+  if(typeof S!=='undefined'){
+    S._trench=null;
+    S._trenches=(S._trenches||[]).filter(function(t){ return t && t.pts && t.pts.length>1; });
+  }
   if(typeof _dcfcGuidePos!=='undefined') _dcfcGuidePos=null;
-  var oldT=document.getElementById('dcfc-trenches'); if(oldT&&oldT.parentNode) oldT.parentNode.removeChild(oldT);
+  try{ _dcfcRenderTrenches(); }catch(e){}
   if(typeof setMode==='function') setMode('bgbplace'); else S.mode='bgbplace';
   _bgbGuideRender(); _bgbPrompt();
 }
@@ -66305,6 +66522,8 @@ function placeBgbAt(p){
   if(BGB.phase==='placeon'){
     var run=BGB._activeRun; if(!run){ BGB.phase='drawtrench'; return; }
     var snap=_dcfcNearestOnPoly(run.pts, p); if(!snap) return;
+    /* One undo entry per leg — see omegaHistBatch. */
+    omegaHistBatch(function(){
     var kind=_bgbCurKind(); if(!kind){ _bgbFinish(); return; }
     var n=BGB_NODES[kind]; var spec='';
     if(kind==='xfmr'){ var _lv=(BGB.cfg&&BGB.cfg.gridConnectV)?String(BGB.cfg.gridConnectV).replace(/\s.*$/,''):'480V'; spec=BGB.kva+' kVA pad-mount \u00b7 '+_lv+'\u2192MV step-up'; }
@@ -66487,6 +66706,7 @@ function placeBgbAt(p){
     else { _dcfcDraw=null; }
     _dcfcRenderTrenches(); _bgbGuideRender(); _bgbPrompt();
     if(typeof updateSummaryPanel==='function') updateSummaryPanel();
+    }); /* end omegaHistBatch */
     return;
   }
 }
@@ -66992,6 +67212,7 @@ function _cgcDrawUndoPt(){
   }
 }
 window._cgcDrawUndoPt=_cgcDrawUndoPt;
+try{ window._cgcState=function(){ return CGC; }; }catch(e){}
 
 function _cgcToggleSurface(){
   CGC.surface = (CGC.surface==='concrete') ? 'soil' : 'concrete';
@@ -67254,7 +67475,14 @@ window._cgcGuideRender=_cgcGuideRender;
 document.addEventListener('keydown', function(e){
   if(typeof CGC==='undefined' || !CGC.active) return;
   if(['INPUT','TEXTAREA'].indexOf(e.target.tagName)>=0 || e.target.contentEditable==='true') return;
-  if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); _cgcFinishRun(); return; }
+  if(e.key==='Enter'){
+    e.preventDefault(); e.stopPropagation();
+    /* One undo entry per committed run — see omegaHistBatch. Only batch a
+       run that will actually commit; a short one just shows the banner. */
+    if(typeof omegaHistBatch==='function' && _dcfcDraw && _dcfcDraw.pts && _dcfcDraw.pts.length>=2) omegaHistBatch(_cgcFinishRun);
+    else _cgcFinishRun();
+    return;
+  }
   if(e.key==='Backspace'){ e.preventDefault(); e.stopPropagation(); _cgcDrawUndoPt(); return; }
   if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); _cgcCancel(); return; }
 }, true);
@@ -75800,10 +76028,31 @@ window._crmToastModal=_crmToastModal;
     return TYPES[t] ? t : 'bess';
   }
 
+  /* Records and links spell the type in more than one vocabulary: the New
+     Project modal writes 'dcfc' / 'compute' / 'other', a link may say 'l2'
+     or 'level2'. Fold them onto the keys above so a saved record selects
+     the right type instead of being ignored. */
+  var ALIAS={ l2:'evl2', level2:'evl2', 'level-2':'evl2', evl2:'evl2', 'ev-l2':'evl2',
+              dcfc:'ev', ev:'ev', 'ev-dcfc':'ev', evdcfc:'ev',
+              bess:'bess', storage:'bess', battery:'bess',
+              solar:'solar', pv:'solar', solarpv:'solar',
+              der:'der', microgrid:'der',
+              solarbess:'solarbess', 'solar+bess':'solarbess', 'solar-bess':'solarbess',
+              'solar+storage':'solarbess', solarstorage:'solarbess',
+              datacenter:'datacenter', compute:'datacenter', 'data-center':'datacenter', datacentre:'datacenter' };
+  function normKey(key){
+    var k=String(key||'').toLowerCase().replace(/\s+/g,'');
+    return ALIAS[k] || (TYPES[k] ? k : null);
+  }
   function setType(key, silent){
-    if(!TYPES[key]) return;
+    key=normKey(key);
+    if(!key || !TYPES[key]) return;
     var t=TYPES[key];
-    try{ var s=S_(); if(s) s.projectType=key; }catch(e){}
+    /* The boot-time call (silent) only publishes the browser's last choice
+       for the UI. It must not read as a choice made for THIS project, or
+       every save would stamp that default onto the record and the projects
+       list would show "bess" on a Level 2 job. */
+    if(!silent){ try{ var s=S_(); if(s) s.projectType=key; }catch(e){} }
     try{ localStorage.setItem('omegaProjectType', key); }catch(e){}
     window.OmegaProjectType = { key:key, noun:t.noun, ai:t.ai, assembly:t.assembly };
 
@@ -93731,6 +93980,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     };
 
     window.pushHist = function () {
+      /* A guided-build leg is placed under omegaHistBatch (core): the entry
+         is held until the leg is complete, so one undo takes the charger,
+         its conduit and its bollard together, never the trench alone. */
+      if ((window._omHistHold | 0) > 0) {
+        window._workDirty = true;
+        try { if (typeof omegaSetStale === 'function') omegaSetStale(true); } catch (e) {}
+        return;
+      }
       try { if (typeof _geoStampAll === 'function') _geoStampAll(); } catch (e) {}
       try {
         if (!S.history) S.history = [];
@@ -93791,6 +94048,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         if (S._trench && typeof renderTrenchSpine === 'function') {
           try { renderTrenchSpine(); } catch (e) {}
         }
+        /* The guided-build runs (#dcfc-trenches) draw inside #csvg as well
+           and were never redrawn here, so every undo made the drawn trench
+           vanish until a reload. The runs are still in S._trenches. */
+        try { if (S._trenches && S._trenches.length && typeof _dcfcRenderTrenches === 'function') _dcfcRenderTrenches(); } catch (e) {}
 
         try { showProps(null); } catch (e) {}
         try { updCount(); } catch (e) {}
@@ -103439,6 +103700,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     { name: 'Theme: Graphite + Blue (Autodesk)', desc: 'Neutral chrome with a blue highlight', ico: '\u25D1', run: function () { setAccent('blue'); } },
     { name: 'Theme: Graphite + Brand Green', desc: 'Neutral chrome with the NextNRG green highlight', ico: '\u25D1', run: function () { setAccent('green'); } },
     { name: 'Theme: Graphite + Amber', desc: 'Neutral chrome with an amber highlight', ico: '\u25D1', run: function () { setAccent('amber'); } },
+    { name: 'Reconnect chargers to the panel', desc: 'Rebuild the branch trench (and its bollard) for any guided-build charger that lost it', ico: '\u26A1', run: function () { if (window.OmegaEvReconnect) OmegaEvReconnect.reconnectAll(); } },
     { name: 'Interface: restore original colours', desc: 'Turn the colour harmonizer off for this session', ico: '\u21BA', run: function () { OmegaSkin.harmonize(false); } }
   ];
 
@@ -103557,6 +103819,27 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       try { it.el.click(); } catch (e) { console.error(TAG + ' run', e); }
     }, 30);
   }
+
+  /* The index by name, for Ask Jarvis. An action Jarvis proposes is a
+     command the person could have found in Search tools themselves; this
+     is the same list and the same run(), so the two can never disagree. */
+  window.OmegaCommands = {
+    list: function () {
+      buildIndex();
+      return items.map(function (it) { return { name: it.name, group: it.group || '', page: it.page || '', desc: it.desc || '' }; });
+    },
+    run: function (name) {
+      buildIndex();
+      var q = String(name || '').toLowerCase().trim();
+      if (!q) return false;
+      var hit = null;
+      for (var i = 0; i < items.length; i++) { if (items[i].name.toLowerCase() === q) { hit = items[i]; break; } }
+      if (!hit) { var res = search(name); hit = res[0] || null; }
+      if (!hit) return false;
+      run(hit);
+      return true;
+    }
+  };
 
   function buildUI() {
     if (ck) return;
@@ -173083,6 +173366,195 @@ window.openProjectIntelligence=function(){render();document.getElementById('opi'
 body.omega-review-3d #omega3d-hud{box-shadow:0 10px 28px rgba(0,0,0,.45)}
 body.omega-review-3d #cw::after{content:'3D REVIEW · RETURN TO 2D TO EDIT';position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:125;pointer-events:none;padding:5px 9px;border:1px solid rgba(96,165,250,.45);background:rgba(8,14,26,.88);color:#B9DCFF;border-radius:5px;font:700 9px/1 'IBM Plex Mono',monospace;letter-spacing:.06em}
 </style>
+<script id="omega-ev-reconnect-js">
+/* ══════════════════════════════════════════════════════════════════════
+ *  RECONNECT A GUIDED-BUILD CHARGER THAT LOST ITS BRANCH
+ *  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+ *
+ *  A charger the guided build placed is never meant to stand without a
+ *  branch conduit from the panel — the build draws the two together. Until
+ *  omegaHistBatch, one Cmd+Z could split them: the charger survived, the
+ *  conduit and bollard did not, and the project saved that way. Projects
+ *  saved in that state exist. This puts the leg back.
+ *
+ *  It rebuilds from what the drawing still holds. The trench RUN the user
+ *  drew survives in S._trenches (undo never touched it), so the conduit is
+ *  laid along that run exactly as the build laid it, snapped where the
+ *  charger sits. Only when no run survives does it fall back to a straight
+ *  trench, welded to both ends, and says so.
+ *
+ *  Nothing runs on its own. On load it announces what is missing and
+ *  offers one button; the same command is in Search tools. A conduit the
+ *  user deleted on purpose is a conduit they can decline to restore.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function(root){
+'use strict';
+var TAG='[omega/ev-reconnect]';
+
+function S_(){ try{ return (typeof S!=='undefined' && S) ? S : (root.S||null); }catch(e){ return root.S||null; } }
+function isCharger(e){ return !!(e && e.type==='evgear' && e.evKind==='charger'); }
+function isPanel(e){ return !!(e && e.type==='evgear' && e.evKind==='panel'); }
+function box(e){
+  try{ if(typeof _elBox==='function'){ var b=_elBox(e); if(b) return b; } }catch(x){}
+  var w=+e.w||60, h=+e.h||w;
+  return { cx:(+e.x||0)+w/2, cy:(+e.y||0)+h/2, hw:w/2, hh:h/2 };
+}
+function attached(s, id){
+  return (s.conduits||[]).some(function(c){
+    return c && (c.fromId===id || c.toId===id || c.fromElId===id || c.toElId===id);
+  });
+}
+function nearestPanel(s, ch){
+  var b=box(ch), best=null, bd=Infinity;
+  (s.elements||[]).forEach(function(e){
+    if(!isPanel(e)) return;
+    var pb=box(e), d=Math.sqrt((pb.cx-b.cx)*(pb.cx-b.cx)+(pb.cy-b.cy)*(pb.cy-b.cy));
+    if(d<bd){ bd=d; best=e; }
+  });
+  return best;
+}
+/* The build centred the charger ON its run, so the run this charger belongs
+   to passes within its own footprint. Anything farther is another leg. */
+function branchRun(s, ch){
+  var b=box(ch), best=null, bd=Infinity;
+  if(typeof _dcfcNearestOnPoly!=='function') return null;
+  (s._trenches||[]).forEach(function(t){
+    if(!t || !t.pts || t.pts.length<2) return;
+    if(t.leg && t.leg!=='branch') return;
+    var sn=_dcfcNearestOnPoly(t.pts, {x:b.cx, y:b.cy});
+    if(sn && sn.dist<bd){ bd=sn.dist; best={ run:t, snap:sn }; }
+  });
+  return (best && bd <= Math.max(40, b.hw*2+20)) ? best : null;
+}
+function hasBollardNear(s, ch){
+  var b=box(ch);
+  return (s.elements||[]).some(function(e){
+    if(!e || e.eqId!=='bollard') return false;
+    var eb=box(e);
+    return Math.sqrt((eb.cx-b.cx)*(eb.cx-b.cx)+(eb.cy-b.cy)*(eb.cy-b.cy)) <= b.hw+b.hh+40;
+  });
+}
+function idxOf(ch){
+  var m=/(?:EVSE|DCFC)\s+(\d+)/i.exec(ch.label||'');
+  return m ? parseInt(m[1],10) : null;
+}
+
+function orphans(){
+  var s=S_(); if(!s) return [];
+  var out=[];
+  (s.elements||[]).forEach(function(e){
+    if(!isCharger(e) || attached(s, e.id)) return;
+    var p=nearestPanel(s, e); if(!p) return;
+    out.push({ charger:e, panel:p });
+  });
+  return out;
+}
+
+function reconnect(o){
+  var s=S_(); if(!s || !o) return null;
+  var ch=o.charger, panel=o.panel;
+  var l2=(ch.evLevel==='L2');
+  var type=l2 ? 'L2-TRENCH' : 'EV-BRANCH';
+  var idx=idxOf(ch);
+  var label='Branch — panel→'+(l2?'EVSE':'DCFC')+(idx?' '+idx:'');
+  var c=null, along=false;
+  var br=branchRun(s, ch);
+  if(br && typeof _dcfcConduitAlongRun==='function'){
+    try{ c=_dcfcConduitAlongRun(ch, br.run, br.snap, type, label); along=!!c; }catch(e){ c=null; }
+  }
+  if(c){
+    /* The build leaves the far end unbonded (toId:null). A rebuilt leg is
+       welded to the panel it feeds from, so it follows when the panel moves. */
+    c.toId=panel.id; c.toElId=panel.id; c.fromElId=ch.id;
+    try{ if(c.pts && c.pts.length) c.pts[c.pts.length-1].elId=panel.id; }catch(e){}
+  } else {
+    var a=box(ch), b=box(panel);
+    var pts=[{x:a.cx, y:a.cy, elId:ch.id},{x:b.cx, y:b.cy, elId:panel.id}];
+    var ppf=(root.OmegaScale && typeof OmegaScale.pxPerFt==='function') ? OmegaScale.pxPerFt() : (s.pxPerFt||6);
+    var len=(typeof _polyLen==='function') ? _polyLen(pts) : Math.sqrt((b.cx-a.cx)*(b.cx-a.cx)+(b.cy-a.cy)*(b.cy-a.cy));
+    c={ id:(typeof uid==='function') ? uid() : ('c'+Math.random().toString(36).slice(2,11)),
+        condType:type, pts:pts, pxLen:len, ftLen:+(len/ppf).toFixed(1),
+        fromId:ch.id, toId:panel.id, fromElId:ch.id, toElId:panel.id,
+        route:'trench', trenchIn:'soil', evRole:type, label:label, labelDx:50, labelDy:-28 };
+    s.conduits.push(c);
+    try{ if(typeof _geoRestampOne==='function') _geoRestampOne(c); }catch(e){}
+  }
+  try{ if(typeof renderConduit==='function') renderConduit(c); }catch(e){}
+  var bollard=false;
+  /* Level 2 pedestals carry one bollard on the odd unit (see _l2Bollards);
+     the build placed it with the leg, so the leg gets it back. */
+  try{
+    if(l2 && (idx==null || idx%2===1) && !hasBollardNear(s, ch) && typeof _l2Bollards==='function'){
+      _l2Bollards(ch, idx||1); bollard=true;
+    }
+  }catch(e){}
+  return { conduit:c, along:along, bollard:bollard };
+}
+
+function banner(type, msg, withButton){
+  var b=document.getElementById('banner'); if(!b) return;
+  try{ showBanner(type, msg); }catch(e){ return; }
+  if(!withButton) return;
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.textContent='Reconnect';
+  btn.setAttribute('style','margin-left:10px;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;font:inherit;font-weight:700;cursor:pointer');
+  btn.addEventListener('click', function(ev){ ev.stopPropagation(); reconnectAll(); });
+  b.appendChild(btn);
+}
+
+function reconnectAll(){
+  var list=orphans();
+  if(!list.length){ banner('cal','Every charger already has a branch conduit.'); return { count:0, items:[] }; }
+  var done=[];
+  var work=function(){
+    list.forEach(function(o){
+      var r=reconnect(o);
+      if(r && r.conduit) done.push({ label:o.charger.label||'charger', along:r.along, bollard:r.bollard });
+    });
+  };
+  if(typeof omegaHistBatch==='function') omegaHistBatch(work);
+  else { work(); try{ pushHist(); }catch(e){} }
+  try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
+  try{ if(typeof updCount==='function') updCount(); }catch(e){}
+  try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+  try{ if(typeof updateSummaryPanel==='function') updateSummaryPanel(); }catch(e){}
+  try{ if(typeof _setSaved==='function') _setSaved('unsaved'); }catch(e){}
+  var straight=done.filter(function(d){ return !d.along; }).length;
+  var msg='Reconnected '+done.map(function(d){ return d.label; }).join(', ')
+        +(done.some(function(d){ return d.bollard; }) ? ' — branch trench and bollard restored.' : ' — branch trench restored.')
+        +(straight ? ' '+straight+' run'+(straight>1?'s were':' was')+' drawn straight (no drawn trench survived) — drag its points to the route.' : '')
+        +' Press Run to recompute.';
+  banner('cal', msg);
+  try{ console.info(TAG, msg); }catch(e){}
+  return { count:done.length, items:done };
+}
+
+function announce(){
+  var list=orphans(); if(!list.length) return false;
+  var names=list.map(function(o){ return o.charger.label||'charger'; });
+  try{ console.warn(TAG, names.length+' charger(s) with no branch conduit:', names); }catch(e){}
+  banner('cond', names.join(', ')+(names.length>1?' have':' has')+' no branch conduit from the panel.', true);
+  return true;
+}
+
+/* Announce once per loaded project, after the load has settled. */
+var lastPid=null;
+setInterval(function(){
+  try{
+    var ready=(typeof _loadReady==='undefined') ? true : !!_loadReady;
+    var pid=root._projectId||null;
+    var s=S_();
+    if(!ready || !pid || pid===lastPid || !s || !(s.elements||[]).length) return;
+    lastPid=pid;
+    setTimeout(announce, 1500);
+  }catch(e){}
+}, 2000);
+
+root.OmegaEvReconnect={ orphans:orphans, reconnect:reconnect, reconnectAll:reconnectAll, announce:announce };
+})(window);
+</script>
+
 <script>
 /* A lightweight, user-safe health model for the editor. This does not change
    project data; it gives support and QA one deterministic place to inspect the

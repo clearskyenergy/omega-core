@@ -612,7 +612,7 @@ window._omegaReady = function(){
       <!-- Same-origin, never osa.clearskyomega.com — that host is the old Vercel
            project and a click there drops the user onto the legacy build. See
            the long note in index.html beside the same link. -->
-      <a class="sn-item" id="sn-osa" href="/tenants/osa" style="display:none">
+      <a class="sn-item" id="sn-osa" href="/osa" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>OSA Workspace</span>
       </a>
@@ -999,7 +999,7 @@ function renderTable() {
       return `<div class="pt-row" onclick="openProject('${p.id}')">
         <div><div class="pt-name">${esc(p.name||'Untitled')}</div><div class="pt-addr">${esc(p.address||'—')}</div></div>
         <div>${ownerCell(p)}</div>
-        <div><span class="pt-type">${esc(p.type||'BESS')}</span></div>
+        <div><span class="pt-type">${esc(typeLabel(p.type))}</span></div>
         <div class="pt-date">${date}</div>
         <div><button class="pt-del" onclick="event.stopPropagation();deleteProject('${p.id}','${esc(p.name||'Untitled')}')">🗑</button></div>
       </div>`;
@@ -1010,6 +1010,25 @@ function renderTable() {
    or the legacy `createdBy`/`ownerName`. Renders an owner chip matching the
    portal index (teal = you, amber = unassigned) plus a mailto link so the row
    links to whoever created/owns it. */
+/* Records carry the type in more than one spelling: the New Project modal
+   writes 'bess' / 'solar' / 'dcfc' / 'compute' / 'other', and the editor
+   writes its own keys ('evl2' for Level 2, 'ev' for DCFC, 'solarbess',
+   'datacenter'). Show one label for each, never the raw key. */
+const TYPE_LABEL = {
+  bess:'BESS', storage:'BESS',
+  evl2:'Level 2 EV', l2:'Level 2 EV', level2:'Level 2 EV',
+  ev:'DCFC', dcfc:'DCFC',
+  solar:'Solar PV', pv:'Solar PV',
+  der:'DER', microgrid:'DER',
+  solarbess:'Solar + BESS',
+  datacenter:'Data center', compute:'Data center',
+  other:'Other'
+};
+function typeLabel(t) {
+  const k = String(t || '').toLowerCase().replace(/\s+/g, '');
+  return TYPE_LABEL[k] || (t ? String(t) : 'BESS');
+}
+
 function ownerCell(p) {
   const email = ownerEmailOf(p);
   const name  = p.ownerName || (email ? email.split('@')[0] : '');
