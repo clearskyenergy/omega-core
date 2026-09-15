@@ -376,3 +376,31 @@ the agent from a demo into the thing that drafts this set.
 **Still unproven.** No signed-in editor run has happened. Geocoding, map
 alignment, `_evAdd` placement, read-back and save are untested against the
 live editor. Do that on a surveyed site before anyone relies on it.
+
+## Trench lengths measure the ground, and undo leaves the scale alone  (2026-09-15)
+
+Site designs came back with trench runs near double what Google Earth
+measures on the same parking row (Menachem, 160 S Main St). Drawn runs
+(`S._trenches`) were measured as `_polyLen(pts) / S.pxPerFt` in three
+places (right panel, BOM civil lines, BOM summary), and `S.pxPerFt` was a
+cache: refreshed on `zoom_changed`, rolled back by undo and by a tab switch
+to whatever zoom the snapshot was taken at. One zoom level between two undo
+points is exactly 2x on every length that followed, until the next zoom.
+
+- `_trenchRunFt(t)` (beside `_polyLen`) measures a run from its `_geoPts`
+  by haversine, same radius as `spherical.computeLength`, so a run and the
+  conduit laid in it agree; falls back to pixels over `_viewPxPerFt()`.
+- `_viewPxPerFt()` asks the live map for its scale and re-runs
+  `_gmapAutoScale()` when the cache disagrees. Frozen plot and uploaded
+  photo keep the cached value: there it is the record, not a derivation.
+- `_dcfcConduitAlongRun`, `_connectToEms`, `_trenchToEms` and
+  `_trenchUtilityToBess` take the view's scale, and a leg along a run takes
+  its ground length the moment its anchor is cut.
+- `undoLast` (FIX 6 core) and `_restoreCanvas` no longer overwrite a
+  map-owned scale (`_viewOwnsScale()`); a calibrated photo still undoes.
+- `scripts/tests/ttrenchft.js` covers all of it from the page's own code.
+
+Not changed: the dimension tool already measures from the ground when the
+map is live; on a committed plot it divides pixels by the scale fixed at
+capture, which is correct as long as the scale is never rolled back, which
+is what this closes.

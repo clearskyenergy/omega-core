@@ -6770,6 +6770,15 @@ function _restoreCanvas(snap){
   window._frozenMapImg = snap.mapImg || null;
   window._frozenMapStencil = snap.stencilImg || null;
   window._isUploadedPhoto = !!snap.isUpload;
+  /* THE SCALE BELONGS TO THE VIEW WHEN THERE IS A LIVE MAP. This tab came
+     back with the pxPerFt it had when it was captured; zoom the map once on
+     another tab and every length here read 2^(zoom delta) wrong until the
+     next zoom_changed. The map knows its own scale, so ask it. A frozen plot
+     or an uploaded photo keeps the snapshot's value: there it is the record. */
+  try{
+    if(!window._isUploadedPhoto && typeof _liveMapState==='function' && _liveMapState()
+       && typeof _gmapAutoScale==='function') _gmapAutoScale();
+  }catch(e){}
   // Repaint elements / conduits / shapes (same sequence as project load).
   clone(snap.elements).forEach(function(el){ S.elements.push(el); try{ renderEl(el); }catch(e){} });
   clone(snap.conduits).forEach(function(c){ S.conduits.push(c); try{ renderConduit(c); }catch(e){} });
@@ -24547,11 +24556,11 @@ function updateSummaryPanel() {
       const ct = {'RMC-DC':'#DC2626','RMC-AC':'#F59E0B','EMT-BMS':'#2563EB','PVC-UG':'#7C3AED','MV-UG':'#EF4444','GAS-UG':'#EAB308','EV-MAIN':'#FF0000','EV-FEEDER':'#FFFF00','EV-BRANCH':'#00FFFF','EV-SPARE':'#00FF00','custom':'#10B981'};
       // Total EV trench footage (drawn runs), shown as a civil line under conduit.
       var _trFt=0, _trRuns=(S._trenches||[]).length;
-      (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1&&S.pxPerFt&&typeof _polyLen==='function') _trFt+=_polyLen(t.pts)/S.pxPerFt; });
+      (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1&&typeof _trenchRunFt==='function') _trFt+=_trenchRunFt(t); });
       var _trLine = _trRuns>0 ? ('<div style="display:flex;align-items:center;gap:6px;margin:4px 0 0;min-width:0">'
           +'<div style="width:16px;height:6px;background:repeating-linear-gradient(90deg,#8a5a28 0 3px,transparent 3px 7px);border-radius:1px;flex-shrink:0"></div>'
           +'<span style="flex:1;min-width:0;font-size:9px;color:var(--sub)">Trenching (drawn)</span>'
-          +'<span style="font-size:9px;color:var(--text);font-weight:600;flex-shrink:0">'+(S.pxPerFt? _trFt.toFixed(0)+' '+S.unitLabel : '—')+' · '+_trRuns+' run(s)</span></div>') : '';
+          +'<span style="font-size:9px;color:var(--text);font-weight:600;flex-shrink:0">'+(_trFt>0? _trFt.toFixed(0)+' '+(S.unitLabel||'ft') : '—')+' · '+_trRuns+' run(s)</span></div>') : '';
       condEl.innerHTML = Object.entries(byType).map(([type, ft]) => {
         const color = ct[type] || '#8BA3C4';
         const label = CTYPES.find(c=>c.id===type)?.label || type;
@@ -36494,8 +36503,8 @@ function buildBOM() {
     var _trFtSoil=0, _trFtConc=0, _trRuns=0;
     for (var _t=0; _t<S._trenches.length; _t++) {
       var _tr=S._trenches[_t]; if(!_tr.pts || _tr.pts.length<2) continue;
-      var _tpx=_polyLen(_tr.pts);
-      var _tft=(S.pxPerFt ? _tpx/S.pxPerFt : 0);
+      /* ground-true where the run is anchored; see _trenchRunFt */
+      var _tft=(typeof _trenchRunFt==='function') ? _trenchRunFt(_tr) : (S.pxPerFt ? _polyLen(_tr.pts)/S.pxPerFt : 0);
       if(_tft<=0) continue;
       _trRuns++;
       if(_tr.in==='concrete') _trFtConc+=_tft; else _trFtSoil+=_tft;
@@ -36789,7 +36798,7 @@ function buildBOM() {
            computePods: _cs.pods, computeKw: _cs.podKw,
            genUnits: _cs.gen, genKw: _cs.genKw,
            kwh: S.bessList.reduce(function(s,x){return s+(+(x.kwh||0))*(+(x.qty||1));},0) || _cs.bessKwh,
-           trenchFt: (function(){ var f=0; (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1&&S.pxPerFt) f+=_polyLen(t.pts)/S.pxPerFt; }); return Math.round(f); })() };
+           trenchFt: (function(){ var f=0; (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1) f+=(typeof _trenchRunFt==='function')?_trenchRunFt(t):(S.pxPerFt?_polyLen(t.pts)/S.pxPerFt:0); }); return Math.round(f); })() };
 }
 
 function _csvCell(v){
@@ -56046,7 +56055,7 @@ function _trenchToEms(bx, by, ems, idx, bessShape){
     ];
     var pxLen=_polyLen(pts);
     var c={ id:uid(), condType:o.t, pts:pts, pxLen:pxLen,
-            ftLen:+(pxLen/(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6))).toFixed(1),
+            ftLen:+(pxLen/((typeof _viewPxPerFt==='function'&&_viewPxPerFt())||(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6)))).toFixed(1),
             fromId:null, toId:ems.id, cluster:true,
             fromShapeId:(bessShape?bessShape.id:null),
             emsEdgeOff:o.d, exitRight:exitRight, halfW:halfW, halfH:halfH,
@@ -56057,6 +56066,97 @@ function _trenchToEms(bx, by, ems, idx, bessShape){
   if(typeof updCondStat==='function') updCondStat();
 }
 function _polyLen(pts){ var d=0; for(var i=1;i<pts.length;i++){ var a=pts[i-1],b=pts[i]; d+=Math.sqrt((b.x-a.x)*(b.x-a.x)+(b.y-a.y)*(b.y-a.y)); } return d; }
+
+/* ── GROUND-TRUE LENGTH FOR A DRAWN TRENCH RUN ──────────────────────────────
+   A run's length was _polyLen(pts)/S.pxPerFt in three places: the right
+   panel, the BOM's civil lines and the BOM summary. Pixels against a cached
+   scale. That cache is refreshed by zoom_changed and ROLLED BACK by undo and
+   by a tab switch (both restored the snapshot's pxPerFt), so one zoom between
+   two undo points left every later measurement off by 2^(zoom delta): a run
+   Google Earth measures at 86 ft came back on the sheet near 170 (Menachem,
+   160 S Main St, 2026-09-15). Conduits already measure from their ground
+   anchors ([omega/groundlen]); the runs carry the same _geoPts and nothing
+   read them. Now:
+
+     anchors complete           -> haversine over _geoPts; zoom cannot touch it
+     anchors stale or missing   -> pixels / the scale the LIVE MAP has right
+                                   now, never the cached one
+
+   Same radius as google.maps.geometry.spherical (6378137 m), so a run and the
+   conduit laid in it report the same number. */
+function _groundPolyFt(geo, n){
+  if(!geo || !geo.length || geo.length<2) return null;
+  if(n!=null && geo.length!==n) return null;
+  var R=6378137, r=Math.PI/180, d=0;
+  for(var i=1;i<geo.length;i++){
+    var a=geo[i-1], b=geo[i];
+    if(!a||!b||!isFinite(a.lat)||!isFinite(a.lng)||!isFinite(b.lat)||!isFinite(b.lng)) return null;
+    var dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r;
+    var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    d+=2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+  }
+  return d*3.280839895;
+}
+/* Does the VIEW own the drawing scale? On a live map the scale is the zoom;
+   on a committed plot it was fixed when the plot was captured. Either way a
+   history snapshot must not overwrite it. An uploaded photo's scale is the
+   user's calibration, which belongs to the drawing and does undo. */
+function _viewOwnsScale(){
+  try{
+    if(window._isUploadedPhoto) return false;
+    if(typeof mapLockState==='function' && mapLockState().hasPlot) return true;
+    if(typeof _liveMapState==='function' && _liveMapState()) return true;
+  }catch(e){}
+  return false;
+}
+/* Pixels per foot AS THE VIEW HAS IT NOW. Asks the live map first; when the
+   cached S.pxPerFt disagrees (an undo or a tab switch rolled it back) it
+   re-runs the stock recalibration so the label, the ruler and the cache
+   agree again. Falls back to S.pxPerFt when the map is frozen or absent:
+   there the cache is the only record of the scale. */
+function _viewPxPerFt(){
+  var s=(typeof S!=='undefined' && S) ? S : null;
+  try{
+    if(!window._isUploadedPhoto && typeof _liveMapState==='function'){
+      var ms=_liveMapState();
+      if(ms && isFinite(ms.lat) && ms.zoom>0){
+        var mpp=156543.03392*Math.cos(ms.lat*Math.PI/180)/Math.pow(2, ms.zoom);
+        var p=1/(mpp*3.28084);
+        if(isFinite(p) && p>0){
+          if(s && Math.abs((+s.pxPerFt||0)-p) > p*1e-6){
+            var healed=false;
+            try{
+              if(typeof _gmapAutoScale==='function'){ _gmapAutoScale(); healed = Math.abs((+s.pxPerFt||0)-p) <= p*1e-6; }
+            }catch(e){}
+            if(!healed){ s.pxPerFt=p; s.unitLabel='ft'; }
+          }
+          return p;
+        }
+      }
+    }
+  }catch(e){}
+  return (s && +s.pxPerFt>0) ? +s.pxPerFt : 0;
+}
+/* Feet of one drawn run (an S._trenches entry). Caches t.ftLen for the
+   exports. A run whose pixels moved since its anchor was cut (a drag, a
+   rebuild) is measured from the pixels, which are the newer truth. */
+function _trenchRunFt(t){
+  if(!t || !t.pts || t.pts.length<2) return 0;
+  var stale=false;
+  try{
+    if(t._geoSig!=null && typeof window.__omegaCondPxSig==='function') stale = (t._geoSig!==window.__omegaCondPxSig(t));
+  }catch(e){}
+  if(!stale){
+    var g=_groundPolyFt(t._geoPts, t.pts.length);
+    if(g!=null && g>=0){ t.ftLen=+g.toFixed(1); return g; }
+  }
+  var p=_viewPxPerFt();
+  if(!(p>0)) return 0;
+  var f=_polyLen(t.pts)/p;
+  t.ftLen=+f.toFixed(1);
+  return f;
+}
+try{ window._groundPolyFt=_groundPolyFt; window._viewOwnsScale=_viewOwnsScale; window._viewPxPerFt=_viewPxPerFt; window._trenchRunFt=_trenchRunFt; }catch(e){}
 
 /* Shared trench SPINE: units in a row drop to a common aisle trench below the
    row; the trench (3 color-coded conductors) runs horizontally to the EMS.
@@ -56483,7 +56583,7 @@ function _trenchUtilityToBess(srcEl){
   var pts=[{x:sx,y:sy},{x:sx,y:ty},{x:tx,y:ty}];
   var pxLen=_polyLen(pts);
   var c={ id:uid(), condType:'MV-UG', pts:pts, pxLen:pxLen,
-          ftLen:+(pxLen/(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6))).toFixed(1),
+          ftLen:+(pxLen/((typeof _viewPxPerFt==='function'&&_viewPxPerFt())||(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6)))).toFixed(1),
           fromId:srcEl.id, toId:target, mv:true,
           label:'MV Trench '+cable.kv+' \u00b7 '+cable.cable+' \u00b7 '+cable.conduit,
           mvCable:cable, labelDx:0, labelDy:-40 };
@@ -56665,7 +56765,7 @@ function _connectToEms(ems, el, eqId){
   if(pts[pts.length-1]) pts[pts.length-1].elId=el.id;
   var pxLen=_polyLen(pts);
   var c={ id:uid(), condType:ctype, pts:pts, pxLen:pxLen,
-          ftLen:+(pxLen/(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6))).toFixed(1),
+          ftLen:+(pxLen/((typeof _viewPxPerFt==='function'&&_viewPxPerFt())||(window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6)))).toFixed(1),
           fromId:ems.id, toId:el.id, fromElId:ems.id, toElId:el.id,
           chainFromEms:true, labelDx:50, labelDy:-28 };
   S.conduits.push(c);
@@ -56687,6 +56787,14 @@ function _connectToEms(ems, el, eqId){
      doing nothing here is strictly safer than guessing. */
   try{
     if(window.OmegaAnchorCond && typeof OmegaAnchorCond.stamp==='function') OmegaAnchorCond.stamp();
+  }catch(e){}
+  /* The anchor just cut is the ground truth for this leg; the pixel division
+     above was only ever the fallback. It is the same measure the schedule
+     settles on at the next idle, so the callout never changes under the
+     user's eyes. */
+  try{
+    var _gft=(typeof _groundPolyFt==='function') ? _groundPolyFt(c._geoPts, c.pts.length) : null;
+    if(_gft!=null && _gft>=0) c.ftLen=+_gft.toFixed(1);
   }catch(e){}
   if(typeof renderConduit==='function') renderConduit(c);
   if(typeof updCondStat==='function') updCondStat();
@@ -65493,8 +65601,13 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
   }
   var pts=[{x:cx,y:cy,elId:el.id},{x:snap.x,y:snap.y}];
   for(var i=snap.seg-1;i>=0;i--){ pts.push({x:run.pts[i].x,y:run.pts[i].y}); }
+  /* The scale the map has NOW, not whatever the cache was last set to: an
+     undo between the draw and this click could have rolled S.pxPerFt back a
+     zoom level, and this division is what the callout prints. */
+  var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;
+  if(!(_ppfLeg>0)) _ppfLeg=((typeof S!=='undefined'&&S.pxPerFt)||6);
   var c={ id:uid(), condType:condType, pts:pts, pxLen:_polyLen(pts),
-          ftLen:+(_polyLen(pts)/((typeof S!=='undefined'&&S.pxPerFt)||6)).toFixed(1),
+          ftLen:+(_polyLen(pts)/_ppfLeg).toFixed(1),
           fromId:el.id, toId:null, route:'trench', trenchIn:run.in||'soil',
           evRun:run.id, evRole:condType, label:label||'', labelDx:50, labelDy:-28 };
   /* BOND THE FAR END, AND ANCHOR IT NOW.
@@ -65546,6 +65659,14 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
      doing nothing here is strictly safer than guessing. */
   try{
     if(window.OmegaAnchorCond && typeof OmegaAnchorCond.stamp==='function') OmegaAnchorCond.stamp();
+  }catch(e){}
+  /* The anchor just cut is the ground truth for this leg; the pixel division
+     above was only ever the fallback. It is the same measure the schedule
+     settles on at the next idle, so the callout never changes under the
+     user's eyes. */
+  try{
+    var _gft=(typeof _groundPolyFt==='function') ? _groundPolyFt(c._geoPts, c.pts.length) : null;
+    if(_gft!=null && _gft>=0) c.ftLen=+_gft.toFixed(1);
   }catch(e){}
   if(typeof renderConduit==='function') renderConduit(c);
   if(typeof updCondStat==='function') updCondStat();
@@ -65731,7 +65852,11 @@ document.addEventListener('keydown', function(e){
   cov.addEventListener('mousemove', function(e){
     if(typeof DCFC==='undefined' || !DCFC.active || DCFC.phase!=='drawtrench' || !_dcfcDraw) return;
     var sc=document.getElementById('sc'); var r=sc.getBoundingClientRect();
-    _dcfcDrawMove({x:e.clientX-r.left, y:e.clientY-r.top});
+    /* Clicks are unprojected through the plot/pinch transform (covClick);
+       the preview was raw screen pixels, so on a zoomed plot the rubber band
+       ran away from the cursor. */
+    var _raw={x:e.clientX-r.left, y:e.clientY-r.top};
+    _dcfcDrawMove((typeof _plotUnproject==='function') ? _plotUnproject(_raw) : _raw);
   });
 })();
 
@@ -94097,8 +94222,15 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         S.conduits = clone(prev.conds || []);
         S.shapes   = clone(prev.shps  || []);
         S._trench  = prev.trench ? clone(prev.trench) : null;
-        if (prev.pxPerFt   !== undefined) S.pxPerFt   = prev.pxPerFt;
-        if (prev.unitLabel !== undefined) S.unitLabel = prev.unitLabel;
+        /* THE SCALE IS NOT PART OF THE DRAWING'S HISTORY ON A MAP. On a live
+           map it is the zoom; on a committed plot it was fixed at capture.
+           Restoring the snapshot's pxPerFt after the user had zoomed between
+           two undo points put the cache one level behind the map, and every
+           pixel-measured length that followed came out 2x (or 4x). Only a
+           calibrated photo, or a blank canvas, undoes its scale. */
+        var _histOwnsScale = !(typeof _viewOwnsScale === 'function' && _viewOwnsScale());
+        if (_histOwnsScale && prev.pxPerFt   !== undefined) S.pxPerFt   = prev.pxPerFt;
+        if (_histOwnsScale && prev.unitLabel !== undefined) S.unitLabel = prev.unitLabel;
 
         /* Clear every flavour of selection -- the nodes they pointed at
            were just destroyed. */
