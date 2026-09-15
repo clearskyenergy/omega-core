@@ -444,3 +444,15 @@ any route the user cycled by hand (`routeExplicit`, set in
 `cycleConduitRoute`) alone; `_dcfcRenderTrenches` paints no band under a
 run whose only conduit is interior. Every consumer that keys on the route
 is right without being touched.
+
+**One trench, one line.** Only the two legs of a charger pair coincide
+vertex-for-vertex, so only they formed a corridor in
+`renderTrenchCorridors`, and banking them 9 px apart drew every run as two
+parallel cyan lines with the other four legs hidden underneath ("it's like
+you ran two lines", 145 West St). A corridor whose members are all legs of
+a drawn run (`evRun`) is skipped: the run's own band is the trench, the
+legs draw on its centreline, and `renderConduit` paints no per-leg band
+for them. A hand-drawn conduit that coincides with a run's leg still
+banks. Not yet on the live site: silmarillion still serves the build from
+before this branch, which is where the 138.5 ft and 315.9 ft screenshots
+came from.
