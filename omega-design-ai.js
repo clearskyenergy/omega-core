@@ -79,17 +79,74 @@
     } catch (e) { return false; }
   }
 
+  /* ── SITE TYPE ────────────────────────────────────────────────────────
+     Not every site is a battery (Thomas, 2026-09-14). The editor already
+     carries the project type — it drives the sheet set, the cover labels
+     and the assembly — and this dialog ignored it and hardcoded a BESS, so
+     pressing "Design with AI" on a solar job sketched a battery.
+
+     The dropdown is populated from the editor's own registry rather than a
+     second list here, defaults to the type already selected, and SETS it on
+     change so the rest of the editor follows the same choice.
+
+     WHAT THE AUTOPILOT CAN ACTUALLY BUILD is a smaller set than what the
+     editor can draw. Its layout() walks the behind/front-of-meter sequence
+     (battery, transformer, disconnect, switchgear, meter, POI). There is no
+     autopilot path for solar arrays, chargers or a data centre lineup yet.
+     Rather than sketch a battery on a solar site, the other types run the
+     SITE half — geocode, parcel, roads, frontage — and stop there, saying
+     so. A half-build that is honest about the half is useful; one that
+     quietly draws the wrong technology is not. */
+  /* What the autopilot draws for each type, mirroring TYPE_PLAN in the
+     editor. 'build' runs a guided build, 'array' packs a PV field, 'site'
+     loads the ground and names the human step. Kept as words rather than a
+     boolean because the dialog has to say which of the three it is about to
+     do before anybody presses the button. */
+  var TYPE_DOES = {
+    bess:       'build', solarbess: 'build',
+    solar:      'array',
+    ev:         'site',  evl2: 'site', der: 'site', datacenter: 'site'
+  };
+  function does(k) { return TYPE_DOES[k] || 'site'; }
+  var AUTO_BUILDS = { bess: 1, solarbess: 1, solar: 1 };
+
+  function types() {
+    try {
+      if (root.OmegaProjectTypes && typeof OmegaProjectTypes.list === 'function') {
+        var l = OmegaProjectTypes.list();
+        if (l && l.length) return l;
+      }
+    } catch (e) {}
+    return [{ key: 'bess', label: 'BESS — Battery Energy Storage', noun: 'BESS' }];
+  }
+  function currentType() {
+    try {
+      if (root.OmegaProjectTypes && typeof OmegaProjectTypes.get === 'function')
+        return OmegaProjectTypes.get() || 'bess';
+    } catch (e) {}
+    return 'bess';
+  }
+  function setType(k) {
+    try {
+      if (root.OmegaProjectTypes && typeof OmegaProjectTypes.set === 'function') OmegaProjectTypes.set(k);
+    } catch (e) {}
+  }
+
   /* ── the sketch: hand the address to the autopilot's own contract ────── */
 
   function launch(o) {
+    /* auto=bess runs the whole chain; auto=map stops after the site. */
+    var auto = AUTO_BUILDS[o.type] ? 'bess' : 'map';
     if (canCommandThisTab()) {
       /* The map, parcel and roads are already here. Build on them instead
          of throwing the tab away — this is the autopilot's second turn. */
-      root.postMessage({ type: 'OMEGA_AUTOPILOT_CMD', auto: 'bess',
-                         mw: o.mw, mwh: o.mwh, mode: o.mode }, root.location.origin);
+      root.postMessage({ type: 'OMEGA_AUTOPILOT_CMD', auto: auto,
+                         mw: o.mw, mwh: o.mwh, mode: o.mode, ptype: o.type },
+                       root.location.origin);
       return 'commanded';
     }
-    var q = '?address=' + encodeURIComponent(o.address) + '&auto=bess&from=button';
+    var q = '?address=' + encodeURIComponent(o.address) + '&auto=' + auto + '&from=button';
+    if (o.type) q += '&ptype=' + encodeURIComponent(o.type);
     if (o.mw) q += '&mw=' + o.mw;
     if (o.mwh) q += '&mwh=' + o.mwh;
     if (o.mode) q += '&mode=' + o.mode;
@@ -135,9 +192,22 @@
   function open() {
     if (doc.getElementById('dai-wrap')) return;
     var wrap = el('div', WRAP); wrap.id = 'dai-wrap';
-    var card = el('div', CARD);
-    function close() { try { wrap.remove(); } catch (e) {} }
+    var card = el('div', CARD); card.style.position = 'relative';
+    function close() {
+      try { doc.removeEventListener('keydown', onKey, true); } catch (e) {}
+      try { wrap.remove(); } catch (e) {}
+    }
+    /* THREE WAYS OUT. Cancel alone was not enough: the scrim only closes on
+       an exact hit, and on a short window the card fills it. Escape and a ✕
+       are what people actually reach for (Thomas, 2026-09-15). */
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } }
+    doc.addEventListener('keydown', onKey, true);
     wrap.onclick = function (e) { if (e.target === wrap) close(); };
+    var shut = el('button', 'position:absolute;top:10px;right:10px;background:transparent;border:1px solid #26364d;'
+      + 'color:#8FA3B8;border-radius:6px;width:24px;height:24px;line-height:1;cursor:pointer;font-size:13px', '\u2715');
+    shut.title = 'Close (Esc)';
+    shut.onclick = close;
+    card.appendChild(shut);
 
     card.appendChild(el('div', 'font-weight:700;color:#E2EEF9;font-size:14px', 'Design with AI'));
     var sub = el('div', 'color:#8FA3B8;margin-top:3px');
@@ -153,6 +223,20 @@
       warn.textContent = 'This canvas has objects on it. Starting a new site reloads the editor, so save first if you want to keep them.';
       card.appendChild(warn);
     }
+
+    /* FIRST, because it changes what every field below means. */
+    card.appendChild(label('SITE TYPE'));
+    var ptype = el('select', FIELD);
+    types().forEach(function (t) {
+      var o = doc.createElement('option');
+      o.value = t.key;
+      o.textContent = t.label + (does(t.key) === 'site' ? '  — site only' : '');
+      ptype.appendChild(o);
+    });
+    ptype.value = currentType();
+    card.appendChild(ptype);
+    var ptypeNote = el('div', 'color:#8FA3B8;margin-top:5px;font-size:11px');
+    card.appendChild(ptypeNote);
 
     card.appendChild(label('SITE ADDRESS'));
     var addr = el('input', FIELD); addr.placeholder = '800 Progress Dr, Frederick MD 21701';
@@ -179,9 +263,6 @@
        it is produced, not in a caveat underneath it afterwards. */
     var note = el('div', 'margin-top:14px;padding:9px 11px;border-radius:7px;background:rgba(96,165,250,.10);'
       + 'border:1px solid #2A4A6B;color:#9FC2E8;font-size:11.5px');
-    note.textContent = 'This produces a SKETCH: equipment spaced along a line from the site centre. '
-      + 'It does not check the building, setbacks, clearances or obstructions. '
-      + 'Use "Make it buildable" once you have the survey and the service location.';
     card.appendChild(note);
 
     var msg = el('div', 'margin-top:10px;min-height:16px;color:#F59E0B;font-size:11.5px');
@@ -190,6 +271,40 @@
     var actions = el('div', 'display:flex;gap:8px;justify-content:flex-end;margin-top:14px');
     var cancel = el('button', FLAT, 'Cancel'); cancel.onclick = close;
     var go = el('button', GO, 'Sketch the site');
+
+    /* Everything the dialog promises depends on the type, so say it here
+       and keep saying it as the choice changes. */
+    function syncType() {
+      var k = ptype.value, d = does(k), noun = 'this';
+      types().forEach(function (t) { if (t.key === k) noun = t.noun || t.label; });
+      var HAND = {
+        ev:   'you place the EV stencils on the stalls you want charged — which stalls is a judgement '
+            + 'about that lot, and OpenStreetMap has no traffic data to guess it from.',
+        evl2: 'you place the EV stencils on the stalls you want charged.',
+        der:  'a microgrid has no single sequence to walk — you pick the assets from Build.',
+        datacenter: 'the lineup is sized from the IT load, which this dialog does not ask for.'
+      };
+      ptypeNote.textContent =
+          d === 'build' ? 'Runs the guided build: the battery goes behind the building, then transformer, '
+                        + 'disconnect, switchgear, meter — and it stops at the utility connection for you.'
+        : d === 'array' ? 'Packs a ground-mount array into the parcel, fitted around the buildings it imports. '
+                        + 'No electrical equipment is drawn.'
+        :                 'Loads the site and stops: ' + (HAND[k] || 'the next step is yours.');
+      note.textContent =
+          d === 'build' ? 'This produces a SKETCH: equipment walked out from the building toward the road. It checks the '
+                        + 'building footprints it imported, but not setbacks, easements, clearances or obstructions. '
+                        + 'Use "Make it buildable" once you have the survey and the service location.'
+        : d === 'array' ? 'This produces a SKETCH array: the packing engine fills the parcel at the configured GCR and '
+                        + 'setback, with the buildings taken out. It knows nothing about shading, easements or soils.'
+        :                 'This produces the SITE only — map, parcel boundary, roads and frontage. No equipment is drawn, '
+                        + 'because guessing the wrong technology onto a site is worse than drawing nothing.';
+      go.textContent = d === 'build' ? 'Sketch the site' : d === 'array' ? 'Lay out the array' : 'Load the site';
+      var sized = (d === 'build');
+      mwBox.style.opacity = mwhBox.style.opacity = sized ? '1' : '.45';
+      mw.disabled = mwh.disabled = mode.disabled = !sized;
+    }
+    ptype.onchange = function () { setType(ptype.value); syncType(); };
+    syncType();
     go.onclick = function () {
       var a = String(addr.value || '').trim();
       if (!canCommandThisTab()) {
@@ -199,7 +314,8 @@
       if (!signedIn()) { msg.textContent = 'Sign in first — the parcel and score both need your token.'; return; }
       go.disabled = true; go.textContent = 'Starting…';
       try {
-        launch({ address: a, mw: num(mw.value), mwh: num(mwh.value), mode: mode.value });
+        setType(ptype.value);
+        launch({ address: a, type: ptype.value, mw: num(mw.value), mwh: num(mwh.value), mode: mode.value });
         close();
       } catch (e) {
         go.disabled = false; go.textContent = 'Sketch the site';
