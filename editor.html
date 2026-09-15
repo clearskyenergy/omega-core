@@ -13732,9 +13732,11 @@ function trenchTotals(){
       if(lat<1) lat=0;                                        /* centring noise, not a dig */
       return { along:f-lat, lateral:lat };
     }
+    /* an interior feed drawn on a run is conduit in a building, not a dig */
+    var _isIn=(typeof _condIsIndoor==='function') ? _condIsIndoor : function(){ return false; };
     var byRun={}, runOrder=[];
     list.forEach(function(c){
-      if(!c || c.route!=='trench' || !c.evRun) return;
+      if(!c || c.route!=='trench' || !c.evRun || _isIn(c)) return;
       var r=byRun[c.evRun];
       if(!r){ r=byRun[c.evRun]={ along:0, lateral:0, n:0 }; runOrder.push(c.evRun); }
       var q=parts(c);
@@ -13749,15 +13751,17 @@ function trenchTotals(){
        with a run's leg lies in that same dig. */
     groups=(typeof _buildCorridors==='function')?_buildCorridors():[];   /* memo cache: never push into it */
     groups.forEach(function(g){
-      var fresh=g.members.filter(function(m){ return !seen[m.id]; });
+      var live=g.members.filter(function(m){ return !_isIn(m); });
+      if(!live.length) return;
+      var fresh=live.filter(function(m){ return !seen[m.id]; });
       if(!fresh.length) return;
-      if(fresh.length===g.members.length){ ft+=(+g.members[0].ftLen||0); corridors++; }
+      if(fresh.length===live.length){ ft+=(+fresh[0].ftLen||0); corridors++; }
       fresh.forEach(function(m){ seen[m.id]=true; });
     });
 
     /* 3. SOLO TRENCHED LEGS count their own length. */
     list.forEach(function(c){
-      if(!c || seen[c.id] || c.route!=='trench') return;
+      if(!c || seen[c.id] || c.route!=='trench' || _isIn(c)) return;
       ft+=(+c.ftLen||0);
     });
   }catch(e){}
@@ -18436,10 +18440,11 @@ function renderLegend(){
       var tags=(typeof _engTagMap==='function')?_engTagMap():{};
       /* Group by type + routing, same rule as the schedule. */
       var groups={}, order=[], totalFt=0;
+      var _lgIn=(typeof _condIsIndoor==='function') ? _condIsIndoor : function(){ return false; };
       clist.forEach(function(c){
         var route=(c.route==='trench')?'T':(c.route==='surface'?'S':'-');
         var key=c.condType+'|'+route;
-        if(!groups[key]){ groups[key]={condType:c.condType,route:route,qty:0,ft:0,tags:[]}; order.push(key); }
+        if(!groups[key]){ groups[key]={condType:c.condType,route:route,qty:0,ft:0,tags:[],indoor:_lgIn(c)}; order.push(key); }
         groups[key].qty++; groups[key].ft+=(+c.ftLen||0);
         groups[key].tags.push(tags[c.id]||'');
         totalFt+=(+c.ftLen||0);
@@ -18463,7 +18468,7 @@ function renderLegend(){
            the row labelled "Trench (panel->EVSE)" reads as excavation. */
         h+='<div class="li">'+swatch+'<span class="li-txt">'+(ct.label||G.condType)
           +'<br><span style="font-size:8px;opacity:.65">'+G.qty+' run'+(G.qty>1?'s':'')
-          +' \u00b7 '+lenTxt+(G.route==='T'?' of conduit \u00b7 in trench':'')+'</span></span></div>';
+          +' \u00b7 '+lenTxt+(G.route==='T'?(G.indoor?' of conduit \u00b7 interior, not dug':' of conduit \u00b7 in trench'):'')+'</span></span></div>';
       });
 
       /* Trench quantity is the EXCAVATION: dug once, shared by every conduit
@@ -18472,7 +18477,7 @@ function renderLegend(){
         var tt=(typeof trenchTotals==='function')?trenchTotals():{ft:0,corridors:0};
         if(tt.ft>0){
           var tTxt=(S.pxPerFt && typeof fmtLen==='function')?fmtLen(tt.ft):(Math.round(tt.ft)+'px');
-          var _inTr=clist.filter(function(c){ return c && c.route==='trench'; }).length;
+          var _inTr=clist.filter(function(c){ return c && c.route==='trench' && !_lgIn(c); }).length;
           h+='<div class="li" style="border-top:1px solid rgba(255,255,255,.1);margin-top:4px;padding-top:4px">'
             +'<span class="li-txt" style="font-size:8.5px"><strong>Trench '+tTxt+'</strong> \u00b7 dug once'
             +'<br><span style="font-size:7.5px;opacity:.6">'
@@ -24587,8 +24592,12 @@ function updateSummaryPanel() {
       });
       const ct = {'RMC-DC':'#DC2626','RMC-AC':'#F59E0B','EMT-BMS':'#2563EB','PVC-UG':'#7C3AED','MV-UG':'#EF4444','GAS-UG':'#EAB308','EV-MAIN':'#FF0000','EV-FEEDER':'#FFFF00','EV-BRANCH':'#00FFFF','EV-SPARE':'#00FF00','custom':'#10B981'};
       // Total EV trench footage (drawn runs), shown as a civil line under conduit.
-      var _trFt=0, _trRuns=(S._trenches||[]).length;
-      (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1&&typeof _trenchRunFt==='function') _trFt+=_trenchRunFt(t); });
+      var _trFt=0, _trRuns=0;
+      (S._trenches||[]).forEach(function(t){
+        if(!(t.pts&&t.pts.length>1&&typeof _trenchRunDugFt==='function')) return;
+        var _d=_trenchRunDugFt(t);            /* an interior feed's run is conduit, not a dig */
+        if(_d>0){ _trFt+=_d; _trRuns++; }
+      });
       var _trLine = _trRuns>0 ? ('<div style="display:flex;align-items:center;gap:6px;margin:4px 0 0;min-width:0">'
           +'<div style="width:16px;height:6px;background:repeating-linear-gradient(90deg,#8a5a28 0 3px,transparent 3px 7px);border-radius:1px;flex-shrink:0"></div>'
           +'<span style="flex:1;min-width:0;font-size:9px;color:var(--sub)">Trenching (drawn)</span>'
@@ -36536,7 +36545,7 @@ function buildBOM() {
     for (var _t=0; _t<S._trenches.length; _t++) {
       var _tr=S._trenches[_t]; if(!_tr.pts || _tr.pts.length<2) continue;
       /* ground-true where the run is anchored; see _trenchRunFt */
-      var _tft=(typeof _trenchRunFt==='function') ? _trenchRunFt(_tr) : (S.pxPerFt ? _polyLen(_tr.pts)/S.pxPerFt : 0);
+      var _tft=(typeof _trenchRunDugFt==='function') ? _trenchRunDugFt(_tr) : (S.pxPerFt ? _polyLen(_tr.pts)/S.pxPerFt : 0);
       if(_tft<=0) continue;
       _trRuns++;
       if(_tr.in==='concrete') _trFtConc+=_tft; else _trFtSoil+=_tft;
@@ -36830,7 +36839,7 @@ function buildBOM() {
            computePods: _cs.pods, computeKw: _cs.podKw,
            genUnits: _cs.gen, genKw: _cs.genKw,
            kwh: S.bessList.reduce(function(s,x){return s+(+(x.kwh||0))*(+(x.qty||1));},0) || _cs.bessKwh,
-           trenchFt: (function(){ var f=0; (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1) f+=(typeof _trenchRunFt==='function')?_trenchRunFt(t):(S.pxPerFt?_polyLen(t.pts)/S.pxPerFt:0); }); return Math.round(f); })() };
+           trenchFt: (function(){ var f=0; (S._trenches||[]).forEach(function(t){ if(t.pts&&t.pts.length>1) f+=(typeof _trenchRunDugFt==='function')?_trenchRunDugFt(t):(S.pxPerFt?_polyLen(t.pts)/S.pxPerFt:0); }); return Math.round(f); })() };
 }
 
 function _csvCell(v){
@@ -41047,10 +41056,13 @@ function _ppRenderCondSchedule(sizeKey, street){
   var trFt=0, trN=0;
   try{
     (S._trenches||[]).forEach(function(t){
-      if(!t) return; trN++;
+      if(!t) return;
+      /* an interior feed's run is conduit in a building, not a corridor */
+      if(typeof _trenchRunIsIndoor==='function' && _trenchRunIsIndoor(t)) return;
+      trN++;
       /* ground-true where anchored; a run never carried pxLen, so the old
          fallback added 0 for any run that had not yet cached its length */
-      if(scaled) trFt += (typeof _trenchRunFt==='function') ? _trenchRunFt(t)
+      if(scaled) trFt += (typeof _trenchRunDugFt==='function') ? _trenchRunDugFt(t)
                        : (t.ftLen!=null?+t.ftLen:((typeof _polyLen==='function'&&t.pts)?_polyLen(t.pts)/S.pxPerFt:0));
     });
   }catch(e){}
@@ -56191,7 +56203,32 @@ function _trenchRunFt(t){
   t.ftLen=+f.toFixed(1);
   return f;
 }
-try{ window._groundPolyFt=_groundPolyFt; window._viewOwnsScale=_viewOwnsScale; window._viewPxPerFt=_viewPxPerFt; window._trenchRunFt=_trenchRunFt; }catch(e){}
+/* AN INTERIOR CONDUIT IS NOT EXCAVATION, whatever tool drew it. The Level 2
+   feed from the service to the panel is tagged L2-INT and is EMT, not rated
+   for burial, yet it rides a drawn run, so it sat inside the trench total
+   and the drawn-trench footage. "The total trench would be just the panel
+   to the EVSE units" (Menachem, 160 S Main St, 2026-09-15). One rule, read
+   by the legend, the schedule, the BOM, the permit sheet and the EV cost
+   takeoff, so they cannot disagree about what gets dug. */
+function _condIsIndoor(c){
+  if(!c) return false;
+  var t=String(c.condType||'').toUpperCase(), l=String(c.label||'').toLowerCase();
+  return t.indexOf('INT')>=0 || l.indexOf('interior')>=0 || l.indexOf('indoor')>=0;
+}
+/* A drawn run is excavation unless every leg laid in it is interior. A run
+   with no legs yet is a trench still being built. */
+function _trenchRunIsIndoor(t){
+  if(!t || !t.id) return false;
+  var legs=[];
+  try{ legs=((typeof S!=='undefined' && S.conduits)||[]).filter(function(c){ return c && c.evRun===t.id; }); }catch(e){}
+  if(!legs.length) return false;
+  for(var i=0;i<legs.length;i++) if(!_condIsIndoor(legs[i])) return false;
+  return true;
+}
+/* Feet of a drawn run that actually get dug. */
+function _trenchRunDugFt(t){ return _trenchRunIsIndoor(t) ? 0 : _trenchRunFt(t); }
+try{ window._groundPolyFt=_groundPolyFt; window._viewOwnsScale=_viewOwnsScale; window._viewPxPerFt=_viewPxPerFt; window._trenchRunFt=_trenchRunFt;
+     window._condIsIndoor=_condIsIndoor; window._trenchRunIsIndoor=_trenchRunIsIndoor; window._trenchRunDugFt=_trenchRunDugFt; }catch(e){}
 
 /* Shared trench SPINE: units in a row drop to a common aisle trench below the
    row; the trench (3 color-coded conductors) runs horizontally to the EMS.
@@ -71099,8 +71136,11 @@ function _evFeetFromCanvas(){
        Ground/Indoor with the rest of the interior work. */
     var _cType=String(c.condType||'').toUpperCase();
     var _cLbl =String(c.label||'').toLowerCase();
-    var _indoor = _cType.indexOf('INT')>=0 || _cType.indexOf('EMT')>=0
-               || _cLbl.indexOf('interior')>=0 || _cLbl.indexOf('indoor')>=0;
+    /* the shared rule (_condIsIndoor), plus EMT: not rated for direct burial,
+       so it is priced above ground even where it was drawn on a run */
+    var _indoor = ((typeof _condIsIndoor==='function') ? _condIsIndoor(c)
+                    : (_cType.indexOf('INT')>=0 || _cLbl.indexOf('interior')>=0 || _cLbl.indexOf('indoor')>=0))
+               || _cType.indexOf('EMT')>=0;
     if(c.route==='trench' && !_indoor) ug+=lf; else ag+=lf;
     cable += (typeof _cdCableLf==='function') ? _cdCableLf(c) : 0;
     /* Surface type from the TRENCHED runs only, counting both kinds. Turf
