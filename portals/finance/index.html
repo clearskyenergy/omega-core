@@ -1201,6 +1201,10 @@ input.szr-in[type=number]{font-family:var(--mono)}
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<!-- ClearSky's commission on a partner's deals, as data. The same file
+     /api/offer.js requires, so the price a partner sees as they type is the
+     price the server stamps on the offer. -->
+<script src="/omega-fees.js"></script>
 <script src="/portals/finance/firebase-config.js" onerror="console.warn('[OMEGA] /firebase-config.js not found — falling back to the inline block below')"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3282,6 +3286,52 @@ function partnerMarketplace() {
     S.view === 'map' ? 'Click a state to filter, then switch back to cards or the table.' : 'Open any deal to read the full file.'}</p>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE DEAL ROOM — what ClearSky has routed to THIS firm.
+   Every capital partner has one from the day their account is approved: it is
+   the set of deals held for their people (firstLookUids), delivered to their
+   organisation (room.forOrgId) or awarded to them. A deal in here is off the
+   open marketplace while they hold it; nobody else on the capital side sees
+   it. The card at the top states their terms with ClearSky, because an offer
+   made without knowing the fee on it is an offer made blind.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function feeScheduleCard() {
+  if (!window.OmegaFees || !SESSION) return '';
+  const set = !!(ORG && ORG.fees != null);
+  const text = set ? OmegaFees.describe(ORG.fees) : 'ClearSky has not set a fee schedule for your firm yet';
+  return `<div class="card" style="margin-bottom:14px">
+    <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px">Your terms with ClearSky</h3>
+    <p class="note">${esc(text)}. ${set
+      ? 'Every offer you make shows its total price with these fees applied, and the total is what ClearSky invoices against.'
+      : 'You can still make offers; ClearSky confirms the fee on each before award.'}</p></div>`;
+}
+
+function roomDeals() {
+  const uid = myUid(), mine = myOrgId();
+  return allDeals().filter(d => !d.sample && (
+    iHoldFirstLook(d)
+    || (d.room && d.room.forOrgId && mine && String(d.room.forOrgId).toLowerCase() === mine.toLowerCase())
+    || (uid && d.awardedTo === uid)));
+}
+
+function partnerRoom() {
+  const room = roomDeals();
+  const live = room.filter(d => onHold(d) && !holdExpired(d));
+  const mine = room.filter(d => d.awardedTo && d.awardedTo === myUid());
+  if (!room.length) return `${feeScheduleCard()}<div class="empty">
+    <div class="e-ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></div>
+    <h3>Nothing in your deal room yet</h3>
+    <p>When ClearSky routes a deal to ${esc(SESSION.org)}, it lands here first — before the marketplace, and nobody else on the capital side sees it while you hold it.</p>
+    <button class="btn btn-primary" data-act="tab" data-val="market">Browse the marketplace</button></div>`;
+  return `${feeScheduleCard()}
+  <div class="kpi-strip">
+    ${kpi('In your room', room.length, '', `${usdC(sum(room.map(d => d.ask)))} sought`, '')}
+    ${kpi('Exclusive to you now', live.length, '', live.length ? esc(holdCountdown(live.sort((a, b) => holdMsLeft(a) - holdMsLeft(b))[0])) : 'no window running', live.length ? 'up' : '')}
+    ${kpi('Awarded to you', mine.length, '', mine.length ? `${usdC(sum(mine.map(d => d.ask)))}` : 'none yet', '')}
+  </div>
+  ${dealsView(room, {caption: 'Deals ClearSky has routed to ' + SESSION.org + '. Open one to read the file and make an offer.'})}`;
+}
+
 /* The allowance, stated plainly and always in view. A partner who does not
    know what an unlock costs them will not spend one. */
 function tokenStrip() {
@@ -3539,6 +3589,7 @@ function offerModal(dealId) {
       <div class="field"><label for="ofInstrument">Instrument</label>
         <select id="ofInstrument">${INSTRUMENTS.map(i => `<option${o.instrument === i ? ' selected' : ''}>${i}</option>`).join('')}</select></div>
     </div>
+    <div id="ofPricing" class="note" style="margin:-4px 0 12px;padding:10px 12px;border:1px solid var(--cs-border);border-radius:10px"></div>
     <div class="field-row three">
       <div class="field"><label for="ofRate">Rate / cost of capital (%)</label>
         <input id="ofRate" type="number" step="0.01" min="0" placeholder="7.25" value="${v(o.rate)}"></div>
@@ -3576,6 +3627,28 @@ function offerModal(dealId) {
 
   const links = (o.docs && o.docs.length) ? o.docs : [{label: 'Term sheet', url: ''}];
   links.forEach(l => addLinkRow(l.label, l.url));
+  paintOfferPricing();
+}
+
+/* What this offer costs the partner, with their firm's ClearSky fees applied.
+   Computed client-side from the same module the server uses, so the preview
+   and the stamped figure agree; the server's figure is the one of record. */
+function offerPricingPreview(amount) {
+  if (!window.OmegaFees || !SESSION) return '';
+  const feesKnown = !!(ORG && ORG.fees != null);
+  const p = OmegaFees.price(amount || 0, ORG ? ORG.fees : null);
+  if (!feesKnown) return `<b>ClearSky fee:</b> not set for ${esc(SESSION.org)} yet — ClearSky confirms the fee before award. Your offer of ${usdC(p.offer)} is what the sponsor receives.`;
+  if (p.waived) return `<b>ClearSky fee:</b> waived for ${esc(SESSION.org)}. Total price ${usdC(p.total)} — all of it to the sponsor.`;
+  const lines = [];
+  if (p.transactionPct > 0) lines.push(`Transaction fee ${p.transactionPct}% · ${usdC(p.transactionFee)}, built onto the price at close`);
+  p.finders.forEach(m => lines.push(`Finders fee ${m.pct}% at ${esc(m.milestone)} · ${usdC(m.amount)}`));
+  return `<b>Your total price with ClearSky fees: ${usdC(p.total)}</b>
+    <span class="muted">· ${usdC(p.offer)} to the sponsor · ${usdC(p.dueAtClose)} due at close</span><br>${lines.join('<br>')}`;
+}
+function paintOfferPricing() {
+  const box = $('#ofPricing'); if (!box) return;
+  const amt = parseFloat(($('#ofAmount') || {}).value) || 0;
+  box.innerHTML = offerPricingPreview(amt);
 }
 
 async function sendOffer(dealId) {
@@ -3620,19 +3693,41 @@ async function sendOffer(dealId) {
   };
   if (!myOffer()) body.createdAt = Date.now();
 
+  /* THE PRICE COMES FROM THE SERVER. /api/offer reads this firm's fee
+     schedule off fin_orgs and stamps the total onto the offer; the rules
+     refuse a partner any write to pricing, so the figure ClearSky invoices is
+     never the partner's own. If the service is down (503), not deployed (404)
+     or unreachable, the offer is still filed — directly, with
+     pricingPending:true — so a deal is not lost to a missing credential, and
+     the administrator sees exactly which offers still need a price. */
+  let priced = null;
   try {
-    await FB.db.collection('fin_projects').doc(d.docId)
-      .collection('offers').doc(FB.auth.currentUser.uid).set(body, {merge: true});
+    const r = await apiPost('/api/offer', Object.assign({}, body, {dealId: d.docId}));
+    priced = (r && r.pricing) ? r : null;
   } catch (err) {
-    console.error('[OMEGA] offer write failed:', err);
-    btn.disabled = false; btn.textContent = label;
-    const [h, t] = explain(err);
-    return modalErr(err.code === 'permission-denied'
-      ? 'This deal is no longer accepting offers.' : h + (t ? ' ' + t : ''));
+    if (err && (err.status === 503 || err.status === 404 || err.status === 0)) {
+      console.warn('[OMEGA] /api/offer unavailable (' + err.status + '); filing unpriced:', err.message);
+      try {
+        await FB.db.collection('fin_projects').doc(d.docId)
+          .collection('offers').doc(FB.auth.currentUser.uid).set(Object.assign({}, body, {pricingPending: true}), {merge: true});
+      } catch (e2) {
+        console.error('[OMEGA] offer write failed:', e2);
+        btn.disabled = false; btn.textContent = label;
+        const [h, t] = explain(e2);
+        return modalErr(e2.code === 'permission-denied'
+          ? 'This deal is no longer accepting offers.' : h + (t ? ' ' + t : ''));
+      }
+    } else {
+      console.error('[OMEGA] offer refused:', err);
+      btn.disabled = false; btn.textContent = label;
+      return modalErr(err.message || 'The offer could not be sent.');
+    }
   }
   btn.disabled = false; btn.textContent = label;
   closeModal();
-  toast(`Offer sent to ${esc(d.developer)} — ${usdC(amount)}.`);
+  toast(priced
+    ? `Offer sent to ${esc(d.developer)} — ${usdC(amount)}${priced.pricing.feesTotal > 0 ? `; your total with ClearSky fees is ${usdC(priced.pricing.total)}` : ''}.`
+    : `Offer sent to ${esc(d.developer)} — ${usdC(amount)}. ClearSky will confirm the fee on it.`);
 }
 
 async function setOfferStatus(dealId, partnerUid, status) {
@@ -3677,6 +3772,25 @@ async function signOff(dealId, side) {
 }
 
 /* ── the drawer tab ──────────────────────────────────────────────────────── */
+/* The fee block on an offer card. Shown to the partner who made the offer and
+   to ClearSky; never to the sponsor, whose number is the offer itself. */
+function offerPricingHtml(o, d) {
+  const canSee = isPlatformAdmin() || (S.role === 'partner' && o.uid === myUid());
+  if (!canSee) return '';
+  if (!o.pricing) {
+    if (!o.pricingPending) return '';
+    return `<div class="oc-sec"><h6>ClearSky fees</h6><p class="note">Not priced yet — filed while the pricing service was unavailable.${isPlatformAdmin()
+      ? ` <button class="btn btn-ghost btn-xs" data-act="price-offer" data-val="${esc(d.docId || '')}|${esc(o.uid)}">Price it now</button>` : ''}</p></div>`;
+  }
+  const p = o.pricing;
+  if (p.waived) return `<div class="oc-sec"><h6>ClearSky fees</h6><p>Waived${o.feesSet === false ? ' — no schedule is set for this partner' : ''}. Total price ${usdC(p.total)}.</p></div>`;
+  const rows = [];
+  if (p.transactionPct > 0) rows.push(`Transaction fee ${p.transactionPct}% · ${usdC(p.transactionFee)} (built onto the price)`);
+  (p.finders || []).forEach(m => rows.push(`Finders fee ${m.pct}% at ${esc(m.milestone)} · ${usdC(m.amount)}`));
+  return `<div class="oc-sec"><h6>ClearSky fees</h6><ul>${rows.map(r => `<li>${r}</li>`).join('')}</ul>
+    <p><b>Total price ${usdC(p.total)}</b> · ${usdC(p.offer)} to the sponsor · ${usdC(p.dueAtClose)} due at close</p></div>`;
+}
+
 function offersTab(d) {
   if (!d.docId) return `<p class="note">Offers open up once the deal is saved to the marketplace.</p>`;
   if (offersErr) return `<div class="empty"><h3>Offers could not be loaded</h3><p>${esc(offersErr)}</p></div>`;
@@ -3699,6 +3813,7 @@ function offersTab(d) {
         <div><div class="k">Rate</div><div class="v">${o.rate ? o.rate.toFixed(2) + '%' : '—'}</div></div>
         <div><div class="k">Term</div><div class="v">${o.termYears ? o.termYears + ' yr' : '—'}</div></div>
       </div>
+      ${offerPricingHtml(o, d)}
       ${conds.length ? `<div class="oc-sec"><h6>Conditions precedent</h6><ul>${conds.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>` : ''}
       ${(o.docs || []).filter(x => x.url).length ? `<div class="oc-sec"><h6>Documents</h6>
         ${o.docs.filter(x => x.url).map(l => `<a class="doc-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-act="doc-open">
@@ -7121,6 +7236,125 @@ async function resetOrgPeriod(orgKey) {
   } catch (err) { toast(explain(err)[0], true); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   12d-ii. FEES — what ClearSky earns on each capital partner's deals
+   ───────────────────────────────────────────────────────────────────────────
+   Set here by an administrator when a partner is stood up, stored on
+   fin_orgs/{orgKey}.fees, applied by /api/offer to every offer the partner
+   makes. Either, both, or neither of:
+     transaction fee   % of the offer, built onto the price   (Budderfly: 1%)
+     finders fee       % of the offer at milestones            (Amperage: 2.5%
+                                                                at NTP, 2.5% at COD)
+   The rules let only an administrator write it; a partner reads their own.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function orgFeesCell(r) {
+  if (!r.partner) return '<span class="note">—</span>';
+  if (!window.OmegaFees) return '';
+  const f = r.ent ? r.ent.fees : null;
+  const txt = f == null ? '<span class="pill p-diligence">Not set</span>' : esc(OmegaFees.describe(f));
+  return `${txt}<br><button class="btn btn-ghost btn-xs" style="margin-top:4px" data-act="edit-fees" data-val="${esc(r.orgKey)}">${f == null ? 'Set fees' : 'Edit fees'}</button>`;
+}
+
+function feeRowHtml(m) {
+  return `<div class="fee-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+    <select class="fee-ms fb-sel" style="flex:1;padding:6px 8px">${OmegaFees.MILESTONES.map(x => `<option${(m && m.milestone) === x ? ' selected' : ''}>${x}</option>`).join('')}</select>
+    <input class="fee-pct" type="number" step="0.1" min="0" max="100" placeholder="2.5" value="${m && m.pct ? m.pct : ''}" style="width:96px">
+    <span class="note" style="white-space:nowrap">% of the offer</span>
+    <button type="button" class="link-btn" data-act="fee-rm-row">Remove</button></div>`;
+}
+
+function feesModal(orgKey) {
+  if (!window.OmegaFees) return toast('The fee module did not load — refresh and try again.', true);
+  const o = ORGS.find(x => x.orgKey === orgKey) || {orgKey};
+  const row = orgKpis().find(r => r.orgKey === orgKey);
+  const name = (row && row.name) || o.name || orgKey;
+  const set = o.fees != null;
+  const f = OmegaFees.normalize(o.fees || {});
+  openModal(`
+  <div class="modal-head">
+    <div><h2>ClearSky fees · ${esc(name)}</h2>
+      <div class="mh-sub">What ClearSky earns on every deal ${esc(name)} takes through the portal. Applied to each offer they make; they see their own schedule, and only an administrator can change it.</div></div>
+    <button class="dr-x" data-act="close-modal" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <div class="auth-err" id="modalErr"></div>
+    <label class="cond" style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+      <input type="checkbox" id="feeWaived"${set && f.waived ? ' checked' : ''}>
+      <span><b>Waived</b> — no ClearSky fee on this partner's deals</span></label>
+    <div id="feeBody" style="${set && f.waived ? 'opacity:.45;pointer-events:none' : ''}">
+      <div class="field" style="max-width:300px">
+        <label for="feeTx">Transaction fee — % of the offer, built onto the price</label>
+        <input id="feeTx" type="number" step="0.1" min="0" max="100" placeholder="1.0" value="${f.transactionPct || ''}"></div>
+      <h4 class="set-h">Finders fee, by milestone</h4>
+      <p class="field-note" style="margin:0 0 10px">Invoiced as each milestone is reached. Amperage Capital pays 2.5% at NTP and 2.5% at COD.</p>
+      <div id="feeRows">${f.finders.map(feeRowHtml).join('')}</div>
+      <button type="button" class="link-btn" data-act="fee-add-row">+ Add a milestone</button>
+      <div class="field" style="margin-top:14px"><label for="feeNote">Note (administrators only)</label>
+        <textarea id="feeNote" placeholder="Per the referral agreement dated …">${esc(f.note)}</textarea></div>
+    </div>
+    <div id="feePreview" class="note" style="margin-top:12px;padding:10px 12px;border:1px solid var(--cs-border);border-radius:10px"></div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" data-act="close-modal">Cancel</button>
+    <button class="btn btn-primary" data-act="save-fees" data-val="${esc(orgKey)}">Save fees</button>
+  </div>`);
+  paintFeePreview();
+}
+
+function readFeesForm() {
+  const finders = $$('#feeRows .fee-row').map(r => ({
+    milestone: r.querySelector('.fee-ms').value,
+    pct: parseFloat(r.querySelector('.fee-pct').value) || 0 }));
+  return OmegaFees.normalize({
+    waived: !!($('#feeWaived') && $('#feeWaived').checked),
+    transactionPct: parseFloat(($('#feeTx') || {}).value) || 0,
+    finders,
+    note: ($('#feeNote') || {}).value || ''
+  });
+}
+
+/* Worked on a round million so the administrator sees the money, not only
+   the percentages. */
+function paintFeePreview() {
+  const box = $('#feePreview'); if (!box || !window.OmegaFees) return;
+  const body = $('#feeBody'), w = $('#feeWaived');
+  if (body && w) { body.style.opacity = w.checked ? '.45' : ''; body.style.pointerEvents = w.checked ? 'none' : ''; }
+  const f = readFeesForm(), p = OmegaFees.price(1000000, f);
+  box.innerHTML = `<b>${esc(OmegaFees.describe(f))}.</b> On a $1,000,000 offer ClearSky earns ${usdC(p.feesTotal)}; the partner's total price is ${usdC(p.total)}${p.finders.length ? ', of which ' + usdC(p.findersTotal) + ' falls due at milestones' : ''}.`;
+}
+
+async function saveFees(orgKey) {
+  if (!isPlatformAdmin()) return;
+  const fees = readFeesForm();
+  try {
+    await FB.db.collection('fin_orgs').doc(orgKey).set(
+      {orgKey, fees, feesSetBy: SESSION.email || SESSION.name, feesSetAt: Date.now()}, {merge: true});
+    const o = ORGS.find(x => x.orgKey === orgKey);
+    if (o) o.fees = fees; else ORGS.push({orgKey, fees});
+    closeModal(); render();
+    toast(`${orgKey}: ${OmegaFees.describe(fees)}.`);
+  } catch (err) {
+    console.error('[OMEGA] fee save failed:', err);
+    modalErr(err.code === 'permission-denied'
+      ? 'The database refused that change. Deploy the latest firestore.rules, then try again.'
+      : explain(err)[0]);
+  }
+}
+
+/* The OMEGA org id a delivery is addressed to (room.forOrgId), for a finance
+   org key. Off the org record when it has one, else off a profile at that
+   firm, else the email domain of one of its partners. Empty means the hold
+   still works — the uid array grants the read — but the room query does not. */
+function orgIdOf(orgKey) {
+  const o = ORGS.find(x => x.orgKey === orgKey);
+  if (o && o.orgId) return String(o.orgId).toLowerCase();
+  const at = p => (p.orgKey || orgKeyOf(p.org)) === orgKey;
+  const withId = PEOPLE.find(p => at(p) && p.orgId);
+  if (withId) return String(withId.orgId).toLowerCase();
+  const partner = PEOPLE.find(p => at(p) && p.role === 'partner' && p.email);
+  return partner ? String(partner.email).split('@')[1].toLowerCase() : '';
+}
+
 /* What each organisation has actually brought to the platform. Sponsors are
    measured on deal flow; capital partners on what they open and close. */
 function orgKpis() {
@@ -7210,7 +7444,7 @@ function orgsView() {
   <p class="note" style="margin-bottom:14px">Tier sets how many deals an organisation can unlock each month \u2014 <b>Tier 1</b> 5, <b>Tier 2</b> 10, <b>Tier 3</b> 20, <b>Enterprise</b> unlimited. Set a number in the override box to grant something other than the tier. Filing deals is never metered, for anyone.</p>
   <div class="sheet-wrap"><table class="sheet org-sheet">
     <thead><tr>
-      <th>Organization</th><th>Tier</th><th style="width:96px">Override</th><th>Unlocks used</th>
+      <th>Organization</th><th>ClearSky fees</th><th>Tier</th><th style="width:96px">Override</th><th>Unlocks used</th>
       <th class="num">Deals</th><th class="num">Closed</th><th class="num">Close rate</th>
       <th class="num">Avg size</th><th class="num">Avg check</th><th>By category</th><th style="text-align:right">Reset</th>
     </tr></thead>
@@ -7222,6 +7456,7 @@ function orgsView() {
            <span class="tok-n">${r.used} / ${isFinite(r.limit) ? r.limit : '\u221e'}</span>`;
       return `<tr style="cursor:default">
         <td class="c-name"><div>${esc(r.name)}<span>${esc(r.orgKey)} \u00b7 ${plural(r.people, 'person')}${r.partner ? ' \u00b7 capital' : ''}${r.sponsor ? ' \u00b7 sponsor' : ''}</span></div></td>
+        <td>${orgFeesCell(r)}</td>
         <td><select class="fb-sel" style="padding:5px 8px;font-size:12px" data-act="set-tier" data-val="${esc(r.orgKey)}">
           ${TIER_ORDER.map(t => `<option value="${t}"${r.tier === t ? ' selected' : ''}>${TIERS[t].label}</option>`).join('')}
         </select></td>
@@ -7324,9 +7559,14 @@ const INTAKE_DEFAULTS = {
   firstLookOrgKey: 'amperage-capital',
   firstLookOrgName:'Amperage Capital',
   holdByDefault:   true,              // pre-select "hold" on the approve dialog
-  viewerDisclosure:'named'            // 'named' | 'counts' — see section 12f
+  viewerDisclosure:'named',           // 'named' | 'counts' — see section 12f
+  gateAll:         true               // EVERY filed deal stops for review, whatever its technology
 };
 const MAX_HOLD_DAYS = 90;
+/* "Until I release it": a hold with no clock is stored as one a century out,
+   so the rules' live-window test (request.time < firstLookUntil) still holds
+   and the partner can offer, while nothing ever sweeps it open. */
+const FOREVER_MS = 36500 * 86400000;
 
 let INTAKE = Object.assign({}, INTAKE_DEFAULTS);
 let intakeUnsub = null;
@@ -7351,6 +7591,7 @@ function normaliseIntake(raw) {
   x.firstLookOrgKey = String(x.firstLookOrgKey || '').trim();
   x.firstLookOrgName = String(x.firstLookOrgName || '').trim() || x.firstLookOrgKey;
   x.viewerDisclosure = x.viewerDisclosure === 'counts' ? 'counts' : 'named';
+  x.gateAll = x.gateAll !== false;
   return x;
 }
 
@@ -7398,7 +7639,7 @@ async function saveIntake(patch) {
 }
 
 /* ── Deal state ─────────────────────────────────────────────────────────── */
-const gatedTech   = t => !!INTAKE.gateEnabled && (INTAKE.gateTechs || []).indexOf(t) !== -1;
+const gatedTech   = t => !!INTAKE.gateEnabled && (INTAKE.gateAll || (INTAKE.gateTechs || []).indexOf(t) !== -1);
 const inReview    = d => !!d && d.fsStatus === FS_REVIEW;
 const onHold      = d => !!d && d.fsStatus === FS_HOLD;
 const holdMsLeft  = d => { const u = Number(d && d.firstLookUntil); return isFinite(u) ? u - Date.now() : 0; };
@@ -7412,6 +7653,7 @@ const iHoldFirstLook = d => !!d && Array.isArray(d.firstLookUids)
 const heldBackFromMarket = d => isDraft(d) || inReview(d) || onHold(d);
 
 function holdCountdown(d) {
+  if (d && d.firstLookIndefinite) return 'until released';
   const ms = holdMsLeft(d);
   if (ms <= 0) return 'window closed';
   const hrs = ms / 3600000;
@@ -7450,34 +7692,49 @@ function partnerOrgs() {
 
 /* Approve out of the review queue. mode 'market' publishes; mode 'hold' opens
    the exclusive window for the first-look partner. */
-async function approveDeal(id, mode, days) {
+async function approveDeal(id, mode, days, orgKeyPick, forever) {
   const d = allDeals().find(x => x.id === id);
   if (!d || !d.docId || !FB.ready) return;
   if (!isPlatformAdmin()) return toast('Only an administrator can approve a deal.', true);
 
   const now = Date.now();
-  let patch;
+  let patch, orgName = '';
 
   if (mode === 'hold') {
-    const orgKey = INTAKE.firstLookOrgKey;
+    /* ROUTE TO ONE PARTNER'S DEAL ROOM. Any capital partner with an approved
+       account, not only the Controls default: Budderfly wants particular
+       projects, Amperage wants first look at BESS, and the person deciding
+       is the administrator reading the deal, at the moment they read it. */
+    const orgKey = orgKeyPick || INTAKE.firstLookOrgKey;
+    const org = partnerOrgs().find(o => o.orgKey === orgKey);
     const uids = partnerUidsForOrg(orgKey);
-    if (!orgKey) return toast('Set a first-look partner under Controls first.', true);
+    if (!orgKey) return toast('Pick the capital partner this deal goes to.', true);
+    orgName = org ? org.name : (orgKey === INTAKE.firstLookOrgKey ? INTAKE.firstLookOrgName : orgKey);
     if (!uids.length) {
-      return toast(`No approved capital partner at ${INTAKE.firstLookOrgName} yet — approve their account under People, or publish this straight to the marketplace.`, true);
+      return toast(`No approved capital partner at ${orgName} yet — approve their account under People, or publish this straight to the marketplace.`, true);
     }
-    const n = clampDays(days == null ? INTAKE.firstLookDays : days);
+    const n = forever ? null : clampDays(days == null ? INTAKE.firstLookDays : days);
     patch = {
       status: FS_HOLD,
       approvedAt: now, approvedBy: SESSION.email || SESSION.name,
       firstLookOrgKey: orgKey,
-      firstLookOrgName: INTAKE.firstLookOrgName,
+      firstLookOrgName: orgName,
       firstLookUids: uids,
       firstLookDays: n,
+      firstLookIndefinite: !!forever,
       firstLookStartedAt: now,
-      firstLookUntil: now + n * 86400000,
+      firstLookUntil: forever ? now + FOREVER_MS : now + n * 86400000,
       firstLookDecision: null,
       firstLookDecidedAt: null,
-      firstLookDecidedBy: null
+      firstLookDecidedBy: null,
+      /* The deal room label and address. forOrgId is what the partner's
+         room query and the rules match on; the uid array above is what
+         grants the read even when it is unknown. */
+      'room.forOrg': orgName,
+      'room.forOrgId': orgIdOf(orgKey) || null,
+      'room.state': 'delivered',
+      'room.deliveredAt': now,
+      'room.routedBy': SESSION.email || SESSION.name
     };
   } else {
     patch = {
@@ -7485,6 +7742,7 @@ async function approveDeal(id, mode, days) {
       approvedAt: now, approvedBy: SESSION.email || SESSION.name,
       firstLookUids: [],
       firstLookUntil: null,
+      firstLookIndefinite: false,
       firstLookDecision: null
     };
   }
@@ -7493,7 +7751,7 @@ async function approveDeal(id, mode, days) {
     await FB.db.collection('fin_projects').doc(d.docId).update(patch);
     closeModal();
     toast(mode === 'hold'
-      ? `${d.name} is held for ${INTAKE.firstLookOrgName} for ${plural(patch.firstLookDays, 'day')}.`
+      ? `${d.name} is in ${orgName}'s deal room${forever ? ' until you release it' : ' for ' + plural(patch.firstLookDays, 'day')}.`
       : `${d.name} is on the marketplace.`);
   } catch (err) {
     console.error('[OMEGA] approve failed:', err);
@@ -7535,7 +7793,8 @@ async function releaseHold(id, reason) {
       firstLookDecision: reason || 'released',
       firstLookDecidedAt: Date.now(),
       firstLookDecidedBy: reason === 'expired' ? 'system' : (SESSION.email || SESSION.name),
-      firstLookUntil: null
+      firstLookUntil: null,
+      firstLookIndefinite: false
     });
     if (reason !== 'expired') toast(`${d.name} is open to every capital partner.`);
   } catch (err) {
@@ -7649,14 +7908,24 @@ function passModal(id) {
 const reviewQueue = () => allDeals().filter(d => inReview(d) && !d.sample);
 const heldDeals   = () => allDeals().filter(d => onHold(d) && !d.sample);
 
-function approveModal(id) {
+function approveModal(id, opts) {
   const d = allDeals().find(x => x.id === id); if (!d) return;
-  const uids = partnerUidsForOrg(INTAKE.firstLookOrgKey);
-  const canHold = !!INTAKE.firstLookOrgKey && uids.length > 0;
-  const hold = canHold && INTAKE.holdByDefault;
+  opts = opts || {};
+  if (!orgsLoaded) loadOrgs();
+  const orgs = partnerOrgs().map(o => Object.assign({}, o, {uids: partnerUidsForOrg(o.orgKey).length}))
+                            .filter(o => o.uids > 0);
+  const dflt = orgs.find(o => o.orgKey === INTAKE.firstLookOrgKey) || orgs[0] || null;
+  const canHold = !!dflt;
+  /* routeOnly: the deal is already on the marketplace and is being moved
+     into one partner's room; there is no "straight to marketplace" here. */
+  const routeOnly = !!opts.routeOnly;
+  const hold = routeOnly || (canHold && INTAKE.holdByDefault);
+  const orgNote = o => o
+    ? `${esc(o.name)} sees it and nobody else. ${plural(o.uids, 'account')} at that firm will get it. They can take it or pass; when the window runs out — or you release it — it opens to every capital partner.`
+    : 'No capital partner has an approved account yet, so the only route is the marketplace.';
   openModal(`
   <div class="modal-head">
-    <div><h2>Put this deal on the portal</h2>
+    <div><h2>${routeOnly ? "Move this deal into a partner's deal room" : 'Route this deal'}</h2>
       <div class="mh-sub">${esc(d.name)} · ${esc(d.techName)} · ${esc(d.city)}, ${d.state}</div></div>
     <button class="dr-x" data-act="close-modal" aria-label="Close">&times;</button>
   </div>
@@ -7667,28 +7936,36 @@ function approveModal(id) {
     </div>
 
     <div class="seg" style="margin:18px 0 6px" id="apMode">
-      <button type="button" class="${hold ? 'on' : ''}" data-act="ap-mode" data-val="hold"${canHold ? '' : ' disabled'}>Hold for ${esc(INTAKE.firstLookOrgName)}</button>
-      <button type="button" class="${hold ? '' : 'on'}" data-act="ap-mode" data-val="market">Straight to marketplace</button>
+      <button type="button" class="${hold ? 'on' : ''}" data-act="ap-mode" data-val="hold"${canHold ? '' : ' disabled'}>To a partner's deal room</button>
+      ${routeOnly ? '' : `<button type="button" class="${hold ? '' : 'on'}" data-act="ap-mode" data-val="market">Straight to the marketplace</button>`}
     </div>
 
     <div id="apHold" style="display:${hold ? 'block' : 'none'};margin-top:16px">
-      <div class="field" style="max-width:220px">
-        <label for="apDays">First-look window (days)</label>
-        <input id="apDays" type="number" min="1" max="${MAX_HOLD_DAYS}" step="1" value="${INTAKE.firstLookDays}">
+      <div class="field-row">
+        <div class="field">
+          <label for="apOrg">Capital partner</label>
+          <select id="apOrg">${orgs.map(o => `<option value="${esc(o.orgKey)}"${dflt && o.orgKey === dflt.orgKey ? ' selected' : ''}>${esc(o.name)} · ${plural(o.uids, 'account')}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="max-width:200px">
+          <label for="apDays">Exclusive window (days)</label>
+          <input id="apDays" type="number" min="1" max="${MAX_HOLD_DAYS}" step="1" value="${INTAKE.firstLookDays}">
+        </div>
       </div>
-      <p class="note">${esc(INTAKE.firstLookOrgName)} sees it and nobody else. ${plural(uids.length, 'account')} at that organisation will get it. They can take it or pass; if they do neither, it opens to every capital partner when the clock runs out. Change the default window under <b>Controls</b>.</p>
+      <label class="cond" style="display:flex;gap:10px;align-items:center;margin:2px 0 10px">
+        <input type="checkbox" id="apForever"><span>Keep it in their room until I release it — no clock</span></label>
+      <p class="note" id="apOrgNote">${orgNote(dflt)} Change the default partner and window under <b>Controls</b>.</p>
     </div>
 
     <div id="apMarket" style="display:${hold ? 'none' : 'block'};margin-top:16px">
       <p class="note">Every approved capital partner sees this deal immediately, with no exclusive period.
-      ${canHold ? '' : `<br><br><b>Note:</b> a first-look hold isn't available — ${INTAKE.firstLookOrgKey ? 'there is no approved capital partner at ' + esc(INTAKE.firstLookOrgName) + ' yet' : 'no first-look partner has been set'}. Fix that under ${INTAKE.firstLookOrgKey ? 'People' : 'Controls'}.`}</p>
+      ${canHold ? '' : `<br><br><b>Note:</b> a deal room is not available — no capital partner has an approved account yet. Approve one under <b>People</b>.`}</p>
     </div>
 
     <div class="auth-err" id="modalErr" style="margin-top:14px"></div>
   </div>
   <div class="modal-foot">
-    <button class="btn btn-ghost" data-act="return-deal" data-val="${esc(d.id)}">Send back to sponsor</button>
-    <button class="btn btn-primary" data-act="do-approve" data-val="${esc(d.id)}">Approve and publish</button>
+    ${routeOnly ? '' : `<button class="btn btn-ghost" data-act="return-deal" data-val="${esc(d.id)}">Send back to sponsor</button>`}
+    <button class="btn btn-primary" data-act="do-approve" data-val="${esc(d.id)}">${routeOnly ? 'Move it' : 'Approve and route'}</button>
   </div>`);
 }
 
@@ -7719,6 +7996,8 @@ function returnModal(id) {
 function reviewView() {
   const queue = reviewQueue(), held = heldDeals();
   const gateLabel = (INTAKE.gateTechs || []).map(t => (TECH_BY_ID[t] || {}).name || t).join(', ');
+  const openDeals = allDeals().filter(d => d.fsStatus === FS_OPEN && !d.sample && d.status === 'active');
+  if (!orgsLoaded) loadOrgs();
 
   if (!peopleLoaded) loadPeople();
 
@@ -7756,15 +8035,15 @@ function reviewView() {
   return `
   <div class="kpi-strip">
     ${kpi('Waiting on you', queue.length, '', queue.length ? 'oldest filed ' + esc(dt(queue[0] ? queue[0].submitted : iso(TODAY))) : 'queue is clear', queue.length ? 'up' : '')}
-    ${kpi('On first look', held.length, '', held.length ? esc(INTAKE.firstLookOrgName) : 'nothing held', '')}
+    ${kpi('In deal rooms', held.length, '', held.length ? plural(new Set(held.map(holdOrgName)).size, 'partner') : 'nothing held', '')}
     ${kpi('Windows closed', held.filter(holdExpired).length, '', 'released on next sweep', '')}
-    ${kpi('Gate', INTAKE.gateEnabled ? 'On' : 'Off', '', INTAKE.gateEnabled ? esc(gateLabel || 'nothing selected') : 'everything publishes on filing', '')}
+    ${kpi('Gate', INTAKE.gateEnabled ? 'On' : 'Off', '', INTAKE.gateEnabled ? (INTAKE.gateAll ? 'every deal' : esc(gateLabel || 'nothing selected')) : 'everything publishes on filing', '')}
   </div>
 
   <div class="card" style="margin-bottom:18px">
     <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px">Waiting for approval</h3>
     <p class="note" style="margin-bottom:14px">${INTAKE.gateEnabled
-      ? `Filed ${esc(gateLabel || 'gated')} deals stop here until you put them on the portal. Nobody on the capital side can see them yet.`
+      ? `${INTAKE.gateAll ? 'Every filed deal stops' : `Filed ${esc(gateLabel || 'gated')} deals stop`} here until you route it — to one partner's deal room, or to the open marketplace. Nobody on the capital side can see it yet.`
       : 'The gate is off, so nothing new arrives here. Turn it on under Controls.'}</p>
     ${queue.length ? `<div class="sheet-wrap"><table class="sheet"><thead><tr>
         <th>Deal</th><th>Technology</th><th>Filed by</th><th class="num">MW</th><th class="num">Ask</th><th>Filed</th><th></th>
@@ -7773,12 +8052,30 @@ function reviewView() {
   </div>
 
   <div class="card">
-    <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px">On first look</h3>
-    <p class="note" style="margin-bottom:14px">Held for one partner only. When the window closes — or they pass — the deal opens to everyone automatically.</p>
+    <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px">In a partner's deal room</h3>
+    <p class="note" style="margin-bottom:14px">Held for one partner only. When the window closes — or they pass — the deal opens to everyone automatically. A deal kept until released never opens on its own.</p>
     ${held.length ? `<div class="sheet-wrap"><table class="sheet"><thead><tr>
         <th>Deal</th><th>Held for</th><th>Window</th><th>Their answer</th><th>Closes</th><th></th>
       </tr></thead><tbody>${heldRows}</tbody></table></div>`
       : `<p class="note" style="padding:10px 0">Nothing on hold right now.</p>`}
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h3 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px">On the marketplace</h3>
+    <p class="note" style="margin-bottom:14px">Open to every approved capital partner. Move one into a single partner's deal room and it comes off the open market while they hold it.</p>
+    ${openDeals.length ? `<div class="sheet-wrap"><table class="sheet"><thead><tr>
+        <th>Deal</th><th>Technology</th><th class="num">MW</th><th class="num">Ask</th><th>Filed by</th><th></th>
+      </tr></thead><tbody>${openDeals.map(d => `<tr>
+        <td class="c-name"><div>${esc(d.name)}<span>${esc(d.ref)} · ${esc(d.city)}, ${d.state}</span></div></td>
+        <td><span class="tag" style="color:${d.techColor};background:${d.techColor}18">${esc(d.techName)}</span></td>
+        <td class="num">${unsized(d) ? '—' : num(d.mw)}</td>
+        <td class="num">${d.ask ? usdC(d.ask) : '—'}</td>
+        <td>${esc(d.submittedBy)}<span style="display:block;font-size:11px;color:var(--cs-muted-2)">${esc(d.developer)}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" data-act="push-partner" data-val="${esc(d.id)}">Push to a partner</button>
+          <button class="btn btn-ghost btn-sm" data-act="open" data-val="${esc(d.id)}">Open</button>
+        </td></tr>`).join('')}</tbody></table></div>`
+      : `<p class="note" style="padding:10px 0">Nothing open right now.</p>`}
   </div>`;
 }
 
@@ -7799,6 +8096,14 @@ function controlsView() {
       <select id="ctlGate" data-act="ctl-gate">
         <option value="1"${INTAKE.gateEnabled ? ' selected' : ''}>On — selected technologies queue for review</option>
         <option value="0"${INTAKE.gateEnabled ? '' : ' selected'}>Off — everything goes straight to the marketplace</option>
+      </select>
+    </div>
+
+    <div class="field" style="max-width:520px">
+      <label for="ctlScope">Which deals stop for your review</label>
+      <select id="ctlScope" data-act="ctl-scope">
+        <option value="1"${INTAKE.gateAll ? ' selected' : ''}>Every deal — you route each one to a partner's deal room or to the marketplace</option>
+        <option value="0"${INTAKE.gateAll ? '' : ' selected'}>Only the technologies selected below</option>
       </select>
     </div>
 
@@ -8224,7 +8529,7 @@ function interestPanel(list) {
 
 const TABS_BASE = {
   dev: [['overview','Overview'],['timelines','Timelines'],['deals','My deals']],
-  partner: [['market','Marketplace'],['watchlist','Watchlist'],['coverage','Coverage'],['reports','Reports']]
+  partner: [['room','Deal room'],['market','Marketplace'],['watchlist','Watchlist'],['coverage','Coverage'],['reports','Reports']]
 };
 const TABS = new Proxy({}, {get: (_, k) => {
   const base = (TABS_BASE[k] || TABS_BASE.dev).slice();
@@ -9409,7 +9714,8 @@ function render() {
                      + `<p class="note" style="margin-top:12px">Showing ${filtered().length} of ${myBook().length} deals${
                          S.view === 'map' ? ' — click a state to filter, then switch back to cards or the table' : ''}.</p>`;
   } else {
-    view.innerHTML = S.tab === 'market' ? partnerMarketplace()
+    view.innerHTML = S.tab === 'room' ? partnerRoom()
+                   : S.tab === 'market' ? partnerMarketplace()
                    : S.tab === 'watchlist' ? partnerWatchlist()
                    : S.tab === 'coverage' ? partnerCoverage()
                    : partnerReports();
@@ -9527,9 +9833,12 @@ document.addEventListener('click', e => {
       const on = $('#apMode .on');
       const mode = on ? on.dataset.val : 'market';
       const days = $('#apDays') ? $('#apDays').value : null;
-      approveDeal(val, mode, days);
+      const org = $('#apOrg') ? $('#apOrg').value : null;
+      const forever = !!($('#apForever') && $('#apForever').checked);
+      approveDeal(val, mode, days, org, forever);
       break;
     }
+    case 'push-partner': approveModal(val, {routeOnly: true}); break;
     case 'ctl-tech': {
       const cur = (INTAKE.gateTechs || []).slice();
       const i = cur.indexOf(val);
@@ -9576,6 +9885,12 @@ document.addEventListener('click', e => {
     case 'ask-unlock':   ndaModal(val); break;
     case 'nda-unlock':   unlockDeal(val); break;
     case 'reset-tokens': resetOrgPeriod(val); break;
+    /* fees: what ClearSky earns on a capital partner's deals */
+    case 'edit-fees':    feesModal(val); break;
+    case 'save-fees':    saveFees(val); break;
+    case 'fee-add-row':  { const r = $('#feeRows'); if (r) { r.insertAdjacentHTML('beforeend', feeRowHtml(null)); paintFeePreview(); } break; }
+    case 'fee-rm-row':   { const r = el.closest('.fee-row'); if (r) { r.remove(); paintFeePreview(); } break; }
+    case 'price-offer':  { const [dl, pu] = val.split('|'); priceOfferNow(dl, pu); break; }
     case 'export-orgs':    exportOrgs(); break;
     case 'export-unlocks': exportUnlocks(); break;
     case 'upload-bill':closeDeal(); submitModal(); break;
@@ -9591,6 +9906,14 @@ document.addEventListener('change', e => {
   /* Controls tab. Saved on change rather than behind a Save button — each is
      a single independent setting, and a half-applied form is worse. */
   if (e.target.id === 'ctlGate')    { saveIntake({gateEnabled: e.target.value === '1'}); return; }
+  if (e.target.id === 'ctlScope')   { saveIntake({gateAll: e.target.value === '1'}); return; }
+  if (e.target.id === 'feeWaived' || (e.target.closest && e.target.closest('#feeBody'))) { paintFeePreview(); return; }
+  if (e.target.id === 'apOrg') {
+    const o = partnerOrgs().find(x => x.orgKey === e.target.value);
+    const n = $('#apOrgNote');
+    if (n && o) n.innerHTML = `${esc(o.name)} sees it and nobody else. ${plural(partnerUidsForOrg(o.orgKey).length, 'account')} at that firm will get it. They can take it or pass; when the window runs out — or you release it — it opens to every capital partner. Change the default partner and window under <b>Controls</b>.`;
+    return;
+  }
   if (e.target.id === 'ctlDefault') { saveIntake({holdByDefault: e.target.value === '1'}); return; }
   if (e.target.id === 'ctlDisclose') { saveIntake({viewerDisclosure: e.target.value}); return; }
   if (e.target.id === 'ctlOrg') {
@@ -9640,6 +9963,8 @@ document.addEventListener('change', e => {
 /* search box — keep focus across the re-render */
 let qTimer;
 document.addEventListener('input', e => {
+  if (e.target.id === 'ofAmount') { paintOfferPricing(); return; }
+  if (e.target.closest && e.target.closest('#feeBody')) { paintFeePreview(); return; }
   if (e.target.id !== 'fbq') return;
   const v = e.target.value;
   clearTimeout(qTimer);
@@ -10191,13 +10516,44 @@ async function loadPeople() {
   render();
 }
 
+/* A CAPITAL PARTNER GETS A DEAL ROOM THE DAY THEY ARE APPROVED. The room is
+   their organisation record — fin_orgs/{orgKey} with the org id a delivery
+   is addressed to — plus that id on their profile, so the room query and
+   the rules can match. A self-signed-up partner has neither until now, and
+   without them a deal routed to their firm is readable by nobody. Fees are
+   NOT set here: an unset schedule shows as "Not set" under Organizations,
+   which is a prompt, where a guessed one would be an invoice. */
+async function ensurePartnerRoom(p) {
+  if (!p || p.role !== 'partner') return;
+  const orgKey = p.orgKey || orgKeyOf(p.org); if (!orgKey) return;
+  const domain = String(p.email || '').split('@')[1] || '';
+  const orgId = p.orgId || domain;
+  const patch = {};
+  if (!p.orgKey) patch.orgKey = orgKey;
+  if (!p.orgId && orgId) patch.orgId = orgId;
+  if (Object.keys(patch).length) {
+    await FB.db.collection('fin_profiles').doc(p.uid).update(patch);
+    Object.assign(p, patch);
+  }
+  const orgDoc = {orgKey, name: p.org || orgKey, active: true};
+  if (orgId) orgDoc.orgId = orgId;
+  await FB.db.collection('fin_orgs').doc(orgKey).set(orgDoc, {merge: true});
+  const o = ORGS.find(x => x.orgKey === orgKey);
+  if (o) Object.assign(o, orgDoc); else if (orgsLoaded) ORGS.push(Object.assign({}, orgDoc));
+}
+
 async function setApproved(uid, on) {
   const p = PEOPLE.find(x => x.uid === uid);
   try {
     await FB.db.collection('fin_profiles').doc(uid).update({approved: !!on});
     if (p) p.approved = !!on;
+    let roomNote = '';
+    if (on && p && p.role === 'partner') {
+      try { await ensurePartnerRoom(p); roomNote = ' Their deal room is ready; set their ClearSky fees under Organizations.'; }
+      catch (e) { console.warn('[OMEGA] deal room setup failed:', e); roomNote = ' Their deal room could not be set up — check the fin_orgs rules.'; }
+    }
     render();
-    toast(on ? `${(p && p.name) || 'That partner'} can now see the marketplace.`
+    toast(on ? `${(p && p.name) || 'That partner'} can now see the marketplace.${roomNote}`
              : `Access revoked. ${(p && p.name) || 'They'} will see the pending screen.`);
   } catch (err) {
     console.error('[OMEGA] approval change failed:', err);
@@ -10483,6 +10839,38 @@ async function republish(id) {
 
 const isPlatformAdmin = () => !!SESSION &&
   (SESSION.role === 'admin' || ADMIN_DOMAINS.test(SESSION.email || ''));
+
+/* One way to call /api/*: the signed-in user's ID token as a bearer, JSON
+   both ways, and an Error carrying .status so callers can tell "the server
+   refused" (4xx) from "the server is not there" (503, 404, network). */
+async function apiPost(path, body) {
+  if (!FB.ready || !FB.auth.currentUser) throw Object.assign(new Error('Not signed in.'), {status: 401});
+  const tok = await FB.auth.currentUser.getIdToken();
+  let res;
+  try {
+    res = await fetch(path, {method: 'POST',
+      headers: {'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {})});
+  } catch (e) {
+    throw Object.assign(new Error('The server could not be reached.'), {status: 0, network: true});
+  }
+  let j = null; try { j = await res.json(); } catch (e) {}
+  if (!res.ok) throw Object.assign(new Error((j && j.error) || ('HTTP ' + res.status)), {status: res.status});
+  return j || {};
+}
+
+/* An offer filed while /api/offer was down carries pricingPending; ClearSky
+   prices it from here, against the partner's schedule as it stands now. */
+async function priceOfferNow(dealId, partnerUid) {
+  if (!isPlatformAdmin()) return;
+  try {
+    const r = await apiPost('/api/offer', {dealId, partnerUid, reprice: true});
+    toast('Priced: ' + (r.describe || 'fees applied') + ' — total ' + usdC((r.pricing || {}).total || 0) + '.');
+  } catch (err) {
+    console.error('[OMEGA] re-price failed:', err);
+    toast(err.message || 'The offer could not be priced.', true);
+  }
+}
 
 /* A capital partner reads other companies' deal flow, so an administrator
    admits them first. Sponsors and administrators need no approval. Profiles

@@ -27,6 +27,7 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./_lib/admin');
+var FEES = require('../omega-fees.js');
 
 var ROLES = ['partner', 'developer', 'originator', 'admin'];
 
@@ -80,9 +81,20 @@ module.exports = A.handler(function (req) {
     var tier = clean(b.tier, 30) || 'partner';
     var out = { org: orgId, orgKey: orgKey, accounts: [] };
 
-    var work = db.collection('fin_orgs').doc(orgKey).set({
-      name: name, orgId: orgId, active: true, tier: tier
-    }, { merge: true })
+    /* THE COMMISSION, SET WHEN THE PARTNER IS SET UP. fees is optional:
+       { transactionPct, finders: [{ milestone, pct }], waived, note }.
+       Amperage Capital pays 2.5% at NTP and 2.5% at COD; Budderfly pays 1%
+       of the offer, built onto the price. Normalised here so the record can
+       only ever hold a schedule the portal and /api/offer both understand,
+       and stamped with who set it. Absent, the record is left alone: an
+       unset schedule shows as "not set" in the portal, never as waived. */
+    var orgDoc = { name: name, orgId: orgId, active: true, tier: tier };
+    if (b.fees != null) {
+      orgDoc.fees = FEES.normalize(b.fees);
+      orgDoc.feesSetBy = caller.email || 'clearsky';
+      orgDoc.feesSetAt = Date.now();
+    }
+    var work = db.collection('fin_orgs').doc(orgKey).set(orgDoc, { merge: true })
 
     .then(function () {
       /* A tenant that signed itself up already has a name its own people
