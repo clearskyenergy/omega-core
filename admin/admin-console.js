@@ -1159,6 +1159,103 @@ function referDeal(preset, orgKey){
 }
 window.referDeal = referDeal;
 
+/* ── DASHBOARD PROFILE ─────────────────────────────────────────────────────
+   What kind of company this is decides what its dashboard is for. The table
+   ships in omega-dashboard-profiles.js and every shell reads the same one;
+   this control writes two fields on omega_orgs — dashboardProfile (which row
+   of the table; blank = follow the account type) and dashboardBlocks (only
+   the blocks that differ from that row, so a later change to the table still
+   reaches a tenant that never overrode that block). Nothing here copies the
+   table. */
+var _DASH_ORG = {};
+var _DASH_LABELS = { referrals:'Referrals inbox', quotes:'Quote requests', marketplace:'Marketplace',
+                     assets:'Owned assets', portfolio:'Portfolio', pipeline:'Pipeline',
+                     analytics:'Analytics', taskflow:'Task flow' };
+function _dashWs(orgId){
+  var m=_DASH_ORG[orgId]||{}, sel=document.getElementById('tb-dprof-'+orgId);
+  return { vertical:m.vertical||'', financeOrgKey:m.financeOrgKey||'',
+           dashboardProfile: sel ? sel.value : (m.dashboardProfile||''),
+           dashboardBlocks: m.dashboardBlocks||{} };
+}
+function _dashProfileHtml(orgId, org){
+  if (typeof OmegaDashProfiles === 'undefined') return '';
+  _DASH_ORG[orgId] = { vertical: org.vertical||'', financeOrgKey: org.financeOrgKey||'',
+                       dashboardProfile: org.dashboardProfile||'', dashboardBlocks: org.dashboardBlocks||{} };
+  var P=OmegaDashProfiles.PROFILES, ws=_dashWs(orgId), cur=OmegaDashProfiles.resolve(ws);
+  var auto=OmegaDashProfiles.keyFor({ vertical: ws.vertical, financeOrgKey: ws.financeOrgKey });
+  var h='<div style="margin-top:12px;padding:10px 11px;border:1px solid var(--cs-border,#E1E6EC);border-radius:8px;background:#FBFCFD">';
+  h+='<div class="sub-txt" style="font-weight:600;margin-bottom:6px">Dashboard profile</div>';
+  h+='<select id="tb-dprof-'+esc(orgId)+'" onchange="dashProfilePicked(&quot;'+esc(orgId)+'&quot;)"'
+   + ' style="display:block;width:100%;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">';
+  h+='<option value="">Follow the account type — '+esc(P[auto].label)+'</option>';
+  Object.keys(P).forEach(function(k){
+    h+='<option value="'+esc(k)+'"'+(ws.dashboardProfile===k?' selected':'')+'>'+esc(P[k].label)+'</option>';
+  });
+  h+='</select>';
+  h+='<div class="sub-txt" id="tb-dhint-'+esc(orgId)+'" style="margin:4px 0 8px">'+esc(cur.hint)+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">';
+  Object.keys(_DASH_LABELS).forEach(function(b){
+    h+='<label class="sub-txt" style="display:block"><input type="checkbox" data-dblock="'+b+'" data-org="'+esc(orgId)+'"'
+     + (cur.blocks[b]?' checked':'')+'> '+_DASH_LABELS[b]+'</label>';
+  });
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+   + '<button class="btn" onclick="saveDashProfile(&quot;'+esc(orgId)+'&quot;)">Save dashboard profile</button>'
+   + '<button class="btn" onclick="resetStarterBoard(&quot;'+esc(orgId)+'&quot;)">Reset starter board</button>'
+   + '</div>';
+  h+='<div class="sub-txt" id="tb-dwid-'+esc(orgId)+'" style="margin-top:6px">Starter widgets: '+esc(cur.widgets.join(', '))
+   + '. People add more from the palette; a reset rewrites the org default only, never anybody\'s own arrangement.</div>';
+  h+='</div>';
+  return h;
+}
+/* Picking a row re-ticks the boxes to that row's defaults — the override
+   set starts empty again, which is what "pick a profile" means. */
+function dashProfilePicked(orgId){
+  if (typeof OmegaDashProfiles === 'undefined') return;
+  var ws=_dashWs(orgId); ws.dashboardBlocks={};
+  var p=OmegaDashProfiles.resolve(ws);
+  Array.prototype.forEach.call(document.querySelectorAll('input[data-dblock][data-org="'+orgId+'"]'), function(cb){
+    cb.checked = p.blocks[cb.getAttribute('data-dblock')] === true;
+  });
+  var hint=document.getElementById('tb-dhint-'+orgId); if (hint) hint.textContent=p.hint;
+  var wid=document.getElementById('tb-dwid-'+orgId);
+  if (wid) wid.textContent='Starter widgets: '+p.widgets.join(', ')+'. People add more from the palette; a reset rewrites the org default only, never anybody\'s own arrangement.';
+}
+function saveDashProfile(orgId){
+  if (typeof OmegaDashProfiles === 'undefined') return;
+  var ws=_dashWs(orgId), key=ws.dashboardProfile||'';
+  var baseKey = key || OmegaDashProfiles.keyFor({ vertical: ws.vertical, financeOrgKey: ws.financeOrgKey });
+  var base = OmegaDashProfiles.PROFILES[baseKey].blocks, ov = {};
+  Array.prototype.forEach.call(document.querySelectorAll('input[data-dblock][data-org="'+orgId+'"]'), function(cb){
+    var b=cb.getAttribute('data-dblock');
+    if (cb.checked !== (base[b] === true)) ov[b] = cb.checked;
+  });
+  var FV = firebase.firestore.FieldValue;
+  var patch = { dashboardProfile: key || FV['delete'](),
+                dashboardBlocks: Object.keys(ov).length ? ov : FV['delete'](),
+                dashboardUpdatedAt: FV.serverTimestamp() };
+  db.collection('omega_orgs').doc(orgId).set(patch, { merge:true }).then(function(){
+    var m=_DASH_ORG[orgId]; if (m){ m.dashboardProfile=key; m.dashboardBlocks=ov; }
+    toast('Dashboard profile saved for '+esc(orgId)+'. Their next page load picks it up.');
+  })['catch'](function(e){ adminFail('save the dashboard profile', e); });
+}
+/* omega_orgs/{org}/layouts/default is the first thing a new person's board
+   is built from, ahead of the profile table, so an old one written for a
+   different kind of company would keep winning. This rewrites it to the
+   profile's starter list. Personal layouts (dashboard_layouts) are untouched. */
+function resetStarterBoard(orgId){
+  if (typeof OmegaDashProfiles === 'undefined') return;
+  var p=OmegaDashProfiles.resolve(_dashWs(orgId));
+  if (!window.confirm('Rewrite the org-level starter board for '+orgId+' to:\n\n  '+p.widgets.join(', ')
+      +'\n\nNew people get this board. Anybody who has already arranged their own keeps it.')) return;
+  var u=(firebase.auth().currentUser||{});
+  db.collection('omega_orgs').doc(orgId).collection('layouts').doc('default').set({
+    widgets: p.widgets, profile: p.key,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: u.email||''
+  }, { merge:true }).then(function(){ toast('Starter board reset for '+esc(orgId)+'.'); })
+  ['catch'](function(e){ adminFail('reset the starter board', e); });
+}
+
 /* Staff-only endpoints want a bearer token. Kept in one place so a missing
    sign-in fails loudly here rather than as a 401 with no explanation. */
 function _authedPost(path, body){
@@ -2336,6 +2433,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '<div><div class="sub-txt">Vertical</div><div style="font:700 20px system-ui">'+esc(org.vertical||'—')+'</div></div>'
    + '</div>';
   h+='<div class="sub-txt" style="margin-top:10px">Hostnames: '+esc((org.domains||[]).join(', ')||'—')+'</div>';
+  h+=_dashProfileHtml(orgId, org);
   h+='</div></div>';
 
   /* ── PROJECTS SHARED WITH THEM ────────────────────────────────────────

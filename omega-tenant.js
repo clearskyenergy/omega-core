@@ -399,6 +399,14 @@
        needed to put them on a project's roster when one is sent over. */
     if (T.org && T.org.jdRole) ws.jdRole = T.org.jdRole;
     if (T.org && T.org.jdPartnerOrg) ws.jdPartnerOrg = T.org.jdPartnerOrg;
+    /* The dashboard profile and per-block overrides, set from the admin
+       console. omega-dashboard-profiles.js turns these plus the vertical into
+       what mounts; publishing them here is what lets that be synchronous. */
+    if (T.org && T.org.dashboardProfile) ws.dashboardProfile = T.org.dashboardProfile;
+    if (T.org && T.org.dashboardBlocks && typeof T.org.dashboardBlocks === 'object')
+      ws.dashboardBlocks = T.org.dashboardBlocks;
+    if (T.org && typeof T.org.financeOrgKey === 'string' && T.org.financeOrgKey)
+      ws.financeOrgKey = T.org.financeOrgKey;
     /* unlockedTools is what applyToolLocks() reads. Compute it from the
        catalog when omega-tools.js is present; otherwise leave config's. */
     if (global.OMEGATools && OMEGATools.catalog) {

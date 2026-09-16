@@ -72,11 +72,11 @@ ok(/orphan/.test(T._note || ''), 'the note warns that renaming orgKey orphans de
 
 console.log('\nthe dashboard panels');
 const idx = code('index.html');
-['finroom', 'finoffers', 'fininvest'].forEach(t => {
+['finroom', 'finmarket', 'finoffers', 'fininvest'].forEach(t => {
   ok(new RegExp("type:'" + t + "'").test(idx), t + ' is in the widget palette');
 });
-ok(/_PANEL_TYPES\s*=\s*\['finroom','finoffers','fininvest'\]/.test(idx),
-   'all three are registered as panel widgets, not charts');
+ok(/_PANEL_TYPES\s*=\s*\['finroom','finmarket','finoffers','fininvest'\]/.test(idx),
+   'all four are registered as panel widgets, not charts');
 ok(/_drawableTypes[\s\S]{0,400}concat\(_PANEL_TYPES\)/.test(idx),
    'and the drawable list includes them, so a saved layout can restore one');
 ok(/if\s*\(_isPanelType\(type\)\)/.test(idx),

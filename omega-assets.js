@@ -122,6 +122,13 @@
       /* Resolved with no vertical recorded: show it, which is how this
          behaved before the gate and keeps un-backfilled tenants whole. */
       byVertical = !vertical ? true : (OWNER_VERTICALS[vertical] === 1);
+      /* The profile table wins over the local list when it is on the page —
+         it carries the admin console's per-tenant override, which this list
+         cannot. */
+      if (global.OmegaDashProfiles) {
+        var want = global.OmegaDashProfiles.wants(ws, 'assets');
+        if (want !== 'unknown') byVertical = want;
+      }
     }
 
     return {

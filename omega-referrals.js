@@ -177,6 +177,14 @@
        module is not on the page at all there is nothing to wait for. */
     if (global.OmegaJdNav && !ws._tenantFlagsAt) return 'unknown';
     if (ws.financeOrgKey) return false;
+    /* ONE TABLE. omega-dashboard-profiles.js says whether this kind of
+       company receives quote requests at all — an installer does not, an OEM
+       does — and carries the admin console's per-tenant override. The
+       vertical list below is only the fallback for a page without it. */
+    if (global.OmegaDashProfiles) {
+      var want = global.OmegaDashProfiles.wants(ws, 'referrals');
+      if (want !== 'unknown') return want;
+    }
     var v = String(ws.vertical || '').toLowerCase();
     /* Resolved, but no vertical recorded. Show it — that is how this behaved
        before the gate existed, and nobody should lose an inbox they are

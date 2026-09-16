@@ -2634,6 +2634,7 @@ window._omegaReady = function(){
      the Joint Development nav, shared by every shell. -->
 <script src="/omega-auth-errors.js?v=1"></script>
 <script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-dashboard-profiles.js?v=1"></script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
 <!-- Terms of Service acceptance gate. Shared platform file, no tenant data.
@@ -5934,6 +5935,7 @@ var DASH = (function(){
        wants to know WHICH deals arrived overnight and what they owe an answer
        on — a bar chart of a count answers neither. */
     { key:'w-finroom',   type:'finroom',   name:'Deal Room — new arrivals', verticals:[] },
+    { key:'w-finmarket', type:'finmarket', name:'Marketplace — open deals',  verticals:[] },
     { key:'w-finoffers', type:'finoffers', name:'Offers I have made',       verticals:[] },
     { key:'w-fininvest', type:'fininvest', name:'Investments',              verticals:[] },
 
@@ -5979,7 +5981,7 @@ var DASH = (function(){
   /* Chart widgets draw into a canvas; panel widgets write HTML. Keeping the
      two lists separate is what lets _makeWidgetBlock build the right shell —
      a panel widget given a canvas renders nothing at all, silently. */
-  var _PANEL_TYPES = ['finroom','finoffers','fininvest'];
+  var _PANEL_TYPES = ['finroom','finmarket','finoffers','fininvest'];
   function _isPanelType(t){ return _PANEL_TYPES.indexOf(t) >= 0; }
   function _drawableTypes(){
     return ['stage','ptype','capex','owner','storage','pl','plproj','incent','matrix','funnel','fleet']
@@ -6031,7 +6033,13 @@ var DASH = (function(){
     // hidden
     blocks().forEach(function(b){
       var k=b.getAttribute('data-block');
-      b.style.display = (state.hidden.indexOf(k)>=0 && !editing) ? 'none' : '';
+      /* Blocks the tenant's profile turns off. Kept apart from state.hidden,
+         which is the user's own arrangement: a profile change from the admin
+         console must take effect without touching what people have arranged.
+         In edit mode everything shows, so a card can still be found. */
+      var profHidden = (window.OmegaDashProfiles && window.OMEGA_WORKSPACE)
+        ? OmegaDashProfiles.hiddenBlockIds(window.OMEGA_WORKSPACE) : [];
+      b.style.display = ((state.hidden.indexOf(k)>=0 || profHidden.indexOf(k)>=0) && !editing) ? 'none' : '';
       if (state.sizes[k]==='half') b.classList.add('db-w1'); else b.classList.remove('db-w1');
     });
   }
@@ -6063,7 +6071,7 @@ var DASH = (function(){
      for anything wider would be refused by the rules, and should be — so the
      panels ask for exactly their own row and say plainly when they cannot
      get it, rather than rendering an empty card that reads as "no deals". */
-  var _FIN = { key:null, loaded:false, room:[], offers:[], err:null };
+  var _FIN = { key:null, loaded:false, room:[], offers:[], market:[], err:null };
 
   /* The workspace object is built from the client-side registry, which does
      not necessarily carry fields written to omega_orgs by provisioning. So:
@@ -6152,7 +6160,9 @@ var DASH = (function(){
                    .collection('offers').doc(uid).get()
             .then(function(o){
               if(o && o.exists) _FIN.offers.push(Object.assign(
-                { dealId:d.docId, dealName:d.name||d.docId }, o.data()));
+                { dealId:d.docId, dealName:d.name||d.docId,
+                  dealMw:d.mw!=null?d.mw:d.sizeMw, dealCapexUsd:d.capexUsd,
+                  dealState:d.state||'' }, o.data()));
             })['catch'](function(e){ _FIN.offersErr=_FIN.offersErr||e; });
         }));
       });
@@ -6165,7 +6175,12 @@ var DASH = (function(){
             _FIN.offersScope = 'all';
           })['catch'](function(){ return _offersPerDeal(); });
 
-    Promise.all([roomQ, offerQ]).then(function(){ _FIN.loaded=true; cb&&cb(); });
+    /* The open marketplace — what a capital partner can bid on today. status
+       == 'open' is one of the three reads the rules grant a partner. */
+    var marketQ = db.collection('fin_projects').where('status','==','open').get()
+      .then(function(sn){ _FIN.market = sn.docs.map(function(d){ return Object.assign({docId:d.id}, d.data()); }); })
+      ['catch'](function(e){ _FIN.marketErr=e; });
+    Promise.all([roomQ, offerQ, marketQ]).then(function(){ _FIN.loaded=true; cb&&cb(); });
     });
   }
 
@@ -6182,6 +6197,7 @@ var DASH = (function(){
       if(_FIN.err==='nodb'){ host.innerHTML=_finNote('Not connected.'); return; }
       try{
         if(type==='finroom')   host.innerHTML=_finRoomHtml();
+        else if(type==='finmarket') host.innerHTML=_finMarketHtml();
         else if(type==='finoffers') host.innerHTML=_finOffersHtml();
         else if(type==='fininvest') host.innerHTML=_finInvestHtml();
       }catch(e){ host.innerHTML=_finNote('Could not draw this panel.'); }
@@ -6219,6 +6235,28 @@ var DASH = (function(){
     return h;
   }
 
+  /* 1b. The open marketplace: how many, how big, how much. Sums of what is
+     on the documents and nothing modelled — these are the numbers a capital
+     partner quotes to their own committee. */
+  function _finMarketHtml(){
+    if(_FIN.marketErr) return _finNote('The marketplace could not be read. Contact your account administrator.');
+    var m=_FIN.market||[];
+    if(!m.length) return _finNote('No open deals on the marketplace right now.');
+    var mw=0,capex=0,withMw=0,withCapex=0,states={};
+    m.forEach(function(d){
+      var w=Number(d.mw!=null?d.mw:d.sizeMw); if(isFinite(w)&&w>0){mw+=w;withMw++;}
+      var c=Number(d.capexUsd); if(isFinite(c)&&c>0){capex+=c;withCapex++;}
+      if(d.state) states[d.state]=1;
+    });
+    var h='<div class="fin-stats">'
+      + '<div><span class="fin-n">'+m.length+'</span><span class="fin-k">open deals</span></div>'
+      + '<div><span class="fin-n">'+(withMw?mw.toFixed(1):'\u2014')+'</span><span class="fin-k">MW listed'+(withMw&&withMw<m.length?' \u00b7 '+withMw+' sized':'')+'</span></div>'
+      + '<div><span class="fin-n">'+(withCapex?_finMoney(capex):'\u2014')+'</span><span class="fin-k">capex sought'+(withCapex&&withCapex<m.length?' \u00b7 '+withCapex+' priced':'')+'</span></div>'
+      + '<div><span class="fin-n">'+Object.keys(states).length+'</span><span class="fin-k">states</span></div>'
+      + '</div>';
+    return h+'<div class="fin-more"><a href="/portals/finance/">Open the marketplace \u203a</a></div>';
+  }
+
   /* 2. What we have offered, and what came back. */
   function _finOffersHtml(){
     if(_FIN.offersErr) return _finNote('Your offers could not be read. '
@@ -6253,11 +6291,21 @@ var DASH = (function(){
     var total=won.reduce(function(a,x){ return a+(Number(x.amountUsd||x.amount||0)||0); },0);
     var h='<div class="fin-lead"><b>'+won.length+'</b> position'+(won.length===1?'':'s')
       + (total>0 ? ' \u00b7 '+_finMoney(total)+' committed' : '')+'</div><ul class="fin-list">';
+    /* An accepted offer IS the investment from the moment it is accepted:
+       ClearSky arranges terms and the transaction after that, but the
+       position exists now and the partner should see it now. */
+    won.sort(function(a,b){ return (+b.decidedAt||0)-(+a.decidedAt||0); });
     won.slice(0,6).forEach(function(x){
+      var bits=[];
+      if(x.dealMw!=null&&isFinite(+x.dealMw)) bits.push((+x.dealMw)+' MW');
+      if(x.dealCapexUsd) bits.push(_finMoney(x.dealCapexUsd)+' capex');
+      if(x.amountUsd||x.amount) bits.push(_finMoney(x.amountUsd||x.amount)+' offered');
+      if(x.rate) bits.push(_finEsc(x.rate)+'%');
+      if(x.decidedAt) bits.push('accepted '+_finEsc(_finWhen(x.decidedAt)));
       h+='<li><a href="/portals/finance/dealroom.html?p='+encodeURIComponent(x.dealId||'')+'">'
-        + '<span class="fin-name">'+_finEsc(x.dealName||x.dealId||'Deal')+'</span>'
-        + '<span class="fin-meta">'+(x.amountUsd||x.amount?_finMoney(x.amountUsd||x.amount):'')
-        + (x.rate?' \u00b7 '+_finEsc(x.rate)+'%':'')+'</span></a></li>';
+        + '<span class="fin-name">'+_finEsc(x.dealName||x.dealId||'Deal')
+        + (x.dealState?' <span class="fin-meta">'+_finEsc(x.dealState)+'</span>':'')+'</span>'
+        + '<span class="fin-meta">'+bits.join(' \u00b7 ')+'</span></a></li>';
     });
     return h+'</ul>';
   }
@@ -6620,13 +6668,23 @@ var TC={bess:'#2B5FA8',dcfc:'#2B5FA8',solar:'#F0A030',
     var ws = window.OMEGA_WORKSPACE || {};
     var org = ws.orgId || (typeof currentOrg !== 'undefined' ? currentOrg : '');
     if (typeof db==='undefined' || !db){ done&&done(); return; }
+    /* verticals/{v}.defaultWidgets, then the profile table. The collection
+       was designed but never seeded, so every tenant fell through to an empty
+       board; the table ships in code and is the same answer the admin console
+       shows, so the two cannot disagree. */
+    var byProfile = function(){
+      var p = (window.OmegaDashProfiles && OmegaDashProfiles.resolve(ws)) || null;
+      if (p) _addStarter(p.widgets);
+      done&&done();
+    };
     var byVertical = function(){
       var v = ws.vertical || '';
-      if (!v){ done&&done(); return; }
+      if (!v){ byProfile(); return; }
       db.collection('verticals').doc(v).get().then(function(d){
-        _addStarter((d && d.exists && (d.data()||{}).defaultWidgets) || []);
-        done&&done();
-      })['catch'](function(){ done&&done(); });
+        var list = (d && d.exists && (d.data()||{}).defaultWidgets) || [];
+        if (_addStarter(list) > 0){ done&&done(); return; }
+        byProfile();
+      })['catch'](byProfile);
     };
     if (!org){ byVertical(); return; }
     db.collection('omega_orgs').doc(org).collection('layouts').doc('default').get()
