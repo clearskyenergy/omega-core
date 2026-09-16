@@ -8,6 +8,10 @@
 'use strict';
 var fs = require('fs'), path = require('path');
 var APPLY = process.argv.indexOf('--apply') >= 0, FORCE = process.argv.indexOf('--force') >= 0;
+/* --create-owners: with --apply, create an Auth account for each tenant's
+   ownerEmail that has none yet (no password set), and print — and email,
+   when the mail transport is configured — Firebase's set-password link. */
+var CREATE_OWNERS = process.argv.indexOf('--create-owners') >= 0;
 var root = path.join(__dirname, '..', 'tenants');
 var seeds = fs.readdirSync(root).filter(function (d) { return fs.existsSync(path.join(root, d, 'tenant.json')); })
   .map(function (d) { var t = JSON.parse(fs.readFileSync(path.join(root, d, 'tenant.json'))); t.slug = d; return t; });
@@ -48,8 +52,40 @@ function mergeKeep(ref, data) { return ref.get().then(function (s) { var cur = s
     await mergeKeep(ref.collection('billing').doc('current'), p.billing);
     for (var h = 0; h < p.pub.domains.length; h++) await mergeKeep(db.collection('tenant_public').doc(String(p.pub.domains[h]).toLowerCase()), p.pub);
     if (p.owner) {
-      try { var u = await admin.auth().getUserByEmail(p.owner); await mergeKeep(ref.collection('members').doc(u.uid), { email: p.owner.toLowerCase(), role: 'owner', status: 'active' }); await admin.auth().setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { orgId: p.orgId, role: 'owner' })); console.log('  owner set:', p.owner); }
-      catch (e) { console.log('  owner NOT set (no Auth user yet?):', p.owner, e.message); }
+      try {
+        var u = null;
+        try { u = await admin.auth().getUserByEmail(p.owner); }
+        catch (e0) {
+          /* --create-owners: stand the owner's account up WITHOUT a password
+             and hand back Firebase's own set-password link, so the person
+             chooses their password and nobody here ever handles one. */
+          if (!CREATE_OWNERS || !(e0 && e0.code === 'auth/user-not-found')) throw e0;
+          u = await admin.auth().createUser({ email: p.owner.toLowerCase(), emailVerified: false, displayName: p.org.name });
+          console.log('  owner account created (no password):', p.owner);
+        }
+        await mergeKeep(ref.collection('members').doc(u.uid), { email: p.owner.toLowerCase(), role: 'owner', status: 'active' });
+        await admin.auth().setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { orgId: p.orgId, role: 'owner' }));
+        console.log('  owner set:', p.owner);
+        if (CREATE_OWNERS) {
+          var host = p.pub.domains[0] || (p.org.slug + '.clearskyomega.com');
+          var link = await admin.auth().generatePasswordResetLink(p.owner.toLowerCase(), { url: 'https://' + host + '/' });
+          console.log('  set-password link for ' + p.owner + ' (valid ~1 hour):\n    ' + link);
+          try {
+            var M = require('../api/_lib/mail');
+            if (M && typeof M.configured === 'function' && M.configured()) {
+              var html = M.layout('Your ' + p.org.name + ' workspace is ready',
+                '<p>ClearSky has set up <b>' + M.esc(p.org.name) + '</b> on ClearSky-OMEGA at <b>' + M.esc(host) + '</b>.</p>'
+                + '<p>Choose your password to get in. The link is good for about an hour; after that, use “Forgot password” on the sign-in page with this address.</p>'
+                + M.button(link, 'Set your password')
+                + '<p>Colleagues at ' + M.esc(p.orgId) + ' can sign in with their work email and will join your workspace automatically.</p>');
+              var r = await M.send(p.owner.toLowerCase(), p.org.name + ' on ClearSky-OMEGA — set your password', html,
+                'Your ' + p.org.name + ' workspace is ready at https://' + host + '/. Set your password: ' + link);
+              console.log('  set-password email:', (r && r.ok) ? 'sent' : ('not sent — ' + ((r && (r.error || (r.skipped && 'no mailbox configured'))) || 'send failed')));
+            } else console.log('  set-password email: not sent — no mail transport configured; send the link above yourself.');
+          } catch (em) { console.log('  set-password email: not sent —', em.message); }
+        }
+      }
+      catch (e) { console.log('  owner NOT set (no Auth user yet? pass --create-owners to create one):', p.owner, e.message); }
     }
     console.log('written:', p.orgId);
   }
