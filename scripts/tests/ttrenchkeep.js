@@ -60,6 +60,9 @@ global._dcfcDraw = null;
 
 /* load the functions under test */
 (0, eval)(grabFn('_dcfcNearestOnPoly'));
+(0, eval)(grabFn('_polyLen'));
+(0, eval)(grabFn('_dcfcPathBack'));
+(0, eval)(grabFn('_dcfcReanchorRun'));
 (0, eval)(grabFn('_dcfcSnapOrExtend'));
 (0, eval)(grabFn('trenchTotals'));
 (0, eval)('var _dcfcStartPlacing; ' + grabAssign('_dcfcStartPlacing'));
@@ -70,15 +73,26 @@ global._dcfcDraw = null;
 console.log('\nsnap or extend');
 {
   const run = { id: 'r', pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }] };
-  const st = { _lastEnd: { x: 100, y: 0 } };
-  const beside = _dcfcSnapOrExtend(run, { x: 50, y: 20 }, st);
-  chk('a click beside the run snaps onto it', near(beside.x, 50) && near(beside.y, 0) && !beside.extended && run.pts.length === 2);
+  S._trenches = [run];
+  const st = { _lastEnd: { x: 100, y: 0 }, _buildId: 'b1' };
+  const beside = _dcfcSnapOrExtend(run, { x: 50, y: 8 }, st);
+  chk('a click on the trench (within ~2 ft) snaps onto it', near(beside.x, 50) && near(beside.y, 0) && !beside.extended && !beside.spur && run.pts.length === 2);
   const nudge = _dcfcSnapOrExtend(run, { x: 104, y: 0 }, st);
   chk('a click a few px past the end still snaps to the end', near(nudge.x, 100) && !nudge.extended && run.pts.length === 2);
   const past = _dcfcSnapOrExtend(run, { x: 160, y: 30 }, st);
   chk('a click well past the end extends the run to the click', !!past.extended && run.pts.length === 3 && near(past.x, 160) && near(past.y, 30) && past.seg === 2, JSON.stringify(run.pts));
   chk('the build chains its next run from the new end', st._lastEnd.x === 160 && st._lastEnd.y === 30);
   chk('the trench layer was redrawn', calls.render > 0);
+  /* off the trench: a spur from the nearest point, the device stays put */
+  const off = _dcfcSnapOrExtend(run, { x: 50, y: 60 }, st);
+  chk('a click off the trench starts a spur from the nearest point', !!off.spur && near(off.x, 50) && near(off.y, 60) && off.run && off.run.spurOf === 'r' && off.run.spurSeg === 1, JSON.stringify(off));
+  chk('the spur is a run in its own right, tapping the parent at the right distance', S._trenches.length === 2 && near(off.run.pts[0].x, 50) && near(off.run.pts[0].y, 0) && near(off.run.spurTapFt, 50 / 6, 0.1));
+  const back = _dcfcPathBack(off.run, 1).map(p => p.x + ',' + p.y).join(' ');
+  chk('a leg on the spur walks the spur, then the parent, back to the start', back === '50,0 0,0', back);
+  const onSpur = _dcfcSnapOrExtend(run, { x: 52, y: 30 }, st);
+  chk('the next click near the spur lands on the spur, not the parent', !onSpur.spur && !onSpur.extended && onSpur.run === off.run && near(onSpur.x, 50), JSON.stringify(onSpur));
+  const beyondSpur = _dcfcSnapOrExtend(run, { x: 50, y: 120 }, st);
+  chk('a click past the spur\'s end extends the spur', !!beyondSpur.extended && beyondSpur.run === off.run && off.run.pts.length === 3 && st._lastEnd.x === 160, JSON.stringify(off.run.pts));
 }
 
 console.log('\ntrench totals');

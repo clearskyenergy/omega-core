@@ -554,14 +554,98 @@
         "allowedEmails": []
       },
       "owner": null
-    }
-  ],
-  "skipped": [
+    },
     {
-      "slug": "osa",
-      "hosts": [
-        "osa.clearskyomega.com"
-      ]
+      "orgId": "budderfly.com",
+      "org": {
+        "name": "Budderfly",
+        "slug": "budderfly",
+        "domains": [
+          "budderfly.clearskyomega.com"
+        ],
+        "logoUrl": "",
+        "vertical": "developer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Budderfly",
+          "logo": ""
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": "2026-10-16T12:00:00.000Z",
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "budderfly.com",
+        "name": "Budderfly",
+        "logoUrl": "",
+        "colors": null,
+        "exportBrand": {
+          "name": "Budderfly",
+          "logo": ""
+        },
+        "tier": "trial",
+        "vertical": "developer",
+        "shell": "default",
+        "domains": [
+          "budderfly.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": "kevin.morgan@budderfly.com"
+    },
+    {
+      "orgId": "eastwestenergy.ai",
+      "org": {
+        "name": "East West Energy",
+        "slug": "eastwestenergy",
+        "domains": [
+          "eastwestenergy.clearskyomega.com"
+        ],
+        "logoUrl": "",
+        "vertical": "developer",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "East West Energy",
+          "logo": ""
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": "2026-10-16T12:00:00.000Z",
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "eastwestenergy.ai",
+        "name": "East West Energy",
+        "logoUrl": "",
+        "colors": null,
+        "exportBrand": {
+          "name": "East West Energy",
+          "logo": ""
+        },
+        "tier": "trial",
+        "vertical": "developer",
+        "shell": "default",
+        "domains": [
+          "eastwestenergy.clearskyomega.com"
+        ],
+        "requiredTools": null,
+        "allowedEmails": []
+      },
+      "owner": "michael.duhs@eastwestenergy.ai"
     }
   ]
 }

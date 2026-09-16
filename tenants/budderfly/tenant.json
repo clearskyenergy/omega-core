@@ -1,0 +1,16 @@
+{
+  "orgId": "budderfly.com",
+  "name": "Budderfly",
+  "domains": [
+    "budderfly.clearskyomega.com"
+  ],
+  "vertical": "developer",
+  "tier": "trial",
+  "trialEndsAt": "2026-10-16T12:00:00.000Z",
+  "logoUrl": "",
+  "shell": "default",
+  "status": "active",
+  "receivesFullBom": false,
+  "ownerEmail": "kevin.morgan@budderfly.com",
+  "_note": "Added 2026-09-16. Energy-efficiency-as-a-service; funds the upgrades it installs (budderfly.com), so on the financing marketplace they sit on the capital side. orgId is the email domain their people sign in with; domains[] is the hostname the workspace answers on. ownerEmail is set as owner by scripts/seed-omega-orgs.js once that person has signed in; until then the first sign-in from the domain joins as a member."
+}

@@ -1,0 +1,16 @@
+{
+  "orgId": "eastwestenergy.ai",
+  "name": "East West Energy",
+  "domains": [
+    "eastwestenergy.clearskyomega.com"
+  ],
+  "vertical": "developer",
+  "tier": "trial",
+  "trialEndsAt": "2026-10-16T12:00:00.000Z",
+  "logoUrl": "",
+  "shell": "default",
+  "status": "active",
+  "receivesFullBom": false,
+  "ownerEmail": "michael.duhs@eastwestenergy.ai",
+  "_note": "Added 2026-09-16. Strategic advisor / integrator across data centres, generation, BESS and capital (eastwestenergy.ai); using the editor and the financing marketplace. orgId is the email domain their people sign in with; domains[] is the hostname the workspace answers on. ownerEmail is set as owner by scripts/seed-omega-orgs.js once that person has signed in; until then the first sign-in from the domain joins as a member."
+}

@@ -13778,10 +13778,29 @@ function trenchTotals(){
       var r=byRun[c.evRun];
       if(!r){ r=byRun[c.evRun]={ along:0, lateral:0, n:0 }; runOrder.push(c.evRun); }
       var q=parts(c);
+      /* A leg records how far along its OWN run it taps (evRunFt). A leg on
+         a spur also runs on through the parent run, which is dug in its own
+         right below — counting the leg's full length here would dig the
+         shared stretch twice. */
+      if(c.evRunFt!=null && isFinite(+c.evRunFt)) q.along=+c.evRunFt;
       if(q.along>r.along) r.along=q.along;
       r.lateral+=q.lateral; r.n++;
       seen[c.id]=true;
     });
+    /* A spur digs its parent as far as the tap, whether or not a charger
+       sits that far along the parent. */
+    try{
+      var _rb={}; (S._trenches||[]).forEach(function(t){ if(t && t.id) _rb[t.id]=t; });
+      runOrder.slice().forEach(function(k){
+        var t=_rb[k], g=0;
+        while(t && t.spurOf && g++<8){
+          var pr=byRun[t.spurOf];
+          if(!pr){ pr=byRun[t.spurOf]={ along:0, lateral:0, n:0 }; runOrder.push(t.spurOf); }
+          if((+t.spurTapFt||0)>pr.along) pr.along=+t.spurTapFt||0;
+          t=_rb[t.spurOf];
+        }
+      });
+    }catch(e){}
     runOrder.forEach(function(k){ ft+=byRun[k].along+byRun[k].lateral; if(byRun[k].n>1) corridors++; });
 
     /* 2. HAND-DRAWN RUNS WHOSE ROUTES COINCIDE share one excavation. A group
@@ -65718,31 +65737,80 @@ function _dcfcNearestOnPoly(pts, p){
    was, and its conduit follows the run back like every other leg. A click
    beside the run still snaps onto it. `st` is the build state whose
    _lastEnd chains the next run from the end of this one. */
-function _dcfcSnapOrExtend(run, p, st){
-  var snap=_dcfcNearestOnPoly(run.pts, p);
-  if(!snap || !run.pts || run.pts.length<2) return snap;
-  var last=run.pts[run.pts.length-1];
-  var onEnd = snap.seg===run.pts.length-1 && Math.hypot(snap.x-last.x, snap.y-last.y)<0.5;
-  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
-  var beyond=Math.hypot(p.x-last.x, p.y-last.y);
-  if(!onEnd || beyond < Math.max(8, ppf*1.5)) return snap;
-  run.pts.push({ x:p.x, y:p.y });
-  /* The run's ground anchor no longer matches its vertices. Re-cut it from
-     the pixels now, so the next map idle does not pull the new leg back.
-     If it cannot be re-cut here (no live map state, or mid-reproject),
-     drop the stale anchor: _geoStampAll re-cuts an unanchored run on the
-     next pushHist, but skips one that still has an anchor, and the
-     reprojector moves only as many vertices as the anchor has. */
+/* Vertices from a tap on `run` back to where its trench starts, walking a
+   spur into the run it taps. Excludes the tap point itself. */
+function _dcfcPathBack(run, seg, depth){
+  var out=[]; if(!run || !run.pts) return out; depth=depth||0;
+  for(var i=seg-1;i>=0;i--) out.push({ x:run.pts[i].x, y:run.pts[i].y });
+  if(run.spurOf && depth<8){
+    var parent=null;
+    try{ parent=(S._trenches||[]).filter(function(t){ return t && t.id===run.spurOf; })[0]||null; }catch(e){}
+    if(parent) out=out.concat(_dcfcPathBack(parent, run.spurSeg||1, depth+1));
+  }
+  return out;
+}
+try{ window._dcfcPathBack=_dcfcPathBack; }catch(e){}
+
+/* The run's ground anchor no longer matches its vertices. Re-cut it from
+   the pixels now, so the next map idle does not pull the new leg back. If
+   it cannot be re-cut here (no live map state, or mid-reproject), drop the
+   stale anchor: _geoStampAll re-cuts an unanchored run on the next
+   pushHist, but skips one that still has an anchor, and the reprojector
+   moves only as many vertices as the anchor has. */
+function _dcfcReanchorRun(run){
   try{
     if(run._geoPts!==undefined){
       if(typeof _geoRestampOne==='function') _geoRestampOne(run);
       if(!(run._geoPts && run._geoPts.length===run.pts.length)) delete run._geoPts;
     }
   }catch(e){ try{ delete run._geoPts; }catch(e2){} }
-  if(st && st._lastEnd) st._lastEnd={ x:p.x, y:p.y };
+}
+
+/* ── WHERE A CLICK LANDS ON THE TRENCH ───────────────────────────────
+   ON the trench (within about two feet): the device snaps onto it.
+   PAST THE END of a run: the run extends to the click.
+   OFF the trench anywhere else: a SPUR runs from the nearest point on the
+   trench to the click, the device stays where it was clicked, and its
+   conduit follows the spur, then the trench, back to the panel. A panel in
+   the middle of a row feeds both directions off one trench without digging
+   it twice (Thomas, 2026-09-16): the spur is dug once, its parent is dug
+   once as far as the tap, and the totals count it that way. Spurs join the
+   build's family of runs, so the next click near a spur lands on it. */
+function _dcfcSnapOrExtend(run, p, st){
+  if(!run || !run.pts || run.pts.length<2) return null;
+  var ppf=(typeof S!=='undefined' && S.pxPerFt>0) ? S.pxPerFt : 6;
+  var tol=Math.max(8, ppf*2);
+  var all=(typeof S!=='undefined' && S._trenches) ? S._trenches : [];
+  /* the trench family: this run and every spur hanging off it, or off those */
+  var fam=[run], ids={}; ids[run.id]=1;
+  for(var pass=0; pass<8; pass++){
+    var grew=false;
+    all.forEach(function(t){ if(t && t.pts && t.pts.length>1 && !ids[t.id] && t.spurOf && ids[t.spurOf]){ ids[t.id]=1; fam.push(t); grew=true; } });
+    if(!grew) break;
+  }
+  var best=null, on=null;
+  fam.forEach(function(t){ var sn=_dcfcNearestOnPoly(t.pts, p); if(sn && (!best || sn.dist<best.dist)){ best=sn; on=t; } });
+  if(!best) return null;
+  best.run=on;
+  if(best.dist<=tol) return best;                       /* on the trench */
+  var last=on.pts[on.pts.length-1];
+  var onEnd = best.seg===on.pts.length-1 && Math.hypot(best.x-last.x, best.y-last.y)<0.5;
+  if(onEnd){                                            /* past the end: extend */
+    on.pts.push({ x:p.x, y:p.y });
+    _dcfcReanchorRun(on);
+    if(on===run && st && st._lastEnd) st._lastEnd={ x:p.x, y:p.y };
+    try{ _dcfcRenderTrenches(); }catch(e){}
+    var a=on.pts[on.pts.length-2], dx=p.x-a.x, dy=p.y-a.y, L=Math.hypot(dx,dy)||1;
+    return { x:p.x, y:p.y, dist:0, nx:-dy/L, ny:dx/L, seg:on.pts.length-1, run:on, extended:true };
+  }
+  /* off the trench: a spur from the nearest point to the click */
+  var tapFt=+(_polyLen(on.pts.slice(0,best.seg).concat([{ x:best.x, y:best.y }]))/ppf).toFixed(1);
+  var spur={ id:uid(), pts:[{ x:best.x, y:best.y },{ x:p.x, y:p.y }], in:on.in||'soil', leg:'branch',
+             build:on.build||(st&&st._buildId)||null, spurOf:on.id, spurSeg:best.seg, spurTapFt:tapFt };
+  if(typeof S!=='undefined'){ if(!S._trenches) S._trenches=[]; S._trenches.push(spur); }
   try{ _dcfcRenderTrenches(); }catch(e){}
-  var a=run.pts[run.pts.length-2], dx=p.x-a.x, dy=p.y-a.y, L=Math.hypot(dx,dy)||1;
-  return { x:p.x, y:p.y, dist:0, nx:-dy/L, ny:dx/L, seg:run.pts.length-1, extended:true };
+  var sx=p.x-best.x, sy=p.y-best.y, SL=Math.hypot(sx,sy)||1;
+  return { x:p.x, y:p.y, dist:0, nx:-sy/SL, ny:sx/SL, seg:1, run:spur, spur:true };
 }
 try{ window._dcfcSnapOrExtend=_dcfcSnapOrExtend; }catch(e){}
 
@@ -65828,7 +65896,18 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
     cx=snap.x; cy=snap.y;
   }
   var pts=[{x:cx,y:cy,elId:el.id},{x:snap.x,y:snap.y}];
-  for(var i=snap.seg-1;i>=0;i--){ pts.push({x:run.pts[i].x,y:run.pts[i].y}); }
+  /* back along this run, and through any spur into the run it taps */
+  if(typeof _dcfcPathBack==='function') pts=pts.concat(_dcfcPathBack(run, snap.seg));
+  else for(var _i=snap.seg-1;_i>=0;_i--){ pts.push({x:run.pts[_i].x,y:run.pts[_i].y}); }
+  /* a spur tapping a run at a vertex repeats that vertex; keep the device
+     and tap points (they may coincide by design), drop later repeats */
+  for(var _d=2; _d<pts.length; _d++){
+    if(Math.abs(pts[_d].x-pts[_d-1].x)<0.01 && Math.abs(pts[_d].y-pts[_d-1].y)<0.01){ pts.splice(_d,1); _d--; }
+  }
+  /* how far along THIS run the tap sits from the run's start — what this
+     leg adds to the dig of this run; a spur's parent is dug to the tap */
+  var _runFt=null;
+  try{ _runFt=_polyLen(run.pts.slice(0,snap.seg).concat([{x:snap.x,y:snap.y}])); }catch(e){}
   /* The scale the map has NOW, not whatever the cache was last set to: an
      undo between the draw and this click could have rolled S.pxPerFt back a
      zoom level, and this division is what the callout prints. */
@@ -65846,6 +65925,7 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
           fromId:el.id, toId:null, route:(_indoorLeg?'surface':'trench'),
           evRun:run.id, evRole:condType, label:label||'', labelDx:50, labelDy:-28 };
   if(!_indoorLeg) c.trenchIn=run.in||'soil';
+  if(_runFt!=null && isFinite(_runFt)) c.evRunFt=+(_runFt/_ppfLeg).toFixed(1);
   /* BOND THE FAR END, AND ANCHOR IT NOW.
 
      Every run the guided build created was pushed with toId:null and no
@@ -66013,6 +66093,8 @@ placeDcfcAt=function(p){
     /* A click past the end of the run extends the run to the click; a click
        beside it snaps onto it. See _dcfcSnapOrExtend. */
     var snap=_dcfcSnapOrExtend(run, p, DCFC); if(!snap){ return; }
+    /* the click may have landed on a spur, or started one, off this run */
+    if(snap.run) run=snap.run;
     /* The whole leg — node or charger, its conduit, its bollards — lands as
        ONE undo entry. See omegaHistBatch. */
     omegaHistBatch(function(){
@@ -66161,7 +66243,7 @@ _dcfcGuideRender=function(){
       +'<button onclick="_dcfcToggleSurface2()" style="width:100%;padding:6px;background:rgba(255,255,255,.06);border:1px solid #26364d;color:#B7C6D8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Surface: '+((DCFC._surface==='concrete')?'sawcut concrete':'in-ground')+'</button>';
   } else if(phase==='placeon'){
     if(kind==='charger'){
-      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. Click <strong>past its end</strong> and the trench extends to that stall. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
+      hint='Click <strong>anywhere on the '+legName+' trench</strong> to drop a charger \u2014 it snaps to the line. Click <strong>past its end</strong> and the trench extends to that stall; click <strong>off it</strong> and a spur runs there from the nearest point. <strong style="color:#00FFFF">'+(DCFC.chargers-placedCh)+'</strong> left. Press <strong>Enter</strong> to finish.';
     } else {
       hint='Click <strong>anywhere on the '+legName+' trench</strong> to place the <strong style="color:'+legCol+'">'+(nodeLabels[kind]||kind)+'</strong>. It snaps to the line; the '+legName.toLowerCase()+' conduit routes through the trench.';
     }
@@ -174102,11 +174184,14 @@ function relayOne(s, c, el){
   var p=centre(el);
   var sn=_dcfcNearestOnPoly(run.pts, p); if(!sn) return 'no-run';
   var pts=[{ x:sn.x, y:sn.y, elId:el.id },{ x:sn.x, y:sn.y }];
-  for(var i=sn.seg-1;i>=0;i--) pts.push({ x:run.pts[i].x, y:run.pts[i].y });
+  /* back along the run, and through a spur into the run it taps */
+  if(typeof _dcfcPathBack==='function') pts=pts.concat(_dcfcPathBack(run, sn.seg));
+  else for(var i=sn.seg-1;i>=0;i--) pts.push({ x:run.pts[i].x, y:run.pts[i].y });
   var before=plen(c.pts||[]), after=plen(pts);
   if(Math.abs(before-after)<0.5 && c.evRun===run.id) return 'same';
   var ppf=(s.pxPerFt>0)?s.pxPerFt:6;
   c.pts=pts; c.pxLen=after; c.ftLen=+(after/ppf).toFixed(1);
+  c.evRunFt=+(plen(run.pts.slice(0,sn.seg).concat([{ x:sn.x, y:sn.y }]))/ppf).toFixed(1);
   c.evRun=run.id; if(!c.route) c.route='trench'; if(c.trenchIn==null && run.in) c.trenchIn=run.in;
   /* The far end is a point on the trench, not a device — as the build lays it. */
   c.toId=null; c.toElId=null;
