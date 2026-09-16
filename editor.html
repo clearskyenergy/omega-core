@@ -89149,14 +89149,17 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
          switchgear) are STRUCTURAL, not chatty stencil names, and are tagged
          .omega-utillabel (never .omega-name), so they stay visible here. */
       base = '#csvg text.omega-name{display:none!important}'
-        + '.omega-lab{display:none!important}';
+        + '.omega-lab{display:none!important}'
+        + '.eq-lbl-wrap{display:none!important}';
     } else {
       /* full off: hide the whole utility chip (rect + text) together so no
          orphaned black box is left behind. */
       base = '#csvg text{display:none!important}'
         + '#csvg .omega-utillabel{display:none!important}'
         + '#csvg .omega-lab,.omega-lab{display:none!important}'
-        + '#cov .omega-lab{display:none!important}';
+        + '#cov .omega-lab{display:none!important}'
+        /* the equipment name + spec chips under every placed element */
+        + '.eq-lbl-wrap{display:none!important}';
     }
     /* Annotate content (Text Note, Callout Arrow, Dimension, Zone Box) is a
        separate, user-authored markup layer, not the auto-generated
@@ -89388,12 +89391,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var b = document.createElement('button');
       b.className = 'rbtn';
       b.id = 'rb-labels';
-      b.title = 'Grouped (default): forty identical pods get one callout for the area '
-              + 'instead of forty names. Click to cycle grouped \u2192 every item \u2192 off. '
-              + 'The legend, schedule and takeoff are unaffected by all three.';
+      b.title = 'Show or hide every label on the map \u2014 equipment names and specs, '
+              + 'conduit callouts, stencil text. One click off, one click back on. '
+              + 'The legend, schedule and takeoff are unaffected.';
       b.innerHTML = '<span class="rb-ico">\u1d40</span><span class="rb-lbl">Labels</span>';
+      /* One switch, two states. This used to cycle grouped \u2192 every item \u2192
+         off, so a click from "grouped" showed MORE labels and it took two
+         presses to clear the map (Thomas, 2026-09-16). Grouped and
+         dimensions-only stay reachable as OmegaLabels.grouped() / dimsOnly(). */
       b.onclick = function () {
-        set(mode === 'grouped' ? 'on' : mode === 'on' ? 'off' : 'grouped');
+        set(mode === 'off' ? 'on' : 'off');
       };
       host.appendChild(b);
     }
