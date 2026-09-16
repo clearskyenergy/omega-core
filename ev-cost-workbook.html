@@ -2170,6 +2170,8 @@ function loadPayload(pay){
     if(num(EDITOR_COUNTS.xfmrpad)>0)  DATA.nXfmrPad  = num(EDITOR_COUNTS.xfmrpad);
     if(num(EDITOR_COUNTS.handhole)>0) DATA.nHandhole = num(EDITOR_COUNTS.handhole);
     if(num(EDITOR_COUNTS.meter)>0)    DATA.nMeter    = num(EDITOR_COUNTS.meter);
+    /* dual pedestals placed on the drawing: one pedestal per placement */
+    if(num(EDITOR_COUNTS.pedestal)>0) DATA.nPedestal = num(EDITOR_COUNTS.pedestal);
     /* an existing meter bank on the drawing answers the service question */
     if(!d('serviceScenario') && EDITOR_COUNTS.existingService)
       DATA.serviceScenario = SERVICE_SCENARIOS[0];
@@ -2809,16 +2811,23 @@ function standardRate(row, bucket){
                           would put an item on a utility form that is not
                           on the job. */
                        if(typeof chargerClass==='function' && chargerClass()==='dcfc') return null;
-                       var _pu=0;
-                       try{
-                         if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
-                           for(var _pi=0;_pi<EDITOR_FLEET.length;_pi++) _pu += (num(EDITOR_FLEET[_pi].qty)||0);
-                         }
-                       }catch(e){}
-                       if(!_pu) _pu = ports;
+                       /* The drawing wins when it placed pedestals: a dual
+                          pedestal carries two chargers on ONE pedestal, so
+                          "one per charger" would bill twice. */
+                       var _pu=num(DATA.nPedestal)||0, _puHow='';
+                       if(_pu){ _puHow=' (from the drawing: one per pedestal placed)'; }
+                       else {
+                         try{
+                           if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
+                             for(var _pi=0;_pi<EDITOR_FLEET.length;_pi++) _pu += (num(EDITOR_FLEET[_pi].qty)||0);
+                           }
+                         }catch(e){}
+                         if(!_pu) _pu = ports;
+                         _puHow=' (one per charger)';
+                       }
                        return _pu>0 ? { qty:_pu, unit:'EA',
                                 mat:ST.pedestalUnit.mat*_pu, lab:0,
-                                note:_pu+' \u00d7 $'+ST.pedestalUnit.mat+' pedestal (one per charger)' } : null;
+                                note:_pu+' \u00d7 $'+ST.pedestalUnit.mat+' pedestal'+_puHow } : null;
     /* Both per port, identical on all five submitted jobs. They were the
        only cost lines with no rate at all \u2014 they arrived from the estimate
        or not at all, so a hand-built job silently lost them. */
