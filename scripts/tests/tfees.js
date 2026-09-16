@@ -237,9 +237,14 @@ Promise.resolve()
 
     const VERCEL = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
     const hostRoutes = h => VERCEL.rewrites.filter(r => (r.has || []).some(x => x.type === 'host' && x.value === h));
+    const hostRedirects = h => (VERCEL.redirects || []).filter(r => (r.has || []).some(x => x.type === 'host' && x.value === h));
     ['finance.csebuilders.com', 'financing.csebuilders.com'].forEach(h => {
       const rs = hostRoutes(h);
-      ok(rs.some(r => r.source === '/' && r.destination === '/portals/finance'), h + ' serves the portal from omega-core');
+      /* Vercel serves the filesystem before rewrites, so the root index.html
+         would win a rewrite of "/": the front door is a redirect to /finance,
+         which then rewrites to the portal (b4fbeb1). */
+      ok(hostRedirects(h).some(r => r.source === '/' && r.destination === '/finance'), h + ' front door redirects into the portal');
+      ok(VERCEL.rewrites.some(r => r.source === '/finance' && r.destination === '/portals/finance' && (!r.has || rs.indexOf(r) >= 0)), h + ' serves the portal from omega-core');
       ok(rs.some(r => r.source === '/dealroom' && r.destination === '/portals/finance/dealroom'), h + ' serves the deal rooms page');
     });
     const IGN = fs.readFileSync(path.join(ROOT, '.vercelignore'), 'utf8');
