@@ -23,7 +23,7 @@ to this folder:
 
 | URL on financing.csebuilders.com | served from                        |
 |----------------------------------|------------------------------------|
-| `/`, `/index.html`               | `/portals/finance/index.html`      |
+| `/`, `/index.html`               | 307 → `/finance` → `/portals/finance/index.html` (a rewrite of `/` loses to the root `index.html` on the filesystem; a redirect runs first) |
 | `/dealroom`, `/dealroom.html`    | `/portals/finance/dealroom.html`   |
 | `/battery-sizer`                 | `/portals/finance/battery-sizer.html` |
 | `/api/*`                         | the root `api/` functions          |

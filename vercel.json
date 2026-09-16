@@ -160,26 +160,6 @@
       "destination": "/tenants/osa/portfolio"
     },
     {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance"
-    },
-    {
-      "source": "/index.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "finance.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance"
-    },
-    {
       "source": "/dealroom",
       "has": [
         {
@@ -218,26 +198,6 @@
         }
       ],
       "destination": "/portals/finance/battery-sizer"
-    },
-    {
-      "source": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance"
-    },
-    {
-      "source": "/index.html",
-      "has": [
-        {
-          "type": "host",
-          "value": "financing.csebuilders.com"
-        }
-      ],
-      "destination": "/portals/finance"
     },
     {
       "source": "/dealroom",
@@ -304,6 +264,50 @@
     }
   },
   "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/finance",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/finance",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/finance",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/finance",
+      "permanent": false
+    },
     {
       "source": "/dealroom",
       "destination": "/portals/finance/dealroom",
