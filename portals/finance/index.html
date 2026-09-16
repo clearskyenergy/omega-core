@@ -1204,7 +1204,25 @@ input.szr-in[type=number]{font-family:var(--mono)}
 <!-- ClearSky's commission on a partner's deals, as data. The same file
      /api/offer.js requires, so the price a partner sees as they type is the
      price the server stamps on the offer. -->
+<style>
+  /* Fee breakdown: a small ledger that visibly adds up. */
+  .fee-tbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px;line-height:1.35}
+  .fee-tbl td{padding:4px 0;vertical-align:top}
+  .fee-tbl td.fee-amt{text-align:right;white-space:nowrap;padding-left:14px;font-variant-numeric:tabular-nums}
+  .fee-tbl td.fee-note{padding-left:12px;color:var(--cs-muted,#6b7280);white-space:nowrap}
+  .fee-tbl tr.fee-sub td{border-top:1px solid var(--cs-border,#e5e7eb);font-weight:600}
+  .fee-tbl tr.fee-total td{border-top:2px solid var(--cs-text,#111827);font-weight:700}
+  @media (max-width:640px){ .fee-tbl td.fee-note{display:none} }
+</style>
 <script src="/omega-fees.js"></script>
+<!-- Cross-tenant originator credit. Shared with the main dashboard so both
+     surfaces write the SAME field names; this portal loads none of the other
+     omega-*.js runtime, which is exactly why the primitive is its own small
+     file rather than living inside omega-referrals.js. onerror is not
+     decoration: if it fails to load the submit form simply shows no credit
+     box, and nobody loses the ability to submit a deal over a missing
+     helper. -->
+<script src="/omega-originator.js" onerror="console.warn('[OMEGA] omega-originator.js not found \u2014 originator credit disabled')"></script>
 <script src="/portals/finance/firebase-config.js" onerror="console.warn('[OMEGA] /firebase-config.js not found — falling back to the inline block below')"></script>
 <script>
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3633,17 +3651,34 @@ function offerModal(dealId) {
 /* What this offer costs the partner, with their firm's ClearSky fees applied.
    Computed client-side from the same module the server uses, so the preview
    and the stamped figure agree; the server's figure is the one of record. */
+/* The arithmetic, laid out so it adds up: the offer, plus the transaction
+   fee, equals what is due at close; plus each finders fee, equals the total.
+   Exact dollars on purpose — the compact figures this used to print ($1.6M ·
+   $1.5M · $78K) never visibly totalled, and a partner checks that first. */
+function feeBreakdownHtml(p) {
+  const row = (label, amt, note, cls) =>
+    `<tr class="${cls || ''}"><td>${label}</td><td class="fee-amt">${amt}</td><td class="fee-note">${note || ''}</td></tr>`;
+  const finders = p.finders || [];
+  const rows = [row('Your offer — what the sponsor receives', usd(p.offer), '')];
+  if (p.transactionPct > 0)
+    rows.push(row(`ClearSky transaction fee · ${p.transactionPct}% of the offer`, '+ ' + usd(p.transactionFee), 'built onto the price, paid at close'));
+  if (finders.length) {
+    rows.push(row('Due at close', usd(p.dueAtClose), 'offer + transaction fee', 'fee-sub'));
+    finders.forEach(m => rows.push(row(`ClearSky finders fee · ${m.pct}% at ${esc(m.milestone)}`, '+ ' + usd(m.amount), `invoiced at ${esc(m.milestone)}`)));
+    rows.push(row('Total price with ClearSky fees', usd(p.total), 'close plus milestones', 'fee-total'));
+  } else {
+    rows.push(row('Total price with ClearSky fees', usd(p.total), 'due at close', 'fee-total'));
+  }
+  return `<table class="fee-tbl"><tbody>${rows.join('')}</tbody></table>`;
+}
+
 function offerPricingPreview(amount) {
   if (!window.OmegaFees || !SESSION) return '';
   const feesKnown = !!(ORG && ORG.fees != null);
   const p = OmegaFees.price(amount || 0, ORG ? ORG.fees : null);
-  if (!feesKnown) return `<b>ClearSky fee:</b> not set for ${esc(SESSION.org)} yet — ClearSky confirms the fee before award. Your offer of ${usdC(p.offer)} is what the sponsor receives.`;
-  if (p.waived) return `<b>ClearSky fee:</b> waived for ${esc(SESSION.org)}. Total price ${usdC(p.total)} — all of it to the sponsor.`;
-  const lines = [];
-  if (p.transactionPct > 0) lines.push(`Transaction fee ${p.transactionPct}% · ${usdC(p.transactionFee)}, built onto the price at close`);
-  p.finders.forEach(m => lines.push(`Finders fee ${m.pct}% at ${esc(m.milestone)} · ${usdC(m.amount)}`));
-  return `<b>Your total price with ClearSky fees: ${usdC(p.total)}</b>
-    <span class="muted">· ${usdC(p.offer)} to the sponsor · ${usdC(p.dueAtClose)} due at close</span><br>${lines.join('<br>')}`;
+  if (!feesKnown) return `<b>ClearSky fee:</b> not set for ${esc(SESSION.org)} yet — ClearSky confirms the fee before award. Your offer of ${usd(p.offer)} is what the sponsor receives.`;
+  if (p.waived) return `<b>ClearSky fee:</b> waived for ${esc(SESSION.org)}. Total price ${usd(p.total)} — all of it to the sponsor.`;
+  return `<b>Your total price with ClearSky fees: ${usd(p.total)}</b>${feeBreakdownHtml(p)}`;
 }
 function paintOfferPricing() {
   const box = $('#ofPricing'); if (!box) return;
@@ -3783,12 +3818,8 @@ function offerPricingHtml(o, d) {
       ? ` <button class="btn btn-ghost btn-xs" data-act="price-offer" data-val="${esc(d.docId || '')}|${esc(o.uid)}">Price it now</button>` : ''}</p></div>`;
   }
   const p = o.pricing;
-  if (p.waived) return `<div class="oc-sec"><h6>ClearSky fees</h6><p>Waived${o.feesSet === false ? ' — no schedule is set for this partner' : ''}. Total price ${usdC(p.total)}.</p></div>`;
-  const rows = [];
-  if (p.transactionPct > 0) rows.push(`Transaction fee ${p.transactionPct}% · ${usdC(p.transactionFee)} (built onto the price)`);
-  (p.finders || []).forEach(m => rows.push(`Finders fee ${m.pct}% at ${esc(m.milestone)} · ${usdC(m.amount)}`));
-  return `<div class="oc-sec"><h6>ClearSky fees</h6><ul>${rows.map(r => `<li>${r}</li>`).join('')}</ul>
-    <p><b>Total price ${usdC(p.total)}</b> · ${usdC(p.offer)} to the sponsor · ${usdC(p.dueAtClose)} due at close</p></div>`;
+  if (p.waived) return `<div class="oc-sec"><h6>ClearSky fees</h6><p>Waived${o.feesSet === false ? ' — no schedule is set for this partner' : ''}. Total price ${usd(p.total)}.</p></div>`;
+  return `<div class="oc-sec"><h6>ClearSky fees</h6>${feeBreakdownHtml(p)}</div>`;
 }
 
 function offersTab(d) {
