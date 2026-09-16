@@ -58417,7 +58417,7 @@ var EVC_L2 = {
     label:'Autel AC Pro \u00d72 \u2014 dual pedestal', unitLabel:'Autel AC Pro',
     mfr:'Autel', model:'Autel MaxiCharger AC Pro (dual pedestal)',
     kw:19.2, amps:'80A', connectors:'J1772 / NACS', ports:2, units:2, pedestal:true, priceId:'autel_ac_pro',
-    lf:1.60, wf:3.20, minW:36, minH:72,
+    lf:1.60, wf:3.20, minW:18, minH:36,
     spec:'2 \u00d7 19.2 kW (80A each) \u00b7 dual floor pedestal \u00b7 two branch circuits',
     img:EVIMG_AUTEL_ACPRO_PED
   },
@@ -63933,6 +63933,13 @@ function _elFootprintFt(el){
   /* Set by the insert layer; fall back to the catalog, then to whatever
      the element was drawn at, so an old drawing still scales. */
   var lf = +el.lf || 0, wf = +el.wf || 0;
+  /* A guided-build unit placed before footprints were recorded on the
+     element still names its catalog entry; take the footprint and the
+     symbol floor from there rather than from the pixels it was drawn at. */
+  if(!(lf>0) && el.catalogId && typeof EVC_L2!=='undefined' && EVC_L2[el.catalogId]){
+    try{ var _cm=EVC_L2[el.catalogId]; lf=+_cm.lf||0; wf=+_cm.wf||0;
+         if(!(el.minW>0) && _cm.minW) el.minW=_cm.minW; if(!(el.minH>0) && _cm.minH) el.minH=_cm.minH; }catch(e){}
+  }
   if(!(lf>0) && typeof footprintOf==='function' && el.eqId){
     try{ var f=footprintOf(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
   }
@@ -63959,8 +63966,10 @@ function omegaRescaleElements(){
        still derive one later. */
     if(!(el._ppfAtPlace>0)) el._ppfAtPlace = ppf;
 
-    var wantW = Math.max(10, Math.round(f.lf*ppf));
-    var wantH = Math.max(8,  Math.round(f.wf*ppf));
+    /* The element's own floor (set by _evAdd, same as at placement) so a
+       symbol never drops below legible or balloons past its footprint. */
+    var wantW = Math.max((+el.minW>0)?+el.minW:10, Math.round(f.lf*ppf));
+    var wantH = Math.max((+el.minH>0)?+el.minH:8,  Math.round(f.wf*ppf));
     if(Math.abs((el.w||0)-wantW) <= 1 && Math.abs((el.h||0)-wantH) <= 1) return;
 
     /* Grow about the centre. The geo anchor is the centre too, so this
@@ -65170,6 +65179,20 @@ function _evAdd(kind, cx, cy, label, spec, img, fp){
   var el=addEl({ type:'evgear', evKind:kind, label:label, spec:spec,
     x:Math.round(cx-d.w/2), y:Math.round(cy-d.h/2), w:d.w, h:d.h,
     aspect:(d.h/d.w), rot:0, flip:false, evImg:img||null });
+  /* Record the REAL footprint and the symbol floor on the element. Without
+     lf/wf the zoom rescale derived a footprint from the placed pixel size,
+     so a symbol held up by its floor read back as a machine that big: a
+     dual pedestal placed at 3 px/ft became 11 x 22 ft and grew from there
+     on every zoom-in (Thomas, 145 West St, 2026-09-16). The same floors
+     _evPx used are kept, so the size at any zoom matches placement. */
+  try{
+    var f=fp||EV_FOOTPRINT[kind]||{lf:5,wf:4};
+    if(f && f.lf>0){
+      el.lf=+f.lf; el.wf=(+f.wf>0)?+f.wf:+f.lf*0.72;
+      var _sm=(f.lf<=4 && f.wf<=4);
+      el.minW=Math.max(_sm?14:28, +(f.minW||0)); el.minH=Math.max(_sm?12:20, +(f.minH||0));
+    }
+  }catch(e){}
   return el;
 }
 /* OMEGA PATCH 15.
