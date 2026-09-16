@@ -1107,6 +1107,20 @@ service cloud.firestore {
                  && request.auth.uid in parent().get('firstLookUids', [])
                  && request.time.toMillis() < parent().get('firstLookUntil', 0);
         }
+        /* THE PRICE ON AN OFFER IS CLEARSKY'S, NOT THE PARTNER'S. pricing,
+           feesApplied and their stamps are written only by /api/offer.js,
+           which reads the partner's fee schedule off fin_orgs and applies
+           it through the Admin SDK. No client — partner or sponsor — may
+           create or move them; a partner filing directly while the server
+           is down writes pricingPending:true instead, which is allowed, and
+           an administrator prices it afterwards. */
+        function noPricingKeys() {
+          return !request.resource.data.keys().hasAny(['pricing', 'feesApplied', 'feesSet', 'pricedAt', 'pricedBy']);
+        }
+        function pricingUntouched() {
+          return !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['pricing', 'feesApplied', 'feesSet', 'pricedAt', 'pricedBy']);
+        }
         allow read: if signedIn() && (
                        parentOwner() ||
                        parentOrgMate() ||
@@ -1125,6 +1139,7 @@ service cloud.firestore {
                     && offerId == request.auth.uid
                     && request.resource.data.partnerUid == request.auth.uid
                     && parent().status != 'awarded'
+                    && noPricingKeys()
                     && (
                          hasUnlocked(projectId)                  /* ← UNLOCK GATE */
                          || parentHeldForMeNow()                 /* ← FIRST-LOOK EXEMPTION */
@@ -1132,10 +1147,12 @@ service cloud.firestore {
         allow update: if isPartner()
                     && offerId == request.auth.uid
                     && request.resource.data.partnerUid == request.auth.uid
-                    && parent().status != 'awarded';
-        allow update: if parentOwner()
+                    && parent().status != 'awarded'
+                    && pricingUntouched();
+        allow update: if (parentOwner()
                     || parentOrgMate()
-                    || (isPartner() && offerId == request.auth.uid);
+                    || (isPartner() && offerId == request.auth.uid))
+                    && pricingUntouched();
         allow delete: if false;
       }
       match /inquiries/{msgId} {
@@ -1245,10 +1262,19 @@ service cloud.firestore {
             : d.get('tier', 'tier1') == 'tier2' ? 10 : 5);
       }
       /* The client writes tier back on every unlock because it merges the
-         value it just read — so this compares rather than forbids. */
+         value it just read — so this compares rather than forbids.
+
+         fees IS THE COMMISSION CLEARSKY EARNS ON THIS PARTNER'S DEALS — the
+         transaction fee built onto the price and the finders fee at NTP and
+         COD — set by an administrator when the partner is stood up. A
+         partner's own writes to their org record (spending an unlock) may
+         not move it; only isAdmin()/isFinAdmin() reach it, above. */
       function tierHeld() {
         return request.resource.data.get('tier', 'tier1') == resource.data.get('tier', 'tier1')
-            && request.resource.data.get('unlocksOverride', null) == resource.data.get('unlocksOverride', null);
+            && request.resource.data.get('unlocksOverride', null) == resource.data.get('unlocksOverride', null)
+            && request.resource.data.get('fees', null) == resource.data.get('fees', null)
+            && request.resource.data.get('feesSetBy', null) == resource.data.get('feesSetBy', null)
+            && request.resource.data.get('feesSetAt', null) == resource.data.get('feesSetAt', null);
       }
       function spendsOne() {
         return (request.resource.data.used == resource.data.get('used', 0) + 1
@@ -1263,6 +1289,7 @@ service cloud.firestore {
                     || (mine()
                         && request.resource.data.get('tier', 'tier1') == 'tier1'
                         && request.resource.data.get('unlocksOverride', null) == null
+                        && request.resource.data.get('fees', null) == null
                         && request.resource.data.used == 1);
       allow update: if isAdmin()
                     || (hasFinProfile() && isFinAdmin())

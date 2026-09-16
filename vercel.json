@@ -160,6 +160,126 @@
       "destination": "/tenants/osa/portfolio"
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance"
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance"
+    },
+    {
+      "source": "/dealroom",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/dealroom"
+    },
+    {
+      "source": "/dealroom.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/dealroom"
+    },
+    {
+      "source": "/battery-sizer",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/battery-sizer"
+    },
+    {
+      "source": "/battery-sizer.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "finance.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/battery-sizer"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance"
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance"
+    },
+    {
+      "source": "/dealroom",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/dealroom"
+    },
+    {
+      "source": "/dealroom.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/dealroom"
+    },
+    {
+      "source": "/battery-sizer",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/battery-sizer"
+    },
+    {
+      "source": "/battery-sizer.html",
+      "has": [
+        {
+          "type": "host",
+          "value": "financing.csebuilders.com"
+        }
+      ],
+      "destination": "/portals/finance/battery-sizer"
+    },
+    {
       "source": "/finance",
       "destination": "/portals/finance"
     },

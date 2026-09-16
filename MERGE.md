@@ -456,3 +456,55 @@ for them. A hand-drawn conduit that coincides with a run's leg still
 banks. Not yet on the live site: silmarillion still serves the build from
 before this branch, which is where the 138.5 ft and 315.9 ft screenshots
 came from.
+
+## Financing portal: commission per partner, offers priced by the server, a deal room for every partner  (2026-09-16)
+
+What was asked: when a capital partner buys a deal through the portal,
+ClearSky's commission — a finders fee at milestones (Amperage Capital, 2.5%
+at NTP and 2.5% at COD), a transaction fee built onto the price (Budderfly,
+1% of the offer), both, or waived — is set per partner by a ClearSky
+administrator, and a partner entering an offer sees the total price with it
+applied. Every partner gets a deal room when their account is created; every
+deal that reaches the portal is reviewed by ClearSky and pushed either to one
+partner's room or to the marketplace. `finance.csebuilders.com` is to be this
+repository's portal.
+
+- **`omega-fees.js`** (root, ES5, UMD): `normalize`, `price`, `describe`. The
+  one implementation; loaded by the portal and required by `/api/offer`.
+- **`fin_orgs/{orgKey}.fees`** is the schedule. Admin-only: `tierHeld()` in
+  the rules now pins `fees`, `feesSetBy`, `feesSetAt` on a partner's own
+  writes, and a self-created org record may not carry fees. Set from
+  Organizations → Set fees, or via `fees` on `POST /api/provision-partner`.
+- **`POST /api/offer`** prices and files an offer. It re-asserts the rules'
+  gate (partner, approved, not suspended; deal not awarded; open and unlocked,
+  or held for them with a live window, or delivered into their room), reads
+  the schedule off the org record, never the request, and stamps `pricing`,
+  `feesApplied`, `feesSet`, `pricedAt`, `pricedBy`. The rules refuse every
+  client any write to those keys (`noPricingKeys()`, `pricingUntouched()`).
+  `dryRun` prices without writing; `reprice` lets ClearSky price an offer
+  filed while the server was down.
+- **The portal** shows the total price as the partner types (`#ofPricing`),
+  sends the offer to `/api/offer`, and on 503/404/network files it directly
+  with `pricingPending:true` — visible, never silent; an administrator
+  prices it from the offer card. Offer cards show the fee block to the
+  partner who owes it and to ClearSky, never to the sponsor.
+- **Routing.** `fin_settings/intake.gateAll` (default true) stops every
+  filed deal in Review. The approve dialog routes to ANY partner with an
+  approved account, for a window or until released (`firstLookIndefinite`,
+  stored as a hold a century out so the rules' live-window test still holds),
+  and stamps `room.forOrg / forOrgId / state / deliveredAt`. Open deals can be
+  pushed to a partner from Review. Partners land on a **Deal room** tab
+  (held, delivered or awarded to them) with their fee schedule at the top.
+  Approving a partner under People writes `fin_orgs/{orgKey}` and `orgId`
+  on the profile — the room the rules can match.
+- **Routing the host.** `vercel.json` rewrites `finance.csebuilders.com` and
+  `financing.csebuilders.com` to `/portals/finance` (and `/dealroom`,
+  `/battery-sizer`). Attaching the domains to the omega-core project is the
+  manual step; `docs/finance-partner-setup.md` §6.
+- **Not done here:** e-mailing a partner when a deal lands in their room
+  (`/api/dealroom-send` exists but requires a data-room link); invoicing at
+  NTP/COD (the milestone amounts are on the offer for whoever raises the
+  invoice); a Cloud Function to sweep expired holds without a client open.
+- Tests: `scripts/tests/tfees.js`. Rules changes need a deploy from the
+  repo root before the portal's fee editor and `/api/offer` are honoured.
+
