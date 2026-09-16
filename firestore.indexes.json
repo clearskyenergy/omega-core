@@ -7,10 +7,40 @@
   "//5": "means it deploys with the rules rather than being clicked into the console",
   "//6": "once and lost the next time the project is rebuilt.",
   "indexes": [],
+  "//7": "offers.partnerUid: the dashboard's collectionGroup('offers').where('partnerUid','==',me).",
+  "//8": "fin_views.sponsorOrgKey: the finance portal's collectionGroup('fin_views').where('sponsorOrgKey','==',org).",
+  "//9": "billing.stripeCustomerId: api/stripe-webhook.js finds the tenant behind a Stripe customer.",
   "fieldOverrides": [
     {
       "collectionGroup": "recipients",
       "fieldPath": "vendorOrgId",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "offers",
+      "fieldPath": "partnerUid",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "fin_views",
+      "fieldPath": "sponsorOrgKey",
+      "indexes": [
+        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "billing",
+      "fieldPath": "stripeCustomerId",
       "indexes": [
         { "order": "ASCENDING",  "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION" },

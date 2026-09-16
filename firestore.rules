@@ -1215,11 +1215,19 @@ service cloud.firestore {
        rule, which checks the deal is open, held for them, or theirs to
        revise. Nothing here widens what may be WRITTEN.
 
-       Requires the single-field index on the `offers` collection group that
-       Firestore prompts for on first use.
+       A group query cannot be filtered on the document id, and rules are
+       proved against the query's own filter: the dashboard asks
+       where('partnerUid','==',me), so the rule must accept partnerUid — a
+       field every partner write above is required to set to its own uid.
+       The offerId clause keeps a direct get() of offers/{me} working.
+
+       Requires the COLLECTION_GROUP index on offers.partnerUid in
+       firestore.indexes.json, deployed with this file.
        ============================================================ */
     match /{path=**}/offers/{offerId} {
-      allow read: if signedIn() && offerId == request.auth.uid;
+      allow read: if signedIn()
+                  && (offerId == request.auth.uid
+                      || resource.data.partnerUid == request.auth.uid);
       allow write: if false;
     }
 

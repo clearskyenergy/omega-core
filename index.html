@@ -6167,19 +6167,49 @@ var DASH = (function(){
         }));
       });
     }
-    var offerQ = (!uid) ? Promise.resolve()
-      : db.collectionGroup('offers').where('uid','==',uid).get()
-          .then(function(sn){
-            _FIN.offers = sn.docs.map(function(d){
-              return Object.assign({ dealId:null }, d.data()); });
-            _FIN.offersScope = 'all';
-          })['catch'](function(){ return _offersPerDeal(); });
-
     /* The open marketplace — what a capital partner can bid on today. status
        == 'open' is one of the three reads the rules grant a partner. */
     var marketQ = db.collection('fin_projects').where('status','==','open').get()
       .then(function(sn){ _FIN.market = sn.docs.map(function(d){ return Object.assign({docId:d.id}, d.data()); }); })
       ['catch'](function(e){ _FIN.marketErr=e; });
+
+    /* The group query returns the offer, not the deal. Size, cost and state
+       live on fin_projects/{deal}; take them from what was already read and
+       fetch the rest — an accepted deal is readable by its awardee, so an
+       investment always resolves. A refused read leaves that offer sizeless
+       rather than dropping it. The deal id is the offer's grandparent, which
+       is true of every offer ever written, not only the ones that stored it. */
+    function _sizeOffers(){
+      return Promise.all([roomQ, marketQ]).then(function(){
+        var known = {};
+        (_FIN.room||[]).concat(_FIN.market||[]).forEach(function(d){ known[d.docId]=d; });
+        return Promise.all(_FIN.offers.map(function(o){
+          if(!o.dealId || o.dealMw!=null) return Promise.resolve();
+          var p = known[o.dealId] ? Promise.resolve(known[o.dealId])
+            : db.collection('fin_projects').doc(o.dealId).get()
+                .then(function(s){ return s.exists ? Object.assign({docId:s.id}, s.data()) : null; });
+          return p.then(function(d){
+            if(!d) return;
+            if(!o.dealName) o.dealName = d.name||o.dealId;
+            o.dealMw = d.mw!=null?d.mw:d.sizeMw; o.dealCapexUsd = d.capexUsd; o.dealState = d.state||'';
+          })['catch'](function(){});
+        }));
+      });
+    }
+    /* partnerUid, not a separate uid field: the create rule has always
+       required partnerUid == the writer, so every offer has it and the
+       group rule can be proved from this filter alone. */
+    var offerQ = (!uid) ? Promise.resolve()
+      : db.collectionGroup('offers').where('partnerUid','==',uid).get()
+          .then(function(sn){
+            _FIN.offers = sn.docs.map(function(d){
+              var deal = (d.ref && d.ref.parent && d.ref.parent.parent) ? d.ref.parent.parent.id : null;
+              var o = Object.assign({ dealId:null }, d.data());
+              if(deal) o.dealId = deal;
+              return o; });
+            _FIN.offersScope = 'all';
+            return _sizeOffers();
+          })['catch'](function(){ return _offersPerDeal(); });
     Promise.all([roomQ, offerQ, marketQ]).then(function(){ _FIN.loaded=true; cb&&cb(); });
     });
   }

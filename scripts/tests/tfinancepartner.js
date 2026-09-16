@@ -105,11 +105,16 @@ ok(/where\('firstLookUids','array-contains',uid\)/.test(idx),
 ok(/where\('awardedTo','==',uid\)/.test(idx), 'and the ones they have won');
 ok(!/where\('room\.forOrg'/.test(idx),
    'and never queries room.forOrg, which no rule permits');
-/* The uid is now stored as a field, so the group query works and returns
-   marketplace offers too. What must never happen is a refusal reading as
-   "no offers" — hence the fallback and the scope label. */
-ok(/collectionGroup\('offers'\)\.where\('uid','==',uid\)/.test(idx),
+/* The group query filters on partnerUid — the field the create rule has
+   always required to equal the writer — so every offer ever written
+   qualifies and no backfill is needed. What must never happen is a refusal
+   reading as "no offers" — hence the fallback and the scope label. */
+ok(/collectionGroup\('offers'\)\.where\('partnerUid','==',uid\)/.test(idx),
    'offers are read with a collection group, so marketplace offers count too');
+ok(/o\.dealId = deal;/.test(idx) && /d\.ref\.parent\.parent\.id/.test(idx),
+   'the deal id comes from the offer\'s path, which every offer has');
+ok(/function _sizeOffers/.test(idx) && /o\.dealMw = d\.mw!=null\?d\.mw:d\.sizeMw/.test(idx),
+   'group results are sized from the deal, so investments show MW and capex');
 ok(/\['catch'\]\(function\(\)\{ return _offersPerDeal\(\); \}\)/.test(idx),
    'and a refused group query falls back to the per-deal read rather than reporting zero');
 ok(/_FIN\.offersScope\s*=\s*'room'/.test(idx) && /_FIN\.offersScope\s*=\s*'all'/.test(idx),
@@ -126,8 +131,14 @@ ok(/dealId:\s*d\.docId/.test(fin) && /dealName:\s*d\.name/.test(fin),
 const rules = read('firestore.rules');
 ok(/match \/\{path=\*\*\}\/offers\/\{offerId\}/.test(rules),
    'a collection-group rule exists — the nested match cannot cover a group query');
-ok(/allow read: if signedIn\(\) && offerId == request\.auth\.uid;/.test(rules),
-   'and it returns a partner exactly their own offers, on any deal');
+ok(/resource\.data\.partnerUid == request\.auth\.uid\);/.test(rules.slice(rules.indexOf('match /{path=**}/offers/{offerId}'))),
+   'and it is provable from the query\'s own filter — a rule on the doc id alone refuses a group query');
+const groupRule = rules.slice(rules.indexOf('match /{path=**}/offers/{offerId}'), rules.indexOf('match /{path=**}/offers/{offerId}') + 400);
+ok(/allow write: if false;/.test(groupRule), 'and the group match widens nothing that may be written');
+const ix = JSON.parse(read('firestore.indexes.json'));
+ok((ix.fieldOverrides || []).some(o => o.collectionGroup === 'offers' && o.fieldPath === 'partnerUid'
+     && o.indexes.some(i => i.queryScope === 'COLLECTION_GROUP')),
+   'the COLLECTION_GROUP index on offers.partnerUid deploys with the rules');
 ok(/match \/\{path=\*\*\}\/offers\/\{offerId\} \{[\s\S]{0,200}allow write: if false;/.test(rules),
    'the group rule is read-only — writing still goes through the nested checks');
 ok(/status===['"]accepted['"]/.test(idx),
