@@ -6792,6 +6792,11 @@ function _restoreCanvas(snap){
   if(typeof _applyFrozenMap==='function') try{ _applyFrozenMap(); }catch(e){}
   if(typeof _removeFrozenMap==='function' && !window._frozenMapImg) try{ _removeFrozenMap(); }catch(e){}
   if(typeof updateRightPanel==='function') try{ updateRightPanel(); }catch(e){}
+  /* The snapshot is raw pixels from whatever view and canvas size it was
+     serialized at. Put everything back on its ground now, before a drag can
+     re-anchor something to the stale pixels (called through window so the
+     zoom-hold / rescale wrappers apply; a no-op without a live map). */
+  try{ if(typeof window._geoReprojectAll==='function') window._geoReprojectAll(); }catch(e){}
 }
 
 // Ensure at least one tab exists, seeded from the current canvas.
@@ -6870,6 +6875,13 @@ function startRenameDocTab(ev, i){
 function switchDocTab(i){
   if(i===_activeDocTab) return;
   _ensureDocTabs();
+  /* A guided build in progress belongs to THIS tab. Cancel it before the
+     canvas is swapped, or its next click lands on the other tab with a run
+     that is not in that tab's model. The build state is IIFE-local, so go
+     through the exported accessors. */
+  try{ var _gEv=(typeof _dcfcState==='function')?_dcfcState():null; if(_gEv && _gEv.active && typeof _dcfcCancel==='function') _dcfcCancel(); }catch(e){}
+  try{ var _gBg=(typeof _bgbState==='function')?_bgbState():null; if(_gBg && _gBg.active && typeof _bgbCancel==='function') _bgbCancel(); }catch(e){}
+  try{ var _gCg=(typeof _cgcState==='function')?_cgcState():null; if(_gCg && _gCg.active && typeof _cgcCancel==='function') _cgcCancel(); }catch(e){}
   // Save current canvas into the active slot before leaving.
   _docTabs[_activeDocTab].state = _serializeCanvas();
   _activeDocTab = i;
@@ -6882,8 +6894,19 @@ function switchDocTab(i){
   try{ if(typeof _gmapAutoScale==='function') _gmapAutoScale(); }catch(e){}
 }
 
+/* A guided build in progress belongs to the tab it started on. Cancel it
+   before the canvas is swapped by a tab add, close or switch, or its next
+   click lands on another tab with a run that is not in that tab's model.
+   The build state is IIFE-local, so go through the exported accessors. */
+function _docTabCancelBuild(){
+  try{ var _gEv=(typeof _dcfcState==='function')?_dcfcState():null; if(_gEv && _gEv.active && typeof _dcfcCancel==='function') _dcfcCancel(); }catch(e){}
+  try{ var _gBg=(typeof _bgbState==='function')?_bgbState():null; if(_gBg && _gBg.active && typeof _bgbCancel==='function') _bgbCancel(); }catch(e){}
+  try{ var _gCg=(typeof _cgcState==='function')?_cgcState():null; if(_gCg && _gCg.active && typeof _cgcCancel==='function') _cgcCancel(); }catch(e){}
+}
+
 function addDocTab(kind){
   _ensureDocTabs();
+  _docTabCancelBuild();
   // Persist current canvas first.
   _docTabs[_activeDocTab].state = _serializeCanvas();
   kind = kind || 'sitemap';
@@ -6919,6 +6942,7 @@ function closeDocTab(ev, i){
   if(_docTabs.length<=1) return;
   if(!confirm('Close "'+_docTabs[i].name+'"? Its canvas will be removed from this project on next save.')) return;
   var wasActive = (i===_activeDocTab);
+  if(wasActive) _docTabCancelBuild();
   _docTabs.splice(i,1);
   if(_activeDocTab>=_docTabs.length) _activeDocTab=_docTabs.length-1;
   else if(i<_activeDocTab) _activeDocTab--;
@@ -6987,6 +7011,19 @@ function _loadDocTabs(saved){
       _docTabs.push({ id:t.id||_newTabId(), name:t.name||'Site Map', kind:t.kind||'sitemap', state:st });
     });
     _activeDocTab = 0;
+    /* doRender() has already geo-decoded (or cover-rescaled) S.elements,
+       S.conduits and S.shapes for THIS window; the tab snapshot holds the
+       raw pixels of the window that saved them, so restoring it verbatim
+       threw that decode away. With a single tab both describe the same
+       canvas, so carry the decoded geometry into the snapshot first. */
+    if(saved.length===1){
+      try{
+        var _t0=_docTabs[0].state;
+        _t0.elements=JSON.parse(JSON.stringify(S.elements||[]));
+        _t0.conduits=JSON.parse(JSON.stringify(S.conduits||[]));
+        _t0.shapes=JSON.parse(JSON.stringify(S.shapes||[]));
+      }catch(e){}
+    }
     _restoreCanvas(_docTabs[0].state);
   } else {
     // No tabs array (legacy single-canvas project): seed tab 0 from current S.
@@ -18484,7 +18521,7 @@ function renderLegend(){
         var route=(c.route==='trench')?'T':(c.route==='surface'?'S':'-');
         var key=c.condType+'|'+route;
         if(!groups[key]){ groups[key]={condType:c.condType,route:route,qty:0,ft:0,tags:[],indoor:_lgIn(c)}; order.push(key); }
-        groups[key].qty++; groups[key].ft+=(+c.ftLen||0);
+        groups[key].qty++; groups[key].ft+=S.pxPerFt?(+c.ftLen||0):(+c.pxLen||0);
         groups[key].tags.push(tags[c.id]||'');
         totalFt+=(+c.ftLen||0);
       });
@@ -25449,6 +25486,20 @@ function _shedIfOversize(payload){
     };
     payload.shapes = strip(payload.shapes);
     payload.conduits = strip(payload.conduits);
+    /* The active tab's snapshot in docTabs carries the SAME geometry and
+       anchors -- and it is the copy _loadDocTabs actually restores -- so
+       shedding only the top-level copy never got the document under the
+       limit. t.state is a shallow copy made by _collectDocTabsForSave, so
+       this touches neither S nor _docTabs. */
+    (payload.docTabs || []).forEach(function (t) {
+      if (!t || !t.state) return;
+      t.state.shapes = strip((t.state.shapes || []).map(function (sh) {
+        if (!sh || !sh.tables || !sh.tables.length) return sh;
+        var c = {}; for (var k in sh) if (sh.hasOwnProperty(k)) c[k] = sh[k];
+        c.tables = null; c._tablesShed = true; return c;
+      }));
+      t.state.conduits = strip(t.state.conduits);
+    });
     if (geo) { dropped.push('ground anchors on ' + geo + ' items'); size = _payloadBytes(payload); }
   }
 
@@ -39275,6 +39326,11 @@ function _geoReprojectAll(){
     /* Patch 24: reproject the guided-build trenches too. */
     (S._trenches||[]).forEach(function(t){
       if(!t._geoPts || !t.pts) return;
+      /* Same rule as conduits: never half-move a run. A mismatched or partial
+         anchor is dropped so _geoStampAll re-cuts it from the drawing. */
+      var _tok=(t._geoPts.length===t.pts.length);
+      for(var _tk=0;_tok && _tk<t._geoPts.length;_tk++){ var _tg=t._geoPts[_tk]; if(!_tg || _tg.lat==null || _tg.lng==null) _tok=false; }
+      if(!_tok){ try{ delete t._geoPts; }catch(e){} return; }
       for(var i=0;i<t.pts.length && i<t._geoPts.length;i++){
         var g=t._geoPts[i]; if(!g) continue;
         var px=toPx(g.lat,g.lng);
@@ -56699,6 +56755,9 @@ function _trenchUtilityToBess(srcEl){
           label:'MV Trench '+cable.kv+' \u00b7 '+cable.cable+' \u00b7 '+cable.conduit,
           mvCable:cable, labelDx:0, labelDy:-40 };
   S.conduits.push(c);
+  /* Anchor at creation, as trenchWire and _dcfcConduitAlongRun do, so a
+     wheel zoom before the next sweep cannot anchor it at the wrong view. */
+  try{ if(typeof _geoRestampOne==='function') _geoRestampOne(c); }catch(e){}
   if(typeof renderConduit==='function') renderConduit(c);
   if(typeof updCondStat==='function') updCondStat();
   if(typeof renderLegend==='function') renderLegend();
@@ -65822,8 +65881,12 @@ function _dcfcConduitAlongRun(el, run, snap, condType, label){
     var _gft=(typeof _groundPolyFt==='function') ? _groundPolyFt(c._geoPts, c.pts.length) : null;
     if(_gft!=null && _gft>=0) c.ftLen=+_gft.toFixed(1);
   }catch(e){}
-  if(typeof renderConduit==='function') renderConduit(c);
-  if(typeof updCondStat==='function') updCondStat();
+  /* The conduit is already in S.conduits. A throw in the drawing or the
+     badge must not unwind the leg: inside omegaHistBatch it would skip the
+     history entry, and in placeDcfcAt it would skip chargersLeft-- so the
+     next click makes a second "EVSE n" with the same index. */
+  try{ if(typeof renderConduit==='function') renderConduit(c); }catch(e){}
+  try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
   return c;
 }
 
@@ -66729,7 +66792,10 @@ function _bgbStartPlacing(){
   }catch(e){}
   BGB._surface='soil'; BGB._activeRun=null; BGB._lastEnd=null;
   BGB.seq=_bgbSeq().slice();
-  if(typeof _dcfcDraw!=='undefined') _dcfcDraw=null;
+  /* A tie-in seeded the draft above and moved to 'drawtrench'; keep it.
+     Nulling it here started the run at the first click, not at the
+     equipment it was meant to tie into. */
+  if(typeof _dcfcDraw!=='undefined' && !(BGB.tieEl && BGB.phase==='drawtrench')) _dcfcDraw=null;
   /* Keep the runs already on the drawing — see _dcfcStartPlacing. Emptying
      S._trenches here erased every trench band an earlier build had drawn. */
   if(typeof S!=='undefined'){
@@ -73316,7 +73382,8 @@ window._crmToastModal=_crmToastModal;
             var _els=clone(snap.elements).map(function(el){ var p=rs(el.x||0,el.y||0); el.x=p.x; el.y=p.y; if(el.w) el.w=el.w*cover; return el; });
             var _cds=clone(snap.conduits).map(function(c){ if(c.pts) c.pts=c.pts.map(function(p){ var q=rs(p.x||0,p.y||0); p.x=q.x; p.y=q.y; return p; }); return c; });
             var _shs=clone(snap.shapes).map(function(s){ if(s.pts) s.pts=s.pts.map(function(p){ var q=rs(p.x||0,p.y||0); p.x=q.x; p.y=q.y; return p; }); if(s.x!=null){ var q2=rs(s.x,s.y); s.x=q2.x; s.y=q2.y; } if(s.w) s.w=s.w*cover; if(s.h) s.h=s.h*cover; return s; });
-            snap = Object.assign({}, snap, { elements:_els, conduits:_cds, shapes:_shs, plotCanvasW:nowW, plotCanvasH:nowH });
+            var _trs=clone(snap.trenches).map(function(t){ if(t && t.pts) t.pts=t.pts.map(function(p){ var q=rs(p.x||0,p.y||0); p.x=q.x; p.y=q.y; return p; }); return t; });
+            snap = Object.assign({}, snap, { elements:_els, conduits:_cds, shapes:_shs, trenches:_trs, plotCanvasW:nowW, plotCanvasH:nowH });
           }
         }
       }catch(e){ if(window.console) console.warn('plot rescale:', e&&e.message); }
@@ -76231,7 +76298,9 @@ window._crmToastModal=_crmToastModal;
       if(typeof showBanner==='function'){
         try{ showBanner('wiz','Committed plot cleared \u2014 this project now uses the live map.'); }catch(e){}
       }
-      if(window.OmegaNative && !OmegaNative.isOn()) OmegaNative.enable();
+      /* Do not switch the native layer on here: it hides #csvg (trench bands,
+         conduit labels) and never draws S._trenches, and the omegaNativeOffV2
+         migration has already defaulted it off on purpose. */
       if(window.console) console.info('[no-lock] cleared a committed plot from a saved project');
     }catch(e){}
   }, 500);
@@ -152191,6 +152260,14 @@ function daisy(on){
   try { if (typeof _setSaved === 'function') _setSaved('unsaved'); } catch (e) {}
   try { if (typeof updateSummaryPanel === 'function') updateSummaryPanel(); } catch (e) {}
 
+  if (!n) {
+    /* Guided-build legs record the charger as fromId with toId null, so
+       branchesFor() matched nothing and nothing was re-pointed. Those legs
+       already share their drawn run (evRun) and trenchTotals() counts it
+       once. Say so rather than report a change that did not happen. */
+    toast('Nothing to re-point — these chargers are already laid along one drawn trench run.');
+    return 0;
+  }
   toast(on
     ? list.length + ' chargers on one trench. The first segment carries all ' + list.length +
       ' \u2014 size the conductor for the group, not for one unit.'
