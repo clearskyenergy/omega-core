@@ -2359,13 +2359,23 @@ service cloud.firestore {
        as the person writing it. */
     match /access_requests/{uid} {
       allow read:   if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create: if signedIn()
+      /* Two ways a request is filed: the person themselves from the sign-in
+         page (id = their uid, email must match), or ClearSky queueing one on a
+         prospect's behalf from the console (source 'clearsky'), so a tenant
+         asked for in a meeting shows up in the same queue for approval. */
+      allow create: if (signedIn()
                     && request.auth.uid == uid
                     && request.resource.data.email == request.auth.token.email.lower()
                     && request.resource.data.get('status', '') == 'pending'
                     && request.resource.data.company is string
                     && request.resource.data.company.size() > 1
-                    && request.resource.data.company.size() < 120;
+                    && request.resource.data.company.size() < 120)
+                    || (isAdmin()
+                    && request.resource.data.get('source', '') == 'clearsky'
+                    && request.resource.data.get('status', '') == 'pending'
+                    && request.resource.data.company is string
+                    && request.resource.data.company.size() > 1
+                    && request.resource.data.company.size() < 120);
       /* Re-filing is allowed — a typo in the company name should not need a
          support ticket — but only while it is still pending, and only by the
          person it belongs to. Once ClearSky has acted, the row is history. */

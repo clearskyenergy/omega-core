@@ -126,7 +126,12 @@
      "serves every tenant, pins none", which is a third thing from "hub" and
      "one tenant's portal". */
   var OPEN_HOSTS = ['silmarillion.clearskyomega.com'];
-  var TIER_LEVEL = { trial: -1, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
+  /* A trial is the product on approval, not a locked lobby. At -1 a trial
+     tenant unlocked nothing (every tool defaults to Standard), so Budderfly
+     opened its marketplace to "All 0 · No applications match" on day one
+     (Thomas, 2026-09-16). While the trial runs it holds the top level; when
+     it lapses, standing() closes the account, not the tier. */
+  var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
   var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 
   function cfg() { return global.CLEARSKY_CONFIG || (global.CLEARSKY_CONFIG = {}); }

@@ -1813,6 +1813,49 @@ function createTenant(){
 var REQS = [];
 var NT_FROM_REQ = null;
 
+/* ── QUEUE A REQUEST ON A PROSPECT'S BEHALF ─────────────────────────────
+   A tenant agreed to in a meeting arrives the same way a self-signup does:
+   as a pending access request in the queue, with "Set up workspace" already
+   filled in from it. Keyed by domain (q-<domain>) so filing the same company
+   twice updates the one request instead of adding a second. The rules admit
+   it only from a ClearSky admin, with source 'clearsky'. */
+function toggleQueueRequest(){
+  var box=document.getElementById('tn-queue'); if(!box) return;
+  var open = box.style.display==='none';
+  box.style.display = open ? '' : 'none';
+  if(open){ var e=document.getElementById('q-company'); if(e) e.focus(); }
+}
+function queueAccessRequest(o){
+  var v=function(id){ return String((document.getElementById(id)||{}).value||'').trim(); };
+  o = o || { company:v('q-company'), domain:v('q-domain'), email:v('q-email'), vertical:v('q-vertical')||'developer', note:v('q-note') };
+  var msg=document.getElementById('q-msg'); var say=function(t){ if(msg) msg.textContent=t; };
+  var company=String(o.company||'').trim();
+  var domain=String(o.domain||'').trim().toLowerCase().replace(/^@/,'').replace(/^https?:\/\//,'').split('/')[0];
+  var email=String(o.email||'').trim().toLowerCase();
+  if(company.length<2) return say('Give the company a name.');
+  if(!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) return say('That does not look like an email domain.');
+  if(email && email.indexOf('@')<1) return say('That does not look like an email address.');
+  var FV=firebase.firestore.FieldValue;
+  var id='q-'+domain.replace(/[^a-z0-9]+/g,'-');
+  say('Checking…');
+  return db.collection('omega_orgs').doc(domain).get().then(function(s){
+    if(s.exists) throw new Error(domain+' already has a workspace ('+((s.data()||{}).name||domain)+') — edit it in the table below.');
+    return db.collection('access_requests').doc(id).set({
+      company:company, domain:domain, email:email||null, vertical:o.vertical||'developer', note:o.note||null,
+      status:'pending', source:'clearsky',
+      requestedBy:(currentUser&&currentUser.email)||'console', createdAt:FV.serverTimestamp()
+    });
+  }).then(function(){
+    say('Queued — it is in Access requests, ready to set up.');
+    ['q-company','q-domain','q-email','q-note'].forEach(function(k){ var e=document.getElementById(k); if(e) e.value=''; });
+    return loadAccessRequests();
+  })['catch'](function(e){
+    say(e && e.code==='permission-denied' ? 'Firestore refused it — this console needs a ClearSky admin account, and the rules must allow source "clearsky".'
+                                         : ((e&&e.message)||'Could not queue the request.'));
+  });
+}
+window.queueAccessRequest=queueAccessRequest; window.toggleQueueRequest=toggleQueueRequest;
+
 function loadAccessRequests(){
   return db.collection('access_requests').where('status','==','pending').get()
     .then(function(sn){
@@ -1843,7 +1886,7 @@ function renderAccessRequests(){
     var when = (r.createdAt&&r.createdAt.toDate) ? r.createdAt.toDate().toLocaleDateString() : '';
     return '<div class="info-card"><div class="ic-top"><div>'
       + '<div class="ic-name">'+esc(r.company||r.domain||r.email)+'</div>'
-      + '<div class="ic-sub">'+esc(r.email)+' · '+esc(r.domain||'')
+      + '<div class="ic-sub">'+esc(r.email||(r.source==='clearsky'?'queued by '+(r.requestedBy||'ClearSky'):''))+' · '+esc(r.domain||'')
       +   (r.vertical?(' · '+esc(r.vertical)):'')+(when?(' · '+esc(when)):'')+'</div>'
       + (r.note?('<div class="sub-txt" style="margin-top:6px">“'+esc(r.note)+'”</div>'):'')
       + '</div><span class="chip warn">requested</span></div>'

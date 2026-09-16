@@ -687,6 +687,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
           <button class="btn-ghost" id="tn-refer-calexico" onclick="referDeal('calexico','helios')"
                   title="Hold the Calexico project for Helios for 14 days">&#128188; Refer Calexico &rarr; Helios</button>
           <button class="btn-ghost" id="tn-new-toggle" onclick="toggleNewTenant()">+ New tenant</button>
+          <button class="btn-ghost" id="tn-queue-toggle" onclick="toggleQueueRequest()" title="File a pending access request for a company agreed to elsewhere, so it is approved and set up here like a self-signup">✉ Queue a request</button>
           <button class="btn-ghost" id="tn-refresh" onclick="loadTenants()">&#8635; Refresh</button>
         </div>
       </div>
@@ -747,6 +748,30 @@ body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-tex
       <!-- ACCESS REQUESTS — somebody created an account on /login and their
            email domain has no workspace. One click sets the tenant up with
            their own answers already in the form. -->
+      <!-- QUEUE A REQUEST — a tenant agreed to in a meeting or a message is
+           filed into the same approval queue as a self-signup, so it is set
+           up the same way, by the same button, with the same record. -->
+      <div id="tn-queue" class="info-card" style="display:none;margin-bottom:16px">
+        <div class="ic-name">Queue an access request</div>
+        <div class="sub-txt" style="margin:4px 0 10px">Files a pending request as if the company had signed up. It appears under Access requests with “Set up workspace” pre-filled.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px">
+          <label class="nt-f"><span>Company</span><input id="q-company" placeholder="East West Energy"></label>
+          <label class="nt-f"><span>Email domain</span><input id="q-domain" placeholder="eastwestenergy.ai"></label>
+          <label class="nt-f"><span>Contact email</span><input id="q-email" placeholder="name@company.com"></label>
+          <label class="nt-f"><span>Vertical</span>
+            <select id="q-vertical">
+              <option value="developer" selected>Developer, owner &amp; capital</option>
+              <option value="installer">Installer &amp; sales channel</option>
+              <option value="epc">EPC &amp; engineering</option>
+              <option value="oem">OEM &amp; technology channel</option>
+            </select></label>
+        </div>
+        <label class="nt-f" style="margin-top:8px"><span>Note</span><input id="q-note" placeholder="How they came in, what they need"></label>
+        <div class="ic-actions" style="margin-top:10px">
+          <button onclick="queueAccessRequest()">Queue request</button>
+          <span id="q-msg" class="sub-txt" style="margin-left:8px"></span>
+        </div>
+      </div>
       <div id="tn-req-wrap" style="display:none;margin-bottom:16px">
         <div class="block-title" style="font-size:14px;margin-bottom:8px">Access requests<span class="cnt" id="tn-req-count">0</span></div>
         <div id="tn-req"></div>

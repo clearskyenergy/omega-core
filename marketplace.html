@@ -692,7 +692,7 @@ window._omegaReady = function(){
       <!-- Same-origin, never osa.clearskyomega.com — that host is the old Vercel
            project and a click there drops the user onto the legacy build. See
            the long note in index.html beside the same link. -->
-      <a class="sn-item" id="sn-osa" href="/tenants/osa" style="display:none">
+      <a class="sn-item" id="sn-osa" href="/osa" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <span>OSA Workspace</span>
       </a>
@@ -1033,15 +1033,27 @@ function loadPins(org, cb){
   } else { cb([]); }
 }
 
-/* ── Which tools this tenant may see (workspace unlock gate). ── */
+/* ── Which tools this tenant may BROWSE: everything it is allowed to see.
+   The marketplace is the catalogue, so a tool a plan does not include is
+   still listed, marked locked, rather than hidden — a tenant cannot ask
+   for what it cannot see. Whether a tool opens is isUnlocked(); the card
+   shows the plan it comes with. ── */
 function qualifying(){
   var all = OMEGATools.all(), out=[];
   for (var i=0;i<all.length;i++){
     var t = all[i];
-    if (OMEGATools && typeof OMEGATools.isUnlocked==='function'){ if (OMEGATools.isUnlocked(t, WORKSPACE)) out.push(t); }
+    if (OMEGATools && typeof OMEGATools.isVisible==='function'){ if (OMEGATools.isVisible(t, WORKSPACE)) out.push(t); }
     else out.push(t);
   }
   return out;
+}
+function isUnlockedHere(t){
+  if (!(OMEGATools && typeof OMEGATools.isUnlocked==='function')) return true;
+  return OMEGATools.isUnlocked(t, WORKSPACE);
+}
+function planLabel(t){
+  var n = (typeof t.tier==='number') ? t.tier : 1;
+  return ({0:'every plan',1:'Standard',2:'Deluxe',3:'Enterprise'})[n] || 'a higher plan';
 }
 function isPinned(k){ return _PINNED.indexOf(k)>=0; }
 function isRequired(t){
@@ -1128,8 +1140,10 @@ function card(t){
   else if (t.action) open='href="/"';   // action tools live on the portal
   else open='href="'+esc(hrefFor(t))+'"';
 
+  var locked = !t.soon && !isUnlockedHere(t);
   var pill='';
   if (t.soon) pill='<span class="mkt-pill soon">Soon</span>';
+  else if (locked) pill='<span class="mkt-pill soon">'+esc(planLabel(t))+' plan</span>';
   else if (req) pill='<span class="mkt-pill inc">Included</span>';
   else if (pinned) pill='<span class="mkt-pill added">Added</span>';
   else if (t.badge==='invest') pill='<span class="mkt-pill invest">Investors</span>';
@@ -1137,6 +1151,7 @@ function card(t){
 
   var action;
   if (t.soon){ action='<div class="mkt-actions"><div class="mkt-act disabled">Coming soon</div></div>'; }
+  else if (locked){ action='<div class="mkt-actions"><div class="mkt-act disabled" title="Ask ClearSky to add this to your plan">Included with '+esc(planLabel(t))+'</div></div>'; }
   else if (req || pinned){
     var openBtn='<a class="mkt-act primary" '+open+'>Open</a>';
     var rm = req ? '' : '<button class="mkt-act ghost" onclick="toggle(&quot;'+esc(t.key)+'&quot;)">Remove</button>';
