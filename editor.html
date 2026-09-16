@@ -58389,6 +58389,17 @@ var EVC_L2 = {
     spec:'9.6-12 kW (40-50A) \u00b7 wall/pedestal \u00b7 J1772/NACS',
     img:EVIMG_AUTEL_ACELITE
   },
+  /* Two AC Elite units on one floor pedestal \u2014 same rules as the AC Pro
+     dual below: one placement, two chargers, two branch circuits in the
+     same trench, one pedestal per placement, priced as two Elites. */
+  autel_ac_elite_dual: {
+    label:'Autel AC Elite \u00d72 \u2014 dual pedestal', unitLabel:'Autel AC Elite',
+    mfr:'Autel', model:'Autel MaxiCharger AC Elite (dual pedestal)',
+    kw:12, amps:'40-50A', connectors:'J1772 / NACS', ports:2, units:2, pedestal:true, priceId:'autel_ac_elite',
+    lf:1.60, wf:3.20, minW:18, minH:36,
+    spec:'2 \u00d7 9.6-12 kW (40-50A each) \u00b7 dual floor pedestal \u00b7 two branch circuits',
+    img:EVIMG_AUTEL_ACPRO_PED
+  },
   autel_ac_pro: {
     label:'Autel AC Pro', mfr:'Autel', model:'Autel MaxiCharger AC Pro',
     kw:19.2, amps:'80A', connectors:'J1772 / NACS', ports:1, lf:1.10, wf:0.80,
@@ -104171,6 +104182,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     { name: 'Theme: Graphite + Brand Green', desc: 'Neutral chrome with the NextNRG green highlight', ico: '\u25D1', run: function () { setAccent('green'); } },
     { name: 'Theme: Graphite + Amber', desc: 'Neutral chrome with an amber highlight', ico: '\u25D1', run: function () { setAccent('amber'); } },
     { name: 'Reconnect chargers to the panel', desc: 'Rebuild the branch trench (and its bollard) for any guided-build charger that lost it', ico: '\u26A1', run: function () { if (window.OmegaEvReconnect) OmegaEvReconnect.reconnectAll(); } },
+    { name: 'Re-lay branch conduits along the drawn trench', desc: 'Put every charger branch back on the trench run you drew \u2014 fixes legs that fan straight to the panel and the footage they quote', ico: '\u26A1', run: function () { if (window.OmegaEvRelay) OmegaEvRelay.relayAll(); } },
     { name: 'Interface: restore original colours', desc: 'Turn the colour harmonizer off for this session', ico: '\u21BA', run: function () { OmegaSkin.harmonize(false); } }
   ];
 
@@ -174033,6 +174045,100 @@ setInterval(function(){
 }, 2000);
 
 root.OmegaEvReconnect={ orphans:orphans, reconnect:reconnect, reconnectAll:reconnectAll, announce:announce };
+})(window);
+</script>
+<script id="omega-ev-relay-js">
+/* ══════════════════════════════════════════════════════════════════════
+ *  RE-LAY EVERY GUIDED-BUILD BRANCH ALONG THE DRAWN TRENCH
+ *  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+ *
+ *  Drawings saved before 5e9a54f carry branch conduits that were dragged
+ *  after their charger: a straight diagonal from the panel to wherever the
+ *  symbol ended up, one per charger, fanning across the lot and quoting
+ *  conduit that was never dug (Concord's 30 Massachusetts Ave, ten legs,
+ *  1,133 ft). The trench RUN the person drew is still on the drawing. This
+ *  lays each branch back along it: the leg taps the run at the point
+ *  nearest its charger and follows the run to the panel; the charger symbol
+ *  stays where it was put. Orphaned chargers are reconnected first.
+ *
+ *  Nothing runs on its own — Search tools › "Re-lay branch conduits along
+ *  the drawn trench", or OmegaEvRelay.relayAll() in the console.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function(root){
+'use strict';
+var TAG='[omega/ev-relay]';
+function S_(){ try{ return (typeof S!=='undefined' && S) ? S : (root.S||null); }catch(e){ return root.S||null; } }
+function isCharger(e){ return !!(e && e.type==='evgear' && e.evKind==='charger'); }
+function centre(e){
+  try{ if(typeof _elBox==='function'){ var b=_elBox(e); if(b) return { x:b.cx, y:b.cy }; } }catch(x){}
+  var w=+e.w||60, h=+e.h||w; return { x:(+e.x||0)+w/2, y:(+e.y||0)+h/2 };
+}
+function plen(pts){ var d=0; for(var i=1;i<pts.length;i++) d+=Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y); return d; }
+/* The run this leg belongs to: the one it was laid in, else the nearest
+   branch-leg run to the charger — within a stall or two, never across the lot. */
+function runFor(s, c, el){
+  var runs=(s._trenches||[]).filter(function(t){ return t && t.pts && t.pts.length>1; });
+  var r=null;
+  if(c.evRun) r=runs.filter(function(t){ return t.id===c.evRun; })[0]||null;
+  if(r) return r;
+  if(typeof _dcfcNearestOnPoly!=='function') return null;
+  var p=centre(el), best=null, bd=Infinity;
+  runs.forEach(function(t){
+    if(t.leg && t.leg!=='branch') return;
+    var sn=_dcfcNearestOnPoly(t.pts, p); if(sn && sn.dist<bd){ bd=sn.dist; best=t; }
+  });
+  var ppf=(s.pxPerFt>0)?s.pxPerFt:6;
+  return (best && bd<=ppf*30) ? best : null;
+}
+function relayOne(s, c, el){
+  var run=runFor(s, c, el); if(!run) return 'no-run';
+  var p=centre(el);
+  var sn=_dcfcNearestOnPoly(run.pts, p); if(!sn) return 'no-run';
+  var pts=[{ x:sn.x, y:sn.y, elId:el.id },{ x:sn.x, y:sn.y }];
+  for(var i=sn.seg-1;i>=0;i--) pts.push({ x:run.pts[i].x, y:run.pts[i].y });
+  var before=plen(c.pts||[]), after=plen(pts);
+  if(Math.abs(before-after)<0.5 && c.evRun===run.id) return 'same';
+  var ppf=(s.pxPerFt>0)?s.pxPerFt:6;
+  c.pts=pts; c.pxLen=after; c.ftLen=+(after/ppf).toFixed(1);
+  c.evRun=run.id; if(!c.route) c.route='trench'; if(c.trenchIn==null && run.in) c.trenchIn=run.in;
+  /* The far end is a point on the trench, not a device — as the build lays it. */
+  c.toId=null; c.toElId=null;
+  if(c._geoPts!==undefined) c._geoPts=[];
+  try{ if(typeof _geoRestampOne==='function') _geoRestampOne(c); }catch(e){}
+  return 'relaid';
+}
+function relayAll(){
+  var s=S_(); if(!s) return { relaid:0 };
+  var relaid=0, same=0, noRun=0, orphans=0;
+  var work=function(){
+    try{ if(root.OmegaEvReconnect){ var r=root.OmegaEvReconnect.reconnectAll(); orphans=(r&&r.count)||0; } }catch(e){}
+    (s.conduits||[]).forEach(function(c){
+      if(!c || !c.fromId) return;
+      if(!(c.evRun || /L2-TRENCH|EV-BRANCH/.test(String(c.condType||'')))) return;
+      var el=(s.elements||[]).filter(function(e){ return e && e.id===c.fromId; })[0];
+      if(!isCharger(el)) return;
+      var r=relayOne(s, c, el);
+      if(r==='relaid'){ relaid++; try{ if(typeof renderConduit==='function') renderConduit(c); }catch(e){} }
+      else if(r==='same') same++; else noRun++;
+    });
+  };
+  if(typeof omegaHistBatch==='function') omegaHistBatch(work); else { work(); try{ pushHist(); }catch(e){} }
+  try{ if(typeof renderTrenchCorridors==='function') renderTrenchCorridors(); }catch(e){}
+  try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
+  try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+  try{ if(typeof updateSummaryPanel==='function') updateSummaryPanel(); }catch(e){}
+  try{ if(relaid||orphans) _setSaved('unsaved'); }catch(e){}
+  var msg = (relaid||orphans)
+    ? ('Re-laid '+relaid+' branch conduit'+(relaid===1?'':'s')+' along the drawn trench'
+       +(orphans?(' and reconnected '+orphans+' charger'+(orphans===1?'':'s')):'')
+       +(noRun?('; '+noRun+' left as drawn — no trench run near them'):'')+'. Press Run to recompute.')
+    : (noRun ? 'No drawn trench run near these chargers — draw the run, then re-lay.'
+             : 'Every branch already follows its trench.');
+  try{ showBanner('cal', msg); }catch(e){}
+  try{ console.info(TAG, msg); }catch(e){}
+  return { relaid:relaid, same:same, noRun:noRun, orphans:orphans };
+}
+root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
 })(window);
 </script>
 
