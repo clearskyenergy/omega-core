@@ -137,21 +137,21 @@ console.log('\ncancelling keeps what was placed');
   chk('the build is off and the mode is select', DCFC.active === false && calls.mode === 'select');
 }
 
-console.log('\ndragging a charger keeps its branch on the run');
+console.log('\nmoving a charger leaves its trench where it was drawn');
 {
   S._trenches = [{ id: 'r1', pts: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 0 }] }];
-  const c = { id: 'c1', evRun: 'r1', fromId: 'e1', route: 'trench', _geoPts: [{ lat: 1, lng: 1 }, { lat: 1, lng: 1 }, { lat: 1, lng: 1 }],
+  const c = { id: 'c1', evRun: 'r1', fromId: 'e1', route: 'trench', ftLen: 33.3, pxLen: 100,
+              _geoPts: [{ lat: 1, lng: 1 }, { lat: 1, lng: 1 }, { lat: 1, lng: 1 }],
               pts: [{ x: 100, y: 0, elId: 'e1' }, { x: 100, y: 0 }, { x: 0, y: 0 }] };
   S.conduits = [c];
   global.getCenter = () => ({ x: 150, y: 40 });
   calls.conduitRenders = 0;
   updateAttached('e1');
   const p = c.pts.map(q => Math.round(q.x) + ',' + Math.round(q.y)).join(' ');
-  chk('lateral to the nearest point on the run, then the run back to its start', p === '150,40 150,0 100,0 0,0', p);
-  chk('the device end keeps its attachment', c.pts[0].elId === 'e1');
-  chk('the stale anchor is marked for a full re-cut', Array.isArray(c._geoPts) && c._geoPts.length === 0);
-  chk('the length is re-measured', near(c.pxLen, 40 + 50 + 100));
-  chk('the run was redrawn', calls.conduitRenders === 1);
+  chk('the leg does not follow the symbol: no lateral, no diagonal', p === '100,0 100,0 0,0', p);
+  chk('its length is untouched', c.ftLen === 33.3 && c.pxLen === 100);
+  chk('its ground anchor is untouched', c._geoPts.length === 3);
+  chk('nothing was redrawn', calls.conduitRenders === 0);
   const plain = { id: 'c2', fromId: 'e2', pts: [{ x: 5, y: 5, elId: 'e2' }, { x: 9, y: 9 }] };
   S.conduits = [plain];
   global.getCenter = () => ({ x: 7, y: 7 });

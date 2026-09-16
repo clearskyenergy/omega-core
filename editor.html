@@ -18049,29 +18049,14 @@ function updateAttached(elId){
   const center=getCenter(elId);if(!center)return;
   S.conduits.forEach(c=>{
     let ch=false;
-    /* A guided-build branch follows the trench RUN it was laid in (evRun).
-       When its device is dragged, put the device end back on that run — a
-       short lateral to the nearest point on the run, then the run back to
-       its start — instead of stretching the first segment into a diagonal
-       across the lot. Four chargers dragged off one short run drew four
-       diagonals from the panel (Thomas, 30 Mass Ave, 2026-09-15). When the
-       run no longer exists, fall through to the plain endpoint follow. */
-    if(c.evRun && c.pts && c.pts.length>1 && c.pts[0] && c.pts[0].elId===elId && typeof _dcfcNearestOnPoly==='function'){
-      const run=(S._trenches||[]).find(t=>t && t.id===c.evRun);
-      if(run && run.pts && run.pts.length>1){
-        const sn=_dcfcNearestOnPoly(run.pts, center);
-        if(sn){
-          const tail=c.pts[c.pts.length-1];
-          const np=[{...c.pts[0], x:center.x, y:center.y},{x:sn.x, y:sn.y}];
-          for(let i=sn.seg-1;i>=0;i--) np.push({x:run.pts[i].x, y:run.pts[i].y});
-          if(tail && tail.elId) np[np.length-1]={...np[np.length-1], elId:tail.elId};
-          c.pts=np; ch=true;
-          /* The vertex count changed; the anchor below is re-cut from the
-             new vertices rather than left half-matching the old ones. */
-          if(c._geoPts!==undefined) c._geoPts=[];
-        }
-      }
-    }
+    /* A guided-build leg (evRun) is the trench as it was DRAWN. Moving the
+       charger is a drawing choice — the symbol goes where it reads best on
+       the map — not a change to what gets dug, so the leg does not follow
+       it: no lateral, no diagonal, no added footage. Earlier versions
+       stretched the leg to the new spot and the trench total climbed with
+       every nudge (Thomas, 160 S Main St, 2026-09-16). To move the trench
+       itself, drag the run's own points. */
+    if(c.evRun && c.pts && c.pts.length>1 && c.pts[0] && c.pts[0].elId===elId) return;
     // Update any point tagged with this elId
     c.pts=c.pts.map(p=>{if(p.elId===elId){ch=true;return{...p,x:center.x,y:center.y};}return p;});
     // Also update first/last point if fromElId/toElId matches
@@ -39274,7 +39259,11 @@ function _geoReprojectAll(){
          port/edge exit and is recorded. Beyond that it is drift, and the
          endpoint goes home to the centre. The old tolerance is used ONCE,
          to make that call, instead of every frame forever. */
-      if(typeof _elCenter==='function' && c.pts.length){
+      /* Guided-build legs (evRun) are anchored to the ground they were drawn
+         on, not to the charger: welding their end to the charger's centre
+         on every map move dragged the trench after a symbol that was only
+         moved for looks, and the footage climbed with it. Skip the weld. */
+      if(typeof _elCenter==='function' && c.pts.length && !c.evRun){
         var lastI = c.pts.length-1;
         var _ppfW = (S.pxPerFt>0) ? S.pxPerFt : 0;
         for(var pi=0; pi<c.pts.length; pi++){
