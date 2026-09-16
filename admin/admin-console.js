@@ -1117,11 +1117,13 @@ function serverHealth(){
   _authedPost('/api/health', {}).then(function(r){
     var miss = (r.missing || Object.keys(r.env || {}).filter(function(k){ return !r.env[k]; }).map(function(k){ return { name:k }; }))
       .map(function(m){ return m.name + (m.blocks ? '\n      stops: ' + m.blocks : ''); });
+    var bad  = (r.malformed || []).map(function(m){ return m.name + '\n      expects: ' + m.expects; });
     var dflt = (r.defaulted || []).map(function(d){ return d.name + ' = ' + d.value; });
     window.alert('Server health\n\n'
       + r.summary + '\n\n'
       + 'Firestore: ' + r.firestore + (r.firestoreError ? ' (' + r.firestoreError + ')' : '') + '\n\n'
       + 'Missing (set in Vercel › Settings › Environment Variables, then redeploy):\n  ' + (miss.length ? miss.join('\n  ') : 'none')
+      + (bad.length ? '\n\nSet but wrong (replace the value, then redeploy):\n  ' + bad.join('\n  ') : '')
       + (dflt.length ? '\n\nUsing built-in defaults:\n  ' + dflt.join('\n  ') : ''));
     try { console.log('[health]', r); } catch(e){}
   })['catch'](function(e){ adminFail('read server health', e); });

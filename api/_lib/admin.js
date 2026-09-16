@@ -28,23 +28,38 @@ var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
    caller dying with a 500 "is not set". Measured 2026-09-11: production ran
    for weeks with the variable absent and every Admin-backed function was a
    500, discovered only when the site-map autopilot asked /api/parcel. */
-var degraded = false;
+var degraded = false, degradedWhy = '';
+/* The credential is parsed here, once, and a bad one degrades the server the
+   same way a missing one does. It used to throw out of JSON.parse on every
+   request, which turned a pasted-wrong variable into a 500 on every endpoint
+   that takes a token — strictly worse than the unset state it replaced. */
+function parseServiceAccount(sa) {
+  var j;
+  try { j = JSON.parse(sa); }
+  catch (e) { return { error: 'FIREBASE_SERVICE_ACCOUNT is not JSON (it begins "' + String(sa).slice(0, 12).replace(/[^\x20-\x7e]/g, '?') + '…")' }; }
+  if (!j || j.type !== 'service_account' || !j.private_key || !j.client_email) {
+    return { error: 'FIREBASE_SERVICE_ACCOUNT parses but is not a service-account key (expects type, client_email, private_key)' };
+  }
+  return { key: j };
+}
 function init() {
   if (admin.apps.length) return admin;
   var sa = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!sa) {
-    degraded = true;
-    console.error('[api] FIREBASE_SERVICE_ACCOUNT is not set — tokens verify, Firestore is unavailable');
+  var parsed = sa ? parseServiceAccount(sa) : { error: 'FIREBASE_SERVICE_ACCOUNT is not set' };
+  if (parsed.error) {
+    degraded = true; degradedWhy = parsed.error;
+    console.error('[api] ' + parsed.error + ' — tokens verify, Firestore is unavailable');
     admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID || 'clearsky-portal' });
     return admin;
   }
-  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(sa)) });
+  admin.initializeApp({ credential: admin.credential.cert(parsed.key) });
   return admin;
 }
 function isDegraded() { init(); return degraded; }
+function degradedReason() { init(); return degradedWhy; }
 function db() {
   init();
-  if (degraded) throw httpError(503, 'server has no Firestore credential (FIREBASE_SERVICE_ACCOUNT is not set)');
+  if (degraded) throw httpError(503, 'server has no Firestore credential (' + degradedWhy + ')');
   return admin.firestore();
 }
 
@@ -116,6 +131,6 @@ function cors(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
-module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
+module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
   canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };

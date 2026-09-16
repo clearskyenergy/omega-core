@@ -32,6 +32,19 @@ var EXPECTED = {
 /* Read with a default that is right for production; listed so the dialog can
    say "using default" instead of "missing". Only GOOGLE_MAPS_API_KEY used to
    be listed and is read by no function — the Maps key is a browser key. */
+/* A set key that cannot be right is reported as malformed — still a boolean,
+   still never a value. This exists because a service-account variable once
+   held the Vercel CLI's own banner text, pasted at the prompt. */
+function shape(test, hint) { return { test: test, hint: hint }; }
+var SHAPE = {
+  FIREBASE_SERVICE_ACCOUNT: shape(function (v) {
+    try { var j = JSON.parse(v); return !!(j && j.type === 'service_account' && j.private_key && j.client_email); } catch (e) { return false; }
+  }, 'the JSON key file from Firebase › Project settings › Service accounts, as one line'),
+  RESEND_API_KEY:        shape(function (v) { return /^re_[A-Za-z0-9_]+$/.test(v); }, 'a Resend key, which starts with re_'),
+  GEMINI_API_KEY:        shape(function (v) { return /^AIza[0-9A-Za-z_-]{20,}$/.test(v); }, 'a Google AI key, which starts with AIza'),
+  STRIPE_SECRET_KEY:     shape(function (v) { return /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(v); }, 'a Stripe secret key, which starts with sk_live_ or sk_test_'),
+  STRIPE_WEBHOOK_SECRET: shape(function (v) { return /^whsec_[A-Za-z0-9]+$/.test(v); }, 'a Stripe webhook signing secret, which starts with whsec_')
+};
 var DEFAULTED = {
   FIREBASE_PROJECT_ID: 'clearsky-portal',
   FINANCE_PORTAL_URL:  'https://silmarillion.clearskyomega.com/finance'
@@ -43,10 +56,11 @@ module.exports = A.handler(function (req) {
     if (!caller.staff) throw A.httpError(403, 'ClearSky staff only');
 
     var set = function (k) { return !!(process.env[k] && String(process.env[k]).trim()); };
-    var env = {}, missing = [], defaulted = [];
+    var env = {}, missing = [], defaulted = [], malformed = [];
     Object.keys(EXPECTED).forEach(function (k) {
       env[k] = set(k);
       if (!env[k]) missing.push({ name: k, blocks: EXPECTED[k] });
+      else if (SHAPE[k] && !SHAPE[k].test(String(process.env[k]).trim())) malformed.push({ name: k, expects: SHAPE[k].hint });
     });
     Object.keys(DEFAULTED).forEach(function (k) {
       env[k] = true;                       /* never "missing": it has a value either way */
@@ -69,16 +83,20 @@ module.exports = A.handler(function (req) {
     return probe.then(function (fs) {
       return {
         env: env,
-        missing: missing,       /* [{name, blocks}] — what each absent key stops */
-        defaulted: defaulted,   /* [{name, value}]  — unset, running on the built-in value */
+        missing: missing,       /* [{name, blocks}]  — what each absent key stops */
+        malformed: malformed,   /* [{name, expects}] — set, but cannot be the right thing */
+        defaulted: defaulted,   /* [{name, value}]   — unset, running on the built-in value */
         degraded: degraded,
+        degradedReason: typeof A.degradedReason === 'function' ? A.degradedReason() : null,
         firestore: fs.firestore,
         firestoreError: fs.error,
         /* The one sentence somebody can act on. */
         summary: fs.firestore === 'ok'
           ? 'Firestore is reachable. Anything failing is not a credential.'
           : (env.FIREBASE_SERVICE_ACCOUNT
-              ? 'FIREBASE_SERVICE_ACCOUNT is set but Firestore did not answer: ' + (fs.error || 'unknown')
+              ? (degraded
+                  ? 'FIREBASE_SERVICE_ACCOUNT is set but unusable: ' + (A.degradedReason ? A.degradedReason() : 'not a service-account key') + '. Replace it in Vercel and redeploy.'
+                  : 'FIREBASE_SERVICE_ACCOUNT is set but Firestore did not answer: ' + (fs.error || 'unknown'))
               : 'FIREBASE_SERVICE_ACCOUNT is NOT set. Tokens verify, Firestore does not. '
                 + 'Set it in the Vercel project environment and redeploy.'),
         checkedBy: caller.email || null
