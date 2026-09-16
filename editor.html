@@ -66050,7 +66050,7 @@ placeDcfcAt=function(p){
       var lastIdx = idx + units - 1;
       var cel = DCFC.level2
         ? _evAdd('charger', snap.x, snap.y,
-            (units>1 ? 'EVSE '+idx+'–'+lastIdx : 'EVSE '+idx)+' · '+mm.label,
+            (units>1 ? 'EVSE '+idx+'–'+lastIdx+' · '+(mm.unitLabel||mm.label)+' ×'+units : 'EVSE '+idx+' · '+mm.label),
             (units>1
               ? units+' × '+(mm.amps||(DCFC.l2amps+'A'))+' · '+_l2Circuit()+'A circuit each'
               : (mm.amps||(DCFC.l2amps+'A'))+' · '+_l2Circuit()+'A circuit')
