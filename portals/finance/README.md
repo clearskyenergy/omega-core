@@ -13,6 +13,40 @@ Hosting). No build step, no bundler, no local tooling required.
 
 ---
 
+## How this deploys (read before touching Vercel)
+
+**There is no separate deploy for this portal.** `portals/finance/` ships with
+`omega-core`: every push to `main` deploys it to production alongside the
+rest of the platform, and `https://financing.csebuilders.com` is a domain on
+the **`omega-core`** Vercel project. The root `vercel.json` routes that host
+to this folder:
+
+| URL on financing.csebuilders.com | served from                        |
+|----------------------------------|------------------------------------|
+| `/`, `/index.html`               | `/portals/finance/index.html`      |
+| `/dealroom`, `/dealroom.html`    | `/portals/finance/dealroom.html`   |
+| `/battery-sizer`                 | `/portals/finance/battery-sizer.html` |
+| `/api/*`                         | the root `api/` functions          |
+| `/omega-*.js`, `/portals/finance/*` | the same files as on silmarillion |
+
+The same pages are `https://silmarillion.clearskyomega.com/finance` (rewrite)
+and `/portals/finance/...` (real path). Reference shared assets by absolute
+path (`/omega-fees.js`, `/portals/finance/firebase-config.js`), never
+`./file` — the browser URL on the financing host is `/dealroom`, not
+`/portals/finance/dealroom`, so a relative path resolves to the root and 404s.
+
+**Legacy, do not deploy to:** the Vercel project named `finance` and the
+GitHub repo `clearskyenergy/finance` are the pre-consolidation portal. Until
+2026-09-16 the `financing.csebuilders.com` domain was still attached to that
+project, so the live host froze at a CLI deploy from 2026-09-08 while
+`main` moved on; the domain was moved to `omega-core` that day. The local
+`.vercel/` link in this folder was removed for the same reason — running
+`vercel` from here would have pushed to the old project again. If either
+legacy surface is ever needed, `finance-amber-six.vercel.app` still points at
+its last build.
+
+---
+
 ## ⚠️ What actually runs
 
 **`index.html` is the whole application.** It carries the markup, the styles
@@ -530,18 +564,15 @@ The composite indexes may also be created on demand — the first time a query
 runs, the Firebase console will surface a one-click "create index" link.
 
 ### 4. Authorize your domains
-**Authentication → Settings → Authorized domains** — add your Vercel domain
-(e.g. `financing.csebuilders.com`) and `localhost` for local testing.
+**Authentication → Settings → Authorized domains** — `financing.csebuilders.com`
+and `silmarillion.clearskyomega.com` are already listed; add a new host there
+before pointing it at this folder, and `localhost` for local testing.
 
 ### 5. Deploy the app
 
-**Vercel (GitHub flow):** push this repo, import it in Vercel, set the root/output
-directory to `public/`, deploy. Point `financing.csebuilders.com` at it.
-
-**or Firebase Hosting:**
-```bash
-firebase deploy --only hosting
-```
+Push to `main` in `omega-core`. That is the whole procedure — see
+*How this deploys* at the top. Do **not** import this folder as its own
+Vercel project and do **not** run `vercel` from inside it.
 
 ---
 
@@ -573,12 +604,11 @@ the CTA links on the marketing page (`financing.html`).
 
 ## Linking from the platform
 
-Point the **Financing Partners** card in `platform.html` (currently `SOON`) and
-the nav item at the marketing page `financing.html`, whose register/login CTAs
-send users to this portal at `https://financing.csebuilders.com/?mode=register`
-(or `mode=login`). Swap that host if you deploy under a different subdomain.
-
----
+The **Financing Partners** card in `omega-tools.js` / `omega-tool.js` points at
+`/finance` (same origin). Emails from `api/dealroom-send.js` link to
+`https://silmarillion.clearskyomega.com/finance` unless `FINANCE_PORTAL_URL`
+is set. `https://financing.csebuilders.com/?mode=register` (or `mode=login`)
+is the same deployment under the customer-facing host.
 
 ## Roadmap hooks
 

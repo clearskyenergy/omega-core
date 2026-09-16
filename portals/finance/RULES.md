@@ -46,3 +46,14 @@ cd <repo root> && firebase deploy --only firestore:rules,storage
 there. One database means one source of truth for its rules, and that is this
 repository. If the finance repo stays deployable on its own, its rules deploy
 needs disabling too — the app can ship from wherever; the rules cannot.
+
+## The app deploys with omega-core, and only with omega-core
+
+`https://financing.csebuilders.com` is a domain on the **`omega-core`** Vercel
+project (moved there 2026-09-16). Root `vercel.json` rewrites that host to
+this folder. A push to `main` is the deploy; there is no second pipeline.
+
+The Vercel project named `finance` and the GitHub repo `clearskyenergy/finance`
+are the legacy portal. Nothing routes to them any more. The `.vercel/` link
+that lived in this folder was deleted so a stray `vercel` command here cannot
+publish to the old project; if it reappears, delete it again.
