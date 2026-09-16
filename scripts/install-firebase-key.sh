@@ -10,24 +10,28 @@ set -e
 cd "$(dirname "$0")/.."
 
 CONSOLE="https://console.firebase.google.com/project/clearsky-portal/settings/serviceaccounts/adminsdk"
-START=$(date +%s)
 
-echo
-echo "1) A browser tab is opening on the Firebase console."
-echo "   Click the blue  'Generate new private key'  button, then  'Generate'."
-echo "   A file named clearsky-portal-firebase-adminsdk-....json lands in Downloads."
-echo
-open "$CONSOLE"
-echo "   Waiting for that download…"
-
-FILE=""
-for i in $(seq 1 180); do
-  FILE=$(find "$HOME/Downloads" -maxdepth 1 -name 'clearsky-portal-firebase-adminsdk*.json' -newermt "@$START" 2>/dev/null | head -1)
-  [ -n "$FILE" ] && break
-  sleep 2
-done
-if [ -z "$FILE" ]; then echo "   No key file appeared in Downloads after 6 minutes. Run this again."; exit 1; fi
-echo "   Got it: $(basename "$FILE")"
+# Newest key file already in Downloads wins — the key is usually generated
+# before this script is run. Otherwise open the console and wait for one.
+newest_key() { ls -t "$HOME"/Downloads/clearsky-portal-firebase-adminsdk*.json 2>/dev/null | head -1; }
+FILE=$(newest_key)
+if [ -n "$FILE" ]; then
+  echo
+  echo "1) Using the key already in Downloads: $(basename "$FILE")"
+else
+  echo
+  echo "1) A browser tab is opening on the Firebase console."
+  echo "   Click the blue  'Generate new private key'  button, then  'Generate'."
+  echo "   A file named clearsky-portal-firebase-adminsdk-....json lands in Downloads."
+  echo
+  open "$CONSOLE"
+  echo "   Waiting for that download…"
+  for i in $(seq 1 180); do
+    FILE=$(newest_key); [ -n "$FILE" ] && break; sleep 2
+  done
+  if [ -z "$FILE" ]; then echo "   No key file appeared in Downloads after 6 minutes. Run this again."; exit 1; fi
+  echo "   Got it: $(basename "$FILE")"
+fi
 
 node -e '
   const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
