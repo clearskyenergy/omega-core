@@ -40,14 +40,20 @@ var A = load().OmegaDesignAI;
 
 /* ── a cold tab navigates, carrying the size it was given ────────────────── */
 var cold = load(null);
-assert.equal(cold.OmegaDesignAI.launch({ address: '800 Progress Dr', mw: 1.71, mwh: 3.42, mode: 'BTM' }), 'navigating');
+/* Since b95523c the full chain runs only for a build type in AUTO_BUILDS
+   (bess, solarbess, solar); an untyped launch stops after the site. */
+assert.equal(cold.OmegaDesignAI.launch({ address: '800 Progress Dr', type: 'bess', mw: 1.71, mwh: 3.42, mode: 'BTM' }), 'navigating');
 var url = cold.location.href;
 assert.ok(url.indexOf('/editor?address=') === 0, 'it navigates to the editor with an address: ' + url);
 assert.ok(url.indexOf('auto=bess') > 0, 'it asks for the bess run');
+assert.ok(url.indexOf('ptype=bess') > 0, 'the build type rides along');
 assert.ok(url.indexOf('mw=1.71') > 0 && url.indexOf('mwh=3.42') > 0, 'the size rides along');
 assert.ok(url.indexOf('from=button') > 0, 'the entry point is recorded');
 assert.ok(url.indexOf('800%20Progress%20Dr') > 0 || url.indexOf('800+Progress+Dr') > 0, 'the address is encoded');
 assert.equal(cold.posted, null, 'a cold tab posts nothing');
+var untyped = load(null);
+untyped.OmegaDesignAI.launch({ address: '800 Progress Dr', mw: 1.71, mwh: 3.42, mode: 'BTM' });
+assert.ok(untyped.location.href.indexOf('auto=map') > 0, 'with no build type the autopilot stops after the site');
 
 /* A size that was not given must not become a number in the URL — the
    autopilot stops and asks for it, which is the behaviour worth keeping. */
@@ -57,10 +63,11 @@ assert.ok(noSize.location.href.indexOf('mw=') < 0, 'no size means no mw paramete
 
 /* ── a tab that already finished a run is commanded, not reloaded ────────── */
 var warm = load({ finished: true, stopped: false, fatal: false, centre: { lat: 39.4, lng: -77.4 } });
-assert.equal(warm.OmegaDesignAI.launch({ address: 'ignored', mw: 2, mwh: 8, mode: 'FOM' }), 'commanded');
+assert.equal(warm.OmegaDesignAI.launch({ address: 'ignored', type: 'bess', mw: 2, mwh: 8, mode: 'FOM' }), 'commanded');
 assert.equal(warm.location.href, '/editor', 'a warm tab is not thrown away');
 assert.equal(warm.posted.type, 'OMEGA_AUTOPILOT_CMD', 'it uses the autopilot command channel');
 assert.equal(warm.posted.auto, 'bess');
+assert.equal(warm.posted.ptype, 'bess', 'the build type rides the command too');
 assert.equal(warm.posted.mw, 2);
 assert.equal(warm.posted.mode, 'FOM');
 
