@@ -153,6 +153,40 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
               min-width:56px;flex:none}
 .cardRow .val{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--ink)}
 .cardRow .cp{flex:none;padding:2px 8px;font-size:10px;letter-spacing:1px}
+/* ── the relationship half of a person card ──────────────────────────────
+   Asked for three times before it got built, which is its own argument for
+   what belongs here: a card that shows an email address and a phone number
+   is a contact card, and he already knows how to reach these people. What he
+   does not carry in his head is what is outstanding with them and how long it
+   has been. The numbers come from bin/graph on the Mac, so the section is
+   simply absent when the neural link is down rather than showing zeroes,
+   which would read as "nothing owed" instead of "not known". */
+.relWrap{margin-top:14px;border-top:1px solid rgba(0,243,255,.14);padding-top:12px}
+.relHead{display:flex;align-items:baseline;gap:8px;margin-bottom:9px}
+.relW{font-family:var(--mono);font-size:22px;line-height:1;color:var(--glow-cyan)}
+.relWlbl{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim)}
+.relMeta{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:1.2px;color:var(--dim)}
+/* The bar is the score's argument, not decoration: engagement and open
+   commitments push right, stale debt pulls left, and the widths are the
+   actual components so a ranking can be disagreed with on sight. */
+.relBar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.06)}
+.relBar i{display:block;height:100%}
+.relBar .eng{background:var(--glow-cyan)}
+.relBar .owe{background:#0070F2}
+.relBar .stl{background:var(--warn)}
+.relKey{display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;
+        font-family:var(--mono);font-size:9px;letter-spacing:1.1px;color:var(--dim)}
+.relKey b{font-weight:600}
+.relKey .k{display:flex;align-items:center;gap:4px}
+.relKey .sw{width:7px;height:7px;border-radius:2px;flex:none}
+.relList{margin-top:11px}
+.relList h4{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;color:var(--dim);
+            margin:9px 0 5px;font-weight:600}
+.relItem{font-size:12.5px;line-height:1.5;color:var(--ink);padding:4px 0 4px 11px;
+         border-left:2px solid rgba(0,243,255,.2);margin-bottom:3px}
+.relItem.stale{border-left-color:var(--warn)}
+.relItem .age{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--warn);margin-left:5px}
+.relNone{font-size:12px;color:var(--dim);font-style:italic}
 .cardActs{display:flex;gap:8px;margin-top:16px}
 .cardActs button{flex:1;justify-content:center;padding:9px}
 .cardNote{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:12px;
@@ -4368,6 +4402,7 @@ function renderTasks(){
 
 const BD_COLOURS=['#ffe27a','#a8e6a3','#9fd4ff','#ffb3c6','#e2c7ff','#ffd0a1'];
 let bdNotes=[], bdColour=BD_COLOURS[0], bdDb=null, bdSaveT=null, bdLoaded=false;
+let bdWired=false, bdFetching=false;
 
 async function bdStore(){
   if(bdDb) return bdDb;
@@ -4382,8 +4417,22 @@ function bdOrg(){
 function bdState(t){ const e=el('bdState'); if(e) e.textContent=t; }
 
 async function bdLoad(){
-  if(bdLoaded) return;
-  bdLoaded=true;
+  /* WIRING happens once; FETCHING can be retried. Those were one flag, and
+     that cost the board a second failure mode: bdLoaded was set before the
+     await, so a load that threw left the tab permanently un-loadable — every
+     later bdLoad() returned early, bdReady never became true, and every edit
+     was refused with "reload before editing" until he actually did. The guard
+     was right to refuse the save; being stuck until a manual reload was not
+     the intended price. */
+  if(!bdWired){
+    bdWired=true;
+    bdWire();
+  }
+  if(bdReady || bdFetching) return;
+  await bdFetch();
+}
+
+function bdWire(){
   bdPalette();
   el('bdAdd').addEventListener('click',()=>bdNew());
   el('bdSend').addEventListener('click',()=>bdThink(false));
@@ -4401,6 +4450,10 @@ async function bdLoad(){
     bdNew(e.clientX-r.left+e.currentTarget.scrollLeft-95,
           e.clientY-r.top+e.currentTarget.scrollTop-40);
   });
+}
+
+async function bdFetch(){
+  bdFetching=true;
   try{
     bdState('loading…');
     const {fs,db}=await bdStore();
@@ -4416,9 +4469,12 @@ async function bdLoad(){
   }catch(e){
     /* bdReady stays FALSE. The board renders empty because that is all this
        tab knows, and the guard in bdSave stops that emptiness reaching
-       Firestore. */
-    bdState('NOT LOADED — ' + e.message.slice(0,34) + ' · edits will not save');
+       Firestore. Switching to the Board view again now retries the fetch
+       rather than returning early forever. */
+    bdState('NOT LOADED — ' + e.message.slice(0,34) + ' · open the Board tab again to retry');
     bdPaint();
+  }finally{
+    bdFetching=false;
   }
 }
 
@@ -4531,11 +4587,21 @@ function bdPaint(){
    fourteen with a board of none, and the only trace is a status line nobody
    was looking at.
 
-   It has not happened: point-in-time recovery shows this document holding
-   fourteen notes and a single unchanged write timestamp across the whole
-   seven-day window, so nothing was ever overwritten with nothing. It is
-   still one failed load away, because bdLoad's catch leaves bdNotes at []
-   and every later edit saves from there.
+   IT HAS HAPPENED. 2026-09-16 22:32 Central (2026-09-17T03:32:55Z) this
+   document was written with `notes: []`, destroying fourteen post-its —
+   client actions for Solela, Walters, CIR, Fenecon, Concord, Joules.AI, OSA
+   and Helios. Recovered 2026-09-17 from point-in-time recovery, which had
+   been switched on the day before and is the only reason they exist.
+
+   An earlier version of this comment said the opposite — "it has not
+   happened", on the evidence of point-in-time recovery showing fourteen
+   notes and one unchanged timestamp across the window. That check was real
+   and its conclusion was wrong, in a way worth naming because it is easy to
+   repeat: PITR was queried at read times BEFORE the destroying write had
+   landed, so every one of them returned the healthy version. The history
+   looked spotless while the live document was already empty. Reading the
+   past is not the same as reading the present; check the CURRENT document
+   first, then go looking for when it changed.
 
    bdReady is the guard: it is set ONLY after a load that actually returned,
    and bdSave refuses while it is false. A refused save says so, which is the
@@ -7244,6 +7310,115 @@ function closeCard(){
   if(cardHolo){ cardHolo.stop(); cardHolo=null; }
 }
 
+/* ── what is outstanding with one person ─────────────────────────────────
+   Matched by NAME, because the roster is keyed by email and the meeting
+   record only ever has names. Returns null when the neural link is down or
+   the person has no meeting history, and the caller then draws nothing —
+   deliberately, because a card showing "0 owed" claims something it does not
+   know. Absent and zero are different facts. */
+function relFor(person){
+  if(!BGX || !person) return null;
+  const want=String(person.name||'').trim().toLowerCase();
+  if(!want) return null;
+  return (BGX.nodes||[]).find(n=>n.type==='person'
+    && String(n.label).trim().toLowerCase()===want) || null;
+}
+
+function relSection(r){
+  const wrap=document.createElement('div'); wrap.className='relWrap';
+  const mk=(tag,cls,txt)=>{const e=document.createElement(tag); if(cls)e.className=cls;
+    if(txt!=null)e.textContent=txt; return e;};
+
+  const head=document.createElement('div'); head.className='relHead';
+  head.appendChild(mk('div','relW',r.weight));
+  head.appendChild(mk('div','relWlbl','WEIGHT'));
+  const bits=[];
+  if(r.meetings) bits.push(r.meetings+' MET');
+  if(r.last) bits.push('LAST '+String(r.last).slice(0,10));
+  head.appendChild(mk('div','relMeta',bits.join('  \u00b7  ')));
+  wrap.appendChild(head);
+
+  /* The bar IS the score, at the scale the numbers actually are. Engagement
+     and open commitments add; stale debt is drawn as its own segment rather
+     than netted off, because "high because he is around a lot" and "high
+     because he owes you a pile" are different situations that would otherwise
+     land on the same number. */
+  const total=Math.max(1,(r.engagement||0)+(r.owedPts||0)+(r.stalePts||0));
+  const bar=document.createElement('div'); bar.className='relBar';
+  [['eng',r.engagement||0],['owe',r.owedPts||0],['stl',r.stalePts||0]].forEach(([cls,v])=>{
+    if(v<=0) return;
+    const i=document.createElement('i'); i.className=cls;
+    i.style.width=(v/total*100).toFixed(1)+'%'; bar.appendChild(i);
+  });
+  wrap.appendChild(bar);
+
+  const key=document.createElement('div'); key.className='relKey';
+  const sw=(cls,label,val,neg)=>{
+    if(val<=0) return;
+    const k=mk('span','k'); const s2=mk('span','sw');
+    s2.style.background=cls==='eng'?'var(--glow-cyan)':cls==='owe'?'#0070F2':'var(--warn)';
+    const t=document.createElement('span');
+    t.appendChild(mk('b',null,(neg?'\u2212':'')+val));
+    t.appendChild(document.createTextNode(' '+label));
+    k.appendChild(s2); k.appendChild(t); key.appendChild(k);
+  };
+  sw('eng','ENGAGEMENT',r.engagement||0);
+  sw('owe','OPEN COMMITMENTS',r.owedPts||0);
+  sw('stl','STALE DRAG',r.stalePts||0,true);
+  wrap.appendChild(key);
+
+  /* Each outstanding item carries the meeting it was made in and when. That
+     provenance is the difference between a to-do list and something he can
+     raise on a call — "you said this on the 14th, in the Helios meeting" is
+     an argument; "you owe me this" is a nag. */
+  const list=document.createElement('div'); list.className='relList';
+  const days=w=>{const t=Date.parse(w); return isFinite(t)?Math.floor((Date.now()-t)/864e5):null;};
+  const addItems=(title,items,count)=>{
+    if(!items||!items.length) return;
+    list.appendChild(mk('h4',null,title+(count?' ('+count+')':'')));
+    items.forEach(it=>{
+      const o=(typeof it==='string')?{text:it}:(it||{});
+      const age=o.when?days(o.when):null;
+      const d=mk('div','relItem'+(age!=null&&age>30?' stale':''),null);
+      d.appendChild(document.createTextNode(o.text||''));
+      const tail=[];
+      if(o.when) tail.push(String(o.when).slice(0,10));
+      if(o.meeting) tail.push(o.meeting);
+      if(o.due) tail.push('due '+o.due);
+      if(tail.length){
+        const sm=document.createElement('div');
+        sm.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);margin-top:3px';
+        sm.textContent=tail.join('  \u00b7  ');
+        d.appendChild(sm);
+      }
+      if(age!=null&&age>30) d.appendChild(mk('span','age',age+'d'));
+      list.appendChild(d);
+    });
+  };
+
+  if(r.owed) addItems('THEY OWE YOU',r.topOwed,r.owed);
+  else list.appendChild(mk('div','relNone','Nothing outstanding from them.'));
+  if(r.owed>(r.topOwed||[]).length)
+    list.appendChild(mk('div','relNone','+'+(r.owed-(r.topOwed||[]).length)+' more \u2014 FULL HISTORY below'));
+
+  addItems('YOURS, FROM MEETINGS WITH THEM',r.topYouOwe,r.youOwe);
+  addItems('UNANSWERED IN THOSE ROOMS',r.topQuestions,r.questions);
+  wrap.appendChild(list);
+
+  /* HONEST LABELLING, and why the two lists above read differently. What
+     they owe is attributed to a named owner by the analyser. What HE owes,
+     and the open questions, are recorded against the MEETING — so they are
+     things from rooms this person sat in, not promises made to them. The
+     headings say so rather than letting a count imply a claim it cannot
+     support. */
+  if(r.youOwe||r.questions){
+    wrap.appendChild(mk('div','cardNote',
+      'Your commitments and the open questions belong to the meetings you shared, '
+      +'not to '+String(r.label||'').split(' ')[0]+' personally.'));
+  }
+  return wrap;
+}
+
 function showCard(p, fromEl){
   const back=el('cardBack'), card=el('card');
   if(!back||!card) return;
@@ -7273,6 +7448,30 @@ function showCard(p, fromEl){
   addRow('PHONE', p.phone);
   card.appendChild(rows);
 
+  /* The relationship half, between the contact rows and the actions: it is
+     the reason the card is being opened, so it sits above the buttons rather
+     than below the footnote.
+
+     If the graph has not been fetched yet — the People view can be opened
+     without ever visiting the Brain — the card asks for it and fills itself
+     in when it arrives, rather than showing nothing and making him click
+     again. The card is re-checked on arrival because he may have closed it
+     or opened a different person in the meantime. */
+  const relHost=document.createElement('div');
+  card.appendChild(relHost);
+  const paintRel=()=>{
+    const r=relFor(p);
+    if(!r) return;
+    relHost.textContent='';
+    relHost.appendChild(relSection(r));
+  };
+  paintRel();
+  if(!BGX){
+    loadRelations(false).then(()=>{
+      if(el('card')===card && card.isConnected) paintRel();
+    }).catch(()=>{});
+  }
+
   const acts=document.createElement('div'); acts.className='cardActs';
   if(p.email){
     const b=document.createElement('button'); b.textContent='✉ EMAIL';
@@ -7289,6 +7488,16 @@ function showCard(p, fromEl){
   const ask=document.createElement('button'); ask.textContent='ASK JARVIS';
   ask.addEventListener('click',()=>{ closeCard(); submit('who is '+(p.first||p.name)); });
   acts.appendChild(ask);
+  /* The card shows the three most recent things outstanding; the note in the
+     vault has every one of them with the meeting it came from. Asking the
+     brain for it is the existing road to that file, so the button routes
+     through the same channel rather than inventing a second one. */
+  if(relFor(p)){
+    const full=document.createElement('button'); full.textContent='FULL HISTORY';
+    full.addEventListener('click',()=>{ closeCard();
+      submit('read the people note for '+p.name+' and summarise what is outstanding'); });
+    acts.appendChild(full);
+  }
   const x=document.createElement('button'); x.textContent='CLOSE';
   x.addEventListener('click',closeCard); acts.appendChild(x);
   card.appendChild(acts);
