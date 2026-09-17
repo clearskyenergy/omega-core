@@ -160,6 +160,9 @@ function commandsText(list) {
    without it rather than failing the person's question. */
 async function ask(key, model, system, messages, useFallbacks) {
   var headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  /* An organisation-level key (one not created inside a workspace) is
+     refused unless the request names the workspace to bill. */
+  if (process.env.ANTHROPIC_WORKSPACE_ID) headers['anthropic-workspace-id'] = process.env.ANTHROPIC_WORKSPACE_ID;
   var payload = {
     model: model, max_tokens: 2000,
     output_config: { effort: 'medium' },
