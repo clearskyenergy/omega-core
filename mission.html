@@ -4407,10 +4407,17 @@ async function bdLoad(){
     const ref=fs.doc(db,'toolData',bdOrg(),'tools','whiteboard');
     const snap=await fs.getDoc(ref);
     bdNotes=(snap.exists()&&(snap.data().notes||[]))||[];
+    /* Only now is it safe to write: bdNotes holds what the server holds.
+       A document that does not exist yet is also a valid, known state — an
+       empty board saved over nothing loses nothing. */
+    bdReady=true;
     bdPaint();
     bdState(bdNotes.length+' note'+(bdNotes.length===1?'':'s'));
   }catch(e){
-    bdState('offline — '+e.message.slice(0,40));
+    /* bdReady stays FALSE. The board renders empty because that is all this
+       tab knows, and the guard in bdSave stops that emptiness reaching
+       Firestore. */
+    bdState('NOT LOADED — ' + e.message.slice(0,34) + ' · edits will not save');
     bdPaint();
   }
 }
@@ -4515,20 +4522,69 @@ function bdPaint(){
 }
 
 /* Debounced: typing a sentence should be one write, not forty. */
-function bdSave(){
+/* A SAVE BEFORE THE FIRST LOAD IS A DELETE.
+
+   bdSave writes the whole `notes` array. {merge:true} merges FIELDS, not
+   array elements, so writing `notes` always replaces the stored array
+   wholesale — and `bdNotes` starts life as []. Any save that fires before
+   bdLoad has put the real notes into memory therefore replaces a board of
+   fourteen with a board of none, and the only trace is a status line nobody
+   was looking at.
+
+   It has not happened: point-in-time recovery shows this document holding
+   fourteen notes and a single unchanged write timestamp across the whole
+   seven-day window, so nothing was ever overwritten with nothing. It is
+   still one failed load away, because bdLoad's catch leaves bdNotes at []
+   and every later edit saves from there.
+
+   bdReady is the guard: it is set ONLY after a load that actually returned,
+   and bdSave refuses while it is false. A refused save says so, which is the
+   part that matters — losing the board silently is the failure worth
+   preventing, not losing a keystroke loudly. */
+let bdReady=false;
+let bdDirty=false;
+
+function bdFlush(){
+  /* The 700ms debounce is the other way a note dies: type it, switch away,
+     and the write has not fired yet. visibilitychange is the event that
+     actually arrives on iOS and on a backgrounded tab, where beforeunload
+     often does not.
+
+     This fires the pending write NOW instead of waiting out the debounce. It
+     is not a guarantee — an async write racing a closing tab may not land —
+     but attempting it beats sitting on a timer that will never run. */
+  if(!bdReady || !bdDirty) return;
   clearTimeout(bdSaveT);
+  bdWrite().then(()=>{ bdDirty=false; }).catch(()=>{});
+}
+
+async function bdWrite(){
+  const {fs,db}=await bdStore();
+  const ref=fs.doc(db,'toolData',bdOrg(),'tools','whiteboard');
+  await fs.setDoc(ref,{notes:bdNotes, updatedAt:new Date().toISOString()},{merge:true});
+}
+
+function bdSave(){
+  if(!bdReady){
+    /* Refuse loudly rather than write [] over a real board. */
+    bdState('NOT SAVED — the board has not loaded yet; reload before editing');
+    return;
+  }
+  clearTimeout(bdSaveT);
+  bdDirty=true;
   bdState('saving…');
   bdSaveT=setTimeout(async()=>{
     try{
-      const {fs,db}=await bdStore();
-      const ref=fs.doc(db,'toolData',bdOrg(),'tools','whiteboard');
-      await fs.setDoc(ref,{notes:bdNotes, updatedAt:new Date().toISOString()},{merge:true});
+      await bdWrite();
+      bdDirty=false;
       bdState(bdNotes.length+' note'+(bdNotes.length===1?'':'s')+' · saved');
     }catch(e){
       bdState('NOT SAVED — '+e.message.slice(0,44));
     }
   },700);
 }
+addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') bdFlush(); });
+addEventListener('pagehide', bdFlush);
 
 
 
