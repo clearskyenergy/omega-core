@@ -154,7 +154,11 @@
     var link=document.getElementById('portalLink');
     var pm=window.location.search.match(/[?&]portal=([^&]+)/);var url=null;
     if(pm){url=decodeURIComponent(pm[1]);}
-    else if(ORG){var slug=ORG.split('.')[0].toLowerCase();url='https://'+slug+'.csebuilders.com/';}
+    /* Same origin: on omega-core the tool and the tenant portal are the SAME
+       deployment. This used to build https://<slug>.csebuilders.com/, which is
+       the legacy build on a different Vercel project — the back button walked
+       the user out of the app they were signed in to. */
+    else if(ORG){url='/';}
     else if(document.referrer){try{var u=new URL(document.referrer);url=u.origin+'/';}catch(e){}}
     if(url){link.href=url;link.className='tb-plat';link.title='Return to '+url;}
     else{link.title='Open this tool from your portal to enable';}

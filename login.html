@@ -634,7 +634,7 @@
          host would send a JV partner onto the old deployment and ask them
          to sign in a second time. */
       { key: "osa", order: 10, name: "OSA Workspace",
-        url: PORTAL + "/tenants/osa/portfolio.html",
+        url: PORTAL + "/osa/portfolio",
         desc: () => "The joint venture \u2014 pipeline, partners and verification",
         requires: (c) => OSA_ORGS.indexOf(c.org) >= 0 },
       { key: "financing", order: 20, name: "Finance Marketplace", url: ROUTES.financing,

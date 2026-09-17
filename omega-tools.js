@@ -203,18 +203,29 @@
 
     { key:'financing', name:'Financing Partners', category:'marketplace',
       desc:'Debt, tax equity & capital partners for projects.',
-      file:'https://financing.csebuilders.com/', soon:false, tier:TIER.ALL,
+      /* Same-origin: portals/finance/ lives in THIS repo. It used to point at
+         https://financing.csebuilders.com/ — a separate Vercel project running
+         the legacy build — so the marketplace a tenant opened was never the one
+         maintained here. /finance is the vercel.json rewrite. */
+      file:'/finance', soon:false, tier:TIER.ALL,
       icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 
     /* SILMARILLION 2.0 — the joint-development surface.
        tier:ENTERPRISE keeps it off every tenant's palette by default; JV
        members are given it through unlockedTools on their billing doc, so
        adding a partner to the JV is a console action rather than a deploy and
-       no domain is hardcoded here. Absolute URL because the portal is its own
-       origin — the href builder above passes those through untouched. */
+       no domain is hardcoded here.
+
+       ⚠ SAME-ORIGIN PATH, NOT https://osa.clearskyomega.com/. That hostname is
+       still attached to the OLD Vercel project — the legacy cse.builders
+       deployment — so an absolute URL here handed a paying tenant the previous
+       build and a second sign-in. tenants/osa/ in this repo is the canonical
+       console; every other link to it (index/projects/marketplace sidebars,
+       login.html SURFACES) now agrees on this path. Point it back at the
+       branded host only once that host is moved onto omega-core in Vercel. */
     { key:'osaportal', name:'OSA Portal', category:'marketplace',
       desc:'JV verification console, referred-deal pipeline and portfolio matrix.',
-      file:'https://osa.clearskyomega.com/', soon:false, tier:TIER.ENTERPRISE,
+      file:'/osa', soon:false, tier:TIER.ENTERPRISE,
       icon:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
 
     { key:'aggregators', name:'Aggregators', category:'marketplace',
@@ -502,33 +513,39 @@
       return out;
     },
 
-    /* ── TOOL HOST ──
-       The ONE deployment that hosts every shared tool .html. All portals
-       (admin + every client) link here, so a tool fix ships once. Set this
-       to your tool-host origin. Leave '' to use same-origin relative paths
-       (Option A / the admin console itself, which is same-repo as the tools). */
-    TOOL_HOST: 'https://tools.csebuilders.com',
+    /* ── TOOL HOST — RETIRED 2026-09-14, KEEP IT EMPTY ──
+       This named the ONE deployment that hosted every shared tool .html. That
+       deployment is tools.csebuilders.com: a SEPARATE Vercel project running
+       the legacy cse.builders build. Every tool routed through it was the old
+       copy, so fixes made in omega-core never reached the user.
 
-    /* ── WHAT IS STILL ON THE OLD HOST ────────────────────────────────────
-       TOOL_HOST sent EVERY tool link to tools.csebuilders.com, which was
-       right before the consolidation and is wrong now: 32 of the 42
-       registered tools live in this repo, and pointing at the old
-       deployment meant every fix made here was invisible. The Cost
-       Estimator was the case that surfaced it — registered in omega-core,
-       linked to a host that has never had the file, so it 404s. The Site
-       Finder's new "Cost site" button had the same problem: users were
-       opening the old copy without it.
+       The last two tools that genuinely lived only there — intake.html and
+       spatco-ev-estimate.html — were imported into this repo on the same day,
+       which emptied REMOTE_TOOLS below and made this string unreachable.
 
-       THE LIST IS THE REMOTE ONES, NOT THE LOCAL ONES, deliberately. It
-       shrinks as consolidation continues, and it reaches empty, at which
-       point TOOL_HOST can be deleted. Listing the local ones instead would
-       grow forever and a tool added here tomorrow would default to a host
-       that has never heard of it.
+       It stays as '' rather than being deleted because hrefFor() reads it and
+       an empty host is exactly the "same-origin relative path" branch. Putting
+       a hostname back here sends every tool to another deployment again. */
+    TOOL_HOST: '',
 
-       Absolute URLs in tool.file are untouched — they are elsewhere on
-       purpose. */
-    REMOTE_TOOLS: ['intake', 'ahj', 'procurement', 'aggregators',
-                   'offtakers', 'spatco_ev'],
+    /* ── WHAT IS STILL ON THE OLD HOST — NOTHING. ─────────────────────────
+       This list named the tools still served from tools.csebuilders.com. It
+       was always meant to shrink to empty, at which point every tool resolves
+       same-origin. It reached empty on 2026-09-14:
+
+         intake, spatco_ev            imported into omega-core that day. They
+                                      were LIVE and existed only on the old
+                                      deployment — the real consolidation gap.
+         ahj, procurement,            soon:true, and 404 on the old host too.
+         aggregators, offtakers       They were never anywhere. Marking them
+                                      remote pointed a "coming soon" tile at a
+                                      foreign origin for no reason.
+
+       KEEP IT EMPTY. Adding a key here sends that tool to another deployment,
+       where a fix made in this repo will not appear. If a tool genuinely has
+       to live elsewhere, give it an absolute tool.file — hrefFor() passes
+       those through untouched and the intent is then visible at the tool. */
+    REMOTE_TOOLS: [],
 
     isRemote: function (tool) {
       return !!tool && this.REMOTE_TOOLS.indexOf(tool.key) >= 0;

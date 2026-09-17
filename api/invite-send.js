@@ -30,10 +30,17 @@ var M = require('./_lib/mail');
 
 /* The workspaces that can send invitations this way. Adding one is a deploy,
    which for "may email our users on our letterhead" is the right ceremony. */
+/* ⚠ The default must NEVER be osa.clearskyomega.com. That hostname is still
+   attached to the old Vercel project (the legacy cse.builders deployment), and
+   this URL goes into an invitation email — the one link a brand-new partner
+   clicks. It has to land on the build their colleagues are using. If
+   OSA_PORTAL_URL is set in Vercel, check it points here too: the env var wins
+   over this default. */
 var WORKSPACES = {
   osa: {
     label: 'OSA Workspace',
-    url: process.env.OSA_PORTAL_URL || 'https://osa.clearskyomega.com/portfolio.html',
+    url: process.env.OSA_PORTAL_URL ||
+         'https://silmarillion.clearskyomega.com/osa/portfolio',
     users: 'omega_users',
     invites: 'omega_invites'
   }

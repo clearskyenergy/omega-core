@@ -30,7 +30,10 @@
              "c0f9178a756c4246a99acdb3fe7de103/rest/services/" +
              "ComEd_BESS_Hosting_Capacity_JUN2026/FeatureServer";
   /* Same origin first, then the shared tools host. */
-  M.DATA_HOSTS = ["", "https://tools.csebuilders.com/"];
+  /* Same-origin only. The legacy host (tools.csebuilders.com) was a separate
+     Vercel project, so a fallback to it silently served the old data bundles
+     when a fetch here failed — a stale answer that looks like a working one. */
+  M.DATA_HOSTS = [""];
   M.CI_URL = "ci-industrial.js";
   M.ILS_URL = "ilshines-sites.js";
   M.EDC_URL = "edc-sites.js";

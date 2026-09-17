@@ -158,6 +158,15 @@ async function pollOrg(orgId) {
 
 /* ---- main handler ---- */
 module.exports = async (req, res) => {
+  /* ⚠ LEFT AS-IS DELIBERATELY, BUT IT IS NOW STALE. Every caller in omega-core
+     (account-settings, om-console, fleet-command, field-service,
+     sla-intelligence) was repointed to /api/om-integrations on 2026-09-14 and
+     is therefore SAME-ORIGIN, which needs no CORS header at all. The only thing
+     this line still permits is the legacy tools.csebuilders.com deployment —
+     and this endpoint handles integration credentials. Narrow it to this origin
+     (or drop the header) as part of decommissioning that project; it is not
+     changed here because doing so would break the old build while it is still
+     serving users. */
   res.setHeader("Access-Control-Allow-Origin", "https://tools.csebuilders.com");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");

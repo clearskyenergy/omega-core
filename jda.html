@@ -503,8 +503,14 @@ function renderPipeline(){
             : ' <span class="chip warn">no programme set</span>')
        + '</h2>';
     if (!mine.length){
-      h += '<p class="sub" style="margin:0">Nothing on the roster yet. Add '+esc(pt._id)
-         + ' to a project’s orgsInvolved and it appears here.</p></div>';
+      /* Two audiences, two true sentences. Telling a partner to edit
+         orgsInvolved names a field they cannot write — the rule stops them,
+         and correctly: the roster is not self-serve. */
+      h += '<p class="sub" style="margin:0">' + (isStaff()
+             ? 'Nothing on the roster yet. Add ' + esc(pt._id)
+               + '’s org to a project’s orgsInvolved and it appears here.'
+             : 'Nothing shared with you yet. ClearSky puts a project on your roster '
+               + 'and it appears here.') + '</p></div>';
       return;
     }
     h += '<table><thead><tr><th style="width:40%">Project</th><th>Ready</th>'
@@ -531,13 +537,38 @@ function renderPipeline(){
 
 /* Only co-developed projects appear. A project with an empty roster is an
    ordinary single-org project and has no responsibilities to divide. */
+/* ── A COLLECTION-WIDE GET IS A LIST NO RULE CAN PROVE ────────────────────
+   This read the whole `projects` collection for everybody, and Firestore
+   refuses a LIST outright the moment one returned document would fail — it
+   does not filter, it denies. So the page worked for ClearSky and told every
+   JD partner "Could not read projects — Missing or insufficient permissions",
+   which is the same sentence a broken rule produces and reads as the product
+   being shut to them. The rule was right the whole time; the query was asking
+   for the customer book.
+
+   Two queries for a partner, each one the rule can prove:
+     orgsInvolved array-contains me   → isCollaborator(), the JDA roster
+     orgId == me                      → my own projects, co-developed or not
+   They are different questions — "shared with me" and "mine" — and a
+   collaborator has no read across the other org's list to fold them into one.
+   Deduped on the id, because a project you own and are also rostered on
+   comes back twice. */
 function loadProjects(){
-  db.collection('projects').get().then(function(sn){
-    var out=[];
-    sn.forEach(function(d){
-      var v=d.data()||{}; v._id=d.id;
-      if((v.orgsInvolved||[]).length) out.push(v);
+  var qs = isStaff()
+    ? [ db.collection('projects').get() ]
+    : [ db.collection('projects').where('orgsInvolved','array-contains',MYORG).get(),
+        db.collection('projects').where('orgId','==',MYORG).get() ];
+
+  Promise.all(qs).then(function(snaps){
+    var seen={}, out=[];
+    snaps.forEach(function(sn){
+      sn.forEach(function(d){
+        if(seen[d.id]) return; seen[d.id]=1;
+        var v=d.data()||{}; v._id=d.id;
+        if((v.orgsInvolved||[]).length) out.push(v);
+      });
     });
+    out.sort(function(a,b){ return String(a.name||a._id).localeCompare(String(b.name||b._id)); });
     PROJECTS=out;
     var sel=document.getElementById('proj');
     out.forEach(function(p){
@@ -548,10 +579,17 @@ function loadProjects(){
     try { renderPipeline(); } catch(e){}
     if(!out.length){
       document.getElementById('roles').innerHTML =
-        '<div class="empty">No co-developed projects yet. Add a partner org to a project’s roster (orgsInvolved) and it appears here.</div>';
+        '<div class="empty">'+(isStaff()
+          ? 'No co-developed projects yet. Add a partner org to a project’s roster (orgsInvolved) and it appears here.'
+          : 'Nothing co-developed with you yet. ClearSky shares a project with '+esc(MYORG)
+            +' from the tenant console, and it appears here — no sign-out needed, just reload.')+'</div>';
     }
-  }).catch(function(e){
-    document.getElementById('roles').innerHTML='<div class="empty">Could not read projects — '+esc(e.message)+'</div>';
+  })['catch'](function(e){
+    /* Both cards depend on this read. The pipeline said "Loading…" for ever
+       when it failed, which is a worse lie than the error. */
+    var m='<div class="empty">Could not read projects — '+esc(e.message)+'</div>';
+    document.getElementById('roles').innerHTML=m;
+    var pl=document.getElementById('pipeline'); if(pl) pl.innerHTML=m;
   });
 }
 

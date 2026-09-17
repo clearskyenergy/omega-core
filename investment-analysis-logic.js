@@ -1261,43 +1261,22 @@ function iaShowResume(data, when){
 }
 
 /* -------------------------------------------------------------------------
-   Platform / logo links point back to the TENANT portal, not tools.cse root.
-   This tool is served from tools.csebuilders.com and shared across tenants,
-   so a bare href="/" lands on the tool host instead of the portal the user
-   came from. Resolve the tenant from ?org= (same source OMEGATools uses),
-   fall back to the referring subdomain, and rewrite both links.
+   Platform / logo links point back to the tenant portal — which, in
+   omega-core, is THIS ORIGIN.
+
+   This used to map an org domain to a tenant slug and return
+   https://<slug>.csebuilders.com/, because the tool was served from the
+   shared tools.csebuilders.com host and a bare "/" would have landed on the
+   tool host rather than the portal. That host is a SEPARATE Vercel project
+   running the legacy build, so the mapping sent a signed-in user out of
+   omega-core and asked them to sign in again — and the brand map silently
+   dropped every tenant not listed in it onto the tool host's own root.
+
+   One deployment now serves both, so "/" is the portal for every tenant and
+   there is no map to keep in sync.
    ------------------------------------------------------------------------- */
 function iaTenantPortalUrl(){
-  // org domain -> tenant subdomain slug. Keep in sync with the brand map
-  // used elsewhere in OMEGA (nextnrg/solela/chileasing/spatco/ogisolar).
-  var BRAND = {
-    'nextnrg.com'    : 'nextnrg',
-    'solela.com'     : 'solela',
-    'chileasing.com' : 'chileasing',
-    'spatco.com'     : 'spatco',
-    'ogisolar.com'   : 'ogisolar'
-  };
-  var slug = null;
-
-  // 1) Primary: the org we were launched with (?org=nextnrg.com).
-  try {
-    var org = (OMEGATools.orgFromUrl('') || '').toLowerCase();
-    if (BRAND[org]) slug = BRAND[org];
-  } catch(e){}
-
-  // 2) Fallback: the subdomain of the portal that linked here.
-  if (!slug && document.referrer){
-    try {
-      var h = new URL(document.referrer).hostname;   // e.g. nextnrg.csebuilders.com
-      if (/\.csebuilders\.com$/.test(h)){
-        var sub = h.split('.')[0];
-        if (sub && sub !== 'tools') slug = sub;
-      }
-    } catch(e2){}
-  }
-
-  return slug ? 'https://' + slug + '.csebuilders.com/'
-              : 'https://tools.csebuilders.com/';    // last resort
+  return '/';
 }
 
 function iaWirePlatformNav(){

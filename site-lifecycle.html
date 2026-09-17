@@ -173,7 +173,7 @@ label.f { display:block; font-size:11px; color:#7b8794; text-transform:uppercase
 <!-- ClearSky config (Firebase + Maps keys). Optional: inline fallback exists. -->
 <script src="/config.js"></script>
 <!-- Shared tool registry + tier system (single source of truth) -->
-<script src="https://tools.csebuilders.com/omega-tools.js"></script>
+<script src="/omega-tools.js"></script>
 <!-- Firebase compat v8 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -244,7 +244,7 @@ label.f { display:block; font-size:11px; color:#7b8794; text-transform:uppercase
      The proxy holds each customer's CRM credentials server-side. The browser
      NEVER stores or reads the token. Settings UI sends credentials to the proxy
      (action:"save_credentials"); Firestore only holds non-secret metadata. ---- */
-  var CRM_PROXY_URL = "https://tools.csebuilders.com/api/crm-sync"; // TODO: your serverless route
+  var CRM_PROXY_URL = "/api/crm-sync"; // TODO: your serverless route
 
   /* Supported CRMs and the credential fields each needs.
      'secret:true' fields are sent to the proxy and never persisted client-side. */

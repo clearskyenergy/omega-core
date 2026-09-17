@@ -1624,6 +1624,14 @@
                  typo nor an invention. */
               + '<select id="or-c-to">' + toOptions() + '</select>'
               + '<div class="hint" id="or-c-to-hint">' + esc(toHint()) + '</div></div>'
+            /* WHO INTRODUCED IT. Same cross-tenant attribution this file
+               already does with toOrgId, pointed the other way: toOrgId is
+               who the referral is FOR, originatorOrgId is who is owed the
+               introduction. Shared with the finance portal through
+               omega-originator.js so both write identical field names —
+               two surfaces disagreeing about what "originator" means is
+               the failure that costs someone their credit. */
+            + '<div class="or-f" id="or-c-origbox"></div>'
           + '</div>'
           + '<div class="or-msg" id="or-cmsg"></div>'
         + '</div>'
@@ -1692,6 +1700,11 @@
     var hint = $('or-c-to-hint');
     if (hint) { hint.textContent = toHint(); }
     $('or-compose').classList.add('on');
+    if (global.OmegaOriginator && $('or-c-origbox') && !_origPicker) {
+      _origPicker = global.OmegaOriginator.mount($('or-c-origbox'), {
+        idBase: 'or-c-orig', orgs: creditableOrgs()
+      });
+    }
     setTimeout(function () { var i = $('or-c-site'); if (i) i.focus(); }, 60);
   }
 
@@ -1762,6 +1775,23 @@
     try { msg('or-cmsg', t, ''); } catch (e) {}
   }
 
+  var _origPicker = null;
+
+  /* Orgs worth suggesting: whoever has actually sent or received referrals
+     here. Anything else can still be credited by typing the domain. */
+  function creditableOrgs() {
+    if (!global.OmegaOriginator) { return []; }
+    var seen = {}, out = [];
+    (S.rows || []).forEach(function (r) {
+      [r.fromOrgId, r.toOrgId, r.originatorOrgId].forEach(function (v) {
+        var id = global.OmegaOriginator.normalize(v);
+        if (id && !seen[id]) { seen[id] = 1; out.push({ id: id, label: id }); }
+      });
+    });
+    out.sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    return out;
+  }
+
   function send() {
     var site = ($('or-c-site').value || '').trim();
     var addr = ($('or-c-addr').value || '').trim();
@@ -1797,6 +1827,18 @@
       createdAt:  stamp(),
       updatedAt:  stamp()
     };
+
+    if (_origPicker && global.OmegaOriginator) {
+      var oc = _origPicker.check();
+      if (!oc.ok) { btn.disabled = false; msg('or-cmsg', oc.warn, 'bad'); return; }
+      var of = _origPicker.fields(myEmail());
+      if (of) {
+        rec.originatorOrgId = of.originatorOrgId;
+        rec.originatorName  = of.originatorName;
+        rec.originatorBy    = of.originatorBy;
+        rec.originatorAt    = of.originatorAt;
+      }
+    }
 
     /* ── OSA IS AN INTAKE, NOT A REFERRAL ────────────────────────────────
        A referral is addressed to ONE org by toOrgId, and the read rule

@@ -251,9 +251,21 @@ textarea:focus,input:focus{border-color:var(--accent)}
    * tenant's queue. Server-side, Firestore rules are the real boundary — this
    * is the second lock, not the first.
    * ---------------------------------------------------------------------- */
+  /* ⚠ THIS LIST IS EXACT FOR clearskyomega.com, AND MUST STAY THAT WAY.
+     omega-core serves EVERY tenant from ONE deployment, distinguished only by
+     hostname — so a /\.clearskyomega\.com$/ regex here would hand the intake
+     queue to every tenant subdomain, which is precisely what this guard exists
+     to prevent. The csebuilders.com and clearsky-usa.com suffix tests below are
+     safe only because those are the legacy per-tenant deployments, where a
+     tenant host is a different app entirely.
+
+     Named here: the omega-core staff surfaces. silmarillion is the public front
+     door, alpha the ops console. Adding a tenant host to this list exposes the
+     whole queue to that tenant. */
   var ADMIN_HOSTS = [
     'clearsky-usa.com', 'www.clearsky-usa.com',
     'csebuilders.com', 'tools.csebuilders.com',
+    'silmarillion.clearskyomega.com', 'alpha.clearskyomega.com',
     'localhost', '127.0.0.1', ''
   ];
   (function hostGuard() {
@@ -261,7 +273,7 @@ textarea:focus,input:focus{border-color:var(--accent)}
     var ok = ADMIN_HOSTS.indexOf(h) > -1 ||
              /\.clearsky-usa\.com$/.test(h) ||
              /\.csebuilders\.com$/.test(h) ||
-             /^clearsky-[a-z0-9-]+\.vercel\.app$/.test(h);   // preview builds
+             /^(clearsky|omega-core)-[a-z0-9-]+\.vercel\.app$/.test(h);   // preview builds
     if (ok) return;
     document.body.innerHTML =
       '<div style="max-width:520px;margin:14vh auto;padding:0 24px;font-family:system-ui">' +

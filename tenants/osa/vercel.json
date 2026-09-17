@@ -4,10 +4,20 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate"
+        }
       ]
     }
-  ]
+  ],
+  "_NOTE": "NOT DEPLOYED. Vercel reads the ROOT vercel.json only; a nested one is ignored. Leftover from when OSA was its own repository. The headers it asks for (X-Frame-Options DENY, no-cache) are NOT in effect \u2014 the root vercel.json sets X-Frame-Options SAMEORIGIN for every path. If OSA genuinely needs DENY, add a path rule for /tenants/osa there."
 }

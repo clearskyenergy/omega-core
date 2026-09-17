@@ -26,7 +26,12 @@
 var A = require('./_lib/admin');
 var mail = require('./_lib/mail');
 
-var PORTAL = process.env.FINANCE_PORTAL_URL || 'https://financing.csebuilders.com';
+/* ⚠ Not financing.csebuilders.com — that is the legacy Vercel project, and this
+   URL goes into an email, which is the one link the recipient will click. The
+   finance portal lives in omega-core at portals/finance/ (/finance rewrite). If
+   FINANCE_PORTAL_URL is set in Vercel, check it points here too: it wins. */
+var PORTAL = process.env.FINANCE_PORTAL_URL ||
+             'https://silmarillion.clearskyomega.com/finance';
 
 function esc(s) {
   return String(s == null ? '' : s)

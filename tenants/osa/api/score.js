@@ -1,3 +1,22 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠ NOT DEPLOYED. THIS FILE DOES NOT RUN. EDITING IT SHIPS NOTHING.
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   Vercel builds serverless functions from the ROOT /api directory only. A
+   nested api/ folder is copied as static files, never mounted as a function —
+   so nothing has ever served this. It is a leftover from when OSA was its own
+   repository, before the console moved into omega-core.
+
+   THE LIVE ONE IS  /api/score.js  AT THE REPO ROOT.  Fix bugs there.
+
+   This file and the root copy are BYTE-IDENTICAL as of 2026-09-14, so nothing
+   is lost either way — but only the root one is reachable.
+
+   Kept rather than deleted: 35KB of working code is not worth discarding on an
+   assumption, and it costs nothing inert. Delete it once you have satisfied
+   yourself the root copy covers everything you need — checked 2026-09-14.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    /api/score.js — relay to OGI Solar's screening tools
    Vercel serverless function.

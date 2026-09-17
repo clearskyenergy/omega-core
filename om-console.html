@@ -200,8 +200,8 @@ label.f { display:block; font-size:11px; color:#7b8794; text-transform:uppercase
 <!-- ClearSky config (Firebase + Maps keys). Optional: inline fallback exists. -->
 <script src="/config.js"></script>
 <!-- Shared tool registry + tier system (single source of truth) -->
-<script src="https://tools.csebuilders.com/omega-tools.js"></script>
-<script src="https://tools.csebuilders.com/om-telemetry-gate.js?v=1"></script>
+<script src="/omega-tools.js"></script>
+<script src="/om-telemetry-gate.js?v=1"></script>
 <!-- Firebase compat v8 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -255,7 +255,7 @@ label.f { display:block; font-size:11px; color:#7b8794; text-transform:uppercase
      Same secure-proxy pattern the Site Lifecycle Console uses for CRM.
      The proxy holds each customer's monitoring/DAS credentials server-side.
      The browser NEVER stores or reads the token. ---- */
-  var INTEG_PROXY_URL = "https://tools.csebuilders.com/api/om-integrations"; // TODO: serverless route
+  var INTEG_PROXY_URL = "/api/om-integrations"; // TODO: serverless route
 
   /* Supported live-data & field-service integrations. 'secret:true' fields
      are sent to the proxy and never persisted client-side. */

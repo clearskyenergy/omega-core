@@ -196,8 +196,8 @@ code { background:#eef2f6; padding:1px 5px; border-radius:4px; font-size:12px; }
 <div class="toast" id="toast"></div>
 
 <script src="/config.js"></script>
-<script src="https://tools.csebuilders.com/omega-tools.js"></script>
-<script src="https://tools.csebuilders.com/om-telemetry-gate.js?v=1"></script>
+<script src="/omega-tools.js"></script>
+<script src="/om-telemetry-gate.js?v=1"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -242,7 +242,7 @@ code { background:#eef2f6; padding:1px 5px; border-radius:4px; font-size:12px; }
   var COMPANY = (CSCONFIG && CSCONFIG.companyName) ? CSCONFIG.companyName : "ClearSky OMEGA";
 
   /* Alert delivery uses the same secure proxy the O&M console defines. */
-  var ALERT_PROXY_URL = "https://tools.csebuilders.com/api/om-integrations";
+  var ALERT_PROXY_URL = "/api/om-integrations";
 
   /* ---- Contract vocabulary ----
      Availability basis: how the guarantee is measured. */
@@ -832,8 +832,8 @@ code { background:#eef2f6; padding:1px 5px; border-radius:4px; font-size:12px; }
       var hasSlack=cfg.connected&&cfg.connected.slack, hasSms=cfg.connected&&cfg.connected.twilio;
       var h=info("Alert delivery shares the O&M Console's secure integration proxy — credentials stay server-side.");
       h+='<div class="card"><div class="card-h"><h3>Breach-Risk Alert Routing</h3><span class="sub">Where early warnings are delivered</span></div><div class="card-b"><div class="tbl-wrap"><table><thead><tr><th>Channel</th><th>Status</th><th></th></tr></thead><tbody>';
-      h+='<tr><td><b>Slack</b><div class="small muted">P1 breach & at-risk posts</div></td><td>'+(hasSlack?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>')+'</td><td style="text-align:right">'+(hasSlack?'<span class="small muted">Managed in O&M Console</span>':'<a class="btn sm" href="https://tools.csebuilders.com" target="_blank">Connect in O&M Console ↗</a>')+'</td></tr>';
-      h+='<tr><td><b>Twilio SMS</b><div class="small muted">On-call escalation</div></td><td>'+(hasSms?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>')+'</td><td style="text-align:right">'+(hasSms?'<span class="small muted">Managed in O&M Console</span>':'<a class="btn sm" href="https://tools.csebuilders.com" target="_blank">Connect in O&M Console ↗</a>')+'</td></tr>';
+      h+='<tr><td><b>Slack</b><div class="small muted">P1 breach & at-risk posts</div></td><td>'+(hasSlack?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>')+'</td><td style="text-align:right">'+(hasSlack?'<span class="small muted">Managed in O&M Console</span>':'<a class="btn sm" href="/om-console.html" target="_blank">Connect in O&M Console ↗</a>')+'</td></tr>';
+      h+='<tr><td><b>Twilio SMS</b><div class="small muted">On-call escalation</div></td><td>'+(hasSms?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>')+'</td><td style="text-align:right">'+(hasSms?'<span class="small muted">Managed in O&M Console</span>':'<a class="btn sm" href="/om-console.html" target="_blank">Connect in O&M Console ↗</a>')+'</td></tr>';
       h+='</tbody></table></div></div></div>';
       h+='<div class="card"><div class="card-h"><h3>Portal Data Feed</h3><span class="sub">How the portal consumes SLA compliance</span></div><div class="card-b"><p class="small">Each contract publishes <code>{guarantee, contractualAvail, rawAvail, margin, status, ldAmount}</code> under <code>sla_contracts/{id}</code>, plus an aggregate at <code>sla_rollup/'+esc(WS.orgId)+'</code>. Joined to the portal project card by <code>editorProjectId</code> / <code>mondayBoardId</code> — the same identity the editor and O&M Console use.</p></div></div>';
       $("app").innerHTML=h;

@@ -889,28 +889,30 @@ function showApp(user){
   setInterval(tick, 1000);
 }
 
-/* The real intake tool lives on tools.csebuilders.com and is shared by every
-   tenant portal. This console does NOT ship its own — a second intake form is
-   exactly how the queue got split in the first place. */
+/* ONE intake tool, shared by every tenant portal — a second intake form is
+   exactly how the queue got split in the first place. It was linked on
+   tools.csebuilders.com (a separate Vercel project, the legacy build) until
+   intake.html was imported into omega-core on 2026-09-14; same-origin now, so
+   the console and the portals open the same copy. */
 function intakeUrl(orgId){
   var base = (window.CLEARSKY_CONFIG.ops || {}).intakeUrl
-          || 'https://tools.csebuilders.com/intake.html';
+          || '/intake.html';
   var url = base;
   if (orgId) url += (base.indexOf('?') >= 0 ? '&' : '?') + 'org=' + encodeURIComponent(orgId);
   return url;
 }
 function openIntake(orgId){ window.open(intakeUrl(orgId), '_blank'); }
 
-/* Same arrangement as intake: the workbook lives on tools.csebuilders.com
-   with every other OMEGA tool, and this console links to it rather than
-   shipping a copy. Two copies of a pricing tool is how two versions of a
-   number reach a customer.
+/* Same arrangement as intake: ONE workbook, linked rather than copied. Two
+   copies of a pricing tool is how two versions of a number reach a customer —
+   which is precisely what linking the legacy tools.csebuilders.com deployment
+   produced. ev-cost-workbook.html is in omega-core, so this is same-origin.
 
    The tool gates itself on a signed-in clearsky-usa.com / csebuilders.com
    account, so this link is a convenience, not the access control. */
 function workbookUrl(orgId){
   var base = (window.CLEARSKY_CONFIG.ops || {}).workbookUrl
-          || 'https://tools.csebuilders.com/ev-cost-workbook.html';
+          || '/ev-cost-workbook.html';
   var url = base;
   if (orgId) url += (base.indexOf('?') >= 0 ? '&' : '?') + 'org=' + encodeURIComponent(orgId);
   return url;

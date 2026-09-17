@@ -115,7 +115,11 @@ var T = {
     return send(to, '[OMEGA] New workspace request: ' + o.company + ' (' + o.orgId + ')',
       layout('New workspace request', '<table style="font-size:14px;border-collapse:collapse">'
         + row('Company', o.company) + row('Domain', o.orgId) + row('Requested by', o.email) + row('Vertical', o.vertical) + row('Host', o.host) + row('Phone', o.phone || '—') + row('Note', o.note || '—')
-        + '</table>' + button(o.consoleUrl || 'https://tools.csebuilders.com/', 'Review in the master console')));
+        /* The master console is /admin in omega-core. This defaulted to
+           https://tools.csebuilders.com/ — a separate Vercel project running the
+           legacy build — so the one button in the signup alert took staff to the
+           old console to approve a tenant that exists only in this one. */
+        + '</table>' + button(o.consoleUrl || 'https://silmarillion.clearskyomega.com/admin', 'Review in the master console')));
   },
   approved: function (o) {
     return send(o.email, 'Your ClearSky-OMEGA workspace is live',

@@ -308,7 +308,9 @@ var GA_BRAND      = {"nextnrg.com":"nextnrg","solela.com":"solela","chileasing.c
                      "spatco.com":"spatco","ogisolar.com":"ogisolar"};
 var GA_URL_KEY    = "omega.tenant.portalUrl";   /* the literal page we came from */
 var GA_SLUG_KEY   = "omega.tenant.slug";        /* convention fallback */
-var GA_FALLBACK   = "https://tools.csebuilders.com/";
+/* This origin. The old value (tools.csebuilders.com) is a separate Vercel
+   project, so the last-resort "back to portal" left omega-core entirely. */
+var GA_FALLBACK   = "/";
 
 function gaStoreGet(k){
   var v="";
@@ -784,17 +786,79 @@ map.createPane("basePane");
 map.getPane("basePane").style.zIndex=200; // overlayPane is 400, markerPane 600
 map.getPane("basePane").style.pointerEvents="none";
 
-/* Basemaps — switchable for readability. Satellite for site context, light for labels. */
+/* ══════════════════════════════════════════════════════════════════
+   BASEMAPS — CARTO now requires a key; keyless Esri fallback
+   ══════════════════════════════════════════════════════════════════
+   CARTO's raster tiles at basemaps.cartocdn.com were keyless for years.
+   They changed it, and the failure mode is nasty because it is NOT an
+   error: the CDN still answers 200 with a real PNG, but the tile has
+   "API KEY REQUIRED / carto.com/basemaps/apikey" burned diagonally into
+   the image. So the map looks like it works, every layer draws
+   correctly, and the whole continent is covered in grey nag text.
+   Nothing logs, nothing 404s, nothing retries. (Verified 2026-09-15.)
+
+   comed-capacity.html hit this first and chose the same two paths this
+   now follows, so there is ONE answer in the codebase:
+
+     WITH A KEY — set cartoKey in config.js. Free tier is 5M tile
+     requests a month. Best-looking, and what these styles were
+     designed against.
+
+     WITHOUT A KEY — Esri's Light/Dark Gray Canvas. No key, no signup,
+     near-identical pale styling.
+
+   ⚠ Esri splits what CARTO combines. CARTO's light_all/dark_all include
+   place labels; Esri's Canvas *_Base layers are geography ONLY, with
+   labels in a separate *_Reference layer. Substituting the Base alone
+   silently drops every city name — on a national map where reps orient
+   by "Chicago", that is a real regression, not a style change. So the
+   keyless path stacks Base + Reference as a layerGroup.
+
+   Esri Canvas stops at zoom 16 natively; maxNativeZoom lets Leaflet
+   upscale rather than serve blank tiles past it.
+   ══════════════════════════════════════════════════════════════════ */
 var ATTR='© OpenStreetMap · © CARTO/Esri · HIFLD/EIA/EPA/OSM';
 function baseTile(url,opts){ opts=opts||{}; opts.pane="basePane"; opts.attribution=ATTR; if(!opts.maxZoom)opts.maxZoom=19; return L.tileLayer(url,opts); }
+/* ⚠ THREE TOOLS, THREE SPELLINGS — read them all, hardcode none.
+   A working CARTO key already exists in this repo: clearsky-sitefinder.html
+   carries one as a file-local default under window.CS_TILE_KEY, and
+   comed-capacity.html reads CLEARSKY_CONFIG.cartoKey. Grid Atlas read
+   neither, which is why this tool alone showed watermarked tiles while the
+   other two were fine.
+
+   Both names are honoured because both are already in the wild and picking
+   one would break the other tool's users. The key is deliberately NOT copied
+   in here: a credential duplicated across files is one someone rotates in one
+   place and forgets in two. Set it ONCE in config.js as cartoKey (or
+   CS_TILE_KEY) and all three tools pick it up.
+
+   With no key configured anywhere, the Esri path below runs and the map is
+   clean — just Esri's styling rather than CARTO's. */
+var CARTO_KEY=window.CS_TILE_KEY
+            ||(window.CLEARSKY_CONFIG&&window.CLEARSKY_CONFIG.cartoKey)
+            ||(location.search.match(/[?&]tilekey=([^&]+)/)||[])[1]
+            ||"";
+function carto(style,opts){
+  opts=opts||{}; opts.subdomains="abcd";
+  return baseTile("https://{s}.basemaps.cartocdn.com/"+style+"/{z}/{x}/{y}{r}.png?key="+encodeURIComponent(CARTO_KEY),opts);
+}
+function esri(service,opts){
+  opts=opts||{}; if(opts.maxNativeZoom===undefined) opts.maxNativeZoom=16;
+  return baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/"+service+"/MapServer/tile/{z}/{y}/{x}",opts);
+}
+function esriImagery(){ return baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{}); }
+/* Base + labels, because Esri keeps them apart. */
+function esriCanvas(tone){
+  return L.layerGroup([ esri("Canvas/World_"+tone+"_Gray_Base"), esri("Canvas/World_"+tone+"_Gray_Reference") ]);
+}
 var BASEMAPS={
-  dark:{ name:"Dark", layer:baseTile("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd"}) },
-  light:{ name:"Light", layer:baseTile("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd"}) },
+  dark:{ name:"Dark", layer: CARTO_KEY ? carto("dark_all") : esriCanvas("Dark") },
+  light:{ name:"Light", layer: CARTO_KEY ? carto("light_all") : esriCanvas("Light") },
   streets:{ name:"Streets", layer:baseTile("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{subdomains:"abc"}) },
-  satellite:{ name:"Satellite", layer:baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{}) },
+  satellite:{ name:"Satellite", layer:esriImagery() },
   hybrid:{ name:"Hybrid", layer:L.layerGroup([
-     baseTile("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{}),
-     baseTile("https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",{subdomains:"abcd"})
+     esriImagery(),
+     CARTO_KEY ? carto("dark_only_labels") : esri("Canvas/World_Dark_Gray_Reference")
   ]) }
 };
 var currentBase="light";

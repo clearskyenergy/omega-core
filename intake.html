@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ClearSky-OMEGA · Project Intake
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     Imported into omega-core 2026-09-14 from the legacy tools.csebuilders.com
+     deployment, which was a separate Vercel project. This is now the only copy. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Intake</title>
+<!-- Tenant branding is injected by config.js + omega-brand.js. This file is
+     shared platform code and ships byte-identical to every tenant. -->
+<style>
+:root{
+  --paper:#EFF2F5; --surface:#FFFFFF; --sunken:#F7F9FB;
+  --ink:#0F151C; --ink-2:#39434E; --muted:#6B7783; --faint:#9AA5AF;
+  --rule:#DCE3E9; --rule-2:#EAEFF3;
+  --accent: var(--omega-accent, #0E5FA8);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, white);
+  --good:#1B7A4B; --good-soft:#E6F4EC;
+  --warn:#9A5A08; --warn-soft:#FBF0DF;
+  --info:#0E5FA8; --info-soft:#E7F0F9;
+  --r:8px; --r-lg:12px;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --shadow: 0 1px 2px rgba(16,26,38,.06), 0 6px 20px rgba(16,26,38,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- chrome ---------- */
+.topbar{position:sticky;top:0;z-index:40;background:var(--surface);
+  border-bottom:1px solid var(--rule);display:flex;align-items:center;
+  gap:14px;padding:10px 20px}
+.brandmark{display:flex;align-items:center;gap:10px;min-width:0}
+.brandmark img{height:24px;width:auto;display:block}
+.brandmark .bn{font-weight:650;letter-spacing:-.01em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.tooltag{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);border-left:1px solid var(--rule);
+  padding-left:14px}
+.topbar .sp{flex:1}
+.whoami{font-size:12.5px;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:34vw}
+
+.tabs{display:flex;gap:2px;padding:0 20px;background:var(--surface);
+  border-bottom:1px solid var(--rule);position:sticky;top:45px;z-index:39;
+  overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:none;border:0;padding:11px 14px;cursor:pointer;color:var(--muted);
+  font-weight:550;font-size:13.5px;border-bottom:2px solid transparent;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .cnt{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:6px}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1240px;margin:0 auto;padding:22px 20px 96px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;align-items:start}
+@media(max-width:1000px){.cols{grid-template-columns:1fr}}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);margin-bottom:18px;overflow:hidden}
+.card > header{padding:14px 18px 12px;border-bottom:1px solid var(--rule-2);
+  display:flex;align-items:baseline;gap:12px}
+.card > header h2{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em}
+.card > header .sub{font-size:12.5px;color:var(--muted);margin-left:auto;text-align:right}
+.card .body{padding:16px 18px}
+.step{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--accent);
+  border:1px solid color-mix(in srgb,var(--accent) 28%, white);
+  background:var(--accent-soft);border-radius:4px;padding:2px 6px}
+
+/* ---------- fields ---------- */
+.grid{display:grid;gap:12px 14px;grid-template-columns:repeat(12,1fr)}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f.c12{grid-column:span 12}.f.c8{grid-column:span 8}.f.c6{grid-column:span 6}
+.f.c4{grid-column:span 4}.f.c3{grid-column:span 3}.f.c2{grid-column:span 2}
+@media(max-width:720px){
+  .f.c8,.f.c6,.f.c4,.f.c3,.f.c2{grid-column:span 12}
+  .f.c3.keep,.f.c4.keep{grid-column:span 6}
+}
+.f > label{font-size:12px;font-weight:550;color:var(--ink-2)}
+.f > label .req{color:#B4302A;margin-left:2px}
+.f .hint{font-size:11.5px;color:var(--faint)}
+input[type=text],input[type=email],input[type=tel],input[type=url],input[type=number],
+input[type=date],select,textarea{
+  width:100%;background:var(--surface);border:1px solid var(--rule);
+  border-radius:var(--r);padding:8px 10px;outline:none;transition:border-color .12s,box-shadow .12s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%, transparent)}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+textarea{min-height:70px;resize:vertical}
+.check{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px}
+.check input{width:16px;height:16px;accent-color:var(--accent);flex:none}
+
+/* ---------- scope matrix (signature) ---------- */
+.matrix{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;padding:16px 18px;border-bottom:1px solid var(--rule-2);background:var(--sunken)}
+.tile{position:relative;text-align:left;background:var(--surface);
+  border:1px solid var(--rule);border-radius:var(--r);padding:12px 12px 11px;
+  cursor:pointer;transition:border-color .14s, box-shadow .14s, transform .14s}
+.tile:hover{border-color:var(--faint);transform:translateY(-1px)}
+.tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile .sh{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted)}
+.tile .lb{font-weight:600;font-size:13.5px;margin-top:3px;line-height:1.25}
+.tile .st{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:7px;
+  padding-top:7px;border-top:1px dashed var(--rule)}
+.tile[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);
+  box-shadow:inset 0 0 0 1px var(--accent)}
+.tile[aria-pressed="true"] .sh,.tile[aria-pressed="true"] .st{color:var(--accent)}
+.tile .dot{position:absolute;top:11px;right:11px;width:8px;height:8px;border-radius:50%;
+  background:var(--rule);}
+.tile[aria-pressed="true"] .dot{background:var(--accent)}
+
+.scopepanel{border-top:1px solid var(--rule-2);padding:16px 18px;background:var(--surface)}
+.scopepanel > .ph{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.scopepanel > .ph h3{margin:0;font-size:13.5px;font-weight:650}
+.scopepanel > .ph .rm{margin-left:auto;background:none;border:0;color:var(--muted);
+  cursor:pointer;font-size:12.5px;text-decoration:underline}
+
+/* ---------- links table ---------- */
+.linkrow{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(0,1.3fr) 34px;
+  gap:8px;align-items:start;padding:9px 0;border-bottom:1px dashed var(--rule-2)}
+@media(max-width:820px){.linkrow{grid-template-columns:1fr 1fr;}
+  .linkrow .u{grid-column:span 2}.linkrow .x{grid-column:span 2;justify-self:start}}
+.linkrow .x{background:none;border:1px solid var(--rule);border-radius:6px;
+  width:32px;height:32px;cursor:pointer;color:var(--muted);line-height:1}
+.linkrow .x:hover{border-color:#C9534C;color:#C9534C}
+.prov{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:4px}
+.addrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* ---------- deliverables ---------- */
+.deliv{display:flex;gap:10px;padding:11px 0;border-bottom:1px dashed var(--rule-2);align-items:flex-start}
+.deliv:last-child{border-bottom:0}
+.deliv input{margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex:none}
+.deliv .dl{font-weight:550;font-size:13.5px}
+.deliv .dh{font-size:12px;color:var(--muted)}
+
+/* ---------- routing ---------- */
+.routes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.routes{grid-template-columns:1fr}}
+.route{text-align:left;background:var(--surface);border:1px solid var(--rule);
+  border-radius:var(--r);padding:14px;cursor:pointer;transition:border-color .14s}
+.route:hover{border-color:var(--faint)}
+.route[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);
+  box-shadow:inset 0 0 0 1px var(--accent)}
+.route .rt{font-weight:650;font-size:13.5px;margin-bottom:4px}
+.route .rd{font-size:12.5px;color:var(--muted)}
+
+/* ---------- rail ---------- */
+.rail{position:sticky;top:104px}
+@media(max-width:1000px){.rail{position:static}}
+.meter{height:5px;background:var(--rule-2);border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.meter i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.ledger{list-style:none;margin:10px 0 0;padding:0}
+.ledger li{display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12.5px;
+  color:var(--muted);border-bottom:1px dashed var(--rule-2)}
+.ledger li:last-child{border-bottom:0}
+.ledger li.on{color:var(--ink)}
+.ledger li .m{font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;width:14px}
+.ledger li.on .m{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-family:var(--mono);font-size:11px;letter-spacing:.05em;padding:3px 7px;
+  border-radius:999px;border:1px solid var(--rule);color:var(--ink-2);background:var(--sunken)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* ---------- buttons ---------- */
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:var(--r);
+  padding:8px 14px;font-weight:550;font-size:13.5px;cursor:pointer;
+  transition:background .12s,border-color .12s}
+.btn:hover{background:var(--sunken);border-color:var(--faint)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed;filter:none}
+/* Not-yet-valid is a different state from not-allowed: the button stays
+   clickable so it can say what is missing. */
+.btn.primary.pending{opacity:.55;box-shadow:none}
+#needHint{font-size:12.5px;color:var(--warn);margin-right:auto;line-height:1.4}
+#needHint b{font-weight:600}
+.btn.ghost{border-color:transparent;background:none;color:var(--accent);padding-left:6px;padding-right:6px}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+
+.actionbar{position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--surface);
+  border-top:1px solid var(--rule);padding:11px 20px;display:flex;gap:10px;
+  align-items:center;box-shadow:0 -4px 18px rgba(16,26,38,.06)}
+.actionbar .msg{font-size:12.5px;color:var(--muted);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
+@media(max-width:640px){.actionbar{flex-wrap:wrap}.actionbar .msg{order:-1;flex-basis:100%}}
+
+/* ---------- status / list ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
+  border-radius:999px;border:1px solid var(--rule);color:var(--muted);background:var(--sunken)}
+.badge.info{color:var(--info);background:var(--info-soft);border-color:color-mix(in srgb,var(--info) 25%,white)}
+.badge.good{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 25%,white)}
+.badge.warn{color:var(--warn);background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 30%,white)}
+
+.plist{display:flex;flex-direction:column}
+.pitem{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;
+  padding:14px 18px;border-bottom:1px solid var(--rule-2);cursor:pointer;
+  transition:background .12s;align-items:center}
+.pitem:hover{background:var(--sunken)}
+.pitem:last-child{border-bottom:0}
+.pitem h3{margin:0 0 3px;font-size:14px;font-weight:600}
+.pitem .meta{font-size:12px;color:var(--muted)}
+.pitem .right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.pipe{display:flex;gap:3px;margin-top:8px}
+.pipe span{height:3px;flex:1;background:var(--rule-2);border-radius:2px}
+.pipe span.on{background:var(--accent)}
+.empty{padding:44px 18px;text-align:center;color:var(--muted)}
+.empty h3{margin:0 0 6px;color:var(--ink);font-size:15px}
+
+.actingbar{background:var(--warn-soft);border-bottom:1px solid color-mix(in srgb,var(--warn) 32%,white);
+  padding:9px 20px;font-size:12.5px;color:var(--warn);display:flex;gap:10px;align-items:center;
+  flex-wrap:wrap}
+.actingbar b{color:var(--warn)}
+.actingbar button{margin-left:auto}
+.notice{border:1px solid color-mix(in srgb,var(--good) 30%,white);background:var(--good-soft);
+  border-radius:var(--r-lg);padding:13px 16px;margin-bottom:18px;display:flex;
+  gap:12px;align-items:flex-start}
+.notice .nt{font-weight:650;font-size:13.5px;color:var(--good)}
+.notice .nb{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+
+.outlist{list-style:none;margin:10px 0 0;padding:0}
+.outlist li{display:flex;gap:10px;align-items:center;padding:8px 0;
+  border-bottom:1px dashed var(--rule-2);font-size:13px}
+.outlist li:last-child{border-bottom:0}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- project portal (client-facing status, quote, payment, messages) ---------- */
+.pp{border:1px solid var(--line,#E4E8EC);border-radius:12px;background:#fff;padding:16px 18px;
+  margin-bottom:18px}
+.pp-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.pp-k{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8FA0AE}
+.pp-t{font-size:17px;font-weight:700;color:var(--ink,#0F2733);margin-top:3px;letter-spacing:-.2px}
+.pp-flow{display:flex;gap:6px;margin:16px 0 4px;flex-wrap:wrap}
+.pp-step{flex:1 1 90px;min-width:78px}
+.pp-dot{display:block;height:4px;border-radius:3px;background:#E4E8EC}
+.pp-step.done .pp-dot{background:#16A34A}
+.pp-step.now .pp-dot{background:#0070F2}
+.pp-lbl{display:block;font-size:11px;color:#8FA0AE;margin-top:6px}
+.pp-step.now .pp-lbl{color:#0070F2;font-weight:600}
+.pp-step.done .pp-lbl{color:#5A7180}
+.pp-blurb{font-size:13px;color:var(--muted,#5A7180);margin-top:10px;line-height:1.55}
+.pp-card{border:1px solid var(--line,#E4E8EC);border-radius:10px;padding:14px 15px;margin-top:14px;
+  background:#FAFBFC}
+.pp-ct{font-size:10.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:#8FA0AE;
+  margin-bottom:9px}
+.pp-amt{font:500 24px/1.1 'DM Mono',ui-monospace,monospace;color:#0F2733;letter-spacing:-.8px}
+.pp-lines{list-style:none;margin:11px 0 0;padding:0;font-size:13px}
+.pp-lines li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;
+  border-bottom:1px solid #EEF1F4;color:var(--muted,#5A7180)}
+.pp-lines li:last-child{border-bottom:none}
+.pp-note{font-size:13px;line-height:1.55;color:var(--muted,#5A7180);margin-top:9px}
+.pp-when{font-size:11.5px;color:#A6B3BF;margin-top:7px}
+.pp-fine{font-size:11.5px;color:#8FA0AE;margin-top:8px;line-height:1.5}
+.pp-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.pp-ok{font-size:13px;color:#16A34A;font-weight:600;margin-top:9px}
+.pp-no{font-size:13px;color:#DC2626;font-weight:600;margin-top:9px}
+.pp-thread{max-height:280px;overflow-y:auto;padding:2px}
+.pp-msg{margin-bottom:12px;max-width:88%}
+.pp-msg:last-child{margin-bottom:0}
+.pp-who{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8FA0AE;
+  margin-bottom:3px}
+.pp-bub{font-size:13px;line-height:1.55;padding:9px 12px;border-radius:10px;white-space:pre-wrap;
+  word-break:break-word;background:#fff;border:1px solid var(--line,#E4E8EC)}
+.pp-msg.me{margin-left:auto}
+.pp-msg.me .pp-who{text-align:right}
+.pp-msg.me .pp-bub{background:#E8F1FE;border-color:#CBDDF0;color:#123A66}
+.pp-msg .pp-when{margin-top:3px}
+.pp-msg.me .pp-when{text-align:right}
+#ppMsg{width:100%;margin-top:12px;border:1.5px solid #DDE3E9;border-radius:9px;padding:10px 12px;
+  font:400 13.5px/1.5 inherit;color:inherit;background:#fff;outline:none;resize:vertical}
+#ppMsg:focus{border-color:#0070F2}
+
+.pp-fg{margin-bottom:12px}
+.pp-fg:last-child{margin-bottom:0}
+.pp-fgn{font-size:12px;font-weight:600;color:var(--ink,#0F2733);margin-bottom:5px}
+.pp-frow{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line,#E4E8EC);
+  border-radius:7px;padding:7px 10px;margin-bottom:4px;font-size:13px}
+.pp-fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#0070F2;
+  cursor:pointer;text-decoration:none}
+.pp-fn:hover{text-decoration:underline}
+.pp-fs{font:400 11px 'DM Mono',ui-monospace,monospace;color:#8FA0AE;flex:none}
+
+/* ---------- project portal ---------- */
+.pp{margin-bottom:20px}
+.pp-h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.pp-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.pp-t{font-size:26px;font-weight:650;letter-spacing:-.02em;color:var(--ink);margin-top:6px;line-height:1.15}
+.pp-sub{font-size:13.5px;color:var(--muted);margin-top:5px}
+.pp-badge{flex:none;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  padding:6px 11px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--muted)}
+.pp-badge.good{background:var(--good-soft);border-color:transparent;color:var(--good)}
+.pp-badge.info{background:var(--info-soft);border-color:transparent;color:var(--info)}
+.pp-badge.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.stepper{display:flex;list-style:none;margin:0 0 18px;padding:0}
+.step{flex:1;position:relative;text-align:center;min-width:0}
+.step .rail{position:absolute;top:13px;right:50%;width:100%;height:2px;background:var(--rule-2)}
+.step:first-child .rail{display:none}
+.step.done .rail,.step.now .rail{background:var(--accent)}
+.step .node{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:50%;font-family:var(--mono);font-size:11px;background:var(--surface);
+  border:2px solid var(--rule-2);color:var(--faint)}
+.step.done .node{background:var(--accent);border-color:var(--accent);color:#fff}
+.step.now .node{border-color:var(--accent);color:var(--accent);font-weight:700;box-shadow:0 0 0 4px var(--accent-soft)}
+.step .slab{display:block;font-size:11.5px;color:var(--faint);margin-top:8px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.step.now .slab{color:var(--accent);font-weight:600}
+.step.done .slab{color:var(--muted)}
+.pp-blurb{font-size:14px;color:var(--ink-2);line-height:1.6;margin-bottom:18px}
+.pp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:760px){.pp-grid{grid-template-columns:1fr}}
+.pp-card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-lg);
+  padding:18px 20px;box-shadow:var(--shadow)}
+.pp-card.wide{margin-bottom:14px}
+.pp-ct{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:12px}
+.pp-amt{font-family:var(--mono);font-size:34px;font-weight:500;letter-spacing:-.03em;color:var(--ink);line-height:1}
+.pp-lines{list-style:none;margin:14px 0 0;padding:0;font-size:13px}
+.pp-lines li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+  border-bottom:1px solid var(--rule-2);color:var(--muted)}
+.pp-lines li:last-child{border-bottom:none}
+.pp-note{font-size:13.5px;line-height:1.6;color:var(--muted);margin-top:10px}
+.pp-when{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:8px}
+.pp-fine{font-size:12px;color:var(--faint);margin-top:10px;line-height:1.5}
+.pp-empty{font-size:13.5px;color:var(--muted);line-height:1.6;padding:6px 0 2px}
+.pp-row{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap;align-items:center}
+.pp-stat{font-size:13.5px;font-weight:600;margin-top:12px}
+.pp-stat.good{color:var(--good)} .pp-stat.warn{color:var(--warn)} .pp-stat.bad{color:#B3261E}
+.pbtn{border:1px solid transparent;border-radius:var(--r);padding:10px 18px;cursor:pointer;
+  font:600 13.5px var(--sans);text-decoration:none;display:inline-flex;align-items:center;
+  transition:background .12s,border-color .12s}
+.pbtn.primary{background:var(--accent);color:#fff}
+.pbtn.primary:hover{filter:brightness(1.08)}
+.pbtn.ghost{background:var(--surface);border-color:var(--rule);color:var(--ink-2)}
+.pbtn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.pbtn:disabled{opacity:.5;cursor:not-allowed}
+.pp-fg{margin-bottom:16px}
+.pp-fg:last-child{margin-bottom:0}
+.pp-fgn{font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:7px}
+.pp-frow{display:flex;align-items:center;gap:11px;background:var(--sunken);border:1px solid var(--rule-2);
+  border-radius:var(--r);padding:10px 13px;margin-bottom:6px;font-size:13.5px;transition:border-color .12s}
+.pp-frow:hover{border-color:var(--accent)}
+.fico{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--muted);background:var(--surface);
+  border:1px solid var(--rule);border-radius:4px;padding:3px 5px;flex:none;min-width:34px;text-align:center}
+.pp-fn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);
+  cursor:pointer;text-decoration:none;font-weight:500}
+.pp-fn:hover{text-decoration:underline}
+.pp-fs{font-family:var(--mono);font-size:11px;color:var(--faint);flex:none}
+.pp-thread{max-height:320px;overflow-y:auto;padding:2px 2px 6px;margin-bottom:12px}
+.pp-msg{margin-bottom:14px;max-width:82%}
+.pp-msg:last-child{margin-bottom:0}
+.pp-who{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:4px}
+.pp-bub{font-size:13.5px;line-height:1.6;padding:11px 14px;border-radius:12px;white-space:pre-wrap;
+  word-break:break-word;background:var(--sunken);border:1px solid var(--rule-2);color:var(--ink)}
+.pp-msg.me{margin-left:auto}
+.pp-msg.me .pp-who{text-align:right}
+.pp-msg.me .pp-bub{background:var(--accent-soft);border-color:transparent}
+.pp-msg.me .pp-when{text-align:right}
+.pp-send{display:flex;gap:9px;align-items:flex-end}
+.pp-err{margin-top:9px;padding:9px 11px;border-radius:var(--r);font-size:12.5px;line-height:1.5;
+  background:#FBECEA;border:1px solid #E8BDB8;color:#8E2F27}
+.pp-err b{display:block;margin-bottom:2px}
+.pp-err code{font-family:var(--mono);font-size:11.5px}
+#ppMsg{flex:1;border:1px solid var(--rule);border-radius:var(--r);padding:11px 13px;
+  font:400 13.5px/1.55 var(--sans);color:var(--ink);background:var(--surface);outline:none;
+  resize:vertical;min-height:44px}
+#ppMsg:focus{border-color:var(--accent)}
+#detailsBar{margin-bottom:18px}
+#detailsToggle{background:none;border:none;border-bottom:1px dashed var(--rule);color:var(--muted);
+  font:500 13px var(--sans);cursor:pointer;padding:0 0 3px}
+#detailsToggle:hover{color:var(--accent);border-bottom-color:var(--accent)}
+/* Scoped to #intakeCols ONLY. The earlier form used the bare `.cols`
+   sibling selector, which also matched the project-list view later in the
+   DOM and hid every submitted project's row — the list header showed "4
+   records" while the rows themselves were display:none'd. */
+#detailsBar:not([hidden]) ~ #intakeCols{display:none}
+#detailsBar:not([hidden]) ~ #intakeCols.open{display:grid}
+
+.plist-amt{font-family:var(--mono);font-size:13px;color:var(--ink);font-weight:500}
+.plist-files{font-size:11.5px;color:var(--muted)}
+.plist-when{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.pipe span.at{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+#orgWarn{margin:0 0 18px;padding:12px 15px;border-radius:var(--r);font-size:13px;line-height:1.55;
+  background:var(--warn-soft,#FDF3E7);border:1px solid var(--warn,#B7791F);color:var(--warn,#8A5A16)}
+#orgWarn b{font-weight:600}
+
+#orgPick{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 18px;padding:11px 14px;
+  border-radius:var(--r);background:var(--info-soft,#EAF2FE);border:1px solid var(--info,#2563EB)}
+#orgPick .op-l{font-size:12.5px;font-weight:600;color:var(--info,#1D4ED8)}
+#orgPick select{border:1px solid var(--rule,#D6DCE3);border-radius:var(--r,7px);padding:7px 10px;
+  font:500 13px var(--sans);color:var(--ink);background:var(--surface,#fff);outline:none;max-width:340px}
+#orgPick select:focus{border-color:var(--info,#2563EB)}
+#orgPick .op-h{font-size:11.5px;color:var(--muted);flex-basis:100%}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brandmark" id="brand"><span class="bn">Portal</span></div>
+  <span class="tooltag">Project intake</span>
+  <span class="sp"></span>
+  <a class="whoami" id="backLink" href="#" hidden style="text-decoration:none">← Portal</a>
+  <span class="whoami" id="whoami"></span>
+  <button class="btn sm" id="signOut" type="button" hidden style="margin-left:10px">Switch account</button>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-new"  aria-selected="true"  data-view="new">New intake</button>
+  <button class="tab" role="tab" id="tab-list" aria-selected="false" data-view="list">My projects <span class="cnt" id="listCount"></span></button>
+</div>
+
+<div id="actingSlot"></div>
+
+<div class="wrap">
+  <!-- ================= NEW / EDIT ================= -->
+  <div id="view-new">
+    <div id="noticeSlot"></div>
+    <div id="detailsBar" hidden>
+      <button id="detailsToggle" type="button" aria-expanded="false">View intake details</button>
+    </div>
+    <div class="cols" id="intakeCols">
+      <div>
+        <!-- 0 purpose -->
+        <section class="card" id="cardPurpose">
+          <header><h2>What do you need?</h2>
+            <span class="sub">This changes what the form asks for</span></header>
+          <div class="body">
+            <div class="routes">
+              <button class="route" type="button" data-purpose="build" aria-pressed="true">
+                <div class="rt">Open a project</div>
+                <div class="rd">Bring your documents and site photos into one record, open a
+                  project you can work in the editor, and keep it yours. No fee.</div>
+              </button>
+              <button class="route" type="button" data-purpose="service" aria-pressed="false">
+                <div class="rt">Have {svc} do the work</div>
+                <div class="rd">Same intake, but we produce the plot, site map, costs and the
+                  utility / AHJ packages. We price it first — you see the fee before anything starts.</div>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1 customer -->
+        <section class="card">
+          <header><span class="step">01</span><h2>Customer</h2>
+            <span class="sub">Who we're doing this for</span></header>
+          <div class="body"><div class="grid">
+            <div class="f c6"><label for="c_company">Company <span class="req">*</span></label>
+              <input id="c_company" type="text" data-bind="customer.company" autocomplete="organization"></div>
+            <div class="f c6"><label for="c_contact">Primary contact <span class="req">*</span></label>
+              <input id="c_contact" type="text" data-bind="customer.contactName" autocomplete="name"></div>
+            <div class="f c4"><label for="c_email">Email <span class="req">*</span></label>
+              <input id="c_email" type="email" data-bind="customer.email" autocomplete="email"></div>
+            <div class="f c4"><label for="c_phone">Phone</label>
+              <input id="c_phone" type="tel" data-bind="customer.phone" autocomplete="tel"></div>
+            <div class="f c4"><label for="c_role">Role</label>
+              <input id="c_role" type="text" data-bind="customer.role" placeholder="Developer, EPC, host, owner"></div>
+            <div class="f c6"><label for="c_street">Billing street</label>
+              <input id="c_street" type="text" data-bind="customer.street"></div>
+            <div class="f c3 keep"><label for="c_city">City</label>
+              <input id="c_city" type="text" data-bind="customer.city"></div>
+            <div class="f c2 keep"><label for="c_state">State</label>
+              <input id="c_state" type="text" data-bind="customer.state" maxlength="3"></div>
+            <div class="f c2 keep"><label for="c_zip">ZIP</label>
+              <input id="c_zip" type="text" data-bind="customer.zip" maxlength="10"></div>
+            <div class="f c12"><label for="c_notes">Anything we should know about the customer</label>
+              <textarea id="c_notes" data-bind="customer.notes"></textarea></div>
+          </div></div>
+        </section>
+
+        <!-- 2 site -->
+        <section class="card">
+          <header><span class="step">02</span><h2>Site &amp; project</h2>
+            <span class="sub">Where it goes and who governs it</span></header>
+          <div class="body"><div class="grid">
+            <div class="f c6"><label for="p_name">Project name <span class="req">*</span></label>
+              <input id="p_name" type="text" data-bind="project.name" placeholder="Riverside Depot Phase 1"></div>
+            <div class="f c6"><label for="p_site">Site name</label>
+              <input id="p_site" type="text" data-bind="project.siteName"></div>
+            <div class="f c6"><label for="p_street">Site street</label>
+              <input id="p_street" type="text" data-bind="project.street"></div>
+            <div class="f c3 keep"><label for="p_city">City <span class="req">*</span></label>
+              <input id="p_city" type="text" data-bind="project.city"></div>
+            <div class="f c3 keep"><label for="p_state">State <span class="req">*</span></label>
+              <input id="p_state" type="text" data-bind="project.state" maxlength="3"></div>
+            <div class="f c3 keep"><label for="p_zip">ZIP</label>
+              <input id="p_zip" type="text" data-bind="project.zip" maxlength="10"></div>
+            <div class="f c3 keep"><label for="p_apn">Parcel / APN</label>
+              <input id="p_apn" type="text" data-bind="project.apn"></div>
+            <div class="f c3 keep"><label for="p_lat">Latitude</label>
+              <input id="p_lat" type="text" data-bind="project.lat" placeholder="33.9416" inputmode="decimal"></div>
+            <div class="f c3 keep"><label for="p_lng">Longitude</label>
+              <input id="p_lng" type="text" data-bind="project.lng" placeholder="-118.4085" inputmode="decimal"></div>
+            <div class="f c6"><label for="p_utility">Serving utility</label>
+              <input id="p_utility" type="text" data-bind="project.utility" placeholder="SCE, PG&amp;E, Duke, Bayernwerk…">
+              <span class="hint">Needed for the utility submission package.</span></div>
+            <div class="f c6"><label for="p_ahj">Authority having jurisdiction</label>
+              <input id="p_ahj" type="text" data-bind="project.ahj" placeholder="City / county building &amp; fire">
+              <span class="hint">Needed for the AHJ permit package.</span></div>
+            <div class="f c4"><label for="p_volt">Existing service voltage</label>
+              <input id="p_volt" type="text" data-bind="project.serviceVoltage" placeholder="480/277V 3Ø"></div>
+            <div class="f c4"><label for="p_amps">Existing service size (A)</label>
+              <input id="p_amps" type="number" data-bind="project.existingServiceA" placeholder="1200"></div>
+            <div class="f c4"><label for="p_acct">Utility account / meter no.</label>
+              <input id="p_acct" type="text" data-bind="project.utilityAccount"></div>
+            <div class="f c4"><label for="p_stage">Project stage</label>
+              <select id="p_stage" data-bind="project.stage">
+                <option>Feasibility</option><option>Site selection</option>
+                <option>Preliminary design</option><option>Permitting</option>
+                <option>Construction ready</option><option>Under construction</option>
+              </select></div>
+            <div class="f c4"><label for="p_ctrl">Site control</label>
+              <select id="p_ctrl" data-bind="project.siteControl">
+                <option>Under evaluation</option><option>LOI signed</option>
+                <option>Lease signed</option><option>Owned</option>
+              </select></div>
+            <div class="f c4"><label for="p_target">Target energization</label>
+              <input id="p_target" type="date" data-bind="project.targetDate"></div>
+            <div class="f c12"><label for="p_notes">Site constraints, easements, known issues</label>
+              <textarea id="p_notes" data-bind="project.notes"></textarea></div>
+          </div></div>
+        </section>
+
+        <!-- 3 scope -->
+        <section class="card">
+          <header><span class="step">03</span><h2>Scope <span class="req" style="color:#B4302A">*</span></h2>
+            <span class="sub">Pick every technology on this site</span></header>
+          <div class="matrix" id="matrix"></div>
+          <div id="scopePanels"></div>
+        </section>
+
+        <!-- 4 documents -->
+        <section class="card">
+          <header><span class="step">04</span><h2>Documents</h2>
+            <span class="sub">Link your Drive, Dropbox, SharePoint or Box folders</span></header>
+          <div class="body">
+            <p style="margin:0 0 12px;color:var(--muted);font-size:12.5px">
+              Paste share links rather than uploading files. Make sure the link is readable by
+              anyone with the link<span id="shareEmail"></span>.
+              You and {svc} can both add links and change a category at any time.
+            </p>
+            <div id="linkList"></div>
+            <div class="addrow">
+              <button class="btn sm" type="button" id="addLinkBtn">Add a link</button>
+              <button class="btn sm ghost" type="button" id="addCatBtn">Add a category</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5 deliverables -->
+        <section class="card" id="cardDeliverables">
+          <header><span class="step">05</span><h2>What you want back</h2>
+            <span class="sub" id="delivSub">{svc} produces these for you</span></header>
+          <div class="body">
+            <div id="delivList"></div>
+            <p id="pricingNote" style="margin:14px 0 0;font-size:12px;color:var(--muted)"></p>
+          </div>
+        </section>
+
+        <!-- 6 project -->
+        <section class="card">
+          <header><span class="step">06</span><h2>Your project</h2>
+            <span class="sub">Where this lands in the editor</span></header>
+          <div class="body">
+            <div class="grid">
+              <div class="f c8"><label for="p_editor">Linked project</label>
+                <select id="p_editor"></select>
+                <span class="hint" id="projHint">Link this intake to a project you already have,
+                  or open a new one from what you have filled in.</span></div>
+              <div class="f c4 keep" style="justify-content:flex-end;gap:8px">
+                <button class="btn sm" type="button" id="createProject">Open a new project</button>
+                <a class="btn sm" id="openEditor" href="#" target="_blank" rel="noopener"
+                   style="text-align:center;text-decoration:none">Open in editor</a></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7 quote -->
+        <section class="card" id="cardQuote" hidden>
+          <header><span class="step">07</span><h2>Your quote</h2>
+            <span class="sub" id="quoteSub"></span></header>
+          <div class="body"><div id="quoteBody"></div></div>
+        </section>
+      </div>
+
+      <!-- rail -->
+      <aside class="rail">
+        <section class="card">
+          <header><h2 id="railTitle">This intake</h2></header>
+          <div class="body">
+            <div class="eyebrow">Ready to submit</div>
+            <div class="meter"><i id="meterFill" style="width:0%"></i></div>
+            <div class="mono" style="font-size:11px;color:var(--muted)" id="meterPct">0%</div>
+
+            <div class="eyebrow" style="margin-top:16px">Scope</div>
+            <div class="chips" id="railChips"><span style="font-size:12.5px;color:var(--faint)">None selected</span></div>
+
+            <div class="eyebrow" style="margin-top:16px">Deliverables ledger</div>
+            <ul class="ledger" id="railLedger"></ul>
+
+            <div id="railMissing" style="margin-top:14px"></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ================= LIST ================= -->
+  <div id="view-list" hidden>
+    <section class="card">
+      <header><h2>Your projects</h2><span class="sub" id="listSub"></span></header>
+      <div class="plist" id="plist"></div>
+    </section>
+  </div>
+</div>
+
+<div class="actionbar" id="actionbar">
+  <span class="msg" id="statusMsg"></span>
+  <span id="needHint"></span>
+  <button class="btn" type="button" id="btnDelete" hidden
+     style="border-color:#E3C4C2;color:#B4302A">Delete</button>
+  <button class="btn" type="button" id="btnNew">New intake</button>
+  <button class="btn" type="button" id="btnSave">Save draft</button>
+  <button class="btn primary" type="button" id="btnSubmit">Submit to Omega</button>
+</div>
+
+<!-- Firebase compat v8 + shared platform config/registry (OMEGA standard order) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="/omega-intake.js"></script>
+<script>
+(function () {
+  'use strict';
+  var OI = window.OmegaIntake;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var el = function (t, c, txt) { var n = document.createElement(t);
+    if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
+  var esc = function (s) { return String(s == null ? '' : s); };
+
+  /* ---------- identity ---------- */
+  function currentUser() {
+    var c = OI.cfg();
+    if (c.user) return c.user;
+    if (window.OMEGA_USER) return window.OMEGA_USER;
+    try {
+      if (window.firebase && firebase.auth && firebase.auth().currentUser) {
+        var u = firebase.auth().currentUser;
+        return { uid: u.uid, email: u.email, displayName: u.displayName };
+      }
+    } catch (e) {}
+    return { uid: null, email: '', displayName: '' };
+  }
+  var user = { uid: null, email: '', displayName: '' };
+  var persistenceOK = true;
+
+  /* Every write below is authenticated by the CURRENT token, not by the
+     `user` object captured at boot. Checking the live session first turns a
+     bare "Missing or insufficient permissions" — which reads like a rules
+     problem and sent us chasing rules for a day — into an accurate statement
+     of what actually happened. */
+  function requireAuth() {
+    var u = null;
+    try { u = (window.firebase && firebase.auth) ? firebase.auth().currentUser : null; }
+    catch (e) { u = null; }
+    if (!u) {
+      sessionLost();
+      return Promise.reject(new Error(
+        'Your session ended, so that could not be saved. Sign in again \u2014 '
+        + 'nothing you typed has been lost.'));
+    }
+    /* Force-refresh: a token revoked or expired server-side still looks valid
+       in memory, and the write would be refused with no explanation. */
+    return u.getIdToken(true).then(function () {
+      user = currentUser();
+      return u;
+    }, function () {
+      sessionLost();
+      throw new Error('Your sign-in expired. Sign in again to continue \u2014 '
+                      + 'nothing you typed has been lost.');
+    });
+  }
+
+  function sessionLost() {
+    try {
+      setMsg('Signed out \u2014 sign in again to save.');
+      var h = document.getElementById('needHint');
+      if (h) {
+        h.innerHTML = '';
+        h.appendChild(el('b', null, 'Signed out. '));
+        h.appendChild(document.createTextNode(
+          persistenceOK
+            ? 'Sign in again to save your work.'
+            : 'This browser will not keep you signed in \u2014 private browsing or '
+              + 'blocked storage. Try a normal window.'));
+      }
+    } catch (e) { /* never let the warning itself throw */ }
+  }
+
+  /* ---------- brand ----------
+   * Nothing here is baked in. A white-label tenant sees its own name, its own
+   * support address, and whatever it calls the fulfilment service — never
+   * ClearSky's, unless its own config.js puts it there. */
+  var SVC = 'Omega';
+  function svc(s) { return String(s).replace(/\{svc\}/g, SVC); }
+
+  /* Nothing is baked in. On TOOL_HOST there is no tenant config.js, so the
+     name, logo and support address come from omega_orgs/{orgId}. A white-label
+     tenant sees its own — never ClearSky's, unless its own org doc says so. */
+  function applyBrand() {
+    var bd = OI.brand(), tgt = $('#brand');
+    var logo = bd.logoUrl || (bd.brand && bd.brand.logoUrl);
+    tgt.innerHTML = '';
+    if (logo) { var i = new Image(); i.src = logo; i.alt = ''; tgt.appendChild(i); }
+    tgt.appendChild(el('span', 'bn', OI.tenantName()));
+
+    var contact = bd.supportEmail || (bd.support && bd.support.email) || '';
+    $('#shareEmail').textContent = contact ? ', or invite ' + contact : '';
+
+    (function walk(node) {
+      for (var n = node.firstChild; n; n = n.nextSibling) {
+        if (n.nodeType === 3) {
+          if (n.nodeValue.indexOf('{svc}') > -1) n.nodeValue = svc(n.nodeValue);
+        } else if (n.nodeType === 1 && n.tagName !== 'SCRIPT' && n.tagName !== 'STYLE') {
+          walk(n);
+        }
+      }
+    })(document.body);
+
+    var who = user.displayName || user.email || '';
+    $('#whoami').textContent = [who, OI.tenantName()].filter(Boolean).join(' \u00b7 ');
+    document.title = OI.tenantName() + ' \u00b7 Project intake';
+
+    /* Two cases where the page's org and the caller diverge:
+
+       STAFF (clearsky-usa / csebuilders) may file into ANY tenant, so instead
+       of a warning they get a PICKER — choose the customer this intake is for,
+       and every new record files into that org. This is how you file a Concord
+       job from your ClearSky account without hand-editing ?org= in the URL.
+
+       NON-STAFF whose domain doesn't match the page get the warning: their
+       write will be refused unless ClearSky granted them this tenant. */
+    (function orgControls() {
+      var email = (user.email || '').toLowerCase();
+      var myDom = email.indexOf('@') > -1 ? email.split('@')[1] : '';
+      var pageOrg = (OI.orgId() || '').toLowerCase();
+
+      if (OI.isStaffEmail && OI.isStaffEmail()) {
+        /* Only offer the tenant switcher when the URL carries NO tenant.
+           Opened from a tenant's portal (?org=...), the workspace is already
+           decided — the record stamps that org, and a dropdown there is just
+           an invitation to file into the wrong one. The picker's home is the
+           bare tools.csebuilders.com/intake.html, where staff arrive with no
+           tenant context at all. */
+        var urlOrg = new URLSearchParams(location.search).get('org');
+        if (!urlOrg) buildTenantPicker(pageOrg);
+        return;
+      }
+      if (!pageOrg || !myDom || myDom === pageOrg) return;
+      /* Submissions are owner-scoped now (any signed-in user may file; the
+         record carries their identity), so a domain mismatch is worth a
+         heads-up, not a refusal warning: they'll see only their OWN records
+         here, not the whole workspace. */
+      var bar = document.createElement('div');
+      bar.id = 'orgWarn';
+      bar.innerHTML = 'You\u2019re signed in as <b>' + esc(email) + '</b> on the <b>'
+        + esc(pageOrg) + '</b> intake. Your submissions will file to this workspace under '
+        + 'your name \u2014 but this list shows only your own records, not the '
+        + 'whole company\u2019s.';
+      var host = document.getElementById('noticeSlot') || document.body;
+      host.parentNode.insertBefore(bar, host);
+    })();
+  }
+
+  /* Staff tenant switcher. Files the current and every new record into the
+     chosen customer's org. Records already loaded from My projects keep their
+     own org — switching only affects what you create next. */
+  function buildTenantPicker(current) {
+    var wrap = document.createElement('div');
+    wrap.id = 'orgPick';
+    wrap.innerHTML = '<span class="op-l">Filing for</span>'
+      + '<select id="opSel"><option value="' + esc(current) + '">'
+      + esc(OI.tenantName() || current) + '</option></select>'
+      + '<span class="op-h">staff \u00b7 this intake is stamped with the tenant you pick</span>';
+    var host = document.getElementById('noticeSlot') || document.body;
+    host.parentNode.insertBefore(wrap, host);
+
+    var sel = document.getElementById('opSel');
+    OI.listOrgs().then(function (orgs) {
+      if (!orgs.length) return;
+      sel.innerHTML = '';
+      var seen = {};
+      orgs.forEach(function (o) {
+        if (seen[o.orgId]) return; seen[o.orgId] = 1;
+        var opt = document.createElement('option');
+        opt.value = o.orgId;
+        opt.textContent = (o.name ? o.name + ' \u2014 ' : '') + o.orgId;
+        if (o.orgId === current) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (!seen[current] && current) {
+        var opt = document.createElement('option');
+        opt.value = current; opt.textContent = current; opt.selected = true;
+        sel.insertBefore(opt, sel.firstChild);
+      }
+    });
+
+    sel.addEventListener('change', function () {
+      var o = sel.value;
+      OI.setOrg(o);
+      rec.orgId = OI.orgId();
+      rec.tenantName = '';
+      markDirty();
+      setMsg('Now filing for ' + o + '. New records save to this tenant.');
+      $('#whoami').textContent = [user.displayName || user.email || '', o]
+        .filter(Boolean).join(' \u00b7 ');
+    });
+  }
+
+  /* ---------- state ---------- */
+  var rec = OI.blankRecord(user);
+  var all = [];
+  var dirty = false;
+  var isExisting = false;   // opened from My projects, not a fresh form
+  var editorProjects = [];
+
+  function setMsg(t) { $('#statusMsg').textContent = t || ''; }
+  function markDirty() { dirty = true; renderRail(); }
+
+  /* ---------- generic binding ---------- */
+  function getPath(o, p) {
+    return p.split('.').reduce(function (a, k) { return a == null ? a : a[k]; }, o);
+  }
+  function setPath(o, p, v) {
+    var ks = p.split('.'), last = ks.pop();
+    var t = ks.reduce(function (a, k) { if (a[k] == null) a[k] = {}; return a[k]; }, o);
+    t[last] = v;
+  }
+  function bindAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-bind]'), function (n) {
+      n.addEventListener('input', function () {
+        setPath(rec, n.dataset.bind, n.value); markDirty();
+        if (n.dataset.bind === 'project.name') {
+          $('#railTitle').textContent = rec.project.name || 'This intake';
+          syncRecordChrome();
+        }
+      });
+      n.addEventListener('change', function () {
+        setPath(rec, n.dataset.bind, n.value); markDirty();
+        if (n.dataset.bind === 'editorProjectId') syncEditorLink();
+      });
+    });
+  }
+  function fillBound() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-bind]'), function (n) {
+      var v = getPath(rec, n.dataset.bind);
+      n.value = v == null ? '' : v;
+    });
+  }
+
+  /* ---------- scope matrix ---------- */
+  function renderMatrix() {
+    var m = $('#matrix'); m.innerHTML = '';
+    OI.SCOPES.forEach(function (s) {
+      var on = !!(rec.scope[s.key] && rec.scope[s.key].enabled);
+      var t = el('button', 'tile'); t.type = 'button';
+      t.setAttribute('aria-pressed', on ? 'true' : 'false');
+      t.innerHTML = '<span class="dot"></span>' +
+        '<div class="sh">' + esc(s.short) + '</div>' +
+        '<div class="lb">' + esc(s.label) + '</div>' +
+        '<div class="st">' + (on ? esc(s.summary(rec.scope[s.key])) : 'Not in scope') + '</div>';
+      t.addEventListener('click', function () {
+        rec.scope[s.key] = rec.scope[s.key] || {};
+        rec.scope[s.key].enabled = !rec.scope[s.key].enabled;
+        renderMatrix(); renderScopePanels(); markDirty();
+      });
+      m.appendChild(t);
+    });
+  }
+
+  function renderScopePanels() {
+    var host = $('#scopePanels'); host.innerHTML = '';
+    OI.activeScopes(rec).forEach(function (s) {
+      var data = rec.scope[s.key];
+      var p = el('div', 'scopepanel');
+      var h = el('div', 'ph');
+      h.innerHTML = '<span class="eyebrow">' + esc(s.short) + '</span><h3>' + esc(s.label) + '</h3>';
+      var rm = el('button', 'rm', 'Remove from scope'); rm.type = 'button';
+      rm.addEventListener('click', function () {
+        data.enabled = false; renderMatrix(); renderScopePanels(); markDirty();
+      });
+      h.appendChild(rm); p.appendChild(h);
+
+      var g = el('div', 'grid');
+      s.fields.forEach(function (f) {
+        var span = f.t === 'textarea' ? 'c12' : (f.t === 'bool' ? 'c4 keep' : 'c4 keep');
+        var w = el('div', 'f ' + span);
+        var id = 'sc_' + s.key + '_' + f.k;
+        if (f.t === 'bool') {
+          var lab = el('label', 'check');
+          var cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = id;
+          cb.checked = !!data[f.k];
+          cb.addEventListener('change', function () {
+            data[f.k] = cb.checked; markDirty();
+          });
+          lab.appendChild(cb); lab.appendChild(document.createTextNode(f.l));
+          w.appendChild(lab);
+        } else {
+          var l = el('label', null, f.l); l.htmlFor = id; w.appendChild(l);
+          var input;
+          if (f.t === 'select') {
+            input = document.createElement('select');
+            input.appendChild(new Option('—', ''));
+            f.o.forEach(function (o) { input.appendChild(new Option(o, o)); });
+          } else if (f.t === 'textarea') {
+            input = document.createElement('textarea');
+          } else {
+            input = document.createElement('input');
+            input.type = f.t === 'number' ? 'number' : 'text';
+            if (f.step) input.step = f.step;
+            if (f.t === 'number') input.min = '0';
+          }
+          input.id = id;
+          if (f.ph) input.placeholder = f.ph;
+          input.value = data[f.k] == null ? '' : data[f.k];
+          input.addEventListener('input', function () {
+            data[f.k] = f.t === 'number' ? (input.value === '' ? '' : Number(input.value)) : input.value;
+            markDirty(); refreshTileSummary();
+          });
+          w.appendChild(input);
+        }
+        g.appendChild(w);
+      });
+      p.appendChild(g); host.appendChild(p);
+    });
+  }
+  function refreshTileSummary() {
+    var tiles = document.querySelectorAll('#matrix .tile');
+    OI.SCOPES.forEach(function (s, i) {
+      var t = tiles[i]; if (!t) return;
+      var on = !!(rec.scope[s.key] && rec.scope[s.key].enabled);
+      var st = t.querySelector('.st');
+      if (st) st.textContent = on ? s.summary(rec.scope[s.key]) : 'Not in scope';
+    });
+  }
+
+  /* ---------- links ---------- */
+  function renderLinks() {
+    var host = $('#linkList'); host.innerHTML = '';
+    if (!rec.links.length) {
+      var e = el('div', null, 'No links yet. Add a Drive or Dropbox folder for surveys, drawings, photos or utility correspondence.');
+      e.style.cssText = 'color:var(--faint);font-size:12.5px;padding:6px 0 2px';
+      host.appendChild(e); return;
+    }
+    rec.links.forEach(function (ln) {
+      var row = el('div', 'linkrow');
+
+      var cw = el('div', 'f');
+      var sel = document.createElement('select');
+      rec.categories.forEach(function (c) { sel.appendChild(new Option(c, c)); });
+      if (rec.categories.indexOf(ln.category) === -1) {
+        sel.appendChild(new Option(ln.category, ln.category));
+      }
+      sel.value = ln.category;
+      sel.setAttribute('aria-label', 'Category');
+      sel.addEventListener('change', function () {
+        OI.updateLink(rec, ln.id, { category: sel.value }, user.email); markDirty();
+      });
+      cw.appendChild(sel); row.appendChild(cw);
+
+      var lw = el('div', 'f');
+      var li = document.createElement('input'); li.type = 'text'; li.value = ln.label;
+      li.placeholder = 'Label'; li.setAttribute('aria-label', 'Link label');
+      li.addEventListener('input', function () { ln.label = li.value; markDirty(); });
+      lw.appendChild(li); row.appendChild(lw);
+
+      var uw = el('div', 'f u');
+      var ui = document.createElement('input'); ui.type = 'url'; ui.value = ln.url;
+      ui.placeholder = 'https://drive.google.com/…'; ui.setAttribute('aria-label', 'Share URL');
+      var pv = el('div', 'prov', ln.url ? OI.linkProvider(ln.url) : '');
+      ui.addEventListener('input', function () {
+        ln.url = ui.value; pv.textContent = ui.value ? OI.linkProvider(ui.value) : ''; markDirty();
+      });
+      uw.appendChild(ui); uw.appendChild(pv); row.appendChild(uw);
+
+      var x = el('button', 'x', '×'); x.type = 'button';
+      x.title = 'Remove link'; x.setAttribute('aria-label', 'Remove link');
+      x.addEventListener('click', function () {
+        OI.removeLink(rec, ln.id, user.email); renderLinks(); markDirty();
+      });
+      row.appendChild(x);
+      host.appendChild(row);
+    });
+  }
+
+  $('#addLinkBtn').addEventListener('click', function () {
+    OI.addLink(rec, { url: '', label: '', category: rec.categories[0] }, user.email);
+    renderLinks(); markDirty();
+    var inputs = document.querySelectorAll('#linkList .linkrow input[type=url]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  $('#addCatBtn').addEventListener('click', function () {
+    var name = prompt('Name the new category');
+    if (!name) return;
+    if (OI.addCategory(rec, name)) { renderLinks(); markDirty(); setMsg('Category "' + name + '" added.'); }
+    else setMsg('That category already exists.');
+  });
+
+  /* ---------- deliverables ---------- */
+  function renderDeliverables() {
+    var host = $('#delivList'); host.innerHTML = '';
+    OI.DELIVERABLES.forEach(function (d) {
+      var slot = rec.deliverables.filter(function (x) { return x.key === d.key; })[0];
+      if (!slot) { slot = { key: d.key, label: d.label, requested: false, status: 'not_started', outputUrl: '', note: '' };
+        rec.deliverables.push(slot); }
+      var row = el('label', 'deliv');
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!slot.requested;
+      cb.addEventListener('change', function () { slot.requested = cb.checked; markDirty(); });
+      var txt = el('div');
+      txt.appendChild(el('div', 'dl', d.label));
+      txt.appendChild(el('div', 'dh', d.hint));
+      row.appendChild(cb); row.appendChild(txt);
+      host.appendChild(row);
+    });
+  }
+
+  /* ---------- routing ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll('.route'), function (b) {
+    b.addEventListener('click', function () {
+      rec.routing = b.dataset.route;
+      document.querySelectorAll('.route').forEach(function (o) {
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
+      syncActionBar(); markDirty();
+    });
+  });
+  function syncRouteButtons() {
+    document.querySelectorAll('.route').forEach(function (o) {
+      o.setAttribute('aria-pressed', o.dataset.route === rec.routing ? 'true' : 'false');
+    });
+  }
+  function syncActionBar() {
+    var isSelf = rec.routing === 'self';
+    $('#btnSubmit').textContent = svc(isSelf ? 'Switch to {svc} and submit' : 'Submit to {svc}');
+    $('#btnSave').textContent = isSelf ? 'Save record' : 'Save draft';
+    var v = OI.validate(rec);
+
+    /* The button is NOT disabled when the form is merely incomplete.
+       It used to be, and the only code that names the missing fields lives
+       inside this button's click handler — so the explanation sat behind a
+       control that could not be clicked. From the customer's side the button
+       was simply dead: no message, no reason, nothing to act on. The rail
+       lists what is missing, but it scrolls off on a narrow window.
+
+       Now the state is visible in the bar itself, and clicking still works
+       and still says what is needed. */
+    var b = $('#btnSubmit'), hint = $('#needHint');
+    b.disabled = false;
+    b.classList.toggle('pending', !v.ok);
+    if (hint) {
+      if (v.ok) { hint.textContent = ''; b.removeAttribute('title'); }
+      else {
+        var miss = (v.missing || []).slice();
+        var shown = miss.slice(0, 3).join(', ')
+                  + (miss.length > 3 ? ' and ' + (miss.length - 3) + ' more' : '');
+        hint.innerHTML = '';
+        hint.appendChild(el('b', null, 'Still needed: '));
+        hint.appendChild(document.createTextNode(shown || 'some required fields'));
+        b.title = 'Still needed: ' + (miss.join(', ') || 'some required fields');
+      }
+    }
+  }
+
+  /* ---------- editor link ---------- */
+  function loadEditorProjects() {
+    var c = OI.cfg();
+    var src = c.listEditorProjects;
+    var p = typeof src === 'function' ? Promise.resolve(src(OI.orgId(), user)) : Promise.resolve([]);
+    return p.then(function (list) {
+      editorProjects = Array.isArray(list) ? list : [];
+    }).catch(function () { editorProjects = []; }).then(renderEditorSelect);
+  }
+  function renderEditorSelect() {
+    var s = $('#p_editor'); s.innerHTML = '';
+    s.appendChild(new Option('Not linked', ''));
+    editorProjects.forEach(function (p) {
+      s.appendChild(new Option(p.name || p.title || p.id, p.id));
+    });
+    if (rec.editorProjectId && !editorProjects.some(function (p) { return p.id === rec.editorProjectId; })) {
+      s.appendChild(new Option(rec.editorProjectId, rec.editorProjectId));
+    }
+    s.value = rec.editorProjectId || '';
+    syncEditorLink();
+  }
+  function syncEditorLink() {
+    $('#openEditor').href = OI.editorUrl(rec.editorProjectId || '');
+  }
+
+  /* ---------- rail ---------- */
+  function renderRail() {
+    var pct = OI.completeness(rec);
+    $('#meterFill').style.width = pct + '%';
+    $('#meterPct').textContent = pct + '%';
+
+    var chips = $('#railChips'); chips.innerHTML = '';
+    var act = OI.activeScopes(rec);
+    if (!act.length) {
+      var n = el('span'); n.style.cssText = 'font-size:12.5px;color:var(--faint)';
+      n.textContent = 'None selected'; chips.appendChild(n);
+    } else act.forEach(function (s) { chips.appendChild(el('span', 'chip on', s.short)); });
+
+    var led = $('#railLedger'); led.innerHTML = '';
+    OI.DELIVERABLES.forEach(function (d) {
+      var slot = rec.deliverables.filter(function (x) { return x.key === d.key; })[0];
+      var on = slot && slot.requested;
+      var li = el('li', on ? 'on' : '');
+      li.appendChild(el('span', 'm', on ? '✓' : '·'));
+      li.appendChild(el('span', null, d.label));
+      led.appendChild(li);
+    });
+
+    var miss = $('#railMissing'); miss.innerHTML = '';
+    var v = OI.validate(rec);
+    if (!v.ok) {
+      miss.appendChild(el('div', 'eyebrow', 'Still needed'));
+      var ul = el('ul'); ul.style.cssText = 'margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--warn)';
+      v.missing.forEach(function (m) { ul.appendChild(el('li', null, m)); });
+      miss.appendChild(ul);
+    }
+    syncActionBar();
+    refreshTileSummary();
+  }
+
+  /* ---------- persistence ---------- */
+  function saveDraft() {
+    var fn = rec.routing === 'self' ? OI.saveSelfServe : function (r) {
+      return OI.store().save(r);
+    };
+    return requireAuth().then(function () {
+      return fn(rec, user.email);
+    }).then(function () {
+      dirty = false; isExisting = true; syncRecordChrome();
+      setMsg('Saved ' + new Date().toLocaleTimeString() + '.');
+      refreshList();
+    })['catch'](function (e) {
+      setMsg('Could not save: ' + ((e && e.message) || 'write refused'));
+      console.error('[intake] save failed:', e);
+    });
+  }
+  $('#btnSave').addEventListener('click', saveDraft);
+
+  $('#btnSubmit').addEventListener('click', function () {
+    var v = OI.validate(rec);
+    if (!v.ok) {
+      setMsg('Still needed: ' + ((v.missing || []).join(', ') || 'some required fields'));
+      /* Naming the fields is not much use if they are three screens away. */
+      var m = $('#railMissing');
+      if (m && m.scrollIntoView) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    $('#btnSubmit').disabled = true;
+    requireAuth().then(function () {
+      return OI.submit(rec, user.email);
+    }).then(function () {
+      dirty = false;
+      setMsg(svc('Submitted. {svc} will notify you here when the package is ready.'));
+      syncRouteButtons(); refreshList(); renderNotice();
+    })['catch'](function (e) {
+      setMsg('Could not submit: ' + ((e && e.message) || 'write refused'));
+      console.error('[intake] submit failed:', e);
+      $('#btnSubmit').disabled = false;
+      syncActionBar();
+    });
+  });
+
+  $('#btnNew').addEventListener('click', function () {
+    if (dirty && !confirm('Start a new intake? Unsaved changes will be lost.')) return;
+    rec = OI.blankRecord(user);
+    isExisting = false;
+    hydrate(); showView('new'); setMsg('New intake started.');
+  });
+
+  /* ---------- list ---------- */
+  function refreshList() {
+    return OI.store().listForOrg(OI.orgId()).then(function (list) {
+      all = (list || []).sort(function (a, b) {
+        /* updatedAt is usually an ISO string, but an admin edit can leave a
+           Firestore Timestamp. ms() normalises both so the sort — and the
+           row render below — never throw on a mixed shape. */
+        return ms(b.updatedAt) - ms(a.updatedAt);
+      });
+      $('#listCount').textContent = all.length ? '(' + all.length + ')' : '';
+      renderList();
+    }).catch(function (e) {
+      /* Don't swallow it silently — a blank list with no reason is exactly the
+         bug we just chased. */
+      console.error('[intake] project list failed to load:', e);
+      setMsg('Couldn\u2019t load your projects: ' + ((e && e.message) || 'unknown error'));
+    });
+  }
+
+  /* Milliseconds from an ISO string, a Firestore Timestamp, or a Date. */
+  function ms(v) {
+    if (!v) return 0;
+    if (typeof v === 'string') { var p = Date.parse(v); return isNaN(p) ? 0 : p; }
+    if (typeof v === 'number') return v;
+    if (v.toDate) { try { return v.toDate().getTime(); } catch (e) { return 0; } }
+    if (v instanceof Date) return v.getTime();
+    if (v.seconds) return v.seconds * 1000;
+    return 0;
+  }
+
+  function renderList() {
+    var host = $('#plist'); host.innerHTML = '';
+    var unread = all.filter(function (r) { return r.notify && r.notify.unreadForClient; }).length;
+    $('#listSub').textContent = all.length
+      ? all.length + ' record' + (all.length === 1 ? '' : 's') + (unread ? ' · ' + unread + ' need your attention' : '')
+      : '';
+    if (!all.length) {
+      var e = el('div', 'empty');
+      e.appendChild(el('h3', null, 'Nothing here yet'));
+      e.appendChild(el('p', null, 'Fill in an intake and either submit it to Omega or save it as your own record.'));
+      host.appendChild(e); return;
+    }
+    all.forEach(function (r) {
+      /* One malformed record must not blank the whole list. A record written
+         by an older tool (or the staff quick-form) can arrive with no nested
+         `project` object — reading r.project.name off undefined throws, the
+         forEach dies, and every row vanishes while the count still says 5.
+         Normalise defensively and skip anything that still can't render. */
+      var proj = r.project || {};
+      var cust = r.customer || {};
+      var name = proj.name || r.projectName || cust.company || 'Untitled project';
+      try {
+      var st = OI.STATUS[r.status] || { label: r.status || 'unknown', stage: 0, tone: 'muted' };
+      var item = el('div', 'pitem'); item.tabIndex = 0; item.setAttribute('role', 'button');
+      var left = el('div');
+      left.appendChild(el('h3', null, name));
+      var bits = [
+        [proj.city || cust.city, proj.state || cust.state].filter(Boolean).join(', '),
+        (OI.activeScopes(r) || []).map(function (s) { return s.short; }).join(' · '),
+        r.routing === 'self' ? 'Self-serve' : SVC
+      ].filter(Boolean);
+      left.appendChild(el('div', 'meta', bits.join('  ·  ')));
+      var pipe = el('div', 'pipe');
+      OI.PIPELINE.forEach(function (label, i) {
+        var sp = el('span');
+        sp.className = (i < st.stage) ? 'on' : (i === st.stage ? 'at' : '');
+        sp.title = label;
+        pipe.appendChild(sp);
+      });
+      left.appendChild(pipe);
+      item.appendChild(left);
+
+      var right = el('div', 'right');
+      right.appendChild(el('span', 'pp-badge ' + st.tone, st.label));
+      if (r.notify && r.notify.unreadForClient) {
+        right.appendChild(el('span', 'pp-badge good', 'New update'));
+      }
+      /* Money and files are what a client scans this list for, so surface
+         them here rather than making them open each record to find out. */
+      var q = r.quote || {};
+      if (typeof q.total === 'number') {
+        right.appendChild(el('span', 'plist-amt', OI.money(q.total, q.currency)));
+      }
+      var nf = (r.files || []).length;
+      if (nf) right.appendChild(el('span', 'plist-files', nf + (nf === 1 ? ' file' : ' files')));
+      right.appendChild(el('span', 'plist-when', when(r.updatedAt)));
+      item.appendChild(right);
+
+      function open() {
+        rec = OI.clone(r);
+        isExisting = true;
+        hydrate();
+        showView('new');
+        window.scrollTo(0, 0);
+      }
+      item.addEventListener('click', open);
+      item.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
+      });
+      host.appendChild(item);
+      } catch (rowErr) {
+        /* Draw a minimal row rather than dropping the record silently, and
+           log which one is malformed so it can be cleaned up. */
+        console.error('[intake] skipped a malformed record:', r && r.intakeId, rowErr);
+        var bad = el('div', 'pitem');
+        bad.appendChild(el('h3', null, name + ' (could not fully load)'));
+        host.appendChild(bad);
+      }
+    });
+  }
+
+  /* ---------- delivered notice ---------- */
+  /* A short glyph reads faster than a file extension and needs no icon set. */
+  function fileKind(name) {
+    var x = String(name || '').split('.').pop().toLowerCase();
+    if (x === 'pdf') return 'PDF';
+    if (['png','jpg','jpeg','gif','webp','svg','heic'].indexOf(x) >= 0) return 'IMG';
+    if (['xlsx','xls','csv'].indexOf(x) >= 0) return 'XLS';
+    if (['docx','doc'].indexOf(x) >= 0) return 'DOC';
+    if (['zip','7z','rar'].indexOf(x) >= 0) return 'ZIP';
+    if (['dwg','dxf'].indexOf(x) >= 0) return 'CAD';
+    return 'FILE';
+  }
+
+
+function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  /* Dates on this record are ISO strings. Anything else — a Firestore
+     Timestamp written by another tool — used to render as "Invalid Date",
+     which reads as a bug in the client's own project list. */
+  function when(v, withTime) {
+    if (!v) return '';
+    var t = null;
+    if (typeof v === 'string') { var p = Date.parse(v); if (!isNaN(p)) t = p; }
+    else if (typeof v === 'number') t = v;
+    else if (v && typeof v.toDate === 'function') { try { t = v.toDate().getTime(); } catch (e) {} }
+    else if (v instanceof Date) t = v.getTime();
+    else if (v && v.seconds) t = v.seconds * 1000;
+    if (t == null) return '';
+    var d = new Date(t);
+    return withTime
+      ? d.toLocaleDateString() + ' \u00b7 ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : d.toLocaleDateString();
+  }
+  function ago(v) {
+    var s = when(v, true);
+    if (!s) return '';
+    var t = Date.parse(typeof v === 'string' ? v : when(v, true));
+    if (isNaN(t)) return s;
+    var diff = Date.now() - t;
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return Math.round(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.round(diff / 3600000) + 'h ago';
+    if (diff < 604800000) return Math.round(diff / 86400000) + 'd ago';
+    return s;
+  }
+
+  /* ---------- project portal ----------
+     Everything the customer needs to follow and act on the job, on the record
+     they already opened: where it is, what it costs, how to pay, and a way to
+     talk to whoever is building it.
+
+     Before this, a submitted project showed a status badge and nothing else —
+     a quote could be sent and the client had no way to see the number, let
+     alone accept it. */
+  function renderNotice() {
+    var slot = $('#noticeSlot');
+    slot.innerHTML = '';
+    if (!isExisting || rec.status === 'draft') return;
+
+    var st = OI.STATUS[rec.status] || { label: rec.status, stage: 0, tone: 'muted', blurb: '' };
+    var q = rec.quote || {};
+    var pay = OI.paymentState ? OI.paymentState(rec) : { key: 'none', label: '' };
+    var total = (typeof q.total === 'number') ? q.total : null;
+    var acc = rec.acceptance || {};
+    var done = (rec.deliverables || []).filter(function (d) { return d.requested && d.outputUrl; });
+    var msgs = (rec.messages || []).slice().sort(function (a, b) {
+      return Date.parse(a.at || 0) - Date.parse(b.at || 0);
+    });
+    var html = '';
+    var stageNames = OI.PIPELINE;
+
+    /* ── header ── */
+    html += '<div class="pp">';
+    html += '<div class="pp-h">'
+         +  '<div class="pp-hl"><div class="pp-k">Your project</div>'
+         +  '<div class="pp-t">' + esc(rec.project.name || 'Untitled project') + '</div>'
+         +  '<div class="pp-sub">' + esc([rec.project.city, rec.project.state]
+              .filter(Boolean).join(', ') || (rec.customer.company || '')) + '</div></div>'
+         +  '<span class="pp-badge ' + st.tone + '">' + esc(st.label) + '</span></div>';
+
+    /* ── stepper: the thing a client checks over and over, so it earns the
+          space. Circles carry the state; the rail between them carries the
+          progress. ── */
+    html += '<ol class="stepper">';
+    stageNames.forEach(function (label, i) {
+      var cls = i < st.stage ? 'done' : (i === st.stage ? 'now' : 'todo');
+      html += '<li class="step ' + cls + '">'
+           +  '<span class="rail"></span>'
+           +  '<span class="node">' + (i < st.stage ? '\u2713' : (i + 1)) + '</span>'
+           +  '<span class="slab">' + esc(label) + '</span></li>';
+    });
+    html += '</ol>';
+    if (st.blurb) html += '<div class="pp-blurb">' + esc(st.blurb) + '</div>';
+
+    /* ── quote + payment, side by side where there's room ── */
+    var showQuote = (total !== null || rec.status === 'quoted');
+    var showPay = pay.key !== 'none';
+    if (showQuote || showPay) {
+      html += '<div class="pp-grid">';
+
+      if (showQuote) {
+        html += '<section class="pp-card"><div class="pp-ct">Quote</div>';
+        if (total === null) {
+          html += '<div class="pp-note">Being priced. Nothing to approve yet.</div>';
+        } else {
+          html += '<div class="pp-amt">' + esc(OI.money(total, q.currency)) + '</div>';
+          if ((q.lines || []).length) {
+            html += '<ul class="pp-lines">';
+            q.lines.forEach(function (l) {
+              html += '<li><span>' + esc(l.label || l.key) + '</span>'
+                   +  '<span class="mono">' + esc(OI.money(l.amount, q.currency)) + '</span></li>';
+            });
+            html += '</ul>';
+          }
+          if (q.note) html += '<div class="pp-note">' + esc(q.note) + '</div>';
+          if (q.sentAt) html += '<div class="pp-when">Sent ' + esc(when(q.sentAt)) + '</div>';
+
+          if (rec.status === 'quoted') {
+            html += '<div class="pp-row">'
+                 +  '<button class="pbtn primary" id="ppAccept" type="button">Accept</button>'
+                 +  '<button class="pbtn ghost" id="ppDecline" type="button">Decline</button></div>'
+                 +  '<div class="pp-fine">Accepting starts the work. Payment comes later.</div>';
+          } else if (acc.state === 'accepted') {
+            html += '<div class="pp-stat good">\u2713 Accepted ' + esc(when(acc.at))
+                 +  (acc.poNumber ? ' \u00b7 PO ' + esc(acc.poNumber) : '') + '</div>';
+          } else if (acc.state === 'declined') {
+            html += '<div class="pp-stat bad">Declined ' + esc(when(acc.at))
+                 +  (acc.note ? ' \u2014 ' + esc(acc.note) : '') + '</div>';
+          }
+        }
+        html += '</section>';
+      }
+
+      if (showPay) {
+        html += '<section class="pp-card"><div class="pp-ct">Payment</div>';
+        if (pay.key === 'paid') {
+          html += '<div class="pp-stat good">\u2713 Paid ' + esc(when(q.paidAt)) + '</div>'
+               +  '<div class="pp-note">Nothing outstanding.</div>';
+        } else if (pay.key === 'claimed') {
+          html += '<div class="pp-stat warn">Payment reported</div>'
+               +  '<div class="pp-note">You told us on ' + esc(when(rec.payment.claimedAt))
+               +  (rec.payment.reference ? ' \u00b7 ref ' + esc(rec.payment.reference) : '')
+               +  '. We\u2019ll confirm once it lands.</div>';
+        } else if (pay.key === 'due') {
+          html += '<div class="pp-amt">' + esc(OI.money(total, q.currency)) + '</div>'
+               +  '<div class="pp-note">Due now.</div>'
+               +  '<div class="pp-row">'
+               +  '<a class="pbtn primary" href="' + esc(q.paymentUrl) + '" target="_blank" '
+               +  'rel="noopener">Pay now</a>'
+               +  '<button class="pbtn ghost" id="ppPaid" type="button">I\u2019ve paid</button></div>'
+               +  '<div class="pp-fine">Opens in a new tab. Tell us after and we\u2019ll '
+               +  'reconcile it.</div>';
+        } else {
+          html += '<div class="pp-note">A payment link appears here once the work is '
+               +  'scheduled.</div>';
+        }
+        html += '</section>';
+      }
+      html += '</div>';
+    }
+
+    /* ── files ── */
+    var uploads = OI.files ? OI.files(rec) : [];
+    if (done.length || uploads.length) {
+      html += '<section class="pp-card wide"><div class="pp-ct">Your files</div>';
+      (rec.deliverables || []).forEach(function (d) {
+        if (!d.requested) return;
+        var mine = uploads.filter(function (f) { return (f.key || 'other') === d.key; });
+        if (!mine.length && !d.outputUrl) return;
+        html += '<div class="pp-fg"><div class="pp-fgn">' + esc(d.label) + '</div>';
+        mine.forEach(function (f) {
+          html += '<div class="pp-frow"><span class="fico">' + esc(fileKind(f.name))
+               +  '</span><a class="pp-fn" data-file="' + esc(f.id) + '">' + esc(f.name)
+               +  '</a><span class="pp-fs">'
+               +  esc(OI.fmtBytes ? OI.fmtBytes(f.size) : '') + '</span></div>';
+        });
+        if (d.outputUrl) {
+          html += '<div class="pp-frow"><span class="fico">\u2197</span>'
+               +  '<a class="pp-fn" href="' + esc(d.outputUrl) + '" target="_blank" '
+               +  'rel="noopener">Open shared link</a></div>';
+        }
+        if (d.note) html += '<div class="pp-when">' + esc(d.note) + '</div>';
+        html += '</div>';
+      });
+      var other = uploads.filter(function (f) { return (f.key || 'other') === 'other'; });
+      if (other.length) {
+        html += '<div class="pp-fg"><div class="pp-fgn">Additional files</div>';
+        other.forEach(function (f) {
+          html += '<div class="pp-frow"><span class="fico">' + esc(fileKind(f.name))
+               +  '</span><a class="pp-fn" data-file="' + esc(f.id) + '">' + esc(f.name)
+               +  '</a><span class="pp-fs">'
+               +  esc(OI.fmtBytes ? OI.fmtBytes(f.size) : '') + '</span></div>';
+        });
+        html += '</div>';
+      }
+      html += '</section>';
+    }
+
+    /* ── messages ── */
+    html += '<section class="pp-card wide"><div class="pp-ct">Messages</div>';
+    if (!msgs.length) {
+      html += '<div class="pp-empty">Ask anything about this project here. It goes straight '
+           +  'to whoever is building it.</div>';
+    } else {
+      html += '<div class="pp-thread">';
+      msgs.forEach(function (m) {
+        var mine = m.side === 'client';
+        html += '<div class="pp-msg ' + (mine ? 'me' : 'them') + '">'
+             +  '<div class="pp-who">' + esc(mine ? 'You' : (SVC || 'Omega')) + '</div>'
+             +  '<div class="pp-bub">' + esc(m.text || '') + '</div>'
+             +  '<div class="pp-when">' + esc(ago(m.at)) + '</div></div>';
+      });
+      html += '</div>';
+    }
+    html += '<div class="pp-send"><textarea id="ppMsg" rows="2" '
+         +  'placeholder="Write a message\u2026"></textarea>'
+         +  '<button class="pbtn primary" id="ppSend" type="button">Send</button></div>';
+    html += '</section>';
+
+    if (rec.notify && rec.notify.unreadForClient) {
+      html += '<div class="pp-row"><button class="pbtn ghost" id="ppAck" type="button">'
+           +  'Mark updates as read</button></div>';
+    }
+    html += '</div>';
+
+    slot.innerHTML = html;
+
+    /* Once a project is submitted this page is a STATUS page, not a form. The
+       route picker is a decision already made, and thirty fields of intake
+       below the fold buries the thing the client actually came to see.
+       Collapse it behind a disclosure and let the portal be the page. */
+    var purpose = $('#cardPurpose');
+    if (purpose) purpose.hidden = true;
+    var cols = $('#intakeCols'), bar = $('#detailsBar');
+    if (cols && bar) {
+      bar.hidden = false;
+      if (!bar.dataset.wired) {
+        bar.dataset.wired = '1';
+        $('#detailsToggle').addEventListener('click', function () {
+          var open = cols.classList.toggle('open');
+          var b = $('#detailsToggle');
+          b.textContent = open ? 'Hide intake details' : 'View intake details';
+          b.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      }
+    }
+
+
+    /* ---- actions ----
+       Every listener below is attached AFTER this line, so anything that
+       throws here silently un-wires the entire portal — the Send button, the
+       quote buttons and the file links all render and then do nothing, with
+       no error anywhere. OI.currentEmail is not guaranteed to exist in an
+       older omega-intake.js, so it is resolved defensively rather than
+       called outright. The signed-in user is already known locally; the
+       library was never the only source for it. */
+    var me = '';
+    try {
+      if (typeof OI.currentEmail === 'function') me = OI.currentEmail() || '';
+    } catch (e) { me = ''; }
+    if (!me) me = (user && user.email) || (currentUser() || {}).email || '';
+
+    function after(msg) {
+      return function () { hydrate(); renderNotice(); refreshList(); if (msg) setMsg(msg); };
+    }
+    function fail(e) { setMsg((e && e.message) || 'That didn\u2019t save. Try again.'); }
+
+    var bA = $('#ppAccept');
+    if (bA) bA.addEventListener('click', function () {
+      var po = prompt('Accepting ' + OI.money(total, q.currency)
+        + '.\n\nPO or reference number (optional):', '');
+      if (po === null) return;
+      bA.disabled = true;
+      OI.acceptQuote(rec, me, po).then(after('Quote accepted. We\u2019ll get started.'))
+        .catch(function (e) { bA.disabled = false; fail(e); });
+    });
+
+    var bD = $('#ppDecline');
+    if (bD) bD.addEventListener('click', function () {
+      var why = prompt('Declining this quote. Anything we should know?', '');
+      if (why === null) return;
+      bD.disabled = true;
+      OI.declineQuote(rec, me, why).then(after('Quote declined.'))
+        .catch(function (e) { bD.disabled = false; fail(e); });
+    });
+
+    var bP = $('#ppPaid');
+    if (bP) bP.addEventListener('click', function () {
+      var ref = prompt('Thanks. A payment reference or confirmation number, if you have one:', '');
+      if (ref === null) return;
+      bP.disabled = true;
+      OI.claimPayment(rec, me, ref)
+        .then(after('Thanks \u2014 we\u2019ll confirm once it lands.'))
+        .catch(function (e) { bP.disabled = false; fail(e); });
+    });
+
+    /* A failed send used to report itself through setMsg, which writes to the
+       action bar at the top of the page — while the customer is looking at
+       the message box near the bottom. From where they were standing the
+       button simply did nothing. Errors now land next to the thing that
+       failed, and carry the Firestore code, because "permission-denied" and
+       "the library is missing" need completely different fixes. */
+    function sendErr(html) {
+      var box = document.getElementById('ppSendErr');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'ppSendErr'; box.className = 'pp-err';
+        var host = slot.querySelector('.pp-send');
+        if (host && host.parentNode) host.parentNode.appendChild(box);
+      }
+      box.innerHTML = html;
+    }
+    function clearSendErr() {
+      var box = document.getElementById('ppSendErr');
+      if (box && box.parentNode) box.parentNode.removeChild(box);
+    }
+
+    /* Mirrors the client half of OI.postMessage when the library predates it,
+       so a stale cached omega-intake.js degrades to a working send instead of
+       a dead button. */
+    /* A message is written as a THREE-FIELD update, not as a save of the
+       whole record.
+
+       The rule that permits client messaging outside the status gate is
+       affectedKeys().hasOnly(['messages','notify','updatedAt']). A full-record
+       save satisfies that only by accident — the moment anything else on the
+       record differs by a byte (an activity entry appended alongside the
+       message, a timestamp that re-serialises, a field the library normalises
+       on write) the key set widens and Firestore refuses the whole thing with
+       the same permission-denied as before. arrayUnion also appends exactly
+       one entry, which is the other half of what the rule checks.
+
+       So the narrow write is the primary path and the library is the
+       fallback, rather than the other way round. */
+    function newMessage(text) {
+      return {
+        id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        side: 'client', text: text, by: me,
+        at: OI.nowIso ? OI.nowIso() : new Date().toISOString()
+      };
+    }
+
+    function directSend(msg) {
+      var fs = firebase.firestore();
+      var notify = {};
+      Object.keys(rec.notify || {}).forEach(function (k) { notify[k] = rec.notify[k]; });
+      notify.unreadForStaff = true;
+      return fs.collection('intake_projects').doc(rec.intakeId).update({
+        messages: firebase.firestore.FieldValue.arrayUnion(msg),
+        notify: notify,
+        updatedAt: msg.at
+      }).then(function () {
+        /* keep the in-memory copy in step so the thread repaints without a
+           round trip */
+        rec.messages = (rec.messages || []).concat([msg]);
+        rec.notify = notify;
+        rec.updatedAt = msg.at;
+      });
+    }
+
+    function canWriteDirect() {
+      try {
+        return !!(window.firebase && firebase.firestore && firebase.apps.length
+                  && rec && rec.intakeId);
+      } catch (e) { return false; }
+    }
+
+    function sendMessage(text) {
+      var msg = newMessage(text);
+      if (canWriteDirect()) return directSend(msg);
+      if (typeof OI.postMessage === 'function') {
+        return Promise.resolve(OI.postMessage(rec, text, 'client', me));
+      }
+      rec.messages = (rec.messages || []).concat([msg]);
+      rec.notify = rec.notify || {};
+      rec.notify.unreadForStaff = true;
+      rec.updatedAt = msg.at;
+      return OI.store().save(rec);
+    }
+
+    var bS = $('#ppSend');
+    if (bS) bS.addEventListener('click', function () {
+      var box = $('#ppMsg');
+      var text = (box && box.value || '').trim();
+      if (!text) return;
+      clearSendErr();
+      bS.disabled = true;
+      /* try/catch as well as .catch: a missing OI member throws synchronously,
+         which never reaches a promise rejection handler and would leave the
+         button disabled forever. */
+      var p;
+      try { p = sendMessage(text); }
+      catch (e) { bS.disabled = false; return sendErr(explainSend(e)); }
+
+      Promise.resolve(p).then(function () {
+        clearSendErr();
+        if (box) box.value = '';
+        after('Message sent.')();
+      })['catch'](function (e) {
+        bS.disabled = false;
+        sendErr(explainSend(e));
+        console.error('[intake] message send failed:', e);
+      });
+    });
+
+    /* Turns the raw failure into the one sentence that identifies which
+       system said no. */
+    function explainSend(e) {
+      var code = (e && (e.code || e.name)) || '';
+      var msg  = (e && e.message) || 'Unknown error';
+      if (/permission|denied|insufficient/i.test(code + ' ' + msg)) {
+        return '<b>Your account isn\u2019t allowed to post on this project.</b>'
+             + 'The message was not saved. This is a Firestore rules result, not a '
+             + 'typo \u2014 send this to your administrator: <code>' + esc(code || 'permission-denied')
+             + '</code> for <code>' + esc(rec.intakeId || 'this record') + '</code> as <code>'
+             + esc(me || 'unknown user') + '</code>.';
+      }
+      if (/is not a function|undefined/i.test(msg)) {
+        return '<b>The messaging library didn\u2019t load.</b>'
+             + 'Reload the page. If it happens again, <code>omega-intake.js</code> is stale or '
+             + 'blocked \u2014 tell your administrator: <code>' + esc(msg) + '</code>.';
+      }
+      if (/offline|network|unavailable/i.test(code + ' ' + msg)) {
+        return '<b>No connection to the server.</b>Your message wasn\u2019t sent. '
+             + 'Check your network and try again \u2014 the text is still in the box.';
+      }
+      return '<b>That message didn\u2019t send.</b>' + esc(msg)
+           + ' \u2014 the text is still in the box, so nothing was lost.';
+    }
+
+    /* Resolved per click rather than baked into the href, so the storage rules
+       are consulted every time instead of once, forever, by whoever the link
+       was forwarded to. */
+    Array.prototype.forEach.call(slot.querySelectorAll('[data-file]'), function (a) {
+      a.addEventListener('click', function () {
+        var f = (rec.files || []).filter(function (x) { return x.id === a.dataset.file; })[0];
+        if (!f) return;
+        var was = a.textContent;
+        a.textContent = 'Opening\u2026';
+        OI.fileUrl(f).then(function (url) {
+          a.textContent = was;
+          window.open(url, '_blank');
+        })['catch'](function (e) {
+          a.textContent = was;
+          setMsg('Could not open ' + f.name + ': ' + ((e && e.message) || 'storage error'));
+        });
+      });
+    });
+
+    var bK = $('#ppAck');
+    if (bK) bK.addEventListener('click', function () {
+      if (typeof OI.markMessagesRead !== 'function') {
+        rec.notify = rec.notify || {};
+        rec.notify.unreadForClient = false;
+        return OI.store().save(rec).then(after())['catch'](fail);
+      }
+      OI.markMessagesRead(rec, 'client').then(after())['catch'](fail);
+    });
+  }
+
+  
+  /* ---------- views ---------- */
+  function showView(v) {
+    $('#view-new').hidden = v !== 'new';
+    $('#view-list').hidden = v !== 'list';
+    $('#actionbar').style.display = v === 'new' ? 'flex' : 'none';
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.setAttribute('aria-selected', t.dataset.view === v ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () { showView(t.dataset.view); });
+  });
+
+  /* ---------- which record am I looking at? ----------
+     Without this the tab still said "New intake" while a saved record was
+     loaded, so the only way to tell them apart was to notice the form was
+     already filled in. On an empty saved record there was no way to tell at
+     all — which is exactly the case that looked broken. */
+  function syncRecordChrome() {
+    var name = rec.project.name || 'Untitled project';
+    $('#tab-new').textContent = isExisting ? ('Editing \u00b7 ' + name) : 'New intake';
+
+    /* The rules allow a client to delete only what was never submitted.
+       Anything priced or in production is ClearSky's work product too, so the
+       button is hidden rather than shown-and-refused. */
+    var deletable = isExisting && (rec.status === 'draft' || rec.status === 'saved');
+    $('#btnDelete').hidden = !deletable;
+  }
+
+  $('#btnDelete').addEventListener('click', function () {
+    var name = rec.project.name || 'this untitled record';
+    if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+    $('#btnDelete').disabled = true;
+    OI.store().remove(rec.intakeId).then(function () {
+      setMsg('Deleted.');
+      rec = OI.blankRecord(user);
+      isExisting = false;
+      hydrate();
+      return refreshList();
+    }).then(function () {
+      showView('list');
+    })['catch'](function (e) {
+      setMsg('Could not delete: ' + e.message);
+    }).then(function () { $('#btnDelete').disabled = false; });
+  });
+
+  /* ---------- hydrate ---------- */
+  function hydrate() {
+    // backfill schema for older records — including whole objects a record
+    // written by an older tool may be missing entirely. Without these the
+    // first rec.scope[...] / rec.project.name access throws.
+    if (!rec.project)  rec.project  = {};
+    if (!rec.customer) rec.customer = {};
+    if (!rec.scope)    rec.scope    = {};
+    if (!rec.notify)   rec.notify   = {};
+    if (!rec.quote)    rec.quote    = {};
+    OI.SCOPES.forEach(function (s) { if (!rec.scope[s.key]) rec.scope[s.key] = { enabled: false }; });
+    if (!rec.categories || !rec.categories.length) rec.categories = OI.DEFAULT_CATEGORIES.slice();
+    if (!rec.deliverables) rec.deliverables = [];
+    fillBound();
+    renderMatrix(); renderScopePanels(); renderLinks(); renderDeliverables();
+    syncRouteButtons(); renderEditorSelect(); renderRail(); renderNotice();
+    $('#railTitle').textContent = rec.project.name || 'This intake';
+    syncRecordChrome();
+    dirty = false;
+  }
+
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+  function isStaff(email) {
+    var d = String(email || '').split('@')[1];
+    return !!d && STAFF_DOMAINS.indexOf(d.toLowerCase()) >= 0;
+  }
+
+  function signOutHere() {
+    try {
+      firebase.auth().signOut().then(function () { location.reload(); });
+    } catch (e) { location.reload(); }
+  }
+
+  function checkIdentity() {
+    var so = $('#signOut');
+    if (window.firebase && firebase.apps && firebase.apps.length) {
+      so.hidden = false;
+      so.addEventListener('click', signOutHere);
+    }
+
+    var mine = OI.orgAlias(String(user.email || '').split('@')[1] || '');
+    var target = OI.orgId();
+
+    /* ClearSky staff are explicitly allowed into a tenant workspace — the
+       portal does the same thing via LOCK_ADMIN_DOMAINS, which is why you can
+       open a client deployment with your own account. So this is normal, not
+       an error, and it gets a quiet line rather than a warning bar. What it
+       must still say plainly is WHOSE workspace the record lands in. */
+    if (isStaff(user.email)) {
+      var q = el('a', 'whoami');
+      q.href = 'intake-admin.html';
+      q.textContent = 'Staff queue \u2192';
+      q.style.cssText = 'text-decoration:none;margin-left:10px';
+      $('#whoami').parentNode.insertBefore(q, $('#whoami').nextSibling);
+
+      if (mine && mine !== target) {
+        var note = el('div', 'actingbar');
+        note.innerHTML = '<span>ClearSky staff \u2014 you are working inside <b>' +
+          esc(OI.tenantName()) + '</b>. Records you save here belong to ' + esc(target) + '.</span>';
+        var sw = el('button', 'btn sm', 'Switch account');
+        sw.type = 'button';
+        sw.addEventListener('click', signOutHere);
+        note.appendChild(sw);
+        $('#actingSlot').appendChild(note);
+      }
+      return;
+    }
+
+    /* A tenant user on someone else's link is a different matter: the rules
+       will refuse every write, so say so before they fill the form in. */
+    if (mine && mine !== target) {
+      var bar = el('div', 'actingbar');
+      bar.innerHTML = '<span>Signed in as <b>' + esc(user.email) + '</b>, but this link is for <b>' +
+        esc(target) + '</b>. Saving will be refused. Switch to your ' + esc(target) + ' account.</span>';
+      var b2 = el('button', 'btn sm', 'Switch account');
+      b2.type = 'button';
+      b2.addEventListener('click', signOutHere);
+      bar.appendChild(b2);
+      $('#actingSlot').appendChild(bar);
+      $('#btnSubmit').disabled = true;
+      $('#btnSave').disabled = true;
+    }
+  }
+
+  /* ---------- boot ----------
+     Wait for Firebase to resolve the session before reading anything: orgId
+     falls back to the signed-in email domain, and the rules reject an
+     unauthenticated read outright. Booting early shows an empty list to a
+     signed-in person, which reads as data loss. */
+  function start() {
+    var db = null;
+    try { if (window.firebase && firebase.apps.length) db = firebase.firestore(); } catch (e) {}
+
+    var back = OI.returnUrl();
+    if (back) { $('#backLink').href = back; $('#backLink').hidden = false; }
+
+    /* ---------- whose session is this? ----------
+       Firebase keeps a session per ORIGIN, so the account signed in HERE is
+       not necessarily the one signed into the portal that linked here. The
+       ?org= param says which workspace to write to; the signed-in account
+       decides what the rules will actually allow. When those two disagree the
+       record still saves — isAdmin() permits it — so it has to be visible,
+       or ClearSky staff can file an intake into the wrong tenant and never
+       notice. */
+    /* Resolve WHO is signed in before checking their identity against the
+       link. checkIdentity() reads user.email, and this assignment used to sit
+       three lines below the call — so `mine` was always the empty initial
+       value, the domain comparison could never fail, and the "this link is for
+       someone else, saving will be refused" bar never appeared for anyone. The
+       warning existed; it just ran before there was anything to warn about. */
+    user = currentUser();
+    checkIdentity();
+
+    OI.loadBrand(db).then(function () {
+      user = currentUser();
+      SVC = OI.serviceName();
+      applyBrand();
+      bindAll();
+      hydrate();
+      loadEditorProjects();
+      return refreshList();
+    }).then(function () {
+      setMsg(OI.tenantName() + ' \u00b7 ' + OI.store().name);
+      var qid = new URLSearchParams(location.search).get('id');
+      if (qid) {
+        OI.store().get(qid).then(function (r) {
+          if (r) { rec = r; hydrate(); showView('new'); }
+        });
+      }
+    });
+  }
+
+  /* ---------- authentication ----------
+     Firebase keeps its session per ORIGIN. The portal lives on the tenant's
+     domain and this tool lives on TOOL_HOST, so opening it from the portal
+     does NOT carry the session across — currentUser is null here regardless.
+     The tool therefore signs the person in on its own origin. Because they are
+     already signed in with the same provider, this is one click (usually one
+     silent redirect), and browserLocalPersistence means it happens once per
+     browser rather than once per visit. */
+  /* ---------- SIGN-IN ----------
+     Firebase keeps its session per ORIGIN. The portal is on the tenant's
+     domain, this tool is on TOOL_HOST, so the portal's session does not carry
+     across and currentUser is null here until the person signs in on THIS
+     origin. That is true of every shared tool, not just this one.
+
+     The card below mirrors the portal's: email + password first (how most
+     tenant users sign in), Google second. It is an OVERLAY, not a body
+     rewrite — an earlier version replaced document.body, which meant a
+     successful sign-in had no page left to render into. */
+  function authCard(){
+    var box = document.getElementById('ix-auth');
+    if (box) return box;
+    box = el('div');
+    box.id = 'ix-auth';
+    box.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--paper);' +
+      'display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto';
+    var back = OI.returnUrl();
+    box.innerHTML =
+      '<div style="width:400px;max-width:100%;background:var(--surface);border:1px solid var(--rule);' +
+        'border-radius:var(--r-lg);box-shadow:var(--shadow);padding:30px 28px">' +
+        '<div class="eyebrow">Project intake</div>' +
+        '<h1 style="font-size:19px;margin:8px 0 6px;letter-spacing:-.01em">Sign in to continue</h1>' +
+        '<p style="font-size:12.5px;color:var(--muted);line-height:1.55;margin:0 0 18px">' +
+          'This tool runs on a different domain from your portal, so it keeps its own ' +
+          'sign-in. Use the same account \u2014 it is remembered after the first time.</p>' +
+        '<div class="f" style="margin-bottom:10px"><label for="ixEmail">Work email</label>' +
+          '<input id="ixEmail" type="email" autocomplete="username"></div>' +
+        '<div class="f" style="margin-bottom:14px"><label for="ixPass">Password</label>' +
+          '<input id="ixPass" type="password" autocomplete="current-password"></div>' +
+        '<button class="btn primary" id="ixSignIn" type="button" style="width:100%">Sign in</button>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin:16px 0 14px;' +
+          'font-size:11px;color:var(--faint)"><span style="flex:1;height:1px;background:var(--rule)"></span>' +
+          'or<span style="flex:1;height:1px;background:var(--rule)"></span></div>' +
+        '<button class="btn" id="ixGoogle" type="button" style="width:100%">Continue with Google</button>' +
+        '<p id="ixErr" style="color:#B4302A;font-size:12.5px;margin:14px 0 0;min-height:16px"></p>' +
+        '<p id="ixReset" style="margin:6px 0 0;font-size:12px"></p>' +
+        (back ? '<p style="margin:18px 0 0;font-size:12px"><a href="' + back + '">\u2190 Back to the portal</a></p>' : '') +
+      '</div>';
+    document.body.appendChild(box);
+
+    function err(m){ document.getElementById('ixErr').textContent = m || ''; }
+    function busy(on){
+      var b = document.getElementById('ixSignIn');
+      b.disabled = on; b.textContent = on ? 'Signing in\u2026' : 'Sign in';
+    }
+
+    document.getElementById('ixSignIn').addEventListener('click', function(){
+      var e = (document.getElementById('ixEmail').value || '').trim();
+      var p = document.getElementById('ixPass').value || '';
+      if (!e || !p){ err('Enter your email and password.'); return; }
+      err(''); busy(true);
+      firebase.auth().signInWithEmailAndPassword(e, p).then(function(){
+        /* Success. onAuthStateChanged removes the card; if it somehow does
+           not, the button must not be left reading "Signing in..." forever. */
+        busy(false);
+        console.log('[intake] sign-in OK for', e);
+      })['catch'](function(x){
+        busy(false);
+        var c = x && x.code;
+        /* The code goes to the console every time. Without it a rejected
+           sign-in and a browser that cannot persist a session look identical
+           from the outside, and both present as "it keeps asking me to log
+           in". */
+        console.error('[intake] sign-in failed:', c, x && x.message);
+        if (c === 'auth/wrong-password' || c === 'auth/invalid-credential' || c === 'auth/user-not-found'){
+          err('Incorrect email or password.');
+          document.getElementById('ixReset').innerHTML =
+            '<a href="#" id="ixResetLink">Send a password reset email</a>';
+          document.getElementById('ixResetLink').addEventListener('click', function(ev){
+            ev.preventDefault();
+            firebase.auth().sendPasswordResetEmail(e).then(function(){
+              err(''); document.getElementById('ixReset').textContent = 'Reset email sent to ' + e + '.';
+            })['catch'](function(){ err('Could not send a reset email.'); });
+          });
+        } else if (c === 'auth/too-many-requests'){ err('Too many attempts. Try again shortly.'); }
+        else if (c === 'auth/network-request-failed'){ err('No connection to the sign-in server.'); }
+        else { err(((x && x.message) || 'Sign-in failed.') + ' [' + (c || 'no code') + ']'); }
+      });
+    });
+    document.getElementById('ixPass').addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter') document.getElementById('ixSignIn').click();
+    });
+
+    document.getElementById('ixGoogle').addEventListener('click', function(){
+      err('');
+      var auth = firebase.auth();
+      var provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      auth.signInWithPopup(provider)['catch'](function(x){
+        if (x && (x.code === 'auth/popup-blocked' ||
+                  x.code === 'auth/cancelled-popup-request' ||
+                  x.code === 'auth/operation-not-supported-in-this-environment')){
+          return auth.signInWithRedirect(provider);
+        }
+        err((x && x.message) || 'Sign-in failed.');
+      });
+    });
+    return box;
+  }
+  function hideAuthCard(){
+    var b = document.getElementById('ix-auth');
+    if (b && b.parentNode) b.parentNode.removeChild(b);
+  }
+
+  function fatal(title, body){
+    hideAuthCard();
+    var d = el('div');
+    d.style.cssText = 'position:fixed;inset:0;z-index:9000;background:var(--paper);padding:14vh 24px;' +
+      'font-family:var(--sans);color:var(--ink)';
+    d.innerHTML = '<div style="max-width:480px;margin:0 auto">' +
+      '<div class="eyebrow">Project intake</div>' +
+      '<h1 style="font-size:19px;margin:8px 0 10px"></h1>' +
+      '<p style="color:var(--ink-2);font-size:13.5px;line-height:1.6"></p></div>';
+    d.querySelector('h1').textContent = title;
+    d.querySelector('p').textContent = body;
+    document.body.appendChild(d);
+  }
+
+  /* ---------- BOOT ----------
+     Same shape as the portal's _initFirebase(): wait for the SDK AND for
+     config.js to have published CLEARSKY_CONFIG, then initialise once. The
+     earlier version read the config synchronously and gave up if it wasn't
+     there yet, which looked exactly like a missing config. */
+  var booted = false;
+  function bootFirebase(tries){
+    tries = tries || 0;
+    if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG){
+      if (tries > 80){
+        if (typeof firebase === 'undefined'){ start(); return; }   // dev: localStorage
+        fatal('Configuration not loaded',
+              'config.js did not publish CLEARSKY_CONFIG on this host. Every OMEGA tool ' +
+              'loads /config.js for its Firebase settings \u2014 check that it is served here.');
+        return;
+      }
+      setTimeout(function(){ bootFirebase(tries + 1); }, 120);
+      return;
+    }
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+    } catch (e) {
+      if (!/already exists/.test(e.message)) console.error('[intake] firebase init', e);
+    }
+    if (!firebase.apps.length){
+      fatal('Firebase not initialised',
+            'CLEARSKY_CONFIG.firebase is missing from config.js on this host.');
+      return;
+    }
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)['catch'](function(e){
+      /* Private browsing and a locked-down Safari both refuse persistent
+         storage. The session then lives only as long as the tab, which looks
+         like being randomly signed out. Worth saying so rather than leaving
+         the person to guess. */
+      console.warn('[intake] persistence unavailable, session will not survive a reload:', e);
+      persistenceOK = false;
+    })
+      .then(function(){ return firebase.auth().getRedirectResult()['catch'](function(){}); })
+      .then(function(){
+        firebase.auth().onAuthStateChanged(function(u){
+          if (!u){
+            /* Do NOT hideAuthCard() then authCard() here. hideAuthCard()
+               removes the node and authCard() builds a fresh one, so every
+               auth event wiped whatever the person had typed AND wiped the
+               #ixErr line explaining why the last attempt failed. The result
+               was a pristine sign-in card with no error on it — which reads
+               as "it just keeps asking me to log in" rather than "your
+               password was rejected". authCard() already returns the existing
+               card if one is present, so calling it alone is correct. */
+            if (booted) sessionLost();
+            authCard(); return;
+          }
+          hideAuthCard();
+          if (!booted){
+            booted = true;
+            start();
+            return;
+          }
+          /* ALREADY BOOTED. This used to `return` here, which meant a
+             re-authentication never refreshed `user` — the page kept the uid
+             captured at boot, and every subsequent write carried a
+             createdBy.uid that no longer matched request.auth.uid. The rule
+             compares those two, so the record could never be created again
+             and no amount of retrying helped. */
+          if (user && user.uid && u.uid !== user.uid){
+            /* A DIFFERENT account. Records already loaded belong to the old
+               one, so reload rather than splice two identities together. */
+            location.reload();
+            return;
+          }
+          user = currentUser();
+          if (typeof syncActionBar === 'function') syncActionBar();
+        });
+      });
+  }
+
+  bootFirebase();
+})();
+</script>
+</body>
+</html>

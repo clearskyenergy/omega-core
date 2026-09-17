@@ -8,3 +8,7 @@ audit-*.json
 .vercel
 firebase-debug.log
 *-debug.log
+
+# Agent session scratch — not product code
+.claude/
+.codex/

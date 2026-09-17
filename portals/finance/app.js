@@ -922,7 +922,13 @@ function openSubmitModal() {
       '<div class="field"><label>Total cost basis (USD)</label><input type="number" id="f-cost" placeholder="e.g. 3200000" min="0"></div>' +
     '</div>' +
     '<div class="field"><label>Pro forma summary</label><textarea id="f-pf" placeholder="Headline returns \u2014 e.g. 14.2% unlevered IRR, 8-yr payback, $410K/yr stacked revenue (arbitrage + capacity + SDVPP)."></textarea></div>' +
-    '<div class="field"><label>Notes for partners (optional)</label><textarea id="f-notes" placeholder="Interconnection status, offtake, timeline, incentives, what you\'re looking for (finance vs. acquire)\u2026"></textarea></div>';
+    '<div class="field"><label>Notes for partners (optional)</label><textarea id="f-notes" placeholder="Interconnection status, offtake, timeline, incentives, what you\'re looking for (finance vs. acquire)\u2026"></textarea></div>' +
+    /* WHO INTRODUCED THIS. Cross-tenant attribution by org id, the same shape
+       omega-referrals.js uses for `toOrgId` — pointed the other way: not who
+       the deal is FOR, but who is owed the introduction. Cleancell crediting
+       Sunesol for putting them in front of Amperage is the case this exists
+       for. The id is the key; the typed name is decoration. */
+    '<div class="field" id="f-origbox"></div>';
 
   /* ---- cloud links: the fast path, and the one everyone can use ---- */
   body.appendChild(el("div", "form-rule"));
@@ -957,6 +963,41 @@ function openSubmitModal() {
   wrap.appendChild(foot);
 
   openModal(wrap);
+
+  /* Mounted after openModal so the host is in the document. Degrades to
+     nothing if the shared file is not loaded — a missing helper must not cost
+     someone the ability to submit a deal. */
+  if (global_OmegaOriginator()) {
+    ORIG_PICKER = global_OmegaOriginator().mount($("f-origbox"), {
+      idBase: "f-orig",
+      orgs: knownOrgsForCredit()
+    });
+  }
+}
+
+/* The shared primitive, if the page loaded it. Looked up late rather than
+   captured at parse time so script order cannot break the form. */
+function global_OmegaOriginator() {
+  return (typeof window !== "undefined" && window.OmegaOriginator) || null;
+}
+var ORIG_PICKER = null;
+
+/* Orgs worth offering in the picker. Built from deals already in the
+   marketplace, so the list reflects who actually trades here; anything not on
+   it can still be credited by typing the domain. */
+function knownOrgsForCredit() {
+  var seen = {}, out = [];
+  (STATE.projects || []).forEach(function (p) {
+    [p.developerOrg, p.originatorName, p.awardedToOrg].forEach(function (v) {
+      var id = global_OmegaOriginator()
+        ? global_OmegaOriginator().normalize(v) : "";
+      if (id && !seen[id]) { seen[id] = 1; out.push({ id: id, label: id }); }
+    });
+    var oid = p.originatorOrgId;
+    if (oid && !seen[oid]) { seen[oid] = 1; out.push({ id: oid, label: oid }); }
+  });
+  out.sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+  return out;
 }
 
 function modalHead(title, sub) {
@@ -1062,6 +1103,25 @@ function doSubmitProject() {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
   };
+
+  /* Originator credit, if any was given. `fields()` returns null when the box
+     was left empty, so an uncredited deal carries no empty strings — absent
+     and blank read differently in a report. */
+  if (ORIG_PICKER && global_OmegaOriginator()) {
+    var oc = ORIG_PICKER.check();
+    if (!oc.ok) {
+      btn.disabled = false; btn.textContent = origLabel;
+      toast(oc.warn, true);
+      return;
+    }
+    var of = ORIG_PICKER.fields(STATE.profile.email || "");
+    if (of) {
+      proj.originatorOrgId = of.originatorOrgId;
+      proj.originatorName = of.originatorName;
+      proj.originatorBy = of.originatorBy;
+      proj.originatorAt = of.originatorAt;
+    }
+  }
 
   db.collection(COL_PROJECTS).add(proj).then(function (ref) {
     var pid = ref.id;
@@ -1842,6 +1902,9 @@ var ADMIN_COLS = [
   { key: "offerCount", label: "Offers", num: true,
     get: function (p) { return String(p.offerCount || 0); },
     sort: function (p) { return Number(p.offerCount) || 0; } },
+  { key: "originator", label: "Introduced by",
+    get: function (p) { return p.originatorOrgId || p.originatorName || ""; },
+    sort: function (p) { return (p.originatorOrgId || p.originatorName || "").toLowerCase(); } },
   { key: "awardedToOrg", label: "Awarded to",
     get: function (p) { return p.awardedToOrg || ""; },
     sort: function (p) { return (p.awardedToOrg || "").toLowerCase(); } },
@@ -1891,6 +1954,20 @@ function adminAttachCell(p, which) {
   return html;
 }
 
+/* Status values present in the marketplace right now, most common first. */
+function statusOptions() {
+  var count = {}, out = [];
+  (STATE.projects || []).forEach(function (p) {
+    var v = p.status || "";
+    if (v) { count[v] = (count[v] || 0) + 1; }
+  });
+  Object.keys(count).forEach(function (v) {
+    out.push({ v: v, l: statusLabel(v) + " (" + count[v] + ")", n: count[v] });
+  });
+  out.sort(function (a, b) { return b.n - a.n; });
+  return out;
+}
+
 /* ---------- filtering ---------- */
 function adminRows() {
   var rows = filteredProjects();   /* respects the status tab */
@@ -1905,7 +1982,8 @@ function adminRows() {
     if (q) {
       var hay = [
         p.name, p.developerOrg, p.developerName, p.submitterEmail,
-        p.location, p.proformaSummary, p.notes, p.awardedToOrg
+        p.location, p.proformaSummary, p.notes, p.awardedToOrg,
+        p.originatorOrgId, p.originatorName
       ].join(" ").toLowerCase();
       if (hay.indexOf(q) === -1) { return false; }
     }
@@ -1955,6 +2033,13 @@ function buildAdminShell(area) {
     { v: "developer", l: "Developers" },
     { v: "originator", l: "Originators" }
   ]));
+  /* adminRows() has always filtered on f.status — there was simply no control
+     that set it, so the filter was dead state and the only way to narrow by
+     status was the tab strip. Built from the values actually present in the
+     data rather than a hardcoded list, because this collection is written by
+     more than one surface and a fixed list goes stale silently. */
+  bar.appendChild(adminSelect("adminStatus", "status", "Any status",
+    statusOptions()));
   bar.appendChild(adminSelect("adminType", "type", "Any type", (function () {
     var o = [], k;
     for (k in TYPE_LABELS) { if (TYPE_LABELS.hasOwnProperty(k)) { o.push({ v: k, l: TYPE_LABELS[k] }); } }
@@ -1966,6 +2051,7 @@ function buildAdminShell(area) {
     STATE.adminFilters = { q: "", submitter: "", role: "", status: "", type: "" };
     $("adminQ").value = "";
     $("adminSubmitter").value = ""; $("adminRole").value = ""; $("adminType").value = "";
+    if ($("adminStatus")) { $("adminStatus").value = ""; }
     renderAdminRows();
   };
   bar.appendChild(clear);

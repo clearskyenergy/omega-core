@@ -40,7 +40,7 @@ window.CLEARSKY_CONFIG = {
         name:     'Grid Atlas',
         desc:     'Hosting capacity, substations, transmission and fiber on one map, with site viability scoring.',
         category: 'design',
-        href:     'https://tools.csebuilders.com/grid-atlas.html',
+        href:     '/grid-atlas.html',
         icon:     'M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z M8 2v16 M16 6v16'
       },
       {
@@ -48,7 +48,7 @@ window.CLEARSKY_CONFIG = {
         name:     'Financing Partners Portal',
         desc:     'Post projects to the capital deal room, track offers, and match with lenders and equity partners.',
         category: 'finance',
-        href:     'https://financing.csebuilders.com/',
+        href:     '/finance',
         icon:     'M12 1v22 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'
       }
     ]

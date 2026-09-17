@@ -1818,32 +1818,27 @@ document.getElementById("q").addEventListener("keydown",function(e){if(e.key==="
 })();
 
 /* ── BACK TO PORTAL ──
-   OMEGATools.hrefFor() appends ?return=<portal origin+path> because this tool
-   is served from TOOL_HOST, a DIFFERENT ORIGIN from the portal — so the
-   referrer is gone on any refresh or rel="noreferrer" link and referrer alone
-   would strand the user on the generic tools host. Prefer the explicit param,
-   validate its host against our own domains so the param can't be used to
-   point our own back-button at someone else's site, then fall back to the
-   referrer, then to the tools host. */
+   In omega-core the tool and the portal are the SAME deployment, so "/" is the
+   portal and that is the default. hrefFor() still appends ?return=<portal
+   origin+path> when a caller wants a specific page, and that wins — but it is
+   validated first, or the param becomes a way to aim our own back-button at
+   someone else's site.
+
+   ⚠ SAFE MUST LIST clearskyomega.com. It did not: the allowlist predates the
+   domain the product actually runs on, so a perfectly legitimate ?return= to
+   silmarillion.clearskyomega.com was rejected while the legacy csebuilders.com
+   hosts were trusted. Any new first-party domain has to be added here too. */
 (function(){
-  var SAFE=/(^|\.)(csebuilders\.com|clearsky-usa\.com)$/;
+  var SAFE=/(^|\.)(clearskyomega\.com|csebuilders\.com|clearsky-usa\.com)$/;
   function ok(u){
     try{ var x=new URL(u); return (x.protocol==="https:"||x.protocol==="http:")&&SAFE.test(x.hostname); }
     catch(e){ return false; }
   }
   try{
-    var url="https://tools.csebuilders.com/";
+    var url="/";
     var m=(location.search||"").match(/[?&]return=([^&]+)/);
     var ret=m?decodeURIComponent(m[1]):null;
-    if(ret&&ok(ret)){
-      url=ret;
-    } else {
-      var ref=document.referrer;
-      if(ref&&ok(ref)){
-        var hn=new URL(ref).hostname, s=hn.split(".")[0];
-        url=(s&&s!=="tools")?("https://"+hn+"/"):"https://tools.csebuilders.com/";
-      }
-    }
+    if(ret&&ok(ret)) url=ret;
     var b=document.getElementById("back-link"),l=document.getElementById("logo-link");
     if(b)b.href=url; if(l)l.href=url;
   }catch(e){}
@@ -4472,7 +4467,9 @@ function openAccount(row){
    (solela.csebuilders.com, spatco..., nextnrg...). A relative path only finds
    the bundle on whichever host it happens to be deployed to, so try the
    sibling file first and fall back to the canonical copy on tools. */
-var DATA_HOSTS=["", "https://tools.csebuilders.com/"];
+/* Same-origin only — the legacy host is a different Vercel project and a
+   fallback to it serves stale bundles that look like success. */
+var DATA_HOSTS=[""];
 var EDC_URL="edc-sites.js";
 var EDC={state:"idle",rows:[],queue:[]};
 var edcLayer=null;

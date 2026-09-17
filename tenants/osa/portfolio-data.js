@@ -820,6 +820,12 @@
       state:     fields.state || '',
       clientOrgId: String(fields.clientOrgId || '').toLowerCase(),
       intakeId:  fields.intakeId || '',
+      /* THE UNDO HANDLE. A hundred rows arriving at once is the one write path
+         where a mistake is a hundred mistakes, so every row remembers the
+         import it came in on. Reversing a bad upload is then one query on one
+         field rather than picking a hundred records out of the collection by
+         hand. Empty for anything created one at a time. */
+      importBatch: fields.importBatch || '',
       projectId: fields.projectId || '',
       verificationIds: [],
 

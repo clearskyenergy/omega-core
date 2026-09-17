@@ -4,5 +4,6 @@
   "version": "1.0.0",
   "engines": {
     "node": ">=20.x"
-  }
+  },
+  "_NOTE": "NOT USED. The root package.json is the only one Vercel installs from. Leftover from the standalone OSA repository."
 }

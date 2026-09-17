@@ -54,11 +54,15 @@
     if (forced) return [forced];
     var out = [], worked = lsGet(LS_WORKED);
     if (worked) out.push(worked);
+  /* omega-core serves /api/grid-atlas itself (verified 2026-09-14), so the
+     same-origin candidate answers and nothing below it is ever reached. The
+     old fallback hosts are kept OUT deliberately: tools.csebuilders.com and
+     clearsky-portal.vercel.app both 404 this route, and osa.clearskyomega.com
+     answers it from the legacy Vercel project — a silent cross-origin call
+     into a build that is not this one. A dead list that looks like resilience
+     is worse than no list. */
     ['/api/grid-atlas',
-     cfgUrl(),
-     'https://tools.csebuilders.com/api/grid-atlas',
-     'https://clearsky-portal.vercel.app/api/grid-atlas',
-     'https://osa.clearskyomega.com/api/grid-atlas'
+     cfgUrl()
     ].forEach(function (u) { if (u && out.indexOf(u) < 0) out.push(u); });
     return out;
   }

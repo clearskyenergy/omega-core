@@ -133,7 +133,11 @@
 
     { key:'financing', name:'Financing Partners', category:'marketplace',
       desc:'Debt, tax equity & capital partners for projects.',
-      file:'https://financing.csebuilders.com/', tier:TIER.ALL,
+      /* Same-origin: portals/finance/ lives in THIS repo. It used to point at
+         https://financing.csebuilders.com/ — a separate Vercel project running
+         the legacy build — so the marketplace a tenant opened was never the one
+         maintained here. /finance is the vercel.json rewrite. */
+      file:'/finance', tier:TIER.ALL,
       icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
 
     { key:'aggregators', name:'Aggregators', category:'marketplace',
@@ -180,7 +184,10 @@
        (admin + every client) link here, so a tool fix ships once. Set this
        to your tool-host origin. Leave '' to use same-origin relative paths
        (Option A / the admin console itself, which is same-repo as the tools). */
-    TOOL_HOST: 'https://tools.csebuilders.com',
+    /* RETIRED — keep empty. tools.csebuilders.com is a separate Vercel project
+       running the legacy build; see the long note in omega-tools.js, which is
+       the registry actually loaded by the app. */
+    TOOL_HOST: '',
 
     /* Resolve the full href a given tenant should use for a tool.
        - action tool          => null (caller opens the project modal instead).
