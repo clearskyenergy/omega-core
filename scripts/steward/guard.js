@@ -239,66 +239,50 @@ function checkSecrets(files) {
    a page links to it, which is how four serverless functions - the Grid Atlas
    scoring model among them - came to be downloadable as plain text. */
 
-/* .vercelignore is .gitignore SYNTAX, and the one rule that matters here is
-   the one that is easy to forget: A PATTERN WITH NO SLASH IN IT MATCHES A
-   BASENAME AT ANY DEPTH. `render.js` does not mean "the render.js at the root",
-   it means "every file called render.js anywhere" - api/render.js included.
+/* WHICH FILES THE DEPLOYMENT ACTUALLY SERVES, ASKED OF GIT.
 
-   This function used to treat a slashless pattern as an exact root path. That
-   is a matcher which says a file is deployed when it is not, and on 2026-09-17
-   it did exactly that: guard reported the served-server-code findings fixed
-   while the same .vercelignore lines had quietly removed api/grid-atlas.js and
-   api/render.js from the deployment. vercel.json names both in its `functions`
-   block, so the build failed outright. checkVercelFunctions() below is the
-   check for that; this is the matcher being right in the first place. */
-function vercelIgnoreMatcher() {
-  var raw = read('.vercelignore') || '';
-  var deny = [], allow = [];
-  raw.split('\n').forEach(function (l) {
-    l = l.trim();
-    if (!l || l[0] === '#') return;
-    if (l[0] === '!') allow.push(l.slice(1)); else deny.push(l);
-  });
+   This used to reimplement gitignore matching, and that reimplementation is
+   how .vercelignore came to delete api/grid-atlas.js and api/render.js from
+   the deployment on 2026-09-17 while guard reported the change clean: the
+   hand-rolled matcher treated a slashless pattern as an exact root path, when
+   gitignore matches a basename AT EVERY DEPTH.
 
-  function globToRegex(glob) {
-    var re = '';
-    for (var i = 0; i < glob.length; i++) {
-      var c = glob[i];
-      if (c === '*') {
-        if (glob[i + 1] === '*') { re += '.*'; i++; if (glob[i + 1] === '/') i++; }
-        else { re += '[^/]*'; }
-      } else if (c === '?') { re += '[^/]';
-      } else if ('.+^${}()|[]\\'.indexOf(c) >= 0) { re += '\\' + c;
-      } else { re += c; }
+   Gitignore semantics have corners - anchoring, negation, **, trailing
+   slashes - and an approximation that disagrees on a corner is worse than no
+   check at all, because that bug WAS a corner. git implements it exactly and
+   Vercel follows git, so ask git. Same call scripts/check-vercelignore.js
+   makes, for the same reason.
+
+   One batched call for the whole tree rather than one per file: check-ignore
+   takes the list on stdin.
+
+   If git cannot answer, every file is reported as SERVED. That over-reports
+   rather than under-reports - the failure mode is a false finding somebody
+   dismisses, not a silent hole - and the note says the check is degraded so
+   it does not read as a pass. */
+function vercelIgnoreMatcher(files) {
+  var ignoredSet = {};
+  if (!exists('.vercelignore')) return function () { return true; };
+  try {
+    var out = require('child_process').execFileSync('git',
+      ['-c', 'core.excludesFile=' + path.join(ROOT, '.vercelignore'),
+       'check-ignore', '--no-index', '--stdin'],
+      { cwd: ROOT, input: files.join('\n'), encoding: 'utf8' });
+    out.split('\n').forEach(function (l) { l = l.trim(); if (l) ignoredSet[l] = true; });
+  } catch (e) {
+    /* exit 1 is "nothing matched", which is an answer, not a failure. */
+    if (e.status !== 1) {
+      report('vercel-ignore', 'unreadable', '.vercelignore',
+        'could not ask git which files .vercelignore excludes (' + (e.message || e) +
+        '), so every file is treated as served. The served-server-code check is over-reporting until this works.', 'warn');
+      return function () { return true; };
     }
-    return re;
   }
-
-  function matches(pat, rel) {
-    var dirOnly = pat.slice(-1) === '/';
-    if (dirOnly) pat = pat.slice(0, -1);
-    var anchored = pat.indexOf('/') >= 0;      /* a slash anywhere anchors it */
-    if (pat[0] === '/') { pat = pat.slice(1); anchored = true; }
-    if (!pat) return false;
-
-    var body = globToRegex(pat);
-    /* Anchored: match from the root. Unanchored: match the basename, or any
-       path segment run ending at the basename. Either way a directory match
-       also covers everything under it. */
-    var re = anchored
-      ? new RegExp('^' + body + '(?:/.*)?$')
-      : new RegExp('(?:^|/)' + body + '(?:/.*)?$');
-    return re.test(rel);
-  }
-
-  function hit(list, rel) {
-    return list.some(function (pat) { return matches(pat, rel); });
-  }
-  return function served(rel) { return !(hit(deny, rel) && !hit(allow, rel)); };
+  return function served(rel) { return !ignoredSet[rel]; };
 }
 
 function checkServedServerCode(files) {
-  var served = vercelIgnoreMatcher();
+  var served = vercelIgnoreMatcher(files);
   files.forEach(function (f) {
     if (!/\.js$/.test(f)) return;
     if (f.indexOf('api/') === 0) return;                 /* api/ is the function runtime */
@@ -312,59 +296,10 @@ function checkServedServerCode(files) {
   });
 }
 
-/* -- 4b. every function vercel.json declares still has a file ----------------
-   Vercel fails the whole build - not the route, the BUILD - when a key in the
-   `functions` block matches no serverless function: "The pattern ... doesn't
-   match any Serverless Functions." Two ways to cause it, and this repo found
-   the second one the hard way:
-
-     - rename or delete api/<name>.js and leave the key behind
-     - exclude the file in .vercelignore without meaning to. On 2026-09-17 a
-       bare `render.js` added to hide the root copy also matched api/render.js,
-       because .gitignore syntax matches a slashless pattern at any depth. The
-       preview deployment failed with a project error, and had it deployed,
-       Grid Atlas and the renderer would have been 404s.
-
-   So this asks the question the build asks, before the push. */
-
-function vercelFunctionMatcher(pattern) {
-  var re = '';
-  for (var i = 0; i < pattern.length; i++) {
-    var c = pattern[i];
-    if (c === '*') {
-      if (pattern[i + 1] === '*') { re += '.*'; i++; if (pattern[i + 1] === '/') i++; }
-      else { re += '[^/]*'; }
-    } else if ('.+^${}()|[]\\'.indexOf(c) >= 0) { re += '\\' + c; }
-    else { re += c; }
-  }
-  return new RegExp('^' + re + '$');
-}
-
-function checkVercelFunctions(files) {
-  var raw = read('vercel.json');
-  if (!raw) return;
-  var cfg;
-  try { cfg = JSON.parse(raw); }
-  catch (e) { report('vercel', 'unparseable', 'vercel.json', 'vercel.json is not valid JSON: ' + e.message); return; }
-  var fns = cfg.functions || {};
-  var served = vercelIgnoreMatcher();
-
-  Object.keys(fns).forEach(function (pattern) {
-    var re = vercelFunctionMatcher(pattern);
-    var all = files.filter(function (f) { return re.test(f); });
-    var live = all.filter(served);
-    if (live.length) return;
-    report('vercel', pattern, 'vercel.json',
-      all.length
-        ? 'declares a function for "' + pattern + '" but .vercelignore excludes every file it matches (' + all.slice(0, 3).join(', ') + '). Vercel fails the BUILD on a functions pattern that matches nothing - check for a slashless .vercelignore pattern, which matches a basename at any depth.'
-        : 'declares a function for "' + pattern + '" and no file in the repo matches it. Vercel fails the BUILD on a functions pattern that matches nothing.');
-  });
-}
-
 /* -- 5. no browser file reads the server environment ----------------------- */
 
 function checkBrowserEnv(files) {
-  var served = vercelIgnoreMatcher();
+  var served = vercelIgnoreMatcher(files);
   files.forEach(function (f) {
     if (!/\.html$/.test(f) || !served(f)) return;
     var src = read(f); if (src == null) return;
@@ -522,7 +457,6 @@ function collect() {
   checkHeaders(files);
   checkSecrets(files);
   checkServedServerCode(files);
-  checkVercelFunctions(files);
   checkBrowserEnv(files);
   checkCoreCopies(files);
   checkOrgAlias(files);

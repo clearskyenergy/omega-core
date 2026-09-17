@@ -80,7 +80,11 @@ function tests() {
   var suite = [
     ['scripts/test-caps.js'], ['scripts/test-bess-sizer.js'], ['scripts/test-site-intel.js'],
     ['scripts/test-network-proximity.js'], ['scripts/check-html-scripts.js'],
-    ['scripts/check-rules.js', 'firestore.rules']
+    ['scripts/check-rules.js', 'firestore.rules'],
+    /* Added after .vercelignore deleted two live serverless functions from a
+       deploy. It asks git which files the deployment actually excludes, which
+       is why guard.js no longer reimplements that matching itself. */
+    ['scripts/check-vercelignore.js']
   ];
   suite.forEach(function (args) {
     if (!fs.existsSync(path.join(ROOT, args[0]))) return;
