@@ -57,10 +57,24 @@ admin/seed-plan.json
 # is referenced by a <script src> anywhere in the repo, so excluding them
 # changes no behaviour. What they hold is the logic CLAUDE.md puts in /api/
 # precisely so it is not downloadable. The api/ copies keep running.
-grid-atlas.js
-render.js
-commercial.js
-api-crm-sync.js
+#
+# ⚠ THE LEADING SLASH IS LOAD-BEARING. .vercelignore takes .gitignore
+# semantics, where a pattern with no slash matches AT EVERY DEPTH — so a bare
+# `grid-atlas.js` excluded api/grid-atlas.js too, and `render.js` took
+# api/render.js with it. vercel.json names both of those in `functions`, so
+# the build failed outright:
+#
+#     The pattern "api/grid-atlas.js" defined in `functions`
+#     doesn't match any Serverless Functions.
+#
+# That failure was the lucky outcome. Without those two entries in
+# vercel.json the deploy would have SUCCEEDED and quietly shipped without the
+# Grid Atlas and render endpoints — the exact opposite of "the api/ copies
+# keep running". Anchored to the root, which is what was meant.
+/grid-atlas.js
+/render.js
+/commercial.js
+/api-crm-sync.js
 tenants/osa/score.js
 tenants/osa/api/score.js
 tenants/osa/api/grid-atlas.js
