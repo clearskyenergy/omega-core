@@ -33,6 +33,11 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 var crypto = require('crypto');
+var AIERR  = require('./_lib/ai-errors');
+
+/* Who sees a provider's own words. Same two domains verify-token treats as
+   ClearSky staff; this file verifies tokens itself and cannot import that. */
+var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
 
 var PROJECT_ID    = process.env.FIREBASE_PROJECT_ID || 'clearsky-portal';
 var DEFAULT_MODEL = process.env.OMEGA_AI_MODEL || 'claude-sonnet-5';
@@ -217,12 +222,13 @@ module.exports = async function handler(req, res) {
 
     var data = await r.json();
     if (!r.ok) {
-      console.error('[omega-ai] upstream', r.status, data && data.error);
-      var msg = (data && data.error && data.error.message) || 'The AI service refused the request.';
-      if (r.status === 401) msg = 'The ' + (keySource === 'tenant' ? orgId : 'platform') +
-        ' AI key was rejected by Anthropic. Check ' + (keySource === 'tenant' ? envName : 'ANTHROPIC_API_KEY') + '.';
-      if (r.status === 429) msg = 'Rate limited by the AI service. Wait a moment and try again.';
-      res.status(r.status === 429 ? 429 : 502).json({ error: msg });
+      var raw = (data && data.error && data.error.message) || 'The AI service refused the request.';
+      console.error('[omega-ai] upstream', r.status, raw);
+      var f = AIERR.aiFailure(r.status, raw, {
+        subject: 'AI extraction', staff: STAFF_DOMAINS.indexOf(orgId) >= 0,
+        staffHint: 'check ' + (keySource === 'tenant' ? envName : 'ANTHROPIC_API_KEY') + ' on the deployment'
+      });
+      res.status(f.status).json({ error: f.message });
       return;
     }
 

@@ -35,6 +35,7 @@
 'use strict';
 
 var V = require('./_lib/verify-token');
+var AIERR = require('./_lib/ai-errors');
 
 var DEFAULT_MODEL = process.env.OMEGA_HELP_MODEL || 'claude-opus-5';
 var MAX_MESSAGE = 4000;
@@ -271,11 +272,15 @@ module.exports = async function handler(req, res) {
     return;
   }
   if (r.status !== 200) {
-    var msg = (r.data && r.data.error && r.data.error.message) || 'The AI service refused the request.';
-    console.error('[jarvis-help] upstream', r.status, msg);
-    if (r.status === 401) msg = 'The ' + (keySource === 'tenant' ? caller.orgId : 'platform') + ' AI key was rejected. Check ' + (keySource === 'tenant' ? envName : 'ANTHROPIC_API_KEY') + '.';
-    if (r.status === 429) msg = 'Jarvis is busy. Wait a moment and ask again.';
-    res.status(r.status === 429 ? 429 : 502).json({ error: msg });
+    var raw = (r.data && r.data.error && r.data.error.message) || 'The AI service refused the request.';
+    /* The log keeps the provider's words whoever asked — it is the only
+       version anyone can act on. */
+    console.error('[jarvis-help] upstream', r.status, raw);
+    var f = AIERR.aiFailure(r.status, raw, {
+      subject: 'Jarvis', staff: caller.staff,
+      staffHint: 'check ' + (keySource === 'tenant' ? envName : 'ANTHROPIC_API_KEY') + ' on the deployment'
+    });
+    res.status(f.status).json({ error: f.message });
     return;
   }
 
