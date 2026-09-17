@@ -234,9 +234,24 @@ module.exports = async function handler(req, res) {
   var key = process.env[envName] || null, keySource = key ? 'tenant' : null;
   if (!key && process.env.ANTHROPIC_API_KEY) { key = process.env.ANTHROPIC_API_KEY; keySource = 'platform'; }
   if (!key) {
-    res.status(402).json({ error: 'Jarvis is not switched on for ' + caller.orgId + ' yet. ClearSky adds ' + envName + ' (or ANTHROPIC_API_KEY for every tenant) to the deployment and redeploys.' });
+    res.status(402).json({ error: 'Jarvis is not switched on yet: the deployment has no platform AI key. ClearSky sets ANTHROPIC_API_KEY (or ' + envName + ' for this tenant only) in Vercel and redeploys — the gateway’s Server health lists it.' });
     return;
   }
+  /* THE PER-TENANT SWITCH. The gateway's Manage › Billing form writes
+     billing/current.jarvis; off wins over any key. Read through the Admin
+     SDK; when the server has no Firestore credential the switch cannot be
+     read and Jarvis stays on, which is the state every tenant had before
+     the switch existed. */
+  try {
+    var A = require('./_lib/admin');
+    if (!A.isDegraded()) {
+      var bill = await A.db().collection('omega_orgs').doc(caller.orgId).collection('billing').doc('current').get();
+      if (bill.exists && bill.data().jarvis === false) {
+        res.status(402).json({ error: 'Jarvis is switched off for ' + caller.orgId + '. ClearSky turns it on in the gateway: Tenants › Manage › Jarvis.' });
+        return;
+      }
+    }
+  } catch (e) { console.error('[jarvis] could not read the tenant switch: ' + (e && e.message)); }
 
   var model = DEFAULT_MODEL;
   var system = [

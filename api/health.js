@@ -25,6 +25,7 @@ var EXPECTED = {
   FIREBASE_SERVICE_ACCOUNT: 'every Admin-backed function: tenant signup and approval, provisioning, offers, deal rooms, invites',
   RESEND_API_KEY:           'every email the server sends: invites, password set-up links, deal-room referrals, validation reports',
   GEMINI_API_KEY:           'stencil generation (api/stencil)',
+  ANTHROPIC_API_KEY:        'Jarvis in the editor and AI extraction, for every tenant without its own AI_KEY_<ORG>',
   REGRID_TOKEN:             'parcel lookup outside the county feeds (api/parcel falls back to county GIS)',
   STRIPE_SECRET_KEY:        'billing: checkout, customer portal, subscriptions',
   STRIPE_WEBHOOK_SECRET:    'billing events from Stripe (paid, cancelled) — the webhook rejects every event without it'
@@ -42,6 +43,7 @@ var SHAPE = {
   }, 'the JSON key file from Firebase › Project settings › Service accounts, as one line'),
   RESEND_API_KEY:        shape(function (v) { return /^re_[A-Za-z0-9_]+$/.test(v); }, 'a Resend key, which starts with re_'),
   GEMINI_API_KEY:        shape(function (v) { return /^AIza[0-9A-Za-z_-]{20,}$/.test(v); }, 'a Google AI key, which starts with AIza'),
+  ANTHROPIC_API_KEY:     shape(function (v) { return /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(v); }, 'an Anthropic key, which starts with sk-ant-'),
   STRIPE_SECRET_KEY:     shape(function (v) { return /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(v); }, 'a Stripe secret key, which starts with sk_live_ or sk_test_'),
   STRIPE_WEBHOOK_SECRET: shape(function (v) { return /^whsec_[A-Za-z0-9]+$/.test(v); }, 'a Stripe webhook signing secret, which starts with whsec_')
 };

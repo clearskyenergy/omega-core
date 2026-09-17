@@ -2267,6 +2267,16 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
    + '</select>'
    + '<span class="sub-txt" style="display:block;margin-top:3px;font-size:11px">Caps what the '
    + 'EDITOR grants. Does not change the plan, the invoice, or which tools they see.</span></label>';
+  /* JARVIS. The editor's assistant answers on ClearSky's platform AI key
+     (ANTHROPIC_API_KEY on the deployment); this switch is the per-tenant
+     gate the endpoint reads from billing/current.jarvis. Default on. */
+  h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Jarvis (editor assistant)'
+   + '<select id="tb-jarvis-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
+   + '<option value="on"'+(bill.jarvis===false?'':' selected')+'>On — answers on the ClearSky platform key</option>'
+   + '<option value="off"'+(bill.jarvis===false?' selected':'')+'>Off — the editor says Jarvis is switched off for this workspace</option>'
+   + '</select>'
+   + '<span class="sub-txt" style="display:block;margin-top:3px;font-size:11px">Needs ANTHROPIC_API_KEY on the deployment '
+   + '(Server health lists it). A tenant-specific key, AI_KEY_&lt;ORG&gt;, overrides the platform key for that tenant.</span></label>';
   /* THE ALLOWLIST. Blank means the plan decides, which is how every account
      behaved before this existed. Filled, it is the WHOLE list — the tier,
      unlockedTools and requiredTools are all ignored beneath it, because an
@@ -2627,6 +2637,7 @@ function saveTenantBilling(orgId){
 
   var allow = v('tb-allow').split(',').map(function(x){return x.trim();}).filter(Boolean);
   var patch={ tier:v('tb-tier'), addons:addons, capTier: v('tb-cap') || null,
+              jarvis: v('tb-jarvis') !== 'off',
               /* null, not [], so "no allowlist" and "an allowlist of nothing"
                  stay distinguishable — an empty array would lock the account
                  out of every tool it has. */
