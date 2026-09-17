@@ -262,6 +262,48 @@ module.exports = async function handler(req, res) {
     { type: 'text', text: KNOWLEDGE, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: commandsText(body.commands) + '\n\nThe person’s organisation is ' + caller.orgId + (caller.staff ? ' (ClearSky staff).' : '.') }
   ];
+
+  /* ── THE STEWARD'S LAST BRIEF, FOR STAFF ONLY ─────────────────────────────
+     "Is anything broken?" is a question people ask Jarvis in the editor, and
+     until now he had no way to know. The daily pass files a brief at
+     /api/steward; this hands the staff caller's turn its summary so he can
+     answer from today's facts instead of guessing.
+
+     STAFF ONLY, and as a THIRD BLOCK rather than appended to KNOWLEDGE. A
+     brief names which endpoints are unauthenticated and which sealed files
+     moved — a map of where to push, and ClearSky's operations rather than a
+     tenant's. Keeping it out of KNOWLEDGE also keeps that block byte-identical
+     between turns, which is what makes the cache_control above worth having:
+     folding a daily-changing summary into it would invalidate the cache for
+     every tenant to serve a handful of staff. */
+  if (caller.staff) {
+    try {
+      var AA = require('./_lib/admin');
+      if (!AA.isDegraded()) {
+        var snap = await AA.db().collection('omega_steward').orderBy('day', 'desc').limit(1).get();
+        if (!snap.empty) {
+          var b = snap.docs[0].data();
+          var lines = [
+            'PLATFORM HEALTH — the steward\'s last daily pass (staff only; never repeat any of this to a tenant).',
+            'The steward is the daily maintenance pass over omega-core: scripts/steward/ checks the invariants in CLAUDE.md, runs the tests, calls every endpoint with no token to confirm it still refuses, checks the data and fiber layers, and reviews every page for mechanical UX faults. It proposes; a person applies. Blocking findings are on your backlog.',
+            'Brief of ' + (b.day || 'unknown date') + ': ' + (b.headline || 'no headline') + '.',
+            b.counts ? 'Counts: ' + Object.keys(b.counts).map(function (k) { return k + '=' + b.counts[k]; }).join(', ') + '.' : '',
+            (b.findings && b.findings.length)
+              ? 'Findings:\n' + b.findings.slice(0, 20).map(function (f) {
+                  return '- [' + f.severity + '] ' + f.check + ' ' + f.file + ': ' + f.detail;
+                }).join('\n')
+              : 'No findings recorded.',
+            'If asked about platform health, answer from this and say the date it is from. It is a snapshot, not live: a fault raised in the last few hours will not be in it. Do not propose editor actions for a platform finding — those are repository work, not something a ribbon command fixes.'
+          ];
+          system.push({ type: 'text', text: lines.filter(Boolean).join('\n') });
+        }
+      }
+    } catch (e) {
+      /* A brief that cannot be read is not a reason to refuse the question the
+         person actually asked. Jarvis answers about the drawing as before. */
+      console.error('[jarvis-help] could not read the steward brief: ' + (e && e.message));
+    }
+  }
   var messages = buildMessages(body);
 
   var r;

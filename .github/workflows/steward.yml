@@ -17,10 +17,15 @@
 #           the same PR, so the security boundary cannot move quietly.
 #
 #   daily   runs the whole pass — integrity, tests, live probe, data and fiber
-#           layers, interface review — and files the brief as an issue. It
-#           needs no secrets to be useful: the probe's best check, "does every
+#           layers, interface review — and REPORTS IT TO JARVIS: the brief is
+#           filed at /api/steward, where Mission Control's Integrity panel and
+#           Jarvis in the editor both read it, and each blocking finding goes on
+#           Jarvis's backlog through the twin's /task door. The GitHub issue is
+#           the durable copy, not the primary one.
+#           It needs no secrets to be useful: the probe's best check, "does every
 #           endpoint still refuse an anonymous caller", needs no identity by
-#           definition. With a steward credential it also reads /api/health.
+#           definition. Without a credential the step is a dry run that still
+#           prints the brief. With one it also reads /api/health.
 #
 # The daily job never pushes, never deploys, and calls only the read-only
 # endpoints listed in scripts/steward/api-registry.js. Acting on the brief is
@@ -76,7 +81,12 @@ jobs:
         with:
           node-version: '20'
 
-      - name: the pass
+      # The pass and the report to Jarvis are one step: jarvis.js runs the pass
+      # in-process (run.pass()) so the brief it files is the brief this log
+      # printed, not a second run with its own answers. --file is what makes it
+      # write; without it the step is a dry run, which is what a fork's PR gets
+      # because it has no secrets.
+      - name: the pass, reported to Jarvis
         id: pass
         continue-on-error: true
         env:
@@ -86,11 +96,24 @@ jobs:
           OMEGA_STEWARD_PASSWORD: ${{ secrets.OMEGA_STEWARD_PASSWORD }}
           # Writes require this AND an explicit flag. A schedule sets neither.
           OMEGA_STEWARD_ALLOW_WRITES: '0'
-        run: node scripts/steward/run.js --out steward-brief.md
+        run: |
+          # ONE pass. --out writes the markdown for the issue below; --file is
+          # what makes it write to Jarvis, and it is only passed when there is a
+          # credential to write with. Without one this is a dry run that still
+          # prints the whole brief, which is what a fork's PR gets.
+          if [ -n "${OMEGA_STEWARD_EMAIL:-}" ] && [ -n "${OMEGA_STEWARD_PASSWORD:-}" ]; then
+            node scripts/steward/jarvis.js --file --out steward-brief.md
+          else
+            echo "No steward credential in this environment — dry run, nothing will be filed."
+            node scripts/steward/jarvis.js --out steward-brief.md
+          fi
 
-      # One issue per day. The brief is already scrubbed of anything
-      # key-shaped by scripts/steward/client.js before it reaches here.
-      - name: file the brief
+      # The durable copy, and the one a person can find without being signed
+      # in to the portal. Jarvis holds the same brief (Mission Control ›
+      # System › Integrity) and the blocking findings are on his backlog; this
+      # is the record that survives the container and reads in a browser tab.
+      # Already scrubbed of anything key-shaped by scripts/steward/client.js.
+      - name: file the brief as an issue
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}

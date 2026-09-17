@@ -1,9 +1,14 @@
 # The Steward
 
-An agent that runs omega-core every day: checks it has not been altered, runs
-the tests, checks the deployment still refuses strangers, reports on the data
-and fiber layers, and proposes interface fixes. It opens pull requests. It does
-not merge them.
+Jarvis's daily maintenance pass over omega-core: checks it has not been
+altered, runs the tests, checks the deployment still refuses strangers, reports
+on the data and fiber layers, and proposes interface fixes. It opens pull
+requests. It does not merge them.
+
+It reports **to Jarvis**, not beside him — the brief lands where Jarvis can read
+it and the blocking findings land on his backlog, so a steward finding is ranked
+against everything else he is tracking rather than competing with it. See
+[Part of Jarvis](#part-of-jarvis).
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
@@ -18,6 +23,8 @@ npm run steward:api          # the endpoint registry: what exists, who may call 
 npm run steward:ux           # UX/accessibility findings across every page
 npm run steward:data         # data layers + fiber sources
 npm run steward:accept       # fold today's findings into the baseline (reviewed)
+npm run steward:jarvis       # what it would report to Jarvis (dry run)
+npm run steward:file         # actually file the brief and the backlog items
 
 node scripts/steward/run.js --offline     # no network
 node scripts/steward/run.js --out brief.md
@@ -38,6 +45,7 @@ constraint the rest of the repo runs under.
 | `ux-review.js` | What is mechanically wrong for a user, on all ~72 pages? |
 | `api-registry.js` | What is the API surface, and who is allowed to call each part? |
 | `run.js` | All of the above, in one brief, in the order that makes the answers trustworthy. |
+| `jarvis.js` | Files that brief with Jarvis, and puts the blocking findings on his backlog. |
 
 ---
 
@@ -99,6 +107,60 @@ the edit. It stops the edit from being invisible, and CODEOWNERS does the rest.
 | `boot-order` | a sign-in page that skips `omega-tenant.js` or loads it before `omega-brand.js` |
 | `api-auth` | an endpoint with no token check, especially one spending a paid key |
 | `header` | shipped source with no copyright line |
+
+---
+
+## Part of Jarvis
+
+The pass used to file its brief as a GitHub issue, which is the one place nobody
+looks while they are working. Jarvis is where the work is already tracked — the
+backlog, "To do — ranked", "Needs you" — so a finding that does not reach Jarvis
+is a finding that competes with Jarvis for attention and loses.
+
+Three joins, and the steward writes nothing else anywhere:
+
+**1. The brief, at `/api/steward`.** One document per day in `omega_steward`,
+staff-gated both ways. `npm run steward:file` puts it there. A second run the
+same day replaces it, so the collection is a history at daily resolution;
+nothing deletes, because yesterday's brief is how you tell what changed.
+
+**2. The backlog, through the twin's `/task` door.** The same call the editor's
+"File with Jarvis" button makes, so a steward finding and a person's note land in
+one queue and get ranked against each other. Only **blocking** findings are
+filed, only **once** — yesterday's brief is read back first and anything already
+on it is skipped, capped at eight either way. A backlog that receives 95 known
+findings every morning is a backlog somebody mutes in a week, and then the one
+that mattered arrives muted. If the previous brief cannot be read, it files
+nothing rather than risk filing everything twice.
+
+**3. Mission Control › System › Integrity.** The panel reads `/api/steward` and
+shows the verdict, the counts and the findings, throttled to five minutes
+because a brief changes once a day and the dashboard refreshes every thirty
+seconds. It says "no brief filed yet" rather than rendering empty, because an
+empty panel reads as all-clear.
+
+**And Jarvis in the editor can answer from it.** `/api/jarvis-help` hands a
+**staff** caller's turn the latest summary, so "is anything broken?" is answered
+from today's facts. It goes in a separate system block, not in `KNOWLEDGE`: a
+brief names which endpoints are unauthenticated and which sealed files moved —
+ClearSky's operations, not a tenant's — and folding a daily-changing summary into
+the cached block would invalidate that cache for every tenant to serve a handful
+of staff. A tenant asking gets nothing.
+
+### The three writes, and why they are functions
+
+`client.js` refuses any endpoint not on the steward-safe list. The three things
+the steward may write are **functions with their URL hardcoded**, taking no
+target argument — `publishBrief()`, `fileWithJarvis()`, `lastBrief()` — so the
+entirety of what it can write is those shapes to those addresses, and none of
+them can be aimed at anything else by passing a name. `/api/steward` therefore
+shows as *not* steward-callable in `npm run steward:api`, which is accurate:
+`call('steward')` is refused, and the publisher does not go through `call()`.
+
+All three need `--file` passed by hand or by the daily workflow. Dry run is the
+default, because the steward's posture is propose-and-let-a-person-apply — the
+same L2 rung Jarvis already runs on — and a publisher that wrote the moment it
+was invoked would be the one part of it that did not.
 
 ---
 
@@ -262,7 +324,9 @@ also need `Authorization` added or the browser will strip it.
 
 ## What it will not do
 
-- It does not commit, push, deploy, or call an endpoint that writes.
+- It does not commit, push, deploy, or call an endpoint that writes — with the
+  three hardcoded exceptions above, which write its own brief to its own
+  collection and its own findings to Jarvis's backlog, and nothing else.
 - It produces a brief and an exit code. The agent acts on the brief, and every
   action it takes arrives as a pull request a person merges.
 - The UX section is mechanical. It finds what is measurably wrong, not what is

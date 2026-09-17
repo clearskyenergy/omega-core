@@ -1415,6 +1415,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
           </div>
+          <!-- The steward's last daily pass. Not the twin's status: this comes
+               from /api/steward on the portal, which is where the pass files
+               its brief. Staff only at the function, so a non-staff token
+               gets the "staff only" row rather than an empty panel. -->
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Integrity — the steward<span class="live" id="stewDay"></span></div>
+            <div id="steward" class="scroll"></div>
+          </div>
         </div>
         <div class="col">
           <div class="panel" style="flex:none">
@@ -2800,7 +2808,7 @@ async function load(){
 
     lastStatus=s;
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
-    renderQuick(); renderNeeds(s); renderConns(s);
+    renderQuick(); renderNeeds(s); renderConns(s); renderSteward();
     glassSync();
 
     /* The queue count lives in Overview. It used to sit inside the sphere as
@@ -5821,6 +5829,54 @@ function taskButtons(id, row, titleEl){
       b.disabled=true; row.style.opacity='.4';
       if(!await taskAct(id,'drop')) { b.disabled=false; row.style.opacity=''; } });
   return bar;
+}
+
+/* ── the steward's brief ──────────────────────────────────────────────────
+   The daily pass files one document a day at /api/steward. This shows the
+   verdict, the counts and the findings, and says plainly when there is no
+   brief yet rather than rendering an empty panel that reads as "all clear".
+   Its own fetch and its own interval: it is portal state, not twin state, and
+   it changes once a day rather than every thirty seconds. */
+let stewAt=0, stewCache=null;
+async function renderSteward(force){
+  const host=el('steward'); if(!host) return;
+  /* The refresh loop runs every 30s and this changes once a day. Serve the
+     last answer unless it is five minutes old, so the panel stays live
+     without asking the portal 2,880 times for yesterday's brief. */
+  if(!force && stewCache && Date.now()-stewAt < 300000){ rows(host, stewCache); return; }
+  const dayTag=el('stewDay');
+  const say=(list)=>{ stewCache=list; stewAt=Date.now(); rows(host,list); };
+  try{
+    const t=await token();
+    if(!t){ if(dayTag) dayTag.textContent=''; return say([['STEWARD','sign in to read','warn']]); }
+    const r=await fetch('/api/steward',{headers:{Authorization:'Bearer '+t}});
+    if(r.status===403){ if(dayTag) dayTag.textContent=''; return say([['STEWARD','ClearSky staff only']]); }
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j.found){
+      if(dayTag) dayTag.textContent='';
+      return say([['STEWARD','no brief filed yet','warn'],
+                  ['HOW','npm run steward:file']]);
+    }
+    const q=j.summary||{}, c=q.counts||{};
+    if(dayTag) dayTag.textContent=q.day||'';
+    const list=[
+      ['VERDICT', q.blocking?('BLOCKING — '+(q.blockingSections||[]).join(', ')):'clear', q.blocking?'bad':'good'],
+      ['HEADLINE', q.headline||'—', q.blocking?'warn':'cy'],
+      ['GUARD', (c.guardNew||0)+' new · '+(c.guardKnown||0)+' known', (c.guardNew||0)?'warn':'good'],
+      ['TESTS', (c.testsRun||0)-(c.testsFailed||0)+'/'+(c.testsRun||0)+' passing', (c.testsFailed||0)?'bad':'good'],
+      ['ENDPOINTS', (c.endpointsRefusing||0)+' refuse · '+(c.endpointsFailing||0)+' failing', (c.endpointsFailing||0)?'bad':'good'],
+      ['DATA LAYERS', (c.layersStale||0)?((c.layersStale)+' past budget'):'current', (c.layersStale||0)?'warn':'good'],
+      ['INTERFACE', (c.uiFindings||0)+' findings']
+    ];
+    (q.findings||[]).slice(0,14).forEach(f=>{
+      list.push([f.check.toUpperCase()+' '+f.file, f.detail||'', f.severity==='error'?'bad':'warn']);
+    });
+    say(list);
+  }catch(e){
+    if(dayTag) dayTag.textContent='';
+    say([['STEWARD','could not read the brief','bad'],['WHY', String(e.message||e).slice(0,60)]]);
+  }
 }
 
 function renderOverview(s){

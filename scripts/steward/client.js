@@ -39,6 +39,14 @@
        else refuses here, before the network, and says so.
      - Writes need OMEGA_STEWARD_ALLOW_WRITES=1 AND an explicit endpoint
        argument. A cron job never sets that.
+     - TWO DELIBERATE EXCEPTIONS, written as functions rather than list entries
+       so neither can be reached by passing a name. publishBrief() files the
+       day's brief at /api/steward so Jarvis can read it; fileWithJarvis() puts
+       a blocking finding on Jarvis's backlog through the twin's /task door -
+       the same call the editor's "File with Jarvis" button makes. Each has its
+       URL hardcoded and takes no target, so the entirety of what the steward
+       can write is these two shapes to these two addresses. Both are staff-
+       gated on the server as well.
      - A call budget per run, so a loop cannot turn into a bill.
      - The token is never logged, never written to a file, and responses are
        scrubbed of anything key-shaped before they are printed or stored.
@@ -204,6 +212,66 @@ function call(id, opts) {
   });
 }
 
+/* -- the two writes ----------------------------------------------------------
+   Deliberately not reachable through call(): no endpoint name is taken, so
+   neither of these can be aimed at anything else. See the header. */
+
+/* Jarvis's own backlog, through the twin's /task door. Same address and same
+   body the editor's "File with Jarvis" button posts (omega-jarvis-help.js),
+   and the twin refuses a non-staff token itself. */
+var TWIN = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
+
+function fileWithJarvis(title, urgency) {
+  if (++calls > MAX_CALLS) return Promise.reject(new Error('call budget of ' + MAX_CALLS + ' exhausted'));
+  return token().then(function (tok) {
+    return withTimeout(fetch(TWIN + '/task', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: String(title).slice(0, 400), urgency: urgency || 'queue' })
+    })).then(function (r) {
+      if (r.status === 403) throw new Error('the twin refused this account - Jarvis filing is ClearSky staff only');
+      if (!r.ok) throw new Error('twin /task returned HTTP ' + r.status);
+      return { ok: true };
+    });
+  });
+}
+
+/* The day's brief, at /api/steward, for the Integrity panel and for Jarvis to
+   answer from. One document per day; the function replaces same-day runs. */
+function publishBrief(payload) {
+  if (++calls > MAX_CALLS) return Promise.reject(new Error('call budget of ' + MAX_CALLS + ' exhausted'));
+  return token().then(function (tok) {
+    return withTimeout(fetch(BASE + '/api/steward', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })).then(function (r) {
+      return r.text().then(function (t) {
+        var j; try { j = JSON.parse(t); } catch (e) { j = { raw: scrub(t).slice(0, 300) }; }
+        if (!r.ok) throw new Error('/api/steward returned HTTP ' + r.status + ': ' + ((j && j.error) || j.raw || ''));
+        return j;
+      });
+    });
+  });
+}
+
+/* The brief already on file, so the publisher can tell a NEW finding from one
+   it filed yesterday and not re-file it. GET only, URL hardcoded, same reason
+   as the two above. */
+function lastBrief(day) {
+  if (++calls > MAX_CALLS) return Promise.reject(new Error('call budget of ' + MAX_CALLS + ' exhausted'));
+  return token().then(function (tok) {
+    var url = BASE + '/api/steward' + (day ? '?day=' + encodeURIComponent(day) : '');
+    return withTimeout(fetch(url, { headers: { Authorization: 'Bearer ' + tok } })).then(function (r) {
+      return r.text().then(function (t) {
+        var j; try { j = JSON.parse(t); } catch (e) { j = null; }
+        if (!r.ok) throw new Error('/api/steward returned HTTP ' + r.status + ': ' + ((j && j.error) || ''));
+        return j;
+      });
+    });
+  });
+}
+
 /* -- cli --------------------------------------------------------------------- */
 
 function arg(name) {
@@ -257,5 +325,6 @@ if (require.main === module) {
 }
 module.exports = {
   call: call, callAnonymous: callAnonymous, token: token,
-  haveCredentials: haveCredentials, scrub: scrub, base: function () { return BASE; }
+  haveCredentials: haveCredentials, scrub: scrub, base: function () { return BASE; },
+  fileWithJarvis: fileWithJarvis, publishBrief: publishBrief, lastBrief: lastBrief
 };

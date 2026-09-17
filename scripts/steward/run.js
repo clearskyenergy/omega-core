@@ -273,13 +273,21 @@ function brief(s) {
   return L.join('\n');
 }
 
+/* One pass, as one object. main() and scripts/steward/jarvis.js both go
+   through this so the brief Jarvis files is the brief the terminal printed -
+   not a second run with its own timings and its own answers. */
+function pass() {
+  return {
+    integrity: integrity(),
+    tests: tests(),
+    service: service(),
+    data: data(),
+    ui: interfaceReview()
+  };
+}
+
 function main() {
-  var s = {};
-  s.integrity = integrity();
-  s.tests = tests();
-  s.service = service();
-  s.data = data();
-  s.ui = interfaceReview();
+  var s = pass();
 
   if (process.argv.indexOf('--json') >= 0) {
     console.log(JSON.stringify(s, null, 2));
@@ -296,4 +304,4 @@ function main() {
 }
 
 if (require.main === module) process.exit(main());
-module.exports = { integrity: integrity, tests: tests, service: service, data: data, interfaceReview: interfaceReview, brief: brief };
+module.exports = { pass: pass, integrity: integrity, tests: tests, service: service, data: data, interfaceReview: interfaceReview, brief: brief };

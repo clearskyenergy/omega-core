@@ -2,7 +2,7 @@
   "name": "omega-core",
   "private": true,
   "version": "5.0.0",
-  "description": "ClearSky-OMEGA — one codebase, every tenant",
+  "description": "ClearSky-OMEGA \u2014 one codebase, every tenant",
   "engines": {
     "node": ">=18"
   },
@@ -29,6 +29,8 @@
     "steward:api": "node scripts/steward/api-registry.js",
     "steward:ux": "node scripts/steward/ux-review.js",
     "steward:data": "node scripts/steward/data-watch.js",
-    "steward:whoami": "node scripts/steward/client.js --whoami"
+    "steward:whoami": "node scripts/steward/client.js --whoami",
+    "steward:jarvis": "node scripts/steward/jarvis.js",
+    "steward:file": "node scripts/steward/jarvis.js --file"
   }
 }
