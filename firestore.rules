@@ -2096,11 +2096,38 @@ service cloud.firestore {
       function hasStatus(d) {
         return d.get('status', '') is string && d.get('status', '') != '';
       }
+      /* ── SITE SPINE (2026-09-16) ──────────────────────────────────────
+         Sites are the one collection a JOINT VENTURE uploads into. The OSA
+         orgId 'osa' is not anybody's email domain, so userOrg() alone would
+         leave every OSA site unreadable by the member firms who filed it.
+         mineHere() therefore honours canActInOrg() — an org_members grant —
+         for THIS collection. It is the read-widening the header on
+         canActInOrg() says is not the default; it is deliberate here because a
+         site record is what the grant exists to let the member work. */
       function mineHere() {
         return signedIn()
           && (resource.data.orgId == userOrg()
               || ownsDemoBucket(resource.data.orgId)
+              || canActInOrg(resource.data.orgId)
               || isAdmin());
+      }
+      function mineToCreate() {
+        return signedIn()
+          && (request.resource.data.orgId == userOrg()
+              || ownsDemoBucket(request.resource.data.orgId)
+              || canActInOrg(request.resource.data.orgId)
+              || isAdmin());
+      }
+      /* CROSS-PORTAL READ, BY GRANT. site_shares/{siteId}__{myOrg} exists and
+         says scope 'read' → I may read the canonical document. Never update,
+         never delete: a grant grants read. Revoking = deleting the grant, and
+         the read is gone on the next evaluation. Only an ACCEPTED site is
+         readable through a grant — a pending import is not yet vouched for. */
+      function sharedToMe() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/site_shares/$(siteId + '__' + userOrg()))
+          && get(/databases/$(database)/documents/site_shares/$(siteId + '__' + userOrg())).data.get('scope', '') == 'read'
+          && resource.data.get('review', {}).get('state', 'accepted') == 'accepted';
       }
       /* On CREATE the claim must be the caller's own address or nothing at all
          — you may claim a site for yourself, and you may leave it open for the
@@ -2112,25 +2139,33 @@ service cloud.firestore {
             || request.resource.data.get('repEmail', '').lower()
                  == request.auth.token.email.lower();
       }
+      /* Attribution and provenance are written by /api/sites-import from the
+         token, and locked on acceptance. A browser may not rewrite them. */
+      function touchesSiteAttribution() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['origination', 'provenance', 'review', 'siteId', 'sourceKey']);
+      }
 
-      allow read: if mineHere();
+      allow read: if mineHere() || sharedToMe();
 
       /* ⚠ ONLY orgId AND status ARE REQUIRED. An earlier draft also demanded a
          non-empty siteName, which the tool does not write on first save — a
          site identified from the map has a parcel and a feeder before anyone
          has typed a name. That would have refused every create. */
-      allow create: if signedIn()
-                    && (request.resource.data.orgId == userOrg()
-                        || ownsDemoBucket(request.resource.data.orgId)
-                        || isAdmin())
+      allow create: if mineToCreate()
                     && request.resource.data.orgId is string
                     && request.resource.data.orgId.size() > 0
                     && hasStatus(request.resource.data)
-                    && (claimIsOwnOrOpen() || isAdmin());
+                    && (claimIsOwnOrOpen() || isAdmin())
+                    /* Imported rows come through /api/sites-import, which
+                       stamps these. A browser create must not forge them. */
+                    && !request.resource.data.keys().hasAny(['origination', 'provenance', 'review']);
 
       allow update: if mineHere()
                     && request.resource.data.orgId == resource.data.orgId
+                    && request.resource.data.get('portfolioId', '') is string
                     && hasStatus(request.resource.data)
+                    && (!touchesSiteAttribution() || isAdmin())
                     /* ← LOCK ATTRIBUTION — uncomment the next three lines the
                        day this board drives commission. A rep may then claim
                        an OPEN site but never take one off a colleague; only an
@@ -2142,6 +2177,84 @@ service cloud.firestore {
                     ;
 
       allow delete: if mineHere();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       SITE SPINE  —  site_shares · portfolios · site_imports   (2026-09-16)
+       ════════════════════════════════════════════════════════════════════════
+       Bulk upload lands in ONE portal; other portals REFERENCE the canonical
+       site through a grant. Nothing is copied. See api/_lib/site-spine.js for
+       the record contract and api/sites-import.js for the write path.
+
+       site_shares/{siteId}__{toOrgId}
+         siteId, fromOrgId, toOrgId, grantedBy, grantedAt, scope: 'read'
+         The id is composite so the sites read rule can find the grant with
+         ONE exists() and no query. scope is fixed to 'read' in v1: the rule
+         below refuses any other value, so a future 'write' scope is a rules
+         change somebody has to make on purpose.
+         Written by the OWNER org (canActInOrg on fromOrgId, which must equal
+         the site's own orgId — checked by a get(), so you cannot share a site
+         you do not own). Revoke = delete; the grantee's read ends at once.
+
+       portfolios/{portfolioId}
+         orgId, name, slug, vertical, siteCount, pendingCount, createdAt
+         The owner org's document. A partner learns which portfolio a shared
+         site belongs to from the projected site record, not from here.
+
+       site_imports/{importId}
+         The receipt for one upload. SERVER-WRITTEN ONLY (Admin SDK bypasses
+         rules); the browser reads its own org's receipts and nothing else.
+       ════════════════════════════════════════════════════════════════════════ */
+    match /site_shares/{shareId} {
+      function siteDoc(id) {
+        return get(/databases/$(database)/documents/sites/$(id)).data;
+      }
+      function shareIsSane(d) {
+        return d.get('scope', '') == 'read'
+            && d.get('siteId', '') is string && d.get('siteId', '') != ''
+            && d.get('fromOrgId', '') is string && d.get('fromOrgId', '') != ''
+            && d.get('toOrgId', '') is string && d.get('toOrgId', '') != ''
+            && d.get('fromOrgId', '') != d.get('toOrgId', '')
+            /* the id IS the pair — anything else and sharedToMe() in /sites
+               would look up a document that says something different */
+            && shareId == d.get('siteId', '') + '__' + d.get('toOrgId', '')
+            && siteDoc(d.get('siteId', '')).orgId == d.get('fromOrgId', '');
+      }
+      allow read:   if signedIn()
+                    && (canActInOrg(resource.data.fromOrgId)
+                        || resource.data.toOrgId == userOrg()
+                        || isAdmin());
+      allow create: if signedIn()
+                    && canActInOrg(request.resource.data.fromOrgId)
+                    && shareIsSane(request.resource.data);
+      /* No update. A grant is granted or it is revoked; editing one in place
+         is how 'read' quietly becomes something else. */
+      allow update: if false;
+      allow delete: if signedIn()
+                    && (canActInOrg(resource.data.fromOrgId) || isAdmin());
+    }
+
+    match /portfolios/{portfolioId} {
+      function pfMine() {
+        return signedIn() && (canActInOrg(resource.data.orgId) || isAdmin());
+      }
+      allow read:   if pfMine();
+      allow create: if signedIn()
+                    && canActInOrg(request.resource.data.orgId)
+                    && request.resource.data.orgId is string
+                    && request.resource.data.orgId.size() > 0
+                    && request.resource.data.get('name', '') is string
+                    && request.resource.data.get('name', '') != '';
+      allow update: if pfMine()
+                    && request.resource.data.orgId == resource.data.orgId;
+      /* Refused for everyone. A portfolio with sites in it that vanishes
+         orphans every siteId that points at it. Rename or empty it instead. */
+      allow delete: if false;
+    }
+
+    match /site_imports/{importId} {
+      allow read: if signedIn() && (canActInOrg(resource.data.orgId) || isAdmin());
+      allow write: if false;
     }
 
     /* ════════════════════════════════════════════════════════════════════════

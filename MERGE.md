@@ -508,3 +508,48 @@ repository's portal.
 - Tests: `scripts/tests/tfees.js`. Rules changes need a deploy from the
   repo root before the portal's fee editor and `/api/offer` are honoured.
 
+
+## Site spine: bulk upload into one portal, referenced everywhere  (2026-09-16)
+
+Built from the OSA JV partner's brief, by ClearSky, in two PRs so the core
+half is reviewed separately from the tenant half.
+
+**Core (this PR).** `sites/{siteId}` is extended, not replaced. Imported
+sites carry a deterministic id `${orgId}:${sourceKey}` (provider row id, else
+an address hash) so a re-upload updates and never duplicates. New fields are
+all optional: `portfolioId, source, sourceKey, vertical, ev{}, provenance{},
+origination{}, participants[], review{}, confidential{}`. Nothing is
+invented; a blank column is absent and the page renders `[CONFIRM]`.
+
+- `api/_lib/site-spine.js` — the pure contract: id derivation, row → doc,
+  the partner and public PROJECTIONS (whitelists), the review gate, the EV
+  roll-up. Tested by `scripts/tests/tsitespine.js` with no credential.
+- `api/sites-import.js` — the only writer of imported rows. Requires
+  `origination.partnerOrg` per upload (who brought it), stamps provenance
+  from the token, lands every row `review.state='pending'`, writes a
+  `site_imports/{importId}` receipt. `action:'review'` accepts or rejects
+  and locks attribution on acceptance, as `deals` does leaving `referred`.
+- `api/sites-projection.js` — what a NON-owner sees. Partner mode returns
+  sites shared to the caller's org via `site_shares`, with `confidential`,
+  `provenance` and `notes` stripped. Public mode drops the street address
+  and rounds coordinates to ~1 km. Pending sites are never returned.
+- `firestore.rules` — `sites.mineHere()` now honours `canActInOrg()`, which
+  is what lets a JV member firm (own domain) read and write `osa`-stamped
+  sites; `sharedToMe()` grants READ through `site_shares/{siteId}__{myOrg}`
+  and nothing else; browsers cannot forge or edit `origination`,
+  `provenance`, `review`. New blocks: `site_shares` (owner creates, scope
+  fixed to 'read', id must equal the pair, delete = revoke, no update),
+  `portfolios` (org-scoped, no delete), `site_imports` (server-written,
+  org-read). `node scripts/check-rules.js firestore.rules` is clean.
+
+**Tenant PR.** `tenants/osa/site-import.html` (upload → map → preview →
+import → review inbox → share), `tenants/osa/portfolio-sites.html` (one
+page per portfolio named in `tenant.json`), `tenant.json.portfolios[]`.
+
+**Deploy order.** Rules first, then `api/`, then the tenant pages. Before
+and after: `npm run audit` — the importer writes to the shared `sites`
+collection, so per-org counts for every OTHER tenant must not move.
+
+**Not done, on purpose.** No `scope:'write'` on a share. No public
+marketplace card yet (the projection exists; no page calls it). Person-level
+assignment across orgs — same gap as Silmarillion, same reason.
