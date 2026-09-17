@@ -646,6 +646,54 @@
         "allowedEmails": []
       },
       "owner": "michael.duhs@eastwestenergy.ai"
+    },
+    {
+      "orgId": "cleancell.us",
+      "org": {
+        "name": "Clean Cell US",
+        "slug": "cleancell",
+        "domains": [
+          "cleancell.clearskyomega.com"
+        ],
+        "logoUrl": "",
+        "vertical": "oem",
+        "shell": "default",
+        "status": "active",
+        "receivesFullBom": false,
+        "exportBrand": {
+          "name": "Clean Cell US",
+          "logo": ""
+        }
+      },
+      "billing": {
+        "tier": "trial",
+        "addons": [],
+        "toolOverrides": {},
+        "paymentProvider": "manual",
+        "trialEndsAt": "2026-10-17T12:00:00.000Z",
+        "subscriptionDue": null
+      },
+      "pub": {
+        "orgId": "cleancell.us",
+        "name": "Clean Cell US",
+        "logoUrl": "",
+        "colors": null,
+        "exportBrand": {
+          "name": "Clean Cell US",
+          "logo": ""
+        },
+        "tier": "trial",
+        "vertical": "oem",
+        "shell": "default",
+        "domains": [
+          "cleancell.clearskyomega.com"
+        ],
+        "requiredTools": [
+          "financing"
+        ],
+        "allowedEmails": []
+      },
+      "owner": "robert.bucher@cleancell.us"
     }
   ]
 }
