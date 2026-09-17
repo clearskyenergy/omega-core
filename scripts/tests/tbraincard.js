@@ -29,7 +29,8 @@ const html = fs.readFileSync(root('mission.html'), 'utf8');
 /* Pull one top-level `function name(...){...}` out of the page by brace
    counting. Naive on strings containing braces, which none of these have. */
 function grab(name) {
-  const start = html.indexOf('\nfunction ' + name + '(');
+  let start = html.indexOf('\nfunction ' + name + '(');
+  if (start < 0) start = html.indexOf('\nasync function ' + name + '(');
   if (start < 0) throw new Error('mission.html no longer defines ' + name + '()');
   let i = html.indexOf('{', start), depth = 0;
   for (let j = i; j < html.length; j++) {
@@ -47,10 +48,10 @@ const sandbox = {
   closeCard: () => {}, submit: () => {}, bpoke: () => {}, binspect: () => {},
   bcenter: () => {}, bopen: () => {}, bsel: null, bpath: null,
   lastStatus: { todos: [] },
-  BG: null
+  BG: null, BGX: null
 };
-const src = ['bpersonSubject', 'bdealSubject', 'bnodeSubject'].map(grab).join('\n');
-const make = new Function('env', 'with(env){' + src + '; return {bpersonSubject,bdealSubject,bnodeSubject};}');
+const src = ['bpersonSubject', 'bdealSubject', 'bnodeSubject', 'relFor'].map(grab).join('\n');
+const make = new Function('env', 'with(env){' + src + '; return {bpersonSubject,bdealSubject,bnodeSubject,relFor};}');
 const S = make(sandbox);
 
 const rowOf = (subj, label) => (subj.rows.find(r => r.label === label) || {}).value;
@@ -138,6 +139,43 @@ ok(/11 meetings/.test(r2.provenance), 'and the card says where the name actually
 ok(rowOf(r2, 'KNOWN SINCE') === '2025-02-03  →  2026-09-10', 'first and last seen travel');
 ok(r2.first === 'Grant', 'ASK JARVIS gets a first name to use');
 ok(r2.kind === 'person', 'so the card runs the relationship half for them');
+
+console.log('tbraincard: finding a person the roster spells differently');
+const TERRY = { type: 'person', label: 'Terry Warren', weight: 50 };
+const OTHER = { type: 'person', label: 'Dana Reed', weight: 3 };
+sandbox.BGX = null;
+ok(S.relFor({ name: 'Terry Warren' }) === null, 'with no graph fetched there is no match to give');
+sandbox.BGX = { nodes: [TERRY, OTHER] };
+ok(S.relFor({ name: 'Terry Warren' }) === TERRY, 'the exact name still matches');
+ok(S.relFor({ name: '  TERRY WARREN ' }) === TERRY, 'case and stray spaces do not defeat it');
+/* THE BUG: the roster says "Warren Terry", the meeting record says "Terry
+   Warren", and an empty card reads as "nothing outstanding". */
+ok(S.relFor({ name: 'Warren Terry' }) === null,
+   'WITHOUT a declared alias, a reversed name does NOT match — no sorted-token heuristic');
+sandbox.BGX = { nodes: [TERRY, OTHER], aliases: { 'warren terry': 'Terry Warren', 'tj warren': 'Terry Warren' } };
+ok(S.relFor({ name: 'Warren Terry' }) === TERRY, 'a DECLARED alias finds him, and his weight of 50 with him');
+ok(S.relFor({ name: 'TJ Warren' }) === TERRY, 'so does the other spelling in the map');
+ok(S.relFor({ name: 'Dana Reed' }) === OTHER, 'an unaliased person is unaffected');
+ok(S.relFor({ name: 'Nobody Here' }) === null, 'a name in neither the record nor the map is still null');
+sandbox.BGX = { nodes: [TERRY], aliases: { 'ghost name': 'Someone Not In The Graph' } };
+ok(S.relFor({ name: 'Ghost Name' }) === null, 'an alias pointing at a name the graph lacks returns null, not a crash');
+sandbox.BGX = null;
+
+console.log('tbraincard: the four things an empty relationship half can mean');
+const load = grab('loadRelations');
+ok(/bgxTried=true;/.test(load) && load.indexOf('bgxTried=true;') < load.indexOf('try{'),
+   'the attempt is recorded BEFORE the fetch, so a failure cannot look like never having asked');
+ok(/bgxFailed = !BGX;/.test(load), 'failure is read off the OUTCOME, not off which path threw');
+ok(load.indexOf('bgxFailed = !BGX;') > load.indexOf('}catch'),
+   '...after the catch, so an answered {ok:false} counts as a failure too');
+const paint = grab('showCard');
+ok(/!brainOn \|\| bgxFailed/.test(paint), 'a link that is off or has failed says so — it is actionable');
+ok(/else if\(!bgxTried\)/.test(paint), 'a fetch still in flight says it is reading, and claims nothing');
+ok(/No one by that name in the meeting record/.test(paint), 'and only a completed lookup makes a claim about the person');
+ok(paint.indexOf('!brainOn || bgxFailed') < paint.indexOf('else if(!bgxTried)'),
+   'the failed branch is tested FIRST — a loading message over a dead link is a slower lie, not a safer one');
+ok(/relHost\.textContent='';/.test(paint) && paint.indexOf("relHost.textContent='';") < paint.indexOf('const r=relFor(p)'),
+   'the host is cleared before every repaint, so a message cannot outlive the state that wrote it');
 
 console.log('tbraincard: the wiring in the page itself');
 ok(/bsel=n; bpath=null; binspect\(n\);[\s\S]{0,600}?bopen\(n\);/.test(html),

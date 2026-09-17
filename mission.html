@@ -6520,10 +6520,16 @@ function matchClient(name, clients){
    the only key both sides actually carry. People the roster has never heard
    of are added rather than dropped — someone you have met eleven times is a
    node whether or not they were ever typed into a contact list. */
-var BGX=null, bgxAt=0;
+/* `BGX` being null is TWO different facts and the card has to tell them
+   apart: nobody has asked yet (transient, resolves in a moment) and we asked
+   and did not get it (not transient — the Mac is asleep and it will still be
+   missing in ten minutes). Only `bgxAt` was recorded, and only on success, so
+   a failed fetch was bit-for-bit indistinguishable from never having tried. */
+var BGX=null, bgxAt=0, bgxTried=false, bgxFailed=false;
 async function loadRelations(force){
   if(!brainOn) return null;
   if(BGX && !force && Date.now()-bgxAt < 300000) return BGX;
+  bgxTried=true;
   try{
     const c=new AbortController(); const tm=setTimeout(()=>c.abort(),4000);
     const r=await fetch(BRAIN+'/graph',{cache:'no-store',signal:c.signal});
@@ -6531,6 +6537,19 @@ async function loadRelations(force){
     const j=await r.json();
     if(j && j.ok){ BGX=j; bgxAt=Date.now(); }
   }catch(e){ /* the Mac is asleep; the graph simply stays as it was */ }
+  /* ONE flag, read off the OUTCOME rather than off which path was taken.
+     Throwing is not the only way to fail: the brain answers 404 with
+     {ok:false, error:"no graph yet — run bin/graph on the Mac"} when that
+     file has never been written (jarvis_brain.py). That parses cleanly,
+     assigns nothing, and never reaches the catch — so a catch-only flag
+     would leave a fresh install reading "…" for ever against a link that was
+     answering the whole time. Reading the outcome also cannot drift when
+     someone adds a fifth way to fail.
+
+     A forced refresh that fails while BGX still holds an earlier load is
+     NOT a failure by this test, which is right: we do have the record, it is
+     merely stale. */
+  bgxFailed = !BGX;
   return BGX;
 }
 function relIndex(){
@@ -7562,8 +7581,32 @@ function relFor(person){
   if(!BGX || !person) return null;
   const want=String(person.name||'').trim().toLowerCase();
   if(!want) return null;
-  return (BGX.nodes||[]).find(n=>n.type==='person'
-    && String(n.label).trim().toLowerCase()===want) || null;
+  const byName=l=>(BGX.nodes||[]).find(n=>n.type==='person'
+    && String(n.label).trim().toLowerCase()===l) || null;
+  const exact=byName(want);
+  if(exact) return exact;
+  /* DECLARED ALIASES, and only declared ones. The roster spells one man
+     "Warren Terry", surname first; the meeting record only ever says "Terry
+     Warren". So his card opened with nothing on it while his weight of 50 sat
+     on the graph under the other spelling — and an empty card reads as
+     "nothing outstanding", which was the opposite of true. bin/graph
+     publishes the map as `aliases` on /graph; Thomas maintains it by hand in
+     ~/jarvis/graph.json, so entries appear without anyone touching this.
+
+     NOT a sorted-token match, which is the obvious generalisation and the
+     wrong one. Comparing the words of a name as an unordered set would make
+     "Warren Terry" and "Terry Warren" the same person — correct here — and
+     would also merge ANY two people who share a first and last name in either
+     order. This function feeds a weight score and a list of who owes what, so
+     a wrong match silently piles two people's commitments onto one card with
+     nothing on screen saying it happened. That is worse than the blank it was
+     meant to fix: a blank is visibly missing something, a merged card looks
+     authoritative. A declared entry can be read, argued with and deleted; a
+     heuristic cannot. If surname-first turns out to be a class rather than
+     one name, the honest fix is bin/graph deriving it from the roster at
+     build time, where the entry lands in graph.json and can be inspected. */
+  const alias=(BGX.aliases||{})[want];
+  return alias ? byName(String(alias).trim().toLowerCase()) : null;
 }
 
 function relSection(r){
@@ -7795,12 +7838,31 @@ function showCard(p, fromEl){
   scroll.appendChild(relHost);
   const paintRel=()=>{
     if(kind!=='person') return;
-    const r=relFor(p);
-    if(!r) return;
     relHost.textContent='';
-    const sec=relSection(r);
-    relHost.appendChild(sec);
-    if(r.note && brainOn) sec.appendChild(noteReader(r.note));
+    const say=t=>{
+      const w=document.createElement('div'); w.className='relWrap';
+      const n2=document.createElement('div'); n2.className='relNone'; n2.textContent=t;
+      w.appendChild(n2); relHost.appendChild(w);
+    };
+    const r=relFor(p);
+    if(r){
+      const sec=relSection(r);
+      relHost.appendChild(sec);
+      if(r.note && brainOn) sec.appendChild(noteReader(r.note));
+      return;
+    }
+    /* ABSENT IS NOT ZERO — which is why none of this renders a row of
+       noughts for someone with no history; "0 owed" claims something we do
+       not know. But INVISIBLE absence is the same trap one step along: a
+       blank says nothing about which absence it is, and the card was read as
+       "nothing outstanding" for a man who is owed plenty under a spelling
+       this could not match. So each state says which one it is. Only the
+       last is a statement about the person; the first two are statements
+       about us, and a loading message shown over a link that has already
+       failed is a lie that just takes longer to notice. */
+    if(!brainOn || bgxFailed) say('The neural link is off, so the meeting record cannot be read from here.');
+    else if(!bgxTried) say('Reading the meeting record…');
+    else say('No one by that name in the meeting record.');
   };
   paintRel();
   if(!BGX && kind==='person'){
