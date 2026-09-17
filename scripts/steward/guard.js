@@ -239,6 +239,18 @@ function checkSecrets(files) {
    a page links to it, which is how four serverless functions - the Grid Atlas
    scoring model among them - came to be downloadable as plain text. */
 
+/* .vercelignore is .gitignore SYNTAX, and the one rule that matters here is
+   the one that is easy to forget: A PATTERN WITH NO SLASH IN IT MATCHES A
+   BASENAME AT ANY DEPTH. `render.js` does not mean "the render.js at the root",
+   it means "every file called render.js anywhere" - api/render.js included.
+
+   This function used to treat a slashless pattern as an exact root path. That
+   is a matcher which says a file is deployed when it is not, and on 2026-09-17
+   it did exactly that: guard reported the served-server-code findings fixed
+   while the same .vercelignore lines had quietly removed api/grid-atlas.js and
+   api/render.js from the deployment. vercel.json names both in its `functions`
+   block, so the build failed outright. checkVercelFunctions() below is the
+   check for that; this is the matcher being right in the first place. */
 function vercelIgnoreMatcher() {
   var raw = read('.vercelignore') || '';
   var deny = [], allow = [];
@@ -247,23 +259,40 @@ function vercelIgnoreMatcher() {
     if (!l || l[0] === '#') return;
     if (l[0] === '!') allow.push(l.slice(1)); else deny.push(l);
   });
-  function patternToRe(pat) {
+
+  function globToRegex(glob) {
     var re = '';
-    for (var i = 0; i < pat.length; i++) {
-      var c = pat[i];
+    for (var i = 0; i < glob.length; i++) {
+      var c = glob[i];
       if (c === '*') {
-        if (pat[i + 1] === '*') { re += '.*'; i++; } else { re += '[^/]*'; }
-      } else if ('.+^${}()|[]\\'.indexOf(c) >= 0) { re += '\\' + c; }
-      else { re += c; }
+        if (glob[i + 1] === '*') { re += '.*'; i++; if (glob[i + 1] === '/') i++; }
+        else { re += '[^/]*'; }
+      } else if (c === '?') { re += '[^/]';
+      } else if ('.+^${}()|[]\\'.indexOf(c) >= 0) { re += '\\' + c;
+      } else { re += c; }
     }
-    return new RegExp('^' + re + '$');
+    return re;
   }
+
+  function matches(pat, rel) {
+    var dirOnly = pat.slice(-1) === '/';
+    if (dirOnly) pat = pat.slice(0, -1);
+    var anchored = pat.indexOf('/') >= 0;      /* a slash anywhere anchors it */
+    if (pat[0] === '/') { pat = pat.slice(1); anchored = true; }
+    if (!pat) return false;
+
+    var body = globToRegex(pat);
+    /* Anchored: match from the root. Unanchored: match the basename, or any
+       path segment run ending at the basename. Either way a directory match
+       also covers everything under it. */
+    var re = anchored
+      ? new RegExp('^' + body + '(?:/.*)?$')
+      : new RegExp('(?:^|/)' + body + '(?:/.*)?$');
+    return re.test(rel);
+  }
+
   function hit(list, rel) {
-    return list.some(function (pat) {
-      if (pat.slice(-1) === '/') return rel.indexOf(pat) === 0;
-      if (pat.indexOf('*') < 0) return rel === pat || rel.indexOf(pat + '/') === 0;
-      return patternToRe(pat).test(rel);
-    });
+    return list.some(function (pat) { return matches(pat, rel); });
   }
   return function served(rel) { return !(hit(deny, rel) && !hit(allow, rel)); };
 }
@@ -280,6 +309,55 @@ function checkServedServerCode(files) {
     if (!isServer) return;
     report('served-server-code', f, f,
       'serverless-function source served at https://<host>/' + f + ' - pricing, scoring and routing logic must not be downloadable (CLAUDE.md, IP protection). Add it to .vercelignore or move it under api/.');
+  });
+}
+
+/* -- 4b. every function vercel.json declares still has a file ----------------
+   Vercel fails the whole build - not the route, the BUILD - when a key in the
+   `functions` block matches no serverless function: "The pattern ... doesn't
+   match any Serverless Functions." Two ways to cause it, and this repo found
+   the second one the hard way:
+
+     - rename or delete api/<name>.js and leave the key behind
+     - exclude the file in .vercelignore without meaning to. On 2026-09-17 a
+       bare `render.js` added to hide the root copy also matched api/render.js,
+       because .gitignore syntax matches a slashless pattern at any depth. The
+       preview deployment failed with a project error, and had it deployed,
+       Grid Atlas and the renderer would have been 404s.
+
+   So this asks the question the build asks, before the push. */
+
+function vercelFunctionMatcher(pattern) {
+  var re = '';
+  for (var i = 0; i < pattern.length; i++) {
+    var c = pattern[i];
+    if (c === '*') {
+      if (pattern[i + 1] === '*') { re += '.*'; i++; if (pattern[i + 1] === '/') i++; }
+      else { re += '[^/]*'; }
+    } else if ('.+^${}()|[]\\'.indexOf(c) >= 0) { re += '\\' + c; }
+    else { re += c; }
+  }
+  return new RegExp('^' + re + '$');
+}
+
+function checkVercelFunctions(files) {
+  var raw = read('vercel.json');
+  if (!raw) return;
+  var cfg;
+  try { cfg = JSON.parse(raw); }
+  catch (e) { report('vercel', 'unparseable', 'vercel.json', 'vercel.json is not valid JSON: ' + e.message); return; }
+  var fns = cfg.functions || {};
+  var served = vercelIgnoreMatcher();
+
+  Object.keys(fns).forEach(function (pattern) {
+    var re = vercelFunctionMatcher(pattern);
+    var all = files.filter(function (f) { return re.test(f); });
+    var live = all.filter(served);
+    if (live.length) return;
+    report('vercel', pattern, 'vercel.json',
+      all.length
+        ? 'declares a function for "' + pattern + '" but .vercelignore excludes every file it matches (' + all.slice(0, 3).join(', ') + '). Vercel fails the BUILD on a functions pattern that matches nothing - check for a slashless .vercelignore pattern, which matches a basename at any depth.'
+        : 'declares a function for "' + pattern + '" and no file in the repo matches it. Vercel fails the BUILD on a functions pattern that matches nothing.');
   });
 }
 
@@ -444,6 +522,7 @@ function collect() {
   checkHeaders(files);
   checkSecrets(files);
   checkServedServerCode(files);
+  checkVercelFunctions(files);
   checkBrowserEnv(files);
   checkCoreCopies(files);
   checkOrgAlias(files);
