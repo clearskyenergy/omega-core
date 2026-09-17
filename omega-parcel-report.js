@@ -30,7 +30,7 @@
 (function (global) {
   'use strict';
 
-  var VERSION = 'parcel-report/1.0';
+  var VERSION = 'parcel-report/1.1';
 
   /* Component colour per key. The method section and the bars read the same
      map, so a component added to the engine shows up in both or in neither. */
@@ -140,6 +140,18 @@
     var haz = (g.hazardOnParcel || 0) + (g.hazardAdjacent || 0);
     if (haz) f(String(haz) + ' hazardous‑liquid', g.hazardOnParcel ? 'on parcel' : 'adjacent');
 
+    /* THE FIBER GATE, beside the grid facts and never inside the score. A
+       verdict word from /api/network-proximity with the distance that
+       earned it; absent when the service was not asked or did not answer,
+       and the flag on the record says which. */
+    var F = k.fiber;
+    if (F && F.verdict) {
+      var fb = F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi';
+      if (F.lateral && F.lateral.mi != null && F.lateral.mi < (F.nearestCarrier ? F.nearestCarrier.mi : Infinity))
+        fb = (F.lateral.mi < 10 ? F.lateral.mi.toFixed(1) : Math.round(F.lateral.mi)) + ' mi lateral';
+      out.push('<span><b class="fv-' + esc(F.verdict) + '">fiber ' + esc(F.verdict) + '</b> <span class="u">' + esc(fb) + '</span></span>');
+    }
+
     return '<div class="facts">' + out.join('') + '</div>';
   }
 
@@ -232,6 +244,11 @@
       'lines are a setback and a construction risk, not fuel. Applied after the components, ' +
       'and capped: a pipeline corridor is a cost and a schedule item, never a ' +
       'disqualification on its own.</p></div>';
+    cells += '<div class="m"><h4><u style="background:var(--copper)"></u>Fiber<span class="w">a gate, not points</span></h4>' +
+      '<p>For a data load fiber decides whether the queue was worth joining, so it is a verdict beside ' +
+      'the score, never averaged into it: <i>likely</i>, <i>plausible</i>, <i>uncertain</i> or <i>unlikely</i>, ' +
+      'from surveyed plant, FCC service at the point, mapped exchanges and the nearest carrier facility ' +
+      '(PeeringDB). Every record shows the distance that earned the word.</p></div>';
     return '<h2 class="sec">How the number is built</h2><div class="mgrid">' + cells + '</div>';
   }
 
@@ -273,6 +290,8 @@
     var acres = rows.reduce(function (a, r) { return a + (r.intake.grossAcres || 0); }, 0);
     var mw    = rows.reduce(function (a, r) { return a + (r.grid.mwHostable || 0); }, 0);
     var flagged = rows.filter(function (r) { return (r.intake.flags || []).length; }).length;
+    var lit = rows.filter(function (r) { return r.intake.fiber && r.intake.fiber.dataReady; }).length;
+    var asked = rows.filter(function (r) { return r.intake.fiber && r.intake.fiber.verdict; }).length;
 
     function countFlag(code) {
       return rows.filter(function (r) {
@@ -287,6 +306,7 @@
       [ehv, 'on 345&nbsp;kV'],
       [n0(acres), 'gross acres'],
       [(mw / 1000).toFixed(1) + '<small style="font-size:13px"> GW</small>', 'hostable, grid-limited'],
+      [asked ? lit : '\u2014', asked ? 'fiber likely or plausible' : 'fiber not checked'],
       [flagged, 'carrying a flag']
     ].map(function (c) {
       return '<div class="cell"><div class="n">' + c[0] + '</div><div class="l">' + c[1] + '</div></div>';
@@ -298,7 +318,9 @@
       'than 5%' + (disc ? '; ' + disc + (disc === 1 ? ' parcel here does' : ' parcels here do') : '') +
       '. Substations labelled without a voltage are scored conservatively' +
       (unlab ? ' — ' + unlab + ' of these files would move on a one-word edit to the KMZ' : '') +
-      '.';
+      '.' + (asked ? ' Fiber verdicts come from <span class="mono">/api/network-proximity</span> — ' +
+      'PeeringDB, FCC Broadband Data Collection where a key is set, OpenStreetMap telecom, published ' +
+      'municipal and state plant, and the InterTubes long-haul conduit subset — and are not carrier quotes.' : '');
 
     return '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -404,6 +426,7 @@
     '.cell .n{font-family:"IBM Plex Mono",monospace;font-size:25px;font-weight:500;',
       'color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1}',
     '.cell .l{font-size:11px;color:var(--mute);margin-top:3px;line-height:1.35}',
+    '.fv-likely{color:var(--strong)}.fv-plausible{color:var(--strong)}.fv-uncertain{color:var(--fair)}.fv-unlikely{color:var(--weak)}',
     'h2.sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.11em;',
       'color:var(--mute);padding-bottom:7px;border-bottom:1px solid var(--rule);margin-bottom:0}',
     '.reg{display:flex;flex-direction:column}',

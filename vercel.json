@@ -256,6 +256,9 @@
     "api/grid-atlas.js": {
       "maxDuration": 60
     },
+    "api/network-proximity.js": {
+      "maxDuration": 60
+    },
     "api/render.js": {
       "maxDuration": 60
     },

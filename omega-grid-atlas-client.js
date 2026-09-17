@@ -32,6 +32,7 @@
    a site gets sized against a transmission line it is not connected to.
 
    Console: OmegaGridAtlas.run({lat, lng, address})
+            OmegaGridAtlas.network({lat, lng})   → /api/network-proximity
    ═══════════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -161,12 +162,66 @@
     };
   }
 
+  /* ── NETWORK PROXIMITY — the fiber half of the same question ──────────
+     /api/network-proximity is the sibling of /api/grid-atlas: same shape of
+     request, same-origin, and it is where the fiber score, the verdict and
+     the lateral estimate are computed. It REQUIRES the signed-in user's ID
+     token — PeeringDB, the FCC key and the ArcGIS harvest all run behind
+     it — so this reads the token off whatever Firebase session the page
+     has and refuses cleanly when there is none, instead of a 401 nobody
+     can interpret.
+
+     The editor used to answer this from a static PeeringDB snapshot pasted
+     into editor.html and a constant that lived inside a wrapped block; the
+     button died on "PDB_ROUTE_FACTOR is not defined". Route factor and
+     µs/km now come back IN the response, so the page prints what the
+     service used rather than what it remembers. */
+  function idToken() {
+    var u = null;
+    try { u = root._currentUser || (root.firebase && root.firebase.auth && root.firebase.auth().currentUser); } catch (e) {}
+    if (!u || typeof u.getIdToken !== 'function') return Promise.resolve(null);
+    return u.getIdToken().then(null, function () { return null; });
+  }
+  function network(site, opts) {
+    opts = opts || {};
+    var body = { lat: site && site.lat != null ? +site.lat : null,
+                 lng: site && site.lng != null ? +site.lng : (site && site.lon != null ? +site.lon : null) };
+    if (body.lat == null || body.lng == null || !isFinite(body.lat) || !isFinite(body.lng))
+      return Promise.reject(new Error('No coordinates \u2014 place or lock the satellite view first.'));
+    return idToken().then(function (tok) {
+      if (!tok) throw new Error('Sign in to run Network Proximity \u2014 the fiber sources are behind your account.');
+      var ctl = null, timer = null;
+      try {
+        ctl = new AbortController();
+        timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, opts.timeoutMs || 55000);
+      } catch (e) {}
+      return fetch(opts.url || '/api/network-proximity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify(body),
+        signal: ctl ? ctl.signal : undefined
+      }).then(function (r) {
+        if (timer) clearTimeout(timer);
+        return r.json().then(null, function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error((j && (j.error || j.detail)) || ('Network Proximity returned ' + r.status));
+          if (!j || !j.fiber) throw new Error('Network Proximity answered with nothing usable.');
+          return j;
+        });
+      })['catch'](function (e) {
+        if (timer) clearTimeout(timer);
+        if (e && e.name === 'AbortError') throw new Error('Network Proximity timed out \u2014 the sources took longer than ' + Math.round((opts.timeoutMs || 55000) / 1000) + ' s.');
+        throw e;
+      });
+    });
+  }
+
   root.OmegaGridAtlas = {
     run: run,
+    network: network,
     summarise: summarise,
     candidates: candidates,
     setService: function (u) { lsSet(LS_FORCED, u || ''); return u; },
-    VERSION: 'grid-atlas-client/1.0'
+    VERSION: 'grid-atlas-client/1.1'
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OmegaGridAtlas;
 })(typeof window !== 'undefined' ? window : globalThis);

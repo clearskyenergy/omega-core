@@ -49,7 +49,7 @@
    console showed a new build stamp while the serverless function was still the
    previous one, and nothing in the reply said so. Bump this whenever the file
    changes and the answer is visible from any response. */
-const BUILD = '2026-09-01.layers-connected';
+const BUILD = '2026-09-17.substations-back-lines-light';
 
 const MODEL = {
   version: 'grid-atlas-svc-v1',
@@ -386,6 +386,29 @@ const HIFLD_LAYERS = {
   lines:       process.env.HIFLD_LINES       || 'Electric_Power_Transmission_Lines',
   plants:      process.env.HIFLD_PLANTS      || 'Power_Plants'
 };
+/* ── THE SUBSTATION LAYER IS BACK, ON ANOTHER HOST ──────────────────────
+   The HIFLD host above lost its substation service (note above), so every
+   screened site fell through to OpenStreetMap — and the OSM bundle in a
+   dense metro takes 40–50 s and 504s as often as not, which the browser
+   client gives up on at 35 s. The Parcel Screening Register therefore
+   reported "Grid Atlas could not be reached" for a site with 206 published
+   substations inside 25 km.
+
+   grid-atlas.html, the browser tool that "already works", never used the
+   HIFLD host for substations. It reads these mirrors (SRC.subs in
+   grid-atlas-national.js) — verified again 2026-09-17: the first answers in
+   0.3 s with NAME / STATUS / MAX_VOLT / MIN_VOLT / TYPE / LINES. Tried in
+   order, full layer URLs, before OSM. HIFLD_SUBSTATIONS still wins if set. */
+const SUB_SOURCES = (process.env.GRID_ATLAS_SUB_SOURCES
+  || 'https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0,'
+   + 'https://services.arcgis.com/G4S1dGvn7PIgYd6Y/ArcGIS/rest/services/HIFLD_electric_power_substations/FeatureServer/0')
+  .split(',').map(s => s.trim()).filter(Boolean);
+/* Same story for plants: Power_Plants is gone from the HIFLD host ("Invalid
+   URL" on every call), so the congestion layer was always the OSM fallback.
+   grid-atlas.html reads this mirror (SRC.plants[0]); verified 2026-09-17. */
+const PLANT_SOURCES = (process.env.GRID_ATLAS_PLANT_SOURCES
+  || 'https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/Power_Plants_in_the_US/FeatureServer/0')
+  .split(',').map(s => s.trim()).filter(Boolean);
 /* ── MIRROR ORDER IS NOT ARBITRARY, IT IS MEASURED ──────────────────────
    Tested against one bbox in Frio County, TX on 2026-09-07:
      kumi.systems     16 elements from a laptop, HTTP 429 from Vercel
@@ -439,15 +462,19 @@ function trace(url, outcome) {
    ArcGIS envelope query. A circle would be tighter, but an envelope is one
    parameter and the distance filter below trims the corners anyway. */
 async function arcgis(service, layer, lat, lng, radiusKm, outFields) {
+  return arcgisAt(`${HIFLD}/${service}/FeatureServer/${layer}`, lat, lng, radiusKm, outFields);
+}
+/* Same query against a full layer URL, for mirrors that live on other hosts. */
+async function arcgisAt(layerUrl, lat, lng, radiusKm, outFields) {
   const dLat = radiusKm / 110.574;
   const dLng = radiusKm / (111.320 * Math.cos(lat * Math.PI / 180) || 1);
-  const url = `${HIFLD}/${service}/FeatureServer/${layer}/query`
+  const url = `${layerUrl}/query`
     + `?where=1%3D1&geometryType=esriGeometryEnvelope`
     + `&geometry=${(lng - dLng).toFixed(5)},${(lat - dLat).toFixed(5)},`
     + `${(lng + dLng).toFixed(5)},${(lat + dLat).toFixed(5)}`
     + `&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects`
     + `&outFields=${encodeURIComponent(outFields)}&returnGeometry=true`
-    + `&resultRecordCount=200&f=json`;
+    + `&resultRecordCount=400&f=json`;
   const j = await getJson(url);
   if (j && j.error) throw new Error(j.error.message || 'ArcGIS error');
   if (!j || !Array.isArray(j.features)) throw new Error('unexpected ArcGIS response');
@@ -489,7 +516,11 @@ async function overpass(query, ms) {
       /* The first mirror is the one that has the data, so it gets a real
          budget; the rest are a fallback and must not eat the function's
          30 s ceiling between them. */
-      const budget = ms || (first ? 20000 : 6000);
+      /* ⚠ `ms` used to apply to every mirror, so a 40 s bundle budget was
+         40 + 40 + 40 s worst case — past the function's 60 s ceiling and
+         far past the client's. The caller's budget is for the first mirror
+         only; the fallbacks get 6 s each, as the comment above says. */
+      const budget = first ? (ms || 20000) : 6000;
       first = false;
       /* ── WHY THERE IS A USER-AGENT HERE ──────────────────────────────
          The trace said overpass-api.de was returning HTTP 406 on every
@@ -579,6 +610,32 @@ async function findSubstations(lat, lng, radiusKm) {
     return within(out, radiusKm);
   } catch (e) { SOURCES.substations = 'hifld-failed:' + (e.message || 'error'); }
 
+  for (const src of SUB_SOURCES) {
+    try {
+      const f = await arcgisAt(src, lat, lng, radiusKm, '*');
+      const out = [];
+      for (const ft of f) {
+        const p = featurePoint(ft.geometry); if (!p) continue;
+        const a = ft.attributes || {};
+        if (a.STATUS && /NOT IN SERVICE|RETIRED/i.test(a.STATUS)) continue;
+        /* HIFLD encodes "unknown" as -999999; num() already refuses it. */
+        out.push({
+          name: a.NAME || a.name || 'Substation',
+          distanceKm: distanceKm(lat, lng, p.lat, p.lng),
+          voltageKv: num(a.MAX_VOLT) || num(a.MIN_VOLT) || num(a.VOLTAGE),
+          owner: a.OWNER || a.owner || '',
+          lines: num(a.LINES)
+        });
+      }
+      const host = src.split('/')[2];
+      SOURCES.substations = (SOURCES.substations ? SOURCES.substations + ' -> ' : '') + 'arcgis:' + host + '(' + f.length + ' raw)';
+      /* An empty answer from a national layer is a finding for a rural site
+         and a mirror gap for a city. Only a NON-empty answer is trusted;
+         empty falls through to the next mirror and then to OSM. */
+      if (out.length) return within(out, radiusKm);
+    } catch (e) { SOURCES.substations = (SOURCES.substations ? SOURCES.substations + ' -> ' : '') + 'arcgis-failed:' + (e.message || 'error'); }
+  }
+
   try {
     /* nwr, not node+way: a large substation is often mapped as a multipolygon
        relation, and Moore Substation next to the Lattice site is a way that
@@ -658,13 +715,24 @@ function osmBundle(lat, lng, radiusKm) {
 
 async function fetchBundle(lat, lng, radiusKm) {
   const bbox = bboxFor(lat, lng, radiusKm);
+  /* ── LINES BY CENTRE, EVERYTHING ELSE BY GEOMETRY ─────────────────────
+     `out geom` for every power line inside a 50 km box is what made the
+     bundle 504 in the New York metro: the line layer is by far the largest
+     and its geometry is not needed. HIFLD answers lines; OSM lines are
+     read only for their `circuits` / `cables` tags (by voltage class), and
+     when HIFLD is down nearestOnWay() already falls back to the centre
+     point. Pipelines and substations keep their geometry — a pipeline's
+     nearest point is a real distance, its centroid is not.
+
+     The query timeout and the first-mirror budget are both under the
+     client's 55 s, and the fallbacks are 6 s each (see overpass()). */
   const els = await overpass(
-    `[out:json][timeout:45];(`
+    `[out:json][timeout:24];(`
     + `nwr["power"="substation"](${bbox});`
     + `nwr["man_made"="pipeline"](${bbox});`
-    + `nwr["power"="line"](${bbox});`
     + `nwr["power"="plant"](${bbox});`
-    + `);out geom tags;`, 40000);
+    + `);out geom tags;`
+    + `(nwr["power"="line"](${bbox}););out center tags;`, 26000);
   const out = { subs: [], pipes: [], lines: [], plants: [] };
   for (const el of els) {
     const t = el.tags || {};
@@ -878,6 +946,26 @@ async function findPlants(lat, lng, radiusKm) {
     return within(out, radiusKm);
   } catch (e) { SOURCES.plants = 'hifld-failed:' + (e.message || 'error'); }
 
+  for (const src of PLANT_SOURCES) {
+    try {
+      const f = await arcgisAt(src, lat, lng, radiusKm, '*');
+      const out = [];
+      for (const ft of f) {
+        const p = featurePoint(ft.geometry); if (!p) continue;
+        const a = ft.attributes || {};
+        if (a.STATUS && /RETIRED|NOT IN SERVICE/i.test(a.STATUS)) continue;
+        out.push({
+          name: a.NAME || a.Plant_Name || a.PLANT_NAME || a.name || 'Generating plant',
+          distanceKm: distanceKm(lat, lng, p.lat, p.lng),
+          fuel: a.PRIM_FUEL || a.PrimSource || a.TYPE || a.SOURCE || '',
+          capacityMw: num(a.TOTAL_MW) || num(a.Total_MW) || num(a.CAPACITY_MW) || num(a.SUMMER_CAP) || null
+        });
+      }
+      SOURCES.plants = (SOURCES.plants ? SOURCES.plants + ' -> ' : '') + 'arcgis:' + src.split('/')[2] + '(' + f.length + ' raw)';
+      if (out.length) return within(out, radiusKm);
+    } catch (e) { SOURCES.plants = (SOURCES.plants || '') + ' -> arcgis-failed:' + (e.message || 'error'); }
+  }
+
   try {
     const els = (await osmBundle(lat, lng, radiusKm)).plants;
     const out = [];
@@ -934,7 +1022,7 @@ function distanceKm(aLat, aLng, bLat, bLng) {
    off the open internet and a wildcard would undo that. Add hosts with
    GRID_ATLAS_ORIGINS, comma separated. */
 const ALLOWED_ORIGINS = (process.env.GRID_ATLAS_ORIGINS
-  || 'https://osa.clearskyomega.com,https://alpha.clearskyomega.com,'
+  || 'https://silmarillion.clearskyomega.com,https://osa.clearskyomega.com,https://alpha.clearskyomega.com,'
    + 'https://nextnrg.csebuilders.com,https://tools.csebuilders.com')
   .split(',').map(s => s.trim()).filter(Boolean);
 
@@ -976,7 +1064,8 @@ module.exports = async function handler(req, res) {
         + 'retried progressively less specific until something matches.',
       authRequired: !!process.env.GRID_ATLAS_KEY,
       dataSources: {
-        primary:  'HIFLD Open (ArcGIS) \u2014 substations, transmission lines, power plants',
+        primary:  'HIFLD Open (ArcGIS) \u2014 transmission lines, power plants; substations from SUB_SOURCES mirrors',
+        subSources: SUB_SOURCES,
         fallback: 'OpenStreetMap via Overpass \u2014 used per layer when HIFLD does not answer',
         keys:     'none required for either',
         hifldBase: HIFLD,
@@ -1080,7 +1169,7 @@ module.exports = async function handler(req, res) {
     const summary = !anyLayer
       ? 'No grid data source answered \u2014 nothing measured.'
       : nearestSub
-        ? nearestSub.voltageKv + ' kV substation ' + nearestSub.distanceKm + ' km away'
+        ? (nearestSub.voltageKv ? nearestSub.voltageKv + ' kV substation ' : 'Substation (voltage not published) ') + nearestSub.distanceKm + ' km away'
           + (nearestLine ? ', transmission ' + nearestLine.distanceKm + ' km' : '')
         : substations
           ? 'No substation found within ' + radiusKm + ' km'

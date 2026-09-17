@@ -508,3 +508,72 @@ repository's portal.
 - Tests: `scripts/tests/tfees.js`. Rules changes need a deploy from the
   repo root before the portal's fee editor and `/api/offer` are honoured.
 
+
+## Network proximity is a service, and Grid Atlas answers before the client gives up  (2026-09-17)
+
+Two reports from the deployed editor on the Jersey Power Site, same morning:
+the Parcel Screening Register said "Grid Atlas could not be reached" for a
+parcel with 206 published substations inside 25 km, and the Network Proximity
+button died on `PDB_ROUTE_FACTOR is not defined`. Thomas's ask on top: the
+screen has to say whether there is fiber to support a data load, and the
+network-proximity tool "needs to be perfect and access as much fiber data as
+possible".
+
+**Grid Atlas was not down. It was slow, and the client was impatient.** The
+HIFLD host lost its substation service weeks ago (already noted in the file),
+so every site fell through to the OpenStreetMap bundle — which in a dense
+metro ran `out geom` over every power line in a 50 km box, 504'd on
+overpass-api.de, and then, because the caller's 40 s budget applied to EVERY
+mirror, could run 120 s against a 60 s function ceiling. Measured: 51 s to a
+200 for the NJ point. The screen aborted at 35 s. Fixes in `api/grid-atlas.js`:
+
+- Substations come from the ArcGIS mirrors `grid-atlas.html` always used
+  (`SUB_SOURCES`, first answers in 0.3 s with NAME/STATUS/MAX_VOLT/LINES),
+  tried before OSM. `HIFLD_SUBSTATIONS` still wins if set; an EMPTY answer
+  from a mirror falls through rather than being believed.
+- The Overpass bundle asks for power lines `out center`, geometry only for
+  substations, pipelines and plants. OSM lines are read for `circuits` by
+  voltage class, which needs no geometry; `nearestOnWay()` already falls
+  back to the centre.
+- `overpass()` gives the caller's budget to the first mirror only; the
+  fallbacks get 6 s each, as its own comment always claimed.
+- `screenCurrent()` waits 55 s, under the 60 s ceiling, for both services.
+
+**Network proximity moved to `/api/network-proximity.js`** — the fiber half of
+the same question, and the first implementation of the scoring rather than a
+second one. `grid-atlas-national.js` computed a fiber score in the page from
+PeeringDB/FCC/plant; `editor.html` computed facility distance from `PDB_FAC`,
+a 136 KB static PeeringDB snapshot, using a constant inside a wrapped block.
+The function asks six sources in parallel, each time-boxed and each reporting
+ok / empty / failed / skipped with its elapsed time: PeeringDB facilities and
+exchanges (live, keyless); FCC BDC business fiber at the point through
+broadbandmap.com (`FCC_BB_KEY`, else "not checked" — never "no fiber");
+OpenStreetMap telecom features by centre; the verified municipal/state plant
+layers; an ArcGIS Online harvest of fiber feature services whose OWN metadata
+extent contains the site (AGOL's bbox filter returned Broward County for New
+Jersey); and the InterTubes long-haul conduit subset as a direct-line
+estimate. Out of it: `fiber.score` (weights identical to the page's
+`scoreFiber()` so the two agree), `fiber.verdict` — likely / plausible /
+uncertain / unlikely with the reasons that earned it — a lateral estimate to
+the nearest hard evidence with a $45k–$250k/mile construction band, and RTT
+to the nearest carrier hotel. Smoke-tested live: Rockford found the city's
+own conduit at 0 mi; the NJ point found 132 facilities within 80 mi and 60
+Hudson at 0.08 ms; Frio County answered "uncertain, 52 mi to the nearest
+carrier", which is the honest word for it.
+
+Wired in three places: `OmegaGridAtlas.network()` in the shared client (sends
+the signed-in user's ID token — the function requires one, via
+`verify-token`, no service account); the Network Proximity panel, which now
+renders the response and prints the route factor the service used; and the
+screening register, where `mergeFiber()` carries the verdict on the intake as
+`fiber`, a Fiber column, a detail block, nine CSV columns and a report tile +
+fact line. The verdict sits BESIDE the grid score and is never averaged into
+it. `scripts/test-network-proximity.js` (35 checks) is in `npm test`.
+
+Left alone on purpose: `PDB_FAC` and `omegaNetworkProximity()` stay in
+editor.html because the self-test at ~164930 calls them; delete both together
+once that check is rewritten against the service. `grid-atlas.html` still
+scores fiber in the page — pointing it at this function is the same "worth
+doing, not urgent" note that file already carries for `/api/grid-atlas`.
+`FCC_BB_KEY` is not set in Vercel; until it is, "service at the point" scores
+its not-checked middle value and the verdict says so.
