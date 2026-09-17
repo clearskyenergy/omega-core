@@ -433,7 +433,7 @@ function fccAtPoint(lat, lon) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function osmTelecom(lat, lon) {
   var ar = '(around:' + OSM_RADIUS_M + ',' + lat.toFixed(5) + ',' + lon.toFixed(5) + ')';
-  var q = '[out:json][timeout:12];(' +
+  var q = '[out:json][timeout:20];(' +
     'nwr["telecom"]' + ar + ';' +
     'nwr["communication"="line"]' + ar + ';' +
     'nwr["communication:fibre_optic"]' + ar + ';' +
@@ -442,7 +442,7 @@ function osmTelecom(lat, lon) {
   var trace = [], i = 0, first = true;
   function attempt() {
     if (i >= OVERPASS.length) return Promise.resolve(null);
-    var url = OVERPASS[i++], budget = first ? 12000 : 6000; first = false;
+    var url = OVERPASS[i++], budget = first ? 22000 : 6000; first = false;
     return getJson(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, budget)
       .then(function (j) {
         var els = (j && j.elements) || [];
@@ -451,7 +451,17 @@ function osmTelecom(lat, lon) {
       }, function (e) { trace.push(url.split('/')[2] + ':' + ((e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'err')); return attempt(); });
   }
   return attempt().then(function (els) {
-    if (els === null && !trace.some(function (t) { return /empty/.test(t); })) return { status: 'failed', trace: trace, features: [], error: 'no Overpass mirror answered' };
+    /* THE CONFIDENT ZERO. Measured in production 2026-09-17: overpass-api.de
+       504, kumi.systems timeout, osm.ch "empty" — and the panel printed
+       "osm empty" as if the area had been checked. osm.ch is the mirror
+       grid-atlas.js documents as answering a well-formed, WRONG, empty 200.
+       An empty answer is only believed from the PRIMARY mirror; an empty
+       from a fallback after the primary failed is reported as a failure,
+       because that is what it is. */
+    if (els === null) {
+      var primaryEmpty = /:empty$/.test(trace[0] || '');
+      if (!primaryEmpty) return { status: 'failed', trace: trace, features: [], error: 'primary Overpass mirror did not answer (' + trace.join(', ') + ')' };
+    }
     els = els || [];
     var feats = [];
     for (var k = 0; k < els.length; k++) {
@@ -667,6 +677,15 @@ function verdict(d) {
   else if (fac != null && fac <= 3) { v = 'likely'; reasons.push('carrier facility ' + d.nearestCarrier.name + ' ' + fmtMi(fac) + ' away with ' + d.nearestCarrier.nets + ' networks'); }
   else if (nearest && nearest.mi <= 5) { v = 'plausible'; reasons.push(nearest.label + ' ' + fmtMi(nearest.mi) + ' away — a lateral, not a build'); }
   else if (fac != null && fac <= 15) { v = 'plausible'; reasons.push('carrier facility ' + fmtMi(fac) + ' away (' + d.nearestCarrier.name + ')'); }
+  /* A metro with hundreds of carrier presences within 80 mi has plant on
+     every arterial; a site 17 mi out of Philadelphia is not "uncertain"
+     because nobody published a shapefile for it. Density is the atlas's own
+     second-weighted component, so it counts here too — one notch below a
+     measured distance, and only while the FCC point is unanswered or lit. */
+  else if (fac != null && fac <= 40 && (d.netsWithin80 || 0) >= 200 && d.fccFiber !== false) {
+    v = 'plausible';
+    reasons.push('dense carrier market — ' + (d.netsWithin80 || 0).toLocaleString('en-US') + ' network presences within 80 mi; nearest facility ' + fmtMi(fac) + ' (' + d.nearestCarrier.name + ')');
+  }
   else if (d.fccFiber === false && (nearest == null || nearest.mi > 10) && (fac == null || fac > 25)) {
     v = 'unlikely'; reasons.push('FCC reports no fiber at this location');
     reasons.push(nearest ? 'nearest mapped fiber is ' + fmtMi(nearest.mi) + ' away' : 'no published fiber geometry within ' + PLANT_RADIUS_MI + ' mi');

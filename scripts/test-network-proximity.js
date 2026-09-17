@@ -68,6 +68,9 @@ ok('an exchange 0.5 mi away → likely',           V({ osmExchangeMi: 0.5 }).ver
 ok('plant 3 mi → plausible (a lateral)',         V({ harvestMi: 3, harvestSource: 'County' }).verdict === 'plausible');
 ok('carrier 12 mi → plausible',                  V({ nearestCarrier: { mi: 12, name: 'H', nets: 30 } }).verdict === 'plausible');
 ok('nothing at all → uncertain, not unlikely',   V({}).verdict === 'uncertain');
+ok('a dense market 17 mi out → plausible',       V({ nearestCarrier: { mi: 17, name: 'PH1', nets: 24 }, netsWithin80: 462 }).verdict === 'plausible');
+ok('the same distance in a thin market → uncertain', V({ nearestCarrier: { mi: 17, name: 'X', nets: 12 }, netsWithin80: 40 }).verdict === 'uncertain');
+ok('density does not override an FCC "no fiber"', V({ nearestCarrier: { mi: 30, name: 'X', nets: 12 }, netsWithin80: 900, fccFiber: false }).verdict === 'unlikely');
 ok('FCC says none, nothing within 10, carrier 60 → unlikely',
    V({ fccFiber: false, nearestCarrier: { mi: 60, name: 'H', nets: 30 } }).verdict === 'unlikely');
 ok('FCC says none but a carrier at 8 mi → plausible, not unlikely',
