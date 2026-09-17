@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSA · Portfolio</title>
+<link rel="icon" href="/omega-logo.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   OSA · PORTFOLIO PAGE  (tenant page — one page per portfolio in tenant.json)
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   /tenants/osa/portfolio-sites?portfolio=<slug>. No slug → the index of
+   portfolios. Reads the owner's own sites from Firestore (rules: canActInOrg
+   on 'osa'), so this page shows the FULL record including the owner-only
+   block — it is the owner's page. The "Shared with us" panel is the other
+   direction: what other portals have granted THIS person's own firm, fetched
+   through /api/sites-projection so the confidential block never arrives.
+
+   EV first: charger-level rows roll up to a site line and the header sums
+   chargers and kW. Vertical-neutral: a BESS portfolio uses the same page and
+   simply has no ev columns.
+   ═══════════════════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#1D2D3E;--ink-2:#556B82;--ink-3:#8A9BAB;--page:#EDEFF1;--card:#fff;--line:#E4E8EC;
+  --navy:#0B2233;--accent:#4338CA;--accent-soft:#EEEDFB;--ok:#16A34A;--warn:#D97706;--bad:#DC2626;--r:10px}
+body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'DM Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer}
+#top{background:var(--navy);color:#fff;height:52px;display:flex;align-items:center;padding:0 18px;gap:14px}
+#top img{height:28px}#top b{font-size:14px}#top small{opacity:.7;font-size:12px}#top .sp{flex:1}
+#top a{color:#cfd8e3;font-size:12.5px;text-decoration:none;margin-left:14px}#who{font-size:12px;opacity:.85}
+main{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+h1{font-size:20px}h2{font-size:16px;margin-bottom:6px}h3{font-size:12px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px}
+p.hint{color:var(--ink-2);font-size:13px;line-height:1.5}
+.stats{display:flex;gap:26px;flex-wrap:wrap;margin:14px 0 4px}
+.stat b{font-size:22px;display:block;font-weight:700}.stat span{font-size:12px;color:var(--ink-2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.pf{display:block;text-decoration:none;color:inherit;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.pf:hover{border-color:var(--accent)}.pf b{font-size:15px}.pf .v{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.pf .n{color:var(--ink-2);font-size:12.5px;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:top}
+th{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.4px;background:#F6F7F9;position:sticky;top:0}
+td.num,th.num{text-align:right}
+.scroll{overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:8px}
+.confirm{color:var(--warn);font-weight:600;font-size:11px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.pill.ok{background:#DCFCE7;color:#166534}.pill.warn{background:#FEF3C7;color:#92400E}.pill.grey{background:#E5E7EB;color:#374151}.pill.acc{background:var(--accent-soft);color:var(--accent)}
+.muted{color:var(--ink-3)}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+input,select{font:inherit;font-size:13px;padding:7px 10px;border:1px solid #CBD3DB;border-radius:7px}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:600}
+.btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+#gate{max-width:520px;margin:60px auto;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="top"><img src="/omega-logo.png" alt=""><div><b>OSA · Portfolio</b><br><small id="sub">Sites by portfolio</small></div>
+  <div class="sp"></div><span id="who"></span><a href="/tenants/osa/portfolio-sites">All portfolios</a><a href="/tenants/osa/site-import">Upload</a><a href="/osa/portfolio">Deals</a><a href="#" id="signout">Sign out</a></div>
+
+<div id="gate" class="card" hidden><h2 id="gate-h">Sign in</h2><p class="hint" id="gate-p">Use your own firm's work address.</p><p style="margin-top:14px"><button class="btn" id="signin">Sign in with Google</button></p></div>
+
+<main id="app" hidden>
+  <section id="index" hidden>
+    <h1 style="margin-bottom:12px">Portfolios</h1>
+    <div class="grid" id="pfs"></div>
+    <div class="card" style="margin-top:18px"><h3>Shared with <span id="my-org"></span></h3>
+      <p class="hint">Sites other portals have granted your firm read on. Server projection: no owner details, no lease or revenue-share terms. You cannot edit these here or anywhere.</p>
+      <div class="scroll" style="margin-top:10px"><table id="shared"></table></div></div>
+  </section>
+
+  <section id="one" hidden>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div><span class="pill acc" id="pf-v"></span> <h1 id="pf-name" style="display:inline;margin-left:8px"></h1><p class="hint" id="pf-hint" style="margin-top:6px"></p></div>
+        <div class="row"><input id="q" placeholder="filter by name, address, city"><select id="st"><option value="acc">accepted</option><option value="all">accepted + pending</option></select><a class="btn ghost" id="csv" href="#">Export CSV</a></div></div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="card"><div class="scroll"><table id="sites"></table></div><p class="hint" style="margin-top:8px"><span class="confirm">[CONFIRM]</span> marks a field that was blank in the upload. It was not guessed. Fix it in the source and re-upload; the same address updates the same site.</p></div>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/tenants/osa/config.js?v=16"></script>
+<script>
+(function () {
+  'use strict';
+  var ORG = 'osa';
+  var auth, db, ME = null, T = null, PF = null, SITES = [], LIVE = {};
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  function cell(v) { return (v === '' || v == null) ? '<span class="confirm">[CONFIRM]</span>' : esc(v); }
+  function numc(v) { return typeof v === 'number' ? '<td class="num mono">' + v.toLocaleString() + '</td>' : '<td class="num"><span class="confirm">[CONFIRM]</span></td>'; }
+  function domainOf(e) { return String(e || '').toLowerCase().split('@')[1] || ''; }
+  function slug() { var m = /[?&]portfolio=([^&]+)/.exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
+
+  var tries = 0;
+  (function boot() {
+    if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG) { if (++tries > 80) { document.body.innerHTML = '<p style="padding:40px">Could not start: the Firebase SDK or /tenants/osa/config.js failed to load.</p>'; return; } setTimeout(boot, 120); return; }
+    try { firebase.initializeApp(window.CLEARSKY_CONFIG.firebase); } catch (e) { if (!/already exists/.test(e.message)) console.error(e); }
+    auth = firebase.auth(); db = firebase.firestore();
+    $('signin').onclick = function () { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); };
+    $('signout').onclick = function (e) { e.preventDefault(); auth.signOut(); };
+    auth.onAuthStateChanged(function (u) {
+      if (!u) { $('gate').hidden = false; $('app').hidden = true; return; }
+      ME = u; $('who').textContent = u.email; $('my-org').textContent = domainOf(u.email);
+      fetch('/tenants/osa/tenant.json').then(function (r) { return r.json(); }).then(function (t) { T = t; })['catch'](function () { T = { portfolios: [] }; })
+        .then(function () { return db.collection('portfolios').where('orgId', '==', ORG).get(); })
+        .then(function (q) {
+          q.forEach(function (d) { LIVE[d.id] = d.data(); });
+          $('gate').hidden = true; $('app').hidden = false;
+          var s = slug();
+          if (!s) return renderIndex();
+          PF = (T.portfolios || []).filter(function (p) { return p.slug === s || p.id === s; })[0];
+          if (!PF) { var id = Object.keys(LIVE).filter(function (k) { return (LIVE[k].slug || k) === s; })[0]; if (id) PF = { id: id, slug: s, name: LIVE[id].name, vertical: LIVE[id].vertical }; }
+          if (!PF) { $('index').hidden = false; $('pfs').innerHTML = '<p class="hint">No portfolio called “' + esc(s) + '”.</p>'; return; }
+          return renderOne();
+        })['catch'](function (err) {
+          $('gate').hidden = false; $('app').hidden = true;
+          $('gate-h').textContent = 'No grant for the OSA portal';
+          $('gate-p').textContent = u.email + ' has no org_members grant on "osa". (' + (err && err.message || err) + ')';
+          $('signin').textContent = 'Try another account'; $('signin').onclick = function () { auth.signOut(); };
+        });
+    });
+  })();
+
+  /* ── Index: one card per portfolio + what has been shared with my firm ── */
+  function renderIndex() {
+    $('index').hidden = false;
+    var list = (T.portfolios || []).slice();
+    Object.keys(LIVE).forEach(function (id) { if (!list.some(function (p) { return p.id === id; })) list.push({ id: id, slug: LIVE[id].slug || id, name: LIVE[id].name || id, vertical: LIVE[id].vertical }); });
+    $('pfs').innerHTML = list.map(function (p) { var l = LIVE[p.id] || {}; return '<a class="pf" href="?portfolio=' + encodeURIComponent(p.slug || p.id) + '"><div class="v">' + esc(p.vertical || 'mixed') + '</div><b>' + esc(p.name) + '</b><div class="n">' + (l.siteCount != null ? l.siteCount + ' accepted' + (l.pendingCount ? ' · ' + l.pendingCount + ' in review' : '') : 'not created yet — first upload creates it') + '</div>' + (p.hint ? '<div class="n">' + esc(p.hint) + '</div>' : '') + '</a>'; }).join('') || '<p class="hint">No portfolios defined in tenant.json.</p>';
+    loadShared();
+  }
+  function loadShared() {
+    var mine = domainOf(ME.email);
+    auth.currentUser.getIdToken().then(function (tok) { return fetch('/api/sites-projection?orgId=' + encodeURIComponent(mine), { headers: { Authorization: 'Bearer ' + tok } }); })
+      .then(function (r) { return r.json(); }).then(function (j) {
+        var s = j.sites || [], cols = ['siteName', 'addr', 'city', 'state', 'vertical', 'stage', 'orgId'];
+        $('shared').innerHTML = '<tr>' + cols.map(function (c) { return '<th>' + (c === 'orgId' ? 'owner' : c) + '</th>'; }).join('') + '<th class="num">chargers</th><th class="num">total kW</th></tr>'
+          + (s.length ? s.map(function (x) { return '<tr>' + cols.map(function (c) { return '<td>' + cell(x[c]) + '</td>'; }).join('') + numc(x.ev && x.ev.chargers) + numc(x.ev && x.ev.totalKw) + '</tr>'; }).join('') : '<tr><td colspan="9" class="muted">' + (j.error ? esc(j.error) : 'Nothing has been shared with ' + esc(mine) + ' yet.') + '</td></tr>');
+      })['catch'](function (e) { $('shared').innerHTML = '<tr><td class="muted">' + esc(e.message) + '</td></tr>'; });
+  }
+
+  /* ── One portfolio ─────────────────────────────────────────────────────── */
+  function renderOne() {
+    $('one').hidden = false; document.title = 'OSA · ' + PF.name; $('sub').textContent = PF.name;
+    $('pf-name').textContent = PF.name; $('pf-v').textContent = PF.vertical || 'mixed'; $('pf-hint').textContent = PF.hint || '';
+    $('q').oninput = draw; $('st').onchange = draw; $('csv').onclick = exportCsv;
+    return db.collection('sites').where('orgId', '==', ORG).where('portfolioId', '==', PF.id).limit(2000).get().then(function (q) {
+      SITES = []; q.forEach(function (d) { var s = d.data(); s.__id = d.id; s.__state = (s.review && s.review.state) || 'accepted'; SITES.push(s); });
+      draw();
+    });
+  }
+  function visible() {
+    var q = $('q').value.toLowerCase(), all = $('st').value === 'all';
+    return SITES.filter(function (s) { return (all ? s.__state !== 'rejected' : s.__state === 'accepted') && (!q || [s.siteName, s.addr, s.city].join(' ').toLowerCase().indexOf(q) >= 0); });
+  }
+  function draw() {
+    var list = visible(), ev = PF.vertical === 'ev' || list.some(function (s) { return s.ev; });
+    var t = { chargers: 0, totalKw: 0, missingKw: 0, pending: 0 };
+    list.forEach(function (s) { var e = s.ev || {}; if (typeof e.chargers === 'number') t.chargers += e.chargers; if (typeof e.totalKw === 'number') t.totalKw += e.totalKw; else t.missingKw++; if (s.__state === 'pending') t.pending++; });
+    var stats = [['Sites', list.length], ['In review', t.pending]];
+    if (ev) stats.push(['Chargers', t.chargers], ['Total kW', t.totalKw], ['Sites missing kW', t.missingKw]);
+    $('stats').innerHTML = stats.map(function (s) { return '<div class="stat"><b class="mono">' + s[1].toLocaleString() + '</b><span>' + s[0] + '</span></div>'; }).join('');
+    var cols = ['siteName', 'addr', 'city', 'state', 'zip', 'stage', 'status'];
+    $('sites').innerHTML = '<tr><th>review</th>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + (ev ? '<th class="num">chargers</th><th class="num">DCFC kW</th><th class="num">L2 kW</th><th class="num">total kW</th><th>util</th>' : '') + '<th>brought by</th><th>owner</th><th>lease $/yr</th><th>shared</th></tr>'
+      + (list.length ? list.map(function (s) { var c = s.confidential || {}, e = s.ev || {}; return '<tr><td><span class="pill ' + (s.__state === 'accepted' ? 'ok' : 'warn') + '">' + s.__state + '</span></td>' + cols.map(function (k) { return '<td>' + cell(s[k]) + '</td>'; }).join('')
+          + (ev ? numc(e.chargers) + numc(e.dcfcKw) + numc(e.l2Kw) + (typeof e.totalKw === 'number' ? '<td class="num mono">' + e.totalKw.toLocaleString() + (e.totalKwSrc === 'derived' ? ' <span class="muted">Σ</span>' : '') + '</td>' : '<td class="num"><span class="confirm">[CONFIRM]</span></td>') + '<td>' + cell(e.utilTercile) + '</td>' : '')
+          + '<td>' + esc(s.origination && s.origination.partnerOrg) + (s.origination && s.origination.lockedAt ? ' <span class="muted" title="attribution locked">🔒</span>' : '') + '</td><td>' + cell(c.owner && c.owner.name) + '</td>' + numc(c.leaseUsdYr) + '<td id="sh-' + esc(s.__id).replace(/[^A-Za-z0-9_-]/g, '_') + '" class="muted">…</td></tr>'; }).join('') : '<tr><td colspan="20" class="muted">No sites match.</td></tr>');
+    sharesFor(list);
+  }
+  /* Who each site is shared with — one query for the portfolio, not one per row. */
+  function sharesFor(list) {
+    if (!list.length) return;
+    db.collection('site_shares').where('fromOrgId', '==', ORG).limit(2000).get().then(function (q) {
+      var by = {}; q.forEach(function (d) { var g = d.data(); (by[g.siteId] = by[g.siteId] || []).push(g.toOrgId); });
+      list.forEach(function (s) { var el = $('sh-' + s.__id.replace(/[^A-Za-z0-9_-]/g, '_')); if (el) el.innerHTML = by[s.__id] ? esc(by[s.__id].join(', ')) : '—'; });
+    })['catch'](function () {});
+  }
+  function exportCsv(e) {
+    e.preventDefault();
+    var list = visible(), cols = ['siteId', 'siteName', 'addr', 'city', 'state', 'zip', 'lat', 'lon', 'vertical', 'stage', 'status', 'portfolioId'];
+    var q = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var out = [cols.concat(['chargers', 'dcfcKw', 'l2Kw', 'totalKw', 'broughtBy', 'review']).join(',')];
+    list.forEach(function (s) { var ev = s.ev || {}; out.push(cols.map(function (c) { return q(s[c]); }).concat([q(ev.chargers), q(ev.dcfcKw), q(ev.l2Kw), q(ev.totalKw), q(s.origination && s.origination.partnerOrg), q(s.__state)]).join(',')); });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' })); a.download = 'osa-' + (PF.slug || PF.id) + '.csv'; a.click();
+  }
+})();
+</script>
+</body>
+</html>

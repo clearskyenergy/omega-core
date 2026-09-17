@@ -10,5 +10,22 @@
   "logoUrl": "/omega-logo.png",
   "status": "active",
   "receivesFullBom": false,
-  "_note": "OSA is a JOINT VENTURE between ClearSky, SUN Energy Solutions and OGI Solar. orgId is 'osa' and is NOT an email domain, deliberately — nobody signs in as OSA. The three member firms sign in on their own domains and reach OSA-stamped records through an org_members grant, which canActInOrg() honours. demo-clearsky is the existing precedent for a non-domain orgId. This replaces the earlier note saying to leave orgId empty until the JV agreement fixed a sign-in domain: that assumed orgId had to BE a sign-in domain, and for a shared workspace it does not — it is an addressing key and access comes from the grants. Referrals sent to 'osa' are filed as intake_projects, which the OSA console already ingests; the referrals collection cannot serve a JV because its read rule compares toOrgId against the reader's own email domain and OSA has three. REQUIRES org_members rows for each JV member before they can see anything."
+  "_note": "OSA is a JOINT VENTURE between ClearSky, SUN Energy Solutions and OGI Solar. orgId is 'osa' and is NOT an email domain, deliberately — nobody signs in as OSA. The three member firms sign in on their own domains and reach OSA-stamped records through an org_members grant, which canActInOrg() honours. demo-clearsky is the existing precedent for a non-domain orgId. This replaces the earlier note saying to leave orgId empty until the JV agreement fixed a sign-in domain: that assumed orgId had to BE a sign-in domain, and for a shared workspace it does not — it is an addressing key and access comes from the grants. Referrals sent to 'osa' are filed as intake_projects, which the OSA console already ingests; the referrals collection cannot serve a JV because its read rule compares toOrgId against the reader's own email domain and OSA has three. REQUIRES org_members rows for each JV member before they can see anything.",
+  "portfolios": [
+    {
+      "id": "osa-ev-midwest",
+      "slug": "ev-midwest",
+      "name": "EV charging — Midwest",
+      "vertical": "ev",
+      "hint": "Charger-level rows roll up to sites. Uploaded by the land providers, reviewed by OSA."
+    },
+    {
+      "id": "osa-bess-il",
+      "slug": "bess-il",
+      "name": "BESS — Illinois",
+      "vertical": "bess",
+      "hint": "Same spine, different vertical: no ev{} block, same review and sharing."
+    }
+  ],
+  "_portfoliosNote": "portfolios[] is the SEED for portfolios/{id} (orgId 'osa') and the list /tenants/osa/portfolio-sites.html renders a page per entry (?portfolio=<slug>). The Firestore document is created on first import if missing; siteCount there is server-maintained and counts ACCEPTED sites only."
 }

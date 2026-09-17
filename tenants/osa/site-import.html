@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSA · Site upload</title>
+<link rel="icon" href="/omega-logo.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   OSA · SITE UPLOAD  (tenant page — /tenants/osa/, JV territory)
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   Upload → map columns → preview → import → review → share. Same tokens as
+   the portfolio console. Nothing here decides anything: the browser parses
+   the spreadsheet and shows it; /api/sites-import writes it, requires the
+   attribution, and lands every row pending. This page cannot skip review
+   and cannot invent a field — a blank cell renders [CONFIRM] and stays blank.
+   ═══════════════════════════════════════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#1D2D3E;--ink-2:#556B82;--ink-3:#8A9BAB;--page:#EDEFF1;--card:#fff;--line:#E4E8EC;
+  --navy:#0B2233;--accent:#4338CA;--accent-hi:#5B50E0;--accent-soft:#EEEDFB;--ok:#16A34A;--warn:#D97706;--bad:#DC2626;--r:10px}
+body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px}
+.mono{font-family:'DM Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent-hi);outline-offset:2px;border-radius:4px}
+#top{background:var(--navy);color:#fff;height:52px;display:flex;align-items:center;padding:0 18px;gap:14px}
+#top img{height:28px}#top b{font-size:14px}#top small{opacity:.7;font-size:12px}
+#top .sp{flex:1}#top a{color:#cfd8e3;font-size:12.5px;text-decoration:none;margin-left:14px}
+#who{font-size:12px;opacity:.85}
+main{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{background:none;border:0;padding:10px 14px;font-size:13.5px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+h2{font-size:16px;margin-bottom:6px}h3{font-size:13px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px}
+p.hint{color:var(--ink-2);font-size:13px;line-height:1.5}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+label{display:block;font-size:12px;color:var(--ink-2);margin-bottom:4px}
+input,select{font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #CBD3DB;border-radius:7px;background:#fff;min-width:200px}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 16px;font-size:13.5px;font-weight:600}
+.btn:disabled{opacity:.45;cursor:default}.btn.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+.btn.bad{background:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+th{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.4px;background:#F6F7F9;position:sticky;top:0}
+.scroll{overflow:auto;max-height:52vh;border:1px solid var(--line);border-radius:8px}
+.confirm{color:var(--warn);font-weight:600;font-size:11px}
+.bad-row td{background:#FEF2F2}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.pill.ok{background:#DCFCE7;color:#166534}.pill.warn{background:#FEF3C7;color:#92400E}.pill.bad{background:#FEE2E2;color:#991B1B}.pill.grey{background:#E5E7EB;color:#374151}
+.map-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.map-grid select{min-width:0;width:100%}
+#msg{margin:10px 0;font-size:13px;min-height:18px}
+#msg.err{color:var(--bad)}#msg.ok{color:var(--ok)}
+.muted{color:var(--ink-3)}
+.stat{display:inline-block;margin-right:18px;font-size:13px}.stat b{font-size:18px;display:block}
+#gate{max-width:520px;margin:60px auto;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="top">
+  <img src="/omega-logo.png" alt=""><div><b>OSA · Site upload</b><br><small>Bulk sites into the JV portal, reviewed, then shared read-only</small></div>
+  <div class="sp"></div><span id="who"></span>
+  <a href="/osa/portfolio">Portfolio</a><a href="/tenants/osa/portfolio-sites">Portfolio pages</a><a href="#" id="signout">Sign out</a>
+</div>
+
+<div id="gate" class="card" hidden>
+  <h2 id="gate-h">Sign in</h2><p class="hint" id="gate-p">Use your own firm's work address. Access to the OSA portal comes from a grant, not from a shared login.</p>
+  <p style="margin-top:14px"><button class="btn" id="signin">Sign in with Google</button></p>
+</div>
+
+<main id="app" hidden>
+  <div class="tabs">
+    <button class="tab on" data-t="upload">1 · Upload</button>
+    <button class="tab" data-t="review">2 · Review inbox <span id="n-review" class="pill grey">0</span></button>
+    <button class="tab" data-t="share">3 · Share</button>
+    <button class="tab" data-t="history">Receipts</button>
+  </div>
+
+  <!-- ── UPLOAD ── -->
+  <section id="t-upload">
+    <div class="card">
+      <h2>Where the sites go, and who brought them</h2>
+      <div class="row">
+        <div><label>Portfolio</label><select id="portfolio"></select></div>
+        <div><label>Brought by (email domain) — required</label><input id="partnerOrg" placeholder="e.g. sunesol.com"></div>
+        <div><label>Vertical (when the sheet has no column)</label>
+          <select id="vertical"><option value="">from the sheet</option><option value="ev">ev</option><option value="bess">bess</option><option value="solar">solar</option><option value="dc">dc</option><option value="microgrid">microgrid</option></select></div>
+      </div>
+      <p class="hint" style="margin-top:10px">Attribution is set once per upload and locks when a site is accepted. Rows without it are refused by the server — it is the number the JV's reporting is built on.</p>
+    </div>
+    <div class="card">
+      <h2>Spreadsheet</h2>
+      <p class="hint">CSV or Excel. Charger-level rows are fine: rows with the same address roll up to one site on the portfolio page. <a href="#" id="tpl">Download the template</a> to skip the mapping step.</p>
+      <p style="margin-top:10px"><input type="file" id="file" accept=".csv,.xlsx,.xls"></p>
+    </div>
+    <div class="card" id="mapcard" hidden>
+      <h2>Column mapping</h2>
+      <p class="hint">Guessed from the headers. Correct anything wrong; leave a field on “— not in this file —” rather than forcing a column that means something else.</p>
+      <div class="map-grid" id="map"></div>
+      <p style="margin-top:12px"><button class="btn ghost" id="preview">Preview rows</button></p>
+    </div>
+    <div class="card" id="prevcard" hidden>
+      <h2>Preview <span class="muted" id="prev-n"></span></h2>
+      <p class="hint">Blank cells show <span class="confirm">[CONFIRM]</span> and stay blank in the record. A row with no address and no source id has nothing to key on and is refused.</p>
+      <div class="scroll" style="margin-top:10px"><table id="prev"></table></div>
+      <div id="msg"></div>
+      <p><button class="btn" id="go">Import <span id="go-n"></span> rows into review</button></p>
+    </div>
+  </section>
+
+  <!-- ── REVIEW ── -->
+  <section id="t-review" hidden>
+    <div class="card">
+      <h2>Review inbox</h2>
+      <p class="hint">Imported sites are not part of any portfolio number, not shareable and not visible to any other portal until someone here accepts them. Rejecting needs a reason.</p>
+      <p style="margin:12px 0"><button class="btn" id="acc">Accept selected</button> <input id="rej-why" placeholder="reason (required to reject)" style="min-width:280px"> <button class="btn bad" id="rej">Reject selected</button> <span id="rmsg" class="muted"></span></p>
+      <div class="scroll"><table id="rev"></table></div>
+    </div>
+  </section>
+
+  <!-- ── SHARE ── -->
+  <section id="t-share" hidden>
+    <div class="card">
+      <h2>Share accepted sites with another portal, read-only</h2>
+      <p class="hint">A share is a grant on the canonical record: the other org reads it and cannot edit or delete it. Nothing is copied. Owner mailing, lease and revenue-share terms are stripped by the server before any partner sees the record. Revoking removes their read immediately.</p>
+      <div class="row" style="margin-top:12px">
+        <div><label>Share with (email domain of the tenant)</label><input id="toOrg" placeholder="e.g. concordenergyusa.com"></div>
+        <div><label>Portfolio</label><select id="sh-portfolio"></select></div>
+        <div><button class="btn" id="sh-go">Grant read on selected</button></div>
+      </div>
+      <span id="smsg" class="muted"></span>
+      <h3>Accepted sites</h3>
+      <div class="scroll"><table id="sh-sites"></table></div>
+      <h3>Existing grants</h3>
+      <div class="scroll"><table id="sh-grants"></table></div>
+    </div>
+  </section>
+
+  <!-- ── HISTORY ── -->
+  <section id="t-history" hidden>
+    <div class="card"><h2>Import receipts</h2><div class="scroll"><table id="hist"></table></div></div>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="/tenants/osa/config.js?v=16"></script>
+<script>
+(function () {
+  'use strict';
+  var ORG = 'osa';
+  var auth, db, ME = null, TOKEN = null;
+  var S = { tenant: null, portfolios: [], sheet: null, headers: [], mapping: {}, rows: [], pending: [], accepted: [], grants: [] };
+
+  /* ── The columns. `header` is what the template writes; a file filled in
+     from the template maps with no clicks. Keys are the ones
+     api/_lib/site-spine.js reads — change them together. ─────────────── */
+  var FIELDS = [
+    { key:'sourceKey',   header:'Source id',       hint:'Provider row id if you have one. Otherwise the address is the key.' },
+    { key:'siteName',    header:'Site name' },
+    { key:'addr',        header:'Address',         key_field:true },
+    { key:'city',        header:'City' },
+    { key:'state',       header:'State' },
+    { key:'zip',         header:'ZIP',             key_field:true },
+    { key:'lat',         header:'Latitude' },
+    { key:'lon',         header:'Longitude' },
+    { key:'vertical',    header:'Vertical',        hint:'ev | bess | solar | dc | microgrid' },
+    { key:'stage',       header:'Stage' },
+    { key:'type',        header:'Property type' },
+    { key:'sqft',        header:'Building sqft' },
+    { key:'lotAcres',    header:'Lot acres' },
+    { key:'feederId',    header:'Feeder' },
+    { key:'chargers',    header:'Chargers',        ev:true },
+    { key:'dcfcKw',      header:'DCFC kW',         ev:true },
+    { key:'l2Kw',        header:'L2 kW',           ev:true },
+    { key:'totalKw',     header:'Total kW',        ev:true },
+    { key:'utilTercile', header:'Utilization tercile', ev:true },
+    { key:'ownerName',   header:'Owner name',      conf:true },
+    { key:'ownerMailing',header:'Owner mailing',   conf:true },
+    { key:'ownerPhone',  header:'Owner phone',     conf:true },
+    { key:'ownerEmail',  header:'Owner email',     conf:true },
+    { key:'leaseUsdYr',  header:'Lease USD/yr',    conf:true },
+    { key:'leaseTermYrs',header:'Lease term yrs',  conf:true },
+    { key:'revSharePct', header:'Rev share %',     conf:true },
+    { key:'notes',       header:'Notes' }
+  ];
+  var ALIASES = { addr:['address','street','street address','site address'], zip:['postal','postcode','zip code'],
+    lat:['latitude','y'], lon:['longitude','lng','long','x'], siteName:['name','site','location name'],
+    chargers:['ports','stalls','charger count','# chargers'], dcfcKw:['dcfc','dc fast kw','fast kw'],
+    l2Kw:['level 2 kw','l2'], totalKw:['kw','total kw','capacity kw'], sourceKey:['id','row id','provider id','station id'],
+    type:['property type','use','building type'], sqft:['sq ft','building area','area'], feederId:['feeder','circuit'],
+    ownerMailing:['mailing address','owner address'], revSharePct:['rev share','revenue share'] };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  function cell(v) { return (v === '' || v == null) ? '<span class="confirm">[CONFIRM]</span>' : esc(v); }
+  function norm(h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function msg(t, cls) { var m = $('msg'); m.textContent = t || ''; m.className = cls || ''; }
+  function domainOf(email) { return String(email || '').toLowerCase().split('@')[1] || ''; }
+
+  /* ── API ────────────────────────────────────────────────────────────── */
+  function api(path, opts) {
+    opts = opts || {};
+    return auth.currentUser.getIdToken().then(function (tok) {
+      return fetch(path, { method: opts.method || 'GET', headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: opts.body ? JSON.stringify(opts.body) : undefined });
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); });
+  }
+
+  /* ── Boot ───────────────────────────────────────────────────────────── */
+  var tries = 0;
+  (function boot() {
+    if (typeof firebase === 'undefined' || !window.CLEARSKY_CONFIG) { if (++tries > 80) { document.body.innerHTML = '<p style="padding:40px">Could not start: the Firebase SDK or /tenants/osa/config.js failed to load. This is a deployment problem, not a sign-in problem.</p>'; return; } setTimeout(boot, 120); return; }
+    try { firebase.initializeApp(window.CLEARSKY_CONFIG.firebase); } catch (e) { if (!/already exists/.test(e.message)) console.error(e); }
+    auth = firebase.auth(); db = firebase.firestore();
+    $('signin').onclick = function () { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); };
+    $('signout').onclick = function (e) { e.preventDefault(); auth.signOut(); };
+    auth.onAuthStateChanged(function (u) {
+      if (!u) { $('gate').hidden = false; $('app').hidden = true; return; }
+      ME = u; $('who').textContent = u.email;
+      /* Can this person act in OSA? The rules answer via org_members; the
+         cheapest honest test is to try the read the page needs. */
+      db.collection('portfolios').where('orgId', '==', ORG).get().then(function (q) {
+        $('gate').hidden = true; $('app').hidden = false;
+        $('partnerOrg').value = domainOf(u.email);
+        return loadTenant().then(function () { renderPortfolios(q); return refreshAll(); });
+      })['catch'](function (err) {
+        $('gate').hidden = false; $('app').hidden = true;
+        $('gate-h').textContent = 'No grant for the OSA portal';
+        $('gate-p').textContent = u.email + ' is signed in but has no org_members grant on "osa". ClearSky adds those; nothing here can. (' + (err && err.message || err) + ')';
+        $('signin').textContent = 'Try another account'; $('signin').onclick = function () { auth.signOut().then(function () { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }); };
+      });
+    });
+  })();
+
+  function loadTenant() {
+    return fetch('/tenants/osa/tenant.json').then(function (r) { return r.json(); }).then(function (t) { S.tenant = t; })['catch'](function () { S.tenant = { portfolios: [] }; });
+  }
+  function renderPortfolios(q) {
+    var seeded = (S.tenant && S.tenant.portfolios) || [], live = {};
+    q.forEach(function (d) { live[d.id] = d.data(); });
+    S.portfolios = seeded.map(function (p) { return { id: p.id, name: p.name, vertical: p.vertical, live: !!live[p.id], siteCount: live[p.id] ? live[p.id].siteCount : 0 }; });
+    Object.keys(live).forEach(function (id) { if (!seeded.some(function (p) { return p.id === id; })) S.portfolios.push({ id: id, name: live[id].name || id, vertical: live[id].vertical, live: true, siteCount: live[id].siteCount }); });
+    var opts = S.portfolios.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + (p.live ? '' : ' (not created yet)') + '</option>'; }).join('');
+    $('portfolio').innerHTML = opts; $('sh-portfolio').innerHTML = '<option value="">all</option>' + opts;
+    $('portfolio').onchange = function () { var p = byId($('portfolio').value); if (p && p.vertical) $('vertical').value = p.vertical; };
+    $('portfolio').onchange();
+  }
+  function byId(id) { for (var i = 0; i < S.portfolios.length; i++) if (S.portfolios[i].id === id) return S.portfolios[i]; return null; }
+
+  /* The portfolio document is created on first use from the tenant.json
+     seed. Rules: canActInOrg on orgId, name required, orgId immutable. */
+  function ensurePortfolio(id) {
+    var p = byId(id); if (!p) return Promise.reject(new Error('pick a portfolio'));
+    if (p.live) return Promise.resolve();
+    return db.collection('portfolios').doc(id).set({ orgId: ORG, name: p.name, slug: id.replace(/^osa-/, ''), vertical: p.vertical || null, siteCount: 0, createdAt: new Date().toISOString(), createdBy: ME.email }).then(function () { p.live = true; });
+  }
+
+  /* ── Tabs ───────────────────────────────────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.remove('on'); }); b.classList.add('on');
+      ['upload', 'review', 'share', 'history'].forEach(function (t) { $('t-' + t).hidden = t !== b.getAttribute('data-t'); });
+    };
+  });
+
+  /* ── Template ───────────────────────────────────────────────────────── */
+  $('tpl').onclick = function (e) {
+    e.preventDefault();
+    var head = FIELDS.map(function (f) { return f.header; }).join(',');
+    var ex = ['STN-0417','Northgate Plaza','1200 W Roosevelt Rd','Chicago','IL','60608','41.8667','-87.6580','ev','identified','Retail','48000','3.2','D5017','8','600','96','','mid','','','','','','','',''].join(',');
+    var blob = new Blob([head + '\n' + ex + '\n'], { type: 'text/csv' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'osa-sites-template.csv'; a.click();
+  };
+
+  /* ── Parse + map ────────────────────────────────────────────────────── */
+  $('file').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function (ev) {
+      var wb = XLSX.read(ev.target.result, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      while (rows.length && rows[0].every(function (c) { return c === ''; })) rows.shift();
+      if (!rows.length) { msg('The first sheet is empty.', 'err'); return; }
+      S.headers = rows[0].map(String); S.sheet = rows.slice(1).filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+      S.fileName = f.name;
+      S.mapping = suggest(S.headers);
+      renderMap(); $('mapcard').hidden = false; $('prevcard').hidden = true;
+    };
+    rd.readAsArrayBuffer(f);
+  };
+  function suggest(headers) {
+    var m = {}, used = {};
+    FIELDS.forEach(function (f) {
+      var cands = [norm(f.header), norm(f.key)].concat((ALIASES[f.key] || []).map(norm));
+      for (var i = 0; i < headers.length; i++) {
+        if (used[i]) continue;
+        if (cands.indexOf(norm(headers[i])) >= 0) { m[f.key] = i; used[i] = true; return; }
+      }
+    });
+    return m;
+  }
+  function renderMap() {
+    $('map').innerHTML = FIELDS.map(function (f) {
+      var opts = '<option value="">— not in this file —</option>' + S.headers.map(function (h, i) { return '<option value="' + i + '"' + (S.mapping[f.key] === i ? ' selected' : '') + '>' + esc(h) + '</option>'; }).join('');
+      return '<div><label>' + esc(f.header) + (f.conf ? ' <span class="pill warn">owner-only</span>' : '') + (f.ev ? ' <span class="pill grey">ev</span>' : '') + '</label><select data-k="' + f.key + '">' + opts + '</select>' + (f.hint ? '<div class="muted" style="font-size:11px;margin-top:3px">' + esc(f.hint) + '</div>' : '') + '</div>';
+    }).join('');
+    Array.prototype.forEach.call($('map').querySelectorAll('select'), function (s) { s.onchange = function () { var v = s.value; if (v === '') delete S.mapping[s.getAttribute('data-k')]; else S.mapping[s.getAttribute('data-k')] = Number(v); }; });
+  }
+
+  /* ── Preview ────────────────────────────────────────────────────────── */
+  $('preview').onclick = function () {
+    S.rows = S.sheet.map(function (r, i) {
+      var o = { __row: i + 2 };
+      Object.keys(S.mapping).forEach(function (k) { var v = r[S.mapping[k]]; if (v != null && String(v).trim() !== '') o[k] = String(v).trim(); });
+      o.__ok = !!(o.sourceKey || o.addr);
+      return o;
+    });
+    var shown = ['siteName', 'addr', 'city', 'state', 'zip', 'vertical', 'chargers', 'dcfcKw', 'l2Kw', 'totalKw'];
+    var okN = S.rows.filter(function (r) { return r.__ok; }).length;
+    $('prev-n').textContent = '— ' + S.rows.length + ' rows, ' + okN + ' importable' + (S.rows.length - okN ? ', ' + (S.rows.length - okN) + ' refused (no address, no source id)' : '');
+    $('prev').innerHTML = '<tr><th>#</th><th>key</th>' + shown.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr>'
+      + S.rows.slice(0, 300).map(function (r) { return '<tr' + (r.__ok ? '' : ' class="bad-row"') + '><td class="mono">' + r.__row + '</td><td>' + (r.__ok ? '<span class="pill ok">' + (r.sourceKey ? 'id' : 'address') + '</span>' : '<span class="pill bad">none</span>') + '</td>' + shown.map(function (k) { return '<td>' + cell(r[k]) + '</td>'; }).join('') + '</tr>'; }).join('');
+    $('go-n').textContent = okN; $('go').disabled = !okN; $('prevcard').hidden = false; msg('');
+  };
+
+  /* ── Import: 200 rows per call, sequential, so a half-failure says which
+     rows landed. ─────────────────────────────────────────────────────── */
+  $('go').onclick = function () {
+    var partnerOrg = $('partnerOrg').value.trim().toLowerCase(), pid = $('portfolio').value;
+    if (!/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/.test(partnerOrg)) { msg('"Brought by" must be an email domain, e.g. sunesol.com', 'err'); return; }
+    var good = S.rows.filter(function (r) { return r.__ok; }).map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { if (k !== '__ok') o[k] = r[k]; }); return o; });
+    var importId = ORG + ':' + Date.now().toString(36), done = 0, tot = { created: 0, updated: 0, refused: [] };
+    $('go').disabled = true; msg('Creating portfolio if needed…');
+    ensurePortfolio(pid).then(function step() {
+      if (done >= good.length) return;
+      var chunk = good.slice(done, done + 200);
+      msg('Importing rows ' + (done + 1) + '–' + (done + chunk.length) + ' of ' + good.length + '…');
+      return api('/api/sites-import', { method: 'POST', body: { orgId: ORG, portfolioId: pid, source: /\.csv$/i.test(S.fileName) ? 'csv' : 'xlsx', fileName: S.fileName, importId: importId,
+        vertical: $('vertical').value || undefined, origination: { partnerOrg: partnerOrg }, rows: chunk } })
+        .then(function (r) { tot.created += r.created; tot.updated += r.updated; tot.refused = tot.refused.concat(r.refused); done += chunk.length; return step(); });
+    }).then(function () {
+      msg('Done. ' + tot.created + ' new, ' + tot.updated + ' updated' + (tot.refused.length ? ', ' + tot.refused.length + ' refused by the server' : '') + '. They are in the review inbox.', 'ok');
+      return refreshAll();
+    })['catch'](function (e) { msg('Stopped: ' + e.message + ' (' + done + ' rows had already landed)', 'err'); $('go').disabled = false; });
+  };
+
+  /* ── Review inbox ───────────────────────────────────────────────────── */
+  function refreshAll() { return Promise.all([loadPending(), loadAccepted(), loadGrants(), loadHistory()]); }
+  function loadPending() {
+    return db.collection('sites').where('orgId', '==', ORG).where('review.state', '==', 'pending').limit(500).get().then(function (q) {
+      S.pending = []; q.forEach(function (d) { var s = d.data(); s.__id = d.id; S.pending.push(s); });
+      $('n-review').textContent = S.pending.length;
+      var cols = ['siteName', 'addr', 'city', 'state', 'zip', 'vertical', 'portfolioId'];
+      $('rev').innerHTML = '<tr><th><input type="checkbox" id="rev-all"></th>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th>brought by</th><th>uploaded</th></tr>'
+        + (S.pending.length ? S.pending.map(function (s) { return '<tr><td><input type="checkbox" class="rv" value="' + esc(s.__id) + '"></td>' + cols.map(function (c) { return '<td>' + cell(s[c]) + '</td>'; }).join('') + '<td>' + esc(s.origination && s.origination.partnerOrg) + '</td><td class="muted">' + esc(s.provenance && s.provenance.uploadedBy) + ' · row ' + esc(s.provenance && s.provenance.rowNumber) + '</td></tr>'; }).join('') : '<tr><td colspan="10" class="muted">Nothing waiting.</td></tr>');
+      var all = $('rev-all'); if (all) all.onchange = function () { Array.prototype.forEach.call(document.querySelectorAll('.rv'), function (c) { c.checked = all.checked; }); };
+    });
+  }
+  function selected(cls) { return Array.prototype.map.call(document.querySelectorAll('.' + cls + ':checked'), function (c) { return c.value; }); }
+  function decide(decision) {
+    var ids = selected('rv'); if (!ids.length) { $('rmsg').textContent = 'Select some rows.'; return; }
+    var why = $('rej-why').value.trim();
+    if (decision === 'reject' && !why) { $('rmsg').textContent = 'A reason is required to reject.'; return; }
+    $('rmsg').textContent = 'Saving…';
+    api('/api/sites-import', { method: 'POST', body: { action: 'review', orgId: ORG, siteIds: ids, decision: decision, reason: why } })
+      .then(function (r) { $('rmsg').textContent = (r.accepted || 0) + ' accepted, ' + (r.rejected || 0) + ' rejected.'; return refreshAll(); })
+      ['catch'](function (e) { $('rmsg').textContent = e.message; });
+  }
+  $('acc').onclick = function () { decide('accept'); };
+  $('rej').onclick = function () { decide('reject'); };
+
+  /* ── Share ──────────────────────────────────────────────────────────── */
+  function loadAccepted() {
+    return db.collection('sites').where('orgId', '==', ORG).where('review.state', '==', 'accepted').limit(500).get().then(function (q) {
+      S.accepted = []; q.forEach(function (d) { var s = d.data(); s.__id = d.id; S.accepted.push(s); });
+      renderShareSites();
+    });
+  }
+  function renderShareSites() {
+    var pf = $('sh-portfolio').value, list = S.accepted.filter(function (s) { return !pf || s.portfolioId === pf; });
+    var cols = ['siteName', 'addr', 'city', 'state', 'vertical', 'portfolioId'];
+    $('sh-sites').innerHTML = '<tr><th><input type="checkbox" id="sh-all"></th>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th>shared with</th></tr>'
+      + (list.length ? list.map(function (s) { var to = S.grants.filter(function (g) { return g.siteId === s.__id; }).map(function (g) { return g.toOrgId; }); return '<tr><td><input type="checkbox" class="sv" value="' + esc(s.__id) + '"></td>' + cols.map(function (c) { return '<td>' + cell(s[c]) + '</td>'; }).join('') + '<td>' + (to.length ? esc(to.join(', ')) : '<span class="muted">—</span>') + '</td></tr>'; }).join('') : '<tr><td colspan="9" class="muted">No accepted sites' + (pf ? ' in this portfolio' : '') + '.</td></tr>');
+    var all = $('sh-all'); if (all) all.onchange = function () { Array.prototype.forEach.call(document.querySelectorAll('.sv'), function (c) { c.checked = all.checked; }); };
+  }
+  $('sh-portfolio').onchange = renderShareSites;
+  function loadGrants() {
+    return db.collection('site_shares').where('fromOrgId', '==', ORG).limit(1000).get().then(function (q) {
+      S.grants = []; q.forEach(function (d) { var g = d.data(); g.__id = d.id; S.grants.push(g); });
+      $('sh-grants').innerHTML = '<tr><th>site</th><th>to</th><th>scope</th><th>granted</th><th></th></tr>'
+        + (S.grants.length ? S.grants.map(function (g) { return '<tr><td class="mono">' + esc(g.siteId) + '</td><td>' + esc(g.toOrgId) + '</td><td><span class="pill grey">' + esc(g.scope) + '</span></td><td class="muted">' + esc(g.grantedBy) + ' · ' + esc(String(g.grantedAt || '').slice(0, 10)) + '</td><td><button class="btn ghost" data-rv="' + esc(g.__id) + '" style="padding:4px 10px">Revoke</button></td></tr>'; }).join('') : '<tr><td colspan="5" class="muted">No grants yet.</td></tr>');
+      Array.prototype.forEach.call($('sh-grants').querySelectorAll('button[data-rv]'), function (b) { b.onclick = function () { db.collection('site_shares').doc(b.getAttribute('data-rv')).delete().then(function () { $('smsg').textContent = 'Revoked. Their read is gone.'; return loadGrants().then(renderShareSites); })['catch'](function (e) { $('smsg').textContent = e.message; }); }; });
+      renderShareSites();
+    });
+  }
+  $('sh-go').onclick = function () {
+    var to = $('toOrg').value.trim().toLowerCase(), ids = selected('sv');
+    if (!/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/.test(to)) { $('smsg').textContent = 'Enter the tenant’s email domain.'; return; }
+    if (!ids.length) { $('smsg').textContent = 'Select some accepted sites.'; return; }
+    var batch = db.batch(), now = new Date().toISOString();
+    ids.forEach(function (id) {
+      /* id = siteId__toOrgId — the rules refuse any other spelling, because
+         the sites read rule looks the grant up by exactly this key. */
+      batch.set(db.collection('site_shares').doc(id + '__' + to), { siteId: id, fromOrgId: ORG, toOrgId: to, grantedBy: ME.email, grantedAt: now, scope: 'read' });
+    });
+    $('smsg').textContent = 'Granting…';
+    batch.commit().then(function () { $('smsg').textContent = ids.length + ' site(s) now readable by ' + to + '.'; return loadGrants(); })['catch'](function (e) { $('smsg').textContent = 'Refused: ' + e.message; });
+  };
+
+  /* ── Receipts ───────────────────────────────────────────────────────── */
+  function loadHistory() {
+    return db.collection('site_imports').where('orgId', '==', ORG).limit(200).get().then(function (q) {
+      var rows = []; q.forEach(function (d) { rows.push(d.data()); });
+      rows.sort(function (a, b) { return String(b.uploadedAt).localeCompare(String(a.uploadedAt)); });
+      $('hist').innerHTML = '<tr><th>when</th><th>file</th><th>portfolio</th><th>by</th><th>brought by</th><th>rows</th><th>new</th><th>updated</th><th>refused</th></tr>'
+        + (rows.length ? rows.map(function (r) { return '<tr><td class="mono">' + esc(String(r.uploadedAt).slice(0, 16).replace('T', ' ')) + '</td><td>' + esc(r.fileName) + '</td><td>' + esc(r.portfolioId) + '</td><td>' + esc(r.uploadedBy) + '</td><td>' + esc(r.partnerOrg) + '</td><td class="mono">' + r.rows + '</td><td class="mono">' + r.created + '</td><td class="mono">' + r.updated + '</td><td class="mono">' + r.refused + '</td></tr>'; }).join('') : '<tr><td colspan="9" class="muted">No uploads yet.</td></tr>');
+    })['catch'](function () { $('hist').innerHTML = '<tr><td class="muted">Receipts need the site_imports rule deployed.</td></tr>'; });
+  }
+})();
+</script>
+</body>
+</html>
