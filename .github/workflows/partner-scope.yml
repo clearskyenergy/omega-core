@@ -1,0 +1,43 @@
+# ============================================================================
+# partner-scope.yml — a JV partner's pull request stays inside its folder.
+#
+# CODEOWNERS already routes anything outside tenants/osa/ to the core team,
+# but a missing approval is easy to miss on a busy PR page. This turns the
+# same boundary into a red check: if the PR author is not on the core list
+# and the diff touches a file outside the partner's folder, the job fails and
+# says which files. Core authors are never blocked.
+#
+# It does not replace branch protection (require code-owner review on main);
+# it makes the boundary visible before anyone reads the diff.
+# ============================================================================
+name: partner-scope
+
+on:
+  pull_request:
+
+jobs:
+  scope:
+    name: partner PR stays in tenants/osa
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: check changed paths against the author
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          CORE_FILE=.github/core-authors.txt
+          if grep -qix "$AUTHOR" "$CORE_FILE"; then
+            echo "core author $AUTHOR — no scope restriction"; exit 0
+          fi
+          echo "partner author $AUTHOR — diff must stay inside tenants/osa/"
+          OUT=$(git diff --name-only "$BASE" "$HEAD" | grep -v '^tenants/osa/' || true)
+          if [ -n "$OUT" ]; then
+            echo "::error::PR by $AUTHOR touches files outside tenants/osa/. Core changes are proposed as a separate PR reviewed by ClearSky."
+            echo "$OUT"; exit 1
+          fi
+          echo "ok — every changed file is under tenants/osa/"

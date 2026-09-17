@@ -1,0 +1,3 @@
+# GitHub logins that may change files outside tenants/osa/ (one per line).
+# Checked by .github/workflows/partner-scope.yml. Case-insensitive.
+clearskyenergy
