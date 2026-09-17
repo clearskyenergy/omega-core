@@ -331,9 +331,29 @@ var QUEUES = {
    so nobody mistakes an untested endpoint for confirmed coverage.
    ═══════════════════════════════════════════════════════════════════════════ */
 var STATE_FIBER = [
+  /* CA Middle-Mile moved host and nobody noticed. `gis.cdt.ca.gov` stopped
+     resolving at all — not a 404, no DNS record — so the one layer in this
+     list carrying real route geometry had been failing silently since
+     whenever that happened, while still showing `verified:true` in the rail.
+     That is the worst shape a data source can be in: marked confirmed, and
+     dead. Re-verified 2026-09-16 against the live service, which is now
+     published through the CAMMBI ArcGIS Hub.
+
+     The field names changed with the move, which is why this could not be a
+     URL swap: the old service exposed SegmentName/Status, the current one
+     exposes County_Name and Public_Construction_Status. Left alone the rail
+     would have drawn 247 unlabelled lines.
+
+     LICENSING IS UNRESOLVED AND MATTERS HERE. The Hub lists this dataset as
+     license "custom" and the service returns no licenseInfo or copyrightText
+     at all. Fine for Thomas looking at a map; NOT established for serving the
+     geometry on to tenants through the platform, which is the direction this
+     is heading. Confirm terms with CDT before this layer reaches a paying
+     tenant's screen. See [[Fiber Route Data — Options]] in the vault. */
   { key: "fiber_ca_mm", name: "CA Middle-Mile", st: "CA", verified: true,
-    url: "https://gis.cdt.ca.gov/arcgis/rest/services/CDT/Middle_Mile_Network/FeatureServer/0",
-    nameField: ["SegmentName","RouteName","Name"], metaField: ["Status","PhaseStatus"] }
+    url: "https://services6.arcgis.com/sAv98EYUZbLCVPW0/arcgis/rest/services/MMBI_Statewide_Network_High_All/FeatureServer/1",
+    nameField: ["County_Name","SegmentName","RouteName","Name"],
+    metaField: ["Public_Construction_Status","Status","PhaseStatus"] }
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
