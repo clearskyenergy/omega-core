@@ -422,6 +422,41 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         color:var(--ink);font-size:12.5px;padding:7px 9px;outline:none;width:100%}
 .brainQ:focus{border-color:var(--glow-cyan)}
 .brainIns{font-size:12px;line-height:1.65;color:var(--dim);max-height:210px}
+/* THE PERSON PROFILE. The inspector is a 210px side panel — right for "what
+   is this dot", wrong for "who is this and what is between us". This is the
+   second click: a drawer over the stage with the bio, the weight arithmetic
+   and the actual history. */
+.pProf{position:absolute;inset:0;z-index:40;background:rgba(6,12,20,.93);
+  display:none;flex-direction:column;border-radius:inherit;overflow:hidden}
+.pProf.on{display:flex}
+.pProf .pHead{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;
+  border-bottom:1px solid var(--line)}
+.pProf .pName{font-size:19px;font-weight:700;color:var(--ink);line-height:1.2}
+.pProf .pOrg{font-size:12px;color:var(--dim);margin-top:3px}
+.pProf .pX{margin-left:auto;background:none;border:1px solid var(--line);color:var(--dim);
+  border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:14px;flex:none}
+.pProf .pBody{flex:1;overflow:auto;padding:14px 18px 20px;font-size:12.5px;line-height:1.6}
+.pProf h4{margin:16px 0 7px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--dim);font-family:var(--mono);font-weight:600}
+.pProf h4:first-child{margin-top:0}
+.pW{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.pW .pWn{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--ink);line-height:1}
+.pW .pWl{font-size:11px;color:var(--dim)}
+.pBar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.07);margin:6px 0 9px}
+.pBar i{display:block;height:100%}
+.pTerm{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim);margin:3px 0}
+.pTerm b{font-family:var(--mono);color:var(--ink);font-weight:600;min-width:38px;text-align:right}
+.pTerm .sw{width:9px;height:9px;border-radius:2px;flex:none}
+.pItem{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.055)}
+.pItem:last-child{border-bottom:0}
+.pItem .t{color:var(--ink);font-size:12.5px}
+.pItem .m{color:var(--dim);font-size:10.5px;font-family:var(--mono);margin-top:2px}
+.pItem .old{color:var(--warn)}
+.pNote{white-space:pre-wrap;font-family:var(--mono);font-size:11px;line-height:1.6;
+  color:var(--dim);max-height:280px;overflow:auto;border:1px solid var(--line);
+  border-radius:8px;padding:10px 12px;background:rgba(0,0,0,.25)}
+.pMore{background:none;border:1px solid var(--line);color:var(--dim);border-radius:7px;
+  padding:5px 11px;font:inherit;font-size:11.5px;cursor:pointer;margin-top:6px}
 .brainIns b{color:var(--ink);font-weight:600}
 .frow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
       letter-spacing:1.2px;color:var(--dim)}
@@ -1006,6 +1041,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
+      <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
@@ -1214,6 +1250,33 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       </div>
     </section>
 
+    <!-- ========== TERMINAL ==========
+         Claude Code itself, served by ttyd on loopback and framed here. A VIEW
+         and not a Command Center panel on purpose: .cmdGrid is 280px | 1fr |
+         400px, so a panel gives ~38 or ~55 characters of width and about
+         twenty rows — Claude Code's box drawing folds into mush at that size.
+         Full bleed is ~200x45, which is a real terminal.
+
+         The iframe is http:// inside an https page. That is allowed, not a
+         loophole: browsers treat 127.0.0.1 as a potentially trustworthy
+         origin, so it is not mixed content. Verified on the live dashboard
+         2026-09-15 before this was built.
+
+         Basic auth sits in front of ttyd (password in the login Keychain), so
+         the browser asks once per session. That prompt is the point — without
+         it any page that could reach the port would be framing a shell. -->
+    <section class="view" data-view="terminal">
+      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+        <div class="boardBar">
+          <span class="ptitle" style="border:none;padding:0;margin:0">Chat with JARVIS</span>
+          <span class="live" id="termState">—</span>
+          <button id="termReload" title="Reload the terminal">RELOAD</button>
+          <button id="termPop" title="Open it in its own window">POP OUT</button>
+        </div>
+        <div id="termHost" style="position:absolute;inset:38px 0 0 0"></div>
+      </div>
+    </section>
+
     <!-- ========== INDEX ========== -->
     <section class="view" data-view="index">
       <div class="panel" style="flex:1;min-height:0">
@@ -1247,8 +1310,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
         <div class="panel brainStage">
           <canvas id="brainCv"></canvas>
-          <div class="brainHint" id="brainHint">drag to pan · scroll to zoom · click to focus</div>
+          <div class="brainHint" id="brainHint">drag to pan · scroll to zoom · click to focus · double-click a person for their profile</div>
           <button class="brainFit" id="brainFit">FIT</button>
+          <div class="pProf" id="pProf">
+            <div class="pHead">
+              <div><div class="pName" id="pName">—</div><div class="pOrg" id="pOrg"></div></div>
+              <button class="pX" id="pX" title="Close (Esc)">✕</button>
+            </div>
+            <div class="pBody" id="pBody"></div>
+          </div>
         </div>
 
         <div class="panel brainSide">
@@ -1635,21 +1705,48 @@ function makeCore(id, opts) {
      anything: the poster Thomas sent is Marvel's artwork and Marvel's
      character, and this is a silhouette of my own making that carries the
      same weight. x is across, y is down from the crown, z is depth. */
+  /* HEAD_K — the head, as a fraction of the size it was drawn at.
+
+     The figure measured 5.25 heads tall; a person is about 7.5. That single
+     ratio, not the silhouette, is what made it read as a mascot rather than a
+     man. Shrinking the head to 0.78 puts it at 6.15 heads — a deliberate stop
+     short of anatomical, because a hood needs volume to read as a hood and a
+     7.5-head figure under a cowl looks pinheaded.
+
+     It is a named constant because the mask lights are positioned in a second
+     place, further down drawDoom(). The previous author left a warning there
+     about the two copies drifting and the eyes floating off the face; deriving
+     both from this number is the version of that warning that cannot be
+     ignored by accident. */
+  const HEAD_K = 0.78;
+  const HEAD_TOP = -1.00;                       /* the peak the head scales about */
+  const headY = y => HEAD_TOP + (y - HEAD_TOP) * HEAD_K;
+  const EYE = { y: headY(-0.70), x: 0.075 * HEAD_K, z: 0.16 };
+
   const FIG = {
     v: [
-      [ 0.00,-1.00, 0.06],[-0.17,-0.86,-0.02],[ 0.17,-0.86,-0.02],   /* hood peak, temples */
-      [-0.20,-0.66,-0.04],[ 0.20,-0.66,-0.04],[ 0.00,-0.60, 0.14],   /* jaw, faceplate */
+      [ 0.00,-1.00, 0.06],[-0.13,-0.89,-0.02],[ 0.13,-0.89,-0.02],   /* hood peak, temples */
+      [-0.16,-0.73,-0.04],[ 0.16,-0.73,-0.04],[ 0.00,-0.69, 0.14],   /* jaw, faceplate */
       [-0.40,-0.52,-0.06],[ 0.40,-0.52,-0.06],                       /* shoulders */
       [-0.22,-0.46, 0.02],[ 0.22,-0.46, 0.02],                       /* collar */
       [-0.26, 0.00, 0.00],[ 0.26, 0.00, 0.00],                       /* waist */
       [-0.55,-0.16,-0.10],[ 0.55,-0.16,-0.10],                       /* cape shoulders */
       [-0.62, 0.46,-0.16],[ 0.62, 0.46,-0.16],                       /* cape mid */
       [-0.34, 0.96,-0.12],[ 0.34, 0.96,-0.12],[ 0.00, 1.10,-0.06],   /* cape hem */
-      [-0.44,-0.30, 0.10],[ 0.44,-0.30, 0.10],                       /* elbows */
+      /* Elbow at the MIDPOINT of the arm. It sat at -0.30, which made the
+         forearm 1.8x the upper arm — the one proportion the eye reads as
+         wrong even when it cannot say why. Shoulder -0.52 to gauntlet +0.10
+         is 0.62, so the joint belongs at -0.21 and the two halves are equal. */
+      [-0.44,-0.21, 0.10],[ 0.44,-0.21, 0.10],                       /* elbows */
       [-0.34, 0.10, 0.16],[ 0.34, 0.10, 0.16],                       /* gauntlets */
       [-0.16, 0.52, 0.04],[ 0.16, 0.52, 0.04],                       /* knees */
       [-0.18, 0.92, 0.06],[ 0.18, 0.92, 0.06],                       /* boots */
-      [ 0.00,-0.46, 0.10],[ 0.00, 0.02, 0.12]                        /* sternum, belt */
+      [ 0.00,-0.46, 0.10],[ 0.00, 0.02, 0.12],                       /* sternum, belt */
+      /* THE STAFF — 29 top, 30 grip, 31 foot. Held in the right gauntlet (22),
+         which is why the grip sits at exactly the gauntlet's height: the hand
+         has to be ON the shaft, not near it. Kept inside y -1.00..+1.10 so it
+         never punches through the counter-rotating shells. */
+      [ 0.36,-0.88, 0.18],[ 0.36, 0.10, 0.18],[ 0.36, 0.99, 0.18]    /* staff */
     ],
     /* 29 vertices, so the highest legal index is 28. The first version of this
        list reached for 29 — sternum and belt were written one place further
@@ -1661,7 +1758,8 @@ function makeCore(id, opts) {
         [8,10],[9,11],[10,11],[10,28],[11,28],[27,28],
         [6,12],[7,13],[12,14],[13,15],[14,16],[15,17],[16,18],[17,18],[14,10],[15,11],
         [6,19],[7,20],[19,21],[20,22],[21,28],[22,28],
-        [10,23],[11,24],[23,25],[24,26],[25,26]]
+        [10,23],[11,24],[23,25],[24,26],[25,26],
+        [29,30],[30,31],[22,30]]
   };
 
   /* Three orbits, each tilted differently, each carrying one body. */
@@ -1818,10 +1916,51 @@ function makeCore(id, opts) {
     /* the figure, floating — a slow bob so it hangs rather than sits */
     const bob = Math.sin(t * 0.012) * R * 0.035;
     const fyaw = Math.sin(t * 0.004) * 0.55;        /* turns, never spins */
-    const fp = FIG.v.map(v => {
-      const p = spin([v[0], v[1], v[2]], fyaw);
-      return [cx + p[0] * R * 0.92, cy + p[1] * R * 0.80 + bob, p[2]];
-    });
+    /* ONE scale on both axes. It used to be 0.92 across and 0.80 down, which
+       is not a style choice but an accident with a visible cost: the model is
+       1.24 wide by 2.10 tall (aspect 0.590), and those two numbers rendered it
+       at 0.679 — fifteen per cent too wide, so the figure read as squat and
+       the cape flared where it should fall.
+
+       0.80 is the one kept rather than 0.92 because it holds the silhouette
+       where it already sits: the figure spans -0.80R to +0.88R vertically,
+       just inside the counter-rotating shells. Scaling up to 0.92 would push
+       the cape hem past R and through the armour it is supposed to sit
+       inside. So the height is unchanged and only the width is corrected,
+       which is the whole of the bug.
+
+       Projected through one helper because this was written out twice — body
+       here, mask lights below — and two copies of a projection are two things
+       that can be edited apart. The day they disagree, the eyes float off the
+       face and it looks like a rendering bug rather than an edit. */
+    const FS = 0.80;
+
+    /* IDLE MOTION — the half of "person-like" that proportion cannot do.
+
+       A correctly proportioned figure holding perfectly still reads as a
+       mannequin, because nothing alive is ever still. Weight shift does most
+       of the work here: the boots stay planted and everything above them
+       moves a little more the higher it sits, which is exactly what a person
+       standing does. Squaring `lift` keeps the feet quiet and lets the hood
+       carry the movement.
+
+       Breath is a second, faster cycle and it is confined to the chest — a
+       figure whose legs breathe looks like it is being inflated. Both ride
+       `t`, which the canvas already advances, so this costs one sine each and
+       no new state. */
+    const sway   = Math.sin(t * 0.0060) * 0.020;
+    const breath = Math.sin(t * 0.0210) * 0.006;
+    const animate = v => {
+      const lift = Math.min(1, Math.max(0, (0.92 - v[1]) / 1.92));
+      const chest = (v[1] > -0.62 && v[1] < 0.06) ? 1 : 0;
+      return [v[0] + sway * lift * lift, v[1] - breath * chest, v[2]];
+    };
+    const proj = v => {
+      const a = animate(v);
+      const p = spin([a[0], a[1], a[2]], fyaw);
+      return [cx + p[0] * R * FS, cy + p[1] * R * FS + bob, p[2]];
+    };
+    const fp = FIG.v.map(proj);
     ctx.lineCap = 'round';
     FIG.e.forEach(([a, b]) => {
       const p = fp[a], q = fp[b];
@@ -1832,15 +1971,31 @@ function makeCore(id, opts) {
       ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
     });
     /* the mask reads as a mask because of the two lights behind it */
-    [[-0.075, -0.70], [0.075, -0.70]].forEach(([ex, ey]) => {
-      const e = spin([ex, ey, 0.16], fyaw);
-      const x = cx + e[0] * R * 0.92, y = cy + e[1] * R * 0.80 + bob;
+    [[-EYE.x, EYE.y], [EYE.x, EYE.y]].forEach(([ex, ey]) => {
+      const e = proj([ex, ey, EYE.z]);
+      const x = e[0], y = e[1];
       const eg = ctx.createRadialGradient(x, y, 0, x, y, 6);
       eg.addColorStop(0, 'rgba(220,255,232,0.95)');
       eg.addColorStop(1, 'rgba(' + col + ',0)');
       ctx.fillStyle = eg;
       ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
     });
+
+    /* The staff's head, lit by `energy` — the same value the lines and the
+       smoke already read. It is the one part of the figure that reports
+       anything, and it reports what the rest of the canvas is already
+       showing: nothing new is measured, nothing is claimed, no truth is
+       edited. A skin stays a skin. */
+    (function () {
+      const s0 = fp[29];
+      if (!s0) return;
+      const r0 = 4 + energy * 7;
+      const fg = ctx.createRadialGradient(s0[0], s0[1], 0, s0[0], s0[1], r0);
+      fg.addColorStop(0, 'rgba(226,255,238,' + (0.55 + energy * 0.45).toFixed(3) + ')');
+      fg.addColorStop(1, 'rgba(' + col + ',0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(s0[0], s0[1], r0, 0, Math.PI * 2); ctx.fill();
+    })();
     ctx.lineWidth = 1;
 
     drawShells(cx, cy, R, yaw, col);
@@ -3436,7 +3591,35 @@ function glassPlatform(){
 }
 function glassBrain(){
   const s=lastStatus||{}, cs=(book&&book.clients)||[], people=s.people||[], deals=(book&&book.deals&&book.deals.top)||[];
-  const out=['# Brain','', 'As of '+gtime()+' · '+cs.length+' clients · '+people.length+' people · '+deals.length+' deals · '+(((platform&&platform.tools)||[]).length)+' tools', '', 'Who is connected to whom. The picture is Brain.png in Props.', ''];
+  /* THE RANKED HALF, from the meeting record rather than the roster.
+     This note used to open with clients and their people — who exists, in
+     alphabetical-ish order, which tells you nothing you did not already know.
+     The board is glanced at, so it should open with the thing you would ask
+     for: who is carrying the most of your unfinished business. Weight, open
+     commitments and staleness all come from bin/graph on the Mac; when it is
+     asleep this section is simply absent and the rest reads as before. */
+  const rel=(BGX&&BGX.nodes||[]).filter(n=>n.type==='person'&&n.weight>0)
+    .sort((a,b)=>b.weight-a.weight);
+  const out=['# Brain','', 'As of '+gtime()+' · '+cs.length+' clients · '
+    +(rel.length||people.length)+' people · '+deals.length+' deals · '
+    +(((platform&&platform.tools)||[]).length)+' tools', ''];
+  if(rel.length){
+    const owed=rel.reduce((n,p)=>n+(p.owed||0),0);
+    const stale=rel.reduce((n,p)=>n+(p.stale||0),0);
+    out.push('**'+owed+' things are owed to you**'+(stale?' · **'+stale+' of them over a month old**':'')
+             +' · across '+rel.filter(p=>p.owed).length+' people', '');
+    out.push('# Who is carrying your open business');
+    rel.slice(0,12).forEach((p,i)=>{
+      const bits=[];
+      if(p.org) bits.push(gl(p.org));
+      if(p.owed) bits.push(p.owed+' owed'+(p.stale?' ('+p.stale+' stale)':''));
+      if(p.meetings90) bits.push(p.meetings90+' mtg/90d');
+      out.push((i+1)+'. **'+gl(p.label)+'** · '+bits.join(' · '));
+      if(p.topOwed&&p.topOwed.length) out.push('   — '+gl(p.topOwed[0]));
+    });
+    out.push('');
+  }
+  out.push('Who is connected to whom. The picture is Brain.png in Props.', '');
   cs.forEach(c=>{
     const at=people.filter(p=>p.org && matchClient(p.org, cs)===c).map(p=>gl(p.name)+(p.role?' ('+gl(p.role)+')':''));
     const own=deals.filter(d=>d.orgId===c.orgId).map(d=>gl(d.name||'(untitled deal)'));
@@ -3466,6 +3649,11 @@ async function glassSync(force){
      them whether or not he opened those views today. Both cache. */
   try{ await loadBook(false); }catch(_){}
   try{ await loadPlatform(); }catch(_){}
+  /* The relationship layer the same way, and for the same reason: the board
+     wants it whether or not he has opened the Brain view today. It caches for
+     five minutes and fails soft, so a sleeping Mac costs a section, not the
+     note. */
+  try{ await loadRelations(false); }catch(_){}
   let notes={};
   try{
     notes={'Command Center':glassHome(), 'Tasks today':glassTasks(), 'Calendar':glassCalendar(),
@@ -5825,6 +6013,7 @@ const IX_VIEWS=[
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
+  ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
 ];
@@ -5946,6 +6135,39 @@ function matchClient(name, clients){
   return null;
 }
 
+/* ── the relationship layer ───────────────────────────────────────────────
+   The graph has always known WHO EXISTS — the twin's current roster, the
+   clients on the book, today's calendar. It has never known anything that
+   accumulated: who owes what, for how long, how often you are actually in a
+   room with someone. That history is built on the Mac by bin/graph from the
+   whole meeting record and served at /graph, the same relay the vault uses.
+
+   Merged by NAME, lowercased. The roster is keyed by email and the meeting
+   record only ever has names, so there is no shared id to join on; a name is
+   the only key both sides actually carry. People the roster has never heard
+   of are added rather than dropped — someone you have met eleven times is a
+   node whether or not they were ever typed into a contact list. */
+var BGX=null, bgxAt=0;
+async function loadRelations(force){
+  if(!brainOn) return null;
+  if(BGX && !force && Date.now()-bgxAt < 300000) return BGX;
+  try{
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),4000);
+    const r=await fetch(BRAIN+'/graph',{cache:'no-store',signal:c.signal});
+    clearTimeout(tm);
+    const j=await r.json();
+    if(j && j.ok){ BGX=j; bgxAt=Date.now(); }
+  }catch(e){ /* the Mac is asleep; the graph simply stays as it was */ }
+  return BGX;
+}
+function relIndex(){
+  const by={};
+  if(BGX) (BGX.nodes||[]).forEach(n=>{
+    if(n.type==='person') by[String(n.label).toLowerCase()]=n;
+  });
+  return by;
+}
+
 function buildBrain(){
   const nodes=[], links=[], byId={};
   const add=(id,label,type,meta)=>{
@@ -5966,6 +6188,26 @@ function buildBrain(){
     const c=matchClient(p.org, clients);
     const o=c ? byId['org:'+c.orgId] : add('org:'+bslug(p.org), p.org, 'org', {name:p.org});
     tie(n,o,'works at');
+  });
+
+  /* the accumulated half: weight, what is owed, how long it has been owed */
+  const rel=relIndex();
+  nodes.forEach(n=>{
+    if(n.type!=='person') return;
+    const r=rel[String(n.label).toLowerCase()];
+    if(r){ n.rel=r; if(!n.meta.org && r.org) n.meta.org=r.org; }
+  });
+  Object.keys(rel).forEach(k=>{
+    const r=rel[k];
+    const id='per:'+bslug(r.label);
+    if(byId[id]||nodes.some(n=>n.type==='person'&&String(n.label).toLowerCase()===k)) return;
+    const n=add(id, r.label, 'person', {org:r.org, source:'meeting history'});
+    n.rel=r;
+    if(r.org){
+      const c=matchClient(r.org, clients);
+      const o=c ? byId['org:'+c.orgId] : add('org:'+bslug(r.org), r.org, 'org', {name:r.org});
+      tie(n,o,'works at');
+    }
   });
 
   /* deals → the org that owns them */
@@ -6036,7 +6278,17 @@ function btick(){
 }
 
 /* ── drawing ─────────────────────────────────────────────────────────── */
-function bsize(n){ return 3 + Math.min(13, Math.sqrt(n.deg)*2.6); }
+/* Size carried only the connection count, which on this graph is close to
+   "how many lists is he on". Where a relationship HAS history, weight says
+   something the degree cannot: how much you are in a room with someone and
+   how much of what they promised is still outstanding. The two are blended
+   rather than swapped so a well-connected node with no meeting record does
+   not suddenly shrink to nothing. */
+function bsize(n){
+  const base = 3 + Math.min(13, Math.sqrt(n.deg)*2.6);
+  if(!n.rel) return base;
+  return Math.max(base, 4 + Math.min(15, Math.sqrt(Math.max(0,n.rel.weight))*1.9));
+}
 function bvisible(n){ return !bOff[n.type]; }
 
 function bneighbours(node){
@@ -6084,6 +6336,16 @@ function bdraw(){
     let alpha=1;
     if(onPath) alpha=onPath.has(n.id)?1:0.12;
     else if(lit) alpha=lit.has(n.id)?1:0.12;
+    /* A ring for debt that has gone stale. The weight already carries it as a
+       number, but a number in a side panel is not a thing you notice while
+       looking at the whole picture — and "who has been sitting on something
+       of mine for a month" is exactly the question this graph should answer
+       at a glance. */
+    if(n.rel && n.rel.stale>0 && alpha>0.5){
+      ctx.strokeStyle='rgba(255,183,51,'+Math.min(0.9,0.35+n.rel.stale*0.12).toFixed(2)+')';
+      ctx.lineWidth=1.6/bview.k;
+      ctx.beginPath(); ctx.arc(n.x,n.y,r+3.5/bview.k,0,Math.PI*2); ctx.stroke();
+    }
     const hit = qq && n.label.toLowerCase().indexOf(qq)!==-1;
     if(qq && !hit) alpha=Math.min(alpha,0.1);
 
@@ -6172,6 +6434,146 @@ function bfsPath(a,b){
   return null;
 }
 
+/* ── THE PERSON PROFILE ───────────────────────────────────────────────────
+   "Click a person and show their bio, history, and weight score breakdown."
+
+   The graph the Mac builds already knows all three; the dashboard was only
+   ever handed the total, so a weight could be read and not argued with. The
+   breakdown now travels with every node (engagement, open commitments, stale
+   drag) and the full account is the person note in the vault, fetched through
+   the brain's /vault relay — so this panel shows what Obsidian shows rather
+   than a second, thinner summary that can drift from it. */
+var PROF = null;
+function profOpen(n){
+  if(!n || n.type!=='person') return;
+  PROF = n;
+  const R = n.rel || {}, m = n.meta || {};
+  el('pName').textContent = n.label;
+  el('pOrg').textContent = [m.role, m.org || R.org, m.email].filter(Boolean).join(' · ') || '—';
+  const host = el('pBody'); host.textContent='';
+
+  const h = (t)=>{ const e=document.createElement('h4'); e.textContent=t; host.appendChild(e); return e; };
+  const row = (k,v)=>{ const r=document.createElement('div'); r.className='row';
+    const a=document.createElement('span'); a.className='k'; a.textContent=k;
+    const b=document.createElement('span'); b.className='v'; b.textContent=v;
+    r.append(a,b); host.appendChild(r); };
+
+  /* ── the bio ── */
+  h('Who');
+  if(m.role) row('Role', m.role);
+  if(m.org || R.org) row('Org', m.org || R.org);
+  if(m.email) row('Email', m.email);
+  if(m.phone) row('Phone', m.phone);
+  row('Connections', String(n.deg));
+  if(R.first || R.last) row('Known since', (R.first||'?') + ' → ' + (R.last||'?'));
+  if(!R.first && m.source) row('Known from', m.source);
+
+  /* ── the weight, as arithmetic rather than a verdict ── */
+  if(R && R.weight != null){
+    h('Weight');
+    const eng = +R.engagement||0, owe = +R.owedPts||0, stale = +R.stalePts||0;
+    const w = document.createElement('div'); w.className='pW';
+    w.innerHTML = '<span class="pWn">'+(+R.weight)+'</span>'
+      + '<span class="pWl">engagement '+eng+' + open commitments '+owe+' − stale drag '+stale+'</span>';
+    host.appendChild(w);
+    /* The bar is the same arithmetic, drawn. Drag is shown as its own
+       segment rather than silently subtracted, because the whole point of
+       three numbers instead of one is that you can see which is carrying. */
+    const span = Math.max(1, eng + owe + stale);
+    const bar = document.createElement('div'); bar.className='pBar';
+    [[eng,'#4ade80'],[owe,'#60a5fa'],[stale,'#f59e0b']].forEach(([v,c])=>{
+      if(v<=0) return;
+      const i=document.createElement('i');
+      i.style.width=(v/span*100)+'%'; i.style.background=c; bar.appendChild(i);
+    });
+    host.appendChild(bar);
+    [['Engagement',eng,'#4ade80','meetings, weighted toward the last 90 days'],
+     ['Open commitments',owe,'#60a5fa',(R.owed||0)+' they have made to you'],
+     ['Stale drag',-stale,'#f59e0b',(R.stale||0)+' older than a month']
+    ].forEach(([k,v,c,why])=>{
+      const t=document.createElement('div'); t.className='pTerm';
+      t.innerHTML='<span class="sw" style="background:'+c+'"></span><b>'+(v>0?'+':'')+v+'</b>'
+        +'<span>'+k+' — '+why+'</span>';
+      host.appendChild(t);
+    });
+    const note=document.createElement('div');
+    note.style.cssText='font-size:10.5px;color:var(--dim);margin-top:7px;line-height:1.5';
+    note.textContent='No monetary value is in this number. Nothing in a transcript measures it, '
+      + 'and a figure invented here would get quoted back as if it did.';
+    host.appendChild(note);
+  }
+
+  /* ── the history ── */
+  const owedList = (R.topOwed||[]);
+  if(owedList.length){
+    h('They owe you' + (R.owed>owedList.length ? '  ('+owedList.length+' of '+R.owed+')' : ''));
+    owedList.forEach(c=>{
+      const it=document.createElement('div'); it.className='pItem';
+      const t=document.createElement('div'); t.className='t';
+      t.textContent = typeof c==='string' ? c : (c.text||'');
+      it.appendChild(t);
+      if(typeof c!=='string'){
+        const age = c.when ? Math.round((Date.now()-new Date(c.when).getTime())/864e5) : null;
+        const mm=document.createElement('div'); mm.className='m'+(age!=null&&age>30?' old':'');
+        mm.textContent=[c.when, c.due?('due '+c.due):'', c.meeting, (age!=null&&age>30)?(age+' days old'):'']
+          .filter(Boolean).join(' · ');
+        it.appendChild(mm);
+      }
+      host.appendChild(it);
+    });
+  }
+  if((R.topYouOwe||[]).length){
+    h('You owe them');
+    R.topYouOwe.forEach(c=>{
+      const it=document.createElement('div'); it.className='pItem';
+      it.innerHTML='<div class="t"></div><div class="m"></div>';
+      it.querySelector('.t').textContent=c.text||String(c);
+      it.querySelector('.m').textContent=c.when||'';
+      host.appendChild(it);
+    });
+  }
+  if((R.topQuestions||[]).length){
+    h('Open questions');
+    R.topQuestions.forEach(q=>{
+      const it=document.createElement('div'); it.className='pItem';
+      const t=document.createElement('div'); t.className='t'; t.textContent=q; it.appendChild(t);
+      host.appendChild(it);
+    });
+  }
+
+  /* ── the note itself, on demand ── */
+  if(R.note){
+    h('The full note');
+    const btn=document.createElement('button'); btn.className='pMore';
+    btn.textContent='Read '+R.note.split('/').pop();
+    const pre=document.createElement('div'); pre.className='pNote'; pre.hidden=true;
+    btn.onclick=async()=>{
+      if(!pre.hidden){ pre.hidden=true; btn.textContent='Read '+R.note.split('/').pop(); return; }
+      btn.disabled=true; btn.textContent='Reading…';
+      try{
+        const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(R.note),{cache:'no-store'});
+        const j=await r.json();
+        pre.textContent = (j&&j.ok) ? j.text : ((j&&j.error)||'The note could not be read.');
+      }catch(e){ pre.textContent='The Mac is not reachable, so the note cannot be read from here.'; }
+      pre.hidden=false; btn.disabled=false; btn.textContent='Hide the note';
+    };
+    host.appendChild(btn); host.appendChild(pre);
+  }
+  if(!R || R.weight==null){
+    const none=document.createElement('div');
+    none.style.cssText='font-size:11.5px;color:var(--dim);margin-top:10px;line-height:1.55';
+    none.textContent='No meeting history for this person yet. The history is built on the Mac by '
+      + 'bin/graph from the meeting record — if the neural link is off, only the roster is here.';
+    host.appendChild(none);
+  }
+  el('pProf').classList.add('on');
+}
+function profClose(){ PROF=null; const e=el('pProf'); if(e) e.classList.remove('on'); }
+/* Three ways out, the same rule as every other panel here. */
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && PROF) { e.preventDefault(); profClose(); }
+});
+
 /* ── the inspector ───────────────────────────────────────────────────── */
 function binspect(n){
   const host=el('brainIns'); host.textContent='';
@@ -6193,6 +6595,28 @@ function binspect(n){
     if(m.email) facts.push(['Email',m.email]);
     if(m.phone) facts.push(['Phone',m.phone]);
     if(m.source) facts.push(['Known from',m.source]);
+    /* WHO THEY ARE, from what has actually happened. The ask was that
+       clicking a node tells you about the person; a role and an email address
+       is a contact card, not an account of a relationship. */
+    const R=n.rel;
+    if(R){
+      if(R.meetings) facts.push(['Met',R.meetings+' time'+(R.meetings===1?'':'s')
+        +(R.meetings90?' · '+R.meetings90+' in 90 days':'')]);
+      if(R.last) facts.push(['Last seen',R.last]);
+      if(R.owed) facts.push(['They owe you',R.owed+' open'
+        +(R.stale?' · '+R.stale+' over a month old':'')]);
+      if(R.youOwe) facts.push(['You owe them',String(R.youOwe)]);
+      if(R.questions) facts.push(['Open questions',String(R.questions)]);
+      facts.push(['Weight',String(R.weight)]);
+    }
+    /* A double-click is discoverable only once somebody has been told, so the
+       inspector carries the door as a button as well. */
+    setTimeout(()=>{
+      const b=document.createElement('button'); b.className='pMore';
+      b.textContent = n.rel ? 'Open profile' : 'Open profile (roster only)';
+      b.onclick=()=>profOpen(n);
+      host.appendChild(b);
+    },0);
   } else if(n.type==='client'){
     facts.push(['Tier',m.tier||'—']); facts.push(['Vertical',m.vertical||'—']);
     facts.push(['Billed',usd(m.amountDue)]); facts.push(['Paid',usd(m.amountPaid)]);
@@ -6435,6 +6859,14 @@ function bwire(){
     }
     bsel=n; bpath=null; binspect(n);
   });
+  /* THE SECOND CLICK. One click focuses and fills the side inspector, which is
+     the right weight for "what is this dot". A person is the one node type
+     with an actual account behind it, so double-clicking one opens it. */
+  cv.addEventListener('dblclick',e=>{
+    e.preventDefault();
+    const n=bat(e);
+    if(n && n.type==='person'){ bsel=n; binspect(n); profOpen(n); }
+  });
   cv.addEventListener('wheel',e=>{
     e.preventDefault(); bpoke();
     const f=e.deltaY<0?1.12:0.89;
@@ -6462,6 +6894,7 @@ function bwire(){
   el('brainFit').addEventListener('click',()=>{ bpoke(); bfit(); });
   /* Hovering a node counts as being here, even without a click. */
   cv.addEventListener('pointerenter',bpoke);
+  { const x=el('pX'); if(x) x.addEventListener('click', profClose); }
 }
 
 function bfit(){
@@ -6479,8 +6912,10 @@ function bfit(){
 
 let brainReady=false;
 async function loadBrain(){
-  /* Needs all three planes before the joins mean anything. */
-  await Promise.all([loadBook(false), loadPlatform()]);
+  /* Needs all three planes before the joins mean anything. The relationship
+     layer is fetched alongside them and is allowed to fail: if the Mac is
+     asleep the graph still draws, simply without any history in it. */
+  await Promise.all([loadBook(false), loadPlatform(), loadRelations(false)]);
   buildBrain();
   bhubs(); btypes(); bwire(); binspect(null);
   el('brainN').textContent=BG.nodes.length+' NODES · '+BG.links.length+' LINKS';
