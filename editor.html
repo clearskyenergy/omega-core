@@ -14767,14 +14767,22 @@ function computeGroundLayout(opts){
 
   var tables=[];
   var capped=false;
+  /* A DC target (opts.maxKwDc) stops the walk at the table that reaches
+     it. Rows fill top-down, so a sized array is a solid block from one
+     edge rather than a thinned-out field; the ground past it stays open. */
+  var kwPerTable=tbl.tableW*tbl.tableH*0.92*(A.wpsf||DER_PV_WPSF)/1000;
+  var maxKwDc=(+opts.maxKwDc>0)?+opts.maxKwDc:0;
+  var maxTables=maxKwDc>0?Math.max(1, Math.round(maxKwDc/kwPerTable)):Infinity;
+  var targetHit=false;
   /* Walk a grid: columns across (x), rows down (y at row pitch). */
   var y=bb.minY+tableHpx/2+setbackPx;
   var rowCount=0;
-  while(y+tableHpx/2 <= bb.maxY-setbackPx){
+  while(y+tableHpx/2 <= bb.maxY-setbackPx && !targetHit){
     rowCount++;
     var x=bb.minX+tableWpx/2+setbackPx;
     while(x+tableWpx/2 <= bb.maxX-setbackPx){
       if(_gmRectPlaceable(x, y, tableWpx/2, tableHpx/2, boundary, setbackPx, exclusions)){
+        if(tables.length >= maxTables){ targetHit=true; break; }
         if(tables.length < GM_ROW_DRAW_CAP*4){      /* hard safety ceiling */
           tables.push({ x:x-tableWpx/2, y:y-tableHpx/2, w:tableWpx, h:tableHpx });
         } else { capped=true; }
@@ -14809,6 +14817,7 @@ function computeGroundLayout(opts){
     tableWft:tbl.tableW, tableHft:tbl.tableH,
     pitchFt:+(pitchPx/ppf).toFixed(1),
     bboxAcres:bbAcres, capped:capped,
+    targetKwDc:maxKwDc, targetHit:targetHit,
     tooMany:(tables.length>GM_ROW_DRAW_CAP),
     blockCount:blockCount, tablesPerBlock:tablesPerBlock,
     blockKwTarget:blockKwTarget,
@@ -15360,6 +15369,15 @@ function _siteBoundaryShape(){
   var shapes=(typeof S!=='undefined' && S.shapes)||[];
   for(var i=0;i<shapes.length;i++){
     if(shapes[i] && shapes[i].isSiteBoundary) return shapes[i];
+  }
+  /* The Trace Boundary tool stamps omegaRole='boundary', not the older
+     flag, so on every traced parcel this returned null: the post-build
+     fit-inside-the-parcel check had nothing to fit inside, "Along the
+     parcel" had no parcel, and the sheets printed the outline as a guess.
+     One traced outline is the site boundary. */
+  for(var j=0;j<shapes.length;j++){
+    var x=shapes[j];
+    if(x && x.omegaRole==='boundary' && x.pts && x.pts.length>=3) return x;
   }
   return null;
 }
@@ -57995,13 +58013,37 @@ function sebCompute(){
 
 
 /* ── Network Proximity panel ────────────────────────────────────────── */
+/* THE ENGINE IS /api/network-proximity, reached through
+   OmegaGridAtlas.network(). This panel used to compute from PDB_FAC — a
+   static PeeringDB snapshot pasted into this file — and died on
+   "PDB_ROUTE_FACTOR is not defined" because that constant lives inside a
+   wrapped block further down. Nothing here computes any more: the fiber
+   score, the verdict, the lateral estimate and the route factor all come
+   back in the response, and the panel prints what the service used. */
 function openNetworkProximity(){
   var host=document.createElement('div');
   host.id='npx-modal';
   host.setAttribute('style','position:fixed;inset:0;background:rgba(6,12,22,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px');
   host.onclick=function(e){ if(e.target===host) host.remove(); };
-  host.innerHTML=_npxInner();
+  var site=_npxSiteLatLon();
+  host.innerHTML=_npxShell(site, site
+    ? '<div style="padding:24px;color:#94A3B8;font-size:12px">Reading carrier facilities, FCC service, mapped fibre, published plant and long-haul conduits for '
+      + site.lat.toFixed(4)+', '+site.lon.toFixed(4)+'… <span style="color:#64748B">(up to a minute — five public sources are asked in parallel)</span></div>'
+    : '<div style="padding:24px;color:#94A3B8;font-size:12px">Place or lock the satellite view first — this scores the site against real interconnection density, so it needs a location.</div>');
   document.body.appendChild(host);
+  if(!site) return;
+  var GA=window.OmegaGridAtlas;
+  if(!GA || !GA.network){
+    host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">The Grid Atlas client (omega-grid-atlas-client.js) did not load. Reload the page.</div>');
+    return;
+  }
+  GA.network({lat:site.lat, lng:site.lon},{timeoutMs:55000}).then(function(r){
+    if(!document.getElementById('npx-modal')) return;
+    host.innerHTML=_npxShell(site,_npxBody(r));
+  })['catch'](function(e){
+    if(!document.getElementById('npx-modal')) return;
+    host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">'+_npxEsc((e&&e.message)||'Network Proximity failed.')+'</div>');
+  });
 }
 window.openNetworkProximity=openNetworkProximity;
 
@@ -58015,54 +58057,69 @@ function _npxSiteLatLon(){
   }catch(e){}
   return null;
 }
+function _npxEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
-function _npxInner(){
-  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
-  var site=_npxSiteLatLon();
-  var head=''
+function _npxShell(site, inner){
+  return '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:900px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
    +'<div style="padding:16px 20px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between">'
-   +'<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">\u25C8 Network Proximity</div>'
-   +'<div style="font-size:10px;color:#64748B">Carrier hotels and interconnection facilities near this site \u00b7 PeeringDB</div></div>'
-   +'<button onclick="var h=document.getElementById(\'npx-modal\');if(h)h.remove()" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">\u00d7</button></div>';
+   +'<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">◈ Network Proximity</div>'
+   +'<div style="font-size:10px;color:#64748B">Fiber and interconnection reach for this site · PeeringDB, FCC, OpenStreetMap, published plant, long-haul conduits · /api/network-proximity</div></div>'
+   +'<button onclick="var h=document.getElementById(\'npx-modal\');if(h)h.remove()" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>'
+   + inner + '</div>';
+}
 
-  if(!site){
-    return '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:760px;width:100%">'
-      + head
-      + '<div style="padding:24px;color:#94A3B8;font-size:12px">Place or lock the satellite view first \u2014 this scores the site against real interconnection density, so it needs a location.</div></div>';
-  }
-
-  var r = omegaNetworkProximity(site.lat, site.lon, 8);
+function _npxBody(r){
+  var esc=_npxEsc, F=r.fiber||{}, fac=r.facilities||{};
+  var vcol={likely:'#4ADE80',plausible:'#A3E635',uncertain:'#FBBF24',unlikely:'#F87171'}[F.verdict]||'#94A3B8';
   var kpi=function(lbl,val,sub,col){ return '<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px">'
     +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px">'+lbl+'</div>'
     +'<div style="font-size:19px;font-weight:800;color:'+(col||'#E2EEF9')+'">'+val+'</div>'
     +'<div style="font-size:10px;color:#94A3B8">'+(sub||'')+'</div></div>'; };
+  var nc=fac.nearestCarrier, lat=F.latency, lt=F.lateral;
+  var fmt=function(mi){ return mi==null?'—':(mi<10?mi.toFixed(1):Math.round(mi))+' mi'; };
+  var money=function(v){ return v==null?'—':(v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+Math.round(v/1000)+'k'); };
 
-  var n0 = r.nearest[0];
-  var col = !n0 ? '#F87171' : (n0.routeMi<25 ? '#4ADE80' : (n0.routeMi<75 ? '#FBBF24' : '#F87171'));
+  var reasons=(F.reasons||[]).map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('');
+  var evid=(F.evidence||[]).map(function(x){ return '<li><span style="color:#E2EEF9">'+fmt(x.mi)+'</span> — '+esc(x.label)+'</li>'; }).join('');
 
   var rows='';
-  for(var i=0;i<r.nearest.length;i++){
-    var f=r.nearest[i];
+  (fac.nearest||[]).slice(0,8).forEach(function(f){
     rows += '<tr style="border-bottom:1px solid #14243a">'
-      +'<td style="padding:6px 8px;color:#E2EEF9">'+esc(f.name)+'</td>'
-      +'<td style="padding:6px 8px;color:#94A3B8">'+esc(f.city)+'</td>'
+      +'<td style="padding:6px 8px;color:#E2EEF9">'+esc(f.name)+(f.diverseSubs?' <span title="fed from two substations" style="color:#4ADE80">⚡⚡</span>':'')+'</td>'
+      +'<td style="padding:6px 8px;color:#94A3B8">'+esc(f.city)+(f.state?', '+esc(f.state):'')+'</td>'
       +'<td style="padding:6px 8px;text-align:right;color:#E2EEF9">'+f.routeMi.toFixed(1)+'</td>'
       +'<td style="padding:6px 8px;text-align:right;color:#94A3B8">'+f.rttMs.toFixed(2)+'</td>'
       +'<td style="padding:6px 8px;text-align:right;color:#38BDF8">'+f.nets+'</td>'
       +'<td style="padding:6px 8px;text-align:right;color:#94A3B8">'+f.ix+'</td></tr>';
-  }
-  if(!rows) rows='<tr><td colspan="6" style="padding:14px;color:#F87171">No PeeringDB facility with 10+ networks within 750 miles. For a latency-sensitive load this is a fatal-flaw finding, not a detail.</td></tr>';
+  });
+  if(!rows) rows='<tr><td colspan="6" style="padding:14px;color:#F87171">No PeeringDB facility within 160 miles'+(fac.status==='failed'?' — PeeringDB did not answer ('+esc(fac.error||'')+')':'. For a latency-sensitive load this is a fatal-flaw finding, not a detail.')+'</td></tr>';
 
-  return ''
-  +'<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:860px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
-  + head
-  +'<div style="padding:16px 20px">'
+  var src=r.sources||{}, ms=function(k){ return r[k]&&r[k].ms!=null?' '+(r[k].ms/1000).toFixed(1)+'s':''; };
+  var scol=function(st){ return st==='ok'?'#4ADE80':st==='empty'?'#94A3B8':st==='skipped'?'#FBBF24':'#F87171'; };
+  var sources=[['peeringdb','facilities'],['fcc','fcc'],['osm','osm'],['plant','plant'],['harvest','harvest'],['longhaul','longhaul']].map(function(p){
+    return '<span style="color:'+scol(src[p[0]])+'">'+p[0]+' '+esc(src[p[0]]||'?')+ms(p[1])+'</span>'; }).join(' · ');
+  var findings=(r.findings||[]).map(function(f){
+    var c=f.severity==='blocker'?'#F87171':f.severity==='risk'?'#FBBF24':'#94A3B8';
+    return '<div style="border-left:2px solid '+c+';padding:4px 8px;margin-top:6px;color:'+c+'">'+esc(f.text)+'</div>'; }).join('');
+
+  return '<div style="padding:16px 20px">'
    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
-    + kpi('Nearest facility', n0 ? n0.routeMi.toFixed(1)+' mi' : '\u2014', n0 ? esc(n0.city) : 'none in range', col)
-    + kpi('Est. RTT', n0 ? n0.rttMs.toFixed(2)+' ms' : '\u2014', 'fibre, round trip')
-    + kpi('Facilities \u2264 80 mi', r.within80, r.within160+' within 160 mi')
-    + kpi('Networks \u2264 80 mi', r.netsWithin80.toLocaleString(), 'connected ASNs')
+    + kpi('Fiber for a data load', esc(F.verdict||'—'), 'score '+(F.score!=null?F.score+'/100':'—')+' · '+esc(F.scoreBasis?'carrier reach':''), vcol)
+    + kpi('Nearest carrier facility', nc?fmt(nc.mi):'—', nc?esc(nc.name)+' · '+nc.nets+' networks':'none within 160 mi', nc?(nc.mi<25?'#4ADE80':(nc.mi<75?'#FBBF24':'#F87171')):'#F87171')
+    + kpi('Est. RTT to a carrier hotel', lat?lat.rttMs.toFixed(2)+' ms':'—', lat?esc(lat.facility)+' · '+lat.routeMi.toFixed(1)+' route mi':'no facility in range')
+    + kpi('Facilities ≤ 80 mi', fac.within80!=null?fac.within80:'—', (fac.netsWithin80||0).toLocaleString()+' networks · '+(fac.ixWithin80||0)+' IXPs')
+   +'</div>'
+   +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Why — '+esc(r.summary||'')+'</div>'
+      +'<ul style="margin:0;padding-left:16px;line-height:1.6">'+(reasons||'<li>no reasons returned</li>')+'</ul></div>'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Lateral estimate</div>'
+      +(lt?'<div style="font-size:15px;font-weight:800;color:#E2EEF9">'+fmt(lt.mi)+' <span style="font-size:11px;font-weight:400;color:#94A3B8">to '+esc(lt.to)+'</span></div>'
+          +'<div style="margin-top:4px">'+money(lt.costLow)+' – '+money(lt.costHigh)+' <span style="color:#64748B">'+esc(lt.basis)+'</span></div>'
+        :'<div>No fiber evidence or carrier facility to measure to.</div>')
+      +(evid?'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Evidence, nearest first</div><ul style="margin:0;padding-left:16px;line-height:1.6">'+evid+'</ul>':'')
+    +'</div>'
    +'</div>'
    +'<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:inherit">'
     +'<thead><tr style="border-bottom:1px solid #1E3A5F;color:#64748B;font-size:9px;text-transform:uppercase;letter-spacing:.4px">'
@@ -58070,12 +58127,15 @@ function _npxInner(){
     +'<th style="padding:6px 8px;text-align:right">Route mi</th><th style="padding:6px 8px;text-align:right">RTT ms</th>'
     +'<th style="padding:6px 8px;text-align:right">Nets</th><th style="padding:6px 8px;text-align:right">IX</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
+   + findings
    +'<div style="margin-top:12px;font-size:10px;color:#64748B;line-height:1.6">'
-    +'Distances are great-circle \u00d7 '+PDB_ROUTE_FACTOR+' to approximate a built route \u2014 they are <strong>not</strong> a quoted fibre path. '
-    +'RTT assumes ~5&thinsp;\u00b5s/km each way in glass and excludes equipment latency. '
+    +'<div style="margin-bottom:6px">Sources: '+sources+' · '+((r.elapsedMs||0)/1000).toFixed(1)+'s · '+esc(r.build||'')+'</div>'
+    +'Facility distances are great-circle × '+esc(r.routeFactor)+' to approximate a built route — they are <strong>not</strong> a quoted fibre path. '
+    +'RTT assumes ~'+esc(r.usPerKm)+'&thinsp;µs/km each way in glass and excludes equipment latency. '
+    +'Plant distances are to the nearest published segment; OpenStreetMap distances are to a feature\'s centre. '
     +'A short distance does not mean a carrier will build to you: confirm route, conduit and lit capacity with the providers before this informs a siting decision.'
    +'</div>'
-  +'</div></div>';
+  +'</div>';
 }
 
 function openEnergyBalance(){
@@ -112278,8 +112338,13 @@ table.e3-tbl td{ white-space:normal }
 
     var haveGrid = (st.transmission && st.transmission.length) || (st.substations && st.substations.length);
     var at = window.OmegaGridAtlas, loc = siteLatLng(m.features);
+    /* 55 s, not 35: the function's own ceiling is 60 s and a dense metro
+       used to take 50 s on the OSM bundle. The bundle is lighter now and
+       substations come from a 0.3 s mirror, but the client must never give
+       up before the service can answer — that was the whole "Grid Atlas
+       could not be reached" report, for a site with 206 substations. */
     var step = (!haveGrid && at && loc)
-      ? at.run({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 35000 })
+      ? at.run({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 55000 })
           .then(function (res) { return mergeAtlas(st, res) ? 'atlas' : 'atlas-empty'; })
           ['catch'](function (e) {
             st.flags.push({ level: 'warn', code: 'grid_lookup_failed',
@@ -112289,7 +112354,28 @@ table.e3-tbl td{ white-space:normal }
           })
       : Promise.resolve(haveGrid ? 'drawn' : 'none');
 
-    return step.then(function (gridSrc) {
+    /* ── THE FIBER GATE, ASKED AT THE SAME TIME ─────────────────────────
+       Nobody draws fiber on a site plan either, and for a compute load it
+       is the hard gate (1 Gbps bidirectional, per How Compute Projects
+       Work). /api/network-proximity answers it from the same coordinates
+       — PeeringDB, FCC service at the point, mapped fibre, published
+       plant, long-haul conduits — and returns a verdict with its reasons.
+       It is carried on the intake as `fiber` and rendered beside the grid
+       score, never folded INTO it: a site can be 90 on power and unlit,
+       and averaging that into a 60 hides the only fact that matters. */
+    var fiberStep = (at && at.network && loc)
+      ? at.network({ lat: loc.lat, lng: loc.lng }, { timeoutMs: 55000 })
+          .then(function (r) { mergeFiber(st, r); return 'fiber'; })
+          ['catch'](function (e) {
+            st.flags.push({ level: 'warn', code: 'fiber_lookup_failed',
+              msg: 'Fiber could not be looked up (' + ((e && e.message) || 'no answer') +
+                   '), so the fiber gate for a data load is unanswered on this row.' });
+            return 'fiber-failed';
+          })
+      : Promise.resolve('none');
+
+    return Promise.all([step, fiberStep]).then(function (both) {
+      var gridSrc = both[0];
       var g = SI.gridScore(st);
       /* ── CONFIDENCE IS ABOUT THE FILE, NOT THE SCORE ─────────────────
          With the grid supplied, every gap gridScore counts is filled and it
@@ -112304,8 +112390,33 @@ table.e3-tbl td{ white-space:normal }
         if (REG[i].name === name) { REG.splice(i, 1); break; }
       }
       REG.push({ name: name, intake: st, grid: g, fromMap: true });
-      return { ok: true, src: m.src, name: name, gridSrc: gridSrc, score: g.score };
+      return { ok: true, src: m.src, name: name, gridSrc: gridSrc, score: g.score,
+               fiber: st.fiber ? { verdict: st.fiber.verdict, summary: st.fiber.summary } : null };
     });
+  }
+
+  /* Scalars off the service, plus one flag that says what it concluded and
+     why. Facilities and evidence lists are kept for the detail view and the
+     report; nothing here is geometry and nothing is measured against the
+     ring — the service already said what it measured to. */
+  function mergeFiber(st, r) {
+    var F = (r && r.fiber) || {}, fac = (r && r.facilities) || {};
+    st.fiber = {
+      verdict: F.verdict || 'uncertain', dataReady: !!F.dataReady, score: F.score,
+      summary: r.summary || '', reasons: F.reasons || [], evidence: F.evidence || [],
+      lateral: F.lateral || null, latency: F.latency || null,
+      nearestCarrier: fac.nearestCarrier || null, within80: fac.within80 || 0,
+      netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
+      fcc: (r && r.fcc) || null, sources: (r && r.sources) || {}, build: r && r.build
+    };
+    var level = F.verdict === 'unlikely' ? 'warn' : 'info';
+    st.flags.push({ level: level, code: 'fiber_' + (F.verdict || 'uncertain'),
+      msg: (r.summary || 'Fiber: no verdict') +
+           (F.verdict === 'unlikely' ? ' A data load needs 1 Gbps bidirectional fiber; treat this as the gate, not a detail.'
+          : F.verdict === 'uncertain' ? ' The public record has a gap here, not a finding — ask the carriers.'
+          : '') +
+           (F.lateral ? ' Lateral ~' + (F.lateral.mi < 10 ? F.lateral.mi.toFixed(1) : Math.round(F.lateral.mi)) + ' mi to ' + F.lateral.to + '.' : '') +
+           ' From /api/network-proximity, not from anything drawn.' });
   }
 
   /* ── THE FILE THE PARTNERS EXCHANGE ──────────────────────────────────
@@ -112386,6 +112497,13 @@ table.e3-tbl td{ white-space:normal }
   function regOpen() { regHost().classList.add('on'); regRender(); }
 
   function regBand(n) { return n >= 70 ? '#2E9E6B' : n >= 50 ? '#C9A24E' : '#C97A72'; }
+  function regFiberColor(v) { return v === 'likely' ? '#2E9E6B' : v === 'plausible' ? '#7FB069' : v === 'uncertain' ? '#C9A24E' : v === 'unlikely' ? '#C97A72' : 'var(--sub)'; }
+  function regFiberCell(F) {
+    if (!F) return '<span style="color:var(--sub)">\u2014</span>';
+    var t = F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi';
+    return '<b style="color:' + regFiberColor(F.verdict) + '" title="' + esc(F.summary || '') + '">' + esc(F.verdict) + '</b>' +
+           '<div style="font-size:10px;color:var(--sub)">' + esc(t) + '</div>';
+  }
 
   function regRender() {
     var h = regHost();
@@ -112413,7 +112531,7 @@ table.e3-tbl td{ white-space:normal }
         '</div>' +
         '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr>' +
           '<th></th><th>Parcel</th><th>Score</th><th>Confidence</th><th>kV</th>' +
-          '<th>POI</th><th>Acres</th><th>MW</th><th>Flags</th><th></th>' +
+          '<th>POI</th><th>Acres</th><th>MW</th><th>Fiber</th><th>Flags</th><th></th>' +
         '</tr></thead><tbody>' +
         rows.map(function (r, i) {
           var g = r.grid, k = r.intake;
@@ -112426,6 +112544,7 @@ table.e3-tbl td{ white-space:normal }
             '<td class="e3-num">' + (g.poiMi == null ? '\u2014' : g.poiMi.toFixed(2) + ' mi') + '</td>' +
             '<td class="e3-num">' + n0(k.grossAcres || 0) + '</td>' +
             '<td class="e3-num">' + (g.mwHostable == null ? '\u2014' : n0(g.mwHostable)) + '</td>' +
+            '<td>' + regFiberCell(k.fiber) + '</td>' +
             '<td style="font-size:10px;color:var(--sub)">' +
               (k.flags.length ? esc(k.flags.map(function (f) { return f.code; }).join(', ')) : '\u2014') +
             '</td>' +
@@ -112537,6 +112656,7 @@ table.e3-tbl td{ white-space:normal }
           'the substation came from Grid Atlas national data \u2014 confirm with the utility.';
         else if (r.gridSrc === 'atlas-empty' || r.gridSrc === 'atlas-failed')
           msg += ' No grid was drawn and none could be looked up, so this is a land score only.';
+        if (r.fiber) msg += ' ' + r.fiber.summary + '.';
         if (d.skipped) msg += ' ' + d.skipped + ' shape' + (d.skipped === 1 ? ' was' : 's were') +
           ' left out for having no coordinates.';
         say(r.gridSrc === 'atlas' || d.boundary !== 'designated' ? 'warn' : 'info', msg);
@@ -112624,6 +112744,7 @@ table.e3-tbl td{ white-space:normal }
                 (c.max ? ' / ' + c.max : '') + '</td>' +
               '<td style="color:var(--sub)">' + esc(c.note) + '</td></tr>';
           }).join('') + '</tbody></table>' +
+          regFiberDetail(k.fiber) +
           k.flags.map(function (f) {
             return '<div class="e3-note ' + (f.level === 'error' ? 'warn' : f.level === 'warn' ? 'warn' : 'info') +
                    '" style="margin-top:8px">' + esc(f.msg) + '</div>';
@@ -112635,18 +112756,47 @@ table.e3-tbl td{ white-space:normal }
     if (b) b.onclick = function () { regRender(); };
   }
 
+  function regFiberDetail(F) {
+    if (!F) return '';
+    function mi(v) { return v == null ? '\u2014' : (v < 10 ? v.toFixed(1) : Math.round(v)) + ' mi'; }
+    function money(v) { return v == null ? '\u2014' : (v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : '$' + Math.round(v / 1000) + 'k'); }
+    var rows = '';
+    rows += '<tr><td style="width:90px;color:var(--sub)">verdict</td><td class="e3-num" style="width:70px"><b style="color:' + regFiberColor(F.verdict) + '">' + esc(F.verdict) + '</b></td><td style="color:var(--sub)">' + esc(F.summary) + '</td></tr>';
+    rows += '<tr><td style="color:var(--sub)">score</td><td class="e3-num">' + (F.score == null ? '\u2014' : F.score + ' / 100') + '</td><td style="color:var(--sub)">carrier reach \u2014 facility, density, service at the point, exchanges</td></tr>';
+    if (F.nearestCarrier) rows += '<tr><td style="color:var(--sub)">carrier</td><td class="e3-num">' + mi(F.nearestCarrier.mi) + '</td><td style="color:var(--sub)">' + esc(F.nearestCarrier.name) + ' \u00b7 ' + F.nearestCarrier.nets + ' networks \u00b7 ' + F.within80 + ' facilities and ' + (F.netsWithin80 || 0).toLocaleString() + ' networks within 80 mi</td></tr>';
+    if (F.latency) rows += '<tr><td style="color:var(--sub)">latency</td><td class="e3-num">' + F.latency.rttMs.toFixed(2) + ' ms</td><td style="color:var(--sub)">round trip to ' + esc(F.latency.facility) + ' over ~' + F.latency.routeMi.toFixed(1) + ' route mi</td></tr>';
+    if (F.lateral) rows += '<tr><td style="color:var(--sub)">lateral</td><td class="e3-num">' + mi(F.lateral.mi) + '</td><td style="color:var(--sub)">to ' + esc(F.lateral.to) + ' \u00b7 ' + money(F.lateral.costLow) + '\u2013' + money(F.lateral.costHigh) + ' \u00b7 ' + esc(F.lateral.basis) + '</td></tr>';
+    if (F.fcc) rows += '<tr><td style="color:var(--sub)">at the point</td><td class="e3-num">' + (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : '?') + '</td><td style="color:var(--sub)">' + esc(F.fcc.note || '') + '</td></tr>';
+    (F.evidence || []).forEach(function (e) {
+      rows += '<tr><td style="color:var(--sub)">evidence</td><td class="e3-num">' + mi(e.mi) + '</td><td style="color:var(--sub)">' + esc(e.label) + '</td></tr>';
+    });
+    var src = F.sources || {};
+    rows += '<tr><td style="color:var(--sub)">sources</td><td></td><td style="color:var(--sub);font-size:10px">' +
+      esc(Object.keys(src).map(function (k2) { return k2 + ' ' + src[k2]; }).join(' \u00b7 ')) + '</td></tr>';
+    return '<div class="e3-sub" style="margin-top:14px;font-weight:700">Fiber \u2014 can this site carry a data load?</div>' +
+           '<table class="e3-tbl" style="margin-top:6px"><tbody>' + rows + '</tbody></table>';
+  }
+
   function regCsv() {
     var rows = REG.slice().sort(function (a, b) { return b.grid.score - a.grid.score; });
     var head = ['rank','parcel','score','confidence','kv','poi_mi','poi_via','gross_acres',
                 'buildable_ceiling_acres','mw_hostable','circuits','substations',
-                'gas_diameter_in','hazard_on_parcel','flags','evidence'];
+                'gas_diameter_in','hazard_on_parcel',
+                'fiber_verdict','fiber_score','fiber_carrier_mi','fiber_carrier','fiber_rtt_ms',
+                'fiber_lateral_mi','fiber_lateral_cost_low','fiber_lateral_cost_high','fiber_at_point',
+                'flags','evidence'];
     var out = [head];
     rows.forEach(function (r, i) {
-      var g = r.grid, k = r.intake;
+      var g = r.grid, k = r.intake, F = k.fiber || null;
       out.push([i + 1, r.name, g.score, g.confidence, g.kv || '', g.poiMi == null ? '' : g.poiMi,
         g.poiVia || '', Math.round(k.grossAcres || 0), g.buildableCeilingAcres == null ? '' : g.buildableCeilingAcres,
         g.mwHostable == null ? '' : g.mwHostable, k.circuitsAtMaxKv || 0,
         (k.substations || []).length, k.maxGasDiameterIn || '', k.hazardOnParcel || 0,
+        F ? F.verdict : '', F && F.score != null ? F.score : '',
+        F && F.nearestCarrier ? F.nearestCarrier.mi : '', F && F.nearestCarrier ? F.nearestCarrier.name : '',
+        F && F.latency ? F.latency.rttMs : '',
+        F && F.lateral ? F.lateral.mi : '', F && F.lateral ? F.lateral.costLow : '', F && F.lateral ? F.lateral.costHigh : '',
+        F && F.fcc ? (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : 'not checked') : '',
         k.flags.map(function (f) { return f.code; }).join('; '), g.evidence]);
     });
     var csv = out.map(function (rr) {
@@ -154670,6 +154820,9 @@ if (root.console && console.info) {
     /* Size: all the ground, capped at what daytime load can absorb. */
     var kwDcLand = ac / cfg.solarAcPerMwDc * 1000;
     var kwDcCap = (s.facKw * cfg.solarDaytimeFraction) * cfg.solarDcAc / cfg.solarCf * cfg.solarCf;
+    /* A stated ratio (MW-AC of solar per MW of IT) is the size, not a cap
+       on the economics. */
+    if (+input.solarRatio > 0) kwDcCap = +input.solarRatio * s.itMw * 1000 * cfg.solarDcAc;
     var kwDc = Math.min(kwDcLand, Math.max(kwDcCap, 0));
     var mwhYr = (kwDc / 1000 / cfg.solarDcAc) * cfg.solarCf * 8760;
     var facMwhYr = (s.facKw / 1000) * cfg.loadFactor * 8760;
@@ -159234,7 +159387,8 @@ if (root.console && console.info) {
         boundary: poly, exclusions: excl,
         presetKey: opts.presetKey || 'fixed_ground',
         gcr: +opts.gcr || 0.40,
-        setbackFt: +opts.setbackFt || 25
+        setbackFt: +opts.setbackFt || 25,
+        maxKwDc: +opts.maxKwDc || 0
       });
     } catch (e) {
       if (root.console) console.warn(TAG + ' solar', e && e.message);
@@ -160841,6 +160995,14 @@ if (root.console && console.info) {
     };
   }
 
+  /* The DC the array is allowed when the dialog asked for a ratio
+     (MW-AC of solar per MW of IT), at the 1.25 DC/AC the ground layout
+     assumes. Empty in fill mode, which means "all the ground". */
+  function solarCap(itMw) {
+    if (DER.solarMode !== 'ratio' || !(+DER.solarRatio > 0) || !(+itMw > 0)) return {};
+    return { maxKwDc: +DER.solarRatio * itMw * 1000 * 1.25 };
+  }
+
   /* ── run ────────────────────────────────────────────────────────────── */
 
   function run(opts) {
@@ -160877,7 +161039,7 @@ if (root.console && console.info) {
     /* Solar only if elected, and only into what is left. */
     var solar = null;
     if (DER.solar) {
-      try { solar = root.OmegaMaxFit && root.OmegaMaxFit.fillSolar(); } catch (e) {
+      try { solar = root.OmegaMaxFit && root.OmegaMaxFit.fillSolar(solarCap(out && out.itMw)); } catch (e) {
         solar = { ok: false, why: (e && e.message) || 'it threw' };
       }
     }
@@ -160973,6 +161135,18 @@ if (root.console && console.info) {
             'Carries the critical bus through transients and transfer.')
       + chk('od-solar', DER.solar, 'Solar array',
             'Fills the ground left after the compute and generation blocks.')
+      + '<div id="od-solarsize" style="margin:-2px 0 12px 30px">'
+      + '<label style="' + lbl + '">Solar sizing</label>'
+      + '<select id="od-solarmode" style="' + inp + '">'
+      + '<option value="fill"' + (DER.solarMode === 'ratio' ? '' : ' selected') + '>Fill the ground that is left</option>'
+      + '<option value="ratio"' + (DER.solarMode === 'ratio' ? ' selected' : '') + '>A ratio to the compute load</option>'
+      + '</select>'
+      + '<div id="od-ratiobox" style="' + (DER.solarMode === 'ratio' ? '' : 'display:none;') + 'margin-top:8px">'
+      + '<label style="' + lbl + '">MW of solar (AC) per MW of IT load</label>'
+      + '<input id="od-solarratio" type="number" min="0.1" step="0.1" value="'
+      + (+DER.solarRatio > 0 ? DER.solarRatio : 1.3) + '" style="' + inp + '">'
+      + '<div id="od-rationote" style="font-size:10px;color:#9A9A9A;margin-top:4px;line-height:1.5"></div>'
+      + '</div></div>'
 
       + '<div style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'
       + 'color:#8B7BD8;margin:16px 0 8px">Load</div>'
@@ -161022,6 +161196,10 @@ if (root.console && console.info) {
       DER.generation = !!(g('od-gen') && g('od-gen').checked);
       DER.storage = !!(g('od-bess') && g('od-bess').checked);
       DER.solar = !!(g('od-solar') && g('od-solar').checked);
+      var sm = g('od-solarmode');
+      DER.solarMode = (sm && sm.value === 'ratio') ? 'ratio' : 'fill';
+      var sr = g('od-solarratio') ? parseFloat(g('od-solarratio').value) : NaN;
+      DER.solarRatio = (isFinite(sr) && sr > 0) ? sr : (+DER.solarRatio > 0 ? DER.solarRatio : 1.3);
       saveDer();
       var mw = g('od-ws') ? parseFloat(g('od-ws').value) : NaN;
       if (isFinite(mw) && mw > 0) setWillServe(mw, g('od-ref') ? g('od-ref').value : null);
@@ -161039,6 +161217,36 @@ if (root.console && console.info) {
       setTimeout(function () { root.OmegaDesign.run({ mode: mode, itMw: it }); }, 40);
     });
     document.body.appendChild(w);
+
+    /* The ratio box shows only in ratio mode, and its note does the
+       arithmetic as the numbers change so nobody has to. */
+    var ratioNote = function () {
+      var sel = document.getElementById('od-solarmode');
+      var box = document.getElementById('od-ratiobox');
+      var nt = document.getElementById('od-rationote');
+      if (box) box.style.display = (sel && sel.value === 'ratio') ? '' : 'none';
+      if (!nt) return;
+      var r = parseFloat((document.getElementById('od-solarratio') || {}).value);
+      var it = parseFloat((document.getElementById('od-it') || {}).value);
+      if (!(r > 0)) { nt.textContent = 'Enter a ratio above zero.'; return; }
+      if (mode === 'max' || !(it > 0)) {
+        nt.textContent = r + ' MW-AC of solar for every MW of IT the search settles on. '
+          + 'Land can still bound it; the summary says so if it does.';
+        return;
+      }
+      var ac = r * it;
+      nt.textContent = r + ' \u00d7 ' + it + ' MW IT = ' + n1(ac) + ' MW-AC (\u2248 ' + n1(ac * 1.25)
+        + ' MW-DC at 1.25 DC/AC). Drawn as a solid block from one edge of the solar ground; '
+        + 'land can still bound it.';
+    };
+    ['od-solarmode', 'od-solarratio', 'od-it'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.addEventListener('change', ratioNote); el.addEventListener('input', ratioNote); }
+    });
+    w.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-m]')) setTimeout(ratioNote, 0);
+    });
+    ratioNote();
     return true;
   }
 
@@ -161492,7 +161700,8 @@ if (root.console && console.info) {
             return q && q.poly ? { poly: _framePoly(_sfr, q.poly, true), ac: q.ac } : q;
           });
         }
-        var lay = computeGroundLayout({ boundary: plan.solar.polygon, exclusions: exclusions() });
+        var lay = computeGroundLayout({ boundary: plan.solar.polygon, exclusions: exclusions(),
+                                        maxKwDc: plan.solar.targetKwDc || 0 });
         if (lay) {
           var sh = applyGroundLayout(plan.solar.polygon, lay, exclusions());
           if (sh) { sh.omegaCompute = true; sh.omegaSolarZone = true; }
@@ -161607,6 +161816,7 @@ if (root.console && console.info) {
       itMw: +opts.itMw || 40,
       generation: der.generation !== false, storage: der.storage !== false,
       solar: der.solar === true, genClass: genClass || null,
+      solarRatio: (der.solarMode === 'ratio' && +der.solarRatio > 0) ? +der.solarRatio : null,
       redundancy: opts.redundancy || 'n1'
     };
     var over = {};
@@ -161636,6 +161846,28 @@ if (root.console && console.info) {
       /* The build already came out on the parcel's axis; the post-build
          turn must not turn it a second time. */
       root.__omegaPlanFramed = !!_fr;
+      if (_fr) {
+        /* Fences, control yard and ties from WORLD coordinates, now that
+           the sweep is done (the campus draw skipped them in the frame). */
+        try { if (root.OmegaFenceTie) root.OmegaFenceTie.run({ from: 'campus' }); }
+        catch (e) { if (root.console) console.warn(TAG + ' fence', e && e.message); }
+        /* Everything fits inside the traced boundary. The framed path
+           skips the post-build turn, and the fit check lived only there. */
+        try {
+          var MAPK = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
+          var tagsF = {};
+          (S.shapes || []).forEach(function (o) {
+            if (!o || o.isSiteBoundary) return;
+            var t = o.omegaCampus || MAPK[o.kind]; if (t) tagsF[t] = 1;
+          });
+          var tooBig = [];
+          Object.keys(tagsF).forEach(function (t) {
+            if (typeof _fitCampusInsideParcel === 'function' && _fitCampusInsideParcel(t, null) === 'toobig') tooBig.push(t);
+          });
+          if (tooBig.length && typeof showBanner === 'function')
+            showBanner('warn', tooBig.join(' and ') + ' is wider than the parcel and crosses the line \u2014 make it smaller or pick a different axis.');
+        } catch (e) { if (root.console) console.warn(TAG + ' fit', e && e.message); }
+      }
     }
     root._omegaPlan = plan;
 
@@ -165780,6 +166012,16 @@ if (root.console && console.info) {
       if (lcoe < tiers[i].rate) { wantAc += tiers[i].kwAc; taken.push(tiers[i]); }
       else { stoppedBy = tiers[i]; break; }
     }
+    /* A STATED RATIO IS THE SIZE. "1.3 MW of solar per MW of compute" is
+       a design decision the economics do not get to overrule — the array
+       is that big, the land can still bound it, and the saving is
+       allocated across every tier it actually displaces. */
+    var ratio = (+input.solarRatio > 0) ? +input.solarRatio : 0;
+    if (ratio) {
+      wantAc = ratio * s.itMw * 1000;
+      taken = tiers.length ? tiers.slice() : [{ kwAc: wantAc, rate: utilRate, src: 'utility energy' }];
+      stoppedBy = null;
+    }
     if (wantAc <= 0) {
       return { built: false, acres: ac, polygon: clipped, polygons: polys, kwDc: 0, kwAc: 0, mwhYr: 0,
         displacesPerMwh: tiers.length ? tiers[0].rate : 0,
@@ -165809,12 +166051,15 @@ if (root.console && console.info) {
     });
 
     var facMwh = (s.facKw / 1000) * (cfg.loadFactor || 0.9) * 8760;
-    var why = 'solar at $' + lcoe + '/MWh displaces ' + taken[0].src + ' at $'
-      + Math.round(taken[0].rate) + '/MWh';
-    if (landBound) why += ' \u2014 land-bound at ' + Math.round(ac) + ' ac, not economics';
+    var why = ratio
+      ? 'sized at ' + ratio + ' MW-AC of solar per MW of IT load \u2014 ' + (wantAc / 1000).toFixed(1)
+        + ' MW-AC / ' + (kwDcWant / 1000).toFixed(1) + ' MW-DC asked for'
+      : 'solar at $' + lcoe + '/MWh displaces ' + taken[0].src + ' at $'
+        + Math.round(taken[0].rate) + '/MWh';
+    if (landBound) why += ' \u2014 land-bound at ' + Math.round(ac) + ' ac' + (ratio ? ', short of the ratio' : ', not economics');
     else if (stoppedBy) why += ' \u2014 stopped where the next megawatt would only displace '
       + stoppedBy.src + ' at $' + Math.round(stoppedBy.rate) + '/MWh, under its own cost';
-    else why += ' \u2014 the whole load is covered in daylight';
+    else if (!ratio) why += ' \u2014 the whole load is covered in daylight';
 
     /* Storage only earns a shift where solar would otherwise spill, and a
        flat compute load larger than the array never spills. Said out
@@ -165830,6 +166075,7 @@ if (root.console && console.info) {
       displacesPerMwh: taken[0].rate, displaces: taken[0].src,
       lcoePerMwh: lcoe, savingPerYr: saveYr, tiers: mix,
       landBound: landBound, stoppedBy: stoppedBy ? stoppedBy.src : null,
+      ratio: ratio || null, targetKwDc: ratio ? kwDc : 0,
       shiftKwh: shiftKwh,
       shiftNote: shiftKwh > 0 ? 'shifting the daytime surplus into the evening'
         : 'no shift: the array never exceeds the load, so nothing spills',
@@ -166025,12 +166271,18 @@ if (root.console && console.info) {
        reports as a 12-acre one. */
     try {
       var extra = (plan.solar && plan.solar.polygons) || [];
+      var target = (plan.solar && plan.solar.targetKwDc) || 0;
       for (var f = 1; f < extra.length; f++) {
+        /* With a ratio, the later fields only take what the first left
+           unfilled; at zero left they stay open ground. */
+        var left = target ? Math.max(0, target - (plan.solar.drawnKw || 0)) : 0;
+        if (target && left <= 0) break;
         var lay = root.computeGroundLayout({ boundary: extra[f].poly,
-          exclusions: (root._alExclusions || []) });
+          exclusions: (root._alExclusions || []), maxKwDc: left });
         if (!lay) continue;
         var sh2 = root.applyGroundLayout(extra[f].poly, lay, root._alExclusions || []);
         if (sh2) { sh2.omegaCompute = true; sh2.omegaSolarZone = true; }
+        plan.solar.drawnKw = (plan.solar.drawnKw || 0) + (lay.kw || 0);
       }
     } catch (e) { if (root.console) console.warn(TAG + ' extra solar fields', e && e.message); }
 
@@ -166052,9 +166304,13 @@ if (root.console && console.info) {
 
     root._omegaCampusPlan = plan;
     /* Fences, the control yard and the ties, drawn from what is now on
-       the canvas. Runs after the equipment, never before it. */
+       the canvas. Runs after the equipment, never before it — and never
+       while the build is still in the parcel's frame: a fence measured
+       from frame coordinates and then swept to world came out as 36 acres
+       of compound thrown across the boundary. The adapter fences once the
+       sweep is done and everything stands where it will stay. */
     try {
-      if (root.OmegaFenceTie) root.OmegaFenceTie.run({ from: 'campus' });
+      if (root.OmegaFenceTie && !root.__omegaPlanFrame) root.OmegaFenceTie.run({ from: 'campus' });
     } catch (e) { if (root.console) console.warn(TAG + ' fence', e && e.message); }
     try { if (typeof root.updShapeCount === 'function') root.updShapeCount(); } catch (e) {}
     try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (e) {}
