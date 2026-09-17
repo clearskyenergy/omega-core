@@ -129,10 +129,31 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .cardBack{position:fixed;inset:0;z-index:150;background:rgba(2,8,19,.62);
           backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center}
 .cardBack[hidden]{display:none!important}
+/* THE CARD IS A FIXED FRAME WITH A SCROLLING MIDDLE, not a column that grows.
+   It had no max-height at all: a person with a dozen outstanding items made a
+   card taller than the screen, so the name ran off the top and the buttons ran
+   off the bottom — the two parts you always need were the two you could not
+   reach. Identity stays pinned at the top, actions pinned at the bottom, and
+   only the detail between them moves. */
 .card{width:min(460px,92vw);background:var(--panel);border:var(--edge);border-radius:10px;
       padding:20px 22px;position:relative;
+      max-height:min(84vh,680px);display:flex;flex-direction:column;
       box-shadow:0 0 40px rgba(0,243,255,.18), inset 0 0 24px rgba(0,68,255,.20);
       animation:beam .22s cubic-bezier(.2,.9,.25,1) both}
+/* Bleeds to the card's padding edge so the scrollbar rides the border rather
+   than cutting a channel through the content. */
+.cardScroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+            margin:0 -22px;padding:0 22px;
+            scrollbar-width:thin;scrollbar-color:rgba(0,243,255,.35) transparent}
+.cardScroll::-webkit-scrollbar{width:6px}
+.cardScroll::-webkit-scrollbar-thumb{background:rgba(0,243,255,.3);border-radius:3px}
+.cardScroll::-webkit-scrollbar-track{background:transparent}
+/* The fold. Everything past the score and the two most recent items lives
+   here, because a card you have to scroll to read is only better than a card
+   that runs off the screen — what he opens it for should be on top. */
+.relMore[hidden]{display:none}
+.relToggle{width:100%;margin-top:10px;font-family:var(--mono);font-size:9.5px;
+           letter-spacing:1.6px;padding:7px;justify-content:center}
 @keyframes beam{
   from{opacity:0;transform:translateY(26px) scale(.86);filter:blur(6px)}
   to  {opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
@@ -141,7 +162,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
   border-top:2px solid var(--glow-cyan);border-left:2px solid var(--glow-cyan)}
 .card::after{content:'';position:absolute;bottom:0;right:0;width:14px;height:14px;
   border-bottom:2px solid var(--glow-cyan);border-right:2px solid var(--glow-cyan)}
-.holo{width:100%;height:150px;display:block;margin:-4px 0 10px}
+/* 150px was a third of the card's height for something that is the same for
+   everyone and says nothing about the person. Kept, because it is the
+   card's character, at a size that no longer costs the content. */
+.holo{width:100%;height:82px;display:block;margin:-4px 0 6px}
 .cardName{font-family:var(--mono);font-size:20px;letter-spacing:2px;color:var(--glow-cyan);
           text-shadow:0 0 14px rgba(0,243,255,.5)}
 .cardRole{font-size:13px;color:var(--ink);margin-top:4px}
@@ -7638,14 +7662,56 @@ function relSection(r){
     });
   };
 
-  if(r.owed) addItems('THEY OWE YOU',r.topOwed,r.owed);
+  /* WHAT OPENS BY DEFAULT: the score above, and the two most recent things
+     they owe. That is the card's actual question — "where are we with this
+     person" — answered without scrolling. Everything else is real but is
+     reference, and reference that arrives uninvited is what made the card
+     unusable. */
+  const recent=(r.topOwed||[]).slice(0,2);
+  const rest=(r.topOwed||[]).slice(2);
+  if(r.owed) addItems('THEY OWE YOU',recent,r.owed);
   else list.appendChild(mk('div','relNone','Nothing outstanding from them.'));
-  if(r.owed>(r.topOwed||[]).length)
-    list.appendChild(mk('div','relNone','+'+(r.owed-(r.topOwed||[]).length)+' more \u2014 FULL HISTORY below'));
-
-  addItems('YOURS, FROM MEETINGS WITH THEM',r.topYouOwe,r.youOwe);
-  addItems('UNANSWERED IN THOSE ROOMS',r.topQuestions,r.questions);
   wrap.appendChild(list);
+
+  const more=document.createElement('div');
+  more.className='relMore'; more.hidden=true;
+  const moreList=document.createElement('div'); moreList.className='relList';
+  const addTo=(host,title,items,count)=>{
+    if(!items||!items.length) return;
+    host.appendChild(mk('h4',null,title+(count?' ('+count+')':'')));
+    items.forEach(it=>{
+      const o=(typeof it==='string')?{text:it}:(it||{});
+      const age=o.when?days(o.when):null;
+      const d=mk('div','relItem'+(age!=null&&age>30?' stale':''),null);
+      d.appendChild(document.createTextNode(o.text||''));
+      const tail=[];
+      if(o.when) tail.push(String(o.when).slice(0,10));
+      if(o.meeting) tail.push(o.meeting);
+      if(o.due) tail.push('due '+o.due);
+      if(tail.length){
+        const sm=document.createElement('div');
+        sm.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);margin-top:3px';
+        sm.textContent=tail.join('  \u00b7  ');
+        d.appendChild(sm);
+      }
+      if(age!=null&&age>30) d.appendChild(mk('span','age',age+'d'));
+      host.appendChild(d);
+    });
+  };
+  addTo(moreList,'MORE THEY OWE YOU',rest,0);
+  addTo(moreList,'YOURS, FROM MEETINGS WITH THEM',r.topYouOwe,r.youOwe);
+  addTo(moreList,'UNANSWERED IN THOSE ROOMS',r.topQuestions,r.questions);
+  more.appendChild(moreList);
+
+  const hidden=rest.length+(r.topYouOwe||[]).length+(r.topQuestions||[]).length;
+  if(hidden){
+    const tog=document.createElement('button'); tog.className='btn relToggle';
+    const label=()=> more.hidden ? ('SHOW '+hidden+' MORE') : 'SHOW LESS';
+    tog.textContent=label();
+    tog.addEventListener('click',()=>{ more.hidden=!more.hidden; tog.textContent=label(); });
+    wrap.appendChild(tog);
+    wrap.appendChild(more);
+  }
 
   /* HONEST LABELLING, and why the two lists above read differently. What
      they owe is attributed to a named owner by the analyser. What HE owes,
@@ -7676,6 +7742,11 @@ function showCard(p, fromEl){
   if(p.org){ const o=document.createElement('div'); o.className='cardOrg'; o.textContent=String(p.org).toUpperCase(); h.appendChild(o); }
   card.appendChild(h);
 
+  /* Everything from here to the actions scrolls; the name above and the
+     buttons below stay put. */
+  const scroll=document.createElement('div'); scroll.className='cardScroll';
+  card.appendChild(scroll);
+
   const rows=document.createElement('div'); rows.className='cardRows';
   const addRow=(label,value)=>{
     if(!value) return;
@@ -7688,7 +7759,7 @@ function showCard(p, fromEl){
   };
   addRow('EMAIL', p.email);
   addRow('PHONE', p.phone);
-  card.appendChild(rows);
+  scroll.appendChild(rows);
 
   /* The relationship half, between the contact rows and the actions: it is
      the reason the card is being opened, so it sits above the buttons rather
@@ -7700,7 +7771,7 @@ function showCard(p, fromEl){
      again. The card is re-checked on arrival because he may have closed it
      or opened a different person in the meantime. */
   const relHost=document.createElement('div');
-  card.appendChild(relHost);
+  scroll.appendChild(relHost);
   const paintRel=()=>{
     const r=relFor(p);
     if(!r) return;
