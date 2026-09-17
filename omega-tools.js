@@ -201,6 +201,14 @@
       file:'/procurement.html', soon:true, tier:TIER.ALL,
       icon:'M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0' },
 
+    /* The originator's front door to the same marketplace. It writes nothing:
+       it converts a unit count into MW/MWh and hands the numbers to the
+       financing form, which is the single submission path. Registered next to
+       'financing' because they are two ends of one road. */
+    { key:'opportunity', name:'File an Opportunity', category:'marketplace',
+      desc:'Address, unit count, size and cost — straight into the financing marketplace.',
+      file:'/opportunity-intake.html', soon:false, tier:TIER.ALL,
+      icon:'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
     { key:'financing', name:'Financing Partners', category:'marketplace',
       desc:'Debt, tax equity & capital partners for projects.',
       /* Same-origin: portals/finance/ lives in THIS repo. It used to point at

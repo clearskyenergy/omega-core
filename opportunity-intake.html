@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClearSky OMEGA — Opportunity Intake</title>
+<!--
+  opportunity-intake.html — an originator files an opportunity in four fields.
+
+  WHY THIS EXISTS AND WHAT IT DELIBERATELY IS NOT.
+
+  Clean Cell US builds batteries and sells them; they are the mirror of an OEM
+  like FENECON, which RECEIVES quote requests. An originator SENDS an
+  opportunity out — address, how many units, how big, what it costs — and it
+  has to reach a capital partner's deal room.
+
+  It is NOT a second submission path. That was the whole instruction, and it is
+  also the right architecture: the finance portal already has a submit form
+  with validation, a review gate, the firestore rules that govern fin_projects
+  and one buildDeal()/persistDeal() pair. A tool that wrote its own document
+  would be a second author of the same collection, drifting from the first the
+  day either changed.
+
+  So this collects, converts, and HANDS OFF. It ends at:
+
+      /finance#new?name=…&state=…&city=…&mw=…&mwh=…&ask=…&notes=…
+
+  which the portal reads once, opens its own dialog prefilled, and the person
+  presses Submit there — seeing exactly what will be filed and able to correct
+  it first. Nothing here writes to Firestore. Nothing here can.
+
+  THE UNIT ARITHMETIC IS SHOWN, NOT HIDDEN. A count of batteries and a kWh
+  rating per unit are what an originator actually has; MW and MWh are what the
+  marketplace is denominated in. The conversion is one multiplication and it is
+  printed on screen with its inputs, because a number that appears without its
+  working is a number nobody can check.
+
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+-->
+<style>
+  :root{
+    --bg:#0a1018; --panel:#101a26; --line:#22344a; --ink:#e6eef7; --dim:#8fa7bd;
+    --accent:#2fb7ff; --ok:#4ade80; --warn:#f59e0b; --bad:#f87171;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    padding:28px 18px 60px}
+  .wrap{max-width:46rem;margin:0 auto}
+  h1{font-size:23px;font-weight:700;margin:0 0 6px;letter-spacing:-.01em}
+  .lede{color:var(--dim);font-size:13.5px;margin:0 0 22px;max-width:52ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;margin-bottom:14px}
+  h2{font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);
+    font-family:var(--mono);font-weight:600;margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:34rem){.grid{grid-template-columns:1fr}}
+  label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}
+  label .req{color:var(--bad);margin-left:3px}
+  input,select,textarea{width:100%;background:#0a1420;border:1px solid var(--line);
+    color:var(--ink);border-radius:8px;padding:10px 11px;font:inherit;font-size:14.5px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:5px;line-height:1.45}
+  .err{font-size:12px;color:var(--bad);font-weight:600;margin-top:5px;display:none}
+  .bad input,.bad select{border-color:var(--bad)}
+  .bad .err{display:block}
+  .calc{background:#0a1420;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    font-family:var(--mono);font-size:12.5px;color:var(--dim);line-height:1.8}
+  .calc b{color:var(--ink);font-weight:600}
+  .calc .big{font-size:19px;color:var(--accent)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
+  button{border-radius:9px;padding:11px 20px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--dim)}
+  button.go{background:var(--accent);border-color:var(--accent);color:#04121d}
+  button:disabled{opacity:.5;cursor:default}
+  .note{font-size:11.5px;color:var(--dim);line-height:1.5;margin-top:14px;
+    border-left:2px solid var(--line);padding-left:12px}
+  .note b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>File an opportunity</h1>
+  <p class="lede">Four things about the site. This hands them to the financing marketplace's
+    own submission form, prefilled — you press Submit there, and nothing is filed until you do.</p>
+
+  <div class="card">
+    <h2>The site</h2>
+    <div class="field" id="f-name">
+      <label for="name">Project name <span class="req">*</span></label>
+      <input id="name" placeholder="S.J Burns — 330 Roberts" autofocus>
+      <div class="err">Give it a name a stranger could recognise.</div>
+    </div>
+    <div style="height:14px"></div>
+    <div class="field" id="f-addr">
+      <label for="addr">Address <span class="req">*</span></label>
+      <input id="addr" placeholder="330 Roberts St, Easton, PA 18042">
+      <div class="hint">City and state are what the marketplace files it under; the street address
+        travels through in the notes.</div>
+      <div class="err">Include the city and the state — without them this cannot be placed.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>The batteries</h2>
+    <div class="grid">
+      <div class="field" id="f-count">
+        <label for="count">How many units <span class="req">*</span></label>
+        <input id="count" type="number" min="1" step="1" placeholder="56">
+        <div class="err">A whole number of units.</div>
+      </div>
+      <div class="field" id="f-kwh">
+        <label for="kwh">Energy per unit (kWh) <span class="req">*</span></label>
+        <input id="kwh" type="number" min="0.1" step="0.1" placeholder="215">
+        <div class="err">The nameplate energy of one unit.</div>
+      </div>
+      <div class="field" id="f-kw">
+        <label for="kw">Power per unit (kW)</label>
+        <input id="kw" type="number" min="0" step="0.1" placeholder="100">
+        <div class="hint">Optional. Left blank, the marketplace is told the energy only.</div>
+      </div>
+      <div class="field" id="f-cost">
+        <label for="cost">Total cost (USD) <span class="req">*</span></label>
+        <input id="cost" type="number" min="0" step="1000" placeholder="4200000">
+        <div class="err">What the opportunity costs, all in.</div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="calc" id="calc">Enter a count and a size and the conversion appears here.</div>
+  </div>
+
+  <div class="card">
+    <h2>Anything a partner would otherwise ask</h2>
+    <textarea id="notes" rows="4" placeholder="Offtaker, host, interconnection status, why this site, what is still open."></textarea>
+    <div class="hint">Optional, and the most-read field on the page it lands on.</div>
+  </div>
+
+  <div class="row">
+    <button class="go" id="go">Continue to the marketplace form</button>
+    <button id="reset">Clear</button>
+    <span class="hint" id="msg" style="margin:0"></span>
+  </div>
+
+  <div class="note">
+    <b>This page files nothing.</b> It opens the financing marketplace's own submission
+    form with these values in it. That form is the single path onto the marketplace — same
+    validation, same review gate, same rules — so what a capital partner sees is what that
+    form produced, whoever started it.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var num = function (id) { var v = parseFloat(($(id) || {}).value); return isFinite(v) ? v : null; };
+
+  /* US states, so a typed address resolves to the code the marketplace files
+     under. Matched on the postal code or the full name — the two spellings an
+     address actually carries. */
+  var STATES = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+    CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',
+    IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',
+    MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+    NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',
+    NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',
+    RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',
+    VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+    DC:'District of Columbia'};
+
+  /* Pull the city and the state out of a typed address. Deliberately small and
+     deliberately honest: it reads the LAST comma-separated parts, which is how
+     a US address is written, and returns nothing rather than guessing when it
+     cannot find a state. A wrong state files the deal into the wrong market. */
+  function place(addr) {
+    var s = String(addr || '').trim();
+    if (!s) return null;
+    var parts = s.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var st = null, city = null;
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var p = parts[i];
+      var m = p.match(/\b([A-Za-z]{2})\b(?:\s+\d{5}(?:-\d{4})?)?\s*$/);
+      if (m && STATES[m[1].toUpperCase()]) { st = m[1].toUpperCase(); }
+      if (!st) {
+        for (var code in STATES) {
+          if (STATES[code].toLowerCase() === p.toLowerCase().replace(/\s+\d{5}.*$/, '')) { st = code; break; }
+        }
+      }
+      if (st) { city = parts[i - 1] || null; break; }
+    }
+    return st ? { state: st, city: city } : null;
+  }
+
+  function recalc() {
+    var n = num('count'), kwh = num('kwh'), kw = num('kw'), cost = num('cost');
+    var box = $('calc');
+    if (!n || !kwh) {
+      box.textContent = 'Enter a count and a size and the conversion appears here.';
+      return null;
+    }
+    var mwh = (n * kwh) / 1000, mw = kw ? (n * kw) / 1000 : 0;
+    var lines = [];
+    lines.push('<b>' + n + '</b> units &times; <b>' + kwh + '</b> kWh = <span class="big">'
+      + mwh.toFixed(2) + ' MWh</span>');
+    if (kw) lines.push('<b>' + n + '</b> units &times; <b>' + kw + '</b> kW = <span class="big">'
+      + mw.toFixed(2) + ' MW</span>');
+    else lines.push('Power per unit is blank, so the marketplace is told <b>0 MW</b> — energy only.');
+    if (cost && mwh) lines.push('Cost works out at <b>$' + Math.round(cost / mwh).toLocaleString()
+      + '</b> per MWh.');
+    box.innerHTML = lines.join('<br>');
+    return { mw: mw, mwh: mwh };
+  }
+
+  ['count','kwh','kw','cost'].forEach(function (id) {
+    var el = $(id); if (el) el.addEventListener('input', recalc);
+  });
+
+  function bad(fieldId, on) {
+    var f = $(fieldId); if (f) f.className = 'field' + (on ? ' bad' : '');
+  }
+
+  $('go').addEventListener('click', function () {
+    var name = ($('name').value || '').trim();
+    var addr = ($('addr').value || '').trim();
+    var n = num('count'), kwh = num('kwh'), cost = num('cost');
+    var p = place(addr);
+    var ok = true;
+    bad('f-name', !name); if (!name) ok = false;
+    bad('f-addr', !p);    if (!p) ok = false;
+    bad('f-count', !(n > 0));   if (!(n > 0)) ok = false;
+    bad('f-kwh', !(kwh > 0));   if (!(kwh > 0)) ok = false;
+    bad('f-cost', !(cost > 0)); if (!(cost > 0)) ok = false;
+    if (!ok) { $('msg').textContent = 'Fix the fields marked in red.'; return; }
+
+    var sized = recalc();
+    /* The street address and the unit arithmetic travel in the notes, because
+       the marketplace stores a city and a state — and a partner reading the
+       deal should still be able to see the site and check the maths. */
+    var notes = [
+      'Site: ' + addr,
+      n + ' units × ' + kwh + ' kWh = ' + sized.mwh.toFixed(2) + ' MWh'
+        + (num('kw') ? '; ' + n + ' × ' + num('kw') + ' kW = ' + sized.mw.toFixed(2) + ' MW' : ''),
+      ($('notes').value || '').trim()
+    ].filter(Boolean).join('\n');
+
+    var q = new URLSearchParams({
+      name: name, state: p.state, city: p.city || '',
+      mw: sized.mw ? sized.mw.toFixed(2) : '0',
+      mwh: sized.mwh.toFixed(2), ask: String(Math.round(cost)),
+      notes: notes
+    });
+    $('msg').textContent = 'Opening the marketplace form…';
+    location.href = '/finance#new?' + q.toString();
+  });
+
+  $('reset').addEventListener('click', function () {
+    ['name','addr','count','kwh','kw','cost','notes'].forEach(function (id) { $(id).value = ''; });
+    ['f-name','f-addr','f-count','f-kwh','f-cost'].forEach(function (f) { bad(f, false); });
+    $('msg').textContent = ''; recalc(); $('name').focus();
+  });
+})();
+</script>
+</body>
+</html>

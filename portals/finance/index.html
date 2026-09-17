@@ -5153,7 +5153,49 @@ function closeModal() { $('#modalBack').classList.remove('show'); $('#modalEl').
 
 let editingId = null;
 
-function submitModal(dealId) {
+/* ── PREFILL FROM A TOOL, INTO THIS SAME FORM ─────────────────────────────
+   An originator's tool collects four things about an opportunity — where it
+   is, how many units, how big, what it costs — and has to get them onto the
+   marketplace. The rule Thomas set is that it must NOT be a second submission
+   path: one form, one buildDeal(), one persistDeal(), one set of rules to
+   argue with. So the tool hands its numbers to THIS dialog through the hash
+   and a person still presses Submit, sees what will be filed, and can correct
+   it. Nothing is written without the form.
+
+       /finance#new?name=…&state=TX&city=…&mw=…&mwh=…&ask=…&notes=…
+
+   Read once and cleared, so a reload does not silently re-open a half-filled
+   dialog over whatever the person is doing by then. */
+function prefillFromHash() {
+  var h = String(location.hash || '');
+  if (h.indexOf('new?') !== 0 && h.indexOf('#new?') !== 0) return null;
+  var q = null;
+  try { q = new URLSearchParams(h.slice(h.indexOf('?') + 1)); } catch (e) { return null; }
+  history.replaceState(null, '', location.pathname + location.search);
+  var out = {};
+  ['name','state','city','mw','mwh','ask','notes','tech'].forEach(function (k) {
+    var v = q.get(k); if (v != null && v !== '') out[k] = v;
+  });
+  return Object.keys(out).length ? out : null;
+}
+function applyPrefill(pre) {
+  if (!pre) return;
+  var set = function (id, v) {
+    var el = document.querySelector(id);
+    if (el && v != null && v !== '') el.value = v;
+  };
+  set('#nfName', pre.name); set('#nfCity', pre.city);
+  set('#nfMw', pre.mw); set('#nfMwh', pre.mwh); set('#nfAsk', pre.ask);
+  set('#nfNotes', pre.notes);
+  var st = document.querySelector('#nfState');
+  if (st && pre.state) { st.value = String(pre.state).toUpperCase(); }
+  /* The name is filled, so focus belongs on the first thing a person still
+     has to decide rather than on a box that is already correct. */
+  var first = document.querySelector('#nfAsk');
+  if (first && !pre.ask) first.focus();
+}
+
+function submitModal(dealId, prefill) {
   const ed = dealId ? allDeals().find(x => x.id === dealId) : null;
   editingId = ed ? ed.id : null;
   pendingBill = ed ? ed.bill : null;
@@ -5322,6 +5364,7 @@ function submitModal(dealId) {
   wizStep = 1;
   wizGo(1);
   const nm = $('#nfName'); if (nm) nm.focus();
+  if (prefill) applyPrefill(prefill);
 }
 
 /* ── Asset detail block ─────────────────────────────────────────────────────
@@ -11041,6 +11084,14 @@ async function signIn(acct) {
 
   $('#authView').style.display = 'none';
   $('#appView').style.display = 'block';
+  /* A tool sent an opportunity here. Read AFTER sign-in, because the dialog
+     needs a session to know who is filing it — and the hash survives the
+     Google redirect, so somebody arriving cold still lands on their numbers
+     rather than on an empty form and a lost draft. */
+  try {
+    var _pre = prefillFromHash();
+    if (_pre) setTimeout(function () { submitModal(null, _pre); }, 0);
+  } catch (e) { console.warn('[OMEGA] prefill ignored:', e && e.message); }
   $('#roleSwitch').style.display = meta.side === 'both' ? 'flex' : 'none';
   $('#roleChip').textContent = meta.label;
   $('#roleChip').className = 'role-chip ' + meta.chip;
