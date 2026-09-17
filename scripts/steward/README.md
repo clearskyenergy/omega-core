@@ -200,6 +200,66 @@ every morning without blocking anyone — until somebody deletes the line.
 
 ---
 
+## The caller trace, 2026-09-17
+
+Asked of the five open endpoints: *who calls this today, and would adding a
+token check break them?* Traced by hand; every line number below was read.
+
+**None of the five callers sends an `Authorization` header.** All send
+`Content-Type: application/json` and nothing else. So a server-side token check
+alone WOULD break them — each fix is two-sided: the caller attaches the token,
+the endpoint verifies it, and both ship together.
+
+The client half is not new work. `editor.html` already does exactly this in
+three places — `/api/rfq` (line 37330), `/api/bess-size` (115641), and a
+generic helper at 154041 that attaches the header only when a token exists.
+There is an `idToken()` helper at 153547 that returns null when signed out.
+
+| endpoint | caller | verdict |
+|---|---|---|
+| `greenfield` | **none** | The only `greenfield` hits in the repo are the editor's site-condition UI (greenfield/brownfield), which is unrelated, plus a comment in the unreachable `commercial.js`. Gate it with no client change. Do this one first. |
+| `stencil` | `editor.html:8017` | Already has a documented fallback (PATH 2, a direct Gemini call with the user's own key) and a user-facing message at 8103. Safe: wrap in `idToken()`, add the header. |
+| `validation` | `editor.html:55846` | Runs inside a flow that writes to `projects` via `_db` immediately afterwards, so the user is signed in by definition at that point. Safe. |
+| `score` | `tenants/osa/portfolio-data.js:1814` | Gated behind `scoringEnabled()`, which is off unless config turns it on, and the URL is overridable via `scoringCfg().relayUrl`. **JV-partner territory** — `/tenants/osa/` is governed by the JV agreement and CODEOWNERS, so the client half needs OSA's sign-off, not just ours. |
+| `crm-sync` | `editor.html:72512, 72532, 72543, 72644` | See below. This one is not a cost problem. |
+
+### `api/crm-sync.js` — the org comes from the request body
+
+Not "it spends a paid key". The handler takes the tenant from the caller:
+
+```js
+const orgId = body && body.orgId;                 // line 65 — no token, anywhere
+if (action === "delete_credentials") await SECRETS.del(orgId);      // 81
+if (action === "save_credentials")  await SECRETS.save(orgId, ...); // 76
+if (action === "sync")              await pushRecord(store, job);   // 108
+```
+
+`orgId` is the tenant's email domain (CLAUDE.md), so there is nothing to guess.
+An unauthenticated POST can therefore, for any tenant: delete their stored CRM
+credentials, overwrite them, push attacker-supplied records into their real CRM
+using their own tokens, or use `action:"test"` as an oracle for which orgs have
+a CRM connected and which provider. The blob itself is never returned to the
+caller — that part is right.
+
+The file's own header says it is "the ONLY place CRM credentials live".
+
+**Precisely how much of this is live is not visible from outside.** The store
+is Upstash Redis behind `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`;
+if those are unset in Vercel the actions fail before touching anything and
+today's impact is nil. The live probe got HTTP 400 (`"orgId required"`, which is
+checked before any Redis call), so it confirms the endpoint runs and reaches the
+body — not whether the store is configured. **`/api/health` does not monitor
+either variable**, so nobody can answer that question without opening the Vercel
+dashboard. Registering them in `EXPECTED` is a one-line fix and worth doing
+regardless.
+
+The fix derives `orgId` from the verified token instead of the body, which is
+what every other endpoint in `api/` already does. Note that the handler's
+`Access-Control-Allow-Headers` is `Content-Type` only (line 57), so it would
+also need `Authorization` added or the browser will strip it.
+
+---
+
 ## What it will not do
 
 - It does not commit, push, deploy, or call an endpoint that writes.
