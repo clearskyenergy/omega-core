@@ -226,7 +226,7 @@ module.exports = async function handler(req, res) {
       console.error('[omega-ai] upstream', r.status, raw);
       var f = AIERR.aiFailure(r.status, raw, {
         subject: 'AI extraction', staff: STAFF_DOMAINS.indexOf(orgId) >= 0,
-        staffHint: 'check ' + (keySource === 'tenant' ? envName : 'ANTHROPIC_API_KEY') + ' on the deployment'
+        staffHint: 'check the ' + (keySource === 'tenant' ? 'tenant' : 'platform') + ' AI key on the deployment'
       });
       res.status(f.status).json({ error: f.message });
       return;

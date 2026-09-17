@@ -11,9 +11,10 @@
    customer a piece of our deployment.
 
    SO: the customer is told the truth at their altitude — the assistant is
-   down, it is ours to fix, their plan is fine — while ClearSky staff and the
-   server log keep the exact provider text, which is the only version anyone
-   can act on.
+   down, it is ours to fix, their plan is fine — and staff are told what to
+   do about it. Neither audience sees the provider's own words or the
+   provider's name: the server log keeps the exact upstream text, which is
+   the only version anyone can act on, and the log is where it belongs.
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -41,13 +42,17 @@ function aiFailure(status, raw, opts) {
     return { status: 429, kind: kind, message: subject + ' is busy. Wait a moment and try again.' };
   }
 
-  /* Staff can act on the real thing, so they get it — plus the one sentence
-     that says what to do about it. */
+  /* Staff get the one sentence that says what to do. Not the provider's
+     text and not the provider's name — the exact upstream response is in
+     the server log, and a screenshot of this box should be safe to show a
+     customer. */
   if (opts.staff) {
-    var hint = kind === 'account'
-      ? ' — ClearSky’s Anthropic account is out of credit. Add credit at platform.claude.com/settings/billing.'
-      : (kind === 'key' ? ' — ' + (opts.staffHint || 'check the AI key on the deployment') + '.' : '');
-    return { status: 502, kind: kind, message: raw + hint };
+    var what = kind === 'account'
+      ? subject + ' is down because the AI service account is out of credit. Top up the AI service billing to restore it.'
+      : kind === 'key'
+      ? subject + ' is down because the AI service key was refused — ' + (opts.staffHint || 'check the AI key on the deployment') + '.'
+      : subject + ' is down: the AI service refused the request.';
+    return { status: 502, kind: kind, message: what + ' The exact response is in the server log.' };
   }
 
   /* The customer. Says it is ours, says their plan is fine, promises nothing
