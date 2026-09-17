@@ -38,3 +38,31 @@ storage.rules
 firestore.indexes.json
 firebase.json
 admin/seed-plan.json
+
+# ── SERVERLESS SOURCE SITTING IN THE STATIC TREE ─────────────────────────
+# Found 2026-09-17 by scripts/steward/guard.js. Vercel only treats /api at
+# the project root as functions; every other copy of a function is a static
+# file, and the root serves the repo, so each of these was a 200:
+#
+#   /grid-atlas.js            the Grid Atlas scoring model, weights and all
+#   /render.js                the render pipeline
+#   /commercial.js            the C&I source adapter (no api/ copy exists —
+#                             it has never been deployed as a function)
+#   /api-crm-sync.js          the CRM proxy, whose whole point is that it is
+#                             the ONLY place CRM credentials live
+#   /tenants/osa/**           OSA's copies of score and grid-atlas
+#   /portals/finance/**       the finance portal's copy of omega-ai-extract
+#
+# None of them holds a secret — they read process.env at runtime — and none
+# is referenced by a <script src> anywhere in the repo, so excluding them
+# changes no behaviour. What they hold is the logic CLAUDE.md puts in /api/
+# precisely so it is not downloadable. The api/ copies keep running.
+grid-atlas.js
+render.js
+commercial.js
+api-crm-sync.js
+tenants/osa/score.js
+tenants/osa/api/score.js
+tenants/osa/api/grid-atlas.js
+portals/finance/omega-ai-extract.js
+portals/finance/api/omega-ai-extract.js

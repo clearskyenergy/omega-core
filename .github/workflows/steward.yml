@@ -1,0 +1,116 @@
+# ============================================================================
+# steward.yml — the invariants, gated on every PR; the full pass, every day.
+#
+# tests.yml already asks "does the code still work". This asks the other
+# question: "does it still obey its own rules". A repo with no build step has
+# no compiler to enforce CLAUDE.md, so until now nothing did — the first time
+# a rule broke was in production, on a field rep's tablet.
+#
+# TWO JOBS, DELIBERATELY DIFFERENT IN WEIGHT.
+#
+#   guard   runs on every pull request and blocks. It fails only on findings
+#           that are NEW — scripts/steward/baseline.json carries the debt that
+#           already exists, so the gate is "you did not make it worse", which
+#           is a gate people keep rather than switch off. The exception is a
+#           sealed file (firestore.rules, api/_lib/admin.js, .vercelignore and
+#           six others): changing one fails until the new hash is committed in
+#           the same PR, so the security boundary cannot move quietly.
+#
+#   daily   runs the whole pass — integrity, tests, live probe, data and fiber
+#           layers, interface review — and files the brief as an issue. It
+#           needs no secrets to be useful: the probe's best check, "does every
+#           endpoint still refuse an anonymous caller", needs no identity by
+#           definition. With a steward credential it also reads /api/health.
+#
+# The daily job never pushes, never deploys, and calls only the read-only
+# endpoints listed in scripts/steward/api-registry.js. Acting on the brief is
+# a person's decision, or an agent's pull request.
+# ============================================================================
+
+name: steward
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 12:17 UTC — a few minutes off the hour so it is not queued behind every
+    # other cron on GitHub, and after the US working day has started.
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guard:
+    name: invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step, on purpose: the steward has no dependencies for the
+      # same reason the tools have no bundler.
+      - name: guard
+        run: node scripts/steward/guard.js
+
+      - name: API surface (reporting only)
+        if: always()
+        run: node scripts/steward/api-registry.js
+
+  daily:
+    name: daily pass
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # data-watch.js reads the commit date of each data layer to decide
+          # whether it is stale. A shallow clone has no history to read.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: the pass
+        id: pass
+        continue-on-error: true
+        env:
+          OMEGA_API_BASE: ${{ secrets.OMEGA_API_BASE }}
+          FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
+          OMEGA_STEWARD_EMAIL: ${{ secrets.OMEGA_STEWARD_EMAIL }}
+          OMEGA_STEWARD_PASSWORD: ${{ secrets.OMEGA_STEWARD_PASSWORD }}
+          # Writes require this AND an explicit flag. A schedule sets neither.
+          OMEGA_STEWARD_ALLOW_WRITES: '0'
+        run: node scripts/steward/run.js --out steward-brief.md
+
+      # One issue per day. The brief is already scrubbed of anything
+      # key-shaped by scripts/steward/client.js before it reaches here.
+      - name: file the brief
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f steward-brief.md ]; then
+            echo "no brief produced — the pass itself failed"
+            exit 1
+          fi
+          title="steward — $(date -u +%Y-%m-%d)"
+          if [ "${{ steps.pass.outcome }}" != "success" ]; then
+            title="$title — BLOCKING"
+          fi
+          gh issue create \
+            --title "$title" \
+            --body-file steward-brief.md \
+            --label steward \
+            || gh issue create --title "$title" --body-file steward-brief.md
+
+      - name: fail the run if the pass was blocking
+        if: steps.pass.outcome != 'success'
+        run: |
+          echo "The daily pass reported a blocking finding. The brief is on the issue."
+          exit 1
