@@ -161047,7 +161047,8 @@ if (root.console && console.info) {
        connect" without three more clicks. */
     try {
       var has = (S.shapes || []).some(function (s) { return s && s.kind === 'substation'; });
-      if (!has && ceiling().kw > 0) CP.placeSubstation();
+      if (root.OmegaIntercon && root.OmegaIntercon.apply) root.OmegaIntercon.apply(true);
+      else if (!has && ceiling().kw > 0) CP.placeSubstation();
     } catch (e) {}
     if (DER.generation) {
       try { if (root.OmegaMaxFit) root.OmegaMaxFit.gasTieIn(); } catch (e) {}
@@ -161126,6 +161127,26 @@ if (root.console && console.info) {
       + (c.firm ? '' : ' A screening estimate is not a commitment \u2014 enter the will-serve '
         + 'figure when you have the letter and it will outrank this everywhere.') + '</div>'
 
+      + (function () {
+          /* The utility side is a choice, not a 120 x 90 ft yard by default.
+             Same three modes as the Interconnection button; blank follows
+             the recommendation for this load and lookup. */
+          var IC = root.OmegaIntercon; if (!IC) return '';
+          var cur = '', rec = null;
+          try { cur = IC.explicit() ? IC.mode() : ''; } catch (e) {}
+          try { rec = IC.recommend({ facMw: 0, substationKind: null }); } catch (e) {}
+          try { if (typeof IC.status === 'function') { /* no-op: status logs */ } } catch (e) {}
+          var L = { none: 'None \u2014 service already exists, draw nothing',
+                    service: 'Transformer only \u2014 pad-mount transformer and meter, no substation',
+                    substation: 'Substation yard \u2014 120 \u00d7 90 ft for a new large load' };
+          var h = '<div style="margin-bottom:16px"><label style="' + lbl + '">Interconnection</label>'
+            + '<select id="od-intercon" style="' + inp + '">'
+            + '<option value=""' + (cur ? '' : ' selected') + '>Automatic \u2014 by load size and the substation lookup</option>';
+          ['service', 'substation', 'none'].forEach(function (k) {
+            h += '<option value="' + k + '"' + (cur === k ? ' selected' : '') + '>' + L[k] + '</option>';
+          });
+          return h + '</select></div>';
+        })()
       + '<div style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;'
       + 'color:#8B7BD8;margin-bottom:8px">What to build</div>'
       + chk('od-gen', DER.generation, 'On-site generation',
@@ -161196,6 +161217,12 @@ if (root.console && console.info) {
       DER.generation = !!(g('od-gen') && g('od-gen').checked);
       DER.storage = !!(g('od-bess') && g('od-bess').checked);
       DER.solar = !!(g('od-solar') && g('od-solar').checked);
+      /* Stored, not applied: the build clears and redraws, and the adapter
+         applies the mode once everything stands in world coordinates. */
+      try {
+        var ic = g('od-intercon');
+        if (ic) { if (ic.value) S.interconMode = ic.value; else delete S.interconMode; window._workDirty = true; }
+      } catch (e) {}
       var sm = g('od-solarmode');
       DER.solarMode = (sm && sm.value === 'ratio') ? 'ratio' : 'fill';
       var sr = g('od-solarratio') ? parseFloat(g('od-solarratio').value) : NaN;
@@ -161720,7 +161747,13 @@ if (root.console && console.info) {
     /* Substation and gas tie-in if missing. */
     try {
       var has = (S.shapes || []).some(function (x) { return x && x.kind === 'substation'; });
-      if (!has && s.utilKw > 0 && root.OmegaComputePlace.placeSubstation) root.OmegaComputePlace.placeSubstation();
+      /* In the parcel's frame this waits for the sweep — placeSubstation
+         reads the world boundary, so a yard placed now would be swept to
+         somewhere it is not. The interconnection mode (none / service
+         point / substation) decides what gets drawn. */
+      if (root.__omegaPlanFrame) { /* after the sweep */ }
+      else if (root.OmegaIntercon && root.OmegaIntercon.apply) root.OmegaIntercon.apply(true);
+      else if (!has && s.utilKw > 0 && root.OmegaComputePlace.placeSubstation) root.OmegaComputePlace.placeSubstation();
     } catch (e) {}
     /* Only guess a gas tie-in if nobody has set one. */
     if (s.gen) {
@@ -161847,6 +161880,13 @@ if (root.console && console.info) {
          turn must not turn it a second time. */
       root.__omegaPlanFramed = !!_fr;
       if (_fr) {
+        /* The service point or substation yard, from world coordinates. */
+        try {
+          if (root.OmegaIntercon && root.OmegaIntercon.apply) root.OmegaIntercon.apply(true);
+          else if (plan.sizing.utilKw > 0 && root.OmegaComputePlace.placeSubstation
+                   && !(S.shapes || []).some(function (x) { return x && x.kind === 'substation'; }))
+            root.OmegaComputePlace.placeSubstation();
+        } catch (e) { if (root.console) console.warn(TAG + ' intercon', e && e.message); }
         /* Fences, control yard and ties from WORLD coordinates, now that
            the sweep is done (the campus draw skipped them in the frame). */
         try { if (root.OmegaFenceTie) root.OmegaFenceTie.run({ from: 'campus' }); }
