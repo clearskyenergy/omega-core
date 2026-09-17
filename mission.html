@@ -4190,6 +4190,57 @@ function loadOpenWork(){
   loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
 }
 
+/* ── the Terminal view ───────────────────────────────────────────────────
+   Claude Code itself, served by ttyd on loopback and framed here.
+
+   The iframe is http:// inside an https page, which is allowed rather than a
+   loophole: browsers treat 127.0.0.1 as a potentially trustworthy origin, so
+   it is not mixed content. Verified against this live dashboard before the
+   view was built.
+
+   Basic auth sits in front of ttyd with the password in the login Keychain,
+   so the browser asks once per session. That prompt is the feature: without
+   it, anything able to reach the port would be framing a shell.
+
+   Built on FIRST OPEN and then left alone. At page load it would start a
+   shell nobody asked for; rebuilt on every view switch it would kill a
+   running Claude turn each time he glanced at his calendar. */
+const TERM = 'http://127.0.0.1:7681';
+let termFrame = null;
+function termMount(force){
+  const host = el('termHost'); if(!host) return;
+  if(termFrame && !force) return;
+  host.innerHTML = '';
+  const f = document.createElement('iframe');
+  f.src = TERM + (force ? ('?r=' + Date.now()) : '');
+  f.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#060a12';
+  f.setAttribute('allow', 'clipboard-read; clipboard-write');
+  host.appendChild(f);
+  termFrame = f;
+}
+async function termProbe(){
+  const s = el('termState'); if(!s) return;
+  try{
+    const c = new AbortController(); const tm = setTimeout(()=>c.abort(), 2500);
+    /* 401 is the HEALTHY answer here — ttyd is up and asking for the
+       password. Treating "not 200" as down would report a correctly secured
+       terminal as broken, so only a network failure counts as missing. */
+    await fetch(TERM + '/', {signal:c.signal, mode:'no-cors'});
+    clearTimeout(tm);
+    s.textContent = '\u25cf ON THIS MAC'; s.style.color = '';
+  }catch(_){
+    s.textContent = 'NOT RUNNING \u2014 launchctl kickstart -k gui/$(id -u)/com.clearsky.jarvis-terminal';
+    s.style.color = 'var(--bad, #ff6b6b)';
+  }
+}
+function wireTerm(){
+  const r = el('termReload'), p = el('termPop');
+  if(r && !r.dataset.w){ r.dataset.w='1';
+    r.addEventListener('click', ()=>{ termMount(true); termProbe(); }); }
+  if(p && !p.dataset.w){ p.dataset.w='1';
+    p.addEventListener('click', ()=>{ window.open(TERM, 'jarvis-terminal'); }); }
+}
+
 function showView(name){
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
@@ -4207,6 +4258,7 @@ function showView(name){
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='openwork'){ loadOpenWork(); }
+  if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
   /* The core burns behind the command centre and nowhere else — a graph or a
