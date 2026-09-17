@@ -142,8 +142,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       animation:beam .22s cubic-bezier(.2,.9,.25,1) both}
 /* Bleeds to the card's padding edge so the scrollbar rides the border rather
    than cutting a channel through the content. */
+/* The top edge is a FADE, not a cut. The name is pinned and the detail runs
+   under it, so a scrolled row was being guillotined a pixel below SUNESOL and
+   read as two things colliding rather than as one thing continuing. The mask
+   sits on the viewport, not the content, and the first 9px of an unscrolled
+   card are the .cardRows margin — so nothing fades until something scrolls. */
 .cardScroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
             margin:0 -22px;padding:0 22px;
+            -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 9px);
+            mask-image:linear-gradient(to bottom,transparent 0,#000 9px);
             scrollbar-width:thin;scrollbar-color:rgba(0,243,255,.35) transparent}
 .cardScroll::-webkit-scrollbar{width:6px}
 .cardScroll::-webkit-scrollbar-thumb{background:rgba(0,243,255,.3);border-radius:3px}
@@ -209,6 +216,10 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .relItem{font-size:12.5px;line-height:1.5;color:var(--ink);padding:4px 0 4px 11px;
          border-left:2px solid rgba(0,243,255,.2);margin-bottom:3px}
 .relItem.stale{border-left-color:var(--warn)}
+/* An item that is itself a door — a person listed on a project's card opens
+   their own. It has to look different from the ones that are only text. */
+.relItem.go{cursor:pointer}
+.relItem.go:hover{border-left-color:var(--glow-cyan);background:rgba(0,243,255,.06)}
 .relItem .age{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--warn);margin-left:5px}
 .relNone{font-size:12px;color:var(--dim);font-style:italic}
 .cardActs{display:flex;gap:8px;margin-top:16px}
@@ -480,36 +491,9 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         color:var(--ink);font-size:12.5px;padding:7px 9px;outline:none;width:100%}
 .brainQ:focus{border-color:var(--glow-cyan)}
 .brainIns{font-size:12px;line-height:1.65;color:var(--dim);max-height:210px}
-/* THE PERSON PROFILE. The inspector is a 210px side panel — right for "what
-   is this dot", wrong for "who is this and what is between us". This is the
-   second click: a drawer over the stage with the bio, the weight arithmetic
-   and the actual history. */
-.pProf{position:absolute;inset:0;z-index:40;background:rgba(6,12,20,.93);
-  display:none;flex-direction:column;border-radius:inherit;overflow:hidden}
-.pProf.on{display:flex}
-.pProf .pHead{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;
-  border-bottom:1px solid var(--line)}
-.pProf .pName{font-size:19px;font-weight:700;color:var(--ink);line-height:1.2}
-.pProf .pOrg{font-size:12px;color:var(--dim);margin-top:3px}
-.pProf .pX{margin-left:auto;background:none;border:1px solid var(--line);color:var(--dim);
-  border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:14px;flex:none}
-.pProf .pBody{flex:1;overflow:auto;padding:14px 18px 20px;font-size:12.5px;line-height:1.6}
-.pProf h4{margin:16px 0 7px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
-  color:var(--dim);font-family:var(--mono);font-weight:600}
-.pProf h4:first-child{margin-top:0}
-.pW{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
-.pW .pWn{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--ink);line-height:1}
-.pW .pWl{font-size:11px;color:var(--dim)}
-.pBar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.07);margin:6px 0 9px}
-.pBar i{display:block;height:100%}
-.pTerm{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim);margin:3px 0}
-.pTerm b{font-family:var(--mono);color:var(--ink);font-weight:600;min-width:38px;text-align:right}
-.pTerm .sw{width:9px;height:9px;border-radius:2px;flex:none}
-.pItem{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.055)}
-.pItem:last-child{border-bottom:0}
-.pItem .t{color:var(--ink);font-size:12.5px}
-.pItem .m{color:var(--dim);font-size:10.5px;font-family:var(--mono);margin-top:2px}
-.pItem .old{color:var(--warn)}
+/* What survives the profile drawer (retired 2026-09-17, its job handed to the
+   contact card): the vault-note reader the card now carries, and the quiet
+   button style the brain inspector opens it with. */
 .pNote{white-space:pre-wrap;font-family:var(--mono);font-size:11px;line-height:1.6;
   color:var(--dim);max-height:280px;overflow:auto;border:1px solid var(--line);
   border-radius:8px;padding:10px 12px;background:rgba(0,0,0,.25)}
@@ -1385,15 +1369,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
         <div class="panel brainStage">
           <canvas id="brainCv"></canvas>
-          <div class="brainHint" id="brainHint">drag to pan · scroll to zoom · click to focus · double-click a person for their profile</div>
+          <div class="brainHint" id="brainHint">drag to pan · scroll to zoom · click a person or a project to open its card · shift-click two dots for the path between them</div>
           <button class="brainFit" id="brainFit">FIT</button>
-          <div class="pProf" id="pProf">
-            <div class="pHead">
-              <div><div class="pName" id="pName">—</div><div class="pOrg" id="pOrg"></div></div>
-              <button class="pX" id="pX" title="Close (Esc)">✕</button>
-            </div>
-            <div class="pBody" id="pBody"></div>
-          </div>
         </div>
 
         <div class="panel brainSide">
@@ -5116,12 +5093,20 @@ function showEvent(e, fromEl){
                    e.location||''].filter(Boolean).join('  ·  ');
   card.appendChild(sub);
 
+  /* The same scrolling middle the contact card has. The card became a capped
+     flex column when the person card was fixed, and this one was never given
+     a part that gives — so a meeting with a dozen guests and a wall of notes
+     pushed its own JOIN button off the bottom. Title and time stay pinned
+     above, the buttons below, and the guest list is what moves. */
+  const scroll=document.createElement('div'); scroll.className='cardScroll';
+  card.appendChild(scroll);
+
   const guests=(e.guests||[]).filter(g=>!g.self);
   if(guests.length){
     const h=document.createElement('div');
     h.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:14px 0 4px';
     h.textContent='GUESTS · '+guests.length;
-    card.appendChild(h);
+    scroll.appendChild(h);
     guests.forEach(g=>{
       const r=document.createElement('div'); r.className='row';
       const k=document.createElement('span'); k.className='k';
@@ -5131,22 +5116,22 @@ function showEvent(e, fromEl){
       v.className='v '+(st==='accepted'?'good':st==='declined'?'bad':'');
       v.textContent = st==='accepted'?'yes' : st==='declined'?'no'
                     : st==='tentative'?'maybe' : 'no reply';
-      r.append(k,v); card.appendChild(r);
+      r.append(k,v); scroll.appendChild(r);
     });
   }else if(e.others){
     const p=document.createElement('div'); p.className='cardNote';
     p.textContent=e.others+' guest'+(e.others===1?'':'s')+', but the invite list did not come through.';
-    card.appendChild(p);
+    scroll.appendChild(p);
   }
 
   if(e.notes){
     const h=document.createElement('div');
     h.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin:14px 0 4px';
     h.textContent='NOTES';
-    card.appendChild(h);
+    scroll.appendChild(h);
     const n=document.createElement('div'); n.className='cardNote';
     n.style.whiteSpace='pre-wrap'; n.textContent=String(e.notes).slice(0,900);
-    card.appendChild(n);
+    scroll.appendChild(n);
   }
 
   const bar=document.createElement('div'); bar.className='cardActs';
@@ -6822,145 +6807,122 @@ function bfsPath(a,b){
   return null;
 }
 
-/* ── THE PERSON PROFILE ───────────────────────────────────────────────────
+/* ── A DOT, OPENED ────────────────────────────────────────────────────────
    "Click a person and show their bio, history, and weight score breakdown."
 
-   The graph the Mac builds already knows all three; the dashboard was only
-   ever handed the total, so a weight could be read and not argued with. The
-   breakdown now travels with every node (engagement, open commitments, stale
-   drag) and the full account is the person note in the vault, fetched through
-   the brain's /vault relay — so this panel shows what Obsidian shows rather
-   than a second, thinner summary that can drift from it. */
-var PROF = null;
-function profOpen(n){
-  if(!n || n.type!=='person') return;
-  PROF = n;
-  const R = n.rel || {}, m = n.meta || {};
-  el('pName').textContent = n.label;
-  el('pOrg').textContent = [m.role, m.org || R.org, m.email].filter(Boolean).join(' · ') || '—';
-  const host = el('pBody'); host.textContent='';
+   That was a drawer of its own over the stage until 2026-09-17. It is now the
+   SAME detail card the People list opens, because the card had grown the
+   better half of this — the weight arithmetic, the meeting each outstanding
+   item was promised in, and a frame that does not run off the screen — and
+   two panels answering one question is two answers that drift apart.
 
-  const h = (t)=>{ const e=document.createElement('h4'); e.textContent=t; host.appendChild(e); return e; };
-  const row = (k,v)=>{ const r=document.createElement('div'); r.className='row';
-    const a=document.createElement('span'); a.className='k'; a.textContent=k;
-    const b=document.createElement('span'); b.className='v'; b.textContent=v;
-    r.append(a,b); host.appendChild(r); };
-
-  /* ── the bio ── */
-  h('Who');
-  if(m.role) row('Role', m.role);
-  if(m.org || R.org) row('Org', m.org || R.org);
-  if(m.email) row('Email', m.email);
-  if(m.phone) row('Phone', m.phone);
-  row('Connections', String(n.deg));
-  if(R.first || R.last) row('Known since', (R.first||'?') + ' → ' + (R.last||'?'));
-  if(!R.first && m.source) row('Known from', m.source);
-
-  /* ── the weight, as arithmetic rather than a verdict ── */
-  if(R && R.weight != null){
-    h('Weight');
-    const eng = +R.engagement||0, owe = +R.owedPts||0, stale = +R.stalePts||0;
-    const w = document.createElement('div'); w.className='pW';
-    w.innerHTML = '<span class="pWn">'+(+R.weight)+'</span>'
-      + '<span class="pWl">engagement '+eng+' + open commitments '+owe+' − stale drag '+stale+'</span>';
-    host.appendChild(w);
-    /* The bar is the same arithmetic, drawn. Drag is shown as its own
-       segment rather than silently subtracted, because the whole point of
-       three numbers instead of one is that you can see which is carrying. */
-    const span = Math.max(1, eng + owe + stale);
-    const bar = document.createElement('div'); bar.className='pBar';
-    [[eng,'#4ade80'],[owe,'#60a5fa'],[stale,'#f59e0b']].forEach(([v,c])=>{
-      if(v<=0) return;
-      const i=document.createElement('i');
-      i.style.width=(v/span*100)+'%'; i.style.background=c; bar.appendChild(i);
-    });
-    host.appendChild(bar);
-    [['Engagement',eng,'#4ade80','meetings, weighted toward the last 90 days'],
-     ['Open commitments',owe,'#60a5fa',(R.owed||0)+' they have made to you'],
-     ['Stale drag',-stale,'#f59e0b',(R.stale||0)+' older than a month']
-    ].forEach(([k,v,c,why])=>{
-      const t=document.createElement('div'); t.className='pTerm';
-      t.innerHTML='<span class="sw" style="background:'+c+'"></span><b>'+(v>0?'+':'')+v+'</b>'
-        +'<span>'+k+' — '+why+'</span>';
-      host.appendChild(t);
-    });
-    const note=document.createElement('div');
-    note.style.cssText='font-size:10.5px;color:var(--dim);margin-top:7px;line-height:1.5';
-    note.textContent='No monetary value is in this number. Nothing in a transcript measures it, '
-      + 'and a figure invented here would get quoted back as if it did.';
-    host.appendChild(note);
-  }
-
-  /* ── the history ── */
-  const owedList = (R.topOwed||[]);
-  if(owedList.length){
-    h('They owe you' + (R.owed>owedList.length ? '  ('+owedList.length+' of '+R.owed+')' : ''));
-    owedList.forEach(c=>{
-      const it=document.createElement('div'); it.className='pItem';
-      const t=document.createElement('div'); t.className='t';
-      t.textContent = typeof c==='string' ? c : (c.text||'');
-      it.appendChild(t);
-      if(typeof c!=='string'){
-        const age = c.when ? Math.round((Date.now()-new Date(c.when).getTime())/864e5) : null;
-        const mm=document.createElement('div'); mm.className='m'+(age!=null&&age>30?' old':'');
-        mm.textContent=[c.when, c.due?('due '+c.due):'', c.meeting, (age!=null&&age>30)?(age+' days old'):'']
-          .filter(Boolean).join(' · ');
-        it.appendChild(mm);
-      }
-      host.appendChild(it);
-    });
-  }
-  if((R.topYouOwe||[]).length){
-    h('You owe them');
-    R.topYouOwe.forEach(c=>{
-      const it=document.createElement('div'); it.className='pItem';
-      it.innerHTML='<div class="t"></div><div class="m"></div>';
-      it.querySelector('.t').textContent=c.text||String(c);
-      it.querySelector('.m').textContent=c.when||'';
-      host.appendChild(it);
-    });
-  }
-  if((R.topQuestions||[]).length){
-    h('Open questions');
-    R.topQuestions.forEach(q=>{
-      const it=document.createElement('div'); it.className='pItem';
-      const t=document.createElement('div'); t.className='t'; t.textContent=q; it.appendChild(t);
-      host.appendChild(it);
-    });
-  }
-
-  /* ── the note itself, on demand ── */
-  if(R.note){
-    h('The full note');
-    const btn=document.createElement('button'); btn.className='pMore';
-    btn.textContent='Read '+R.note.split('/').pop();
-    const pre=document.createElement('div'); pre.className='pNote'; pre.hidden=true;
-    btn.onclick=async()=>{
-      if(!pre.hidden){ pre.hidden=true; btn.textContent='Read '+R.note.split('/').pop(); return; }
-      btn.disabled=true; btn.textContent='Reading…';
-      try{
-        const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(R.note),{cache:'no-store'});
-        const j=await r.json();
-        pre.textContent = (j&&j.ok) ? j.text : ((j&&j.error)||'The note could not be read.');
-      }catch(e){ pre.textContent='The Mac is not reachable, so the note cannot be read from here.'; }
-      pre.hidden=false; btn.disabled=false; btn.textContent='Hide the note';
-    };
-    host.appendChild(btn); host.appendChild(pre);
-  }
-  if(!R || R.weight==null){
-    const none=document.createElement('div');
-    none.style.cssText='font-size:11.5px;color:var(--dim);margin-top:10px;line-height:1.55';
-    none.textContent='No meeting history for this person yet. The history is built on the Mac by '
-      + 'bin/graph from the meeting record — if the neural link is off, only the roster is here.';
-    host.appendChild(none);
-  }
-  el('pProf').classList.add('on');
+   A node has to become a SUBJECT before the card will take it, and only two
+   kinds have one. A person node carries a roster entry and, where the Mac has
+   met them, the relationship record. A deal node is a project on the book,
+   and its card is built from the deal's own fields with blanks left blank:
+   a deal with no capex recorded is not a deal worth nothing. Everything else
+   — orgs, tools, areas, today's calendar, the state totals — has no card and
+   one click still fills the inspector, which is the right weight for them. */
+function bpersonSubject(n){
+  const m=n.meta||{}, R=n.rel||null;
+  /* No ORG row: the header already carries it, and a card that says SunESol
+     twice in four lines reads as a card that is padding itself out. */
+  const rows=[{label:'EMAIL',value:m.email,copy:1},{label:'PHONE',value:m.phone,copy:1}];
+  rows.push({label:'CONNECTIONS',value:String(n.deg)});
+  if(R&&(R.first||R.last)) rows.push({label:'KNOWN SINCE',value:(R.first||'?')+'  →  '+(R.last||'?')});
+  /* Where the name came from, said plainly. Someone the roster has never
+     heard of is in this graph because bin/graph found them in a meeting;
+     calling that "your roster" is a small lie told confidently. */
+  const prov = (m.source==='meeting history')
+    ? 'From the meeting record — not on your roster. Built on the Mac by bin/graph from '
+      + (R&&R.meetings ? R.meetings+' meeting'+(R.meetings===1?'':'s') : 'the meeting transcripts') + '.'
+    : (R ? 'From your roster, with the meeting record joined on to it by name.'
+         : 'From your roster. No meeting history for this person yet — that half is built on the '
+           + 'Mac by bin/graph, so if the neural link is off only the roster is here.');
+  return { kind:'person', name:n.label,
+           role:m.role||'', org:m.org||(R&&R.org)||'',
+           email:m.email||'', phone:m.phone||'',
+           first:String(n.label).split(/\s+/)[0]||n.label,
+           rows:rows, provenance:prov };
 }
-function profClose(){ PROF=null; const e=el('pProf'); if(e) e.classList.remove('on'); }
-/* Three ways out, the same rule as every other panel here. */
-document.addEventListener('keydown', e => {
-  if(e.key === 'Escape' && PROF) { e.preventDefault(); profClose(); }
-});
+
+function bdealSubject(n){
+  const m=n.meta||{};
+  const org=(m.orgId&&BG&&BG.byId['org:'+m.orgId])?BG.byId['org:'+m.orgId]:null;
+  /* The stage is the card's subtitle and the owner is its org line, the same
+     places a person's role and company go. Neither is repeated as a row —
+     a record that lists itself twice looks fuller than it is. The stage only
+     becomes a row when there is nothing to put in the subtitle, because
+     "nobody has set a stage on this" is itself worth reading. */
+  const staged=!!(m.stage&&m.stage!=='unknown');
+  const rows=[];
+  if(!staged) rows.push({label:'STAGE',value:'not set'});
+  const cap=[];
+  if(+m.mw>0) cap.push((+m.mw).toLocaleString()+' MW');
+  if(+m.mwh>0) cap.push((+m.mwh).toLocaleString()+' MWh');
+  rows.push({label:'CAPACITY',value:cap.length?cap.join('  ·  '):'not recorded'});
+  if(m.state) rows.push({label:'STATE',value:String(m.state)});
+  rows.push({label:'CAPEX',value:(+m.capex>0)?usd(m.capex):'not recorded'});
+  rows.push({label:'CONNECTIONS',value:String(n.deg)});
+
+  const sections=[];
+  /* Who is actually on it. The deal names an owning org and the graph already
+     knows who works there, so this is the same edge the graph draws rather
+     than a guess about who is "involved". Each one opens their own card. */
+  if(org&&BG){
+    const who=[];
+    BG.links.forEach(l=>{
+      const other = l.a===org ? l.b : (l.b===org ? l.a : null);
+      if(other&&other.type==='person'&&who.indexOf(other)===-1) who.push(other);
+    });
+    if(who.length) sections.push({
+      title:'PEOPLE AT '+String(org.label).toUpperCase(),
+      items:who.map(w=>({
+        text:w.label,
+        meta:[(w.meta||{}).role, w.rel&&w.rel.meetings?('met '+w.rel.meetings+'×'):null]
+               .filter(Boolean).join('  ·  '),
+        go:()=>{ bpoke(); bsel=w; bpath=null; binspect(w); bcenter(w); bopen(w); }
+      }))
+    });
+  }
+  /* Tasks whose text names the deal. A contains-match is a weak join and is
+     labelled as one — the same convention the inspector already uses for an
+     org — rather than dressed up as something the backlog records. */
+  const key=String(n.label).toLowerCase().split(/[\s/]+/)[0];
+  if(key.length>3){
+    const hits=((typeof lastStatus!=='undefined'&&lastStatus.todos)||[])
+      .filter(t=>String(t.title||'').toLowerCase().indexOf(key)!==-1);
+    if(hits.length) sections.push({
+      title:'TASKS THAT MENTION IT',
+      items:hits.map(t=>({text:t.title})),
+      note:'Matched on the word “'+key+'” appearing in the task. That is a mention, not a link the backlog records.'
+    });
+  }
+
+  const filled=[(m.stage&&m.stage!=='unknown'),(+m.mw>0),(+m.mwh>0),!!m.state,(+m.capex>0)].filter(Boolean).length;
+  return { kind:'project', name:n.label,
+           role:(m.stage&&m.stage!=='unknown')?String(m.stage):'',
+           org:org?org.label:(m.orgId||''),
+           rows:rows, sections:sections,
+           acts:[['ASK JARVIS',()=>{ closeCard(); submit('what is the status of the '+n.label+' deal'); }]],
+           provenance:'From the deals collection on the book — '+filled+' of 5 fields filled in on this record. '
+             +'Blanks are shown as blank rather than as zero, because a deal with no capex recorded is not a deal worth nothing.' };
+}
+
+function bnodeSubject(n){
+  if(!n) return null;
+  if(n.type==='person') return bpersonSubject(n);
+  if(n.type==='deal') return bdealSubject(n);
+  return null;
+}
+/* Returns whether it opened anything, so the caller can leave the inspector
+   to carry the node types that have no card. */
+function bopen(n){
+  const s=bnodeSubject(n);
+  if(!s) return false;
+  showCard(s);
+  return true;
+}
 
 /* ── the inspector ───────────────────────────────────────────────────── */
 function binspect(n){
@@ -6997,12 +6959,13 @@ function binspect(n){
       if(R.questions) facts.push(['Open questions',String(R.questions)]);
       facts.push(['Weight',String(R.weight)]);
     }
-    /* A double-click is discoverable only once somebody has been told, so the
-       inspector carries the door as a button as well. */
+    /* Clicking the dot already opened the card. The inspector keeps the door
+       as a button too, for arriving here by search or by walking the
+       CONNECTED TO list, where nothing was ever clicked on the canvas. */
     setTimeout(()=>{
       const b=document.createElement('button'); b.className='pMore';
-      b.textContent = n.rel ? 'Open profile' : 'Open profile (roster only)';
-      b.onclick=()=>profOpen(n);
+      b.textContent = n.rel ? 'Open the card' : 'Open the card (roster only)';
+      b.onclick=()=>bopen(n);
       host.appendChild(b);
     },0);
   } else if(n.type==='client'){
@@ -7013,6 +6976,13 @@ function binspect(n){
     facts.push(['Stage',m.stage||'—']);
     if(m.mw) facts.push(['MW',String(m.mw)]);
     if(m.state) facts.push(['State',m.state]);
+    /* Same door as a person's, for the same reason. */
+    setTimeout(()=>{
+      const b=document.createElement('button'); b.className='pMore';
+      b.textContent='Open the card';
+      b.onclick=()=>bopen(n);
+      host.appendChild(b);
+    },0);
   } else if(n.type==='tool'){
     facts.push(['File',m.file]); facts.push(['Size',m.kb+'KB']);
     facts.push(['Lines',(m.lines||0).toLocaleString()]);
@@ -7246,14 +7216,21 @@ function bwire(){
       return;
     }
     bsel=n; bpath=null; binspect(n);
+    /* THE DOT IS THE DOOR. It used to focus the node and fill a 210px side
+       panel, and the detail lived behind a double-click almost nobody would
+       guess at. One deliberate click on a person or a project now opens the
+       card; a pan that happens to end on a node does not, because `bmoved`
+       has already returned above. Every other type still just focuses, and
+       the inspector is the right weight for those. */
+    bopen(n);
   });
-  /* THE SECOND CLICK. One click focuses and fills the side inspector, which is
-     the right weight for "what is this dot". A person is the one node type
-     with an actual account behind it, so double-clicking one opens it. */
+  /* Double-click is kept as the same door, not a second one — it was how a
+     person opened before the single click did it, and muscle memory should
+     not be punished for being right yesterday. */
   cv.addEventListener('dblclick',e=>{
     e.preventDefault();
     const n=bat(e);
-    if(n && n.type==='person'){ bsel=n; binspect(n); profOpen(n); }
+    if(n){ bsel=n; binspect(n); bopen(n); }
   });
   cv.addEventListener('wheel',e=>{
     e.preventDefault(); bpoke();
@@ -7282,7 +7259,6 @@ function bwire(){
   el('brainFit').addEventListener('click',()=>{ bpoke(); bfit(); });
   /* Hovering a node counts as being here, even without a click. */
   cv.addEventListener('pointerenter',bpoke);
-  { const x=el('pX'); if(x) x.addEventListener('click', profClose); }
 }
 
 function bfit(){
@@ -7727,9 +7703,47 @@ function relSection(r){
   return wrap;
 }
 
+/* The people note itself, read straight off the Mac instead of asked for in
+   prose. This is the one thing the brain graph's old profile drawer could do
+   that the card could not; the drawer is gone, so it moved in here. */
+function noteReader(path){
+  const wrap=document.createElement('div');
+  const btn=document.createElement('button'); btn.className='btn relToggle';
+  const name=String(path).split('/').pop();
+  btn.textContent='READ '+name.toUpperCase();
+  const pre=document.createElement('div'); pre.className='pNote'; pre.hidden=true;
+  btn.addEventListener('click',async()=>{
+    if(!pre.hidden){ pre.hidden=true; btn.textContent='READ '+name.toUpperCase(); return; }
+    btn.disabled=true; btn.textContent='READING…';
+    try{
+      const r=await fetch(BRAIN+'/vault?f='+encodeURIComponent(path),{cache:'no-store'});
+      const j=await r.json();
+      pre.textContent=(j&&j.ok)? j.text : ((j&&j.error)||'The note could not be read.');
+    }catch(e){ pre.textContent='The Mac is not reachable, so the note cannot be read from here.'; }
+    pre.hidden=false; btn.disabled=false; btn.textContent='HIDE THE NOTE';
+  });
+  wrap.appendChild(btn); wrap.appendChild(pre);
+  return wrap;
+}
+
+/* ONE CARD, MORE THAN ONE SUBJECT.
+
+   This was written for a person clicked out of the People list. The brain
+   graph now opens the same card — for a person OR for a project — rather
+   than the separate profile drawer it used to have. Two detail surfaces for
+   one dot is how two versions of the same fact get built, and the graph
+   already had the second one.
+
+   The caller hands it a SUBJECT: a name, the rows worth showing, any extra
+   sections, extra actions, and where the facts came from. A person subject
+   keeps exactly the shape it always had (name/role/org/email/phone), so the
+   People list's call is unchanged and the relationship half still only ever
+   runs for a person — `relFor` is keyed on a person's NAME and would happily
+   match a deal called after one. */
 function showCard(p, fromEl){
   const back=el('cardBack'), card=el('card');
   if(!back||!card) return;
+  const kind=p.kind||'person';
   card.textContent='';
 
   const holo=document.createElement('canvas'); holo.className='holo';
@@ -7748,17 +7762,24 @@ function showCard(p, fromEl){
   card.appendChild(scroll);
 
   const rows=document.createElement('div'); rows.className='cardRows';
-  const addRow=(label,value)=>{
+  const addRow=(label,value,copy)=>{
     if(!value) return;
     const d=document.createElement('div'); d.className='cardRow';
     const l=document.createElement('span'); l.className='lbl'; l.textContent=label;
     const v=document.createElement('span'); v.className='val'; v.textContent=value;
-    const c=document.createElement('button'); c.className='cp'; c.textContent='COPY';
-    c.addEventListener('click',()=>copyToClipboard(value,c));
-    d.appendChild(l); d.appendChild(v); d.appendChild(c); rows.appendChild(d);
+    d.appendChild(l); d.appendChild(v);
+    /* Only a value worth pasting somewhere gets the button. A stage name does
+       not need one, and a COPY on every row makes the two that matter
+       invisible. */
+    if(copy){
+      const c=document.createElement('button'); c.className='cp'; c.textContent='COPY';
+      c.addEventListener('click',()=>copyToClipboard(value,c));
+      d.appendChild(c);
+    }
+    rows.appendChild(d);
   };
-  addRow('EMAIL', p.email);
-  addRow('PHONE', p.phone);
+  (p.rows || [{label:'EMAIL',value:p.email,copy:1},{label:'PHONE',value:p.phone,copy:1}])
+    .forEach(r=>addRow(r.label,r.value,r.copy));
   scroll.appendChild(rows);
 
   /* The relationship half, between the contact rows and the actions: it is
@@ -7773,56 +7794,101 @@ function showCard(p, fromEl){
   const relHost=document.createElement('div');
   scroll.appendChild(relHost);
   const paintRel=()=>{
+    if(kind!=='person') return;
     const r=relFor(p);
     if(!r) return;
     relHost.textContent='';
-    relHost.appendChild(relSection(r));
+    const sec=relSection(r);
+    relHost.appendChild(sec);
+    if(r.note && brainOn) sec.appendChild(noteReader(r.note));
   };
   paintRel();
-  if(!BGX){
+  if(!BGX && kind==='person'){
     loadRelations(false).then(()=>{
       if(el('card')===card && card.isConnected) paintRel();
     }).catch(()=>{});
   }
 
-  const acts=document.createElement('div'); acts.className='cardActs';
-  if(p.email){
-    const b=document.createElement('button'); b.textContent='✉ EMAIL';
-    b.addEventListener('click',()=>{
-      window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(p.email),'_blank','noopener');
+  /* Sections a subject brought with it. A project uses these for who is on it
+     and what mentions it; a person has none and this loop does nothing. */
+  (p.sections||[]).forEach(s=>{
+    if(!s||!s.items||!s.items.length) return;
+    const wrap=document.createElement('div'); wrap.className='relWrap';
+    const list=document.createElement('div'); list.className='relList';
+    const t=document.createElement('h4');
+    t.textContent=s.title+(s.items.length>1?' ('+s.items.length+')':'');
+    list.appendChild(t);
+    s.items.slice(0,8).forEach(it=>{
+      const d=document.createElement('div'); d.className='relItem'+(it.go?' go':'');
+      d.appendChild(document.createTextNode(it.text||''));
+      if(it.meta){
+        const sm=document.createElement('div');
+        sm.style.cssText='font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);margin-top:3px';
+        sm.textContent=it.meta; d.appendChild(sm);
+      }
+      if(it.go) d.addEventListener('click',it.go);
+      list.appendChild(d);
     });
+    if(s.items.length>8){
+      const more=document.createElement('div'); more.className='relNone';
+      more.textContent='+'+(s.items.length-8)+' more'; list.appendChild(more);
+    }
+    wrap.appendChild(list);
+    /* How the section was joined, when the join is weaker than it looks. */
+    if(s.note){
+      const n2=document.createElement('div'); n2.className='relNone';
+      n2.textContent=s.note; n2.style.marginTop='7px'; wrap.appendChild(n2);
+    }
+    scroll.appendChild(wrap);
+  });
+
+  const acts=document.createElement('div'); acts.className='cardActs';
+  if(kind==='person'){
+    if(p.email){
+      const b=document.createElement('button'); b.textContent='✉ EMAIL';
+      b.addEventListener('click',()=>{
+        window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(p.email),'_blank','noopener');
+      });
+      acts.appendChild(b);
+    }
+    if(p.phone){
+      const b=document.createElement('button'); b.textContent='✆ CALL';
+      b.addEventListener('click',()=>{ window.location.href='tel:'+String(p.phone).replace(/[^0-9+]/g,''); });
+      acts.appendChild(b);
+    }
+    const ask=document.createElement('button'); ask.textContent='ASK JARVIS';
+    ask.addEventListener('click',()=>{ closeCard(); submit('who is '+(p.first||p.name)); });
+    acts.appendChild(ask);
+    /* The card shows the most recent things outstanding; the note in the
+       vault has every one of them with the meeting it came from. Asking the
+       brain for it is the existing road to that file, so the button routes
+       through the same channel rather than inventing a second one. */
+    if(relFor(p)){
+      const full=document.createElement('button'); full.textContent='FULL HISTORY';
+      full.addEventListener('click',()=>{ closeCard();
+        submit('read the people note for '+p.name+' and summarise what is outstanding'); });
+      acts.appendChild(full);
+    }
+  }
+  (p.acts||[]).forEach(pair=>{
+    const b=document.createElement('button'); b.textContent=pair[0];
+    b.addEventListener('click',()=>pair[1]());
     acts.appendChild(b);
-  }
-  if(p.phone){
-    const b=document.createElement('button'); b.textContent='✆ CALL';
-    b.addEventListener('click',()=>{ window.location.href='tel:'+String(p.phone).replace(/[^0-9+]/g,''); });
-    acts.appendChild(b);
-  }
-  const ask=document.createElement('button'); ask.textContent='ASK JARVIS';
-  ask.addEventListener('click',()=>{ closeCard(); submit('who is '+(p.first||p.name)); });
-  acts.appendChild(ask);
-  /* The card shows the three most recent things outstanding; the note in the
-     vault has every one of them with the meeting it came from. Asking the
-     brain for it is the existing road to that file, so the button routes
-     through the same channel rather than inventing a second one. */
-  if(relFor(p)){
-    const full=document.createElement('button'); full.textContent='FULL HISTORY';
-    full.addEventListener('click',()=>{ closeCard();
-      submit('read the people note for '+p.name+' and summarise what is outstanding'); });
-    acts.appendChild(full);
-  }
+  });
   const x=document.createElement('button'); x.textContent='CLOSE';
   x.addEventListener('click',closeCard); acts.appendChild(x);
   card.appendChild(acts);
 
   /* Where this came from, always. A harvested row has a domain guess where a
      curated one has a title read out of a signature block, and the card must
-     not let those look like the same kind of fact. */
+     not let those look like the same kind of fact. A subject that knows its
+     own provenance says so in its own words. */
   const note=document.createElement('div'); note.className='cardNote';
-  note.textContent = p.source === 'mail'
-    ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
-      ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
-    : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : '');
+  note.textContent = p.provenance ? p.provenance
+    : (p.source === 'mail'
+      ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
+        ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
+      : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : ''));
   card.appendChild(note);
 
   /* Rise from the row that was clicked. */
