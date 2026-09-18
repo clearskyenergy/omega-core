@@ -91,6 +91,11 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .pill{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);
       background:rgba(0,243,255,.1);border-radius:9px;padding:1px 7px;min-width:20px;text-align:center}
 .navItem.on .pill{color:var(--glow-cyan)}
+/* The one pill that is a state rather than a count. Amber and steady — not
+   flashing, because a thing blinking in the corner of a dashboard he reads
+   all day is a thing he learns to stop seeing. */
+.pill.warn{color:var(--warn);background:rgba(255,176,32,.14)}
+.navItem.on .pill.warn{color:var(--warn)}
 .railFoot{flex:none;border-top:1px solid rgba(0,243,255,.14);padding-top:10px}
 /* Hung off the parent rather than set inline, because this button MOVES: on a
    phone it lives in the talk bar, where full width and a top margin are both
@@ -1304,7 +1309,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
       <button class="navItem" data-view="people">◉  People<span class="pill" id="nPeople"></span></button>
-      <button class="navItem" data-view="system">⚙  System</button>
+      <button class="navItem" data-view="system">⚙  System<span class="pill" id="nSys"></span></button>
     </nav>
 
     <div class="railFoot">
@@ -1358,7 +1363,6 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="schedule" style="flex:1;min-height:0">
             <div class="ptitle">Mission timeline — today</div>
             <div id="schedule" class="scroll"></div>
-            <div id="alert"></div>
           </div>
           <div class="panel" data-widget="conns" style="flex:none">
             <div class="ptitle">Connections</div>
@@ -1616,6 +1620,12 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="pipeline" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
+            <!-- The ingest health warning lived on the command view, under the
+                 timeline, where it was the loudest thing on the page for a
+                 condition that is usually somebody else's waiting room. It
+                 belongs with the numbers it is about: LAST INGEST, FETCHED,
+                 MEETINGS SEEN are all right above it. -->
+            <div id="alert"></div>
           </div>
         </div>
         <div class="col">
@@ -3395,8 +3405,18 @@ async function load(){
       ['QUEUE', num(s.counts.queued), (s.counts.queued||0)?'warn':'good']
     ] : [['LAST INGEST','no run recorded','bad']]);
 
+    /* Moved to the System view, beside the ingest numbers it describes. The
+       nav pill is what stops that being the same as hiding it: he is not on
+       System most of the day, and a health warning he never walks past is a
+       health warning that does not exist. A dot, not a number — there is only
+       ever one of these and "1" reads like a count of something. */
     el('alert').textContent='';
-    if(ing&&ing.alert){const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;el('alert').appendChild(d);}
+    const sysPill=el('nSys');
+    if(ing&&ing.alert){
+      const d=document.createElement('div');d.className='alert';d.textContent=ing.alert;
+      el('alert').appendChild(d);
+      if(sysPill){ sysPill.textContent='●'; sysPill.classList.add('warn'); }
+    } else if(sysPill){ sysPill.textContent=''; sysPill.classList.remove('warn'); }
 
     lastStatus=s;
     renderOverview(s); buildFeed(s); renderWeek(s); renderRoutines(s); renderPeople(s);
