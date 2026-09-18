@@ -266,7 +266,8 @@
       "maxDuration": 60
     },
     "api/network-proximity.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "data/fiber/**"
     },
     "api/render.js": {
       "maxDuration": 60
