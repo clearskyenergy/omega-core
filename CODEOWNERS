@@ -1,8 +1,50 @@
-# Default: core team reviews everything.
-*                         @clearskyenergy/core
-# Rules and server code: require a core reviewer AND cannot be changed by partners.
-/firestore.rules          @clearskyenergy/core
-/storage.rules            @clearskyenergy/core
-/api/                     @clearskyenergy/core
-# JV partner territory — only the OSA team and core may touch it.
-/tenants/osa/             @clearskyenergy/jv-osa @clearskyenergy/core
+# ============================================================================
+# CODEOWNERS — who must review what.
+# © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+#
+# ⚠ THIS IS A REVIEW REQUIREMENT, NOT AN ACCESS CONTROL.
+# It cannot stop anyone from CHANGING a path. It only requests — or, with
+# "Require review from Code Owners" enabled on the protected branch, requires —
+# an approval from the named owner on the PR that changes it. Anyone holding
+# write access to this repository can write to every path in it. GitHub has no
+# path-scoped write permission: not for a user, not for a team, not on any
+# plan. "Write access scoped to /tenants/osa/" is therefore a review convention
+# plus branch protection, and nothing else. Say it that way to partners rather
+# than implying the folder is a wall.
+#
+# ⚠ AN OWNER MUST BE A HANDLE THAT RESOLVES, AND MUST HOLD WRITE ACCESS.
+# GitHub silently ignores a CODEOWNERS line naming an owner it cannot resolve,
+# or one who lacks write access — the path is then simply unowned, and nothing
+# in the UI says so. This file previously read @clearskyenergy/core and
+# @clearskyenergy/jv-osa. `clearskyenergy` is a PERSONAL account and personal
+# accounts have no teams, so BOTH matched nobody and every path below was
+# unowned. If this repository moves to a GitHub organisation, restore the team
+# form; until then an owner is an individual handle.
+# ============================================================================
+
+# Default: ClearSky reviews everything.
+*                                     @clearskyenergy
+
+# The security boundary and the server-side logic. A PR touching either needs a
+# ClearSky approval, always — these are the two places where a wrong merge is
+# not a bug but a breach.
+/firestore.rules                      @clearskyenergy
+/storage.rules                        @clearskyenergy
+/api/                                 @clearskyenergy
+
+# JV partner territory, governed by the JV agreement.
+# Add the OSA contributors here as individual handles at the moment they
+# actually hold write access — not before. A code owner without write access is
+# ignored, which re-creates exactly the silent no-op described above.
+/tenants/osa/                         @clearskyenergy
+
+# …but not these, even inside it. A rules file and server code do not become
+# partner territory by sitting in a partner folder. Neither copy is live today
+# — firebase.json deploys the ROOT firestore.rules and Vercel builds only the
+# ROOT api/ — but an unowned copy of the access model is a trap rather than a
+# document: it reads as authoritative to anyone who opens it. Last match wins
+# in CODEOWNERS, so these lines must stay BELOW /tenants/osa/.
+/tenants/osa/firestore.rules          @clearskyenergy
+/tenants/osa/firestore.rules.partner  @clearskyenergy
+/tenants/osa/storage.rules.additions  @clearskyenergy
+/tenants/osa/api/                     @clearskyenergy
