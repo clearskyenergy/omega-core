@@ -1,0 +1,45 @@
+# ============================================================================
+# partner-scope.yml — the part of "scoped to tenants/osa" a machine can hold.
+#
+# GitHub has no path-scoped write permission, for a user or a team, on any
+# plan. A collaborator added so they can work on the OSA folder can also write
+# firestore.rules, api/ and every other tenant's folder. CODEOWNERS only asks
+# for a review. This check refuses the merge.
+#
+# ⚠ It is a gate ONLY if "partner scope" is a REQUIRED status check on main.
+# Until then it is an advisory X beside a green Merge button, which is worse
+# than no check at all because it looks like protection.
+#
+# Settings → Branches → main → Require status checks to pass → add
+# "partner scope". Do that in the same sitting as granting the access.
+# ============================================================================
+
+name: partner scope
+
+on:
+  pull_request:
+
+jobs:
+  scope:
+    name: partner scope
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 because the check diffs against the merge base, and a
+      # shallow clone has no merge base to diff against. Without it this job
+      # fails as an error rather than a verdict, which reads as a broken CI.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step, same as tests.yml — the checker is one dependency-free
+      # file so it runs in about a second and nobody is tempted to skip it.
+      - name: changed paths are inside the author's scope
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-partner-scope.js
