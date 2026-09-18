@@ -459,6 +459,27 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 /* The hole the core used to fill: space for the burst to be seen through. */
 .coreHole{flex:1;min-height:180px;pointer-events:none}
 
+/* ── ARRANGING ───────────────────────────────────────────────────────────
+   A panel is dragged by its heading, and the heading only looks draggable
+   when you are over it. A grab cursor on twenty-seven headings at rest says
+   "all of this moves" about a page whose whole job is to hold still. */
+.panel[data-widget] > .ptitle{cursor:grab;position:relative}
+.panel[data-widget] > .ptitle:active{cursor:grabbing}
+.panel[data-widget] > .ptitle::after{content:'\2059';position:absolute;right:0;top:50%;
+  transform:translateY(-50%);font-size:11px;letter-spacing:0;color:var(--dim);
+  opacity:0;transition:opacity .12s;pointer-events:none}
+.panel[data-widget]:hover > .ptitle::after{opacity:.55}
+/* The 62px of right padding the grip sits in is already reserved further up,
+   for the zoom control in the same corner. */
+.panel.dragging{opacity:.38}
+/* The drop target is the COLUMN, so the column is what lights up. Inset, so
+   the outline does not push the grid around at the moment you are aiming. */
+.col.dropOK,.view.dropOK{outline:1px dashed rgba(0,243,255,.45);outline-offset:-3px;
+  border-radius:10px;background:rgba(0,243,255,.03)}
+body.arranging .panel > .ptitle{cursor:grabbing}
+body.arranging .scroll{pointer-events:none}
+#resetLayout[hidden]{display:none}
+
 /* ── minimised panels ────────────────────────────────────────────────────
    A panel you are not reading should not cost a rectangle. Collapsed, it
    becomes an orb in the dock — the same object the brain draws, because a
@@ -1321,6 +1342,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         <div class="badge" id="badge">CONNECTING</div>
         <button id="mic">🎙 VOICE OFF</button>
         <button id="refresh">REFRESH</button>
+        <button id="resetLayout" hidden title="Put every panel back where the page puts it">↺ LAYOUT</button>
       </div>
     </header>
 
@@ -1329,16 +1351,16 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
       <div class="cmdGrid">
 
         <div class="col">
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="overview" style="flex:none">
             <div class="ptitle">Overview</div>
             <div id="overview"></div>
           </div>
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="schedule" style="flex:1;min-height:0">
             <div class="ptitle">Mission timeline — today</div>
             <div id="schedule" class="scroll"></div>
             <div id="alert"></div>
           </div>
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="conns" style="flex:none">
             <div class="ptitle">Connections</div>
             <div id="conns"></div>
           </div>
@@ -1346,26 +1368,26 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
         <div class="col">
           <div class="coreHole"></div>
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="quick-commands" style="flex:none">
             <div class="ptitle">Quick commands</div>
             <div class="quick" id="quick"></div>
           </div>
-          <div class="panel" style="flex:none;height:132px">
+          <div class="panel" data-widget="agent-activity-last-8-runs" style="flex:none;height:132px">
             <div class="ptitle">Agent activity — last 8 runs</div>
             <div class="scroll" id="logStream"></div>
           </div>
         </div>
 
         <div class="col">
-          <div class="panel" style="flex:none;max-height:34%">
+          <div class="panel" data-widget="feed" style="flex:none;max-height:34%">
             <div class="ptitle">Live feed<span class="live">● LIVE</span></div>
             <div id="feed" class="scroll"></div>
           </div>
-          <div class="panel" style="flex:none;max-height:26%">
+          <div class="panel" data-widget="needs" style="flex:none;max-height:26%">
             <div class="ptitle">Needs you<span class="live" id="needsN"></span></div>
             <div id="needs" class="scroll"></div>
           </div>
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="conversation" style="flex:1;min-height:0">
             <div class="ptitle">Conversation</div>
             <div class="thread scroll" id="thread"></div>
           </div>
@@ -1376,7 +1398,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== TASKS ========== -->
     <section class="view" data-view="tasks">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="todos" style="flex:1;min-height:0">
         <div class="ptitle">To do — ranked</div>
         <div id="todos" class="scroll"></div>
       </div>
@@ -1384,7 +1406,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== OUTBOX ========== -->
     <section class="view" data-view="outbox">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="drafts" style="flex:1;min-height:0">
         <div class="ptitle">Waiting to go out — say “execute items 1 through 4”</div>
         <div id="drafts" class="scroll"></div>
       </div>
@@ -1393,11 +1415,11 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== CALENDAR ========== -->
     <section class="view" data-view="calendar">
       <div class="cmdGrid" style="grid-template-columns:1fr 320px">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="week" style="flex:1;min-height:0">
           <div class="ptitle">Today, hour by hour<span class="live" id="dayN"></span></div>
           <div id="week" class="scroll dayGrid"></div>
         </div>
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="dayPlan" style="flex:1;min-height:0">
           <div class="ptitle">What the day could look like</div>
           <div id="dayPlan" class="scroll"></div>
         </div>
@@ -1406,7 +1428,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== ROUTINES ========== -->
     <section class="view" data-view="routines">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="routines" style="flex:1;min-height:0">
         <div class="ptitle">Routines — say “every weekday at 8am send me my schedule”</div>
         <div id="routines" class="scroll"></div>
       </div>
@@ -1414,7 +1436,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== PEOPLE ========== -->
     <section class="view" data-view="people">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="people" style="flex:1;min-height:0">
         <div class="ptitle">Who you work with</div>
         <div id="people" class="scroll"></div>
       </div>
@@ -1422,15 +1444,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== CLIENTS ========== -->
     <section class="view" data-view="clients">
-      <div class="panel" style="flex:none">
+      <div class="panel" data-widget="bookTotals" style="flex:none">
         <div class="ptitle">The book<span class="live" id="bookAt"></span></div>
         <div id="bookTotals"></div>
       </div>
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="clients" style="flex:1;min-height:0">
         <div class="ptitle">Organisations on the portal</div>
         <div id="clients" class="scroll"></div>
       </div>
-      <div class="panel" style="flex:none;max-height:34%">
+      <div class="panel" data-widget="finance" style="flex:none;max-height:34%">
         <div class="ptitle">Financing &amp; deals</div>
         <div id="finance" class="scroll"></div>
       </div>
@@ -1439,7 +1461,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== BOARD ========== -->
     <section class="view" data-view="board">
       <div class="cmdGrid" style="grid-template-columns:1fr 330px">
-      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+      <div class="panel" data-widget="whiteboard" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
           <span class="ptitle" style="border:none;padding:0;margin:0">Whiteboard</span>
           <button id="bdAdd">+ NOTE</button>
@@ -1457,7 +1479,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
         </div>
         <div class="boardSurface" id="boardSurface"></div>
       </div>
-      <div class="panel" style="flex:0 0 330px;min-height:0" id="bdThinkPanel">
+      <div class="panel" data-widget="bdThread" style="flex:0 0 330px;min-height:0" id="bdThinkPanel">
         <div class="ptitle">Think with me<span class="live" id="bdThinkState"></span></div>
         <div id="bdThread" class="scroll bdThread"></div>
         <textarea id="bdAsk" class="askBox"
@@ -1477,11 +1499,11 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
          vault is on the Mac and this page is served from silmarillion. -->
     <section class="view" data-view="openwork">
       <div class="cmdGrid" style="grid-template-columns:1fr 1fr">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="active-priorities" style="flex:1;min-height:0">
           <div class="ptitle">Active Priorities<span class="live" id="apN"></span></div>
           <div class="scroll vaultDoc" id="apDoc"></div>
         </div>
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="decisions" style="flex:1;min-height:0">
           <div class="ptitle">Decisions<span class="live" id="dcN"></span></div>
           <div class="scroll vaultDoc" id="dcDoc"></div>
         </div>
@@ -1504,7 +1526,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
          the browser asks once per session. That prompt is the point — without
          it any page that could reach the port would be framing a shell. -->
     <section class="view" data-view="terminal">
-      <div class="panel" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+      <div class="panel" data-widget="termHost" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
           <span class="ptitle" style="border:none;padding:0;margin:0">Chat with JARVIS</span>
           <span class="live" id="termState">—</span>
@@ -1517,7 +1539,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 
     <!-- ========== INDEX ========== -->
     <section class="view" data-view="index">
-      <div class="panel" style="flex:1;min-height:0">
+      <div class="panel" data-widget="brainIns" style="flex:1;min-height:0">
         <div class="ptitle">Everywhere you can go<span class="live" id="ixN"></span></div>
         <div class="ixWrap">
           <div class="ixHead">
@@ -1565,7 +1587,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <!-- ========== PLATFORM ========== -->
     <section class="view" data-view="platform">
       <div class="cmdGrid platGrid">
-        <div class="panel" style="flex:1;min-height:0">
+        <div class="panel" data-widget="platform" style="flex:1;min-height:0">
           <div class="ptitle">OMEGA<span class="live" id="platN"></span></div>
           <div id="platform" class="scroll"></div>
         </div>
@@ -1591,19 +1613,19 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
     <section class="view" data-view="system">
       <div class="cmdGrid">
         <div class="col">
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="pipeline" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
           </div>
         </div>
         <div class="col">
-          <div class="panel" style="flex:none">
+          <div class="panel" data-widget="spend" style="flex:none">
             <div class="ptitle">Spend</div>
             <div id="spend"></div>
           </div>
         </div>
         <div class="col">
-          <div class="panel" style="flex:1;min-height:0">
+          <div class="panel" data-widget="features" style="flex:1;min-height:0">
             <div class="ptitle">Subsystems</div>
             <div id="features" class="scroll"></div>
           </div>
@@ -6423,17 +6445,230 @@ function pickTool(t){
 
    The choice persists per view. Folding six panels away and having them all
    return on the next reload is the feature failing to be a feature. */
+/* ══ THE WIDGET REGISTRY ═════════════════════════════════════════════════
+   Every panel on this page declares an id in the markup — data-widget — and
+   this reads them into one table. Borrowed from jarvisos-app's widget
+   manifest, which is the same problem in a desktop shell: a surface made of
+   independent panes needs a name for each pane that is not its title.
+
+   WHY AN ID AND NOT THE TITLE. panelKey() below used to key a folded panel on
+   the words in its heading, with a comment admitting it: "a stable name for a
+   panel that has no id: its title". It is stable right up until a title is
+   edited, and then every panel Thomas had folded away quietly comes back and
+   the one he wanted back is gone. The titles on this page are sentences —
+   "Waiting to go out — say 'execute items 1 through 4'" — which is exactly the
+   kind of string that gets reworded. An id is the thing that does not move.
+
+   PROVENANCE IS STAMPED HERE, NOT DECLARED. jarvisos-app's scanner fills in
+   whether a widget came from the bundle or from the user's own directory
+   rather than reading it out of the manifest, because a widget that can say
+   where it came from can lie about it. Same rule: `source` is set by this
+   function. Nothing in the markup can set it.
+
+   A MALFORMED WIDGET IS SKIPPED, NOT FATAL. One panel with a blank or
+   duplicated id must not take the other twenty-six down with it — the failure
+   mode of a registry that throws is a blank dashboard, which is worse than a
+   dashboard missing one pane. */
+const WIDGETS = new Map();
+
+function widgetContainers(view){
+  const cols = [...view.querySelectorAll(':scope > .cmdGrid > .col, :scope > .col')];
+  return cols.length ? cols : [view];
+}
+
+function scanWidgets(){
+  WIDGETS.clear();
+  document.querySelectorAll('.panel[data-widget]').forEach(p => {
+    const id = (p.dataset.widget || '').trim();
+    if (!id) { console.warn('widget: a panel declares an empty id — skipped'); return; }
+    if (WIDGETS.has(id)) { console.warn('widget: duplicate id "'+id+'" — keeping the first'); return; }
+    const v = p.closest('.view');
+    const t = p.querySelector('.ptitle');
+    /* The live badge is part of the heading element and not part of the name:
+       "Live feed● LIVE" is not what anyone would call that panel. */
+    const live = t && t.querySelector('.live');
+    const name = t ? t.textContent.replace(live ? live.textContent : '', '').trim() : id;
+    WIDGETS.set(id, {
+      id,
+      name: name || id,
+      view: (v && v.dataset.view) || 'x',
+      source: 'bundled',
+      el: p
+    });
+    p.dataset.source = 'bundled';
+  });
+  return WIDGETS;
+}
+
+/* ══ THE ARRANGEMENT ═════════════════════════════════════════════════════
+   Which column a panel sits in and in what order, per view, keyed by the ids
+   above. Saved per viewer in localStorage — this is a preference about how
+   one person's screen is arranged, not a fact about the business, and it has
+   no business in Firestore.
+
+   FORGIVING ON PURPOSE. A saved id that no longer exists is ignored, and a
+   panel the saved arrangement has never heard of still appears — it goes to
+   the END of the column the markup put it in. So a panel shipped next week
+   turns up at the bottom of wherever it belongs rather than being dropped,
+   which is how a layout system starts eating features, and rather than
+   landing on top and shoving a year of somebody's arrangement down the page,
+   which is what it did the first time this was measured. */
+const LAYOUT_KEY = 'jarvisLayout';
+let layout = (() => { try { return JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}'); }
+                      catch (_) { return {}; } })();
+function saveLayout(){ try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (_) {} }
+
+function captureLayout(view){
+  const name = view.dataset.view;
+  layout[name] = widgetContainers(view).map(c =>
+    [...c.querySelectorAll(':scope > .panel[data-widget]')].map(p => p.dataset.widget));
+  saveLayout();
+}
+
+function applyLayout(){
+  document.querySelectorAll('.view').forEach(view => {
+    const saved = layout[view.dataset.view];
+    if (!Array.isArray(saved)) return;
+    const cols = widgetContainers(view);
+    const placed = new Set();
+    saved.forEach((ids, i) => {
+      const col = cols[i];
+      if (!col || !Array.isArray(ids)) return;
+      ids.forEach(id => {
+        const w = WIDGETS.get(id);
+        /* Only ever moves a panel to a column in its OWN view. A saved
+           arrangement is per view, and a panel that turned up in another
+           one would be a panel Thomas cannot find. */
+        if (!w || w.view !== view.dataset.view) return;
+        col.appendChild(w.el);
+        placed.add(id);
+      });
+    });
+    /* Then everything the arrangement never mentioned, re-appended to the
+       column it is already in, so it ends up after the arranged ones instead
+       of in front of them. */
+    cols.forEach(col => {
+      [...col.querySelectorAll(':scope > .panel[data-widget]')].forEach(el2 => {
+        if (!placed.has(el2.dataset.widget)) col.appendChild(el2);
+      });
+    });
+  });
+}
+
+/* The control exists only when there is an arrangement to undo. A reset
+   button on a page nobody has rearranged is a button that does nothing, and
+   one of those next to REFRESH is a button somebody eventually presses to
+   find out. */
+function syncResetBtn(){
+  const b=el('resetLayout');
+  if(b) b.hidden = !Object.keys(layout).length;
+}
+
+function resetLayout(){
+  layout = {}; saveLayout();
+  /* The markup is the default, so putting it back means reloading rather than
+     remembering what the original order was — which would be a second copy of
+     the layout, in code, drifting from the one in the file. */
+  location.reload();
+}
+
+/* ══ MOVING ONE ══════════════════════════════════════════════════════════
+   Drag a panel by its heading. HTML5 drag-and-drop rather than the pointer
+   maths the caption and the whiteboard use: those two have to land anywhere,
+   this one only has to land in a column, and the browser already knows how to
+   do that.
+
+   The whole panel is NOT draggable — a panel is full of text you select and
+   buttons you press, and making all of it a drag handle breaks both. */
+function armDragging(){
+  document.querySelectorAll('.panel[data-widget] > .ptitle').forEach(t => {
+    if (t.dataset.drag) return;
+    t.dataset.drag = '1';
+    t.draggable = true;
+    t.addEventListener('dragstart', ev => {
+      const p = t.closest('.panel');
+      ev.dataTransfer.setData('text/plain', p.dataset.widget);
+      ev.dataTransfer.effectAllowed = 'move';
+      p.classList.add('dragging');
+      document.body.classList.add('arranging');
+    });
+    t.addEventListener('dragend', () => {
+      document.querySelectorAll('.panel.dragging').forEach(p => p.classList.remove('dragging'));
+      document.body.classList.remove('arranging');
+      document.querySelectorAll('.dropOK').forEach(c => c.classList.remove('dropOK'));
+    });
+  });
+
+  document.querySelectorAll('.view').forEach(view => {
+    widgetContainers(view).forEach(col => {
+      if (col.dataset.drop) return;
+      col.dataset.drop = '1';
+      col.addEventListener('dragover', ev => {
+        if (!document.body.classList.contains('arranging')) return;
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        col.classList.add('dropOK');
+      });
+      col.addEventListener('dragleave', () => col.classList.remove('dropOK'));
+      col.addEventListener('drop', ev => {
+        ev.preventDefault();
+        col.classList.remove('dropOK');
+        const id = ev.dataTransfer.getData('text/plain');
+        const w = WIDGETS.get(id);
+        if (!w || w.view !== view.dataset.view) return;
+        /* Dropped ONTO a panel means "before that one"; dropped on the gap
+           means the end. Without this every drop lands at the bottom and
+           reordering a three-panel column takes six drags. */
+        const over = ev.target.closest('.panel[data-widget]');
+        if (over && over !== w.el && over.parentElement === col) col.insertBefore(w.el, over);
+        else col.appendChild(w.el);
+        captureLayout(view);
+        syncResetBtn();
+        remeasure();
+      });
+    });
+  });
+}
+
 const MIN_KEY='jarvisMinimised';
 let minned = (()=>{ try{ return JSON.parse(localStorage.getItem(MIN_KEY)||'{}'); }
                     catch(_){ return {}; } })();
 function saveMin(){ try{ localStorage.setItem(MIN_KEY, JSON.stringify(minned)); }catch(_){} }
 
-/* A stable name for a panel that has no id: its title. Two panels with the
-   same title in one view would collide, and none do. */
+/* THE KEY IS THE DECLARED ID NOW. It used to be the title, with a comment
+   calling that "a stable name for a panel that has no id" — true until a
+   title is edited, and the titles here are sentences. Rewording one used to
+   silently unfold whatever Thomas had folded and orphan the entry that kept
+   it folded. Every panel declares data-widget; the title fallback survives
+   only for anything that does not. */
 function panelKey(p){
-  const t=p.querySelector('.ptitle');
   const view=(p.closest('.view')||{}).dataset;
-  return ((view&&view.view)||'x')+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+  const v=(view&&view.view)||'x';
+  const id=(p.dataset&&p.dataset.widget||'').trim();
+  if(id) return v+'::#'+id;
+  const t=p.querySelector('.ptitle');
+  return v+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+}
+
+/* ONE-TIME MIGRATION. Changing the key format without this would read every
+   existing folded panel as "not folded" — the feature failing to be a feature,
+   which is the exact thing the comment above the store already warns about.
+   Runs once against the live DOM, where both the old key and the new one can
+   still be computed for the same element, and then marks itself done. */
+function migrateMinKeys(){
+  if(minned.__keyed) return;
+  const next={ __keyed:1 };
+  document.querySelectorAll('.panel').forEach(p=>{
+    const view=(p.closest('.view')||{}).dataset;
+    const v=(view&&view.view)||'x';
+    const t=p.querySelector('.ptitle');
+    const oldKey=v+'::'+((t&&t.textContent.trim().slice(0,40))||'panel');
+    if(minned[oldKey]) next[panelKey(p)]=1;
+  });
+  /* Anything already in the new format is carried across untouched, so running
+     this twice cannot lose a fold. */
+  Object.keys(minned).forEach(k=>{ if(k.indexOf('::#')!==-1) next[k]=minned[k]; });
+  minned=next; saveMin();
 }
 
 function dockFor(view){
@@ -6509,8 +6744,19 @@ function restore(p,orb){
   remeasure();
 }
 
-/* Applied on every render pass, so panels built later fold correctly too. */
+/* Applied on every render pass, so panels built later fold correctly too.
+
+   The registry is rescanned here for the same reason: it is the one pass that
+   already runs after anything appears, so a panel added later gets its id, its
+   place and its drag handle without a second place having to remember. Scan
+   BEFORE the migration and the folds, because both key off the ids. */
 function applyMin(){
+  scanWidgets();
+  migrateMinKeys();
+  applyLayout();
+  armDragging();
+  syncResetBtn();
+
   document.querySelectorAll('.view').forEach(v=>{
     const d=v.querySelector(':scope > .dock');
     if(d) d.textContent='';
@@ -8368,6 +8614,11 @@ function showCard(p, fromEl){
   if(cardHolo) cardHolo.stop();
   cardHolo = makeHologram(holo, p.name);
 }
+
+(function(){
+  const b=el('resetLayout');
+  if(b) b.addEventListener('click', resetLayout);
+})();
 
 el('cardBack').addEventListener('click', ev=>{ if(ev.target.id==='cardBack') closeCard(); });
 document.addEventListener('keydown', ev=>{ if(ev.key==='Escape') closeCard(); });
