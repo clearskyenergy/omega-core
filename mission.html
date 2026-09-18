@@ -1936,6 +1936,19 @@ function makeCore(id, opts) {
   const ctx = cv.getContext('2d');
   let W = 0, H = 0; const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let energy = 0.15, target = 0.15, t = 0;
+  /* VOICE IS NOT ENERGY. `energy` answers "how much is going on" — it rides
+     the backlog count, it never reaches zero, and it eases at 0.02 a frame,
+     which is most of a second. Ask it to drive a mouth and you get a lamp
+     fading up and down half a syllable late.
+
+     This is a second channel with its own clock, carrying one thing: how loud
+     HE is, right now. Zero when he is not talking, and zero is a real value
+     here rather than a floor. */
+  let voice = 0, voiceTarget = 0, vPrev = 0, yawAcc = 0;
+  /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
+     the envelope rather than on a timer, so the count and the spacing are the
+     speech's, not a decoration's. */
+  const VRING = [];
 
   const LAT = 9, LON = 18, PER_LAT = 96, PER_LON = 64;
   const TILT = -0.42;                         /* the axis leans toward you */
@@ -2161,7 +2174,40 @@ function makeCore(id, opts) {
            came out 1.65× too wide and read as a smear rather than a man.
            Stored rather than hard-coded so replacing the drawing cannot
            reintroduce it. */
-        cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums), n: lums.length, ar: h / w };
+        /* WHERE HIS FACE IS, found in the artwork rather than written down.
+           The voice has to appear to come from the mask, which means something
+           has to know where the mask is — and a constant measured once is a
+           constant that lies the day the drawing is replaced. The aspect ratio
+           two lines up is stored for exactly that reason; this is the same
+           argument about a different number.
+
+           Polished metal is the only thing in this drawing that catches light:
+           the brightest sample anywhere in the head is 0.866 against a figure
+           whose median is 0.055. So the faceplate is a luminance centroid over
+           the top fifth of the silhouette, cubed so the highlights dominate
+           and the hood's shadow does not drag it down the face. */
+        var top = 1, bot = -1, k;
+        for (k = 0; k < lums.length; k++) {
+          var yk = pos[k * 3 + 1];
+          if (yk < top) top = yk;
+          if (yk > bot) bot = yk;
+        }
+        var cut = top + (bot - top) * 0.22;
+        var mx = 0, my = 0, mz = 0, mw = 0;
+        for (k = 0; k < lums.length; k++) {
+          if (pos[k * 3 + 1] >= cut) continue;
+          var wgt = Math.pow(lums[k], 3);
+          mx += pos[k * 3] * wgt; my += pos[k * 3 + 1] * wgt; mz += pos[k * 3 + 2] * wgt;
+          mw += wgt;
+        }
+        var mask = mw > 0
+          ? { x: mx / mw, y: my / mw, z: mz / mw }
+          /* No head found is not a reason to fail; it is a reason to aim at
+             the top of whatever was drawn and carry on. */
+          : { x: 0, y: top + (bot - top) * 0.12, z: 0.15 };
+
+        cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
+                  n: lums.length, ar: h / w, mask: mask };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -2359,6 +2405,50 @@ function makeCore(id, opts) {
       drawCloud(cx, cy - R * 0.04, R, cyaw, col, { sweep: ((t * 0.0024) % 1.9) - 0.95 });
       ctx.globalCompositeOperation = 'lighter';
       drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 2, gain: 0.26, grow: 2.4, bright: true });
+
+      /* ── THE VOICE, AT HIS FACE ──────────────────────────────────────
+         Everything else on this canvas already answers `energy`: the smoke,
+         the embers, the shells. That says the scene got busier. It does not
+         say HE is speaking, because none of it comes from him.
+
+         So the speech is drawn at the mask and nowhere else. The position is
+         `cloud.mask` — found in the artwork at sample time, turned by the
+         same angle the body is turned by, so the light stays on his face
+         through the whole swing instead of hanging in the air beside it.
+         Inside this save(), which already carries the bob and the entry
+         scale: a glow that does not bob with him is a glow that is not
+         attached to him. */
+      if (voice > 0.02 && cloud && cloud.mask) {
+        const m = cloud.mask;
+        const mc = Math.cos(cyaw * 0.55), msn = Math.sin(cyaw * 0.55);
+        const vsy = R * 1.68, vsx = vsy / (cloud.ar || 1.65);
+        const mX = cx + (m.x * mc - m.z * msn * 0.85) * vsx;
+        const mY = (cy - R * 0.04) + m.y * vsy;
+
+        const bloom = ctx.createRadialGradient(mX, mY, 0, mX, mY, R * (0.11 + voice * 0.20));
+        bloom.addColorStop(0, 'rgba(' + col + ',' + (0.30 + voice * 0.50).toFixed(3) + ')');
+        bloom.addColorStop(0.45, 'rgba(' + col + ',' + (voice * 0.20).toFixed(3) + ')');
+        bloom.addColorStop(1, 'rgba(' + col + ',0)');
+        ctx.fillStyle = bloom;
+        ctx.beginPath(); ctx.arc(mX, mY, R * (0.11 + voice * 0.20), 0, Math.PI * 2); ctx.fill();
+
+        /* The slits. Narrow, brighter than the bloom, and the only part that
+           tracks the peak rather than the envelope — it is what the eye reads
+           as the thing doing the talking. */
+        const sw = R * 0.055 * (0.6 + voice);
+        ctx.fillStyle = 'rgba(' + col + ',' + Math.min(0.95, 0.25 + voice * 0.8).toFixed(3) + ')';
+        ctx.fillRect(mX - sw * 1.5, mY - R * 0.008, sw, R * 0.016);
+        ctx.fillRect(mX + sw * 0.5, mY - R * 0.008, sw, R * 0.016);
+
+        VRING.forEach(function (r2) {
+          if (r2.a <= 0) return;
+          ctx.strokeStyle = 'rgba(' + col + ',' + (r2.a * 0.5).toFixed(3) + ')';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(mX, mY, R * r2.r, R * r2.r * 0.62, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+      }
       ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
 
@@ -2514,6 +2604,22 @@ function makeCore(id, opts) {
     if (!W || !H) { resize(); requestAnimationFrame(frame); return; }
     t += 1;
     energy += (target - energy) * 0.02;
+    /* ATTACK FAST, RELEASE SLOW — the shape of a mouth rather than a dimmer.
+       0.55 rising is about three frames to the peak, so a consonant lands on
+       the frame you hear it. 0.12 falling is about eight, which holds the
+       shape of a vowel through the gaps in its own waveform instead of
+       strobing on every zero crossing. Symmetric easing gives you one or the
+       other and neither reads as speech. */
+    voice += (voiceTarget - voice) * (voiceTarget > voice ? 0.55 : 0.12);
+    /* A ring on the way up past a quarter, and only on the way up — without
+       the edge test a held vowel spawns one every frame and the face
+       disappears behind sixty concentric circles. */
+    if (voice > 0.25 && vPrev <= 0.25) VRING.push({ r: 0.06, a: 0.9 });
+    vPrev = voice;
+    for (let vi = VRING.length - 1; vi >= 0; vi--) {
+      VRING[vi].r += 0.010; VRING[vi].a -= 0.035;
+      if (VRING[vi].a <= 0) VRING.splice(vi, 1);
+    }
     const doomNow = document.documentElement.dataset.mode === 'doom';
     /* The arrival is stamped here, where the mode is already being read, so
        the mode is not queried twice a frame for two different reasons. */
@@ -2528,7 +2634,19 @@ function makeCore(id, opts) {
 
     const cx = W / 2, cy = H / 2;
     const R = Math.min(W, H) * (opts.scale || 0.30);
-    const yaw = t * (0.0022 + energy * 0.0024);
+    /* ACCUMULATED, not `t * rate`. Multiplying the frame count by a rate that
+       itself changes means the ANGLE jumps whenever the rate does — the whole
+       history is re-evaluated at the new speed. It eased slowly enough to read
+       as drift rather than a jerk, which is why it survived; it is still the
+       wrong shape for a thing that is supposed to be turning.
+
+       AND HE STEADIES WHILE HE TALKS. The energy term is scaled by (1 - voice),
+       so the shells fall back to their base rate when he speaks instead of
+       spinning up. A thing that accelerates the moment it opens its mouth
+       reads as agitated. Doom is not agitated — the room should go still and
+       let him talk. */
+    yawAcc += 0.0022 + energy * 0.0024 * (1 - voice);
+    const yaw = yawAcc;
     const doom = doomNow;
     /* Gold on the way in when the saved mode is quantum, or the gate shows a
        cyan globe under a gold name. The command centre has its own sphere;
@@ -2617,7 +2735,13 @@ function makeCore(id, opts) {
   }
   requestAnimationFrame(frame);
 
-  return { set(v) { target = Math.max(0.12, Math.min(1, v)); }, resize };
+  return {
+    set(v) { target = Math.max(0.12, Math.min(1, v)); },
+    /* Fed only by HIS voice — see meter(). The envelope is shaped there,
+       where the samples are; this just receives it. */
+    say(v) { voiceTarget = Math.max(0, Math.min(1, v || 0)); },
+    resize
+  };
 }
 
 /* The gold sphere. A translucent globe of segmented light — nested bands and
@@ -3302,7 +3426,15 @@ function ctxOf(){
   if(actx&&actx.state==='suspended') actx.resume().catch(()=>{});
   return actx;
 }
-function meter(node){
+/* WHOSE VOICE IT IS MATTERS. This is called from two places: the reply
+   playing through the speakers, and the microphone. They look identical from
+   inside — both are audio, both should push the core — but only one of them
+   is HIM. Drive the mask from the mic and Doom mouths along to whatever
+   Thomas says, which is not a feature, it is a puppet.
+
+   So `his` is a parameter with no default: the mic path does not pass it and
+   never lights the face. */
+function meter(node, his){
   const c=ctxOf(); if(!c) return null;
   const an=c.createAnalyser(); an.fftSize=1024; node.connect(an);
   const buf=new Uint8Array(an.fftSize); let alive=true; audioOwns=true;
@@ -3312,9 +3444,16 @@ function meter(node){
     let sum=0; for(let i=0;i<buf.length;i++) sum+=Math.abs(buf[i]-128);
     const lvl=Math.min(1,(sum/buf.length)/30);
     arc.set(lvl); try{ doomCore.set(lvl); }catch(_){} try{ quantumCore.set(lvl); }catch(_){}
+    if(his){ try{ doomCore.say(lvl); }catch(_){} }
     requestAnimationFrame(poll);
   })();
-  return ()=>{ alive=false; audioOwns=false; try{node.disconnect(an);}catch(_){} };
+  return ()=>{
+    alive=false; audioOwns=false;
+    /* The mouth closes when the audio stops. Without this the last frame's
+       level is held for good and he finishes every sentence mid-word. */
+    if(his){ try{ doomCore.say(0); }catch(_){} }
+    try{node.disconnect(an);}catch(_){}
+  };
 }
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
@@ -3450,7 +3589,11 @@ async function speakReply(text){
     const t=await token();
     const r=await fetch(CHAT+'/speak',{method:'POST',
       headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
-      body:JSON.stringify({text})});
+      /* WHICH SKIN IS ON, so he can be given a different voice in doom mode.
+         A WORD, never a voice id — run-chat looks it up in a closed table and
+         the id itself only ever comes from the server's environment. A voice
+         id from here would go straight into the ElevenLabs request path. */
+      body:JSON.stringify({text, mode: document.documentElement.dataset.mode || 'jarvis'})});
     if(!r.ok){
       /* The body names the reason — quota, unknown voice, a key without
          text_to_speech permission. Surfacing it beats a silent assistant,
@@ -3484,7 +3627,7 @@ async function speakReply(text){
           /* createMediaElementSource throws if called twice on one element, so
              the node for the shared element is made once and kept. */
           if(!sndSrc){ sndSrc=c.createMediaElementSource(a); sndSrc.connect(c.destination); }
-          stop=meter(sndSrc);
+          stop=meter(sndSrc, true);       /* his own voice — light the mask */
         }
       }
     }catch(_){}
