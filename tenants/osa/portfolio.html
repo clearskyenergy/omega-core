@@ -1289,8 +1289,10 @@ function showApp(){
      rules refuse it either way; a dead button just wastes somebody's click. */
   if (!A.can('write_deal')) {
     document.getElementById('btn-new').style.display='none';
-    hideNav('inbox');
   }
+  /* Adoption is still write_deal. Seeing your own filings is not, which is
+     what lets a member firm watch its own pipeline without waiting on us. */
+  if (!canSeeInbox()) hideNav('inbox');
   if (!A.can('approve_any') && !A.can('approve_scoped') && !A.can('approve_own_org'))
     hideNav('users');
   if (!A.can('approve_any')) hideNav('orgs');
@@ -1305,6 +1307,30 @@ function showApp(){
 function hideNav(v){
   var b=document.querySelector('.sn-item[data-view="'+v+'"]');
   if(b) b.style.display='none';
+}
+
+/* ── Who sees the review inbox, and how much of it ────────────────────
+   Own-only before acceptance: a member firm sees the records ITS OWN org
+   filed, until one is adopted. Adoption makes it a deal, and the portfolio of
+   deals is shared across the JV — which is the point of the JV, so nothing
+   here scopes the portfolio.
+
+   The scoping is not enforced in this file and must not be read as if it
+   were. intake_projects gates read on canActInOrg(resource.data.orgId) and
+   projects on resource.data.orgId == userOrg(); the filter in IN.loadInbox
+   exists to MATCH those rules, because Firestore refuses a whole query the
+   moment one returned document fails them. That is precisely why the inbox
+   was write_deal-only before today: an unfiltered read from a partner is not
+   trimmed to their own rows, it is refused outright. */
+function canSeeInbox(){ return A.can('write_deal') || A.can('see_own'); }
+function inboxScope(){
+  /* see_all is ClearSky. see_scoped is a limited administrator over several
+     named organisations, which one equality filter cannot express — both keep
+     the unfiltered query they already have, so this adds no regression for
+     anyone who can open the inbox today. Everyone else is scoped to their own
+     org, which is the new case. */
+  if (A.can('see_all') || A.can('see_scoped')) return '';
+  return String((typeof ME!=='undefined' && ME && ME.orgId) || '').toLowerCase();
 }
 
 /* ── Auth actions ─────────────────────────────────────────────────────── */
@@ -1357,7 +1383,7 @@ function refresh(manual){
     /* Scan the source collections once, on first load, so the Inbox count is
        populated before anybody clicks it — an empty portfolio with a silent
        inbox is exactly the state that looks like the product is broken. */
-    if (!S.inboxLoaded && A.can('write_deal')) loadInbox(false);
+    if (!S.inboxLoaded && canSeeInbox()) loadInbox(false);
     if (!S.designLoaded) loadDesign(false);
     if (A.can('approve_any') && !S.staff.length) loadStaff();
     /* Loaded for anyone who can assign work, not only administrators — the
@@ -3711,8 +3737,14 @@ function doSendToVerify(){
 
 /* ── Inbox: adopting what already exists ──────────────────────────────── */
 function loadInbox(manual){
-  if(!A.can('write_deal')) return;
-  return IN.loadInbox({ sources:['fin','intake','editor'] }).then(function(r){
+  if(!canSeeInbox()) return;
+  var scope=inboxScope();
+  /* fin_projects is ClearSky-only — its read rule turns on fin_profiles
+     membership, which a JV partner does not have, so no filter makes it
+     readable to them. Asking for it anyway would put a permission error in
+     the error list and make a working inbox look broken. */
+  var sources = scope ? ['intake','editor'] : ['fin','intake','editor'];
+  return IN.loadInbox({ sources:sources, scopeOrg:scope }).then(function(r){
     S.inbox = IN.annotate(r.candidates, S.deals);
     S.inboxErrors = r.errors; S.inboxLoaded = true;
     render();
@@ -3803,14 +3835,22 @@ function renderInbox(){
      with the wrong originator is precisely the failure adoption exists to
      avoid. Only ever offered on a filtered set for that reason. */
   var selN=selectedInbox().length;
-  document.getElementById('inbox-bulk').innerHTML = selN
+  /* Say the list is scoped rather than letting a short one read as an empty
+     pipeline. "Why isn't X here" has to have an answer, and for a partner the
+     answer is that X is somebody else's until it is adopted. */
+  var scopeNote = inboxScope()
+    ? '<div class="banner info" style="margin-bottom:12px">Showing what <b>'
+      + esc(inboxScope()) + '</b> filed. Records from the other member firms '
+      + 'appear here only once they are adopted into the shared portfolio.</div>'
+    : '';
+  document.getElementById('inbox-bulk').innerHTML = (selN && A.can('write_deal'))
     ? '<div class="bulk"><b>'+selN+' selected</b>'
       + '<span class="s">Adopting together asks who brought them once, for all '+selN
       + '. Only do that when the selection genuinely shares an originator \u2014 filter by '
       + '<i>filed by</i> first if you are not sure.</span>'
       + '<button class="btn-a" onclick="doBulkAdopt()">Adopt '+selN+'\u2026</button>'
       + '<button class="btn-o" onclick="S.inboxSel={};renderInbox()">Clear</button></div>'
-    : '';
+    : scopeNote;
 
   if(!rows.length){
     host.innerHTML='<tr><td colspan="8"><div class="empty"><b>Nothing here</b>'
@@ -3819,7 +3859,7 @@ function renderInbox(){
   }
   host.innerHTML=rows.map(function(c){
     var st=F.stageOf(c.suggestStage), k=inboxKey(c), i=S.inbox.indexOf(c);
-    return '<tr><td>'+(c.linkedDeal?'':'<input type="checkbox" '
+    return '<tr><td>'+((c.linkedDeal||!A.can('write_deal'))?'':'<input type="checkbox" '
         + (S.inboxSel[k]?'checked ':'')
         + 'onchange="toggleInboxOne(\''+esc(k)+'\',this.checked)">')+'</td>'
       + '<td><div class="t-name">'+esc(c.name)+'</div>'
@@ -3836,9 +3876,13 @@ function renderInbox(){
       +   '<span class="dot"></span>'+esc(st.label)+'</span></td>'
       + '<td>'+(c.linkedDeal
           ? '<button class="btn-x" onclick="openDeal(\''+c.linkedDeal.id+'\')">Open deal</button>'
-          : '<button class="btn-x" onclick="doAdopt('+i+')">Adopt\u2026</button>'
-            + (c.possibleDupes.length
-               ? '<button class="btn-x" onclick="doLinkExisting('+i+')">Link</button>':''))
+          : (A.can('write_deal')
+             ? '<button class="btn-x" onclick="doAdopt('+i+')">Adopt\u2026</button>'
+               + (c.possibleDupes.length
+                  ? '<button class="btn-x" onclick="doLinkExisting('+i+')">Link</button>':'')
+             /* A dead button that errors is worse than no button. The rules
+                refuse the write either way; this says who it is waiting on. */
+             : '<span class="t-sub">With ClearSky</span>'))
       + '</td></tr>'; }).join('');
 }
 
@@ -3846,6 +3890,7 @@ function renderInbox(){
    record in it, with the count stated plainly on the form so nobody adopts a
    hundred deals under the wrong partner without having been told. */
 function doBulkAdopt(){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var sel=selectedInbox(); if(!sel.length) return;
   var orgs={}; sel.forEach(function(c){ orgs[c.filedByOrg||'(none)']=1; });
   var mixed=Object.keys(orgs).length>1;
@@ -3892,6 +3937,7 @@ function doBulkAdopt(){
 }
 
 function doAdopt(idx){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var c=S.inbox[idx]; if(!c) return;
   Forms.open({
     title:'Adopt into the portfolio',
@@ -3956,6 +4002,7 @@ function doAdopt(idx){
 }
 
 function doLinkExisting(idx){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var c=S.inbox[idx]; if(!c) return;
   var opts=(c.possibleDupes.length?c.possibleDupes:S.deals)
     .map(function(d){ return {value:d.id,label:d.name+' \u2014 '+F.stageOf(d.stage).label}; });
