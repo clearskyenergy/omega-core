@@ -56,12 +56,38 @@
      Named here rather than inferred, because a wrong guess reads a collection
      nobody meant to expose and the failure is silent (an empty inbox looks the
      same as nothing to adopt). */
+  /* orgField is what a SCOPED reader filters on, and it has to be the same
+     field the security rules test. Firestore refuses an entire query the
+     moment one returned document fails the rules, so a filter the rule does
+     not recognise does not narrow the inbox — it empties it, silently, which
+     is the failure this comment block already warns about above.
+
+     intake_projects gates read on canActInOrg(resource.data.orgId), and
+     projects on resource.data.orgId == userOrg(). Both are satisfied exactly
+     by where('orgId','==',<my org>), so a scoped reader's query is allowed.
+
+     That is true of projects only since 2026-09-18. Its read rule also had
+     isConsoleViewer(), true for any @sunesol.com or @ogisolar.com token
+     regardless of the document, so this filter narrowed what those readers
+     saw without being what stopped them reading more. The grant is gone; see
+     the note above isConsoleViewer in firestore.rules.
+
+     fin_projects is different and deliberately not scopable. It carries
+     orgKey, a finance-portal SLUG rather than an email domain, and its read
+     rule turns on fin_profiles membership rather than on the caller's org —
+     a JV partner has no fin_profiles record, so NO filter makes that
+     collection readable to them. A scoped reader simply does not see it.
+     That is a smaller inbox rather than a broken one, and it is the honest
+     answer: those records are not theirs to work. */
   var SOURCES = [
     { key:'fin',    collection:'fin_projects',    label:'Marketplace',
+      orgField:null, scopable:false,
       hint:'Deals filed into the financing portal. The main back catalogue.' },
     { key:'intake', collection:'intake_projects', label:'Project intake',
+      orgField:'orgId', scopable:true,
       hint:'Work requests filed through a tenant portal.' },
     { key:'editor', collection:'projects',        label:'Editor projects',
+      orgField:'orgId', scopable:true,
       hint:'Drawings the design team has already built. Usually adopt these by '
          + 'linking them to an existing deal rather than creating a new one.' }
   ];
@@ -215,12 +241,23 @@
     if (!_db) return Promise.resolve({ candidates:[], errors:[] });
 
     var wanted = opts.sources || ['fin', 'intake'];
+    /* No scope means everything, which is what ClearSky sees. A scope string
+       means this reader sees only what their own org filed — own-only before
+       acceptance; once a candidate is adopted it is a deal, and the portfolio
+       of deals is shared across the JV. */
+    var scope = String(opts.scopeOrg || '').toLowerCase();
     var jobs = [], errors = [];
 
     SOURCES.forEach(function (s) {
       if (wanted.indexOf(s.key) < 0) return;
+      /* Not readable by a scoped reader at all — see the note on SOURCES.
+         Skipped rather than queried-and-caught, because a predictable absence
+         beats an error row that says the marketplace is broken. */
+      if (scope && !s.scopable) return;
+      var q = _db.collection(s.collection);
+      if (scope) q = q.where(s.orgField, '==', scope);
       jobs.push(
-        _db.collection(s.collection).get().then(function (snap) {
+        q.get().then(function (snap) {
           var out = [];
           snap.forEach(function (doc) {
             var d = doc.data() || {};
@@ -520,13 +557,34 @@
      "have access to these projects" means being able to find one without
      knowing which deal it hangs off, including the ones drawn before any of
      this existed. */
-  function loadDesignProjects(deals) {
+  function loadDesignProjects(deals, scopeOrg) {
     if (!_db) return Promise.resolve([]);
     var byProject = {};
     (deals || []).forEach(function (d) { if (d.projectId) byProject[d.projectId] = d; });
-    return _db.collection('projects').get().then(function (snap) {
-      var out = [];
+    var scope = String(scopeOrg || '').toLowerCase();
+
+    /* TWO queries when scoped, because the read rule is a disjunction and
+       Firestore cannot OR across two different fields in one query:
+
+         where('orgId','==',me)                  → resource.data.orgId == userOrg()
+         where('orgsInvolved','array-contains',me) → isCollaborator()
+
+       The second one is not optional padding. orgsInvolved IS the JDA roster,
+       so dropping it would scope a member firm out of the very projects it
+       was invited onto — co-development would look like an empty Design view.
+       Merged and de-duplicated by document id, since a project can satisfy
+       both. */
+    var queries = scope
+      ? [ _db.collection('projects').where('orgId', '==', scope),
+          _db.collection('projects').where('orgsInvolved', 'array-contains', scope) ]
+      : [ _db.collection('projects') ];
+
+    return Promise.all(queries.map(function (q) { return q.get(); })).then(function (snaps) {
+      var out = [], seen = {};
+      snaps.forEach(function (snap) {
       snap.forEach(function (doc) {
+        if (seen[doc.id]) return;
+        seen[doc.id] = 1;
         var v = doc.data() || {};
         out.push({
           id: doc.id,
@@ -547,6 +605,7 @@
           deal: byProject[doc.id] || null,
           dealId: v.dealId || ''
         });
+      });
       });
       out.sort(function (a,b) { return ms(b.updatedAt) - ms(a.updatedAt); });
       return out;

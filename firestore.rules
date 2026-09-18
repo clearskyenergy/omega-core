@@ -233,32 +233,38 @@ service cloud.firestore {
       return isAdmin() || (staffActive() && staffRole() == 'admin');
     }
 
-    /* ⚠ REVIEW BEFORE OGI SOLAR'S TRIAL OPENS.
-       isConsoleViewer() is used on /projects read, and grants a CROSS-ORG
-       read of every tenant's projects. ogisolar.com and sunesol.com are in
-       it from an earlier arrangement. If OGI Solar is now a restricted
-       five-tool trial tenant, this line hands them read access to FENECON's,
-       Concord's and iQGen's project data — far past what that trial is meant
-       to include.
+    /* RESOLVED 2026-09-18 — the two JV domains are gone from here.
 
-       STILL UNRESOLVED. It has NOT been widened — the partner portal's
-       collections, /sites, /referrals, and the two capacity collections added
-       below all deliberately decline to consult it — but the database now
-       holds more parties than it did when this was written.
+       This used to read `isAdmin() || .*@sunesol[.]com || .*@ogisolar[.]com`,
+       and it is consulted on /projects read, so those two domains held a
+       CROSS-ORG read of every tenant's projects: FENECON's, Concord's,
+       iQGen's, and Solela's entire site map built off the ComEd pipeline. It
+       never referenced `resource`, so it was true for every document in the
+       collection — not a scoped grant but a blanket one.
 
-       ⚠ ALSO AFFECTS SOLELA. sunesol.com and ogisolar.com can read Solela's
-       /projects — every site map built off the ComEd pipeline. The prospect
-       list itself (/sites) and the capacity ledger stay private; the projects
-       built from them do not.
+       It sat here flagged, and in MERGE.md unticked, as a pending decision.
+       What forced it was the OSA review inbox: that feature gives a member
+       firm an own-only view of what it filed, and every non-staff user it
+       admits is at sunesol.com or ogisolar.com — exactly the two domains this
+       blanketed. So the feature's guarantee rested on a filter in the browser
+       while this line said otherwise. A promise the rules contradict is not a
+       promise, and the honest fix was here rather than in the wording.
 
-       ⚠ omega-core: DECISION PENDING (Tommy). Remove the two domains below
-       unless a live agreement requires them. See MERGE.md → Decisions. */
+       WHAT REPLACED IT, so this is not read as a JV lockout: a member firm
+       still reaches a project by `resource.data.orgId == userOrg()` when it is
+       theirs, and by isCollaborator() — userOrg() in orgsInvolved[] — when
+       they have been invited onto it. That is the JDA roster, which is how
+       co-development was always meant to be expressed here.
+       tenants/osa/ingest-data.js issues both queries and merges them. What is
+       gone is reading the projects of tenants who never invited them.
+
+       NOW SUBSUMED: what remains is isAdmin(), and the one rule that consults
+       this (/projects read) already carries `|| isOmegaStaff()`, which
+       includes isAdmin(). It therefore grants nothing on its own. The name is
+       kept because a dozen comments in this file read "deliberately NOT
+       isConsoleViewer()", and deleting it would strand every one of them. */
     function isConsoleViewer() {
-      return signedIn() && (
-        isAdmin()
-        || request.auth.token.email.matches('.*@sunesol[.]com')
-        || request.auth.token.email.matches('.*@ogisolar[.]com')
-      );
+      return signedIn() && isAdmin();
     }
     function myProfile() {
       return get(/databases/$(database)/documents/fin_profiles/$(request.auth.uid)).data;
@@ -1484,8 +1490,12 @@ service cloud.firestore {
        no business reading tenants' drawings; the partner portal gets a frozen
        packet copied onto the assignment instead.
 
-       ⚠ isConsoleViewer() ON READ grants a cross-org read of EVERY tenant's
-       projects to sunesol.com and ogisolar.com. See the note above.
+       isConsoleViewer() ON READ used to grant a cross-org read of EVERY
+       tenant's projects to sunesol.com and ogisolar.com. Resolved 2026-09-18:
+       it is isAdmin() now, which `|| isOmegaStaff()` below already covers, so
+       it grants nothing here. A JV member firm reaches a project by owning it
+       (orgId == userOrg()) or by being on its roster (isCollaborator()), and
+       by nothing wider. See the note above the function.
 
        ⚠ omega-core: tenantActive(userOrg()) is NOT yet on this read. Add it
        as its own deploy once omega_orgs is seeded for every live tenant.

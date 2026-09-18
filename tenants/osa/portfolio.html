@@ -116,6 +116,21 @@ button{font-family:inherit}
 .sn-count.alert{background:var(--warn);color:#fff}
 .sn-item.active .sn-count{background:var(--accent);color:#fff}
 
+/* The portfolio switcher. Matrix, Overview, Board and Pipeline are four
+   renderings of ONE list of projects. As four sidebar entries they read as
+   four destinations, so the first question on opening the portal was "which of
+   these am I meant to click" — a question the data cannot answer, because
+   they all show the same deals. One entry now; this picks the rendering. */
+.vsw{display:none;gap:2px;margin:0 0 16px;background:#EEF1F5;border-radius:9px;
+  padding:3px;width:fit-content;max-width:100%;flex-wrap:wrap}
+.vsw.on{display:flex}
+.vsw button{border:0;background:none;padding:7px 13px;border-radius:7px;cursor:pointer;
+  font:inherit;font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.vsw button:hover{color:var(--ink)}
+.vsw button.on{background:#fff;color:var(--accent);font-weight:600;
+  box-shadow:0 1px 2px rgba(16,24,40,.09)}
+.vsw .n{font-size:11px;font-weight:600;opacity:.7;font-variant-numeric:tabular-nums}
+
 #main{flex:1;padding:22px 26px 60px;max-width:1600px;min-width:0}
 .view{display:none}.view.on{display:block}
 .ph{margin-bottom:18px}
@@ -680,18 +695,12 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <div id="shell">
   <nav id="side">
     <div class="sn-group">Portfolio</div>
-    <button class="sn-item active" data-view="matrix" onclick="go('matrix')">
+    <!-- ONE entry for the four renderings. data-group keeps it lit whichever
+         one is showing; the switcher above the content picks between them.
+         id="c-pipe" stays here so renderCounts keeps its target. -->
+    <button class="sn-item active" data-view="matrix" data-group="portfolio" onclick="go('matrix')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      <span>Matrix</span></button>
-    <button class="sn-item" data-view="dash" onclick="go('dash')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      <span>Overview</span></button>
-    <button class="sn-item" data-view="board" onclick="go('board')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="10" y="3" width="6" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>
-      <span>Board</span></button>
-    <button class="sn-item" data-view="pipeline" onclick="go('pipeline')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
-      <span>Pipeline</span><span class="sn-count" id="c-pipe">0</span></button>
+      <span>Portfolio</span><span class="sn-count" id="c-pipe">0</span></button>
     <button class="sn-item" data-view="partners" onclick="go('partners')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
       <span>Partners</span><span class="sn-count" id="c-partners">0</span></button>
@@ -733,6 +742,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 
   <main id="main">
     <div id="banners"></div>
+    <div id="viewswitch" class="vsw"></div>
 
     <section class="view on" id="v-dash">
       <div class="ph"><h1 id="dash-h">Portfolio</h1>
@@ -1279,8 +1289,10 @@ function showApp(){
      rules refuse it either way; a dead button just wastes somebody's click. */
   if (!A.can('write_deal')) {
     document.getElementById('btn-new').style.display='none';
-    hideNav('inbox');
   }
+  /* Adoption is still write_deal. Seeing your own filings is not, which is
+     what lets a member firm watch its own pipeline without waiting on us. */
+  if (!canSeeInbox()) hideNav('inbox');
   if (!A.can('approve_any') && !A.can('approve_scoped') && !A.can('approve_own_org'))
     hideNav('users');
   if (!A.can('approve_any')) hideNav('orgs');
@@ -1295,6 +1307,43 @@ function showApp(){
 function hideNav(v){
   var b=document.querySelector('.sn-item[data-view="'+v+'"]');
   if(b) b.style.display='none';
+}
+
+/* ── Who sees the review inbox, and how much of it ────────────────────
+   Own-only before acceptance: a member firm sees the records ITS OWN org
+   filed, until one is adopted. Adoption makes it a deal, and the portfolio of
+   deals is shared across the JV — which is the point of the JV, so nothing
+   here scopes the portfolio.
+
+   BOTH SOURCES ARE RULES-ENFORCED, as of 2026-09-18. The filters below exist
+   to MATCH those rules, because Firestore refuses a whole query the moment
+   one returned document fails them — a filter on the wrong field does not
+   narrow the result, it empties it.
+
+   intake_projects: read gates on mineToWork() →
+   canActInOrg(resource.data.orgId), resolved from the caller's token email
+   domain.
+
+   projects: read is a disjunction, and until 2026-09-18 one of its disjuncts
+   was isConsoleViewer(), true for any @sunesol.com or @ogisolar.com token
+   regardless of the document — which is every non-staff user who can reach
+   this page. So this feature's guarantee rested on the browser. That grant is
+   now removed (see the note above isConsoleViewer in firestore.rules), and
+   what remains reaches a project by ownership, orgId == userOrg(), or by the
+   JDA roster, isCollaborator().
+
+   ⚠ THE ROSTER HALF IS WHY loadDesignProjects SENDS TWO QUERIES. Scoping on
+   orgId alone would scope a member firm out of the very projects it was
+   invited onto. If you add another scoped read of /projects, it needs both. */
+function canSeeInbox(){ return A.can('write_deal') || A.can('see_own'); }
+function inboxScope(){
+  /* see_all is ClearSky. see_scoped is a limited administrator over several
+     named organisations, which one equality filter cannot express — both keep
+     the unfiltered query they already have, so this adds no regression for
+     anyone who can open the inbox today. Everyone else is scoped to their own
+     org, which is the new case. */
+  if (A.can('see_all') || A.can('see_scoped')) return '';
+  return String((typeof ME!=='undefined' && ME && ME.orgId) || '').toLowerCase();
 }
 
 /* ── Auth actions ─────────────────────────────────────────────────────── */
@@ -1347,7 +1396,7 @@ function refresh(manual){
     /* Scan the source collections once, on first load, so the Inbox count is
        populated before anybody clicks it — an empty portfolio with a silent
        inbox is exactly the state that looks like the product is broken. */
-    if (!S.inboxLoaded && A.can('write_deal')) loadInbox(false);
+    if (!S.inboxLoaded && canSeeInbox()) loadInbox(false);
     if (!S.designLoaded) loadDesign(false);
     if (A.can('approve_any') && !S.staff.length) loadStaff();
     /* Loaded for anyone who can assign work, not only administrators — the
@@ -1365,10 +1414,56 @@ var dealErr=null;
 function loadSample(){ S.deals=F.sample(); S.demo=true; S.loaded=true; render();
   toast('Sample portfolio loaded \u2014 nothing is saved'); }
 
+/* ── The portfolio switcher ───────────────────────────────────────────────
+   Matrix, Overview, Board and Pipeline render the same deals four ways. They
+   used to be four sidebar entries, which is four destinations for one place.
+   Order runs widest-to-narrowest: the matrix is still the landing view (that
+   is the decision recorded in showApp), the list is where you go when you want
+   rows rather than a picture, and it carries the live count so the choice is
+   informed instead of a guess. */
+var VIEWS = [
+  { k:'matrix',   label:'Matrix'   },
+  { k:'dash',     label:'Overview' },
+  { k:'board',    label:'Board'    },
+  { k:'pipeline', label:'List'     }
+];
+function inPortfolio(v){
+  for(var i=0;i<VIEWS.length;i++) if(VIEWS[i].k===v) return true;
+  return false;
+}
+function renderViewSwitch(){
+  var el=document.getElementById('viewswitch'); if(!el) return;
+  var on=inPortfolio(S.view);
+  el.classList.toggle('on', on);
+  if(!on){ el.innerHTML=''; return; }
+  /* Guarded rather than assumed: go() runs once before the first load
+     resolves, and S.deals is empty until it does. */
+  var live=(S.deals||[]).filter(function(d){ return !F.isExit(d.stage); }).length;
+  var h='';
+  for(var i=0;i<VIEWS.length;i++){
+    var v=VIEWS[i];
+    h+='<button class="'+(S.view===v.k?'on':'')+'" onclick="go(\''+v.k+'\')">'
+      + v.label
+      + (v.k==='pipeline' ? '<span class="n">'+live+'</span>' : '')
+      + '</button>';
+  }
+  el.innerHTML=h;
+}
+
 function go(v,silent){
   S.view=v;
   var items=document.querySelectorAll('.sn-item[data-view]');
-  for(var i=0;i<items.length;i++) items[i].classList.toggle('active',items[i].getAttribute('data-view')===v);
+  for(var i=0;i<items.length;i++){
+    /* The Portfolio entry stands for all four renderings, so it stays lit
+       whichever one is showing. Matching on data-view alone would un-highlight
+       the sidebar the moment you switched to Board, and a portal with nothing
+       lit reads as having lost your place. */
+    var lit = items[i].getAttribute('data-group')==='portfolio'
+            ? inPortfolio(v)
+            : items[i].getAttribute('data-view')===v;
+    items[i].classList.toggle('active', lit);
+  }
+  renderViewSwitch();
   var vs=document.querySelectorAll('.view');
   for(var j=0;j<vs.length;j++) vs[j].classList.remove('on');
   var el=document.getElementById('v-'+v); if(el) el.classList.add('on');
@@ -1383,7 +1478,7 @@ function render(){
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
   renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
-  renderSettings(); renderStaff(); renderInvites();
+  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
 }
@@ -1421,22 +1516,28 @@ function renderBanners(){
     +' waiting.</b> <button class="btn-x" onclick="go(\'users\')">Review them</button></div>';
 }
 
+/* Every badge goes through put(), which tolerates a missing element.
+   hideNav() already removes entries a role cannot use, and merging the four
+   portfolio entries removed three more — under the old code an absent badge
+   threw a TypeError here, and because renderCounts() is the last call in
+   render(), one missing span silently killed every render after it. */
 function renderCounts(){
-  document.getElementById('c-pipe').textContent = S.deals.filter(function(d){
-    return !F.isExit(d.stage); }).length;
-  document.getElementById('c-partners').textContent = F.allPartners(S.deals).length;
+  function put(id,n,alert){
+    var e=document.getElementById(id); if(!e) return;
+    e.textContent=n;
+    if(alert!==undefined) e.classList.toggle('alert',!!alert);
+  }
+  put('c-pipe', S.deals.filter(function(d){ return !F.isExit(d.stage); }).length);
+  put('c-partners', F.allPartners(S.deals).length);
   var dr=openDraws().length;
-  var el=document.getElementById('c-draws'); el.textContent=dr;
-  el.classList.toggle('alert', dr>0);
+  put('c-draws', dr, dr>0);
   var nb=S.inbox.filter(function(c){return !c.linkedDeal && !c.skipByDefault;}).length;
-  var ib=document.getElementById('c-inbox'); ib.textContent=nb; ib.classList.toggle('alert', nb>0);
-  document.getElementById('c-work').textContent =
-    S.deals.filter(function(d){ return d.assignment.designLead||d.assignment.devLead; }).length;
-  var vo=verifyRows('open').length;
-  var ve=document.getElementById('c-verify'); if(ve){ ve.textContent=vo;
-    ve.classList.toggle('alert', verifyRows('blocked').length>0); }
+  put('c-inbox', nb, nb>0);
+  put('c-work', S.deals.filter(function(d){
+    return d.assignment.designLead||d.assignment.devLead; }).length);
+  put('c-verify', verifyRows('open').length, verifyRows('blocked').length>0);
   var pu=A.pendingCount?A.pendingCount():0;
-  var ue=document.getElementById('c-users'); ue.textContent=pu; ue.classList.toggle('alert',pu>0);
+  put('c-users', pu, pu>0);
 }
 
 /* ── Overview ─────────────────────────────────────────────────────────── */
@@ -3649,8 +3750,14 @@ function doSendToVerify(){
 
 /* ── Inbox: adopting what already exists ──────────────────────────────── */
 function loadInbox(manual){
-  if(!A.can('write_deal')) return;
-  return IN.loadInbox({ sources:['fin','intake','editor'] }).then(function(r){
+  if(!canSeeInbox()) return;
+  var scope=inboxScope();
+  /* fin_projects is ClearSky-only — its read rule turns on fin_profiles
+     membership, which a JV partner does not have, so no filter makes it
+     readable to them. Asking for it anyway would put a permission error in
+     the error list and make a working inbox look broken. */
+  var sources = scope ? ['intake','editor'] : ['fin','intake','editor'];
+  return IN.loadInbox({ sources:sources, scopeOrg:scope }).then(function(r){
     S.inbox = IN.annotate(r.candidates, S.deals);
     S.inboxErrors = r.errors; S.inboxLoaded = true;
     render();
@@ -3741,14 +3848,22 @@ function renderInbox(){
      with the wrong originator is precisely the failure adoption exists to
      avoid. Only ever offered on a filtered set for that reason. */
   var selN=selectedInbox().length;
-  document.getElementById('inbox-bulk').innerHTML = selN
+  /* Say the list is scoped rather than letting a short one read as an empty
+     pipeline. "Why isn't X here" has to have an answer, and for a partner the
+     answer is that X is somebody else's until it is adopted. */
+  var scopeNote = inboxScope()
+    ? '<div class="banner info" style="margin-bottom:12px">Showing what <b>'
+      + esc(inboxScope()) + '</b> filed. Records from the other member firms '
+      + 'appear here only once they are adopted into the shared portfolio.</div>'
+    : '';
+  document.getElementById('inbox-bulk').innerHTML = (selN && A.can('write_deal'))
     ? '<div class="bulk"><b>'+selN+' selected</b>'
       + '<span class="s">Adopting together asks who brought them once, for all '+selN
       + '. Only do that when the selection genuinely shares an originator \u2014 filter by '
       + '<i>filed by</i> first if you are not sure.</span>'
       + '<button class="btn-a" onclick="doBulkAdopt()">Adopt '+selN+'\u2026</button>'
       + '<button class="btn-o" onclick="S.inboxSel={};renderInbox()">Clear</button></div>'
-    : '';
+    : scopeNote;
 
   if(!rows.length){
     host.innerHTML='<tr><td colspan="8"><div class="empty"><b>Nothing here</b>'
@@ -3757,7 +3872,7 @@ function renderInbox(){
   }
   host.innerHTML=rows.map(function(c){
     var st=F.stageOf(c.suggestStage), k=inboxKey(c), i=S.inbox.indexOf(c);
-    return '<tr><td>'+(c.linkedDeal?'':'<input type="checkbox" '
+    return '<tr><td>'+((c.linkedDeal||!A.can('write_deal'))?'':'<input type="checkbox" '
         + (S.inboxSel[k]?'checked ':'')
         + 'onchange="toggleInboxOne(\''+esc(k)+'\',this.checked)">')+'</td>'
       + '<td><div class="t-name">'+esc(c.name)+'</div>'
@@ -3774,9 +3889,13 @@ function renderInbox(){
       +   '<span class="dot"></span>'+esc(st.label)+'</span></td>'
       + '<td>'+(c.linkedDeal
           ? '<button class="btn-x" onclick="openDeal(\''+c.linkedDeal.id+'\')">Open deal</button>'
-          : '<button class="btn-x" onclick="doAdopt('+i+')">Adopt\u2026</button>'
-            + (c.possibleDupes.length
-               ? '<button class="btn-x" onclick="doLinkExisting('+i+')">Link</button>':''))
+          : (A.can('write_deal')
+             ? '<button class="btn-x" onclick="doAdopt('+i+')">Adopt\u2026</button>'
+               + (c.possibleDupes.length
+                  ? '<button class="btn-x" onclick="doLinkExisting('+i+')">Link</button>':'')
+             /* A dead button that errors is worse than no button. The rules
+                refuse the write either way; this says who it is waiting on. */
+             : '<span class="t-sub">With ClearSky</span>'))
       + '</td></tr>'; }).join('');
 }
 
@@ -3784,6 +3903,7 @@ function renderInbox(){
    record in it, with the count stated plainly on the form so nobody adopts a
    hundred deals under the wrong partner without having been told. */
 function doBulkAdopt(){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var sel=selectedInbox(); if(!sel.length) return;
   var orgs={}; sel.forEach(function(c){ orgs[c.filedByOrg||'(none)']=1; });
   var mixed=Object.keys(orgs).length>1;
@@ -3830,6 +3950,7 @@ function doBulkAdopt(){
 }
 
 function doAdopt(idx){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var c=S.inbox[idx]; if(!c) return;
   Forms.open({
     title:'Adopt into the portfolio',
@@ -3894,6 +4015,7 @@ function doAdopt(idx){
 }
 
 function doLinkExisting(idx){
+  if(!A.can('write_deal')){ toast('Adoption is ClearSky\u2019s to do.',true); return; }
   var c=S.inbox[idx]; if(!c) return;
   var opts=(c.possibleDupes.length?c.possibleDupes:S.deals)
     .map(function(d){ return {value:d.id,label:d.name+' \u2014 '+F.stageOf(d.stage).label}; });
@@ -3915,7 +4037,11 @@ function doLinkExisting(idx){
    already knowing which deal it hangs off \u2014 including every drawing made
    before any of this existed. */
 function loadDesign(manual){
-  return IN.loadDesignProjects(S.deals).then(function(rows){
+  /* Same scope as the inbox. Without it a partner's Design view issues an
+     unfiltered projects read, which the rules refuse outright once
+     isConsoleViewer() no longer blankets their domain — an empty view that
+     looks like "no drawings" rather than "refused". */
+  return IN.loadDesignProjects(S.deals, inboxScope()).then(function(rows){
     S.design=rows; S.designLoaded=true; render();
     if(manual) toast(rows.length+' editor project(s)');
   })['catch'](function(e){ toast((e&&e.message)||'Could not read projects',true); });

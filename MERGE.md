@@ -105,7 +105,14 @@ live. Second person from the same domain auto-joins as member.
 
 ## Decisions pending (Tommy)
 
-- [ ] Remove `sunesol.com` / `ogisolar.com` from `isConsoleViewer()`?
+- [x] Remove `sunesol.com` / `ogisolar.com` from `isConsoleViewer()`? — **done
+      2026-09-18.** It is `isAdmin()` now. Forced by the OSA own-only inbox:
+      every non-staff user that feature admits is at one of those two domains,
+      so its guarantee rested on a browser filter while the rules said
+      otherwise. JV members still reach a project by owning it
+      (`orgId == userOrg()`) or by being on its roster (`isCollaborator()` —
+      `userOrg()` in `orgsInvolved[]`); `tenants/osa/ingest-data.js` queries
+      both and merges. ⚠ NOT LIVE UNTIL `firebase deploy --only firestore:rules`.
 - [ ] Flip legacy `fin_projects/{projectId}/{file}` Storage write to `if false`?
 - [ ] Same for `mkt_projects/` Storage write?
 - [ ] Delete the deprecated `intake_requests` rules block (confirm collection empty first)?
