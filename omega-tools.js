@@ -697,18 +697,45 @@
          This is what the "Import / Update Applications" button calls. It
          writes/updates one doc per tool (id = key) and stamps a sort index
          so portals render in a stable order. Returns a Promise. ── */
-    publishToFirestore: function (db, firebase) {
+    /* Publish the catalog to Firestore. The admin console's "Import / Update
+       Applications" button calls this with two arguments and writes all of
+       them, which is what it has always done.
+
+       `keys` is optional and exists for scripts/publish-tools.js: after the
+       dry run shows a diff, the operator may want to land ONE tool rather
+       than all forty-four — a full publish reverts any field somebody tuned
+       directly in Firestore back to the seed, and "the new tool, and nothing
+       else" is a reasonable thing to ask for.
+
+       `sort` is still the tool's index in the FULL catalog, not in the
+       filtered subset. Publishing one tool must not renumber it to 0 and
+       send it to the top of every portal's grid. */
+    publishToFirestore: function (db, firebase, keys) {
       if (!db) return Promise.reject(new Error('No Firestore.'));
-      var batch = db.batch();
+      var only = null;
+      if (keys && keys.length) {
+        only = {};
+        for (var q = 0; q < keys.length; q++) only[keys[q]] = true;
+        /* An unknown key means a typo, and a typo that silently writes
+           nothing looks exactly like a successful publish. */
+        var known = {}, miss = [];
+        for (var m = 0; m < SEED_TOOLS.length; m++) known[SEED_TOOLS[m].key] = true;
+        for (var p = 0; p < keys.length; p++) if (!known[keys[p]]) miss.push(keys[p]);
+        if (miss.length) return Promise.reject(new Error(
+          'No tool in the catalog has the key ' + miss.join(', ') + '.'));
+      }
+      var batch = db.batch(), wrote = 0;
       for (var i = 0; i < SEED_TOOLS.length; i++) {
         var t = SEED_TOOLS[i];
+        if (only && !only[t.key]) continue;
         var doc = {};
         for (var k in t) { if (t.hasOwnProperty(k)) doc[k] = t[k]; }
         doc.sort = i;
         doc.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         batch.set(db.collection('tools').doc(t.key), doc, { merge: true });
+        wrote++;
       }
-      return batch.commit();
+      return batch.commit().then(function () { return wrote; });
     },
 
     /* ── SAVED DATA CONTRACT ──
