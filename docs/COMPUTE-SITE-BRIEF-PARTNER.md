@@ -171,15 +171,21 @@ roughly the same rent whether you carve out one acre or five — which means the
 per-acre figure moves dramatically with how much land is in the lease, and on
 its own it is a misleading number.
 
-**Per 1 MW site, 15-year term, fiber already on site:**
+**Per 1 MW site on a two-acre carve-out, 15-year term, fiber already on
+site.** The acreage has to be stated: these are whole-site numbers, and a
+table that varies the tranche while quietly also varying the carve-out
+overstates the tranche step.
 
 | | Hold at (floor) | Open at | Ceiling (internal) |
 |---|---|---|---|
-| Tranche 1 | ~$35,000 /yr | **~$63,000 /yr** | ~$103,000 /yr |
+| Tranche 1 | ~$40,000 /yr | **~$71,000 /yr** | ~$116,000 /yr |
 | Tranche 2 | ~$45,000 /yr | **~$82,000 /yr** | ~$134,000 /yr |
 | Tranche 3 | ~$53,000 /yr | **~$96,000 /yr** | ~$157,000 /yr |
 
-That is roughly **$5,300–$8,000 per month** at the opening number, escalating
+Tranche 2 is exactly 1.15× Tranche 1 and Tranche 3 exactly 1.35×, on one
+basis — which is the check that the table is internally consistent.
+
+That is roughly **$5,900–$8,000 per month** at the opening number, escalating
 annually, beginning at commercial operation. Over a 15-year term at the base
 escalator that totals roughly **$1.3M (T1) to $1.7M (T3)** on a single 1 MW
 site.
@@ -196,7 +202,7 @@ Same 1 MW site, Tranche 1, varying only the size of the carve-out:
 | 5 acres | $10,000 | **$18,000** | $29,000 |
 | 10 acres | $6,600 | **$12,000** | $19,000 |
 
-**The usable answer: roughly $12,000 to $125,000 per acre-year**, with the
+**The usable answer: roughly $12,000 to $126,000 per acre-year**, with the
 common case — 1 MW on a one-to-two-acre carve-out — opening around
 **$36,000–$66,000 per acre-year**. Tranche 2 adds about 15% and Tranche 3
 about 35% on top of any row above.
@@ -208,8 +214,10 @@ the footprint is small.
 
 ### What moves a site inside the range
 
-- **More megawatts.** A 2 MW site roughly doubles the rent; 5 MW roughly
-  quintuples it. This is the largest single lever by far.
+- **More megawatts.** A 2 MW site pays close to twice a 1 MW one (~1.8×) and
+  5 MW about four and a half times, rather than exactly double and quintuple:
+  the pad rent underneath does not scale with the load. Still the largest
+  single lever by far.
 - **Tranche.** Meter transfer and improvement rights are worth more than the
   dirt.
 - **Evidence rather than promises.** A confirmed will-serve, industrial
