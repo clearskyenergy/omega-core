@@ -577,3 +577,127 @@ scores fiber in the page — pointing it at this function is the same "worth
 doing, not urgent" note that file already carries for `/api/grid-atlas`.
 `FCC_BB_KEY` is not set in Vercel; until it is, "service at the point" scores
 its not-checked middle value and the verdict says so.
+
+---
+
+## 2026-09-17 · A national fiber map, and "how much fiber is here"
+
+### What was wrong
+
+`grid-atlas.html` had a `backbone` layer pointing at `/data/intertubes-backbone.geojson`
+— **a file that was never built**, so the layer had been silently empty since
+it was written. `grid-atlas-national.js` carried its own 53 city pairs and
+routed them through OSRM's public demo server at runtime, twelve per site
+analysis. `/api/network-proximity` carried the same 53 pairs as **straight
+chords**. Three surfaces, three different answers, and the one a tenant sees
+first was blank.
+
+Underneath that, the tool could say how far the nearest carrier hotel was and
+could not say the two things a data-center developer actually asks: *how much
+fiber is here*, and *is there a second path*.
+
+### What is here now
+
+**`data/us-longhaul-fiber.geojson` — 317 corridors, 54,639 corridor miles.**
+Built by `scripts/build-fiber-backbone.js` from the tables in
+`scripts/fiber-corridors.js`, **routed over the road network at build time**.
+That is the point: the central finding of InterTubes (Durairajan, Barford,
+Sommers & Willinger, SIGCOMM 2015) is that US long-haul fiber is laid in
+transportation rights-of-way, so the driving route between two cities is a far
+better proxy for where conduit runs than the chord between them. All 317
+routed on the first build; zero straight-line fallbacks.
+
+Two provenance tiers, and they never draw the same:
+- `src:'intertubes'` (53) — carries the paper's citation and its count of
+  carriers sharing the conduit. Drawn solid and hot.
+- `src:'corridor'` (264) — asserts that long-haul capacity runs this way and
+  **asserts nothing about which carrier is in which ditch**. Drawn cooler.
+  Carrier-on-segment is licensed data and belongs in `api/fiber-proxy.js`.
+
+**`data/us-datacenters.geojson` — 3,885 US facilities**, merged and deduped by
+`scripts/build-fiber-facilities.js` from Compute Atlas (CC BY 4.0), the Global
+Data Center Map (credit required) and the CYBR capstone; 1,124 duplicates
+collapsed. An operating facility is the strongest free evidence that
+carrier-grade fiber was pulled to an address. **`facilityType` is load-bearing
+and not cosmetic**: Compute Atlas tracks the generation built to feed these
+campuses, so 113 of these rows are wind farms and gas peakers. They are
+counted under `generation`, never as "nearest operating compute" — the first
+build had a site in Tunica reporting a data center 13 miles away that was a
+turbine field.
+
+**`data/us-fiber-carriers.json` — 24 carriers**, from the Telecom Ramblings
+network-map index, normalised to who actually answers the phone today
+(CenturyLink and Level 3 are both Lumen; Sprint wireline is Cogent; Windstream
+is Uniti; Masergy is Comcast). A call list with links to each carrier's own
+published map — not geometry, and not a claim of presence.
+
+### Logic that moved to `/api/` (per CLAUDE.md)
+
+`/api/network-proximity` (`network-proximity-v2`) gained three things, all
+server-side because the weights are the part worth anything:
+
+- **`longhaul()`** now measures against the routed corridors and returns
+  *every* corridor within 50 mi, plus **route diversity** — corridors folded
+  to a 180° axis and counted once, so two readings of the same I-80 conduit
+  30 miles apart is one path, not two. That is how a single backhoe takes out
+  a "redundant" site.
+- **`capacity()`** — the "how much fiber is here" answer: class (backbone /
+  regional / metro / edge), route diversity, carrier presences, lit service,
+  a **strand planning band** and the carriers to call. The band travels with
+  its caveat attached in every surface, because a number without it gets
+  quoted as a measurement within a week.
+- **`dcSuitability()`** — the connectivity half of a data-center read, scored
+  on corridor 30 / diversity 25 / carriers 20 / exchange 10 / comparables 15,
+  and it says `CONNECTIVITY ONLY` in its own `scope` field. Power, water, land
+  and tax are not in it.
+
+The long-haul component of `score()` was also changed: half of it is now the
+*second* independent path rather than proximity alone, because a site on a
+stub was scoring as though it were on a ring.
+
+### Wired in four places
+
+- **`grid-atlas.html`** — the dead `backbone` layer now loads the real file;
+  new `dc_registry` and `cable_landings` layers; a new **Fiber** preset; the
+  Data Center preset gained the corridor, registry, IXP and colo layers. The
+  renderer gained a per-feature `styleFor(props)` hook so a cited conduit and
+  an inferred corridor cannot draw identically.
+- **`grid-atlas-national.js`** — both the map layer and the site analysis now
+  read the same prebuilt file instead of routing live. Six times the coverage,
+  no OSRM round trip, and the page and the function finally agree. The live
+  path is kept as a fallback and **says so in the layer status**, so a
+  deployment missing the file cannot pass 53 conduits off as 317. The report
+  gained a route-diversity row.
+- **`editor.html` Network Proximity panel** — a second KPI row (class,
+  diversity, strand band, DC fit), a corridor table with bearings, the
+  regional call list as live links, the DC-fit component bars and the nearest
+  comparables.
+- **`editor.html` screening register** — the Fiber cell now reads
+  *class · diversity* rather than distance-to-carrier, a **DC fit** column was
+  added, the detail view gained capacity and comparables rows, a
+  `fiber_single_path` flag is raised, and the CSV went from 23 to 42 columns
+  (header and row arity verified to match — a mismatch silently shifts every
+  column).
+
+`scripts/test-network-proximity.js` is now 68 checks. The Frio County test
+changed its assertion on purpose: it used to read "far from every published
+conduit" at 100+ mi, because the old 53 chords never passed through south
+Texas. The routed San Antonio–Laredo corridor runs down I-35 straight through
+it, so the honest answer became "on a corridor, but single-threaded". That
+change is the whole reason for routing the geometry.
+
+### Open
+
+- **`data/us-cable-landings.geojson` (111 US landing stations) is LICENCE
+  UNCLEARED and off by default.** The compilation is TeleGeography's
+  commercial research product and the repository it came from mirrors their
+  public API. Confirm redistribution terms before this is enabled for a
+  tenant. Everything else here is CC BY 4.0, credit-required or public domain,
+  and the attribution rides on every feature as `attrib`.
+- Carrier-on-segment is still unanswerable from free data. `api/fiber-proxy.js`
+  is where GeoTel / FiberLocator / LandGate lands when a licence is bought;
+  the corridor layer is the free approximation until then.
+- `scripts/build-fiber-facilities.js` reads from `~/Downloads`. Point `--src`
+  at wherever the source datasets live before re-running it.
+- `FCC_BB_KEY` is still not set in Vercel, so "service at the point" still
+  scores its not-checked middle value and the verdict still says so.

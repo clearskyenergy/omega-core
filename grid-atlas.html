@@ -599,11 +599,68 @@ var LAYERS = {
     label:function(a){return a.name||"Cable landing station";},
     meta:function(a){return a.operator||"submarine cable landing";}
   },
+  /* ── US LONG-HAUL FIBER CORRIDORS — the national backbone layer ───────
+     This pointed at /data/intertubes-backbone.geojson, a file that was never
+     built, so the layer has been silently empty since it was written. It now
+     loads scripts/build-fiber-backbone.js's output: 317 intercity corridors
+     ROUTED OVER THE ROAD NETWORK, because US long-haul fiber is laid in
+     transportation rights-of-way (Durairajan et al., SIGCOMM 2015) and a
+     chord between two cities crosses country no conduit crosses.
+
+     53 of the corridors carry that paper's citation and its count of carriers
+     sharing the conduit. The rest assert a corridor and assert nothing about
+     who is in it — that is a licensed-data question and it belongs in
+     fiber_licensed, not here. */
   backbone: {
-    name:"LH Backbone (InterTubes)", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
-    url:"__STATIC__", staticFile:"/data/intertubes-backbone.geojson",
-    label:function(a){return a.name||a.link||"Long-haul conduit";},
-    meta:function(a){return (a.owner||a.carriers||"backbone conduit");}
+    name:"US Long-Haul Fiber Corridors", color:"#FF3D9A", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-longhaul-fiber.geojson",
+    label:function(a){return a.name||"Long-haul corridor";},
+    meta:function(a){return a.meta||"long-haul corridor";},
+    /* Cited conduits draw hot; inferred corridors draw cooler, so the map
+       never lets a corridor pass for a surveyed route at a glance. */
+    styleFor:function(a){
+      return a.src==='intertubes'
+        ? {color:"#FF3D9A", weight:3.0, opacity:0.95, dashArray:null}
+        : {color:"#C2417A", weight:2.0, opacity:0.62, dashArray:a.routed?null:"6,5"};
+    }
+  },
+  /* ── DATA CENTER REGISTRY — where fiber already terminates ────────────
+     3,885 US facilities merged from Compute Atlas (CC BY 4.0), the Global
+     Data Center Map and the CYBR capstone. The `datacenters` layer above is
+     live OpenStreetMap and stays; this is the registry, which has proposed
+     and under-construction sites OSM will never carry and states capacity.
+     ATTRIBUTION IS REQUIRED by two of the three sources and is on every
+     feature as `attrib`; it is rendered in the popup, not just carried. */
+  dc_registry: {
+    name:"Data Centers (registry)", color:"#A78BFA", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-datacenters.geojson",
+    label:function(a){return a.name||a.operator||"Data center";},
+    meta:function(a){return (a.meta||"data center")+(a.attrib?" · "+a.attrib:"");},
+    /* Operating sites read solid; proposed and cancelled read faint, because
+       an announcement is not a building and this dataset carries plenty of
+       both. Radius follows stated capacity where a source stated it. */
+    styleFor:function(a){
+      var live=a.status==='operational', build=a.status==='under_construction';
+      var mw=+a.mw||0;
+      return {
+        color: a.status==='cancelled' ? "#64748B" : live ? "#A78BFA" : build ? "#38BDF8" : "#7C6BA8",
+        radius: mw>0 ? Math.max(4,Math.min(16,Math.sqrt(mw)*0.7)) : 4,
+        opacity: live?0.7:(build?0.6:0.3),
+        weight: live?1.5:1
+      };
+    }
+  },
+  /* ── SUBMARINE CABLE LANDINGS — OFF, AND LICENCE UNCLEARED ────────────
+     111 US landing stations. For a coastal site the nearest landing is the
+     difference between a transit bill and a transport bill, which is why it
+     is here at all. The compilation is TeleGeography's commercial research
+     product and the repository it came from mirrors their public API:
+     DO NOT enable this for a tenant until the terms are confirmed. */
+  cable_landings: {
+    name:"Submarine Cable Landings (licence unconfirmed)", color:"#22D3EE", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/us-cable-landings.geojson",
+    label:function(a){return a.name||"Cable landing";},
+    meta:function(a){return (a.meta||"landing point")+" · TeleGeography";}
   },
   /* ── STATE / REGIONAL OPEN FIBER (add one entry per jurisdiction) ──
      Each is a public ArcGIS FeatureServer of real fiber-route geometry, queried
@@ -731,7 +788,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1082,6 +1139,13 @@ function renderLayer(key,feats){
   for(var i=0;i<feats.length;i++){
     var f=feats[i], gm=f.geom; if(!gm) continue;
     var col=featColor(L2,f.props);
+    /* Per-feature style hook. A layer that wants one feature to look unlike
+       its neighbour supplies styleFor(props); everything else is unaffected.
+       The fiber corridor layer is the reason it exists: a cited conduit and
+       an inferred corridor are different claims and must not draw the same,
+       or the map quietly upgrades a guess into a survey. */
+    var st=L2.styleFor?(L2.styleFor(f.props)||{}):{};
+    if(st.color) col=st.color;
     if(gm.type==="Point"){
       var c=gm.coordinates;
       if(f.bubbleMw!=null){
@@ -1091,16 +1155,19 @@ function renderLayer(key,feats){
         L.circleMarker([c[1],c[0]],{radius:r,color:bc,weight:1,fillColor:bc,fillOpacity:.4})
           .bindPopup(popup(L2,f.props,bc)).addTo(g);
       } else {
-        L.circleMarker([c[1],c[0]],{radius:L2.geom==="point"?5:4,color:col,weight:1.5,
-          fillColor:col,fillOpacity:.65}).bindPopup(popup(L2,f.props,col)).addTo(g);
+        L.circleMarker([c[1],c[0]],{radius:st.radius!=null?st.radius:(L2.geom==="point"?5:4),
+          color:col,weight:st.weight!=null?st.weight:1.5,
+          fillColor:col,fillOpacity:st.opacity!=null?st.opacity:.65}).bindPopup(popup(L2,f.props,col)).addTo(g);
       }
     } else if(gm.type==="LineString"||gm.type==="MultiLineString"){
       var lines=gm.type==="LineString"?[gm.coordinates]:gm.coordinates;
       // weight scales with voltage for the OIM look
       var kv=osmKv(f.props), w=kv>=220?2.6:kv>=110?2.0:1.6;
+      if(st.weight!=null) w=st.weight;
       for(var j=0;j<lines.length;j++){
         var latlngs=lines[j].map(function(p){return [p[1],p[0]];});
-        L.polyline(latlngs,{color:col,weight:w,opacity:.75}).bindPopup(popup(L2,f.props,col)).addTo(g);
+        L.polyline(latlngs,{color:col,weight:w,opacity:st.opacity!=null?st.opacity:.75,
+          dashArray:st.dashArray||null}).bindPopup(popup(L2,f.props,col)).addTo(g);
       }
     } else if(gm.type==="Polygon"||gm.type==="MultiPolygon"){
       var polys=gm.type==="Polygon"?[gm.coordinates]:gm.coordinates;
@@ -1230,10 +1297,13 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_licensed","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","fiber","fiber_licensed","backbone","dc_registry","ixp","colo","ll_backbone","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
-  {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]}
+  {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","backbone","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
+  /* Connectivity on its own: the question "how much fiber is at this point"
+     without the grid layers competing for the same screen. */
+  {key:"fiber", name:"Fiber", icon:"⌗", layers:["backbone","fiber","fiber_licensed","fiber_ca","dc_registry","ixp","colo","carrierhotels","fcc_fiber"]}
 ];
 var activePreset=null;
 function applyPreset(p){
@@ -1455,7 +1525,11 @@ function analyze(ll){
   var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
   var dcN=within(ll,cache.datacenters,40);
   var evN=within(ll,cache.ev,15);
-  var fiberKeys=['fiber_licensed','fiber_import','backbone','fiber_ca','fiber','fiber_verified','ll_backbone','fiber_estimated'];
+  /* Ordered best-evidence-first: licensed and imported route data, then
+     surveyed state plant, then the national corridor set, then the softer
+     aggregators. The corridor layer sits behind anything surveyed on purpose
+     — it says where a conduit plausibly runs, not where one was walked. */
+  var fiberKeys=['fiber_licensed','fiber_import','fiber_ca','fiber','backbone','fiber_verified','ll_backbone','fiber_estimated'];
   var fiberSets=fiberKeys.map(function(key){return LAYERS[key] && LAYERS[key].on ? cache[key] : [];});
   var fiber=null;
   for(var fi=0;fi<fiberSets.length;fi++){
