@@ -118,7 +118,6 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
-<script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -8982,11 +8981,7 @@ function renderEl(el){
     if(el.evKind==='charger' && el.evImg){
       _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
     } else {
-      var _visuals=window.OmegaEquipmentVisuals;
-      var _gearKind=el.evKind==='service'?'meter':el.evKind;
-      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
-        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
-      else _gearHtml=rf(gw,gh);
+      _gearHtml=rf(gw,gh);
     }
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
