@@ -9,22 +9,18 @@
    than a comment.
 
    WHAT THIS TEST DOES AND DOES NOT PROVE. It asserts the SHAPE OF THE QUERY
-   the client sends. It runs against a recording stub, not against the rules,
-   so it cannot tell you the rules refuse anything.
+   the client sends, against a recording stub. It does not execute the rules,
+   so it cannot by itself prove anything is refused.
 
      intake_projects  read: mineToWork() → canActInOrg(resource.data.orgId).
-                      Genuinely enforced; the filter is what makes the query
-                      legal.
-     projects         read: a six-way disjunction. orgId == userOrg() is one
-                      disjunct; isConsoleViewer() is another and is true for
-                      any @sunesol.com or @ogisolar.com token regardless of
-                      the document. So for this source the filter is a UI
-                      narrowing, not a boundary. Pre-existing grant, open
-                      decision in MERGE.md.
+     projects         read: orgId == userOrg(), or isCollaborator() for a
+                      project whose orgsInvolved[] names your org.
 
-   A rules-emulator test asserting an @ogisolar.com token is DENIED an
-   unfiltered projects read is the thing that would close that gap. This is
-   not it.
+   Both are enforced. For projects that is true only since 2026-09-18, when
+   isConsoleViewer() stopped blanketing @sunesol.com and @ogisolar.com; before
+   that this filter was a UI narrowing over a rule that allowed everything.
+   A rules-emulator test would pin the other half of the pair; this is the
+   client half.
 
    fin_projects is deliberately absent for a scoped reader: its read rule turns
    on fin_profiles membership, which a JV partner does not have, so no filter

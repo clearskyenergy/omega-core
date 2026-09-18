@@ -63,13 +63,14 @@
      is the failure this comment block already warns about above.
 
      intake_projects gates read on canActInOrg(resource.data.orgId), and
-     projects has resource.data.orgId == userOrg() as ONE of six disjuncts.
-     Both are satisfied by where('orgId','==',<my org>), so a scoped reader's
-     query is allowed — but "allowed" is not "required". For projects, the
-     disjunct isConsoleViewer() is separately true for any @sunesol.com or
-     @ogisolar.com token, so the filter narrows what those readers SEE without
-     being what stops them reading more. See the longer note in
-     portfolio.html's inboxScope(); the open decision is in MERGE.md.
+     projects on resource.data.orgId == userOrg(). Both are satisfied exactly
+     by where('orgId','==',<my org>), so a scoped reader's query is allowed.
+
+     That is true of projects only since 2026-09-18. Its read rule also had
+     isConsoleViewer(), true for any @sunesol.com or @ogisolar.com token
+     regardless of the document, so this filter narrowed what those readers
+     saw without being what stopped them reading more. The grant is gone; see
+     the note above isConsoleViewer in firestore.rules.
 
      fin_projects is different and deliberately not scopable. It carries
      orgKey, a finance-portal SLUG rather than an email domain, and its read
@@ -556,13 +557,34 @@
      "have access to these projects" means being able to find one without
      knowing which deal it hangs off, including the ones drawn before any of
      this existed. */
-  function loadDesignProjects(deals) {
+  function loadDesignProjects(deals, scopeOrg) {
     if (!_db) return Promise.resolve([]);
     var byProject = {};
     (deals || []).forEach(function (d) { if (d.projectId) byProject[d.projectId] = d; });
-    return _db.collection('projects').get().then(function (snap) {
-      var out = [];
+    var scope = String(scopeOrg || '').toLowerCase();
+
+    /* TWO queries when scoped, because the read rule is a disjunction and
+       Firestore cannot OR across two different fields in one query:
+
+         where('orgId','==',me)                  → resource.data.orgId == userOrg()
+         where('orgsInvolved','array-contains',me) → isCollaborator()
+
+       The second one is not optional padding. orgsInvolved IS the JDA roster,
+       so dropping it would scope a member firm out of the very projects it
+       was invited onto — co-development would look like an empty Design view.
+       Merged and de-duplicated by document id, since a project can satisfy
+       both. */
+    var queries = scope
+      ? [ _db.collection('projects').where('orgId', '==', scope),
+          _db.collection('projects').where('orgsInvolved', 'array-contains', scope) ]
+      : [ _db.collection('projects') ];
+
+    return Promise.all(queries.map(function (q) { return q.get(); })).then(function (snaps) {
+      var out = [], seen = {};
+      snaps.forEach(function (snap) {
       snap.forEach(function (doc) {
+        if (seen[doc.id]) return;
+        seen[doc.id] = 1;
         var v = doc.data() || {};
         out.push({
           id: doc.id,
@@ -583,6 +605,7 @@
           deal: byProject[doc.id] || null,
           dealId: v.dealId || ''
         });
+      });
       });
       out.sort(function (a,b) { return ms(b.updatedAt) - ms(a.updatedAt); });
       return out;

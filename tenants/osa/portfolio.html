@@ -1315,27 +1315,26 @@ function hideNav(v){
    deals is shared across the JV — which is the point of the JV, so nothing
    here scopes the portfolio.
 
-   HOW MUCH OF THIS THE RULES ACTUALLY ENFORCE — read this before trusting it.
+   BOTH SOURCES ARE RULES-ENFORCED, as of 2026-09-18. The filters below exist
+   to MATCH those rules, because Firestore refuses a whole query the moment
+   one returned document fails them — a filter on the wrong field does not
+   narrow the result, it empties it.
 
-   intake_projects: ENFORCED. read gates on mineToWork() →
+   intake_projects: read gates on mineToWork() →
    canActInOrg(resource.data.orgId), resolved from the caller's token email
-   domain. An unfiltered read really is refused, and the filter below exists
-   to match the rule so the query is allowed at all.
+   domain.
 
-   projects: NOT ENFORCED for the people this feature serves. Its read rule is
-   a six-way disjunction and one of the disjuncts is isConsoleViewer(), which
-   is true for any token matching @sunesol.com or @ogisolar.com — two of the
-   three JV orgs, and therefore every non-staff user who can reach this page.
-   It never references `resource`, so it is true for every document in the
-   collection: those accounts can read every tenant's projects, and the filter
-   below is the only thing narrowing what they see. That is a browser control,
-   not a boundary.
+   projects: read is a disjunction, and until 2026-09-18 one of its disjuncts
+   was isConsoleViewer(), true for any @sunesol.com or @ogisolar.com token
+   regardless of the document — which is every non-staff user who can reach
+   this page. So this feature's guarantee rested on the browser. That grant is
+   now removed (see the note above isConsoleViewer in firestore.rules), and
+   what remains reaches a project by ownership, orgId == userOrg(), or by the
+   JDA roster, isCollaborator().
 
-   This is a PRE-EXISTING grant, not something this feature introduced —
-   firestore.rules carries a ⚠ block above isConsoleViewer() and MERGE.md has
-   the open decision "Remove sunesol.com / ogisolar.com from isConsoleViewer()?".
-   Until that is closed, do not describe the editor source as own-only to
-   anyone outside this file. The intake source genuinely is. */
+   ⚠ THE ROSTER HALF IS WHY loadDesignProjects SENDS TWO QUERIES. Scoping on
+   orgId alone would scope a member firm out of the very projects it was
+   invited onto. If you add another scoped read of /projects, it needs both. */
 function canSeeInbox(){ return A.can('write_deal') || A.can('see_own'); }
 function inboxScope(){
   /* see_all is ClearSky. see_scoped is a limited administrator over several
@@ -4038,7 +4037,11 @@ function doLinkExisting(idx){
    already knowing which deal it hangs off \u2014 including every drawing made
    before any of this existed. */
 function loadDesign(manual){
-  return IN.loadDesignProjects(S.deals).then(function(rows){
+  /* Same scope as the inbox. Without it a partner's Design view issues an
+     unfiltered projects read, which the rules refuse outright once
+     isConsoleViewer() no longer blankets their domain — an empty view that
+     looks like "no drawings" rather than "refused". */
+  return IN.loadDesignProjects(S.deals, inboxScope()).then(function(rows){
     S.design=rows; S.designLoaded=true; render();
     if(manual) toast(rows.length+' editor project(s)');
   })['catch'](function(e){ toast((e&&e.message)||'Could not read projects',true); });
