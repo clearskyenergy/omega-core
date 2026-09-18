@@ -2135,7 +2135,14 @@ function makeCore(id, opts) {
              looks like when it is pretending to be a projection. */
           if (ddat[i] < 12) continue;
           var lum = (cdat[i] * 0.299 + cdat[i + 1] * 0.587 + cdat[i + 2] * 0.114) / 255;
-          var dz = (ddat[i] / 255 - 0.5);
+          /* DEPTH, TO SCALE. The map's full range was taken as ±0.5 in the
+             same normalised units as x — that is, the figure was made as deep
+             as it is wide. A man in a cloak is about 0.45 as deep as he is
+             across, so every sample sat two and a bit times too far fore or
+             aft, and any turn at all sheared him. This is the other half of
+             why he looked wrong while rotating, and it is the half that was
+             wrong even standing still under the rim light. */
+          var dz = (ddat[i] / 255 - 0.5) * 0.45;
           pos.push((x / w - 0.5), (y / h - 0.5), dz);
 
           var tone = Math.min(1, lum / 0.70);
@@ -2267,6 +2274,22 @@ function makeCore(id, opts) {
   }
 
   function drawDoom(cx, cy, R, yaw, col) {
+    /* THE FIGURE TURNS; THE SHELLS SPIN. They were handed the same angle, and
+       that angle is `t * rate` — it increases forever. An icosahedron can spin
+       through 360 degrees because it is a real solid and every angle of it is
+       a real view. The figure is NOT: it is one drawing pushed along z by a
+       depth map, so it has a front and nothing else. Carried past about forty
+       degrees it shears, and at ninety it collapses to its own depth and reads
+       as a crumpled sheet — which is what was on screen, twice a revolution,
+       for as long as doom mode has existed.
+
+       The lesson was already learned twenty lines down, where the wireframe
+       figure uses `Math.sin(...)` and the comment says "turns, never spins".
+       The point cloud that replaced it on screen never got the same treatment.
+       ±1.0 here, because drawCloud multiplies by 0.55 internally — so the
+       figure swings ±31°, which is the width of a three-quarter view and the
+       edge of where a depth-displaced billboard still reads as a body. */
+    const cyaw = Math.sin(t * 0.0022) * 1.0;
     /* the smoke it stands in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 2.0);
     g.addColorStop(0, 'rgba(' + col + ',' + (0.12 + energy * 0.12).toFixed(3) + ')');
@@ -2314,7 +2337,7 @@ function makeCore(id, opts) {
       ctx.save();
       ctx.translate(0, y0); ctx.scale(1, -0.42); ctx.translate(0, -y0);
       ctx.translate(0, bob2);
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 3, gain: 0.26 });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 3, gain: 0.26 });
       ctx.restore();
 
       if (ent > 0) {
@@ -2333,9 +2356,9 @@ function makeCore(id, opts) {
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { sweep: ((t * 0.0024) % 1.9) - 0.95 });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { sweep: ((t * 0.0024) % 1.9) - 0.95 });
       ctx.globalCompositeOperation = 'lighter';
-      drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 2, gain: 0.26, grow: 2.4, bright: true });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 2, gain: 0.26, grow: 2.4, bright: true });
       ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
 
@@ -2350,7 +2373,7 @@ function makeCore(id, opts) {
         ctx.rect(0, cy + (((t * 7) % 100) / 100 - 0.5) * R * 1.6, W, R * 0.14);
         ctx.clip();
         ctx.translate(R * 0.06 * ((t % 2) ? 1 : -1), 0);
-        drawCloud(cx, cy - R * 0.04, R, yaw, col, { step: 2, gain: 0.85 });
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 2, gain: 0.85 });
         ctx.restore();
       }
 
