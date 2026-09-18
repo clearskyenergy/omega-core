@@ -539,7 +539,20 @@ body{overflow-x:hidden}
   .tm-panel{max-height:none}
   .tm-body{max-height:560px}
 }
-#app{display:flex !important;align-items:stretch;min-height:100vh}
+/* ── NO !important HERE. IT DEFEATS THE SIGN-IN GATE ──────────────────────
+   This rule arrived with the 16-repo consolidation (6311b6e) to force the
+   sidebar layout, and `display:flex !important` silently broke the thing
+   directly above it: onAuth() hides the app with el('app').style.display=
+   'none', and an inline style LOSES to !important in the author stylesheet.
+   So the app could never be hidden. Signed-out visitors got the workspace
+   chrome — sidebar, nav, Sign Out — rendered underneath the login card,
+   which is what "the marketplace is doing it again" has meant every time.
+
+   #app{display:none} at the top is the default; onAuth sets display:flex
+   inline when a workspace resolves. That is the only thing that should ever
+   reveal this element, so layout properties stay here and display does not.
+   marketplace.html was the only page carrying this pattern. */
+#app{align-items:stretch;min-height:100vh}
 #side-nav{width:212px;flex:none;background:#0B2A3D;color:#C9D6E2;display:flex;flex-direction:column;
   position:sticky;top:0;height:100vh;overflow:hidden;z-index:60}
 #app-body{flex:1;min-width:0;display:flex;flex-direction:column}
