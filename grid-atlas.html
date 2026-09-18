@@ -684,6 +684,37 @@ var LAYERS = {
     label:function(a){return a.name||"Telecom facility";},
     meta:function(a){return (a.operator||"operator unknown")+" · facility, not a route · OSM";}
   },
+  /* ── PUBLISHED ROUTE INVENTORY — 26,371 features, national ────────────
+     The simplified national overview of the same inventory /api/fiber-screen
+     and /api/network-proximity measure against, so what you see and what the
+     services answer come from one dataset. 10.7 MB, so it is off by default
+     like everything else here.
+
+     STATUS IS THE STYLING, because it is the finding. A planned route and a
+     built one are different claims and must never draw alike: planned is
+     dashed and amber, inactive is dotted and grey, and a route whose
+     publisher never stated a status is drawn thinner rather than promoted to
+     "existing". 16,530 of these are that last case — the largest bucket by
+     far — and letting them read as confirmed plant would be the single most
+     misleading thing this layer could do. */
+  pf_inventory: {
+    name:"Published fiber routes (national)", color:"#2DD4BF", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/usa-fiber/overview.geojson",
+    label:function(a){return a.name||a.carrier||"Published fiber route";},
+    meta:function(a){
+      var st=a.routeStatus&&a.routeStatus!=='Unknown'?a.routeStatus:'status not stated by the publisher';
+      return (a.carrier||'operator not published')+" · "+st+
+             (a.states&&a.states.length?" · "+a.states.join(", "):"")+
+             " · capacity unknown";
+    },
+    styleFor:function(a){
+      var c=a.category;
+      if(c==='planned')  return {color:"#F59E0B", weight:1.8, opacity:0.80, dashArray:"7,5"};
+      if(c==='inactive') return {color:"#64748B", weight:1.4, opacity:0.55, dashArray:"2,4"};
+      if(c==='existing') return {color:"#2DD4BF", weight:2.2, opacity:0.90, dashArray:null};
+      return {color:"#5EAAA8", weight:1.3, opacity:0.55, dashArray:null}; /* status unstated */
+    }
+  },
   /* ── SUBMARINE CABLE LANDINGS — OFF, AND LICENCE UNCLEARED ────────────
      111 US landing stations. For a coastal site the nearest landing is the
      difference between a transit bill and a transport bill, which is why it
@@ -822,7 +853,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1337,7 +1368,7 @@ var PRESETS=[
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","backbone","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
   /* Connectivity on its own: the question "how much fiber is at this point"
      without the grid layers competing for the same screen. */
-  {key:"fiber", name:"Fiber", icon:"⌗", layers:["pf_routes","pf_facilities","backbone","fiber","fiber_licensed","fiber_ca","dc_registry","ixp","colo","carrierhotels","fcc_fiber"]}
+  {key:"fiber", name:"Fiber", icon:"⌗", layers:["pf_inventory","pf_routes","pf_facilities","backbone","fiber","fiber_licensed","fiber_ca","dc_registry","ixp","colo","carrierhotels","fcc_fiber"]}
 ];
 var activePreset=null;
 function applyPreset(p){
@@ -1706,14 +1737,21 @@ function analyze(ll){
          is .operator — which threw and took the whole Site Analysis panel
          down with it, because analyze() builds one string and renders once. */
       var p=hit?(hit.props||(hit.f&&hit.f.props)||{}):null;
+      /* The two inventories name the same facts differently — OSM-derived
+         features use operator/operational_status, the published inventory
+         uses carrier/routeStatus. Read both rather than showing "unknown"
+         for data that is right there under another key. */
       var sub=hit
-        ? ((p.operator||"operator unknown")
-           +" · "+(p.operational_status||"status unknown")
-           +" · "+(p.source_vintage||p.source_last_edited||p.retrieved_at||"evidence date unknown"))
+        ? ((p.operator||p.carrier||"operator unknown")
+           +" · "+((p.routeStatus&&p.routeStatus!=='Unknown')?p.routeStatus
+                   :(p.operational_status||"status not stated"))
+           +" · "+(p.source_vintage||p.dataDate||p.metadataModified||p.source_last_edited||p.retrievedAt||p.retrieved_at||"evidence date unknown"))
         : (LAYERS[layerKey].on?none:"enable "+LAYERS[layerKey].name);
       h+=infoRow(LAYERS[layerKey].color,what,sub,pfDist(hit));
     };
-    pfLine('pf_routes',pfR,"Nearest optical route","no mapped optical route within "+PF_MAX_KM+" km");
+    var pfI=nearestLine(ll,cache.pf_inventory);
+    pfLine('pf_inventory',pfI,"Nearest published route","no published route within "+PF_MAX_KM+" km");
+    pfLine('pf_routes',pfR,"Nearest optical route (OSM)","no mapped optical route within "+PF_MAX_KM+" km");
     pfLine('pf_facilities',pfF,"Nearest telecom facility","no mapped facility within "+PF_MAX_KM+" km");
     pfLine('pf_unknown',pfU,"Unknown-medium line","none within "+PF_MAX_KM+" km");
     pfLine('pf_design',pfD,"CA planning / construction","none within "+PF_MAX_KM+" km");

@@ -80,7 +80,12 @@ function summarize(f,d) {
     notes:p.notes||'Mapped evidence; carrier confirmation required.'};
 }
 function screen(input,dataset) {
-  var request=parseRequest(input), data=dataset||load(), point=[request.lon,request.lat];
+  var request=parseRequest(input);
+  /* A caller that supplies its own dataset gets exactly that and nothing
+     else — the tests rely on it, and so does any future fixture. Otherwise
+     both bundled inventories are consulted, bbox-narrowed to the query. */
+  var data=dataset||combined(boxAround(request.lat,request.lon,request.radius_km));
+  var point=[request.lon,request.lat];
   var routes=[],facilities=[],planning=[],unknown=[];
   data.features.forEach(function(f) {
     var p=f.properties||{},d=geometryDistance(point,f.geometry);
@@ -94,6 +99,9 @@ function screen(input,dataset) {
   var counts={routes:routes.length,facilities:facilities.length,planning:planning.length,unknown_medium:unknown.length};
   [routes,facilities,planning,unknown].forEach(function(a){a.sort(function(x,y){return x.mapped_distance_m-y.mapped_distance_m;});});
   return {schema_version:'1.0',query:request,dataset_built_at:data.manifest.built_at,
+    datasets:{osm_and_ca:{built_at:data.manifest.built_at},
+              published_inventory:{built_at:data.usaBuiltAt||null,
+                                   records_in_box:data.usaCount==null?null:data.usaCount}},
     evidence_status:routes.length?'mapped_fiber_route_nearby':facilities.length?'telecom_facility_nearby':'no_route_evidence_in_loaded_sources',
     site_has_fiber:null,site_serviceability:'unconfirmed',available_capacity_gbps:null,
     meets_requested_capacity:null,physical_route_diversity:'unconfirmed',
@@ -289,13 +297,15 @@ function classify(data, request, distanceOf, method) {
 }
 
 function screenArea(input, dataset) {
-  var request = parseAreaRequest(input), data = dataset || load();
+  var request = parseAreaRequest(input);
   var ring = request.ring, rb = ringBbox(ring);
   /* Degrees of longitude shrink with latitude; pad generously rather than
      precisely, because a too-small pad silently drops real evidence. */
   var padLat = request.radius_km / 110.574;
   var padLon = request.radius_km / (111.320 * Math.max(0.15, Math.cos(rb[1] * Math.PI / 180)));
   var box = [rb[0] - padLon, rb[1] - padLat, rb[2] + padLon, rb[3] + padLat];
+  /* Built after the box, because the published inventory is narrowed by it. */
+  var data = dataset || combined(box);
 
   var METHOD = 'shortest_distance_from_site_boundary_to_published_geometry';
   var sets = classify(data, request, function (f) {
@@ -316,6 +326,9 @@ function screenArea(input, dataset) {
     measurement_note: 'Distance is from the site boundary, not its centroid. Zero means a published ' +
       'route crosses the parcel or a facility stands inside it — it does not mean service is present.',
     dataset_built_at: data.manifest.built_at,
+    datasets: { osm_and_ca: { built_at: data.manifest.built_at },
+                published_inventory: { built_at: data.usaBuiltAt || null,
+                                       records_in_box: data.usaCount == null ? null : data.usaCount } },
     evidence_status: sets.routes.length ? 'mapped_fiber_route_nearby'
                    : sets.facilities.length ? 'telecom_facility_nearby'
                    : 'no_route_evidence_in_loaded_sources',
@@ -354,3 +367,135 @@ module.exports.geometryToRing = geometryToRing;
 module.exports.segmentToSegment = segmentToSegment;
 module.exports.pointInRing = pointInRing;
 module.exports.normalizeRing = normalizeRing;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PUBLISHED ROUTE INVENTORY — 26,371 features, one interpreter
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   A second dataset arrived: 26,371 published line features across 30 states
+   and DC, sharded one GeoJSON per state. It shipped with its OWN evidence
+   library and its own endpoint, which would have given Grid Atlas and the
+   Site Map Editor two interpreters and two answers for one coordinate. That
+   is the thing this integration exists to prevent, so the data is adapted
+   INTO this library instead and every caller keeps the same four buckets,
+   the same classifier and the same nulls.
+
+   WHY SHARDED AND LAZY
+   68 MB. load() above reads its whole dataset eagerly because 11 MB is
+   affordable; this one is not. Each state file is read only when the query
+   bbox meets that state's bbox, and every feature carries its own bbox for a
+   second, cheaper rejection before any geometry maths. A Chicago lookup
+   touches Illinois, Indiana and Wisconsin — not Oregon.
+
+   The cache is bounded. A warm serverless instance answering queries across
+   the country would otherwise accumulate all 30 states and hold 68 MB
+   resident for the life of the container.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var USA_ROOT = path.join(__dirname, '../../data/usa-fiber');
+var usaManifest = null, usaCache = {}, usaOrder = [];
+var USA_CACHE_MAX = 6;
+
+function usaLoadManifest() {
+  if (!usaManifest) usaManifest = JSON.parse(fs.readFileSync(path.join(USA_ROOT, 'manifest.json'), 'utf8'));
+  return usaManifest;
+}
+function bboxHit(a, b) { return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1]; }
+
+function usaState(code) {
+  if (usaCache[code]) return usaCache[code];
+  var fc = JSON.parse(fs.readFileSync(path.join(USA_ROOT, code + '.geojson'), 'utf8'));
+  usaCache[code] = fc.features || [];
+  usaOrder.push(code);
+  while (usaOrder.length > USA_CACHE_MAX) { delete usaCache[usaOrder.shift()]; }
+  return usaCache[code];
+}
+
+/* Map the inventory's vocabulary onto this library's schema.
+
+   CATEGORY IS NOT MEDIUM, and conflating the two would be the easy mistake
+   here. This dataset's `unknown` means the PUBLISHER did not state whether
+   the route is in service — the medium is fiber either way, because every
+   source layer is a fiber layer. That is a different claim from the OSM
+   `telecom_route_unknown` bucket above, where the medium itself is
+   unspecified and the line may be copper. Filing status-unknown fiber under
+   "medium unknown" would invent a doubt the source never expressed; filing
+   it under confirmed optical with its status shown per record is what the
+   source actually supports.
+
+   Planned and inactive routes are NOT proximity-eligible, so the shared
+   classifier drops them into planning_routes where they belong. */
+function usaAdapt(f) {
+  var p = f.properties || {}, cat = p.category;
+  var kind = 'fiber_route', eligible = true;
+  if (cat === 'planned') { kind = 'network_design'; eligible = false; }
+  else if (cat === 'inactive') { eligible = false; }
+  return {
+    type: 'Feature', id: p.id, bbox: f.bbox, geometry: f.geometry,
+    properties: {
+      source_id: p.sourceId, source_feature_id: p.id,
+      feature_kind: kind, proximity_eligible: eligible,
+      source_url: p.sourceUrl, retrieved_at: p.retrievedAt,
+      geometry_quality: p.evidence === 'approximate_project_route'
+        ? 'generalized_public_design' : 'agency_published',
+      operational_status: p.routeStatus && p.routeStatus !== 'Unknown'
+        ? p.routeStatus : (cat === 'unknown' ? 'not stated by the publisher' : cat),
+      serviceability: 'unconfirmed',
+      name: p.name || null, operator: p.carrier || null,
+      source_vintage: p.dataDate || null,
+      source_last_edited: p.metadataModified || null,
+      /* This dataset carries no capacity of any kind. Explicit nulls, not
+         absent keys, so a consumer reading them gets "unknown" and not
+         undefined-coerced-to-zero. */
+      fiber_strands_reported: null, lit_capacity_gbps: null,
+      spare_capacity_gbps: null, offered_capacity_gbps: null,
+      capacity_evidence: null, positional_accuracy_m: null,
+      notes: p.networkType || 'Published route; carrier confirmation required.',
+      dataset: 'usa-fiber'
+    }
+  };
+}
+
+/* Candidate features whose own bbox meets the query box. */
+function usaCandidates(box) {
+  var m;
+  try { m = usaLoadManifest(); } catch (e) { return []; }
+  var out = [];
+  (m.states || []).forEach(function (s) {
+    if (!s.segments || !s.bbox || !bboxHit(s.bbox, box)) return;
+    var feats;
+    try { feats = usaState(s.code); } catch (e) { return; }
+    for (var i = 0; i < feats.length; i++) {
+      var f = feats[i];
+      if (f.bbox && !bboxHit(f.bbox, box)) continue;
+      out.push(usaAdapt(f));
+    }
+  });
+  return out;
+}
+
+function boxAround(lat, lon, km) {
+  var dLat = km / 110.574;
+  var dLon = km / (111.320 * Math.max(0.15, Math.cos(lat * Math.PI / 180)));
+  return [lon - dLon, lat - dLat, lon + dLon, lat + dLat];
+}
+
+/* One dataset object for the classifier, from both sources. Cross-source
+   duplicates are NOT merged: the two inventories publish different records
+   from different agencies and silently collapsing them would drop provenance
+   the user is entitled to see. They are deduplicated only within a source,
+   which each source already guarantees by id. */
+function combined(box) {
+  var base = load();
+  var extra = usaCandidates(box);
+  return {
+    features: base.features.concat(extra),
+    manifest: base.manifest,
+    usaCount: extra.length,
+    usaBuiltAt: (usaManifest && usaManifest.builtAt) || null
+  };
+}
+module.exports.usaAdapt = usaAdapt;
+module.exports.usaCandidates = usaCandidates;
+module.exports.combined = combined;
+module.exports.boxAround = boxAround;

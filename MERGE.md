@@ -894,3 +894,84 @@ The `omega-core-main.zip` package (26,371 published features across 29 states
 + DC) remains unmerged. It is a different package built on a stale ~Sep 12
 snapshot and it collides with this one on `api/_lib/fiber-evidence.js` — two
 interpreters of two datasets, which is a reconciliation, not a copy.
+
+---
+
+## 2026-09-18 · The published route inventory, folded into the one library
+
+### What arrived, and what was wrong with how it arrived
+
+`Omega-Grid-Atlas-Fiber-Integrated.zip` carried a second dataset — 26,371
+published line features across 30 states and DC, sharded one GeoJSON per
+state — and it resolved the earlier filename collision by **renaming rather
+than unifying**:
+
+| Endpoint | Interpreter | Dataset |
+|---|---|---|
+| `api/fiber-screen.js` | `fiber-screen-evidence.js` | `data/fiber` (10,345) |
+| `api/fiber-site.js` | `fiber-evidence.js` + `fiber-inventory.js` | `data/usa-fiber` (26,371) |
+
+Two interpreters and two endpoints means the same coordinate can return two
+different answers depending on which tool asks — the exact thing this work was
+told to prevent. That snapshot was also stale in the usual way: `mission.html`
+80 KB behind `main`, `editor.html` 163 KB behind, and none of this branch's
+work present.
+
+So only the **data** was taken, plus its best idea, and both were folded into
+`api/_lib/fiber-evidence.js`. There is still one interpreter, one classifier
+and one set of nulls. `fiber-screen-evidence.js`, `fiber-inventory.js` and
+`fiber-site.js` were deliberately not merged.
+
+### Sharded and lazy, because 68 MB is not 11 MB
+
+`load()` reads its dataset eagerly; that is affordable at 11 MB and not at 68.
+The inventory is read per state, only when the query bbox meets that state's
+bbox, with a second per-feature bbox rejection before any geometry maths, and
+a **bounded cache** (6 states) so a warm serverless instance answering queries
+across the country cannot end up holding all 68 MB resident.
+
+Measured: Chicago cold 314 ms / warm 87 ms; Portland cold 412 ms against
+Oregon's 5,073 features; an empty Wyoming point 116 ms returning
+`no_route_evidence_in_loaded_sources`.
+
+### Category is not medium — the mapping that mattered
+
+16,530 of the 26,371 records carry `category: "unknown"`, the largest bucket by
+far. That means the **publisher did not state whether the route is in
+service**. It does not mean the medium is uncertain: every source layer in
+this inventory is a fiber layer.
+
+That is a different claim from the OSM `telecom_route_unknown` bucket, where
+the medium itself is unspecified and the line may be copper. Filing
+status-unknown fiber under "medium unknown" would invent a doubt the source
+never expressed, so it maps to `fiber_route` with its status surfaced verbatim
+as "not stated by the publisher". `planned` and `inactive` are **not**
+proximity-eligible and fall to `planning_routes`, which is what the shared
+classifier already does with an ineligible route.
+
+### On the map
+
+`data/usa-fiber/overview.geojson` (10.7 MB, all 26,371 simplified) is a
+national layer, off by default. **Status is the styling, because status is the
+finding:** planned draws dashed amber, inactive dotted grey, existing solid
+teal, and status-unstated thinner rather than being promoted to look like
+confirmed plant.
+
+Site Analysis reads both inventories. They name the same facts differently —
+OSM-derived features use `operator`/`operational_status`, the published
+inventory uses `carrier`/`routeStatus` — so both keys are read rather than
+printing "unknown" over data sitting under another name.
+
+### Deploy
+
+`includeFiles` on both `api/fiber-screen.js` and `api/network-proximity.js` is
+now `data/{fiber,usa-fiber}/**`. Same tracing gap as before: the library builds
+its paths at runtime and `@vercel/nft` cannot follow them, so undeclared data
+is an ENOENT that only appears once deployed.
+
+### Open
+
+Nothing about the two datasets is de-duplicated across sources. They publish
+different records from different agencies, and silently collapsing them would
+drop provenance a user is entitled to see; each source already guarantees
+uniqueness by id within itself.

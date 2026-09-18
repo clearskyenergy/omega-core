@@ -267,14 +267,14 @@
     },
     "api/network-proximity.js": {
       "maxDuration": 60,
-      "includeFiles": "data/fiber/**"
+      "includeFiles": "data/{fiber,usa-fiber}/**"
     },
     "api/render.js": {
       "maxDuration": 60
     },
     "api/fiber-screen.js": {
       "maxDuration": 30,
-      "includeFiles": "data/fiber/**"
+      "includeFiles": "data/{fiber,usa-fiber}/**"
     },
     "api/**/*.js": {
       "maxDuration": 30
