@@ -62,9 +62,14 @@
      not recognise does not narrow the inbox — it empties it, silently, which
      is the failure this comment block already warns about above.
 
-     intake_projects gates read on canActInOrg(resource.data.orgId) and
-     projects on resource.data.orgId == userOrg(). Both are satisfied exactly
-     by where('orgId','==',<my org>), so a scoped reader's query is allowed.
+     intake_projects gates read on canActInOrg(resource.data.orgId), and
+     projects has resource.data.orgId == userOrg() as ONE of six disjuncts.
+     Both are satisfied by where('orgId','==',<my org>), so a scoped reader's
+     query is allowed — but "allowed" is not "required". For projects, the
+     disjunct isConsoleViewer() is separately true for any @sunesol.com or
+     @ogisolar.com token, so the filter narrows what those readers SEE without
+     being what stops them reading more. See the longer note in
+     portfolio.html's inboxScope(); the open decision is in MERGE.md.
 
      fin_projects is different and deliberately not scopable. It carries
      orgKey, a finance-portal SLUG rather than an email domain, and its read

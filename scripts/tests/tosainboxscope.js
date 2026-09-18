@@ -8,10 +8,23 @@
    looks identical to "nothing to adopt", which is why it gets a test rather
    than a comment.
 
-   The rules this pins against, both read out of firestore.rules:
-     intake_projects  read: canActInOrg(resource.data.orgId)
-     projects         read: resource.data.orgId == userOrg()
-   Both are satisfied by where('orgId','==',<org>) and by nothing else.
+   WHAT THIS TEST DOES AND DOES NOT PROVE. It asserts the SHAPE OF THE QUERY
+   the client sends. It runs against a recording stub, not against the rules,
+   so it cannot tell you the rules refuse anything.
+
+     intake_projects  read: mineToWork() → canActInOrg(resource.data.orgId).
+                      Genuinely enforced; the filter is what makes the query
+                      legal.
+     projects         read: a six-way disjunction. orgId == userOrg() is one
+                      disjunct; isConsoleViewer() is another and is true for
+                      any @sunesol.com or @ogisolar.com token regardless of
+                      the document. So for this source the filter is a UI
+                      narrowing, not a boundary. Pre-existing grant, open
+                      decision in MERGE.md.
+
+   A rules-emulator test asserting an @ogisolar.com token is DENIED an
+   unfiltered projects read is the thing that would close that gap. This is
+   not it.
 
    fin_projects is deliberately absent for a scoped reader: its read rule turns
    on fin_profiles membership, which a JV partner does not have, so no filter

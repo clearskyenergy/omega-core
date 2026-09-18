@@ -1315,13 +1315,27 @@ function hideNav(v){
    deals is shared across the JV — which is the point of the JV, so nothing
    here scopes the portfolio.
 
-   The scoping is not enforced in this file and must not be read as if it
-   were. intake_projects gates read on canActInOrg(resource.data.orgId) and
-   projects on resource.data.orgId == userOrg(); the filter in IN.loadInbox
-   exists to MATCH those rules, because Firestore refuses a whole query the
-   moment one returned document fails them. That is precisely why the inbox
-   was write_deal-only before today: an unfiltered read from a partner is not
-   trimmed to their own rows, it is refused outright. */
+   HOW MUCH OF THIS THE RULES ACTUALLY ENFORCE — read this before trusting it.
+
+   intake_projects: ENFORCED. read gates on mineToWork() →
+   canActInOrg(resource.data.orgId), resolved from the caller's token email
+   domain. An unfiltered read really is refused, and the filter below exists
+   to match the rule so the query is allowed at all.
+
+   projects: NOT ENFORCED for the people this feature serves. Its read rule is
+   a six-way disjunction and one of the disjuncts is isConsoleViewer(), which
+   is true for any token matching @sunesol.com or @ogisolar.com — two of the
+   three JV orgs, and therefore every non-staff user who can reach this page.
+   It never references `resource`, so it is true for every document in the
+   collection: those accounts can read every tenant's projects, and the filter
+   below is the only thing narrowing what they see. That is a browser control,
+   not a boundary.
+
+   This is a PRE-EXISTING grant, not something this feature introduced —
+   firestore.rules carries a ⚠ block above isConsoleViewer() and MERGE.md has
+   the open decision "Remove sunesol.com / ogisolar.com from isConsoleViewer()?".
+   Until that is closed, do not describe the editor source as own-only to
+   anyone outside this file. The intake source genuinely is. */
 function canSeeInbox(){ return A.can('write_deal') || A.can('see_own'); }
 function inboxScope(){
   /* see_all is ClearSky. see_scoped is a limited administrator over several

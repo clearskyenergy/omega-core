@@ -6,6 +6,22 @@
 # firestore.rules, api/ and every other tenant's folder. CODEOWNERS only asks
 # for a review. This check refuses the merge.
 #
+# ⚠ WHY pull_request_target AND NOT pull_request.
+# `pull_request` reads the workflow definition — and the checked-out script —
+# from the PR's own merge ref. That let the pull request edit the gate that
+# judges it: adding a handle to CLEARSKY in scripts/check-partner-scope.js, in
+# the same PR that touches firestore.rules, produced a green "partner scope".
+# `pull_request_target` takes the workflow from the BASE branch instead, and
+# the checkout below pins the script to the base SHA, so what runs is always
+# the copy already reviewed and merged.
+#
+# ⚠ AND WHY THAT IS SAFE HERE. pull_request_target runs with a token and with
+# access to secrets, so checking out and EXECUTING a pull request's code under
+# it is the well-known footgun. This job never does. It fetches the head
+# commit as data, runs `git diff --name-only` over it, and executes only
+# scripts/check-partner-scope.js from the base SHA. Do not add a build, an
+# install, or any step that runs code from the PR.
+#
 # ⚠ It is a gate ONLY if "partner scope" is a REQUIRED status check on main.
 # Until then it is an advisory X beside a green Merge button, which is worse
 # than no check at all because it looks like protection.
@@ -17,19 +33,33 @@
 name: partner scope
 
 on:
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Read-only: this job decides a verdict, it never writes to the repository.
+permissions:
+  contents: read
 
 jobs:
   scope:
     name: partner scope
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 because the check diffs against the merge base, and a
-      # shallow clone has no merge base to diff against. Without it this job
-      # fails as an error rather than a verdict, which reads as a broken CI.
+      # THE BASE, deliberately — not the PR. This is what stops a pull request
+      # from rewriting the check that judges it. fetch-depth: 0 because the
+      # check diffs against the merge base, and a shallow clone has none.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      # The head commit is fetched as DATA to be diffed, never checked out and
+      # never executed.
+      - name: fetch the pull request's head commit
+        run: |
+          git fetch --no-tags --depth=0 origin \
+            "+${{ github.event.pull_request.head.sha }}:refs/remotes/pr/head"
 
       - uses: actions/setup-node@v4
         with:

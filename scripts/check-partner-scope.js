@@ -48,6 +48,16 @@ var CLEARSKY = [
   'clearskyenergy'
 ];
 
+/* The git identities behind those handles. Used to confirm that a
+   ClearSky-authored PR carries only ClearSky commits — see unrestricted().
+   Anything not listed here scopes the PR instead of exempting it, so a new
+   teammate shows up as a failing check and one line of maintenance rather
+   than as a silent hole. */
+var CLEARSKY_GIT_EMAILS = [
+  'tom@clearsky-usa.com',
+  'noreply@anthropic.com'
+];
+
 /* ── JV partners, and the only paths their PRs may change. ─────────────────
    A handle here is a statement about the JV agreement, not about trust — the
    point of writing it down is that the boundary survives the person who
@@ -82,10 +92,19 @@ function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
 
 /* Three dots: what this branch changed since it diverged, not everything that
    has landed on main in the meantime. Two dots here would fail a partner's PR
-   for core commits somebody else merged while they were working. */
+   for core commits somebody else merged while they were working.
+
+   --no-renames IS LOad-BEARING, not tidiness. With git's default rename
+   detection, --name-only prints only the DESTINATION of a rename and the
+   source path vanishes from the output entirely. So
+   `git mv firestore.rules tenants/osa/keep.rules` showed one in-scope file
+   and PASSED, having deleted the root rules file — and the same trick on
+   CODEOWNERS would strip the review requirement from every later PR. With
+   --no-renames a move is reported as the delete and the add it really is,
+   and the delete is judged on the path it came from. */
 function changedFiles(base, head) {
   var range = head ? (base + '...' + head) : (base + '...HEAD');
-  var out = cp.execSync('git diff --name-only ' + range, { encoding: 'utf8' });
+  var out = cp.execSync('git diff --no-renames --name-only ' + range, { encoding: 'utf8' });
   return out.split('\n')
     .map(function (s) { return s.trim(); })
     .filter(function (s) { return s.length > 0; });
@@ -93,6 +112,48 @@ function changedFiles(base, head) {
 
 function isClearSky(author) {
   return CLEARSKY.map(lower).indexOf(lower(author)) >= 0;
+}
+
+/* Every git identity that wrote or committed something in this range.
+   Both %ae and %ce, because a partner can push somebody else's commits. */
+function rangeIdentities(base, head) {
+  var range = head ? (base + '..' + head) : (base + '..HEAD');
+  var out = cp.execSync('git log --format=%ae%n%ce ' + range, { encoding: 'utf8' });
+  var seen = {}, list = [];
+  out.split('\n').forEach(function (e) {
+    e = lower(e.trim());
+    if (e && !seen[e]) { seen[e] = 1; list.push(e); }
+  });
+  return list;
+}
+
+/* Unrestricted requires BOTH that a ClearSky handle opened the pull request
+   AND that nothing in the range was written by an identity we do not
+   recognise.
+
+   The opener alone was not enough. PR_AUTHOR is
+   github.event.pull_request.user.login — the person who OPENED it, never the
+   person who pushed the commits after. Partners hold repo-wide write (that is
+   the whole reason this file exists), so pushing onto a ClearSky-authored
+   branch skipped the check without the diff ever being read.
+
+   Fails safe: an identity not on the list is treated as untrusted, which
+   scopes the PR rather than exempting it. A git identity is self-asserted, so
+   this raises the cost from "push to their branch" to "impersonate them in
+   git" — it does not make it impossible, and CODEOWNERS review is still the
+   backstop for that. */
+function unrestricted(author, base, head) {
+  if (!isClearSky(author)) return false;
+  var unknown = rangeIdentities(base, head).filter(function (e) {
+    return CLEARSKY_GIT_EMAILS.map(lower).indexOf(e) < 0;
+  });
+  if (!unknown.length) return true;
+  console.log('PR opened by a ClearSky handle, but the range carries identities');
+  console.log('this file does not recognise, so the scope check applies:');
+  unknown.forEach(function (e) { console.log('  ' + e); });
+  console.log('If these are ClearSky, add them to CLEARSKY_GIT_EMAILS.');
+  console.log('');
+  return false;
 }
 
 /* An outside contributor is not a partner, so they get no named prefix — but
@@ -130,8 +191,8 @@ function main() {
     process.exit(2);
   }
 
-  if (isClearSky(author)) {
-    console.log('ClearSky author (' + author + ') — unrestricted. Nothing to check.');
+  if (unrestricted(author, base, head)) {
+    console.log('ClearSky author (' + author + '), ClearSky commits — unrestricted.');
     process.exit(0);
   }
 
