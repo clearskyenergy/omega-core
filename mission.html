@@ -1957,6 +1957,9 @@ function makeCore(id, opts) {
   /* Where the cape HAS got to, as against where the body is. The gap between
      the two is the whole of the effect: cloth arrives late. */
   let capeLag = 0;
+  /* Where the shoulders have got to. Same idea as the cape: the body is
+     always catching up with the head. */
+  let headLag = 0;
   /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
      the envelope rather than on a timer, so the count and the spacing are the
      speech's, not a decoration's. */
@@ -2233,6 +2236,19 @@ function makeCore(id, opts) {
            separates. This is skinning, with two bones and no skeleton. */
         var hw = new Float32Array(lums.length);
         var cw = new Float32Array(lums.length);
+        /* A THIRD BONE: the upper body. Not the arms — those cannot be cut
+           out of this drawing, and it was measured twice rather than assumed.
+           The depth map is a smooth unimodal relief across the arm band
+           (p50 0.71, no valley), so there is no "arm in front of chest" layer
+           to separate; and luminance decays monotonically from 42% of the
+           band below 0.05, so the bright tenth is scattered highlights on
+           armour edges rather than a connected limb. Neither cuts.
+
+           What a band CAN do is what the head already does. The shoulders and
+           chest turning a beat behind the head is most of what reads as a
+           person moving — the head leads, the body follows, and the lag is
+           the tell. */
+        var sw = new Float32Array(lums.length);
         var span = (bot - top) || 1;
         for (k = 0; k < lums.length; k++) {
           var d = (pos[k * 3 + 1] - top) / span;        /* 0 at the crown, 1 at the hem */
@@ -2242,6 +2258,13 @@ function makeCore(id, opts) {
              bottom trails furthest and the top barely moves */
           var c2 = d <= 0.55 ? 0 : (d >= 0.96 ? 1 : (d - 0.55) / 0.41);
           cw[k] = c2 * c2;
+          /* shoulders: in from the neck, out again before the cape takes
+             over, so the two never both own a sample at full strength */
+          sw[k] = d <= 0.18 ? 0
+                : d < 0.34  ? (d - 0.18) / 0.16
+                : d <= 0.52 ? 1
+                : d < 0.74  ? (0.74 - d) / 0.22
+                : 0;
         }
 
         /* THE NECK, which is what the head turns on. A fifth of the way down
@@ -2256,6 +2279,8 @@ function makeCore(id, opts) {
           nz += pos[k * 3 + 2] * hw[k]; nzw += hw[k];
         }
         var neck = { x: 0, y: neckY, z: nzw ? nz / nzw : 0 };
+        /* The waist, which the upper body turns on. */
+        var waist = { x: 0, y: top + span * 0.52 };
 
         var mask = mw > 0
           ? { x: mx / mw, y: my / mw, z: mz / mw }
@@ -2264,7 +2289,8 @@ function makeCore(id, opts) {
           : { x: 0, y: top + (bot - top) * 0.12, z: 0.15 };
 
         cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
-                  n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, neck: neck };
+                  n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, sw: sw,
+                  neck: neck, waist: waist };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -2313,9 +2339,10 @@ function makeCore(id, opts) {
        about 0.25 rad, where 1 - a*a/2 and a are within one per cent of the
        real thing — invisible here, and it keeps a trig pair out of a loop
        that runs eleven thousand times a frame. */
-    const HW = cloud.hw, CW = cloud.cw, NK = cloud.neck;
+    const HW = cloud.hw, CW = cloud.cw, SW = cloud.sw, NK = cloud.neck, WS = cloud.waist;
     const hy = o.headYaw || 0, hn = o.headNod || 0, cx2 = o.capeX || 0, hr = o.headRoll || 0;
-    const bones = !!(HW && NK && (hy || hn || cx2 || hr));
+    const sr = o.bodyRoll || 0, bz = o.breath || 0;
+    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz));
     /* The roll has to be circular ON SCREEN, and x and y are not drawn at the
        same scale — sy is `ar` times sx. Rotating in the stored units would
        shear the head into an ellipse. So y is carried into x-proportional
@@ -2354,6 +2381,24 @@ function makeCore(id, opts) {
             py = NK.y + (ex * b + ey * cb) / AR;
           }
         }
+        /* THE UPPER BODY FOLLOWS, LATE. Same rotation, about the waist, driven
+           by a lagged and inverted copy of the head — which is what a torso
+           does: the head leads, the shoulders come round after it, and the
+           lag between them is the tell that there is a person in there. */
+        if (SW && SW[k] > 0 && (sr || bz)) {
+          const swk = SW[k];
+          if (sr) {
+            const b2 = sr * swk, cb2 = 1 - b2 * b2 * 0.5;
+            const fx = px - WS.x, fy = (py - WS.y) * AR;
+            px = WS.x + fx * cb2 - fy * b2;
+            py = WS.y + (fx * b2 + fy * cb2) / AR;
+          }
+          /* AND HE BREATHES. The chest rises against the waist — a fraction
+             of a per cent, which is all a breath is, and the only motion on
+             this canvas that never stops. */
+          if (bz) py = WS.y + (py - WS.y) * (1 + bz * swk);
+        }
+
         /* AND THE HEM TRAILS. Cloth follows the body a beat late; a cape that
            moves with the hips is a painted cape. */
         if (CW[k] > 0) px += cx2 * CW[k];
@@ -2508,7 +2553,18 @@ function makeCore(id, opts) {
       const capeX = (capeLag - sway) / (R * 1.02) * 1.6;
       /* Every pass gets the same bones, or the reflection and the bloom
          disagree with the body about where his head is. */
-      const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll, capeX: capeX };
+      /* THE BODY IS ALWAYS CATCHING UP. 0.045 a frame puts the shoulders
+         about a third of a second behind the head; inverted and at 40%,
+         because a torso counter-rotates as the head turns rather than
+         copying it. Take the lag out and he moves as one carved piece. */
+      headLag += (headRoll - headLag) * 0.045;
+      const bodyRoll = -headLag * 0.40;
+      /* Four seconds a cycle, six tenths of a per cent. A breath is not
+         supposed to be noticed — it is supposed to be missed when it stops. */
+      const breath = Math.sin(t * 0.026) * 0.006;
+
+      const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll,
+                      bodyRoll: bodyRoll, breath: breath, capeX: capeX };
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
