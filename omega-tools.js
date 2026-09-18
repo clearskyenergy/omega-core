@@ -440,9 +440,23 @@
        vercel.json. Rewrites are per-tenant and TOOL_HOST is one shared deploy,
        so pointing at the rewrite would 404 for every tenant that has not added
        it. */
+    /* tier ALL, not DELUXE. The Firestore document has carried tier 0 \u2014 open
+       to every tenant \u2014 with a description that has never existed in this
+       file, so it was opened by hand in the console and the seed was never
+       brought into line. The two disagreed silently: nothing reads the seed
+       until somebody presses "Import / Update Applications", and that press
+       would have revoked Site Finder from every Standard tenant without a
+       word. Found by scripts/publish-tools.js, which is the whole reason that
+       script exists.
+
+       Matching the seed to the live value is the fix. Changing the live value
+       to match the seed is also a fix, and it is the wrong one \u2014 the site
+       finder is top-of-funnel, and a prospecting tool behind an upgrade wall
+       does not produce the upgrade. Same argument gridatlas and datacenter
+       already carry. */
     { key:'sitefinder', name:'Site Finder', category:'interconnection',
       desc:'Browse northern-Illinois C&I property ranked by deliverable kW, not price \u2014 hold a circuit and it leaves every other rep\u2019s inventory.',
-      file:'/clearsky-sitefinder.html', badge:'new', tier:TIER.DELUXE, savesData:true,
+      file:'/clearsky-sitefinder.html', badge:'new', tier:TIER.ALL, savesData:true,
       icon:'M12 22s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11zM12 7l-2 4h3l-2 4' },
 
     /* ── OPERATIONS ── */
