@@ -1196,7 +1196,26 @@ module.exports = function handler(req, res) {
     return Promise.all([
       timed('peeringdb', function () { return facilities(41.8781, -87.6298).then(function (f) { return { status: f.status, within80: f.within80, nearestMajor: f.nearestMajor && f.nearestMajor.name }; }); }),
       timed('plant', function () { return arcQuery(FIBER_PLANT[0].u, bboxFor(42.2711, -89.0940, 5), 8000).then(function (f) { return { status: f.length ? 'ok' : 'empty', segments: f.length, layer: FIBER_PLANT[0].n }; }); }),
-      timed('agol', function () { return getJson(AGOL + '/search?f=json&num=1&q=' + encodeURIComponent(HARVEST_QUERIES[0]), null, 8000).then(function (j) { return { status: j && j.total ? 'ok' : 'empty', total: j && j.total }; }); })
+      timed('agol', function () { return getJson(AGOL + '/search?f=json&num=1&q=' + encodeURIComponent(HARVEST_QUERIES[0]), null, 8000).then(function (j) { return { status: j && j.total ? 'ok' : 'empty', total: j && j.total }; }); }),
+      timed('publicFiber', function () {
+        try {
+          var base = fiberEvidence.load();
+          /* Chicago: both inventories have records there, so a zero from
+             either one is a bundling failure rather than a quiet map. */
+          var box = fiberEvidence.boxAround(41.8781, -87.6298, 25);
+          var inv = fiberEvidence.usaCandidates(box);
+          return {
+            status: base.features.length && inv.length ? 'ok' : 'empty',
+            osmAndCa: base.features.length,
+            publishedInventoryNearChicago: inv.length,
+            builtAt: base.manifest && base.manifest.built_at
+          };
+        } catch (e) {
+          return { status: 'failed', error: String((e && e.message) || e).slice(0, 160),
+                   note: 'The bundled route data is not readable from the deployed function. ' +
+                         'Check includeFiles in vercel.json.' };
+        }
+      })
     ]).then(function (p) {
       return res.status(200).json({
         ok: true, build: BUILD, model: MODEL,
@@ -1208,13 +1227,22 @@ module.exports = function handler(req, res) {
           longhaul: CORRIDORS.length + ' routed long-haul corridors, ' +
                     CORRIDORS.filter(function (c) { return c.src === 'intertubes'; }).length + ' of them cited, local',
           datacenters: DCS.ROWS.length + ' operating/under-construction US facilities, local \u2014 ' + DCS.ATTRIB,
-          carriers: (CARRIERS.carriers || []).length + ' carrier network maps indexed'
+          carriers: (CARRIERS.carriers || []).length + ' carrier network maps indexed',
+          publicFiber: 'bundled route inventory, local \u2014 see probe.publicFiber for whether this ' +
+                       'deployment can actually read it'
         },
         constants: { ROUTE_FACTOR: ROUTE_FACTOR, US_PER_KM: US_PER_KM, CARRIER_NETS: CARRIER_NETS, MAJOR_NETS: MAJOR_NETS,
                      LATERAL_COST_PER_MI: LATERAL_COST_PER_MI, weights: W,
                      CORRIDOR_RADIUS_MI: CORRIDOR_RADIUS_MI, DIVERSITY_BEARING_DEG: DIVERSITY_BEARING_DEG,
                      DC_RADIUS_MI: DC_RADIUS_MI, dcWeights: DC_W, STRAND_BAND: STRAND_BAND },
-        probe: { peeringdb: p[0], plant: p[1], agol: p[2] }
+        /* PROVES THE DATA SHIPPED. fiber-evidence.js builds its paths at
+           runtime, which @vercel/nft cannot trace, so the datasets only reach
+           the deployed function because vercel.json declares includeFiles.
+           Get that wrong and every fiber answer is an ENOENT that no local
+           test can catch — the files are right there on a developer's disk.
+           This actually reads both inventories and reports what it found, so
+           a deployment can be checked from outside without a token. */
+        probe: { peeringdb: p[0], plant: p[1], agol: p[2], publicFiber: p[3] }
       });
     });
   }
