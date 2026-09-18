@@ -22,7 +22,44 @@
     "engineering",
     "schematics",
     "exports",
-    "permitting"
+    "permitting",
+    "whitelabel"
   ],
-  "subscriptionDue": "09/30/2026"
+  "subscriptionDue": "09/30/2026",
+  "whiteLabel": {
+    "enabled": true,
+    "platformName": "Clean Cell Power Platform",
+    "shortName": "Clean Cell",
+    "attribution": "powered-by",
+    "attributionText": "Powered by ClearSky OMEGA",
+    "markUrl": "",
+    "supportEmail": "robert.bucher@cleancell.us",
+    "accent": "#2B5FA8",
+    "embed": {
+      "origins": [
+        "https://cleancell.us",
+        ".cleancell.us"
+      ],
+      "headline": "Size your Clean Cell storage system",
+      "intro": "Enter what your utility bill says and we will size a system for your site. No account needed.",
+      "cta": "Request this system",
+      "attribution": "none",
+      "supportEmail": "robert.bucher@cleancell.us",
+      "mailFrom": ""
+    }
+  },
+  "storefront": {
+    "headline": "Size your Clean Cell storage system",
+    "intro": "Enter what your utility bill says and we will size a system for your site. No account needed.",
+    "disclaimer": "Indicative only. Peak duration is estimated from monthly billing data; interval data from your utility settles the final size. Not a quotation.",
+    "thanks": "Thank you - your request is with the Clean Cell team. We will be in touch shortly.",
+    "requireAddress": true,
+    "collectBill": true,
+    "showEconomics": false,
+    "emailCustomer": false,
+    "dailyOrderCap": 60,
+    "fulfilledBy": "clearsky",
+    "products": []
+  },
+  "_noteWhiteLabel": "WHITE LABEL, added 2026-09-18. Clean Cell sells on cleancell.us; ClearSky fulfils. See docs/WHITE-LABEL.md for the whole design. FIVE THINGS ARE NOT DONE BY THIS FILE and each one is a decision somebody has to make, not a field to fill in. (1) PRODUCTS IS EMPTY ON PURPOSE. Nothing is orderable until real SKUs are published into omega_orgs/cleancell.us/storefront/config.products, and inventing them here would put fictional equipment in front of a paying customer's customers. Note clearsky-cost-estimator.html carries a battery BRAND { key:'cleancells', name:'Clean Cells' } - that is a dropdown entry, not a SKU, and it has no price. With products empty the storefront still works: it sizes, it takes the enquiry, and it says we will come back with options, which is true. (2) THE COST BASIS (storefront.capexPerKwh / capexPerKw) IS DELIBERATELY ABSENT. It is Clean Cell's negotiated buy price and this file is committed source - seed-omega-orgs.js THROWS if either key appears here. Set them directly in Firestore. Until then the sizer sweeps on the engine defaults in api/_lib/bess-engine.js, which are generic and will mis-rank the recommendation for their actual equipment. (3) showEconomics IS FALSE. Turning it on publishes an annual saving off the customer's own tariff, and a payback only where a product carries a published list price - never off the cost basis (api/embed-size.js explains why at length). That is a marketing call. (4) NO EMBED KEY EXISTS YET: run scripts/seed-embed-key.js --org cleancell.us --origins https://cleancell.us,.cleancell.us --apply. (5) HOSTNAME. cleancell.clearskyomega.com still does not resolve - there is no wildcard DNS for *.clearskyomega.com - so the loader snippet on cleancell.us would load nothing. Either attach that hostname in Vercel or point the snippet at silmarillion.clearskyomega.com, which does resolve. ATTRIBUTION: 'powered-by' on the signed-in chrome (their staff know whose platform it is and the contract has not said otherwise), 'none' on the public storefront (their customer is on their website and there is only one company in that conversation). Both are contract terms - change them when the paper says to, not to tidy this file."
 }

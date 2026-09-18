@@ -31,8 +31,12 @@ touching anything.
 /                       core pages (index, editor, projects, marketplace,
                         account-settings) + ALL tool pages at the root, because
                         omega-tools.js registers them by root path
-/omega-*.js             shared runtime: sso, brand, TENANT (new), tools, terms,
-                        assets, delivery, legal, capacity-ledger…
+/omega-*.js             shared runtime: sso, brand, TENANT (new), WHITELABEL
+                        (new), tools, terms, assets, delivery, legal,
+                        capacity-ledger…
+/embed/                 the PUBLIC, unauthenticated storefront: one iframe-able
+                        page + the loader a tenant pastes on their own site.
+                        No Firebase SDK, no sign-in, no platform name.
 /api/                   Vercel serverless; api/_lib/admin.js is the shared auth
 /admin/                 master index (tools.csebuilders.com) — admin-console.js
 /console/               ops console (alpha.clearskyomega.com)
@@ -90,6 +94,13 @@ opportunities/{id}                    # editor-generated, anonymous parent
 opportunities/{id}/private/contact    # identity; vendor reads after reveal
 rfqs/{id}                             # customer's full BOM
 rfqs/{id}/recipients/{vendorOrgId}    # each vendor's slice + quote
+
+omega_orgs/{orgId}.whiteLabel         # what the PLATFORM is called here
+omega_orgs/{orgId}/storefront/config  # published products + copy + cost basis
+omega_orgs/{orgId}/storefront/counters# the durable daily order limit
+embed_keys/{omega_pk_…}               # a publishable key = ONE installation
+embed_configs/{id}                    # a designer's published quote, snapshot
+orders/{id}                           # tenant sells, ClearSky fulfils
 ```
 
 Already-existing role/identity collections — use, don't duplicate:
@@ -188,6 +199,36 @@ more from the palette; tenant admin can set an org-level default layout.
   `receivesFullBom` (whole BOM).
 - Identity is revealed only when the customer accepts a quote.
 - Notifications via `api/notify.js` on write.
+
+## White label
+
+`omega-whitelabel.js` owns ONE question: what is the platform called here, and
+what carries its mark? It wraps `OmegaBrand.platformName` and loads directly
+after `omega-tenant.js`. A `whiteLabel` block on `omega_orgs/{orgId}` drives
+it; `api/_lib/whitelabel.js` is the ONE allowlist of keys that may cross into
+world-readable `tenant_public` (the login page has to paint before there is a
+user). Do not add a second copy of that list — see what three copies of
+`orgAlias()` already cost.
+
+- `whiteLabel` is **staff-written**. It decides whether our name appears on a
+  product we operate, which is a contract line item, not a tenant preference.
+  `attribution` defaults to `'powered-by'` so removing our name is always a
+  decision somebody made.
+- `/embed/` is served to the PUBLIC with no token. Its gate is a publishable
+  key plus an origin allowlist — **accounting and hygiene, not a security
+  boundary.** What holds instead: nothing confidential is reachable, pricing
+  and sizing are server-side and return results never inputs, an order is a
+  request with `status` pinned to `new` that a human confirms, and there are
+  rate limits. Read the header of `api/_lib/embed.js` before changing any of
+  it.
+- A tenant's cost basis (`storefront.capexPerKwh`/`capexPerKw`) must NEVER be
+  in the repo. `scripts/seed-omega-orgs.js` throws if a `tenant.json` carries
+  either.
+- `orders` is read from Firestore and written ONLY through `api/orders.js`:
+  "only ClearSky may price, but the tenant may always cancel their own" is a
+  commercial arrangement and does not belong in a rules file.
+
+Design, runbook and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
 
 ## Silmarillion 2.0 — joint development
 

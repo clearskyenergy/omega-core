@@ -6,7 +6,30 @@
   "//4": "fails with FAILED_PRECONDITION until this override exists. Keeping it here",
   "//5": "means it deploys with the rules rather than being clicked into the console",
   "//6": "once and lost the next time the project is rebuilt.",
-  "indexes": [],
+  "//6a": "orders: the Order Desk lists a tenant's own rows newest-first, and",
+  "//6b": "api/embed-order.js dedupes a double-click on (orgId, customer.email,",
+  "//6c": "createdAt). Both composite, so neither is auto-created. The dedupe",
+  "//6d": "falls back to CREATING the order if its query fails, so a missing",
+  "//6e": "index costs a duplicate row rather than a lost order - but one every time.",
+  "indexes": [
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId",     "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId",          "order": "ASCENDING"  },
+        { "fieldPath": "customer.email", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+      ]
+    }
+  ],
   "//7": "offers.partnerUid: the dashboard's collectionGroup('offers').where('partnerUid','==',me).",
   "//8": "fin_views.sponsorOrgKey: the finance portal's collectionGroup('fin_views').where('sponsorOrgKey','==',org).",
   "//9": "billing.stripeCustomerId: api/stripe-webhook.js finds the tenant behind a Stripe customer.",

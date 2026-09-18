@@ -53,10 +53,33 @@ live. Second person from the same domain auto-joins as member.
 `config.js` at the root is the ONE platform config (no tenant block).
 
 - `omega-tenant.js` — hostname → `tenant_public/{host}` → `CLEARSKY_CONFIG.tenant`; post-auth entitlements from `omega_orgs/{org}` + `billing/current` + `members/{uid}`; hostname lock; suspension gate; wraps `OmegaBrand.resolve`.
+- `omega-whitelabel.js` — what the PLATFORM is called for a white-labelled
+  tenant. Wraps `OmegaBrand.platformName` the way `omega-tenant.js` wraps
+  `resolve`. Loads directly after it on all nine pages that sign users in.
 - `api/_lib/admin.js`, `api/set-role.js`, `api/opportunity.js`, `api/rfq.js`, `api/stripe-create.js`, `api/stripe-portal.js`, `api/stripe-webhook.js`, `api/tenant-branding.js`.
 - `scripts/audit-counts.js`, `scripts/seed-omega-orgs.js`, `tenants/*/tenant.json`.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
+
+**White-label storefronts (2026-09-18, for Clean Cell USA).** Three surfaces:
+the signed-in workspace renamed (`omega-whitelabel.js` + a `whiteLabel` block
+on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
+`tenant_public`); a PUBLIC, unauthenticated, iframe-able storefront
+(`embed/storefront.html` + `embed/loader.js`, authorised by a publishable
+`embed_keys` key through `api/_lib/embed.js`); and an order spine (`orders`,
+`embed_configs`, `api/embed-order.js`, `api/order-link.js`, `api/orders.js`,
+`orders.html`). Full design, runbook and the list of what is NOT built:
+`docs/WHITE-LABEL.md`.
+
+### Logic moved server-side (CLAUDE.md § IP protection)
+
+| what | from | to | why |
+|---|---|---|---|
+| public BESS sizing | would have been in `embed/storefront.html` | `api/embed-size.js` → `_lib/bess-engine.js` | The caller is a stranger on the open internet. Returns kW/kWh/duration; **never** `capexPerKwh`/`capexPerKw` or `paybackYr` derived from them — the sweep needs the cost basis to choose a recommendation, and one division inverts it back to the tenant's buy price. The sensitivity band is REBUILT with the capex column dropped rather than forwarded. |
+| item price on an order | would have been the posted body | `api/embed-order.js`, re-read from `storefront.config.products` by SKU | A browser that could set `listPrice` could order 4 MWh for a dollar and hold a document saying we agreed. Quantity is the only number the customer chooses. |
+| order pricing and lifecycle | — | `api/orders.js` | "Only ClearSky may price, but the tenant may always cancel" is a commercial arrangement. It cannot be expressed in `firestore.rules`, and it should not be, because the people who negotiate it will never read that file. |
+| storefront catalogue publication | `equipment where vendorOrgId ==` (the obvious query) | explicit `storefront/config.products` | Those rows are the tenant's INTERNAL catalogue and carry cost on some of them. A "safe fields" filter is a list somebody has to remember to update, and the failure is silent and public. |
+| tenant attribution on editor exports | hardcoded `poweredByLine()` | reads the white-label block | The proposal a designer hands their customer is the highest-value leak in the estate. |
 
 ## TODO — Claude Code sessions, in order
 
@@ -95,6 +118,21 @@ live. Second person from the same domain auto-joins as member.
    ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
+11. **White-label `editor.html`.** Its export attribution is done
+    (`poweredByLine()` reads the block, defensively, and is a no-op until the
+    runtime is present). Still ClearSky-branded: ~29 literal strings, the
+    `<title>`, the `apple-mobile-web-app-title`/`application-name` meta, the
+    inline web-app manifest, and its OWN brand resolver (`CS_TENANTS` /
+    `CS_BRAND` / `brandName()`, ≈ line 69840) which predates
+    `omega-brand.js` and does not consult it.
+    ⚠ NOT a ride-along on another change. The page loads neither
+    `omega-brand.js` nor `omega-tenant.js`; adding them brings the HOSTNAME
+    LOCK to a page that currently boots on hosts nobody has registered, so it
+    needs its own test pass. Convert the strings with
+    `<span data-omega-platform>` as you go — see `docs/WHITE-LABEL.md`.
+12. **Editor → order link button.** `api/order-link.js` works and is callable;
+    nothing in `editor.html` calls it. One button in the BOM panel: POST the
+    placed SKUs and the system size, show the returned customer URL.
 
 ## Decisions made (2026-09-06)
 

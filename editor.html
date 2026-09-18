@@ -6503,9 +6503,37 @@ function brandName(){
   return 'Your Company';
 }
 function brandLogo(){ return _BRAND.logoDataUrl || ''; }
-// Platform attribution shown on exports. Constant across tenants (like
-// "Powered by Salesforce"); never the NextNRG-specific string.
-function poweredByLine(){ return 'Powered by ClearSky-OMEGA'; }
+/* Platform attribution shown on exports. Was a constant across tenants (like
+   "Powered by Salesforce"); never the NextNRG-specific string.
+
+   ── STILL A CONSTANT, EXCEPT FOR A WHITE-LABELLED TENANT ────────────────
+   A white label is bought precisely so the proposal a designer hands their
+   customer does not carry our name. This is the line on twelve exports — the
+   proposal, the energy balance, the DER summary, the site estimate — so it is
+   the single highest-value place in this file to honour it.
+
+   THREE SOURCES, MOST AUTHORITATIVE FIRST, ALL OPTIONAL. Today the editor
+   loads neither omega-brand.js nor omega-tenant.js (it has its own brand
+   resolution, above), so in production this still returns the constant and
+   nothing changes. It starts working the moment the runtime is wired in —
+   which is the tracked next step in MERGE.md, deliberately NOT bundled here:
+   omega-tenant.js enforces a hostname lock and adding it to a 162k-line page
+   needs its own test pass, not a ride-along on someone else's change.
+
+   'none' returns '' and the callers already tolerate an empty attribution —
+   the line is user-editable as 'ol-developer2', so a blank one is a state
+   this file has always been able to reach. */
+function poweredByLine(){
+  try {
+    if (window.OmegaWhiteLabel && OmegaWhiteLabel.active()) return OmegaWhiteLabel.attribution();
+    var wl = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.whiteLabel)
+          || ((window.CLEARSKY_CONFIG || {}).tenant || {}).whiteLabel;
+    if (wl && wl.enabled !== false && wl.platformName) {
+      return (wl.attribution === 'none') ? '' : (wl.attributionText || 'Powered by ClearSky OMEGA');
+    }
+  } catch (e) {}
+  return 'Powered by ClearSky-OMEGA';
+}
 // EMS/product label for exports -- follows the resolved tenant brand so a
 // tenant's proposal doesn't advertise another tenant's EMS.
 function emsBrandName(){ return brandName() + ' EMS'; }

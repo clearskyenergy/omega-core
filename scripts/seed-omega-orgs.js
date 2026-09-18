@@ -16,17 +16,64 @@ var root = path.join(__dirname, '..', 'tenants');
 var seeds = fs.readdirSync(root).filter(function (d) { return fs.existsSync(path.join(root, d, 'tenant.json')); })
   .map(function (d) { var t = JSON.parse(fs.readFileSync(path.join(root, d, 'tenant.json'))); t.slug = d; return t; });
 
-var TIER_PUBLIC = { trial: 'trial', standard: 'standard', pro: 'pro', enterprise: 'enterprise', internal: 'internal', partner: 'partner' };
+/* 'deluxe' was missing here too, so a deluxe tenant's tenant_public said
+   'standard' and their sign-in page painted the wrong tier before auth.
+   Same omission as the two maps in omega-tenant.js; same ladder as
+   omega-caps.js and api/tenant-billing.js. */
+var TIER_PUBLIC = { trial: 'trial', standard: 'standard', pro: 'pro', deluxe: 'deluxe', enterprise: 'enterprise', internal: 'internal', partner: 'partner' };
+
+/* The world-readable subset of a whiteLabel block. ONE allowlist, shared with
+   api/tenant-branding.js — see api/_lib/whitelabel.js for what may cross into
+   tenant_public and what may not. */
+var pickPublicWL = require('../api/_lib/whitelabel').pickPublic;
+
+/* ── STOREFRONT KEYS THAT MUST NOT COME OUT OF THE REPO ──────────────────
+   capexPerKwh / capexPerKw are the installed-cost basis the public sizer
+   sweeps against — the tenant's negotiated buy price. Every tenant.json under
+   tenants/ is committed source, and CLAUDE.md is explicit that a contract value does
+   not belong in the repo (the cleancell note already refuses to carry an
+   invoice amount for the same reason).
+
+   So the seed carries the storefront's PRESENTATION and its PUBLISHED product
+   list, and refuses the cost basis loudly rather than dropping it silently —
+   a key that vanished without a word would be set in tenant.json, committed,
+   and then quietly absent in production. Set those two by hand in Firestore,
+   or from the master console. */
+var STOREFRONT_FORBIDDEN = ['capexPerKwh', 'capexPerKw'];
+var STOREFRONT_KEYS = ['headline', 'intro', 'disclaimer', 'thanks', 'cta',
+  'requireAddress', 'collectBill', 'showEconomics', 'emailCustomer',
+  'dailyOrderCap', 'fulfilledBy', 'products'];
+
+function planStorefront(t) {
+  var sf = t.storefront;
+  if (!sf || typeof sf !== 'object') return null;
+  STOREFRONT_FORBIDDEN.forEach(function (k) {
+    if (sf[k] !== undefined) {
+      throw new Error('tenants/' + t.slug + '/tenant.json: storefront.' + k + ' is a COST BASIS and '
+        + 'must not live in the repo. Remove it and set it in Firestore '
+        + '(omega_orgs/' + t.orgId + '/storefront/config). See CLAUDE.md IP protection.');
+    }
+  });
+  var out = {};
+  STOREFRONT_KEYS.forEach(function (k) { if (sf[k] !== undefined) out[k] = sf[k]; });
+  return out;
+}
+
 function plan(t) {
   var org = { name: t.name, slug: t.slug, domains: t.domains || [], logoUrl: t.logoUrl || '', vertical: t.vertical || null, shell: t.shell || 'default',
     status: t.status || 'active', receivesFullBom: !!t.receivesFullBom, exportBrand: t.exportBrand || { name: t.name, logo: t.logoUrl || '' } };
+  /* whiteLabel goes on the ORG record whole — that is the authority, and
+     omega-tenant.js mergeEntitlements() reads it there once a user is signed
+     in. Only the allowlisted subset reaches tenant_public below. */
+  if (t.whiteLabel) org.whiteLabel = t.whiteLabel;
   var billing = { tier: t.tier || 'standard', addons: t.addons || [], toolOverrides: t.toolOverrides || {}, paymentProvider: t.paymentProvider || 'manual', trialEndsAt: t.trialEndsAt || null, subscriptionDue: t.subscriptionDue || null };
   var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier] || 'standard',
-    vertical: org.vertical, shell: org.shell, domains: org.domains, requiredTools: t.requiredTools || null, allowedEmails: t.allowedEmails || [] };
-  return { orgId: t.orgId, org: org, billing: billing, pub: pub, owner: t.ownerEmail || null };
+    vertical: org.vertical, shell: org.shell, domains: org.domains, requiredTools: t.requiredTools || null, allowedEmails: t.allowedEmails || [],
+    whiteLabel: pickPublicWL(t.whiteLabel) };
+  return { orgId: t.orgId, org: org, billing: billing, pub: pub, storefront: planStorefront(t), owner: t.ownerEmail || null };
 }
 var plans = seeds.map(plan);
-plans.forEach(function (p) { console.log('\n== ' + p.orgId + ' (' + p.org.slug + ')'); console.log('  omega_orgs:', JSON.stringify(p.org)); console.log('  billing/current:', JSON.stringify(p.billing)); console.log('  tenant_public:', p.pub.domains.join(', ') || '(no hostnames!)'); if (p.owner) console.log('  owner:', p.owner); });
+plans.forEach(function (p) { console.log('\n== ' + p.orgId + ' (' + p.org.slug + ')'); console.log('  omega_orgs:', JSON.stringify(p.org)); console.log('  billing/current:', JSON.stringify(p.billing)); console.log('  tenant_public:', p.pub.domains.join(', ') || '(no hostnames!)'); if (p.org.whiteLabel) console.log('  whiteLabel:', JSON.stringify(p.org.whiteLabel)); if (p.storefront) console.log('  storefront/config:', JSON.stringify(p.storefront)); if (p.owner) console.log('  owner:', p.owner); });
 /* A tenant whose orgId is still undecided (OSA, pending the JV agreement)
    cannot be a Firestore document id: .doc('') throws, and because the write
    loop is neither transactional nor guarded, that throw would abort the run
@@ -50,6 +97,9 @@ function mergeKeep(ref, data) { return ref.get().then(function (s) { var cur = s
     var p = plans[i], ref = db.collection('omega_orgs').doc(p.orgId);
     await mergeKeep(ref, p.org);
     await mergeKeep(ref.collection('billing').doc('current'), p.billing);
+    /* mergeKeep, so a products list edited in Firestore is not clobbered by a
+       re-run of the seed. --force is the way to push the repo's version. */
+    if (p.storefront) await mergeKeep(ref.collection('storefront').doc('config'), p.storefront);
     for (var h = 0; h < p.pub.domains.length; h++) await mergeKeep(db.collection('tenant_public').doc(String(p.pub.domains[h]).toLowerCase()), p.pub);
     if (p.owner) {
       try {

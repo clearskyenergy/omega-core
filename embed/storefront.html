@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     ClearSky-OMEGA · White-label storefront  (embed/storefront.html)
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     THE ONE PAGE IN THIS REPO WITH NO SIGN-IN AND NO FIREBASE SDK.
+
+     It is served from our origin and framed by the tenant's website, so their
+     customer sizes and orders without leaving cleancell.us and without ever
+     learning that OMEGA is underneath. Two consequences shape everything here:
+
+       1. NOTHING CONFIDENTIAL IS IN THIS FILE. No cost model, no margin, no
+          tariff library, no equipment catalogue — every number comes from
+          /api/embed-* and every one of those returns results, never inputs.
+          If you find yourself adding a constant with a dollar sign to this
+          page, it belongs in /api/. CLAUDE.md § IP protection.
+
+       2. NO PLATFORM NAME ANYWHERE. Not in the markup, not in the <title>,
+          not in a comment the customer could read in devtools. The only brand
+          on screen is the tenant's, painted from /api/embed-config. This is
+          the white label; a stray "OMEGA" in a class name is the leak.
+          (This banner is a server-side comment on a file the customer can
+          view-source — it stays because the honest version of "we host this"
+          is better than a file that pretends to be theirs. Change it if the
+          contract says otherwise.)
+
+     ES5, single file, no build step. Framed OR standalone: it works opened
+     directly, which is how you test it.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Energy storage</title>
+<style>
+  :root{
+    --accent:#2B5FA8; --ink:#14171A; --sub:#5B6672;
+    --bg:#FFFFFF; --panel:#F7F7F5; --line:rgba(20,23,26,.14);
+    --ok:#2E7D5B; --bad:#D9482B; --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 18px 30px}
+  .head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .head img{max-height:44px;max-width:190px;display:block}
+  .head h1{font-size:21px;line-height:1.25;margin:0;font-weight:700}
+  .intro{color:var(--sub);margin:0 0 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+  .card h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--sub);margin:0 0 14px;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  .hint{font-size:12px;color:var(--sub);font-weight:400;margin-top:4px}
+  input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;
+    background:#fff;color:var(--ink);font:inherit;font-size:15px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  textarea{min-height:76px;resize:vertical}
+  button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:12px 20px;cursor:pointer}
+  .btn{background:var(--accent);color:#fff}
+  .btn:disabled{opacity:.55;cursor:default}
+  .btn-ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:9px 15px;font-weight:600}
+  table.months{width:100%;border-collapse:collapse;font-size:14px}
+  table.months th{text-align:left;font-size:12px;color:var(--sub);font-weight:700;padding:0 8px 6px 0}
+  table.months td{padding:0 8px 8px 0}
+  table.months td:first-child{width:52px;color:var(--sub);font-size:13px;padding-top:11px}
+  .result{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px;margin-bottom:14px}
+  .stat .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+  .stat .v{font-size:26px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+  .stat .u{font-size:13px;color:var(--sub);font-weight:600}
+  .opt{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);background:#fff;
+    border-radius:8px;padding:13px;margin-bottom:9px;cursor:pointer}
+  .opt.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .opt input{width:auto;margin-top:3px;flex:0 0 auto}
+  .opt .n{font-weight:700}
+  .opt .d{font-size:13px;color:var(--sub)}
+  .opt .p{margin-left:auto;text-align:right;font-weight:700;white-space:nowrap}
+  .band{font-size:13px;color:var(--sub);border-top:1px solid var(--line);padding-top:11px;margin-top:4px}
+  .band b{color:var(--ink)}
+  .note{font-size:12px;color:var(--sub);margin-top:14px}
+  .msg{padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px;display:none}
+  .msg.err{background:#FDECEC;color:#8A1F1F;display:block}
+  .msg.ok{background:#EAF6F0;color:#1C5B41;display:block}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .consent{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;font-weight:500;margin:6px 0 14px}
+  .consent input{width:auto;flex:0 0 auto;margin-top:3px}
+  .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+  .foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--sub);display:flex;gap:12px;flex-wrap:wrap}
+  .spin{display:none;font-size:13px;color:var(--sub)}
+  .busy .spin{display:inline}
+  #boot{padding:40px 18px;text-align:center;color:var(--sub);font-size:14px}
+  .hide{display:none!important}
+  @media (max-width:520px){ .row2{grid-template-columns:1fr} .stat .v{font-size:22px} }
+</style>
+</head>
+<body>
+
+<div id="boot">Loading…</div>
+
+<div class="wrap hide" id="app">
+  <div class="head">
+    <img id="logo" alt="" class="hide">
+    <h1 id="headline"></h1>
+  </div>
+  <p class="intro" id="intro"></p>
+
+  <div class="msg" id="msg"></div>
+
+  <!-- ── A published configuration: the designer already decided ───────── -->
+  <div class="card hide" id="cfgCard">
+    <h2 id="cfgLabel">Your proposed system</h2>
+    <div class="result" id="cfgStats"></div>
+    <div id="cfgItems"></div>
+    <p class="note" id="cfgNote"></p>
+  </div>
+
+  <!-- ── Or: size it from their own bill ──────────────────────────────── -->
+  <div class="card" id="sizeCard">
+    <h2>Your electricity bill</h2>
+    <div class="grid" style="margin-bottom:14px">
+      <div>
+        <label for="dc">Demand charge
+          <span class="hint">$/kW per month, from your bill</span>
+        </label>
+        <input id="dc" type="number" step="0.01" min="0" placeholder="18.00" inputmode="decimal">
+      </div>
+      <div>
+        <label for="er">Energy rate
+          <span class="hint">$/kWh</span>
+        </label>
+        <input id="er" type="number" step="0.001" min="0" placeholder="0.11" inputmode="decimal">
+      </div>
+      <div>
+        <label for="bh">Backup needed
+          <span class="hint">hours, optional</span>
+        </label>
+        <input id="bh" type="number" step="0.5" min="0" max="12" placeholder="2" inputmode="decimal">
+      </div>
+    </div>
+
+    <table class="months">
+      <thead><tr><th></th><th>Peak demand (kW)</th><th>Usage (kWh)</th></tr></thead>
+      <tbody id="monthRows"></tbody>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn-ghost" type="button" id="addMonth">Add a month</button>
+      <span class="hint" style="margin:0">More months, better answer. One is enough to start.</span>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="sizeBtn">Size my system</button>
+      <span class="spin">Working…</span>
+    </div>
+  </div>
+
+  <!-- ── The sized answer ─────────────────────────────────────────────── -->
+  <div class="card hide" id="resCard">
+    <h2>Recommended system</h2>
+    <div class="result" id="resStats"></div>
+    <div class="band" id="resBand"></div>
+    <div id="resEcon" class="band hide"></div>
+    <div id="optWrap" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ── Contact and submit ───────────────────────────────────────────── -->
+  <div class="card hide" id="orderCard">
+    <h2>Where should we send it?</h2>
+    <div class="row2" style="margin-bottom:12px">
+      <div><label for="cName">Your name</label><input id="cName" autocomplete="name"></div>
+      <div><label for="cCo">Company</label><input id="cCo" autocomplete="organization"></div>
+    </div>
+    <div class="row2" style="margin-bottom:12px">
+      <div><label for="cEmail">Email</label><input id="cEmail" type="email" autocomplete="email"></div>
+      <div><label for="cPhone">Phone</label><input id="cPhone" type="tel" autocomplete="tel"></div>
+    </div>
+    <div id="addrWrap" style="margin-bottom:12px">
+      <label for="aLine">Installation address</label>
+      <input id="aLine" autocomplete="address-line1" style="margin-bottom:10px">
+      <div class="grid">
+        <input id="aCity" placeholder="City" autocomplete="address-level2">
+        <input id="aState" placeholder="State" autocomplete="address-level1">
+        <input id="aZip" placeholder="ZIP" autocomplete="postal-code">
+      </div>
+    </div>
+    <div style="margin-bottom:6px">
+      <label for="cNotes">Anything we should know?</label>
+      <textarea id="cNotes" placeholder="Timeline, site constraints, utility, existing equipment…"></textarea>
+    </div>
+
+    <!-- Off screen and unlabelled: a person never sees it, a bot fills it.
+         api/embed-order.js refuses any submission that has it set. -->
+    <input class="hp" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+    <label class="consent">
+      <input type="checkbox" id="consent">
+      <span id="consentText">Yes, contact me about this system.</span>
+    </label>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="orderBtn">Request this system</button>
+      <span class="spin">Sending…</span>
+    </div>
+    <p class="note" id="disclaimer"></p>
+  </div>
+
+  <!-- ── Done ─────────────────────────────────────────────────────────── -->
+  <div class="card hide" id="doneCard">
+    <h2>Request received</h2>
+    <p id="doneMsg" style="margin:0 0 8px;font-size:16px"></p>
+    <p class="note" id="doneRef"></p>
+  </div>
+
+  <div class="foot">
+    <span id="supportEmail"></span>
+    <span id="supportPhone"></span>
+    <span id="attribution" style="margin-left:auto"></span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Where are we, and who framed us? ──────────────────────────────────
+     The iframe is served from OUR origin, so every fetch below is
+     same-origin and the browser sends the server our own Origin — which says
+     nothing about whose site this widget is on. So the parent is READ here
+     and REPORTED in a header.
+
+     It is a claim, not a proof: anyone can curl the endpoint with any header
+     they like. api/_lib/embed.js says so at length and is built not to need
+     it. What it buys is accounting — which installation a lead came from —
+     and switching one site off without touching the others. */
+  function parentOrigin() {
+    try {
+      var a = window.location.ancestorOrigins;
+      if (a && a.length) return a[a.length - 1];
+    } catch (e) {}
+    try {
+      if (document.referrer) {
+        var m = /^(https?:\/\/[^/?#]+)/i.exec(document.referrer);
+        if (m) return m[1];
+      }
+    } catch (e) {}
+    /* Opened directly rather than framed — how this page is tested. */
+    return window.location.origin;
+  }
+
+  var PARENT = parentOrigin();
+
+  function qs(name) {
+    var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  }
+  var KEY = qs('k') || qs('key');
+  var CONFIG_ID = qs('c') || qs('config');
+
+  function $(id) { return document.getElementById(id); }
+  function show(el) { el.classList.remove('hide'); }
+  function hide(el) { el.classList.add('hide'); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function n0(v) { return Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function usd(v) {
+    return '$' + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+
+  /* ── Auto-resize inside the host page ─────────────────────────────────
+     The host's iframe has no idea how tall this content is. It posts its
+     height and embed/loader.js applies it. Posted to '*' because the parent
+     origin is exactly the thing we do not reliably know — and the payload is
+     a number, which discloses nothing to a listener who was going to see the
+     rendered page anyway. */
+  var lastH = 0;
+  function postHeight() {
+    try {
+      var h = Math.ceil(document.documentElement.scrollHeight);
+      if (h === lastH) return;
+      lastH = h;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ omegaEmbed: 'height', height: h }, '*');
+      }
+    } catch (e) {}
+  }
+  setInterval(postHeight, 400);
+  window.addEventListener('resize', postHeight);
+
+  /* ── Transport ───────────────────────────────────────────────────────── */
+  function api(path, method, body) {
+    /* ?c= HAS TO BE ON THE GET. embed-config resolves the published
+       configuration server-side and reads it from the query; dropping it here
+       made every designer's order link render an empty proposal. */
+    var url = path;
+    if (method === 'GET') {
+      url += '?k=' + encodeURIComponent(KEY)
+           + (CONFIG_ID ? '&c=' + encodeURIComponent(CONFIG_ID) : '');
+    }
+    var opts = {
+      method: method,
+      headers: { 'X-Omega-Embed-Key': KEY, 'X-Omega-Parent': PARENT }
+    };
+    if (method !== 'GET') {
+      opts.headers['Content-Type'] = 'application/json';
+      body = body || {};
+      body.key = KEY;
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(url, opts).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j && j.error) || ('Request failed (' + r.status + ')'));
+        return j;
+      }, function () {
+        throw new Error('Request failed (' + r.status + ')');
+      });
+    });
+  }
+
+  function say(text, kind) {
+    var m = $('msg');
+    m.className = 'msg ' + (kind || 'err');
+    m.textContent = text;
+    if (!text) m.className = 'msg';
+    postHeight();
+  }
+  function busy(on) {
+    document.body.className = on ? 'busy' : '';
+    var bs = document.querySelectorAll('button.btn');
+    for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on;
+  }
+
+  /* ── State ───────────────────────────────────────────────────────────── */
+  var CFG = null;       /* /api/embed-config answer */
+  var CONFIG = null;    /* a published configuration, when ?c= was given */
+  var SIZED = null;     /* /api/embed-size answer   */
+  var PICKED = null;    /* the chosen product sku   */
+
+  /* ── Paint the brand ─────────────────────────────────────────────────── */
+  function paintBrand() {
+    var b = CFG.brand, c = CFG.copy;
+    if (b.accent) document.documentElement.style.setProperty('--accent', b.accent);
+    if (b.ink) document.documentElement.style.setProperty('--ink', b.ink);
+    if (b.logoUrl) { var l = $('logo'); l.src = b.logoUrl; l.alt = b.name; show(l); }
+    $('headline').textContent = c.headline;
+    document.title = b.name ? (b.name + ' — energy storage') : 'Energy storage';
+    if (c.intro) $('intro').textContent = c.intro; else hide($('intro'));
+    $('disclaimer').textContent = c.disclaimer || '';
+    $('orderBtn').textContent = c.cta || 'Request this system';
+    $('consentText').textContent = 'Yes, ' + (b.name || 'we') + ' may contact me about this system.';
+    if (b.supportEmail) {
+      $('supportEmail').innerHTML = '<a href="mailto:' + esc(b.supportEmail) + '" style="color:inherit">' + esc(b.supportEmail) + '</a>';
+    }
+    if (b.supportPhone) $('supportPhone').textContent = b.supportPhone;
+    /* Empty unless the contract says otherwise — see api/embed-config.js. */
+    $('attribution').textContent = b.attribution || '';
+    if (!CFG.flow.requireAddress) { /* still shown; just not required */ }
+  }
+
+  /* ── Month rows ──────────────────────────────────────────────────────── */
+  var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var monthCount = 0;
+  function addMonthRow() {
+    if (monthCount >= 12) return;
+    var i = monthCount++;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + MONTH_NAMES[i] + '</td>'
+      + '<td><input type="number" min="0" step="1" inputmode="decimal" data-kw="' + i + '" placeholder="kW"></td>'
+      + '<td><input type="number" min="0" step="1" inputmode="decimal" data-kwh="' + i + '" placeholder="kWh"></td>';
+    $('monthRows').appendChild(tr);
+    if (monthCount >= 12) hide($('addMonth'));
+    postHeight();
+  }
+
+  function readMonths() {
+    var out = [];
+    for (var i = 0; i < monthCount; i++) {
+      var kw = $('monthRows').querySelector('[data-kw="' + i + '"]').value;
+      var kwh = $('monthRows').querySelector('[data-kwh="' + i + '"]').value;
+      if (kw === '' && kwh === '') continue;
+      if (kw === '') { say('Month ' + MONTH_NAMES[i] + ' needs a peak demand in kW.'); return null; }
+      out.push({ month: i, demandKw: Number(kw), kwh: Number(kwh || 0) });
+    }
+    if (!out.length) { say('Enter at least one month from your bill.'); return null; }
+    return out;
+  }
+
+  /* ── Size ────────────────────────────────────────────────────────────── */
+  function doSize() {
+    say('');
+    var months = readMonths();
+    if (!months) return;
+    var body = { months: months };
+    if ($('dc').value !== '') body.demandChargePerKw = Number($('dc').value);
+    if ($('er').value !== '') body.energyRate = Number($('er').value);
+    if ($('bh').value !== '') body.backupHours = Number($('bh').value);
+
+    busy(true);
+    api('/api/embed-size', 'POST', body).then(function (r) {
+      busy(false);
+      SIZED = r;
+      paintSized(r);
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not size that.');
+    });
+  }
+
+  function stat(k, v, u) {
+    return '<div class="stat"><div class="k">' + esc(k) + '</div>'
+         + '<div class="v">' + esc(v) + ' <span class="u">' + esc(u || '') + '</span></div></div>';
+  }
+
+  function paintSized(r) {
+    var s = r.system;
+    $('resStats').innerHTML = stat('Power', n0(s.kw), 'kW')
+      + stat('Energy', n0(s.kwh), 'kWh')
+      + stat('Duration', s.durationH, 'hours');
+
+    var band = 'Sized from ' + r.sizingToken.months + ' month'
+      + (r.sizingToken.months === 1 ? '' : 's') + ' of billing data.';
+    if (s.assumedDuration && r.sensitivity && r.sensitivity.length) {
+      /* The honest presentation of an assumed number is the range it moves
+         over — the same thing the signed-in sizer shows a designer. */
+      var lo = r.sensitivity[0], hi = r.sensitivity[r.sensitivity.length - 1];
+      band += ' Peak duration is estimated, so the energy could land between <b>'
+        + n0(lo.nameplateKwh) + ' kWh</b> (' + lo.hours + 'h peaks) and <b>'
+        + n0(hi.nameplateKwh) + ' kWh</b> (' + hi.hours + 'h peaks). '
+        + 'Interval data from your utility settles it.';
+    }
+    $('resBand').innerHTML = band;
+
+    var econ = $('resEcon');
+    if (r.economics && r.economics.savingsYr) {
+      var t = 'Estimated demand-charge saving: <b>' + usd(r.economics.savingsYr) + ' a year</b>'
+        + ', on the rates you entered.';
+      if (r.economics.paybackYr) t += ' Simple payback about <b>' + r.economics.paybackYr + ' years</b>.';
+      econ.innerHTML = t;
+      show(econ);
+    } else hide(econ);
+
+    paintOptions(r.products);
+    show($('resCard'));
+    show($('orderCard'));
+    postHeight();
+    $('resCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function priceLabel(p) {
+    if (p.priceMode === 'list' && p.listPrice) {
+      return usd(p.listPrice * (p.qty || 1)) + (p.qty > 1 ? '<div class="d">' + p.qty + ' × ' + usd(p.listPrice) + '</div>' : '');
+    }
+    return '<span class="d">Price on request</span>';
+  }
+
+  function paintOptions(products) {
+    var w = $('optWrap');
+    if (!products || !products.length) {
+      w.innerHTML = '<div class="band">We will come back to you with the equipment options that fit this size.</div>';
+      return;
+    }
+    var h = '<h2 style="margin-bottom:10px">Choose a system</h2>';
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      h += '<label class="opt" data-sku="' + esc(p.sku) + '">'
+        + '<input type="radio" name="sku" value="' + esc(p.sku) + '"' + (i === 0 ? ' checked' : '') + '>'
+        + '<span><span class="n">' + esc(p.name) + '</span>'
+        + '<span class="d">' + (p.kw ? n0(p.kw) + ' kW' : '') + (p.kwh ? ' · ' + n0(p.kwh) + ' kWh' : '')
+        + (p.qty > 1 ? ' · ' + p.qty + ' units' : '') + '</span></span>'
+        + '<span class="p">' + priceLabel(p) + '</span></label>';
+    }
+    w.innerHTML = h;
+    PICKED = products[0].sku;
+    var opts = w.querySelectorAll('.opt');
+    for (var j = 0; j < opts.length; j++) {
+      opts[j].onclick = function () {
+        PICKED = this.getAttribute('data-sku');
+        var all = w.querySelectorAll('.opt');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('sel');
+        this.classList.add('sel');
+      };
+    }
+    opts[0].classList.add('sel');
+  }
+
+  /* ── A published configuration ───────────────────────────────────────── */
+  function paintConfig(c) {
+    hide($('sizeCard'));
+    $('cfgLabel').textContent = c.label || 'Your proposed system';
+    var s = c.system || {};
+    $('cfgStats').innerHTML = (s.kw ? stat('Power', n0(s.kw), 'kW') : '')
+      + (s.kwh ? stat('Energy', n0(s.kwh), 'kWh') : '')
+      + (s.durationH ? stat('Duration', s.durationH, 'hours') : '');
+    var items = c.items || [], h = '';
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      h += '<div class="opt" style="cursor:default"><span><span class="n">' + esc(it.name || it.sku) + '</span>'
+        + '<span class="d">' + it.qty + ' × ' + (it.kwh ? n0(it.kwh) + ' kWh' : it.sku) + '</span></span>'
+        + '<span class="p">' + (it.listPrice ? usd(it.listPrice * it.qty) : '<span class="d">Price on request</span>') + '</span></div>';
+    }
+    $('cfgItems').innerHTML = h;
+    var foot = c.note || '';
+    if (c.expiresAt) {
+      /* Shown, not hidden. A quote with a date on it is a quote; one without
+         is an argument later. */
+      var d = new Date(c.expiresAt);
+      if (!isNaN(d.getTime())) {
+        foot += (foot ? ' ' : '') + 'This proposal holds until ' + d.toLocaleDateString() + '.';
+      }
+    }
+    $('cfgNote').textContent = foot;
+    show($('cfgCard'));
+    show($('orderCard'));
+  }
+
+  /* ── Order ───────────────────────────────────────────────────────────── */
+  function doOrder() {
+    say('');
+    if (!$('cName').value.trim()) { say('Please enter your name.'); return; }
+    if (!$('cEmail').value.trim()) { say('Please enter an email address.'); return; }
+    if (!$('consent').checked) { say('Please tick the box so we know we may contact you.'); return; }
+    if (CFG.flow.requireAddress && !$('aLine').value.trim()) {
+      say('Please enter the installation address.'); return;
+    }
+
+    var body = {
+      consent: true,
+      _hp: $('hp').value,
+      customer: {
+        name: $('cName').value, company: $('cCo').value,
+        email: $('cEmail').value, phone: $('cPhone').value,
+        notes: $('cNotes').value,
+        address: { line1: $('aLine').value, city: $('aCity').value,
+                   state: $('aState').value, zip: $('aZip').value }
+      }
+    };
+    if (CONFIG_ID) {
+      body.configId = CONFIG_ID;
+    } else if (SIZED) {
+      body.system = SIZED.system;
+      if (PICKED) {
+        var q = 1;
+        for (var i = 0; i < SIZED.products.length; i++) {
+          if (SIZED.products[i].sku === PICKED) q = SIZED.products[i].qty || 1;
+        }
+        body.items = [{ sku: PICKED, qty: q }];
+      }
+    }
+
+    busy(true);
+    api('/api/embed-order', 'POST', body).then(function (r) {
+      busy(false);
+      hide($('sizeCard')); hide($('resCard')); hide($('orderCard')); hide($('cfgCard'));
+      $('doneMsg').textContent = r.message || 'Thank you — we will be in touch shortly.';
+      $('doneRef').textContent = r.orderNo ? ('Your reference is ' + r.orderNo + '.') : '';
+      show($('doneCard'));
+      say('');
+      postHeight();
+      $('doneCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not send that.');
+    });
+  }
+
+  /* ── Boot ────────────────────────────────────────────────────────────── */
+  function fail(text) {
+    $('boot').textContent = text;
+    postHeight();
+  }
+
+  if (!KEY) { fail('This storefront is missing its key.'); return; }
+
+  api('/api/embed-config', 'GET').then(function (cfg) {
+    CFG = cfg;
+    hide($('boot'));
+    show($('app'));
+    paintBrand();
+
+    if (CONFIG_ID) {
+      /* embed-config resolved it for us, checking expiry, withdrawal and
+         ownership. A dead link says WHICH kind of dead and offers the sizer
+         instead, because a customer who followed a stale quote is still a
+         customer standing in front of us. */
+      if (cfg.config && cfg.config.error) {
+        say(cfg.config.error + ' You can size a system below in the meantime.', 'err');
+        CONFIG_ID = '';
+        addMonthRow();
+      } else if (cfg.config) {
+        CONFIG = cfg.config;
+        paintConfig(CONFIG);
+      } else {
+        CONFIG_ID = '';
+        addMonthRow();
+      }
+    } else {
+      addMonthRow();
+    }
+
+    $('addMonth').onclick = addMonthRow;
+    $('sizeBtn').onclick = doSize;
+    $('orderBtn').onclick = doOrder;
+    postHeight();
+  })['catch'](function (e) {
+    fail(e.message || 'This storefront is not available right now.');
+  });
+})();
+</script>
+</body>
+</html>
