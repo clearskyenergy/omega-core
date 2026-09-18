@@ -1945,6 +1945,15 @@ function makeCore(id, opts) {
      HE is, right now. Zero when he is not talking, and zero is a real value
      here rather than a floor. */
   let voice = 0, voiceTarget = 0, vPrev = 0, yawAcc = 0;
+  /* TALK IS NOT VOICE EITHER. `voice` is per-syllable and spends most of a
+     sentence near zero — the gaps between words are real silence. Drive a
+     POSE with it and he lurches on every consonant.
+
+     `talk` is the slower question: is he speaking at all. It rises quickly
+     when a syllable lands and takes about a second to fall, so it stays up
+     across the gaps and comes down once he has actually finished. The mask
+     pulses on `voice`; the body answers `talk`. */
+  let talk = 0;
   /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
      the envelope rather than on a timer, so the count and the spacing are the
      speech's, not a decoration's. */
@@ -2335,7 +2344,13 @@ function makeCore(id, opts) {
        ±1.0 here, because drawCloud multiplies by 0.55 internally — so the
        figure swings ±31°, which is the width of a three-quarter view and the
        edge of where a depth-displaced billboard still reads as a body. */
-    const cyaw = Math.sin(t * 0.0022) * 1.0;
+    /* HE TURNS TO FACE YOU WHEN HE SPEAKS. Idle, he drifts through the ±31°
+       the billboard can carry. Talking, `talk` pulls that drift toward zero —
+       square on, looking at the man he is answering. It is one multiply and
+       it is the whole difference between a figure that happens to be lit and
+       one that is addressing you. Eased by `talk` and not by `voice`, or he
+       would snap round on every consonant. */
+    const cyaw = Math.sin(t * 0.0022) * 1.0 * (1 - talk * 0.92);
     /* the smoke it stands in */
     const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 2.0);
     g.addColorStop(0, 'rgba(' + col + ',' + (0.12 + energy * 0.12).toFixed(3) + ')');
@@ -2360,6 +2375,15 @@ function makeCore(id, opts) {
          too large, and after that the arithmetic below is all zero. */
       const ent = Math.max(0, 1 - (t - doomT0) / 70);
       const bob2 = Math.sin(t * 0.012) * R * 0.03;
+      /* HE SHIFTS HIS WEIGHT. A figure that only bobs on one axis reads as a
+         sprite on a spring; a slow lateral drift at a different period reads
+         as somebody standing. Damped by `talk` for the same reason the turn
+         is — a man delivering a line plants his feet. */
+      const sway = Math.sin(t * 0.0016 + 1.1) * R * 0.045 * (1 - talk * 0.8);
+      /* AND HE STEPS IN. Three and a half per cent, about his own centre.
+         Enough that the room feels him come forward, small enough that it
+         never reads as the canvas resizing. */
+      const lean = 1 + talk * 0.035;
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
@@ -2382,7 +2406,9 @@ function makeCore(id, opts) {
 
       ctx.save();
       ctx.translate(0, y0); ctx.scale(1, -0.42); ctx.translate(0, -y0);
-      ctx.translate(0, bob2);
+      /* The same sway, or he slides away from his own reflection and the
+         floor stops being a floor. */
+      ctx.translate(sway, bob2);
       drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 3, gain: 0.26 });
       ctx.restore();
 
@@ -2398,7 +2424,8 @@ function makeCore(id, opts) {
          is light coming off him, and that ordering is the whole difference
          between a glow and a haze. */
       ctx.save();
-      ctx.translate(0, bob2);
+      ctx.translate(sway, bob2);
+      ctx.translate(cx, cy); ctx.scale(lean, lean); ctx.translate(-cx, -cy);
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
@@ -2418,25 +2445,30 @@ function makeCore(id, opts) {
          Inside this save(), which already carries the bob and the entry
          scale: a glow that does not bob with him is a glow that is not
          attached to him. */
-      if (voice > 0.02 && cloud && cloud.mask) {
+      /* `talk` is the floor and `voice` is the peak: lit for as long as he is
+         speaking, brightest on each syllable. Driven off `voice` alone the
+         face went dark in every gap between two words, which reads as a fault
+         in the projection rather than as speech. */
+      const lit = Math.max(voice, talk * 0.42);
+      if (lit > 0.02 && cloud && cloud.mask) {
         const m = cloud.mask;
         const mc = Math.cos(cyaw * 0.55), msn = Math.sin(cyaw * 0.55);
         const vsy = R * 1.68, vsx = vsy / (cloud.ar || 1.65);
         const mX = cx + (m.x * mc - m.z * msn * 0.85) * vsx;
         const mY = (cy - R * 0.04) + m.y * vsy;
 
-        const bloom = ctx.createRadialGradient(mX, mY, 0, mX, mY, R * (0.11 + voice * 0.20));
-        bloom.addColorStop(0, 'rgba(' + col + ',' + (0.30 + voice * 0.50).toFixed(3) + ')');
-        bloom.addColorStop(0.45, 'rgba(' + col + ',' + (voice * 0.20).toFixed(3) + ')');
+        const bloom = ctx.createRadialGradient(mX, mY, 0, mX, mY, R * (0.11 + lit * 0.20));
+        bloom.addColorStop(0, 'rgba(' + col + ',' + (0.30 + lit * 0.50).toFixed(3) + ')');
+        bloom.addColorStop(0.45, 'rgba(' + col + ',' + (lit * 0.20).toFixed(3) + ')');
         bloom.addColorStop(1, 'rgba(' + col + ',0)');
         ctx.fillStyle = bloom;
-        ctx.beginPath(); ctx.arc(mX, mY, R * (0.11 + voice * 0.20), 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(mX, mY, R * (0.11 + lit * 0.20), 0, Math.PI * 2); ctx.fill();
 
         /* The slits. Narrow, brighter than the bloom, and the only part that
            tracks the peak rather than the envelope — it is what the eye reads
            as the thing doing the talking. */
-        const sw = R * 0.055 * (0.6 + voice);
-        ctx.fillStyle = 'rgba(' + col + ',' + Math.min(0.95, 0.25 + voice * 0.8).toFixed(3) + ')';
+        const sw = R * 0.055 * (0.6 + lit);
+        ctx.fillStyle = 'rgba(' + col + ',' + Math.min(0.95, 0.25 + lit * 0.8).toFixed(3) + ')';
         ctx.fillRect(mX - sw * 1.5, mY - R * 0.008, sw, R * 0.016);
         ctx.fillRect(mX + sw * 0.5, mY - R * 0.008, sw, R * 0.016);
 
@@ -2611,6 +2643,9 @@ function makeCore(id, opts) {
        strobing on every zero crossing. Symmetric easing gives you one or the
        other and neither reads as speech. */
     voice += (voiceTarget - voice) * (voiceTarget > voice ? 0.55 : 0.12);
+    /* Up in ~5 frames, down in ~60. The asymmetry is the point: it must not
+       drop out between two words of the same sentence. */
+    talk += ((voice > 0.08 ? 1 : 0) - talk) * (voice > 0.08 ? 0.22 : 0.016);
     /* A ring on the way up past a quarter, and only on the way up — without
        the edge test a held vowel spawns one every frame and the face
        disappears behind sixty concentric circles. */
@@ -3548,8 +3583,26 @@ async function browserSpeak(text){
       if(pref) u.voice=pref;
       if(pref&&pref.lang) u.lang=pref.lang;
       u.rate=1.02; u.pitch=0.9;
-      u.onend=u.onerror=()=>done();
+
+      /* THE FREE VOICE HAS TO MOVE HIM TOO — and this is the path that
+         matters, because it is the default. SpeechSynthesis plays through the
+         OS, not through WebAudio: there is no node to meter, so the analyser
+         that drives the mask on the ElevenLabs path has nothing to listen to
+         here. Left alone, the whole feature only ever fired on the paid voice
+         Thomas turned off after it burned a month of credits in two days.
+
+         `onboundary` is the signal that exists instead. It fires per word,
+         from the engine actually speaking it, so it is real articulation
+         rather than a timer pretending to be one — one pulse a word, and the
+         release envelope in makeCore carries the shape between them. */
+      const pulse = v => { try{ doomCore.say(v); }catch(_){} };
+      u.onstart = () => pulse(0.5);
+      u.onboundary = () => pulse(0.85);
+      u.onend=u.onerror=()=>{ pulse(0); done(); };
       S.speak(u);
+      /* Cancelled mid-sentence — a new reply, or S.cancel() above — fires no
+         onend in every browser. Closing his mouth is not optional. */
+      setTimeout(()=>pulse(0), 15000);
       setTimeout(done, 15000);          /* never hang the reply on the voice */
     }catch(_){ done(); }
   });
