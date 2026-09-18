@@ -163,6 +163,22 @@
       file:'/sales-proposal.html', tier:TIER.STANDARD, savesData:true,
       icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8' },
 
+    /* Deliberately a SECOND proposal tool rather than a fourth model button on
+       'sales'. That one sells a PPA: we own the kit, the customer buys the
+       output, and every number argues about the customer's bill. This one
+       sells the opposite trade — the host owns nothing, buys nothing and
+       saves nothing; they rent us space, power and a fiber path and we pay
+       them. Merging the two would mean one document arguing both directions.
+
+       tier STANDARD to match 'sales': a rep who can build a PPA proposal can
+       build a land lease proposal. The rate card behind it is gated in
+       /api/compute-lease.js, not here — the registry decides what is on the
+       menu, never what the numbers are. */
+    { key:'computelease', name:'Compute Land Lease', category:'sales',
+      desc:'Score a site on power, fiber, zoning and site control — then price the land lease you may offer the host over 15 years.',
+      file:'/compute-proposal.html', badge:'new', tier:TIER.STANDARD, savesData:true,
+      icon:'M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M9 11h.01M15 11h.01' },
+
     { key:'permit', name:'Permit Creator', category:'permitting',
       desc:'AHJ-ready sets — cover, plot plan, SLD, details.',
       file:'/permit.html', tier:TIER.DELUXE, savesData:true,
