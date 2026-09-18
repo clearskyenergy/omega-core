@@ -296,6 +296,8 @@ function card(o){
     +   (o.customer&&o.customer.notes
           ? '<div style="margin:10px 0;font-size:13px"><b>Customer said:</b> '+esc(o.customer.notes)+'</div>' : '')
 
+  +   siteStudyBlock(o)
+
     +   (items
           ? '<table style="margin-top:8px"><thead><tr><th>Item</th><th class="num">Qty</th>'
             + '<th class="num">kWh ea</th><th class="num">List</th></tr></thead><tbody>'+items+'</tbody></table>'
@@ -307,6 +309,35 @@ function card(o){
     +   (hist ? '<div class="hist"><b>History</b>'+hist+'</div>' : '')
     +   '<div class="msg" id="m-'+esc(o._id)+'"></div>'
     + '</div></div>';
+}
+
+/* What the customer was SHOWN, if they ran a site study. Written server-side
+   by api/embed-layout.js from its own computation, so unlike the system size
+   on an enquiry these are our numbers and not a browser's claim — which is
+   why they are presented plainly rather than hedged.
+
+   Still a FIT STUDY and not a layout: no service location, no survey, no code
+   review. Said here too, because the person about to ring this customer is
+   exactly who must not over-promise on it. */
+function siteStudyBlock(o){
+  var s = o.siteStudy;
+  if (!s) return '';
+  var yard = s.yardAcres ? (s.yardAcres+' ac'+(s.yardChosenByCustomer?' (they picked it)':' (we proposed it)')) : '—';
+  return '<div class="panel" style="margin-top:10px;background:#F3F8FF;border-color:#D5E6FB">'
+    + '<div style="font-weight:700;font-size:13px;margin-bottom:6px">They saw a site study '
+    +   (s.fits ? '<span class="chip ok">it fit</span>' : '<span class="chip warn">it did not fit</span>') + '</div>'
+    + '<div class="kv">'
+    +   '<span class="k">Property</span><span>'+esc(s.address||'—')+'</span>'
+    +   '<span class="k">Lot</span><span>'+esc(s.acres||'?')+' acres'+(s.zoning?' · zoned '+esc(s.zoning):'')+'</span>'
+    +   '<span class="k">Marked yard</span><span>'+esc(yard)+'</span>'
+    +   '<span class="k">Units</span><span>'+esc(s.unitsNeeded||'?')+' needed of '+esc(s.unitsThatFit||'?')
+    +     ' the yard holds'+(s.sku?' · '+esc(s.sku):'')+'</span>'
+    +   '<span class="k">Drawn at</span><span>'+esc(s.setbackFt)+' ft setback · '+esc(s.clearanceFt)
+    +     ' ft between units'+(s.aisleFt?' · '+esc(s.aisleFt)+' ft aisles':'')+'</span>'
+    + '</div>'
+    + '<div class="meta" style="margin-top:7px">Geometric fit only — no service location, survey, '
+    + 'zoning or code review. Do not quote it as a layout.</div>'
+    + '</div>';
 }
 
 /* ClearSky only. The tenant's margin sits on top of this number; two parties

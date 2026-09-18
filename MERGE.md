@@ -80,6 +80,9 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
 | order pricing and lifecycle | — | `api/orders.js` | "Only ClearSky may price, but the tenant may always cancel" is a commercial arrangement. It cannot be expressed in `firestore.rules`, and it should not be, because the people who negotiate it will never read that file. |
 | storefront catalogue publication | `equipment where vendorOrgId ==` (the obvious query) | explicit `storefront/config.products` | Those rows are the tenant's INTERNAL catalogue and carry cost on some of them. A "safe fields" filter is a list somebody has to remember to update, and the failure is silent and public. |
 | tenant attribution on editor exports | hardcoded `poweredByLine()` | reads the white-label block | The proposal a designer hands their customer is the highest-value leak in the estate. |
+| yard fit geometry | would have been in `embed/storefront.html` | `api/embed-layout.js` → `_lib/site-fit.js` | The placement sweep, the setback raster and the packing rules are the METHOD. Shipped to the browser, any tenant reads how OMEGA decides what fits where — the same reasoning `api/site-plan.js` already gives for itself. |
+| address → point | inline in `api/greenfield.js` | `api/_lib/geocode.js` | One copy, now shared. Not IP (both sources are keyless and free) — it is server-side because the POINT is what authorises a metered parcel lookup, and a browser that geocoded for itself could ask us to bill a lookup for a place it invented. |
+| parcel lookup chain | was only reachable from `api/parcel.js`'s handler | exposed via its `_helpers` seam | Cook County moved its layer in 2026. A second copy of the source order, timeouts and county extents would have drifted, and the drifted one would have been the one serving the public. |
 
 ## TODO — Claude Code sessions, in order
 
@@ -133,6 +136,16 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
 12. **Editor → order link button.** `api/order-link.js` works and is callable;
     nothing in `editor.html` calls it. One button in the BOM panel: POST the
     placed SKUs and the system size, show the returned customer URL.
+13. **Fold `api/greenfield.js`'s remaining inline helpers into `_lib/`.** Its
+    geocoder now delegates to `_lib/geocode.js`; its county-slug FIPS map and
+    listing parser are still inline. Low priority — it has no test, which is
+    why the geocoder extraction was kept to three lines.
+14. **Promote a site study into a real layout.** `_lib/site-fit.js` works in
+    the same local-feet frame as `scripts/site-agent/example-site.json`, on
+    purpose: a concept a customer accepted can be handed to
+    `_lib/site-agent-planner.js` without reinterpreting its axes. What is
+    missing is the evidence the planner demands — the confirmed service wall
+    above all. That is a signed-in workflow, not a public one.
 
 ## Decisions made (2026-09-06)
 

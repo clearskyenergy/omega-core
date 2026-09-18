@@ -62,6 +62,13 @@ function publicProduct(p) {
                      ? str(p.imageUrl, 400) : '',
     kw:            num(p.kw),
     kwh:           num(p.kwh),
+    /* The physical footprint, in feet. Needed by /api/embed-layout to draw
+       the unit to scale on the customer's own lot — and ABSENT is a real
+       state, not a zero: a product with no footprint on file is simply not
+       offered a site study, because a default footprint drawn to scale on
+       somebody's parcel is the most convincing kind of wrong. */
+    widthFt:       num(p.widthFt),
+    depthFt:       num(p.depthFt),
     chemistry:     str(p.chemistry, 40),
     warrantyYears: num(p.warrantyYears),
     leadTimeDays:  num(p.leadTimeDays),
@@ -166,7 +173,16 @@ module.exports = E.handler(function (req) {
             /* No products published = the storefront is a sizing tool with a
                contact step. A working page is better than an empty one, and
                "we will come back with options" is a true thing to say. */
-            hasCatalog:     products.length > 0
+            hasCatalog:     products.length > 0,
+            /* The site study is on unless switched off, and only offered for
+               products that can actually be drawn. Computed here so the page
+               never shows a button that the endpoint will refuse. */
+            siteStudy:      sf.siteStudy !== false
+                              && products.some(function (p) { return p.widthFt && p.depthFt; }),
+            /* Whether the address step has to come after the enquiry. The
+               page needs to know to order its own steps; the ENFORCEMENT is
+               in api/embed-layout.js, which refuses without the receipt. */
+            studyNeedsContact: sf.requireContactForLayout !== false
           },
           products: products,
           /* null when the link carried no ?c=; { error } when it carried one

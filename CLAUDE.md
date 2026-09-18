@@ -221,6 +221,14 @@ user). Do not add a second copy of that list — see what three copies of
   request with `status` pinned to `new` that a human confirms, and there are
   rate limits. Read the header of `api/_lib/embed.js` before changing any of
   it.
+- The site study (`api/embed-layout.js` + `_lib/site-fit.js`) is the one
+  public call that COSTS MONEY — `api/parcel.js` reaches metered Regrid. It is
+  gated on a named lead (an enquiry receipt), capped per org per day in a
+  transaction, and a cache hit never spends the allowance. It is NOT
+  `api/site-plan.js` and must not become it: that one demands a surveyed
+  parcel and a confirmed service wall and would return `needs_input` to every
+  visitor. A parcel record's owner name and APN are never echoed to the
+  public page.
 - A tenant's cost basis (`storefront.capexPerKwh`/`capexPerKw`) must NEVER be
   in the repo. `scripts/seed-omega-orgs.js` throws if a `tenant.json` carries
   either.

@@ -290,6 +290,13 @@ function handler(fn) {
 module.exports = {
   resolve: resolve,
   handler: handler,
+  /* TEST SEAM. The bucket lives in module memory, so a suite that exercises
+     more than one case against one key trips its own limiter and every
+     assertion after the first minute's worth reads as a 429. Exported rather
+     than worked around with a key per case, because the limiter's behaviour
+     is itself under test (scripts/tests/tembedlayout.js). Not called by any
+     handler. */
+  _resetLimits: function () { buckets = {}; },
   rateLimit: rateLimit,
   normOrigin: normOrigin,
   originAllowed: originAllowed,

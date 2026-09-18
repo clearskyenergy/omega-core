@@ -42,7 +42,14 @@ var pickPublicWL = require('../api/_lib/whitelabel').pickPublic;
 var STOREFRONT_FORBIDDEN = ['capexPerKwh', 'capexPerKw'];
 var STOREFRONT_KEYS = ['headline', 'intro', 'disclaimer', 'thanks', 'cta',
   'requireAddress', 'collectBill', 'showEconomics', 'emailCustomer',
-  'dailyOrderCap', 'fulfilledBy', 'products'];
+  'dailyOrderCap', 'fulfilledBy', 'products',
+  /* The site study (api/embed-layout.js). setbackFt/clearanceFt/aisleFt/
+     rowsPerBlock are geometric ASSUMPTIONS, not a cost basis, so unlike
+     capexPerKwh they belong in version control: they decide the unit count on
+     a customer's drawing and a change to one should show up in a diff.
+     dailyParcelCap is the spend limit on the metered parcel lookup. */
+  'siteStudy', 'requireContactForLayout', 'dailyParcelCap',
+  'setbackFt', 'clearanceFt', 'aisleFt', 'rowsPerBlock'];
 
 function planStorefront(t) {
   var sf = t.storefront;

@@ -89,6 +89,26 @@
     font-size:12px;color:var(--sub);display:flex;gap:12px;flex-wrap:wrap}
   .spin{display:none;font-size:13px;color:var(--sub)}
   .busy .spin{display:inline}
+  /* ── the site plan ──────────────────────────────────────────────────
+     Drawn as inline SVG. No map tiles: a satellite backdrop is a metered
+     per-request API, and this has to be free to serve to anybody who asks.
+     A clean plan view also reads as engineering rather than as marketing,
+     which is the impression that sells a battery. */
+  .plan{width:100%;background:#FBFBF9;border:1px solid var(--line);border-radius:var(--r);
+    display:block;touch-action:none}
+  .plan .parcel{fill:#EDEFE9;stroke:#9AA3AD;stroke-width:1.5;vector-effect:non-scaling-stroke}
+  .plan .yard{fill:rgba(43,95,168,.08);stroke:var(--accent);stroke-width:1.5;
+    stroke-dasharray:6 4;vector-effect:non-scaling-stroke;cursor:move}
+  .plan .unit{fill:var(--accent);fill-opacity:.85;stroke:#fff;stroke-width:.5;vector-effect:non-scaling-stroke}
+  .plan .grip{fill:#fff;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;cursor:nwse-resize}
+  .plan .scale{stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
+  .plan text{font:600 11px -apple-system,system-ui,sans-serif;fill:var(--sub)}
+  .planhint{font-size:12.5px;color:var(--sub);margin:8px 0 0}
+  .unver{margin:14px 0 0;padding:12px 14px;background:#FFF8EC;border:1px solid #EBDCC0;
+    border-radius:8px;font-size:12px;color:#6B5426}
+  .unver b{display:block;margin-bottom:5px;font-size:12px}
+  .unver ul{margin:0;padding-left:17px}
+  .unver li{margin:2px 0}
   #boot{padding:40px 18px;text-align:center;color:var(--sub);font-size:14px}
   .hide{display:none!important}
   @media (max-width:520px){ .row2{grid-template-columns:1fr} .stat .v{font-size:22px} }
@@ -161,6 +181,40 @@
     <div class="band" id="resBand"></div>
     <div id="resEcon" class="band hide"></div>
     <div id="optWrap" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ── See it on your site ──────────────────────────────────────────
+       The middle of the funnel, and the only step that reaches a metered
+       upstream. api/embed-layout.js refuses without the enquiry receipt this
+       step files first, so the spend and the lead always land together. -->
+  <div class="card hide" id="studyCard">
+    <h2>See it on your site</h2>
+    <p class="intro" id="studyIntro" style="margin-bottom:14px"></p>
+    <div class="row2" style="margin-bottom:12px" id="studyWho">
+      <div><label for="sName">Your name</label><input id="sName" autocomplete="name"></div>
+      <div><label for="sEmail">Email</label><input id="sEmail" type="email" autocomplete="email"></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label for="sAddr">Site address
+        <span class="hint">The property the system would go on</span>
+      </label>
+      <input id="sAddr" autocomplete="street-address" placeholder="123 Industrial Dr, Springfield IL">
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="studyBtn">Show it on my site</button>
+      <span class="spin">Looking up your property…</span>
+    </div>
+  </div>
+
+  <!-- ── The plan ─────────────────────────────────────────────────────── -->
+  <div class="card hide" id="planCard">
+    <h2 id="planTitle">Your site</h2>
+    <div class="result" id="planStats"></div>
+    <svg class="plan" id="plan" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"
+         role="img" aria-label="Indicative site plan"></svg>
+    <p class="planhint" id="planHint"></p>
+    <div class="band" id="planAssume" style="margin-top:12px"></div>
+    <div class="unver" id="planUnver"></div>
   </div>
 
   <!-- ── Contact and submit ───────────────────────────────────────────── -->
@@ -336,6 +390,9 @@
   var CONFIG = null;    /* a published configuration, when ?c= was given */
   var SIZED = null;     /* /api/embed-size answer   */
   var PICKED = null;    /* the chosen product sku   */
+  var STUDY = null;     /* /api/embed-layout answer */
+  var STUDY_AT = null;  /* the geocoded point, so dragging never re-geocodes */
+  var LEAD_ID = null;   /* the enquiry receipt embed-layout requires         */
 
   /* ── Paint the brand ─────────────────────────────────────────────────── */
   function paintBrand() {
@@ -442,9 +499,35 @@
 
     paintOptions(r.products);
     show($('resCard'));
+    offerStudy();
     show($('orderCard'));
     postHeight();
     $('resCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* The study is offered only when the tenant has it on AND the chosen
+     product has a footprint on file — embed-config decides both, so the page
+     never shows a button the endpoint would refuse. */
+  function offerStudy() {
+    if (!CFG.flow.siteStudy) return;
+    var p = productBySku(PICKED);
+    if (!p || !p.widthFt || !p.depthFt) { hide($('studyCard')); return; }
+    $('studyIntro').textContent = CFG.flow.studyNeedsContact
+      ? 'Tell us where and we will draw this system on your own property, to scale.'
+      : 'Enter the address and we will draw this system on your own property, to scale.';
+    $('studyWho').className = CFG.flow.studyNeedsContact ? 'row2' : 'row2 hide';
+    show($('studyCard'));
+  }
+
+  function productBySku(sku) {
+    var all = (SIZED && SIZED.products) || CFG.products || [];
+    for (var i = 0; i < all.length; i++) if (all[i].sku === sku) return all[i];
+    /* The sizer's fitted list carries no footprint — it is a different
+       projection of the same catalogue — so fall back to the full one. */
+    for (var j = 0; j < (CFG.products || []).length; j++) {
+      if (CFG.products[j].sku === sku) return CFG.products[j];
+    }
+    return null;
   }
 
   function priceLabel(p) {
@@ -479,6 +562,13 @@
         var all = w.querySelectorAll('.opt');
         for (var k = 0; k < all.length; k++) all[k].classList.remove('sel');
         this.classList.add('sel');
+        /* A plan drawn for the previous product is now wrong, and silently
+           leaving it on screen next to a different selection is the kind of
+           mismatch a customer screenshots. */
+        STUDY = null;
+        hide($('planCard'));
+        offerStudy();
+        postHeight();
       };
     }
     opts[0].classList.add('sel');
@@ -512,6 +602,297 @@
     $('cfgNote').textContent = foot;
     show($('cfgCard'));
     show($('orderCard'));
+  }
+
+  /* ── The site study ──────────────────────────────────────────────────── */
+
+  /* Two calls, in this order and for a reason. api/embed-layout.js refuses
+     without an enquiry receipt, so the lead is filed FIRST and the metered
+     parcel lookup happens second. That is not a UI convention the page could
+     choose to skip — the server enforces it. */
+  function doStudy() {
+    say('');
+    var addr = $('sAddr').value.trim();
+    if (addr.length < 6) { say('Enter the site address.'); return; }
+
+    var needContact = CFG.flow.studyNeedsContact;
+    if (needContact) {
+      if (!$('sName').value.trim()) { say('Please enter your name.'); return; }
+      if (!$('sEmail').value.trim()) { say('Please enter an email address.'); return; }
+    }
+
+    busy(true);
+    fileLead(addr).then(function () {
+      return runLayout({ address: addr });
+    }).then(function (r) {
+      busy(false);
+      if (!r.found) {
+        /* A rural point, or a county whose GIS is down. Not the customer's
+           fault and not fixable by retrying, so it is said once and the flow
+           carries on to the order rather than dead-ending. */
+        say(r.reason, 'ok');
+        hide($('planCard'));
+        postHeight();
+        return;
+      }
+      STUDY = r;
+      STUDY_AT = r.at;
+      paintPlan(r);
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'We could not draw that site.');
+    });
+  }
+
+  /* Files the enquiry, or reuses the one already filed. embed-order dedupes
+     on the same email inside ten minutes, so a customer who adjusts their
+     yard and re-runs does not fill the tenant's queue with duplicates. */
+  function fileLead(addr) {
+    if (!CFG.flow.studyNeedsContact) return Promise.resolve(null);
+    if (LEAD_ID) return Promise.resolve(LEAD_ID);
+    return api('/api/embed-order', 'POST', {
+      consent: true, _hp: $('hp').value,
+      customer: {
+        name: $('sName').value, email: $('sEmail').value,
+        notes: 'Asked for a site study at: ' + addr,
+        address: { line1: addr }
+      },
+      system: SIZED ? SIZED.system : null
+    }).then(function (r) {
+      LEAD_ID = r.orderId || null;
+      /* Carry it into the order step so the same row is completed rather
+         than a second one created. */
+      if (!$('cName').value) $('cName').value = $('sName').value;
+      if (!$('cEmail').value) $('cEmail').value = $('sEmail').value;
+      if (!$('aLine').value) $('aLine').value = addr;
+      return LEAD_ID;
+    });
+  }
+
+  /* where is { address } the first time and { lat,lng } on every redraw —
+     re-geocoding an address the customer has not changed is a wasted call,
+     and the parcel cache is keyed on the point anyway. */
+  function runLayout(where) {
+    var body = { sku: PICKED, orderId: LEAD_ID,
+                 system: SIZED ? SIZED.system : null };
+    if (where.address) body.address = where.address;
+    else { body.lat = where.lat; body.lng = where.lng; }
+    if (where.usable) body.usable = where.usable;
+    return api('/api/embed-layout', 'POST', body);
+  }
+
+  /* ── Drawing ─────────────────────────────────────────────────────────── */
+
+  var VIEW = null;   /* { minX,minY,w,h } in FEET, the svg's own user units */
+
+  function paintPlan(r) {
+    var p = productBySku(PICKED) || {};
+    var pk = r.packing || {};
+    $('planTitle').textContent = r.at.matched ? r.at.matched : 'Your site';
+
+    $('planStats').innerHTML =
+        stat('Lot', r.site.acres, 'acres')
+      + stat('Your system', pk.unitsDrawn || pk.unitsNeeded || 0, 'units')
+      + stat('Marked yard', (r.usable && r.usable.acres) || 0, 'acres')
+      + (pk.unitsThatFit ? stat('Yard could hold', pk.unitsThatFit, 'units') : '');
+
+    drawPlan(r);
+
+    var fitLine = r.fits
+      ? 'Your system fits in the marked area with room to spare.'
+      : (r.reason || 'Your system does not fit in the marked area at these clearances.');
+    $('planHint').innerHTML = esc(fitLine)
+      + ' <b>Drag the dashed box</b> to the part of the lot you would actually use,'
+      + ' or pull its corner to resize — we will re-run the fit.';
+
+    var a = r.assumptions || {};
+    $('planAssume').innerHTML = 'Drawn at a <b>' + esc(a.setbackFt) + ' ft</b> property setback, <b>'
+      + esc(a.clearanceFt) + ' ft</b> between units'
+      + (a.aisleFt ? ', and a <b>' + esc(a.aisleFt) + ' ft</b> access aisle every '
+         + esc(a.rowsPerBlock) + ' rows' : '')
+      + '. ' + esc(a.basis);
+
+    $('planUnver').innerHTML = '<b>What this has NOT checked</b><ul>'
+      + (r.unverified || []).map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('')
+      + '</ul>';
+
+    show($('planCard'));
+    postHeight();
+    $('planCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function svgEl(name, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  /* SVG user units ARE FEET, with y flipped so north is up — the study works
+     in local feet with y north, and screen y grows downward. One transform at
+     the group rather than a sign flip at every coordinate, which is where
+     mirrored drawings come from. */
+  function drawPlan(r) {
+    var svg = $('plan');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var pts = r.parcel || [];
+    if (!pts.length) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < pts.length; i++) {
+      if (pts[i].x < minX) minX = pts[i].x;
+      if (pts[i].x > maxX) maxX = pts[i].x;
+      if (pts[i].y < minY) minY = pts[i].y;
+      if (pts[i].y > maxY) maxY = pts[i].y;
+    }
+    var pad = Math.max(20, (maxX - minX) * 0.06);
+    VIEW = { minX: minX - pad, minY: minY - pad,
+             w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 };
+    svg.setAttribute('viewBox', '0 0 ' + VIEW.w + ' ' + VIEW.h);
+    svg.style.height = Math.round(Math.min(520, Math.max(260, 640 * (VIEW.h / VIEW.w)))) + 'px';
+
+    var g = svgEl('g', { transform: 'translate(' + (-VIEW.minX) + ',' + (VIEW.minY + VIEW.h) + ') scale(1,-1)' });
+    svg.appendChild(g);
+
+    g.appendChild(svgEl('polygon', {
+      'class': 'parcel',
+      points: pts.map(function (p) { return p.x + ',' + p.y; }).join(' ')
+    }));
+
+    var u = r.usable;
+    if (u) {
+      var yard = svgEl('rect', { 'class': 'yard', x: u.x, y: u.y, width: u.w, height: u.h });
+      g.appendChild(yard);
+      (r.packing.units || []).forEach(function (b) {
+        g.appendChild(svgEl('rect', { 'class': 'unit', x: b.x, y: b.y, width: b.w, height: b.h }));
+      });
+      /* The grip sits at the yard's north-east corner in FEET; its size is in
+         feet too, so it scales with the drawing instead of vanishing on a
+         large lot. */
+      var gs = Math.max(6, VIEW.w * 0.02);
+      var grip = svgEl('rect', { 'class': 'grip', x: u.x + u.w - gs, y: u.y + u.h - gs,
+                                 width: gs, height: gs, rx: gs * 0.2 });
+      g.appendChild(grip);
+      attachDrag(svg, g, yard, grip, u);
+    }
+
+    /* A scale bar, because a plan without one is a picture. */
+    var barFt = niceBar(VIEW.w / 4);
+    var bx = VIEW.minX + VIEW.w * 0.04, by = VIEW.minY + VIEW.h * 0.05;
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by, x2: bx + barFt, y2: by }));
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by - 4, x2: bx, y2: by + 4 }));
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx + barFt, y1: by - 4, x2: bx + barFt, y2: by + 4 }));
+    var lbl = svgEl('text', { x: bx, y: -(by + 10), transform: 'scale(1,-1)' });
+    lbl.textContent = n0(barFt) + ' ft';
+    g.appendChild(lbl);
+  }
+
+  function niceBar(target) {
+    var steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= target) return steps[i];
+    return steps[steps.length - 1];
+  }
+
+  /* ── Dragging the yard ─────────────────────────────────────────────────
+     THE SVG-LEVEL LISTENERS ARE BOUND ONCE, EVER.
+
+     The first version bound pointermove/up inside attachDrag, which runs on
+     every repaint. drawPlan() clears the svg's CHILDREN but the svg itself
+     survives, so listener sets accumulated: after three drags, three `up`
+     handlers fired, two of them closing over detached <rect> elements whose
+     getAttribute still answers. Each drag therefore fired several redundant
+     /api/embed-layout calls — and on a cache miss, several metered lookups.
+
+     So the handlers live here, read one mutable DRAG record, and attachDrag
+     only points that record at the current elements. */
+  var DRAG = null;      /* { yard, g, mode, start, box, u0 } while dragging */
+  var DRAG_BOUND = false;
+
+  /* Client pixels → SVG user units (feet), through the group's own CTM so it
+     stays correct at any responsive width and after a scroll. */
+  function toFeet(g, ev) {
+    var svg = $('plan');
+    if (!svg.createSVGPoint) return null;
+    var pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    var m = g.getScreenCTM();
+    if (!m) return null;
+    return pt.matrixTransform(m.inverse());
+  }
+
+  function bindDragOnce() {
+    if (DRAG_BOUND) return;
+    DRAG_BOUND = true;
+    var svg = $('plan');
+
+    svg.addEventListener('pointermove', function (ev) {
+      if (!DRAG) return;
+      var now = toFeet(DRAG.g, ev);
+      if (!now) return;
+      var dx = now.x - DRAG.start.x, dy = now.y - DRAG.start.y;
+      if (DRAG.mode === 'move') {
+        DRAG.yard.setAttribute('x', DRAG.box.x + dx);
+        DRAG.yard.setAttribute('y', DRAG.box.y + dy);
+      } else {
+        /* A minimum, so the box cannot be collapsed to nothing and lost. */
+        DRAG.yard.setAttribute('width', Math.max(20, DRAG.box.w + dx));
+        DRAG.yard.setAttribute('height', Math.max(20, DRAG.box.h + dy));
+      }
+    });
+
+    function release() {
+      if (!DRAG) return;
+      var d = DRAG;
+      DRAG = null;                     /* cleared FIRST: a pointerup and a
+                                          pointerleave both arrive, and the
+                                          second must not re-run the call. */
+      var next = {
+        x: parseFloat(d.yard.getAttribute('x')), y: parseFloat(d.yard.getAttribute('y')),
+        w: parseFloat(d.yard.getAttribute('width')), h: parseFloat(d.yard.getAttribute('height'))
+      };
+      /* Unchanged is not a request. Re-running on every pointerup would
+         spend a call — and, on a cache miss, a metered lookup — to redraw
+         exactly what is already on screen. */
+      if (Math.abs(next.x - d.u0.x) < 1 && Math.abs(next.y - d.u0.y) < 1 &&
+          Math.abs(next.w - d.u0.w) < 1 && Math.abs(next.h - d.u0.h) < 1) return;
+
+      say('');
+      busy(true);
+      runLayout({ lat: STUDY_AT.lat, lng: STUDY_AT.lng, usable: next }).then(function (r) {
+        busy(false);
+        if (!r.found) { say(r.reason); return; }
+        STUDY = r;
+        paintPlan(r);
+      })['catch'](function (e) {
+        busy(false);
+        say(e.message || 'We could not re-run that.');
+        /* Put the box back where the server last agreed it was, so the
+           drawing and the numbers under it never disagree. */
+        if (STUDY) paintPlan(STUDY);
+      });
+    }
+    svg.addEventListener('pointerup', release);
+    svg.addEventListener('pointercancel', release);
+    svg.addEventListener('pointerleave', release);
+  }
+
+  function attachDrag(svg, g, yard, grip, u0) {
+    bindDragOnce();
+
+    function down(which) {
+      return function (ev) {
+        ev.preventDefault();
+        var start = toFeet(g, ev);
+        if (!start) return;
+        DRAG = { g: g, yard: yard, mode: which, start: start, u0: u0,
+                 box: { x: u0.x, y: u0.y, w: u0.w, h: u0.h } };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      };
+    }
+    /* These two ARE per-repaint, and correctly so: the elements are new each
+       time and are discarded with the old drawing, taking their listeners
+       with them. */
+    yard.addEventListener('pointerdown', down('move'));
+    grip.addEventListener('pointerdown', down('resize'));
   }
 
   /* ── Order ───────────────────────────────────────────────────────────── */
@@ -600,6 +981,7 @@
 
     $('addMonth').onclick = addMonthRow;
     $('sizeBtn').onclick = doSize;
+    $('studyBtn').onclick = doStudy;
     $('orderBtn').onclick = doOrder;
     postHeight();
   })['catch'](function (e) {

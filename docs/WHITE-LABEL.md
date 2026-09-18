@@ -11,19 +11,35 @@ runbook, and — in the last section — an honest list of what is not built.
 
 > Clean Cell sells. ClearSky fulfils.
 
-A customer on **cleancell.us** sizes and orders a battery system. They never
-see ClearSky, never make an OMEGA account, and never leave Clean Cell's
-website. The order lands in **our** queue and **we** manage it through
-fulfilment. Clean Cell's own engineers, meanwhile, design real projects in the
-editor and can hand any design to a customer as a one-click order link.
+Clean Cell is a **battery manufacturer**. They are not trying to sell software
+— they are trying to sell more batteries, and the platform is how. So the
+funnel matters more than the feature list:
 
-That is three surfaces, and they are genuinely different problems:
+| Step | What the customer does | What it costs us | Why it converts |
+|---|---|---|---|
+| **1 · Size** | Types their bill. Gets kW / kWh. | Nothing | Anonymous and instant. No account, no form, no friction. |
+| **2 · See it on their site** | Types their address. Gets their own lot drawn to scale with the system on it, and drags the yard to where they would really put it. | A metered parcel lookup | **This is the conversion moment.** No battery manufacturer's website does it. |
+| **3 · Order** | Confirms and submits. | Nothing | They have already seen it on their own property. |
+
+Step 2 is the one that earns the sale, and it is also the only step that costs
+real money — which is why a named lead is the ticket for it (see
+**The metered call** below). The spend and the value land in the same place:
+every lookup we pay for has already produced a lead for Clean Cell.
+
+A customer on **cleancell.us** does all three without ever seeing ClearSky,
+making an OMEGA account, or leaving Clean Cell's website. The order lands in
+**our** queue and **we** manage it through fulfilment. Clean Cell's own
+engineers, meanwhile, design real projects in the editor and can hand any
+design to a customer as a one-click order link.
+
+That is four surfaces, and they are genuinely different problems:
 
 | # | Surface | Who is looking | What it needed |
 |---|---------|----------------|----------------|
 | 1 | The signed-in workspace | Clean Cell's own staff | The platform renamed. They know whose software it is; the chrome should still say theirs. |
 | 2 | The public storefront | Clean Cell's **customer** | A page with no sign-in, framed by their website, with no trace of us. **This did not exist.** |
-| 3 | The order desk | ClearSky + Clean Cell | A queue, a price, a lifecycle. **This did not exist.** |
+| 3 | The site study | Clean Cell's **customer** | Their own parcel, drawn, with the system on it. **This did not exist.** |
+| 4 | The order desk | ClearSky + Clean Cell | A queue, a price, a lifecycle. **This did not exist.** |
 
 ---
 
@@ -201,7 +217,146 @@ ever needs to be real, serve the page through a function that sets
 
 ---
 
-## 3 · The order desk
+## 3 · The site study — "show me it on my site"
+
+`POST /api/embed-layout` → `_lib/geocode.js` → `api/parcel.js` →
+`_lib/site-fit.js` → an SVG plan the customer can drag.
+
+```
+address ──geocode(free)──> lat/lng ──parcel(metered, cached)──> ring
+                                                                 │
+                                   _lib/site-fit.js ─────────────┘
+                                   · project to local feet (x east, y north)
+                                   · raster the buildable envelope (setback)
+                                   · largest inscribed rectangle  → proposed yard
+                                   · pack the footprint, with access aisles
+                                   → parcel outline, yard, unit blocks, counts
+```
+
+### This is NOT `api/site-plan.js`, and it must not become it
+
+`api/site-plan.js` is the real constrained layout: it places the battery **and
+the switchgear** and routes the conduit. It demands a surveyed parcel, a
+**confirmed service wall**, reviewed obstacle rectangles and a documented
+clearance basis, and it returns `needs_input` rather than invent any of them.
+
+That is correct, and it is exactly why it can never serve a public storefront:
+**every visitor would get `needs_input`** and a list of evidence they have
+never heard of. Pointing the embed at it would have looked like reuse and
+shipped a dead feature.
+
+So the study answers a deliberately weaker question — *does a system this size
+plausibly fit in this yard* — and says nothing about where anything goes. If
+someone later asks to "just add the conduit route", the answer is no: that is
+`site-plan`'s job and `site-plan`'s evidence bar.
+
+### Why a raster and not polygon offsetting
+
+Correct polygon offsetting is a real geometry library, it degenerates on the
+self-touching and near-collinear rings that assessor data is full of, and a
+subtly wrong inset produces a confident drawing that is wrong by six feet.
+
+A distance raster cannot degenerate: each cell asks "am I inside the ring, and
+at least `setbackFt` from every edge?" with an exact point-to-segment
+distance. When a parcel is too big to raster finely the grid **coarsens and
+says so** (`assumptions.gridCoarsened`), which undercounts rather than
+overcounts — so a reader knows which way the error runs.
+
+### The aisle, and the 378 containers
+
+The first packing pass used clearance alone and reported **378 containers on a
+3.67-acre lot**. Geometrically exact; physically absurd — nothing could be
+delivered, serviced or reached by a fire apparatus, and no authority would
+permit it. A storefront that printed it would have been caught by the first
+engineer who saw it, and rightly.
+
+Units now pack in **blocks of `rowsPerBlock` rows with an `aisleFt` drive
+between blocks** (default: 2 rows, 20 ft). Those are stated on the drawing as
+assumptions, not buried in code. They are **not** a code determination —
+NFPA 855 separation, the local fire code and the manufacturer's own
+installation manual all govern and none is consulted anywhere in the file.
+
+Conservative on purpose: undercounting a yard loses nothing, because a real
+engineer refines it. Overcounting sells a system that cannot be installed.
+
+### It draws what they need, and reports what fits
+
+The customer came to see *their* system on *their* lot. Drawing the yard's
+maximum instead answers a question nobody asked and, on a large parcel,
+produces a wall of two hundred containers that reads as a sales fantasy. So
+`unitsDrawn` is capped at what the sizing called for, and `unitsThatFit`
+reports the capacity beside it — the genuinely useful second number for
+somebody thinking about phase two.
+
+### The customer drags the yard, and the server clamps it
+
+The largest empty rectangle on a lot is very often **the front lawn**. Only
+the owner knows that, so the proposed yard is a starting point they drag and
+resize, and the study re-runs.
+
+The dragged rectangle is **clamped, never trusted** — a box overhanging the
+setback would otherwise let the browser choose its own answer and put a
+container in the street. `clampToRaster` erodes from whichever side actually
+has a blocked cell, converging on the largest legal rectangle inside what they
+asked for. A box whose interior still has a hole (an L-shaped lot) falls back
+to the proposed yard rather than being forced.
+
+Dragging re-runs with the **lat/lng**, not the address, so it never
+re-geocodes; and it almost always hits the parcel cache, so it is free.
+
+### The metered call, and who pays for it
+
+Everything else on the public surface is free to serve. This one is not:
+`api/parcel.js` reaches **Regrid, billed per lookup**. A storefront on the
+open internet pointed at a paid upstream with no account behind it is a bill
+waiting to happen, and "we'll watch it" is not a control.
+
+Three controls, deliberately different in kind:
+
+1. **A named lead is the ticket.** With `requireContactForLayout` on (the
+   default), `embed-layout` refuses without an `orderId` — the receipt from an
+   enquiry already filed through `embed-order`. That row carries a name and an
+   email. So every lookup we pay for has produced a lead for the tenant.
+   Checked against the org (one tenant's order id cannot unlock another's) and
+   aged out at 24 h (a receipt is not a permanent free pass).
+2. **A daily cap per org**, in a Firestore transaction. Instance memory cannot
+   hold a spend limit — every cold start would get a fresh allowance. The
+   claim is *inside* the cache-miss branch, so **a cache hit never spends
+   somebody's allowance**.
+3. **The cache** `api/parcel.js` already keeps at about a metre.
+
+The geocoder is free either way (Census, then Nominatim), so a mistyped
+address costs nothing and is answered plainly.
+
+### What the customer is NOT told
+
+The parcel record carries an **owner name and an APN**. Neither is echoed.
+This is a public page: telling a visitor who owns a lot they typed the address
+of is a different product with a different consent story. Acres, zoning and
+county *are* on the drawing, because they are facts about the land rather than
+about a person. `scripts/tests/tembedlayout.js` asserts this against a fixture
+whose owner field reads `A REAL PERSON WHO DID NOT ASK`, on both the live and
+the cached path.
+
+### One implementation of the parcel chain
+
+`embed-layout` calls `api/parcel.js`'s own `lookup` through its `_helpers`
+seam rather than carrying a copy of the source order, the timeouts, the county
+extents and the "a source that failed is not *no parcel*" rule. Cook County
+moved its layer in 2026; a second copy would have drifted, and the drifted one
+would have been the one serving the public.
+
+### No map tiles
+
+A satellite backdrop would be more impressive and is a metered per-request API
+with a key. The plan view is free to serve, instant, and reads as engineering
+rather than marketing — which is the impression that sells a battery. A
+backdrop is a deliberate later decision with a cost attached, not an
+oversight.
+
+---
+
+## 4 · The order desk
 
 ```
 orders/{orderId}
@@ -324,9 +479,22 @@ node scripts/seed-embed-key.js --org cleancell.us \
 #       capexPerKwh: <their installed $/kWh>
 #       capexPerKw:  <their installed $/kW>
 
-# 5 · The products. Nothing is orderable until real SKUs are published.
+# 5 · The products. Nothing is orderable until real SKUs are published, and
+#     nothing is DRAWABLE without a footprint — widthFt/depthFt are required
+#     for the site study. There is no default footprint on purpose: a made-up
+#     size drawn to scale on somebody's own lot is the most convincing kind
+#     of wrong, so a product without one is simply not offered a study.
 #     omega_orgs/cleancell.us/storefront/config.products = [ { sku, name,
-#       kw, kwh, priceMode, listPrice, leadTimeDays, … } ]
+#       kw, kwh, widthFt, depthFt, priceMode, listPrice, leadTimeDays, … } ]
+#
+# 5a · The site-study geometry, if Clean Cell's installation manual differs
+#      from the defaults (15 ft setback, 5 ft between units, 20 ft aisle
+#      every 2 rows). These live in tenant.json — they are assumptions, not a
+#      cost basis, and a change to one should show up in a diff.
+#        setbackFt, clearanceFt, aisleFt, rowsPerBlock
+#
+# 5b · dailyParcelCap (default 40). The hard per-day stop on the metered
+#      parcel lookup. Raise it once the funnel is measured, not before.
 
 # 6 · Vercel env: ORDER_NOTIFY=<fulfilment inbox>   (falls back to MAIL_NOTIFY)
 ```
@@ -362,5 +530,20 @@ Listed so nobody mistakes any of it for done.
 - **Per-tenant `frame-ancestors`.**
 - **The editor's "publish an order link" button.** `api/order-link.js` works
   and is callable; nothing in `editor.html` calls it yet.
-- **Address validation / geocoding** on the storefront. The address is a free
-  string a human reads.
+- **Address validation** beyond the geocoder's own match. The order's address
+  is a free string a human reads; the STUDY's address is geocoded, and its
+  matched form is shown so the customer can see what we looked up.
+- **Buildings, drives and easements on the plan.** The study rasters the
+  parcel and the setback, and nothing else. It does not know where their
+  building is — which is precisely why the customer drags the yard, and why
+  `unverified` says so in as many words. OSM footprints are free and would
+  help; they are also unverified geometry that would make the drawing look
+  more authoritative than it is, so it is a deliberate decision rather than a
+  missing feature.
+- **A satellite backdrop** under the plan. Metered, keyed, and a real
+  decision — see § No map tiles.
+- **The value stack in the embed.** `embed-size` will show an annual saving
+  off the customer's own tariff when `showEconomics` is on. The full dispatch
+  and revenue model (`omega-value-stack.js`, `valuestack.html`) is not on the
+  public surface and should not be: it is the most valuable thing in the
+  platform and it is what the signed-in product is for.
