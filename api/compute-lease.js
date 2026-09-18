@@ -64,7 +64,7 @@ var auth = require('./_lib/verify-token');
 /* Bumped whenever this file changes. Stamped into every response including
    errors, for the same reason grid-atlas.js carries one: the last round of
    confusion was entirely "which version of this is actually running". */
-var BUILD = '2026-09-18.compute-lease-v1';
+var BUILD = '2026-09-18.compute-lease-v1.brand';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE RATE CARD  ⚠ seed values — see the header
@@ -631,6 +631,45 @@ function verdictOf(gates) {
     reason: 'All four gates clear on evidence. Offerable.' };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE TENANT'S BRAND, RESOLVED HERE
+   ═══════════════════════════════════════════════════════════════════════════
+   A proposal carries the name of the company sending it. On a multi-tenant
+   platform that is NOT ClearSky — it is SunESol, or Concord, or whoever the
+   signed-in rep works for. A host who receives a document branded with their
+   vendor's vendor has been told something nobody meant to tell them.
+
+   WHY THE FUNCTION AND NOT THE PAGE. Two surfaces already render this
+   proposal — compute-proposal.html and the editor's compute panel — and
+   there will be more. Each one resolving branding for itself means each one
+   reading omega_orgs, each one deciding what to do with a blank field, and
+   the two documents drifting apart inside a month. This function already
+   authenticates the caller and already reads their org for the entitlement
+   check; the brand comes off that same read, at no extra cost.
+
+   It is also why this cannot simply be omega-brand.js: that file is not on
+   editor.html's script list, and adding a sign-in-path module to the largest
+   page in the repo to fetch four strings is the wrong trade.
+
+   EMPTY IS EMPTY, not a guess. A tenant with no logo gets '' and the page
+   falls back to its own wordmark. Deriving a name from the orgId would put
+   "concordenergyusa.com" on a customer's desk. */
+function brandOf(org) {
+  org = org || {};
+  var eb = org.exportBrand || {};
+  var colors = org.colors || {};
+  return {
+    name: str(eb.name) || str(org.name) || '',
+    logoUrl: str(eb.logo) || str(eb.logoUrl) || str(org.logoUrl) || '',
+    accent: str(colors.accent) || str(eb.accent) || '',
+    tagline: str(eb.tagline) || '',
+    slug: str(org.slug) || '',
+    /* So a surface can say "unbranded" out loud rather than printing a blank
+       header and leaving somebody to wonder whether the lookup failed. */
+    resolved: !!(str(eb.name) || str(org.name))
+  };
+}
+
 /* ── small helpers ───────────────────────────────────────────────────────── */
 function num(v) { var n = Number(v); return (v === '' || v == null || !isFinite(n)) ? null : n; }
 function str(v) { return v == null ? '' : String(v).trim(); }
@@ -718,7 +757,11 @@ function evaluate(body, opts) {
     offer: offer,
     asks: asks,
     findings: findings,
-    disclaimer: 'Indicative only. The lease range is produced from ClearSky\'s rate card ('
+    /* The company whose name goes on the proposal. Resolved from the caller's
+       omega_orgs record in the handler; empty when the model is run directly
+       (tests, scripts), and every surface falls back to its own wordmark. */
+    brand: opts.brand || brandOf(null),
+    disclaimer: 'Indicative only. The lease range is produced from the rate card ('
       + RATE_CARD.version + ') against the evidence supplied and is not a binding offer. '
       + 'Rent, term and conditions are subject to a signed LOI, utility will-serve, a carrier '
       + 'commitment for 1 Gbps bidirectional service, and site diligence.'
@@ -749,6 +792,9 @@ module.exports = function (req, res) {
       gates: ['power', 'fiber (hard gate)', 'zoning', 'siteControl'],
       evidence: 'POST { rep:{...}, evidence:{ gridAtlas, network, parcel } }. The page calls '
               + '/api/grid-atlas, /api/network-proximity and /api/parcel itself and posts what they said.',
+      brand: 'The response carries the CALLER\'s tenant brand (name, logoUrl, accent, tagline) read '
+           + 'from their omega_orgs record, so every surface renders one proposal rather than each '
+           + 'resolving branding for itself. Unset fields come back empty, never guessed.',
       note: 'An unanswered question is UNCONFIRMED, not a failure — it drops the site to indicative '
           + 'and is named in `asks`, rather than counting against it.'
     });
@@ -758,8 +804,19 @@ module.exports = function (req, res) {
   return auth.authenticateWithTier(req).then(function (a) {
     if (!a.caller.staff && (a.billing.toolOverrides || {})[TOOL_KEY] === false)
       throw auth.httpError(403, 'Compute Lease access required.');
-    if (a.caller.staff) return a;
     var token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+
+    /* Staff skip the ENTITLEMENT checks, not the org read: a ClearSky rep's
+       proposal carries ClearSky's brand by the same path a tenant's carries
+       theirs, and a branding bug that only shows up for tenants is a branding
+       bug nobody at ClearSky ever sees. The read is best-effort for staff —
+       it must not be able to fail their request. */
+    if (a.caller.staff) {
+      return auth.readAsCaller(token, 'omega_orgs/' + encodeURIComponent(a.caller.orgId))
+        .then(function (org) { a.org = org || null; return a; },
+              function () { a.org = null; return a; });
+    }
+
     return Promise.all([
       auth.readAsCaller(token, 'omega_orgs/' + encodeURIComponent(a.caller.orgId)),
       auth.readAsCaller(token, 'omega_orgs/' + encodeURIComponent(a.caller.orgId)
@@ -772,6 +829,7 @@ module.exports = function (req, res) {
         throw auth.httpError(403, 'An active organisation membership is required.');
       if (Array.isArray(member.toolAccess) && member.toolAccess.indexOf(TOOL_KEY) < 0)
         throw auth.httpError(403, 'Compute Lease access required.');
+      a.org = org;
       return a;
     });
   }).then(function (a) {
@@ -779,7 +837,10 @@ module.exports = function (req, res) {
     if (!body.rep || typeof body.rep !== 'object')
       throw auth.httpError(400, 'rep:{} is required — the answers the rep captured. '
         + 'Send {} for a site with nothing known and every gate comes back unconfirmed, which is the honest answer.');
-    return res.status(200).json(evaluate(body, { disclose: !!(a && a.caller && a.caller.staff) }));
+    return res.status(200).json(evaluate(body, {
+      disclose: !!(a && a.caller && a.caller.staff),
+      brand: brandOf(a && a.org)
+    }));
   }).catch(function (e) {
     return res.status(e.status || 500).json({
       build: BUILD,
@@ -793,6 +854,7 @@ module.exports = function (req, res) {
    network and no Firebase. The handler is a thin auth wrapper around it. */
 module.exports._model = {
   evaluate: evaluate, RATE_CARD: RATE_CARD, BUILD: BUILD,
+  brandOf: brandOf,
   gatePower: gatePower, gateFiber: gateFiber, gateZoning: gateZoning,
   gateSiteControl: gateSiteControl, classifyZoning: classifyZoning,
   classifyTranche: classifyTranche, verdictOf: verdictOf,

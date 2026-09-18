@@ -223,7 +223,17 @@ you said as equally loose.
 
 ## 5 · How to run a site through the tool
 
-`/compute-proposal.html` — **Compute Land Lease** in the Sales category.
+Two doors into the same screen, the same model and the same proposal:
+
+- **`/compute-proposal.html`** — *Compute Land Lease* in the Sales category.
+  Start here when the site is an address on a list.
+- **Site Map editor → Compute tab → 3 · Size & Cost → Land Lease.** Start here
+  when the site is already on the drawing; it screens the point on screen and
+  you never retype the address.
+
+Both run the same four gates and print the same document, carrying **your**
+company's name and logo rather than ClearSky's. The steps below are written
+for the standalone tool; the editor panel is the same fields in one modal.
 
 1. Type the address with city and state. Press **Screen this site**.
 2. Three services run in parallel and each reports separately: Grid Atlas
@@ -304,7 +314,8 @@ to defend it.
 | Quick SOQ intake (front-of-funnel, §3) | **Live** — the left panel of `/compute-proposal.html` |
 | Four-gate screen with evidence and call list | **Live** — the Screen tab |
 | Indicative land lease range, 15-year | **Live** — on a seed rate card |
-| Four-page host-facing proposal, print/PDF | **Live** — the Proposal tab |
+| Four-page host-facing proposal, print/PDF | **Live** — the Proposal tab, and from the editor's Compute panel |
+| Proposal carries the tenant's logo, name and accent colour | **Live** — resolved from your `omega_orgs` record. If your logo or brand colour is missing, set it in Account Settings; the proposal falls back to the platform wordmark rather than guessing. |
 | Detailed 32-category site assessment | **Not built.** Ravi is merging the two spreadsheets into one; nothing in Omega covers the deep assessment yet. |
 | Saved per-site records, pipeline view | **Partial** — the tool saves the last site per org via the standard `toolData` contract. There is no multi-site register on this tool yet; `clearsky-sitefinder.html` is the nearest thing. |
 
@@ -323,8 +334,12 @@ implied:
 
 ## 8 · Related
 
-- `api/compute-lease.js` — the gate model, the tranche rule and the rate card
-- `compute-proposal.html` — the tool
+- `api/compute-lease.js` — the gate model, the tranche rule, the rate card and
+  the tenant branding that goes on the proposal
+- `omega-compute-lease.js` — the shared client: the three-way fan-out and the
+  four-page proposal, used by both surfaces so they cannot drift
+- `compute-proposal.html` — the standalone tool
+- `editor.html` Patch 130 (`OmegaLeasePanel`) — the Compute panel door
 - `scripts/test-compute-lease.js` — 94 checks over the gates, the hard gate,
   the tranche and the arithmetic. In `npm test`.
 - `api/grid-atlas.js` — substations, voltage, transmission

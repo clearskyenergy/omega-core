@@ -666,3 +666,70 @@ Still open, and said plainly in that doc rather than implied: the 32-category
 deep assessment is not in Omega and should be scoped off Ravi's merged
 spreadsheet rather than invented, and this tool saves one site per org through
 the standard `toolData` contract — there is no multi-site register on it yet.
+
+### Land lease in the editor, and the proposal a tenant can send
+
+Two things followed the tool: the Compute panel wanted the same screen on the
+site already on the drawing, and the proposal had to carry the TENANT's name
+rather than ClearSky's. Neither is a feature on its own — both are the same
+problem, which is that a second surface now renders this document.
+
+**`omega-compute-lease.js`** is that surface's other half, and the tool's. It
+holds the fan-out (Grid Atlas, Network Proximity, the parcel record — parallel,
+independently failable, each reporting its own progress) and the four-page
+proposal. `compute-proposal.html` was refactored onto it in the same pass and
+is ~340 lines shorter for it. The argument is the one
+`omega-grid-atlas-client.js` already makes about the scoring model, only worse
+here: two copies of a proposal generator means two hosts getting two different
+offers from the same company in the same week.
+
+Nothing in the client scores or prices. The gates, the tranche rule and the
+rate card stay in `/api/compute-lease.js`.
+
+**Branding is resolved server-side**, in the function, off the caller's own
+`omega_orgs` record — `brand: { name, logoUrl, accent, tagline, resolved }`.
+Not in `omega-brand.js`, because that file is not on editor.html's script list
+and adding a sign-in-path module to the largest page in the repo to fetch four
+strings is the wrong trade. Not in each page, because then each page decides
+for itself what a blank field means and the two documents disagree. Staff read
+their org too, skipping only the entitlement checks — a branding bug that only
+shows up for tenants is a branding bug nobody at ClearSky ever sees. An unset
+field comes back `''` and the page falls back to its own wordmark: deriving a
+name from the orgId would put "concordenergyusa.com" on a customer's desk.
+
+A logo is drawn on a white chip on the dark cover and page headers. That is
+not decoration — `sales-proposal.html` carries a long note about exactly this
+failure: a mark that is black-on-transparent vanishes on a navy footer, the
+export looks right on screen, and it ships with an invisible logo. A white
+chip works for every mark without needing a second white-variant file.
+
+**Patch 130 (`OmegaLeasePanel`)** puts a Land Lease button in the Compute
+tab's "3 · Size & Cost" panel, beside Compute Cost — which prices what we
+build, where this prices what we pay to stand it somewhere. It injects next to
+`rb-compute-cost` and Patch 114's PLAN moves it into the panel, the same way
+every other compute tool gets there. The site comes from `_npxSiteLatLon()`
+first, then `S`, then the map centre: the same three fallbacks in the same
+order the Network Proximity panel uses, so the two panels can never disagree
+about which point they are looking at. Evidence is fetched once and survives
+closing the modal; every answer the rep types re-scores against it and never
+re-runs a 55-second fiber lookup.
+
+The parcel record prefills zoning and owner, and only where the rep has typed
+nothing — their value wins, because they are looking at the site and the county
+layer is looking at a database that was right in 2019. Parcel ACREAGE is
+deliberately not prefilled into the leased-area field: we lease a carve-out,
+not somebody's whole industrial park, and a number that looks agreed is worse
+than a blank.
+
+**The proposal opens in a window, and falls back to an overlay.** `window.open`
+is tried first because a separate window is nicer — the rep keeps the proposal
+beside the drawing. It is not relied on: a popup blocker eats it silently, it
+was eaten in the first browser this was tested in, and a rep who presses "Open
+the proposal" and gets an alert about pop-up settings has been handed a support
+ticket instead of a document. The fallback is a full-screen overlay with the
+document in an iframe — `srcdoc`, so there is nothing to revoke and no origin
+to get wrong — printing through the iframe's own `contentWindow`, which prints
+the four pages and leaves the host page's print rules out of it. The document
+suppresses its own toolbar in that mode (`bare`), because two Print buttons a
+centimetre apart is the kind of thing that gets clicked wrongly under time
+pressure.

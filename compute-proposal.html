@@ -150,61 +150,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
 .f-blocker{background:var(--red-dim);color:var(--red)}
 .empty{padding:70px 24px;text-align:center;color:var(--muted);font-size:12px;line-height:1.8}
 
-/* ── PROPOSAL PAGES ── */
+/* ── PROPOSAL PAGES ──
+   Only the CONTAINER is styled here. The pages themselves carry the .cl-*
+   classes from omega-compute-lease.js, injected at boot with the tenant's
+   accent colour, so this page and the editor's Compute panel render one
+   document rather than two that look alike today. */
 .pages{padding:20px 24px 60px;display:flex;flex-direction:column;align-items:center;gap:22px}
-.page{width:816px;min-height:1056px;background:#fff;box-shadow:0 2px 16px rgba(15,27,42,.10);position:relative;overflow:hidden;flex:0 0 auto}
-.p1{background:var(--ink);color:#fff;padding:58px 58px 44px;display:flex;flex-direction:column}
-.p1-eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.55);font-weight:700;margin-bottom:16px}
-.p1-brand{font-size:15px;font-weight:800;letter-spacing:-.01em;margin-bottom:auto}
-.p1-h1{font-size:44px;font-weight:800;line-height:1.1;letter-spacing:-.03em;margin-bottom:8px}
-.p1-h1 span{color:#60A5FA}
-.p1-lede{font-size:14px;line-height:1.7;color:rgba(255,255,255,.72);max-width:520px;margin-bottom:34px}
-.p1-offer{border-top:1px solid rgba(255,255,255,.16);border-bottom:1px solid rgba(255,255,255,.16);padding:26px 0;margin-bottom:30px}
-.p1-offer-label{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);font-weight:700;margin-bottom:10px}
-.p1-offer-num{font-size:50px;font-weight:800;letter-spacing:-.035em;line-height:1}
-.p1-offer-unit{font-size:14px;font-weight:600;color:rgba(255,255,255,.6);margin-top:8px}
-.p1-meta{display:grid;grid-template-columns:1fr 1fr;gap:20px 30px;margin-bottom:auto}
-.p1-meta-item label{display:block;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:700;margin-bottom:4px}
-.p1-meta-item span{font-size:13px;font-weight:600}
-.p1-foot{display:flex;justify-content:space-between;font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.4);font-weight:700;padding-top:26px}
-
-.ph{background:var(--ink);color:#fff;padding:15px 44px;display:flex;align-items:center;justify-content:space-between}
-.ph-brand{font-size:12px;font-weight:800}
-.ph-title{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:rgba(255,255,255,.62);font-weight:700}
-.pb{padding:32px 44px}
-.pt{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:800;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.pp{font-size:12px;line-height:1.75;color:#334155;margin-bottom:16px}
-.pf{position:absolute;bottom:0;left:0;right:0;background:var(--ink);color:rgba(255,255,255,.55);padding:12px 44px;display:flex;justify-content:space-between;font-size:8.5px;letter-spacing:.05em}
-
-.qtbl{width:100%;border-collapse:collapse;margin-bottom:18px}
-.qtbl th{text-align:left;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);font-weight:800;padding:8px 10px;border-bottom:1px solid var(--border)}
-.qtbl td{font-size:11.5px;padding:11px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.55;color:#334155}
-.qtbl td.g{font-weight:700;color:var(--ink);width:112px}
-.pill{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
-.pill-pass{background:var(--green-dim);color:var(--green)}
-.pill-conditional{background:var(--amber-dim);color:var(--amber)}
-.pill-unconfirmed{background:var(--slate-dim);color:var(--slate)}
-.pill-fail{background:var(--red-dim);color:var(--red)}
-
-.econ{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
-.econ-box{border:1px solid var(--border);border-radius:9px;padding:16px;text-align:center}
-.econ-box.hero{border-color:var(--accent);background:var(--accent-dim)}
-.econ-label{font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;color:var(--sub);margin-bottom:8px}
-.econ-num{font-size:24px;font-weight:800;color:var(--ink);letter-spacing:-.03em;line-height:1.1}
-.econ-note{font-size:9.5px;color:var(--sub);margin-top:6px;line-height:1.5}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:18px}
-.split h4{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:800;margin-bottom:9px}
-.split li{font-size:11.5px;line-height:1.75;color:#334155;margin-left:15px;margin-bottom:5px}
-.fineprint{font-size:9.5px;line-height:1.7;color:var(--sub);padding:12px 14px;background:var(--panel);border-radius:7px;border:1px solid var(--border)}
-
-.stepr{display:flex;gap:15px;margin-bottom:17px}
-.stepn{width:27px;height:27px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-.stept{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:3px}
-.stepd{font-size:11px;line-height:1.7;color:#475569}
-.faq{margin-bottom:13px}
-.faqq{font-size:11.5px;font-weight:700;color:var(--ink);margin-bottom:3px}
-.faqa{font-size:11px;line-height:1.7;color:#475569}
-
 /* ── PRINT ── */
 @media print{
   @page{size:letter;margin:0}
@@ -213,8 +164,6 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
   .main{display:block;height:auto}
   .rp{overflow:visible}
   .pages{padding:0;gap:0;display:block}
-  .page{width:8.5in;min-height:11in;box-shadow:none;page-break-after:always;break-after:page}
-  .page:last-child{page-break-after:auto;break-after:auto}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
@@ -422,6 +371,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
 <script src="/config.js"></script>
 <script src="/omega-tools.js"></script>
 <script src="/omega-grid-atlas-client.js"></script>
+<script src="/omega-compute-lease.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    ClearSky-OMEGA · Compute Land Lease Proposal
@@ -431,7 +381,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
    whatever embedded browser a field rep has open on a laptop in a parking lot
    outside the site, which is exactly when it matters most.
    ═══════════════════════════════════════════════════════════════════════════ */
-(function () {
+(function (root) {
 'use strict';
 
 var TOOL_KEY = 'computelease';
@@ -496,168 +446,85 @@ function repAnswers() {
   return r;
 }
 
-/* ── AUTH ──────────────────────────────────────────────────────────────────
-   /api/compute-lease, /api/network-proximity and /api/parcel all require the
-   signed-in user's ID token. Grid Atlas does not. A missing token is reported
-   as "sign in", never as a 401 nobody can interpret. */
-function idToken() {
-  var u = null;
-  try { u = window.firebase && firebase.auth && firebase.auth().currentUser; } catch (e) {}
-  if (!u || typeof u.getIdToken !== 'function') return Promise.resolve(null);
-  return u.getIdToken().then(null, function () { return null; });
-}
+/* ── THE SCREEN ────────────────────────────────────────────────────────────
+   The fan-out, the token handling and the POST are all in
+   omega-compute-lease.js. The editor's Compute panel runs the same three
+   lookups against the same model, and either surface keeping its own copy is
+   exactly how the two come to disagree about one site.
 
-/* ── STATUS LINES ──────────────────────────────────────────────────────────
-   Four lines, one per service, each saying what it is doing right now. A rep
-   watching a slow fiber lookup should be able to see that the power gate has
+   What stays here is this page's own part: five status lines, one per source,
+   so a rep watching a slow fiber lookup can see that the power gate has
    already landed rather than watching one undifferentiated spinner. */
 var RUN = {};
-function runLine(key, label, cls, text) {
-  RUN[key] = { label: label, cls: cls, text: text };
+var RUN_LABEL = { geocode: 'Address', grid: 'Grid Atlas', fiber: 'Network Proximity',
+                  parcel: 'Parcel record', score: 'Scoring' };
+function runLine(key, cls, text) {
+  RUN[key] = { cls: cls, text: text };
   var out = [], order = ['geocode', 'grid', 'fiber', 'parcel', 'score'];
   for (var i = 0; i < order.length; i++) {
     var r = RUN[order[i]];
     if (!r) continue;
-    out.push('<div class="run-line"><b>' + esc(r.label) + '</b><span class="run-' + r.cls + '">'
-      + esc(r.text) + '</span></div>');
+    out.push('<div class="run-line"><b>' + esc(RUN_LABEL[order[i]]) + '</b><span class="run-'
+      + esc(r.cls) + '">' + esc(r.text) + '</span></div>');
   }
   $('run-status').innerHTML = out.join('');
 }
 function clearRun() { RUN = {}; $('run-status').innerHTML = ''; }
+var PROGRESS = { onSource: function (key, state, text) { runLine(key, state, text); } };
 
-/* ── THE THREE EVIDENCE LOOKUPS ────────────────────────────────────────────
-   In parallel, each independently failable. A layer that does not answer is
-   MISSING, not zero: /api/compute-lease drops it out of the gate rather than
-   counting it against the site, and says so in `findings`. That distinction
-   is the same one api/grid-atlas.js makes and it is the whole reason the
-   gates can be trusted. */
-function lookupGrid() {
-  runLine('grid', 'Grid Atlas', 'busy', 'measuring…');
-  return window.OmegaGridAtlas.run({ lat: site.lat, lng: site.lng, address: site.address, sizeMw: numOf('in-mw') || 1 })
-    .then(function (j) {
-      site.lat = j.lat; site.lng = j.lng;
-      site.resolved = j.resolvedAddress || site.address;
-      var s = window.OmegaGridAtlas.summarise(j) || {};
-      runLine('grid', 'Grid Atlas', 'ok', (s.nearestSubKm != null
-        ? 'substation ' + (Math.round(s.nearestSubKm * 10) / 10) + ' km'
-          + (s.maxKv ? ' · ' + s.maxKv + ' kV' : '')
-        : 'no substation in range') + ' · ' + (s.score == null ? 'unscored' : s.score + '/100'));
-      return { score: s.score, nearestSubKm: s.nearestSubKm, nearestSubName: s.nearestSubName,
-               maxKv: s.maxKv, resolvedAddress: j.resolvedAddress, geocode: j.geocode || null };
-    })['catch'](function (e) {
-      runLine('grid', 'Grid Atlas', 'warn', (e && e.message) || 'did not answer');
-      return null;
-    });
-}
-
-function lookupFiber(tok) {
-  if (!tok) { runLine('fiber', 'Network Proximity', 'warn', 'sign in to run the fiber lookup'); return Promise.resolve(null); }
-  runLine('fiber', 'Network Proximity', 'busy', 'asking six sources, up to 55 s…');
-  return window.OmegaGridAtlas.network({ lat: site.lat, lng: site.lng }, { requestedCapacityGbps: 1 })
-    .then(function (j) {
-      var f = j.fiber || {};
-      runLine('fiber', 'Network Proximity', f.verdict === 'unlikely' ? 'bad' : f.verdict === 'likely' ? 'ok' : 'warn',
-        'fiber ' + (f.verdict || 'unknown')
-        + (f.lateral && f.lateral.mi != null ? ' · nearest evidence ' + f.lateral.mi + ' mi' : ''));
-      return { verdict: f.verdict || null, score: f.score == null ? null : f.score,
-               reasons: f.reasons || [], lateral: f.lateral || null,
-               dataReady: !!f.dataReady };
-    })['catch'](function (e) {
-      runLine('fiber', 'Network Proximity', 'warn', (e && e.message) || 'did not answer');
-      return null;
-    });
-}
-
-function lookupParcel(tok) {
-  if (!tok) { runLine('parcel', 'Parcel record', 'warn', 'sign in to read the parcel'); return Promise.resolve(null); }
-  runLine('parcel', 'Parcel record', 'busy', 'reading the county layer…');
-  return fetch('/api/parcel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-    body: JSON.stringify({ lat: site.lat, lng: site.lng })
-  }).then(function (r) { return r.json()['catch'](function () { return {}; }); })
-    .then(function (j) {
-      if (!j || j.ok === false) {
-        runLine('parcel', 'Parcel record', 'warn', (j && j.reason) || 'no parcel record here');
-        return j && j.ok === false ? j : null;
-      }
-      runLine('parcel', 'Parcel record', 'ok',
-        (j.zoning ? 'zoned ' + j.zoning : 'no zoning published')
-        + (j.acres != null ? ' · ' + (Math.round(j.acres * 100) / 100) + ' ac' : '')
-        + (j.owner ? ' · ' + j.owner : ''));
-      /* Prefill only what the rep has NOT already typed. The rep's own value
-         always wins: they are looking at the site and the county layer is
-         looking at a database that was right in 2019. */
-      if (j.zoning && !val('in-zonecode')) $('in-zonecode').value = j.zoning;
-      if (j.owner && !val('in-owner')) $('in-owner').value = j.owner;
-      return j;
-    })['catch'](function (e) {
-      runLine('parcel', 'Parcel record', 'warn', (e && e.message) || 'did not answer');
-      return null;
-    });
-}
-
-/* ── THE SCREEN ────────────────────────────────────────────────────────── */
 function screenSite() {
   var addr = val('in-address');
   if (!addr) { alert('Enter the site address first.'); $('in-address').focus(); return; }
-  site.address = addr; site.lat = null; site.lng = null;
+  if (!root.OmegaComputeLease) {
+    alert('The compute lease client (omega-compute-lease.js) did not load. Reload the page.');
+    return;
+  }
   clearRun();
-  runLine('geocode', 'Address', 'busy', 'locating…');
   $('btn-screen').disabled = true;
 
-  lookupGrid().then(function (ga) {
-    if (site.lat == null) {
-      runLine('geocode', 'Address', 'bad', 'could not be located — the gates will rest on your answers alone');
-    } else {
-      runLine('geocode', 'Address', 'ok', site.resolved || addr);
-    }
-    return idToken().then(function (tok) {
-      return Promise.all([
-        site.lat == null ? Promise.resolve(null) : lookupFiber(tok),
-        site.lat == null ? Promise.resolve(null) : lookupParcel(tok)
-      ]).then(function (parts) {
-        evidence = { gridAtlas: ga, network: parts[0], parcel: parts[1] };
-        return score();
-      });
-    });
-  })['catch'](function (e) {
-    runLine('score', 'Scoring', 'bad', (e && e.message) || 'failed');
-  }).then(function () { $('btn-screen').disabled = false; });
+  /* evidence() then rescore(), rather than the client's one-call screen(),
+     because the parcel record has to prefill the form BEFORE the answers are
+     posted — otherwise the first score runs without a zoning code we already
+     had in hand. */
+  OmegaComputeLease.evidence({ address: addr, sizeMw: numOf('in-mw') || 1 }, PROGRESS)
+    .then(function (ev) {
+      evidence = ev;
+      site = { lat: ev.site.lat, lng: ev.site.lng, address: addr, resolved: ev.site.resolved };
+      prefill(ev.parcel);
+      return score();
+    })['catch'](function (e) {
+      runLine('score', 'bad', (e && e.message) || 'failed');
+    }).then(function () { $('btn-screen').disabled = false; });
 }
 
-/* Post the evidence and the rep's answers to the model. Coalesced: a rep
-   tabbing through eight fields must not queue eight round trips, and the
-   last edit is the one that matters. */
+/* Prefill only what the rep has NOT already typed. The rep's own value always
+   wins: they are looking at the site, and the county layer is looking at a
+   database that was right in 2019. */
+function prefill(parcel) {
+  if (!parcel || parcel.ok === false) return;
+  if (parcel.zoning && !val('in-zonecode')) $('in-zonecode').value = parcel.zoning;
+  if (parcel.owner && !val('in-owner')) $('in-owner').value = parcel.owner;
+}
+
+/* Coalesced: a rep tabbing through eight fields must not queue eight round
+   trips, and the last edit is the one that matters. */
 function score() {
   if (scoring) { queued = true; return Promise.resolve(); }
   scoring = true;
-  runLine('score', 'Scoring', 'busy', 'running the gate set…');
-  return idToken().then(function (tok) {
-    if (!tok) throw new Error('Sign in — the gate model and the rate card are behind your account.');
-    return fetch('/api/compute-lease', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-      body: JSON.stringify({ rep: repAnswers(), evidence: evidence || {} })
+  return OmegaComputeLease.rescore(evidence || {}, repAnswers(), PROGRESS)
+    .then(function (j) {
+      result = j;
+      $('build-stamp').textContent = j.build || '';
+      render();
+      save();
+    })['catch'](function () {
+      /* rescore() has already put the reason on the Scoring line. Swallowing
+         it here keeps a failed re-score from unwinding the edit handler that
+         called it. */
+    }).then(function () {
+      scoring = false;
+      if (queued) { queued = false; return score(); }
     });
-  }).then(function (r) {
-    return r.json()['catch'](function () { return {}; }).then(function (j) {
-      if (!r.ok) throw new Error((j && (j.error || j.detail)) || ('/api/compute-lease returned ' + r.status));
-      return j;
-    });
-  }).then(function (j) {
-    result = j;
-    $('build-stamp').textContent = j.build || '';
-    runLine('score', 'Scoring', j.verdict === 'disqualified' ? 'bad' : j.verdict === 'qualified' ? 'ok' : 'warn',
-      j.verdict + ' · ' + (j.offer ? money(j.offer.monthly.base) + '/mo at base' : 'no offer priced'));
-    render();
-    save();
-  })['catch'](function (e) {
-    runLine('score', 'Scoring', 'bad', (e && e.message) || 'failed');
-  }).then(function () {
-    scoring = false;
-    if (queued) { queued = false; return score(); }
-  });
 }
 
 /* ── RENDER · SCREEN (internal) ────────────────────────────────────────── */
@@ -770,222 +637,44 @@ function offerBand(label, m, a, total, isBase) {
 }
 
 /* ── RENDER · PROPOSAL (host facing) ───────────────────────────────────────
-   Deliberately a different document from the screen above. The host sees the
-   offer, the term, what we bring and what we need from them. They do not see
-   gate scores, the ask list or the rate card — those are ours. */
-/* What goes on the host's page. The DEFAULT is the opening number alone.
+   The document itself is in omega-compute-lease.js, because the editor's
+   Compute panel prints the same four pages. Two copies of it would mean two
+   hosts getting two different offers from the same company in the same week.
 
-   The band is three positions in a negotiation, not three estimates of the
-   site, and printing low–high hands the host the ceiling before anyone has
-   said anything — after which there is no version of the conversation that
-   ends below it. `full` exists for an internal review copy and says so in the
-   field hint; it is never the default. */
-/* The host's version of the caveat. The API's `disclaimer` says the same thing
-   but names the internal rate card by version, which is provenance for the rep
-   and noise on the host's copy. The screen view prints that one; this page
-   prints this one. Both say the document is indicative and neither pretends
-   otherwise. */
-var HOST_DISCLAIMER = 'This is an indicative proposal, not a binding offer. Rent, term and conditions '
-  + 'are subject to a signed letter of intent, a utility will-serve confirmation, a carrier commitment '
-  + 'for 1 Gbps bidirectional service, and site diligence.';
+   This page supplies who the document is for and how much of the band to
+   show. The client supplies the pages, and the tenant's branding, which
+   /api/compute-lease resolved server-side off the caller's own org record —
+   a SunESol rep sends a SunESol proposal, not a ClearSky one. */
+function proposalOpts() {
+  return {
+    host: val('in-host'), contact: val('in-contact'),
+    rep: val('in-rep'), repEmail: val('in-repmail'),
+    present: val('in-present') || 'base',
+    term: numOf('in-leaseterm') || 15
+  };
+}
 
-function rentPhrase(o) {
-  if (!o) return null;
-  var mode = val('in-present') || 'base';
-  if (mode === 'open') return { num: money(o.monthly.low), unit: 'per month',
-    yr: money(o.annual.low) + ' per year', total: o.termTotal.low, totalHi: o.termTotal.low };
-  if (mode === 'range') return { num: money(o.monthly.low) + '–' + money(o.monthly.base), unit: 'per month',
-    yr: money(o.annual.low) + '–' + money(o.annual.base) + ' per year', total: o.termTotal.low, totalHi: o.termTotal.base };
-  if (mode === 'full') return { num: money(o.monthly.low) + '–' + money(o.monthly.high), unit: 'per month',
-    yr: money(o.annual.low) + '–' + money(o.annual.high) + ' per year', total: o.termTotal.low, totalHi: o.termTotal.high };
-  return { num: money(o.monthly.base), unit: 'per month',
-    yr: money(o.annual.base) + ' per year', total: o.termTotal.base, totalHi: o.termTotal.base };
+/* The pages' stylesheet is injected rather than static because the tenant's
+   accent colour is not known until /api/compute-lease answers. Re-injected
+   when the accent changes and not otherwise, so a re-render is not a restyle. */
+var cssAccent = null;
+function ensureProposalCss(accent) {
+  if (accent === cssAccent) return;
+  cssAccent = accent;
+  var el = $('cl-proposal-css');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'cl-proposal-css';
+    document.head.appendChild(el);
+  }
+  el.textContent = OmegaComputeLease.proposalCss(accent);
 }
 
 function renderProposal() {
-  var r = result;
-  if (!r) return;
-  var o = r.offer, rent = rentPhrase(o);
-  var host = val('in-host') || 'Site Host';
-  var addr = r.site.address || site.address || '—';
-  var rep = val('in-rep'), repmail = val('in-repmail');
-  var contact = val('in-contact');
-  var today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  var term = o ? o.termYears : (numOf('in-leaseterm') || 15);
-  var p = [];
-
-  /* ── PAGE 1 · COVER ── */
-  p.push('<div class="page p1">'
-    + '<div class="p1-brand">ClearSky Energy Solutions</div>'
-    + '<div class="p1-eyebrow">Land Lease Proposal · Distributed Compute</div>'
-    + '<h1 class="p1-h1">Your land.<br><span>Our equipment.</span><br>Your income.</h1>'
-    + '<div class="p1-lede">We are looking for sites that already have power and fiber. '
-    + 'We install and operate modular compute equipment on a small fenced pad, we pay for everything, '
-    + 'and you receive rent for ' + term + ' years. No capital, no operating obligation, no change to your business.</div>'
-    + (o
-        ? '<div class="p1-offer"><div class="p1-offer-label">Indicative lease consideration</div>'
-          + '<div class="p1-offer-num">' + esc(rent.num) + '</div>'
-          + '<div class="p1-offer-unit">' + esc(rent.unit) + ' &nbsp;·&nbsp; ' + esc(rent.yr)
-          + ' &nbsp;·&nbsp; escalating annually over a ' + term + '-year term</div></div>'
-        : '<div class="p1-offer"><div class="p1-offer-label">Lease consideration</div>'
-          + '<div class="p1-offer-unit" style="font-size:16px;color:rgba(255,255,255,.8)">'
-          + 'To be established once the site qualification is complete.</div></div>')
-    + '<div class="p1-meta">'
-    + metaItem('Prepared for', host + (contact ? ' · ' + contact : ''))
-    + metaItem('Site', addr)
-    + metaItem('Prepared by', rep || 'ClearSky Energy Solutions')
-    + metaItem('Date', today)
-    + '</div>'
-    + '<div class="p1-foot"><span>Powered by ClearSky-OMEGA</span><span>' + esc(repmail || '') + '</span></div>'
-    + '</div>');
-
-  /* ── PAGE 2 · SITE QUALIFICATION ── */
-  var rows = [];
-  var order = r.gateOrder || ['power', 'fiber', 'zoning', 'siteControl'];
-  var hostWords = {
-    power: 'We need roughly one megawatt of available power, with your utility confirming it will serve.',
-    fiber: 'We need one gigabit per second of symmetric fiber. This is the requirement we cannot work around.',
-    zoning: 'The area where the equipment sits needs to be zoned commercial or industrial.',
-    siteControl: 'We need a ' + term + '-year lease or space use agreement with whoever controls the site.'
-  };
-  for (var i = 0; i < order.length; i++) {
-    var g = r.gates[order[i]];
-    rows.push('<tr><td class="g">' + esc(g.label) + '</td>'
-      + '<td><span class="pill pill-' + esc(g.status) + '">'
-      + esc(g.status === 'unconfirmed' ? 'to confirm' : g.status) + '</span></td>'
-      + '<td>' + esc(hostWords[order[i]] || '') + '<br><span style="color:#64748B">'
-      + esc(g.headline) + '</span></td></tr>');
-  }
-  p.push('<div class="page">'
-    + pageHead('Site Qualification')
-    + '<div class="pb">'
-    + '<div class="pt">What we are looking for, and where this site stands</div>'
-    + '<div class="pp">Every site we take forward has to clear four requirements. We screen them from public '
-    + 'infrastructure data before we ask you for anything, so this is our read of your site as it stands today '
-    + '&mdash; not a questionnaire for you to fill in.</div>'
-    + '<table class="qtbl"><thead><tr><th>Requirement</th><th>Status</th><th>What it means</th></tr></thead>'
-    + '<tbody>' + rows.join('') + '</tbody></table>'
-    + '<div class="pt">The site</div>'
-    + '<table class="qtbl"><tbody>'
-    + kvRow('Address', addr)
-    + (r.site.owner ? kvRow('Owner of record', r.site.owner) : '')
-    + (r.site.apn ? kvRow('Parcel', r.site.apn + (r.site.county ? ' · ' + r.site.county : '')) : '')
-    + (o ? kvRow('Area we would lease', acresPhrase(o.leasedAcres) + ' \u2014 pad, clearances, transformer and access') : '')
-    + (o ? kvRow('Load we would contract', money(o.contractedKw).replace('$', '') + ' kW') : '')
-    + '</tbody></table>'
-    + '<div class="fineprint">' + esc(HOST_DISCLAIMER) + '</div>'
-    + '</div>' + pageFoot(host) + '</div>');
-
-  /* ── PAGE 3 · THE LEASE ── */
-  p.push('<div class="page">'
-    + pageHead('The Lease')
-    + '<div class="pb">'
-    + '<div class="pt">What you would receive</div>'
-    + (o
-      ? '<div class="econ">'
-        + econ('Per month', rent.num, 'Escalating annually', true)
-        + econ('Per year', rent.yr.replace(' per year', ''), 'Year one', false)
-        + econ('Over ' + term + ' years',
-               rent.total === rent.totalHi ? moneyShort(rent.total)
-                 : moneyShort(rent.total) + '–' + moneyShort(rent.totalHi),
-               'Total consideration including escalation', false)
-        + '</div>'
-      : '<div class="pp">The lease consideration is established once site qualification is complete. '
-        + 'Nothing on this page is a commitment until then.</div>')
-    + '<div class="split">'
-    + '<div><h4>ClearSky pays for</h4><ul>'
-    + '<li>All equipment and its installation</li>'
-    + '<li>The electrical interconnection and any utility upgrade</li>'
-    + '<li>Bringing fiber to the pad, if it is not already there</li>'
-    + '<li>The power the equipment consumes &mdash; on our own meter or a submeter</li>'
-    + '<li>Insurance, permitting, maintenance and monitoring</li>'
-    + '<li>Removing everything and restoring the pad at the end of the term</li>'
-    + '</ul></div>'
-    + '<div><h4>You provide</h4><ul>'
-    + '<li>' + acresPhrase(o ? o.leasedAcres : 0.5) + ' under a ' + term + '-year lease</li>'
-    + '<li>Access for installation and for service visits</li>'
-    + '<li>Your cooperation on the utility interconnection application</li>'
-    + '<li>Existing fiber service, where you already have it</li>'
-    + '<li>No capital. No operating obligation. No staff time beyond access.</li>'
-    + '</ul></div></div>'
-    + '<div class="pt">Terms</div>'
-    + '<table class="qtbl"><tbody>'
-    + kvRow('Structure', 'Ground lease / space use agreement. You keep title to the land.')
-    + kvRow('Term', term + ' years, with renewal options')
-    + kvRow('Escalation', 'Fixed annual escalator, set in the lease')
-    + kvRow('Payment', 'Monthly, in advance, beginning at commercial operation')
-    + kvRow('Your power bill', 'Unchanged. Our load sits behind its own meter or an agreed submeter.')
-    + kvRow('Exclusivity', 'Limited to the leased area. The rest of your site is yours.')
-    + '</tbody></table>'
-    + '<div class="fineprint">' + esc(HOST_DISCLAIMER) + '</div>'
-    + '</div>' + pageFoot(host) + '</div>');
-
-  /* ── PAGE 4 · PROCESS + THE QUESTIONS EVERY HOST ASKS ── */
-  p.push('<div class="page">'
-    + pageHead('How It Works')
-    + '<div class="pb">'
-    + '<div class="pt">From this document to your first payment</div>'
-    + step(1, 'Site qualification · week 1',
-        'We confirm the four requirements on page two. Most of it we do ourselves from public data and a '
-      + 'call with your utility. What we need from you is the zoning, who controls the site, and your current '
-      + 'fiber service if you have one.')
-    + step(2, 'Letter of intent · week 2–3',
-        'A short non-binding document setting the rent, the term and the area. It gives us both something to '
-      + 'work against and costs you nothing.')
-    + step(3, 'Will-serve and fiber · week 3–10',
-        'We file the utility interconnection application and secure a carrier commitment. This is the longest '
-      + 'step and it is ours to carry. Nothing is built and nothing is owed until it clears.')
-    + step(4, 'Lease and permitting · week 10–16',
-        'We sign the lease, take it through the AHJ, and complete site diligence. Your first payment date is '
-      + 'set in this document.')
-    + step(5, 'Install and pay · week 16+',
-        'Installation on the pad takes days, not months. Rent begins at commercial operation and is paid '
-      + 'monthly for the full term.')
-    + '<div class="pt" style="margin-top:22px">Questions we are always asked</div>'
-    + faq('What does this cost me?',
-        'Nothing. There is no capital contribution and no operating obligation. We pay for the equipment, the '
-      + 'interconnection, the fiber, the power and the removal at the end of the term.')
-    + faq('What do I get paid?',
-        'A market-rate ground lease with an annual escalator, paid monthly'
-      + (o ? ' — indicatively ' + rent.num + ' ' + rent.unit + ' at this site' : '')
-      + '. If you are willing to let us improve the asset further \u2014 canopies, on-site generation, storage '
-      + '\u2014 or to take the meter, the consideration goes up from there.')
-    + faq('What are you actually putting on my property?',
-        'Modular compute equipment in standard shipping-container enclosures on a small fenced pad, with a '
-      + 'transformer and a fiber connection. It is unstaffed, it is quiet, and it takes about the footprint of '
-      + 'two parking spaces per unit.')
-    + faq('How long is the commitment?',
-        term + ' years, with renewal options. A shorter term is not a smaller version of this deal — the '
-      + 'equipment cannot be financed against it, which is why the term is the one point we hold firm on.')
-    + faq('Does this affect my power bill or my operations?',
-        'No. Our load sits behind its own meter or an agreed submeter, so your bill is unchanged. Access for '
-      + 'service visits is the only call on your time.')
-    + faq('What happens at the end?',
-        'We remove the equipment and restore the pad, at our cost. That obligation is written into the lease.')
-    + '</div>'
-    + '<div class="pf"><span>ClearSky Energy Solutions · ' + esc(rep || '') + (repmail ? ' · ' + esc(repmail) : '') + '</span>'
-    + '<span>© 2025–2026 ClearSky Energy Solutions LLC</span></div>'
-    + '</div>');
-
-  $('pages').innerHTML = p.join('');
+  if (!result || !root.OmegaComputeLease) return;
+  ensureProposalCss(OmegaComputeLease.brandOf(result).accent);
+  $('pages').innerHTML = OmegaComputeLease.proposalPages(result, proposalOpts());
 }
-
-function metaItem(l, v) { return '<div class="p1-meta-item"><label>' + esc(l) + '</label><span>' + esc(v) + '</span></div>'; }
-function pageHead(t) { return '<div class="ph"><span class="ph-brand">ClearSky Energy Solutions</span><span class="ph-title">' + esc(t) + '</span></div>'; }
-function pageFoot(h) { return '<div class="pf"><span>' + esc(h) + '</span><span>Land Lease Proposal · Distributed Compute</span></div>'; }
-function kvRow(k, v) { return '<tr><td class="g">' + esc(k) + '</td><td colspan="2">' + esc(v) + '</td></tr>'; }
-function econ(l, n, note, hero) {
-  return '<div class="econ-box' + (hero ? ' hero' : '') + '"><div class="econ-label">' + esc(l) + '</div>'
-    + '<div class="econ-num">' + esc(n) + '</div><div class="econ-note">' + esc(note) + '</div></div>';
-}
-function step(n, t, d) {
-  return '<div class="stepr"><div class="stepn">' + n + '</div>'
-    + '<div><div class="stept">' + esc(t) + '</div><div class="stepd">' + esc(d) + '</div></div></div>';
-}
-function faq(q, a) { return '<div class="faq"><div class="faqq">' + esc(q) + '</div><div class="faqa">' + esc(a) + '</div></div>'; }
-/* The leased carve-out is usually under an acre, so "1 acres" is the common
-   case rather than the edge case on a host-facing page. */
-function acresPhrase(n) { return n + ' ' + (Number(n) === 1 ? 'acre' : 'acres'); }
 
 /* ── COPY THE SCREEN ───────────────────────────────────────────────────────
    A rep on a call needs the gates and the range as text they can paste into
@@ -1107,7 +796,7 @@ $('in-address').addEventListener('keydown', function (e) { if (e.key === 'Enter'
   });
 })();
 
-})();
+})(typeof window !== 'undefined' ? window : globalThis);
 </script>
 </body>
 </html>

@@ -239,6 +239,29 @@ ok('disclosure · staff DO get the bands', r.offer.rateCard.capacityPerKwYear !=
 ok('disclosure · staff DO get the components', r.offer.components != null);
 eq('disclosure · redaction never changes the number', tenant.offer.annual.base, r.offer.annual.base);
 
+/* ── the tenant's brand ──────────────────────────────────────────────────
+   A proposal carries the name of the company sending it, and on this platform
+   that is the tenant, not ClearSky. Resolved once in the function so the two
+   surfaces that render this document cannot drift. */
+eq('brand · exportBrand.name wins over org.name',
+   M.brandOf({ name: 'Concord Energy USA', exportBrand: { name: 'Concord Energy' } }).name, 'Concord Energy');
+eq('brand · falls back to org.name', M.brandOf({ name: 'SunESol' }).name, 'SunESol');
+eq('brand · exportBrand.logo wins over logoUrl',
+   M.brandOf({ logoUrl: '/a.png', exportBrand: { logo: '/b.png' } }).logoUrl, '/b.png');
+eq('brand · colors.accent is read', M.brandOf({ colors: { accent: '#00AA91' } }).accent, '#00AA91');
+eq('brand · an empty org resolves to empty strings, never a guess', M.brandOf(null).name, '');
+eq('brand · and says it did not resolve', M.brandOf(null).resolved, false);
+eq('brand · a named org says it did', M.brandOf({ name: 'X' }).resolved, true);
+ok('brand · no org id ever leaks into the name',
+   JSON.stringify(M.brandOf({ slug: 'concord', domains: ['concordenergyusa.com'] })).indexOf('concordenergyusa.com') < 0);
+
+var branded = M.evaluate(GOOD, { disclose: true, brand: M.brandOf({ name: 'SunESol', logoUrl: '/s.png' }) });
+eq('brand · rides on the response', branded.brand.name, 'SunESol');
+eq('brand · with the logo', branded.brand.logoUrl, '/s.png');
+eq('brand · an un-branded run still answers', r.brand.resolved, false);
+ok('brand · and the disclaimer no longer hard-codes one company',
+   r.disclaimer.indexOf('ClearSky') < 0, r.disclaimer);
+
 /* ── the rate card is traceable ──────────────────────────────────────────── */
 ok('rate card · echoed in the offer', r.offer.rateCard.version === M.RATE_CARD.version);
 ok('rate card · version is on the response', r.rateCardVersion === M.RATE_CARD.version);
