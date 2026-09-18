@@ -1954,6 +1954,9 @@ function makeCore(id, opts) {
      across the gaps and comes down once he has actually finished. The mask
      pulses on `voice`; the body answers `talk`. */
   let talk = 0;
+  /* Where the cape HAS got to, as against where the body is. The gap between
+     the two is the whole of the effect: cloth arrives late. */
+  let capeLag = 0;
   /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
      the envelope rather than on a timer, so the count and the spacing are the
      speech's, not a decoration's. */
@@ -2209,6 +2212,51 @@ function makeCore(id, opts) {
           mx += pos[k * 3] * wgt; my += pos[k * 3 + 1] * wgt; mz += pos[k * 3 + 2] * wgt;
           mw += wgt;
         }
+        /* --- TWO BONES, SOFTLY WEIGHTED ------------------------------------
+           This figure is ONE drawing displaced by a depth map. There are no
+           arms in it — there is a region of samples that looks like arms,
+           welded to the torso, crossed over the chest and occluding each
+           other. Nothing can articulate them, and pretending otherwise tears
+           the cloud along a seam that does not exist.
+
+           What the artwork DOES separate cleanly, measured off its own width
+           profile: the head (2-42% of the frame's width, down to 0.16 of the
+           figure), the shoulders (widest at 0.26, and the deepest part of the
+           whole body at 0.708), and the cape, which flares again to 57% at
+           the hem. So: a head that can turn on its own neck, and a hem that
+           can trail. Those are the two that carry almost all of the life.
+
+           WEIGHTS, NOT REGIONS. A hard cut at a row is a guillotine — the
+           neck would shear off on the first turn. Each sample gets a 0..1
+           influence that ramps across a band, so the transform fades in
+           through the neck and out through the waist and nothing ever
+           separates. This is skinning, with two bones and no skeleton. */
+        var hw = new Float32Array(lums.length);
+        var cw = new Float32Array(lums.length);
+        var span = (bot - top) || 1;
+        for (k = 0; k < lums.length; k++) {
+          var d = (pos[k * 3 + 1] - top) / span;        /* 0 at the crown, 1 at the hem */
+          /* head: full to 0.14, gone by 0.26 — the ramp IS the neck */
+          hw[k] = d <= 0.14 ? 1 : (d >= 0.26 ? 0 : (0.26 - d) / 0.12);
+          /* cape: nothing above the waist, full by the hem, squared so the
+             bottom trails furthest and the top barely moves */
+          var c2 = d <= 0.55 ? 0 : (d >= 0.96 ? 1 : (d - 0.55) / 0.41);
+          cw[k] = c2 * c2;
+        }
+
+        /* THE NECK, which is what the head turns on. A fifth of the way down
+           is where the width profile stops being hood and starts being
+           shoulder (24% of the frame at 0.11, 42% by 0.16, 52% by 0.21), so
+           that is the joint. Centred in x; z taken from the head band, since
+           a head pivoting about the body's mid-depth swings its face through
+           the chest. */
+        var neckY = top + span * 0.20, nz = 0, nzw = 0;
+        for (k = 0; k < lums.length; k++) {
+          if (hw[k] <= 0) continue;
+          nz += pos[k * 3 + 2] * hw[k]; nzw += hw[k];
+        }
+        var neck = { x: 0, y: neckY, z: nzw ? nz / nzw : 0 };
+
         var mask = mw > 0
           ? { x: mx / mw, y: my / mw, z: mz / mw }
           /* No head found is not a reason to fail; it is a reason to aim at
@@ -2216,7 +2264,7 @@ function makeCore(id, opts) {
           : { x: 0, y: top + (bot - top) * 0.12, z: 0.15 };
 
         cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
-                  n: lums.length, ar: h / w, mask: mask };
+                  n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, neck: neck };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -2259,10 +2307,58 @@ function makeCore(id, opts) {
     const p = cloud.pos, lu = cloud.lum;
     for (let b = 0; b < _cbk.length; b++) _cbk[b].length = 0;
 
+    /* --- the two bones, per frame ------------------------------------------
+       Cheap enough to sit in the per-sample loop because the angles are tiny.
+       SMALL-ANGLE ROTATION rather than cos/sin: the head never turns past
+       about 0.25 rad, where 1 - a*a/2 and a are within one per cent of the
+       real thing — invisible here, and it keeps a trig pair out of a loop
+       that runs eleven thousand times a frame. */
+    const HW = cloud.hw, CW = cloud.cw, NK = cloud.neck;
+    const hy = o.headYaw || 0, hn = o.headNod || 0, cx2 = o.capeX || 0, hr = o.headRoll || 0;
+    const bones = !!(HW && NK && (hy || hn || cx2 || hr));
+    /* The roll has to be circular ON SCREEN, and x and y are not drawn at the
+       same scale — sy is `ar` times sx. Rotating in the stored units would
+       shear the head into an ellipse. So y is carried into x-proportional
+       units for the rotation and back out again. */
+    const AR = cloud.ar || 1.65;
+
     for (let k = 0; k < cloud.n; k += step) {
       const lum = lu[k];
       if (o.bright && lum < 0.80) continue;       /* the bloom takes highlights only */
-      const px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
+      let px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
+
+      if (bones) {
+        const hwk = HW[k];
+        if (hwk > 0) {
+          /* HE TURNS HIS HEAD ON HIS NECK. Weighted, so the transform fades
+             out through the neck instead of shearing it off. */
+          const a = hy * hwk, ca = 1 - a * a * 0.5;
+          const dx = px - NK.x, dz = pz - NK.z;
+          px = NK.x + dx * ca - dz * a;
+          pz = NK.z + dx * a + dz * ca;
+          py += hn * hwk;
+
+          /* AND HE TILTS IT. The yaw above is honest but nearly invisible: a
+             head is about a tenth of the figure wide, and turning a
+             depth-displaced billboard through 0.2 rad moves its samples by at
+             most two per cent of that width. There is no more depth to swing
+             through — the drawing has one face.
+
+             The roll is not depth-limited. It happens in the plane of the
+             image, so three degrees is three degrees, and it is the channel
+             that actually reads as a head moving. */
+          if (hr) {
+            const b = hr * hwk, cb = 1 - b * b * 0.5;
+            const ex = px - NK.x, ey = (py - NK.y) * AR;
+            px = NK.x + ex * cb - ey * b;
+            py = NK.y + (ex * b + ey * cb) / AR;
+          }
+        }
+        /* AND THE HEM TRAILS. Cloth follows the body a beat late; a cape that
+           moves with the hips is a painted cape. */
+        if (CW[k] > 0) px += cx2 * CW[k];
+      }
+
       const x = px * c - pz * sn * 0.85;
       const z = px * sn + pz * c;
       /* nearer samples are drawn bigger and brighter — the only parallax cue
@@ -2384,6 +2480,35 @@ function makeCore(id, opts) {
          Enough that the room feels him come forward, small enough that it
          never reads as the canvas resizing. */
       const lean = 1 + talk * 0.035;
+
+      /* --- WHAT THE TWO BONES DO ------------------------------------------
+         The head is the whole illusion. A body that turns as one piece is a
+         statue on a turntable; a head that moves on its own neck, on its own
+         clock, is a person — and it costs one sine.
+
+         Idle he looks slowly around, ±9°, at a period unrelated to the body's
+         so the two never lock into a single motion. Speaking, that wandering
+         is damped to a third (a man delivering a line is not sightseeing) and
+         a small emphasis movement takes over instead. */
+      const headYaw = Math.sin(t * 0.0009 + 2.3) * 0.16 * (1 - talk * 0.66)
+                    + Math.sin(t * 0.020) * 0.045 * talk;
+      /* The nod is on VOICE, not talk — it lands on the syllable, which is
+         what makes it read as emphasis rather than as a bobbing head. */
+      const headNod = voice * 0.010;
+      /* Idle he inclines slowly, ±3.4°. Speaking, a sharper tilt rides each
+         syllable — the head cocking on a stressed word, which is the single
+         most human thing on this canvas. */
+      const headRoll = Math.sin(t * 0.0013 + 0.7) * 0.060 * (1 - talk * 0.5)
+                     + Math.sin(t * 0.017) * 0.055 * talk
+                     + voice * 0.030;
+
+      /* The hem chases the sway and never catches it. 0.06 is about a fifth
+         of a second behind at 60fps, which is roughly what heavy cloth does. */
+      capeLag += (sway - capeLag) * 0.06;
+      const capeX = (capeLag - sway) / (R * 1.02) * 1.6;
+      /* Every pass gets the same bones, or the reflection and the bloom
+         disagree with the body about where his head is. */
+      const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll, capeX: capeX };
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
@@ -2409,7 +2534,7 @@ function makeCore(id, opts) {
       /* The same sway, or he slides away from his own reflection and the
          floor stops being a floor. */
       ctx.translate(sway, bob2);
-      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 3, gain: 0.26 });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 3, gain: 0.26 }, BONES));
       ctx.restore();
 
       if (ent > 0) {
@@ -2429,9 +2554,9 @@ function makeCore(id, opts) {
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
-      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { sweep: ((t * 0.0024) % 1.9) - 0.95 });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95 }, BONES));
       ctx.globalCompositeOperation = 'lighter';
-      drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 2, gain: 0.26, grow: 2.4, bright: true });
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.26, grow: 2.4, bright: true }, BONES));
 
       /* ── THE VOICE, AT HIS FACE ──────────────────────────────────────
          Everything else on this canvas already answers `energy`: the smoke,
@@ -2495,7 +2620,7 @@ function makeCore(id, opts) {
         ctx.rect(0, cy + (((t * 7) % 100) / 100 - 0.5) * R * 1.6, W, R * 0.14);
         ctx.clip();
         ctx.translate(R * 0.06 * ((t % 2) ? 1 : -1), 0);
-        drawCloud(cx, cy - R * 0.04, R, cyaw, col, { step: 2, gain: 0.85 });
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.85 }, BONES));
         ctx.restore();
       }
 
