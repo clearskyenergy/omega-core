@@ -1882,6 +1882,23 @@ q.addEventListener("keydown",function(e){
 
 buildRail(); updateRailCounts();
 buildPresets();
+
+/* ── FIBER EVIDENCE CONTROL ───────────────────────────────────────────────
+   Hands the bundled public route inventory to /omega-fiber-atlas.js. Its
+   layers are static public data and need no sign-in; only its site check
+   calls /api/fiber-screen, which does. That split matters here, because this
+   page never initializes Firebase — omega-sso.js and omega-tenant.js are the
+   only files that do and neither is loaded on Grid Atlas — so an
+   authenticated layer would simply never render.
+
+   The control reads the same api/_lib/fiber-evidence.js that the Site Map
+   Editor reaches through /api/network-proximity, so both tools return the
+   same answer for the same coordinates. Its distances are NOT fed into this
+   page's Fiber Confidence or Data Center Site Report scores: both of those
+   score missing fiber as a low number rather than as unknown, so admitting a
+   new dataset would move published figures for reasons no user asked for.
+   See MERGE.md. */
+window.OmegaFiberAtlasHost = { map: map, L: L };
 map.whenReady(function(){
   setTimeout(function(){ map.invalidateSize(); },200);
   setTimeout(loadVisible,400);
@@ -1890,5 +1907,6 @@ window.addEventListener("resize",function(){ map.invalidateSize(); });
 
 })();
 </script>
+<script src="/omega-fiber-atlas.js"></script>
 </body>
 </html>

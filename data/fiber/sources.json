@@ -1,0 +1,265 @@
+{
+  "reviewed_at": "2026-09-18",
+  "sources": [
+    {
+      "id": "osm_us",
+      "title": "OpenStreetMap U.S. telecom records",
+      "url": "https://www.openstreetmap.org/copyright",
+      "data_kind": "community_geometry",
+      "distribution": "bundled",
+      "coverage_scope": "U.S. administrative area; sparse and uneven",
+      "reviewed_at": "2026-09-18",
+      "note": "Optical medium is required for the fiber layer. Facilities and unspecified-media lines are separate. Existing records can be old.",
+      "license": "ODbL-1.0",
+      "attribution": "\u00a9 OpenStreetMap contributors",
+      "api_url": "https://overpass-api.de/api/interpreter",
+      "tagging_reference": "https://wiki.openstreetmap.org/wiki/Telecoms"
+    },
+    {
+      "id": "ca_network",
+      "title": "California MMBI statewide network design",
+      "url": "https://www.arcgis.com/home/item.html?id=7debc3879ec8438c8c37ec51b9e958f0",
+      "data_kind": "network_design",
+      "distribution": "bundled",
+      "coverage_scope": "California",
+      "reviewed_at": "2026-09-18",
+      "note": "August 2026 snapshot; multipart geometry split into line parts. No operational or capacity claim.",
+      "license": "CDT public-use terms",
+      "api_url": "https://services6.arcgis.com/sAv98EYUZbLCVPW0/arcgis/rest/services/MMBI_Statewide_Network_Versions_Download_vw/FeatureServer/0"
+    },
+    {
+      "id": "ca_partners",
+      "title": "California MMBI partner network design",
+      "url": "https://www.arcgis.com/home/item.html?id=7dceccdae28d428984930b3c5b8884fe",
+      "data_kind": "network_design",
+      "distribution": "bundled",
+      "coverage_scope": "California",
+      "reviewed_at": "2026-09-18",
+      "note": "Generalized geometry and partner agreements; overlaps the statewide design. Do not sum into unique route miles.",
+      "license": "CDT public-use terms",
+      "api_url": "https://services6.arcgis.com/sAv98EYUZbLCVPW0/arcgis/rest/services/CDT_Nework_Partner_Public_vw/FeatureServer/0"
+    },
+    {
+      "id": "ca_status",
+      "title": "California MMBI project construction status",
+      "url": "https://www.arcgis.com/home/item.html?id=ab3010840faa4cbea569ee2e2d5858d1",
+      "data_kind": "construction_status",
+      "distribution": "bundled",
+      "coverage_scope": "California",
+      "reviewed_at": "2026-09-18",
+      "note": "Installation, Pre-Construction and Ready-to-Connect are preserved. A project status does not qualify the neighboring parcel.",
+      "license": "CDT public-use terms",
+      "api_url": "https://services6.arcgis.com/sAv98EYUZbLCVPW0/arcgis/rest/services/Statewide_Network_Project_Status_vw/FeatureServer/1"
+    },
+    {
+      "id": "fcc_bdc",
+      "title": "FCC National Broadband Map downloads",
+      "url": "https://broadbandmap.fcc.gov/data-download",
+      "data_kind": "mass_market_availability",
+      "distribution": "importer_only",
+      "coverage_scope": "National",
+      "reviewed_at": "2026-09-18",
+      "note": "No national FCC records bundled. Import technology 50 and keep advertised upload/download separate. Coordinates need an authorized exact location-ID join.",
+      "technical_reference": "https://help.bdc.fcc.gov/hc/en-us/articles/5290793888795-Fixed-Technology-Codes",
+      "scope_reference": "https://help.bdc.fcc.gov/hc/en-us/articles/16842264428059-About-the-Fabric-What-a-Broadband-Serviceable-Location-BSL-Is-and-Is-Not"
+    },
+    {
+      "id": "lumen",
+      "title": "Lumen network mapbook",
+      "url": "https://assets.lumen.com/is/content/Lumen/LumenNetworkMapbook25",
+      "data_kind": "carrier_mapbook",
+      "distribution": "reference_only",
+      "coverage_scope": "North America",
+      "reviewed_at": "2026-09-18",
+      "note": "Reviewed the national route image and optical-network pages. Representative routes, with staged deployment; no spare capacity or parcel serviceability.",
+      "published_capability_gbps": 400,
+      "capability_scope": "Next-Gen optical network marketing; not site or segment availability"
+    },
+    {
+      "id": "zayo",
+      "title": "Zayo network maps",
+      "url": "https://www.zayo.com/network/",
+      "data_kind": "carrier_mapbook",
+      "distribution": "reference_only",
+      "coverage_scope": "North America and international",
+      "reviewed_at": "2026-09-18",
+      "note": "Request current route GIS, permitted application use, access points and a serviceability response for each site.",
+      "published_capability_gbps": 400,
+      "capability_scope": "Core wavelength network marketing; not site availability",
+      "product_url": "https://www.zayo.com/services/fiber-transport/wavelengths/"
+    },
+    {
+      "id": "cogent",
+      "title": "Cogent North America optical IP network map",
+      "url": "https://security.cogentco.com/files/docs/network/maps/map_americas.pdf",
+      "data_kind": "carrier_mapbook",
+      "distribution": "reference_only",
+      "coverage_scope": "North America",
+      "reviewed_at": "2026-09-18",
+      "note": "Q3 2026 map distinguishes route construction. Published backbone network totals are not bandwidth for sale at a parcel."
+    },
+    {
+      "id": "uniti",
+      "title": "Uniti network map",
+      "url": "https://uniti.com/network-map/",
+      "data_kind": "carrier_map",
+      "distribution": "reference_only",
+      "coverage_scope": "U.S. footprint",
+      "reviewed_at": "2026-09-18",
+      "note": "Carrier reference located; direct fetch returned 403. No geometry copied or service claim made."
+    },
+    {
+      "id": "fiberlight",
+      "title": "FiberLight network coverage map",
+      "url": "https://www.fiberlight.com/fiber-network/network-coverage-map/",
+      "data_kind": "carrier_map",
+      "distribution": "reference_only",
+      "coverage_scope": "Regional U.S. footprint",
+      "reviewed_at": "2026-09-18",
+      "note": "Official interactive map. Request authoritative GIS and exact-site qualification before promoting any candidate."
+    },
+    {
+      "id": "segra",
+      "title": "Segra network and GIS file request",
+      "url": "https://www.segra.com/our-network/",
+      "data_kind": "carrier_map",
+      "distribution": "reference_only",
+      "coverage_scope": "Regional U.S. footprint",
+      "reviewed_at": "2026-09-18",
+      "note": "Publisher offers a request path for network KMZ and on/near-net building data. No request has been submitted."
+    },
+    {
+      "id": "internet2",
+      "title": "Internet2 network map",
+      "url": "https://internet2.edu/infrastructure/i2-network-map/",
+      "data_kind": "research_network_map",
+      "distribution": "reference_only",
+      "coverage_scope": "National research and education",
+      "reviewed_at": "2026-09-18",
+      "note": "Public network topology and optical sites. Research-network presence does not imply commercially purchasable service; map data not redistributed."
+    },
+    {
+      "id": "esnet",
+      "title": "ESnet network maps",
+      "url": "https://www.es.net/engineering-services/the-network/network-maps/",
+      "data_kind": "research_network_map",
+      "distribution": "reference_only",
+      "coverage_scope": "National research network",
+      "reviewed_at": "2026-09-18",
+      "note": "Science network context. Not a commercial serviceability feed.",
+      "published_capability_gbps": 400,
+      "capability_scope": "Research-network platform capability; not site availability"
+    },
+    {
+      "id": "massbroadband",
+      "title": "Massachusetts Broadband Institute map gallery",
+      "url": "https://broadband.masstech.org/map-gallery",
+      "data_kind": "regional_mapbook",
+      "distribution": "reference_only",
+      "coverage_scope": "Western and north-central Massachusetts",
+      "reviewed_at": "2026-09-18",
+      "note": "Network and interconnection maps are available, including a 2014 completed-network reference. Confirm current route and commercial terms."
+    },
+    {
+      "id": "ct_broadband",
+      "title": "Connecticut broadband mapping hub",
+      "url": "https://broadbandmaps.ct.gov/",
+      "data_kind": "availability_portal",
+      "distribution": "reference_only",
+      "coverage_scope": "Connecticut",
+      "reviewed_at": "2026-09-18",
+      "note": "Regional availability context; do not turn service polygons into cable routes."
+    },
+    {
+      "id": "ct_cen",
+      "title": "Connecticut Education Network Worldview",
+      "url": "https://worldview.net.cen.ct.gov/",
+      "data_kind": "research_network_map",
+      "distribution": "reference_only",
+      "coverage_scope": "Connecticut",
+      "reviewed_at": "2026-09-18",
+      "note": "Public network reference; no commercial capacity feed has been connected."
+    },
+    {
+      "id": "cenic",
+      "title": "CENIC CalREN maps",
+      "url": "https://cenic.org/network/maps",
+      "data_kind": "research_network_map",
+      "distribution": "reference_only",
+      "coverage_scope": "California",
+      "reviewed_at": "2026-09-18",
+      "note": "Research and education network context; distinct from commercial enterprise service."
+    },
+    {
+      "id": "peeringdb",
+      "title": "PeeringDB facilities and networks",
+      "url": "https://www.peeringdb.com/aup",
+      "data_kind": "interconnection_facilities",
+      "distribution": "permission_required",
+      "coverage_scope": "National and global",
+      "reviewed_at": "2026-09-18",
+      "note": "Current AUP restricts bulk onward distribution and commercial uses. No PeeringDB data bundled; source is not treated as CC0.",
+      "api_reference": "https://docs.peeringdb.com/"
+    },
+    {
+      "id": "intertubes",
+      "title": "InterTubes U.S. long-haul infrastructure",
+      "url": "https://www.impactcybertrust.org/dataset_view?idDataset=521",
+      "data_kind": "historical_network_topology",
+      "distribution": "access_and_rights_required",
+      "coverage_scope": "Contiguous U.S. historical study",
+      "reviewed_at": "2026-09-18",
+      "note": "2014\u20132015 collection, not an ongoing measurement. Account required; commercial use listed as unknown. No data bundled."
+    },
+    {
+      "id": "arcgis_unattributed_national",
+      "title": "Public ArcGIS Long Haul Network item",
+      "url": "https://www.arcgis.com/home/item.html?id=8c6120233e7e496e85588cfbd62311ea",
+      "data_kind": "unverified_route_source",
+      "distribution": "excluded",
+      "coverage_scope": "National-looking extent",
+      "reviewed_at": "2026-09-18",
+      "note": "Public endpoint exists, but publisher provenance and reuse terms were blank. Excluded from evidence and routing decisions."
+    },
+    {
+      "id": "arcgis_old_zayo",
+      "title": "Public copy labeled Zayo customer network 2019",
+      "url": "https://www.arcgis.com/home/item.html?id=c37db8596a614b5faf3a78ccb360c0ef",
+      "data_kind": "unverified_historical_copy",
+      "distribution": "excluded",
+      "coverage_scope": "North America",
+      "reviewed_at": "2026-09-18",
+      "note": "Third-party public copy is not current carrier confirmation or a redistribution license. Excluded."
+    },
+    {
+      "id": "census_states",
+      "title": "U.S. Census TIGERweb states",
+      "url": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0",
+      "data_kind": "administrative_boundaries",
+      "distribution": "analysis_reference",
+      "coverage_scope": "50 states, DC and territories",
+      "reviewed_at": "2026-09-18",
+      "note": "Generalized output used to summarize record coverage; geographic intersections do not establish service coverage."
+    },
+    {
+      "id": "fiberlocator",
+      "title": "FiberLocator",
+      "url": "https://www.fiberlocator.com/",
+      "data_kind": "commercial_route_inventory",
+      "distribution": "license_required",
+      "coverage_scope": "Commercial carrier dataset; confirm contracted coverage",
+      "reviewed_at": "2026-09-18",
+      "note": "Potential licensed route/on-net data source. Obtain an explicit application/API reuse agreement and verify coverage and freshness. No subscription or connection established."
+    },
+    {
+      "id": "geotel",
+      "title": "GeoTel",
+      "url": "https://www.geo-tel.com/",
+      "data_kind": "commercial_route_inventory",
+      "distribution": "license_required",
+      "coverage_scope": "Commercial carrier dataset; confirm contracted coverage",
+      "reviewed_at": "2026-09-18",
+      "note": "Potential licensed route/on-net data source. Obtain an explicit application/API reuse agreement and verify coverage and freshness. No subscription or connection established."
+    }
+  ]
+}

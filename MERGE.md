@@ -701,3 +701,114 @@ change is the whole reason for routing the geometry.
   at wherever the source datasets live before re-running it.
 - `FCC_BB_KEY` is still not set in Vercel, so "service at the point" still
   scores its not-checked middle value and the verdict still says so.
+
+---
+
+## 2026-09-18 · Public fiber route evidence, shared by both tools
+
+### The dataset, stated exactly
+
+10,345 public records, verified against the manifest and its SHA-256 hashes:
+195 OSM ways explicitly tagged optical fiber, 1,681 OSM telecom ways whose
+medium is **unspecified**, 5,996 OSM telecom facilities, and 2,473 California
+MMBI design/partner/status line parts. The manifest states its own limits in
+machine-readable fields — `complete_national_route_inventory: false`,
+`fiber_strand_records: 0`, `site_service_records: 0`,
+`available_capacity_records: 0`, `no_evidence_meaning: "unknown; never no
+fiber"` — and nothing in this integration contradicts them.
+
+Optical routes exist in 13 states; facilities in all 50. Those are record-
+presence counts, not coverage estimates.
+
+### One library, two tools
+
+`api/_lib/fiber-evidence.js` is the only interpreter. Grid Atlas reaches it
+through `api/fiber-screen.js`; the Site Map Editor reaches it through
+`/api/network-proximity`, which now requires it directly. Same classifier,
+same four buckets, same nulls — so the two tools cannot disagree about one
+coordinate, which was the whole requirement.
+
+### Boundary support — new, and the reason it was needed
+
+The package shipped point-only. `screenArea()` measures from the site
+**boundary** and returns 0 when a route crosses the parcel. On a 200-acre site
+the edge and the centroid differ by half a mile, and the edge is the one a
+lateral is built to; quoting the centroid overstates every row. Point and
+boundary answers both carry `measurement_method` and `measured_from`, so one
+can never be read as the other.
+
+`editor.html` gained `_npxSiteRing()`. `_e5Ring()` could not be reused: it
+reads `sh._geoBoundary`, which is stamped from `sh.boundary` — the auto-layout
+field — and never from `sh.pts`, so a parcel traced with `OmegaSiteRoles` was
+invisible to it. The new extractor takes the role-tagged shape through
+`OmegaSiteRoles.pts()` (rotation is a live render transform, not baked into the
+stored points), expands rect shapes via `_alShapePts`, and falls back to
+`_savedMapState` because `_liveMapState()` deliberately returns null on a
+frozen plot. When no ring can be built it sends none, and the panel says the
+measurement came from the point.
+
+### No existing score moves — and two that should, but not here
+
+The evidence is reported beside the analysis and folded into `score()`,
+`verdict()`, `capacity()` and `dcSuitability()` **nowhere**. Those numbers are
+already published on saved rows and in the screening register.
+
+Two pre-existing bugs were found and deliberately **left alone**, because
+fixing them changes published figures and that is its own decision:
+
+- `grid-atlas.html` **Fiber Confidence** scores absent fiber as **0** across
+  ~70% of its weight, so "no mapped route" is today indistinguishable from
+  "confirmed route, far away".
+- `grid-atlas.html` **Data Center Site Report** falls back to **15/100** for
+  unknown fiber at 24% weight.
+
+Both are the exact bug class this work was required not to introduce: unknown
+treated as confirmed absence. `api/grid-atlas.js` already has the correct
+pattern at `weightedScore()` — a null part drops out of **both** numerator and
+denominator, commented "UNSCORED IS NOT ZERO". These two should be moved onto
+it in a separate, deliberate change.
+
+Also unfixed and worth knowing: `OmegaNPX.open()` can never open the panel and
+the status-rail carrier cache is permanently null, because both depend on
+`_npxInner`, which does not exist anywhere in `editor.html` — the renderer is
+`_npxBody`. Any validation driven through `OmegaNPX` reports a false failure.
+
+### Deliberate changes to the vendored control
+
+- Layers default **off**, behind `CLEARSKY_CONFIG.fiberLayersOn`. Upstream
+  shipped two **on**, costing every Grid Atlas visitor ~5.8 MB and ~6,200
+  features before touching anything, against a page whose own convention is
+  all-layers-off with viewport-scoped loading.
+- Control moved `bottomleft` → `topright`. `bottomleft` renders underneath the
+  Grid Layers rail; confirmed by screenshot before and after.
+
+### The installer was reviewed and NOT run
+
+`scripts/install-fiber.py` is vendored for reference. It covers only Grid
+Atlas, touches nothing in the Editor, copies no files and verifies no
+prerequisites, and its `vercel.json` edit appends the `api/fiber-screen.js`
+entry **after** the `api/**/*.js` catch-all. The equivalent edits were made by
+hand, with the function entry placed **before** the catch-all, matching how
+`network-proximity` and `render` are already declared.
+
+### Open
+
+- **Not done: persistence and staleness.** A fiber assessment is not yet
+  written to the project record. `saveProject()`'s payload is an explicit
+  allowlist (editor.html:25246–25313) with a matching restore block, and a
+  field added through either `saveProject` wrapper silently never persists —
+  `OmegaVersion.stamp()` sets `S.omegaVersion` and it is provably never
+  written. The correct precedent is `omegaSizing` / `OmegaRecord.persist()`.
+  Marking an assessment stale on geometry change needs a boundary hash; note
+  the boundary can change identity without any vertex moving.
+- **Not done: Grid Atlas site-detail fields.** The vendored control renders its
+  own floating panel with counts and three routes; it does not write into the
+  page's Site Analysis panel, and it shows no evidence date or per-route
+  serviceability. It also binds its own `map.on('click')` rather than reading
+  the page's `pinLatLng`, so its "selected site" and the page's pin can differ.
+- `window.OmegaFiber` is already bound to the operator-entered, carrier-
+  confirmed route record. The public-evidence module must never take that name:
+  it is the stronger verified evidence the requirements say to preserve.
+- The 1,681 unknown-medium OSM ways overlap the live OSM query
+  `network-proximity` already runs. They are kept in their own bucket and out
+  of `hard[]` precisely so one cable is not counted twice at two distances.

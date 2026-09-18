@@ -271,6 +271,10 @@
     "api/render.js": {
       "maxDuration": 60
     },
+    "api/fiber-screen.js": {
+      "maxDuration": 30,
+      "includeFiles": "data/fiber/**"
+    },
     "api/**/*.js": {
       "maxDuration": 30
     }

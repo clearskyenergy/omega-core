@@ -13,3 +13,8 @@ firebase-debug.log
 .claude/
 .codex/
 scripts/.cache/
+.fiber-cache/
+private-fiber/
+*.fiber-backup
+__pycache__/
+*.pyc

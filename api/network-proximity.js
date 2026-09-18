@@ -83,8 +83,8 @@
 'use strict';
 var auth = require('./_lib/verify-token');
 
-var BUILD = '2026-09-17.corridors';
-var MODEL = 'network-proximity-v2';
+var BUILD = '2026-09-18.public-fiber';
+var MODEL = 'network-proximity-v3';
 
 /* ── PLANNING CONSTANTS — argue with these here, not in the code below ───── */
 var ROUTE_FACTOR = 1.4;            /* built route vs great circle, typical */
@@ -180,6 +180,21 @@ function extentContains(meta, lat, lon) {
    in transportation rights-of-way (InterTubes, SIGCOMM 2015) and a chord
    crosses country no conduit crosses. A corridor whose build could not be
    routed carries routed:false and says so in its evidence line. */
+/* ── THE SHARED FIBER-EVIDENCE LIBRARY ────────────────────────────────────
+   api/_lib/fiber-evidence.js is the ONE interpreter of the bundled public
+   route inventory (195 OSM optical routes, 1,681 unknown-medium telecom
+   routes, 5,996 telecom facilities, 2,473 California MMBI design/status
+   parts). Grid Atlas reaches it through /api/fiber-screen; this function
+   reaches it directly. Same library, same classifier, same nulls — which is
+   the entire point: the two tools must not disagree about one location.
+
+   It is reported BESIDE the existing analysis and folded into NO existing
+   score. score(), verdict(), capacity() and dcSuitability() are untouched by
+   it on purpose. Those numbers are already published on saved rows and in
+   the screening register, and silently moving them because a new dataset
+   arrived would be the worst kind of change: invisible, and wrong in a
+   direction nobody asked for. */
+var fiberEvidence = require('./_lib/fiber-evidence.js');
 var CORRIDORS  = require('./_lib/longhaul-corridors.js');
 var DCS        = require('./_lib/datacenters.js');
 var CARRIERS   = require('../data/us-fiber-carriers.json');
@@ -1024,7 +1039,50 @@ function applyCors(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-function analyse(lat, lon) {
+/* Public-evidence screen. Boundary when the editor could give us one, point
+   otherwise, and the response always says which — a centroid distance and a
+   boundary distance are different measurements and must never be compared as
+   though they were the same number. Never throws: a failure here must not
+   take down the rest of the analysis, because everything else in it is
+   independent of this dataset. */
+function publicFiber(lat, lon, boundary, gbps) {
+  try {
+    var opts = { radius_km: 25, limit: 10 };
+    if (gbps != null && isFinite(gbps) && gbps > 0) opts.requested_capacity_gbps = gbps;
+    if (boundary) {
+      try {
+        opts.boundary = boundary;
+        var area = fiberEvidence.screenArea(opts);
+        area.status = 'ok';
+        area.measured_from = 'site_boundary';
+        return area;
+      } catch (be) {
+        /* A malformed ring must degrade to the point answer, clearly labelled,
+           rather than leaving the panel with nothing. */
+        delete opts.boundary;
+        var fb = fiberEvidence.screen(Object.assign(opts, { lat: lat, lon: lon }));
+        fb.status = 'ok';
+        fb.measured_from = 'site_point';
+        fb.boundary_note = 'A site boundary was supplied but could not be read (' +
+          (be.message || 'invalid ring') + '), so this is measured from the site point.';
+        return fb;
+      }
+    }
+    var pt = fiberEvidence.screen({ lat: lat, lon: lon, radius_km: 25, limit: 10,
+      requested_capacity_gbps: (gbps != null && isFinite(gbps) && gbps > 0) ? gbps : undefined });
+    pt.status = 'ok';
+    pt.measured_from = 'site_point';
+    pt.measurement_method = 'great_circle_distance_from_site_point_to_published_geometry';
+    return pt;
+  } catch (e) {
+    return { status: 'failed', error: String((e && e.message) || e).slice(0, 200),
+             measured_from: boundary ? 'site_boundary' : 'site_point',
+             note: 'The bundled public fiber inventory could not be read. This is NOT evidence that ' +
+                   'no fiber exists — it is a failure to look.' };
+  }
+}
+
+function analyse(lat, lon, boundary, gbps) {
   var t0 = Date.now();
   return Promise.all([
     timed('facilities', function () { return facilities(lat, lon); }),
@@ -1033,9 +1091,10 @@ function analyse(lat, lon) {
     timed('plant',      function () { return surveyedPlant(lat, lon); }),
     timed('harvest',    function () { return harvest(lat, lon); }),
     timed('longhaul',   function () { return longhaul(lat, lon); }),
-    timed('datacenters',function () { return datacenters(lat, lon); })
+    timed('datacenters',function () { return datacenters(lat, lon); }),
+    timed('publicFiber', function () { return publicFiber(lat, lon, boundary, gbps); })
   ]).then(function (r) {
-    var fac = r[0], fcc = r[1], osm = r[2], plant = r[3], hv = r[4], lh = r[5], dc = r[6];
+    var fac = r[0], fcc = r[1], osm = r[2], plant = r[3], hv = r[4], lh = r[5], dc = r[6], pf = r[7];
     var d = {
       nearestCarrier: fac.nearestCarrier || null, nearestMajor: fac.nearestMajor || null,
       netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
@@ -1110,8 +1169,16 @@ function analyse(lat, lon) {
                     nearest: dc.nearest, within25: dc.within25, within50: dc.within50,
                     mwWithin25: dc.mwWithin25, mwWithin50: dc.mwWithin50,
                     attrib: dc.attrib, basis: dc.basis },
+      /* PUBLIC ROUTE EVIDENCE — the shared dataset, identical to what
+         /api/fiber-screen returns for the same place. Deliberately NOT merged
+         into `evidence`, `score` or `verdict`: those already treat some
+         absences as low values, and admitting a second dataset into them
+         would move published numbers without anyone asking. Read it as its
+         own section. */
+      publicFiber: pf,
       sources: { peeringdb: fac.status, fcc: fcc.status, osm: osm.status, plant: plant.status,
-                 harvest: hv.status, longhaul: lh.status, datacenters: dc.status },
+                 harvest: hv.status, longhaul: lh.status, datacenters: dc.status,
+                 publicFiber: pf.status },
       findings: findings,
       elapsedMs: Date.now() - t0
     };
@@ -1159,7 +1226,12 @@ module.exports = function handler(req, res) {
     var lat = Number(body.lat), lon = Number(body.lng != null ? body.lng : body.lon);
     if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0))
       throw auth.httpError(400, 'lat and lng are required.');
-    return analyse(lat, lon).then(function (out) { return res.status(200).json(out); });
+    /* Optional. The editor sends a ring when the parcel is anchored to the
+       world; when it cannot, it sends none and the answer says point. */
+    var boundary = body.boundary || null;
+    var gbps = Number(body.requestedCapacityGbps);
+    return analyse(lat, lon, boundary, isFinite(gbps) ? gbps : null)
+      .then(function (out) { return res.status(200).json(out); });
   }).catch(function (e) {
     var status = (e && e.status) || 502;
     return res.status(status).json({ build: BUILD, error: status === 502 ? 'Network proximity failed.' : e.message,
