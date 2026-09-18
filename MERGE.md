@@ -580,6 +580,159 @@ its not-checked middle value and the verdict says so.
 
 ---
 
+## Compute land lease — a second proposal tool, and its model in `/api/`
+
+`sales-proposal.html` sells a PPA: we own the equipment, the customer buys the
+output, and every number on the document argues about the customer's bill.
+Distributed compute sells the opposite trade — the host owns nothing, buys
+nothing and saves nothing; they rent us space, power and a fiber path and we
+pay them. A fourth model button on that tool would have meant one document
+arguing both directions, so this is a separate tool: `compute-proposal.html`,
+registry key `computelease`, tier STANDARD to match `sales`.
+
+**The logic moved to `/api/compute-lease.js` before it was ever written into a
+page.** Per CLAUDE.md's IP rule, the four gates, the tranche classifier and the
+lease rate card are in the function; the page collects inputs, calls three
+evidence services, posts what they said, and renders the answer. There is no
+pricing arithmetic in the HTML. The rate card is the commercial position of the
+business — what ClearSky is willing to pay a host per kW and per acre — and
+shipped in a single-file tool it would be readable by every tenant, by every
+host a proposal is sent to, and by anyone who opens the network tab.
+
+Disclosure is gated inside the function rather than at the registry: every
+entitled caller gets the offer range, because a rep cannot negotiate without
+it, and that is the whole point of the tool. The BANDS behind it are
+staff-only, and so is `offer.components` — which discloses $/kW-year by
+division just as surely as the card does. A tenant caller gets the number to
+say in the room and the `rateCard.version` that produced it, marked
+`disclosed: false`.
+
+**The page fans out; the function only scores.** The obvious shape would have
+been for `/api/compute-lease` to call `/api/grid-atlas`, `/api/network-proximity`
+and `/api/parcel` itself. It deliberately does not. `network-proximity` is
+time-boxed at 55 s against six external sources, under the 60 s ceiling;
+nested inside another function that puts two timeouts in series under one
+ceiling, the outer one dies first, and the rep is told nothing rather than
+told about the two gates that did answer. So the three lookups run in parallel
+from the browser — each gate visibly fills in as its source lands, which is
+better to watch anyway — and the evidence is posted to the model. That makes
+the evidence caller-supplied, which is the same trust boundary `api/score.js`
+already documents: the tenant's own rep is not an adversary, and the thing
+worth protecting is the rate card, not a distance anyone can measure on a
+public map.
+
+Three behaviours are load-bearing and asserted in
+`scripts/test-compute-lease.js` (94 checks, in `npm test`):
+
+- **Fiber is a hard gate and does not average.** A site that fails it is
+  disqualified and NO offer is priced — `offer` is null, not a small number. A
+  number on the page is a number a rep says out loud, and a rep must not be
+  able to quote rent on a site that is not a compute site. Perfect power does
+  not rescue it; the Illinois five-acre site is the precedent.
+- **Unanswered is UNCONFIRMED, never zero.** The same distinction
+  `api/grid-atlas.js` makes for a layer that did not answer. An unasked
+  question drops the site to *indicative* and lands on the `asks` call list
+  rather than counting against it — an empty site comes back incomplete with a
+  full call list, not disqualified.
+- **An unclassified tranche prices at the Tranche 1 floor, never the premium.**
+  Not asking can cost us upside; it can never over-commit the rep in the room.
+
+Grid Atlas rides in as a *secondary* signal on the power gate — a fifth of the
+weight, and it can never turn an unconfirmed will-serve into a confirmed one.
+That is the same warning `omega-grid-atlas-client.js` carries in its header:
+substation proximity is not hosting capacity, and presenting the first as the
+second is how a site gets sized against a line it is not connected to.
+
+The proposal defaults to showing the host **the opening number alone**. The
+band is three positions in a negotiation, not three estimates of the site, and
+printing low–high hands the host the ceiling before anyone has said anything.
+The whole band is a labelled option for an internal review copy.
+
+⚠ **The rate card is a seed, not a comp set.** The bands are a defensible
+build-up — pad rent as commercial ground, capacity rent per kW-year, a
+narrow quality adjustment, a tranche premium, and the amortised fiber lateral
+capped at a third of gross — but they are not verified comparables. Replace
+them with real comps and bump `RATE_CARD.version` before they are quoted as
+ClearSky's position. The version rides on every response so any proposal in
+somebody's inbox is attributable to the numbers that produced it.
+
+The sales-side counterpart is `docs/COMPUTE-SITE-QUALIFICATION.md` — minimum
+site requirements, the tranche mapping with the three questions that settle it,
+the discovery field set and the FAQ baselines. It is deliberately the same
+model the function runs; change one and change the other in the same pass,
+because a rep will trust whichever they read last.
+
+Still open, and said plainly in that doc rather than implied: the 32-category
+deep assessment is not in Omega and should be scoped off Ravi's merged
+spreadsheet rather than invented, and this tool saves one site per org through
+the standard `toolData` contract — there is no multi-site register on it yet.
+
+### Land lease in the editor, and the proposal a tenant can send
+
+Two things followed the tool: the Compute panel wanted the same screen on the
+site already on the drawing, and the proposal had to carry the TENANT's name
+rather than ClearSky's. Neither is a feature on its own — both are the same
+problem, which is that a second surface now renders this document.
+
+**`omega-compute-lease.js`** is that surface's other half, and the tool's. It
+holds the fan-out (Grid Atlas, Network Proximity, the parcel record — parallel,
+independently failable, each reporting its own progress) and the four-page
+proposal. `compute-proposal.html` was refactored onto it in the same pass and
+is ~340 lines shorter for it. The argument is the one
+`omega-grid-atlas-client.js` already makes about the scoring model, only worse
+here: two copies of a proposal generator means two hosts getting two different
+offers from the same company in the same week.
+
+Nothing in the client scores or prices. The gates, the tranche rule and the
+rate card stay in `/api/compute-lease.js`.
+
+**Branding is resolved server-side**, in the function, off the caller's own
+`omega_orgs` record — `brand: { name, logoUrl, accent, tagline, resolved }`.
+Not in `omega-brand.js`, because that file is not on editor.html's script list
+and adding a sign-in-path module to the largest page in the repo to fetch four
+strings is the wrong trade. Not in each page, because then each page decides
+for itself what a blank field means and the two documents disagree. Staff read
+their org too, skipping only the entitlement checks — a branding bug that only
+shows up for tenants is a branding bug nobody at ClearSky ever sees. An unset
+field comes back `''` and the page falls back to its own wordmark: deriving a
+name from the orgId would put "concordenergyusa.com" on a customer's desk.
+
+A logo is drawn on a white chip on the dark cover and page headers. That is
+not decoration — `sales-proposal.html` carries a long note about exactly this
+failure: a mark that is black-on-transparent vanishes on a navy footer, the
+export looks right on screen, and it ships with an invisible logo. A white
+chip works for every mark without needing a second white-variant file.
+
+**Patch 130 (`OmegaLeasePanel`)** puts a Land Lease button in the Compute
+tab's "3 · Size & Cost" panel, beside Compute Cost — which prices what we
+build, where this prices what we pay to stand it somewhere. It injects next to
+`rb-compute-cost` and Patch 114's PLAN moves it into the panel, the same way
+every other compute tool gets there. The site comes from `_npxSiteLatLon()`
+first, then `S`, then the map centre: the same three fallbacks in the same
+order the Network Proximity panel uses, so the two panels can never disagree
+about which point they are looking at. Evidence is fetched once and survives
+closing the modal; every answer the rep types re-scores against it and never
+re-runs a 55-second fiber lookup.
+
+The parcel record prefills zoning and owner, and only where the rep has typed
+nothing — their value wins, because they are looking at the site and the county
+layer is looking at a database that was right in 2019. Parcel ACREAGE is
+deliberately not prefilled into the leased-area field: we lease a carve-out,
+not somebody's whole industrial park, and a number that looks agreed is worse
+than a blank.
+
+**The proposal opens in a window, and falls back to an overlay.** `window.open`
+is tried first because a separate window is nicer — the rep keeps the proposal
+beside the drawing. It is not relied on: a popup blocker eats it silently, it
+was eaten in the first browser this was tested in, and a rep who presses "Open
+the proposal" and gets an alert about pop-up settings has been handed a support
+ticket instead of a document. The fallback is a full-screen overlay with the
+document in an iframe — `srcdoc`, so there is nothing to revoke and no origin
+to get wrong — printing through the iframe's own `contentWindow`, which prints
+the four pages and leaves the host page's print rules out of it. The document
+suppresses its own toolbar in that mode (`bare`), because two Print buttons a
+centimetre apart is the kind of thing that gets clicked wrongly under time
+pressure.
 ## 2026-09-17 · A national fiber map, and "how much fiber is here"
 
 ### What was wrong

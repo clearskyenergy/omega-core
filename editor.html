@@ -118,6 +118,7 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
+<script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -130,6 +131,7 @@ function openFinancingApply(){
 <!-- A build drawing never has the transmission line on it, so screening one
      needs the grid fetched rather than read. Same client the site finder uses. -->
 <script src="/omega-grid-atlas-client.js"></script>
+<script src="/omega-compute-lease.js"></script>
 <script src="/omega-parcel-report.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
@@ -8981,7 +8983,11 @@ function renderEl(el){
     if(el.evKind==='charger' && el.evImg){
       _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
     } else {
-      _gearHtml=rf(gw,gh);
+      var _visuals=window.OmegaEquipmentVisuals;
+      var _gearKind=el.evKind==='service'?'meter':el.evKind;
+      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
+        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
+      else _gearHtml=rf(gw,gh);
     }
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
@@ -171380,7 +171386,8 @@ if (root.console && console.info) {
     { n: 126, k: 'OmegaIntercon',     what: 'interconnection choice: none / service point / substation yard' },
     { n: 127, k: 'OmegaMoveSystem',   what: 'move the placed build as one object and re-trench on drop' },
     { n: 128, k: 'OmegaMoveSystem',   what: 'move or swap individual compartments, with live separation checking' },
-    { n: 129, k: 'OmegaComputeHUD',   what: 'load-vs-ceiling panel minimises, closes, and reopens from the View tab' }
+    { n: 129, k: 'OmegaComputeHUD',   what: 'load-vs-ceiling panel minimises, closes, and reopens from the View tab' },
+    { n: 130, k: 'OmegaLeasePanel',   what: 'land lease: four gates, tranche and the offer band on the site on screen; branded proposal' }
   ];
 
   /* Source-level edits have no module to look for, so they are detected
@@ -171614,7 +171621,7 @@ if (root.console && console.info) {
   var PLAN = {
     site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
-    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost']
+    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
   function panel(key) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
@@ -175232,6 +175239,427 @@ root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
   }
   root.OmegaEditorQA={check:check,log:function(){var r=check();if(root.console){console.group('[OMEGA Editor QA]');console.log(r);console.groupEnd()}return r}};
 })(window);
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+ *  OMEGA PATCH 130 — LAND LEASE, IN THE COMPUTE PANEL
+ *  ---------------------------------------------------------------------
+ *  Every other tool on the Compute tab answers a question about the
+ *  BUILD: how big, on what land, served by what, at what capex. None of
+ *  them answers the question that has to be settled before any of it
+ *  matters — will the person who owns this dirt sign, and what do we pay
+ *  them. A rep had to leave the drawing, open compute-proposal.html, and
+ *  retype an address the editor already knows.
+ *
+ *  This is that tool, on the site already on screen.
+ *
+ *  WHERE THE WORK HAPPENS. Nothing here scores or prices anything. The
+ *  four gates, the tranche rule and the lease rate card are in
+ *  /api/compute-lease.js and stay there (CLAUDE.md, IP protection). The
+ *  fan-out to Grid Atlas, Network Proximity and the parcel record, and
+ *  the four-page proposal, are in omega-compute-lease.js — the same
+ *  client compute-proposal.html uses, deliberately, because two copies
+ *  of a proposal generator means two hosts getting two different offers
+ *  from the same company in the same week.
+ *
+ *  THE PROPOSAL CARRIES THE TENANT'S BRAND, not ClearSky's. It is
+ *  resolved server-side from the caller's own omega_orgs record and
+ *  arrives on the response, so this panel does not resolve branding and
+ *  cannot disagree with the standalone tool about it.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[LeasePanel]';
+  var ID = 'cl-lease-modal';
+
+  /* The screen survives closing the modal. A rep who shuts it to look at
+     the drawing and reopens it should not wait 55 seconds for the fiber
+     lookup a second time — the evidence has not changed, only the view. */
+  var S = { evidence: null, result: null, site: null, busy: false, queued: false };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function $(id) { return document.getElementById(id); }
+  function v(id) { var e = $(id); return e ? String(e.value || '').trim() : ''; }
+  function n(id) { var x = v(id); if (x === '') return null; var f = Number(x); return isFinite(f) ? f : null; }
+
+  /* ── WHERE THE SITE COMES FROM ──────────────────────────────────────
+     The same three fallbacks the Network Proximity panel uses, in the
+     same order, so the two panels never disagree about which point they
+     are looking at. */
+  function siteOf() {
+    var lat = null, lng = null;
+    try {
+      if (typeof root._npxSiteLatLon === 'function') {
+        var p = root._npxSiteLatLon();
+        if (p) { lat = p.lat; lng = p.lon; }
+      }
+    } catch (e) {}
+    if (lat == null) {
+      try { if (root.S && isFinite(+root.S.lat) && isFinite(+root.S.lng) && +root.S.lat !== 0) { lat = +root.S.lat; lng = +root.S.lng; } } catch (e) {}
+    }
+    if (lat == null) {
+      try { var m = root._gmap && root._gmap.getCenter && root._gmap.getCenter(); if (m) { lat = m.lat(); lng = m.lng(); } } catch (e) {}
+    }
+    var addr = '';
+    try { addr = (document.getElementById('addr-in') || {}).value || ''; } catch (e) {}
+    if (lat == null && !addr) return null;
+    return { lat: lat, lng: lng, address: String(addr).trim() };
+  }
+
+  /* ── THE REP'S ANSWERS ──────────────────────────────────────────────
+     Matches the `rep` contract in api/compute-lease.js exactly. Anything
+     unanswered is simply absent: the model treats an unanswered question
+     as UNCONFIRMED, never as a failure, and names it in the ask list. */
+  function rep() {
+    var r = {
+      address: (S.site && (S.site.resolved || S.site.address)) || '',
+      lat: S.site ? S.site.lat : null, lng: S.site ? S.site.lng : null,
+      availableMw: n('cl-mw'), willServe: v('cl-willserve'),
+      fiberOnSite: v('cl-fiber'), fiberDownMbps: n('cl-down'), fiberUpMbps: n('cl-up'),
+      zoningCode: v('cl-zone'),
+      ownerName: v('cl-owner'), willingToLease: v('cl-willing'),
+      maxTermYears: n('cl-term'), leasedAcres: n('cl-acres'),
+      meterPosture: v('cl-meter'), hostEngagement: v('cl-engagement'),
+      termYears: n('cl-leaseterm') || 15
+    };
+    var e = v('cl-energy');
+    if (e === 'true') r.openToEnergyStructure = true;
+    else if (e === 'false') r.openToEnergyStructure = false;
+    return r;
+  }
+
+  /* ── PROGRESS ───────────────────────────────────────────────────────
+     One line per source. A rep watching a slow fiber lookup should see
+     that the power gate has already landed, not one spinner. */
+  var RUN = {};
+  var LABEL = { geocode: 'Address', grid: 'Grid Atlas', fiber: 'Network Proximity',
+                parcel: 'Parcel record', score: 'Scoring' };
+  var COLOR = { ok: '#34D399', warn: '#FBBF24', bad: '#F87171', busy: '#60A5FA' };
+  function paintRun() {
+    var el = $('cl-run'); if (!el) return;
+    var out = [], order = ['geocode', 'grid', 'fiber', 'parcel', 'score'], i;
+    for (i = 0; i < order.length; i++) {
+      var r = RUN[order[i]]; if (!r) continue;
+      out.push('<div style="display:flex;gap:8px;padding:2px 0;font-size:10px">'
+        + '<b style="min-width:112px;color:#94A3B8;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:9px">'
+        + esc(LABEL[order[i]]) + '</b>'
+        + '<span style="color:' + (COLOR[r.cls] || '#94A3B8') + '">' + esc(r.text) + '</span></div>');
+    }
+    el.innerHTML = out.join('');
+  }
+  var PROGRESS = { onSource: function (key, state, text) { RUN[key] = { cls: state, text: text }; paintRun(); } };
+
+  /* ── RENDER ─────────────────────────────────────────────────────────
+     Internal view. The rep sees gate scores, the tranche, the band and
+     the call list; the host sees none of it — that document is the
+     shared client's proposalPages(). */
+  function pill(status) {
+    var c = status === 'pass' ? '#34D399' : status === 'conditional' ? '#FBBF24'
+          : status === 'fail' ? '#F87171' : '#94A3B8';
+    return '<span style="font-size:8.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;'
+      + 'color:' + c + ';border:1px solid ' + c + '55;background:' + c + '15;padding:2px 7px;border-radius:4px">'
+      + esc(status === 'unconfirmed' ? 'to confirm' : status) + '</span>';
+  }
+  function results() {
+    var r = S.result;
+    if (!r) return '<div style="padding:20px;color:#64748B;font-size:11px">Screening…</div>';
+    var CL = root.OmegaComputeLease, money = CL ? CL.money : function (x) { return '$' + x; };
+    var order = r.gateOrder || ['power', 'fiber', 'zoning', 'siteControl'], i, h = [];
+
+    var vc = r.verdict === 'qualified' ? '#34D399' : r.verdict === 'disqualified' ? '#F87171'
+           : r.verdict === 'conditional' ? '#FBBF24' : '#94A3B8';
+    h.push('<div style="border:1px solid ' + vc + '44;background:' + vc + '12;border-radius:8px;padding:11px 13px;margin-bottom:12px">'
+      + '<div style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:' + vc + ';margin-bottom:4px">'
+      + esc(r.verdict) + '</div>'
+      + '<div style="font-size:11px;line-height:1.6;color:#B6C6D8">' + esc(r.verdictReason) + '</div></div>');
+
+    h.push('<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">');
+    for (i = 0; i < order.length; i++) {
+      var g = r.gates[order[i]]; if (!g) continue;
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:7px;padding:9px 10px;background:#0B1728">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+        + '<span style="font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#E2EEF9">'
+        + esc(g.label) + (g.hardGate ? ' <span style="color:#F87171">· hard</span>' : '') + '</span>'
+        + '<span style="font-size:14px;font-weight:800;color:#E2EEF9">' + (g.score == null ? '—' : g.score) + '</span></div>'
+        + '<div style="margin-bottom:5px">' + pill(g.status) + '</div>'
+        + '<div style="font-size:10px;line-height:1.5;color:#8FA6BE">' + esc(g.headline) + '</div></div>');
+    }
+    h.push('</div>');
+
+    if (r.offer) {
+      var o = r.offer;
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:8px;padding:12px;margin-bottom:12px;background:#0B1728">'
+        + '<div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#60A5FA;font-weight:800;margin-bottom:9px">'
+        + 'Land lease · ' + o.termYears + '-year term</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+        + band('Hold at', money(o.monthly.low), money(o.annual.low), false)
+        + band('Open at', money(o.monthly.base), money(o.annual.base), true)
+        + band('Ceiling', money(o.monthly.high), money(o.annual.high), false)
+        + '</div>'
+        + '<div style="font-size:10px;line-height:1.6;color:#8FA6BE;margin-top:9px">' + esc(o.howToUse) + '</div></div>');
+    } else {
+      h.push('<div style="border:1px solid #F8717144;background:#F8717112;border-radius:8px;padding:11px 13px;margin-bottom:12px;'
+        + 'font-size:11px;line-height:1.6;color:#FCA5A5">No offer is priced for this site.</div>');
+    }
+
+    var t = r.tranche;
+    h.push('<div style="display:flex;gap:10px;align-items:center;border:1px solid #1E3A5F;border-radius:8px;padding:10px 12px;margin-bottom:12px;background:#0B1728">'
+      + '<div style="width:30px;height:30px;border-radius:7px;background:' + (t.n ? '#2563EB' : '#334155') + ';color:#fff;'
+      + 'display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex:0 0 auto">' + (t.n || '?') + '</div>'
+      + '<div><div style="font-size:11.5px;font-weight:700;color:#E2EEF9">' + esc(t.label) + '</div>'
+      + '<div style="font-size:10px;line-height:1.55;color:#8FA6BE">' + esc(t.why) + '</div></div></div>');
+
+    if (r.asks && r.asks.length) {
+      var asks = r.asks.map(function (a) {
+        return '<li style="margin-bottom:6px;list-style:none;padding-left:13px;position:relative">'
+          + '<span style="position:absolute;left:0;top:6px;width:5px;height:5px;border-radius:50%;background:#FBBF24;display:block"></span>'
+          + '<span style="font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#FBBF24;display:block">'
+          + esc(a.gate) + '</span>' + esc(a.ask) + '</li>';
+      }).join('');
+      h.push('<div style="border:1px solid #1E3A5F;border-radius:8px;padding:11px 13px;background:#0B1728">'
+        + '<div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#FBBF24;font-weight:800;margin-bottom:8px">'
+        + 'What closes this site — ' + r.asks.length + ' open</div>'
+        + '<ul style="font-size:10.5px;line-height:1.6;color:#B6C6D8;margin:0;padding:0">' + asks + '</ul></div>');
+    }
+    return h.join('');
+  }
+  function band(label, m, a, hero) {
+    return '<div style="border:1px solid ' + (hero ? '#2563EB' : '#1E3A5F') + ';background:' + (hero ? '#2563EB18' : 'transparent')
+      + ';border-radius:6px;padding:9px;text-align:center">'
+      + '<div style="font-size:8px;letter-spacing:.09em;text-transform:uppercase;font-weight:800;color:'
+      + (hero ? '#60A5FA' : '#64748B') + ';margin-bottom:5px">' + esc(label) + '</div>'
+      + '<div style="font-size:17px;font-weight:800;color:#E2EEF9;letter-spacing:-.02em">' + esc(m) + '</div>'
+      + '<div style="font-size:9px;color:#64748B;margin-top:3px">' + esc(a) + ' / yr</div></div>';
+  }
+
+  function paint() {
+    var el = $('cl-results'); if (el) el.innerHTML = results();
+    var btn = $('cl-proposal-btn');
+    if (btn) btn.disabled = !(S.result && S.result.offerable);
+  }
+
+  /* ── RUN ────────────────────────────────────────────────────────────
+     evidence() once, rescore() on every edit. Editing an answer must
+     never re-run a 55-second fiber lookup: the rep typing "will-serve
+     confirmed" has not moved the site. */
+  function runScreen(force) {
+    var CL = root.OmegaComputeLease;
+    if (!CL) { RUN.score = { cls: 'bad', text: 'omega-compute-lease.js did not load — reload the page.' }; paintRun(); return; }
+    var site = siteOf();
+    if (!site) {
+      RUN.score = { cls: 'bad', text: 'Place or lock the satellite view first — this screens a real point.' };
+      paintRun(); return;
+    }
+    if (!force && S.evidence && S.site) return rescore();
+    RUN = {}; paintRun();
+    S.site = site;
+    CL.evidence({ address: site.address, lat: site.lat, lng: site.lng, sizeMw: n('cl-mw') || 1 }, PROGRESS)
+      .then(function (ev) {
+        S.evidence = ev;
+        S.site = { lat: ev.site.lat, lng: ev.site.lng, address: site.address, resolved: ev.site.resolved };
+        prefill(ev.parcel);
+        return rescore();
+      })['catch'](function (e) {
+        RUN.score = { cls: 'bad', text: (e && e.message) || 'screen failed' }; paintRun();
+      });
+  }
+
+  /* Prefill only what the rep has NOT typed. Their value always wins:
+     they are looking at the site and the county layer is looking at a
+     database that was right in 2019. */
+  function prefill(parcel) {
+    if (!parcel || parcel.ok === false) return;
+    if (parcel.zoning && !v('cl-zone') && $('cl-zone')) $('cl-zone').value = parcel.zoning;
+    if (parcel.owner && !v('cl-owner') && $('cl-owner')) $('cl-owner').value = parcel.owner;
+    if (parcel.acres != null && !v('cl-acres') && $('cl-acres')) {
+      /* The PARCEL's acreage is not the LEASED acreage and must not be
+         written into the field as though it were — we lease a carve-out,
+         not somebody's whole industrial park. Left for the rep to agree. */
+    }
+  }
+
+  function rescore() {
+    var CL = root.OmegaComputeLease;
+    if (!CL) return;
+    if (S.busy) { S.queued = true; return; }
+    S.busy = true;
+    CL.rescore(S.evidence || {}, rep(), PROGRESS).then(function (j) {
+      S.result = j; paint();
+    })['catch'](function () { /* rescore() already reported it on the Scoring line */ })
+      .then(function () {
+        S.busy = false;
+        if (S.queued) { S.queued = false; rescore(); }
+      });
+  }
+
+  /* ── THE MODAL ──────────────────────────────────────────────────── */
+  function field(label, id, type, ph) {
+    return '<div style="margin-bottom:7px"><label style="display:block;font-size:8.5px;color:#64748B;'
+      + 'letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:3px">' + esc(label) + '</label>'
+      + '<input id="' + id + '" type="' + type + '" placeholder="' + esc(ph || '') + '" '
+      + 'style="width:100%;background:#0B1728;border:1px solid #1E3A5F;color:#E2EEF9;border-radius:5px;'
+      + 'padding:6px 8px;font-size:11px;font-family:inherit"></div>';
+  }
+  function select(label, id, opts) {
+    var o = opts.map(function (x) {
+      return '<option value="' + esc(x[0]) + '">' + esc(x[1]) + '</option>';
+    }).join('');
+    return '<div style="margin-bottom:7px"><label style="display:block;font-size:8.5px;color:#64748B;'
+      + 'letter-spacing:.05em;text-transform:uppercase;font-weight:700;margin-bottom:3px">' + esc(label) + '</label>'
+      + '<select id="' + id + '" style="width:100%;background:#0B1728;border:1px solid #1E3A5F;color:#E2EEF9;'
+      + 'border-radius:5px;padding:6px 8px;font-size:11px;font-family:inherit">' + o + '</select></div>';
+  }
+  function grp(t) {
+    return '<div style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:#60A5FA;'
+      + 'font-weight:800;margin:13px 0 7px;padding-bottom:4px;border-bottom:1px solid #1E3A5F">' + esc(t) + '</div>';
+  }
+
+  function open() {
+    var ex = $(ID); if (ex) ex.remove();
+    var host = document.createElement('div');
+    host.id = ID;
+    host.setAttribute('style', 'position:fixed;inset:0;background:rgba(6,12,22,.8);z-index:9999;'
+      + 'display:flex;align-items:center;justify-content:center;padding:20px');
+    host.onclick = function (e) { if (e.target === host) host.remove(); };
+
+    var site = siteOf();
+    host.innerHTML = '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:1040px;'
+      + 'width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+      + '<div style="padding:15px 20px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">◫ Land Lease</div>'
+      + '<div style="font-size:10px;color:#64748B">Four gates · tranche · what you may offer this site host · /api/compute-lease'
+      + (site && site.address ? ' · ' + esc(site.address) : '') + '</div></div>'
+      + '<button onclick="var h=document.getElementById(\'' + ID + '\');if(h)h.remove()" '
+      + 'style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>'
+
+      + '<div style="display:grid;grid-template-columns:310px 1fr;gap:0">'
+
+      /* ── left: what the rep heard in the room ── */
+      + '<div style="padding:14px 16px;border-right:1px solid #1E3A5F">'
+      + '<div id="cl-run" style="margin-bottom:6px"></div>'
+      + '<button id="cl-rescreen" style="width:100%;background:#1E3A5F;color:#E2EEF9;border:none;border-radius:6px;'
+      + 'padding:7px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.04em">Re-run the lookups</button>'
+      + grp('Host')
+      + field('Host company', 'cl-host', 'text', 'Acme Logistics')
+      + field('Contact', 'cl-contact', 'text', 'Name')
+      + grp('Gate 1 · Power')
+      + field('Available power (MW)', 'cl-mw', 'number', '1.0')
+      + select('Will-serve', 'cl-willserve', [['unknown', 'Not asked'], ['requested', 'Requested, pending'],
+          ['confirmed', 'Confirmed'], ['none', 'Utility declined']])
+      + grp('Gate 2 · Fiber — hard gate')
+      + select('Service on site', 'cl-fiber', [['unknown', 'Not asked'], ['yes', 'Yes'], ['no', 'No']])
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Down Mbps', 'cl-down', 'number', '1000') + field('Up Mbps', 'cl-up', 'number', '1000') + '</div>'
+      + grp('Gate 3 · Zoning')
+      + field('Zoning code', 'cl-zone', 'text', 'I-2')
+      + grp('Gate 4 · Site control')
+      + field('Owner / controller', 'cl-owner', 'text', 'From the parcel, or ask')
+      + select('Will they lease?', 'cl-willing', [['unknown', 'Not asked'], ['yes', 'Yes'],
+          ['exploring', 'Exploring'], ['no', 'No']])
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Max term (yr)', 'cl-term', 'number', '15') + field('Leased acres', 'cl-acres', 'number', '0.5') + '</div>'
+      + grp('Tranche — what will they give?')
+      + select('The meter', 'cl-meter', [['unknown', 'Not asked'], ['keep', 'Keeps it'],
+          ['share', 'Open to sharing'], ['transfer', 'Will hand it over']])
+      + select('Canopies / solar / storage', 'cl-energy', [['', 'Not asked'], ['true', 'Open to it'],
+          ['false', 'Not interested']])
+      + select('Involvement', 'cl-engagement', [['unknown', 'Not asked'], ['engaged', 'Wants to be involved'],
+          ['passive', 'Cheque, no phone calls']])
+      + grp('Proposal')
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
+      + field('Term (yr)', 'cl-leaseterm', 'number', '15')
+      + select('Show the host', 'cl-present', [['base', 'Opening number'], ['range', 'Hold – open'],
+          ['open', 'Hold only'], ['full', 'Whole band']])
+      + '</div>'
+      + '<div style="font-size:9px;line-height:1.6;color:#64748B;margin-top:4px">Keep the ceiling to yourself. '
+      + 'A host who sees the top of the band has already been given it.</div>'
+      + '</div>'
+
+      /* ── right: the screen, and the document ── */
+      + '<div style="padding:14px 16px">'
+      + '<div id="cl-results"></div>'
+      + '<button id="cl-proposal-btn" disabled style="width:100%;margin-top:12px;background:#2563EB;color:#fff;'
+      + 'border:none;border-radius:7px;padding:10px;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.03em">'
+      + 'Open the proposal — your branding, ready to print</button>'
+      + '<div style="font-size:9px;line-height:1.6;color:#64748B;margin-top:6px">Four host-facing pages carrying your '
+      + 'company’s name and logo, not ClearSky’s. Print or save as PDF from the window that opens.</div>'
+      + '</div>'
+
+      + '</div></div>';
+
+    document.body.appendChild(host);
+
+    /* Wire after the DOM exists. Every answer re-scores against the
+       evidence already gathered; it never re-runs a lookup. */
+    var ids = ['cl-mw', 'cl-willserve', 'cl-fiber', 'cl-down', 'cl-up', 'cl-zone', 'cl-owner',
+               'cl-willing', 'cl-term', 'cl-acres', 'cl-meter', 'cl-energy', 'cl-engagement', 'cl-leaseterm'];
+    var t = null;
+    function onEdit() { clearTimeout(t); t = setTimeout(rescore, 450); }
+    for (var i = 0; i < ids.length; i++) {
+      var el = $(ids[i]); if (!el) continue;
+      el.addEventListener('change', onEdit);
+      if (el.tagName === 'INPUT') el.addEventListener('input', onEdit);
+    }
+    $('cl-rescreen').onclick = function () { runScreen(true); };
+    $('cl-proposal-btn').onclick = function () {
+      var CL = root.OmegaComputeLease;
+      if (!CL || !S.result) return;
+      var w = CL.openProposal(S.result, {
+        host: v('cl-host') || 'Site Host', contact: v('cl-contact'),
+        rep: repName(), repEmail: repEmail(),
+        present: v('cl-present') || 'base', term: n('cl-leaseterm') || 15
+      });
+      if (!w) alert('The proposal window was blocked. Allow pop-ups for this site and press it again.');
+    };
+
+    paint();
+    runScreen(false);
+  }
+
+  /* The signed-in user is the rep. Firebase already knows both, and
+     asking a rep to type their own name into a panel they opened from a
+     signed-in session is the kind of friction that gets a tool skipped. */
+  function repName() {
+    try { var u = root.firebase && firebase.auth().currentUser; return (u && (u.displayName || '')) || ''; } catch (e) { return ''; }
+  }
+  function repEmail() {
+    try { var u = root.firebase && firebase.auth().currentUser; return (u && (u.email || '')) || ''; } catch (e) { return ''; }
+  }
+
+  /* ── THE BUTTON ─────────────────────────────────────────────────────
+     Injected beside Compute Cost, which is its neighbour in the sequence:
+     Compute Cost prices what we build, this prices what we pay to stand
+     it somewhere. Patch 114's PLAN then moves it into the Compute tab's
+     "3 · Size & Cost" panel. */
+  function inject() {
+    var host = document.getElementById('rb-compute-cost') || document.getElementById('rb-elec');
+    if (!host || !host.parentNode) return false;
+    if (document.getElementById('rb-compute-lease')) return true;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-compute-lease';
+    b.title = 'Land Lease — screen this site on power, fiber, zoning and site control, then price the '
+      + 'lease you may offer the host. Fiber is a hard gate: fail it and no offer is priced.';
+    b.onclick = open;
+    b.innerHTML = '<span class="rb-ico" style="color:#34D399">◫</span>'
+      + '<span class="rb-lbl">Land<br>Lease</span>';
+    host.parentNode.insertBefore(b, host.nextSibling);
+    try { if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-lease/); } catch (e) {}
+    return true;
+  }
+
+  function boot() {
+    var c = 0, iv = setInterval(function () { if (inject() || ++c > 40) clearInterval(iv); }, 500);
+    if (root.console) console.info(TAG + ' ready — OmegaLeasePanel.open()');
+  }
+
+  root.OmegaLeasePanel = { open: open, state: function () { return S; }, site: siteOf, inject: inject };
+  if (typeof document === 'undefined') { /* node */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
 </script>
 </body>
 </html>
