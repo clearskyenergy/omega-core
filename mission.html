@@ -1151,8 +1151,17 @@ body.arranging .scroll{pointer-events:none}
   .railFoot{display:none}   /* the mic moves into the talk bar — see placeMic() */
 
   /* The microphone follows you instead of sitting at the foot of a document
-     that is several screens long. */
-  .talkBar{position:sticky;bottom:0;z-index:60;gap:8px;
+     that is several screens long — which is what it had gone back to doing.
+     `.main > .talkBar{position:relative}` up at the core layer outranks a
+     bare `.talkBar` by one class, and a media query carries no specificity of
+     its own, so `position:sticky` here lost every time and nobody noticed:
+     the bar still LOOKED pinned on a short screen, because the foot of a
+     document that is barely taller than the window is nearly the bottom of
+     the window. It only failed once there was something to scroll, which is
+     the one case it exists for. Matched selector, later in the sheet, so it
+     wins — and sticky is a positioned box too, so the reason that rule is
+     there (paint above .coreLayer) still holds. */
+  .main > .talkBar{position:sticky;bottom:0;z-index:60;gap:8px;
            margin:0 -16px;border-radius:0;border-left:none;border-right:none;
            padding:8px 16px calc(8px + env(safe-area-inset-bottom));
            background:var(--bg)}
@@ -1191,7 +1200,9 @@ body.arranging .scroll{pointer-events:none}
   body{padding:10px 10px 0;gap:10px;min-height:100vh;min-height:100dvh}
   #app{gap:10px}
   .foot{padding-bottom:8px}
-  .talkBar{margin:0 -10px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+  /* Same selector as the ≤1100 rule it narrows, or that one's -16px gutter
+     outranks this one's -10px and the bar stops reaching the edges. */
+  .main > .talkBar{margin:0 -10px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
   .wave{display:none}
 
   header{flex-wrap:wrap;gap:8px;padding-bottom:8px}
@@ -1252,6 +1263,100 @@ body.arranging .scroll{pointer-events:none}
        padding-right:max(16px,env(safe-area-inset-right));
        padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }
+/* …but 16px is the DESKTOP gutter, and this block sits after the ≤700 tier,
+   so installing the app on a phone quietly undid the phone's 10px padding.
+   The talk bar bleeds to the edge with margin:0 -10px — which left it ten
+   pixels short of both edges in the one place it is most used. The INSET is
+   what standalone is for; the gutter belongs to the tier. The bottom stays 0
+   because the talk bar already carries safe-area-inset-bottom itself, and
+   paying for the home indicator twice is a dead band above it. */
+@media (display-mode:standalone) and (max-width:700px),
+       (display-mode:fullscreen) and (max-width:700px){
+  body{padding:10px max(10px,env(safe-area-inset-right)) 0
+                    max(10px,env(safe-area-inset-left))}
+}
+
+/* ══ THE SHEET ═════════════════════════════════════════════════════════
+   A panel that comes up from the bottom edge, because the bottom edge is
+   where the thumb already is — the talk bar is the one thing on this page
+   that never scrolls away, so the door to everything else hangs off it.
+
+   It holds nodes that were MOVED here, not copied (see placeNav): the tab
+   list at ≤700, the voice controls at ≤1100. Nothing in here is a second
+   copy of a control that exists somewhere else.
+
+   z-index 160/159, above the caption (145), an expanded panel (140) and a
+   contact card (150): it is the way out of all three. */
+.screenBtn{display:none}
+.sheetBack{position:fixed;inset:0;z-index:159;background:rgba(2,8,19,.66);
+  backdrop-filter:blur(3px);opacity:0;transition:opacity .18s ease}
+.sheetBack.up{opacity:1}
+.sheetBack[hidden],.sheet[hidden]{display:none!important}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:160;
+  display:flex;flex-direction:column;gap:9px;
+  max-height:min(76vh,620px);
+  padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+  background:rgba(2,8,19,.98);border-top:1px solid rgba(0,243,255,.35);
+  border-radius:14px 14px 0 0;
+  box-shadow:0 -18px 44px rgba(0,0,0,.6),inset 0 1px 0 rgba(0,243,255,.18);
+  transform:translateY(100%);transition:transform .2s cubic-bezier(.2,.9,.25,1)}
+.sheet.up{transform:translateY(0)}
+/* The grab handle is drawn on the sheet, not on the strip, so it stays
+   centred on the sheet however wide the title and the close button run. */
+.sheet::before{content:'';position:absolute;left:50%;top:5px;width:34px;height:3px;
+  transform:translateX(-50%);border-radius:2px;background:rgba(0,243,255,.28)}
+.sheetGrip{display:flex;align-items:center;gap:10px;flex:none;
+  padding-bottom:8px;border-bottom:1px solid rgba(0,243,255,.14)}
+.sheetTitle{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--dim)}
+.sheetGrip .sheetX{margin-left:auto;min-height:36px;padding:8px 12px}
+.sheetBody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:12px}
+
+/* ══ ≤1100 · THE VOICE CONTROLS GET A HOME ══════════════════════════
+   .railFoot goes off the screen with the rail at this width, and only the
+   microphone was ever given somewhere else to be (placeMic). MUTE and the
+   voice engine were simply gone — and "stop talking out loud" is the control
+   you need most on a device you carry into rooms with other people in them. */
+@media (max-width:1100px){
+  /* flex:0 0 auto, not 0 1 auto. The talk bar is [button][input][mic], and a
+     shrinkable button loses every time — an input's automatic minimum size is
+     its content, so the box won the argument and the button was squeezed down
+     to the letter C. The button keeps its width; the INPUT is what gives. */
+  .screenBtn{display:flex;align-items:center;gap:7px;flex:0 0 auto;min-width:0;
+    max-width:min(170px,42vw);min-height:40px;padding:9px 11px;
+    white-space:nowrap;overflow:hidden}
+  .askWrap,.askWrap input{min-width:0}
+  .screenBtn .sIcon,.screenBtn .sCue{flex:none}
+  .screenBtn .sCue{opacity:.55;font-size:12px}
+  .screenBtn .sNow{min-width:0;overflow:hidden;text-overflow:ellipsis;
+    font-family:var(--ui);font-size:12.5px;letter-spacing:0;color:var(--ink)}
+  /* Beats the .railFoot{display:none} above it on specificity, and only ever
+     while the node is actually in here. */
+  #sheetBody .railFoot{display:block;border-top:none;padding-top:0}
+  #sheetBody .railFoot #focusInput{display:none}   /* the box is right there */
+  #sheetBody .railFoot .vRow{margin-top:8px}
+  #sheetBody .railFoot .vRow button{min-height:44px}
+
+  /* The hole is a GAP IN THE MIDDLE COLUMN, and stacked there is no middle
+     column. It kept its `flex:1` share of a view that is still stretched to
+     a 100vh shell, so on an iPad it swallowed every pixel the panels did not
+     — some seven hundred of them — and parked them between CONNECTIONS and
+     QUICK COMMANDS, nowhere near the burst it is supposed to be a window
+     onto. The panels are translucent and float over the layer exactly as
+     they do on a desktop, so the burst loses nothing by the hole going. It
+     comes back at ≤700, where the stack is flat enough to put it first. */
+  .coreHole{display:none}
+  .coreLayer{height:min(62vh,560px);bottom:auto}
+
+  /* And the same slack one level up. Stacked, .cmdGrid is a one-column grid
+     of auto rows inside a view that is still `flex:1` of a 100vh shell, and
+     auto rows under the default align-content:stretch share out everything
+     left over — so each of the three former columns ended with a few hundred
+     pixels of nothing, and CONNECTIONS and QUICK COMMANDS were half a screen
+     apart with no panel between them. Pack to the top; the page is what
+     scrolls here, so there is no leftover height worth distributing. */
+  .cmdGrid,.platGrid{align-content:start}
+}
 
 @media (max-width:700px){
   /* HIS RULE, 2026-09-13: on the phone, Jarvis is something you TALK to.
@@ -1259,10 +1364,81 @@ body.arranging .scroll{pointer-events:none}
      one, and asking for a screen is faster than hunting for it — so the
      strip goes and navigation becomes a sentence (see viewCommand()). The
      tabs stay on every larger screen, where there is room for them and a
-     mouse to use them. */
-  #nav{display:none}
+     mouse to use them.
+
+     AMENDED 2026-09-18. The rule holds — speaking is still how you move
+     around in here — but it was the ONLY way, and voice is the one input a
+     device is allowed to refuse. A loud room, a denied microphone, iOS
+     Safari declining recognition: any of those left fourteen screens with
+     no door. The strip still does not come back. The tabs move into the
+     sheet and stay out of sight until asked for, which costs the phone
+     nothing and costs the rule nothing. */
+  .rail #nav{display:none}
+  #sheetBody #nav{display:flex;flex-direction:column;flex:none;gap:4px;
+    width:100%;max-width:100%;overflow:visible;padding-bottom:0}
+  #sheetBody .navItem{width:100%;flex:0 0 auto;min-height:48px;font-size:14.5px;
+    padding:11px 12px;background:rgba(0,243,255,.03);
+    border-color:rgba(0,243,255,.12)}
+  #sheetBody .navItem.on{background:rgba(0,243,255,.12);
+    border-color:rgba(0,243,255,.35);color:var(--glow-cyan)}
+  /* The strip above packs the count against the label because a tab is only
+     as wide as its words. These rows are the full width of the sheet, so the
+     count goes back to the far edge where a column of them lines up. */
+  #sheetBody .navItem .pill{margin-left:auto}
+
+  /* Full width, on its own line, and it reads as a location bar: with the
+     strip gone this is the only thing on the page that says which of the
+     fourteen screens you are looking at. A chip beside the input could not
+     say it — "Command Center" in 90px is "Comm…", which answers nothing. */
+  .talkBar{flex-wrap:wrap;row-gap:8px}
+  .screenBtn{order:-1;flex:1 0 100%;max-width:none;min-height:42px;
+    justify-content:flex-start}
+  .screenBtn .sNow{flex:1;text-align:left}
   .brand{padding-bottom:4px}
   .rail{flex:none;padding-bottom:6px}
+
+  /* Two microphones, and the one in the header is the one a thumb cannot
+     reach — #micBig is down in the sticky bar (placeMic). So the header's
+     copy is width that the date and the connection badge could be using. */
+  header #mic{display:none}
+  header > div:last-child{flex-wrap:wrap;justify-content:flex-end}
+
+  /* ── the command centre, stacked ─────────────────────────────────
+     Three columns stacked in source order put the thread — the thing this
+     page IS on a phone — under eight panels, two screens down. display:
+     contents dissolves the columns so `order` can reach across them, and
+     only the three that have to lead are given one: everything else keeps
+     the sequence the markup (or a saved arrangement) put it in. The columns
+     are dissolved for RENDERING only, so widgetContainers() still finds
+     them and drag-to-rearrange is untouched. */
+  .cmdGrid{display:flex;flex-direction:column;gap:10px}
+  .cmdGrid > .col{display:contents}
+  /* Back, and at the top, because the flattened stack can put it there: the
+     first thing on a phone is the core, and the burst is centred on it. */
+  .cmdGrid .coreHole{display:block;order:-3;flex:none;height:auto;min-height:220px}
+  .cmdGrid [data-widget="conversation"]{order:-2}
+  .cmdGrid [data-widget="needs"]{order:-1}
+  /* The inline max-height:34% / height:132px were written for a column that
+     HAD a height to be a fraction of. Here the page is what scrolls, so a
+     percentage resolves against nothing and a fixed 132px is a scrollport
+     four lines tall. Let each panel be as tall as it is; .panel .scroll
+     (≤1100) is what stops any one of them running away. */
+  .cmdGrid .panel{flex:none!important;height:auto!important;max-height:none!important}
+  .cmdGrid [data-widget="conversation"] .scroll{max-height:52vh}
+  /* inset:0 on a main column that is now several screens tall means
+     animating a canvas the size of the document, behind text that has to be
+     read over it. Bound it to roughly the hole it shows through. */
+  .coreLayer{height:min(44vh,360px);bottom:auto}
+}
+
+/* Sideways, a second row in the talk bar is a tenth of the whole viewport
+   spent on a label. The button goes back to being a chip beside the box, and
+   the core gives up the height it was holding for a burst nobody can see. */
+@media(max-width:700px) and (orientation:landscape) and (max-height:500px){
+  .talkBar{flex-wrap:nowrap;row-gap:0}
+  .screenBtn{order:0;flex:0 0 auto;max-width:34vw;min-height:38px}
+  .cmdGrid .coreHole{min-height:120px}
+  .coreLayer{height:min(70vh,260px)}
 }
 </style>
 </head>
@@ -1645,6 +1821,13 @@ body.arranging .scroll{pointer-events:none}
 
     <!-- ───────── TALK BAR ───────── -->
     <div class="talkBar">
+      <!-- The door to everything else, hung off the one bar that never
+           scrolls away. Display:none until ≤1100 — above that the rail has
+           the tabs and the voice controls in plain sight. -->
+      <button id="screenBtn" class="screenBtn" aria-haspopup="dialog" aria-expanded="false"
+              aria-controls="sheet"><span class="sIcon" aria-hidden="true">◧</span><span
+              class="sNow" id="screenNow">Command Center</span><span class="sCue"
+              aria-hidden="true">⌃</span></button>
       <div class="wave" id="waveL"></div>
       <div class="askWrap">
         <span class="p">&gt;</span>
@@ -1659,6 +1842,21 @@ body.arranging .scroll{pointer-events:none}
 
 <div class="zoomBack" id="zoomBack" hidden></div>
 <div class="cardBack" id="cardBack" hidden><div class="card" id="card"></div></div>
+
+<!-- ───── THE SHEET ─────
+     Deliberately empty in the markup. Everything it shows is a node that
+     lives somewhere else at full width and is MOVED here by placeNav() —
+     the tab list, the voice controls — so there is never a second copy of a
+     button to keep in step with the first. -->
+<div class="sheetBack" id="sheetBack" hidden></div>
+<aside class="sheet" id="sheet" hidden aria-hidden="true" role="dialog"
+       aria-modal="true" aria-label="Screens and voice">
+  <div class="sheetGrip">
+    <div class="sheetTitle" id="sheetTitle">GO TO</div>
+    <button class="sheetX" id="sheetX">CLOSE</button>
+  </div>
+  <div class="sheetBody" id="sheetBody"></div>
+</aside>
 
 <div class="caps" id="caps">
   <div class="capGrip" id="capGrip">
@@ -4706,8 +4904,7 @@ async function submit(said, spoken){
   const view=viewCommand(said);
   if(view){
     showView(view);
-    const label=(document.querySelector('.navItem[data-view="'+view+'"]')||{}).textContent||view;
-    const name=String(label).replace(/^[^A-Za-z]*/,'').replace(/\s*\d+\s*$/,'').trim()||view;
+    const name=viewLabel(view);
     say('jarvis', name+'.');
     coreState(name.toLowerCase(), false);
     return;
@@ -4921,6 +5118,10 @@ function showView(name){
   /* The core burns behind the command centre and nowhere else — a graph or a
      task list read through a firework is a worse graph and a worse list. */
   const cl=el('coreLayer'); if(cl) cl.classList.toggle('on', name==='command');
+  /* Whatever asked for this screen — a tab, a sentence, the index — the
+     phone's switcher has to end up naming it, and a sheet that is standing
+     open has to get out of the way of the thing it just opened. */
+  sheetClose(); syncSheetChrome();
 }
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
@@ -4985,6 +5186,122 @@ function placeMic(reflow){
 placeMic(false);
 phone.addEventListener('change',()=>placeMic(true));
 window.addEventListener('orientationchange',()=>setTimeout(()=>placeMic(true),150));
+
+/* ══ THE SHEET ═════════════════════════════════════════════════════════
+   Two things go off the screen on the way down to a phone, and only one of
+   them was ever caught. The microphone moves into the talk bar (placeMic).
+   The tab list and the voice controls just disappeared — the tabs on
+   purpose (HIS RULE, see the ≤700 block in the stylesheet), the MUTE and
+   engine buttons by accident, because .railFoot is hidden at ≤1100 and
+   nothing was watching what else was inside it.
+
+   Both come back the same way the microphone did: the node MOVES. Its
+   listeners are bound to the element, the pill counts are written by id,
+   and showView() finds the tabs with a document-wide query — so moving them
+   costs nothing and there is never a second copy to drift from the first.
+
+   The two widths are not the same width, which is why there are two queries:
+     ≤1100  the rail is gone, so the VOICE controls need a home.
+     ≤700   the tab strip is gone too, so the TABS need one as well. */
+const handset = window.matchMedia('(max-width:700px)');
+
+/* One reader for "what is this screen called". There were two, and they had
+   already started to drift: submit() knew to strip the pill's digits off the
+   end of a nav label and nothing else did. */
+function viewLabel(name){
+  const b = document.querySelector('.navItem[data-view="'+name+'"]');
+  return String((b && b.textContent) || name)
+    .replace(/^[^A-Za-z]*/,'')      /* the glyph */
+    .replace(/\s*\d+\s*$/,'')       /* the pill */
+    .trim() || name;
+}
+function currentView(){
+  const v = document.querySelector('.view.on');
+  return (v && v.dataset.view) || 'command';
+}
+
+/* The button says where you ARE, not what the button does — with the strip
+   gone, nothing else on a phone answers that question. At tablet width the
+   strip is still there answering it, and the sheet holds only the voice
+   controls, so the button says so rather than naming a screen it cannot
+   take you to. */
+function syncSheetChrome(){
+  const now = el('screenNow'), title = el('sheetTitle'),
+        btn = el('screenBtn'), ask = el('ask'), nav = handset.matches;
+  const here = viewLabel(currentView());
+  if(now)   now.textContent = nav ? here : 'CONTROLS';
+  if(title) title.textContent = nav ? 'GO TO' : 'VOICE';
+  if(btn)   btn.setAttribute('aria-label',
+              nav ? 'Screens — you are on ' + here : 'Voice controls');
+  /* "Ask Jarvis, or say his name" is a sentence written for a box with room
+     for a sentence. Here it is competing with the switcher and the mic. */
+  if(ask)   ask.placeholder = nav ? 'Ask Jarvis…' : 'Ask Jarvis, or say his name';
+}
+
+function sheetOpen(){
+  const sheet = el('sheet'), back = el('sheetBack');
+  if(!sheet || !back || !sheet.hidden) return;
+  sheet.hidden = false; back.hidden = false;
+  sheet.setAttribute('aria-hidden','false');
+  const btn = el('screenBtn'); if(btn) btn.setAttribute('aria-expanded','true');
+  /* Two frames, not one. The box is display:none until this tick, and a
+     transition out of a style the element never actually had does not run —
+     the sheet snapped into place instead of sliding up. */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    sheet.classList.add('up'); back.classList.add('up');
+  }));
+  const on = sheet.querySelector('.navItem.on');
+  if(on) try{ on.scrollIntoView({block:'nearest'}); }catch(_){}
+}
+
+function sheetClose(){
+  const sheet = el('sheet'), back = el('sheetBack');
+  if(!sheet || !back || sheet.hidden) return;
+  sheet.classList.remove('up'); back.classList.remove('up');
+  sheet.setAttribute('aria-hidden','true');
+  const btn = el('screenBtn'); if(btn) btn.setAttribute('aria-expanded','false');
+  /* Hidden only once it has finished leaving, and only if it has not been
+     re-opened in the meantime — otherwise a fast double tap hides a sheet
+     that is on its way back up. */
+  setTimeout(()=>{
+    if(!sheet.classList.contains('up')){ sheet.hidden = true; back.hidden = true; }
+  }, 220);
+}
+
+function placeNav(){
+  const nav  = el('nav'),
+        body = el('sheetBody'),
+        rail = document.querySelector('.rail'),
+        foot = document.querySelector('.railFoot');
+  if(!body || !rail) return;
+  if(nav){
+    if(handset.matches){ if(nav.parentElement !== body) body.insertBefore(nav, body.firstChild); }
+    /* Back to where the markup had it: under the brand, above the voice
+       controls. insertBefore(x, null) appends, which is the right answer
+       when the foot is still down in the sheet at tablet width. */
+    else if(nav.parentElement !== rail) rail.insertBefore(nav, rail.querySelector('.railFoot'));
+  }
+  if(foot){
+    if(phone.matches){ if(foot.parentElement !== body) body.appendChild(foot); }
+    else if(foot.parentElement !== rail) rail.appendChild(foot);
+  }
+  /* Nothing left in it that the page is not already showing. */
+  if(!phone.matches) sheetClose();
+  syncSheetChrome();
+  measureTalk();
+}
+
+el('screenBtn').addEventListener('click',()=>{
+  const sheet = el('sheet');
+  if(sheet && sheet.hidden) sheetOpen(); else sheetClose();
+});
+el('sheetX').addEventListener('click', sheetClose);
+el('sheetBack').addEventListener('click', sheetClose);
+document.addEventListener('keydown', e=>{ if(e.key === 'Escape') sheetClose(); });
+
+placeNav();
+handset.addEventListener('change', ()=>placeNav());
+phone.addEventListener('change', ()=>placeNav());
 
 function tickClock(){
   const now=new Date();
