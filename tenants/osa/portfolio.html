@@ -116,6 +116,21 @@ button{font-family:inherit}
 .sn-count.alert{background:var(--warn);color:#fff}
 .sn-item.active .sn-count{background:var(--accent);color:#fff}
 
+/* The portfolio switcher. Matrix, Overview, Board and Pipeline are four
+   renderings of ONE list of projects. As four sidebar entries they read as
+   four destinations, so the first question on opening the portal was "which of
+   these am I meant to click" — a question the data cannot answer, because
+   they all show the same deals. One entry now; this picks the rendering. */
+.vsw{display:none;gap:2px;margin:0 0 16px;background:#EEF1F5;border-radius:9px;
+  padding:3px;width:fit-content;max-width:100%;flex-wrap:wrap}
+.vsw.on{display:flex}
+.vsw button{border:0;background:none;padding:7px 13px;border-radius:7px;cursor:pointer;
+  font:inherit;font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.vsw button:hover{color:var(--ink)}
+.vsw button.on{background:#fff;color:var(--accent);font-weight:600;
+  box-shadow:0 1px 2px rgba(16,24,40,.09)}
+.vsw .n{font-size:11px;font-weight:600;opacity:.7;font-variant-numeric:tabular-nums}
+
 #main{flex:1;padding:22px 26px 60px;max-width:1600px;min-width:0}
 .view{display:none}.view.on{display:block}
 .ph{margin-bottom:18px}
@@ -680,18 +695,12 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <div id="shell">
   <nav id="side">
     <div class="sn-group">Portfolio</div>
-    <button class="sn-item active" data-view="matrix" onclick="go('matrix')">
+    <!-- ONE entry for the four renderings. data-group keeps it lit whichever
+         one is showing; the switcher above the content picks between them.
+         id="c-pipe" stays here so renderCounts keeps its target. -->
+    <button class="sn-item active" data-view="matrix" data-group="portfolio" onclick="go('matrix')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      <span>Matrix</span></button>
-    <button class="sn-item" data-view="dash" onclick="go('dash')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      <span>Overview</span></button>
-    <button class="sn-item" data-view="board" onclick="go('board')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="10" y="3" width="6" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>
-      <span>Board</span></button>
-    <button class="sn-item" data-view="pipeline" onclick="go('pipeline')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
-      <span>Pipeline</span><span class="sn-count" id="c-pipe">0</span></button>
+      <span>Portfolio</span><span class="sn-count" id="c-pipe">0</span></button>
     <button class="sn-item" data-view="partners" onclick="go('partners')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
       <span>Partners</span><span class="sn-count" id="c-partners">0</span></button>
@@ -733,6 +742,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 
   <main id="main">
     <div id="banners"></div>
+    <div id="viewswitch" class="vsw"></div>
 
     <section class="view on" id="v-dash">
       <div class="ph"><h1 id="dash-h">Portfolio</h1>
@@ -1365,10 +1375,56 @@ var dealErr=null;
 function loadSample(){ S.deals=F.sample(); S.demo=true; S.loaded=true; render();
   toast('Sample portfolio loaded \u2014 nothing is saved'); }
 
+/* ── The portfolio switcher ───────────────────────────────────────────────
+   Matrix, Overview, Board and Pipeline render the same deals four ways. They
+   used to be four sidebar entries, which is four destinations for one place.
+   Order runs widest-to-narrowest: the matrix is still the landing view (that
+   is the decision recorded in showApp), the list is where you go when you want
+   rows rather than a picture, and it carries the live count so the choice is
+   informed instead of a guess. */
+var VIEWS = [
+  { k:'matrix',   label:'Matrix'   },
+  { k:'dash',     label:'Overview' },
+  { k:'board',    label:'Board'    },
+  { k:'pipeline', label:'List'     }
+];
+function inPortfolio(v){
+  for(var i=0;i<VIEWS.length;i++) if(VIEWS[i].k===v) return true;
+  return false;
+}
+function renderViewSwitch(){
+  var el=document.getElementById('viewswitch'); if(!el) return;
+  var on=inPortfolio(S.view);
+  el.classList.toggle('on', on);
+  if(!on){ el.innerHTML=''; return; }
+  /* Guarded rather than assumed: go() runs once before the first load
+     resolves, and S.deals is empty until it does. */
+  var live=(S.deals||[]).filter(function(d){ return !F.isExit(d.stage); }).length;
+  var h='';
+  for(var i=0;i<VIEWS.length;i++){
+    var v=VIEWS[i];
+    h+='<button class="'+(S.view===v.k?'on':'')+'" onclick="go(\''+v.k+'\')">'
+      + v.label
+      + (v.k==='pipeline' ? '<span class="n">'+live+'</span>' : '')
+      + '</button>';
+  }
+  el.innerHTML=h;
+}
+
 function go(v,silent){
   S.view=v;
   var items=document.querySelectorAll('.sn-item[data-view]');
-  for(var i=0;i<items.length;i++) items[i].classList.toggle('active',items[i].getAttribute('data-view')===v);
+  for(var i=0;i<items.length;i++){
+    /* The Portfolio entry stands for all four renderings, so it stays lit
+       whichever one is showing. Matching on data-view alone would un-highlight
+       the sidebar the moment you switched to Board, and a portal with nothing
+       lit reads as having lost your place. */
+    var lit = items[i].getAttribute('data-group')==='portfolio'
+            ? inPortfolio(v)
+            : items[i].getAttribute('data-view')===v;
+    items[i].classList.toggle('active', lit);
+  }
+  renderViewSwitch();
   var vs=document.querySelectorAll('.view');
   for(var j=0;j<vs.length;j++) vs[j].classList.remove('on');
   var el=document.getElementById('v-'+v); if(el) el.classList.add('on');
@@ -1383,7 +1439,7 @@ function render(){
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
   renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
-  renderSettings(); renderStaff(); renderInvites();
+  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
 }
@@ -1421,22 +1477,28 @@ function renderBanners(){
     +' waiting.</b> <button class="btn-x" onclick="go(\'users\')">Review them</button></div>';
 }
 
+/* Every badge goes through put(), which tolerates a missing element.
+   hideNav() already removes entries a role cannot use, and merging the four
+   portfolio entries removed three more — under the old code an absent badge
+   threw a TypeError here, and because renderCounts() is the last call in
+   render(), one missing span silently killed every render after it. */
 function renderCounts(){
-  document.getElementById('c-pipe').textContent = S.deals.filter(function(d){
-    return !F.isExit(d.stage); }).length;
-  document.getElementById('c-partners').textContent = F.allPartners(S.deals).length;
+  function put(id,n,alert){
+    var e=document.getElementById(id); if(!e) return;
+    e.textContent=n;
+    if(alert!==undefined) e.classList.toggle('alert',!!alert);
+  }
+  put('c-pipe', S.deals.filter(function(d){ return !F.isExit(d.stage); }).length);
+  put('c-partners', F.allPartners(S.deals).length);
   var dr=openDraws().length;
-  var el=document.getElementById('c-draws'); el.textContent=dr;
-  el.classList.toggle('alert', dr>0);
+  put('c-draws', dr, dr>0);
   var nb=S.inbox.filter(function(c){return !c.linkedDeal && !c.skipByDefault;}).length;
-  var ib=document.getElementById('c-inbox'); ib.textContent=nb; ib.classList.toggle('alert', nb>0);
-  document.getElementById('c-work').textContent =
-    S.deals.filter(function(d){ return d.assignment.designLead||d.assignment.devLead; }).length;
-  var vo=verifyRows('open').length;
-  var ve=document.getElementById('c-verify'); if(ve){ ve.textContent=vo;
-    ve.classList.toggle('alert', verifyRows('blocked').length>0); }
+  put('c-inbox', nb, nb>0);
+  put('c-work', S.deals.filter(function(d){
+    return d.assignment.designLead||d.assignment.devLead; }).length);
+  put('c-verify', verifyRows('open').length, verifyRows('blocked').length>0);
   var pu=A.pendingCount?A.pendingCount():0;
-  var ue=document.getElementById('c-users'); ue.textContent=pu; ue.classList.toggle('alert',pu>0);
+  put('c-users', pu, pu>0);
 }
 
 /* ── Overview ─────────────────────────────────────────────────────────── */
