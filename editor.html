@@ -118,6 +118,7 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
+<script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -8981,7 +8982,11 @@ function renderEl(el){
     if(el.evKind==='charger' && el.evImg){
       _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
     } else {
-      _gearHtml=rf(gw,gh);
+      var _visuals=window.OmegaEquipmentVisuals;
+      var _gearKind=el.evKind==='service'?'meter':el.evKind;
+      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
+        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
+      else _gearHtml=rf(gw,gh);
     }
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
@@ -140310,6 +140315,7 @@ var ARCH = {
   'solar-carport': { label:'Solar — carport canopy', group:'solar', tilt:7,  clear:14  },
 
   'bess-container':{ label:'BESS — container',       group:'storage', h:9.5  },
+  'bess-assembly': { label:'BESS — complete assembly', group:'storage', h:9.5 },
 
   /* Patch 84. A modular data-centre pod was mapped to 'bess-container',
      so 40 MW of compute drew as forty batteries, counted as STORAGE in
@@ -140360,7 +140366,7 @@ var ARCH_GROUPS = [
 
 /* Selectable archetypes, in menu order. */
 var ARCH_ORDER = ['solar-ground','solar-tracker','solar-roof','solar-carport',
-  'compute-pod','bess-container','bess-cabinet','pcs','ems',
+  'compute-pod','bess-container','bess-assembly','bess-cabinet','pcs','ems',
   'xfmr','switchgear','meter','panel','disco','jbox','genset','ups','pole',
   'building','pad','fence','compound','road','bollard','parking','tree','hydrant','camera',
   'substation','charger','ignore'];
@@ -140417,6 +140423,24 @@ function overlapFrac(a, b){
    then raw pixels, then the app helper, then area, then a visible stub. */
 function shapeBox(sh){
   var p = ppf();
+
+  /* A full BESS assembly is not the battery container alone. Its parts
+     record is the authoritative footprint for the concrete pad, PCS,
+     transformer, disconnect and fence that were laid out together. Using
+     sh.lf/sh.wf here reduced the object to the left-hand container, so the
+     scene centre, ground extent and selection box were all wrong. */
+  if(sh.kind==='assembly' && sh.parts && sh.parts.length && sh.cx != null && sh.cy != null){
+    var ap = [], ai;
+    for(ai=0; ai<sh.parts.length; ai++){
+      var part = sh.parts[ai] || {}, pl = +part.lf || 0, pw = +part.wf || 0;
+      if(!(pl>0) || !(pw>0)) continue;
+      ap.push({ x:sh.cx + ((+part.dx||0) - pl/2)*p,
+                y:sh.cy + ((+part.dy||0) - pw/2)*p });
+      ap.push({ x:sh.cx + ((+part.dx||0) + pl/2)*p,
+                y:sh.cy + ((+part.dy||0) + pw/2)*p });
+    }
+    if(ap.length){ var ab = bboxOfPts(ap); ab.src='assembly parts'; return ab; }
+  }
 
   /* --- 1. feet: true regardless of drawing scale -------------------- */
   if(sh._ftBoundary && sh._ftBoundary.length > 2 && sh.pts && sh.pts[0]){
@@ -140554,6 +140578,9 @@ var ROLE_ARCH = {
 
 function classifyElement(el){
   if(el._visArch && ARCH[el._visArch]) return { arch:el._visArch, why:'explicit' };
+  /* Legacy and wizard BESS assemblies carry their identity in .type rather
+     than eqId. Without this they fell through to an anonymous junction box. */
+  if(el.type==='bess-asm') return { arch:'bess-container', why:'authored' };
   var id = String(el.eqId||'');
   if(EQ_ARCH[id]) return { arch:EQ_ARCH[id], why:'authored' };
 
@@ -140657,7 +140684,7 @@ function classifySolar(sh, ctx){
 /* Non-solar shapes. */
 var SHAPE_ARCH = {
   parking:'parking', adaaisle:'parking', evstencil:'parking', adastencil:'parking',
-  bespad:'bess-container', assembly:'bess-container', energy:'bess-container',
+  bespad:'bess-container', assembly:'bess-assembly', energy:'bess-container',
   substation:'substation', utility:'xfmr',
   evl2:'charger', evcab:'charger', evpost:'charger', evunit:'charger',
   derwind:'ignore', deralt:'genset', derdc:'compute-pod',
@@ -140677,6 +140704,14 @@ function classifyShape(sh, ctx){
   }
   var k = String(sh.kind||'');
   if(k==='dersolar' || k==='solar') return classifySolar(sh, ctx);
+  /* Utility items share one 2D shape type but name their actual device in
+     utype. Treating the whole family as transformers made meters and
+     disconnects appear as large pad-mounts in the visualizer. */
+  if(k==='utility'){
+    var uk = String(sh.utype||'').toLowerCase();
+    var ua = { xfmr:'xfmr', meter:'meter', disco:'disco', ct:'jbox', mpoi:'meter' }[uk] || 'jbox';
+    return { arch:ua, why:'authored' };
+  }
   if(SHAPE_ARCH[k]) return { arch:SHAPE_ARCH[k], why:'authored' };
   /* A rectangle that encloses everything else on the drawing is the
      property line, not a warehouse. readSite flags it (see the context
@@ -140883,6 +140918,14 @@ function readSite(){
       rot: +sh.rot||0,
       approx: !!b.approx, boxSrc: b.src || '?'
     });
+    /* Assembly part offsets are relative to the authored assembly centre,
+       not to the (asymmetric) overall bounds that include the gear column.
+       Anchor the wrapper at that centre so every child lands on the same
+       point as it does in the 2D layout. */
+    if(sh.kind==='assembly' && sh.cx != null && sh.cy != null){
+      var ac = tfPt(sh.cx, sh.cy);
+      it.x = fx(ac.x); it.z = fz(ac.y); it.assemblyScale = scF;
+    }
     /* carry the design data the 3D builders need */
     it.kw       = +sh.kw || 0;
     it.gcr      = +sh.gcr || 0;
@@ -140985,31 +141028,46 @@ function readSite(){
     var eb = elementBox(ele), wpx = eb.w;
     /* Real footprints where the app knows them, so a transformer is 6x5 ft
        and not a 60 px square that happens to be whatever the drop size was. */
-    var fw = wpx/p, fl = eb.h/p;
+    var fw = wpx/p, fl = eb.h/p, footprintSource = '2D symbol';
     try{
       var gf = (typeof EQ_FOOTPRINT_FT!=='undefined') ? EQ_FOOTPRINT_FT[ele.eqId] : null;
       var dc = (typeof DC_CATALOG!=='undefined') ? DC_CATALOG[ele.eqId] : null;
-      if(dc){ fw = dc.lf*(+ele._modelScale||1); fl = dc.wf*(+ele._modelScale||1); }
-      else if(gf){ fw = gf.lf*(+ele._modelScale||1); fl = gf.wf*(+ele._modelScale||1); }
+      if(ele.type==='bess-asm'){
+        /* A legacy BESS assembly's 400 px drawing symbol is deliberately
+           legible, not a physical dimension. Use its selected catalogue
+           footprint whenever it is available; otherwise retain the visual
+           size but make that fact auditable instead of silently treating a
+           symbol as a surveyed container. */
+        var bc = (ele.bessId && S_.bessList) ? S_.bessList.filter(function(x){ return x.id===ele.bessId; })[0] : null;
+        bc = bc || ele._cfgSnapshot || null;
+        var bd = bc && typeof GOTION_CATALOG_DIMS!=='undefined' && bc.catalogKey
+          ? GOTION_CATALOG_DIMS[bc.catalogKey] : null;
+        if(bd){
+          fw = bd.lf*(+ele._modelScale||1); fl = bd.wf*(+ele._modelScale||1);
+          footprintSource = 'BESS catalog';
+        } else footprintSource = 'BESS symbol (catalogue footprint unavailable)';
+      } else if(dc){
+        fw = dc.lf*(+ele._modelScale||1); fl = dc.wf*(+ele._modelScale||1);
+        footprintSource = 'equipment catalog';
+      } else if(gf){
+        fw = gf.lf*(+ele._modelScale||1); fl = gf.wf*(+ele._modelScale||1);
+        footprintSource = 'equipment catalog';
+      }
     }catch(e2){}
+    var productVisual=window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.resolve(ele,ce.arch);
+    if(productVisual){
+      fw=productVisual.product.w/12; fl=productVisual.product.d/12;
+      footprintSource=productVisual.exact?'manufacturer enclosure':'reference enclosure (model unverified)';
+    }
     out.items.push(mkItem(ele, 'element', ce, {
       x: fx(eb.x + eb.w/2), z: fz(eb.y + eb.h/2),
-      wf: fw, lf: fl, rot: +ele.rot||0
+      wf: fw, lf: fl, rot: +ele.rot||0, boxSrc:footprintSource
     }));
   }
 
-  /* Apply the same shape translation/scale to authored outlines and tables.
-     Rotation remains on the placement wrapper, so it is applied once. */
-  out.items.forEach(function(item){
-    if(item.src!=='shape')return;
-    var ref=item.ref,scale=+ref.scale||1,tx=+ref.tx||0,ty=+ref.ty||0;
-    if(scale===1&&!tx&&!ty)return;
-    var raw=shapeBox(ref);if(!raw)return;
-    var ox=raw.x+raw.w/2,oy=raw.y+raw.h/2;
-    function point(q){return {x:fx(ox+(q.x*p+cx-ox)*scale+tx),z:fz(oy+(q.z*p+cy-oy)*scale+ty)};}
-    if(item.poly)item.poly=item.poly.map(point);
-    if(item.tables)item.tables=item.tables.map(function(t){var q=point(t);q.wf=t.wf*scale;q.lf=t.lf*scale;q.a=t.a;return q;});
-  });
+  /* Tables and outlines pass through tfPt() as they are read above. Do not
+     apply the shape transform again here: doing so moved every translated or
+     resized solar shape twice, while its wrapper moved only once. */
   /* --- conduits ------------------------------------------------------ */
   out.conduits = [];
   var cds = S_.conduits || [];
@@ -141145,7 +141203,7 @@ function mkItem(ref, src, c, geo){
   };
   if(geo){
     it.x=geo.x; it.z=geo.z;
-    it.wf=Math.max(0.4,geo.wf); it.lf=Math.max(0.4,geo.lf);
+    it.wf=Math.max(0.05,geo.wf); it.lf=Math.max(0.05,geo.lf);
     it.rot=geo.rot; it.approx=!!geo.approx; it.boxSrc=geo.boxSrc||'';
   }
   /* HEIGHT ABOVE GRADE rides on the drawing object, not on the item.
@@ -142176,6 +142234,95 @@ function buildContainer(it, arch){
   return g;
 }
 
+/* COMPLETE BESS ASSEMBLY.
+
+   The 2D BESS Pad tool writes an explicit parts list in feet. Rendering only
+   the battery shell discarded the PCS, transformer, disconnect, concrete
+   pad and required protection that the map had already placed. Build the
+   same topology here from that source of truth, keeping every child in the
+   assembly's local coordinate system so a move or rotation stays rigid. */
+function buildBessAssembly(it, arch){
+  var g = new THREE.Group();
+  var sh = it.ref || {}, parts = sh.parts || [];
+  var hasParts = false, as = (+it.assemblyScale > 0) ? +it.assemblyScale : 1;
+
+  function partItem(part){
+    return { wf:Math.max(0.4, (+part.lf || 1)*as), lf:Math.max(0.4, (+part.wf || 1)*as),
+             arch:part.key, ref:sh, label:part.label || part.key };
+  }
+  function put(part, node){
+    if(!node) return;
+    node.position.set((+part.dx || 0)*as, 0, (+part.dy || 0)*as);
+    g.add(node);
+  }
+
+  parts.forEach(function(part){
+    if(!part || !(+part.lf>0) || !(+part.wf>0)) return;
+    hasParts = true;
+    var pi = partItem(part), key = String(part.key || '').toLowerCase(), node = null;
+    if(key==='concpad' || part.isPad){
+      node = buildPad(pi);
+    } else if(key==='bess' || part.isBattery){
+      node = buildContainer(pi, ARCH['bess-container']);
+    } else if(key==='xfmr' || key==='transformer'){
+      node = buildXfmr(pi, ARCH.xfmr);
+    } else if(key==='pcs' || key==='inverter'){
+      node = buildCabinet(pi, ARCH.pcs, MAT.cabinet);
+    } else if(key==='disco' || key==='disconnect'){
+      node = buildCabinet(pi, ARCH.disco, MAT.cabinet);
+    } else if(key==='ems' || key==='panel'){
+      node = buildCabinet(pi, ARCH[key] || ARCH.ems, MAT.cabinet);
+    }
+    put(part, node);
+  });
+
+  if(!hasParts){
+    /* Saved projects created before the parts model still have a useful
+       container rather than disappearing. */
+    return buildContainer(it, ARCH['bess-container']);
+  }
+
+  /* Use the same parts envelope, side selection and spacing as renderAssembly.
+     A generic compound adds an invented gate and loses per-side protection. */
+  var minX=Infinity, minZ=Infinity, maxX=-Infinity, maxZ=-Infinity;
+  parts.forEach(function(part){
+    if(!part || !(+part.lf>0) || !(+part.wf>0)) return;
+    var x=+part.dx||0, z=+part.dy||0;
+    minX=Math.min(minX,x-part.lf/2); maxX=Math.max(maxX,x+part.lf/2);
+    minZ=Math.min(minZ,z-part.wf/2); maxZ=Math.max(maxZ,z+part.wf/2);
+  });
+  var legacySide=sh.hasFence ? (sh.hasBollards?'both':'fence') : (sh.hasBollards?'bollards':'none');
+  var sides=sh.sides || {n:legacySide,e:legacySide,s:legacySide,w:legacySide};
+  var clearance=sh.fenceClear!=null ? Math.max(0,+sh.fenceClear||0) : 10.5;
+  var left=(minX-clearance)*as, right=(maxX+clearance)*as;
+  var top=(minZ-clearance)*as, bottom=(maxZ+clearance)*as;
+  var edges={n:[left,top,right,top],e:[right,top,right,bottom],
+    s:[right,bottom,left,bottom],w:[left,bottom,left,top]};
+  var inset=Math.min(sh.bollardOffset!=null ? Math.max(0,+sh.bollardOffset||0) : 2.33,clearance*0.5)*as;
+  var bollEdges={n:[left+inset,top+inset,right-inset,top+inset],
+    e:[right-inset,top+inset,right-inset,bottom-inset],
+    s:[right-inset,bottom-inset,left+inset,bottom-inset],
+    w:[left+inset,bottom-inset,left+inset,top+inset]};
+  var spacing=(+sh.bollardSpacing>0 ? +sh.bollardSpacing : 3)*as, seen={};
+  ['n','e','s','w'].forEach(function(side){
+    var value=sides[side], edge=edges[side];
+    if(value==='fence'||value==='both') fenceRun(g,edge[0],edge[1],edge[2],edge[3],ARCH.fence.h,100);
+    if(value!=='bollards'&&value!=='both') return;
+    edge=bollEdges[side];
+    var dx=edge[2]-edge[0], dz=edge[3]-edge[1];
+    var steps=Math.max(1,Math.round(Math.sqrt(dx*dx+dz*dz)/spacing));
+    for(var i=0;i<=steps;i++){
+      var bx=edge[0]+dx*i/steps, bz=edge[1]+dz*i/steps;
+      var key=bx.toFixed(4)+','+bz.toFixed(4);
+      if(seen[key]) continue;
+      seen[key]=true;
+      var boll=buildBollard({wf:0.5,lf:0.5},ARCH.bollard);
+      boll.position.set(bx,0,bz); g.add(boll);
+    }
+  });
+  return g;
+}
+
 function buildCabinet(it, arch, mat){
   var g = new THREE.Group();
   var w = Math.max(2, it.wf), d = Math.max(1.5, it.lf), h = arch.h;
@@ -142404,6 +142551,16 @@ function buildParking(it){
 function buildFence(it, arch){
   var g = new THREE.Group();
   var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf), h = arch.h;
+  /* A drawn rectangle is an enclosure, not one long panel through its
+     centre. Keep genuinely thin fence runs as runs. */
+  if(d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15){
+    var hw=w/2, hd=d/2;
+    fenceRun(g,-hw,-hd, hw,-hd,h,60);
+    fenceRun(g, hw,-hd, hw, hd,h,60);
+    fenceRun(g, hw, hd,-hw, hd,h,60);
+    fenceRun(g,-hw, hd,-hw,-hd,h,60);
+    return g;
+  }
   /* A fence drawn as a long thin rect runs along its long side. */
   var len = Math.max(w, d), along = (w >= d);
   var mesh = new THREE.Mesh(new THREE.PlaneGeometry(len, h), MAT.mesh);
@@ -142509,7 +142666,9 @@ function buildRoad(it, arch){
     var b = { x:(pts[i].x-cx)/p,   z:(pts[i].y-cy)/p };
     var dx = b.x-a.x, dz = b.z-a.z, len = Math.sqrt(dx*dx+dz*dz);
     if(len < 1) continue;
-    var seg = box(len + w, 0.25, w, MAT.concrete);
+    /* Width belongs across the route, not at both ends. Extending every
+       segment by its full width made bends overshoot their drawn endpoints. */
+    var seg = box(len, 0.18, w, MAT.concrete);
     seg.position.set((a.x+b.x)/2, 0.12, (a.z+b.z)/2);
     seg.rotation.y = -Math.atan2(dz, dx);
     seg.receiveShadow = true; seg.castShadow = false;
@@ -142789,7 +142948,7 @@ var V = {
   sun:null, hemi:null, sunInfo:null, onCamera:null,
   target:null, sph:{ r:400, theta:0.85, phi:0.95 },
   layers:{}, opts:{ hour:13, day:172, shadows:true, sat:true, showAll:false, quality:'high', buildings:false },
-  needsRender:true, disposed:false
+  needsRender:true, disposed:false, groundToken:0
 };
 
 function skyTexture(hour, sun){
@@ -143021,6 +143180,10 @@ function applySun(span){
    single biggest thing separating "a 3D diagram" from "a picture of the
    site", so it is worth the alignment arithmetic. */
 function buildGround(site, span){
+  /* Ground texture loads are asynchronous. Ignore callbacks from an older
+     refresh so stale maps cannot paint over the current 3D scene. */
+  var groundToken = ++V.groundToken;
+  function currentGround(){ return !V.disposed && V.groundToken === groundToken; }
   while(V.groundGrp.children.length){
     var g0 = V.groundGrp.children[0];
     /* The satellite plane owns its own texture and material (unlike the
@@ -143035,6 +143198,7 @@ function buildGround(site, span){
   /* Per build. Left set from an earlier success, a later failed request
      never fell back to the capture plane and the ground stayed bare. */
   V.__wideGroundOk = false;
+  V.__nearGroundOk = false;
 
   /* ── THE GROUND HAS TO REACH AS FAR AS THE EYE ──────────────────────
      span*14 is sized from the SITE, so orbiting out past it ran the camera
@@ -143062,7 +143226,9 @@ function buildGround(site, span){
     else if(bd && bd.src) src = bd.src;
     if(!src && window._frozenMapImg) src = window._frozenMapImg;
   }catch(e){}
-  if(!src || !scEl) return;
+  /* A live map may not have a cached screenshot yet. Static Maps needs the
+     canvas and coordinates, not a screenshot, so keep that clean path open. */
+  if(!scEl) return;
 
   /* #sc carries a CSS translate/scale (pinch zoom, Recenter), so its
      bounding rect is the SCREEN size. The backdrop and every shape are in
@@ -143091,7 +143257,16 @@ function buildGround(site, span){
 
      Falls back to the frozen capture when there is no key, so nothing
      gets worse for a deployment without Static Maps enabled. */
-  var wideSrc = null, wideSpanFt = 0, _haveKey = false;
+  var wideSrc = null, wideSpanFt = 0, nearSrc = null, _haveKey = false, captureGround = null;
+
+  function removeCaptureGround(){
+    if(!captureGround) return;
+    try{ if(captureGround.material && captureGround.material.map) captureGround.material.map.dispose(); }catch(e){}
+    try{ if(captureGround.material) captureGround.material.dispose(); }catch(e2){}
+    try{ if(captureGround.geometry) captureGround.geometry.dispose(); }catch(e3){}
+    try{ V.groundGrp.remove(captureGround); }catch(e4){}
+    captureGround = null;
+  }
 
   /* Says which of the two grounds is actually on screen, in the panel, in
      plain words. Silence here is what made a documented fallback look like a
@@ -143100,7 +143275,10 @@ function buildGround(site, span){
     try {
       var n = document.getElementById('ov-satv');
       if (!n) return;
-      if (state === 'clean') {
+      if (state === 'upload') {
+        n.textContent = 'Uploaded site image — using the canvas scale, position and rotation.';
+        n.style.color = '';
+      } else if (state === 'clean') {
         n.textContent = 'Server-rendered satellite image \u2014 one piece, no gaps.';
         n.style.color = '';
       } else if (state === 'refused') {
@@ -143144,7 +143322,7 @@ function buildGround(site, span){
 
   try {
     var _key = '';
-    try { _key = (window._CFG && _CFG.googleMapsKey) || localStorage.getItem('clearsky_maps_key') || ''; } catch(e){}
+    try { _key = ((typeof _CFG!=='undefined' && _CFG && _CFG.googleMapsKey) || localStorage.getItem('clearsky_maps_key') || ''); } catch(e){}
     _haveKey = !!_key;
     /* WHERE IS THIS SITE?
 
@@ -143168,7 +143346,22 @@ function buildGround(site, span){
     if ((!_ms || _ms.lat == null) && site.lat != null) _ms = { lat: site.lat, lng: site.lng };
     if (_ms && _ms.lat == null) _ms = null;
 
-    if (_key && _ms && _ms.lat != null) {
+    var _uploadedGround = !!(window._isUploadedPhoto || (typeof mapMode!=='undefined' && mapMode==='upload'));
+    if (_key && _ms && _ms.lat != null && !_uploadedGround) {
+      /* Exact foreground: same map centre, zoom and visible canvas extent as
+         the editor. It is the alignment reference for equipment on the map;
+         the wider image below is context only. */
+      var _nearZ = (_ms.zoom != null && isFinite(+_ms.zoom)) ? Math.round(+_ms.zoom) : null;
+      var _nearW = Math.max(1, Math.round(rect.width)), _nearH = Math.max(1, Math.round(rect.height));
+      while((_nearW > 640 || _nearH > 640) && _nearZ > 1){
+        _nearW = Math.max(1, Math.round(_nearW/2));
+        _nearH = Math.max(1, Math.round(_nearH/2));
+        _nearZ--;
+      }
+      if(_nearZ !== null) nearSrc = 'https://maps.googleapis.com/maps/api/staticmap?center=' + _ms.lat + ',' + _ms.lng
+        + '&zoom=' + _nearZ + '&size=' + _nearW + 'x' + _nearH
+        + '&scale=2&maptype=satellite&format=jpg&key=' + _key;
+
       /* Cover roughly three times the site's long side, so the imagery still
          reads at the edges of an orbit rather than cutting off.
 
@@ -143200,11 +143393,37 @@ function buildGround(site, span){
     }
   } catch(e){}
 
+  /* The foreground is calibrated to the live canvas. This is deliberately
+     separate from the large context texture: a broad map is useful outside
+     the site, but cannot also be the pixel-for-pixel reference beneath the
+     2D design. */
+  if(nearSrc){
+    var nl = new THREE.TextureLoader();
+    nl.setCrossOrigin('anonymous');
+    nl.load(nearSrc, function(nt){
+      if(!currentGround()){ try{ nt.dispose(); }catch(e){} return; }
+      try{ if(THREE.sRGBEncoding !== undefined) nt.encoding = THREE.sRGBEncoding; }catch(e){}
+      nt.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
+      var nm = new THREE.MeshStandardMaterial({ map:nt, roughness:0.97, metalness:0.0 });
+      var ng = new THREE.Mesh(new THREE.PlaneGeometry(rect.width/p, rect.height/p), nm);
+      ng.rotation.x = -Math.PI/2;
+      ng.position.set((rect.width/2-o.x)/p, 0.03, (rect.height/2-o.y)/p);
+      ng.receiveShadow = true;
+      removeCaptureGround();
+      V.groundGrp.add(ng);
+      V.__nearGroundOk = true;
+      _satNote('clean');
+      V.needsRender = true;
+    }, undefined, function(){
+      if(currentGround()) addCapturePlane();
+    });
+  }
+
   if (wideSrc && wideSpanFt > 0) {
     var wl = new THREE.TextureLoader();
     wl.setCrossOrigin('anonymous');
     wl.load(wideSrc, function(wt){
-      if(V.disposed) return;
+      if(!currentGround()){ try{ wt.dispose(); }catch(e){} return; }
       try{ if(THREE.sRGBEncoding !== undefined) wt.encoding = THREE.sRGBEncoding; }catch(e){}
       wt.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
       var wm = new THREE.MeshStandardMaterial({ map:wt, roughness:0.97, metalness:0.0 });
@@ -143221,10 +143440,11 @@ function buildGround(site, span){
       _satNote('clean');
       V.needsRender = true;
     }, undefined, function(){
+      if(!currentGround()) return;
       if(window.console) console.warn('[ground] Static Maps refused \u2014 enable "Maps Static API" '
         + 'on the key. Falling back to the frozen viewport capture, which is holed wherever '
         + 'a map tile had not finished loading and carries the attribution text in the pixels.');
-      try { if (window.__omegaAddCapturePlane) window.__omegaAddCapturePlane(); } catch(e){}
+      try { addCapturePlane(); } catch(e){}
     });
 
     /* ── AND A WIDER ONE BEHIND IT ──────────────────────────────────────
@@ -143254,7 +143474,7 @@ function buildGround(site, span){
     var cl = new THREE.TextureLoader();
     cl.setCrossOrigin('anonymous');
     cl.load(_ctxUrl, function(ct){
-      if(V.disposed) return;
+      if(!currentGround()){ try{ ct.dispose(); }catch(e){} return; }
       try{ if(THREE.sRGBEncoding !== undefined) ct.encoding = THREE.sRGBEncoding; }catch(e){}
       ct.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
       var cmat = new THREE.MeshStandardMaterial({ map:ct, roughness:0.99, metalness:0.0 });
@@ -143287,18 +143507,18 @@ function buildGround(site, span){
      image loads, the screenshot is never drawn. */
   var _capturePlaced = false;
   function addCapturePlane(){
-    if (_capturePlaced || V.disposed) return;
+    if (_capturePlaced || !currentGround() || V.__nearGroundOk || !src) return;
     _capturePlaced = true;
-    _satNote(_haveKey ? 'refused' : 'nokey');
+    _satNote(_uploadedGround ? 'upload' : (_haveKey ? 'refused' : 'nokey'));
     _loadCapture();
   }
   window.__omegaAddCapturePlane = addCapturePlane;
 
-  if (wideSrc && wideSpanFt > 0) {
-    /* Give Static Maps a moment; if it has not produced a plane, fall
-       back rather than leaving the ground bare. */
+  if (nearSrc || (wideSrc && wideSpanFt > 0)) {
+    /* Give the exact foreground request a moment; if it has not produced a
+       plane, use the saved canvas image rather than leaving the site bare. */
     setTimeout(function(){
-      if (!V.disposed && !V.__wideGroundOk) addCapturePlane();
+      if (currentGround() && !V.__nearGroundOk) addCapturePlane();
     }, 6000);
   } else {
     addCapturePlane();
@@ -143307,15 +143527,35 @@ function buildGround(site, span){
   function _loadCapture(){
   var loader = new THREE.TextureLoader();
   loader.load(src, function(tex){
-    if(V.disposed) return;
+    if(!currentGround() || V.__nearGroundOk){ try{ tex.dispose(); }catch(e){} return; }
     try{ if(THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding; }catch(e){}
     tex.anisotropy = (QUALITY[V.opts.quality] || QUALITY.high).aniso;
     var m = new THREE.MeshStandardMaterial({ map:tex, roughness:0.97, metalness:0.0 });
-    var g = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+    /* Match CSS object-fit:cover and the uploaded-photo transform. The old
+       ground always stretched an image to the canvas and ignored pan, zoom
+       and rotation, so the 3D objects drifted off their 2D locations. */
+    var drawW = rect.width, drawH = rect.height, photoTransform = false;
+    try{
+      photoTransform = !!(window._isUploadedPhoto || (typeof mapMode!=='undefined' && mapMode==='upload'));
+      if(photoTransform && tex.image && tex.image.width && tex.image.height){
+        var cover = Math.max(rect.width/tex.image.width, rect.height/tex.image.height);
+        drawW = tex.image.width*cover; drawH = tex.image.height*cover;
+      }
+    }catch(e){}
+    var g = new THREE.Mesh(new THREE.PlaneGeometry(drawW/p, drawH/p), m);
     g.rotation.x = -Math.PI/2;
-    g.position.set(x0 + w/2, 0.02, z0 + h/2);
+    var gx = (rect.width/2 - o.x)/p, gz = (rect.height/2 - o.y)/p;
+    if(photoTransform){
+      var bg = (typeof BG!=='undefined' && BG) ? BG : { scale:1, tx:0, ty:0, rot:0 };
+      var bs = (+bg.scale>0) ? +bg.scale : 1;
+      gx += (+bg.tx||0)/p; gz += (+bg.ty||0)/p;
+      g.scale.set(bs, bs, 1);
+      g.rotation.z = -(+bg.rot||0) * Math.PI/180;
+    }
+    g.position.set(gx, 0.02, gz);
     g.receiveShadow = true;
     V.groundGrp.add(g);
+    captureGround = g;
 
     /* ── WHAT SURROUNDS THE IMAGERY ──────────────────────────────────
        The satellite plane only covers the area that was captured. Beyond
@@ -143439,14 +143679,15 @@ function populate(site){
         it._impliedRoof = ru.implied;
         g = buildSolarRoof(it, arch, ru.y, ru.implied); break;
       case 'bess-container': g = buildContainer(it, arch); break;
+      case 'bess-assembly':  g = buildBessAssembly(it, arch); break;
       case 'compute-pod':    g = buildContainer(it, arch); break;
       case 'bess-cabinet':   g = buildBessCabinet(it, arch); break;
       case 'pcs':            g = buildCabinet(it, arch); break;
       case 'ems':            g = buildCabinet(it, arch); break;
       case 'ups':            g = buildCabinet(it, arch); break;
-      case 'panel':          g = buildCabinet(it, arch); break;
-      case 'disco':          g = buildCabinet(it, arch); break;
-      case 'meter':          g = buildCabinet(it, arch); break;
+      case 'panel':
+      case 'disco':
+      case 'meter':          g = window.OmegaEquipmentVisuals ? window.OmegaEquipmentVisuals.build(it,THREE) : buildCabinet(it,arch); break;
       case 'jbox':           g = buildCabinet(it, arch); break;
       case 'xfmr':           g = buildXfmr(it, arch); break;
       case 'switchgear':     g = buildSwitchgear(it, arch); break;
@@ -143463,7 +143704,7 @@ function populate(site){
       case 'tree':           g = buildTree(it, arch); break;
       case 'hydrant':        g = buildHydrant(it, arch); break;
       case 'camera':         g = buildCamera(it, arch); break;
-      case 'charger':        g = buildCharger(it, arch); break;
+      case 'charger':        g = (window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.build(it,THREE)) || buildCharger(it, arch); break;
       default: return;
     }
     if(!g) return;
@@ -144085,6 +144326,24 @@ function paintSide(){
         +  Math.round(it._builtSqft).toLocaleString() + ' sqft module \u00b7 '
         +  pctD + '% of design \u00b7 covers ' + pctL + '% of the area</div>';
     }
+    var equipmentVisuals=window.OmegaEquipmentVisuals;
+    var productView=equipmentVisuals && equipmentVisuals.resolve(it.ref,it.arch);
+    if(equipmentVisuals && ['panel','meter','disco','charger'].indexOf(it.arch)>=0){
+      h+='<div class="ov-im" style="margin-top:8px">Product appearance</div><select data-product="'+esc(it.id)+'" style="width:100%;font-size:11px;margin-top:4px">'
+        +'<option value="">From drawing / reference</option>';
+      Object.keys(equipmentVisuals.products).forEach(function(key){
+        var product=equipmentVisuals.products[key];
+        if(product.kind===it.arch) h+='<option value="'+key+'"'+(it.ref._visProduct===key?' selected':'')+'>'+esc(product.name)+'</option>';
+      });
+      h+='</select>';
+      if(productView){
+        var vp=productView.product;
+        h+='<div class="ov-im" style="margin-top:5px">'+(productView.exact?'Product geometry: ':'Reference only; existing model unverified: ')+esc(vp.name)
+          +'<br>'+vp.w+' × '+vp.h+' × '+vp.d+' in (W × H × D)<br>'+esc(vp.description)
+          +'<br><a href="'+esc(vp.url)+'" target="_blank" rel="noopener" style="color:#93c5fd">Manufacturer reference</a>'
+          +'<br>Appearance selection only; equipment ratings and BOM stay as drawn. Mounting support and meter face are illustrative.</div>';
+      }
+    }
     if(it.basis){
       h += '<div class="ov-im" style="margin-top:2px;color:#9FB8DE">'
         +  esc(it.basis) + '</div>';
@@ -144171,6 +144430,18 @@ function fmtHour(v){
 
 function wireSide(){
   var side = el('ov-side'); if(!side) return;
+
+  each(side.querySelectorAll('[data-product]'),function(select){
+    select.onchange=function(){
+      var id=select.getAttribute('data-product');
+      var item=V.site.items.filter(function(it){return it.id===id;})[0];
+      if(!item)return;
+      if(select.value)item.ref._visProduct=select.value;
+      else delete item.ref._visProduct;
+      try{if(typeof renderAll==='function')renderAll();if(typeof pushHist==='function')pushHist();}catch(e){}
+      reload();
+    };
+  });
 
   each(side.querySelectorAll('[data-view]'), function(b){
     b.onclick = function(){ setView(b.getAttribute('data-view')); };
