@@ -316,6 +316,7 @@ to defend it.
 | Indicative land lease range, 15-year | **Live** — on a seed rate card |
 | Four-page host-facing proposal, print/PDF | **Live** — the Proposal tab, and from the editor's Compute panel |
 | Proposal carries the tenant's logo, name and accent colour | **Live** — resolved from your `omega_orgs` record. If your logo or brand colour is missing, set it in Account Settings; the proposal falls back to the platform wordmark rather than guessing. |
+| Registry published so tenants see the tool | Admin console → **Import / Update Applications**. Run `npm run tools:dry` first to see what that button would change — it publishes all 44 tools and reverts any Firestore-side edits back to the seed. |
 | Detailed 32-category site assessment | **Not built.** Ravi is merging the two spreadsheets into one; nothing in Omega covers the deep assessment yet. |
 | Saved per-site records, pipeline view | **Partial** — the tool saves the last site per org via the standard `toolData` contract. There is no multi-site register on this tool yet; `clearsky-sitefinder.html` is the nearest thing. |
 
