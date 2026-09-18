@@ -1,12 +1,12 @@
 {
   "orgId": "cleancell.us",
-  "name": "Clean Cell US",
+  "name": "Cleancell",
   "domains": [
     "cleancell.clearskyomega.com"
   ],
   "vertical": "oem",
-  "tier": "trial",
-  "trialEndsAt": "2026-10-17T12:00:00.000Z",
+  "tier": "deluxe",
+  "trialEndsAt": "2026-09-30T12:00:00.000Z",
   "logoUrl": "",
   "shell": "default",
   "status": "active",
@@ -15,5 +15,14 @@
     "financing"
   ],
   "ownerEmail": "robert.bucher@cleancell.us",
-  "_note": "Added 2026-09-17 for the live Amperage Capital deal (56 units), which had been parked since 2026-09-16 waiting on exactly this: the sign-in domain. orgId is cleancell.us — the domain of robert.bucher@cleancell.us, which is ALSO their website (verified 2026-09-17: resolves, HTTP 200, MX smtp.google.com, so it is a real Workspace domain and passes the work-email gate in api/_lib/public-domains.js). ownerEmail is promoted to owner by scripts/seed-omega-orgs.js once that person has signed in; until then the first sign-in from the domain joins as a member. NAME — THREE SPELLINGS ARE IN PLAY AND ONLY ONE IS THEIRS. cleancell.us calls itself 'Clean Cell US' (og:site_name), so that is what is used here. Active Priorities says 'Cleancell USA'; clearsky-cost-estimator.html carries a battery brand { key: 'cleancells', name: 'Clean Cells' }. That estimator entry is a BRAND in a dropdown, not a tenant, and was deliberately left alone — confirm with Robert whether it is the same company before reconciling it, because renaming a brand key silently rewrites saved estimates. RECEIVER VS ORIGINATOR. receivesFullBom is false because Clean Cell is the MIRROR of FENECON: Fenecon is an OEM that RECEIVES quote requests (true), Clean Cell is an originator that SENDS an opportunity out. Be careful reading that as a marker — false is also the default for every tenant, so this field does not positively say 'originator'. There is no originator flag on a tenant, and inventing one here would be silently dropped: plan() in scripts/seed-omega-orgs.js copies a fixed key list, so an unknown key in this file never reaches Firestore. Originator identity is recorded PER DEAL by omega-originator.js as originatorOrgId, not on the org. requiredTools pins the financing marketplace to their dashboard (omega-tools.js honours requiredTools) because the finance portal's existing submit path IS this deal's route to Amperage. It is about pinning, not access — 'financing' is tier:ALL, so a trial already reaches it; drop this line if they should be able to remove the tile. HOSTNAME DOES NOT EXIST YET. cleancell.clearskyomega.com is NXDOMAIN as of 2026-09-17 — there is no wildcard DNS for *.clearskyomega.com despite what the topology note implies, and budderfly./eastwestenergy./walters. are in the same state. Attach the domain in Vercel before sending anyone at it; until then they sign in on silmarillion.clearskyomega.com, which is an OPEN_HOST in omega-tenant.js and resolves each user's workspace from their email domain rather than redirecting. STILL TO DO on this deal, none of it in this file: the opportunity-input tool, the push through the finance portal submit, and the backfill that makes deliveredToMyOrg() work at all — not one of the 12 fin_profiles carries orgId, so the rule deployed 2026-09-15 is inert for EVERY partner. Amperage needs no provisioning (fin_orgs/amperage-capital exists, tier enterprise); the value their profile is missing is amperagecapital.com, their id in omega_partner_orgs."
+  "_note": "Added 2026-09-17 for the live Amperage Capital deal (56 units). orgId is cleancell.us — the domain of robert.bucher@cleancell.us, which is ALSO their website (verified 2026-09-17: resolves, HTTP 200, MX smtp.google.com, so it is a real Workspace domain and passes the work-email gate in api/_lib/public-domains.js). ⚠ THE LIVE RECORD IS UNDER THE WRONG KEY AND THIS FILE IS THE CORRECTION. Thomas created omega_orgs/cleancellusa.com by hand on 2026-09-16 with a paid tier and addons already set. cleancellusa.com does NOT EXIST — NXDOMAIN, checked 2026-09-17. Because orgId IS the email domain, that account is reachable only by someone mailing from @cleancellusa.com, so nobody at Clean Cell can sign in to it and none of what was bought is reachable. tier/addons/dates here are copied from that record rather than invented, so a seed run reproduces what he decided instead of repricing a paying account to a trial. The invoice amount is deliberately NOT in this file: plan() in scripts/seed-omega-orgs.js does not read it, and a contract value does not belong in the repo. The migration itself (create cleancell.us, repoint tenant_public/cleancell.clearskyomega.com, FLAG the old record without deleting it — CLAUDE.md, never delete in a migration) is a Firestore write and is NOT done by this file. NAME — three spellings are in play. Thomas's record says 'Cleancell', which is what this file now matches so a seed does not rename his account; cleancell.us calls itself 'Clean Cell US'; clearsky-cost-estimator.html carries a battery brand { key: 'cleancells', name: 'Clean Cells' }. That estimator entry is a BRAND in a dropdown, not a tenant, and was deliberately left alone — renaming a brand key silently rewrites saved estimates. RECEIVER VS ORIGINATOR. receivesFullBom is false because Clean Cell is the MIRROR of FENECON: Fenecon is an OEM that RECEIVES quote requests, Clean Cell is an originator that SENDS an opportunity out. Read that carefully — false is also the default for every tenant, so it does not positively say 'originator', and there is no field that does: plan() in scripts/seed-omega-orgs.js copies a fixed key list, so an invented key never reaches Firestore. Originator identity is recorded PER DEAL by omega-originator.js as originatorOrgId. requiredTools pins the financing marketplace, which is this deal's route to Amperage. HOSTNAME: cleancell.clearskyomega.com does not resolve — there is no wildcard DNS for *.clearskyomega.com, and budderfly./eastwestenergy./walters. are the same. Until it is attached in Vercel they sign in on silmarillion.clearskyomega.com, an OPEN_HOST that resolves the workspace from the email domain.",
+  "addons": [
+    "compute",
+    "parcelscreen",
+    "engineering",
+    "schematics",
+    "exports",
+    "permitting"
+  ],
+  "subscriptionDue": "09/30/2026"
 }

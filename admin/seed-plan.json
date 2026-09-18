@@ -650,7 +650,7 @@
     {
       "orgId": "cleancell.us",
       "org": {
-        "name": "Clean Cell US",
+        "name": "Cleancell",
         "slug": "cleancell",
         "domains": [
           "cleancell.clearskyomega.com"
@@ -661,28 +661,35 @@
         "status": "active",
         "receivesFullBom": false,
         "exportBrand": {
-          "name": "Clean Cell US",
+          "name": "Cleancell",
           "logo": ""
         }
       },
       "billing": {
-        "tier": "trial",
-        "addons": [],
+        "tier": "deluxe",
+        "addons": [
+          "compute",
+          "parcelscreen",
+          "engineering",
+          "schematics",
+          "exports",
+          "permitting"
+        ],
         "toolOverrides": {},
         "paymentProvider": "manual",
-        "trialEndsAt": "2026-10-17T12:00:00.000Z",
-        "subscriptionDue": null
+        "trialEndsAt": "2026-09-30T12:00:00.000Z",
+        "subscriptionDue": "09/30/2026"
       },
       "pub": {
         "orgId": "cleancell.us",
-        "name": "Clean Cell US",
+        "name": "Cleancell",
         "logoUrl": "",
         "colors": null,
         "exportBrand": {
-          "name": "Clean Cell US",
+          "name": "Cleancell",
           "logo": ""
         },
-        "tier": "trial",
+        "tier": "standard",
         "vertical": "oem",
         "shell": "default",
         "domains": [
