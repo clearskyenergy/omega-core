@@ -812,3 +812,85 @@ hand, with the function entry placed **before** the catch-all, matching how
 - The 1,681 unknown-medium OSM ways overlap the live OSM query
   `network-proximity` already runs. They are kept in their own bucket and out
   of `hard[]` precisely so one cable is not counted twice at two distances.
+
+---
+
+## 2026-09-18 · Two live scoring bugs, and the rest of the fiber integration
+
+### The bugs — unknown was being scored as confirmed absence
+
+Both in-page scores in `grid-atlas.html` fed a constant in for every factor
+whose layer was switched off, then weighted it as though it were a
+measurement:
+
+| Score | Factor | Weight | Value when never measured |
+|---|---|---:|---|
+| Fiber Confidence | mapped route | 45% | **0** |
+| Fiber Confidence | FCC coverage | 25% | **0** |
+| DC Site Report | fiber | 24% | **15/100** |
+| DC Site Report | water | 14% | 30/100 |
+| DC Site Report | flood | 12% | 85/100 |
+
+Fiber alone is **70%** of the confidence score. A site nobody had looked at
+scored the same as a site that had been looked at and found wanting, and the
+DC report printed "Challenged for DC scale" about parcels with no fiber layer
+loaded. That is a false negative that reads exactly like a finding.
+
+Both now use `wScore()`, which is `weightedScore()` from `api/grid-atlas.js`
+ported into the page: **an unmeasured factor drops out of the numerator AND
+the denominator**. A factor whose layer IS on and which found nothing is a
+genuine low reading and still counts — "looked and found none" and "never
+looked" are different answers and this is the line between them. An entirely
+unmeasured score renders as an em dash, never as 0, and the caption names the
+weight that went unmeasured. `scripts/test-grid-atlas-scoring.js` lifts
+`wScore` straight out of the page so the test cannot drift from it.
+
+### Persistence and staleness
+
+`omegaFiber` / `omegaFiberAt` are written in the save payload **literal** and
+restored in `_loadProject`. Both halves, because this payload is an allowlist:
+a field set by a `saveProject` wrapper is never written (`OmegaVersion.stamp()`
+sets `S.omegaVersion` and it provably never persists), and a field saved
+without a restore line is written forever and read never.
+
+The record is compact by design — verdict, provenance and the two nearest
+records, not the whole response — because `_shedIfOversize` can drop project
+data to fit the document. `siteHasFiber` and `availableCapacityGbps` are
+stored as `null`, never `false` or `0`: the null is the finding.
+
+`_npxSiteKey()` hashes the point and the boundary ring at ~1 m precision. A
+saved assessment whose key no longer matches raises a stale banner rather than
+letting old distances sit under a new outline. Known gap, stated in the code:
+a boundary can change **identity** without any vertex moving, and a geometry
+hash cannot see that.
+
+### Grid Atlas site details
+
+The four datasets are registered as native layers (`pf_routes`, `pf_unknown`,
+`pf_design`, `pf_facilities`) so they appear in the Grid Layers rail, and a
+"Public route evidence" section in Site Analysis shows route distance,
+operator, source, evidence date and serviceability/capacity status. Route
+proximity is kept separate from facility proximity, and unknown-medium lines
+and planning records are labelled as not-confirmed-optical.
+
+They are **deliberately absent from `fiberKeys`**. Adding them to the
+nearest-fiber winner would move Fiber Confidence and the DC Site Report on
+every covered site.
+
+Two bugs found by running it rather than reading it:
+- `nearestLine()` returns `{props, km}` and `nearestPoint()` returns
+  `{f, km}`. Reading `.props` off a `nearestPoint` result is `undefined`, and
+  the first field touched was `.operator` — which threw and took the entire
+  Site Analysis panel down, because `analyze()` builds one string and renders
+  once. The panel silently stopped at "Connectivity".
+- `nearestLine()` has no radius, and the California layer is national, so a
+  site in Indiana was told its nearest planning route was **2,415 km** away.
+  Capped at 80 km, matching the radius the rest of the panel reasons in;
+  beyond it the answer is "none within 80 km".
+
+### Still open
+
+The `omega-core-main.zip` package (26,371 published features across 29 states
++ DC) remains unmerged. It is a different package built on a stale ~Sep 12
+snapshot and it collides with this one on `api/_lib/fiber-evidence.js` — two
+interpreters of two datasets, which is a reconciliation, not a copy.

@@ -650,6 +650,40 @@ var LAYERS = {
       };
     }
   },
+  /* ── PUBLIC FIBER EVIDENCE — the bundled inventory, as native layers ──
+     The vendored control has its own checkboxes; these exist as well so the
+     four datasets appear in the Grid Layers rail like everything else AND so
+     analyze() can read them out of `cache` for the Site Analysis section.
+
+     They are DELIBERATELY ABSENT from fiberKeys. Adding them to the nearest-
+     fiber winner would move Fiber Confidence and the DC Site Report on every
+     covered site — published numbers changing because a dataset arrived,
+     which is the thing this integration was told not to do. They get their
+     own section instead, where the source and its limits are stated. */
+  pf_routes: {
+    name:"Fiber routes (public, optical)", color:"#24D6BB", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-fiber-routes.geojson",
+    label:function(a){return a.name||a.operator||"Optical fiber route";},
+    meta:function(a){return (a.operator||"operator unknown")+" · "+(a.operational_status||"status unknown")+" · OSM";}
+  },
+  pf_unknown: {
+    name:"Telecom lines (medium unknown)", color:"#8292A6", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-telecom-routes-unknown.geojson",
+    label:function(a){return a.name||"Telecom line";},
+    meta:function(a){return "medium unspecified — optical NOT confirmed · "+(a.operator||"operator unknown");}
+  },
+  pf_design: {
+    name:"CA planning / construction", color:"#F3B650", on:false, geom:"line", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/ca-middle-mile-design.geojson",
+    label:function(a){return a.name||"CA middle-mile record";},
+    meta:function(a){return "planning/design record, not a built route · "+(a.operational_status||"status unknown");}
+  },
+  pf_facilities: {
+    name:"Telecom facilities (public)", color:"#BE9AFF", on:false, geom:"point", role:"connectivity",
+    url:"__STATIC__", staticFile:"/data/fiber/osm-telecom-facilities.geojson",
+    label:function(a){return a.name||"Telecom facility";},
+    meta:function(a){return (a.operator||"operator unknown")+" · facility, not a route · OSM";}
+  },
   /* ── SUBMARINE CABLE LANDINGS — OFF, AND LICENCE UNCLEARED ────────────
      111 US landing stations. For a coastal site the nearest landing is the
      difference between a transit bill and a transport bill, which is why it
@@ -788,7 +822,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1303,7 +1337,7 @@ var PRESETS=[
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","fiber","backbone","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
   /* Connectivity on its own: the question "how much fiber is at this point"
      without the grid layers competing for the same screen. */
-  {key:"fiber", name:"Fiber", icon:"⌗", layers:["backbone","fiber","fiber_licensed","fiber_ca","dc_registry","ixp","colo","carrierhotels","fcc_fiber"]}
+  {key:"fiber", name:"Fiber", icon:"⌗", layers:["pf_routes","pf_facilities","backbone","fiber","fiber_licensed","fiber_ca","dc_registry","ixp","colo","carrierhotels","fcc_fiber"]}
 ];
 var activePreset=null;
 function applyPreset(p){
@@ -1577,20 +1611,54 @@ function analyze(ll){
     var health=layerHealth[key];
     if(health && health.state!=='loaded') h+='<div class="hint">'+esc(LAYERS[key].name)+': '+esc(health.message||health.state)+'. No route result does not establish absence of fiber.</div>';
   });
+  /* ── UNSCORED IS NOT ZERO ──────────────────────────────────────────────
+     Both scores below used to feed a constant in for every factor whose
+     layer was switched off: fiber route 0, FCC coverage 0, DC fiber 15/100.
+     Those constants were then weighted as though they were measurements, so
+     a site nobody had looked at scored identically to a site that had been
+     looked at and found wanting. Fiber alone is 70% of the confidence score
+     and 24% of the DC score, which is enough to decide both.
+
+     This is the same rule api/grid-atlas.js applies in weightedScore(): a
+     factor that was not measured drops out of the numerator AND the
+     denominator, so the score is a real score of what was actually seen and
+     the caption says how much of the weight that was. A factor whose layer
+     IS on and which found nothing is a genuine low reading and still counts
+     — "looked and found none" and "never looked" are different answers and
+     this is the line between them. */
+  function wScore(parts){
+    var earned=0,total=0,missed=0,missedKeys=[];
+    for(var i=0;i<parts.length;i++){
+      var v=parts[i][1],w=parts[i][2];
+      if(v==null){ missed+=w; missedKeys.push(parts[i][0]); continue; }
+      earned+=v*w; total+=w;
+    }
+    return { score: total?Math.round(earned/total):null,
+             measuredWeight: total, missedWeight: missed, missed: missedKeys };
+  }
+  function anyOn(keys){ for(var i=0;i<keys.length;i++) if(LAYERS[keys[i]]&&LAYERS[keys[i]].on) return true; return false; }
+
   // ── Fiber Confidence — blends every free signal into one screening read ──
-  var fcRoute=fiber?Math.max(0,100-fiber.km*7):0;
+  var fiberLayersOn=anyOn(fiberKeys);
   var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
-  var fcInterconnect=Math.min(100,(ixpN*20)+(coloN*12)); // peering/colo nearby = strong
   var fccCov=containingFeature(ll,cache.fcc_fiber);
-  var fcCoverage=fccCov?90:0;
-  // weight: route 45%, interconnect points 30%, FCC coverage 25% (live check adds in bbRow)
-  var haveAny=(fiber||ixpN||coloN||fccCov);
-  var fcScore=Math.round(fcRoute*0.45+fcInterconnect*0.30+fcCoverage*0.25);
-  fcScore=Math.max(haveAny?1:0,Math.min(100,fcScore));
-  var fcBand=fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
-  var fcWord=fcScore>=65?"High — multiple fiber signals present":fcScore>=35?"Moderate — some signal, verify":haveAny?"Low — thin fiber signal here":"No fiber layers loaded";
-  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+fcScore+'</span><span class="lab">/ 100 fiber confidence</span></div>';
-  h+='<div class="bar"><span style="width:'+fcScore+'%;background:'+fcBand+'"></span></div>';
+  /* null = the source was never consulted. Not a zero. */
+  var fcRoute = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*7):0);
+  var fcInterconnect = (LAYERS.ixp.on||LAYERS.colo.on) ? Math.min(100,(ixpN*20)+(coloN*12)) : null;
+  var fcCoverage = LAYERS.fcc_fiber.on ? (fccCov?90:0) : null;
+  var fcW=wScore([["mapped route",fcRoute,45],["peering / colo",fcInterconnect,30],["FCC coverage",fcCoverage,25]]);
+  var fcScore=fcW.score;
+  var fcBand=fcScore==null?"var(--muted)":fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
+  var fcWord = fcScore==null
+      ? "Not measured — no fiber source is loaded. This is not evidence that no fiber exists."
+      : fcW.missedWeight>=30
+        ? "Partial read — "+fcW.missedWeight+"% of the weight was never measured ("+fcW.missed.join(", ")+")"
+        : fcScore>=65?"High — multiple fiber signals present"
+        : fcScore>=35?"Moderate — some signal, verify"
+        : "Low — the loaded sources show thin signal here";
+  if(fcScore==null){ fcBand="var(--muted)"; }
+  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+(fcScore==null?"—":fcScore)+'</span><span class="lab">/ 100 fiber confidence'+(fcW.missedWeight&&fcScore!=null?" · partial":"")+'</span></div>';
+  h+='<div class="bar"><span style="width:'+(fcScore==null?0:fcScore)+'%;background:'+fcBand+'"></span></div>';
   h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
   h+=infoRow(LAYERS.fiber.color, fiber?"Nearest fiber route":"No route in view",
         fiber?LAYERS[fiber.sourceKey].name+" · mapped proximity only":"enable fiber layers",
@@ -1602,6 +1670,59 @@ function analyze(ll){
   if(fiber){
     var fv=fiber.km<=2?"Route within 2 km — carrier serviceability unconfirmed":fiber.km<=8?"Mapped route nearby — lateral route and cost unconfirmed":"Fiber build is a cost driver";
     h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. Confidence blends routes, peering/colo, and FCC service coverage — screening only; no free source maps every carrier conduit.</div>';
+  }
+
+  /* ── PUBLIC ROUTE EVIDENCE IN SITE DETAILS ────────────────────────────
+     Route distance, operator, source, evidence date and serviceability /
+     capacity status — the five fields the requirement names — read from the
+     bundled inventory. Same records the Site Map Editor sees through
+     /api/network-proximity, and the same classifier: confirmed optical stays
+     apart from unknown-medium lines, from planning records, and from
+     facilities. Merging those four into one "fiber nearby" count is the
+     specific dishonesty this section refuses.
+
+     Scores nothing. See the fiberKeys comment above. */
+  var pfOn=anyOn(['pf_routes','pf_unknown','pf_design','pf_facilities']);
+  if(pfOn){
+    var pfR=nearestLine(ll,cache.pf_routes), pfU=nearestLine(ll,cache.pf_unknown),
+        pfD=nearestLine(ll,cache.pf_design), pfF=nearestPoint(ll,cache.pf_facilities,LAYERS.pf_facilities);
+    h+='<div class="sec">◈ Public route evidence</div>';
+    /* A "nearest" record 2,400 km away is noise, not evidence — the first
+       build cheerfully reported a California planning route as the nearest
+       one for a site in Indiana, because nearestLine has no radius and the
+       CA layer is national. 80 km matches the radius the rest of this panel
+       reasons in, and beyond it the answer is "none in view", which is true
+       and useful, rather than a number that is technically correct and
+       actively misleading. */
+    var PF_MAX_KM=80;
+    var pfNear=function(x){ return (x && x.km<=PF_MAX_KM)?x:null; };
+    var pfDist=function(x){ return x?fmtKm(x.km):"—"; };
+    var pfLine=function(layerKey,hit,what,none){
+      hit=pfNear(hit);
+      /* The two finders return DIFFERENT shapes and always have:
+         nearestLine gives {props, km}, nearestPoint gives {f, km} with the
+         properties one level down on the feature. Reading .props off a
+         nearestPoint result is undefined, and the first thing touched here
+         is .operator — which threw and took the whole Site Analysis panel
+         down with it, because analyze() builds one string and renders once. */
+      var p=hit?(hit.props||(hit.f&&hit.f.props)||{}):null;
+      var sub=hit
+        ? ((p.operator||"operator unknown")
+           +" · "+(p.operational_status||"status unknown")
+           +" · "+(p.source_vintage||p.source_last_edited||p.retrieved_at||"evidence date unknown"))
+        : (LAYERS[layerKey].on?none:"enable "+LAYERS[layerKey].name);
+      h+=infoRow(LAYERS[layerKey].color,what,sub,pfDist(hit));
+    };
+    pfLine('pf_routes',pfR,"Nearest optical route","no mapped optical route within "+PF_MAX_KM+" km");
+    pfLine('pf_facilities',pfF,"Nearest telecom facility","no mapped facility within "+PF_MAX_KM+" km");
+    pfLine('pf_unknown',pfU,"Unknown-medium line","none within "+PF_MAX_KM+" km");
+    pfLine('pf_design',pfD,"CA planning / construction","none within "+PF_MAX_KM+" km");
+    h+='<div class="hint" style="margin:5px 0 8px;color:var(--muted)">'
+      +'Serviceability <b>unconfirmed</b> · available capacity <b>unknown</b> · route diversity <b>unconfirmed</b>. '
+      +'Distance is to published geometry, not a surveyed cable or a constructible lateral. '
+      +(pfNear(pfR)?'':'No mapped evidence found is not evidence that no fiber exists. ')
+      +'Unknown-medium lines and planning records are NOT confirmed optical routes. '
+      +'© OpenStreetMap contributors (ODbL); California Department of Technology MMBI.</div>';
   }
 
   // Market / utility context via point-in-polygon
@@ -1625,15 +1746,23 @@ function analyze(ll){
   var water=nearestLine(ll,cache.water);
   var floodF=containingFeature(ll,cache.flood);
   var inFlood=floodF&&/^(A|AE|AO|AH|AR|A99|V|VE)$/i.test((floodF.props.FLD_ZONE||floodF.props.fld_zone||"").replace(/\s/g,""));
-  var pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
-  var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
-  if(txV2>=230) pPower=Math.min(100,pPower+12);
-  var pFiber=fiber?Math.max(0,100-fiber.km*8):15;
-  var pWater=water?Math.max(0,100-water.km*10):30;
-  var pFlood=floodF?(inFlood?12:58):85;
-  var pMarket=containingFeature(ll,cache.iso_rto)?100:70;
-  var dcScore=Math.round(pPower*0.42+pFiber*0.24+pWater*0.14+pFlood*0.12+pMarket*0.08);
-  dcScore=Math.max(1,Math.min(100,dcScore));
+  var powerOn=(LAYERS.substations.on||LAYERS.osm_subs.on||LAYERS.transmission.on);
+  var pPower=null;
+  if(powerOn){
+    pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
+    var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
+    if(txV2>=230) pPower=Math.min(100,pPower+12);
+  }
+  /* The fallback constants are gone. 15/30/85 were reasonable guesses for an
+     unknown and catastrophic as inputs: fiber's 15 dragged the composite
+     roughly twenty points and pushed sites nobody had measured across the
+     "Challenged for DC scale" line. Unmeasured is now null and drops out. */
+  var pFiber = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*8):20);
+  var pWater = !LAYERS.water.on ? null : (water?Math.max(0,100-water.km*10):35);
+  var pFlood = !LAYERS.flood.on ? null : (floodF?(inFlood?12:58):70);
+  var pMarket = !LAYERS.iso_rto.on ? null : (containingFeature(ll,cache.iso_rto)?100:70);
+  var dcW=wScore([["power",pPower,42],["fiber",pFiber,24],["water",pWater,14],["flood",pFlood,12],["market",pMarket,8]]);
+  var dcScore=dcW.score;
   /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
      Each factor falls back to a poor constant when its layer is not loaded:
      fiber to 15, water to 30, power to whatever the missing substation
@@ -1647,15 +1776,13 @@ function analyze(ll){
      The score still computes, because a partial read is useful. It now says
      what it could not see, and it refuses to render a verdict at all when
      the missing weight is enough to change it. */
-  var dcMissing=[];
-  if(!fiber) dcMissing.push("fiber");
-  if(!water) dcMissing.push("water");
-  if(!sub) dcMissing.push("substations");
-  if(!floodF) dcMissing.push("flood zones");
-  var dcMissWeight=(!fiber?24:0)+(!water?14:0)+(!sub?42:0)+(!floodF?12:0);
+  var dcMissing=dcW.missed, dcMissWeight=dcW.missedWeight;
 
-  var dcBand=dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
-  var dcVerdict=dcScore>=72?"Strong data-center candidate":dcScore>=50?"Viable — diligence the constraints":"Challenged for DC scale";
+  var dcBand=dcScore==null?"var(--muted)":dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
+  var dcVerdict=dcScore==null?"Not measured — no scoring layer is loaded"
+              :dcScore>=72?"Strong data-center candidate"
+              :dcScore>=50?"Viable — diligence the constraints"
+              :"Challenged for DC scale";
   /* THRESHOLD IS 20, NOT 25, so a missing FIBER layer alone trips it. Fiber
      carries 24% and falls back to 15/100, which drags the composite about
      twenty points — enough to move a site across the "Challenged" line on
@@ -1663,8 +1790,8 @@ function analyze(ll){
      have been a threshold in name only. */
   if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
   h+='<div class="sec">◆ Data Center Site Report</div>';
-  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+dcScore+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
-  h+='<div class="bar"><span style="width:'+dcScore+'%;background:'+dcBand+'"></span></div>';
+  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+(dcScore==null?"—":dcScore)+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
+  h+='<div class="bar"><span style="width:'+(dcScore==null?0:dcScore)+'%;background:'+dcBand+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
   if(dcMissing.length){
     h+='<div class="hint" style="margin:0 0 8px;color:var(--warn)">Not measured here: '+

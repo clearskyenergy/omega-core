@@ -118,6 +118,7 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
+<script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -8981,7 +8982,11 @@ function renderEl(el){
     if(el.evKind==='charger' && el.evImg){
       _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
     } else {
-      _gearHtml=rf(gw,gh);
+      var _visuals=window.OmegaEquipmentVisuals;
+      var _gearKind=el.evKind==='service'?'meter':el.evKind;
+      if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
+        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
+      else _gearHtml=rf(gw,gh);
     }
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
@@ -25282,6 +25287,15 @@ async function saveProject(){
       costOverrides: S.costOverrides || null,
       omegaSizing:   S.omegaSizing   || null,
       omegaSizingAt: S.omegaSizingAt || null,
+      /* FIBER EVIDENCE. Written HERE, in the literal, and nowhere else: this
+         payload is an allowlist, not a spread of S, so a field set by a
+         saveProject wrapper is never written. OmegaVersion.stamp() sets
+         S.omegaVersion and it is provably never persisted — that is the
+         precedent to avoid, and omegaSizing above is the one to copy.
+         Restored in _loadProject; without a matching line there the data is
+         written forever and read never. */
+      omegaFiber:    S.omegaFiber    || null,
+      omegaFiberAt:  S.omegaFiberAt  || null,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -25625,6 +25639,8 @@ async function _loadProject(id){
     S.costOverrides = (d.costOverrides && typeof d.costOverrides==='object') ? d.costOverrides : null;
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
+    S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
+    S.omegaFiberAt  = d.omegaFiberAt  || null;
     try{ window._omegaComputeLast = (S.omegaSizing && S.omegaSizing.facKw > 0) ? S.omegaSizing : null; }catch(e){}
     try{ if(window.OmegaRecord && OmegaRecord.restore) setTimeout(function(){ try{ OmegaRecord.restore(); }catch(e){} }, 0); }catch(e){}
     /* Same reasoning as vendorOverride: reset to {} when the project has
@@ -58052,6 +58068,7 @@ function openNetworkProximity(){
   var gen=(window.__npxGen=(window.__npxGen||0)+1);
   GA.network(req,{timeoutMs:55000}).then(function(r){
     if(gen!==window.__npxGen || !document.body.contains(host)) return;
+    _npxStoreAssessment(r);
     host.innerHTML=_npxShell(site,_npxBody(r));
   })['catch'](function(e){
     if(gen!==window.__npxGen || !document.body.contains(host)) return;
@@ -58143,6 +58160,77 @@ function _npxSiteRing(){
   return null;
 }
 window._npxSiteRing = _npxSiteRing;
+
+/* ── IS A SAVED ASSESSMENT STILL ABOUT THIS SITE? ────────────────────────
+   A fiber answer is only true of the geometry it was measured from. Move the
+   pin or redraw the parcel and the stored distances describe a place that is
+   no longer the site — so every saved assessment carries a key derived from
+   the geometry, and a mismatch marks it stale rather than silently showing
+   old numbers under a new outline.
+
+   Rounded to ~1e-5 degrees (about a metre) so that floating-point noise and
+   a redraw that lands in the same place do not read as a move. Note the
+   known gap: the boundary can change IDENTITY without any vertex moving —
+   tagging a different shape as the boundary when both occupy the same
+   ground — and a geometry hash cannot see that. */
+function _npxSiteKey(){
+  function r(n){ return Math.round(n*1e5)/1e5; }
+  var parts=[];
+  try{
+    var p=_npxSiteLatLon();
+    parts.push(p?('pt:'+r(p.lat)+','+r(p.lon)):'pt:none');
+  }catch(e){ parts.push('pt:err'); }
+  try{
+    var ring=_npxSiteRing();
+    if(ring){
+      parts.push('ring:'+ring.length);
+      for(var i=0;i<ring.length;i++) parts.push(r(ring[i][0])+','+r(ring[i][1]));
+    } else parts.push('ring:none');
+  }catch(e2){ parts.push('ring:err'); }
+  var str=parts.join('|'), h=5381;
+  for(var k=0;k<str.length;k++) h=((h<<5)+h+str.charCodeAt(k))>>>0;
+  return h.toString(36)+'-'+str.length;
+}
+window._npxSiteKey=_npxSiteKey;
+
+/* Compact by design. _shedIfOversize can drop project data to fit the
+   document, and a fat evidence blob makes that more likely — so this keeps
+   the verdict, the provenance and the two nearest records, not the full
+   response. The nulls are carried explicitly: they are the finding. */
+function _npxStoreAssessment(r){
+  try{
+    var PF=(r&&r.publicFiber)||null;
+    if(!PF||PF.status!=='ok') return;
+    function trim(x){
+      if(!x) return null;
+      return { name:x.name||null, operator:x.operator||null,
+               distanceM:x.mapped_distance_m, intersectsSite:!!x.intersects_site,
+               status:x.operational_status||null, sourceUrl:x.source_url||null,
+               vintage:x.source_vintage||x.source_last_edited||x.retrieved_at||null,
+               strands:x.fiber_strands_reported==null?null:x.fiber_strands_reported };
+    }
+    S.omegaFiber={
+      siteKey:_npxSiteKey(),
+      datasetBuiltAt:PF.dataset_built_at||null,
+      measurementMethod:PF.measurement_method||null,
+      measuredFrom:PF.measured_from||null,
+      evidenceStatus:PF.evidence_status||null,
+      counts:PF.counts_in_radius||null,
+      radiusKm:(PF.query&&PF.query.radius_km)||null,
+      requestedGbps:(PF.query&&PF.query.requested_capacity_gbps)||null,
+      nearestRoute:trim((PF.routes||[])[0]),
+      nearestFacility:trim((PF.facilities||[])[0]),
+      planningCount:(PF.counts_in_radius||{}).planning||0,
+      unknownMediumCount:(PF.counts_in_radius||{}).unknown_medium||0,
+      /* Not derived, not defaulted — these are what the dataset actually says. */
+      siteHasFiber:null, availableCapacityGbps:null,
+      serviceability:PF.site_serviceability||'unconfirmed',
+      routeDiversity:PF.physical_route_diversity||'unconfirmed'
+    };
+    S.omegaFiberAt=new Date().toISOString();
+  }catch(e){}
+}
+window._npxStoreAssessment=_npxStoreAssessment;
 
 function _npxShell(site, inner){
   return '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:900px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
@@ -58266,6 +58354,20 @@ function _npxBody(r){
      this section exists to avoid. Unknown renders as the word unknown, never
      as an em dash and never as zero. */
   var PF=r.publicFiber||{};
+  /* If a saved assessment exists and was measured from different geometry,
+     say so here rather than letting the fresh panel imply the stored record
+     is current. The stored one is what a report or an export would use. */
+  var staleBanner='';
+  try{
+    var prev=S.omegaFiber;
+    if(prev&&prev.siteKey&&prev.siteKey!==_npxSiteKey()){
+      staleBanner='<div style="background:#2A1A06;border:1px solid #92400E;border-radius:8px;padding:10px 12px;font-size:11px;color:#FCD34D;margin-bottom:12px">'
+        +'<b>The saved fiber assessment is stale.</b> It was measured on '
+        +esc((S.omegaFiberAt||'').slice(0,10))+' from different site geometry'
+        +(prev.measuredFrom?' ('+esc(prev.measuredFrom.replace(/_/g," "))+')':'')
+        +'. Save the project to replace it with the reading below.</div>';
+    }
+  }catch(e){}
   var bothUnits=function(m){
     if(m==null||!isFinite(m)) return 'unknown';
     var ft=m*3.280839895, mi=m/1609.344, km=m/1000;
@@ -58356,6 +58458,7 @@ function _npxBody(r){
     +'</div>'
    +'</div>'
    + capacityBlock
+   + staleBanner
    + pfBlock
    +'<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:inherit">'
     +'<thead><tr style="border-bottom:1px solid #1E3A5F;color:#64748B;font-size:9px;text-transform:uppercase;letter-spacing:.4px">'
@@ -141362,6 +141465,11 @@ function readSite(){
         footprintSource = 'equipment catalog';
       }
     }catch(e2){}
+    var productVisual=window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.resolve(ele,ce.arch);
+    if(productVisual){
+      fw=productVisual.product.w/12; fl=productVisual.product.d/12;
+      footprintSource=productVisual.exact?'manufacturer enclosure':'reference enclosure (model unverified)';
+    }
     out.items.push(mkItem(ele, 'element', ce, {
       x: fx(eb.x + eb.w/2), z: fz(eb.y + eb.h/2),
       wf: fw, lf: fl, rot: +ele.rot||0, boxSrc:footprintSource
@@ -141506,7 +141614,7 @@ function mkItem(ref, src, c, geo){
   };
   if(geo){
     it.x=geo.x; it.z=geo.z;
-    it.wf=Math.max(0.4,geo.wf); it.lf=Math.max(0.4,geo.lf);
+    it.wf=Math.max(0.05,geo.wf); it.lf=Math.max(0.05,geo.lf);
     it.rot=geo.rot; it.approx=!!geo.approx; it.boxSrc=geo.boxSrc||'';
   }
   /* HEIGHT ABOVE GRADE rides on the drawing object, not on the item.
@@ -143988,9 +144096,9 @@ function populate(site){
       case 'pcs':            g = buildCabinet(it, arch); break;
       case 'ems':            g = buildCabinet(it, arch); break;
       case 'ups':            g = buildCabinet(it, arch); break;
-      case 'panel':          g = buildCabinet(it, arch); break;
-      case 'disco':          g = buildCabinet(it, arch); break;
-      case 'meter':          g = buildCabinet(it, arch); break;
+      case 'panel':
+      case 'disco':
+      case 'meter':          g = window.OmegaEquipmentVisuals ? window.OmegaEquipmentVisuals.build(it,THREE) : buildCabinet(it,arch); break;
       case 'jbox':           g = buildCabinet(it, arch); break;
       case 'xfmr':           g = buildXfmr(it, arch); break;
       case 'switchgear':     g = buildSwitchgear(it, arch); break;
@@ -144007,7 +144115,7 @@ function populate(site){
       case 'tree':           g = buildTree(it, arch); break;
       case 'hydrant':        g = buildHydrant(it, arch); break;
       case 'camera':         g = buildCamera(it, arch); break;
-      case 'charger':        g = buildCharger(it, arch); break;
+      case 'charger':        g = (window.OmegaEquipmentVisuals && window.OmegaEquipmentVisuals.build(it,THREE)) || buildCharger(it, arch); break;
       default: return;
     }
     if(!g) return;
@@ -144629,6 +144737,24 @@ function paintSide(){
         +  Math.round(it._builtSqft).toLocaleString() + ' sqft module \u00b7 '
         +  pctD + '% of design \u00b7 covers ' + pctL + '% of the area</div>';
     }
+    var equipmentVisuals=window.OmegaEquipmentVisuals;
+    var productView=equipmentVisuals && equipmentVisuals.resolve(it.ref,it.arch);
+    if(equipmentVisuals && ['panel','meter','disco','charger'].indexOf(it.arch)>=0){
+      h+='<div class="ov-im" style="margin-top:8px">Product appearance</div><select data-product="'+esc(it.id)+'" style="width:100%;font-size:11px;margin-top:4px">'
+        +'<option value="">From drawing / reference</option>';
+      Object.keys(equipmentVisuals.products).forEach(function(key){
+        var product=equipmentVisuals.products[key];
+        if(product.kind===it.arch) h+='<option value="'+key+'"'+(it.ref._visProduct===key?' selected':'')+'>'+esc(product.name)+'</option>';
+      });
+      h+='</select>';
+      if(productView){
+        var vp=productView.product;
+        h+='<div class="ov-im" style="margin-top:5px">'+(productView.exact?'Product geometry: ':'Reference only; existing model unverified: ')+esc(vp.name)
+          +'<br>'+vp.w+' × '+vp.h+' × '+vp.d+' in (W × H × D)<br>'+esc(vp.description)
+          +'<br><a href="'+esc(vp.url)+'" target="_blank" rel="noopener" style="color:#93c5fd">Manufacturer reference</a>'
+          +'<br>Appearance selection only; equipment ratings and BOM stay as drawn. Mounting support and meter face are illustrative.</div>';
+      }
+    }
     if(it.basis){
       h += '<div class="ov-im" style="margin-top:2px;color:#9FB8DE">'
         +  esc(it.basis) + '</div>';
@@ -144715,6 +144841,18 @@ function fmtHour(v){
 
 function wireSide(){
   var side = el('ov-side'); if(!side) return;
+
+  each(side.querySelectorAll('[data-product]'),function(select){
+    select.onchange=function(){
+      var id=select.getAttribute('data-product');
+      var item=V.site.items.filter(function(it){return it.id===id;})[0];
+      if(!item)return;
+      if(select.value)item.ref._visProduct=select.value;
+      else delete item.ref._visProduct;
+      try{if(typeof renderAll==='function')renderAll();if(typeof pushHist==='function')pushHist();}catch(e){}
+      reload();
+    };
+  });
 
   each(side.querySelectorAll('[data-view]'), function(b){
     b.onclick = function(){ setView(b.getAttribute('data-view')); };
