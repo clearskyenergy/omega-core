@@ -39,7 +39,16 @@ var GOOD = {
     fiberOnSite: 'yes', fiberDownMbps: 1000, fiberUpMbps: 1000, fiberMonthlyCost: 900,
     zoningCode: 'I-2', ownerName: 'Rockford Holdings LLC',
     controlType: 'owner', willingToLease: 'yes', maxTermYears: 20,
-    leasedAcres: 1, meterPosture: 'keep'
+    leasedAcres: 1, meterPosture: 'keep',
+    /* The rest of the §3 discovery set. "Fully answered" means answered —
+       including the questions that do not move the verdict, because the call
+       list is built from what is still missing and not from what is failing. */
+    zip: '61109', utility: 'ComEd', serviceTerritory: 'PJM',
+    fiberProvider: 'Metronet', jurisdiction: 'City of Rockford',
+    zoningUseStatus: 'permitted', parkingPadSpace: 'Paved yard, NE corner, ~0.6 ac',
+    encumbrances: 'First mortgage, Byline Bank',
+    decisionMaker: 'Dana Reeves, Managing Member', timeline: 'Wants COD inside 12 months',
+    competingParties: 'One solar developer, no LOI'
   },
   evidence: {
     gridAtlas: { score: 82, nearestSubKm: 0.9, maxKv: 138, resolvedAddress: '1 Industrial Way, Rockford, IL' },
@@ -167,7 +176,11 @@ var rz = M.evaluate(resi);
 eq('zoning · residential fails', rz.gates.zoning.status, 'fail');
 eq('zoning · and disqualifies the site', rz.verdict, 'disqualified');
 
+/* The reference site carries a written "permitted" from its AHJ, which would
+   retire the conditional-use risk below. Clear it so this case tests what the
+   ZONING CODE alone says, which is the thing being asserted. */
 var ag = clone(GOOD); ag.rep.zoningCode = 'A-1'; ag.evidence.parcel.zoning = 'A-1';
+ag.rep.zoningUseStatus = '';
 var ra = M.evaluate(ag);
 eq('zoning · agricultural is conditional, not a refusal', ra.gates.zoning.status, 'conditional');
 ok('zoning · agricultural is still offerable', ra.offer != null);
@@ -269,6 +282,78 @@ ok('rate card · bands are ordered', M.RATE_CARD.capacityPerKwYear.low < M.RATE_
    && M.RATE_CARD.capacityPerKwYear.base < M.RATE_CARD.capacityPerKwYear.high);
 ok('rate card · tranche premiums rise', M.RATE_CARD.tranchePremium[1] < M.RATE_CARD.tranchePremium[2]
    && M.RATE_CARD.tranchePremium[2] < M.RATE_CARD.tranchePremium[3]);
+
+/* ── the capture block · §3 discovery set ────────────────────────────────── */
+ok('capture · echoed on the response', r.capture != null);
+eq('capture · utility', r.capture.utility, 'ComEd');
+eq('capture · service territory', r.capture.serviceTerritory, 'PJM');
+eq('capture · carrier', r.capture.fiberProvider, 'Metronet');
+eq('capture · decision maker', r.capture.decisionMaker, 'Dana Reeves, Managing Member');
+eq('capture · an unanswered field is null, never invented', M.evaluate({ rep: {}, evidence: {} }, STAFF).capture.utility, null);
+
+/* The context fields are NOT gates. Stripping every one of them must leave a
+   qualified site qualified — it can only lengthen the call list. */
+var bare = clone(GOOD);
+['zip', 'utility', 'serviceTerritory', 'fiberProvider', 'jurisdiction',
+ 'parkingPadSpace', 'encumbrances', 'decisionMaker', 'timeline', 'competingParties']
+  .forEach(function (k) { delete bare.rep[k]; });
+var rb = M.evaluate(bare, STAFF);
+eq('capture · context fields do not gate the verdict', rb.verdict, 'qualified');
+eq('capture · nor the power gate', rb.gates.power.status, 'pass');
+near('capture · nor the rent', rb.offer.annual.base, r.offer.annual.base, 1);
+ok('capture · but every missing one lands on the call list', rb.asks.length >= 8, rb.asks.length);
+ok('capture · including the utility and service territory',
+   rb.asks.some(function (a) { return /service territory/i.test(a.ask); }));
+ok('capture · including who signs',
+   rb.asks.some(function (a) { return a.field === 'decisionMaker'; }));
+
+/* ── the jurisdiction outranks the zoning code ───────────────────────────── */
+var prohibited = clone(GOOD); prohibited.rep.zoningUseStatus = 'prohibited';
+var rp = M.evaluate(prohibited, STAFF);
+eq('use status · a written prohibition fails an industrial parcel', rp.gates.zoning.status, 'fail');
+eq('use status · and disqualifies the site', rp.verdict, 'disqualified');
+ok('use status · and prices nothing', rp.offer == null);
+
+var agPermitted = clone(GOOD);
+agPermitted.rep.zoningCode = 'A-1'; agPermitted.evidence.parcel.zoning = 'A-1';
+agPermitted.rep.zoningUseStatus = 'permitted';
+var rap = M.evaluate(agPermitted, STAFF);
+eq('use status · a written permit retires the ag conditional', rap.gates.zoning.status, 'pass');
+ok('use status · and is worth more than the same parcel unconfirmed',
+   rap.offer.annual.base > ra.offer.annual.base);
+
+var resiPermitted = clone(resi); resiPermitted.rep.zoningUseStatus = 'permitted';
+eq('use status · but nothing rescues residential',
+   M.evaluate(resiPermitted, STAFF).gates.zoning.status, 'fail');
+
+var condUse = clone(GOOD); condUse.rep.zoningUseStatus = 'conditional';
+eq('use status · a conditional use downgrades an industrial pass',
+   M.evaluate(condUse, STAFF).gates.zoning.status, 'conditional');
+
+/* ── a carrier's quote outranks our per-mile estimate ────────────────────── */
+var trench = clone(GOOD);
+trench.rep.fiberOnSite = 'no';
+delete trench.rep.fiberDownMbps; delete trench.rep.fiberUpMbps;
+trench.evidence.network = { verdict: 'plausible', reasons: ['carrier facility 2 mi'],
+                            lateral: { mi: 2, costLow: 90000, costHigh: 500000 } };
+var rEst = M.evaluate(trench, STAFF);
+eq('lateral · no quote falls back to the per-mile estimate', rEst.offer.lateral.source, 'per-mile estimate');
+near('lateral · at the mid of the band', rEst.offer.lateral.capexMid,
+     2 * (M.RATE_CARD.lateralPerMile.low + M.RATE_CARD.lateralPerMile.high) / 2, 1);
+
+var quoted = clone(trench); quoted.rep.fiberLateralQuote = 60000;
+var rQ = M.evaluate(quoted, STAFF);
+eq('lateral · a carrier quote is used instead', rQ.offer.lateral.source, 'carrier budgetary quote');
+eq('lateral · at the quoted number', rQ.offer.lateral.capexMid, 60000);
+ok('lateral · a cheaper trench leaves more rent', rQ.offer.annual.base > rEst.offer.annual.base,
+   rQ.offer.annual.base + ' vs ' + rEst.offer.annual.base);
+
+var dear = clone(trench); dear.rep.fiberLateralQuote = 2000000;
+var rD = M.evaluate(dear, STAFF);
+ok('lateral · and an expensive one is still capped, never zero',
+   rD.offer.annual.base >= M.RATE_CARD.floorMonthly * 12, rD.offer.annual.base);
+
+ok('lateral · fiber on site carries no trench at all', r.offer.lateral == null || r.offer.lateral.capexMid === 0);
 
 console.log((fail ? '\n' : '') + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

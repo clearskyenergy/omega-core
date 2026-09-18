@@ -64,7 +64,7 @@ var auth = require('./_lib/verify-token');
 /* Bumped whenever this file changes. Stamped into every response including
    errors, for the same reason grid-atlas.js carries one: the last round of
    confusion was entirely "which version of this is actually running". */
-var BUILD = '2026-09-18.compute-lease-v1.brand';
+var BUILD = '2026-09-18.compute-lease-v2.capture';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE RATE CARD  ⚠ seed values — see the header
@@ -175,6 +175,10 @@ function gatePower(rep, ev) {
   var mw = num(rep.availableMw);
   var willServe = str(rep.willServe) || 'unknown';   /* confirmed|requested|none|unknown */
   var ga = ev.gridAtlas || null;
+  var utility = str(rep.utility);
+  var territory = str(rep.serviceTerritory);
+  var existingKw = num(rep.existingDemandKw);
+  var xfmrKva = num(rep.transformerKva);
 
   /* The measured half, first, because it is true whatever the rep knows. */
   var subKm = ga && num(ga.nearestSubKm);
@@ -208,6 +212,20 @@ function gatePower(rep, ev) {
     asks.push('Get the available load in kW or MW at the meter, and the will-serve status.');
     if (willServe !== 'requested') asks.push('Open a will-serve request with the utility — it is the long pole and it is free.');
   }
+
+  /* The utility and the ISO/RTO. Not scored, because naming your utility does
+     not make the feeder any emptier — but it is the field that decides which
+     revenue stack the site gets underwritten against, so a site without it is
+     a site nobody downstream can model. */
+  if (utility || territory) {
+    basis.push('Served by ' + (utility || 'an unnamed utility')
+      + (territory ? ' in ' + territory : '') + '.');
+  } else {
+    asks.push('Get the utility and the service territory (PJM, CAISO/PG&E, FPL, ComEd, ERCOT). '
+            + 'It drives the revenue stack, not just the interconnection.');
+  }
+  if (existingKw != null) basis.push('Existing demand at the meter ' + fmt(existingKw) + ' kW.');
+  if (xfmrKva != null) basis.push('Transformer ' + fmt(xfmrKva) + ' kVA.');
 
   /* Score. Will-serve dominates because it is the only thing that settles the
      question; grid proximity is a fifth of the weight and never more. */
@@ -250,6 +268,8 @@ function gateFiber(rep, ev) {
   var onSite = str(rep.fiberOnSite) || 'unknown';     /* yes|no|unknown */
   var down = num(rep.fiberDownMbps), up = num(rep.fiberUpMbps);
   var monthly = num(rep.fiberMonthlyCost);
+  var provider = str(rep.fiberProvider);
+  var lateralQuote = num(rep.fiberLateralQuote);
   var np = ev.network || null;
   var verdict = np && np.verdict ? String(np.verdict) : null;
   var lateral = np && np.lateral ? np.lateral : null;
@@ -271,6 +291,22 @@ function gateFiber(rep, ev) {
     asks.push('Get the provider, the down/up speed and the monthly cost — a photo of the bill is enough.');
   } else if (onSite === 'no') {
     basis.push('No service on site today.');
+  }
+
+  /* The carrier's name. "There is fiber here" is not a carrier commitment and
+     cannot be chased by anybody who was not in the room. */
+  if (provider) basis.push('Provider: ' + provider + '.');
+  else if (onSite === 'yes') asks.push('Get the carrier\'s name. "There is fiber" is not something '
+    + 'a second person can follow up on.');
+
+  /* A budgetary quote beats our per-mile estimate and the offer uses it
+     directly — see buildOffer. Without one, the trench in the rent is a guess
+     at our own cost. */
+  if (lateralQuote != null) {
+    basis.push('Budgetary quote to bring service in: $' + fmt(lateralQuote) + '.');
+  } else if (onSite === 'no') {
+    asks.push('Get a budgetary quote to bring service to the pad. The lease carries the amortised '
+            + 'lateral, so an estimate here is an estimate in the rent.');
   }
 
   /* The public record, always reported, whether or not the rep answered. */
@@ -311,6 +347,8 @@ function gateFiber(rep, ev) {
             : 'Fiber not confirmed',
     basis: basis, asks: asks,
     lateral: lateral || null,
+    lateralQuote: lateralQuote,
+    provider: provider || null,
     measured: 'Fiber is the hard gate. A site that cannot show 1 Gbps bidirectional is not a '
             + 'compute site, however good the power is.' };
 }
@@ -347,6 +385,8 @@ function gateZoning(rep, ev) {
   var repCode = str(rep.zoningCode);
   var code = repCode || (parcel && str(parcel.zoning)) || '';
   var cls = repClass || classifyZoning(code);
+  var useStatus = str(rep.zoningUseStatus);            /* permitted|conditional|prohibited */
+  var ahj = str(rep.jurisdiction);
 
   if (parcel && parcel.zoning) basis.push('County record: ' + parcel.zoning
     + (parcel.county ? ' (' + parcel.county + ')' : '') + '.');
@@ -382,9 +422,45 @@ function gateZoning(rep, ev) {
     score = 35;
   }
 
+  /* What the jurisdiction actually said outranks what the code implies. The
+     pattern table above reads a string; a planner reads the ordinance. So a
+     written "prohibited" fails a parcel the table likes, and a written
+     "permitted" retires the conditional-use schedule risk on a PUD or an ag
+     parcel. Silence changes nothing — an unasked question is never a failure. */
+  if (ahj) basis.push('Jurisdiction / AHJ: ' + ahj + '.');
+  if (useStatus === 'prohibited') {
+    status = 'fail';
+    basis.push('The jurisdiction says a containerised data load is a prohibited use here. '
+             + 'That outranks the zoning code.');
+    score = 5;
+  } else if (useStatus === 'permitted') {
+    if (status === 'conditional') {
+      status = 'pass';
+      basis.push('The jurisdiction confirms the use is permitted — the conditional-use schedule risk is retired.');
+      score = Math.max(score, 85);
+    } else if (status === 'unconfirmed') {
+      status = 'conditional';
+      basis.push('The jurisdiction confirms the use is permitted, though the zoning class itself is unrecognised.');
+      score = Math.max(score, 70);
+    }
+  } else if (useStatus === 'conditional') {
+    if (status === 'pass') {
+      status = 'conditional';
+      basis.push('The code reads as the gate case, but the jurisdiction calls this a conditional use. '
+               + 'That is schedule, not a refusal.');
+      score = Math.min(score, 70);
+    }
+    asks.push('Ask the AHJ what the conditional use permit costs and how long it takes. '
+            + 'Budget it into the schedule, not the rent.');
+  } else if (status === 'pass' || status === 'conditional') {
+    asks.push('Confirm with the jurisdiction, in writing, whether the use is permitted, conditional '
+            + 'or prohibited for the exact area where the containers would sit.');
+  }
+
   return { key: 'zoning', label: 'Zoning', status: status, score: score,
     headline: cls ? cap(cls) + (code ? ' · ' + code : '') : 'Zoning not captured',
     zoningClass: cls || null, zoningCode: code || null,
+    useStatus: useStatus || null, jurisdiction: ahj || null,
     basis: basis, asks: asks,
     measured: 'Zoning is read from the county parcel layer where one publishes it. The controlling '
             + 'answer is the jurisdiction\'s, for the exact area where the equipment sits.' };
@@ -410,6 +486,7 @@ function gateSiteControl(rep, ev) {
   var term = num(rep.maxTermYears);
   var acres = num(rep.leasedAcres);
   var parcelAcres = parcel && num(parcel.acres);
+  var encumbrances = str(rep.encumbrances);
 
   if (owner) basis.push('Owner of record: ' + owner + (parcel && parcel.apn ? ' · APN ' + parcel.apn : '') + '.');
   else basis.push('No owner name on the public record for this point.');
@@ -436,6 +513,13 @@ function gateSiteControl(rep, ev) {
   }
   if (acres == null) asks.push('Agree the leased area. We price a minimum of ' + RATE_CARD.minLeasedAcres + ' acres — pad, clearances, transformer and access.');
 
+  /* What is already recorded against the parcel. Not scored — an encumbrance
+     is rarely fatal — but a lender consent nobody asked about becomes a
+     closing delay, and the time to find it is now. */
+  if (encumbrances) basis.push('Encumbrances noted: ' + encumbrances + '.');
+  else asks.push('Ask what is already recorded against the parcel — mortgage, easements, existing '
+               + 'leases, mineral rights. A lender consent found late is a closing delay.');
+
   var w = willing === 'yes' ? 100 : willing === 'exploring' ? 55 : willing === 'no' ? 0 : 30;
   var t = term == null ? 40 : term >= RATE_CARD.termYears ? 100 : Math.round(term / RATE_CARD.termYears * 70);
   var o = owner ? 100 : 30;
@@ -446,6 +530,7 @@ function gateSiteControl(rep, ev) {
             : status === 'fail' ? 'Host will not lease'
             : owner ? 'Owner known, commitment open' : 'Control not established',
     owner: owner || null, termYears: term, leasedAcres: acres,
+    encumbrances: encumbrances || null,
     basis: basis, asks: asks,
     measured: 'The parcel layer gives the name on the tax roll. Willingness and term come from the '
             + 'rep — there is no data source for whether somebody will sign.' };
@@ -532,8 +617,15 @@ function buildOffer(gates, tranche, rep, ev) {
   var lat = gates.fiber.lateral;
   var lateralMi = lat && lat.mi != null ? num(lat.mi) : null;
   var onSiteFiber = gates.fiber.status === 'pass';
-  var lateralCost = (!onSiteFiber && lateralMi != null)
-    ? lateralMi * ((RATE_CARD.lateralPerMile.low + RATE_CARD.lateralPerMile.high) / 2) : 0;
+  /* A carrier's budgetary quote is used directly; the per-mile band is only
+     what we fall back to when nobody has asked one. Quoting a $45k–$250k
+     estimate over the top of a real number the host already has in an email
+     is how a proposal loses an argument it had already won. */
+  var quoted = num(gates.fiber.lateralQuote);
+  var lateralCost = onSiteFiber ? 0
+    : quoted != null ? quoted
+    : lateralMi != null ? lateralMi * ((RATE_CARD.lateralPerMile.low + RATE_CARD.lateralPerMile.high) / 2)
+    : 0;
   var lateralAnnualRaw = lateralCost / term;
 
   var bands = ['low', 'base', 'high'];
@@ -570,11 +662,12 @@ function buildOffer(gates, tranche, rep, ev) {
     components: components,
     qualityAdj: Math.round(qualityAdj * 1000) / 1000,
     tranchePremium: trMult,
-    lateral: lateralMi == null ? null : {
-      mi: round(lateralMi, 2),
+    lateral: (lateralMi == null && quoted == null) ? null : {
+      mi: lateralMi == null ? null : round(lateralMi, 2),
       capexMid: Math.round(lateralCost),
       annualised: Math.round(lateralAnnualRaw),
-      cappedAt: RATE_CARD.lateralMaxShareOfRent
+      cappedAt: RATE_CARD.lateralMaxShareOfRent,
+      source: quoted != null ? 'carrier budgetary quote' : 'per-mile estimate'
     },
     floored: flooredBands,
     rateCard: RATE_CARD,
@@ -593,6 +686,43 @@ function buildOffer(gates, tranche, rep, ev) {
 function escalatedTotal(first, e, n) {
   if (!e) return first * n;
   return first * (Math.pow(1 + e, n) - 1) / e;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE CAPTURE BLOCK
+   ═══════════════════════════════════════════════════════════════════════════
+   docs/COMPUTE-SITE-QUALIFICATION.md §3 says "hard-code these as fields", and
+   its list is deliberately larger than the set of answers that MOVE the
+   verdict. Utility, ZIP, carrier, AHJ, pad description, encumbrances, who
+   signs, by when, and who else is talking to them: none of these is a gate,
+   and a site does not fail because nobody asked. But a screen that never asks
+   produces a beautifully qualified site with no path to a signature, and the
+   rep who has to make the next call is not always the rep who made the last
+   one.
+
+   So they are captured, echoed back on the response, and the empty ones land
+   on the call list — the same treatment every other unanswered question gets.
+   They are NOT scored, and nothing here can move a gate. The two fields that
+   DO change the answer live on their gates instead, because they are answers
+   rather than context: `zoningUseStatus` (the jurisdiction outranks the code)
+   and `fiberLateralQuote` (a carrier's number outranks our estimate). */
+function captureOf(rep) {
+  return {
+    zip: str(rep.zip) || null,
+    utility: str(rep.utility) || null,
+    serviceTerritory: str(rep.serviceTerritory) || null,
+    existingDemandKw: num(rep.existingDemandKw),
+    transformerKva: num(rep.transformerKva),
+    fiberProvider: str(rep.fiberProvider) || null,
+    fiberLateralQuote: num(rep.fiberLateralQuote),
+    jurisdiction: str(rep.jurisdiction) || null,
+    zoningUseStatus: str(rep.zoningUseStatus) || null,
+    parkingPadSpace: str(rep.parkingPadSpace) || null,
+    encumbrances: str(rep.encumbrances) || null,
+    decisionMaker: str(rep.decisionMaker) || null,
+    timeline: str(rep.timeline) || null,
+    competingParties: str(rep.competingParties) || null
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -712,6 +842,21 @@ function evaluate(body, opts) {
     asks.push({ gate: 'Tranche', ask: m.ask, field: m.field });
   });
 
+  /* The commercial and context questions. Last in the list on purpose: a gate
+     that is failing outranks a question nobody has asked yet. */
+  var capt = captureOf(rep);
+  if (!capt.zip) asks.push({ gate: 'Site', field: 'zip',
+    ask: 'Capture the ZIP. It is how this site joins the utility and tariff data downstream.' });
+  if (!capt.parkingPadSpace) asks.push({ gate: 'Site control', field: 'parkingPadSpace',
+    ask: 'Describe the parking or pad space available — where the containers, the transformer and '
+       + 'the access path would actually sit, not just how many acres are on the deed.' });
+  if (!capt.decisionMaker) asks.push({ gate: 'Commercial', field: 'decisionMaker',
+    ask: 'Establish who signs, and whether our contact is that person.' });
+  if (!capt.timeline) asks.push({ gate: 'Commercial', field: 'timeline',
+    ask: 'Ask what their timeline is and what is driving it.' });
+  if (!capt.competingParties) asks.push({ gate: 'Commercial', field: 'competingParties',
+    ask: 'Ask who else is talking to them about this site.' });
+
   var findings = [];
   if (!ev.gridAtlas) findings.push({ severity: 'note', text: 'Grid Atlas did not run — the power gate rests on the rep\'s numbers alone.' });
   if (!ev.network) findings.push({ severity: 'note', text: 'Network Proximity did not run — the fiber gate rests on the rep\'s numbers alone.' });
@@ -752,6 +897,7 @@ function evaluate(body, opts) {
     },
     gates: gates,
     gateOrder: ['power', 'fiber', 'zoning', 'siteControl'],
+    capture: capt,
     verdict: v.verdict, offerable: v.offerable, verdictReason: v.reason,
     tranche: tranche,
     offer: offer,

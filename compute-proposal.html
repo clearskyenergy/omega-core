@@ -218,7 +218,16 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
         </select>
       </div>
     </div>
-    <div class="hint">The gate is ~1 MW with a utility will-serve or a clear path to one. Grid Atlas measures how far the substations are; only the utility knows what the feeder has left.</div>
+    <div class="row3">
+      <div class="field"><label>ZIP</label><input type="text" id="in-zip" placeholder="60610"></div>
+      <div class="field"><label>Utility</label><input type="text" id="in-utility" placeholder="ComEd"></div>
+      <div class="field"><label>Territory</label><input type="text" id="in-territory" placeholder="PJM"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Existing demand (kW)</label><input type="number" id="in-demand" placeholder="Meter today, if any"></div>
+      <div class="field"><label>Transformer (kVA)</label><input type="number" id="in-xfmr" placeholder="If known"></div>
+    </div>
+    <div class="hint">The gate is ~1 MW with a utility will-serve or a clear path to one. Grid Atlas measures how far the substations are; only the utility knows what the feeder has left. The territory &mdash; PJM, CAISO/PG&amp;E, FPL, ComEd, ERCOT &mdash; drives the revenue stack, not just the interconnection.</div>
   </div>
 
   <div class="sec">
@@ -236,7 +245,11 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
       <div class="field"><label>Up Mbps</label><input type="number" id="in-up" placeholder="1000"></div>
       <div class="field"><label>$ / month</label><input type="number" id="in-fibercost" placeholder="900"></div>
     </div>
-    <div class="hint">1 Gbps bidirectional is the hard gate. A site without it is not a compute site regardless of how good the power is. If there is no service, capture a budgetary quote to bring it in.</div>
+    <div class="row2">
+      <div class="field"><label>Provider</label><input type="text" id="in-fiberprov" placeholder="Carrier name"></div>
+      <div class="field"><label>Quote to bring service in ($)</label><input type="number" id="in-fiberquote" placeholder="Budgetary"></div>
+    </div>
+    <div class="hint">1 Gbps bidirectional is the hard gate. A site without it is not a compute site regardless of how good the power is. A budgetary quote is used in place of the per-mile estimate &mdash; without one, the trench in the rent is a guess at our own cost.</div>
   </div>
 
   <div class="sec">
@@ -255,7 +268,19 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
         </select>
       </div>
     </div>
-    <div class="hint">Zoning of the exact area where the containers would sit &mdash; not the parcel headline and not the neighbour's.</div>
+    <div class="row2">
+      <div class="field"><label>Jurisdiction / AHJ</label><input type="text" id="in-ahj" placeholder="City of Rockford"></div>
+      <div class="field">
+        <label>The use is</label>
+        <select id="in-usestatus">
+          <option value="">Not asked</option>
+          <option value="permitted">Permitted</option>
+          <option value="conditional">Conditional use</option>
+          <option value="prohibited">Prohibited</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint">Zoning of the exact area where the containers would sit &mdash; not the parcel headline and not the neighbour's. What the jurisdiction says in writing outranks the code: a written prohibition fails the gate, a written permit retires the conditional-use schedule risk.</div>
   </div>
 
   <div class="sec">
@@ -285,6 +310,19 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
       <div class="field"><label>Max term (years)</label><input type="number" id="in-term" placeholder="15"></div>
       <div class="field"><label>Leased area (acres)</label><input type="number" id="in-acres" step="0.1" placeholder="0.5"></div>
     </div>
+    <div class="field"><label>Parking / pad space</label><input type="text" id="in-pad" placeholder="Paved yard, NE corner, ~0.6 ac"></div>
+    <div class="field"><label>Encumbrances</label><input type="text" id="in-encumb" placeholder="Mortgage, easements, existing leases, mineral rights"></div>
+    <div class="hint">Where the containers, the transformer and the access path would actually sit &mdash; not just how many acres are on the deed. A lender consent found late is a closing delay.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">Commercial</div>
+    <div class="field"><label>Who signs</label><input type="text" id="in-signer" placeholder="Name and role — and is our contact that person?"></div>
+    <div class="row2">
+      <div class="field"><label>Timeline</label><input type="text" id="in-timeline" placeholder="What is driving it"></div>
+      <div class="field"><label>Who else is talking to them</label><input type="text" id="in-competing" placeholder="Other parties"></div>
+    </div>
+    <div class="hint">None of this is a gate &mdash; a site does not fail because nobody asked. But a screen that never asks produces a qualified site with no path to a signature.</div>
   </div>
 
   <div class="sec">
@@ -438,7 +476,26 @@ function repAnswers() {
     leasedAcres: numOf('in-acres'),
     meterPosture: val('in-meter'),
     hostEngagement: val('in-engagement'),
-    termYears: numOf('in-leaseterm')
+    termYears: numOf('in-leaseterm'),
+    /* The rest of the §3 discovery set. Two of these are answers that move a
+       gate — zoningUseStatus and fiberLateralQuote — and the remainder is
+       context the model echoes back and puts on the call list when it is
+       missing. Sent whether or not they are filled in: the API decides what
+       an empty one means, not this page. */
+    zip: val('in-zip'),
+    utility: val('in-utility'),
+    serviceTerritory: val('in-territory'),
+    existingDemandKw: numOf('in-demand'),
+    transformerKva: numOf('in-xfmr'),
+    fiberProvider: val('in-fiberprov'),
+    fiberLateralQuote: numOf('in-fiberquote'),
+    jurisdiction: val('in-ahj'),
+    zoningUseStatus: val('in-usestatus'),
+    parkingPadSpace: val('in-pad'),
+    encumbrances: val('in-encumb'),
+    decisionMaker: val('in-signer'),
+    timeline: val('in-timeline'),
+    competingParties: val('in-competing')
   };
   var e = val('in-energy');
   if (e === 'true') r.openToEnergyStructure = true;
@@ -726,7 +783,11 @@ function copyScreen() {
 var db = null, orgId = null, saveTimer = null;
 var FIELDS = ['in-address','in-host','in-contact','in-rep','in-repmail','in-mw','in-willserve',
   'in-fiber','in-down','in-up','in-fibercost','in-zonecode','in-zoneclass','in-owner','in-control',
-  'in-willing','in-term','in-acres','in-meter','in-energy','in-engagement','in-leaseterm','in-present'];
+  'in-willing','in-term','in-acres','in-meter','in-energy','in-engagement','in-leaseterm','in-present',
+  /* The §3 discovery set. A field that is not in this list is a field the rep
+     types once and loses on the next visit, which is worse than not asking. */
+  'in-zip','in-utility','in-territory','in-demand','in-xfmr','in-fiberprov','in-fiberquote',
+  'in-ahj','in-usestatus','in-pad','in-encumb','in-signer','in-timeline','in-competing'];
 
 function snapshot() {
   var s = { v: 1, fields: {}, site: site, evidence: evidence };

@@ -49,7 +49,8 @@ Two ways to clear it, and the host's is the better one:
   **$45k–$250k per mile**. That is a **path** to the gate, not the gate. The
   lease carries the amortised cost of that trench, so rent on those sites
   comes in lower. Get a **budgetary quote** to bring service in, or we are
-  guessing at our own cost.
+  guessing at our own cost — a real quote is used in place of our per-mile
+  estimate, and a cheaper trench leaves more rent for the host.
 
 Fiber strand count beyond 1 Gbps bidirectional is still an open question
 internally. **Do not promise a strand count.**

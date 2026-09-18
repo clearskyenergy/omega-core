@@ -46,7 +46,10 @@ Two ways to clear it, and the host's is better than ours:
   estimate at $45k–$250k per mile. That is a **path** to the gate, not the
   gate. The lease carries the amortised cost of the trench, so the rent on
   those sites comes in lower. Capture a **budgetary quote** to bring service
-  in, or we are guessing at our own cost.
+  in, or we are guessing at our own cost. The tool uses that quote **in place
+  of** the per-mile estimate — quoting a $45k–$250k band over the top of a
+  real number the host already has in an email loses an argument you had
+  already won.
 
 > ⚠ Fiber strand count beyond 1 Gbps bidirectional is still undefined. Open
 > question from the same meeting. Do not promise a strand count.
@@ -84,6 +87,14 @@ Commercial or industrial is the gate case. What to capture:
 Agricultural and PUD sites are not disqualified. They cost schedule. Ask the
 AHJ what a conditional use permit costs and how long it takes, and budget it
 into the **timeline**, not the rent.
+
+**What the jurisdiction says outranks the code, in both directions.** The
+model reads a zoning string against a pattern table; a planner reads the
+ordinance. So `zoningUseStatus` overrides: a written *prohibited* fails a
+parcel the table likes, and a written *permitted* retires the conditional-use
+schedule risk on a PUD or an ag parcel and lifts it to a pass. Nothing
+rescues residential, and silence changes nothing — not asking is never a
+failure.
 
 ### Site control
 
@@ -170,6 +181,14 @@ acres · existing encumbrances
 **Tranche** — meter posture · open to energy structure · engagement
 
 **Commercial** — decision maker · timeline · other parties talking to them
+
+All of the above are **live fields** on `/compute-proposal.html` as of rate
+card v1 / build `compute-lease-v2.capture`. Two of them are answers that move
+a gate — `zoningUseStatus` and `fiberLateralQuote`, above. The rest are
+context: they are echoed back on the response under `capture`, they are saved
+with the site, and the empty ones land on the call list. None of them can fail
+a site on its own, which is the point — a screen that never asks who signs
+produces a beautifully qualified site with no path to a signature.
 
 ---
 
@@ -312,6 +331,7 @@ to defend it.
 | Artifact | State |
 |---|---|
 | Quick SOQ intake (front-of-funnel, §3) | **Live** — the left panel of `/compute-proposal.html` |
+| Full §3 capture set as fields, saved per site | **Live** — utility, territory, ZIP, carrier, lateral quote, AHJ, use status, pad description, encumbrances, and the three commercial questions |
 | Four-gate screen with evidence and call list | **Live** — the Screen tab |
 | Indicative land lease range, 15-year | **Live** — on a seed rate card |
 | Four-page host-facing proposal, print/PDF | **Live** — the Proposal tab, and from the editor's Compute panel |
