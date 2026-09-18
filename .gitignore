@@ -12,3 +12,9 @@ firebase-debug.log
 # Agent session scratch — not product code
 .claude/
 .codex/
+scripts/.cache/
+.fiber-cache/
+private-fiber/
+*.fiber-backup
+__pycache__/
+*.pyc

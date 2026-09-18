@@ -733,3 +733,398 @@ the four pages and leaves the host page's print rules out of it. The document
 suppresses its own toolbar in that mode (`bare`), because two Print buttons a
 centimetre apart is the kind of thing that gets clicked wrongly under time
 pressure.
+## 2026-09-17 · A national fiber map, and "how much fiber is here"
+
+### What was wrong
+
+`grid-atlas.html` had a `backbone` layer pointing at `/data/intertubes-backbone.geojson`
+— **a file that was never built**, so the layer had been silently empty since
+it was written. `grid-atlas-national.js` carried its own 53 city pairs and
+routed them through OSRM's public demo server at runtime, twelve per site
+analysis. `/api/network-proximity` carried the same 53 pairs as **straight
+chords**. Three surfaces, three different answers, and the one a tenant sees
+first was blank.
+
+Underneath that, the tool could say how far the nearest carrier hotel was and
+could not say the two things a data-center developer actually asks: *how much
+fiber is here*, and *is there a second path*.
+
+### What is here now
+
+**`data/us-longhaul-fiber.geojson` — 317 corridors, 54,639 corridor miles.**
+Built by `scripts/build-fiber-backbone.js` from the tables in
+`scripts/fiber-corridors.js`, **routed over the road network at build time**.
+That is the point: the central finding of InterTubes (Durairajan, Barford,
+Sommers & Willinger, SIGCOMM 2015) is that US long-haul fiber is laid in
+transportation rights-of-way, so the driving route between two cities is a far
+better proxy for where conduit runs than the chord between them. All 317
+routed on the first build; zero straight-line fallbacks.
+
+Two provenance tiers, and they never draw the same:
+- `src:'intertubes'` (53) — carries the paper's citation and its count of
+  carriers sharing the conduit. Drawn solid and hot.
+- `src:'corridor'` (264) — asserts that long-haul capacity runs this way and
+  **asserts nothing about which carrier is in which ditch**. Drawn cooler.
+  Carrier-on-segment is licensed data and belongs in `api/fiber-proxy.js`.
+
+**`data/us-datacenters.geojson` — 3,885 US facilities**, merged and deduped by
+`scripts/build-fiber-facilities.js` from Compute Atlas (CC BY 4.0), the Global
+Data Center Map (credit required) and the CYBR capstone; 1,124 duplicates
+collapsed. An operating facility is the strongest free evidence that
+carrier-grade fiber was pulled to an address. **`facilityType` is load-bearing
+and not cosmetic**: Compute Atlas tracks the generation built to feed these
+campuses, so 113 of these rows are wind farms and gas peakers. They are
+counted under `generation`, never as "nearest operating compute" — the first
+build had a site in Tunica reporting a data center 13 miles away that was a
+turbine field.
+
+**`data/us-fiber-carriers.json` — 24 carriers**, from the Telecom Ramblings
+network-map index, normalised to who actually answers the phone today
+(CenturyLink and Level 3 are both Lumen; Sprint wireline is Cogent; Windstream
+is Uniti; Masergy is Comcast). A call list with links to each carrier's own
+published map — not geometry, and not a claim of presence.
+
+### Logic that moved to `/api/` (per CLAUDE.md)
+
+`/api/network-proximity` (`network-proximity-v2`) gained three things, all
+server-side because the weights are the part worth anything:
+
+- **`longhaul()`** now measures against the routed corridors and returns
+  *every* corridor within 50 mi, plus **route diversity** — corridors folded
+  to a 180° axis and counted once, so two readings of the same I-80 conduit
+  30 miles apart is one path, not two. That is how a single backhoe takes out
+  a "redundant" site.
+- **`capacity()`** — the "how much fiber is here" answer: class (backbone /
+  regional / metro / edge), route diversity, carrier presences, lit service,
+  a **strand planning band** and the carriers to call. The band travels with
+  its caveat attached in every surface, because a number without it gets
+  quoted as a measurement within a week.
+- **`dcSuitability()`** — the connectivity half of a data-center read, scored
+  on corridor 30 / diversity 25 / carriers 20 / exchange 10 / comparables 15,
+  and it says `CONNECTIVITY ONLY` in its own `scope` field. Power, water, land
+  and tax are not in it.
+
+The long-haul component of `score()` was also changed: half of it is now the
+*second* independent path rather than proximity alone, because a site on a
+stub was scoring as though it were on a ring.
+
+### Wired in four places
+
+- **`grid-atlas.html`** — the dead `backbone` layer now loads the real file;
+  new `dc_registry` and `cable_landings` layers; a new **Fiber** preset; the
+  Data Center preset gained the corridor, registry, IXP and colo layers. The
+  renderer gained a per-feature `styleFor(props)` hook so a cited conduit and
+  an inferred corridor cannot draw identically.
+- **`grid-atlas-national.js`** — both the map layer and the site analysis now
+  read the same prebuilt file instead of routing live. Six times the coverage,
+  no OSRM round trip, and the page and the function finally agree. The live
+  path is kept as a fallback and **says so in the layer status**, so a
+  deployment missing the file cannot pass 53 conduits off as 317. The report
+  gained a route-diversity row.
+- **`editor.html` Network Proximity panel** — a second KPI row (class,
+  diversity, strand band, DC fit), a corridor table with bearings, the
+  regional call list as live links, the DC-fit component bars and the nearest
+  comparables.
+- **`editor.html` screening register** — the Fiber cell now reads
+  *class · diversity* rather than distance-to-carrier, a **DC fit** column was
+  added, the detail view gained capacity and comparables rows, a
+  `fiber_single_path` flag is raised, and the CSV went from 23 to 42 columns
+  (header and row arity verified to match — a mismatch silently shifts every
+  column).
+
+`scripts/test-network-proximity.js` is now 68 checks. The Frio County test
+changed its assertion on purpose: it used to read "far from every published
+conduit" at 100+ mi, because the old 53 chords never passed through south
+Texas. The routed San Antonio–Laredo corridor runs down I-35 straight through
+it, so the honest answer became "on a corridor, but single-threaded". That
+change is the whole reason for routing the geometry.
+
+### Open
+
+- **`data/us-cable-landings.geojson` (111 US landing stations) is LICENCE
+  UNCLEARED and off by default.** The compilation is TeleGeography's
+  commercial research product and the repository it came from mirrors their
+  public API. Confirm redistribution terms before this is enabled for a
+  tenant. Everything else here is CC BY 4.0, credit-required or public domain,
+  and the attribution rides on every feature as `attrib`.
+- Carrier-on-segment is still unanswerable from free data. `api/fiber-proxy.js`
+  is where GeoTel / FiberLocator / LandGate lands when a licence is bought;
+  the corridor layer is the free approximation until then.
+- `scripts/build-fiber-facilities.js` reads from `~/Downloads`. Point `--src`
+  at wherever the source datasets live before re-running it.
+- `FCC_BB_KEY` is still not set in Vercel, so "service at the point" still
+  scores its not-checked middle value and the verdict still says so.
+
+---
+
+## 2026-09-18 · Public fiber route evidence, shared by both tools
+
+### The dataset, stated exactly
+
+10,345 public records, verified against the manifest and its SHA-256 hashes:
+195 OSM ways explicitly tagged optical fiber, 1,681 OSM telecom ways whose
+medium is **unspecified**, 5,996 OSM telecom facilities, and 2,473 California
+MMBI design/partner/status line parts. The manifest states its own limits in
+machine-readable fields — `complete_national_route_inventory: false`,
+`fiber_strand_records: 0`, `site_service_records: 0`,
+`available_capacity_records: 0`, `no_evidence_meaning: "unknown; never no
+fiber"` — and nothing in this integration contradicts them.
+
+Optical routes exist in 13 states; facilities in all 50. Those are record-
+presence counts, not coverage estimates.
+
+### One library, two tools
+
+`api/_lib/fiber-evidence.js` is the only interpreter. Grid Atlas reaches it
+through `api/fiber-screen.js`; the Site Map Editor reaches it through
+`/api/network-proximity`, which now requires it directly. Same classifier,
+same four buckets, same nulls — so the two tools cannot disagree about one
+coordinate, which was the whole requirement.
+
+### Boundary support — new, and the reason it was needed
+
+The package shipped point-only. `screenArea()` measures from the site
+**boundary** and returns 0 when a route crosses the parcel. On a 200-acre site
+the edge and the centroid differ by half a mile, and the edge is the one a
+lateral is built to; quoting the centroid overstates every row. Point and
+boundary answers both carry `measurement_method` and `measured_from`, so one
+can never be read as the other.
+
+`editor.html` gained `_npxSiteRing()`. `_e5Ring()` could not be reused: it
+reads `sh._geoBoundary`, which is stamped from `sh.boundary` — the auto-layout
+field — and never from `sh.pts`, so a parcel traced with `OmegaSiteRoles` was
+invisible to it. The new extractor takes the role-tagged shape through
+`OmegaSiteRoles.pts()` (rotation is a live render transform, not baked into the
+stored points), expands rect shapes via `_alShapePts`, and falls back to
+`_savedMapState` because `_liveMapState()` deliberately returns null on a
+frozen plot. When no ring can be built it sends none, and the panel says the
+measurement came from the point.
+
+### No existing score moves — and two that should, but not here
+
+The evidence is reported beside the analysis and folded into `score()`,
+`verdict()`, `capacity()` and `dcSuitability()` **nowhere**. Those numbers are
+already published on saved rows and in the screening register.
+
+Two pre-existing bugs were found and deliberately **left alone**, because
+fixing them changes published figures and that is its own decision:
+
+- `grid-atlas.html` **Fiber Confidence** scores absent fiber as **0** across
+  ~70% of its weight, so "no mapped route" is today indistinguishable from
+  "confirmed route, far away".
+- `grid-atlas.html` **Data Center Site Report** falls back to **15/100** for
+  unknown fiber at 24% weight.
+
+Both are the exact bug class this work was required not to introduce: unknown
+treated as confirmed absence. `api/grid-atlas.js` already has the correct
+pattern at `weightedScore()` — a null part drops out of **both** numerator and
+denominator, commented "UNSCORED IS NOT ZERO". These two should be moved onto
+it in a separate, deliberate change.
+
+Also unfixed and worth knowing: `OmegaNPX.open()` can never open the panel and
+the status-rail carrier cache is permanently null, because both depend on
+`_npxInner`, which does not exist anywhere in `editor.html` — the renderer is
+`_npxBody`. Any validation driven through `OmegaNPX` reports a false failure.
+
+### Deliberate changes to the vendored control
+
+- Layers default **off**, behind `CLEARSKY_CONFIG.fiberLayersOn`. Upstream
+  shipped two **on**, costing every Grid Atlas visitor ~5.8 MB and ~6,200
+  features before touching anything, against a page whose own convention is
+  all-layers-off with viewport-scoped loading.
+- Control moved `bottomleft` → `topright`. `bottomleft` renders underneath the
+  Grid Layers rail; confirmed by screenshot before and after.
+
+### The installer was reviewed and NOT run
+
+`scripts/install-fiber.py` is vendored for reference. It covers only Grid
+Atlas, touches nothing in the Editor, copies no files and verifies no
+prerequisites, and its `vercel.json` edit appends the `api/fiber-screen.js`
+entry **after** the `api/**/*.js` catch-all. The equivalent edits were made by
+hand, with the function entry placed **before** the catch-all, matching how
+`network-proximity` and `render` are already declared.
+
+### Open
+
+- **Not done: persistence and staleness.** A fiber assessment is not yet
+  written to the project record. `saveProject()`'s payload is an explicit
+  allowlist (editor.html:25246–25313) with a matching restore block, and a
+  field added through either `saveProject` wrapper silently never persists —
+  `OmegaVersion.stamp()` sets `S.omegaVersion` and it is provably never
+  written. The correct precedent is `omegaSizing` / `OmegaRecord.persist()`.
+  Marking an assessment stale on geometry change needs a boundary hash; note
+  the boundary can change identity without any vertex moving.
+- **Not done: Grid Atlas site-detail fields.** The vendored control renders its
+  own floating panel with counts and three routes; it does not write into the
+  page's Site Analysis panel, and it shows no evidence date or per-route
+  serviceability. It also binds its own `map.on('click')` rather than reading
+  the page's `pinLatLng`, so its "selected site" and the page's pin can differ.
+- `window.OmegaFiber` is already bound to the operator-entered, carrier-
+  confirmed route record. The public-evidence module must never take that name:
+  it is the stronger verified evidence the requirements say to preserve.
+- The 1,681 unknown-medium OSM ways overlap the live OSM query
+  `network-proximity` already runs. They are kept in their own bucket and out
+  of `hard[]` precisely so one cable is not counted twice at two distances.
+
+---
+
+## 2026-09-18 · Two live scoring bugs, and the rest of the fiber integration
+
+### The bugs — unknown was being scored as confirmed absence
+
+Both in-page scores in `grid-atlas.html` fed a constant in for every factor
+whose layer was switched off, then weighted it as though it were a
+measurement:
+
+| Score | Factor | Weight | Value when never measured |
+|---|---|---:|---|
+| Fiber Confidence | mapped route | 45% | **0** |
+| Fiber Confidence | FCC coverage | 25% | **0** |
+| DC Site Report | fiber | 24% | **15/100** |
+| DC Site Report | water | 14% | 30/100 |
+| DC Site Report | flood | 12% | 85/100 |
+
+Fiber alone is **70%** of the confidence score. A site nobody had looked at
+scored the same as a site that had been looked at and found wanting, and the
+DC report printed "Challenged for DC scale" about parcels with no fiber layer
+loaded. That is a false negative that reads exactly like a finding.
+
+Both now use `wScore()`, which is `weightedScore()` from `api/grid-atlas.js`
+ported into the page: **an unmeasured factor drops out of the numerator AND
+the denominator**. A factor whose layer IS on and which found nothing is a
+genuine low reading and still counts — "looked and found none" and "never
+looked" are different answers and this is the line between them. An entirely
+unmeasured score renders as an em dash, never as 0, and the caption names the
+weight that went unmeasured. `scripts/test-grid-atlas-scoring.js` lifts
+`wScore` straight out of the page so the test cannot drift from it.
+
+### Persistence and staleness
+
+`omegaFiber` / `omegaFiberAt` are written in the save payload **literal** and
+restored in `_loadProject`. Both halves, because this payload is an allowlist:
+a field set by a `saveProject` wrapper is never written (`OmegaVersion.stamp()`
+sets `S.omegaVersion` and it provably never persists), and a field saved
+without a restore line is written forever and read never.
+
+The record is compact by design — verdict, provenance and the two nearest
+records, not the whole response — because `_shedIfOversize` can drop project
+data to fit the document. `siteHasFiber` and `availableCapacityGbps` are
+stored as `null`, never `false` or `0`: the null is the finding.
+
+`_npxSiteKey()` hashes the point and the boundary ring at ~1 m precision. A
+saved assessment whose key no longer matches raises a stale banner rather than
+letting old distances sit under a new outline. Known gap, stated in the code:
+a boundary can change **identity** without any vertex moving, and a geometry
+hash cannot see that.
+
+### Grid Atlas site details
+
+The four datasets are registered as native layers (`pf_routes`, `pf_unknown`,
+`pf_design`, `pf_facilities`) so they appear in the Grid Layers rail, and a
+"Public route evidence" section in Site Analysis shows route distance,
+operator, source, evidence date and serviceability/capacity status. Route
+proximity is kept separate from facility proximity, and unknown-medium lines
+and planning records are labelled as not-confirmed-optical.
+
+They are **deliberately absent from `fiberKeys`**. Adding them to the
+nearest-fiber winner would move Fiber Confidence and the DC Site Report on
+every covered site.
+
+Two bugs found by running it rather than reading it:
+- `nearestLine()` returns `{props, km}` and `nearestPoint()` returns
+  `{f, km}`. Reading `.props` off a `nearestPoint` result is `undefined`, and
+  the first field touched was `.operator` — which threw and took the entire
+  Site Analysis panel down, because `analyze()` builds one string and renders
+  once. The panel silently stopped at "Connectivity".
+- `nearestLine()` has no radius, and the California layer is national, so a
+  site in Indiana was told its nearest planning route was **2,415 km** away.
+  Capped at 80 km, matching the radius the rest of the panel reasons in;
+  beyond it the answer is "none within 80 km".
+
+### Still open
+
+The `omega-core-main.zip` package (26,371 published features across 29 states
++ DC) remains unmerged. It is a different package built on a stale ~Sep 12
+snapshot and it collides with this one on `api/_lib/fiber-evidence.js` — two
+interpreters of two datasets, which is a reconciliation, not a copy.
+
+---
+
+## 2026-09-18 · The published route inventory, folded into the one library
+
+### What arrived, and what was wrong with how it arrived
+
+`Omega-Grid-Atlas-Fiber-Integrated.zip` carried a second dataset — 26,371
+published line features across 30 states and DC, sharded one GeoJSON per
+state — and it resolved the earlier filename collision by **renaming rather
+than unifying**:
+
+| Endpoint | Interpreter | Dataset |
+|---|---|---|
+| `api/fiber-screen.js` | `fiber-screen-evidence.js` | `data/fiber` (10,345) |
+| `api/fiber-site.js` | `fiber-evidence.js` + `fiber-inventory.js` | `data/usa-fiber` (26,371) |
+
+Two interpreters and two endpoints means the same coordinate can return two
+different answers depending on which tool asks — the exact thing this work was
+told to prevent. That snapshot was also stale in the usual way: `mission.html`
+80 KB behind `main`, `editor.html` 163 KB behind, and none of this branch's
+work present.
+
+So only the **data** was taken, plus its best idea, and both were folded into
+`api/_lib/fiber-evidence.js`. There is still one interpreter, one classifier
+and one set of nulls. `fiber-screen-evidence.js`, `fiber-inventory.js` and
+`fiber-site.js` were deliberately not merged.
+
+### Sharded and lazy, because 68 MB is not 11 MB
+
+`load()` reads its dataset eagerly; that is affordable at 11 MB and not at 68.
+The inventory is read per state, only when the query bbox meets that state's
+bbox, with a second per-feature bbox rejection before any geometry maths, and
+a **bounded cache** (6 states) so a warm serverless instance answering queries
+across the country cannot end up holding all 68 MB resident.
+
+Measured: Chicago cold 314 ms / warm 87 ms; Portland cold 412 ms against
+Oregon's 5,073 features; an empty Wyoming point 116 ms returning
+`no_route_evidence_in_loaded_sources`.
+
+### Category is not medium — the mapping that mattered
+
+16,530 of the 26,371 records carry `category: "unknown"`, the largest bucket by
+far. That means the **publisher did not state whether the route is in
+service**. It does not mean the medium is uncertain: every source layer in
+this inventory is a fiber layer.
+
+That is a different claim from the OSM `telecom_route_unknown` bucket, where
+the medium itself is unspecified and the line may be copper. Filing
+status-unknown fiber under "medium unknown" would invent a doubt the source
+never expressed, so it maps to `fiber_route` with its status surfaced verbatim
+as "not stated by the publisher". `planned` and `inactive` are **not**
+proximity-eligible and fall to `planning_routes`, which is what the shared
+classifier already does with an ineligible route.
+
+### On the map
+
+`data/usa-fiber/overview.geojson` (10.7 MB, all 26,371 simplified) is a
+national layer, off by default. **Status is the styling, because status is the
+finding:** planned draws dashed amber, inactive dotted grey, existing solid
+teal, and status-unstated thinner rather than being promoted to look like
+confirmed plant.
+
+Site Analysis reads both inventories. They name the same facts differently —
+OSM-derived features use `operator`/`operational_status`, the published
+inventory uses `carrier`/`routeStatus` — so both keys are read rather than
+printing "unknown" over data sitting under another name.
+
+### Deploy
+
+`includeFiles` on both `api/fiber-screen.js` and `api/network-proximity.js` is
+now `data/{fiber,usa-fiber}/**`. Same tracing gap as before: the library builds
+its paths at runtime and `@vercel/nft` cannot follow them, so undeclared data
+is an ENOENT that only appears once deployed.
+
+### Open
+
+Nothing about the two datasets is de-duplicated across sources. They publish
+different records from different agencies, and silently collapsing them would
+drop provenance a user is entitled to see; each source already guarantees
+uniqueness by id within itself.

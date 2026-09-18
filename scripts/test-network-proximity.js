@@ -39,11 +39,82 @@ ok('state-plane feet are dropped, not measured',
 ok('a real feature inside the bbox survives the same guard',
    T.nearestFrom(feats, 40.72, -74.08, 'x') !== null);
 
-/* ── long-haul conduits: a point on the Trenton–Edison chord ──────────── */
+/* ── long-haul corridors ──────────────────────────────────────────────── */
 const lh = T.longhaul(40.37, -74.60);
-ok('a site between Trenton and Edison is ~0 mi from that conduit', lh.status === 'ok' && lh.mi < 2 && /Trenton|Edison/.test(lh.conduit.a + lh.conduit.b), lh);
-const lhFar = T.longhaul(28.9, -99.1);
-ok('Frio County is far from every published conduit', lhFar.status === 'ok' && lhFar.mi > 100, lhFar.mi);
+ok('a site between Trenton and Edison is ~0 mi from that corridor', lh.status === 'ok' && lh.mi < 2 && /Trenton|Edison/.test(lh.conduit.a + lh.conduit.b), lh);
+ok('corridors are loaded and routed', T.corridors.length > 300 && T.corridors.every(c => c.g && c.g.length >= 2), T.corridors.length);
+ok('the cited subset kept its citations', T.corridors.filter(c => c.src === 'intertubes' && c.cite).length >= 50);
+
+/* Frio County used to read "far from every published conduit" at 100+ mi,
+   because the old set was 53 straight chords between metro pairs and none of
+   them passed through south Texas. The corridor set routes San Antonio–Laredo
+   down I-35, which goes straight through it — so the honest answer changed
+   from "no long-haul here" to "on a corridor, but only one". That is the whole
+   reason for routing the geometry, and the test now asserts the new fact. */
+const frio = T.longhaul(28.9, -99.1);
+ok('Frio County sits on the San Antonio–Laredo corridor', frio.status === 'ok' && frio.mi < 2 && /Laredo/.test(frio.conduit.a + frio.conduit.b), frio.conduit);
+ok('...and it is single-threaded, which is the finding', frio.independent === 1, frio.independent);
+
+/* Route diversity: the same bearing twice is one path. */
+ok('Ashburn reads as meshed', T.longhaul(39.0438, -77.4874).independent >= 3);
+ok('a remote Wyoming point reads as single-threaded', T.longhaul(42.7625, -104.4527).independent === 1);
+ok('mid-ocean has no corridor at all', T.longhaul(30.0, -45.0).status === 'empty');
+
+/* ── data centers: generation is not compute ──────────────────────────── */
+const dcAsh = T.datacenters(39.0438, -77.4874);
+ok('Ashburn is dense with operating compute', dcAsh.within50 > 100, dcAsh.within50);
+ok('no power plant is ever returned as compute', T.dcRows.length > 2000 &&
+   [[39.0438, -77.4874], [41.2619, -95.8608], [34.6851, -90.3823]]
+     .every(([la, lo]) => T.datacenters(la, lo).nearest.every(f => f.kind !== 'power_generation')));
+const cb = T.datacenters(41.2619, -95.8608);
+ok('Council Bluffs counts its generation separately', cb.generationCount > 0 && cb.generationMw > 500, [cb.generationCount, cb.generationMw]);
+ok('an empty area returns empty, not a far-away facility', T.datacenters(42.7625, -104.4527).status === 'empty');
+
+/* ── capacity: class, diversity and the strand band ───────────────────── */
+const capOf = (la, lo, extra) => {
+  const l = T.longhaul(la, lo);
+  const d = Object.assign({ lh: l, longhaulMi: l.status === 'ok' ? l.mi : null, longhaul: l.conduit || null,
+                            independentPaths: l.independent || 0, netsWithin80: 0, ixWithin80: 0, fccFiber: null }, extra || {});
+  return T.capacity(d, la, lo);
+};
+const capAsh = capOf(39.0438, -77.4874);
+ok('Ashburn is backbone class and meshed', capAsh.class === 'backbone' && capAsh.routeDiversity === 'meshed', [capAsh.class, capAsh.routeDiversity]);
+ok('a backbone strand band is an order above an edge one', capAsh.strandBand.low > capOf(42.7625, -104.4527).strandBand.low * 10);
+ok('the strand band always carries its caveat', /PLANNING BAND/.test(capAsh.strandBand.caveat));
+ok('Lusk WY is edge class', capOf(42.7625, -104.4527).class === 'edge');
+ok('a far corridor with two bearings is regional, not edge', capOf(34.6851, -90.3823).class === 'regional');
+ok('a thin market with lit service reads as metro', capOf(42.7625, -104.4527, { fccFiber: true }).class === 'metro');
+ok('a single-threaded site says so in its notes', capOf(32.6789, -115.4989).notes.some(n => /single cut/.test(n)));
+ok('a long lateral is priced in the notes', capOf(42.7625, -104.4527).notes.some(n => /before the first splice/.test(n)));
+ok('the call list is regional and links real maps', capAsh.calls.carriers.length >= 3 && capAsh.calls.carriers.some(c => c.mapUrl));
+/* The region only picks a call list, but a wrong one is embarrassing in the
+   one place that matters most: a 40°N cut used to file Ashburn — Data Center
+   Alley — under Southeast and offer a Cox and Spectrum shortlist for it. */
+ok('Ashburn is Mid-Atlantic, not Southeast', T.regionOf(39.0438, -77.4874) === 'Mid-Atlantic', T.regionOf(39.0438, -77.4874));
+ok('Richmond is Mid-Atlantic', T.regionOf(37.5407, -77.4360) === 'Mid-Atlantic');
+ok('Charlotte is Southeast', T.regionOf(35.2271, -80.8431) === 'Southeast');
+ok('New York is Northeast', T.regionOf(40.7128, -74.0060) === 'Northeast');
+ok('Philadelphia is Mid-Atlantic', T.regionOf(39.9526, -75.1652) === 'Mid-Atlantic');
+ok('Chicago is Midwest', T.regionOf(41.8781, -87.6298) === 'Midwest');
+ok('Atlanta is Southeast', T.regionOf(33.7490, -84.3880) === 'Southeast');
+ok('Dallas is South Central', T.regionOf(32.7767, -96.7970) === 'South Central');
+ok('Seattle is the Pacific Northwest', T.regionOf(47.6062, -122.3321) === 'Pacific Northwest');
+ok('Los Angeles is California', T.regionOf(34.0522, -118.2437) === 'California');
+ok('Denver is the Mountain West', T.regionOf(39.7392, -104.9903) === 'Mountain West');
+ok('every region maps to a real call list',
+   ['Northeast','Mid-Atlantic','Southeast','Midwest','Great Plains','South Central','Mountain West','Pacific Northwest','California']
+     .every(function (rg) { return (T.carriersFor(39, -77).carriers.length >= 0); }) &&
+   [[39.04,-77.49],[41.88,-87.63],[32.78,-96.80],[47.61,-122.33],[34.05,-118.24],[39.74,-104.99],[40.71,-74.01],[33.75,-84.39],[41.26,-95.86]]
+     .every(function (pt) { return T.carriersFor(pt[0], pt[1]).carriers.length >= 3; }));
+
+/* ── data-center suitability ──────────────────────────────────────────── */
+const fitAsh = T.dcSuitability({ netsWithin80: 400, ixWithin80: 3 }, capAsh, dcAsh);
+const fitLusk = T.dcSuitability({ netsWithin80: 0, ixWithin80: 0 }, capOf(42.7625, -104.4527), T.datacenters(42.7625, -104.4527));
+ok('Ashburn beats Lusk on connectivity, by a lot', fitAsh.score > fitLusk.score + 40, [fitAsh.score, fitLusk.score]);
+ok('the DC score stays within 0..100', [fitAsh.score, fitLusk.score].every(v => v >= 0 && v <= 100));
+ok('the DC verdict says it is connectivity only', /CONNECTIVITY ONLY/.test(fitAsh.scope));
+ok('an unserved site raises a blocker', fitLusk.flags.some(f => f.severity === 'blocker'));
+ok('every DC component is shown with its weight', fitAsh.components.length === 5 && fitAsh.components.every(c => c.max > 0));
 
 /* ── score: ordered and bounded ───────────────────────────────────────── */
 const base = { nearestCarrier: { mi: 5, name: 'A' }, netsWithin80: 300, ixWithin80: 2, fccFiber: null, longhaulMi: null };
@@ -55,8 +126,11 @@ ok('score stays within 0..100', [near, far, none].every(v => v >= 0 && v <= 100)
 const sTrue = T.score(Object.assign({}, base, { fccFiber: true })).score;
 const sFalse = T.score(Object.assign({}, base, { fccFiber: false })).score;
 ok('FCC fiber at the point beats not-checked beats no-fiber', sTrue > near && near > sFalse, [sTrue, near, sFalse]);
+const oneCorridor = T.score(Object.assign({}, base, { longhaulMi: 0, longhaul: { a: 'X', b: 'Y' }, independentPaths: 1 })).score;
+const twoCorridors = T.score(Object.assign({}, base, { longhaulMi: 0, longhaul: { a: 'X', b: 'Y' }, independentPaths: 2 })).score;
+ok('a second independent corridor is worth more than proximity alone', twoCorridors > oneCorridor, [oneCorridor, twoCorridors]);
 ok('long-haul is a bonus that cannot push past 100',
-   T.score(Object.assign({}, base, { nearestCarrier: { mi: 0, name: 'A' }, netsWithin80: 5000, ixWithin80: 9, fccFiber: true, longhaulMi: 0, longhaul: { a: 'X', b: 'Y' } })).score === 100);
+   T.score(Object.assign({}, base, { nearestCarrier: { mi: 0, name: 'A' }, netsWithin80: 5000, ixWithin80: 9, fccFiber: true, longhaulMi: 0, longhaul: { a: 'X', b: 'Y' }, independentPaths: 4 })).score === 100);
 ok('components are shown, so the number is auditable', T.score(base).parts.length >= 4);
 
 /* ── verdict: the rule, case by case ──────────────────────────────────── */
@@ -78,6 +152,14 @@ ok('FCC says none but a carrier at 8 mi → plausible, not unlikely',
 const u = V({ nearestCarrier: { mi: 52, name: 'H5', nets: 21 } });
 ok('uncertain says the FCC point was not checked', u.reasons.some(r => /not checked/.test(r)), u.reasons);
 ok('dataReady only for likely/plausible', V({ fccFiber: true }).dataReady === true && V({}).dataReady === false);
+ok('an operating compute facility next door is evidence',
+   V({ dcMi: 0.2, dcName: 'Equinix DC1' }).evidence.some(e => e.kind === 'facility'));
+ok('a corridor on the parcel is evidence, ranked behind surveyed plant',
+   V({ longhaulMi: 0.1, longhaul: { a: 'A', b: 'B', src: 'intertubes' } }).evidence.some(e => e.kind === 'corridor'));
+ok('a corridor 20 mi away is not evidence at all',
+   !V({ longhaulMi: 20, longhaul: { a: 'A', b: 'B', src: 'corridor' } }).evidence.some(e => e.kind === 'corridor'));
+ok('surveyed plant still outranks a corridor at the same distance',
+   V({ plantMi: 1, plantSource: 'City', longhaulMi: 1, longhaul: { a: 'A', b: 'B', src: 'corridor' } }).nearestEvidence.kind === 'plant');
 
 /* ── lateral: to the nearest hard evidence, else the carrier ──────────── */
 const L1 = V({ plantMi: 2.5, plantSource: 'City', nearestCarrier: { mi: 40, name: 'H', nets: 30 } }).lateral;
@@ -87,7 +169,12 @@ ok('no evidence and no carrier → no lateral', V({}).lateral === null);
 
 /* ── handler contract (fetch is never reached) ────────────────────────── */
 function handlerWith(authImpl) {
-  const box = { module: { exports: {} }, require: n => n.includes('verify-token') ? authImpl : require(n),
+  /* network-proximity.js now requires three siblings by relative path. Inside
+     vm.runInNewContext the module has no filename, so a bare require() would
+     resolve them against scripts/ and fail. Anchor relative paths at api/. */
+  const req = n => n.includes('verify-token') ? authImpl
+             : (n.charAt(0) === '.' ? require(path.join(__dirname, '..', 'api', n)) : require(n));
+  const box = { module: { exports: {} }, require: req,
     fetch: () => { throw new Error('fetch must not be called in tests'); }, AbortController, setTimeout, clearTimeout, console, Promise, process, Object, Math, Number, String, Date, Array, Buffer };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/network-proximity.js'), 'utf8'), box);
   return box.module.exports;

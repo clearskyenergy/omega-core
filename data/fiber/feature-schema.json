@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Omega Fiber Evidence Feature",
+  "type": "object",
+  "required": [
+    "type",
+    "id",
+    "geometry",
+    "properties"
+  ],
+  "properties": {
+    "type": {
+      "const": "Feature"
+    },
+    "id": {
+      "type": "string"
+    },
+    "geometry": {
+      "type": "object",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "Point",
+            "LineString",
+            "MultiLineString"
+          ]
+        },
+        "coordinates": {
+          "type": "array"
+        }
+      }
+    },
+    "properties": {
+      "type": "object",
+      "required": [
+        "source_id",
+        "source_feature_id",
+        "feature_kind",
+        "source_url",
+        "retrieved_at",
+        "geometry_quality",
+        "operational_status",
+        "proximity_eligible",
+        "serviceability",
+        "fiber_strands_reported",
+        "lit_capacity_gbps",
+        "spare_capacity_gbps",
+        "offered_capacity_gbps"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string"
+        },
+        "source_feature_id": {
+          "type": "string"
+        },
+        "feature_kind": {
+          "enum": [
+            "fiber_route",
+            "telecom_route_unknown",
+            "telecom_facility",
+            "network_design"
+          ]
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "retrieved_at": {
+          "type": "string"
+        },
+        "geometry_quality": {
+          "enum": [
+            "community_mapped",
+            "generalized_public_design"
+          ]
+        },
+        "operational_status": {
+          "type": "string"
+        },
+        "proximity_eligible": {
+          "type": "boolean"
+        },
+        "serviceability": {
+          "const": "unconfirmed"
+        },
+        "fiber_strands_reported": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "lit_capacity_gbps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "spare_capacity_gbps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "offered_capacity_gbps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "positional_accuracy_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "capacity_evidence": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -25288,6 +25288,15 @@ async function saveProject(){
       costOverrides: S.costOverrides || null,
       omegaSizing:   S.omegaSizing   || null,
       omegaSizingAt: S.omegaSizingAt || null,
+      /* FIBER EVIDENCE. Written HERE, in the literal, and nowhere else: this
+         payload is an allowlist, not a spread of S, so a field set by a
+         saveProject wrapper is never written. OmegaVersion.stamp() sets
+         S.omegaVersion and it is provably never persisted — that is the
+         precedent to avoid, and omegaSizing above is the one to copy.
+         Restored in _loadProject; without a matching line there the data is
+         written forever and read never. */
+      omegaFiber:    S.omegaFiber    || null,
+      omegaFiberAt:  S.omegaFiberAt  || null,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -25631,6 +25640,8 @@ async function _loadProject(id){
     S.costOverrides = (d.costOverrides && typeof d.costOverrides==='object') ? d.costOverrides : null;
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
+    S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
+    S.omegaFiberAt  = d.omegaFiberAt  || null;
     try{ window._omegaComputeLast = (S.omegaSizing && S.omegaSizing.facKw > 0) ? S.omegaSizing : null; }catch(e){}
     try{ if(window.OmegaRecord && OmegaRecord.restore) setTimeout(function(){ try{ OmegaRecord.restore(); }catch(e){} }, 0); }catch(e){}
     /* Same reasoning as vendorOverride: reset to {} when the project has
@@ -58027,13 +58038,15 @@ function sebCompute(){
    score, the verdict, the lateral estimate and the route factor all come
    back in the response, and the panel prints what the service used. */
 function openNetworkProximity(){
+  var prior=document.getElementById('npx-modal');
+  if(prior && prior.parentNode) prior.parentNode.removeChild(prior);
   var host=document.createElement('div');
   host.id='npx-modal';
   host.setAttribute('style','position:fixed;inset:0;background:rgba(6,12,22,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px');
   host.onclick=function(e){ if(e.target===host) host.remove(); };
   var site=_npxSiteLatLon();
   host.innerHTML=_npxShell(site, site
-    ? '<div style="padding:24px;color:#94A3B8;font-size:12px">Reading carrier facilities, FCC service, mapped fibre, published plant and long-haul conduits for '
+    ? '<div style="padding:24px;color:#94A3B8;font-size:12px">Reading carrier facilities, FCC service, mapped fibre, published plant, long-haul corridors and operating compute for '
       + site.lat.toFixed(4)+', '+site.lon.toFixed(4)+'… <span style="color:#64748B">(up to a minute — five public sources are asked in parallel)</span></div>'
     : '<div style="padding:24px;color:#94A3B8;font-size:12px">Place or lock the satellite view first — this scores the site against real interconnection density, so it needs a location.</div>');
   document.body.appendChild(host);
@@ -58043,11 +58056,23 @@ function openNetworkProximity(){
     host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">The Grid Atlas client (omega-grid-atlas-client.js) did not load. Reload the page.</div>');
     return;
   }
-  GA.network({lat:site.lat, lng:site.lon},{timeoutMs:55000}).then(function(r){
-    if(!document.getElementById('npx-modal')) return;
+  /* A ring when the parcel is anchored to the world, nothing when it is not.
+     The response reports which was used; it is never silently substituted. */
+  var ring=null; try{ ring=_npxSiteRing(); }catch(e){}
+  var req={lat:site.lat, lng:site.lon};
+  if(ring) req.boundary=ring;
+  /* Generation guard. Every call used to append another element with the id
+     'npx-modal', and the only check before writing results was that SOME
+     element with that id existed — so a slow first request could paint over
+     a newer panel with older numbers. Each open claims a generation; a
+     response whose generation is no longer current is dropped. */
+  var gen=(window.__npxGen=(window.__npxGen||0)+1);
+  GA.network(req,{timeoutMs:55000}).then(function(r){
+    if(gen!==window.__npxGen || !document.body.contains(host)) return;
+    _npxStoreAssessment(r);
     host.innerHTML=_npxShell(site,_npxBody(r));
   })['catch'](function(e){
-    if(!document.getElementById('npx-modal')) return;
+    if(gen!==window.__npxGen || !document.body.contains(host)) return;
     host.innerHTML=_npxShell(site,'<div style="padding:24px;color:#F87171;font-size:12px">'+_npxEsc((e&&e.message)||'Network Proximity failed.')+'</div>');
   });
 }
@@ -58065,11 +58090,154 @@ function _npxSiteLatLon(){
 }
 function _npxEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
+/* ── THE SITE BOUNDARY, IN THE WORLD ──────────────────────────────────────
+   Fiber proximity from a parcel centroid is the wrong number. A 200-acre
+   site whose north edge fronts the road has fiber AT its boundary while its
+   centre is half a mile back, and quoting the centre overstates the lateral
+   by that half mile on every row. So this hands the service a ring.
+
+   _e5Ring() already does something like this and cannot be reused: it reads
+   sh._geoBoundary, which is stamped from sh.boundary — the AUTO-LAYOUT field
+   — and never from sh.pts, where a parcel traced by OmegaSiteRoles actually
+   lives. A traced boundary is invisible to it.
+
+   Returns [[lon,lat], …] (GeoJSON order, closed) or null. Null is a real
+   answer and the caller must treat it as one: it means measure from the
+   point and SAY so, never that the parcel is unbounded. */
+function _npxSiteRing(){
+  function out(pts){
+    if(!pts || pts.length < 3) return null;
+    var ring = pts.map(function(p){
+      var lat = p.lat != null ? +p.lat : null, lng = p.lng != null ? +p.lng : null;
+      if(!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+      return [lng, lat];
+    }).filter(Boolean);
+    if(ring.length < 3) return null;
+    var a = ring[0], b = ring[ring.length-1];
+    if(a[0] !== b[0] || a[1] !== b[1]) ring.push([a[0], a[1]]);
+    return ring;
+  }
+  /* 1 — a shape already carrying world coordinates. */
+  try{
+    var best = null, bestN = 0;
+    (S.shapes||[]).forEach(function(sh){
+      if(sh && sh._geoBoundary && sh._geoBoundary.length > 2 && sh._geoBoundary.length > bestN){
+        best = sh._geoBoundary; bestN = sh._geoBoundary.length;
+      }
+    });
+    var r1 = out(best);
+    if(r1) return r1;
+  }catch(e){}
+  /* 2 — the tagged parcel, in pixels, converted through the map. Uses the
+     ROLE-tagged shape and OmegaSiteRoles.pts(), because rotation is a live
+     render transform: raw sh.pts on a rotated parcel is the parcel's ghost,
+     not where it sits. Rect shapes store one corner plus a size, so
+     _alShapePts expands them. */
+  try{
+    var sh = null;
+    try{ if(window.OmegaSiteRoles && OmegaSiteRoles.byRole) sh = OmegaSiteRoles.byRole('boundary')[0] || null; }catch(e2){}
+    var px = null;
+    if(sh){
+      try{ px = (window.OmegaSiteRoles && OmegaSiteRoles.pts) ? OmegaSiteRoles.pts(sh) : _alShapePts(sh); }catch(e3){ px = null; }
+    }
+    if(!px || px.length < 3){ try{ px = _alFindBoundary(); }catch(e4){ px = null; } }
+    if(px && px.length > 2){
+      /* _liveMapState() deliberately returns null on a frozen plot, so fall
+         back to the saved state. _pxToLatLng prefers the live Google
+         projection anyway and only needs mapState for its fallback maths. */
+      var ms = null;
+      try{ ms = _liveMapState(); }catch(e5){}
+      if(!ms) ms = window._savedMapState || null;
+      var sz = _getCanvasSize();
+      var geo = px.map(function(q){
+        var g = null;
+        try{ g = _pxToLatLng(q.x, q.y, ms, sz.w, sz.h); }catch(e6){}
+        return g ? { lat:g.lat, lng:g.lng } : null;
+      }).filter(Boolean);
+      var r2 = out(geo);
+      if(r2) return r2;
+    }
+  }catch(e){}
+  return null;
+}
+window._npxSiteRing = _npxSiteRing;
+
+/* ── IS A SAVED ASSESSMENT STILL ABOUT THIS SITE? ────────────────────────
+   A fiber answer is only true of the geometry it was measured from. Move the
+   pin or redraw the parcel and the stored distances describe a place that is
+   no longer the site — so every saved assessment carries a key derived from
+   the geometry, and a mismatch marks it stale rather than silently showing
+   old numbers under a new outline.
+
+   Rounded to ~1e-5 degrees (about a metre) so that floating-point noise and
+   a redraw that lands in the same place do not read as a move. Note the
+   known gap: the boundary can change IDENTITY without any vertex moving —
+   tagging a different shape as the boundary when both occupy the same
+   ground — and a geometry hash cannot see that. */
+function _npxSiteKey(){
+  function r(n){ return Math.round(n*1e5)/1e5; }
+  var parts=[];
+  try{
+    var p=_npxSiteLatLon();
+    parts.push(p?('pt:'+r(p.lat)+','+r(p.lon)):'pt:none');
+  }catch(e){ parts.push('pt:err'); }
+  try{
+    var ring=_npxSiteRing();
+    if(ring){
+      parts.push('ring:'+ring.length);
+      for(var i=0;i<ring.length;i++) parts.push(r(ring[i][0])+','+r(ring[i][1]));
+    } else parts.push('ring:none');
+  }catch(e2){ parts.push('ring:err'); }
+  var str=parts.join('|'), h=5381;
+  for(var k=0;k<str.length;k++) h=((h<<5)+h+str.charCodeAt(k))>>>0;
+  return h.toString(36)+'-'+str.length;
+}
+window._npxSiteKey=_npxSiteKey;
+
+/* Compact by design. _shedIfOversize can drop project data to fit the
+   document, and a fat evidence blob makes that more likely — so this keeps
+   the verdict, the provenance and the two nearest records, not the full
+   response. The nulls are carried explicitly: they are the finding. */
+function _npxStoreAssessment(r){
+  try{
+    var PF=(r&&r.publicFiber)||null;
+    if(!PF||PF.status!=='ok') return;
+    function trim(x){
+      if(!x) return null;
+      return { name:x.name||null, operator:x.operator||null,
+               distanceM:x.mapped_distance_m, intersectsSite:!!x.intersects_site,
+               status:x.operational_status||null, sourceUrl:x.source_url||null,
+               vintage:x.source_vintage||x.source_last_edited||x.retrieved_at||null,
+               strands:x.fiber_strands_reported==null?null:x.fiber_strands_reported };
+    }
+    S.omegaFiber={
+      siteKey:_npxSiteKey(),
+      datasetBuiltAt:PF.dataset_built_at||null,
+      measurementMethod:PF.measurement_method||null,
+      measuredFrom:PF.measured_from||null,
+      evidenceStatus:PF.evidence_status||null,
+      counts:PF.counts_in_radius||null,
+      radiusKm:(PF.query&&PF.query.radius_km)||null,
+      requestedGbps:(PF.query&&PF.query.requested_capacity_gbps)||null,
+      nearestRoute:trim((PF.routes||[])[0]),
+      nearestFacility:trim((PF.facilities||[])[0]),
+      planningCount:(PF.counts_in_radius||{}).planning||0,
+      unknownMediumCount:(PF.counts_in_radius||{}).unknown_medium||0,
+      /* Not derived, not defaulted — these are what the dataset actually says. */
+      siteHasFiber:null, availableCapacityGbps:null,
+      serviceability:PF.site_serviceability||'unconfirmed',
+      routeDiversity:PF.physical_route_diversity||'unconfirmed'
+    };
+    S.omegaFiberAt=new Date().toISOString();
+  }catch(e){}
+}
+window._npxStoreAssessment=_npxStoreAssessment;
+
 function _npxShell(site, inner){
   return '<div style="background:#0F1D30;border:1px solid #1E3A5F;border-radius:12px;max-width:900px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
    +'<div style="padding:16px 20px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between">'
    +'<div><div style="font-size:16px;font-weight:800;color:#E2EEF9">◈ Network Proximity</div>'
-   +'<div style="font-size:10px;color:#64748B">Fiber and interconnection reach for this site · PeeringDB, FCC, OpenStreetMap, published plant, long-haul conduits · /api/network-proximity</div></div>'
+   +'<div style="font-size:10px;color:#64748B">Fiber reach, how much capacity is here, and the connectivity half of a data-center read · PeeringDB, FCC, OpenStreetMap, published plant, 317 routed long-haul corridors, 3,100 operating facilities · /api/network-proximity</div></div>'
    +'<button onclick="var h=document.getElementById(\'npx-modal\');if(h)h.remove()" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>'
    + inner + '</div>';
 }
@@ -58100,9 +58268,172 @@ function _npxBody(r){
   });
   if(!rows) rows='<tr><td colspan="6" style="padding:14px;color:#F87171">No PeeringDB facility within 160 miles'+(fac.status==='failed'?' — PeeringDB did not answer ('+esc(fac.error||'')+')':'. For a latency-sensitive load this is a fatal-flaw finding, not a detail.')+'</td></tr>';
 
+  /* ── HOW MUCH FIBER IS HERE ─────────────────────────────────────────
+     The question a developer actually asks, and the one the panel could not
+     answer before: it showed the distance to the nearest carrier hotel and
+     stopped. Class, route diversity and the strand planning band come back
+     from the service; the caveat travels with the band on purpose, because
+     a number without it will be quoted as a measurement within a week. */
+  var cap=r.capacity||{}, dcf=r.datacenter||{}, lh=r.longhaul||{};
+  var clsCol={backbone:'#4ADE80',regional:'#A3E635',metro:'#FBBF24',edge:'#F87171'}[cap['class']]||'#94A3B8';
+  var divCol={meshed:'#4ADE80','dual-path':'#A3E635','single-threaded':'#FBBF24'}[cap.routeDiversity]||'#F87171';
+  var fitCol={strong:'#4ADE80',workable:'#A3E635',marginal:'#FBBF24',poor:'#F87171'}[dcf.verdict]||'#94A3B8';
+
+  var corrRows=(lh.corridors||[]).slice(0,6).map(function(c){
+    return '<tr style="border-bottom:1px solid #14243a">'
+      +'<td style="padding:5px 8px;color:#E2EEF9">'+esc(c.name)+'</td>'
+      +'<td style="padding:5px 8px;color:#94A3B8">'+esc(c.row||'')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#E2EEF9">'+fmt(c.mi)+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#94A3B8">'+c.bearing+'°</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:'+(c.src==='intertubes'?'#FF6FB5':'#64748B')+'">'
+        +(c.src==='intertubes'?(c.isps?c.isps+' ISPs':'cited'):'corridor')+'</td></tr>'; }).join('');
+  if(!corrRows) corrRows='<tr><td colspan="5" style="padding:10px;color:#F87171">No long-haul corridor within '+(cap.corridorRadiusMi||50)+' mi.</td></tr>';
+
+  var calls=((cap.calls||{}).carriers||[]).map(function(c){
+    return c.mapUrl
+      ? '<a href="'+esc(c.mapUrl)+'" target="_blank" rel="noopener" style="color:#38BDF8;text-decoration:none">'+esc(c.name)+' ↗</a>'
+      : '<span style="color:#94A3B8">'+esc(c.name)+'</span>'; }).join(' · ');
+
+  var capNotes=(cap.notes||[]).map(function(n){ return '<li>'+esc(n)+'</li>'; }).join('');
+
+  var dcRows=(dcf.nearest||[]).slice(0,5).map(function(f){
+    return '<tr style="border-bottom:1px solid #14243a">'
+      +'<td style="padding:5px 8px;color:#E2EEF9">'+esc(f.name)+'</td>'
+      +'<td style="padding:5px 8px;color:#94A3B8">'+esc(f.operator||'')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#E2EEF9">'+fmt(f.mi)+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#94A3B8">'+(f.mw!=null?f.mw+' MW':'—')+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:'+(f.operational?'#4ADE80':'#38BDF8')+'">'
+        +(f.operational?'operating':'building')+'</td></tr>'; }).join('');
+  if(!dcRows) dcRows='<tr><td colspan="5" style="padding:10px;color:#94A3B8">No operating compute within 50 mi — greenfield for the carriers too.</td></tr>';
+
+  var dcParts=(dcf.components||[]).map(function(c){
+    var pct=c.max?Math.round(c.points/c.max*100):0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+      +'<span style="width:88px;color:#94A3B8;text-transform:capitalize">'+esc(c.key)+'</span>'
+      +'<span style="flex:0 0 70px;height:5px;background:#14243a;border-radius:3px;overflow:hidden;display:inline-block">'
+        +'<span style="display:block;height:5px;width:'+pct+'%;background:'+fitCol+'"></span></span>'
+      +'<span style="width:48px;text-align:right;color:#E2EEF9">'+c.points+'/'+c.max+'</span>'
+      +'<span style="flex:1;color:#64748B">'+esc(c.note)+'</span></div>'; }).join('');
+
+  var capacityBlock=''
+   +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
+    + kpi('Connectivity class', esc(cap['class']||'—'), esc(cap.classWhy||''), clsCol)
+    + kpi('Route diversity', esc(cap.routeDiversity||'—'), (cap.independentPaths||0)+' independent corridor'+((cap.independentPaths===1)?'':'s')+' ≤ '+(cap.corridorRadiusMi||50)+' mi', divCol)
+    + kpi('Fiber count (planning band)', (cap.strandBand?cap.strandBand.low+'–'+cap.strandBand.high:'—'), 'strands · NOT a count', '#94A3B8')
+    + kpi('Data-center fit', esc(dcf.verdict||'—'), (dcf.score!=null?dcf.score+'/100':'—')+' · connectivity only', fitCol)
+   +'</div>'
+   +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Long-haul corridors within '+(cap.corridorRadiusMi||50)+' mi</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:10.5px">'
+       +'<thead><tr style="color:#64748B;font-size:9px;text-transform:uppercase"><th style="padding:4px 8px;text-align:left">Corridor</th>'
+       +'<th style="padding:4px 8px;text-align:left">ROW</th><th style="padding:4px 8px;text-align:right">Dist</th>'
+       +'<th style="padding:4px 8px;text-align:right">Bearing</th><th style="padding:4px 8px;text-align:right">Source</th></tr></thead>'
+       +'<tbody>'+corrRows+'</tbody></table>'
+      +(calls?'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Who to call — '+esc((cap.calls||{}).region||'')+'</div><div style="line-height:1.7">'+calls+'</div>':'')
+    +'</div>'
+    +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Data-center fit — connectivity only</div>'
+      + dcParts
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Operating compute nearby — '
+        +(dcf.within50||0)+' within 50 mi'+(dcf.mwWithin50?', '+dcf.mwWithin50.toLocaleString()+' MW stated':'')+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:10.5px"><tbody>'+dcRows+'</tbody></table>'
+    +'</div>'
+   +'</div>'
+   +(capNotes?'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8;margin-bottom:14px">'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">What this means for the build</div>'
+      +'<ul style="margin:0;padding-left:16px;line-height:1.6">'+capNotes+'</ul></div>':'');
+
+  /* ── PUBLIC ROUTE EVIDENCE ───────────────────────────────────────────
+     The bundled inventory, read through api/_lib/fiber-evidence.js — the
+     same library /api/fiber-screen serves Grid Atlas from, so the two tools
+     cannot disagree about one location.
+
+     Four buckets stay four buckets. A California design record and an
+     OSM way whose medium is unspecified are NOT confirmed optical routes,
+     and merging them into one "fiber nearby" count is the specific dishonesty
+     this section exists to avoid. Unknown renders as the word unknown, never
+     as an em dash and never as zero. */
+  var PF=r.publicFiber||{};
+  /* If a saved assessment exists and was measured from different geometry,
+     say so here rather than letting the fresh panel imply the stored record
+     is current. The stored one is what a report or an export would use. */
+  var staleBanner='';
+  try{
+    var prev=S.omegaFiber;
+    if(prev&&prev.siteKey&&prev.siteKey!==_npxSiteKey()){
+      staleBanner='<div style="background:#2A1A06;border:1px solid #92400E;border-radius:8px;padding:10px 12px;font-size:11px;color:#FCD34D;margin-bottom:12px">'
+        +'<b>The saved fiber assessment is stale.</b> It was measured on '
+        +esc((S.omegaFiberAt||'').slice(0,10))+' from different site geometry'
+        +(prev.measuredFrom?' ('+esc(prev.measuredFrom.replace(/_/g," "))+')':'')
+        +'. Save the project to replace it with the reading below.</div>';
+    }
+  }catch(e){}
+  var bothUnits=function(m){
+    if(m==null||!isFinite(m)) return 'unknown';
+    var ft=m*3.280839895, mi=m/1609.344, km=m/1000;
+    var imp = mi<0.19 ? Math.round(ft).toLocaleString()+' ft' : mi.toFixed(mi<10?2:1)+' mi';
+    var met = km<1 ? Math.round(m).toLocaleString()+' m' : km.toFixed(km<10?2:1)+' km';
+    return imp+' · '+met;
+  };
+  var unk=function(v,suffix){ return (v==null||v==='') ? '<span style="color:#64748B">unknown</span>'
+                                                       : esc(String(v))+(suffix||''); };
+  var pfRows=function(list,emptyMsg,accent){
+    if(!list||!list.length) return '<div style="color:#64748B;padding:6px 0">'+esc(emptyMsg)+'</div>';
+    return list.slice(0,5).map(function(x){
+      return '<div style="border-left:2px solid '+accent+';padding:4px 0 4px 8px;margin-top:5px">'
+        +'<div style="color:#E2EEF9">'+esc(x.name||x.operator||x.id||'unnamed record')
+        +(x.intersects_site?' <span style="color:#4ADE80">· crosses the site</span>':'')+'</div>'
+        +'<div style="color:#94A3B8">'+bothUnits(x.mapped_distance_m)
+        +' · operator '+unk(x.operator)
+        +' · status '+unk(x.operational_status)
+        +'</div>'
+        +'<div style="color:#64748B">strands '+unk(x.fiber_strands_reported)
+        +' · lit '+unk(x.lit_capacity_gbps,' Gbps')
+        +' · spare '+unk(x.spare_capacity_gbps,' Gbps')
+        +' · serviceability '+esc(x.site_serviceability||'unconfirmed')
+        +' · evidence '+unk(x.source_vintage||x.source_last_edited||x.retrieved_at)
+        +(x.source_url?' · <a href="'+esc(x.source_url)+'" target="_blank" rel="noopener" style="color:#38BDF8">source ↗</a>':'')
+        +'</div></div>';
+    }).join('');
+  };
+  var pfBlock='';
+  if(PF.status==='failed'){
+    pfBlock='<div style="background:#0B1626;border:1px solid #7F1D1D;border-radius:8px;padding:12px;font-size:11px;color:#FCA5A5;margin-bottom:14px">'
+      +'<b>Public route evidence could not be read.</b> '+esc(PF.error||'')+' — '+esc(PF.note||'')+'</div>';
+  } else if(PF.status==='ok'){
+    var c=PF.counts_in_radius||{};
+    var fromBoundary=PF.measured_from==='site_boundary';
+    pfBlock=''
+     +'<div style="background:#0B1626;border:1px solid #1E3A5F;border-radius:8px;padding:12px;font-size:11px;color:#94A3B8;margin-bottom:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'
+       +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px">Public route evidence · bundled inventory</div>'
+       +'<div style="font-size:10px;color:'+(fromBoundary?'#4ADE80':'#FBBF24')+'">'
+         +(fromBoundary?'measured from the site boundary':'measured from the site point')+'</div>'
+      +'</div>'
+      +(PF.boundary_note?'<div style="color:#FBBF24;margin-bottom:6px">'+esc(PF.boundary_note)+'</div>':'')
+      +'<div style="color:#64748B;margin-bottom:8px">'+esc(PF.measurement_note||'Distance is to published geometry, not a surveyed cable.')+'</div>'
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:8px">Confirmed optical routes ('+(c.routes||0)+')</div>'
+      + pfRows(PF.routes,'No mapped evidence found in the bundled sources. This is not evidence that no fiber exists.','#4ADE80')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Telecom facilities ('+(c.facilities||0)+') — kept separate from routes</div>'
+      + pfRows(PF.facilities,'No mapped facility found in the bundled sources.','#38BDF8')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Planning / design records ('+(c.planning||0)+') — not confirmed routes</div>'
+      + pfRows(PF.planning_routes,'No planning record nearby.','#A78BFA')
+      +'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin-top:10px">Unknown-medium telecom lines ('+(c.unknown_medium||0)+') — optical unconfirmed</div>'
+      + pfRows(PF.unknown_medium_routes,'No unknown-medium line nearby.','#64748B')
+      +'<div style="margin-top:10px;color:#64748B;border-top:1px solid #14243a;padding-top:8px">'
+        +'Site serviceability <b style="color:#FBBF24">'+esc(PF.site_serviceability||'unconfirmed')+'</b>'
+        +' · available capacity <b style="color:#64748B">unknown</b>'
+        +' · route diversity <b style="color:#FBBF24">'+esc(PF.physical_route_diversity||'unconfirmed')+'</b>'
+        +(PF.query&&PF.query.requested_capacity_gbps?' · requested '+esc(PF.query.requested_capacity_gbps)+' Gbps: <b style="color:#64748B">cannot be answered from public records</b>':'')
+        +'<br>'+(PF.limitations||[]).map(esc).join(' ')
+      +'</div>'
+     +'</div>';
+  }
+
   var src=r.sources||{}, ms=function(k){ return r[k]&&r[k].ms!=null?' '+(r[k].ms/1000).toFixed(1)+'s':''; };
   var scol=function(st){ return st==='ok'?'#4ADE80':st==='empty'?'#94A3B8':st==='skipped'?'#FBBF24':'#F87171'; };
-  var sources=[['peeringdb','facilities'],['fcc','fcc'],['osm','osm'],['plant','plant'],['harvest','harvest'],['longhaul','longhaul']].map(function(p){
+  var sources=[['peeringdb','facilities'],['fcc','fcc'],['osm','osm'],['plant','plant'],['harvest','harvest'],['longhaul','longhaul'],['datacenters','datacenter'],['publicFiber','publicFiber']].map(function(p){
     return '<span style="color:'+scol(src[p[0]])+'">'+p[0]+' '+esc(src[p[0]]||'?')+ms(p[1])+'</span>'; }).join(' · ');
   var findings=(r.findings||[]).map(function(f){
     var c=f.severity==='blocker'?'#F87171':f.severity==='risk'?'#FBBF24':'#94A3B8';
@@ -58127,6 +58458,9 @@ function _npxBody(r){
       +(evid?'<div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 4px">Evidence, nearest first</div><ul style="margin:0;padding-left:16px;line-height:1.6">'+evid+'</ul>':'')
     +'</div>'
    +'</div>'
+   + capacityBlock
+   + staleBanner
+   + pfBlock
    +'<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:inherit">'
     +'<thead><tr style="border-bottom:1px solid #1E3A5F;color:#64748B;font-size:9px;text-transform:uppercase;letter-spacing:.4px">'
     +'<th style="padding:6px 8px;text-align:left">Facility</th><th style="padding:6px 8px;text-align:left">City</th>'
@@ -58140,6 +58474,11 @@ function _npxBody(r){
     +'RTT assumes ~'+esc(r.usPerKm)+'&thinsp;µs/km each way in glass and excludes equipment latency. '
     +'Plant distances are to the nearest published segment; OpenStreetMap distances are to a feature\'s centre. '
     +'A short distance does not mean a carrier will build to you: confirm route, conduit and lit capacity with the providers before this informs a siting decision.'
+    +'<div style="margin-top:6px">Long-haul corridors are routed over the road network because US long-haul fiber is laid in transportation rights-of-way; '
+    +'53 of them carry a citation from Durairajan et al., SIGCOMM 2015 and its count of carriers sharing the conduit, and the rest assert a corridor and '
+    +'nothing about who is in it. <strong>The fiber count is a planning band, not a measurement</strong>'+(cap.strandBand?' — '+esc(cap.strandBand.basis):'')+'. '
+    +'Strand counts are per-cable and per-carrier and are sold as licensed data.</div>'
+    +(dcf.attrib?'<div style="margin-top:6px">Facility data: '+esc(dcf.attrib)+'.</div>':'')
    +'</div>'
   +'</div>';
 }
@@ -112413,6 +112752,14 @@ table.e3-tbl td{ white-space:normal }
       lateral: F.lateral || null, latency: F.latency || null,
       nearestCarrier: fac.nearestCarrier || null, within80: fac.within80 || 0,
       netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
+      /* HOW MUCH, and IS IT A DATA-CENTER SITE. The register ranked parcels
+         on a fiber verdict alone, which cannot separate two sites that both
+         read "plausible" when one is on a single stub and the other sits
+         where three corridors cross. Class and route diversity do separate
+         them, so they are carried onto the row and sorted on. */
+      capacity: (r && r.capacity) || null,
+      datacenter: (r && r.datacenter) || null,
+      corridors: ((r && r.longhaul) || {}).corridors || [],
       fcc: (r && r.fcc) || null, sources: (r && r.sources) || {}, build: r && r.build
     };
     var level = F.verdict === 'unlikely' ? 'warn' : 'info';
@@ -112423,6 +112770,14 @@ table.e3-tbl td{ white-space:normal }
           : '') +
            (F.lateral ? ' Lateral ~' + (F.lateral.mi < 10 ? F.lateral.mi.toFixed(1) : Math.round(F.lateral.mi)) + ' mi to ' + F.lateral.to + '.' : '') +
            ' From /api/network-proximity, not from anything drawn.' });
+    var C = st.fiber.capacity;
+    if (C && (C.routeDiversity === 'single-threaded' || C.routeDiversity === 'none mapped')) {
+      st.flags.push({ level: 'warn', code: 'fiber_single_path',
+        msg: 'Route diversity: ' + C.routeDiversity + '. ' +
+             (C.independentPaths ? 'One corridor within ' + C.corridorRadiusMi + ' mi — ' : 'No corridor within ' + C.corridorRadiusMi + ' mi — ') +
+             'a single cut takes this site off the network. A tenant with an uptime SLA asks for two diverse entrances on day one, ' +
+             'and here that is a build, not a purchase.' });
+    }
   }
 
   /* ── THE FILE THE PARTNERS EXCHANGE ──────────────────────────────────
@@ -112506,9 +112861,25 @@ table.e3-tbl td{ white-space:normal }
   function regFiberColor(v) { return v === 'likely' ? '#2E9E6B' : v === 'plausible' ? '#7FB069' : v === 'uncertain' ? '#C9A24E' : v === 'unlikely' ? '#C97A72' : 'var(--sub)'; }
   function regFiberCell(F) {
     if (!F) return '<span style="color:var(--sub)">\u2014</span>';
-    var t = F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi';
+    var C = F.capacity;
+    /* Two lines, because two different facts. The verdict is "can it be lit";
+       the second line is "with how much, and on how many paths" — which is
+       what actually orders a shortlist once every row reads plausible. */
+    var t = C ? (C['class'] + ' \u00b7 ' + C.routeDiversity)
+              : (F.nearestCarrier ? (F.nearestCarrier.mi < 10 ? F.nearestCarrier.mi.toFixed(1) : Math.round(F.nearestCarrier.mi)) + ' mi to carrier' : 'no carrier in 160 mi');
     return '<b style="color:' + regFiberColor(F.verdict) + '" title="' + esc(F.summary || '') + '">' + esc(F.verdict) + '</b>' +
            '<div style="font-size:10px;color:var(--sub)">' + esc(t) + '</div>';
+  }
+  function regDcColor(v) {
+    return v === 'strong' ? '#16a34a' : v === 'workable' ? '#65a30d'
+         : v === 'marginal' ? '#d97706' : v === 'poor' ? '#dc2626' : 'var(--sub)';
+  }
+  function regDcCell(F) {
+    var D = F && F.datacenter;
+    if (!D) return '<span style="color:var(--sub)">\u2014</span>';
+    return '<b style="color:' + regDcColor(D.verdict) + '" title="Connectivity only \u2014 power, water, land and tax are not in this number">' +
+           esc(D.verdict) + '</b>' +
+           '<div style="font-size:10px;color:var(--sub)">' + D.score + '/100 \u00b7 ' + (D.within50 || 0) + ' nearby</div>';
   }
 
   function regRender() {
@@ -112537,7 +112908,7 @@ table.e3-tbl td{ white-space:normal }
         '</div>' +
         '<div class="e3-tblwrap"><table class="e3-tbl"><thead><tr>' +
           '<th></th><th>Parcel</th><th>Score</th><th>Confidence</th><th>kV</th>' +
-          '<th>POI</th><th>Acres</th><th>MW</th><th>Fiber</th><th>Flags</th><th></th>' +
+          '<th>POI</th><th>Acres</th><th>MW</th><th>Fiber</th><th title="Connectivity only">DC fit</th><th>Flags</th><th></th>' +
         '</tr></thead><tbody>' +
         rows.map(function (r, i) {
           var g = r.grid, k = r.intake;
@@ -112551,6 +112922,7 @@ table.e3-tbl td{ white-space:normal }
             '<td class="e3-num">' + n0(k.grossAcres || 0) + '</td>' +
             '<td class="e3-num">' + (g.mwHostable == null ? '\u2014' : n0(g.mwHostable)) + '</td>' +
             '<td>' + regFiberCell(k.fiber) + '</td>' +
+            '<td>' + regDcCell(k.fiber) + '</td>' +
             '<td style="font-size:10px;color:var(--sub)">' +
               (k.flags.length ? esc(k.flags.map(function (f) { return f.code; }).join(', ')) : '\u2014') +
             '</td>' +
@@ -112773,6 +113145,26 @@ table.e3-tbl td{ white-space:normal }
     if (F.latency) rows += '<tr><td style="color:var(--sub)">latency</td><td class="e3-num">' + F.latency.rttMs.toFixed(2) + ' ms</td><td style="color:var(--sub)">round trip to ' + esc(F.latency.facility) + ' over ~' + F.latency.routeMi.toFixed(1) + ' route mi</td></tr>';
     if (F.lateral) rows += '<tr><td style="color:var(--sub)">lateral</td><td class="e3-num">' + mi(F.lateral.mi) + '</td><td style="color:var(--sub)">to ' + esc(F.lateral.to) + ' \u00b7 ' + money(F.lateral.costLow) + '\u2013' + money(F.lateral.costHigh) + ' \u00b7 ' + esc(F.lateral.basis) + '</td></tr>';
     if (F.fcc) rows += '<tr><td style="color:var(--sub)">at the point</td><td class="e3-num">' + (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : '?') + '</td><td style="color:var(--sub)">' + esc(F.fcc.note || '') + '</td></tr>';
+    var C = F.capacity;
+    if (C) {
+      rows += '<tr><td style="color:var(--sub)">class</td><td class="e3-num">' + esc(C['class']) + '</td><td style="color:var(--sub)">' + esc(C.classWhy || '') + '</td></tr>';
+      rows += '<tr><td style="color:var(--sub)">diversity</td><td class="e3-num">' + (C.independentPaths || 0) + ' path' + (C.independentPaths === 1 ? '' : 's') + '</td><td style="color:var(--sub)">' + esc(C.routeDiversity) + ' \u2014 ' + (C.corridorsWithin || 0) + ' corridor(s) within ' + C.corridorRadiusMi + ' mi</td></tr>';
+      if (C.nearestCorridor) rows += '<tr><td style="color:var(--sub)">corridor</td><td class="e3-num">' + mi(C.nearestCorridor.mi) + '</td><td style="color:var(--sub)">' + esc(C.nearestCorridor.name) + (C.nearestCorridor.row ? ' \u00b7 ' + esc(C.nearestCorridor.row) : '') + (C.nearestCorridor.isps ? ' \u00b7 ' + C.nearestCorridor.isps + ' ISPs (cited)' : '') + '</td></tr>';
+      if (C.strandBand) rows += '<tr><td style="color:var(--sub)">fiber count</td><td class="e3-num">' + C.strandBand.low + '\u2013' + C.strandBand.high + '</td><td style="color:var(--sub)"><b>planning band, not a count</b> \u00b7 ' + esc(C.strandBand.basis) + '</td></tr>';
+      if (C.calls && C.calls.carriers && C.calls.carriers.length)
+        rows += '<tr><td style="color:var(--sub)">who to call</td><td class="e3-num">' + esc(C.calls.region) + '</td><td style="color:var(--sub)">' +
+                esc(C.calls.carriers.map(function (c2) { return c2.name; }).join(', ')) + '</td></tr>';
+      (C.notes || []).forEach(function (n) {
+        rows += '<tr><td style="color:var(--sub)">note</td><td></td><td style="color:var(--sub)">' + esc(n) + '</td></tr>';
+      });
+    }
+    var D = F.datacenter;
+    if (D) {
+      rows += '<tr><td style="color:var(--sub)">DC fit</td><td class="e3-num"><b style="color:' + regDcColor(D.verdict) + '">' + esc(D.verdict) + ' ' + D.score + '</b></td><td style="color:var(--sub)">' + esc(D.scope || '') + '</td></tr>';
+      rows += '<tr><td style="color:var(--sub)">comparables</td><td class="e3-num">' + (D.within50 || 0) + '</td><td style="color:var(--sub)">operating compute within 50 mi' +
+              (D.mwWithin50 ? ', ' + D.mwWithin50.toLocaleString() + ' MW where stated' : '') +
+              (D.nearest && D.nearest[0] ? ' \u00b7 nearest ' + esc(D.nearest[0].name) + ' at ' + mi(D.nearest[0].mi) : '') + '</td></tr>';
+    }
     (F.evidence || []).forEach(function (e) {
       rows += '<tr><td style="color:var(--sub)">evidence</td><td class="e3-num">' + mi(e.mi) + '</td><td style="color:var(--sub)">' + esc(e.label) + '</td></tr>';
     });
@@ -112790,10 +113182,19 @@ table.e3-tbl td{ white-space:normal }
                 'gas_diameter_in','hazard_on_parcel',
                 'fiber_verdict','fiber_score','fiber_carrier_mi','fiber_carrier','fiber_rtt_ms',
                 'fiber_lateral_mi','fiber_lateral_cost_low','fiber_lateral_cost_high','fiber_at_point',
+                /* The columns a shortlist is actually sorted on once every row
+                   reads "plausible". strand_low/high are a PLANNING BAND and
+                   the header says so, because a bare number in a spreadsheet
+                   gets quoted as a measurement by the third forward. */
+                'fiber_class','route_diversity','independent_paths','corridor_mi','corridor_name','corridor_row','corridor_cited_isps',
+                'strand_band_low_PLANNING','strand_band_high_PLANNING',
+                'dc_fit_verdict','dc_fit_score','dc_within_25mi','dc_within_50mi','dc_mw_within_50mi','dc_nearest_mi','dc_nearest_name',
+                'carriers_to_call',
                 'flags','evidence'];
     var out = [head];
     rows.forEach(function (r, i) {
       var g = r.grid, k = r.intake, F = k.fiber || null;
+      var C = F && F.capacity, D = F && F.datacenter;
       out.push([i + 1, r.name, g.score, g.confidence, g.kv || '', g.poiMi == null ? '' : g.poiMi,
         g.poiVia || '', Math.round(k.grossAcres || 0), g.buildableCeilingAcres == null ? '' : g.buildableCeilingAcres,
         g.mwHostable == null ? '' : g.mwHostable, k.circuitsAtMaxKv || 0,
@@ -112803,6 +113204,16 @@ table.e3-tbl td{ white-space:normal }
         F && F.latency ? F.latency.rttMs : '',
         F && F.lateral ? F.lateral.mi : '', F && F.lateral ? F.lateral.costLow : '', F && F.lateral ? F.lateral.costHigh : '',
         F && F.fcc ? (F.fcc.fiber === true ? 'fiber' : F.fcc.fiber === false ? 'none' : 'not checked') : '',
+        C ? C['class'] : '', C ? C.routeDiversity : '', C ? C.independentPaths : '',
+        C && C.nearestCorridor ? C.nearestCorridor.mi : '',
+        C && C.nearestCorridor ? C.nearestCorridor.name : '',
+        C && C.nearestCorridor ? (C.nearestCorridor.row || '') : '',
+        C && C.nearestCorridor && C.nearestCorridor.isps != null ? C.nearestCorridor.isps : '',
+        C && C.strandBand ? C.strandBand.low : '', C && C.strandBand ? C.strandBand.high : '',
+        D ? D.verdict : '', D ? D.score : '', D ? D.within25 : '', D ? D.within50 : '', D ? D.mwWithin50 : '',
+        D && D.nearest && D.nearest[0] ? D.nearest[0].mi : '',
+        D && D.nearest && D.nearest[0] ? D.nearest[0].name : '',
+        C && C.calls ? C.calls.carriers.map(function (c2) { return c2.name; }).join('; ') : '',
         k.flags.map(function (f) { return f.code; }).join('; '), g.evidence]);
     });
     var csv = out.map(function (rr) {
