@@ -119,6 +119,10 @@ function openFinancingApply(){
 </script>
 <script src="/omega-caps.js"></script>
 <script src="omega-equipment-visuals.js"></script>
+<!-- Spreadsheet in, records out, with a preview before anything is written.
+     The equipment library uses it to bulk-load modular data-center units
+     (OmegaImport.MDC_SPEC); SheetJS is fetched on first use by _d4LoadXlsx. -->
+<script src="/omega-import.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
      readout and with everything one colour. -->
@@ -434,6 +438,10 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
   background:rgba(4,6,10,.78); padding:28px; overflow-y:auto;
 }
 .e3-modal.on{ display:block }
+/* The import preview (omega-import.js) opens from inside the equipment modal
+   and its own z-index sits below this one, so it rendered behind the thing
+   that opened it. The host page owns the stacking order. */
+body .oim-scrim{ z-index:9700 }
 .e3-card{
   max-width:1120px; margin:0 auto; background:var(--panel);
   border:1px solid var(--border); border-radius:10px; overflow:hidden;
@@ -4545,6 +4553,12 @@ function _initFirebase() {
 
       if (user) {
         _currentUser = user;
+
+        /* The org's equipment library, including any uploaded compute
+           modules, so the Data Ctr pickers carry them before the library
+           is ever opened. Forced: a seed-only load may already have run
+           while signed out. Non-fatal — it resolves seed-only on refusal. */
+        try{ if(typeof OmegaEq!=='undefined') OmegaEq.load(true); }catch(e){}
 
         // Now that we know the signed-in user's email domain, re-run brand
         // resolution. On the shared tools.csebuilders.com portal the hostname
@@ -32681,6 +32695,10 @@ var OmegaEq = (function(){
       for(var d in DC_CATALOG){
         if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,d)) continue;
         var c=DC_CATALOG[d], F2=304.8;
+        /* An uploaded unit is projected INTO DC_CATALOG by _dcCatalogSync;
+           it already has its own overlay doc and must not be re-seeded as
+           a second, read-only copy of itself. */
+        if(c.org) continue;
         out['DC-'+d.toUpperCase()]={
           key:'DC-'+d.toUpperCase(), cat:'datacenter', sub:'module',
           manufacturer:(String(c.spec||'').split(' ')[0]||'Generic'),
@@ -32746,7 +32764,12 @@ var OmegaEq = (function(){
               v._docId = d.id;
               overlay[v.key]=v;
             });
-            loaded=true; loading=null; resolve(all());
+            loaded=true; loading=null;
+            /* Uploaded compute modules become placeable units. Done here,
+               on every load, so the cluster dialog and the Data Ctr flyout
+               see them without the library ever having been opened. */
+            try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){}
+            resolve(all());
           })
           .catch(function(err){
             if(window.console) console.warn('[omega/eq] load failed, seed only:', err && err.message);
@@ -32765,7 +32788,12 @@ var OmegaEq = (function(){
       if(!uid) return reject(new Error('Not signed in.'));
       var doc=JSON.parse(JSON.stringify(rec));
       doc.orgId=orgId();
-      doc.uid=uid;
+      /* The rules refuse an update that changes `uid` (request uid must
+         equal the stored one). Stamping the current user on every save
+         meant a colleague could never archive or re-upload a unit somebody
+         else in the org created. The creator stays; only a new doc takes
+         the current user. */
+      if(!doc._docId || !doc.uid) doc.uid=uid;
       doc.createdBy=doc.createdBy||((_currentUser&&(_currentUser.displayName||_currentUser.email))||'user');
       doc.publishedAt=Date.now();
       doc.archived=!!doc.archived;
@@ -32777,6 +32805,9 @@ var OmegaEq = (function(){
       p.then(function(ref){
         if(ref && ref.id) doc._docId=ref.id;
         overlay[doc.key]=doc;
+        /* Archiving a compute module from the library must take it out of
+           the pickers now, not on the next page load. */
+        if(doc.cat==='datacenter'){ try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){} }
         resolve(doc);
       }).catch(reject);
     });
@@ -32807,6 +32838,223 @@ var OmegaEq = (function(){
            pushSeed:pushSeed, seed:seed, orgId:orgId,
            isLoaded:function(){ return loaded; } };
 })();
+
+/* ══════════════════════════════════════════════════════════════════════
+   MODULAR DATA-CENTER UNITS — BULK UPLOAD
+   ──────────────────────────────────────────────────────────────────────
+   DC_CATALOG carried four units and the only way to add a fifth was a
+   commit. A vendor's line card is twenty rows, and a rep evaluating three
+   vendors has sixty. The "+ New equipment" form is BESS-shaped (kWh, PCS,
+   C-rate) and saves cat 'bess' whatever you type into it, so it could not
+   create a compute module at all.
+
+   So: a spreadsheet. omega-import.js parses and validates it, shows what
+   would land and why each held-back row is held back, and only then does
+   commit() below write — one equipment doc per row, cat 'datacenter', sub
+   'module', into THIS org's library and nobody else's (the rules scope
+   equipment/{doc} to orgId). A re-upload of the same manufacturer + model
+   updates in place, because MDC_SPEC derives a stable key from the two.
+
+   WHAT MAKES AN UPLOADED UNIT PLACEABLE. The cluster dialog, the Data Ctr
+   flyout and the guided build's unit picker all iterate DC_CATALOG /
+   DERC_DC, which are source literals. _dcCatalogSync() projects the org's
+   live compute modules into both, under ids that cannot collide with the
+   seed (dc_<key>), on every OmegaEq.load(). Drawings store lf/wf/kw on
+   the shape itself, so a unit later archived still renders where it was
+   placed — the same guarantee dc_leviathan's comment makes for the seed.
+
+   WHAT STAYS OUT. No pricing arithmetic: cost_usd is stored as the vendor
+   quoted it and nothing here computes with it (CLAUDE.md's IP rule).
+   ══════════════════════════════════════════════════════════════════════ */
+
+var _DC_SEED_IDS = (function(){
+  var o={};
+  try{ for(var k in DC_CATALOG){ if(Object.prototype.hasOwnProperty.call(DC_CATALOG,k)) o[k]=1; } }catch(e){}
+  return o;
+})();
+
+/* equipment key -> DC_CATALOG id. Lower-case, underscores, dc_ prefix, so
+   'MDC-ARMADA-LEVIATHAN' is 'dc_mdc_armada_leviathan' and nothing a person
+   types in a SKU column can land on a seed id. */
+function _dcIdForKey(key){
+  var s=String(key||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  return s ? 'dc_'+s : '';
+}
+
+/* Project the org's live compute modules into DC_CATALOG and DERC_DC.
+   Returns how many are live. Safe to call before anything is loaded. */
+function _dcCatalogSync(){
+  if(typeof DC_CATALOG==='undefined' || typeof OmegaEq==='undefined') return 0;
+  var live={}, n=0, FT=304.8;
+  OmegaEq.all({archived:true}).forEach(function(it){
+    if(!it || it.cat!=='datacenter' || it._seed) return;
+    var key=String(it.key||'');
+    /* "Publish seed library" copies the four built-ins into Firestore under
+       DC-<id>; those are already in the catalog and must not come back as
+       a second row each. */
+    if(/^DC-/i.test(key) && _DC_SEED_IDS[key.slice(3).toLowerCase()]) return;
+    var id=_dcIdForKey(key);
+    if(!id || _DC_SEED_IDS[id] || it.archived) return;
+    var kw=+it.powerKw||+it.pmaxKw||0;
+    var lf=+it.lengthFt||(it.lengthMm?+it.lengthMm/FT:0);
+    var wf=+it.widthFt ||(it.widthMm ?+it.widthMm /FT:0);
+    if(!(kw>0) || !(lf>0) || !(wf>0)) return;   /* not drawable; the upload refuses these anyway */
+    lf=Math.round(lf*10)/10; wf=Math.round(wf*10)/10;
+    var volts=+it.volts||480;
+    var u={ label:((it.manufacturer||'')+' '+(it.model||'')).replace(/\s+/g,' ').trim()||key,
+            kw:kw, lf:lf, wf:wf,
+            cooling:it.cooling||'integrated', water:(it.waterGpd!=null?+it.waterGpd:0),
+            ups:it.ups||'integrated', volts:volts,
+            spec:kw.toLocaleString()+' kW IT · '+lf+'×'+wf+' ft · '+volts+' V',
+            verified:it.verified||null, org:true, key:key };
+    if(it.heightFt!=null) u.hf=+it.heightFt;
+    if(it.coolKw!=null)   u.coolKw=+it.coolKw;
+    if(it.acres!=null)    u.acres=+it.acres;
+    if(it.pue!=null)      u.pue=+it.pue;
+    live[id]=u; n++;
+  });
+  /* Units archived or deleted since the last sync leave the pickers;
+     everything live is (re)written so an edit shows without a reload. */
+  var k;
+  for(k in DC_CATALOG){
+    if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,k)) continue;
+    if(DC_CATALOG[k] && DC_CATALOG[k].org && !live[k]){
+      delete DC_CATALOG[k];
+      try{ if(typeof DERC_DC!=='undefined') delete DERC_DC[k]; }catch(e){}
+    }
+  }
+  for(k in live){
+    if(!Object.prototype.hasOwnProperty.call(live,k)) continue;
+    DC_CATALOG[k]=live[k];
+    try{ if(typeof DERC_DC!=='undefined') DERC_DC[k]={ label:live[k].label, kw:live[k].kw, lf:live[k].lf, wf:live[k].wf }; }catch(e){}
+  }
+  try{ _dcFlyoutSync(live); }catch(e){}
+  return n;
+}
+
+/* The Data Ctr flyout is static markup listing the four seed pads. Append
+   the org's units under their own heading so a rep can place one with the
+   same click as a seed pad. Rebuilt on every sync; nothing else in the
+   flyout is touched. */
+function _dcFlyoutSync(live){
+  var f=document.getElementById('fly-dc'); if(!f) return;
+  var old=f.querySelectorAll('.rb-fly-org');
+  for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
+  var ids=Object.keys(live||{}); if(!ids.length) return;
+  ids.sort(function(a,b){ return (live[b].kw||0)-(live[a].kw||0); });
+  var head=document.createElement('div');
+  head.className='rb-fly-head rb-fly-org'; head.textContent='Your units';
+  f.appendChild(head);
+  ids.forEach(function(id){
+    var u=live[id];
+    var b=document.createElement('button');
+    b.className='rb-fly-item rb-fly-org'; b.type='button';
+    var ico=document.createElement('span'); ico.className='fi-ico'; ico.textContent='▦';
+    var sub=document.createElement('span'); sub.className='fi-sub';
+    sub.textContent=u.lf+' × '+u.wf+' ft · '+u.kw.toLocaleString()+' kW';
+    b.appendChild(ico); b.appendChild(document.createTextNode(' '+u.label+' ')); b.appendChild(sub);
+    b.addEventListener('click', function(){ rbFlyDo('fly-dc', function(){ derSetDc(id); }); });
+    f.appendChild(b);
+  });
+}
+
+/* One equipment doc from one validated row. `prev` is the org's existing
+   doc for the same key, when the sheet is a correction: only the facts the
+   sheet actually carries are written over it, so a re-export with an empty
+   Notes column does not blank the notes somebody typed here. */
+function _e3DcDoc(v, prev, batchId){
+  var FT=304.8, kw=Math.round(+v.kw_it||0);
+  var doc = prev ? JSON.parse(JSON.stringify(prev))
+                 : { key:v.key, cat:'datacenter', sub:'module', energyKwh:0, pnomKva:0,
+                     cRate:null, efficiency:null, archived:false };
+  doc.cat='datacenter'; doc.sub='module'; doc.type='Compute module';
+  doc.manufacturer=v.manufacturer; doc.model=v.model;
+  doc.powerKw=kw; doc.pmaxKw=kw;
+  doc.lengthFt=v.length_ft; doc.lengthMm=Math.round(v.length_ft*FT);
+  doc.widthFt =v.width_ft;  doc.widthMm =Math.round(v.width_ft*FT);
+  if(v.height_ft!=null){ doc.heightFt=v.height_ft; doc.heightMm=Math.round(v.height_ft*FT); }
+  else if(!prev) doc.heightMm=null;
+  if(v.cooling!=null)   doc.cooling=v.cooling;
+  if(v.cool_kw!=null)   doc.coolKw=v.cool_kw;
+  if(v.water_gpd!=null) doc.waterGpd=v.water_gpd;
+  if(v.volts!=null)     doc.volts=v.volts;
+  if(v.ups!=null)       doc.ups=v.ups;
+  if(v.pue!=null)       doc.pue=v.pue;
+  if(v.acres!=null)     doc.acres=v.acres;
+  if(v.cost_usd!=null)  doc.costUsd=v.cost_usd;
+  if(v.verified!=null)  doc.verified=v.verified;
+  if(v.notes!=null)     doc.notes=v.notes;
+  doc.importBatch=batchId;
+  delete doc._seed;
+  return doc;
+}
+
+/* The blank sheet, with the columns in our words and two example rows. */
+function e3DcTemplate(){
+  if(typeof OmegaImport==='undefined'){ alert('The importer did not load. Reload the page.'); return; }
+  _d4LoadXlsx().then(function(){
+    var aoa=OmegaImport.templateRows(OmegaImport.MDC_SPEC);
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=aoa[0].map(function(h,i){
+      var w=String(h).length;
+      aoa.forEach(function(r){ w=Math.max(w, String(r[i]==null?'':r[i]).length); });
+      return { wch: Math.min(48, w+2) };
+    });
+    var wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Units');
+    XLSX.writeFile(wb, 'modular-data-center-units.xlsx');
+  }).catch(function(e){ alert(e&&e.message||String(e)); });
+}
+
+function e3DcUploadOpen(){
+  if(typeof OmegaImport==='undefined'){ alert('The importer did not load. Reload the page.'); return; }
+  var uid=null; try{ uid=_currentUser?_currentUser.uid:null; }catch(e){}
+  if(!uid || typeof _db==='undefined' || !_db){
+    alert('Sign in first — uploaded units are saved to your organisation’s library.'); return;
+  }
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='.xlsx,.xls,.csv';
+  inp.onchange=function(){
+    var f=inp.files && inp.files[0]; if(!f) return;
+    _d4LoadXlsx().then(function(){
+      /* Only this org's own modules can be updated by a re-upload. The
+         seed is read-only and is not offered as an "existing" row. */
+      var existing=OmegaEq.all({archived:true}).filter(function(it){
+        return it && it.cat==='datacenter' && !it._seed;
+      });
+      return OmegaImport.open({
+        file:f,
+        spec:OmegaImport.MDC_SPEC,
+        existing:existing,
+        label:'Modular data center units — '+OmegaEq.orgId(),
+        commit:function(rows, batchId){
+          /* Sequential, as portfolio.html does it: a hundred parallel
+             writes is a thundering herd, and the first refusal stops the
+             run with everything before it safely written and tagged. */
+          var i=0;
+          function next(){
+            if(i>=rows.length) return Promise.resolve(i);
+            var r=rows[i++];
+            var prev=(r.updates && r.updates._docId) ? r.updates : null;
+            return OmegaEq.save(_e3DcDoc(r.rec, prev, batchId)).then(next);
+          }
+          return next();
+        }
+      });
+    }).then(function(res){
+      if(!res) return;
+      return OmegaEq.load(true).then(function(){
+        e3Refresh();
+        var n=_dcCatalogSync();
+        alert(res.imported+' unit'+(res.imported===1?'':'s')+' saved to '+OmegaEq.orgId()
+          +(res.skipped?' · '+res.skipped+' held back':'')
+          +' · batch '+res.batchId
+          +'\n\n'+n+' of your units are now in the Data Ctr flyout and the cluster dialog; the MW-class ones are in the guided build’s unit picker too.');
+      });
+    }).catch(function(err){ alert(err && err.message || String(err)); });
+  };
+  inp.click();
+}
 
 /* ---- compatibility advisory (item 19) -------------------------------- */
 
@@ -32877,6 +33125,9 @@ var E3_COLS = [
   { k:'manufacturer', t:'Manufacturer' },
   { k:'model',        t:'Model' },
   { k:'energyKwh',    t:'Energy [kWh]', n:1 },
+  /* A compute module carries no energy; without this column the Data
+     Center tab listed units with nothing to tell a 35 kW node from 1.77 MW. */
+  { k:'powerKw',      t:'Power [kW]', n:1 },
   { k:'lengthMm',     t:'L [mm]', n:1 },
   { k:'widthMm',      t:'W [mm]', n:1 },
   { k:'heightMm',     t:'H [mm]', n:1 },
@@ -33079,6 +33330,12 @@ function e3BrowserRender(){
     h += '<div class="e3-note info">The '+(_e3Br.cat==='solar'?'solar module':'EV charger')
        + ' catalog still lives in its own module and has not been migrated yet.</div>';
   }
+  if(_e3Br.cat==='datacenter'){
+    h += '<div class="e3-note info">Compute modules are placed from the <strong>Data Ctr</strong> flyout, '
+       + 'the cluster dialog and the guided build’s unit picker. Upload a vendor line card to add '
+       + 'many at once — <strong>Template</strong> gives you the columns; a re-upload of the same '
+       + 'manufacturer and model updates the unit rather than adding a second one.</div>';
+  }
 
   h += _e3FacetBar(all.filter(function(it){ return it.cat===_e3Br.cat; }));
   h += _e3Table(list, null, 'e3BrPick');
@@ -33087,7 +33344,10 @@ function e3BrowserRender(){
      +     ' \u00b7 org <strong>'+_omEsc(OmegaEq.orgId())+'</strong></div>'
      +   '<div style="display:flex;gap:8px">'
      +     '<button class="e3-btn" onclick="e3PushSeed()" title="Copy the built-in library into Firestore once, so it can be edited. Never overwrites an existing entry.">Publish seed library</button>'
-     +     '<button class="e3-btn pri" onclick="e3NewOpen()">+ New equipment</button>'
+     +     (_e3Br.cat==='datacenter'
+         ? '<button class="e3-btn" onclick="e3DcTemplate()" title="A blank spreadsheet with the columns the upload reads, and two example rows.">Template</button>'
+         + '<button class="e3-btn pri" onclick="e3DcUploadOpen()" title="Upload a spreadsheet of modular data-center units (.xlsx or .csv). Nothing is saved until you have seen what would land.">↑ Upload units</button>'
+         : '<button class="e3-btn pri" onclick="e3NewOpen()">+ New equipment</button>')
      +   '</div></div>';
   b.innerHTML=h;
 }
