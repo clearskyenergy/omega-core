@@ -5,7 +5,7 @@ Usage: python expand-fiber-inventory.py INPUT_DIRECTORY
 Requires shapely 2.x. Raw inputs stay outside deployment. Reruns replace only
 this import's source IDs. Source geometries are never road-snapped or inferred.
 """
-import collections, datetime, hashlib, json, math, pathlib, sys, zipfile
+import collections, datetime, hashlib, json, math, pathlib, subprocess, sys, zipfile
 import xml.etree.ElementTree as ET
 from shapely.geometry import LineString, MultiLineString, shape, mapping
 from shapely.strtree import STRtree
@@ -85,7 +85,7 @@ for f in all_features.values():
  for code in p['states']: shards[code].append(f)
  g=shape(f['geometry']).simplify(.002,preserve_topology=True)
  props={k:p[k] for k in ['id','sourceId','category','states','routeStatus']}
- for k in ['carrier','publishedLineParts']:
+ for k in ['carrier','publishedLineParts','importBatch']:
   if k in p: props[k]=p[k]
  overview.append(dict(type='Feature',geometry=mapping(g),properties=props,bbox=f['bbox']))
 for row in manifest['states']:
@@ -96,5 +96,6 @@ manifest['publishedLineParts']=sum(f['properties'].get('publishedLineParts',len(
 assert len(all_features)>=baseline_count and len(shards)==51
 for c,fs in shards.items(): dump(OUT/(c+'.geojson'),dict(type='FeatureCollection',features=fs))
 dump(OUT/'overview.geojson',dict(type='FeatureCollection',features=overview));dump(OUT/'manifest.json',manifest)
+subprocess.run(['node',str(pathlib.Path(__file__).with_name('compress-fiber-shards.js'))],check=True)
 print(json.dumps({k:manifest[k] for k in ['uniqueSegments','publishedLineParts','statesWithData','preservedBaselineRecords']}),flush=True)
 print([(r['code'],r['segments'],r['publishedLineParts']) for r in manifest['states']],flush=True)

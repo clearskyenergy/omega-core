@@ -404,7 +404,14 @@ function bboxHit(a, b) { return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && 
 
 function usaState(code) {
   if (usaCache[code]) return usaCache[code];
-  var fc = JSON.parse(fs.readFileSync(path.join(USA_ROOT, code + '.geojson'), 'utf8'));
+  // Committed gzip shards keep serverless bundles small without changing any
+  // coordinates. Plain files remain the static browser/download format.
+  var file = path.join(USA_ROOT, code + '.geojson');
+  var packed = file + '.gz';
+  var raw = fs.existsSync(packed)
+    ? require('zlib').gunzipSync(fs.readFileSync(packed)).toString('utf8')
+    : fs.readFileSync(file, 'utf8');
+  var fc = JSON.parse(raw);
   usaCache[code] = fc.features || [];
   usaOrder.push(code);
   while (usaOrder.length > USA_CACHE_MAX) { delete usaCache[usaOrder.shift()]; }
@@ -436,8 +443,8 @@ function usaAdapt(f) {
       source_id: p.sourceId, source_feature_id: p.id,
       feature_kind: kind, proximity_eligible: eligible,
       source_url: p.sourceUrl, retrieved_at: p.retrievedAt,
-      geometry_quality: p.evidence === 'approximate_project_route'
-        ? 'generalized_public_design' : 'agency_published',
+      geometry_quality: p.geometryQuality || (p.evidence === 'approximate_project_route'
+        ? 'generalized_public_design' : 'agency_published'),
       operational_status: p.routeStatus && p.routeStatus !== 'Unknown'
         ? p.routeStatus : (cat === 'unknown' ? 'not stated by the publisher' : cat),
       serviceability: 'unconfirmed',

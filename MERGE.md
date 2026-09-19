@@ -1153,3 +1153,49 @@ Nothing about the two datasets is de-duplicated across sources. They publish
 different records from different agencies, and silently collapsing them would
 drop provenance a user is entitled to see; each source already guarantees
 uniqueness by id within itself.
+
+---
+
+## 2026-09-19 · Public carrier GIS expansion and publisher-map references
+
+Continued the state-by-state research using Google, image search and original
+publisher maps. FiberLight's public lit/dark GIS, Uniti's national/regional GIS,
+one explicitly classified Henry County fiber record, and Kansas Commerce's
+Freestate planning download add **5,211 map records / 105,492 line parts**.
+All 30,467 prior records are unchanged. The inventory is now **35,678 records /
+323,729 line parts**, with partial geometry in **47 states plus DC**; Hawaii,
+Montana and Vermont remain empty. Counts are source records, not unique cables.
+
+Original coordinates remain intact. At most 100 nearby line parts are grouped
+without invented connectors. Exact duplicates are removed only within each new
+source. Planned Kansas paths remain proximity-ineligible; carrier GIS is marked
+precision/status unverified. Source hashes, counts, metadata age and exclusions
+are recorded in the manifest. Only routes and opaque source IDs are retained:
+no individual contacts, access points, facility heatmaps or private files.
+Public access is not an unrestricted redistribution license; attribution and
+source-term caveats remain attached.
+
+The standalone viewer adds source/carrier and latest-batch filters, plus ten
+publisher map references (seven external images, three map collections) with
+age and accuracy warnings. Images are not traced, georeferenced, counted or
+used for distance/scoring. Main Grid Atlas retains its existing route toggle,
+tenant/auth safeguards and server-side scoring architecture. No business logic
+was added to the browser or moved out of `/api/`.
+
+The larger state shards total 190.9 MB raw, but compress losslessly to 51.7 MB.
+An offline packaging script commits gzip copies; the existing shared evidence
+library reads them lazily with its bounded cache. Both fiber functions now
+explicitly include only the base fiber dataset, gzip state shards and manifest,
+and exclude raw national GeoJSON from tracing. Narrowing `includeFiles` matters:
+the Vercel Node builder inserts explicit includes independently of tracing
+exclusions. Raw browser geometry and the ~40 MB overview remain static files.
+This is data packaging, not a new application build step.
+
+Validation: byte-identical decompression for all 51 shards; source/audit/geometry
+tests; planned-route exclusion; new-source API lookups with raw reads forbidden;
+latest-batch overview retention; image isolation from geometry/scoring; prior
+record preservation; browser checks of TX/CT source filters and CEN image panel.
+Full research details and repeatable import commands are in
+`docs/FIBER-NATIONWIDE-RESEARCH.md`. Production auth/deployment acceptance is
+separate from local verification; PR #46 still requires review. No protected
+branch bypass, unrelated checkout edits or security-workflow changes were made.
