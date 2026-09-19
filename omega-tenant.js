@@ -131,8 +131,22 @@
      opened its marketplace to "All 0 · No applications match" on day one
      (Thomas, 2026-09-16). While the trial runs it holds the top level; when
      it lapses, standing() closes the account, not the tier. */
-  var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
-  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
+  /* ── 'deluxe' WAS MISSING FROM BOTH MAPS ──────────────────────────────
+     billing/current.tier is trial | standard | deluxe | enterprise — that is
+     the ladder in omega-caps.js, the dropdown in admin-console.js, the TIERS
+     list in api/tenant-billing.js, and what the seed writes. 'deluxe' was in
+     none of these two maps, so an unknown key fell through to the defaults
+     and every DELUXE account resolved as tierLevel 1, Standard.
+
+     omega-tools.js gates on TIER = { ALL:0, STANDARD:1, DELUXE:2,
+     ENTERPRISE:3 }, so the effect was that a paying Performance customer had
+     every tier-2 tool locked and their chip read "Standard Account". Found
+     2026-09-18 on cleancell.us, which is deluxe with six addons.
+
+     'pro' is kept as an alias at the same level: it is what some older
+     records say, and dropping it would break them the way deluxe was broken. */
+  var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 };
+  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', deluxe: 'Performance', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 
   function cfg() { return global.CLEARSKY_CONFIG || (global.CLEARSKY_CONFIG = {}); }
   function host() { return String(global.location && global.location.hostname || '').toLowerCase(); }
@@ -217,6 +231,15 @@
       vertical:       pub.vertical || null,
       shell:          pub.shell || 'default',
       trial:          pub.trial || null,
+      /* ── WHITE LABEL HAS TO PAINT BEFORE SIGN-IN ────────────────────────
+         omega-whitelabel.js reads this off the tenant object. It is carried
+         in tenant_public rather than waited for in omega_orgs because the
+         FIRST screen a white-labelled tenant's user sees is the login page,
+         and there is no user yet to authorise an omega_orgs read. A door
+         that says ClearSky-OMEGA has already given the game away.
+         Presentation only — see api/tenant-branding.js WL_PUBLIC for the
+         allowlist that decides what is allowed to become world-readable. */
+      whiteLabel:     pub.whiteLabel || null,
       _source:        'tenant_public'
     };
   }
@@ -238,6 +261,7 @@
       if (pub.logoUrl) c.tenant.logo = pub.logoUrl;
       if (pub.name) c.tenant.clientName = pub.name;
       if (pub.colors) c.tenant.colors = pub.colors;
+      if (pub.whiteLabel) c.tenant.whiteLabel = pub.whiteLabel;
       c.tenant.shell = pub.shell || c.tenant.shell || 'default';
       c.tenant.vertical = pub.vertical || c.tenant.vertical || null;
     }
@@ -377,7 +401,38 @@
     if (b.addons) ws.addons = b.addons;
     if (b.toolOverrides) ws.toolOverrides = b.toolOverrides;
     if (b.trialEndsAt && !ws.trial) ws.trial = { endsAt: b.trialEndsAt };
-    if (T.member && T.member.toolAccess) ws.toolAccess = T.member.toolAccess;
+    /* ── toolAccess: THE PRODUCT, THEN THE PERSON ─────────────────────────
+       Two allowlists that answer different questions, and they INTERSECT.
+
+         billing/current.toolAccess   what the ORG BOUGHT
+         members/{uid}.toolAccess     what one PERSON in it may touch
+
+       THIS FILE READ ONLY THE SECOND, and that was the bug. The org-level
+       allowlist has existed on billing since the master console gained a
+       field for it (admin-console.js writes it; index.html reads it), so
+       "this account gets exactly these tools" was already sayable — but
+       index.html carries its OWN copy of this merge, so the restriction held
+       on the dashboard and on no other page, and ws.unlockedTools computed
+       here contradicted it. A product defined as "only these two tools" that
+       is enforced on one page is not a product.
+
+       That matters right now because it IS a product: a white-labelled
+       design tool of Site Map + Grid Atlas is billing.toolAccess =
+       ['editor','gridatlas'] and nothing else. See docs/WHITE-LABEL.md.
+
+       INTERSECT, never union. A member list must not name a tool the org
+       never bought; the commercial boundary is the outer one. An empty
+       intersection is left empty rather than widened — omega-tools.js and
+       the api/ tool gates both read a present-but-empty allowlist as "none",
+       which is the safe way to be wrong about an allowlist. */
+    var orgAccess = (b.toolAccess && b.toolAccess.length) ? b.toolAccess : null;
+    var memAccess = (T.member && T.member.toolAccess && T.member.toolAccess.length)
+                      ? T.member.toolAccess : null;
+    if (orgAccess && memAccess) {
+      ws.toolAccess = memAccess.filter(function (k) { return orgAccess.indexOf(k) >= 0; });
+    } else if (orgAccess || memAccess) {
+      ws.toolAccess = (orgAccess || memAccess).slice();
+    }
     ws.role = T.role;
     ws.orgStatus = T.status;
     /* ── THE ORG RECORD IS WHERE THE NAME LIVES ──────────────────────────
@@ -412,6 +467,24 @@
       ws.dashboardBlocks = T.org.dashboardBlocks;
     if (T.org && typeof T.org.financeOrgKey === 'string' && T.org.financeOrgKey)
       ws.financeOrgKey = T.org.financeOrgKey;
+    /* ── THE ORG RECORD IS THE AUTHORITY ON THE WHITE LABEL ──────────────
+       tenant_public carries a presentation-only MIRROR so the login screen
+       can paint before there is a user (see toTenantBlock). Once signed in
+       we have the real record, which may carry keys the mirror deliberately
+       withholds. Take it whole here, so a key that must never be
+       world-readable can still drive the signed-in product. Mirror wins
+       nothing on this path — a stale tenant_public must not out-rank the
+       record the console writes. */
+    if (T.org && T.org.whiteLabel && typeof T.org.whiteLabel === 'object')
+      ws.whiteLabel = T.org.whiteLabel;
+    /* Re-paint: fireEntitlements() calls OmegaBrand.paint(), which knows
+       nothing about the platform's name. Without this the chrome carries the
+       white label only until the first repaint after sign-in. */
+    if (global.OmegaWhiteLabel && ws.whiteLabel) {
+      var c2 = cfg();
+      if (c2.tenant) c2.tenant.whiteLabel = ws.whiteLabel;
+      try { global.OmegaWhiteLabel.apply(); } catch (e) {}
+    }
     /* unlockedTools is what applyToolLocks() reads. Compute it from the
        catalog when omega-tools.js is present; otherwise leave config's. */
     if (global.OMEGATools && OMEGATools.catalog) {

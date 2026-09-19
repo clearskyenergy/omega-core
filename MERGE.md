@@ -53,10 +53,72 @@ live. Second person from the same domain auto-joins as member.
 `config.js` at the root is the ONE platform config (no tenant block).
 
 - `omega-tenant.js` — hostname → `tenant_public/{host}` → `CLEARSKY_CONFIG.tenant`; post-auth entitlements from `omega_orgs/{org}` + `billing/current` + `members/{uid}`; hostname lock; suspension gate; wraps `OmegaBrand.resolve`.
+- `omega-whitelabel.js` — what the PLATFORM is called for a white-labelled
+  tenant. Wraps `OmegaBrand.platformName` the way `omega-tenant.js` wraps
+  `resolve`. Loads directly after it on all nine pages that sign users in.
 - `api/_lib/admin.js`, `api/set-role.js`, `api/opportunity.js`, `api/rfq.js`, `api/stripe-create.js`, `api/stripe-portal.js`, `api/stripe-webhook.js`, `api/tenant-branding.js`.
 - `scripts/audit-counts.js`, `scripts/seed-omega-orgs.js`, `tenants/*/tenant.json`.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
+
+**Demoing and standing up a white label (2026-09-19).** Two gaps that were not
+code problems but made the feature unusable by the people who sell it.
+
+*Nobody could look at it.* `orgId` IS the email domain, so no ClearSky account
+resolves to `cleancell.us` and a white label was invisible to its own vendor.
+`?wlpreview=<orgId>` paints a signed-in page as one tenant, staff only. The
+whole design is one distinction — **paint, never scope**:
+`OmegaWhiteLabel.hydrate()` copies presentation keys off the previewed record
+and pins `CLEARSKY_CONFIG.tenant.orgId` to the signed-in org.
+`omega-bess-products.js` gained `catalogOrg()` for the same reason, kept
+separate from `orgId()` so the split is legible in the code rather than in a
+comment. `scripts/test-wl-preview.js` (71 assertions) mutation-tests the one
+line — `{ orgId: mine || org }` — that would turn a branding feature into an
+impersonation feature on `editor.html`, the page where `tenant.orgId` is born.
+
+*Standing one up needed a service-account key.* `whitelabel-setup.html` writes
+the four control-plane documents from a staff browser, using writes the rules
+already grant an `@csebuilders.com` token. It refuses a cost basis, never
+touches `tenant_public` (the one allowlist lives in `api/_lib/whitelabel.js`
+and a browser cannot `require()` it), and reuses an existing active embed key
+rather than minting a second. `scripts/seed-omega-orgs.js` stays canonical for
+a bulk seed and for `tenant_public`; `scripts/seed-embed-key.js` stays
+canonical for rotating, re-scoping and disabling keys, and its header now
+records the second minting path rather than silently contradicting it.
+
+*One mapping, three surfaces.* `tenants/<slug>/products.json` is the importer's
+`--out` artifact, committed, and read by both the setup page and
+`npm run demo`. No CSV parser exists in a browser. The committed Clean Cell
+ladder is four PLACEHOLDER capacity slots — every row says so in `notes`, the
+setup page warns on any row that does, and `test-wl-preview.js` asserts they
+declare themselves, because a footprint drawn to scale on somebody's own lot is
+the most convincing kind of wrong.
+
+Runbook: `docs/DEMO-CLEANCELL.md`.
+
+**White-label storefronts (2026-09-18, for Clean Cell USA).** Three surfaces:
+the signed-in workspace renamed (`omega-whitelabel.js` + a `whiteLabel` block
+on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
+`tenant_public`); a PUBLIC, unauthenticated, iframe-able storefront
+(`embed/storefront.html` + `embed/loader.js`, authorised by a publishable
+`embed_keys` key through `api/_lib/embed.js`); and an order spine (`orders`,
+`embed_configs`, `api/embed-order.js`, `api/order-link.js`, `api/orders.js`,
+`orders.html`). Full design, runbook and the list of what is NOT built:
+`docs/WHITE-LABEL.md`.
+
+### Logic moved server-side (CLAUDE.md § IP protection)
+
+| what | from | to | why |
+|---|---|---|---|
+| public BESS sizing | would have been in `embed/storefront.html` | `api/embed-size.js` → `_lib/bess-engine.js` | The caller is a stranger on the open internet. Returns kW/kWh/duration; **never** `capexPerKwh`/`capexPerKw` or `paybackYr` derived from them — the sweep needs the cost basis to choose a recommendation, and one division inverts it back to the tenant's buy price. The sensitivity band is REBUILT with the capex column dropped rather than forwarded. |
+| item price on an order | would have been the posted body | `api/embed-order.js`, re-read from `storefront.config.products` by SKU | A browser that could set `listPrice` could order 4 MWh for a dollar and hold a document saying we agreed. Quantity is the only number the customer chooses. |
+| order pricing and lifecycle | — | `api/orders.js` | "Only ClearSky may price, but the tenant may always cancel" is a commercial arrangement. It cannot be expressed in `firestore.rules`, and it should not be, because the people who negotiate it will never read that file. |
+| storefront catalogue publication | `equipment where vendorOrgId ==` (the obvious query) | explicit `storefront/config.products` | Those rows are the tenant's INTERNAL catalogue and carry cost on some of them. A "safe fields" filter is a list somebody has to remember to update, and the failure is silent and public. |
+| tenant attribution on editor exports | hardcoded `poweredByLine()` | reads the white-label block | The proposal a designer hands their customer is the highest-value leak in the estate. |
+| yard fit geometry | would have been in `embed/storefront.html` | `api/embed-layout.js` → `_lib/site-fit.js` | The placement sweep, the setback raster and the packing rules are the METHOD. Shipped to the browser, any tenant reads how OMEGA decides what fits where — the same reasoning `api/site-plan.js` already gives for itself. |
+| address → point | inline in `api/greenfield.js` | `api/_lib/geocode.js` | One copy, now shared. Not IP (both sources are keyless and free) — it is server-side because the POINT is what authorises a metered parcel lookup, and a browser that geocoded for itself could ask us to bill a lookup for a place it invented. |
+| tenant BESS products | nowhere — `BESS_CATALOG` was hardcoded in `editor.html` and no tenant could add to it | `omega-bess-products.js`, reading `storefront/config.products` | Not an IP move: an extension point. A white-labelled MANUFACTURER whose own guided build laid out a competitor's container is the failure this fixes. Additive and namespaced by org, because a saved project references a catalogue key. |
+| parcel lookup chain | was only reachable from `api/parcel.js`'s handler | exposed via its `_helpers` seam | Cook County moved its layer in 2026. A second copy of the source order, timeouts and county extents would have drifted, and the drifted one would have been the one serving the public. |
 
 ## TODO — Claude Code sessions, in order
 
@@ -95,6 +157,37 @@ live. Second person from the same domain auto-joins as member.
    ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
+11. **White-label `editor.html`.** ⚠ It now has an ACCESS GATE
+    (`omega-editor-gate.js`) — signed-in user of an active tenant, failing
+    OPEN on a missing record the way `tenantActive()` does. Anything added
+    here must not turn that into a fail-closed check.
+     Its export attribution and its BESS product
+    catalogue are done (`poweredByLine()` reads the white-label block;
+    `omega-bess-products.js` merges the tenant's own products into
+    `BESS_CATALOG` and leads the dropdown with them; both are defensive and
+    no-op when the tenant has nothing configured). Still ClearSky-branded: ~29 literal strings, the
+    `<title>`, the `apple-mobile-web-app-title`/`application-name` meta, the
+    inline web-app manifest, and its OWN brand resolver (`CS_TENANTS` /
+    `CS_BRAND` / `brandName()`, ≈ line 69840) which predates
+    `omega-brand.js` and does not consult it.
+    ⚠ NOT a ride-along on another change. The page loads neither
+    `omega-brand.js` nor `omega-tenant.js`; adding them brings the HOSTNAME
+    LOCK to a page that currently boots on hosts nobody has registered, so it
+    needs its own test pass. Convert the strings with
+    `<span data-omega-platform>` as you go — see `docs/WHITE-LABEL.md`.
+12. **Editor → order link button.** `api/order-link.js` works and is callable;
+    nothing in `editor.html` calls it. One button in the BOM panel: POST the
+    placed SKUs and the system size, show the returned customer URL.
+13. **Fold `api/greenfield.js`'s remaining inline helpers into `_lib/`.** Its
+    geocoder now delegates to `_lib/geocode.js`; its county-slug FIPS map and
+    listing parser are still inline. Low priority — it has no test, which is
+    why the geocoder extraction was kept to three lines.
+14. **Promote a site study into a real layout.** `_lib/site-fit.js` works in
+    the same local-feet frame as `scripts/site-agent/example-site.json`, on
+    purpose: a concept a customer accepted can be handed to
+    `_lib/site-agent-planner.js` without reinterpreting its axes. What is
+    missing is the evidence the planner demands — the confirmed service wall
+    above all. That is a signed-in workflow, not a public one.
 
 ## Decisions made (2026-09-06)
 
