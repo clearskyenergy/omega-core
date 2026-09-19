@@ -57,19 +57,29 @@ var WHO   = String(opt('--who', '')).toLowerCase();
    pipeline.
 
    role is the OSA portal role from access-data.js ROLES:
+     admin          everything, including write_deal and see_all
      partner_admin  manages their OWN org's users, signs verdicts, sees own org
      member         works their org's assignments, signs verdicts, sees own org
      viewer         read-only on their own org
-   Adoption into the shared portfolio stays with ClearSky either way — it is
-   gated on write_deal, which none of these three hold.
+
+   ⚠ THE PARTNER TIERS CANNOT WRITE A DEAL. partner_admin, member and viewer
+   hold no write_deal, and canWritePortalDeals() in firestore.rules is
+   isPortalAdmin() or isPortalLimitedAdmin() — so they cannot adopt a record
+   and cannot run the spreadsheet importer, which calls Portfolio.create() on
+   every row. The name reads like more than it grants: somebody set up as a
+   "partner administrator" can approve their own colleagues and sign verdicts,
+   and nothing else. Give admin to anyone expected to load a portfolio.
 
    ⚠ orgId must be a JV domain. jvOrgs() in firestore.rules, JV_ORGS in
    access-data.js and OSA_ORGS in login.html all list the same three, and a
    fourth partner is an edit in all of them plus a rules deploy. */
 var PEOPLE = [
   { email:'twarren@ogisolar.com', name:'TJ Warren',
-    role:'partner_admin', orgId:'ogisolar.com', orgName:'OGI Solar',
-    note:'JV counterpart for OGI Solar. First of the OGI/SUN/A3 roster.' }
+    role:'admin', orgId:'ogisolar.com', orgName:'OGI Solar',
+    note:'JV counterpart for OGI Solar. admin, not partner_admin: he loads the '
+       + 'portfolio in bulk, and the partner tiers cannot write a deal. '
+       + 'Revisit once the current deal closes — setRole in the Users view '
+       + 'changes it in place, no re-invite.' }
 ];
 
 var people = WHO === 'all' ? PEOPLE
