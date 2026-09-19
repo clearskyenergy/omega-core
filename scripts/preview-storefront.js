@@ -76,7 +76,8 @@ var PRODUCTS_FILE = (function () {
    to neutral defaults if the file moves, because a demo server that refuses
    to boot over branding is worse than one that boots grey. */
 var TENANT = (function () {
-  var d = { name: 'Clean Cell', accent: '#1F6F4A', platformName: 'Clean Cell Power Platform',
+  var d = { name: 'Clean Cell', accent: '#19C2D4', cta: '#F0564F', ink: '#0E1B24',
+            platformName: 'Clean Cell Power Platform',
             supportEmail: '', supportPhone: '', attribution: '' };
   try {
     var t = JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants', 'cleancell', 'tenant.json'), 'utf8'));
@@ -87,6 +88,11 @@ var TENANT = (function () {
       platformName: wl.platformName || d.platformName,
       supportEmail: wl.supportEmail || '',
       supportPhone: '',
+      /* Their calls to action are coral, not the accent — every CONTACT and
+         OUR SERVICES button on cleancell.us. Two colours doing two jobs is
+         the whole feel of that site and flattening it loses the likeness. */
+      cta: wl.accentCta || '#F0564F',
+      ink: wl.ink || '#0E1B24',
       /* 'none' on the public surface, by contract. */
       attribution: (wl.embed && wl.embed.attribution === 'none') ? '' : (wl.attributionText || '')
     };
@@ -425,72 +431,111 @@ function hostPage() {
     return String(v == null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
-  var A = TENANT.accent || '#2B5FA8';
-  var NAME = (TENANT.name || 'Clean Cell').toUpperCase();
+  var A = TENANT.accent || '#19C2D4';
+  var CTA = TENANT.cta || '#F0564F';
+  var INK = TENANT.ink || '#0E1B24';
 
   var cards = STOREFRONT.products.slice(0, 4).map(function (p) {
     return '<div class="card">'
-      + '<div class="cap">' + (p.kwh ? Number(p.kwh).toLocaleString() + ' kWh' : '') + '</div>'
+      + '<div class="cap">' + (p.kwh ? Number(p.kwh).toLocaleString() + ' <span>kWh</span>' : '') + '</div>'
       + '<div class="cn">' + esc(p.name) + '</div>'
       + '<div class="cs">' + (p.kw ? Number(p.kw).toLocaleString() + ' kW' : '')
       + (p.chemistry ? ' &middot; ' + esc(p.chemistry) : '')
-      + (p.warrantyYears ? ' &middot; ' + esc(p.warrantyYears) + ' yr' : '') + '</div>'
+      + (p.warrantyYears ? ' &middot; ' + esc(p.warrantyYears) + ' yr warranty' : '') + '</div>'
       + '<div class="ck">' + esc(p.sku) + '</div></div>';
   }).join('');
+
+  /* The bolt is their hero watermark and the 'll' in the wordmark. Inline
+     SVG so the offline build has no asset to lose. */
+  var BOLT = '<svg class="bolt" viewBox="0 0 100 200" aria-hidden="true">'
+    + '<path d="M62 0 L18 112 h30 L38 200 L92 78 H60 Z" fill="#ffffff" opacity=".55"/></svg>';
 
   return [
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    '<title>' + esc(TENANT.name) + ' — Commercial Energy Storage</title>',
+    '<title>Home - ' + esc(TENANT.name) + ' US</title>',
     '<style>',
-    ':root{--a:' + A + ';--ink:#101828;--mute:#5b6b7c;--line:#e4e7ec}',
+    ':root{--a:' + A + ';--cta:' + CTA + ';--ink:' + INK + ';--mute:#5a6b75;--line:#dceff3}',
     '*{box-sizing:border-box}',
-    'body{margin:0;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink)}',
-    '.bar{background:var(--a);color:#fff;padding:15px 30px;display:flex;align-items:center;gap:20px}',
-    '.bar .logo{font-weight:800;letter-spacing:.06em;font-size:18px}',
-    '.bar nav{margin-left:auto;display:flex;gap:24px;font-size:14px;opacity:.92}',
-    '.bar .cta{background:#fff;color:var(--a);padding:7px 14px;border-radius:6px;font-weight:700;font-size:13px}',
-    '.hero{background:linear-gradient(180deg,#f7f9fc,#eef2f7);padding:56px 30px;border-bottom:1px solid var(--line)}',
-    '.hero .in{max-width:1020px;margin:0 auto}',
-    '.hero h1{margin:0 0 12px;font-size:36px;line-height:1.18;max-width:660px;letter-spacing:-.01em}',
-    '.hero p{margin:0;color:var(--mute);max-width:620px;font-size:17px}',
-    '.strip{max-width:1020px;margin:0 auto;padding:34px 20px 8px}',
-    '.strip h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0 0 14px}',
-    '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}',
-    '.card{border:1px solid var(--line);border-radius:10px;padding:15px;background:#fff}',
-    '.cap{font-size:22px;font-weight:750;color:var(--a);line-height:1.1}',
-    '.cn{font-weight:640;margin-top:5px;font-size:14px}',
-    '.cs{font-size:12.5px;color:var(--mute);margin-top:3px}',
-    '.ck{font:11px ui-monospace,Menlo,monospace;color:#9aa7b4;margin-top:7px}',
-    '.wrap{max-width:1020px;margin:0 auto;padding:34px 20px 70px}',
-    '.lead{border-top:1px solid var(--line);padding-top:30px}',
-    '.lead h2{margin:0 0 6px;font-size:24px}',
-    '.lead p{margin:0 0 20px;color:var(--mute);max-width:620px}',
-    '.note{background:#FFF4D6;border:1px solid #E6D08A;color:#6B5310;padding:11px 14px;',
-    'border-radius:8px;font-size:13px;margin:0 0 24px}',
-    'footer{background:#101828;color:#9aa7b4;padding:26px 30px;font-size:13px}',
+    'body{margin:0;color:var(--ink);background:#fff;',
+    'font:16px/1.7 "Poppins","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;',
+    '-webkit-font-smoothing:antialiased}',
+    'h1,h2,h3{letter-spacing:-.015em}',
+    /* nav — white, wordmark left, red CONTACT right */
+    '.nav{display:flex;align-items:center;padding:22px 44px;background:#fff;gap:34px}',
+    '.mark{font-size:27px;font-weight:800;letter-spacing:-.03em;color:var(--ink)}',
+    '.mark .t{color:var(--a)}.mark sup{font-size:11px;font-weight:700;margin-left:2px;letter-spacing:.06em}',
+    '.nav .links{margin-left:auto;display:flex;gap:30px;font-size:13.5px;font-weight:700;',
+    'letter-spacing:.07em;color:var(--cta)}',
+    '.btn{background:var(--cta);color:#fff;padding:13px 26px;border-radius:5px;font-weight:700;',
+    'font-size:13px;letter-spacing:.08em;display:inline-block;text-decoration:none}',
+    '.btn.ghost{background:#fff;color:var(--cta);border:2px solid var(--cta)}',
+    /* hero — white to cyan, bolt watermark */
+    '.hero{position:relative;overflow:hidden;padding:66px 44px 92px;',
+    'background:linear-gradient(170deg,#ffffff 0%,#eafafd 42%,#8fe6f0 100%)}',
+    '.hero .in{position:relative;z-index:2;max-width:1040px;margin:0 auto}',
+    '.bolt{position:absolute;right:9%;top:-30px;height:420px;z-index:1;opacity:.85}',
+    '.hero h1{margin:0 0 26px;font-size:44px;line-height:1.14;font-weight:800;max-width:760px}',
+    '.hero h1 .sign{color:var(--a);font-weight:800;margin-right:10px}',
+    '.hero h1 .t{color:var(--a)}',
+    '.hero .lede{font-size:17px;font-weight:700;max-width:560px;margin:0 0 14px}',
+    '.hero p{color:#2c3b44;max-width:560px;margin:0 0 30px;font-size:16px}',
+    '.hero .row{display:flex;gap:14px;flex-wrap:wrap}',
+    /* sections */
+    '.sec{max-width:1040px;margin:0 auto;padding:56px 24px 10px}',
+    '.eyebrow{font-size:22px;font-weight:800;margin:0 0 4px}',
+    '.sec h2{margin:0 0 20px;font-size:38px;font-weight:800;color:var(--a);letter-spacing:-.02em}',
+    '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:16px}',
+    '.card{background:#effafc;border:1px solid var(--line);border-radius:14px;padding:20px}',
+    '.cap{font-size:27px;font-weight:800;color:var(--a);line-height:1.05}',
+    '.cap span{font-size:14px;font-weight:700}',
+    '.cn{font-weight:700;margin-top:8px;font-size:14.5px}',
+    '.cs{font-size:13px;color:var(--mute);margin-top:4px}',
+    '.ck{font:11px ui-monospace,Menlo,monospace;color:#9fb4bc;margin-top:9px}',
+    /* the storefront band, on their cyan */
+    '.band{margin-top:52px;background:linear-gradient(180deg,#eafafd,#c4eff6);padding:46px 0 60px}',
+    '.band .in{max-width:1040px;margin:0 auto;padding:0 24px}',
+    '.note{background:#fff;border:1px solid var(--line);border-left:5px solid var(--cta);',
+    'border-radius:12px;padding:14px 18px;font-size:13.5px;color:#3c4d56;margin:0 0 26px}',
+    '#storefront{background:#fff;border-radius:16px;padding:6px 8px;',
+    'box-shadow:0 10px 34px rgba(12,60,72,.13)}',
+    'footer{background:var(--ink);color:#93a7b0;padding:34px 44px;font-size:13.5px}',
     'footer b{color:#fff}',
+    '@media(max-width:760px){.hero h1{font-size:31px}.sec h2{font-size:28px}.bolt{display:none}',
+    '.nav{padding:18px 20px;gap:16px}.nav .links{display:none}.hero{padding:44px 20px 64px}}',
     '</style></head><body>',
-    '<div class="bar"><span class="logo">' + esc(NAME) + '</span>',
-    '<nav><span>Products</span><span>Technology</span><span>Projects</span><span>Support</span></nav>',
-    '<span class="cta">Size a system</span></div>',
-    '<div class="hero"><div class="in">',
-    '<h1>Commercial energy storage, engineered and supported in the USA.</h1>',
-    '<p>LFP cabinets and containers for peak shaving, backup power and grid services — ',
-    'from a single 215 kWh cabinet to multi-megawatt containerised systems.</p>',
+
+    '<div class="nav"><span class="mark"><span class="t">Clean</span>cell<sup>US</sup></span>',
+    '<span class="links"><span>ABOUT</span><span>SERVICES</span><span>CASE STUDIES</span></span>',
+    '<a class="btn" href="#size">CONTACT</a></div>',
+
+    '<div class="hero">', BOLT, '<div class="in">',
+    '<h1><span class="sign">—</span>Commercial storage buyers face a long, slow quote.<br>',
+    '<span class="sign">+</span><span class="t">We see opportunity.</span></h1>',
+    '<p class="lede">Size a system, see it on your own site and order it — without waiting on a ',
+    'proposal.</p>',
+    '<p>Clean Cell storage, quoted and configured the moment somebody is interested.</p>',
+    '<div class="row"><a class="btn" href="#size">SIZE A SYSTEM</a>',
+    '<a class="btn ghost" href="#size">OUR PRODUCTS</a></div>',
     '</div></div>',
-    '<div class="strip"><h2>The range</h2><div class="cards">' + cards + '</div></div>',
-    '<div class="wrap"><div class="lead">',
-    '<p class="note"><b>Local preview.</b> This page stands in for cleancell.us, which is behind a ',
-    'bot wall and could not be read — the name, platform name and accent are theirs, the layout is ',
-    'generic. Everything below this line is the REAL storefront, loaded through ',
-    '<code>embed/loader.js</code> exactly as the two-line snippet would load it on their own site.</p>',
+
+    '<div class="sec"><div class="eyebrow">What We Build</div><h2>The range</h2>',
+    '<div class="cards">' + cards + '</div></div>',
+
+    '<div class="band" id="size"><div class="in">',
+    '<div class="eyebrow">Size It Yourself</div>',
+    '<h2 style="color:' + A + ';margin-bottom:18px">' + esc(STOREFRONT.headline) + '</h2>',
+    '<p class="note"><b>Local preview.</b> This page stands in for cleancell.us — the wordmark, ',
+    'palette and section rhythm follow their live site, the copy is ours. Everything inside the white ',
+    'card is the REAL storefront, loaded through <code>embed/loader.js</code> exactly as the two-line ',
+    'snippet would load it on their own site.</p>',
     '<div id="storefront"></div>',
     '<' + 'script src="/embed/loader.js" data-key="omega_pk_live_preview0000000000000000000000" ',
     'data-target="#storefront" async><' + '/script>',
     '</div></div>',
-    '<footer><b>' + esc(TENANT.name) + '</b> &middot; Commercial energy storage',
-    (TENANT.supportEmail ? ' &middot; ' + esc(TENANT.supportEmail) : ''),
+
+    '<footer><b>' + esc(TENANT.name) + ' US</b> · Commercial energy storage',
+    (TENANT.supportEmail ? ' · ' + esc(TENANT.supportEmail) : ''),
     '</footer></body></html>'
   ].join('\n');
 }
