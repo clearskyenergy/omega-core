@@ -57,6 +57,7 @@ var PORT = Number(process.argv[2]) || 8788;
 var TENANT = {
   name: 'Clean Cell',
   accent: '#1F6F4A',
+  platformName: 'Clean Cell Power Platform',
   supportEmail: 'orders@example.com',
   supportPhone: '',
   attribution: ''                      /* 'none' on the public surface */
@@ -80,10 +81,12 @@ var STOREFRONT = {
     { sku: 'CC-372', name: 'CleanCell 372 cabinet', kw: 100, kwh: 372,
       widthFt: 8, depthFt: 4, chemistry: 'LFP', warrantyYears: 10,
       leadTimeDays: 120, priceMode: 'quote',
+      integrates: { pcs: true, xfmr: false, disco: true },
       blurb: 'Outdoor-rated cabinet. Pad or pier mount.' },
     { sku: 'CC-2000', name: 'CleanCell 2000 container', kw: 500, kwh: 2000,
       widthFt: 20, depthFt: 8, chemistry: 'LFP', warrantyYears: 10,
       leadTimeDays: 180, priceMode: 'quote',
+      integrates: { pcs: true, xfmr: true, disco: true },
       blurb: '20 ft container, integrated thermal and fire suppression.' }
   ]
 };
@@ -129,6 +132,11 @@ function embedConfig(res) {
       sku: p.sku, name: p.name, blurb: p.blurb, imageUrl: '',
       kw: p.kw, kwh: p.kwh, widthFt: p.widthFt, depthFt: p.depthFt,
       chemistry: p.chemistry, warrantyYears: p.warrantyYears,
+      integrates: {
+        pcs: !!(p.integrates && p.integrates.pcs),
+        xfmr: !!(p.integrates && p.integrates.xfmr),
+        disco: !!(p.integrates && p.integrates.disco)
+      },
       leadTimeDays: p.leadTimeDays, priceMode: p.priceMode,
       listPrice: p.priceMode === 'list' ? p.listPrice : null
     };
@@ -136,7 +144,9 @@ function embedConfig(res) {
   json(res, 200, {
     ok: true,
     brand: {
-      name: TENANT.name, logoUrl: '', accent: TENANT.accent, ink: '',
+      orgId: 'cleancell.us',
+      name: TENANT.name, platformName: TENANT.platformName, shortName: TENANT.name,
+      logoUrl: '', accent: TENANT.accent, ink: '',
       supportEmail: TENANT.supportEmail, supportPhone: TENANT.supportPhone,
       attribution: TENANT.attribution
     },
@@ -148,7 +158,8 @@ function embedConfig(res) {
       requireAddress: STOREFRONT.requireAddress, collectBill: true,
       hasCatalog: products.length > 0,
       siteStudy: STOREFRONT.siteStudy && products.some(function (p) { return p.widthFt && p.depthFt; }),
-      studyNeedsContact: STOREFRONT.requireContactForLayout !== false
+      studyNeedsContact: STOREFRONT.requireContactForLayout !== false,
+      editorHandoff: STOREFRONT.editorHandoff !== false && products.length > 0
     },
     products: products,
     config: null

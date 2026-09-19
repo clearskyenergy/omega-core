@@ -230,6 +230,22 @@
     <div class="unver" id="planUnver"></div>
   </div>
 
+  <!-- ── Design it yourself ───────────────────────────────────────────
+       The growth step. The storefront sizes and draws; the DESIGNER is where
+       a customer actually builds their project — and it opens branded as the
+       manufacturer, with their system already configured. No account is asked
+       for here: the editor runs signed-out and prompts on save, so the sign-up
+       happens once they are invested rather than before they have seen
+       anything. -->
+  <div class="card hide" id="designCard">
+    <h2>Build it yourself</h2>
+    <p class="intro" id="designIntro" style="margin-bottom:14px"></p>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="designBtn">Open the designer</button>
+      <span class="hint" style="margin:0">Opens in a new tab. Nothing to install, no account needed to start.</span>
+    </div>
+  </div>
+
   <!-- ── Contact and submit ───────────────────────────────────────────── -->
   <div class="card hide" id="orderCard">
     <h2>Where should we send it?</h2>
@@ -513,6 +529,7 @@
     paintOptions(r.products);
     show($('resCard'));
     offerStudy();
+    offerDesign();
     show($('orderCard'));
     postHeight();
     $('resCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -591,6 +608,7 @@
         STUDY = null;
         hide($('planCard'));
         offerStudy();
+        offerDesign();
         postHeight();
       };
     }
@@ -973,6 +991,52 @@
     grip.addEventListener('pointerdown', down('resize'));
   }
 
+  /* ── The hand-off into the designer ──────────────────────────────────
+     A URL and nothing else. Everything in it is already in this visitor's
+     browser, and the embed key is publishable by design — so there is no
+     hand-off document to create, expire, or leave holding a stranger's
+     address. omega-storefront-handoff.js reads it on the other side. */
+  function designUrl() {
+    var p = productBySku(PICKED);
+    if (!p) return '';
+    var qty = 1;
+    if (SIZED && SIZED.products) {
+      for (var i = 0; i < SIZED.products.length; i++) {
+        if (SIZED.products[i].sku === PICKED) qty = SIZED.products[i].qty || 1;
+      }
+    }
+    var u = '/editor?k=' + encodeURIComponent(KEY)
+          + '&sku=' + encodeURIComponent(PICKED)
+          + '&qty=' + qty;
+    var addr = ($('sAddr').value || $('aLine').value || '').trim();
+    if (addr) u += '&addr=' + encodeURIComponent(addr);
+    if (SIZED && SIZED.system) {
+      if (SIZED.system.kw) u += '&kw=' + SIZED.system.kw;
+      if (SIZED.system.kwh) u += '&kwh=' + SIZED.system.kwh;
+    }
+    return u;
+  }
+
+  function offerDesign() {
+    if (!CFG.flow.editorHandoff || !PICKED) { hide($('designCard')); return; }
+    var p = productBySku(PICKED);
+    if (!p) { hide($('designCard')); return; }
+    $('designIntro').textContent =
+      'Lay this out on your own site plan — trenching, switchgear, the one-line — '
+      + 'with the ' + (p.name || 'system') + ' already configured. You can order from there too.';
+    show($('designCard'));
+  }
+
+  function doDesign() {
+    var u = designUrl();
+    if (!u) { say('Choose a system first.'); return; }
+    /* _blank, not a navigation: the storefront sits in an iframe on the
+       manufacturer's own website and taking that page somewhere else is not
+       ours to do. embed/loader.js grants allow-popups for exactly this. */
+    try { window.open(u, '_blank', 'noopener'); }
+    catch (e) { say('Your browser blocked the new tab — allow pop-ups and try again.'); }
+  }
+
   /* ── Order ───────────────────────────────────────────────────────────── */
   function doOrder() {
     say('');
@@ -1049,6 +1113,7 @@
       } else if (cfg.config) {
         CONFIG = cfg.config;
         paintConfig(CONFIG);
+        if (CONFIG.items && CONFIG.items.length) { PICKED = CONFIG.items[0].sku; offerDesign(); }
       } else {
         CONFIG_ID = '';
         addMonthRow();
@@ -1060,6 +1125,7 @@
     $('addMonth').onclick = addMonthRow;
     $('sizeBtn').onclick = doSize;
     $('studyBtn').onclick = doStudy;
+    $('designBtn').onclick = doDesign;
     $('orderBtn').onclick = doOrder;
     postHeight();
   })['catch'](function (e) {

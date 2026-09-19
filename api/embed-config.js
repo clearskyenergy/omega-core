@@ -69,6 +69,30 @@ function publicProduct(p) {
        somebody's parcel is the most convincing kind of wrong. */
     widthFt:       num(p.widthFt),
     depthFt:       num(p.depthFt),
+    /* ── integrates{} IS PUBLISHED, AND THAT IS A CORRECTION ────────────
+       It was held back with the rest of the engineering fields on the
+       reasoning that anything the guided build reads is internal. That was
+       wrong, for one concrete reason and one principled one.
+
+       CONCRETE: the storefront hands off into the editor with a SKU, and the
+       editor resolves that SKU through THIS endpoint because the visitor has
+       no account yet. Without these flags the guided build cannot know the
+       PCS is inside the cabinet, so it draws an external one — a one-line
+       that would not be built. The whole point of the hand-off is a drawing
+       the customer can trust.
+
+       PRINCIPLED: "what is inside the enclosure" is a datasheet fact a
+       manufacturer prints in its own brochure, and for an all-in-one cabinet
+       it is a selling point. It is not the supplier relationship.
+
+       WHAT STAYS PRIVATE is the part that is: `inverter` (whose PCS they
+       chose), `transformer`, `disconnect`, `usableKwh`, `dcv` and `notes`.
+       Those are sourcing and margin-adjacent, and none of them is needed to
+       draw a correct one-line. */
+    integrates: (function () {
+      var g = p.integrates || {};
+      return { pcs: g.pcs === true, xfmr: g.xfmr === true, disco: g.disco === true };
+    })(),
     chemistry:     str(p.chemistry, 40),
     warrantyYears: num(p.warrantyYears),
     leadTimeDays:  num(p.leadTimeDays),
@@ -152,7 +176,23 @@ module.exports = E.handler(function (req) {
              checkout is a marketing decision, so it is opt-IN per contract
              via embed.attribution rather than inherited. */
           brand: {
+            /* The tenant key. Already world-readable in tenant_public, and
+               the hand-off needs it: omega-whitelabel.js only activates for a
+               tenant it can NAME (block() requires CLEARSKY_CONFIG.tenant.
+               orgId), so without this the editor arrives with a white-label
+               block that never switches on and a tab still reading
+               ClearSky OMEGA. */
+            orgId:     ctx.orgId,
             name:      str(ctx.org.name, 120) || ctx.orgId,
+            /* What the PLATFORM is called for this tenant. Already
+               world-readable in tenant_public (the login page paints it
+               before there is a user), so this is no new disclosure — it is
+               here because the hand-off into the editor carries an anonymous
+               visitor who has no other way to learn it, and an editor tab
+               reading "ClearSky OMEGA" is the leak the white label exists to
+               stop. */
+            platformName: str((ctx.whiteLabel || {}).platformName || '', 80),
+            shortName:    str((ctx.whiteLabel || {}).shortName || '', 60),
             logoUrl:   str(ctx.org.logoUrl, 400),
             accent:    str(em.accent || wl.accent || '', 32),
             ink:       str(em.ink || wl.ink || '', 32),
@@ -182,7 +222,13 @@ module.exports = E.handler(function (req) {
             /* Whether the address step has to come after the enquiry. The
                page needs to know to order its own steps; the ENFORCEMENT is
                in api/embed-layout.js, which refuses without the receipt. */
-            studyNeedsContact: sf.requireContactForLayout !== false
+            studyNeedsContact: sf.requireContactForLayout !== false,
+            /* Whether to offer "design it yourself" — the hand-off into the
+               white-labelled editor. On unless switched off, and only when
+               there is a catalogue to hand off WITH: the editor resolves the
+               SKU through this endpoint, so a storefront with no published
+               products has nothing to send. */
+            editorHandoff: sf.editorHandoff !== false && products.length > 0
           },
           products: products,
           /* null when the link carried no ?c=; { error } when it carried one

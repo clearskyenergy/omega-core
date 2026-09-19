@@ -244,8 +244,81 @@
     }
   }
 
+  /* ── HYDRATE: THE WHITE LABEL ON A PAGE THAT HAS NO TENANT RUNTIME ────
+     omega-tenant.js is what normally puts the block on CLEARSKY_CONFIG, and
+     every page that signs users in loads it. editor.html does NOT — it has
+     its own brand resolution predating omega-brand.js — and wiring the tenant
+     runtime into a 162k-line page brings the HOSTNAME LOCK with it: a page
+     that currently boots anywhere would start refusing unregistered hosts,
+     including whatever the site-agent MCP is pointed at.
+
+     That lock is a real security property and the editor should eventually
+     have it. It is a deliberate, separately-tested change — not a passenger
+     on a branding one. So this reads the ONE document the white label needs,
+     directly, for pages in that position.
+
+     It is not a way around the lock: it adds branding and removes nothing.
+     The editor is exactly as reachable after this as before. Said plainly
+     because "we skipped the security control to ship the logo" is the
+     sentence this comment exists to prevent somebody writing later.
+
+     Reads omega_orgs/{orgId} — a tenant may read their OWN record, so this
+     needs no rule change and no mirror. Resolves the org from whatever the
+     page knows; on the editor that is the signed-in user's email domain.
+
+     Resolves the whiteLabel block (or null). Never rejects. */
+  function hydrate(orgId) {
+    return Promise.resolve().then(function () {
+      var org = String(orgId || resolveOrg() || '').toLowerCase();
+      if (!org) return null;
+      var fb = global.firebase;
+      if (!fb || !fb.firestore || !fb.apps || !fb.apps.length) return null;
+      return fb.firestore().collection('omega_orgs').doc(org).get().then(function (d) {
+        if (!d || !d.exists) return null;
+        var o = d.data() || {};
+        var c = cfg();
+        if (!c.tenant) c.tenant = { orgId: org };
+        /* The NAME and LOGO too, not just the platform string: an editor that
+           says "Clean Cell Power Platform" in the chrome and then prints
+           "Your Company" on the proposal has not been white-labelled. */
+        if (o.name) c.tenant.clientName = o.name;
+        if (o.logoUrl) c.tenant.logo = o.logoUrl;
+        if (o.colors) c.tenant.colors = o.colors;
+        if (o.exportBrand) c.tenant.exportBrand = o.exportBrand;
+        c.tenant.whiteLabel = o.whiteLabel || null;
+        apply();
+        return c.tenant.whiteLabel;
+      }, function () { return null; });
+    })['catch'](function () { return null; });
+  }
+
+  /* Org, from whatever this page knows. Mirrors the alias fold the rules use
+     — FIFTH copy of that map in the estate, which CLAUDE.md already records
+     as a wart; kept local so this file works on a page that defines none of
+     the other resolvers. */
+  var ORG_ALIAS = { 'fenecon.de': 'fenecon.com', 'fenecon.us': 'fenecon.com' };
+  function resolveOrg() {
+    try {
+      if (global.OMEGA_WORKSPACE && global.OMEGA_WORKSPACE.orgId) return global.OMEGA_WORKSPACE.orgId;
+      var c = cfg();
+      if (c.tenant && c.tenant.orgId) return c.tenant.orgId;
+      if (typeof global._projOrgId === 'function') { var p = global._projOrgId(); if (p) return p; }
+      var fb = global.firebase;
+      if (fb && fb.auth && fb.apps && fb.apps.length) {
+        var u = fb.auth().currentUser;
+        if (u && u.email) {
+          var d = String(u.email).toLowerCase().split('@')[1] || '';
+          return ORG_ALIAS[d] || d;
+        }
+      }
+    } catch (e) {}
+    return '';
+  }
+
   global.OmegaWhiteLabel = {
     PLATFORM:      PLATFORM,
+    hydrate:       hydrate,
+    resolveOrg:    resolveOrg,
     block:         block,
     active:        active,
     platformName:  platformName,

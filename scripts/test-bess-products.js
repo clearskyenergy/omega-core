@@ -109,11 +109,28 @@ shipped[made.key] = undefined; delete shipped[made.key];
 var cfgSrc = fs.readFileSync(path.join(ROOT, 'api', 'embed-config.js'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '');      /* strip comments; they discuss the fields */
 
-['inverter', 'inverterKva', 'transformer', 'disconnect', 'integrates',
+/* The sourcing- and margin-adjacent half. None of these is needed to draw a
+   correct one-line, and each of them says something about the tenant's
+   supplier relationships. */
+['inverter', 'inverterKva', 'transformer', 'disconnect',
  'usableKwh', 'dcv', 'notes'].forEach(function (f) {
   ok('embed-config does NOT publish "' + f + '"',
      cfgSrc.indexOf(f) < 0, (new RegExp('.{0,50}' + f + '.{0,50}').exec(cfgSrc) || [])[0]);
 });
+
+/* integrates{} IS published, deliberately — see the comment in
+   api/embed-config.js. The storefront hands a SKU into the editor and the
+   visitor has no account yet, so this endpoint is the only place the guided
+   build can learn that the PCS is inside the cabinet. Without it the
+   hand-off draws an external PCS: a one-line that would not be built.
+   Asserted PRESENT so a later tidy-up cannot quietly remove it. */
+ok('embed-config DOES publish integrates{} — the hand-off needs it',
+   /integrates:/.test(cfgSrc));
+ok('and publishes exactly the three flags, built key by key',
+   /pcs: g\.pcs === true/.test(cfgSrc) && /xfmr: g\.xfmr === true/.test(cfgSrc)
+     && /disco: g\.disco === true/.test(cfgSrc));
+ok('and coerces them to booleans rather than forwarding the stored object',
+   !/integrates:\s*p\.integrates\b/.test(cfgSrc));
 ok('embed-config still publishes the footprint the site study needs',
    /widthFt/.test(cfgSrc) && /depthFt/.test(cfgSrc));
 ok('embed-config still builds its product key by key, not by spread',

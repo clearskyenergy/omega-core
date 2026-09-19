@@ -15,11 +15,16 @@ Clean Cell is a **battery manufacturer**. They are not trying to sell software
 — they are trying to sell more batteries, and the platform is how. So the
 funnel matters more than the feature list:
 
-| Step | What the customer does | What it costs us | Why it converts |
+| Step | What the customer does | What it costs us | Why it matters |
 |---|---|---|---|
 | **1 · Size** | Types their bill. Gets kW / kWh. | Nothing | Anonymous and instant. No account, no form, no friction. |
-| **2 · See it on their site** | Types their address. Gets their own lot drawn to scale with the system on it, and drags the yard to where they would really put it. | A metered parcel lookup | **This is the conversion moment.** No battery manufacturer's website does it. |
-| **3 · Order** | Confirms and submits. | Nothing | They have already seen it on their own property. |
+| **2 · See it on their site** | Types their address. Gets their own lot drawn to scale, and drags the yard to where they would really put it. | A metered parcel lookup | Proof it fits, on their own property. |
+| **3 · Build it** | Opens the **designer**, branded as the manufacturer, system already configured. Guided Build places it: trenching, switchgear, the one-line. | Nothing | **This is the one that matters.** They are now building their project on the platform. |
+| **4 · Order** | From the storefront, or from inside the designer. | Nothing | They ordered what they drew. |
+
+Step 3 is the point. Steps 1 and 2 exist to earn it: the goal is not a web
+lead, it is **the manufacturer's customers building their projects on the
+platform**, in an editor that carries the manufacturer's name.
 
 Step 2 is the one that earns the sale, and it is also the only step that costs
 real money — which is why a named lead is the ticket for it (see
@@ -39,7 +44,8 @@ That is four surfaces, and they are genuinely different problems:
 | 1 | The signed-in workspace | Clean Cell's own staff | The platform renamed. They know whose software it is; the chrome should still say theirs. |
 | 2 | The public storefront | Clean Cell's **customer** | A page with no sign-in, framed by their website, with no trace of us. **This did not exist.** |
 | 3 | The site study | Clean Cell's **customer** | Their own parcel, drawn, with the system on it. **This did not exist.** |
-| 4 | The order desk | ClearSky + Clean Cell | A queue, a price, a lifecycle. **This did not exist.** |
+| 4 | The designer hand-off | Clean Cell's **customer** | The editor, white-labelled, system pre-configured, no account needed. **This did not exist.** |
+| 5 | The order desk | ClearSky + Clean Cell | A queue, a price, a lifecycle. **This did not exist.** |
 
 ---
 
@@ -452,6 +458,98 @@ canvas, and its placement and topology rules are browser-side. Exposing it
 publicly would ship how OMEGA decides a one-line, to anyone who views source.
 The site study (§ 3) is the public-safe subset: it answers *does this fit*,
 not *where does everything go*.
+
+---
+
+## 3c · The hand-off into the designer
+
+```
+/editor?k=<embed key>&sku=CC-2000&qty=4&addr=4200+W+Industrial+Dr
+```
+
+**A URL and nothing else.** No hand-off collection, no server round trip to
+create one, no expiry to get wrong, no document sitting somewhere holding a
+stranger's address. Everything in it is already in that visitor's browser and
+the embed key is publishable by design.
+
+`omega-storefront-handoff.js` reads it on the other side and:
+
+1. resolves the brand and the product through **`/api/embed-config`** — the
+   same public endpoint the storefront already uses;
+2. renames the platform, the tab and the export brand;
+3. seeds the BESS list with the configured system;
+4. drops the address into the map;
+5. opens the **BESS Guided Build**, ready to place;
+6. mounts an **Order this system** button.
+
+### The visitor has no account, and that is the point
+
+This is a manufacturer's *customer*, arriving from the manufacturer's own
+website. Asking them to register before they can see their own battery on
+their own site would lose most of them — and the whole reason the hand-off
+exists is to get them building.
+
+The editor already runs signed-out (it loads a project from the URL and
+prompts on save), so they design first and sign in when they want to keep it.
+**That prompt is the conversion, and it lands after they are invested.**
+
+### It configures; it does not place
+
+The hand-off never forges elements onto the canvas. It sets the system up and
+opens the editor's *own* Guided Build — clearance rules, trench routing, the
+one-line, the skip-and-reroute when the cabinet integrates its PCS. A second
+placement path would drift from the real one and be worse at the job.
+
+### `integrates{}` is why the one-line is right
+
+`getWizSteps()` skips the PCS, disconnect and transformer steps when the pad
+already contains them. Those flags reach an anonymous visitor only through
+`/api/embed-config` — which is why that endpoint now publishes them (see the
+correction note in the file). Lose them and the Guided Build draws an external
+PCS on an all-in-one cabinet: a one-line that would not be built, handed to
+the customer who trusted it most.
+
+### The order follows the design, not the link
+
+They came to the designer to *change* things. `currentQty()` reads what is
+actually configured, not what the link said — ordering the link's quantity
+after they doubled it is the bug it exists to stop.
+
+The anonymous order goes through `/api/embed-order`: the same public endpoint,
+the same publishable key, the same rate limits, the same `status:'new'` pin.
+Nothing new is trusted. A signed-in user orders the other way —
+`POST /api/orders` `action:'create'` — because they have an org and the order
+should be attributed to it.
+
+---
+
+## 3d · Making the editor white-label
+
+`editor.html` now loads `omega-brand.js` and `omega-whitelabel.js`, and
+`OmegaWhiteLabel.hydrate()` reads the tenant's own `omega_orgs/{org}` record
+after sign-in.
+
+**It does NOT load `omega-tenant.js`, and that is a deliberate, stated
+trade.** The tenant runtime brings the *hostname lock*: a page that currently
+boots anywhere would start refusing unregistered hosts, including whatever the
+site-agent MCP is pointed at. That lock is a real control and the editor
+should eventually have it — as its own, separately-tested change, not as a
+passenger on a branding one.
+
+So `hydrate()` reads the one document the white label needs, directly. **It
+adds branding and removes nothing**; the editor is exactly as reachable after
+this as before. Written down here because *"we skipped the security control to
+ship the logo"* is the sentence this note exists to prevent.
+
+Two sources, because the editor has two kinds of visitor:
+
+| Visitor | Brand comes from |
+|---|---|
+| Signed-in tenant user | `OmegaWhiteLabel.hydrate()` → their own org record |
+| Anonymous storefront hand-off | `/api/embed-config` → `tenant_public` |
+
+Still ClearSky-branded in the editor: the meta tags, the inline web-app
+manifest, and ~25 further literal strings. Tracked in `MERGE.md`.
 
 ---
 

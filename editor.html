@@ -117,8 +117,11 @@ function openFinancingApply(){
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
 </script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-whitelabel.js"></script>
 <script src="/omega-caps.js"></script>
 <script src="/omega-bess-products.js"></script>
+<script src="/omega-storefront-handoff.js"></script>
 <script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
@@ -3998,7 +4001,7 @@ if(document.readyState==='loading'){
   <span class="s">|</span>
   <span id="nn-lock-ind" onclick="nnToggleMapLock()" style="cursor:pointer;user-select:none" title="Click to lock/unlock the map">🔓 Map unlocked</span>
   <div style="flex:1"></div>
-  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)">ClearSky OMEGA v4.24</span>
+  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)"><span data-omega-platform>ClearSky OMEGA</span> v4.24</span>
 </div>
 
 <!-- BESS Config Modal -->
@@ -21316,6 +21319,12 @@ const BESS_CATALOG = {
    Deferred until a user exists, because the read is scoped to their org.
    Wrapped so a failure — no Firestore, no products, an offline editor —
    leaves the shipped catalogue exactly as it was. */
+/* Exposed for omega-storefront-handoff.js, the same way window.S is exposed
+   above: BESS_CATALOG is a const in this script's scope, so it is not on
+   window by default, and an anonymous visitor arriving from the storefront
+   has no account to read the tenant catalogue with. */
+try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
+
 (function () {
   var done = false;
   function apply(t) {
@@ -21347,7 +21356,34 @@ const BESS_CATALOG = {
       if (mfr && (!mfr.value || mfr.value === 'Gotion')) { mfr.value = t.brand; mfr.placeholder = t.brand; }
     } catch (e) { /* the shipped catalogue is a perfectly good answer */ }
   }
+  /* ── THE WHITE LABEL, ON THE SAME TRIGGER ─────────────────────────────
+     Both answers come from the tenant's own org record and both need a
+     signed-in user, so they ride the same wait rather than racing two.
+
+     OmegaWhiteLabel.hydrate() reads omega_orgs/{org} directly — editor.html
+     loads no omega-tenant.js, and adding it would bring the hostname lock to
+     a page that currently boots anywhere. That is a real control and a
+     separate, separately-tested change; this adds branding and removes
+     nothing. See omega-whitelabel.js § HYDRATE. */
+  function brand() {
+    if (!window.OmegaWhiteLabel || !OmegaWhiteLabel.hydrate) return;
+    try {
+      OmegaWhiteLabel.hydrate().then(function () {
+        /* The <title> is the one string the tenant runtime cannot reach on
+           its own, because paintTitle() is never called here — the editor
+           sets its own title. A tab reading "ClearSky OMEGA" is the leak a
+           customer screenshots. */
+        try {
+          if (OmegaWhiteLabel.active()) {
+            document.title = OmegaWhiteLabel.platformName() + ' — Site Designer';
+          }
+        } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  }
+
   function go() {
+    brand();
     if (!window.OmegaBessProducts) return;
     try { OmegaBessProducts.load().then(apply, function () {}); } catch (e) {}
   }
@@ -38128,7 +38164,7 @@ function exportSpecSheet() {
 <body>
 <div class="header">
   <div class="header-left">
-    <div class="badge">${(typeof brandName==='function'?brandName():'ClearSky OMEGA').toUpperCase()} -- SYSTEM SPECIFICATION</div>
+    <div class="badge">${(typeof brandName==='function'?brandName():(window.OmegaWhiteLabel?OmegaWhiteLabel.platformName():'ClearSky OMEGA')).toUpperCase()} -- SYSTEM SPECIFICATION</div>
     <h1>${projectName}</h1>
     <p>${address}</p>
   </div>

@@ -245,6 +245,20 @@ user). Do not add a second copy of that list — see what three copies of
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.
 
+- The funnel is **size → see it on your site → BUILD IT → order**, and step
+  three is the point: the goal is the manufacturer's customers building their
+  projects on the platform, not a web lead. `omega-storefront-handoff.js`
+  carries a visitor from the storefront into a white-labelled editor with
+  `/editor?k=<embed key>&sku=&qty=&addr=` — a URL and nothing else, resolved
+  through `/api/embed-config` because that visitor has NO ACCOUNT. The editor
+  already runs signed-out and prompts on save; that prompt is the conversion
+  and it lands after they are invested.
+- `editor.html` gets its white label from `OmegaWhiteLabel.hydrate()`, which
+  reads `omega_orgs/{org}` directly. It deliberately does NOT load
+  `omega-tenant.js`: that would bring the hostname lock to a page that
+  currently boots anywhere. The lock is a real control and a SEPARATE,
+  separately-tested change. hydrate() adds branding and removes nothing.
+
 Design, runbook and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
 
 ## Silmarillion 2.0 — joint development
