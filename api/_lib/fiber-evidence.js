@@ -437,6 +437,7 @@ function usaAdapt(f) {
   var kind = 'fiber_route', eligible = true;
   if (cat === 'planned') { kind = 'network_design'; eligible = false; }
   else if (cat === 'inactive') { eligible = false; }
+  if (p.proximityEligible === false) { eligible = false; }
   return {
     type: 'Feature', id: p.id, bbox: f.bbox, geometry: f.geometry,
     properties: {
@@ -444,7 +445,7 @@ function usaAdapt(f) {
       feature_kind: kind, proximity_eligible: eligible,
       source_url: p.sourceUrl, retrieved_at: p.retrievedAt,
       geometry_quality: p.geometryQuality || (p.evidence === 'approximate_project_route'
-        ? 'generalized_public_design' : 'agency_published'),
+        ? 'generalized_public_design' : 'publisher_geometry_unverified'),
       operational_status: p.routeStatus && p.routeStatus !== 'Unknown'
         ? p.routeStatus : (cat === 'unknown' ? 'not stated by the publisher' : cat),
       serviceability: 'unconfirmed',

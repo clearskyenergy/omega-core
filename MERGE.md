@@ -1,5 +1,30 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## 2026-09-19 — parcel fiber inspection and additional carrier routes
+
+Added 8,989 source-derived records / 549,825 line parts in 45 states plus DC,
+preserving all 38,672 prior records unchanged. Inventory now 47,661 records /
+1,100,644 parts; still partial in 47 states plus DC, with HI/MT/VT gaps.
+Uniti dark-fiber routes are unverified publisher geometry; developing routes
+stay planned. Round Rock municipal records are filtered to EXISTING. Silvis
+historical illustrative records carry an explicit proximity/scoring exclusion.
+No purchased GeoTel layer was copied. Source audits remain in the manifest.
+
+The standalone viewer adds aerial imagery, real public parcel overlays for
+Dallas/Fulton/Cook/DuPage/Lake, drawing/import for any state, coordinate deep
+links from Grid Atlas, evidence highlights and exports. Parcel IDs/geometry
+only; no owner data or metered parcel requests. Full boundary-distance and
+classification logic stays in `api/_lib/fiber-parcel.js`, through POST on the
+existing token/tenant/billing/member/tool-gated `api/fiber-screen.js`. GET and
+legacy editor contracts are preserved. No new collections or security-rule
+changes. Holes and multiple parts are retained rather than silently dropped.
+
+Only low-zoom overview coordinates are compacted; full source paths and all
+prior detailed features remain unchanged. Detailed deep links avoid the
+national overview download. All three server functions continue to bundle
+only gzip state shards (102.8 MB) and manifest, not raw national files.
+See `docs/PARCEL-FIBER-INSPECTION.md` and the nationwide research register.
+
 ## 2026-09-19 — additive nationwide fiber research expansion
 
 Merged the September 18 research snapshot into current main without replacing

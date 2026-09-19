@@ -694,7 +694,7 @@ var LAYERS = {
   /* ── PUBLISHED ROUTE INVENTORY — 38,672 source-derived records ────────
      The simplified national overview of the same inventory /api/fiber-screen
      and /api/network-proximity measure against, so what you see and what the
-     services answer come from one dataset. About 61 MB, so it is off by default
+     services answer come from one dataset. About 82 MB, so it is off by default
      like everything else here.
 
      STATUS IS THE STYLING, because it is the finding. A planned route and a
@@ -711,12 +711,14 @@ var LAYERS = {
     meta:function(a){
       var st=a.routeStatus&&a.routeStatus!=='Unknown'?a.routeStatus:'status not stated by the publisher';
       return (a.carrier||'operator not published')+" · "+st+
+             (a.proximityEligible===false?" · illustrative reference only; excluded from scoring":"")+
              (a.states&&a.states.length?" · "+a.states.join(", "):"")+
              (a.publishedLineParts?" · "+a.publishedLineParts+" published line parts":"")+
              " · capacity unknown";
     },
     styleFor:function(a){
       var c=a.category;
+      if(a.proximityEligible===false) return {color:"#94A3B8", weight:1.4, opacity:0.60, dashArray:"2,4"};
       if(c==='planned')  return {color:"#F59E0B", weight:1.8, opacity:0.80, dashArray:"7,5"};
       if(c==='inactive') return {color:"#64748B", weight:1.4, opacity:0.55, dashArray:"2,4"};
       if(c==='existing') return {color:"#2DD4BF", weight:2.2, opacity:0.90, dashArray:null};
@@ -1618,6 +1620,7 @@ function analyze(ll){
      '  ·  <span style="color:var(--amp);cursor:pointer" id="copyc">copy</span></div>';
 
   h+='<div id="dcSiteScreen"></div>';
+  h+='<p><a href="usa-fiber-map.html?lat='+encodeURIComponent(ll.lat.toFixed(6))+'&lon='+encodeURIComponent(ll.lng.toFixed(6))+'" target="_blank" rel="noopener" style="color:var(--teal)">Inspect parcel boundaries + detailed fiber at this site ↗</a></p>';
 
   h+='<div class="sec">Nearest Infrastructure</div>';
   var subL=sub?LAYERS[sub.src||"substations"]:LAYERS.substations;

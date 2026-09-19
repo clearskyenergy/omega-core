@@ -65,15 +65,17 @@ def import_lines(source, records):
                 sourceUrl=source['pageUrl'],name=source['name'],carrier=source['publisher'],
                 category=source['category'],routeStatus=source['routeStatus'],
                 evidence='publisher_route' if source['category']!='planned' else 'approximate_project_route',
-                geometryQuality='publisher_geometry_unverified',dataDate=None,
+                geometryQuality=source.get('geometryQuality','publisher_geometry_unverified'),dataDate=source.get('sourceVintage'),
                 metadataModified=source.get('itemModified'),retrievedAt=source['retrievedAt'],
                 networkType=source['networkType'],serviceability='Unconfirmed',routeDiversity='Unconfirmed',
                 states=list(states),publishedLineParts=len(chunk),importBatch=BATCH,
                 sourceRecordIds=sorted(set(str(r[1]) for r in chunk)))
             additions.append(dict(type='Feature',geometry=mapping(g),properties=props,bbox=list(g.bounds)))
+            if source.get('proximityEligible') is False:
+                props['proximityEligible'] = False
     assert audit['inputLineParts'] == sum(audit[k] for k in ['includedLineParts','duplicateLineParts','invalidLineParts','outsideStateBoundaries'])
     source.update(dict(audit),includedFeatures=len(additions)-before,
-        geometryQuality='publisher_geometry_unverified',importBatch=BATCH)
+        geometryQuality=source.get('geometryQuality','publisher_geometry_unverified'),importBatch=BATCH)
     sources.append(source)
     print(source['id'],dict(audit),'map records',source['includedFeatures'],flush=True)
 
@@ -137,7 +139,7 @@ for f in features.values():
     for c in p['states']:
         shards[c].append(f)
     g = shape(f['geometry']).simplify(.002,preserve_topology=True)
-    properties = {k:p[k] for k in ['id','sourceId','category','states','routeStatus','carrier','publishedLineParts','importBatch'] if k in p}
+    properties = {k:p[k] for k in ['id','sourceId','category','states','routeStatus','carrier','publishedLineParts','importBatch','proximityEligible','geometryQuality'] if k in p}
     overview.append(dict(type='Feature',geometry=mapping(g),properties=properties,bbox=f['bbox']))
 for row in manifest['states']:
     fs = shards[row['code']]
@@ -164,4 +166,5 @@ with tempfile.TemporaryDirectory(prefix='omega-fiber-import-') as temp:
     for filename in payloads:
         os.replace(stage/filename,OUT/filename)
 subprocess.run(['node',str(pathlib.Path(__file__).with_name('compress-fiber-shards.js'))],check=True)
+subprocess.run(['node',str(pathlib.Path(__file__).with_name('compact-fiber-overview.js'))],check=True)
 print(json.dumps({k:manifest[k] for k in ['uniqueSegments','publishedLineParts','statesWithData','expansionHistory']},indent=2))

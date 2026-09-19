@@ -2,7 +2,7 @@
 
 ## What is delivered
 
-Grid Atlas and standalone `usa-fiber-map.html` now include **38,672 source-derived map records containing 550,819 line parts**, with some geometry in **47 states plus DC**. The first September 19 carrier batch adds **5,211 records / 105,492 line parts**, preserving all **30,467** prior records unchanged. The additional Segra batch adds **2,994 records / 227,090 line parts**, retaining all **35,678** previous records unchanged. This is **partial coverage**, not every fiber cable in those states or the country. Different publishers can describe the same infrastructure.
+Grid Atlas and standalone `usa-fiber-map.html` now include **47,661 source-derived map records containing 1,100,644 line parts**, with some geometry in **47 states plus DC**. The first September 19 carrier batch added **5,211 records / 105,492 line parts**, preserving all **30,467** prior records unchanged. The Segra batch added **2,994 records / 227,090 line parts**, retaining all **35,678** previous records unchanged. The parcel-workflow batch adds **8,989 records / 549,825 line parts**, preserving all **38,672** previous records unchanged. This is **partial coverage**, not every fiber cable in those states or the country. Different publishers can describe the same infrastructure; counts include separately classified plans and illustrative references.
 
 `fiber-research.html` provides an initial research register for all 50 states plus DC, in the requested order: Texas, Georgia, Illinois, Connecticut, Ohio, Florida, South Carolina, California, then remaining states alphabetically. It distinguishes imported geometry, reference-only maps, availability-only maps, incomplete searches, and blocked downloads. Each state links directly to its map view and actual bundled source layers. Search discovery included Google; original publishers supply imported geometry.
 
@@ -12,14 +12,14 @@ Prepared for `clearskyenergy/omega-core` on September 19 against main `0d177c8`.
 
 | State | Map records | Published line parts | Main addition / caveat |
 |---|---:|---:|---|
-| Texas | 2,543 | 58,780 | FiberLight and Uniti added to LOGIX/FNA; source overlaps retained |
-| Georgia | 2,007 | 74,615 | FiberLight/Uniti added to FNA and Atlanta municipal layers |
-| Illinois | 758 | 25,665 | Uniti added; Illinois Century Network maps are reference only |
-| Connecticut | 226 | 229 | Uniti added to Norwalk; CEN's 2018 image is reference only |
-| Ohio | 733 | 6,170 | Uniti and one explicitly classified Henry County fiber record |
-| Florida | 506 | 7,750 | Carrier GIS added; LambdaRail image is reference only |
-| South Carolina | 1,142 | 80,293 | Uniti added; no private Segra file requested |
-| California | 335 | 1,267 | Uniti added; 2,473 supplied design records remain a separate supplemental toggle |
+| Texas | 3,379 | 89,814 | Added Uniti dark/developing layers and Round Rock municipal fiber; Dallas parcels available |
+| Georgia | 3,209 | 166,987 | Added Uniti dark/developing layers; Fulton parcel overlay available |
+| Illinois | 1,003 | 36,048 | Added Uniti geometry and historical Silvis reference; Cook/DuPage/Lake parcels available |
+| Connecticut | 227 | 243 | Further Uniti geometry; CEN's 2018 image remains reference only |
+| Ohio | 1,058 | 26,748 | Further Uniti geometry; no parcel survey accuracy asserted |
+| Florida | 1,237 | 67,018 | Further Uniti geometry; LambdaRail image remains reference only |
+| South Carolina | 1,251 | 85,704 | Further Uniti geometry; no private Segra file requested |
+| California | 401 | 2,106 | Further Uniti geometry; 2,473 supplemental designs remain separate |
 
 State counts are not additive. Multipart geometry is not a unique physical cable count. Entire published features intersecting a state are retained, so cross-border features can extend beyond the selected state.
 
@@ -52,6 +52,20 @@ Google discovery, web/image searches and publisher pages led to public carrier G
 
 The shared data-center scorecard now uses this detailed inventory as a mapped-proximity factor, separately from service and diversity. See `docs/DATA-CENTER-SITE-SCORING.md`.
 
+## Parcel-workflow route expansion
+
+The `20260919-parcel` batch adds geometry in **45 states plus DC**. Kinetic ILEC dark fiber contributes 4,108 local map records / 322,401 line parts; Uniti Wholesale dark fiber contributes 4,662 / 226,071. Both are publicly linked from [Uniti's own network map](https://www.unitiwholesale.com/network-map/), with current status, available strands and parcel service unconfirmed. 215 records / 1,261 parts from the developing/under-review layer remain **planned**, excluded from qualifying proximity evidence. Five Kinetic and one Wholesale record have empty geometry; exact within-source duplicates and out-of-boundary exclusions are audited in the manifest. Cross-source overlaps remain separately attributed.
+
+[Round Rock's public municipal fiber layer](https://www.arcgis.com/home/item.html?id=999003bd039b4586924820e93f667cfd) returned 88 records explicitly labeled `STATUS = 'EXISTING'`, grouped as two local map records. Eight other records were not imported by this filter. Municipal fiber does not establish a commercial service offer. [Silvis's public layer](https://www.arcgis.com/home/item.html?id=a6bd6493486c4cc1add15ce27c8330f6) contributes four parts in two **illustrative-only** records, with an approximately 2014 source vintage. Its publisher expressly says it is not survey/engineering quality and is unsuitable for site-specific decisions. The `proximityEligible:false` override is carried through the importer, overview and shared API adapter; it cannot earn site-scoring points.
+
+Google and publisher searches also surfaced a third-party layer explicitly described as purchased GeoTel data. It was **not imported**. Public accessibility does not grant a commercial dataset license. Vermont's state-owned layer still fails TLS validation and was not fetched with verification disabled. Hawaii, Montana and Vermont remain explicit geometry gaps.
+
+## Parcel inspection
+
+The standalone map now supports street/aerial basemaps, direct coordinate links, boundary drawing, single-feature GeoJSON import (including holes and multiple parts), county parcel selection, and boundary/evidence exports. Registered public parcel services are **Dallas TX, Fulton GA, Cook IL, DuPage IL and Lake IL only**. Queries are viewport-limited, at zoom 16+, capped at 400 displayed outlines with an explicit partial-response warning. Only geometry and parcel IDs are requested, not owners or contact attributes. Draw/import is available throughout the country; this is not nationwide assessor coverage.
+
+`POST /api/fiber-screen` uses the existing authenticated tenant/billing/member/tool gate and the detailed state shards. The new parcel engine preserves holes and disconnected parts, validates finite closed non-self-intersecting geometry, limits boundary size and response geometry, ranks actual boundary distances, and keeps plans/reference-only/unknown-medium routes separate. Zero means a **published geometry intersection**, not a surveyed crossing or service confirmation. All capacity, access and physical-diversity fields remain unconfirmed. The existing GET point contract and legacy editor boundary workflow are unchanged. See `docs/PARCEL-FIBER-INSPECTION.md`.
+
 ## Publisher images inside the map
 
 The standalone viewer now has a source/carrier filter, a September 19 additions filter, and a collapsible **Publisher maps & images** panel tied to the selected state. `map-references.json` catalogs seven publisher-hosted images and three map collections, including CEN, OARnet, Florida LambdaRail, Uniti expansion routes, FiberLight, Illinois Century Network, CENIC and New Mexico Fiber Network.
@@ -83,7 +97,7 @@ Next ingestion candidates include remaining Uniti layers, Dakota Carrier Network
 - Source popups explain unverified precision, carrier-label age and grouping. UI uses “map records” instead of claiming unique cables.
 - The existing authenticated `fiber-screen` and `network-proximity` lookups read the new geometry with unchanged serviceability safeguards. Cross-border records duplicated in state shards are returned once by stable source ID; distinct publisher records are not collapsed. No backend scoring was moved to browser code; no Firebase collections, tenant data, billing or access rules changed.
 - Automated checks pass for all 51 shards, source/ID preservation, coordinate validity and bounds, line-part accounting, priority order, minimized metadata, new-source proximity lookup, existing site/UI regressions and HTML script resolution.
-- Offline gzip packaging reduces 267.5 MB of detailed state JSON to 78.3 MB without coordinate changes. All three screening functions explicitly include the compressed shards and manifest, excluding raw national GeoJSON. The approximately 61 MB overview and raw shards remain static browser assets. No application build or browser decompression dependency is added. `--check` validates byte-for-byte decompression parity, and API tests refuse raw-shard reads to exercise the production format.
+- Offline gzip packaging reduces 361.3 MB of detailed state JSON to 102.8 MB without coordinate changes. All three screening functions explicitly include the compressed shards and manifest, excluding raw national GeoJSON. The approximately 82 MB overview and raw shards remain static browser assets. Only the already-generalized low-zoom overview is rounded to six decimals to stay below GitHub's per-file limit; detailed coordinates used at parcel zoom and by APIs are untouched. Coordinate deep links load detailed state data without first downloading the national overview. No application build or browser decompression dependency is added. `--check` validates byte-for-byte decompression parity, and API tests refuse raw-shard reads to exercise the production format.
 - Local browser verification covers Texas and Connecticut latest-addition filtering and the CEN image panel without browser warnings/errors; first-batch checks also covered high-density Georgia and the research register. Production authentication and deployment acceptance remain outstanding.
 
 ## Repeatable additive workflow
@@ -114,5 +128,14 @@ Segra refresh (a distinct additive batch, no Kansas file required):
 ```sh
 python scripts/download-fiber-expansion.py /absolute/path/to/segra-raw scripts/fiber-segra-sources.json
 python scripts/import-fiber-expansion.py /absolute/path/to/segra-raw --batch 20260919-segra --skip-kansas
+npm test
+```
+
+Parcel-workflow expansion (another independent additive batch):
+
+```sh
+python scripts/download-fiber-expansion.py /absolute/path/to/parcel-batch-raw scripts/fiber-parcel-expansion-sources.json
+python scripts/import-fiber-expansion.py /absolute/path/to/parcel-batch-raw --batch 20260919-parcel --skip-kansas
+node scripts/update-fiber-parcel-research.js
 npm test
 ```
