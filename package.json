@@ -40,6 +40,7 @@
     "demo": "node scripts/preview-storefront.js 8788 --products tenants/cleancell/products.json",
     "test:import": "node scripts/test-import-products.js",
     "test:wlpreview": "node scripts/test-wl-preview.js",
-    "test:toolaccess": "node scripts/tests/ttoolaccess.js"
+    "test:toolaccess": "node scripts/tests/ttoolaccess.js",
+    "demo:build": "node scripts/build-demo.js"
   }
 }

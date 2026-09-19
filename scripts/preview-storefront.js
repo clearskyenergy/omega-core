@@ -63,18 +63,46 @@ var PRODUCTS_FILE = (function () {
    see here is what seeding that document produces. Two products, both with a
    real footprint, because a product without one is correctly refused a site
    study and the preview should show the working case. */
-var TENANT = {
-  name: 'Clean Cell',
-  accent: '#1F6F4A',
-  platformName: 'Clean Cell Power Platform',
-  supportEmail: 'orders@example.com',
-  supportPhone: '',
-  attribution: ''                      /* 'none' on the public surface */
-};
+/* ── THE TENANT, FROM THE TENANT FILE ────────────────────────────────────
+   These were hand-typed literals, and one of them was wrong in a way that
+   matters for a demo: the accent was #1F6F4A, a green somebody picked for a
+   placeholder, while tenants/cleancell/tenant.json has carried Clean Cell's
+   actual #2B5FA8 all along. A demo that paints the customer's brand the
+   wrong colour undercuts the one claim it is making.
+
+   So it reads the seed file, which is the same document
+   scripts/seed-omega-orgs.js and whitelabel-setup.html publish from. One
+   source; the preview cannot drift away from what gets deployed. Falls back
+   to neutral defaults if the file moves, because a demo server that refuses
+   to boot over branding is worse than one that boots grey. */
+var TENANT = (function () {
+  var d = { name: 'Clean Cell', accent: '#1F6F4A', platformName: 'Clean Cell Power Platform',
+            supportEmail: '', supportPhone: '', attribution: '' };
+  try {
+    var t = JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants', 'cleancell', 'tenant.json'), 'utf8'));
+    var wl = t.whiteLabel || {};
+    return {
+      name: wl.shortName || t.name || d.name,
+      accent: wl.accent || d.accent,
+      platformName: wl.platformName || d.platformName,
+      supportEmail: wl.supportEmail || '',
+      supportPhone: '',
+      /* 'none' on the public surface, by contract. */
+      attribution: (wl.embed && wl.embed.attribution === 'none') ? '' : (wl.attributionText || '')
+    };
+  } catch (e) { return d; }
+})();
+
+var TENANT_SEED = (function () {
+  try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants', 'cleancell', 'tenant.json'), 'utf8')); }
+  catch (e) { return {}; }
+})();
+var SEED_SF = TENANT_SEED.storefront || {};
 
 var STOREFRONT = {
-  headline: 'Size your Clean Cell storage system',
-  intro: 'Enter what your utility bill says and we will size a system for your site. '
+  headline: SEED_SF.headline || 'Size your Clean Cell storage system',
+  intro: SEED_SF.intro
+       || 'Enter what your utility bill says and we will size a system for your site. '
        + 'No account needed.',
   disclaimer: 'Indicative only. Peak duration is estimated from monthly billing data; '
             + 'interval data from your utility settles the final size. Not a quotation.',
@@ -371,34 +399,101 @@ function opsAdvance(res, b) {
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
               '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
-var HOST_PAGE = [
-  '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
-  '<meta name="viewport" content="width=device-width,initial-scale=1">',
-  '<title>cleancell.us — preview</title><style>',
-  'body{margin:0;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1b2a22}',
-  '.bar{background:#0E3B27;color:#fff;padding:14px 28px;display:flex;align-items:center;gap:18px}',
-  '.bar .logo{font-weight:800;letter-spacing:.02em;font-size:18px}',
-  '.bar nav{margin-left:auto;display:flex;gap:22px;font-size:14px;opacity:.85}',
-  '.hero{background:#F3F6F4;padding:44px 28px;border-bottom:1px solid #dfe5e1}',
-  '.hero h1{margin:0 0 8px;font-size:30px;max-width:620px;line-height:1.2}',
-  '.hero p{margin:0;color:#4a5a52;max-width:620px}',
-  '.wrap{max-width:900px;margin:0 auto;padding:30px 20px 60px}',
-  '.note{background:#FFF4D6;border:1px solid #E6D08A;color:#6B5310;padding:10px 14px;',
-  'border-radius:8px;font-size:13px;margin:0 0 22px}',
-  '</style></head><body>',
-  '<div class="bar"><span class="logo">CLEAN CELL</span>',
-  '<nav><span>Products</span><span>Technology</span><span>Support</span></nav></div>',
-  '<div class="hero"><h1>Commercial energy storage, built in the USA.</h1>',
-  '<p>LFP cabinets and containers for peak shaving, backup and grid services.</p></div>',
-  '<div class="wrap">',
-  '<p class="note"><b>Local preview.</b> This page stands in for cleancell.us. ',
-  'Everything below the line is the real storefront, loaded through embed/loader.js ',
-  'exactly as the two-line snippet would load it on their own site.</p>',
-  '<div id="storefront"></div>',
-  '<script src="/embed/loader.js" data-key="omega_pk_live_preview0000000000000000000000" ',
-  'data-target="#storefront" async><\/script>',
-  '</div></body></html>'
-].join('\n');
+/* ══════════════════════════════════════════════════════════════════════
+   THEIR WEBSITE
+   ──────────────────────────────────────────────────────────────────────
+   A stand-in for cleancell.us with the storefront mounted in it, so the
+   claim being demonstrated — "this sits on YOUR site" — is visible rather
+   than described.
+
+   ⚠ IT IS NOT A COPY OF THEIR SITE, and must not be passed off as one.
+   cleancell.us sits behind a SiteGround bot wall (a /.well-known/sgcaptcha
+   redirect) that refuses curl and a headless browser alike, so the real
+   layout and copy could not be read. What IS theirs here comes from
+   tenants/cleancell/tenant.json: the name, the platform name and the
+   accent — #2B5FA8, their blue, not the placeholder green this file used
+   to carry. Everything else is a generic C&I battery manufacturer's
+   homepage. Swap in their real header and hero the moment somebody hands
+   over a screenshot or the logo; it is one block below.
+
+   THE PRODUCT STRIP IS REAL. It renders from the same catalogue the
+   storefront sells out of, so what the page advertises and what the
+   storefront will offer cannot disagree — which is the kind of thing a CEO
+   notices in the room. */
+function hostPage() {
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  var A = TENANT.accent || '#2B5FA8';
+  var NAME = (TENANT.name || 'Clean Cell').toUpperCase();
+
+  var cards = STOREFRONT.products.slice(0, 4).map(function (p) {
+    return '<div class="card">'
+      + '<div class="cap">' + (p.kwh ? Number(p.kwh).toLocaleString() + ' kWh' : '') + '</div>'
+      + '<div class="cn">' + esc(p.name) + '</div>'
+      + '<div class="cs">' + (p.kw ? Number(p.kw).toLocaleString() + ' kW' : '')
+      + (p.chemistry ? ' &middot; ' + esc(p.chemistry) : '')
+      + (p.warrantyYears ? ' &middot; ' + esc(p.warrantyYears) + ' yr' : '') + '</div>'
+      + '<div class="ck">' + esc(p.sku) + '</div></div>';
+  }).join('');
+
+  return [
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>' + esc(TENANT.name) + ' — Commercial Energy Storage</title>',
+    '<style>',
+    ':root{--a:' + A + ';--ink:#101828;--mute:#5b6b7c;--line:#e4e7ec}',
+    '*{box-sizing:border-box}',
+    'body{margin:0;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink)}',
+    '.bar{background:var(--a);color:#fff;padding:15px 30px;display:flex;align-items:center;gap:20px}',
+    '.bar .logo{font-weight:800;letter-spacing:.06em;font-size:18px}',
+    '.bar nav{margin-left:auto;display:flex;gap:24px;font-size:14px;opacity:.92}',
+    '.bar .cta{background:#fff;color:var(--a);padding:7px 14px;border-radius:6px;font-weight:700;font-size:13px}',
+    '.hero{background:linear-gradient(180deg,#f7f9fc,#eef2f7);padding:56px 30px;border-bottom:1px solid var(--line)}',
+    '.hero .in{max-width:1020px;margin:0 auto}',
+    '.hero h1{margin:0 0 12px;font-size:36px;line-height:1.18;max-width:660px;letter-spacing:-.01em}',
+    '.hero p{margin:0;color:var(--mute);max-width:620px;font-size:17px}',
+    '.strip{max-width:1020px;margin:0 auto;padding:34px 20px 8px}',
+    '.strip h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:0 0 14px}',
+    '.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}',
+    '.card{border:1px solid var(--line);border-radius:10px;padding:15px;background:#fff}',
+    '.cap{font-size:22px;font-weight:750;color:var(--a);line-height:1.1}',
+    '.cn{font-weight:640;margin-top:5px;font-size:14px}',
+    '.cs{font-size:12.5px;color:var(--mute);margin-top:3px}',
+    '.ck{font:11px ui-monospace,Menlo,monospace;color:#9aa7b4;margin-top:7px}',
+    '.wrap{max-width:1020px;margin:0 auto;padding:34px 20px 70px}',
+    '.lead{border-top:1px solid var(--line);padding-top:30px}',
+    '.lead h2{margin:0 0 6px;font-size:24px}',
+    '.lead p{margin:0 0 20px;color:var(--mute);max-width:620px}',
+    '.note{background:#FFF4D6;border:1px solid #E6D08A;color:#6B5310;padding:11px 14px;',
+    'border-radius:8px;font-size:13px;margin:0 0 24px}',
+    'footer{background:#101828;color:#9aa7b4;padding:26px 30px;font-size:13px}',
+    'footer b{color:#fff}',
+    '</style></head><body>',
+    '<div class="bar"><span class="logo">' + esc(NAME) + '</span>',
+    '<nav><span>Products</span><span>Technology</span><span>Projects</span><span>Support</span></nav>',
+    '<span class="cta">Size a system</span></div>',
+    '<div class="hero"><div class="in">',
+    '<h1>Commercial energy storage, engineered and supported in the USA.</h1>',
+    '<p>LFP cabinets and containers for peak shaving, backup power and grid services — ',
+    'from a single 215 kWh cabinet to multi-megawatt containerised systems.</p>',
+    '</div></div>',
+    '<div class="strip"><h2>The range</h2><div class="cards">' + cards + '</div></div>',
+    '<div class="wrap"><div class="lead">',
+    '<p class="note"><b>Local preview.</b> This page stands in for cleancell.us, which is behind a ',
+    'bot wall and could not be read — the name, platform name and accent are theirs, the layout is ',
+    'generic. Everything below this line is the REAL storefront, loaded through ',
+    '<code>embed/loader.js</code> exactly as the two-line snippet would load it on their own site.</p>',
+    '<div id="storefront"></div>',
+    '<' + 'script src="/embed/loader.js" data-key="omega_pk_live_preview0000000000000000000000" ',
+    'data-target="#storefront" async><' + '/script>',
+    '</div></div>',
+    '<footer><b>' + esc(TENANT.name) + '</b> &middot; Commercial energy storage',
+    (TENANT.supportEmail ? ' &middot; ' + esc(TENANT.supportEmail) : ''),
+    '</footer></body></html>'
+  ].join('\n');
+}
 
 /* A page that stands the gate up in one state. The gate is the real file;
    only Firebase is faked, because the whole point is to see what a person in
@@ -876,7 +971,7 @@ var server = http.createServer(function (req, res) {
      the sale happens. The host page moved to /host so the old link still
      works for anyone who bookmarked it. */
   if (p === '/' || p === '/index.html') return send(res, 200, demoIndex(), TYPES['.html']);
-  if (p === '/host' || p === '/host.html') return send(res, 200, HOST_PAGE, TYPES['.html']);
+  if (p === '/host' || p === '/host.html') return send(res, 200, hostPage(), TYPES['.html']);
   if (p === '/desk' || p === '/desk.html') return send(res, 200, deskPage(), TYPES['.html']);
   if (p === '/ops' || p === '/ops.html') return send(res, 200, opsPage(), TYPES['.html']);
   if (p === '/design' || p === '/design.html') return send(res, 200, designPage(u.query), TYPES['.html']);
@@ -922,6 +1017,17 @@ var server = http.createServer(function (req, res) {
 
   send(res, 404, 'not found', 'text/plain');
 });
+
+/* ── Exported, so scripts/build-demo.js can render the same pages into a
+   standalone file without a second implementation of any of them. The
+   server only listens when this file is RUN; requiring it is inert. */
+module.exports = {
+  hostPage: hostPage, deskPage: deskPage, opsPage: opsPage,
+  designPage: designPage, demoIndex: demoIndex, gatePage: gatePage,
+  TENANT: TENANT, STOREFRONT: STOREFRONT, PARCEL_RING: PARCEL_RING,
+  STATUS_FLOW: STATUS_FLOW, STATUS_LABEL: STATUS_LABEL
+};
+if (require.main !== module) return;
 
 /* 127.0.0.1 ONLY. This server checks no key, no origin and no receipt. */
 server.listen(PORT, '127.0.0.1', function () {
