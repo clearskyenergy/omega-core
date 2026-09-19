@@ -122,6 +122,31 @@ ok('the default aisle is not zero',
      { drawn: pk.units.length, count: pk.count });
 })();
 
+/* ── The DRAWN block is centred on its own extent ─────────────────────
+   The capped case is the normal one — the customer is shown what they need,
+   not the yard's capacity — and the first render laid those few units out on
+   the capacity grid, which parked four cabinets in the bottom-left corner of
+   a 1.66-acre yard and read as a rendering fault. */
+(function drawnBlockIsCentred() {
+  var yard = { x: 0, y: 0, w: 600, h: 400 };
+  [1, 2, 4, 9, 20, 60].forEach(function (n) {
+    var pk = F.packRect(yard, { widthFt: 8, depthFt: 4 },
+      { clearanceFt: 5, aisleFt: 20, rowsPerBlock: 2, maxUnits: n });
+    ok('cap ' + n + ': draws exactly ' + n, pk.drawn === n && pk.units.length === n, pk.drawn);
+    var xs = pk.units.map(function (u) { return u.x; });
+    var ys = pk.units.map(function (u) { return u.y; });
+    var cx = (Math.min.apply(null, xs) + Math.max.apply(null, xs) + 8) / 2;
+    var cy = (Math.min.apply(null, ys) + Math.max.apply(null, ys) + 4) / 2;
+    ok('cap ' + n + ': the block is centred in the yard, not cornered',
+       Math.abs(cx - 300) < 20 && Math.abs(cy - 200) < 20, { cx: cx, cy: cy });
+    /* And roughly square rather than a single 60-wide line. */
+    var bw = Math.max.apply(null, xs) + 8 - Math.min.apply(null, xs);
+    var bh = Math.max.apply(null, ys) + 4 - Math.min.apply(null, ys);
+    ok('cap ' + n + ': the block is not a degenerate strip',
+       n < 3 || (bw / bh < 6 && bh / bw < 6), { bw: bw, bh: bh });
+  });
+})();
+
 /* A yard too small for one unit is an answer with a reason, not a crash. */
 var tiny = F.packRect({ x: 0, y: 0, w: 22, h: 10 }, UNIT, { clearanceFt: 5 });
 ok('a yard too small fits nothing', tiny.count === 0, tiny.count);

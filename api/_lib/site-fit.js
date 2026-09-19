@@ -287,19 +287,41 @@ function packRect(rect, unit, opts) {
              why: 'the usable area is smaller than one unit plus its clearance and access aisle' };
   }
 
+  /* ── THE DRAWN BLOCK IS ARRANGED FOR ITS OWN SIZE ────────────────────
+     `best` describes how the yard would be filled to CAPACITY. When the
+     caller caps the drawing at what the customer actually needs — which is
+     the normal case — laying those few units out on the capacity grid and
+     centring THAT grid puts them in a corner of a huge empty box, with all
+     the whitespace on one side. On the first real render, four cabinets sat
+     in the bottom-left of a 1.66-acre yard and read as a rendering fault.
+
+     So the drawn units get their own arrangement: roughly square in the
+     yard's own proportions, never wider than the yard allows, and centred on
+     its own extent. Presentation only — `count`, `cols` and `rows` still
+     describe the capacity, because that is what the caller reports. */
+  var nDraw = Math.min(cap, best.count);
+  var dCols = best.cols, dRows = best.rows;
+  if (nDraw < best.count) {
+    /* A block whose aspect follows the unit pitch, so a row of long
+       containers does not become a single 40-wide line. */
+    dCols = Math.max(1, Math.min(best.cols,
+      Math.ceil(Math.sqrt(nDraw * (best.d + c) / (best.w + c)))));
+    dRows = Math.ceil(nDraw / dCols);
+  }
+
   /* Rows laid out top-down, inserting an aisle after every `perBlock` rows.
      Y positions are computed by walking, not by a formula, because the aisle
      makes the pitch non-uniform and a closed form here is how an off-by-one
      gets drawn. */
-  var ys = rowOffsets(best.rows, best.d, c, aisle, perBlock);
+  var ys = rowOffsets(dRows, best.d, c, aisle, perBlock);
   var usedH = ys.length ? (ys[ys.length - 1] + best.d + c) : 0;
-  var usedW = best.cols * best.w + (best.cols + 1) * c;
+  var usedW = dCols * best.w + (dCols + 1) * c;
   var offX = rect.x + Math.max(0, (rect.w - usedW) / 2) + c;
   var offY = rect.y + Math.max(0, (rect.h - usedH) / 2);
 
   var units = [], drawn = 0;
-  for (var r = 0; r < best.rows && drawn < cap; r++) {
-    for (var col = 0; col < best.cols && drawn < cap; col++) {
+  for (var r = 0; r < dRows && drawn < nDraw; r++) {
+    for (var col = 0; col < dCols && drawn < nDraw; col++) {
       units.push({
         x: round1(offX + col * (best.w + c)),
         y: round1(offY + ys[r]),

@@ -72,8 +72,10 @@
     border-radius:8px;padding:13px;margin-bottom:9px;cursor:pointer}
   .opt.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
   .opt input{width:auto;margin-top:3px;flex:0 0 auto}
-  .opt .n{font-weight:700}
-  .opt .d{font-size:13px;color:var(--sub)}
+  .opt .n{font-weight:700;display:block}
+  /* block, not inline: the name and the spec ran together as
+     "CleanCell 372 cabinet100 kW · 372 kWh" on the first real render. */
+  .opt .d{font-size:13px;color:var(--sub);display:block}
   .opt .p{margin-left:auto;text-align:right;font-weight:700;white-space:nowrap}
   .band{font-size:13px;color:var(--sub);border-top:1px solid var(--line);padding-top:11px;margin-top:4px}
   .band b{color:var(--ink)}
@@ -101,6 +103,9 @@
     stroke-dasharray:6 4;vector-effect:non-scaling-stroke;cursor:move}
   .plan .unit{fill:var(--accent);fill-opacity:.85;stroke:#fff;stroke-width:.5;vector-effect:non-scaling-stroke}
   .plan .grip{fill:#fff;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;cursor:nwse-resize}
+  .plan .pad{fill:none;stroke:var(--accent);stroke-width:1.5;vector-effect:non-scaling-stroke;opacity:.65}
+  .plan .lead{stroke:var(--accent);stroke-width:1;vector-effect:non-scaling-stroke;opacity:.65}
+  .plan text.tag{font-weight:700;fill:var(--accent)}
   .plan .scale{stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
   .plan text{font:600 11px -apple-system,system-ui,sans-serif;fill:var(--sub)}
   .planhint{font-size:12.5px;color:var(--sub);margin:8px 0 0}
@@ -111,7 +116,15 @@
   .unver li{margin:2px 0}
   #boot{padding:40px 18px;text-align:center;color:var(--sub);font-size:14px}
   .hide{display:none!important}
-  @media (max-width:520px){ .row2{grid-template-columns:1fr} .stat .v{font-size:22px} }
+  @media (max-width:520px){
+    .row2{grid-template-columns:1fr}
+    /* The bill row is three fields. At 390px the auto-fit grid gave two
+       columns and orphaned the third on its own line, which looked broken
+       rather than responsive. One column is plainly deliberate. */
+    .grid{grid-template-columns:1fr}
+    .stat .v{font-size:22px}
+    .result{grid-template-columns:1fr 1fr}
+  }
 </style>
 </head>
 <body>
@@ -519,14 +532,24 @@
     show($('studyCard'));
   }
 
+  /* THE CATALOGUE FIRST, AND THAT ORDER IS THE WHOLE FUNCTION.
+
+     /api/embed-size returns a FITTED list — sku, kw, kwh, price, qty — and no
+     footprint, because sizing has no use for one. /api/embed-config returns
+     the full catalogue record, which has widthFt/depthFt.
+
+     Searching the fitted list first found the sku, returned early, and the
+     fallback below never ran: offerStudy() then saw a product with no
+     footprint and hid the site study on every single session. The button
+     simply never appeared, with nothing in the console to say why.
+
+     So the full record wins, and the fitted list is the fallback for a sku
+     the catalogue no longer carries. */
   function productBySku(sku) {
-    var all = (SIZED && SIZED.products) || CFG.products || [];
-    for (var i = 0; i < all.length; i++) if (all[i].sku === sku) return all[i];
-    /* The sizer's fitted list carries no footprint — it is a different
-       projection of the same catalogue — so fall back to the full one. */
-    for (var j = 0; j < (CFG.products || []).length; j++) {
-      if (CFG.products[j].sku === sku) return CFG.products[j];
-    }
+    var cat = CFG.products || [];
+    for (var i = 0; i < cat.length; i++) if (cat[i].sku === sku) return cat[i];
+    var fitted = (SIZED && SIZED.products) || [];
+    for (var j = 0; j < fitted.length; j++) if (fitted[j].sku === sku) return fitted[j];
     return null;
   }
 
@@ -694,12 +717,26 @@
         stat('Lot', r.site.acres, 'acres')
       + stat('Your system', pk.unitsDrawn || pk.unitsNeeded || 0, 'units')
       + stat('Marked yard', (r.usable && r.usable.acres) || 0, 'acres')
-      + (pk.unitsThatFit ? stat('Yard could hold', pk.unitsThatFit, 'units') : '');
+      + stat('Fits', r.fits ? 'Yes' : 'No', '');
 
     drawPlan(r);
 
+    /* ── HEADROOM AS A PHRASE, NOT AS A NUMBER ─────────────────────────
+       The capacity tile used to read "Yard could hold 350 units". That is
+       geometrically true and commercially absurd — nobody designs 350
+       cabinets onto 1.66 acres, and printing the integer invites exactly the
+       ridicule the aisle spacing was added to avoid. The USEFUL fact is that
+       there is room to grow, so it is said as a capped multiple in a
+       sentence. The exact figure stays in the API for the order desk, where
+       the reader is an engineer. */
+    var head = '';
+    if (r.fits && pk.unitsThatFit && pk.unitsNeeded) {
+      var mult = Math.floor(pk.unitsThatFit / pk.unitsNeeded);
+      if (mult >= 10) head = ' The marked area has room for well over ten times this system.';
+      else if (mult >= 2) head = ' The marked area has room for about ' + mult + '× this system.';
+    }
     var fitLine = r.fits
-      ? 'Your system fits in the marked area with room to spare.'
+      ? ('Your system fits in the marked area.' + head)
       : (r.reason || 'Your system does not fit in the marked area at these clearances.');
     $('planHint').innerHTML = esc(fitLine)
       + ' <b>Drag the dashed box</b> to the part of the lot you would actually use,'
@@ -765,6 +802,41 @@
       (r.packing.units || []).forEach(function (b) {
         g.appendChild(svgEl('rect', { 'class': 'unit', x: b.x, y: b.y, width: b.w, height: b.h }));
       });
+      /* ── A CALLOUT ROUND THE EQUIPMENT ────────────────────────────────
+         Four 8 × 4 ft cabinets on a 2.6-acre lot are four specks. That is
+         physically honest and communicates nothing — the customer came to see
+         THEIR system and cannot find it on the drawing.
+
+         So the block gets a pad outline and a label, the way a real site plan
+         calls out a detail. It adds no claim: the outline is the drawn units'
+         own extent plus the clearance already in the assumptions, and the
+         label says what it is. Zooming to the units instead would have lost
+         the lot context, which is the thing that makes the drawing theirs. */
+      var us = r.packing.units || [];
+      if (us.length) {
+        var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        for (var k = 0; k < us.length; k++) {
+          if (us[k].x < bx0) bx0 = us[k].x;
+          if (us[k].y < by0) by0 = us[k].y;
+          if (us[k].x + us[k].w > bx1) bx1 = us[k].x + us[k].w;
+          if (us[k].y + us[k].h > by1) by1 = us[k].y + us[k].h;
+        }
+        var padFt = Math.max((r.assumptions && r.assumptions.clearanceFt) || 5, VIEW.w * 0.012);
+        g.appendChild(svgEl('rect', { 'class': 'pad',
+          x: bx0 - padFt, y: by0 - padFt,
+          width: (bx1 - bx0) + padFt * 2, height: (by1 - by0) + padFt * 2, rx: padFt * 0.3 }));
+
+        var p2 = productBySku(PICKED) || {};
+        var lead = Math.max(VIEW.h * 0.09, 40);
+        var lx = (bx0 + bx1) / 2, ly = by1 + padFt;
+        g.appendChild(svgEl('line', { 'class': 'lead', x1: lx, y1: ly, x2: lx, y2: ly + lead }));
+        var tag = svgEl('text', { 'class': 'tag', x: lx, y: -(ly + lead + Math.max(6, VIEW.h * 0.014)),
+                                  transform: 'scale(1,-1)', 'text-anchor': 'middle' });
+        tag.textContent = (r.packing.unitsDrawn || us.length) + ' × ' + (p2.name || 'unit')
+          + '  ·  ' + n0(bx1 - bx0) + ' × ' + n0(by1 - by0) + ' ft';
+        g.appendChild(tag);
+      }
+
       /* The grip sits at the yard's north-east corner in FEET; its size is in
          feet too, so it scales with the drawing instead of vanishing on a
          large lot. */
@@ -775,13 +847,19 @@
       attachDrag(svg, g, yard, grip, u);
     }
 
-    /* A scale bar, because a plan without one is a picture. */
+    /* A scale bar, because a plan without one is a picture.
+
+       It lives in the PADDING below the parcel, and its label sits BELOW the
+       bar rather than above it: above put the text on top of the parcel's own
+       outline, which looked like a mistake on the first render. */
     var barFt = niceBar(VIEW.w / 4);
-    var bx = VIEW.minX + VIEW.w * 0.04, by = VIEW.minY + VIEW.h * 0.05;
+    var bx = VIEW.minX + VIEW.w * 0.04;
+    var by = VIEW.minY + pad * 0.55;
+    var tick = Math.max(3, pad * 0.12);
     g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by, x2: bx + barFt, y2: by }));
-    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by - 4, x2: bx, y2: by + 4 }));
-    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx + barFt, y1: by - 4, x2: bx + barFt, y2: by + 4 }));
-    var lbl = svgEl('text', { x: bx, y: -(by + 10), transform: 'scale(1,-1)' });
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by - tick, x2: bx, y2: by + tick }));
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx + barFt, y1: by - tick, x2: bx + barFt, y2: by + tick }));
+    var lbl = svgEl('text', { x: bx + barFt + tick * 2, y: -(by - tick * 0.9), transform: 'scale(1,-1)' });
     lbl.textContent = n0(barFt) + ' ft';
     g.appendChild(lbl);
   }
