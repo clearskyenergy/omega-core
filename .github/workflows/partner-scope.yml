@@ -56,9 +56,14 @@ jobs:
 
       # The head commit is fetched as DATA to be diffed, never checked out and
       # never executed.
+      # No --depth here. `--depth=0` is not "no limit", it is an error
+      # (`fatal: depth 0 is not a positive number`) that kills the job before
+      # the checker runs — an error rather than a verdict, which reads as a
+      # broken CI. The checkout above already used fetch-depth: 0, so the
+      # history is complete and this only needs to name the commit.
       - name: fetch the pull request's head commit
         run: |
-          git fetch --no-tags --depth=0 origin \
+          git fetch --no-tags origin \
             "+${{ github.event.pull_request.head.sha }}:refs/remotes/pr/head"
 
       - uses: actions/setup-node@v4
