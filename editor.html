@@ -118,6 +118,7 @@ function openFinancingApply(){
 }
 </script>
 <script src="/omega-caps.js"></script>
+<script src="/omega-bess-products.js"></script>
 <script src="omega-equipment-visuals.js"></script>
 <!-- Turns a hand-drawn site KMZ into classified features and a grid score.
      Optional: the GIS importer works without it, just without the site
@@ -21291,6 +21292,75 @@ const BESS_CATALOG = {
     dims:'20-ft container',certs:'NFPA855, NFPA69, NFPA72, NFPA70E (opt. NFPA68), UL9540/UL9540A',
     notes:'Canadian Solar / e-STORAGE SolBank 3.0 (S-5016-2H / S-5016-4H), 20-ft containerized DC block: 5,016 kWh nominal, up to 2.35 MW at the DC terminal (1.2-2.35 MW depending on paired PCS). 314Ah LFP, ~45% higher density than SolBank 1.0. DC-COUPLED -- needs an external/central PCS + step-up transformer (unlike the all-in-one Energy Station / PowerBlock). Mid-size building block between the KuBank C&I cabinets and the 14 MWh Energy Station; parallels to utility scale. PRICE: quote required. CSI Solar / e-STORAGE. Datasheet SolBank 3.0 v1.6x NA.'},
 };
+
+/* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────
+   BESS_CATALOG above ships 29 products from 7 manufacturers, and the
+   manufacturer field below defaults to "Gotion". Correct for a developer or
+   an EPC, who buys from whoever quotes best — and the worst possible default
+   for a white-labelled battery MANUFACTURER, whose own guided build would
+   otherwise lay out a competitor's container.
+
+   omega-bess-products.js reads the org's own product list (the same one the
+   public storefront and the site study use — one catalogue, not four) and
+   this merges it in. Three things happen, all additive and all no-ops for a
+   tenant with no list:
+
+     1. The entries join BESS_CATALOG, namespaced by org so a tenant SKU can
+        never collide with or silently replace a shipped one. Nothing shipped
+        is removed: a saved drawing may reference a key, and re-rendering it
+        as a different battery is worse than a crowded dropdown.
+     2. Their products are PREPENDED to the model dropdown, in their own
+        optgroup, so theirs is what a designer reaches first.
+     3. The manufacturer field stops saying Gotion.
+
+   Deferred until a user exists, because the read is scoped to their org.
+   Wrapped so a failure — no Firestore, no products, an offline editor —
+   leaves the shipped catalogue exactly as it was. */
+(function () {
+  var done = false;
+  function apply(t) {
+    if (done || !t || !t.count) return;
+    done = true;
+    try {
+      for (var i = 0; i < t.keys.length; i++) {
+        var k = t.keys[i];
+        if (!BESS_CATALOG[k]) BESS_CATALOG[k] = t.entries[k];
+      }
+      var sel = document.getElementById('bm-catalog');
+      if (sel && !document.getElementById('bm-cat-tenant')) {
+        var grp = document.createElement('optgroup');
+        grp.id = 'bm-cat-tenant';
+        grp.label = t.brand + ' — your products';
+        for (var j = 0; j < t.keys.length; j++) {
+          var key = t.keys[j], e = t.entries[key];
+          var o = document.createElement('option');
+          o.value = key;
+          o.textContent = e.model + ' — ' + (e.kw || '?') + 'kW / ' + (e.kwh || '?') + 'kWh'
+            + (e._incPCS ? ' · PCS integrated' : '');
+          grp.appendChild(o);
+        }
+        /* After the placeholder option, before every shipped optgroup. */
+        var first = sel.querySelector('optgroup');
+        if (first) sel.insertBefore(grp, first); else sel.appendChild(grp);
+      }
+      var mfr = document.getElementById('bm-mfr');
+      if (mfr && (!mfr.value || mfr.value === 'Gotion')) { mfr.value = t.brand; mfr.placeholder = t.brand; }
+    } catch (e) { /* the shipped catalogue is a perfectly good answer */ }
+  }
+  function go() {
+    if (!window.OmegaBessProducts) return;
+    try { OmegaBessProducts.load().then(apply, function () {}); } catch (e) {}
+  }
+  function watch(tries) {
+    if (done || (tries || 0) > 40) return;
+    var u = null;
+    try { u = window.firebase && firebase.apps && firebase.apps.length && firebase.auth().currentUser; } catch (e) {}
+    if (u) { go(); return; }
+    setTimeout(function () { watch((tries || 0) + 1); }, 400);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { watch(0); });
+  else watch(0);
+})();
 
 function applyBMCatalog() {
   const key = document.getElementById('bm-catalog').value;

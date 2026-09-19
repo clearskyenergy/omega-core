@@ -50,6 +50,10 @@ var STOREFRONT_KEYS = ['headline', 'intro', 'disclaimer', 'thanks', 'cta',
      dailyParcelCap is the spend limit on the metered parcel lookup. */
   'siteStudy', 'requireContactForLayout', 'dailyParcelCap',
   'setbackFt', 'clearanceFt', 'aisleFt', 'rowsPerBlock'];
+/* Documentation keys in tenant.json that no reader consumes. Dropped here
+   rather than seeded, so the file can explain its own product shape without
+   putting a _comment block into Firestore. */
+var STOREFRONT_DOC_KEYS = ['_productShape'];
 
 function planStorefront(t) {
   var sf = t.storefront;
@@ -63,6 +67,7 @@ function planStorefront(t) {
   });
   var out = {};
   STOREFRONT_KEYS.forEach(function (k) { if (sf[k] !== undefined) out[k] = sf[k]; });
+  STOREFRONT_DOC_KEYS.forEach(function (k) { delete out[k]; });
   return out;
 }
 

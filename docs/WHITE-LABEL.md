@@ -356,6 +356,105 @@ oversight.
 
 ---
 
+## 3b · The guided build — the part that was already there
+
+`editor.html` has a **BESS Guided Build** (Build ribbon → BESS Build, or the
+Guided Build chooser → Standard). Pick BTM or FOM, confirm the system, press
+*Place Configured System*, and it lays out the whole one-line —
+
+```
+BESS → PCS → AC disconnect → transformer → EMS/SCADA → switchgear
+     → revenue meter → building / POI          … auto-trenched
+```
+
+— skipping the PCS, disconnect or transformer steps when the cabinet already
+contains them, and re-routing the one-line accordingly (`getWizSteps()`).
+There is also **Full Topology** (source → BESS → EMS → XFMR → utility), DER,
+Compute, Level 2 and DCFC.
+
+cleancell.us is on the `deluxe` tier, so this is already unlocked. Nothing had
+to be built. One thing had to be **fixed**.
+
+### It was specifying a competitor
+
+`BESS_CATALOG` in `editor.html` ships **29 products from 7 manufacturers** —
+Gotion (13), Pytes (5), Canadian Solar (5), Aspen Woods (2), CATL (2),
+FENECON (1), Autel (1). The manufacturer field is `value="Gotion"`, and
+`omega-bess-catalog.js` sets `DEFAULT_KEY = "gotion"`.
+
+That is the right default for a developer or an EPC, who buys from whoever
+quotes best. It is the **worst possible default for a white-labelled battery
+manufacturer**: open the guided build on Clean Cell's own platform and it lays
+out a Gotion container. We would have handed their sales team a tool that
+specs a competitor — and nobody would have noticed until a customer did.
+
+`omega-bess-catalog.js` had already anticipated this in its header — *"An
+organisation's own product list still wins"* — but nothing implemented it, and
+`editor.html` does not even load that file.
+
+### One product list, not four
+
+`omega-bess-products.js` reads the org's own products and merges them in. It
+reads **the storefront list** — the same one an operator already has to fill
+for the embed to work:
+
+```
+omega_orgs/{orgId}/storefront/config.products[]
+        │
+        ├─ api/embed-config.js  → the public storefront   (published subset)
+        ├─ api/embed-layout.js  → the site study          (widthFt/depthFt)
+        └─ omega-bess-products.js → BESS_CATALOG          (full record)
+```
+
+Before this a tenant's products could live in four places — `BESS_CATALOG`
+(hardcoded, no tenant could add to it), `omega-bess-catalog.js` (published
+datasheets, one brand), `equipment/{sku}` (the BOM/RFQ catalogue) and the
+storefront list. A manufacturer selling their own product has **one**
+catalogue. Fill it once.
+
+### Published vs engineering fields
+
+| Published (reaches the public) | Engineering only (never published) |
+|---|---|
+| `sku` `name` `blurb` `imageUrl` | `chem` `usableKwh` `durationH` `dcv` |
+| `kw` `kwh` `widthFt` `depthFt` | `inverter` `inverterKva` |
+| `chemistry` `warrantyYears` `leadTimeDays` | `transformer` `disconnect` |
+| `priceMode` `listPrice` | `integrates{pcs,xfmr,disco}` `notes` |
+
+The right-hand column stays private **only** because `api/embed-config.js`
+constructs its response key by key. The moment that becomes a spread, a
+tenant's inverter selection is on a public web page.
+`scripts/test-bess-products.js` asserts each of those field names is absent
+from that file.
+
+### `integrates{}` is the one that changes the drawing
+
+`getWizSteps()` **skips** the PCS, disconnect and transformer steps when the
+pad already contains them. A container with an internal PCS drawn with an
+external one is not a cosmetic error — it is a one-line that would not be
+built. Take these from the manufacturer's submittal, never from a guess.
+
+### The merge is additive, and deliberately so
+
+Tenant entries are namespaced by org (`CLEANCELL-CC-2000`) and a shipped entry
+is **never removed or overwritten**. A saved project references a catalogue key
+by name; re-rendering somebody's existing drawing as a different battery is
+worse than a crowded dropdown. Their products are *prepended* to the dropdown
+in their own optgroup, so theirs is what a designer reaches first.
+
+If a tenant should not see competitors at all, that is a separate decision and
+a separate change — say so rather than implementing it as a side effect here.
+
+### Not the public embed, and not close
+
+The guided build is thousands of lines inside `editor.html`, needs the CAD
+canvas, and its placement and topology rules are browser-side. Exposing it
+publicly would ship how OMEGA decides a one-line, to anyone who views source.
+The site study (§ 3) is the public-safe subset: it answers *does this fit*,
+not *where does everything go*.
+
+---
+
 ## 4 · The order desk
 
 ```

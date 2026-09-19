@@ -82,6 +82,7 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
 | tenant attribution on editor exports | hardcoded `poweredByLine()` | reads the white-label block | The proposal a designer hands their customer is the highest-value leak in the estate. |
 | yard fit geometry | would have been in `embed/storefront.html` | `api/embed-layout.js` → `_lib/site-fit.js` | The placement sweep, the setback raster and the packing rules are the METHOD. Shipped to the browser, any tenant reads how OMEGA decides what fits where — the same reasoning `api/site-plan.js` already gives for itself. |
 | address → point | inline in `api/greenfield.js` | `api/_lib/geocode.js` | One copy, now shared. Not IP (both sources are keyless and free) — it is server-side because the POINT is what authorises a metered parcel lookup, and a browser that geocoded for itself could ask us to bill a lookup for a place it invented. |
+| tenant BESS products | nowhere — `BESS_CATALOG` was hardcoded in `editor.html` and no tenant could add to it | `omega-bess-products.js`, reading `storefront/config.products` | Not an IP move: an extension point. A white-labelled MANUFACTURER whose own guided build laid out a competitor's container is the failure this fixes. Additive and namespaced by org, because a saved project references a catalogue key. |
 | parcel lookup chain | was only reachable from `api/parcel.js`'s handler | exposed via its `_helpers` seam | Cook County moved its layer in 2026. A second copy of the source order, timeouts and county extents would have drifted, and the drifted one would have been the one serving the public. |
 
 ## TODO — Claude Code sessions, in order
@@ -121,9 +122,11 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
    ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
-11. **White-label `editor.html`.** Its export attribution is done
-    (`poweredByLine()` reads the block, defensively, and is a no-op until the
-    runtime is present). Still ClearSky-branded: ~29 literal strings, the
+11. **White-label `editor.html`.** Its export attribution and its BESS product
+    catalogue are done (`poweredByLine()` reads the white-label block;
+    `omega-bess-products.js` merges the tenant's own products into
+    `BESS_CATALOG` and leads the dropdown with them; both are defensive and
+    no-op when the tenant has nothing configured). Still ClearSky-branded: ~29 literal strings, the
     `<title>`, the `apple-mobile-web-app-title`/`application-name` meta, the
     inline web-app manifest, and its OWN brand resolver (`CS_TENANTS` /
     `CS_BRAND` / `brandName()`, ≈ line 69840) which predates

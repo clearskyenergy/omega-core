@@ -232,6 +232,15 @@ user). Do not add a second copy of that list — see what three copies of
 - A tenant's cost basis (`storefront.capexPerKwh`/`capexPerKw`) must NEVER be
   in the repo. `scripts/seed-omega-orgs.js` throws if a `tenant.json` carries
   either.
+- **ONE product list per tenant**: `omega_orgs/{org}/storefront/config.products`
+  feeds the public storefront, the site study's footprints AND the editor's
+  BESS Guided Build (`omega-bess-products.js` merges it into `BESS_CATALOG`).
+  Its ENGINEERING fields — `inverter`, `transformer`, `disconnect`,
+  `usableKwh`, `integrates{}` — are read only by the signed-in product;
+  `api/embed-config.js` builds the public response key by key, which is the
+  only thing keeping them private. Never replace that with a spread.
+  The merge is ADDITIVE and namespaced by org: a saved project references a
+  catalogue key, so a shipped entry is never removed or overwritten.
 - `orders` is read from Firestore and written ONLY through `api/orders.js`:
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.
