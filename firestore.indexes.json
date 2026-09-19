@@ -6,7 +6,20 @@
   "//4": "fails with FAILED_PRECONDITION until this override exists. Keeping it here",
   "//5": "means it deploys with the rules rather than being clicked into the console",
   "//6": "once and lost the next time the project is rebuilt.",
-  "indexes": [],
+  "//a": "change_log: api/change-log.js reads one ISO week newest-first, which is",
+  "//b": "an equality on `week` plus an order on `at` — Firestore will not serve",
+  "//c": "that from single-field indexes, so it is declared here rather than being",
+  "//d": "clicked out of the FAILED_PRECONDITION link the first time it 500s.",
+  "indexes": [
+    {
+      "collectionGroup": "change_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "week", "order": "ASCENDING" },
+        { "fieldPath": "at",   "order": "DESCENDING" }
+      ]
+    }
+  ],
   "//7": "offers.partnerUid: the dashboard's collectionGroup('offers').where('partnerUid','==',me).",
   "//8": "fin_views.sponsorOrgKey: the finance portal's collectionGroup('fin_views').where('sponsorOrgKey','==',org).",
   "//9": "billing.stripeCustomerId: api/stripe-webhook.js finds the tenant behind a Stripe customer.",

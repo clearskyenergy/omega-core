@@ -92,6 +92,18 @@ rfqs/{id}                             # customer's full BOM
 rfqs/{id}/recipients/{vendorOrgId}    # each vendor's slice + quote
 ```
 
+```
+change_log/{id}                       # who changed what, in GitHub and Vercel
+  source, kind, at, week, day, actorKey, actor{}, repo, project, target,
+  title, url, n
+```
+Written ONLY by `api/hook-github.js` and `api/hook-vercel.js` from
+signature-verified webhooks; read ONLY by `api/change-log.js`, which counts
+the week and gates on staff. Rules deny the collection to browsers outright
+— the Admin SDK those three use bypasses rules, so there is nothing for a
+client to be allowed. Surfaced on `/mission` → Changes. `docs/change-log.md`
+has the webhook setup and what Vercel will not tell you.
+
 Already-existing role/identity collections — use, don't duplicate:
 - `omega_staff/{uid}` — ClearSky roles (admin | rep). isOmegaStaff().
 - `org_members/{emailLower}` — cross-org grant for an OUTSIDE person to

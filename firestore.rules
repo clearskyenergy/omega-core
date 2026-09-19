@@ -2552,6 +2552,25 @@ service cloud.firestore {
        an administrator action, enforced here rather than in the UI so it
        cannot be clicked past.
        ============================================================ */
+    /* ═══ THE CHANGE LOG ═══════════════════════════════════════════════
+       change_log/{id} — every commit, pull request, review and deployment,
+       written by api/hook-github.js and api/hook-vercel.js from signed
+       webhooks, read back by api/change-log.js for the weekly report.
+
+       NO BROWSER TOUCHES IT, in either direction. The Admin SDK those three
+       functions use bypasses rules entirely, so denying everything here
+       costs the feature nothing and is the whole of its client-side
+       security boundary — which is what this file is for.
+
+       Read is denied rather than opened to isOmegaStaff() ON PURPOSE. The
+       endpoint already answers that question, and it answers it with more
+       than the rules can: an address in CHANGELOG_VIEWERS is let in without
+       being made staff of everything else in this file. A second door with
+       a different lock is a door somebody eventually walks through. */
+    match /change_log/{entryId} {
+      allow read, write: if false;
+    }
+
     match /omega_staff/{uid} {
       allow read:   if isOmegaStaff() || (signedIn() && request.auth.uid == uid);
       allow create: if signedIn()

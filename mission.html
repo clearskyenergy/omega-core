@@ -1276,6 +1276,91 @@ body.arranging .scroll{pointer-events:none}
                     max(10px,env(safe-area-inset-left))}
 }
 
+/* ══ THE CHANGES SCREEN ════════════════════════════════════════════
+   A week is the unit, so the week is the first thing on the screen and the
+   only control on it. */
+.chWeek{display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap;
+  border:var(--edge);border-radius:8px;padding:9px 12px;
+  background:linear-gradient(90deg,rgba(0,68,255,.10),rgba(0,243,255,.06))}
+.chWeek button{min-height:34px}
+.chWhen{min-width:0}
+.chRange{font-family:var(--mono);font-size:14px;letter-spacing:1.4px;color:var(--glow-cyan)}
+.chSub{font-family:var(--mono);font-size:9px;letter-spacing:1.4px;color:var(--dim);margin-top:2px}
+.chTotals{display:flex;gap:7px;flex-wrap:wrap;margin-left:auto}
+/* A number and the word for it, because "48" alone is not a fact. */
+.chStat{display:flex;align-items:baseline;gap:5px;padding:4px 9px;border-radius:5px;
+  border:1px solid rgba(0,243,255,.18);background:rgba(0,243,255,.05)}
+.chStat b{font-family:var(--mono);font-size:14px;color:var(--ink);font-weight:600}
+.chStat span{font-family:var(--mono);font-size:8.5px;letter-spacing:1.3px;color:var(--dim)}
+.chStat.bad{border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.08)}
+.chStat.bad b{color:var(--bad)}
+
+/* One person, one line, and the line is the sentence you would say out loud:
+   "Thomas — 31 commits, 2 merged, 4 deploys". */
+.chWho{display:flex;align-items:flex-start;gap:9px;padding:9px 2px;
+  border-bottom:1px solid rgba(255,255,255,.055)}
+.chWho:last-child{border-bottom:none}
+.chAv{flex:none;width:28px;height:28px;margin-top:1px;border-radius:50%;object-fit:cover;
+  border:1px solid rgba(0,243,255,.3);background:rgba(0,243,255,.08)}
+.chAv.ph{display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;color:var(--glow-cyan)}
+.chName{min-width:0;flex:1}
+.chName .n1{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Two lines, not one with an ellipsis. "26 commits · 2 PRs opened · 2 m…"
+   cuts off exactly where the sentence starts being worth reading, and this
+   panel is 420px wide by design — the answer is to let it wrap, not to make
+   the column wider at the feed's expense. */
+.chName .n2{font-family:var(--mono);font-size:9px;line-height:1.5;letter-spacing:1.1px;
+  color:var(--dim);margin-top:3px;overflow:hidden;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.chBig{flex:none;font-family:var(--mono);font-size:17px;color:var(--glow-cyan);text-align:right;min-width:34px}
+/* A tag, not a judgement. Work that came through an agent is still that
+   person's work — it is recorded because a week that was forty agent commits
+   and six by hand is a different week, not a worse one. */
+.chTag{flex:none;font-family:var(--mono);font-size:8px;letter-spacing:1.2px;
+  padding:2px 6px;border-radius:3px;border:1px solid rgba(0,243,255,.25);color:var(--dim)}
+.chTag.ai{border-color:rgba(61,255,139,.3);color:var(--good)}
+
+.chPlace{display:flex;align-items:flex-start;gap:9px;padding:8px 2px;
+  border-bottom:1px solid rgba(255,255,255,.055)}
+.chPlace:last-child{border-bottom:none}
+.chPlace .chDot{margin-top:7px}
+
+/* The feed. A time, who, and the sentence the server wrote. */
+.chRow{display:flex;gap:9px;align-items:baseline;padding:6px 2px;
+  border-bottom:1px solid rgba(255,255,255,.045)}
+.chRow:last-child{border-bottom:none}
+.chRow .cAt{flex:none;font-family:var(--mono);font-size:9.5px;color:var(--dim);width:52px}
+.chRow .cWho{flex:none;font-family:var(--mono);font-size:10px;color:var(--glow-cyan);
+  width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chRow .cWhat{flex:1;min-width:0;font-size:12.5px;line-height:1.4;word-wrap:break-word}
+.chRow .cWhere{flex:none;font-family:var(--mono);font-size:8.5px;letter-spacing:1px;color:var(--dim)}
+/* text-decoration and not border-bottom: the link is a flex item stretched
+   to the width of the column, so a border drew a rule all the way across the
+   panel whatever the title's length. An underline follows the words. */
+.chRow a.cWhat{color:var(--ink);text-decoration:underline;
+  text-decoration-color:rgba(0,243,255,.32);text-underline-offset:2px}
+.chRow a.cWhat:hover{color:var(--glow-cyan);text-decoration-color:var(--glow-cyan)}
+.chRow.fail .cWhat{color:var(--bad)}
+/* The dot is the source, and it is the only place colour means "which side
+   of the wall": cyan is the repository, amber is the deploy. */
+.chDot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--glow-cyan);
+  align-self:center;box-shadow:0 0 6px rgba(0,243,255,.6)}
+.chDot.vercel{background:var(--warn);box-shadow:0 0 6px rgba(255,183,51,.6)}
+.chDot.bad{background:var(--bad);box-shadow:0 0 6px rgba(255,107,107,.6)}
+/* Said out loud rather than left as an empty column — a week with no
+   deployments looks exactly like a webhook nobody wired up. */
+.chGap{font-size:11.5px;line-height:1.45;color:var(--warn);padding:8px 10px;margin-bottom:8px;
+  border:1px solid rgba(255,183,51,.28);border-radius:6px;background:rgba(255,183,51,.06)}
+
+@media(max-width:700px){
+  .chWeek{gap:8px;padding:8px 10px}
+  .chTotals{margin-left:0;width:100%}
+  .chRow{flex-wrap:wrap;row-gap:2px}
+  .chRow .cWhat{flex-basis:100%;order:3}
+  .chRow .cWho{width:auto}
+}
+
 /* ══ THE SHEET ═════════════════════════════════════════════════════════
    A panel that comes up from the bottom edge, because the bottom edge is
    where the thumb already is — the talk bar is the one thing on this page
@@ -1481,6 +1566,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
+      <button class="navItem" data-view="changes">◇  Changes<span class="pill" id="nChanges"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
@@ -1705,6 +1791,40 @@ body.arranging .scroll{pointer-events:none}
          Basic auth sits in front of ttyd (password in the login Keychain), so
          the browser asks once per session. That prompt is the point — without
          it any page that could reach the port would be framing a shell. -->
+    <!-- ========== CHANGES ==========
+         Who changed what, and when. Everything on this screen comes from
+         /api/change-log, which is the only thing that reads the collection
+         the two webhook receivers write — the browser never touches it, and
+         the rollup arrives counted rather than being added up here. -->
+    <section class="view" data-view="changes">
+      <div class="chWeek">
+        <button id="chPrev" title="The week before">◀</button>
+        <div class="chWhen">
+          <div class="chRange" id="chRange">—</div>
+          <div class="chSub" id="chSub">loading…</div>
+        </div>
+        <button id="chNext" title="The week after">▶</button>
+        <button id="chNow" title="Back to the week we are in">THIS WEEK</button>
+        <div class="chTotals" id="chTotals"></div>
+      </div>
+      <div class="cmdGrid" style="grid-template-columns:minmax(0,420px) minmax(0,1fr)">
+        <div class="col">
+          <div class="panel" data-widget="change-people" style="flex:1;min-height:0">
+            <div class="ptitle">Who did what<span class="live" id="chPeopleN"></span></div>
+            <div class="scroll" id="chPeople"></div>
+          </div>
+          <div class="panel" data-widget="change-places" style="flex:none;max-height:34%">
+            <div class="ptitle">Where</div>
+            <div class="scroll" id="chPlaces"></div>
+          </div>
+        </div>
+        <div class="panel" data-widget="change-feed" style="flex:1;min-height:0">
+          <div class="ptitle">Every change<span class="live" id="chFeedN"></span></div>
+          <div class="scroll" id="chFeed"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="view" data-view="terminal">
       <div class="panel" data-widget="termHost" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
         <div class="boardBar">
@@ -4854,6 +4974,8 @@ const VIEW_WORDS = {
   platform: ['platform','the platform','omega'],
   board:    ['board','the board','whiteboard','white board'],
   openwork: ['open work','openwork','open items','the open work','work'],
+  changes:  ['changes','the changes','change log','changelog','who did what',
+             'what changed','recent changes','commits','deploys','deployments'],
   index:    ['index','the index'],
   brain:    ['brain','the brain','brain graph','graph'],
   people:   ['people','contacts','the people'],
@@ -5044,6 +5166,247 @@ function loadOpenWork(){
   loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
 }
 
+/* ══ CHANGES ═══════════════════════════════════════════════════════════
+   Every commit, pull request, review and deployment, and who made it.
+   GitHub and Vercel sign a webhook, api/hook-github.js and api/hook-vercel.js
+   verify the signature and write one row each, and api/change-log.js reads a
+   week back with the counting already done.
+
+   THIS PAGE ADDS NOTHING UP. Not one number on this screen is computed in
+   the browser — they arrive counted. A report that says who did what is a
+   record about people, and a record about people is not something to
+   assemble somewhere it can be edited before it is read.
+
+   AND IT BUILDS NODES, NEVER MARKUP. Every string on this screen started
+   life as a commit message, a branch name or a pull-request title — text
+   that anyone who can push has written. textContent is what keeps it text. */
+const CHANGES = '/api/change-log';
+let chWeek = null;            /* null = whatever the server calls this week */
+let chData = null, chBusy = false;
+
+function chTime(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return dash;
+  return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',
+    weekday:'short',hour:'numeric',minute:'2-digit'}).format(d)
+    .replace(',','').toLowerCase();
+}
+/* A provider URL is still a URL from somewhere else. Only the two schemes
+   that can be a link are allowed to become one; anything else renders as
+   plain text rather than as something a click can run. */
+function chSafe(u){
+  try{ const p = new URL(u, location.origin); return /^https?:$/.test(p.protocol) ? p.href : null; }
+  catch(_){ return null; }
+}
+function chInitials(name){
+  return String(name||'?').split(/[\s._-]+/).filter(Boolean).slice(0,2)
+    .map(w=>w[0]).join('').toUpperCase() || '?';
+}
+function chStat(host, n, label, bad){
+  const d=document.createElement('div'); d.className='chStat'+(bad?' bad':'');
+  const b=document.createElement('b'); b.textContent=String(n);
+  const s2=document.createElement('span'); s2.textContent=label;
+  d.appendChild(b); d.appendChild(s2); host.appendChild(d);
+}
+/* "31 commits · 2 merged · 4 deploys" — only the parts that happened. A row
+   of zeroes is noise that reads as if it means something. */
+function chParts(p){
+  const bits=[];
+  const add=(n,one,many)=>{ if(n) bits.push(n+' '+(n===1?one:(many||one+'s'))); };
+  add(p.commits,'commit'); add(p.prsOpened,'PR opened','PRs opened');
+  add(p.prsMerged,'merged','merged'); add(p.prsClosed,'closed unmerged','closed unmerged');
+  add(p.reviews,'review'); add(p.releases,'release');
+  add(p.branches,'branch','branches'); add(p.deploys,'deploy');
+  add(p.failures,'failed build','failed builds');
+  return bits.join(' · ');
+}
+
+function renderChanges(j){
+  const range=el('chRange'), sub=el('chSub'), tot=el('chTotals');
+  if(range) range.textContent = j.range ? (j.range.from + '  →  ' + j.range.to) : j.week;
+  if(sub) sub.textContent = j.week + (j.week===j.current ? ' · this week' : '') + ' · ' + j.zone;
+
+  if(tot){
+    tot.textContent='';
+    const t=j.totals||{};
+    chStat(tot, t.commits||0, 'COMMITS');
+    chStat(tot, t.prsMerged||0, 'MERGED');
+    chStat(tot, t.reviews||0, 'REVIEWS');
+    chStat(tot, t.deploys||0, 'DEPLOYS');
+    if(t.failures) chStat(tot, t.failures, 'FAILED', true);
+    chStat(tot, t.people||0, 'PEOPLE');
+  }
+
+  /* People. */
+  const ph=el('chPeople');
+  if(ph){
+    ph.textContent='';
+    /* A gap is stated before the list, not left for someone to infer from a
+       column that happens to be empty. */
+    const gaps=[];
+    if(j.gaps && j.gaps.github) gaps.push('Nothing from GitHub this week — either nobody pushed, or no repository is pointed at /api/hook-github yet.');
+    if(j.gaps && j.gaps.vercel) gaps.push('Nothing from Vercel this week — either nothing deployed, or the team webhook is not set up yet.');
+    if(gaps.length){
+      const g=document.createElement('div'); g.className='chGap';
+      g.textContent=gaps.join(' ');
+      ph.appendChild(g);
+    }
+    const people=j.people||[];
+    if(!people.length){
+      const d=document.createElement('div'); d.className='row';
+      const k=document.createElement('span'); k.className='k'; k.style.color='var(--dim)';
+      k.textContent='nobody changed anything in this week';
+      d.appendChild(k); ph.appendChild(d);
+    }
+    people.forEach(p=>{
+      const r=document.createElement('div'); r.className='chWho';
+
+      const url=chSafe(p.avatar);
+      if(url){ const img=document.createElement('img'); img.className='chAv'; img.src=url;
+               img.alt=''; img.loading='lazy'; r.appendChild(img); }
+      else { const ph2=document.createElement('div'); ph2.className='chAv ph';
+             ph2.textContent=chInitials(p.name); r.appendChild(ph2); }
+
+      const nm=document.createElement('div'); nm.className='chName';
+      const n1=document.createElement('div'); n1.className='n1';
+      n1.textContent = p.name + (p.login && p.login.toLowerCase()!==String(p.name).toLowerCase() ? '  @'+p.login : '');
+      const n2=document.createElement('div'); n2.className='n2';
+      n2.textContent = chParts(p) + (p.where && p.where.length ? '  —  ' + p.where.join(', ') : '');
+      nm.appendChild(n1); nm.appendChild(n2); r.appendChild(nm);
+
+      if(p.bot){ const t=document.createElement('span'); t.className='chTag'; t.textContent='BOT'; r.appendChild(t); }
+      else if(p.agentEvents){ const t=document.createElement('span'); t.className='chTag ai';
+        t.textContent = p.agentEvents + ' VIA AGENT'; r.appendChild(t); }
+
+      const big=document.createElement('div'); big.className='chBig'; big.textContent=String(p.events);
+      r.appendChild(big);
+      ph.appendChild(r);
+    });
+    const pn=el('chPeopleN'); if(pn) pn.textContent=(j.people||[]).length||'';
+  }
+
+  /* Where. NOT listInto: that puts the label and the value on one line and
+     lets the longer one win, and here the value is a whole sentence — which
+     squeezed 'clearskyenergy/omega-core' down to one character per line. The
+     name owns a line, what happened in it owns the next. */
+  const wh=el('chPlaces');
+  if(wh){
+    wh.textContent='';
+    const places=j.repos||[];
+    if(!places.length){
+      const d=document.createElement('div'); d.className='row';
+      const k=document.createElement('span'); k.className='k'; k.style.color='var(--dim)';
+      k.textContent='no repositories or projects reported in';
+      d.appendChild(k); wh.appendChild(d);
+    }
+    places.forEach(r=>{
+      const row=document.createElement('div'); row.className='chPlace';
+      const dot=document.createElement('span');
+      dot.className='chDot'+(r.source==='vercel'?' vercel':''); row.appendChild(dot);
+      const t=document.createElement('div'); t.className='chName';
+      const n1=document.createElement('div'); n1.className='n1'; n1.textContent=r.name;
+      const n2=document.createElement('div'); n2.className='n2'; n2.textContent=chParts(r)||(r.events+' events');
+      t.appendChild(n1); t.appendChild(n2); row.appendChild(t);
+      const big=document.createElement('div'); big.className='chBig'; big.textContent=String(r.events);
+      row.appendChild(big);
+      wh.appendChild(row);
+    });
+  }
+
+  /* Every change. */
+  const fh=el('chFeed');
+  if(fh){
+    fh.textContent='';
+    const evs=j.events||[];
+    if(!evs.length){
+      const d=document.createElement('div'); d.className='row';
+      const k=document.createElement('span'); k.className='k'; k.style.color='var(--dim)';
+      k.textContent='nothing recorded in this week'; d.appendChild(k); fh.appendChild(d);
+    }
+    evs.forEach(e=>{
+      const fail = e.kind==='deploy_error' || e.kind==='pr_closed';
+      const r=document.createElement('div'); r.className='chRow'+(fail?' fail':'');
+
+      const dot=document.createElement('span');
+      dot.className='chDot'+(e.kind==='deploy_error'?' bad':(e.source==='vercel'?' vercel':''));
+      r.appendChild(dot);
+
+      const at=document.createElement('span'); at.className='cAt'; at.textContent=chTime(e.at); r.appendChild(at);
+      const who=document.createElement('span'); who.className='cWho';
+      who.textContent=e.login||e.who; who.title=e.who; r.appendChild(who);
+
+      const link=chSafe(e.url);
+      const what=document.createElement(link?'a':'span');
+      what.className='cWhat'; what.textContent=e.title;
+      if(link){ what.href=link; what.target='_blank'; what.rel='noopener noreferrer'; }
+      r.appendChild(what);
+
+      if(e.where){ const w=document.createElement('span'); w.className='cWhere';
+        w.textContent=String(e.where).split('/').pop()+(e.target?' · '+e.target:''); r.appendChild(w); }
+      fh.appendChild(r);
+    });
+    const fn=el('chFeedN');
+    if(fn) fn.textContent = evs.length ? (evs.length + (j.truncated?'+':'')) : '';
+  }
+
+  /* The nav count is about THIS week, so browsing backwards leaves it alone
+     rather than making the sidebar report a week nobody is looking at. */
+  if(j.week===j.current){ const n=el('nChanges'); if(n) n.textContent=(j.totals&&j.totals.events)||''; }
+}
+
+function chFail(msg){
+  const ph=el('chPeople');
+  if(ph){ ph.textContent='';
+    const d=document.createElement('div'); d.className='chGap'; d.textContent=msg; ph.appendChild(d); }
+  const sub=el('chSub'); if(sub) sub.textContent='could not load';
+  ['chFeed','chPlaces'].forEach(id=>{ const h=el(id); if(h) h.textContent=''; });
+  const t=el('chTotals'); if(t) t.textContent='';
+}
+
+async function loadChanges(force){
+  if(chBusy) return;
+  /* Already have this week on the screen: a tab click should not re-fetch a
+     report that has not moved. `force` is the refresh button saying so. */
+  if(!force && chData && chData.week===(chWeek||chData.current)) return;
+  chBusy=true;
+  const sub=el('chSub'); if(sub) sub.textContent='loading\u2026';
+  try{
+    const t=await token();
+    if(!t){ chFail('sign in first.'); return; }
+    const r=await fetch(CHANGES + (chWeek?('?week='+encodeURIComponent(chWeek)):''),
+                        {headers:{Authorization:'Bearer '+t}});
+    if(r.status===403){
+      chFail('The change log is staff only. Add your uid to omega_staff, or your address to CHANGELOG_VIEWERS in Vercel, and reload.');
+      return;
+    }
+    if(r.status===404){
+      chFail('/api/change-log is not deployed on this host yet.');
+      return;
+    }
+    const j=await r.json().catch(()=>null);
+    if(!r.ok || !j){ chFail((j&&j.error) ? j.error : ('the change log answered '+r.status+'.')); return; }
+    chData=j; chWeek=j.week;
+    renderChanges(j);
+  }catch(e){
+    chFail('could not reach the change log \u2014 '+e.message);
+  }finally{ chBusy=false; }
+}
+
+function chStep(n){
+  if(!chData) return;
+  chWeek = n<0 ? chData.prev : chData.next;
+  /* Never walk into a week that has not happened. */
+  if(n>0 && chData.week===chData.current){ chWeek=chData.current; return; }
+  loadChanges(true);
+}
+['chPrev','chNext','chNow'].forEach((id,i)=>{
+  const b=el(id); if(!b) return;
+  b.addEventListener('click',()=>{
+    if(id==='chNow'){ chWeek=null; loadChanges(true); return; }
+    chStep(i===0?-1:1);
+  });
+});
+
 /* ── the Terminal view ───────────────────────────────────────────────────
    Claude Code itself, served by ttyd on loopback and framed here.
 
@@ -5112,6 +5475,7 @@ function showView(name){
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='openwork'){ loadOpenWork(); }
+  if(name==='changes'){ loadChanges(false); }
   if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
@@ -7585,6 +7949,7 @@ const IX_VIEWS=[
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
+  ['changes','Changes','who changed what, in GitHub and Vercel'],
   ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
