@@ -285,17 +285,86 @@ function embedLayout(res, b) {
   });
 }
 
+/* ── THE ORDER QUEUE ──────────────────────────────────────────────────
+   An order placed on the storefront has to LAND somewhere, or the demo
+   stops halfway through the sentence it is making. api/orders.js and
+   orders.html are the real desk; both need Firestore, so this keeps the
+   same vocabulary in memory and serves /ops from it.
+
+   IN MEMORY ON PURPOSE. Restarting the server empties the queue, which is
+   the right behaviour for a demo you want to run twice in one afternoon.
+   The status vocabulary is api/orders.js's, not an invented one, so what
+   somebody sees here is what they would see on the real desk. */
 var ORDER_N = 0;
+var ORDERS = [];
+
+var STATUS_FLOW = ['new', 'confirmed', 'quoted', 'accepted', 'in_fulfilment', 'shipped', 'complete'];
+var STATUS_LABEL = {
+  'new': 'New', confirmed: 'Confirmed', quoted: 'Quoted', accepted: 'Accepted',
+  in_fulfilment: 'In fulfilment', shipped: 'Shipped', complete: 'Complete', cancelled: 'Cancelled'
+};
+
+function orderEnergy(items) {
+  var kwh = 0, kw = 0;
+  (items || []).forEach(function (it) {
+    var p = null;
+    for (var i = 0; i < STOREFRONT.products.length; i++) {
+      if (STOREFRONT.products[i].sku === it.sku) p = STOREFRONT.products[i];
+    }
+    if (!p) return;
+    kwh += (+p.kwh || 0) * (+it.qty || 1);
+    kw  += (+p.kw  || 0) * (+it.qty || 1);
+  });
+  return { kwh: kwh, kw: kw };
+}
+
 function embedOrder(res, b) {
   if (b.consent !== true) return fail(res, 400, 'Please confirm you would like us to contact you.');
   if (!b.customer || !b.customer.name) return fail(res, 400, 'Please give us a name to put on the order.');
   if (!b.customer.email) return fail(res, 400, 'Please give us an email address we can reply to.');
   ORDER_N++;
   var no = 'CLEA-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + ('0000' + ORDER_N).slice(-5);
+  var items = (b.items || []).map(function (it) {
+    var p = null;
+    for (var i = 0; i < STOREFRONT.products.length; i++) {
+      if (STOREFRONT.products[i].sku === it.sku) p = STOREFRONT.products[i];
+    }
+    return { sku: it.sku, qty: +it.qty || 1, name: (p && p.name) || it.sku,
+             kwh: (p && p.kwh) || null, kw: (p && p.kw) || null };
+  });
+  var e = orderEnergy(items);
+  ORDERS.unshift({
+    id: 'preview' + ORDER_N, orderNo: no, status: 'new',
+    customer: b.customer, items: items,
+    system: b.system || null, address: b.address || '',
+    interest: items.length ? 'product' : 'platform',
+    energyKwh: e.kwh, powerKw: e.kw,
+    at: new Date().toISOString(),
+    log: [{ to: 'new', at: new Date().toISOString(), by: 'storefront' }]
+  });
   console.log('  [order] ' + no + '  ' + b.customer.email +
-              (b.items && b.items.length ? '  items: ' + b.items.map(function (i) { return i.qty + '× ' + i.sku; }).join(', ')
-                                         : '  (enquiry only)'));
+              (items.length ? '  items: ' + items.map(function (i) { return i.qty + '\u00d7 ' + i.sku; }).join(', ')
+                            : '  (enquiry only)'));
   json(res, 200, { ok: true, orderId: 'preview' + ORDER_N, orderNo: no, message: STOREFRONT.thanks });
+}
+
+/* Advance an order. Same one-way ladder api/orders.js enforces: a status
+   only moves forward, or to cancelled. A demo that let somebody click an
+   order back to 'new' would be teaching the wrong thing about the product. */
+function opsAdvance(res, b) {
+  var o = null;
+  for (var i = 0; i < ORDERS.length; i++) if (ORDERS[i].id === b.id) o = ORDERS[i];
+  if (!o) return fail(res, 404, 'no such order');
+  var to = String(b.to || '');
+  if (to === 'cancelled') { o.status = 'cancelled'; }
+  else {
+    var cur = STATUS_FLOW.indexOf(o.status), nxt = STATUS_FLOW.indexOf(to);
+    if (nxt < 0 || nxt <= cur) return fail(res, 409, 'that is not a forward transition');
+    o.status = to;
+  }
+  o.log.push({ to: o.status, at: new Date().toISOString(), by: 'ops' });
+  console.log('  [ops]   ' + o.orderNo + '  \u2192 ' + o.status);
+  json(res, 200, { ok: true, status: o.status });
 }
 
 /* ── Static + routing ──────────────────────────────────────────────────── */
@@ -419,12 +488,17 @@ function deskPage() {
     return String(v == null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  /* The two tools they buy OPEN; everything in the right-hand column is
+     greyed and inert, because that column is the upsell and not the
+     product. `editor` is the Site Map, so it goes to the layout view. */
   function tile(t, on) {
-    return '<div class="tile' + (on ? '' : ' off') + '">'
-      + '<div class="tname">' + esc(t.name) + '</div>'
+    var href = on ? (t.key === 'editor' ? '/design' : t.key === 'gridatlas' ? '/design?view=atlas' : '') : '';
+    var inner = '<div class="tname">' + esc(t.name) + (href ? ' <span class="go">open \u2192</span>' : '') + '</div>'
       + '<div class="tdesc">' + esc(t.desc || '') + '</div>'
-      + '<div class="tkey">' + esc(t.key) + '</div>'
-      + '</div>';
+      + '<div class="tkey">' + esc(t.key) + '</div>';
+    return href
+      ? '<a class="tile live" href="' + href + '">' + inner + '</a>'
+      : '<div class="tile' + (on ? '' : ' off') + '">' + inner + '</div>';
   }
 
   var A = TENANT.accent || '#1F6F4A';
@@ -446,7 +520,10 @@ function deskPage() {
     'section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px}',
     'section h2{margin:0 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}',
     'section .cnt{font-size:26px;font-weight:700;margin:0 0 14px}',
-    '.tile{border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:0 0 9px;background:#fff}',
+    '.tile{border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:0 0 9px;background:#fff;display:block;text-decoration:none;color:inherit}',
+    'a.tile.live{border-color:var(--a);box-shadow:0 1px 3px rgba(0,0,0,.06)}',
+    'a.tile.live:hover{background:#f7fbf9}',
+    '.go{font-size:11px;font-weight:700;color:var(--a);letter-spacing:.02em}',
     '.tile.off{opacity:.42;background:#f8fafc}',
     '.tname{font-weight:650;font-size:14px}',
     '.tdesc{font-size:12.5px;color:var(--mute);margin-top:2px}',
@@ -462,8 +539,8 @@ function deskPage() {
       + 'The tool list below is produced by the real catalogue and the real entitlement '
       + 'filter (<code>OMEGATools.isUnlocked</code>) against '
       + '<code>toolAccess: [‘editor’,‘gridatlas’]</code> — so it is what a '
-      + 'Clean Cell design customer would actually see. Sign-in is stubbed here; the tiles '
-      + 'do not open.</div>',
+      + 'Clean Cell design customer would actually see. Sign-in is stubbed \u2014 the two tools on '
+      + 'the left open onto the real layout engine; the greyed column is the upsell and is inert.</div>',
     '<div class="cols">',
     '<section><h2>What a Clean Cell customer buys</h2>',
     '<p class="cnt">' + mine.length + ' tool' + (mine.length === 1 ? '' : 's') + '</p>',
@@ -479,6 +556,254 @@ function deskPage() {
       + 'over the tier, the addons and every override. Right column is the same catalogue with no '
       + 'allowlist — the second sale. Both computed by the same function.</footer>',
     '</body></html>'
+  ].join('\n');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   FULFILMENT — the order desk, from the Clean Cell side
+   ──────────────────────────────────────────────────────────────────────
+   "our software being used to place orders and fulfil orders." Placing was
+   already in; this is the other half, and without it the demo stops on the
+   thank-you screen.
+
+   Same vocabulary as api/orders.js and orders.html, which are the real desk
+   — new, confirmed, quoted, accepted, in fulfilment, shipped, complete. The
+   ladder is one-way here too, because a demo that let somebody click an
+   order backwards would teach the wrong thing about the product.
+
+   The rows are the orders placed in THIS session. Place one on the
+   storefront, come here, move it. That round trip is the whole point. */
+function opsPage() {
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  var A = TENANT.accent || '#1F6F4A';
+  var rows = ORDERS.map(function (o) {
+    var i = STATUS_FLOW.indexOf(o.status);
+    var next = (i >= 0 && i < STATUS_FLOW.length - 1) ? STATUS_FLOW[i + 1] : null;
+    var lines = o.items.length
+      ? o.items.map(function (it) {
+          return '<div class="ln"><b>' + it.qty + '×</b> ' + esc(it.name)
+               + ' <span class="sku">' + esc(it.sku) + '</span></div>';
+        }).join('')
+      : '<div class="ln enq">Enquiry only — asking about the design platform</div>';
+    return '<tr>'
+      + '<td><div class="no">' + esc(o.orderNo) + '</div>'
+        + '<div class="when">' + esc(o.at.slice(0, 16).replace('T', ' ')) + ' UTC</div></td>'
+      + '<td><div><b>' + esc(o.customer.name) + '</b></div>'
+        + '<div class="mut">' + esc(o.customer.email) + '</div>'
+        + (o.address ? '<div class="mut">' + esc(o.address) + '</div>' : '') + '</td>'
+      + '<td>' + lines
+        + (o.energyKwh ? '<div class="mut">' + o.energyKwh.toLocaleString() + ' kWh · '
+                        + o.powerKw.toLocaleString() + ' kW</div>' : '') + '</td>'
+      + '<td><span class="chip s-' + esc(o.status) + '">' + esc(STATUS_LABEL[o.status] || o.status) + '</span></td>'
+      + '<td>' + (next
+          ? '<button data-id="' + esc(o.id) + '" data-to="' + esc(next) + '">'
+            + esc(STATUS_LABEL[next]) + ' →</button>' : '<span class="mut">done</span>')
+        + (o.status !== 'complete' && o.status !== 'cancelled'
+          ? ' <button class="x" data-id="' + esc(o.id) + '" data-to="cancelled">Cancel</button>' : '')
+      + '</td></tr>';
+  }).join('');
+
+  return [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>' + esc(TENANT.name) + ' — Order Desk</title>',
+    '<style>',
+    ':root{--a:' + A + ';--ink:#0d1b2a;--mute:#5b6b7c;--line:#dde3ea}',
+    '*{box-sizing:border-box}',
+    'body{margin:0;background:#f4f6f9;color:var(--ink);font:14px/1.55 system-ui,-apple-system,sans-serif}',
+    'header{background:var(--ink);color:#fff;padding:18px 24px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}',
+    'header h1{margin:0;font-size:17px}header span{font-size:13px;color:#aebccb}',
+    'main{max-width:1100px;margin:0 auto;padding:22px 16px 70px}',
+    '.bar{background:#fff;border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin:0 0 16px;font-size:13px;color:var(--mute)}',
+    'table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}',
+    'th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}',
+    'th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);background:#fafbfc}',
+    '.no{font:600 13px ui-monospace,Menlo,monospace}.when,.mut{font-size:12px;color:var(--mute)}',
+    '.ln{font-size:13px}.ln.enq{font-style:italic;color:var(--mute)}',
+    '.sku{font:11px ui-monospace,Menlo,monospace;color:#94a3b8}',
+    '.chip{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid}',
+    '.s-new{background:#fdf4e3;color:#7a4a00;border-color:#f0dcb0}',
+    '.s-confirmed,.s-quoted,.s-accepted{background:#eef4fb;color:#1c4e80;border-color:#c9dcef}',
+    '.s-in_fulfilment,.s-shipped,.s-complete{background:#e8f6ee;color:#0f7b4f;border-color:#bfe4ce}',
+    '.s-cancelled{background:#fdecec;color:#a32020;border-color:#f3c6c6}',
+    'button{font:650 12px system-ui;padding:7px 11px;border-radius:6px;border:1px solid var(--a);background:var(--a);color:#fff;cursor:pointer}',
+    'button.x{background:#fff;color:#a32020;border-color:#f3c6c6}',
+    '.empty{padding:34px;text-align:center;color:var(--mute)}',
+    '.empty a{color:var(--a);font-weight:650}',
+    '</style></head><body>',
+    '<header><h1>' + esc(TENANT.name) + ' — Order Desk</h1>',
+    '<span>Clean Cell and ClearSky work the same queue. Fulfilment is ours; the customer is theirs.</span></header>',
+    '<main>',
+    '<div class="bar">Orders placed on the storefront in this session. The status ladder is the one '
+      + '<code>api/orders.js</code> enforces, and it only moves forward.</div>',
+    ORDERS.length
+      ? '<table><thead><tr><th>Order</th><th>Customer</th><th>What they asked for</th><th>Status</th>'
+        + '<th>Advance</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty">No orders yet.<br><br>Place one on the '
+        + '<a href="/host">storefront</a> and it lands here.</div>',
+    '</main>',
+    '<' + 'script>',
+    'document.addEventListener("click", function (e) {',
+    '  var b = e.target.closest && e.target.closest("button[data-id]"); if (!b) return;',
+    '  b.disabled = true;',
+    '  fetch("/api/ops-advance", { method:"POST", headers:{"content-type":"application/json"},',
+    '    body: JSON.stringify({ id: b.getAttribute("data-id"), to: b.getAttribute("data-to") }) })',
+    '    .then(function(r){ return r.json(); })',
+    '    .then(function(){ location.reload(); })',
+    '    .catch(function(){ b.disabled = false; });',
+    '});',
+    '</' + 'script></body></html>'
+  ].join('\n');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   DESIGNING THE SITE
+   ──────────────────────────────────────────────────────────────────────
+   "our software being used to ... design sites." The real Site Map is
+   editor.html — 160k lines and a Firebase session, so it is not something
+   this stub server can host. What it CAN do is run the same geometry the
+   editor and the site study run (api/_lib/site-fit.js) and draw the result
+   to scale on a parcel: setback, access aisles, unit count, the assumptions
+   printed on the plan.
+
+   So this is the real engine and a stand-in canvas, and the page says which
+   is which. Somebody watching sees a site being laid out from a system size;
+   what they do not get is the full editor's drawing tools. */
+function designPage(q) {
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  var sku = String((q && q.sku) || '');
+  var p = null;
+  for (var i = 0; i < STOREFRONT.products.length; i++) {
+    if (!sku || STOREFRONT.products[i].sku === sku) { p = STOREFRONT.products[i]; if (sku) break; }
+  }
+  for (var j = 0; j < STOREFRONT.products.length && !sku; j++) {
+    if (STOREFRONT.products[j].widthFt && STOREFRONT.products[j].depthFt) { p = STOREFRONT.products[j]; break; }
+  }
+  var kwh = Number((q && q.kwh) || 1250) || 1250;
+  var kw  = Number((q && q.kw) || 600) || 600;
+
+  var study = null, err = '';
+  try {
+    study = FIT.study(PARCEL_RING,
+      { model: p.name, widthFt: p.widthFt, depthFt: p.depthFt, kw: p.kw, kwh: p.kwh },
+      { kw: kw, kwh: kwh },
+      { setbackFt: STOREFRONT.setbackFt, clearanceFt: STOREFRONT.clearanceFt,
+        aisleFt: STOREFRONT.aisleFt, rowsPerBlock: STOREFRONT.rowsPerBlock, usable: null });
+  } catch (e) { err = e.message || String(e); }
+
+  var A = TENANT.accent || '#1F6F4A';
+  var svg = '';
+  if (study && study.parcel && study.parcel.length) {
+    var xs = study.parcel.map(function (pt) { return pt.x; });
+    var ys = study.parcel.map(function (pt) { return pt.y; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var pad = 18;
+    var W = (maxX - minX) + pad * 2, H = (maxY - minY) + pad * 2;
+    var tx = function (v) { return (v - minX + pad).toFixed(1); };
+    var ty = function (v) { return (v - minY + pad).toFixed(1); };
+    var ring = study.parcel.map(function (pt) { return tx(pt.x) + ',' + ty(pt.y); }).join(' ');
+    var u = study.usable;
+    var units = (study.packing && study.packing.units) || [];
+    svg = '<svg viewBox="0 0 ' + W.toFixed(0) + ' ' + H.toFixed(0) + '" width="100%" '
+        + 'style="background:#eef2f6;border-radius:10px;border:1px solid #dde3ea">'
+        + '<polygon points="' + ring + '" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>'
+        + (u ? '<rect x="' + tx(u.x) + '" y="' + ty(u.y) + '" width="' + u.w.toFixed(1)
+             + '" height="' + u.h.toFixed(1) + '" fill="none" stroke="#b6c2cf" '
+             + 'stroke-dasharray="5 4" stroke-width="1.2"/>' : '')
+        + units.map(function (r) {
+            return '<rect x="' + tx(r.x) + '" y="' + ty(r.y) + '" width="' + r.w.toFixed(1)
+                 + '" height="' + r.h.toFixed(1) + '" fill="' + A + '" fill-opacity=".9" '
+                 + 'stroke="#0d1b2a" stroke-width=".6" rx="1"/>';
+          }).join('')
+        /* ── THE CALLOUT ───────────────────────────────────────────────
+           Six 4.5 ft cabinets on a 2.6-acre lot are four pixels wide, and a
+           drawing where the thing being sold is invisible has failed at the
+           only job it had. Same fix the storefront's site study carries: a
+           pad outline round the cluster, a leader, and a label saying what
+           is in there. The units stay at true scale — the callout points at
+           them rather than enlarging them, because the honest fact on this
+           drawing is exactly how little room the system needs. */
+        + (function () {
+            if (!units.length) return '';
+            var ux = units.map(function (r) { return r.x; });
+            var uy = units.map(function (r) { return r.y; });
+            var ux2 = units.map(function (r) { return r.x + r.w; });
+            var uy2 = units.map(function (r) { return r.y + r.h; });
+            var bx = Math.min.apply(null, ux), by = Math.min.apply(null, uy);
+            var bw = Math.max.apply(null, ux2) - bx, bh = Math.max.apply(null, uy2) - by;
+            var m = 6;
+            var px = tx(bx - m), py = ty(by - m);
+            var pw = (bw + m * 2).toFixed(1), ph = (bh + m * 2).toFixed(1);
+            /* Label parked clear of the pad, with a leader back to it. */
+            var lx = (+px + +pw + 26).toFixed(1), ly = (+py - 12).toFixed(1);
+            var label = units.length + ' \u00d7 ' + (p ? p.name : 'unit');
+            var foot = p ? (p.widthFt + ' \u00d7 ' + p.depthFt + ' ft each') : '';
+            return '<rect x="' + px + '" y="' + py + '" width="' + pw + '" height="' + ph + '" '
+                 + 'fill="none" stroke="' + A + '" stroke-width="1.4" stroke-dasharray="3 2" rx="2"/>'
+                 + '<line x1="' + (+px + +pw).toFixed(1) + '" y1="' + py + '" x2="' + lx + '" y2="' + ly + '" '
+                 + 'stroke="' + A + '" stroke-width="1"/>'
+                 + '<text x="' + (+lx + 3).toFixed(1) + '" y="' + (+ly - 1).toFixed(1) + '" '
+                 + 'font-family="system-ui,sans-serif" font-size="9" font-weight="700" fill="#0d1b2a">'
+                 + label + '</text>'
+                 + '<text x="' + (+lx + 3).toFixed(1) + '" y="' + (+ly + 9).toFixed(1) + '" '
+                 + 'font-family="system-ui,sans-serif" font-size="7.5" fill="#5b6b7c">' + foot + '</text>';
+          })()
+        + '</svg>';
+  }
+
+  var pk = (study && study.packing) || {};
+  var as = (study && study.assumptions) || {};
+  return [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>' + esc(TENANT.platformName) + ' — Site Map</title>',
+    '<style>',
+    ':root{--a:' + A + ';--ink:#0d1b2a;--mute:#5b6b7c;--line:#dde3ea}',
+    '*{box-sizing:border-box}',
+    'body{margin:0;background:#f4f6f9;color:var(--ink);font:14px/1.55 system-ui,-apple-system,sans-serif}',
+    'header{background:var(--a);color:#fff;padding:18px 24px}',
+    'header h1{margin:0;font-size:17px}header p{margin:5px 0 0;opacity:.9;font-size:13px}',
+    'main{max-width:1060px;margin:0 auto;padding:22px 16px 70px;display:grid;grid-template-columns:1fr 300px;gap:20px}',
+    '@media(max-width:840px){main{grid-template-columns:1fr}}',
+    'section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}',
+    'h2{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}',
+    '.kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}',
+    '.kv:last-child{border-bottom:0}.kv b{font-weight:650}',
+    '.note{background:#fdf4e3;border:1px solid #f0dcb0;color:#7a4a00;border-radius:9px;padding:11px 13px;font-size:12.5px;margin:0 0 16px;grid-column:1/-1}',
+    '.asm{font-size:12px;color:var(--mute);margin-top:12px;line-height:1.5}',
+    'a{color:var(--a);font-weight:650;text-decoration:none}',
+    '</style></head><body>',
+    '<header><h1>' + esc(TENANT.platformName) + ' · Site Map</h1>',
+    '<p>' + esc(p ? p.name : 'system') + ' laid out to scale on the customer’s parcel.</p></header>',
+    '<main>',
+    '<div class="note"><b>Real geometry, stand-in canvas.</b> The setback, the access aisles and the '
+      + 'unit count come from <code>api/_lib/site-fit.js</code> — the same engine behind the site '
+      + 'study and the designer. The full Site Map editor (drawing tools, conduit routing, one-line) '
+      + 'needs a signed-in session and is not hosted by this demo server.</div>',
+    '<section><h2>Site plan</h2>',
+    err ? '<p>Could not lay this out: ' + esc(err) + '</p>' : (svg || '<p>No parcel.</p>'),
+    '<p class="asm">' + esc(as.basis || '') + '</p></section>',
+    '<section><h2>The system</h2>',
+    '<div class="kv"><span>Target</span><b>' + kw.toLocaleString() + ' kW / ' + kwh.toLocaleString() + ' kWh</b></div>',
+    '<div class="kv"><span>Unit</span><b>' + esc(p ? p.name : '—') + '</b></div>',
+    '<div class="kv"><span>Footprint</span><b>' + (p ? p.widthFt + ' × ' + p.depthFt + ' ft' : '—') + '</b></div>',
+    '<div class="kv"><span>Units needed</span><b>' + (pk.unitsNeeded != null ? pk.unitsNeeded : '—') + '</b></div>',
+    '<div class="kv"><span>Units drawn</span><b>' + (pk.unitsDrawn != null ? pk.unitsDrawn : '—') + '</b></div>',
+    '<div class="kv"><span>Yard would hold</span><b>' + (pk.unitsThatFit != null ? pk.unitsThatFit : '—') + '</b></div>',
+    '<div class="kv"><span>Fits</span><b>' + (study ? (study.fits ? 'Yes' : 'No') : '—') + '</b></div>',
+    '<h2 style="margin-top:18px">Assumptions</h2>',
+    '<div class="kv"><span>Property setback</span><b>' + esc(as.setbackFt) + ' ft</b></div>',
+    '<div class="kv"><span>Between units</span><b>' + esc(as.clearanceFt) + ' ft</b></div>',
+    '<div class="kv"><span>Access aisle</span><b>' + esc(as.aisleFt) + ' ft every ' + esc(as.rowsPerBlock) + ' rows</b></div>',
+    '<p class="asm"><a href="/desk">← back to the design desk</a></p>',
+    '</section></main></body></html>'
   ].join('\n');
 }
 
@@ -525,7 +850,15 @@ function demoIndex() {
         'Site Map + Grid Atlas, Clean Cell-branded — and the full catalogue beside it, '
         + 'so you can show what the next sale unlocks.',
         '/desk', 'Open the design desk'),
-    row(4, 'The door',
+    row(4, 'Fulfilment &middot; the order desk',
+        'Where the order lands. Clean Cell and ClearSky work the same queue — move an order from '
+        + 'new through to shipped. Place one on screen 1 first and it appears here.',
+        '/ops', 'Open the order desk'),
+    row(5, 'Designing the site',
+        'The Site Map laying a system out to scale on the customer’s parcel — setback, access '
+        + 'aisles, unit count. Real geometry engine, stand-in canvas.',
+        '/design', 'Open the site map'),
+    row(6, 'The door',
         'What somebody without an account is told when they reach the designer. '
         + 'The refusal is the pitch. Also /gate/pending, /suspended, /plan, /active.',
         '/gate/signed-out', 'Open the gate'),
@@ -545,6 +878,8 @@ var server = http.createServer(function (req, res) {
   if (p === '/' || p === '/index.html') return send(res, 200, demoIndex(), TYPES['.html']);
   if (p === '/host' || p === '/host.html') return send(res, 200, HOST_PAGE, TYPES['.html']);
   if (p === '/desk' || p === '/desk.html') return send(res, 200, deskPage(), TYPES['.html']);
+  if (p === '/ops' || p === '/ops.html') return send(res, 200, opsPage(), TYPES['.html']);
+  if (p === '/design' || p === '/design.html') return send(res, 200, designPage(u.query), TYPES['.html']);
 
   /* The storefront on its own, for looking at it without the frame. */
   if (p === '/embed/storefront' || p === '/embed/storefront.html') {
@@ -578,6 +913,13 @@ var server = http.createServer(function (req, res) {
     });
   }
 
+  if (p === '/api/ops-advance') {
+    if (req.method !== 'POST') return fail(res, 405, 'POST only');
+    return readBody(req).then(function (b) {
+      return opsAdvance(res, b);
+    });
+  }
+
   send(res, 404, 'not found', 'text/plain');
 });
 
@@ -591,6 +933,8 @@ server.listen(PORT, '127.0.0.1', function () {
   console.log('  Part 1  their website, storefront embedded   /host');
   console.log('  Part 1  the storefront alone                 /embed/storefront?k=preview');
   console.log('  Part 2  the two-tool design desk             /desk');
+  console.log('  Fulfil  the order desk (orders land here)    /ops');
+  console.log('  Design  a site laid out to scale            /design');
   console.log('  The door, per account state                  /gate/signed-out');
   console.log('          (also /pending /suspended /plan /active)');
   console.log('\n  Real: the page, the sizing engine, the site-fit geometry.');
