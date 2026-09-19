@@ -15,16 +15,20 @@ Clean Cell is a **battery manufacturer**. They are not trying to sell software
 — they are trying to sell more batteries, and the platform is how. So the
 funnel matters more than the feature list:
 
-| Step | What the customer does | What it costs us | Why it matters |
+| Step | What the customer does | Account needed? | What it is for |
 |---|---|---|---|
-| **1 · Size** | Types their bill. Gets kW / kWh. | Nothing | Anonymous and instant. No account, no form, no friction. |
-| **2 · See it on their site** | Types their address. Gets their own lot drawn to scale, and drags the yard to where they would really put it. | A metered parcel lookup | Proof it fits, on their own property. |
-| **3 · Build it** | Opens the **designer**, branded as the manufacturer, system already configured. Guided Build places it: trenching, switchgear, the one-line. | Nothing | **This is the one that matters.** They are now building their project on the platform. |
-| **4 · Order** | From the storefront, or from inside the designer. | Nothing | They ordered what they drew. |
+| **1 · Size** | Types their bill. Gets kW / kWh. | No | The taste. Anonymous and instant. |
+| **2 · See it on their site** | Types their address. Gets their own lot drawn to scale, and drags the yard to where they would really put it. | No (a named lead) | Proof it fits, on their own property. |
+| **3 · Order the product** | Confirms and submits. ClearSky fulfils. | No | **Sale one: batteries.** |
+| **4 · Ask about the designer** | Sees what the site designer does and asks for an account. | — | **Sale two: a white-labelled OMEGA account,** which Clean Cell helps sell. |
+| **5 · Design the site** | The full editor, branded as the manufacturer. | **Yes — an approved, active account** | The product they just bought. |
 
-Step 3 is the point. Steps 1 and 2 exist to earn it: the goal is not a web
-lead, it is **the manufacturer's customers building their projects on the
-platform**, in an editor that carries the manufacturer's name.
+**The storefront is the taste. The designer is the next sale.**
+
+Steps 1–3 are deliberately open: a manufacturer's customer should be able to
+size, see and buy without meeting a form. Step 5 is deliberately shut. Giving
+the designer away at the bottom of a storefront funnel sells nothing and puts
+strangers inside the platform — `omega-editor-gate.js` is the door.
 
 Step 2 is the one that earns the sale, and it is also the only step that costs
 real money — which is why a named lead is the ticket for it (see
@@ -44,7 +48,7 @@ That is four surfaces, and they are genuinely different problems:
 | 1 | The signed-in workspace | Clean Cell's own staff | The platform renamed. They know whose software it is; the chrome should still say theirs. |
 | 2 | The public storefront | Clean Cell's **customer** | A page with no sign-in, framed by their website, with no trace of us. **This did not exist.** |
 | 3 | The site study | Clean Cell's **customer** | Their own parcel, drawn, with the system on it. **This did not exist.** |
-| 4 | The designer hand-off | Clean Cell's **customer** | The editor, white-labelled, system pre-configured, no account needed. **This did not exist.** |
+| 4 | The designer pitch + gate | Clean Cell's **customer**, then ClearSky sales | An enquiry in the same queue, and a door on the editor. **This did not exist.** |
 | 5 | The order desk | ClearSky + Clean Cell | A queue, a price, a lifecycle. **This did not exist.** |
 
 ---
@@ -461,65 +465,76 @@ not *where does everything go*.
 
 ---
 
-## 3c · The hand-off into the designer
+## 3c · Selling the designer, not giving it away
+
+The storefront used to link straight into the editor. That was wrong twice
+over: it put strangers inside the platform, and it gave away the thing that is
+meant to be **sold**.
+
+So the storefront now **describes** the designer and takes an enquiry. The
+lead lands in the same `orders` queue, marked `interest: 'platform'`, and the
+Order Desk shows which kind it is and can filter to one.
+
+**One queue on purpose.** A designer-account enquiry and a battery order are
+worked by different people, but a second collection means a second desk, and
+the second desk is the one nobody checks.
+
+### The gate — `omega-editor-gate.js`
+
+`editor.html` had **no access gate at all**. Anyone with the URL got the whole
+designer. The tool registry marks it tier `STANDARD`, which hides the tile in
+the portal — and, as `CLAUDE.md` puts it, *"a hidden link is not a gate; a
+function that refuses is."*
+
+The rule is: **a signed-in user of an active tenant.** That is enough on its
+own, because workspaces are created `pending` and a human at ClearSky approves
+them — *"has an account"* already means somebody decided they could have one.
+
+#### It fails OPEN on a missing record, deliberately
+
+`firestore.rules`' `tenantActive()` says it best:
+
+> ABSENT COUNTS AS ACTIVE. Every tenant live today has no `omega_orgs` doc
+> until `seed-omega-orgs` runs. A helper that failed closed on a missing doc
+> would lock out all seven customers the moment it was consulted.
+
+The same trap is in this gate. Only an **explicit** `pending`, `suspended` or
+`cancelled`, or an **explicit** `toolOverrides.editor === false`, refuses. A
+failed read also fails open — a designer that refuses on a flaky network is a
+support call from somebody who is paying. `scripts/test-handoff.js` runs every
+one of those states through `decide()` and mutation-testing confirms that
+flipping the absent-record case to fail closed breaks the suite.
+
+#### It is not the security boundary
+
+`firestore.rules` is. Every project read and write is already scoped by
+`orgId`, so somebody who bypasses the overlay gets an empty canvas they cannot
+keep. **This gate decides who is shown the product** — a commercial control,
+and pretending it is more would be the mistake.
+
+#### The refusal is the pitch
+
+A stranger who reaches the editor came from somewhere, usually a
+manufacturer's storefront. *"Access denied"* wastes the one moment they are
+interested. The screen is white-labelled, says what the designer does, and
+offers a way to ask for an account.
+
+### The hand-off link still works — for people who have an account
 
 ```
 /editor?k=<embed key>&sku=CC-2000&qty=4&addr=4200+W+Industrial+Dr
 ```
 
-**A URL and nothing else.** No hand-off collection, no server round trip to
-create one, no expiry to get wrong, no document sitting somewhere holding a
-stranger's address. Everything in it is already in that visitor's browser and
-the embed key is publishable by design.
+`omega-storefront-handoff.js` still pre-configures the designer from a link:
+brand, product, quantity, address, Guided Build open and ready to place. What
+changed is that the **public storefront no longer hands one out**. A Clean
+Cell rep can send it, or it can ride the welcome email once an account is
+live. **The gate decides, not the link.**
 
-`omega-storefront-handoff.js` reads it on the other side and:
-
-1. resolves the brand and the product through **`/api/embed-config`** — the
-   same public endpoint the storefront already uses;
-2. renames the platform, the tab and the export brand;
-3. seeds the BESS list with the configured system;
-4. drops the address into the map;
-5. opens the **BESS Guided Build**, ready to place;
-6. mounts an **Order this system** button.
-
-### The visitor has no account, and that is the point
-
-This is a manufacturer's *customer*, arriving from the manufacturer's own
-website. Asking them to register before they can see their own battery on
-their own site would lose most of them — and the whole reason the hand-off
-exists is to get them building.
-
-The editor already runs signed-out (it loads a project from the URL and
-prompts on save), so they design first and sign in when they want to keep it.
-**That prompt is the conversion, and it lands after they are invested.**
-
-### It configures; it does not place
-
-The hand-off never forges elements onto the canvas. It sets the system up and
-opens the editor's *own* Guided Build — clearance rules, trench routing, the
-one-line, the skip-and-reroute when the cabinet integrates its PCS. A second
-placement path would drift from the real one and be worse at the job.
-
-### `integrates{}` is why the one-line is right
-
-`getWizSteps()` skips the PCS, disconnect and transformer steps when the pad
-already contains them. Those flags reach an anonymous visitor only through
-`/api/embed-config` — which is why that endpoint now publishes them (see the
-correction note in the file). Lose them and the Guided Build draws an external
-PCS on an all-in-one cabinet: a one-line that would not be built, handed to
-the customer who trusted it most.
-
-### The order follows the design, not the link
-
-They came to the designer to *change* things. `currentQty()` reads what is
-actually configured, not what the link said — ordering the link's quantity
-after they doubled it is the bug it exists to stop.
-
-The anonymous order goes through `/api/embed-order`: the same public endpoint,
-the same publishable key, the same rate limits, the same `status:'new'` pin.
-Nothing new is trusted. A signed-in user orders the other way —
-`POST /api/orders` `action:'create'` — because they have an org and the order
-should be attributed to it.
+`integrates{}` is published for this reason (see the correction note in
+`api/embed-config.js`): `getWizSteps()` skips the PCS, disconnect and
+transformer steps when the cabinet contains them, and without those flags the
+Guided Build draws an external PCS on an all-in-one cabinet.
 
 ---
 

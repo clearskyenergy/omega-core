@@ -200,7 +200,12 @@ var KEY = 'omega_pk_live_' + 'a'.repeat(32);
 
 /* ── 5 · The wiring on both sides ──────────────────────────────────────── */
 var ed = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
-ok('editor.html loads the hand-off', /src="\/omega-storefront-handoff\.js"/.test(ed));
+/* The hand-off module stays: a link carrying a key and a SKU still
+   pre-configures the designer for somebody who HAS an account — Clean Cell's
+   rep sends it, or it rides the welcome email. What changed is that the
+   public storefront no longer hands one out, and the gate decides. */
+ok('editor.html still loads the hand-off for account holders',
+   /src="\/omega-storefront-handoff\.js"/.test(ed));
 ok('editor.html loads the white-label layer', /src="\/omega-whitelabel\.js"/.test(ed));
 ok('editor.html loads omega-brand before it',
    ed.indexOf('/omega-brand.js') < ed.indexOf('/omega-whitelabel.js'));
@@ -209,20 +214,198 @@ ok('editor.html exposes BESS_CATALOG for the anonymous path',
 ok('editor.html hydrates the white label', /OmegaWhiteLabel\.hydrate\(\)/.test(ed));
 ok('the editor version chip is white-labelled', /data-omega-platform>ClearSky OMEGA<\/span> v/.test(ed));
 
+/* ── THE STOREFRONT DOES NOT LET A STRANGER INTO THE EDITOR ────────────
+   This is the correction. The storefront used to link straight into the
+   designer, which put strangers inside the platform AND gave away the thing
+   that is meant to be sold. The designer is now something a visitor ASKS
+   FOR; omega-editor-gate.js is the door.
+
+   Asserted as an ABSENCE, because an absence is what regresses quietly. */
 var sf = fs.readFileSync(path.join(ROOT, 'embed', 'storefront.html'), 'utf8');
-ok('the storefront offers the designer', /id="designBtn"/.test(sf));
-ok('it builds an /editor link with the key and sku',
-   /\/editor\?k='/.test(sf) && /&sku='/.test(sf));
-ok('it opens a NEW TAB rather than navigating the host page',
-   /window\.open\(u, '_blank'/.test(sf));
-ok('and it stays silent when the tenant has no catalogue to hand off',
-   /CFG\.flow\.editorHandoff/.test(sf));
+var sfCode = sf.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+ok('the storefront does NOT link into the editor', !/\/editor/.test(sfCode),
+   (/.{0,60}\/editor.{0,60}/.exec(sfCode) || [])[0]);
+ok('and opens no new tab at all', !/window\.open/.test(sfCode));
+ok('it pitches the designer instead', /id="designBtn"/.test(sf));
+ok('the pitch files a lead marked as a platform interest',
+   /interest: 'platform'/.test(sfCode));
+ok('through the SAME order endpoint as a product lead',
+   /api\/embed-order/.test(sfCode));
+ok('and is switchable per tenant', /CFG\.flow\.designerPitch/.test(sfCode));
 
 var cfgSrc = fs.readFileSync(path.join(ROOT, 'api', 'embed-config.js'), 'utf8');
-ok('embed-config publishes the platform name for the anonymous editor',
+ok('embed-config exposes the pitch flag', /designerPitch: sf\.designerPitch !== false/.test(cfgSrc));
+ok('embed-config no longer advertises an editor hand-off', !/editorHandoff/.test(cfgSrc));
+ok('embed-config still publishes the platform name for a branded refusal',
    /platformName:/.test(cfgSrc));
-ok('embed-config gates the hand-off on there being products',
-   /editorHandoff: sf\.editorHandoff !== false && products\.length > 0/.test(cfgSrc));
+
+/* ── THE LEAD SAYS WHICH KIND IT IS ────────────────────────────────────── */
+var eo = fs.readFileSync(path.join(ROOT, 'api', 'embed-order.js'), 'utf8');
+ok('embed-order records the interest', /interest:\s+\(b\.interest === 'platform'\)/.test(eo));
+ok('and defaults to a product lead', /: 'product'/.test(eo));
+ok('and the fulfilment email says which kind', /DESIGNER ACCOUNT enquiry/.test(eo));
+var od = fs.readFileSync(path.join(ROOT, 'orders.html'), 'utf8');
+ok('the order desk shows the kind', /Designer account/.test(od));
+ok('and can filter to one kind', /id="fKind"/.test(od));
+
+/* ── THE EDITOR GATE ───────────────────────────────────────────────────
+   The whole point of the correction: no account, no designer. */
+var gate = fs.readFileSync(path.join(ROOT, 'omega-editor-gate.js'), 'utf8');
+ok('editor.html loads the gate', /src="\/omega-editor-gate\.js"/.test(ed));
+ok('the gate loads BEFORE the editor body scripts',
+   ed.indexOf('/omega-editor-gate.js') < ed.indexOf('/omega-bess-products.js'));
+ok('and it does not claim to be the security boundary',
+   /IT IS NOT THE SECURITY BOUNDARY/.test(gate));
+
+/* ── THE GATE, ACTUALLY RUN ────────────────────────────────────────────
+   Pattern-matching a refusal proves nothing about who gets in. Every account
+   state is put through decide() against a stub Firestore, and the assertion
+   is whether the curtain came DOWN. */
+function runGate(docs, user) {
+  var els = {};
+  function El(t) { this.tag = t; this.style = {}; this.children = []; }
+  El.prototype.appendChild = function (c) { this.children.push(c); els[c.id] = c; return c; };
+  El.prototype.setAttribute = function (k, v) { this[k] = v; };
+  El.prototype.removeChild = function (c) {
+    var i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1);
+    delete els[c.id];
+  };
+  var body = new El('body'); body.id = 'body';
+  var w = {
+    location: { href: '', pathname: '/editor', search: '' },
+    document: {
+      body: body, documentElement: new El('html'),
+      getElementById: function (id) { return els[id] || null; },
+      createElement: function (t) { var e = new El(t); e.parentNode = body; return e; },
+      addEventListener: function () {}
+    },
+    setTimeout: function () {},
+    firebase: {
+      apps: [1],
+      auth: function () { return { currentUser: user, onAuthStateChanged: function () {} }; },
+      firestore: function () {
+        return { collection: function (c) {
+          return { doc: function (d) {
+            var key = c + '/' + d;
+            return {
+              get: function () { return Promise.resolve({ exists: !!docs[key], data: function () { return docs[key]; } }); },
+              collection: function (c2) { return { doc: function (d2) {
+                var k2 = key + '/' + c2 + '/' + d2;
+                return { get: function () { return Promise.resolve({ exists: !!docs[k2], data: function () { return docs[k2]; } }); } };
+              } }; }
+            };
+          } };
+        } };
+      }
+    }
+  };
+  w.window = w;
+  new Function('window', 'document', 'setTimeout', 'module',
+    'var self=window;' + gate)(w, w.document, w.setTimeout, { exports: {} });
+  return w.OmegaEditorGate.decide(user).then(function () {
+    return { allowed: !els['omega-editor-gate'], access: w.OMEGA_EDITOR_ACCESS,
+             html: els['omega-editor-gate'] ? els['omega-editor-gate'].innerHTML : '' };
+  });
+}
+
+var ORG = 'northgatefoods.com';
+var USER = { email: 'dana@' + ORG };
+
+Promise.resolve()
+  /* THE TRAP: firestore.rules' tenantActive() says "ABSENT COUNTS AS ACTIVE
+     ... a helper that failed closed on a missing doc would lock out all seven
+     customers". Getting this backwards locks out every paying customer on the
+     first deploy. */
+  .then(function () { return runGate({}, USER); })
+  .then(function (r) {
+    ok('a signed-in user whose org has NO record gets in (absent = active)',
+       r.allowed === true, r.access);
+  })
+  .then(function () {
+    return runGate({ ['omega_orgs/' + ORG]: { status: 'active' } }, USER);
+  })
+  .then(function (r) { ok('an active workspace gets in', r.allowed === true, r.access); })
+
+  .then(function () {
+    return runGate({ ['omega_orgs/' + ORG]: { status: 'pending' } }, USER);
+  })
+  .then(function (r) {
+    ok('a PENDING workspace is refused', r.allowed === false);
+    ok('and is told it is being set up, not "denied"', /being set up/i.test(r.html), r.html.slice(0, 120));
+  })
+
+  .then(function () {
+    return runGate({ ['omega_orgs/' + ORG]: { status: 'suspended' } }, USER);
+  })
+  .then(function (r) { ok('a SUSPENDED workspace is refused', r.allowed === false); })
+
+  .then(function () {
+    return runGate({ ['omega_orgs/' + ORG]: { status: 'cancelled' } }, USER);
+  })
+  .then(function (r) { ok('a CANCELLED workspace is refused', r.allowed === false); })
+
+  .then(function () {
+    return runGate({
+      ['omega_orgs/' + ORG]: { status: 'active' },
+      ['omega_orgs/' + ORG + '/billing/current']: { tier: 'standard', toolOverrides: { editor: false } }
+    }, USER);
+  })
+  .then(function (r) {
+    ok('an EXPLICIT editor switch-off is refused', r.allowed === false);
+    ok('and is told it is a plan matter', /not on this plan/i.test(r.html), r.html.slice(0, 120));
+  })
+
+  .then(function () {
+    return runGate({
+      ['omega_orgs/' + ORG]: { status: 'active' },
+      ['omega_orgs/' + ORG + '/billing/current']: { tier: 'trial' }
+    }, USER);
+  })
+  .then(function (r) { ok('a trial workspace gets in — a trial is the product', r.allowed === true); })
+
+  .then(function () {
+    /* A seeded org with billing that names no tier at all is still a tenant
+       somebody approved. Refusing here would be the absent-record trap
+       wearing a different hat. */
+    return runGate({
+      ['omega_orgs/' + ORG]: { status: 'active' },
+      ['omega_orgs/' + ORG + '/billing/current']: {}
+    }, USER);
+  })
+  .then(function (r) { ok('billing with no tier does not lock anybody out', r.allowed === true); })
+
+  .then(function () {
+    return runGate({ 'omega_orgs/csebuilders.com': { status: 'suspended' } },
+                   { email: 'tommy@csebuilders.com' });
+  })
+  .then(function (r) {
+    ok('ClearSky staff pass even against a suspended record', r.allowed === true, r.access);
+    ok('and are marked as staff', r.access && r.access.staff === true, r.access);
+  })
+
+  .then(function () { return runGate({}, { email: '' }); })
+  .then(function (r) { ok('a user with no email address is refused', r.allowed === false); })
+
+  .then(finishGate)['catch'](function (e) { ok('the gate suite ran', false, e.message); finishGate(); });
+
+function finishGate() {
+
+/* THE TRAP. firestore.rules' tenantActive() says "ABSENT COUNTS AS ACTIVE ...
+   a helper that failed closed on a missing doc would lock out all seven
+   customers". The same trap is in this gate and getting it backwards locks
+   out every paying customer on the first deploy. */
+ok('a MISSING org record fails OPEN, as the rules do',
+   /if \(!exists\) return allow\(/.test(gate), 'missing-record path');
+ok('and a failed read fails open too',
+   /reason: 'read-failed'/.test(gate));
+ok('only an EXPLICIT override refuses on entitlement',
+   /ov\.editor === false/.test(gate));
+ok('the gate paints BEFORE auth answers, not after',
+   gate.indexOf('function start()') > 0 && /shield\(\);\s*\n\s*var began/.test(gate));
+ok('and it does not claim to be the security boundary',
+   /IT IS NOT THE SECURITY BOUNDARY/.test(gate));
+ok('the refusal is branded, not a bare denial', /function brand\(\)/.test(gate));
+ok('and offers a way to ask for an account', /Ask about an account/.test(gate));
 
 /* ── 6 · The tenant's own order path ───────────────────────────────────── */
 var ord = fs.readFileSync(path.join(ROOT, 'api', 'orders.js'), 'utf8');
@@ -249,3 +432,4 @@ ok('and refuses a project belonging to another workspace',
 
 console.log('\nstorefront hand-off: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
+}

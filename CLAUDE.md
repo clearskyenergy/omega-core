@@ -245,14 +245,21 @@ user). Do not add a second copy of that list — see what three copies of
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.
 
-- The funnel is **size → see it on your site → BUILD IT → order**, and step
-  three is the point: the goal is the manufacturer's customers building their
-  projects on the platform, not a web lead. `omega-storefront-handoff.js`
-  carries a visitor from the storefront into a white-labelled editor with
-  `/editor?k=<embed key>&sku=&qty=&addr=` — a URL and nothing else, resolved
-  through `/api/embed-config` because that visitor has NO ACCOUNT. The editor
-  already runs signed-out and prompts on save; that prompt is the conversion
-  and it lands after they are invested.
+- **The storefront is the taste; the designer is the next sale.** Size, site
+  study and product order are open to anybody. The EDITOR is not:
+  `omega-editor-gate.js` requires a signed-in user of an ACTIVE tenant, and
+  the storefront only PITCHES the designer (a lead in the same `orders` queue,
+  marked `interest:'platform'`). Do not add a public link into `/editor`.
+- That gate **fails OPEN on a missing `omega_orgs` record**, exactly as
+  `tenantActive()` does in the rules and for the same reason — every legacy
+  tenant has no record until the seed runs. Only an explicit
+  pending/suspended/cancelled, or `toolOverrides.editor === false`, refuses.
+  Getting this backwards locks out every paying customer.
+- The gate is a COMMERCIAL control, not the security boundary;
+  `firestore.rules` already scopes every project read and write by orgId.
+- `omega-storefront-handoff.js` still pre-configures the designer from
+  `/editor?k=&sku=&qty=&addr=` for somebody who HAS an account. The gate
+  decides, not the link.
 - `editor.html` gets its white label from `OmegaWhiteLabel.hydrate()`, which
   reads `omega_orgs/{org}` directly. It deliberately does NOT load
   `omega-tenant.js`: that would bring the hostname lock to a page that

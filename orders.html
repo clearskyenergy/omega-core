@@ -102,6 +102,11 @@ textarea{width:100%;resize:vertical;padding:6px 9px;border:1px solid var(--cs-bo
       <option value="complete">Complete</option>
       <option value="cancelled">Cancelled</option>
     </select>
+    <select id="fKind">
+      <option value="">Product orders and account enquiries</option>
+      <option value="product">Product orders only</option>
+      <option value="platform">Designer-account enquiries only</option>
+    </select>
     <input id="fText" placeholder="Search customer, order no, storefront" style="min-width:230px">
     <span id="count" style="color:var(--cs-muted);font-size:12.5px;margin-left:auto"></span>
     <button class="ghost" id="reload">Refresh</button>
@@ -220,6 +225,11 @@ function load(){
 }
 
 function passes(o){
+  /* A designer-account enquiry and a battery order are worked by different
+     people. Same queue — a second desk is the one nobody checks — but the
+     filter has to be there or one kind buries the other. */
+  var k = document.getElementById('fKind').value;
+  if (k && (o.interest || 'product') !== k) return false;
   var f = document.getElementById('fStatus').value;
   if (f === 'open') { if (o.status==='complete'||o.status==='cancelled') return false; }
   else if (f && o.status !== f) return false;
@@ -271,7 +281,10 @@ function card(o){
     +       ' · '+n0(o.system&&o.system.kw)+' kW / '+n0(o.system&&o.system.kwh)+' kWh'
     +       (o.owner?' · '+esc(o.owner):'')+'</p>'
     +   '</div>'
-    +   '<div class="acts">'+statusChip(o.status)
+    +   '<div class="acts">'
+    +     (o.interest==='platform'
+            ? '<span class="chip" style="background:#EDE9FE;color:#5B21B6">Designer account</span> ' : '')
+    +     statusChip(o.status)
     +     (o.pricing&&o.pricing.total!=null?' <span class="chip ok">'+esc(usd(o.pricing.total,o.pricing.currency))+'</span>':'')
     +     ' <button class="ghost" onclick="toggle(\''+esc(o._id)+'\')">Work it</button>'
     +   '</div>'
@@ -449,6 +462,7 @@ function note(id){
 }
 
 document.getElementById('fStatus').onchange = render;
+document.getElementById('fKind').onchange = render;
 document.getElementById('fText').oninput = render;
 document.getElementById('reload').onclick = load;
 </script>

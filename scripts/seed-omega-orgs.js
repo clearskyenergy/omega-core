@@ -48,7 +48,7 @@ var STOREFRONT_KEYS = ['headline', 'intro', 'disclaimer', 'thanks', 'cta',
      capexPerKwh they belong in version control: they decide the unit count on
      a customer's drawing and a change to one should show up in a diff.
      dailyParcelCap is the spend limit on the metered parcel lookup. */
-  'siteStudy', 'requireContactForLayout', 'dailyParcelCap',
+  'siteStudy', 'requireContactForLayout', 'dailyParcelCap', 'designerPitch',
   'setbackFt', 'clearanceFt', 'aisleFt', 'rowsPerBlock'];
 /* Documentation keys in tenant.json that no reader consumes. Dropped here
    rather than seeded, so the file can explain its own product shape without

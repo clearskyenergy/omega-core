@@ -230,20 +230,33 @@
     <div class="unver" id="planUnver"></div>
   </div>
 
-  <!-- ── Design it yourself ───────────────────────────────────────────
-       The growth step. The storefront sizes and draws; the DESIGNER is where
-       a customer actually builds their project — and it opens branded as the
-       manufacturer, with their system already configured. No account is asked
-       for here: the editor runs signed-out and prompts on save, so the sign-up
-       happens once they are invested rather than before they have seen
-       anything. -->
+  <!-- ── The designer, as something they ASK FOR ──────────────────────
+       This used to open the editor directly. That was wrong twice over: it
+       put strangers inside the platform, and it gave away the thing that is
+       meant to be SOLD.
+
+       The storefront is the taste — size it, see it on your lot, order the
+       product. The designer is the next sale: a ClearSky-OMEGA account
+       carrying the manufacturer's name, which the manufacturer helps sell and
+       ClearSky approves. So this card describes it and takes an enquiry; the
+       account is what unlocks it. omega-editor-gate.js is the door. -->
   <div class="card hide" id="designCard">
-    <h2>Build it yourself</h2>
+    <h2 id="designHead">Design the whole site</h2>
     <p class="intro" id="designIntro" style="margin-bottom:14px"></p>
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <button class="btn" type="button" id="designBtn">Open the designer</button>
-      <span class="hint" style="margin:0">Opens in a new tab. Nothing to install, no account needed to start.</span>
+    <ul style="margin:0 0 16px;padding-left:20px;color:var(--sub);font-size:14px">
+      <li>Lay the system out on your own site plan, to scale</li>
+      <li>Clearances, trenching, switchgear and the one-line</li>
+      <li>Export the drawing set, or order straight from the design</li>
+    </ul>
+    <div class="row2 hide" id="designWho" style="margin-bottom:12px">
+      <div><label for="dName">Your name</label><input id="dName" autocomplete="name"></div>
+      <div><label for="dEmail">Work email</label><input id="dEmail" type="email" autocomplete="email"></div>
     </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="designBtn">Ask about an account</button>
+      <span class="spin">Sending…</span>
+    </div>
+    <p class="note" id="designNote"></p>
   </div>
 
   <!-- ── Contact and submit ───────────────────────────────────────────── -->
@@ -991,50 +1004,58 @@
     grip.addEventListener('pointerdown', down('resize'));
   }
 
-  /* ── The hand-off into the designer ──────────────────────────────────
-     A URL and nothing else. Everything in it is already in this visitor's
-     browser, and the embed key is publishable by design — so there is no
-     hand-off document to create, expire, or leave holding a stranger's
-     address. omega-storefront-handoff.js reads it on the other side. */
-  function designUrl() {
-    var p = productBySku(PICKED);
-    if (!p) return '';
-    var qty = 1;
-    if (SIZED && SIZED.products) {
-      for (var i = 0; i < SIZED.products.length; i++) {
-        if (SIZED.products[i].sku === PICKED) qty = SIZED.products[i].qty || 1;
-      }
-    }
-    var u = '/editor?k=' + encodeURIComponent(KEY)
-          + '&sku=' + encodeURIComponent(PICKED)
-          + '&qty=' + qty;
-    var addr = ($('sAddr').value || $('aLine').value || '').trim();
-    if (addr) u += '&addr=' + encodeURIComponent(addr);
-    if (SIZED && SIZED.system) {
-      if (SIZED.system.kw) u += '&kw=' + SIZED.system.kw;
-      if (SIZED.system.kwh) u += '&kwh=' + SIZED.system.kwh;
-    }
-    return u;
-  }
+  /* ── The designer enquiry ────────────────────────────────────────────
+     Not a link into the editor. A stranger on a manufacturer's website is
+     not somebody we want inside the platform, and the designer is the thing
+     being SOLD — handing it over at the bottom of a storefront funnel sells
+     nothing.
 
+     So this files a lead marked interest:'platform', through the same
+     /api/embed-order the product path uses. One queue, one set of rules, one
+     place the manufacturer and ClearSky both already watch — and the Order
+     Desk shows which kind of lead it is. */
   function offerDesign() {
-    if (!CFG.flow.editorHandoff || !PICKED) { hide($('designCard')); return; }
-    var p = productBySku(PICKED);
-    if (!p) { hide($('designCard')); return; }
+    if (!CFG.flow.designerPitch) { hide($('designCard')); return; }
+    var who = (CFG.brand && CFG.brand.name) || 'our';
+    $('designHead').textContent = 'Design the whole site';
     $('designIntro').textContent =
-      'Lay this out on your own site plan — trenching, switchgear, the one-line — '
-      + 'with the ' + (p.name || 'system') + ' already configured. You can order from there too.';
+      'The sizing above is the short version. A ' + who + ' account opens the '
+      + 'site designer, where you lay the system out on your own property and '
+      + 'take it through to a drawing set.';
+    $('designWho').className = LEAD_ID ? 'row2 hide' : 'row2';
     show($('designCard'));
   }
 
   function doDesign() {
-    var u = designUrl();
-    if (!u) { say('Choose a system first.'); return; }
-    /* _blank, not a navigation: the storefront sits in an iframe on the
-       manufacturer's own website and taking that page somewhere else is not
-       ours to do. embed/loader.js grants allow-popups for exactly this. */
-    try { window.open(u, '_blank', 'noopener'); }
-    catch (e) { say('Your browser blocked the new tab — allow pop-ups and try again.'); }
+    say('');
+    var name = $('dName').value.trim() || $('sName').value.trim() || $('cName').value.trim();
+    var email = $('dEmail').value.trim() || $('sEmail').value.trim() || $('cEmail').value.trim();
+    if (!email) { say('Enter a work email and we will get in touch about an account.'); return; }
+    if (!name) { say('Please enter your name.'); return; }
+
+    busy(true);
+    api('/api/embed-order', 'POST', {
+      consent: true, _hp: $('hp').value,
+      interest: 'platform',
+      customer: {
+        name: name, email: email,
+        company: $('cCo').value,
+        notes: 'Asked about a site-designer account from the storefront.'
+               + (PICKED ? ' Looking at ' + PICKED + '.' : '')
+      },
+      system: SIZED ? SIZED.system : null
+    }).then(function (r) {
+      busy(false);
+      hide($('designWho'));
+      $('designBtn').disabled = true;
+      $('designBtn').textContent = 'Request sent \u2713';
+      $('designNote').textContent = r.message
+        || 'Thanks — we will be in touch about setting up an account.';
+      postHeight();
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not send that.');
+    });
   }
 
   /* ── Order ───────────────────────────────────────────────────────────── */

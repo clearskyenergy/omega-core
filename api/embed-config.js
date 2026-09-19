@@ -223,12 +223,13 @@ module.exports = E.handler(function (req) {
                page needs to know to order its own steps; the ENFORCEMENT is
                in api/embed-layout.js, which refuses without the receipt. */
             studyNeedsContact: sf.requireContactForLayout !== false,
-            /* Whether to offer "design it yourself" — the hand-off into the
-               white-labelled editor. On unless switched off, and only when
-               there is a catalogue to hand off WITH: the editor resolves the
-               SKU through this endpoint, so a storefront with no published
-               products has nothing to send. */
-            editorHandoff: sf.editorHandoff !== false && products.length > 0
+            /* Whether to PITCH the site designer. Not a link into it — the
+               editor is gated on having an account (omega-editor-gate.js),
+               because it is the thing being sold rather than the sample. This
+               only decides whether the storefront describes it and takes an
+               enquiry. Needs no catalogue: a tenant who sizes but sells no
+               product from the web can still be selling accounts. */
+            designerPitch: sf.designerPitch !== false
           },
           products: products,
           /* null when the link carried no ?c=; { error } when it carried one

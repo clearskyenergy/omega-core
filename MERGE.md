@@ -122,7 +122,11 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
    ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
-11. **White-label `editor.html`.** Its export attribution and its BESS product
+11. **White-label `editor.html`.** ⚠ It now has an ACCESS GATE
+    (`omega-editor-gate.js`) — signed-in user of an active tenant, failing
+    OPEN on a missing record the way `tenantActive()` does. Anything added
+    here must not turn that into a fail-closed check.
+     Its export attribution and its BESS product
     catalogue are done (`poweredByLine()` reads the white-label block;
     `omega-bess-products.js` merges the tenant's own products into
     `BESS_CATALOG` and leads the dropdown with them; both are defensive and

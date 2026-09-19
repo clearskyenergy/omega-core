@@ -254,6 +254,18 @@ module.exports = E.handler(function (req) {
           var no = orderNo(ctx.orgId, ref.id);
           var doc = {
             orderNo:     no,
+            /* ── WHAT THIS LEAD WANTS ──────────────────────────────────────
+               'product'  — batteries. The storefront's main path.
+               'platform' — a site-designer account, pitched at the bottom of
+                            that funnel and sold by ClearSky with the
+                            manufacturer's help.
+
+               Same collection on purpose. Both are leads the manufacturer and
+               ClearSky work out of one queue, with the same status lifecycle
+               and the same refusal to let a browser price anything. A second
+               collection would mean a second desk, and the second desk is the
+               one nobody checks. */
+            interest:    (b.interest === 'platform') ? 'platform' : 'product',
             orgId:       ctx.orgId,                 /* whose customer */
             orgName:     clean(ctx.org.name, 120) || ctx.orgId,
             /* WE fulfil. Stamped, never requested. */
@@ -299,8 +311,11 @@ module.exports = E.handler(function (req) {
    and as the rest of /api/. */
 function notify(ctx, doc, sf) {
   var FV = A.FieldValue();
-  var line = 'New order ' + doc.orderNo + ' — ' + (doc.system.kw || '?') + ' kW / '
-           + (doc.system.kwh || '?') + ' kWh for ' + (doc.customer.company || doc.customer.name);
+  var who = doc.customer.company || doc.customer.name;
+  var line = doc.interest === 'platform'
+    ? ('Designer-account enquiry ' + doc.orderNo + ' — ' + who)
+    : ('New order ' + doc.orderNo + ' — ' + (doc.system.kw || '?') + ' kW / '
+       + (doc.system.kwh || '?') + ' kWh for ' + who);
 
   /* The tenant's own inbox row. They sold it; they should see it arrive. */
   try {
@@ -313,7 +328,9 @@ function notify(ctx, doc, sf) {
      already spoken for by signups. */
   try {
     var to = process.env.ORDER_NOTIFY || process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
-    var rows = M.row('Order', doc.orderNo)
+    var rows = M.row('Kind', doc.interest === 'platform'
+        ? 'DESIGNER ACCOUNT enquiry' : 'Product order')
+      + M.row('Order', doc.orderNo)
       + M.row('Storefront', doc.orgName + ' (' + doc.orgId + ')')
       + M.row('System', (doc.system.kw || '?') + ' kW / ' + (doc.system.kwh || '?') + ' kWh')
       + M.row('Customer', doc.customer.name + (doc.customer.company ? ' · ' + doc.customer.company : ''))
