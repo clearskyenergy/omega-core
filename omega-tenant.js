@@ -401,7 +401,38 @@
     if (b.addons) ws.addons = b.addons;
     if (b.toolOverrides) ws.toolOverrides = b.toolOverrides;
     if (b.trialEndsAt && !ws.trial) ws.trial = { endsAt: b.trialEndsAt };
-    if (T.member && T.member.toolAccess) ws.toolAccess = T.member.toolAccess;
+    /* ── toolAccess: THE PRODUCT, THEN THE PERSON ─────────────────────────
+       Two allowlists that answer different questions, and they INTERSECT.
+
+         billing/current.toolAccess   what the ORG BOUGHT
+         members/{uid}.toolAccess     what one PERSON in it may touch
+
+       THIS FILE READ ONLY THE SECOND, and that was the bug. The org-level
+       allowlist has existed on billing since the master console gained a
+       field for it (admin-console.js writes it; index.html reads it), so
+       "this account gets exactly these tools" was already sayable — but
+       index.html carries its OWN copy of this merge, so the restriction held
+       on the dashboard and on no other page, and ws.unlockedTools computed
+       here contradicted it. A product defined as "only these two tools" that
+       is enforced on one page is not a product.
+
+       That matters right now because it IS a product: a white-labelled
+       design tool of Site Map + Grid Atlas is billing.toolAccess =
+       ['editor','gridatlas'] and nothing else. See docs/WHITE-LABEL.md.
+
+       INTERSECT, never union. A member list must not name a tool the org
+       never bought; the commercial boundary is the outer one. An empty
+       intersection is left empty rather than widened — omega-tools.js and
+       the api/ tool gates both read a present-but-empty allowlist as "none",
+       which is the safe way to be wrong about an allowlist. */
+    var orgAccess = (b.toolAccess && b.toolAccess.length) ? b.toolAccess : null;
+    var memAccess = (T.member && T.member.toolAccess && T.member.toolAccess.length)
+                      ? T.member.toolAccess : null;
+    if (orgAccess && memAccess) {
+      ws.toolAccess = memAccess.filter(function (k) { return orgAccess.indexOf(k) >= 0; });
+    } else if (orgAccess || memAccess) {
+      ws.toolAccess = (orgAccess || memAccess).slice();
+    }
     ws.role = T.role;
     ws.orgStatus = T.status;
     /* ── THE ORG RECORD IS WHERE THE NAME LIVES ──────────────────────────

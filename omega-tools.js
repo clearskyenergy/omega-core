@@ -666,8 +666,26 @@
          An allowlist is checked FIRST and short-circuits, so it cannot be
          widened by the tier, by unlockedTools or by requiredTools underneath
          it. That is the point: an allowlist that something else can override
-         is not an allowlist. Absent, nothing changes. */
-      if (workspace.toolAccess && workspace.toolAccess.length)
+         is not an allowlist. Absent, nothing changes.
+
+         ── ABSENT AND EMPTY ARE DIFFERENT, 2026-09-19 ────────────────────
+         This read `&& .length`, so an allowlist of [] was treated as ABSENT
+         and the tier decided. Nowhere else in the estate agrees:
+
+           api/fiber-screen.js    Array.isArray(toolAccess) && indexOf<0 → 403
+           api/compute-lease.js   the same
+           omega-tenant.js        effectiveTools() offers nothing
+           tests/fiber-api.test.js asserts 403 for toolAccess: []
+
+         So an empty allowlist showed the tool UNLOCKED and the endpoint then
+         refused it — the wrong direction for a disagreement. The client must
+         not offer what the server denies.
+
+         `null`/absent still means "no allowlist"; a present array is now
+         authoritative at whatever length, including zero. An empty
+         intersection is a misconfiguration and this is the safe way to be
+         wrong about one. */
+      if (workspace.toolAccess)
         return workspace.toolAccess.indexOf(tool.key) >= 0;
 
       /* ── toolOverrides: the per-tool exception, also documented and also

@@ -663,6 +663,86 @@ built.
 
 ---
 
+## 4b · The second sale is a two-tool product
+
+Stated by Thomas, 2026-09-19, and it narrows §3c:
+
+> Part 1 is a link that will be a button and live on their site, but will allow
+> them to use some basic sizing and design features and then really the goal is
+> to place an order. Part 2 is that we want to find a way to get the cleancell
+> customers to become omega customers … white label the platform and **only use
+> the site map editor and grid atlas** to sell them a design tool that could be
+> white labeled for cleancell and hosted on their site.
+
+So the thing being sold is not "an OMEGA account". It is **Site Map + Grid
+Atlas**, white-labelled, reached from cleancell.us. Two tools, named:
+
+| He said | Catalogue key | File |
+|---|---|---|
+| site map editor | `editor` — display name is literally *Site Map* | `editor.html` |
+| grid atlas | `gridatlas` | `grid-atlas.html` |
+
+### It needs no new gating machinery
+
+```
+omega_orgs/{orgId}/billing/current.toolAccess = ['editor', 'gridatlas']
+```
+
+An allowlist that **wins**: checked first in `OMEGATools.isUnlocked()` and
+short-circuits, so it cannot be widened by the tier, the addons,
+`toolOverrides`, `requiredTools` or `unlockedTools`. The master console has had
+a field for it since `admin-console.js` gained one ("blank = whatever the plan
+includes"), and `billing/current` is staff-write-only in the rules, so the
+customer cannot grant themselves more.
+
+### The bug that made it a landing page rather than a product
+
+`omega-tenant.js` read only `members/{uid}.toolAccess`. `index.html` carries
+its own copy of the entitlement merge and *did* read `billing.toolAccess`, so
+the restriction held on the dashboard and on no other page — and
+`ws.unlockedTools`, computed in `omega-tenant.js`, contradicted it. Worse:
+colleagues auto-join as `member` with **no member doc at all**, so for them the
+allowlist did not exist. A design customer sold two tools had 41.
+
+Fixed 2026-09-19. `omega-tenant.js` now reads both and **intersects** — a
+member list may narrow the product, never name a tool the org did not buy,
+because `members/*` is tenant-admin-writable and a union there would be an
+escape hatch out of the product.
+
+Also fixed: **absent and empty are different.** `omega-tools.js` tested
+`toolAccess && .length`, so `[]` fell through to the tier and showed the tool
+unlocked — while `api/fiber-screen.js`, `api/compute-lease.js` and
+`effectiveTools()` all read a present-but-empty allowlist as *deny*, and
+`tests/fiber-api.test.js` already asserted a 403 for it. A tile that opens onto
+a 403 is the wrong direction for a client/server disagreement.
+`scripts/tests/ttoolaccess.js` (28 assertions) covers both, and asserts the
+product against the real `OMEGATools.catalog()` so tool 43 cannot join it
+silently.
+
+### Hosting it on their site
+
+Part 1 (the storefront) is genuinely embeddable: no Firebase SDK, no sign-in,
+same-origin iframe via `embed/loader.js` — or, as he describes it, just **a
+button linking to** `https://<host>/embed/storefront.html?k=<key>`. The link
+form is simpler and avoids iframes entirely; both work and the key is the same.
+
+Part 2 is **a link, not an iframe.** It signs users in, and Firebase Auth in a
+third-party iframe is broken by storage partitioning in every current browser.
+The honest shape is a button on cleancell.us pointing at a Clean Cell-branded
+host — `cleancell.clearskyomega.com`, or a CNAME they own like
+`design.cleancell.us` attached in Vercel. Either way the white label paints
+from `tenant_public/{hostname}` before sign-in, which is what §1 is for.
+
+### Still open, and not for us to decide
+
+Whether a Clean Cell-referred customer is **their own tenant** (own `orgId`,
+own `billing.toolAccess`) or a **collaborator on Clean Cell's workspace** via
+`org_members`. The mechanism above works either way; who owns the customer
+relationship is a commercial question. Recorded in
+`tenants/cleancell/tenant.json` under `_noteFunnel`.
+
+---
+
 ## 5 · Looking at what you sold
 
 A white label is the one feature its owner cannot see. `orgId` IS the email

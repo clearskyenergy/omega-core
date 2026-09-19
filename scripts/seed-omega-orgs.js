@@ -79,6 +79,13 @@ function plan(t) {
      in. Only the allowlisted subset reaches tenant_public below. */
   if (t.whiteLabel) org.whiteLabel = t.whiteLabel;
   var billing = { tier: t.tier || 'standard', addons: t.addons || [], toolOverrides: t.toolOverrides || {}, paymentProvider: t.paymentProvider || 'manual', trialEndsAt: t.trialEndsAt || null, subscriptionDue: t.subscriptionDue || null };
+  /* toolAccess — THE ALLOWLIST, and therefore the PRODUCT. When a tenant.json
+     carries it, that account gets exactly these tools whatever its tier: the
+     white-labelled design tool Clean Cell resells is ['editor','gridatlas']
+     and nothing else. Omitted (null, not []) means "whatever the plan
+     includes", which is every tenant seeded so far — an empty array would
+     mean NO tools, and omega-tools.js now reads it that way on purpose. */
+  if (Array.isArray(t.toolAccess) && t.toolAccess.length) billing.toolAccess = t.toolAccess;
   var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier] || 'standard',
     vertical: org.vertical, shell: org.shell, domains: org.domains, requiredTools: t.requiredTools || null, allowedEmails: t.allowedEmails || [],
     whiteLabel: pickPublicWL(t.whiteLabel) };

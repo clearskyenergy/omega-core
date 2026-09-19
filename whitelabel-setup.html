@@ -395,6 +395,11 @@ function buildPlan() {
   var billing = { tier: SEED.tier || 'standard', addons: SEED.addons || [] };
   if (SEED.trialEndsAt) billing.trialEndsAt = SEED.trialEndsAt;
   if (SEED.subscriptionDue) billing.subscriptionDue = SEED.subscriptionDue;
+  /* toolAccess is the PRODUCT: present means "exactly these tools, whatever
+     the tier". The white-labelled design tool is ['editor','gridatlas'].
+     Only written when the tenant file names something — an empty array means
+     NO tools, and writing one by accident would lock the account out. */
+  if (Array.isArray(SEED.toolAccess) && SEED.toolAccess.length) billing.toolAccess = SEED.toolAccess;
 
   var sf = pick(sfSeed, SF_KEYS);
   sf.products = list;
@@ -432,7 +437,12 @@ function renderPlan() {
     + '<tr><td class="mono">omega_orgs/' + esc(org) + '/billing/current</td><td>'
       + verdict(CURRENT.billing, PLAN.billing)
       + '<div class="hint">tier <b>' + esc(PLAN.billing.tier) + '</b> · addons: '
-      + esc((PLAN.billing.addons || []).join(', ') || 'none') + '</div></td></tr>'
+      + esc((PLAN.billing.addons || []).join(', ') || 'none')
+      + (PLAN.billing.toolAccess
+          ? '<br><b>tools: ' + esc(PLAN.billing.toolAccess.join(', ')) + ' — and nothing else</b>, '
+            + 'whatever the tier. This is the product.'
+          : '<br>tools: whatever the plan includes (no allowlist)')
+      + '</div></td></tr>'
     + '<tr><td class="mono">omega_orgs/' + esc(org) + '/storefront/config</td><td>'
       + verdict(CURRENT.storefront, PLAN.storefront)
       + '<div class="hint">' + PLAN.storefront.products.length + ' product(s). Cost basis untouched'

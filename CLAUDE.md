@@ -286,6 +286,24 @@ user). Do not add a second copy of that list — see what three copies of
   needs the one allowlist in `api/_lib/whitelabel.js` and stays with
   `scripts/seed-omega-orgs.js`, which remains canonical for a bulk seed and
   for rotating, re-scoping or disabling an embed key.
+- **The second sale is a TWO-TOOL PRODUCT, not the whole editor.** What Clean
+  Cell resells is Site Map (`editor`) + Grid Atlas (`gridatlas`), white-labelled
+  and reached from their own site. That is `billing/current.toolAccess =
+  ['editor','gridatlas']` — an allowlist that wins over the tier, the addons,
+  `toolOverrides`, `requiredTools` and `unlockedTools`. No new gating code: the
+  master console has written this field for a while.
+  - `omega-tenant.js` read only `members/{uid}.toolAccess`, so the org-level
+    allowlist held on `index.html` (which carries its own copy of the merge)
+    and nowhere else — a colleague who auto-joined got all 41 tools. It now
+    reads both and **intersects**: a member list may narrow the product, never
+    widen past what the org bought (`members/*` is tenant-admin-writable).
+  - **Absent ≠ empty.** `null` means "whatever the plan includes"; a present
+    array is authoritative at any length, including `[]` = nothing. That is
+    what `api/fiber-screen.js`, `api/compute-lease.js` and `effectiveTools()`
+    already did; `omega-tools.js` was the outlier and showed a tile that the
+    endpoint then refused with a 403.
+  - `scripts/tests/ttoolaccess.js` asserts the product against the REAL
+    `OMEGATools.catalog()`, so tool 43 cannot quietly join it.
 - One product list, one mapping. `scripts/import-products.js` converts a
   manufacturer's CSV and is the ONLY place the column names, the unit
   conversion (datasheets print mm) and the footprint sanity check live. Its
