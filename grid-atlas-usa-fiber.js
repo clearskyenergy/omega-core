@@ -14,7 +14,7 @@ var stateEl=document.getElementById('usaFiberState'),catEl=document.getElementBy
 var sourceLabel=document.createElement('label');sourceLabel.htmlFor='usaFiberSource';sourceLabel.textContent='Source / carrier';
 var sourceEl=document.createElement('select');sourceEl.id='usaFiberSource';sourceEl.innerHTML='<option value="all">All published sources</option><option value="latest">Latest additions · September 19</option>';
 stateEl.insertAdjacentElement('afterend',sourceLabel);sourceLabel.insertAdjacentElement('afterend',sourceEl);
-function sourceMatches(p){return sourceEl.value==='all'||(sourceEl.value==='latest'?p.importBatch==='20260919':p.sourceId===sourceEl.value);}
+function sourceMatches(p){return sourceEl.value==='all'||(sourceEl.value==='latest'?/^20260919(?:-|$)/.test(p.importBatch||''):p.sourceId===sourceEl.value);}
 function intersects(b,c){return b[0]<=c[2]&&b[2]>=c[0]&&b[1]<=c[3]&&b[3]>=c[1];}
 function viewport(){var b=A.map.getBounds();return [b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];}
 function draw(features,detailed){

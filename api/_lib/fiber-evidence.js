@@ -466,12 +466,12 @@ function usaAdapt(f) {
 /* Candidate features whose own bbox meets the query box. */
 function usaCandidates(box) {
   var m;
-  try { m = usaLoadManifest(); } catch (e) { return []; }
+  m = usaLoadManifest(); // A missing bundle is a lookup failure, not zero fiber.
   var out = [], seen = Object.create(null);
   (m.states || []).forEach(function (s) {
     if (!s.segments || !s.bbox || !bboxHit(s.bbox, box)) return;
     var feats;
-    try { feats = usaState(s.code); } catch (e) { return; }
+    feats = usaState(s.code); // Do not silently omit a failed state's evidence.
     for (var i = 0; i < feats.length; i++) {
       var f = feats[i];
       if (f.bbox && !bboxHit(f.bbox, box)) continue;

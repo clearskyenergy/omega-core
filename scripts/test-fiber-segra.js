@@ -1,0 +1,8 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+'use strict';
+var fs=require('fs'),assert=require('assert'),m=require('../data/usa-fiber/manifest.json'),api=require('../api/_lib/fiber-evidence');
+var s=m.sources.find(function(x){return x.id==='segra-network-20260919';}),seen=new Set(),parts=0,sample;
+assert(s&&s.emptyGeometryRecords===24);assert.equal(s.inputLineParts,s.includedLineParts+s.duplicateLineParts+s.outsideStateBoundaries+(s.invalidLineParts||0));
+m.states.forEach(function(state){if(state.sources.indexOf(s.id)<0)return;var fc=JSON.parse(fs.readFileSync('data/usa-fiber/'+state.code+'.geojson'));fc.features.forEach(function(f){var p=f.properties;if(p.sourceId!==s.id||seen.has(p.id))return;seen.add(p.id);if(!sample)sample=f;var lines=f.geometry.coordinates;assert.equal(f.geometry.type,'MultiLineString');assert(lines.length<=100);assert.equal(lines.length,p.publishedLineParts);parts+=lines.length;assert.equal(p.category,'unknown');assert.equal(p.dataDate,null);assert.equal(p.geometryQuality,'publisher_geometry_unverified');assert(p.sourceRecordIds.every(function(x){return /^\d+$/.test(x);}));lines.forEach(function(line){assert(line.length>=2);line.forEach(function(c){assert.equal(c.length,2);assert(c.every(Number.isFinite));assert(c[0]>=f.bbox[0]&&c[0]<=f.bbox[2]&&c[1]>=f.bbox[1]&&c[1]<=f.bbox[3]);});});});});
+assert.equal(seen.size,s.includedFeatures);assert.equal(parts,s.includedLineParts);var c=sample.geometry.coordinates[0][0];assert(api.usaCandidates([c[0]-.02,c[1]-.02,c[0]+.02,c[1]+.02]).some(function(f){return f.id===sample.properties.id;}));
+console.log('PASS Segra route-only import, empty-geometry accounting, attribution, grouping, bounds and API reachability');

@@ -14,7 +14,7 @@ OUT = pathlib.Path(sys.argv[1]).resolve()
 if ROOT == OUT or ROOT in OUT.parents:
     raise SystemExit('Raw inputs must stay outside the deployable project')
 OUT.mkdir(parents=True, exist_ok=True)
-SPECS = json.loads((ROOT / 'scripts/fiber-expansion-sources.json').read_text())
+SPECS = json.loads((pathlib.Path(sys.argv[2]) if len(sys.argv)>2 else ROOT / 'scripts/fiber-expansion-sources.json').read_text())
 
 def get(url, params):
     response = subprocess.run(['curl', '--fail', '--silent', '--show-error',

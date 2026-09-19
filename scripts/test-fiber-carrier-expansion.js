@@ -24,7 +24,7 @@ m.states.forEach(function(s){
  });
 });
 assert.equal(records,history.addedRecords);assert.equal(parts,history.addedLineParts);
-assert.equal(m.uniqueSegments,history.preservedBaselineRecords+history.addedRecords);
+assert(m.uniqueSegments>=history.preservedBaselineRecords+history.addedRecords,'Later additive batches preserve the earlier inventory');
 // Simulate production: raw national shards are deliberately not bundled.
 var read=fs.readFileSync;
 fs.readFileSync=function(file){
@@ -40,7 +40,7 @@ history.sourceIds.forEach(function(id){
 });
 fs.readFileSync=read;
 var deploy=require('../vercel.json');
-['api/fiber-screen.js','api/network-proximity.js'].forEach(function(file){
+['api/fiber-screen.js','api/network-proximity.js','api/dc-site-screen.js'].forEach(function(file){
  assert.equal(deploy.functions[file].includeFiles,'{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}');
  assert.equal(deploy.functions[file].excludeFiles,'data/usa-fiber/*.geojson');
 });

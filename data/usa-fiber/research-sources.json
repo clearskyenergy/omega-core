@@ -1,6 +1,6 @@
 {
   "checkedAt": "2026-09-19",
-  "scope": "Continuing public-web discovery including Google, image search and original publishers. September 19 adds carrier GIS and Kansas planning geometry. Coverage is partial; image references do not establish cable alignment or parcel service.",
+  "scope": "Continuing public-web discovery including Google, image search and original publishers. September 19 adds carrier GIS and Kansas planning geometry. Coverage is partial; image references do not establish cable alignment or parcel service. Segra public route GIS added; the separate data-center scorecard uses server-side power, fiber, carrier-market and FEMA evidence.",
   "priorityOrder": [
     "TX",
     "GA",
@@ -112,9 +112,9 @@
       "state": "SC",
       "title": "Segra network",
       "url": "https://www.segra.com/our-network/",
-      "kind": "Geometry request needed",
-      "note": "Detailed KMZ is offered through a request workflow. No request submitted and no private file acquired.",
-      "checkedAt": "2026-09-18"
+      "kind": "Imported carrier GIS",
+      "note": "Official public map links Segra Fiber Network polylines, imported July 2026 metadata snapshot. Private KMZ request not submitted. Near-net polygons and access assets excluded.",
+      "checkedAt": "2026-09-19"
     },
     {
       "state": "CA",
@@ -835,6 +835,190 @@
       "kind": "Imported source-published geometry",
       "checkedAt": "2026-09-19",
       "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "AR",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "AZ",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "CO",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "GA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IL",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IN",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "KS",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "KY",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "MD",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "MO",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NC",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NE",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NM",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "OH",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "OK",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "PA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "SC",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "TN",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "TX",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "VA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "WI",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "WV",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
     }
   ]
 }

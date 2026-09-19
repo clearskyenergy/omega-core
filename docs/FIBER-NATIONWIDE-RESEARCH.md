@@ -2,7 +2,7 @@
 
 ## What is delivered
 
-Grid Atlas and standalone `usa-fiber-map.html` now include **35,678 source-derived map records containing 323,729 line parts**, with some geometry in **47 states plus DC**. The September 19 carrier batch adds **5,211 records / 105,492 line parts**, preserving all **30,467** prior records unchanged. This is **partial coverage**, not every fiber cable in those states or the country. Different publishers can describe the same infrastructure.
+Grid Atlas and standalone `usa-fiber-map.html` now include **38,672 source-derived map records containing 550,819 line parts**, with some geometry in **47 states plus DC**. The first September 19 carrier batch adds **5,211 records / 105,492 line parts**, preserving all **30,467** prior records unchanged. The additional Segra batch adds **2,994 records / 227,090 line parts**, retaining all **35,678** previous records unchanged. This is **partial coverage**, not every fiber cable in those states or the country. Different publishers can describe the same infrastructure.
 
 `fiber-research.html` provides an initial research register for all 50 states plus DC, in the requested order: Texas, Georgia, Illinois, Connecticut, Ohio, Florida, South Carolina, California, then remaining states alphabetically. It distinguishes imported geometry, reference-only maps, availability-only maps, incomplete searches, and blocked downloads. Each state links directly to its map view and actual bundled source layers. Search discovery included Google; original publishers supply imported geometry.
 
@@ -12,13 +12,13 @@ Prepared for `clearskyenergy/omega-core` on September 19 against main `0d177c8`.
 
 | State | Map records | Published line parts | Main addition / caveat |
 |---|---:|---:|---|
-| Texas | 2,334 | 40,574 | FiberLight and Uniti added to LOGIX/FNA; source overlaps retained |
-| Georgia | 1,975 | 73,228 | FiberLight/Uniti added to FNA and Atlanta municipal layers |
-| Illinois | 697 | 23,322 | Uniti added; Illinois Century Network maps are reference only |
+| Texas | 2,543 | 58,780 | FiberLight and Uniti added to LOGIX/FNA; source overlaps retained |
+| Georgia | 2,007 | 74,615 | FiberLight/Uniti added to FNA and Atlanta municipal layers |
+| Illinois | 758 | 25,665 | Uniti added; Illinois Century Network maps are reference only |
 | Connecticut | 226 | 229 | Uniti added to Norwalk; CEN's 2018 image is reference only |
-| Ohio | 682 | 4,923 | Uniti and one explicitly classified Henry County fiber record |
+| Ohio | 733 | 6,170 | Uniti and one explicitly classified Henry County fiber record |
 | Florida | 506 | 7,750 | Carrier GIS added; LambdaRail image is reference only |
-| South Carolina | 768 | 51,336 | Uniti added; no private Segra file requested |
+| South Carolina | 1,142 | 80,293 | Uniti added; no private Segra file requested |
 | California | 335 | 1,267 | Uniti added; 2,473 supplied design records remain a separate supplemental toggle |
 
 State counts are not additive. Multipart geometry is not a unique physical cable count. Entire published features intersecting a state are retained, so cross-border features can extend beyond the selected state.
@@ -46,6 +46,12 @@ Google discovery, web/image searches and publisher pages led to public carrier G
 
 165 carrier line parts fell outside the generalized state boundaries and were excluded. All new geometry is labeled `publisher_geometry_unverified`; the numeric source record IDs are retained without free-text descriptions, contact details or point assets. Public visibility does not establish an unrestricted redistribution license; preserve attribution and review provider terms before external publication.
 
+## Additional Segra route batch
+
+[Segra’s official network map](https://www.segra.com/our-network/) now links a public fiber-polyline service. The July 2026 metadata snapshot contains 228,782 records; 24 have empty geometry and are explicitly excluded. There are 228,761 input line parts: 227,090 retained, 627 exact duplicates removed, and 1,044 outside the generalized state boundaries excluded. The retained lines form 2,994 local records across 23 states. Status, capacity and serviceability remain unconfirmed; near-net polygons, towers and access points are not imported. No private KMZ request was submitted.
+
+The shared data-center scorecard now uses this detailed inventory as a mapped-proximity factor, separately from service and diversity. See `docs/DATA-CENTER-SITE-SCORING.md`.
+
 ## Publisher images inside the map
 
 The standalone viewer now has a source/carrier filter, a September 19 additions filter, and a collapsible **Publisher maps & images** panel tied to the selected state. `map-references.json` catalogs seven publisher-hosted images and three map collections, including CEN, OARnet, Florida LambdaRail, Uniti expansion routes, FiberLight, Illinois Century Network, CENIC and New Mexico Fiber Network.
@@ -69,7 +75,7 @@ No main-inventory line geometry is currently bundled for **Hawaii, Montana or Ve
 
 The Vermont state-owned route service was identified but its TLS chain failed validation during download. The source is linked as blocked, not imported. Some other Vermont fiber availability routes are road-centerline proxies and must not be misrepresented as surveyed cable paths. The Temple TX fiber-only filter returned zero records; electrical and non-fiber data lines were excluded. Some discovered carrier maps require an authorized request for KMZ; no private files were acquired.
 
-Next ingestion candidates include Segra's public GIS experience, remaining Uniti layers, Dakota Carrier Network and SDN interactive routes, MassBroadband 123 source geometry, and operator-approved national long-haul exports. Nebraska logical-circuit GIS needs physical-path verification; Montana's public transport-map page describes a 2016 map. Reference images, diagrams, funding awards and FCC service polygons are not converted to invented cable lines. A complete nationwide view requires carrier-authorized or licensed private route data and continued source acquisition.
+Next ingestion candidates include remaining Uniti layers, Dakota Carrier Network and SDN interactive routes, MassBroadband 123 source geometry, and operator-approved national long-haul exports. Nebraska logical-circuit GIS needs physical-path verification; Montana's public transport-map page describes a 2016 map. Reference images, diagrams, funding awards and FCC service polygons are not converted to invented cable lines. A complete nationwide view requires carrier-authorized or licensed private route data and continued source acquisition.
 
 ## Implementation and validation
 
@@ -77,7 +83,7 @@ Next ingestion candidates include Segra's public GIS experience, remaining Uniti
 - Source popups explain unverified precision, carrier-label age and grouping. UI uses “map records” instead of claiming unique cables.
 - The existing authenticated `fiber-screen` and `network-proximity` lookups read the new geometry with unchanged serviceability safeguards. Cross-border records duplicated in state shards are returned once by stable source ID; distinct publisher records are not collapsed. No backend scoring was moved to browser code; no Firebase collections, tenant data, billing or access rules changed.
 - Automated checks pass for all 51 shards, source/ID preservation, coordinate validity and bounds, line-part accounting, priority order, minimized metadata, new-source proximity lookup, existing site/UI regressions and HTML script resolution.
-- Offline gzip packaging reduces 190.9 MB of detailed state JSON to 51.7 MB without coordinate changes. Both fiber functions explicitly include the compressed shards and manifest, excluding raw national GeoJSON. The approximately 40 MB overview and raw shards remain static browser assets. No application build or browser decompression dependency is added. `--check` validates byte-for-byte decompression parity, and API tests refuse raw-shard reads to exercise the production format.
+- Offline gzip packaging reduces 267.5 MB of detailed state JSON to 78.3 MB without coordinate changes. All three screening functions explicitly include the compressed shards and manifest, excluding raw national GeoJSON. The approximately 61 MB overview and raw shards remain static browser assets. No application build or browser decompression dependency is added. `--check` validates byte-for-byte decompression parity, and API tests refuse raw-shard reads to exercise the production format.
 - Local browser verification covers Texas and Connecticut latest-addition filtering and the CEN image panel without browser warnings/errors; first-batch checks also covered high-density Georgia and the research register. Production authentication and deployment acceptance remain outstanding.
 
 ## Repeatable additive workflow
@@ -102,3 +108,11 @@ npm test
 ```
 
 The downloader writes raw inputs and status reports only and validates public access, HTTPS, pagination, count stability and unique source IDs. The carrier importer refuses an incomplete batch and validates raw snapshot hashes. Both importers preserve unrelated source records and refresh the committed gzip shards. Review source changes and take a project backup before refreshing. Source versions, research notes and counts in this document should be updated together. The manifest and research page are the dynamic coverage authority. Do not replace this mixed GIS/KMZ inventory with a single-source refresh.
+
+Segra refresh (a distinct additive batch, no Kansas file required):
+
+```sh
+python scripts/download-fiber-expansion.py /absolute/path/to/segra-raw scripts/fiber-segra-sources.json
+python scripts/import-fiber-expansion.py /absolute/path/to/segra-raw --batch 20260919-segra --skip-kansas
+npm test
+```

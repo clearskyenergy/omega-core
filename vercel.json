@@ -278,6 +278,11 @@
       "includeFiles": "{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}",
       "excludeFiles": "data/usa-fiber/*.geojson"
     },
+    "api/dc-site-screen.js": {
+      "maxDuration": 30,
+      "includeFiles": "{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}",
+      "excludeFiles": "data/usa-fiber/*.geojson"
+    },
     "api/**/*.js": {
       "maxDuration": 30
     }

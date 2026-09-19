@@ -1199,3 +1199,64 @@ Full research details and repeatable import commands are in
 `docs/FIBER-NATIONWIDE-RESEARCH.md`. Production auth/deployment acceptance is
 separate from local verification; PR #46 still requires review. No protected
 branch bypass, unrelated checkout edits or security-workflow changes were made.
+
+---
+
+## 2026-09-19 · Data-center evidence scorecard and Segra expansion
+
+The user explicitly requested that the growing fiber atlas feed data-center
+site scoring. `api/_lib/dc-site-score.js` is now the shared, versioned
+`dc-site-screen-v1.0` model. `POST /api/dc-site-screen` collects detailed fiber
+geometry plus fixed-source power, PeeringDB and FEMA evidence. Both maps render
+the result and export JSON; map visibility is not an input. MW/Gbps and workload
+profile are recorded, not silently translated into claims of capacity.
+
+**Logic moved out of the browser:** Grid Atlas's interconnect arithmetic,
+fiber-confidence blend and data-center composite were removed. The speculative
+voltage-to-deliverable-MW band was removed too. Browser code retains visual
+proximity context, input collection and rendering; the new numerical model is
+server-only. No scoring logic was moved into browser assets.
+
+Mapped power/fiber, carrier-market context and point flood evidence account for
+at most 60% of scoring weight. Capacity/energization, parcel fiber service,
+physical diversity, cooling/water and land/environment stay explicitly unknown.
+The score is a measured-signal weighted mean, always paired with coverage, not
+a readiness verdict. Counts and carrier labels cannot prove diverse paths;
+planned/unknown-medium routes, images and road-routed corridors earn no fiber
+points. Dataset or source failures remain unknown, including missing state
+shards that the old shared library silently omitted.
+
+The existing Grid Atlas authorization was extracted to `grid-atlas-access.js`
+and is shared by the three screening APIs: Firebase token, billing override,
+organization status, membership and tool access. No access was widened, and no
+Firestore collections or writes were added. `network-proximity-v4` exposes the
+new `datacenterScreening` object; older saved-score fields remain explicitly
+legacy for compatibility. The standalone localhost static server cannot serve
+authenticated APIs; use a deployed Omega session or the local research CLI.
+
+Segra's official public map exposed actual fiber polylines. The route-only
+import adds **2,994 records / 227,090 line parts** across 23 states, preserving
+all **35,678** preceding records unchanged. Now **38,672 records / 550,819 line
+parts** cover parts of 47 states plus DC. 24 empty source records, 627 exact
+duplicate parts and 1,044 outside-state parts are explicitly accounted for.
+Near-net polygons, towers, data-center points and private download requests are
+excluded. Attribution and unconfirmed service/status/precision remain attached.
+
+All 51 state shards total 267.5 MB raw / 78.3 MB lossless gzip. The three API
+bundles include only gzip state shards and the manifest plus the base dataset;
+the ~61 MB overview remains a static map asset. Dataset downloads stay outside
+the repository. Both importers preserve unrelated records.
+
+Validation covers source/type/audit/geometry, actual compressed lookup, auth
+denials before source access, null/failure/truncation behavior, unknown capacity
+and diversity, hazard flags, strict inputs, static script resolution and UI
+state retention. `npm test` passed; CI now runs fiber/DC tests in its existing
+unit job. Browser checks verified the signed-out gate, main-atlas pin form,
+layer-change input retention and the real Dallas collection rendered as a
+clearly labeled local QA snapshot (93 signal score / 60% measured weight).
+Signed-in deployed acceptance remains outstanding. The unrelated partner-scope
+workflow's invalid `--depth=0` fetch and protected-main review are not bypassed.
+
+See `docs/DATA-CENTER-SITE-SCORING.md` for weights, curves, evidence policy,
+limitations and use. These product assumptions are transparent but not an
+externally validated engineering or investment model.

@@ -5,14 +5,20 @@ Requires Shapely 2.x. Usage: python scripts/import-fiber-expansion.py RAW_DIR
 Keeps every other source record exactly as it was. Never draws connecting
 segments, invents street paths, imports access points, or promotes a plan.
 """
-import collections, datetime, hashlib, io, json, math, os, pathlib, subprocess, sys, tempfile, zipfile
+import argparse, collections, datetime, hashlib, io, json, math, os, pathlib, subprocess, sys, tempfile, zipfile
 import xml.etree.ElementTree as ET
 from shapely.geometry import LineString, MultiLineString, shape, mapping
 from shapely.strtree import STRtree
 
-RAW = pathlib.Path(sys.argv[1]).resolve()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('raw_dir')
+parser.add_argument('--batch',default='20260919')
+parser.add_argument('--skip-kansas',action='store_true')
+args = parser.parse_args()
+assert not (args.skip_kansas and args.batch=='20260919'), 'Use a distinct batch ID for an additional carrier-only import'
+RAW = pathlib.Path(args.raw_dir).resolve()
 OUT = pathlib.Path(__file__).resolve().parents[1] / 'data/usa-fiber'
-BATCH = '20260919'
+BATCH = args.batch
 NOW = datetime.datetime.now(datetime.timezone.utc).isoformat()
 NS = {'k':'http://www.opengis.net/kml/2.2'}
 manifest = json.loads((OUT/'manifest.json').read_text())
@@ -78,35 +84,37 @@ for source in downloaded:
     assert digest(data)==source['rawSha256'], 'Snapshot hash mismatch'
     features = json.loads(data)['features']
     assert len(features)==source['count'], 'Snapshot record count mismatch'
+    source['emptyGeometryRecords'] = sum(not f['paths'] for f in features)
     import_lines(source, ((f['sourceRecordId'],line) for f in features for line in f['paths']))
 
 # The publicly offered planning ZIP separates routes from intentionally vague
 # facility heatmaps. Read only route polylines, never the points or heatmap.
-archive = RAW/'kansas-freestate-20240808.zip'
-with zipfile.ZipFile(archive) as z:
-    kmz = z.read('Final2/Freestate-planning-map.kmz')
-with zipfile.ZipFile(io.BytesIO(kmz)) as z:
-    kml = ET.fromstring(z.read(next(n for n in z.namelist() if n.endswith('.kml'))))
-for placemark in kml.findall('.//k:Placemark',NS):
-    lines = placemark.findall('.//k:LineString',NS)
-    if not lines:
-        continue
-    name = placemark.findtext('k:name','',NS)
-    assert name in ['New Cable & Duct Path','New Cable Path','Existing Un-Funded Cable Path'], 'Unknown route class requires review'
-    existing = name=='Existing Un-Funded Cable Path'
-    slug = {'New Cable & Duct Path':'new-cable-duct','New Cable Path':'new-cable','Existing Un-Funded Cable Path':'existing-cable'}[name]
-    s = dict(id='ks-freestate-'+slug+'-20260919',name='Kansas Freestate — '+name,
-        publisher='Kansas Department of Commerce / Freestate Network',
-        pageUrl='https://www.kansascommerce.gov/officeofbroadbanddevelopment/route-maps-and-planning-files/',
-        url='https://www.kansascommerce.gov/wp-content/uploads/2024/08/Final186.zip',
-        category='existing' if existing else 'planned',
-        routeStatus='Existing cable reported in August 2024 plan; current availability unconfirmed' if existing else 'Proposed cable in August 2024 planning file; not confirmed built',
-        networkType='Published planning alignment subject to design and permitting changes',
-        retrievedAt=NOW,itemModified=None,dataDate=None,sourceVintage='2024-08-08',
-        license='Officially offered planning download; preserve attribution. No unrestricted redistribution license established.',
-        downloadStatus='complete',rawSha256=digest(archive.read_bytes()),count=len(lines))
-    records = [(i,[tuple(float(v) for v in token.split(',')[:2]) for token in line.findtext('k:coordinates','',NS).split()]) for i,line in enumerate(lines)]
-    import_lines(s,records)
+if not args.skip_kansas:
+    archive = RAW/'kansas-freestate-20240808.zip'
+    with zipfile.ZipFile(archive) as z:
+        kmz = z.read('Final2/Freestate-planning-map.kmz')
+    with zipfile.ZipFile(io.BytesIO(kmz)) as z:
+        kml = ET.fromstring(z.read(next(n for n in z.namelist() if n.endswith('.kml'))))
+    for placemark in kml.findall('.//k:Placemark',NS):
+        lines = placemark.findall('.//k:LineString',NS)
+        if not lines:
+            continue
+        name = placemark.findtext('k:name','',NS)
+        assert name in ['New Cable & Duct Path','New Cable Path','Existing Un-Funded Cable Path'], 'Unknown route class requires review'
+        existing = name=='Existing Un-Funded Cable Path'
+        slug = {'New Cable & Duct Path':'new-cable-duct','New Cable Path':'new-cable','Existing Un-Funded Cable Path':'existing-cable'}[name]
+        s = dict(id='ks-freestate-'+slug+'-20260919',name='Kansas Freestate — '+name,
+            publisher='Kansas Department of Commerce / Freestate Network',
+            pageUrl='https://www.kansascommerce.gov/officeofbroadbanddevelopment/route-maps-and-planning-files/',
+            url='https://www.kansascommerce.gov/wp-content/uploads/2024/08/Final186.zip',
+            category='existing' if existing else 'planned',
+            routeStatus='Existing cable reported in August 2024 plan; current availability unconfirmed' if existing else 'Proposed cable in August 2024 planning file; not confirmed built',
+            networkType='Published planning alignment subject to design and permitting changes',
+            retrievedAt=NOW,itemModified=None,dataDate=None,sourceVintage='2024-08-08',
+            license='Officially offered planning download; preserve attribution. No unrestricted redistribution license established.',
+            downloadStatus='complete',rawSha256=digest(archive.read_bytes()),count=len(lines))
+        records = [(i,[tuple(float(v) for v in token.split(',')[:2]) for token in line.findtext('k:coordinates','',NS).split()]) for i,line in enumerate(lines)]
+        import_lines(s,records)
 
 replace = {s['id'] for s in sources}
 features = {}
