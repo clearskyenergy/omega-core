@@ -50,6 +50,9 @@ jobs:
       - name: extract the editor's functions
         run: node scripts/tests/extract.js
 
+      - name: fiber inventory and data-center scoring
+        run: npm run test:fiber
+
       - name: geometry, routing and tool tests
         run: |
           failed=""

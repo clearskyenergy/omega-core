@@ -223,6 +223,10 @@
   <div id="presets">
     <div class="preset-lbl">Quick views</div>
     <div id="presetChips"></div>
+    <div style="font-size:11px;line-height:1.6;margin-top:8px">
+      <a href="/usa-fiber-map.html?state=TX" style="color:var(--teal)">Fiber routes by state ↗</a><br>
+      <a href="/fiber-research.html" style="color:var(--muted)">Sources and coverage gaps ↗</a>
+    </div>
   </div>
   <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
   <div id="layers"></div>
@@ -237,7 +241,7 @@
   <div class="p-b" id="pBody">
     <div class="empty">
       <div class="big">◎</div>
-      <div class="t">Drop a pin anywhere on the map to score interconnection proximity — nearest substation, transmission voltage, generation, data-center clusters, and EV/BESS context.</div>
+      <div class="t">Drop a pin to screen a data-center site using mapped power, fiber, carrier facilities and FEMA evidence. The scorecard separates public signals from unconfirmed capacity, resilience and land requirements.</div>
     </div>
   </div>
 </div>
@@ -264,6 +268,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/dc-site-screen.js"></script>
 <script src="/omega-tools.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -684,17 +691,17 @@ var LAYERS = {
     label:function(a){return a.name||"Telecom facility";},
     meta:function(a){return (a.operator||"operator unknown")+" · facility, not a route · OSM";}
   },
-  /* ── PUBLISHED ROUTE INVENTORY — 26,371 features, national ────────────
+  /* ── PUBLISHED ROUTE INVENTORY — 38,672 source-derived records ────────
      The simplified national overview of the same inventory /api/fiber-screen
      and /api/network-proximity measure against, so what you see and what the
-     services answer come from one dataset. 10.7 MB, so it is off by default
+     services answer come from one dataset. About 82 MB, so it is off by default
      like everything else here.
 
      STATUS IS THE STYLING, because it is the finding. A planned route and a
      built one are different claims and must never draw alike: planned is
      dashed and amber, inactive is dotted and grey, and a route whose
      publisher never stated a status is drawn thinner rather than promoted to
-     "existing". 16,530 of these are that last case — the largest bucket by
+     "existing". Status-unstated records are the largest bucket by
      far — and letting them read as confirmed plant would be the single most
      misleading thing this layer could do. */
   pf_inventory: {
@@ -704,11 +711,14 @@ var LAYERS = {
     meta:function(a){
       var st=a.routeStatus&&a.routeStatus!=='Unknown'?a.routeStatus:'status not stated by the publisher';
       return (a.carrier||'operator not published')+" · "+st+
+             (a.proximityEligible===false?" · illustrative reference only; excluded from scoring":"")+
              (a.states&&a.states.length?" · "+a.states.join(", "):"")+
+             (a.publishedLineParts?" · "+a.publishedLineParts+" published line parts":"")+
              " · capacity unknown";
     },
     styleFor:function(a){
       var c=a.category;
+      if(a.proximityEligible===false) return {color:"#94A3B8", weight:1.4, opacity:0.60, dashArray:"2,4"};
       if(c==='planned')  return {color:"#F59E0B", weight:1.8, opacity:0.80, dashArray:"7,5"};
       if(c==='inactive') return {color:"#64748B", weight:1.4, opacity:0.55, dashArray:"2,4"};
       if(c==='existing') return {color:"#2DD4BF", weight:2.2, opacity:0.90, dashArray:null};
@@ -1602,26 +1612,15 @@ function analyze(ll){
     if(cand&&(!fiber||cand.km<fiber.km)){ cand.sourceKey=fiberKeys[fi]; fiber=cand; }
   }
 
-  // interconnect score: closer substation + higher-voltage nearby line = better
-  var subKm=sub?sub.km:99;
-  var txKm=tx?tx.km:99;
+  var subKm=sub?sub.km:null,txKm=tx?tx.km:null;
   var txV=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
-  var s1=Math.max(0,100-subKm*14);         // <7km strong
-  var s2=Math.max(0,100-txKm*20);          // <5km strong
-  var s3=txV>=230?100:txV>=115?78:txV>=69?55:txV>0?35:45;
-  var score=Math.round(s1*0.42+s2*0.33+s3*0.25);
-  score=Math.max(1,Math.min(100,score));
-  var band=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
-  var verdict=score>=70?"Strong interconnect proximity":score>=45?"Workable — verify hosting capacity":"Constrained — distance to grid is a cost driver";
 
   var h='';
   h+='<div class="coord">'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+
      '  ·  <span style="color:var(--amp);cursor:pointer" id="copyc">copy</span></div>';
 
-  h+='<div class="sec">Interconnect Score</div>';
-  h+='<div class="score"><span class="n" style="color:'+band+'">'+score+'</span><span class="lab">/ 100</span></div>';
-  h+='<div class="bar"><span style="width:'+score+'%;background:'+band+'"></span></div>';
-  h+='<div class="hint" style="margin:6px 0 2px;color:'+band+'">'+verdict+'</div>';
+  h+='<div id="dcSiteScreen"></div>';
+  h+='<p><a href="usa-fiber-map.html?lat='+encodeURIComponent(ll.lat.toFixed(6))+'&lon='+encodeURIComponent(ll.lng.toFixed(6))+'" target="_blank" rel="noopener" style="color:var(--teal)">Inspect parcel boundaries + detailed fiber at this site ↗</a></p>';
 
   h+='<div class="sec">Nearest Infrastructure</div>';
   var subL=sub?LAYERS[sub.src||"substations"]:LAYERS.substations;
@@ -1642,55 +1641,10 @@ function analyze(ll){
     var health=layerHealth[key];
     if(health && health.state!=='loaded') h+='<div class="hint">'+esc(LAYERS[key].name)+': '+esc(health.message||health.state)+'. No route result does not establish absence of fiber.</div>';
   });
-  /* ── UNSCORED IS NOT ZERO ──────────────────────────────────────────────
-     Both scores below used to feed a constant in for every factor whose
-     layer was switched off: fiber route 0, FCC coverage 0, DC fiber 15/100.
-     Those constants were then weighted as though they were measurements, so
-     a site nobody had looked at scored identically to a site that had been
-     looked at and found wanting. Fiber alone is 70% of the confidence score
-     and 24% of the DC score, which is enough to decide both.
-
-     This is the same rule api/grid-atlas.js applies in weightedScore(): a
-     factor that was not measured drops out of the numerator AND the
-     denominator, so the score is a real score of what was actually seen and
-     the caption says how much of the weight that was. A factor whose layer
-     IS on and which found nothing is a genuine low reading and still counts
-     — "looked and found none" and "never looked" are different answers and
-     this is the line between them. */
-  function wScore(parts){
-    var earned=0,total=0,missed=0,missedKeys=[];
-    for(var i=0;i<parts.length;i++){
-      var v=parts[i][1],w=parts[i][2];
-      if(v==null){ missed+=w; missedKeys.push(parts[i][0]); continue; }
-      earned+=v*w; total+=w;
-    }
-    return { score: total?Math.round(earned/total):null,
-             measuredWeight: total, missedWeight: missed, missed: missedKeys };
-  }
-  function anyOn(keys){ for(var i=0;i<keys.length;i++) if(LAYERS[keys[i]]&&LAYERS[keys[i]].on) return true; return false; }
-
-  // ── Fiber Confidence — blends every free signal into one screening read ──
-  var fiberLayersOn=anyOn(fiberKeys);
-  var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
+  function anyOn(keys){for(var i=0;i<keys.length;i++)if(LAYERS[keys[i]]&&LAYERS[keys[i]].on)return true;return false;}
+  var ixpN=within(ll,cache.ixp,60),coloN=within(ll,cache.colo,60);
   var fccCov=containingFeature(ll,cache.fcc_fiber);
-  /* null = the source was never consulted. Not a zero. */
-  var fcRoute = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*7):0);
-  var fcInterconnect = (LAYERS.ixp.on||LAYERS.colo.on) ? Math.min(100,(ixpN*20)+(coloN*12)) : null;
-  var fcCoverage = LAYERS.fcc_fiber.on ? (fccCov?90:0) : null;
-  var fcW=wScore([["mapped route",fcRoute,45],["peering / colo",fcInterconnect,30],["FCC coverage",fcCoverage,25]]);
-  var fcScore=fcW.score;
-  var fcBand=fcScore==null?"var(--muted)":fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
-  var fcWord = fcScore==null
-      ? "Not measured — no fiber source is loaded. This is not evidence that no fiber exists."
-      : fcW.missedWeight>=30
-        ? "Partial read — "+fcW.missedWeight+"% of the weight was never measured ("+fcW.missed.join(", ")+")"
-        : fcScore>=65?"High — multiple fiber signals present"
-        : fcScore>=35?"Moderate — some signal, verify"
-        : "Low — the loaded sources show thin signal here";
-  if(fcScore==null){ fcBand="var(--muted)"; }
-  h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+(fcScore==null?"—":fcScore)+'</span><span class="lab">/ 100 fiber confidence'+(fcW.missedWeight&&fcScore!=null?" · partial":"")+'</span></div>';
-  h+='<div class="bar"><span style="width:'+(fcScore==null?0:fcScore)+'%;background:'+fcBand+'"></span></div>';
-  h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
+  h+='<div class="hint">Visible map context only. Use the authenticated data-center scorecard above for server-side analysis independent of map layer switches.</div>';
   h+=infoRow(LAYERS.fiber.color, fiber?"Nearest fiber route":"No route in view",
         fiber?LAYERS[fiber.sourceKey].name+" · mapped proximity only":"enable fiber layers",
         fiber?fmtKm(fiber.km):"—");
@@ -1700,7 +1654,7 @@ function analyze(ll){
   h+='<div id="bbRow"></div>'; // live FCC broadband-at-point, filled async
   if(fiber){
     var fv=fiber.km<=2?"Route within 2 km — carrier serviceability unconfirmed":fiber.km<=8?"Mapped route nearby — lateral route and cost unconfirmed":"Fiber build is a cost driver";
-    h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. Confidence blends routes, peering/colo, and FCC service coverage — screening only; no free source maps every carrier conduit.</div>';
+    h+='<div class="hint" style="margin:2px 0 0;color:var(--muted)">'+fv+'. These map layers are visual context, not the scoring inputs; no public source maps every carrier conduit.</div>';
   }
 
   /* ── PUBLIC ROUTE EVIDENCE IN SITE DETAILS ────────────────────────────
@@ -1780,87 +1734,18 @@ function analyze(ll){
           ba?"↳":"—");
   }
 
-  // ── Data Center Site Report — composite suitability ──
-  var water=nearestLine(ll,cache.water);
-  var floodF=containingFeature(ll,cache.flood);
-  var inFlood=floodF&&/^(A|AE|AO|AH|AR|A99|V|VE)$/i.test((floodF.props.FLD_ZONE||floodF.props.fld_zone||"").replace(/\s/g,""));
-  var powerOn=(LAYERS.substations.on||LAYERS.osm_subs.on||LAYERS.transmission.on);
-  var pPower=null;
-  if(powerOn){
-    pPower=Math.max(0,100-subKm*12)*0.6 + Math.max(0,100-txKm*16)*0.4;
-    var txV2=tx?(+(tx.props.VOLTAGE||tx.props.VOLT_CLASS||0)):0;
-    if(txV2>=230) pPower=Math.min(100,pPower+12);
-  }
-  /* The fallback constants are gone. 15/30/85 were reasonable guesses for an
-     unknown and catastrophic as inputs: fiber's 15 dragged the composite
-     roughly twenty points and pushed sites nobody had measured across the
-     "Challenged for DC scale" line. Unmeasured is now null and drops out. */
-  var pFiber = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*8):20);
-  var pWater = !LAYERS.water.on ? null : (water?Math.max(0,100-water.km*10):35);
-  var pFlood = !LAYERS.flood.on ? null : (floodF?(inFlood?12:58):70);
-  var pMarket = !LAYERS.iso_rto.on ? null : (containingFeature(ll,cache.iso_rto)?100:70);
-  var dcW=wScore([["power",pPower,42],["fiber",pFiber,24],["water",pWater,14],["flood",pFlood,12],["market",pMarket,8]]);
-  var dcScore=dcW.score;
-  /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
-     Each factor falls back to a poor constant when its layer is not loaded:
-     fiber to 15, water to 30, power to whatever the missing substation
-     leaves. Those fallbacks are sensible defaults for an unknown, and then
-     they were fed into the composite as if they were measurements — so a
-     site with no fiber layer switched on scored 24% of the total at 15/100
-     and came back "Challenged for DC scale". That is a false negative on a
-     site nobody looked at, and it reads identically to a site that was
-     looked at and found wanting.
-
-     The score still computes, because a partial read is useful. It now says
-     what it could not see, and it refuses to render a verdict at all when
-     the missing weight is enough to change it. */
-  var dcMissing=dcW.missed, dcMissWeight=dcW.missedWeight;
-
-  var dcBand=dcScore==null?"var(--muted)":dcScore>=72?"var(--ok)":dcScore>=50?"var(--warn)":"var(--bad)";
-  var dcVerdict=dcScore==null?"Not measured — no scoring layer is loaded"
-              :dcScore>=72?"Strong data-center candidate"
-              :dcScore>=50?"Viable — diligence the constraints"
-              :"Challenged for DC scale";
-  /* THRESHOLD IS 20, NOT 25, so a missing FIBER layer alone trips it. Fiber
-     carries 24% and falls back to 15/100, which drags the composite about
-     twenty points — enough to move a site across the "Challenged" line on
-     its own. A threshold that let the single most common gap through would
-     have been a threshold in name only. */
-  if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
-  h+='<div class="sec">◆ Data Center Site Report</div>';
-  h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+(dcScore==null?"—":dcScore)+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
-  h+='<div class="bar"><span style="width:'+(dcScore==null?0:dcScore)+'%;background:'+dcBand+'"></span></div>';
-  h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
-  if(dcMissing.length){
-    h+='<div class="hint" style="margin:0 0 8px;color:var(--warn)">Not measured here: '+
-       esc(dcMissing.join(", "))+'. Those factors are scored at their unknown default, '+
-       'which is LOW — so this number can only go up once the layers are on. '+
-       'Do not read it as a weak site until it is a complete read.</div>';
-  }
-  h+=dcFactor("Power access", pPower, sub?fmtKm(subKm)+" to substation":"no substation loaded");
-  h+=dcFactor("Fiber / connectivity", pFiber, fiber?fmtKm(fiber.km)+" to route":"enable a fiber layer");
-  h+=dcFactor("Cooling water", pWater, water?fmtKm(water.km)+" to water":"enable Water layer");
-  h+=dcFactor("Flood risk", pFlood, floodF?(inFlood?"in FEMA zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"mapped low-risk zone"):"no mapped flood zone");
-  h+=dcFactor("Market liquidity", pMarket, containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market");
-  h+='<div class="hint" style="margin:4px 0 0;color:var(--muted)">Weights: power 42%, fiber 24%, water 14%, flood 12%, market 8%. Enable Site Suitability + Fiber + Market layers for a full read. Screening only — confirm utility capacity, water rights & Phase I before acquisition.</div>';
-
-  // ── Available Power Estimate — the DC-critical question ──
-  // Public data cannot give true feeder headroom, but it bounds the likely capacity
-  // and routes to the utility's authoritative hosting-capacity / interconnection portal.
+  // Utility capacity cannot be inferred from nearby voltage.
   var subV=sub?(+(sub.f.props.MAX_VOLT||sub.f.props.VOLTAGE||sub.f.props.max_volt||sub.f.props.MAX_VOLTAG||0)):0;
-  var lineV=Math.max(txV2,subV);
-  // rough deliverable-capacity band by highest nearby voltage class (screening only)
-  var mwBand = lineV>=500?"1,000+ MW":lineV>=345?"500–1,000 MW":lineV>=230?"200–600 MW":
-               lineV>=115?"50–200 MW":lineV>=69?"10–60 MW":lineV>0?"<10 MW (distribution)":"unknown";
+  var lineV=Math.max(txV,subV);
   var subCount=within(ll,cache.substations,40)+within(ll,cache.osm_subs,40);
   var plantMW=0,plantN=0;
   (cache.eia_plants||[]).forEach(function(f){ if(f.geom&&f.geom.type==="Point"){
     var c=f.geom.coordinates; if(haversine(ll.lat,ll.lng,c[1],c[0])<=40){ plantN++; plantMW+=(f.bubbleMw||0);} }});
   var gasNear=nearestLine(ll,cache.gas);
 
-  h+='<div class="sec">⚡ Available Power Estimate</div>';
-  h+='<div class="score" style="margin-top:2px"><span class="n" style="font-size:22px;color:var(--amp)">'+esc(mwBand)+'</span></div>';
-  h+='<div class="hint" style="margin:3px 0 8px;color:var(--muted)">Screening band from highest nearby voltage ('+(lineV||"?")+' kV). NOT confirmed capacity.</div>';
+  h+='<div class="sec">⚡ Power context — capacity unconfirmed</div>';
+  h+='<div class="score" style="margin-top:2px"><span class="n" style="font-size:22px;color:var(--amp)">Unknown deliverable MW</span></div>';
+  h+='<div class="hint" style="margin:3px 0 8px;color:var(--muted)">Nearby voltage does not establish deliverable MW, utility headroom or an energization date.</div>';
   h+=infoRow(LAYERS.substations.color,"Highest voltage nearby",sub?(subV?subV+" kV substation":"voltage not published"):"no substation",lineV?lineV+" kV":"—");
   h+=infoRow(LAYERS.substations.color,"Substations within 40 km","interconnect options",String(subCount));
   h+=infoRow(LAYERS.eia_plants.color,"Generation within 40 km",plantN?(Math.round(plantMW).toLocaleString()+" MW nameplate"):"enable EIA Plants",plantN?String(plantN):"—");
@@ -1881,12 +1766,10 @@ function analyze(ll){
        'style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(portal.label)+'</a></div>';
   }
 
-  h+='<div class="sec">Notes</div>';
-  h+='<div class="hint">Interconnect score weights substation distance (42%), transmission distance (33%), and voltage class (25%). '+
-     'Coverage depends on active layers and map extent — enable a layer and it feeds the score automatically. '+
-     'Public data (HIFLD / EIA / OSM); confirm hosting capacity with the utility before siting.</div>';
+  h+='<div class="sec">Notes</div><div class="hint">Infrastructure shown below the scorecard depends on map extent and enabled layers. The data-center scorecard queries the server independently and keeps missing evidence unknown. Confirm capacity, land rights and service with the appropriate providers.</div>';
 
   document.getElementById("pBody").innerHTML=h;
+  if(window.OmegaDCScreen)window.OmegaDCScreen.mount(document.getElementById("dcSiteScreen"),ll);
   var cc=document.getElementById("copyc");
   if(cc) cc.onclick=function(){ copy(ll.lat.toFixed(6)+","+ll.lng.toFixed(6)); cc.textContent="copied"; };
   fetchBroadbandAtPoint(ll); // live FCC service check, fills #bbRow async
@@ -1967,15 +1850,7 @@ function utilityPortal(name, ll){
   return null;
 }
 
-function dcFactor(name,score,detail){
-  score=Math.max(0,Math.min(100,Math.round(score)));
-  var c=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
-  return '<div style="padding:5px 0">'+
-    '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'+
-    '<span>'+esc(name)+'</span><span style="font-family:var(--mono);font-size:10px;color:'+c+'">'+score+'</span></div>'+
-    '<div class="bar" style="height:4px"><span style="width:'+score+'%;background:'+c+'"></span></div>'+
-    '<div class="meta" style="font-size:10px;margin-top:2px">'+esc(detail)+'</div></div>';
-}
+
 function fmtKm(km){ return km<1?Math.round(km*1000)+" m":km.toFixed(1)+" km"; }
 function copy(t){ try{var i=document.createElement("textarea");i.value=t;document.body.appendChild(i);i.select();document.execCommand("copy");document.body.removeChild(i);}catch(e){} }
 
@@ -2048,21 +1923,9 @@ q.addEventListener("keydown",function(e){
 buildRail(); updateRailCounts();
 buildPresets();
 
-/* ── FIBER EVIDENCE CONTROL ───────────────────────────────────────────────
-   Hands the bundled public route inventory to /omega-fiber-atlas.js. Its
-   layers are static public data and need no sign-in; only its site check
-   calls /api/fiber-screen, which does. That split matters here, because this
-   page never initializes Firebase — omega-sso.js and omega-tenant.js are the
-   only files that do and neither is loaded on Grid Atlas — so an
-   authenticated layer would simply never render.
-
-   The control reads the same api/_lib/fiber-evidence.js that the Site Map
-   Editor reaches through /api/network-proximity, so both tools return the
-   same answer for the same coordinates. Its distances are NOT fed into this
-   page's Fiber Confidence or Data Center Site Report scores: both of those
-   score missing fiber as a low number rather than as unknown, so admitting a
-   new dataset would move published figures for reasons no user asked for.
-   See MERGE.md. */
+/* Shared public map layers remain available without sign-in. Site scoring
+   and fiber checks use authenticated APIs; dc-site-score.js is the only
+   data-center score model used by this page. See MERGE.md. */
 window.OmegaFiberAtlasHost = { map: map, L: L };
 map.whenReady(function(){
   setTimeout(function(){ map.invalidateSize(); },200);

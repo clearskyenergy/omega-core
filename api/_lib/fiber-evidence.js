@@ -404,7 +404,14 @@ function bboxHit(a, b) { return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && 
 
 function usaState(code) {
   if (usaCache[code]) return usaCache[code];
-  var fc = JSON.parse(fs.readFileSync(path.join(USA_ROOT, code + '.geojson'), 'utf8'));
+  // Committed gzip shards keep serverless bundles small without changing any
+  // coordinates. Plain files remain the static browser/download format.
+  var file = path.join(USA_ROOT, code + '.geojson');
+  var packed = file + '.gz';
+  var raw = fs.existsSync(packed)
+    ? require('zlib').gunzipSync(fs.readFileSync(packed)).toString('utf8')
+    : fs.readFileSync(file, 'utf8');
+  var fc = JSON.parse(raw);
   usaCache[code] = fc.features || [];
   usaOrder.push(code);
   while (usaOrder.length > USA_CACHE_MAX) { delete usaCache[usaOrder.shift()]; }
@@ -430,14 +437,15 @@ function usaAdapt(f) {
   var kind = 'fiber_route', eligible = true;
   if (cat === 'planned') { kind = 'network_design'; eligible = false; }
   else if (cat === 'inactive') { eligible = false; }
+  if (p.proximityEligible === false) { eligible = false; }
   return {
     type: 'Feature', id: p.id, bbox: f.bbox, geometry: f.geometry,
     properties: {
       source_id: p.sourceId, source_feature_id: p.id,
       feature_kind: kind, proximity_eligible: eligible,
       source_url: p.sourceUrl, retrieved_at: p.retrievedAt,
-      geometry_quality: p.evidence === 'approximate_project_route'
-        ? 'generalized_public_design' : 'agency_published',
+      geometry_quality: p.geometryQuality || (p.evidence === 'approximate_project_route'
+        ? 'generalized_public_design' : 'publisher_geometry_unverified'),
       operational_status: p.routeStatus && p.routeStatus !== 'Unknown'
         ? p.routeStatus : (cat === 'unknown' ? 'not stated by the publisher' : cat),
       serviceability: 'unconfirmed',
@@ -459,15 +467,20 @@ function usaAdapt(f) {
 /* Candidate features whose own bbox meets the query box. */
 function usaCandidates(box) {
   var m;
-  try { m = usaLoadManifest(); } catch (e) { return []; }
-  var out = [];
+  m = usaLoadManifest(); // A missing bundle is a lookup failure, not zero fiber.
+  var out = [], seen = Object.create(null);
   (m.states || []).forEach(function (s) {
     if (!s.segments || !s.bbox || !bboxHit(s.bbox, box)) return;
     var feats;
-    try { feats = usaState(s.code); } catch (e) { return; }
+    feats = usaState(s.code); // Do not silently omit a failed state's evidence.
     for (var i = 0; i < feats.length; i++) {
       var f = feats[i];
       if (f.bbox && !bboxHit(f.bbox, box)) continue;
+      // A cross-border source record appears in multiple state shards.
+      // Deduplicate its stable ID, never different publishers' geometry.
+      var id = f.properties && f.properties.id;
+      if (id && seen[id]) continue;
+      if (id) seen[id] = true;
       out.push(usaAdapt(f));
     }
   });

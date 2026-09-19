@@ -83,8 +83,10 @@
 'use strict';
 var auth = require('./_lib/verify-token');
 
-var BUILD = '2026-09-18.public-fiber';
-var MODEL = 'network-proximity-v3';
+var BUILD = '2026-09-19.dc-site-screen';
+var MODEL = 'network-proximity-v4';
+var dcSiteScore = require('./_lib/dc-site-score');
+var gridAtlasAccess = require('./_lib/grid-atlas-access');
 
 /* ── PLANNING CONSTANTS — argue with these here, not in the code below ───── */
 var ROUTE_FACTOR = 1.4;            /* built route vs great circle, typical */
@@ -1176,6 +1178,11 @@ function analyse(lat, lon, boundary, gbps) {
          would move published numbers without anyone asking. Read it as its
          own section. */
       publicFiber: pf,
+      // Additive, versioned replacement for new consumers. Legacy saved-score
+      // fields stay stable; the map uses /api/dc-site-screen for power/FEMA too.
+      datacenterScreening: dcSiteScore.build({request:{lat:lat,lon:lon,requested_capacity_gbps:gbps,profile:'general'},fiber:pf,
+        market:{status:fac.status,nearest:fac.nearestCarrier?{name:fac.nearestCarrier.name,distance_km:fac.nearestCarrier.mi*1.609344,source_url:fac.nearestCarrier.url}:null}}),
+      legacyScoreNotice: 'fiber.score and datacenter.score retain the older corridor-based model for compatibility. Use datacenterScreening or /api/dc-site-screen for evidence-aware screening. Legacy scores do not establish service, capacity or readiness.',
       sources: { peeringdb: fac.status, fcc: fcc.status, osm: osm.status, plant: plant.status,
                  harvest: hv.status, longhaul: lh.status, datacenters: dc.status,
                  publicFiber: pf.status },
@@ -1248,8 +1255,7 @@ module.exports = function handler(req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'GET or POST.' });
 
-  return auth.authenticateWithTier(req).then(function (a) {
-    if (!a.caller.staff && (a.billing.toolOverrides || {}).gridatlas === false) throw auth.httpError(403, 'Grid Atlas access required.');
+  return gridAtlasAccess(req).then(function (a) {
     var body = (req.body && typeof req.body === 'object') ? req.body : {};
     var lat = Number(body.lat), lon = Number(body.lng != null ? body.lng : body.lon);
     if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || (lat === 0 && lon === 0))

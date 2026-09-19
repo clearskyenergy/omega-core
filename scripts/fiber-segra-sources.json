@@ -1,0 +1,3 @@
+[
+  {"id":"segra-network-20260919","name":"Segra published fiber network","publisher":"Segra","pageUrl":"https://www.segra.com/our-network/","webMapId":"27a5210e933644c7aed79ef996aba7ed","itemId":"539e7daf09184fefb0a674cfa329922e","url":"https://services2.arcgis.com/idZndEogp4LoOmcv/arcgis/rest/services/Segra_Fiber_Network_Complete/FeatureServer/0","category":"unknown","routeStatus":"Publisher fiber network map; current operating status unverified","networkType":"Carrier-published route geometry; not surveyed. Near-net polygons and access-point layers excluded."}
+]

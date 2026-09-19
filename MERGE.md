@@ -1,5 +1,48 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## 2026-09-19 — parcel fiber inspection and additional carrier routes
+
+Added 8,989 source-derived records / 549,825 line parts in 45 states plus DC,
+preserving all 38,672 prior records unchanged. Inventory now 47,661 records /
+1,100,644 parts; still partial in 47 states plus DC, with HI/MT/VT gaps.
+Uniti dark-fiber routes are unverified publisher geometry; developing routes
+stay planned. Round Rock municipal records are filtered to EXISTING. Silvis
+historical illustrative records carry an explicit proximity/scoring exclusion.
+No purchased GeoTel layer was copied. Source audits remain in the manifest.
+
+The standalone viewer adds aerial imagery, real public parcel overlays for
+Dallas/Fulton/Cook/DuPage/Lake, drawing/import for any state, coordinate deep
+links from Grid Atlas, evidence highlights and exports. Parcel IDs/geometry
+only; no owner data or metered parcel requests. Full boundary-distance and
+classification logic stays in `api/_lib/fiber-parcel.js`, through POST on the
+existing token/tenant/billing/member/tool-gated `api/fiber-screen.js`. GET and
+legacy editor contracts are preserved. No new collections or security-rule
+changes. Holes and multiple parts are retained rather than silently dropped.
+
+Only low-zoom overview coordinates are compacted; full source paths and all
+prior detailed features remain unchanged. Detailed deep links avoid the
+national overview download. All three server functions continue to bundle
+only gzip state shards (102.8 MB) and manifest, not raw national files.
+See `docs/PARCEL-FIBER-INSPECTION.md` and the nationwide research register.
+
+## 2026-09-19 — additive nationwide fiber research expansion
+
+Merged the September 18 research snapshot into current main without replacing
+the newer atlas, scoring safeguards, source-health UI, or API architecture.
+All 26,371 baseline source records are unchanged. Added 4,096 source-derived
+records from FNA, LOGIX, Norwalk and Atlanta: now 30,467 records / 218,237
+line parts across 39 states plus DC, still partial coverage. The 51-area
+research register and linked state maps prioritize TX, GA, IL, CT, OH, FL,
+SC and CA and explicitly expose gaps, sources and unknown serviceability.
+
+The existing national layer and both shared API consumers read the expanded
+inventory. Same-ID cross-border shard duplicates are removed in the shared
+library; different source records remain distinct. No scoring, tenant data,
+authentication, billing, database rules or unrelated tools were replaced.
+Tests exercise new geometry through the production library and validate all
+shards, provenance, line-part totals and state navigation. See
+`docs/FIBER-NATIONWIDE-RESEARCH.md` for source terms and reproducible imports.
+
 Measured on 2026-09-06 against the sixteen repository snapshots. Every
 "canonical" pick below is the SUPERSET build unless stated; nothing was
 hand-merged inside a multi-megabyte file. Items under **TODO** are the
@@ -1135,3 +1178,110 @@ Nothing about the two datasets is de-duplicated across sources. They publish
 different records from different agencies, and silently collapsing them would
 drop provenance a user is entitled to see; each source already guarantees
 uniqueness by id within itself.
+
+---
+
+## 2026-09-19 · Public carrier GIS expansion and publisher-map references
+
+Continued the state-by-state research using Google, image search and original
+publisher maps. FiberLight's public lit/dark GIS, Uniti's national/regional GIS,
+one explicitly classified Henry County fiber record, and Kansas Commerce's
+Freestate planning download add **5,211 map records / 105,492 line parts**.
+All 30,467 prior records are unchanged. The inventory is now **35,678 records /
+323,729 line parts**, with partial geometry in **47 states plus DC**; Hawaii,
+Montana and Vermont remain empty. Counts are source records, not unique cables.
+
+Original coordinates remain intact. At most 100 nearby line parts are grouped
+without invented connectors. Exact duplicates are removed only within each new
+source. Planned Kansas paths remain proximity-ineligible; carrier GIS is marked
+precision/status unverified. Source hashes, counts, metadata age and exclusions
+are recorded in the manifest. Only routes and opaque source IDs are retained:
+no individual contacts, access points, facility heatmaps or private files.
+Public access is not an unrestricted redistribution license; attribution and
+source-term caveats remain attached.
+
+The standalone viewer adds source/carrier and latest-batch filters, plus ten
+publisher map references (seven external images, three map collections) with
+age and accuracy warnings. Images are not traced, georeferenced, counted or
+used for distance/scoring. Main Grid Atlas retains its existing route toggle,
+tenant/auth safeguards and server-side scoring architecture. No business logic
+was added to the browser or moved out of `/api/`.
+
+The larger state shards total 190.9 MB raw, but compress losslessly to 51.7 MB.
+An offline packaging script commits gzip copies; the existing shared evidence
+library reads them lazily with its bounded cache. Both fiber functions now
+explicitly include only the base fiber dataset, gzip state shards and manifest,
+and exclude raw national GeoJSON from tracing. Narrowing `includeFiles` matters:
+the Vercel Node builder inserts explicit includes independently of tracing
+exclusions. Raw browser geometry and the ~40 MB overview remain static files.
+This is data packaging, not a new application build step.
+
+Validation: byte-identical decompression for all 51 shards; source/audit/geometry
+tests; planned-route exclusion; new-source API lookups with raw reads forbidden;
+latest-batch overview retention; image isolation from geometry/scoring; prior
+record preservation; browser checks of TX/CT source filters and CEN image panel.
+Full research details and repeatable import commands are in
+`docs/FIBER-NATIONWIDE-RESEARCH.md`. Production auth/deployment acceptance is
+separate from local verification; PR #46 still requires review. No protected
+branch bypass, unrelated checkout edits or security-workflow changes were made.
+
+---
+
+## 2026-09-19 · Data-center evidence scorecard and Segra expansion
+
+The user explicitly requested that the growing fiber atlas feed data-center
+site scoring. `api/_lib/dc-site-score.js` is now the shared, versioned
+`dc-site-screen-v1.0` model. `POST /api/dc-site-screen` collects detailed fiber
+geometry plus fixed-source power, PeeringDB and FEMA evidence. Both maps render
+the result and export JSON; map visibility is not an input. MW/Gbps and workload
+profile are recorded, not silently translated into claims of capacity.
+
+**Logic moved out of the browser:** Grid Atlas's interconnect arithmetic,
+fiber-confidence blend and data-center composite were removed. The speculative
+voltage-to-deliverable-MW band was removed too. Browser code retains visual
+proximity context, input collection and rendering; the new numerical model is
+server-only. No scoring logic was moved into browser assets.
+
+Mapped power/fiber, carrier-market context and point flood evidence account for
+at most 60% of scoring weight. Capacity/energization, parcel fiber service,
+physical diversity, cooling/water and land/environment stay explicitly unknown.
+The score is a measured-signal weighted mean, always paired with coverage, not
+a readiness verdict. Counts and carrier labels cannot prove diverse paths;
+planned/unknown-medium routes, images and road-routed corridors earn no fiber
+points. Dataset or source failures remain unknown, including missing state
+shards that the old shared library silently omitted.
+
+The existing Grid Atlas authorization was extracted to `grid-atlas-access.js`
+and is shared by the three screening APIs: Firebase token, billing override,
+organization status, membership and tool access. No access was widened, and no
+Firestore collections or writes were added. `network-proximity-v4` exposes the
+new `datacenterScreening` object; older saved-score fields remain explicitly
+legacy for compatibility. The standalone localhost static server cannot serve
+authenticated APIs; use a deployed Omega session or the local research CLI.
+
+Segra's official public map exposed actual fiber polylines. The route-only
+import adds **2,994 records / 227,090 line parts** across 23 states, preserving
+all **35,678** preceding records unchanged. Now **38,672 records / 550,819 line
+parts** cover parts of 47 states plus DC. 24 empty source records, 627 exact
+duplicate parts and 1,044 outside-state parts are explicitly accounted for.
+Near-net polygons, towers, data-center points and private download requests are
+excluded. Attribution and unconfirmed service/status/precision remain attached.
+
+All 51 state shards total 267.5 MB raw / 78.3 MB lossless gzip. The three API
+bundles include only gzip state shards and the manifest plus the base dataset;
+the ~61 MB overview remains a static map asset. Dataset downloads stay outside
+the repository. Both importers preserve unrelated records.
+
+Validation covers source/type/audit/geometry, actual compressed lookup, auth
+denials before source access, null/failure/truncation behavior, unknown capacity
+and diversity, hazard flags, strict inputs, static script resolution and UI
+state retention. `npm test` passed; CI now runs fiber/DC tests in its existing
+unit job. Browser checks verified the signed-out gate, main-atlas pin form,
+layer-change input retention and the real Dallas collection rendered as a
+clearly labeled local QA snapshot (93 signal score / 60% measured weight).
+Signed-in deployed acceptance remains outstanding. The unrelated partner-scope
+workflow's invalid `--depth=0` fetch and protected-main review are not bypassed.
+
+See `docs/DATA-CENTER-SITE-SCORING.md` for weights, curves, evidence policy,
+limitations and use. These product assumptions are transparent but not an
+externally validated engineering or investment model.

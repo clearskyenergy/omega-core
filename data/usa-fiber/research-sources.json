@@ -1,0 +1,1879 @@
+{
+  "checkedAt": "2026-09-19",
+  "scope": "Continuing public-source discovery, including Google and original publishers. Added Uniti dark/developing layers and municipal records, plus parcel inspection. All states remain partial; no survey-verified nationwide cable system is claimed. Public county parcel coverage is currently limited to Dallas TX, Fulton GA, and Cook/DuPage/Lake IL; draw/import supports all states. Publicly visible purchased third-party datasets are not imported.",
+  "priorityOrder": [
+    "TX",
+    "GA",
+    "IL",
+    "CT",
+    "OH",
+    "FL",
+    "SC",
+    "CA"
+  ],
+  "references": [
+    {
+      "state": "TX",
+      "title": "LOGIX public network map",
+      "url": "https://logix.com/network-maps/",
+      "kind": "Imported carrier geometry",
+      "note": "Public map KMZ imported. Filename contains 02012024; observation date and current operating status are not established.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "TX",
+      "title": "FiberLight Texas Express",
+      "url": "https://www.fiberlight.com/network/regional-network-maps/texas-express-routes/",
+      "kind": "Imported carrier GIS",
+      "note": "Carrier page now links public GIS. Lit, dark-only and dark-and-lit layers were imported directly; no road or diagram tracing. Source metadata September 2025, current serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "TX",
+      "title": "Temple electric/data layer",
+      "url": "https://arcgiswap02.ci.temple.tx.us/arcgiswap02/rest/services/Editing/ELECTRIC/FeatureServer/2",
+      "kind": "Checked; no qualifying records",
+      "note": "Exact single-mode/multi-mode fiber filter returned zero. Non-fiber electrical/data lines excluded.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "GA",
+      "title": "Fiber Network Alliance member lines",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "kind": "Imported publisher geometry",
+      "note": "Undated member routes; names retained as published, not verified current ownership.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "GA",
+      "title": "Atlanta DPW Fiber Assets",
+      "url": "https://dpwgis.atlantaga.gov/hostingserver/rest/services/Fiber_Assets/FeatureServer",
+      "kind": "Imported municipal geometry",
+      "note": "Only line layers 16, 17 and 18 imported; operational status unconfirmed.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "IL",
+      "title": "Illinois Century Network maps",
+      "url": "https://dceo.illinois.gov/broadband/icn.html",
+      "kind": "Reference only",
+      "note": "Official backbone, fiber and Tollway map links; not converted to inferred physical routes.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "IL",
+      "title": "FNA member lines / WOW Chicago",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "kind": "Imported publisher geometry",
+      "note": "Large Chicago-area addition; historical carrier labels retained.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "CT",
+      "title": "Norwalk public fiber GIS",
+      "url": "https://services2.arcgis.com/HfsHDBmkGwb1UtID/ArcGIS/rest/services/Fiber/FeatureServer",
+      "kind": "Imported municipal geometry",
+      "note": "211 line records across City Traffic, City MAN and Fibertech layers. Municipal coverage only, not all Connecticut.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "CT",
+      "title": "Connecticut Education Network fiber map",
+      "url": "https://ctedunet.net/fiber-map/",
+      "kind": "Reference only",
+      "note": "Official network image; no surveyed route geometry imported from the image.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "OH",
+      "title": "OARnet network",
+      "url": "https://www.oar.net/network",
+      "kind": "Reference only",
+      "note": "Official backbone map; topology is not street-level geometry. New Ohio geometry comes from FNA.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "FL",
+      "title": "Florida LambdaRail map",
+      "url": "https://www.flrnet.org/map-for-web_to-size/",
+      "kind": "Reference only",
+      "note": "Network reference image. New Florida geometry comes from FNA member lines.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "SC",
+      "title": "FNA member lines / South Carolina",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "kind": "Imported publisher geometry",
+      "note": "Member lines provide the first bundled SC route geometry; undated and incomplete.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "SC",
+      "title": "Segra network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Official public map links Segra Fiber Network polylines, imported July 2026 metadata snapshot. Private KMZ request not submitted. Near-net polygons and access assets excluded.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "CA",
+      "title": "California statewide middle-mile network",
+      "url": "https://broadbandforall.cdt.ca.gov/middle-mile-broadband-initiative/statewide-middle-mile-network/",
+      "kind": "Existing supplemental design layer",
+      "note": "2,473 supplied design records remain in the separate California design toggle, not counted as verified active fiber.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "CA",
+      "title": "CENIC network maps",
+      "url": "https://cenic.org/network/maps",
+      "kind": "Reference only",
+      "note": "Backbone and endpoint connectivity maps; logical circuits are not assumed to follow physical cable paths.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "AL",
+      "title": "Alabama Fiber Network",
+      "url": "https://alabamafibernetwork.com/",
+      "kind": "Reference only",
+      "note": "Operator network map found. New Alabama geometry in this pass comes from FNA.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "AK",
+      "title": "GCI Alaska United resources",
+      "url": "https://www.gci.com/_site_DotCom/business/support/business-alaska-united-support",
+      "kind": "Further review needed",
+      "note": "Submarine route resources found; not added as terrestrial routes.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "AZ",
+      "title": "ADOT fiber and conduit maps",
+      "url": "https://azdot.gov/business/adot-broadband-office/fiber-and-conduit-maps",
+      "kind": "Further review needed",
+      "note": "Fiber and conduit must be distinguished; empty conduit is not proof of installed fiber.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "AR",
+      "title": "Arkansas Broadband resources",
+      "url": "https://broadband.arkansas.gov/resources/",
+      "kind": "Availability only",
+      "note": "Coverage and funding maps are not cable routes. No new qualifying route geometry imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "CO",
+      "title": "CDOT fiber map",
+      "url": "https://www.codot.gov/programs/intelligent-transportation-systems/fiber-leases-right-of-way-use",
+      "kind": "Reference only",
+      "note": "December 2024 map and route metadata found; PDF not digitized.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "DE",
+      "title": "Delaware Broadband Office maps",
+      "url": "https://broadband.delaware.gov/",
+      "kind": "Availability only",
+      "note": "Addresses and deployment investments do not establish cable alignment. Geometry gap remains.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "HI",
+      "title": "Hawaii broadband service map",
+      "url": "https://www.hawaii.edu/broadband/state-broadband-service-map/",
+      "kind": "Availability only",
+      "note": "Service-location data, not fiber cable alignments. Geometry gap remains.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "ID",
+      "title": "Idaho Regional Optical Network",
+      "url": "https://ironforidaho.net/",
+      "kind": "Further review needed",
+      "note": "Original network operator identified; no qualifying route download imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "IN",
+      "title": "Indiana I-Light",
+      "url": "https://ilight.net/index.html",
+      "kind": "Reference only",
+      "note": "Official research-network map. New map geometry comes from FNA member routes.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "IA",
+      "title": "Iowa ICN backbone and leased connections",
+      "url": "https://icn.iowa.gov/media/462/download?inline=",
+      "kind": "Reference only",
+      "note": "Official network map distinguishes owned fiber from leased connections; no inferred street paths added.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "KS",
+      "title": "Kansas Freestate route maps and planning files",
+      "url": "https://www.kansascommerce.gov/officeofbroadbanddevelopment/route-maps-and-planning-files/",
+      "kind": "Imported planning / reported existing geometry",
+      "note": "August 8, 2024 planning KMZ imported. New cable routes remain planned; only the explicitly existing cable layer is reported existing. Points and facility heatmap excluded.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "KY",
+      "title": "KentuckyWired",
+      "url": "https://kentuckywired.ky.gov/Pages/index.aspx",
+      "kind": "Reference only",
+      "note": "State middle-mile operator. Existing source-linked Kentucky GIS retained; a statewide network claim is not all-carrier coverage.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "LA",
+      "title": "LONI historical ring map",
+      "url": "https://loni.org/PDF/item68602.pdf",
+      "kind": "Historical reference only",
+      "note": "2006 logical/installation diagram is not current route evidence and was not digitized.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "ME",
+      "title": "Networkmaine",
+      "url": "https://networkmaine.net/",
+      "kind": "Further review needed",
+      "note": "Original network organization identified; existing GIS retained, no additional route download imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MD",
+      "title": "Maryland infrastructure buildout",
+      "url": "https://dhcd.maryland.gov/infrastructure/internet-access/infrastructure-buildout",
+      "kind": "Availability only",
+      "note": "Completion/availability mapping does not locate physical cables. Existing GIS and new FNA records remain partial.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MA",
+      "title": "MassBroadband 123 map gallery",
+      "url": "https://broadband.masstech.org/map-gallery",
+      "kind": "Reference only",
+      "note": "Official network and community maps dated January 2014; no line geometry imported. Address-point downloads are not cable routes.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MI",
+      "title": "Merit MOON-Light",
+      "url": "https://www.merit.edu/solutions/networking-security/moon-light/",
+      "kind": "Reference only",
+      "note": "Official backbone reference. New Michigan geometry comes from historical FNA member lines.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MN",
+      "title": "Minnesota geospatial telecom sources",
+      "url": "https://mn.gov/mngeo/gis-data-and-maps/info-by-topic/utilities-telecommunications/",
+      "kind": "Further review needed",
+      "note": "Official source catalog identified; existing line inventory retained.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MS",
+      "title": "C Spire MissiON infrastructure",
+      "url": "https://www.cspire.com/cms/business/mission/",
+      "kind": "Reference only",
+      "note": "Official network image. No street-level routes inferred from topology.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MO",
+      "title": "Missouri broadband mapping",
+      "url": "https://ded.mo.gov/office-broadband-development/mapping",
+      "kind": "Availability only",
+      "note": "Service-location and funding data, not line geometry. Geometry gap remains.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "MT",
+      "title": "BroadbandMT transport fiber map",
+      "url": "https://www.broadbandmt.com/transport-fiber-map",
+      "kind": "Historical reference only",
+      "note": "Publisher identifies its linked map as 2016. No current line geometry imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NE",
+      "title": "Network Nebraska GIS",
+      "url": "https://giscat.ne.gov/agencyext/rest/services/Network_Nebraska/MapServer",
+      "kind": "Further review needed",
+      "note": "Fiber circuits/access GIS discovered; circuit alignment versus physical routing needs verification.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NV",
+      "title": "NDOT GIS infrastructure presentation",
+      "url": "https://www.westernstatesforum.org/Documents/2023/Presentations/NevadaDOT_Palmer_FINALweb_GISInfrastructureMgmtSoln.pdf",
+      "kind": "Reference only",
+      "note": "Agency presentation illustrates fiber GIS, not a statewide downloadable route inventory.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NH",
+      "title": "USNH IBEAM network",
+      "url": "https://www.usnh.edu/ibeamnh/our-network",
+      "kind": "Reference only",
+      "note": "Original network description; no new physical route download imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NJ",
+      "title": "New Jersey Broadband mapping hub",
+      "url": "https://nj.gov/connect/resources/mapping/",
+      "kind": "Availability only",
+      "note": "Coverage, eligibility and community assets are not fiber routes. Small FNA overlap is not statewide coverage.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NM",
+      "title": "New Mexico Fiber Network map",
+      "url": "https://www.nmfibernetwork.com/fiber",
+      "kind": "Reference only",
+      "note": "Operator map found; no physical route geometry extracted from its image.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NY",
+      "title": "New York search follow-up",
+      "url": "https://www.google.com/search?q=New+York+fiber+route+GIS+KMZ+NYSERNet",
+      "kind": "Search incomplete",
+      "note": "No additional import-qualified primary route source established in this pass; tiny FNA overlap is not New York coverage.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "NC",
+      "title": "MCNC network expansion maps",
+      "url": "https://www.mcnc.org/news/day-4-new-map-shows-20-years-of-network-growth-for-north-carolina/",
+      "kind": "Reference only",
+      "note": "Official history and maps; new geometry comes from FNA, not schematic digitization.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "ND",
+      "title": "Dakota Carrier Network interactive fiber map",
+      "url": "https://dakotacarrier.com/dcn-interactive-fiber-map/",
+      "kind": "Further review needed",
+      "note": "Publisher interactive route map identified; export not imported in this pass.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "OK",
+      "title": "OneNet network and hubs",
+      "url": "https://www.onenet.net/about-us/network-hub/",
+      "kind": "Reference only",
+      "note": "Official network map; no roads or cable paths inferred from links between hubs.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "OR",
+      "title": "Link Oregon map resources",
+      "url": "https://www.linkoregon.org/support/",
+      "kind": "Further review needed",
+      "note": "Official interactive map linked; existing Oregon GIS retained.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "PA",
+      "title": "KINBER / KeystoneREN",
+      "url": "https://www.kinber.org/about/",
+      "kind": "Further review needed",
+      "note": "Network organization identified; new Pennsylvania geometry comes from FNA member map.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "RI",
+      "title": "OSHEAN Beacon network",
+      "url": "https://oshean.org/",
+      "kind": "Further review needed",
+      "note": "Original network operator identified; no qualifying line download imported. Geometry gap remains.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "SD",
+      "title": "SDN interactive fiber map",
+      "url": "https://sdncommunications.com/industries/small-business",
+      "kind": "Further review needed",
+      "note": "Publisher distinguishes own routes, member routes and service areas; export not imported.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "TN",
+      "title": "IRIS network",
+      "url": "https://irisnetworksusa.com/",
+      "kind": "Reference only",
+      "note": "Current carrier map identified; FNA iRis geometries imported with original undated status.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "UT",
+      "title": "Utah UEN/UTN map",
+      "url": "https://utn.org/network/networkmap.shtml",
+      "kind": "Reference only",
+      "note": "Logical network includes microwave; no conversion to assumed fiber paths. Geometry gap remains.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "VT",
+      "title": "Vermont state-owned fiber GIS",
+      "url": "https://maps.vcgi.vermont.gov/arcgis/rest/services/PSD_services/OPENDATA_PSD_LAYERS_SP_NOCACHE_v1/MapServer/46",
+      "kind": "Download blocked",
+      "note": "Official line layer found. TLS certificate validation failed during download; not imported and verification not bypassed.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "VT",
+      "title": "Vermont broadband route downloads",
+      "url": "https://publicservice.vermont.gov/telecommunications-and-connectivity/broadband-high-speed-internet-availability-vermont",
+      "kind": "Further review needed",
+      "note": "Some fiber availability routes are road-centerline proxies. Keep separate from surveyed cable paths.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "VA",
+      "title": "Mid-Atlantic Broadband network",
+      "url": "https://mbc-va.com/",
+      "kind": "Further review needed",
+      "note": "Official interactive coverage map found; baseline routes and FNA additions retained.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "WA",
+      "title": "NoaNet network",
+      "url": "https://www.noanet.net/",
+      "kind": "Further review needed",
+      "note": "Official map found; baseline GIS retained. No restricted map reproduced.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "WV",
+      "title": "FNA member lines / West Virginia",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "kind": "Imported publisher geometry",
+      "note": "Public member geometry added; status and present ownership unconfirmed.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "WI",
+      "title": "WiscNet network resources",
+      "url": "https://www.wiscnet.net/support",
+      "kind": "Reference only",
+      "note": "Logical network/weather map is not physical cable geometry. Existing GIS retained.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "WY",
+      "title": "Wyoming broadband availability map",
+      "url": "https://broadband.wyomingbusiness.org/connect-wyoming/wyoming-broadband-availability-map/",
+      "kind": "Availability only",
+      "note": "Public availability map; password-protected grant mapping not accessed. Existing small route coverage remains partial.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "DC",
+      "title": "Existing public GIS inventory",
+      "url": "https://www.fibernetworkalliance.com/membership-map-line/",
+      "kind": "Further review needed",
+      "note": "DC retained as an additional area beyond the 50 states. See manifest for actual bundled source provenance; this regional reference is not a new DC import.",
+      "checkedAt": "2026-09-18"
+    },
+    {
+      "state": "AL",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "AR",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "AZ",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "CA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "CO",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "CT",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "DC",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "DE",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "FL",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "GA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "IA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "ID",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "IL",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "IN",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "KS",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Kansas Freestate — New Cable & Duct Path; Kansas Freestate — New Cable Path; Kansas Freestate — Existing Un-Funded Cable Path. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "KY",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "LA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MD",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MI",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MN",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MO",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network; Kansas Freestate — New Cable & Duct Path. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "MS",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NC",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NE",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NJ",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NM",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NV",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "NY",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "OH",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network; Henry County Ohio explicitly typed fiber-optic lines. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "OK",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network; Kansas Freestate — New Cable Path. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "OR",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "PA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "RI",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "SC",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "SD",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "TN",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "TX",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-only network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "UT",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "VA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "FiberLight published lit network; FiberLight published dark-only network; FiberLight published dark-and-lit network; Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "WA",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "WI",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "WV",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network; Uniti Wholesale regional transport network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "WY",
+      "title": "September 19 route expansion",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported source-published geometry",
+      "checkedAt": "2026-09-19",
+      "note": "Uniti Wholesale national core network. See bundled layers below for original source URLs. Operating status, parcel service and available capacity remain unconfirmed except explicitly dated publisher reports."
+    },
+    {
+      "state": "AR",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "AZ",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "CO",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "GA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IL",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "IN",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "KS",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "KY",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "MD",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "MO",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NC",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NE",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "NM",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "OH",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "OK",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "PA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "SC",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "TN",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "TX",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "VA",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "WI",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "WV",
+      "title": "Segra public fiber network",
+      "url": "https://www.segra.com/our-network/",
+      "kind": "Imported carrier GIS",
+      "note": "Published route polylines imported without access points or near-net polygons. Current operation, capacity and parcel serviceability unconfirmed.",
+      "checkedAt": "2026-09-19"
+    },
+    {
+      "state": "AL",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AL",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AL",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AR",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AR",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AR",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "AZ",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "CA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "CO",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "CO",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "CT",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "DC",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "DE",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "DE",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "FL",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "FL",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "GA",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "GA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "GA",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "GA",
+      "title": "Fulton County, Georgia parcel boundary overlay",
+      "url": "https://gismaps.fultoncountyga.gov/arcgispub2/rest/services/Tax/Tyler_TaxParcels/MapServer/0",
+      "kind": "Live public parcel geometry",
+      "note": "Viewport-limited parcel IDs and Polygon/MultiPolygon geometry only. County coverage, not statewide. Tax boundaries are not surveys. Select a parcel against the detailed fiber layer; service remains unconfirmed.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IA",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IA",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "ID",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "Silvis municipal fiber — illustrative reference only",
+      "url": "https://www.arcgis.com/home/item.html?id=a6bd6493486c4cc1add15ce27c8330f6",
+      "kind": "Imported illustrative reference; scoring excluded",
+      "note": "Publisher expressly disclaims surveying / engineering precision and site-specific decision use; excluded from scoring Historical municipal map; illustrative only, not suitable for site-specific decisions. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "Cook County, Illinois parcel boundary overlay",
+      "url": "https://gis12.cookcountyil.gov/traditional/rest/services/CookViewer3Parcels/MapServer/0",
+      "kind": "Live public parcel geometry",
+      "note": "Viewport-limited parcel IDs and Polygon/MultiPolygon geometry only. County coverage, not statewide. Tax boundaries are not surveys. Select a parcel against the detailed fiber layer; service remains unconfirmed.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "DuPage County, Illinois parcel boundary overlay",
+      "url": "https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/MapServer/0",
+      "kind": "Live public parcel geometry",
+      "note": "Viewport-limited parcel IDs and Polygon/MultiPolygon geometry only. County coverage, not statewide. Tax boundaries are not surveys. Select a parcel against the detailed fiber layer; service remains unconfirmed.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IL",
+      "title": "Lake County, Illinois parcel boundary overlay",
+      "url": "https://maps.lakecountyil.gov/arcgis/rest/services/GISMapping/WABParcels/MapServer/12",
+      "kind": "Live public parcel geometry",
+      "note": "Viewport-limited parcel IDs and Polygon/MultiPolygon geometry only. County coverage, not statewide. Tax boundaries are not surveys. Select a parcel against the detailed fiber layer; service remains unconfirmed.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "IN",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "KS",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "KS",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "KY",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "KY",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "LA",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "LA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "LA",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MD",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "ME",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MI",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MN",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MN",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MN",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MO",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MO",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MO",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MS",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MS",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "MS",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NC",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NC",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NC",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "ND",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NE",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NE",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NE",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NH",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NJ",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NM",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NM",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NV",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NY",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NY",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "NY",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OH",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OH",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OK",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OK",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OK",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "OR",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "PA",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "PA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "SC",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "SC",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "SC",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "SD",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TN",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TN",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TN",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Round Rock municipal fiber ring — reported existing",
+      "url": "https://www.arcgis.com/home/item.html?id=999003bd039b4586924820e93f667cfd",
+      "kind": "Imported public route geometry",
+      "note": "Municipal fiber ring; not a commercial service offer, not a surveyed alignment Existing in municipal GIS; current commercial access unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Dallas County, Texas (DCAD) parcel boundary overlay",
+      "url": "https://maps.dcad.org/prdwa/rest/services/Property/ParcelQuery/MapServer/4",
+      "kind": "Live public parcel geometry",
+      "note": "Viewport-limited parcel IDs and Polygon/MultiPolygon geometry only. County coverage, not statewide. Tax boundaries are not surveys. Select a parcel against the detailed fiber layer; service remains unconfirmed.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "UT",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "VA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WA",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WI",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WI",
+      "title": "Uniti developing routes / under review",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported plans; not confirmed built",
+      "note": "Planning alignment only; excluded from mapped-fiber scoring and existing-route evidence Developing / under review; not confirmed built. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WV",
+      "title": "Uniti published Kinetic ILEC dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; not surveyed and not proof of parcel service Publisher labels Kinetic dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WV",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "WY",
+      "title": "Uniti Wholesale published dark-fiber network",
+      "url": "https://www.unitiwholesale.com/network-map/",
+      "kind": "Imported public route geometry",
+      "note": "Carrier-published geometry; may overlap other network layers; physical diversity unconfirmed Publisher labels dark fiber; operating status and available strands unconfirmed. Original line paths retained; positional accuracy and parcel service remain unverified.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    },
+    {
+      "state": "TX",
+      "title": "Third-party purchased GeoTel layer excluded",
+      "url": "https://maps.pape-dawson.com/server1/rest/services/LandDevelopment/LANDDEVELOPMENT__Hines_SiteSelection/MapServer/layers",
+      "kind": "Not imported — commercial dataset",
+      "note": "Search found a layer explicitly described as purchased GeoTel 2021 data. No licensed third-party geometry was copied from it.",
+      "checkedAt": "2026-09-19",
+      "researchBatch": "20260919-parcel"
+    }
+  ]
+}

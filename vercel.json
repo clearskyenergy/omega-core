@@ -267,14 +267,21 @@
     },
     "api/network-proximity.js": {
       "maxDuration": 60,
-      "includeFiles": "data/{fiber,usa-fiber}/**"
+      "includeFiles": "{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}",
+      "excludeFiles": "data/usa-fiber/*.geojson"
     },
     "api/render.js": {
       "maxDuration": 60
     },
     "api/fiber-screen.js": {
       "maxDuration": 30,
-      "includeFiles": "data/{fiber,usa-fiber}/**"
+      "includeFiles": "{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}",
+      "excludeFiles": "data/usa-fiber/*.geojson"
+    },
+    "api/dc-site-screen.js": {
+      "maxDuration": 30,
+      "includeFiles": "{data/fiber/**,data/usa-fiber/*.geojson.gz,data/usa-fiber/manifest.json}",
+      "excludeFiles": "data/usa-fiber/*.geojson"
     },
     "api/**/*.js": {
       "maxDuration": 30

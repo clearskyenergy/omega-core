@@ -169,10 +169,12 @@ ok('no evidence and no carrier → no lateral', V({}).lateral === null);
 
 /* ── handler contract (fetch is never reached) ────────────────────────── */
 function handlerWith(authImpl) {
+  const gate = { module: { exports: {} }, require: () => authImpl, Promise };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../api/_lib/grid-atlas-access.js'), 'utf8'), gate);
   /* network-proximity.js now requires three siblings by relative path. Inside
      vm.runInNewContext the module has no filename, so a bare require() would
      resolve them against scripts/ and fail. Anchor relative paths at api/. */
-  const req = n => n.includes('verify-token') ? authImpl
+  const req = n => n.includes('verify-token') ? authImpl : n.includes('grid-atlas-access') ? gate.module.exports
              : (n.charAt(0) === '.' ? require(path.join(__dirname, '..', 'api', n)) : require(n));
   const box = { module: { exports: {} }, require: req,
     fetch: () => { throw new Error('fetch must not be called in tests'); }, AbortController, setTimeout, clearTimeout, console, Promise, process, Object, Math, Number, String, Date, Array, Buffer };
