@@ -667,6 +667,42 @@ built.
 
 Nothing below is done by committing this branch. Each step is a decision.
 
+### Their product list
+
+They send a spreadsheet; you import it:
+
+```bash
+node scripts/import-products.js --org cleancell.us --file cleancell.csv
+#   dry run + a readiness report
+FIREBASE_SERVICE_ACCOUNT="$(cat sa.json)" \
+  node scripts/import-products.js --org cleancell.us --file cleancell.csv --apply
+```
+
+`docs/product-list-template.csv` is the sheet to forward to them. The report
+counts **what each product unlocks**, not how many rows parsed:
+
+```
+   12  orderable on the storefront
+    9  drawable on a site study and in the designer   ← 3 missing widthFt/depthFt
+    7  with a stated integration answer               ← 5 will draw an external PCS
+    2  showing a public list price
+```
+
+Three things it refuses or flags, because each fails silently otherwise:
+
+- **Millimetres in a feet column.** Every container datasheet prints mm —
+  Gotion's is 6058 × 2438. Pasted straight in, that is a 6,058 ft battery and
+  the site study confidently reports that nothing fits on three acres. There
+  is a `dimUnits` column (`ft`/`in`/`mm`/`m`/`cm`) and a plausibility check
+  after conversion; an implausible footprint is refused, never drawn.
+- **Blank integration flags.** Blank means *nobody answered*, not *external*.
+  It imports, and it is reported, because `getWizSteps()` skips the PCS,
+  disconnect and transformer steps only when told the cabinet contains them.
+- **A cost basis.** A `capexPerKwh` column is a hard stop — a supplier's own
+  sheet is exactly where one turns up. `listPrice` is fine; that is a number
+  the tenant chose to print in public.
+
+
 ```bash
 # 1 · The tenant record, the white-label block and the storefront config.
 #     tenants/cleancell/tenant.json carries all three.

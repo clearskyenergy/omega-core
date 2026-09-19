@@ -232,6 +232,11 @@ user). Do not add a second copy of that list — see what three copies of
 - A tenant's cost basis (`storefront.capexPerKwh`/`capexPerKw`) must NEVER be
   in the repo. `scripts/seed-omega-orgs.js` throws if a `tenant.json` carries
   either.
+- A tenant's product list is imported with `scripts/import-products.js` from a
+  CSV (`docs/product-list-template.csv` is the sheet to send them). It refuses
+  a cost-basis column outright, converts `dimUnits` (datasheets print mm) and
+  refuses an implausible footprint rather than drawing it, and REPORTS blank
+  integration flags instead of taking them as "external".
 - **ONE product list per tenant**: `omega_orgs/{org}/storefront/config.products`
   feeds the public storefront, the site study's footprints AND the editor's
   BESS Guided Build (`omega-bess-products.js` merges it into `BESS_CATALOG`).
