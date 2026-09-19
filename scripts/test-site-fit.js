@@ -16,7 +16,8 @@
    node scripts/test-site-fit.js */
 'use strict';
 var path = require('path');
-var F = require(path.join(__dirname, '..', 'api', '_lib', 'site-fit.js'));
+var ROOT = path.join(__dirname, '..');
+var F = require(path.join(ROOT, 'api', '_lib', 'site-fit.js'));
 
 var pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -271,6 +272,89 @@ ok('assumptions report the setback', a.setbackFt === 20, a.setbackFt);
 ok('assumptions report the clearance', a.clearanceFt === 5, a.clearanceFt);
 ok('assumptions report the aisle', a.aisleFt > 0, a.aisleFt);
 ok('assumptions say it is not a code determination', /not a code determination/i.test(a.basis || ''), a.basis);
+
+/* ── 13 · WHICH PRODUCTS GET OFFERED ──────────────────────────────────
+   Separate concern from the geometry above, same consequence: a number on
+   the page a customer decides from.
+
+   THE BUG THIS EXISTS TO CATCH, and it was real. The first version asked
+   which SINGLE unit covers the requirement. Run against a manufacturer's
+   actual ladder, a 650 kW / 1,350 kWh need skipped every cabinet and every
+   500 kW container — none covers it alone — and recommended a 1,700 kW /
+   3,421 kWh container. Two and a half times the power asked for. */
+(function productFit() {
+  /* No stub needed: the ranking was extracted to _lib/product-fit.js
+     precisely because it is pure, so it loads with nothing installed. */
+  var H = require(path.join(ROOT, 'api', '_lib', 'product-fit.js'));
+
+  /* A plausible manufacturer ladder: cabinets then containers. */
+  var LADDER = [
+    { sku: 'C215',  kw: 100,  kwh: 215 },
+    { sku: 'C372',  kw: 150,  kwh: 372 },
+    { sku: 'C760',  kw: 380,  kwh: 760 },
+    { sku: 'X2000', kw: 500,  kwh: 2000 },
+    { sku: 'X3400', kw: 1700, kwh: 3421 },
+    { sku: 'X5000', kw: 2500, kwh: 5015 }
+  ];
+  function top(kw, kwh) { var r = H.fitProducts(LADDER, kw, kwh); return r[0] || null; }
+
+  var t = top(650, 1350);
+  ok('650 kW / 1350 kWh is offered multiple cabinets, not one huge container',
+     t && t.p.sku === 'C760' && t.qty === 2, t && (t.qty + '×' + t.p.sku));
+  ok('and the single 1700 kW container is NOT the first offer',
+     !t || t.p.sku !== 'X3400', t && t.p.sku);
+
+  var t2 = top(2400, 5000);
+  ok('2400 kW / 5000 kWh takes the one container that fits it',
+     t2 && t2.p.sku === 'X5000' && t2.qty === 1, t2 && (t2.qty + '×' + t2.p.sku));
+
+  var t3 = top(180, 400);
+  ok('180 kW / 400 kWh takes the smallest cabinet in a pair',
+     t3 && t3.p.sku === 'C215' && t3.qty === 2, t3 && (t3.qty + '×' + t3.p.sku));
+
+  /* BOTH axes, not just energy. A product that covers the kWh and not the kW
+     is a battery that cannot discharge fast enough — the failure a customer
+     finds in July, not on this page. */
+  var covers = H.fitProducts(LADDER, 900, 1000);
+  ok('every offer covers the POWER as well as the energy',
+     covers.every(function (f) { return f.totKw >= 900; }),
+     covers.map(function (f) { return f.qty + '×' + f.p.sku + '=' + f.totKw + 'kW'; }));
+  ok('and every offer covers the energy',
+     covers.every(function (f) { return f.totKwh >= 1000; }));
+
+  /* The cap is doing as much work as the ranking. Without it the smallest
+     cabinet always wins on closeness, and proposing 23 cabinets is absurd. */
+  var many = H.fitProducts(LADDER, 5000, 10000);
+  ok('nothing is offered above the unit cap',
+     many.every(function (f) { return f.qty <= H.MAX_UNITS; }),
+     many.map(function (f) { return f.qty + '×' + f.p.sku; }));
+  ok('and nothing is offered that oversupplies beyond the cap',
+     many.every(function (f) { return f.over <= H.MAX_OVERSUPPLY; }),
+     many.map(function (f) { return f.p.sku + ' x' + f.over.toFixed(2); }));
+
+  /* Ranked by closeness, then by fewer units. Two containers beat five
+     cabinets at the same coverage for every reason that is not arithmetic. */
+  var ranked = H.fitProducts(LADDER, 650, 1350);
+  for (var i = 1; i < ranked.length; i++) {
+    ok('offer ' + (i + 1) + ' oversupplies at least as much as offer ' + i,
+       ranked[i].over >= ranked[i - 1].over - 0.021,
+       ranked.map(function (f) { return f.p.sku + ' x' + f.over.toFixed(2); }));
+  }
+
+  /* A need nothing on the ladder can serve is an EMPTY list, not a bad
+     recommendation. embed-size then says "we will come back to you with
+     options", which is true. */
+  ok('an impossible requirement offers nothing rather than something wrong',
+     H.fitProducts(LADDER, 50000, 100000).length === 0);
+
+  /* A product with no footprint still gets OFFERED — it just cannot be drawn.
+     Conflating "not drawable" with "not sellable" would silently drop stock. */
+  var noDims = H.fitProducts([{ sku: 'RACK', kw: 100, kwh: 215 }], 180, 400);
+  ok('a product with no footprint is still offered for sale', noDims.length === 1);
+
+  ok('a product with neither kW nor kWh is not offered at all',
+     H.fitProducts([{ sku: 'EMPTY' }], 100, 100).length === 0);
+})();
 
 console.log('\nsite fit study: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

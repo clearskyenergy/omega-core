@@ -71,6 +71,15 @@ function arg(name, dflt) {
   return (v && v.slice(0, 2) !== '--') ? v : true;
 }
 var APPLY = process.argv.indexOf('--apply') >= 0;
+/* --out <file.json>: write the parsed products to disk instead of (or as well
+   as) Firestore. Two uses, both real — reviewing EXACTLY what would be stored
+   before committing to it, and feeding scripts/preview-storefront.js so the
+   preview runs on the same catalogue the import produced rather than a
+   hand-kept copy that drifts. */
+var OUT = (function () {
+  var i = process.argv.indexOf('--out');
+  return (i >= 0 && process.argv[i + 1] && process.argv[i + 1].slice(0, 2) !== '--') ? process.argv[i + 1] : '';
+})();
 var FORCE = process.argv.indexOf('--force') >= 0;
 var ORG = String(arg('org', '') || '').toLowerCase();
 var FILE = String(arg('file', '') || '');
@@ -252,8 +261,13 @@ if (drawable === 0) {
 /* The stored shape drops the reporting flag. */
 var out = products.map(function (p) { var q = {}; Object.keys(p).forEach(function (k) { if (k !== '_hasIntegrationAnswer') q[k] = p[k]; }); return q; });
 
+if (OUT) {
+  fs.writeFileSync(OUT, JSON.stringify(out, null, 2) + '\n');
+  console.log('\n  wrote ' + out.length + ' product(s) to ' + OUT);
+}
+
 if (!APPLY) {
-  console.log('\n  DRY RUN — nothing written. Re-run with --apply.');
+  console.log('\n  DRY RUN — nothing written to Firestore. Re-run with --apply.');
   console.log('  First product, as it would be stored:');
   console.log('  ' + JSON.stringify(out[0], null, 2).split('\n').join('\n  ') + '\n');
   process.exit(problems.length ? 1 : 0);

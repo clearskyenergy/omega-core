@@ -39,6 +39,12 @@
 var E = require('./_lib/embed');
 var A = require('./_lib/admin');
 var engine = require('./_lib/bess-engine');
+/* The ranking is pure and dependency-free, so it lives on its own and
+   scripts/preview-storefront.js can require it without dragging in
+   firebase-admin. One implementation; a second would drift and the
+   drifted one would be the one people look at. */
+var FIT = require('./_lib/product-fit');
+var fitProducts = FIT.fitProducts;
 
 var MAX_MONTHS = 12;
 
@@ -69,14 +75,6 @@ function readMonths(raw) {
     }
     return { month: (r.month != null ? r.month : i), demandKw: demandKw, kwh: kwh };
   });
-}
-
-/* Products whose nameplate covers the sized system, smallest first, so the
-   customer is offered the one that fits rather than the biggest one we sell. */
-function fitProducts(products, kw, kwh) {
-  return (products || []).filter(function (p) {
-    return p && (p.kw == null || +p.kw >= kw * 0.85) && (p.kwh == null || +p.kwh >= kwh * 0.85);
-  }).sort(function (a, b) { return (+a.kwh || 0) - (+b.kwh || 0); }).slice(0, 4);
 }
 
 module.exports = E.handler(function (req) {
@@ -129,13 +127,18 @@ module.exports = E.handler(function (req) {
         });
 
         var products = (Array.isArray(sf.products) ? sf.products : []);
-        var fits = fitProducts(products, sum.kw, sum.kwh).map(function (p) {
+        var fits = fitProducts(products, sum.kw, sum.kwh).map(function (f) {
+          var p = f.p;
           return {
             sku: String(p.sku || ''), name: String(p.name || p.sku || ''),
             kw: num(p.kw), kwh: num(p.kwh),
             priceMode: p.priceMode === 'list' ? 'list' : 'quote',
             listPrice: p.priceMode === 'list' ? num(p.listPrice) : null,
-            qty: (p.kwh && +p.kwh > 0) ? Math.max(1, Math.ceil(sum.kwh / +p.kwh)) : 1
+            /* The quantity that covers BOTH axes — computed once, in
+               fitProducts, so the number shown and the number ranked on are
+               the same number. */
+            qty: f.qty,
+            totalKw: Math.round(f.totKw), totalKwh: Math.round(f.totKwh)
           };
         });
 

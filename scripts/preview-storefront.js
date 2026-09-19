@@ -49,6 +49,15 @@ var FIT = require(path.join(ROOT, 'api', '_lib', 'site-fit.js'));
 
 var PORT = Number(process.argv[2]) || 8788;
 
+/* --products <file.json>: run the preview on a catalogue the IMPORTER
+   produced (scripts/import-products.js --out), rather than the literals
+   below. That closes the loop — the sheet a manufacturer sent is the thing
+   you are looking at, not a hand-kept copy that drifts away from it. */
+var PRODUCTS_FILE = (function () {
+  var i = process.argv.indexOf('--products');
+  return (i >= 0 && process.argv[i + 1]) ? process.argv[i + 1] : '';
+})();
+
 /* ── The stand-in tenant ────────────────────────────────────────────────
    Shaped exactly like omega_orgs/{orgId}/storefront/config so that what you
    see here is what seeding that document produces. Two products, both with a
@@ -74,6 +83,7 @@ var STOREFRONT = {
   requireAddress: true,
   showEconomics: true,
   siteStudy: true,
+  designerPitch: true,
   requireContactForLayout: true,
   setbackFt: 15, clearanceFt: 5, aisleFt: 20, rowsPerBlock: 2,
   capexPerKwh: 380, capexPerKw: 240,   /* stub cost basis; never returned */
@@ -90,6 +100,16 @@ var STOREFRONT = {
       blurb: '20 ft container, integrated thermal and fire suppression.' }
   ]
 };
+
+if (PRODUCTS_FILE) {
+  try {
+    var loaded = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
+    if (Array.isArray(loaded) && loaded.length) {
+      STOREFRONT.products = loaded;
+      console.log('  catalogue: ' + loaded.length + ' product(s) from ' + PRODUCTS_FILE);
+    }
+  } catch (e) { console.error('  could not read ' + PRODUCTS_FILE + ': ' + e.message); }
+}
 
 /* An irregular industrial parcel — deliberately not a rectangle, because a
    rectangle makes the setback raster and the largest-rectangle search look
@@ -123,6 +143,7 @@ function readBody(req) {
   });
 }
 function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
+function nOrNull(v) { return (v === undefined || v === null || v === '') ? null : num(v); }
 
 /* ── The four endpoints, answering the shapes the page expects ─────────── */
 
@@ -130,7 +151,12 @@ function embedConfig(res) {
   var products = STOREFRONT.products.map(function (p) {
     return {
       sku: p.sku, name: p.name, blurb: p.blurb, imageUrl: '',
-      kw: p.kw, kwh: p.kwh, widthFt: p.widthFt, depthFt: p.depthFt,
+      /* null, not absent — api/embed-config.js builds every key with num(),
+         so a product with no footprint still carries widthFt: null. The
+         preview emitting nothing at all made the two disagree, which is
+         exactly the kind of drift a preview exists to avoid. */
+      kw: nOrNull(p.kw), kwh: nOrNull(p.kwh),
+      widthFt: nOrNull(p.widthFt), depthFt: nOrNull(p.depthFt),
       chemistry: p.chemistry, warrantyYears: p.warrantyYears,
       integrates: {
         pcs: !!(p.integrates && p.integrates.pcs),
@@ -159,7 +185,7 @@ function embedConfig(res) {
       hasCatalog: products.length > 0,
       siteStudy: STOREFRONT.siteStudy && products.some(function (p) { return p.widthFt && p.depthFt; }),
       studyNeedsContact: STOREFRONT.requireContactForLayout !== false,
-      editorHandoff: STOREFRONT.editorHandoff !== false && products.length > 0
+      designerPitch: STOREFRONT.designerPitch !== false
     },
     products: products,
     config: null
@@ -192,15 +218,15 @@ function embedSize(res, b) {
     return { hours: x.hours, nameplateKwh: x.nameplateKwh };
   });
 
-  var fits = STOREFRONT.products.filter(function (p) {
-    return (p.kw == null || p.kw >= sum.kw * 0.85) && (p.kwh == null || p.kwh >= sum.kwh * 0.85);
-  }).sort(function (a, c) { return (a.kwh || 0) - (c.kwh || 0); }).slice(0, 4);
-  if (!fits.length) fits = STOREFRONT.products.slice();
-
-  var products = fits.map(function (p) {
+  /* THE REAL RANKING, not a copy of it. api/embed-size.js exports fitProducts
+     through its _helpers seam; a second implementation here would drift, and
+     the drifted one would be the one people look at and believe. */
+  var fitProducts = require(path.join(ROOT, 'api', '_lib', 'product-fit.js')).fitProducts;
+  var products = fitProducts(STOREFRONT.products, sum.kw, sum.kwh).map(function (f) {
+    var p = f.p;
     return { sku: p.sku, name: p.name, kw: p.kw, kwh: p.kwh,
              priceMode: p.priceMode, listPrice: p.priceMode === 'list' ? p.listPrice : null,
-             qty: p.kwh > 0 ? Math.max(1, Math.ceil(sum.kwh / p.kwh)) : 1 };
+             qty: f.qty, totalKw: Math.round(f.totKw), totalKwh: Math.round(f.totKwh) };
   });
 
   var economics = null;
@@ -305,6 +331,48 @@ var HOST_PAGE = [
   '</div></body></html>'
 ].join('\n');
 
+/* A page that stands the gate up in one state. The gate is the real file;
+   only Firebase is faked, because the whole point is to see what a person in
+   that state actually gets. */
+function gatePage(state) {
+  var user = state === 'signed-out' ? 'null' : "{ email: 'dana@northgatefoods.com' }";
+  var org = 'northgatefoods.com';
+  var docs = {
+    'pending':   "{ 'omega_orgs/" + org + "': { status: 'pending' } }",
+    'suspended': "{ 'omega_orgs/" + org + "': { status: 'suspended' } }",
+    'plan':      "{ 'omega_orgs/" + org + "': { status: 'active' }, 'omega_orgs/" + org + "/billing/current': { tier: 'standard', toolOverrides: { editor: false } } }",
+    'active':    "{ 'omega_orgs/" + org + "': { status: 'active' } }"
+  }[state] || '{}';
+  var S = '<' + 'script>', SE = '<' + '/' + 'script>';
+  return [
+    '<!DOCTYPE html><html><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>Designer</title><style>body{margin:0;background:#101C2B;color:#9fb;',
+    'font:15px system-ui;height:100vh;display:flex;align-items:center;justify-content:center}</style>',
+    '</head><body>',
+    '<div style="opacity:.3">(the designer would be here)</div>',
+    S,
+    'window.CLEARSKY_CONFIG = { tenant: { orgId: "cleancell.us", clientName: "Clean Cell",',
+    '  whiteLabel: { enabled: true, platformName: "Clean Cell Power Platform",',
+    '                shortName: "Clean Cell", accent: "#1F6F4A",',
+    '                supportEmail: "orders@example.com" } } };',
+    'var DOCS = ' + docs + ';',
+    'window.firebase = { apps:[1],',
+    '  auth: function(){ return { currentUser: ' + user + ', onAuthStateChanged: function(cb){ cb(' + user + '); } }; },',
+    '  firestore: function(){ return { collection: function(c){ return { doc: function(d){',
+    '    var key = c + "/" + d;',
+    '    return { get: function(){ return Promise.resolve({ exists: !!DOCS[key], data: function(){ return DOCS[key]; } }); },',
+    '             collection: function(c2){ return { doc: function(d2){ var k2 = key+"/"+c2+"/"+d2;',
+    '               return { get: function(){ return Promise.resolve({ exists: !!DOCS[k2], data: function(){ return DOCS[k2]; } }); } }; } }; } };',
+    '  } }; } }; } };',
+    SE,
+    '<' + 'script src="/omega-brand.js">' + SE,
+    '<' + 'script src="/omega-whitelabel.js">' + SE,
+    '<' + 'script src="/omega-editor-gate.js">' + SE,
+    '</body></html>'
+  ].join('\n');
+}
+
 var server = http.createServer(function (req, res) {
   var u = url.parse(req.url, true);
   var p = u.pathname;
@@ -320,6 +388,18 @@ var server = http.createServer(function (req, res) {
   }
   if (p === '/embed/loader.js') {
     return send(res, 200, fs.readFileSync(path.join(ROOT, 'embed', 'loader.js')), TYPES['.js']);
+  }
+
+  /* ── The editor gate, in each state ──────────────────────────────────
+     Serves the REAL omega-editor-gate.js against a stubbed Firebase so the
+     refusal screens can be looked at. /gate/signed-out, /gate/pending,
+     /gate/suspended, /gate/plan, /gate/active. */
+  if (p.indexOf('/gate') === 0) {
+    var state = p.split('/')[2] || 'signed-out';
+    return send(res, 200, gatePage(state), TYPES['.html']);
+  }
+  if (p === '/omega-editor-gate.js' || p === '/omega-whitelabel.js' || p === '/omega-brand.js') {
+    return send(res, 200, fs.readFileSync(path.join(ROOT, p.slice(1))), TYPES['.js']);
   }
 
   if (p === '/api/embed-config') return embedConfig(res);
@@ -343,6 +423,8 @@ server.listen(PORT, '127.0.0.1', function () {
   console.log('  ──────────────────');
   console.log('  On a host page (what cleancell.us would look like):');
   console.log('      http://localhost:' + PORT + '/');
+  console.log('  The editor gate, per account state:');
+  console.log('      http://localhost:' + PORT + '/gate/signed-out   (also /pending /suspended /plan /active)');
   console.log('  The storefront on its own:');
   console.log('      http://localhost:' + PORT + '/embed/storefront?k=preview');
   console.log('\n  Real: the page, the sizing engine, the site-fit geometry.');

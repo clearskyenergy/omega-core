@@ -147,7 +147,7 @@ var HEAD = 'sku,name,kw,kwh,widthFt,depthFt,dimUnits,integratesPcs,integratesXfm
 /* ── 5 · It does not write unless told to ──────────────────────────────── */
 (function dryRun() {
   var r = run(HEAD + 'C,Cabinet,100,215,8,4,ft,yes,no,yes,quote,\n');
-  ok('the default is a dry run', /DRY RUN — nothing written/.test(r.out));
+  ok('the default is a dry run', /DRY RUN — nothing written to Firestore/.test(r.out));
   ok('and it exits clean when every row is good', r.code === 0, r.code);
 
   r = run(HEAD + ',No sku,100,215,8,4,ft,yes,no,yes,quote,\n');
