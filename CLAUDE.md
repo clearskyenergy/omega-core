@@ -271,7 +271,29 @@ user). Do not add a second copy of that list — see what three copies of
   currently boots anywhere. The lock is a real control and a SEPARATE,
   separately-tested change. hydrate() adds branding and removes nothing.
 
-Design, runbook and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
+- `?wlpreview=<orgId>` paints a signed-in page as one tenant, for staff only.
+  It exists because `orgId` IS the email domain, so nobody here has an account
+  that resolves to a customer's workspace and a white label was otherwise
+  unviewable by the people who sold it. **It changes the paint and never the
+  scope** — `hydrate()` pins `CLEARSKY_CONFIG.tenant.orgId` to the signed-in
+  org and copies only presentation keys off the previewed record. The gate is
+  Firestore (`isAdmin()` on `omega_orgs/{other}`), not the JavaScript. Not
+  sticky: URL only, with a banner. `scripts/test-wl-preview.js` mutation-tests
+  the one line that would turn it into impersonation.
+- `whitelabel-setup.html` is the staff last mile: it turns `tenants/<slug>/`
+  into a live storefront from the browser, using only writes the rules already
+  grant an `@csebuilders.com` token. It does NOT write `tenant_public` — that
+  needs the one allowlist in `api/_lib/whitelabel.js` and stays with
+  `scripts/seed-omega-orgs.js`, which remains canonical for a bulk seed and
+  for rotating, re-scoping or disabling an embed key.
+- One product list, one mapping. `scripts/import-products.js` converts a
+  manufacturer's CSV and is the ONLY place the column names, the unit
+  conversion (datasheets print mm) and the footprint sanity check live. Its
+  `--out` artifact, `tenants/<slug>/products.json`, is what the setup page and
+  the local preview read — so no second parser exists in a browser.
+
+Design and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
+Demo runbook for the Clean Cell account: `docs/DEMO-CLEANCELL.md`.
 
 ## Silmarillion 2.0 — joint development
 

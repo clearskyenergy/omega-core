@@ -17,12 +17,25 @@
      node scripts/seed-embed-key.js --org cleancell.us --list
      node scripts/seed-embed-key.js --key omega_pk_live_… --disable --apply
 
-   ── WHY A SCRIPT AND NOT A CONSOLE BUTTON ────────────────────────────────
+   ── WHY A SCRIPT AND NOT A SELF-SERVE BUTTON ─────────────────────────────
    Because it is not self-serve and should not look like it. A key is the
    moment a tenant's own website starts taking orders we have to fulfil — it
    follows a signed arrangement, and the person minting it should be the
    person who read the arrangement. The master console gets an Enable/Disable
-   toggle (which is safe, reversible and needed at 2am); MINTING stays here.
+   toggle (which is safe, reversible and needed at 2am); a TENANT never mints.
+
+   AMENDED 2026-09-19 — there is a second sanctioned path: whitelabel-setup.html
+   mints a key for a staff user standing a white label up from the browser.
+   That is not a walk-back of the paragraph above, because the invariant it
+   protects is WHO, not WHERE: that page is isAdmin() in firestore.rules (an
+   @clearsky-usa.com or @csebuilders.com token), it records mintedBy and
+   mintedVia on the document, and it reuses an existing active key rather than
+   minting a second for the same installation. What it buys is the last mile —
+   turning a signed contract into a working storefront without first finding a
+   service-account key, which is how a sold feature sits unlaunched for a week.
+
+   This script stays canonical for everything that page does NOT do: rotating
+   a key, tightening origins on a live one, disabling one, and listing them.
 
    ── THE KEY IS PUBLISHABLE, NOT SECRET ───────────────────────────────────
    It ships in the page source of a public website, exactly like a Stripe

@@ -155,12 +155,37 @@
 
   var _cache = null;
 
+  /* ── WHOSE CATALOGUE ─────────────────────────────────────────────────────
+     Normally the signed-in org's. Under omega-whitelabel.js's staff preview
+     (?wlpreview=cleancell.us) it is the previewed org's, because a white-label
+     preview that paints the chrome and then offers the WRONG manufacturer's
+     batteries in the guided build has demonstrated nothing — specifying a
+     competitor on a manufacturer's own platform is the exact bug this file
+     was written to fix.
+
+     Paint, not scope, same as hydrate(): this value is used for the two
+     catalogue reads and for the brand string on the drawing, and for nothing
+     else. Projects, layouts and toolData key off CLEARSKY_CONFIG.tenant.orgId,
+     which the preview never moves. The read itself is gated by the rules —
+     omega_orgs/{other}/storefront is staff-only — so a tenant who tries the
+     parameter gets an empty catalogue, not somebody else's. */
+  function catalogOrg() {
+    try {
+      var WL = global.OmegaWhiteLabel;
+      if (WL && typeof WL.previewOrg === 'function') {
+        var pv = WL.previewOrg();
+        if (pv) return String(pv).toLowerCase();
+      }
+    } catch (e) {}
+    return orgId();
+  }
+
   /* Resolves { orgId, brand, entries:{key:entry}, keys:[], count }.
      NEVER rejects — a tenant with no list, no Firestore or no signed-in user
      gets an empty result and the shipped catalogue is untouched. */
   function load() {
     if (_cache) return Promise.resolve(_cache);
-    var org = orgId();
+    var org = catalogOrg();
     var empty = { orgId: org, brand: '', entries: {}, keys: [], count: 0 };
     if (!org) return Promise.resolve(empty);
 
@@ -216,7 +241,7 @@
   }
 
   global.OmegaBessProducts = {
-    orgId: orgId, orgOf: orgOf, load: load, mergeInto: mergeInto,
+    orgId: orgId, orgOf: orgOf, catalogOrg: catalogOrg, load: load, mergeInto: mergeInto,
     toCatalogEntry: toCatalogEntry,
     _reset: function () { _cache = null; }   /* tests */
   };

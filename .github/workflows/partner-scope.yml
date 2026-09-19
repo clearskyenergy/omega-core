@@ -56,9 +56,21 @@ jobs:
 
       # The head commit is fetched as DATA to be diffed, never checked out and
       # never executed.
+      #
+      # NO --depth FLAG, and that is the fix rather than an omission. This step
+      # carried `--depth=0`, meaning "not shallow" — but git only accepts a
+      # POSITIVE depth and answers `fatal: depth 0 is not a positive number`,
+      # so the job died here on every pull request from the moment it was
+      # added. The checkout above already used fetch-depth: 0, so the clone is
+      # not shallow and a plain fetch is what "full depth" actually spells.
+      #
+      # It failed silently in the sense that matters: a red X on a check whose
+      # own header says it is only a gate once it is REQUIRED reads as "the
+      # partner gate is doing its job", and a check that can never pass is
+      # indistinguishable from one nobody has satisfied yet.
       - name: fetch the pull request's head commit
         run: |
-          git fetch --no-tags --depth=0 origin \
+          git fetch --no-tags origin \
             "+${{ github.event.pull_request.head.sha }}:refs/remotes/pr/head"
 
       - uses: actions/setup-node@v4

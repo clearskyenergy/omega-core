@@ -61,6 +61,41 @@ live. Second person from the same domain auto-joins as member.
 - `firestore.rules` / `storage.rules` with the control-plane blocks applied and `tenant_public` added.
 - `vercel.json` hostname rewrites (alpha → console, tools → admin, osa/solela → tenant shells).
 
+**Demoing and standing up a white label (2026-09-19).** Two gaps that were not
+code problems but made the feature unusable by the people who sell it.
+
+*Nobody could look at it.* `orgId` IS the email domain, so no ClearSky account
+resolves to `cleancell.us` and a white label was invisible to its own vendor.
+`?wlpreview=<orgId>` paints a signed-in page as one tenant, staff only. The
+whole design is one distinction — **paint, never scope**:
+`OmegaWhiteLabel.hydrate()` copies presentation keys off the previewed record
+and pins `CLEARSKY_CONFIG.tenant.orgId` to the signed-in org.
+`omega-bess-products.js` gained `catalogOrg()` for the same reason, kept
+separate from `orgId()` so the split is legible in the code rather than in a
+comment. `scripts/test-wl-preview.js` (71 assertions) mutation-tests the one
+line — `{ orgId: mine || org }` — that would turn a branding feature into an
+impersonation feature on `editor.html`, the page where `tenant.orgId` is born.
+
+*Standing one up needed a service-account key.* `whitelabel-setup.html` writes
+the four control-plane documents from a staff browser, using writes the rules
+already grant an `@csebuilders.com` token. It refuses a cost basis, never
+touches `tenant_public` (the one allowlist lives in `api/_lib/whitelabel.js`
+and a browser cannot `require()` it), and reuses an existing active embed key
+rather than minting a second. `scripts/seed-omega-orgs.js` stays canonical for
+a bulk seed and for `tenant_public`; `scripts/seed-embed-key.js` stays
+canonical for rotating, re-scoping and disabling keys, and its header now
+records the second minting path rather than silently contradicting it.
+
+*One mapping, three surfaces.* `tenants/<slug>/products.json` is the importer's
+`--out` artifact, committed, and read by both the setup page and
+`npm run demo`. No CSV parser exists in a browser. The committed Clean Cell
+ladder is four PLACEHOLDER capacity slots — every row says so in `notes`, the
+setup page warns on any row that does, and `test-wl-preview.js` asserts they
+declare themselves, because a footprint drawn to scale on somebody's own lot is
+the most convincing kind of wrong.
+
+Runbook: `docs/DEMO-CLEANCELL.md`.
+
 **White-label storefronts (2026-09-18, for Clean Cell USA).** Three surfaces:
 the signed-in workspace renamed (`omega-whitelabel.js` + a `whiteLabel` block
 on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to

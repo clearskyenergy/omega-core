@@ -663,9 +663,78 @@ built.
 
 ---
 
+## 5 · Looking at what you sold
+
+A white label is the one feature its owner cannot see. `orgId` IS the email
+domain, so the only accounts that resolve to `cleancell.us` are Clean Cell's,
+and ClearSky has no mailbox there. Before this, demonstrating, reviewing or
+supporting a white label meant signing in as the customer or editing their
+data — and CLAUDE.md already forbids the second.
+
+**`?wlpreview=<orgId>`** on any signed-in page paints it as that tenant:
+platform name, logo, accent, and their own batteries leading the guided build.
+
+It **changes the paint and never the scope**, and that is enforced rather than
+promised. `OmegaWhiteLabel.hydrate()` reads the previewed org's record for
+presentation keys only and pins `CLEARSKY_CONFIG.tenant.orgId` to the
+signed-in org. That line matters most on `editor.html`, which has no
+`omega-tenant.js` and so is where `tenant.orgId` is *born*: written the obvious
+way, the preview would silently move every project read, layout write and
+`toolData` key into the customer's workspace. Nothing would throw. The page
+would look right. `scripts/test-wl-preview.js` mutation-tests exactly that
+line, on both the born-here and already-resolved cases.
+
+The gate is Firestore, not the browser: preview works by reading
+`omega_orgs/{other org}`, which is `isAdmin()`. A tenant who finds the
+parameter gets a permission error and no preview. The `adminDomains()` check in
+`omega-whitelabel.js` decides whether the *banner* and the messaging are right
+for the person reading them; it is not the control.
+
+It is deliberately **not sticky** — URL only, no sessionStorage, no cookie —
+and a brown bar across the bottom names the previewed org, names the org that
+still owns the data, and says how to leave. Nobody can be left in a preview
+they have forgotten they are in.
+
+### The setup page
+
+`whitelabel-setup.html?org=<orgId>` is the last mile: it turns
+`tenants/<slug>/tenant.json` plus `tenants/<slug>/products.json` into a live
+storefront, from a ClearSky staff browser, with no service-account key.
+
+Every write it makes is one the rules **already** grant an `@csebuilders.com`
+token — `omega_orgs/{org}`, `billing/current`, `storefront/config`,
+`embed_keys/{key}`. It adds no privilege; it spends privilege that exists, from
+a surface where the rules can see who is spending it. It shows a field-by-field
+diff before writing, merges rather than clobbers, reuses an existing active
+embed key rather than minting a second, and refuses outright if the tenant file
+carries a cost basis.
+
+What it does **not** write, on purpose:
+
+- `tenant_public/{hostname}` — the world-readable pre-sign-in mirror. That
+  write needs the one allowlist in `api/_lib/whitelabel.js`, a browser page
+  cannot `require()` it, and a hand-kept second copy would have the open
+  internet as its blast radius. Stays with `scripts/seed-omega-orgs.js`.
+- `amountDue`, `paymentLink`, `stripeCustomerId`, `lastPaidAt`. The page
+  configures a product; it does not price an account.
+- `capexPerKwh` / `capexPerKw`, ever.
+
+`scripts/seed-embed-key.js` remains canonical for rotating a key, tightening
+origins on a live one, disabling one and listing them; its header records why
+browser minting is a second sanctioned path rather than a walk-back.
+
+The operator runbook for a demo is `docs/DEMO-CLEANCELL.md`.
+
+---
+
 ## Runbook — standing up Clean Cell
 
 Nothing below is done by committing this branch. Each step is a decision.
+
+Short version, no credential required: merge → publish `firestore.rules` from
+the Firebase console → open `whitelabel-setup.html?org=cleancell.us` signed in
+as staff → press Publish. Steps 4 (cost basis) and 6 (env) below still need
+doing by hand. `docs/DEMO-CLEANCELL.md` walks it.
 
 ### Their product list
 
