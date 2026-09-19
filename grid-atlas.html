@@ -223,6 +223,10 @@
   <div id="presets">
     <div class="preset-lbl">Quick views</div>
     <div id="presetChips"></div>
+    <div style="font-size:11px;line-height:1.6;margin-top:8px">
+      <a href="/usa-fiber-map.html?state=TX" style="color:var(--teal)">Fiber routes by state ↗</a><br>
+      <a href="/fiber-research.html" style="color:var(--muted)">Sources and coverage gaps ↗</a>
+    </div>
   </div>
   <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
   <div id="layers"></div>
@@ -684,17 +688,17 @@ var LAYERS = {
     label:function(a){return a.name||"Telecom facility";},
     meta:function(a){return (a.operator||"operator unknown")+" · facility, not a route · OSM";}
   },
-  /* ── PUBLISHED ROUTE INVENTORY — 26,371 features, national ────────────
+  /* ── PUBLISHED ROUTE INVENTORY — 30,467 source-derived records ────────
      The simplified national overview of the same inventory /api/fiber-screen
      and /api/network-proximity measure against, so what you see and what the
-     services answer come from one dataset. 10.7 MB, so it is off by default
+     services answer come from one dataset. About 26 MB, so it is off by default
      like everything else here.
 
      STATUS IS THE STYLING, because it is the finding. A planned route and a
      built one are different claims and must never draw alike: planned is
      dashed and amber, inactive is dotted and grey, and a route whose
      publisher never stated a status is drawn thinner rather than promoted to
-     "existing". 16,530 of these are that last case — the largest bucket by
+     "existing". Status-unstated records are the largest bucket by
      far — and letting them read as confirmed plant would be the single most
      misleading thing this layer could do. */
   pf_inventory: {
@@ -705,6 +709,7 @@ var LAYERS = {
       var st=a.routeStatus&&a.routeStatus!=='Unknown'?a.routeStatus:'status not stated by the publisher';
       return (a.carrier||'operator not published')+" · "+st+
              (a.states&&a.states.length?" · "+a.states.join(", "):"")+
+             (a.publishedLineParts?" · "+a.publishedLineParts+" published line parts":"")+
              " · capacity unknown";
     },
     styleFor:function(a){

@@ -1,5 +1,23 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## 2026-09-19 — additive nationwide fiber research expansion
+
+Merged the September 18 research snapshot into current main without replacing
+the newer atlas, scoring safeguards, source-health UI, or API architecture.
+All 26,371 baseline source records are unchanged. Added 4,096 source-derived
+records from FNA, LOGIX, Norwalk and Atlanta: now 30,467 records / 218,237
+line parts across 39 states plus DC, still partial coverage. The 51-area
+research register and linked state maps prioritize TX, GA, IL, CT, OH, FL,
+SC and CA and explicitly expose gaps, sources and unknown serviceability.
+
+The existing national layer and both shared API consumers read the expanded
+inventory. Same-ID cross-border shard duplicates are removed in the shared
+library; different source records remain distinct. No scoring, tenant data,
+authentication, billing, database rules or unrelated tools were replaced.
+Tests exercise new geometry through the production library and validate all
+shards, provenance, line-part totals and state navigation. See
+`docs/FIBER-NATIONWIDE-RESEARCH.md` for source terms and reproducible imports.
+
 Measured on 2026-09-06 against the sixteen repository snapshots. Every
 "canonical" pick below is the SUPERSET build unless stated; nothing was
 hand-merged inside a multi-megabyte file. Items under **TODO** are the

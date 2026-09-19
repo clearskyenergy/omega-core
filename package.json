@@ -26,7 +26,7 @@
     "test": "node scripts/test-caps.js && node scripts/test-bess-sizer.js && node scripts/test-site-intel.js && node scripts/test-network-proximity.js && node scripts/test-compute-lease.js && node scripts/test-auth-gate.js && node scripts/test-publish-tools.js && node scripts/check-html-scripts.js && npm run test:fiber",
     "test:optimizer": "node scripts/test-bess-sizer.js && node scripts/test-model-sizing-fiber.js && node scripts/test-native-model.js && node scripts/test-sizing-api.js && node scripts/test-sizer-render-contract.js && node scripts/check-html-scripts.js editor.html battery-sizer.html grid-atlas.html",
     "test:computelease": "node scripts/test-compute-lease.js",
-    "test:fiber": "node scripts/test-fiber-integration.js && node scripts/test-grid-atlas-scoring.js && node --test tests/fiber.test.js tests/fiber-api.test.js && python3 tests/test_importers.py",
+    "test:fiber": "node scripts/test-fiber-integration.js && node scripts/test-fiber-expansion.js && node scripts/test-grid-atlas-scoring.js && node --test tests/fiber.test.js tests/fiber-api.test.js && python3 tests/test_importers.py",
     "tools:dry": "node scripts/publish-tools.js",
     "tools:apply": "node scripts/publish-tools.js --apply",
     "test:publish": "node scripts/test-publish-tools.js"

@@ -460,7 +460,7 @@ function usaAdapt(f) {
 function usaCandidates(box) {
   var m;
   try { m = usaLoadManifest(); } catch (e) { return []; }
-  var out = [];
+  var out = [], seen = Object.create(null);
   (m.states || []).forEach(function (s) {
     if (!s.segments || !s.bbox || !bboxHit(s.bbox, box)) return;
     var feats;
@@ -468,6 +468,11 @@ function usaCandidates(box) {
     for (var i = 0; i < feats.length; i++) {
       var f = feats[i];
       if (f.bbox && !bboxHit(f.bbox, box)) continue;
+      // A cross-border source record appears in multiple state shards.
+      // Deduplicate its stable ID, never different publishers' geometry.
+      var id = f.properties && f.properties.id;
+      if (id && seen[id]) continue;
+      if (id) seen[id] = true;
       out.push(usaAdapt(f));
     }
   });
