@@ -373,14 +373,178 @@ function gatePage(state) {
   ].join('\n');
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   PART 2 — THE DESIGN DESK THEY RESELL
+   ──────────────────────────────────────────────────────────────────────
+   Thomas: "white label the platform and ONLY use the site map editor and
+   grid atlas to sell them a design tool that could be white labeled for
+   cleancell and hosted on their site."
+
+   So this is not a mock-up of two tiles. It loads the REAL omega-tools.js
+   catalogue and the REAL OMEGATools.isUnlocked(), hands it the workspace a
+   Clean Cell design customer actually gets —
+
+       { tierLevel: 2, toolAccess: ['editor','gridatlas'] }
+
+   — and renders whatever comes back. If somebody later adds a tool that
+   slips the allowlist, this page shows it, which a hardcoded pair never
+   would. The allowlist is billing/current.toolAccess; see docs/WHITE-LABEL.md
+   §4b.
+
+   The SIDE-BY-SIDE is the sales point. Same catalogue, same function, two
+   workspaces: what Clean Cell's customer buys, and what the full account
+   would open up. That second column is the upsell, on screen, honestly
+   computed rather than asserted.
+
+   REAL here: the tool catalogue, the entitlement filter, the brand block.
+   STUB here: sign-in. Clicking a tool goes nowhere — this is the shape of
+   the product, not a signed-in session. Said on the page so nobody
+   demonstrating it has to remember to say it. */
+var DESIGN_PRODUCT = ['editor', 'gridatlas'];
+
+function deskPage() {
+  var TOOLS = require(path.join(ROOT, 'omega-tools.js'));
+  var cat = TOOLS.catalog();
+
+  var bought = { tierLevel: 2, addons: ['whitelabel'], toolAccess: DESIGN_PRODUCT };
+  var full   = { tierLevel: 3, addons: ['compute', 'parcelscreen', 'engineering',
+                                        'schematics', 'exports', 'permitting', 'whitelabel'] };
+
+  function pick(ws) {
+    return cat.filter(function (t) { return TOOLS.isUnlocked(t, ws); });
+  }
+  var mine = pick(bought), theirs = pick(full);
+
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function tile(t, on) {
+    return '<div class="tile' + (on ? '' : ' off') + '">'
+      + '<div class="tname">' + esc(t.name) + '</div>'
+      + '<div class="tdesc">' + esc(t.desc || '') + '</div>'
+      + '<div class="tkey">' + esc(t.key) + '</div>'
+      + '</div>';
+  }
+
+  var A = TENANT.accent || '#1F6F4A';
+  return [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>' + esc(TENANT.platformName) + ' — Design Desk</title>',
+    '<style>',
+    ':root{--a:' + A + ';--ink:#0d1b2a;--mute:#5b6b7c;--line:#dde3ea;--bg:#f4f6f9}',
+    '*{box-sizing:border-box}',
+    'body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}',
+    'header{background:var(--a);color:#fff;padding:22px 24px}',
+    'header h1{margin:0;font-size:20px;font-weight:650;letter-spacing:.01em}',
+    'header p{margin:6px 0 0;opacity:.9;font-size:14px}',
+    'main{max-width:1060px;margin:0 auto;padding:26px 18px 70px}',
+    '.note{background:#fdf4e3;border:1px solid #f0dcb0;color:#7a4a00;border-radius:9px;padding:12px 14px;font-size:13px;margin:0 0 22px}',
+    '.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}',
+    '@media(max-width:820px){.cols{grid-template-columns:1fr}}',
+    'section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px}',
+    'section h2{margin:0 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}',
+    'section .cnt{font-size:26px;font-weight:700;margin:0 0 14px}',
+    '.tile{border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:0 0 9px;background:#fff}',
+    '.tile.off{opacity:.42;background:#f8fafc}',
+    '.tname{font-weight:650;font-size:14px}',
+    '.tdesc{font-size:12.5px;color:var(--mute);margin-top:2px}',
+    '.tkey{font:11px ui-monospace,Menlo,monospace;color:#94a3b8;margin-top:5px}',
+    '.scroll{max-height:430px;overflow:auto;padding-right:4px}',
+    'footer{max-width:1060px;margin:0 auto;padding:0 18px 40px;color:var(--mute);font-size:13px}',
+    '</style></head><body>',
+    '<header><h1>' + esc(TENANT.platformName) + '</h1>',
+    '<p>Design desk — ' + esc(TENANT.name) + '’s own engineering tools, on '
+      + esc(TENANT.name) + '’s own site.</p></header>',
+    '<main>',
+    '<div class="note"><b>This is the product shape, not a signed-in session.</b> '
+      + 'The tool list below is produced by the real catalogue and the real entitlement '
+      + 'filter (<code>OMEGATools.isUnlocked</code>) against '
+      + '<code>toolAccess: [‘editor’,‘gridatlas’]</code> — so it is what a '
+      + 'Clean Cell design customer would actually see. Sign-in is stubbed here; the tiles '
+      + 'do not open.</div>',
+    '<div class="cols">',
+    '<section><h2>What a Clean Cell customer buys</h2>',
+    '<p class="cnt">' + mine.length + ' tool' + (mine.length === 1 ? '' : 's') + '</p>',
+    mine.map(function (t) { return tile(t, true); }).join(''),
+    '</section>',
+    '<section><h2>What the full account opens up</h2>',
+    '<p class="cnt">' + theirs.length + ' tools</p>',
+    '<div class="scroll">',
+    theirs.map(function (t) { return tile(t, DESIGN_PRODUCT.indexOf(t.key) >= 0); }).join(''),
+    '</div></section>',
+    '</div></main>',
+    '<footer>Left column is the allowlist: <code>billing/current.toolAccess</code>, which wins '
+      + 'over the tier, the addons and every override. Right column is the same catalogue with no '
+      + 'allowlist — the second sale. Both computed by the same function.</footer>',
+    '</body></html>'
+  ].join('\n');
+}
+
+/* The demo, in the order the sale happens. One page to open in front of
+   somebody, four links to click left to right. */
+function demoIndex() {
+  var A = TENANT.accent || '#1F6F4A';
+  function row(n, title, body, href, label) {
+    return '<li><div class="n">' + n + '</div><div><h3>' + title + '</h3><p>' + body + '</p>'
+      + '<a href="' + href + '">' + label + ' →</a></div></li>';
+  }
+  return [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width,initial-scale=1">',
+    '<title>Clean Cell × OMEGA — demo</title>',
+    '<style>',
+    ':root{--a:' + A + ';--ink:#0d1b2a;--mute:#5b6b7c;--line:#dde3ea}',
+    'body{margin:0;background:#f4f6f9;color:var(--ink);font:15px/1.6 system-ui,-apple-system,sans-serif}',
+    'header{background:var(--a);color:#fff;padding:26px 24px}',
+    'header h1{margin:0;font-size:21px}header p{margin:6px 0 0;opacity:.9;font-size:14px}',
+    'main{max-width:780px;margin:0 auto;padding:26px 18px 70px}',
+    'ol{list-style:none;margin:0;padding:0}',
+    'li{display:flex;gap:16px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 12px}',
+    '.n{flex:0 0 32px;height:32px;border-radius:50%;background:var(--a);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}',
+    'h3{margin:2px 0 4px;font-size:16px}p{margin:0 0 8px;color:var(--mute);font-size:14px}',
+    'a{color:var(--a);font-weight:650;text-decoration:none}a:hover{text-decoration:underline}',
+    '.real{background:#e8f6ee;border:1px solid #bfe4ce;color:#0f7b4f;border-radius:9px;padding:12px 14px;font-size:13px;margin:0 0 20px}',
+    '</style></head><body>',
+    '<header><h1>Clean Cell × ClearSky OMEGA</h1>',
+    '<p>The demo, in the order the sale happens.</p></header><main>',
+    '<div class="real"><b>Real:</b> the storefront page and loader that ship, the sizing engine, '
+      + 'the site-fit geometry, the tool catalogue and the entitlement filter. '
+      + '<b>Stubbed:</b> Firestore, the parcel lookup (a fixed ring stands in for Regrid), '
+      + 'sign-in, and every gate. Localhost only.</div>',
+    '<ol>',
+    row(1, 'Part 1 &middot; On their website',
+        'What a visitor to cleancell.us sees — the storefront embedded in their page. '
+        + 'Size a system from a utility bill, see it drawn on their own lot, place the order. No account.',
+        '/host', 'Open the host page'),
+    row(2, 'Part 1 &middot; The storefront alone',
+        'The same page without the frame, for looking at it closely.',
+        '/embed/storefront?k=preview', 'Open the storefront'),
+    row(3, 'Part 2 &middot; The design desk they resell',
+        'Site Map + Grid Atlas, Clean Cell-branded — and the full catalogue beside it, '
+        + 'so you can show what the next sale unlocks.',
+        '/desk', 'Open the design desk'),
+    row(4, 'The door',
+        'What somebody without an account is told when they reach the designer. '
+        + 'The refusal is the pitch. Also /gate/pending, /suspended, /plan, /active.',
+        '/gate/signed-out', 'Open the gate'),
+    '</ol></main></body></html>'
+  ].join('\n');
+}
+
 var server = http.createServer(function (req, res) {
   var u = url.parse(req.url, true);
   var p = u.pathname;
 
   if (req.method === 'OPTIONS') return send(res, 204, '');
 
-  /* The host page — what a visitor to cleancell.us would see. */
-  if (p === '/' || p === '/index.html') return send(res, 200, HOST_PAGE, TYPES['.html']);
+  /* The demo walkthrough is the front door now — four links in the order
+     the sale happens. The host page moved to /host so the old link still
+     works for anyone who bookmarked it. */
+  if (p === '/' || p === '/index.html') return send(res, 200, demoIndex(), TYPES['.html']);
+  if (p === '/host' || p === '/host.html') return send(res, 200, HOST_PAGE, TYPES['.html']);
+  if (p === '/desk' || p === '/desk.html') return send(res, 200, deskPage(), TYPES['.html']);
 
   /* The storefront on its own, for looking at it without the frame. */
   if (p === '/embed/storefront' || p === '/embed/storefront.html') {
@@ -419,14 +583,16 @@ var server = http.createServer(function (req, res) {
 
 /* 127.0.0.1 ONLY. This server checks no key, no origin and no receipt. */
 server.listen(PORT, '127.0.0.1', function () {
-  console.log('\n  Storefront preview');
-  console.log('  ──────────────────');
-  console.log('  On a host page (what cleancell.us would look like):');
+  console.log('\n  Clean Cell \u00d7 OMEGA demo');
+  console.log('  ────────────────────────');
+  console.log('  START HERE — the walkthrough, in sale order:');
   console.log('      http://localhost:' + PORT + '/');
-  console.log('  The editor gate, per account state:');
-  console.log('      http://localhost:' + PORT + '/gate/signed-out   (also /pending /suspended /plan /active)');
-  console.log('  The storefront on its own:');
-  console.log('      http://localhost:' + PORT + '/embed/storefront?k=preview');
+  console.log('');
+  console.log('  Part 1  their website, storefront embedded   /host');
+  console.log('  Part 1  the storefront alone                 /embed/storefront?k=preview');
+  console.log('  Part 2  the two-tool design desk             /desk');
+  console.log('  The door, per account state                  /gate/signed-out');
+  console.log('          (also /pending /suspended /plan /active)');
   console.log('\n  Real: the page, the sizing engine, the site-fit geometry.');
   console.log('  Stub: Firestore, the parcel lookup, and every gate.');
   console.log('  Localhost only — it authorises nothing.\n');

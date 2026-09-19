@@ -30,17 +30,35 @@ thing to say out loud in the meeting: *nobody wanders into the platform.*
 
 ---
 
-## A · The five-minute demo, nothing deployed
+## A · The demo, nothing deployed  ← **use this one next week**
 
-Works offline. No Firebase, no Vercel, no credential, no sign-in.
+Works offline. No Firebase, no Vercel, no credential, no merge, no DNS.
 
 ```
 npm run demo
 ```
 
-Then open **http://localhost:8788/**. It serves a mock cleancell.us page with
-the storefront in an iframe, exactly the way their web developer would embed
-it.
+Then open **http://localhost:8788/**. That is a walkthrough page with four
+links in the order the sale happens — click them left to right in front of
+somebody:
+
+| | Route | What it shows |
+|---|---|---|
+| 1 | `/host` | **Part 1 on their website.** A mock cleancell.us with the storefront embedded, exactly the way their web developer would mount it. Size from a bill, see it on their own lot, place the order. |
+| 2 | `/embed/storefront?k=preview` | The same storefront without the frame, for looking closely. |
+| 3 | `/desk` | **Part 2 — the design desk they resell.** Site Map + Grid Atlas, Clean Cell-branded, beside the full 41-tool catalogue so you can show the next sale. |
+| 4 | `/gate/signed-out` | The door. What somebody without an account is told. Also `/pending`, `/suspended`, `/plan`, `/active`. |
+
+**`/desk` is not a mock-up**, and that is worth saying out loud in the room.
+It loads the real `omega-tools.js` catalogue and runs the real
+`OMEGATools.isUnlocked()` against the workspace a Clean Cell design customer
+actually gets — `toolAccess: ['editor','gridatlas']`. Two tools on the left,
+41 on the right, same catalogue and same function. If a tool ever slipped the
+allowlist, that page would show it.
+
+What it does **not** do is sign anybody in. The tiles do not open, and the page
+says so on screen so you do not have to remember to. The signed-in version
+needs Part B.
 
 What is **real**: the storefront page and loader that actually ship, the sizing
 engine (`api/_lib/bess-engine.js`), and the site-fit geometry
