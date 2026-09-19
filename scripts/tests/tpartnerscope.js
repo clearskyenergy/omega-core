@@ -91,5 +91,15 @@ ok(/ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/.test(wf),
 ok(!/^\s*on:\s*\n\s*pull_request:/m.test(wf),
    'and is not also on plain pull_request, which would reinstate the hole');
 
+/* `--depth=0` is not "no limit", it is `fatal: depth 0 is not a positive
+   number` — which kills the job before the checker runs, so the PR shows a
+   red X that means "CI broke" rather than "this diff is out of scope". A
+   gate that fails as an error is indistinguishable from a gate that failed
+   you, and the first person to see it will assume the check is junk. */
+const wfCode = wf.split('\n').filter(function (l) { return !/^\s*#/.test(l); }).join('\n');
+ok(!/--depth=0/.test(wfCode), 'no --depth=0 in the workflow\u2019s executable lines');
+ok(/fetch-depth:\s*0/.test(wf),
+   'the checkout still takes full history, which is what the diff needs');
+
 if (fails) { console.log('tpartnerscope: ' + fails + ' failed'); process.exit(1); }
 console.log('tpartnerscope: all passed');

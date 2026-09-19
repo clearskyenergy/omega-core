@@ -974,7 +974,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
         <div class="card-h"><h2>Adoptable records</h2>
           <div class="chips" id="inbox-chips" style="margin-left:auto"></div>
           <button class="btn-x" onclick="loadInbox(true)">Rescan</button>
-          <button class="btn-x" onclick="openImport()">Import a spreadsheet</button></div>
+          <button class="btn-x" id="btn-import" onclick="openImport()">Import a spreadsheet</button></div>
         <div class="card-b" style="padding-bottom:12px">
           <div class="fbar">
             <input id="inbox-q" class="fbar-i" placeholder="Search site name or address…"
@@ -1293,6 +1293,16 @@ function showApp(){
   /* Adoption is still write_deal. Seeing your own filings is not, which is
      what lets a member firm watch its own pipeline without waiting on us. */
   if (!canSeeInbox()) hideNav('inbox');
+  /* …but importing IS a deal write. Opening the inbox to see_own roles made
+     this button visible to people the rules refuse: runImport() calls
+     Portfolio.create(), and canWritePortalDeals() is isPortalAdmin() or
+     isPortalLimitedAdmin(). A partner_admin could map a whole spreadsheet and
+     have every row rejected at the last step, which is the worst possible
+     moment to find out. */
+  if (!A.can('write_deal')) {
+    var bi = document.getElementById('btn-import');
+    if (bi) bi.style.display = 'none';
+  }
   if (!A.can('approve_any') && !A.can('approve_scoped') && !A.can('approve_own_org'))
     hideNav('users');
   if (!A.can('approve_any')) hideNav('orgs');
@@ -4201,6 +4211,10 @@ function doImportReferrals(){
 }
 
 function openImport(){
+  if(!A.can('write_deal')){
+    toast('Importing creates deals, which is ClearSky\u2019s to do \u2014 ask us to run the file.',true);
+    return;
+  }
   var inp=document.createElement('input');
   inp.type='file'; inp.accept='.xlsx,.xls,.csv';
   inp.onchange=function(){
