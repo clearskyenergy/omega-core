@@ -22,3 +22,4 @@ __pycache__/
 # Built by scripts/build-demo.js — regenerate with `npm run demo:build`,
 # never commit it. It inlines the catalogue and would go stale silently.
 dist/
+scripts/sandbox/index.html
