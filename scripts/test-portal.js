@@ -161,5 +161,48 @@ ok('garbage does not throw', (function () {
 ok('a 500-item order is capped rather than echoed whole',
    P.publicOrder({ items: new Array(500).fill({ sku: 'x' }) }, {}).items.length === 100);
 
-console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
+
+/* ── the org parameter is a Firestore PATH, not just a lookup key ────────
+   Appended 2026-09-20 after an adversarial pass. admin.js cannot be
+   require()d here — it pulls in firebase-admin, which is not a local
+   dependency — so safeOrg is extracted from source and exercised directly.
+   That is uglier than importing it and it is the only way to cover the
+   control at all, which beats leaving it uncovered. */
+(function orgShape() {
+  var fs = require('fs'), path = require('path');
+  var src = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'admin.js'), 'utf8');
+  var alias = /var ORG_ALIAS = \{[^}]*\};/.exec(src);
+  var body  = /function safeOrg\(v\) \{[\s\S]*?\n\}/.exec(src);
+  ok('safeOrg exists in api/_lib/admin.js', !!alias && !!body);
+  if (!alias || !body) return;
+  var safeOrg = new Function(alias[0] + '\n' + body[0] + '\nreturn safeOrg;')();
+
+  ok('a plain domain passes', safeOrg('cleancell.us') === 'cleancell.us');
+  ok('  case and padding are folded', safeOrg('  CleanCell.US ') === 'cleancell.us');
+  ok('  a multi-label domain passes', safeOrg('a.b.co.uk') === 'a.b.co.uk');
+  ok('  and the alias fold still applies', safeOrg('fenecon.de') === 'fenecon.com');
+
+  /* THE ATTACK. Firestore .doc() takes multi-segment paths, so
+     omega_orgs/<org> with a slash in org is a VALID document elsewhere. */
+  ok('a slash is refused — it would resolve to another document',
+     safeOrg('cleancell.us/customers/someone-else') === '');
+  ok('a traversal is refused', safeOrg('../../etc/passwd') === '');
+  ok('a backslash is refused', safeOrg('cleancell.us\\customers') === '');
+  ok('an empty org is refused', safeOrg('') === '' && safeOrg(null) === '' && safeOrg(undefined) === '');
+  ok('a bare label with no dot is refused', safeOrg('cleancell') === '');
+  ok('a leading dash is refused', safeOrg('-bad.com') === '');
+  ok('a trailing dash is refused', safeOrg('bad-.com') === '');
+  ok('an over-long value is refused', safeOrg(new Array(300).join('x') + '.com') === '');
+  ok('a wildcard is refused', safeOrg('*') === '' && safeOrg('cleancell.*') === '');
+  ok('a space inside is refused', safeOrg('clean cell.us') === '');
+  ok('a null byte is refused', safeOrg('cleancell.us\u0000/x') === '');
+
+  /* Every endpoint that takes an org from a caller must use it. */
+  ['my-orders.js', 'my-account.js', 'tenant-systems.js'].forEach(function (f) {
+    var e = fs.readFileSync(path.join(__dirname, '..', 'api', f), 'utf8');
+    ok('api/' + f + ' shape-checks its org parameter', /A\.safeOrg\(/.test(e));
+  });
+})();
+
+console.log('\n  ' + pass + ' passed, ' + fail + ' failed  (including the org-shape control)\n');
 process.exit(fail ? 1 : 0);

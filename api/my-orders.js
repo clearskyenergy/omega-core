@@ -98,8 +98,12 @@ module.exports = A.handler(function (req) {
 
   return A.authenticate(req).then(function (caller) {
     var email = requireVerified(caller);
-    var org = lower((req.query && req.query.org) || '');
-    if (!org) throw A.httpError(400, 'org is required');
+    /* SHAPE-CHECKED, not merely lowercased. Firestore's .doc() accepts
+       multi-segment paths, so an org of 'cleancell.us/customers/x' resolves
+       to a valid four-segment DOCUMENT — a path-injection primitive rather
+       than a failed lookup. A.safeOrg() is the one definition of the shape. */
+    var org = A.safeOrg((req.query && req.query.org) || '');
+    if (!org) throw A.httpError(400, 'a valid org is required');
 
     var db = A.db();
     var wanted = String((req.query && req.query.orderNo) || '').trim().slice(0, 120);

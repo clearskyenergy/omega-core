@@ -45,8 +45,10 @@ module.exports = A.handler(function (req) {
   if (req.method !== 'GET') throw A.httpError(405, 'GET only');
 
   return A.authenticate(req).then(function (caller) {
-    var org = String((req.query && req.query.org) || caller.orgId || '').toLowerCase().trim();
-    if (!org) throw A.httpError(400, 'org is required');
+    /* SHAPE-CHECKED — see api/_lib/admin.js safeOrg(). Lower-casing alone
+       let a multi-segment path through to .doc(). */
+    var org = A.safeOrg((req.query && req.query.org) || caller.orgId || '');
+    if (!org) throw A.httpError(400, 'a valid org is required');
 
     return A.isTenantAdmin(caller, org).then(function (may) {
       if (!may) throw A.httpError(403, 'not an admin of this organisation');

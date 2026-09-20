@@ -155,8 +155,10 @@ module.exports = A.handler(function (req) {
   return A.authenticate(req).then(function (caller) {
     var email = requireVerified(caller);
     var body = (method === 'POST' ? (req.body || {}) : {});
-    var org = lower((req.query && req.query.org) || body.org || '');
-    if (!org) throw A.httpError(400, 'org is required');
+    /* SHAPE-CHECKED — see api/_lib/admin.js safeOrg(). This one matters
+       most: an unvalidated org here reaches .doc() on a WRITE path. */
+    var org = A.safeOrg((req.query && req.query.org) || body.org || '');
+    if (!org) throw A.httpError(400, 'a valid org is required');
 
     var db = A.db();
     var orgRef = db.collection('omega_orgs').doc(org);
