@@ -1,5 +1,5 @@
 <!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
-<title>Clean Cell Sandbox</title>
+<title>Clean Cell Walkthrough</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
   :root{
@@ -23,51 +23,104 @@
     --ok:#4ECB85; --ok-bg:#0F2C1D; --warn:#E0A94D; --warn-bg:#2F2410; --bad:#F0796B; --bad-bg:#331714;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   body{background:var(--paper);color:var(--ink);margin:0;font:400 15px/1.55 var(--f)}
-  .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--panel);
-    border-bottom:1px solid var(--line);padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .top .bd{font-weight:700;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
-  .top .who{font-size:13px;color:var(--ink3)}
-  .top .sp{flex:1}
-  .tabs{display:flex;gap:5px;flex-wrap:wrap}
-  .tabs button{font:600 13px var(--f);color:var(--ink2);background:transparent;
-    border:1px solid var(--line);border-radius:999px;padding:8px 13px;cursor:pointer}
-  .tabs button:hover{border-color:var(--accent);color:var(--accent)}
-  .tabs button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
-  .tabs button:focus-visible,.btn:focus-visible,.g:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  main{max-width:940px;margin:0 auto;padding:22px 18px 60px;display:grid;grid-template-columns:1fr;gap:18px}
+
+  /* ── chrome ─────────────────────────────────────────────────────────── */
+  .top{position:sticky;top:0;z-index:12;background:var(--panel);border-bottom:1px solid var(--line);
+    padding:10px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .lk{display:flex;align-items:center;gap:9px;min-width:0}
+  .lk .sq{width:26px;height:26px;border-radius:7px;background:var(--accent);color:#fff;flex:none;
+    display:grid;place-items:center;font:700 12px var(--f)}
+  .lk b{font-weight:700;font-size:15.5px;letter-spacing:-.01em;white-space:nowrap}
+  .lk span{font-size:12.5px;color:var(--ink3);white-space:nowrap}
+  .sp{flex:1}
+  .acts-nav{display:flex;gap:5px;flex-wrap:wrap}
+  .acts-nav button{font:600 12.5px var(--f);color:var(--ink2);background:transparent;
+    border:1px solid var(--line);border-radius:999px;padding:7px 13px;cursor:pointer;white-space:nowrap}
+  .acts-nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .acts-nav button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  .acts-nav em{font-style:normal;font:700 10.5px var(--m);opacity:.65;margin-right:5px}
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── step rail ──────────────────────────────────────────────────────── */
+  .railwrap{position:sticky;top:0;z-index:11;background:var(--paper);border-bottom:1px solid var(--line);
+    padding:10px 18px;overflow-x:auto}
+  .rail{display:flex;gap:6px;min-width:min-content}
+  .rail button{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:6px 13px 6px 6px;cursor:pointer;white-space:nowrap;
+    font:600 12.5px var(--f);color:var(--ink3)}
+  .rail button .n{width:20px;height:20px;border-radius:50%;background:var(--line2);color:var(--ink3);
+    display:grid;place-items:center;font:700 11px var(--m);flex:none}
+  .rail button.done{color:var(--ink2);border-color:var(--ok)}
+  .rail button.done .n{background:var(--ok);color:#fff}
+  .rail button[aria-current="true"]{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .rail button[aria-current="true"] .n{background:rgba(255,255,255,.26);color:#fff}
+
+  /* ── layout ─────────────────────────────────────────────────────────── */
+  main{max-width:1180px;margin:0 auto;padding:20px 18px 70px}
+  .stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+  @media (max-width:900px){ .stage{grid-template-columns:minmax(0,1fr)} }
+  .col{display:grid;gap:16px;min-width:0}
+  /* Grid items default to min-width:auto, so one wide child — the leak
+     test's JSON — stretches the whole column past the viewport. */
+  .col>*{min-width:0}
   section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
-  h2{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px}
-  .lede{color:var(--ink2);margin:0 0 16px;max-width:62ch;font-size:14.5px}
-  .fine{color:var(--ink3);font-size:13px;margin:10px 0 0;max-width:62ch}
-  .empty{color:var(--ink3);padding:18px 0;font-size:14.5px}
+  h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px}
+  h3{font-size:19px;font-weight:700;letter-spacing:-.015em;margin:0 0 8px}
+  .lede{color:var(--ink2);margin:0 0 16px;max-width:64ch;font-size:14.5px}
+  .fine{color:var(--ink3);font-size:13px;margin:10px 0 0;max-width:64ch}
+  .empty{color:var(--ink3);padding:16px 0;font-size:14.5px}
   .mut{color:var(--ink3)}
-  code{font:500 13px var(--m);background:var(--accent-soft);padding:2px 5px;border-radius:4px}
+  code{font:500 12.5px var(--m);background:var(--accent-soft);padding:2px 5px;border-radius:4px;
+    word-break:break-word}
+
+  /* ── aside ──────────────────────────────────────────────────────────── */
+  aside{position:sticky;top:64px;display:grid;gap:14px}
+  @media (max-width:900px){ aside{position:static} }
+  .teach{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px 18px}
+  .teach h2{margin-bottom:9px}
+  .teach p{margin:0 0 10px;font-size:13.5px;color:var(--ink2);line-height:1.5}
+  .teach p:last-child{margin-bottom:0}
+  .world{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px 18px 14px}
+  .wr{display:flex;gap:10px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line2);font-size:13.5px}
+  .wr:first-of-type{border-top:none}
+  .wr .wk{color:var(--ink3);flex:1;font-size:12.5px}
+  .wr .wv{font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* ── controls ───────────────────────────────────────────────────────── */
   .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
-  label{display:flex;flex-direction:column;gap:5px;font:600 11px var(--f);letter-spacing:.07em;
+  label{display:flex;flex-direction:column;gap:5px;font:600 10.5px var(--f);letter-spacing:.07em;
     text-transform:uppercase;color:var(--ink3)}
-  label.chk{flex-direction:row;align-items:center;gap:7px;text-transform:none;letter-spacing:0;font-size:13.5px}
+  label.chk{flex-direction:row;align-items:center;gap:7px;text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--ink2)}
   input,select{font:400 15px var(--f);color:var(--ink);background:var(--panel);
-    border:1px solid var(--line);border-radius:9px;padding:9px 11px;min-width:120px}
+    border:1px solid var(--line);border-radius:9px;padding:9px 11px;min-width:110px;max-width:100%}
   .btn{font:600 14px var(--f);color:var(--ink2);background:var(--panel);
     border:1px solid var(--line);border-radius:9px;padding:10px 14px;cursor:pointer}
   .btn:hover{border-color:var(--accent);color:var(--accent)}
   .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
   .btn.p:hover{opacity:.9;color:#fff}
-  .rec{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line2);
+  .btn.sm{font-size:12.5px;padding:7px 11px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .next{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px}
+  .next .btn{font-size:15px;padding:12px 20px}
+  .doneflag{font:700 11.5px var(--f);color:var(--ok);background:var(--ok-bg);border-radius:999px;padding:6px 12px}
+
+  /* ── data display ───────────────────────────────────────────────────── */
+  .rec{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--line2);
     border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin:4px 0 14px}
   .rec>div{background:var(--panel);padding:12px 14px}
   .k{font:600 10px var(--m);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
   .v{font-weight:600;font-size:15px;margin-top:4px}
-  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px}
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:14px}
   .ord{border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:11px}
-  .ord:last-child{margin-bottom:0}
+  .ord:last-of-type{margin-bottom:0}
+  .ord.lit{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
   .no{font:600 14.5px var(--m)}
-  .sp{flex:1}
   .pill{font:700 11.5px var(--f);border-radius:999px;padding:5px 11px;white-space:nowrap}
   .pill.go{background:var(--ok-bg);color:var(--ok)} .pill.wait{background:var(--warn-bg);color:var(--warn)}
-  .pill.stop{background:var(--bad-bg);color:var(--bad)}
+  .pill.stop{background:var(--bad-bg);color:var(--bad)} .pill.off{background:var(--line2);color:var(--ink3)}
   .say{margin:9px 0 0;color:var(--ink2);font-size:14.5px}
   .track{display:flex;gap:4px;margin-top:12px}
   .track i{flex:1;height:5px;border-radius:3px;background:var(--line)}
@@ -79,7 +132,40 @@
   .docs a{font:600 12.5px var(--f);color:var(--accent);text-decoration:none;
     border:1px solid var(--line);border-radius:8px;padding:6px 10px}
   .acts{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
-  /* bench */
+
+  /* ── account / gate ─────────────────────────────────────────────────── */
+  .signin{max-width:430px;border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--line2)}
+  .signin label{margin-bottom:11px;text-transform:none;letter-spacing:0;font-size:12px}
+  .signin input{width:100%}
+  .gate{border:1px dashed var(--line);border-radius:12px;padding:20px;text-align:center;background:var(--line2)}
+  .gate .lock{font-size:22px;line-height:1}
+  .gate b{display:block;margin:7px 0 4px;font-size:16px}
+  .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:6px 0 4px}
+  .plan{border:1px solid var(--line);border-radius:12px;padding:15px}
+  .plan.on{border-color:var(--accent);background:var(--accent-soft)}
+  .plan .pn{font-weight:700;font-size:15.5px}
+  .plan .pp{font:600 13px var(--m);color:var(--ink3);margin:2px 0 9px}
+  .plan ul{margin:0;padding-left:17px;font-size:13.5px;color:var(--ink2)}
+
+  /* ── drawing ────────────────────────────────────────────────────────── */
+  .canvas{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--line2)}
+  .canvas svg{display:block;width:100%;height:auto}
+  .legend{display:flex;gap:7px 16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--ink2)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .tabsm{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:13px}
+  .tabsm button{font:600 12.5px var(--f);color:var(--ink2);background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:7px 12px;cursor:pointer}
+  .tabsm button[aria-current="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2)}
+  th{font:600 10px var(--m);letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  .sheet{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--panel)}
+  .sheet h4{margin:0 0 3px;font-size:16px}
+  .sheet .sub{color:var(--ink3);font-size:12.5px;margin-bottom:14px}
+
+  /* ── bench ──────────────────────────────────────────────────────────── */
   .vd{display:flex;align-items:center;gap:11px;flex-wrap:wrap;border:1px solid var(--line);
     border-radius:12px;padding:15px;margin-bottom:14px;background:var(--line2)}
   .vd .mark{font:700 19px var(--m);width:26px;text-align:center}
@@ -94,13 +180,14 @@
   .g small{display:block;font:400 11px var(--f);color:var(--ink3);margin-top:2px}
   .g.hold{border-color:var(--bad)} .g.hold small{color:var(--bad)}
   .board{display:grid;grid-template-columns:repeat(10,minmax(62px,1fr));gap:5px;overflow-x:auto}
-  .col{background:var(--line2);border-radius:8px;padding:7px 5px;min-height:70px}
+  .col2{background:var(--line2);border-radius:8px;padding:7px 5px;min-height:70px}
   .ch{font:600 9px var(--m);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);
     margin-bottom:6px;line-height:1.2}
   .u{font:600 10.5px var(--m);background:var(--accent);color:#fff;border-radius:5px;
     padding:4px 3px;margin-bottom:3px;text-align:center}
   .u.hold{background:var(--bad)}
-  /* estate */
+
+  /* ── estate + log ───────────────────────────────────────────────────── */
   .sf{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line2)}
   .sf:first-of-type{border-top:none}
   .sf .dot{width:9px;height:9px;border-radius:50%;margin-top:7px;flex:none}
@@ -108,31 +195,34 @@
   .sf .st{font:700 10px var(--m);letter-spacing:.08em;text-transform:uppercase;font-style:normal}
   .s-ok .st{color:var(--ok)} .s-warn .st{color:var(--warn)} .s-off .st{color:var(--ink3)}
   .pre{font:400 12px/1.5 var(--m);background:var(--line2);border:1px solid var(--line);border-radius:10px;
-    padding:14px;overflow-x:auto;white-space:pre;color:var(--ink2);max-height:420px}
-  /* log */
-  .log{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
-  .lg{display:flex;gap:10px;font-size:13.5px;padding:5px 0;border-top:1px solid var(--line2);color:var(--ink2)}
-  .lg:first-child{border-top:none}
+    padding:14px;overflow-x:auto;white-space:pre;color:var(--ink2);max-height:400px;max-width:100%}
+  .log{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px 20px 16px;margin-top:18px}
+  .lg{display:flex;gap:10px;font-size:13.5px;padding:6px 0;border-top:1px solid var(--line2);color:var(--ink2)}
+  .lg:first-of-type{border-top:none}
   .lg .t{font:500 12px var(--m);color:var(--ink3);flex:none}
-  .lg .w{font:600 12px var(--f);color:var(--accent);min-width:72px;flex:none}
+  .lg .w{font:600 12px var(--f);color:var(--accent);min-width:76px;flex:none}
   @media (max-width:640px){ .board{grid-template-columns:repeat(10,72px)} main{padding:16px 14px 50px} }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <header class="top">
-  <span class="bd" id="brand">Clean Cell Power Platform</span>
-  <span class="who" id="who"></span>
+  <span class="lk"><span class="sq" id="mark">CC</span>
+    <b id="brand">Clean Cell Power</b></span>
+  <span class="lk"><span id="who" style="font-size:12.5px;color:var(--ink3)"></span></span>
   <span class="sp"></span>
-  <nav class="tabs" id="tabs" aria-label="Who you are">
-    <button type="button" data-role="customer">Buyer</button>
-    <button type="button" data-role="tenant">Clean Cell</button>
-    <button type="button" data-role="bench">Plant floor</button>
-    <button type="button" data-role="staff">ClearSky</button>
-  </nav>
-  <button type="button" class="btn" id="reset">Reset</button>
+  <nav class="acts-nav" id="actnav" aria-label="Which story"></nav>
+  <button type="button" class="btn sm" id="reset">Start over</button>
 </header>
 
+<div class="railwrap"><nav class="rail" id="rail" aria-label="Steps"></nav></div>
+
 <main>
-  <div id="view"></div>
-  <div class="log"><h2>What has happened</h2><div id="logbody"></div></div>
+  <div class="stage">
+    <div class="col" id="view"></div>
+    <aside>
+      <div class="teach"><h2>Behind the glass</h2><div id="teach"></div></div>
+      <div class="world"><h2 style="padding-top:12px">The world right now</h2><div id="world"></div></div>
+    </aside>
+  </div>
+  <div class="log"><h2 style="padding-top:12px">What has happened</h2><div id="logbody"></div></div>
 </main>
