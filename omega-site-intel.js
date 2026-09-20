@@ -850,10 +850,71 @@
     });
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     6.  OUTLINE — the shape, kept
+     The score above is what the portfolio stored; the ring it was measured
+     from was thrown away with the file. An agent asked for "the KMZ and the
+     outline of the site" cannot answer from a score, so this keeps the shape:
+     the largest kept parcel ring as THE outline, everything else drawn as
+     features, coordinates rounded to a metre, sizes capped so a deal document
+     stays well inside Firestore's 1 MB. [lng,lat] throughout, as the file had
+     it. ONE implementation, called from tenants/osa/portfolio.html (browser)
+     and api/_lib/agent-sites.js (server) — they must not drift.
+     ═══════════════════════════════════════════════════════════════════════ */
+  var OUTLINE_MAX_FEATURES = 60, OUTLINE_MAX_POINTS = 500;
+  function r6(n) { return Math.round(n * 1e6) / 1e6; }
+  function closedRing(coords) {
+    var pts = coords.map(function (p) { return [r6(p[0]), r6(p[1])]; });
+    var f = pts[0], z = pts[pts.length - 1];
+    if (f[0] !== z[0] || f[1] !== z[1]) pts.push([f[0], f[1]]);
+    return pts;
+  }
+  function ringCentroid(ring) {
+    var x = 0, y = 0, n = 0;
+    for (var i = 0; i < ring.length - 1; i++) { x += ring[i][0]; y += ring[i][1]; n++; }
+    return n ? [r6(x / n), r6(y / n)] : null;
+  }
+  function compactFeature(f) {
+    var coords = (f.coords || []).slice(0, OUTLINE_MAX_POINTS).map(function (p) { return [r6(p[0]), r6(p[1])]; });
+    var out = { type: f.type, kind: f.kind || 'other', name: String(f.name || '').slice(0, 120), coords: coords };
+    var a = f.attrs || {};
+    if (a.kv) out.kv = a.kv;
+    if (a.owner) out.owner = String(a.owner).slice(0, 80);
+    if (a.diameterIn) out.diameterIn = a.diameterIn;
+    if (a.acres) out.acres = Math.round(a.acres * 10) / 10;
+    return out;
+  }
+  /* intake(): what intake() returned. meta: { source, fileName, by }.
+     Returns the outline block, or null when nothing in the file had a shape
+     or a point — a caller must never store an outline that says nothing. */
+  function outline(s, meta) {
+    meta = meta || {};
+    var rings = (s.parcelRings || []).slice().sort(function (a, b) { return (b.attrs.acres || 0) - (a.attrs.acres || 0); });
+    var main = rings[0] || null;
+    var ring = main && main.coords.length >= 3 ? closedRing(main.coords) : null;
+    var features = (s.features || [])
+      .filter(function (f) { return f !== main && f.kind !== 'acreage_label' && f.coords && f.coords.length; })
+      .slice(0, OUTLINE_MAX_FEATURES).map(compactFeature);
+    if (!ring && !features.length) return null;
+    return {
+      ring: ring,
+      acres: ring ? Math.round(areaAcres(ring) * 10) / 10 : (s.grossAcres != null ? Math.round(s.grossAcres * 10) / 10 : null),
+      statedAcres: s.statedAcres != null ? Math.round(s.statedAcres * 10) / 10 : null,
+      centroid: ring ? ringCentroid(ring) : features[0].coords[0],
+      source: meta.source || 'kmz',
+      fileName: String(meta.fileName || '').slice(0, 120),
+      tracedAt: new Date().toISOString(),
+      by: String(meta.by || '').slice(0, 120),
+      features: features,
+      flags: (s.flags || []).map(function (f) { return { level: f.level, code: f.code, msg: f.msg }; })
+    };
+  }
+
   global.OmegaSiteIntel = {
     parseKML: parseKML, parseKMZ: parseKMZ,
     classify: classify, intake: intake, gridScore: gridScore,
     analyzeKML: analyzeKML, analyzeKMZ: analyzeKMZ,
+    outline: outline,
     mwCeilingFor: mwCeilingFor,
     hazardSetbackFt: hazardSetbackFt,
     setHazardSetback: function (minFt, perIn) {

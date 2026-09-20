@@ -6757,6 +6757,13 @@ function doScoreFromKmz(){
       }).then(function(ok){
         if(!ok) return;
         return F.saveGrid(d,rec).then(function(){
+          /* The ring the score was measured from, kept on the deal. Until
+             this line the file left the machine as a number; /api/agent/site-outline
+             hands the shape back to the JV's agent as KML/KMZ, and it needs
+             the shape to exist. Same builder the server uses (SI.outline). */
+          var outline=SI.outline(intake,{source:'kmz',fileName:f.name,by:(A.me&&A.me()&&A.me().email)||''});
+          return outline ? F.patch(d,{outline:outline}) : null;
+        }).then(function(){
           toast('Scored '+g.score+'/100 from '+f.name);
           return refresh();
         });

@@ -38,11 +38,12 @@ jobs:
       # No install step. These tests are pure functions extracted straight out
       # of the HTML — there is no build, no bundler and no dependency to fetch,
       # which is the whole reason they are fast enough to run on every push.
-      - name: capacity, sizer, site intel
+      - name: capacity, sizer, site intel, agent sites
         run: |
           node scripts/test-caps.js
           node scripts/test-bess-sizer.js
           node scripts/test-site-intel.js
+          node scripts/test-agent-sites.js
 
       # extract.js regenerates sweep/geo/pv/fence/rfq from editor.html, so the
       # tests always run against what is actually in the file rather than a
