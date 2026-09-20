@@ -3068,8 +3068,11 @@ function designFromSizing(quiet){
 
   /* Container count should not come out as a fraction of a unit for a
      small system: below a container, quote the cabinet it is actually
-     sold in. */
-  var mwh = kWh/1000;
+     sold in. Bucket on NAMEPLATE, because that is what a container is sold
+     by, and because the editor's copy of this heuristic buckets on
+     nameplate too - the same site must not land on different hardware
+     depending on which screen it was sized from. */
+  var mwh = kWh/Math.max(nv('dod',90)/100, 0.01)/1000;
   set('dUnitMwh', mwh <= 0.6 ? 0.1 : (mwh <= 3 ? 0.5 : (mwh <= 12 ? 5 : 20)));
 
   /* PCS: pick the largest standard block that still divides the duty into
