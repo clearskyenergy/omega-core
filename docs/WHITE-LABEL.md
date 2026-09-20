@@ -944,3 +944,28 @@ Listed so nobody mistakes any of it for done.
   and revenue model (`omega-value-stack.js`, `valuestack.html`) is not on the
   public surface and should not be: it is the most valuable thing in the
   platform and it is what the signed-in product is for.
+
+---
+
+## After the sale: the buyer portal
+
+Everything above is how a stranger becomes an order. What happens to that
+person afterwards — signing in, seeing their order history and its live
+status, and the terms the tenant set for them — is designed separately in
+**`docs/CUSTOMER-PORTAL.md`** (2026-09-20).
+
+Three things from it are worth knowing here, because they constrain this
+document's surfaces:
+
+- **A buyer is a third identity class**, neither staff nor tenant member. This
+  resolves the `_noteFunnel` question as *neither* — a buyer gets a portal,
+  not a workspace, and becoming a tenant stays a later event with its own
+  commercial trigger.
+- **A buyer never reads `orders/{id}`.** The document carries `pricing`,
+  `cost`, `margin` and `tenantPricing`, and rules hide documents rather than
+  fields, so the portal reads through an endpoint that projects key by key —
+  the same rule `api/embed-config.js` already lives under.
+- **The address bar is part of the white label.** A tenant-owned subdomain
+  CNAME'd to the same Vercel project is the answer; framing the authenticated
+  portal to disguise the URL is not, and `X-Frame-Options: SAMEORIGIN` on
+  everything but `/embed/` (see § Clickjacking) is why.
