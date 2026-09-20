@@ -232,9 +232,9 @@
       s += T(b.x + b.w / 2, b.y + b.d / 2 + 1.6, String(b.n), 13, '#fff', 'middle', 700);
     }
     var rx = L.LOT_W - L.SET - 26;
-    s += R(rx, L.SET + 6, 18, 14, 'var(--warn)', 'var(--warn)');
+    s += R(rx, L.SET + 6, 18, 14, 'var(--accent)', 'var(--accent)');
     s += T(rx + 9, L.SET + 28, 'XFMR', 13, 'var(--ink2)', 'middle', 600);
-    s += R(rx, L.SET + 36, 18, 12, 'var(--ink3)', 'var(--ink3)');
+    s += R(rx, L.SET + 36, 18, 12, 'var(--ink2)', 'var(--ink2)');
     s += T(rx + 9, L.SET + 56, 'SWGR', 13, 'var(--ink2)', 'middle', 600);
     s += '<line x1="' + (L.SET * K) + '" y1="' + ((L.LOT_D - 9) * K) + '" x2="' + ((L.SET + 50) * K)
        + '" y2="' + ((L.LOT_D - 9) * K) + '" stroke="var(--ink2)" stroke-width="2"/>';
@@ -302,7 +302,7 @@
   function part(i) { return S.route.split('/')[i] || ''; }
   function go(r) {
     if (r !== S.route) { S.hist.push(S.route); S.hist = S.hist.slice(-40); }
-    S.route = r; S.modal = null;
+    S.route = r; S.modal = null; S.navOpen = false;
     /* A flash belongs to the page that raised it. Letting it survive a
        navigation put one order's confirmation on another order's screen. */
     if (!S.keepFlash) S.flash = '';
@@ -365,49 +365,67 @@
     return f;
   }
 
+  /* Their wordmark: Clean in cyan, ce in ink, and the bolt standing in for
+     the final ll, with a small US after it. */
+  function bolt(cls) {
+    return '<svg class="' + (cls || 'bolt') + '" viewBox="0 0 26 46" aria-hidden="true">'
+      + '<path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg>';
+  }
+  function wordmark(extra) {
+    return '<span class="logo"' + (extra || '') + '><span class="c1">Clean</span>ce'
+      + bolt() + '<span class="us">US</span></span>';
+  }
+
   /* ══ PUBLIC SITE ═══════════════════════════════════════════════════════ */
   function siteNav() {
     var acct = S.account.signedIn
       ? '<button class="b sm" data-go="p/orders">My account</button>'
       : '<button class="b sm" data-modal="signin">Sign in</button>';
-    return '<div class="nav"><div class="in">'
-      + '<span class="logo"><span class="m">CC</span>Clean Cell</span>'
+    return '<div class="nav' + (S.navOpen ? ' open' : '') + '"><div class="in">'
+      + wordmark()
+      + '<span class="sp"></span>'
+      + '<button type="button" class="burger" id="burger" aria-label="Menu" aria-expanded="'
+      + (!!S.navOpen) + '"><i></i><i></i><i></i></button>'
       + '<nav class="nlinks">'
       + '<button data-go="products">Energy storage</button>'
       + '<button data-go="how">How it works</button>'
       + '<button data-go="products">Company</button></nav>'
-      + '<span class="sp"></span>'
       + '<span class="brow"><button class="b sm p" data-go="size">Size my system</button>' + acct + '</span>'
       + '</div></div>';
   }
   function siteFoot() {
-    return '<div class="foot"><div class="wrap" style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">'
-      + '<span class="logo" style="font-size:14px"><span class="m" style="width:22px;height:22px;font-size:10px">CC</span>Clean Cell USA</span>'
+    return '<div class="foot"><div class="wrap" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">'
+      + wordmark(' style="font-size:19px;color:#fff"')
       + '<span class="sp"></span><span>1450 W Cermak Rd, Chicago IL · sales@cleancell.us · (312) 555 0142</span>'
       + '<span>© 2026 Clean Cell USA</span></div></div>';
   }
   function pgHome() {
     var z = S.sized;
     return siteNav()
-      + '<div class="hero"><div class="wrap hgrid"><div>'
-      + '<div class="eyebrow">Clean Cell USA</div>'
-      + '<h1>Commercial battery storage, built in Illinois, shipped in 12 weeks.</h1>'
-      + '<p class="lead">Cut your demand charges, ride through outages, and keep the cold chain cold. '
-      + 'Tell us what your utility bill says and we will size it in about a minute.</p>'
-      + '<div class="brow" style="margin-top:26px"><button class="b p lg" data-go="size">Size my system</button>'
+      + '<div class="hero">'
+      + '<div style="position:absolute;right:-4%;top:-16%;height:150%;color:rgba(63,175,198,.10);'
+      + 'pointer-events:none">' + bolt('wm') + '</div>'
+      + '<div class="wrap in hgrid"><div>'
+      + '<h1>Storage that ships in twelve weeks.<span class="b2">Sized in about a minute.</span></h1>'
+      + '<p class="say">We empower US-based energy and electrification companies by putting a new '
+      + 'competitive class of products within reach — built here, delivered here, supported here.</p>'
+      + '<p class="say2">Cut your demand charges, ride through outages, and keep the cold chain cold. '
+      + 'Tell us what your utility bill says and we will size it while you read this.</p>'
+      + '<div class="brow" style="margin-top:32px"><button class="b p lg" data-go="size">Size my system</button>'
       + '<button class="b lg" data-go="products">See the range</button></div>'
       + '<div class="stats"><div><b>412 MWh</b><span>shipped since 2021</span></div>'
       + '<div><b>12 weeks</b><span>typical lead time</span></div>'
       + '<div><b>10 year</b><span>capacity warranty</span></div></div>'
       + '</div><div class="card" style="gap:4px">'
-      + '<div class="cap">Quick sizer</div><h3 style="margin-bottom:8px">What does your bill say?</h3>'
+      + '<div class="cap">Quick sizer</div><h3 style="margin-bottom:10px">What does your bill say?</h3>'
       + '<label class="fld"><span>Peak demand (kW)</span><input id="h-kw" type="number" value="' + (z ? z.kw : 900) + '"></label>'
       + '<label class="fld"><span>Hours of backup</span><input id="h-h" type="number" step="0.5" value="' + (z ? z.h : 2) + '"></label>'
       + '<button class="b p" id="h-size" style="margin-top:4px">Size it</button>'
-      + '<p class="xs mut" style="margin-top:8px">No account needed. Nothing is sent to anyone until you ask.</p>'
+      + '<p class="xs mut" style="margin-top:10px">No account needed. Nothing is sent to anyone until you ask.</p>'
       + '</div></div></div>'
       + '<div class="sec"><div class="wrap"><h2>The range</h2>'
-      + '<p class="lead" style="margin-top:8px">One chemistry, four enclosures. Every one of them ships with the same BMS and the same warranty.</p>'
+      + '<p class="lead" style="margin-top:10px;max-width:58ch">One chemistry, four enclosures. Every one of them ships '
+      + 'with the same BMS and the same warranty.</p>'
       + '<div class="cards">' + CATALOG.map(function (c) {
           return '<button class="card" data-go="product/' + c.sku + '">'
             + '<div class="cap">' + esc(c.sku) + '</div><h3>' + esc(c.name) + '</h3>'
@@ -512,7 +530,7 @@
         + tag(S.study.qty + ' × ' + skuOf(S.study.sku).sku, 'br') + '</div><div class="bd">'
         + plotPlan(S.study)
         + '<div class="legend"><span><i style="background:var(--brand)"></i>Storage</span>'
-        + '<span><i style="background:var(--warn)"></i>Transformer pad</span>'
+        + '<span><i style="background:var(--accent)"></i>Transformer pad</span>'
         + '<span><i style="background:var(--ink3)"></i>Switchgear</span></div>'
         + '<div class="brow" style="margin-top:18px"><button class="b p" data-go="checkout">Request this system →</button></div>'
         + '</div></div>';
@@ -569,16 +587,14 @@
       return '<button type="button" data-go="' + n.r + '" aria-current="' + (!!on) + '">' + esc(n.t) + '</button>';
     }).join('');
     return '<div class="app"><div class="side">'
-      + '<div class="brandrow"><span class="m" style="width:26px;height:26px;border-radius:7px;background:var(--brand);'
-      + 'color:#fff;display:grid;place-items:center;font:800 11px var(--f);flex:none">' + esc(o.mark) + '</span>'
-      + '<span>' + esc(o.name) + '</span></div>'
+      + '<div class="brandrow">' + o.mark + '</div>'
       + '<nav class="snav">' + nav + '</nav>'
       + (o.foot ? '<div class="xs mut" style="margin-top:22px;border-top:1px solid var(--line);padding-top:12px">' + o.foot + '</div>' : '')
       + '</div><div class="main">' + o.body + '</div></div>';
   }
   function portalShell(body) {
     return shellWrap({
-      mark: 'CC', name: 'Clean Cell',
+      mark: wordmark(' style="font-size:20px"'),
       nav: [{ r: 'p/orders', t: 'Orders', pre: 'p/order' }, { r: 'p/documents', t: 'Documents' },
             { r: 'p/terms', t: 'Terms & agreements' },
             { grp: 'Design' }, { r: 'p/design', t: 'Design studio' },
@@ -589,7 +605,8 @@
   }
   function adminShell(body) {
     return shellWrap({
-      mark: 'CC', name: 'Clean Cell admin',
+      mark: wordmark(' style="font-size:19px"')
+        + '<span class="xs mut" style="margin-left:2px">admin</span>',
       nav: [{ grp: 'Sales' }, { r: 'a/orders', t: 'Orders', pre: 'a/order' },
             { r: 'a/customers', t: 'Customers', pre: 'a/customer' },
             { grp: 'Production' }, { r: 'a/production', t: 'Works orders' }, { r: 'b/scan', t: 'Bench tablet' }],
@@ -599,10 +616,13 @@
   }
   function omegaShell(body) {
     return shellWrap({
-      mark: 'CS', name: 'ClearSky OMEGA',
+      mark: '<span style="font:700 18px var(--cs);letter-spacing:-.03em;white-space:nowrap">'
+        + '<span style="color:var(--brand);font-size:21px">\u03A9</span> ClearSky '
+        + '<span style="color:var(--brand)">OMEGA</span></span>',
       nav: [{ grp: 'Operations' }, { r: 'o/orders', t: 'Orders', pre: 'o/order' },
             { r: 'o/tenants', t: 'Tenants', pre: 'o/tenant' }, { r: 'o/systems', t: 'Systems' }],
-      foot: 'thomas@csebuilders.com<br>Staff — admin',
+      foot: 'thomas@csebuilders.com<br>Staff — admin'
+        + '<div class="sheettag">SHEET G-002</div>',
       body: body
     });
   }
@@ -770,7 +790,7 @@
       canvas = '<div class="empty" style="padding:60px 20px">Nothing placed yet. Set a target on the right and run the guided build.</div>';
     } else if (S.view === 'plan') {
       canvas = plotPlan(d) + '<div class="legend"><span><i style="background:var(--brand)"></i>Storage</span>'
-        + '<span><i style="background:var(--warn)"></i>Transformer</span>'
+        + '<span><i style="background:var(--accent)"></i>Transformer</span>'
         + '<span><i style="background:var(--ink3)"></i>Switchgear</span></div>';
     } else if (S.view === 'one') {
       canvas = oneLine(d);
@@ -806,7 +826,9 @@
                + '<td class="n mut">A</td></tr>'; }).join('')
         + '</tbody></table></div>';
     }
-    return '<div style="padding:18px 20px 44px">'
+    return '<div style="padding:18px 22px 46px">'
+      + '<div class="ph" style="margin-bottom:14px">' + wordmark(' style="font-size:19px"')
+      + '<span class="mut sm">Site Map</span></div>'
       + '<div class="ph"><div><h2>' + esc(S.account.company || 'Site') + ' — BESS</h2>'
       + '<div class="sub">Site Map · design mode · autosaved ' + hhmm() + '</div></div>'
       + '<span class="sp"></span><button class="b sm" data-go="p/design">Close project</button></div>'
@@ -1015,7 +1037,8 @@
     var vcls = !v ? '' : (v.ok ? (v.action === 'duplicate' ? 'dup' : 'ok') : 'bad');
     var mark = !v ? '·' : (v.ok ? (v.action === 'duplicate' ? '=' : '✓') : '✕');
     return '<div class="kiosk">'
-      + '<div class="kh"><span class="bay">Bay 2 · bench tablet</span>'
+      + '<div class="kh">' + wordmark(' style="font-size:19px"')
+      + '<span class="bay">Bay 2 · bench tablet</span>'
       + tag(navigator.onLine === false ? 'Offline — queued' : 'Online', navigator.onLine === false ? 'warn' : 'ok')
       + '<span class="sp"></span><span class="mut sm">' + esc(o ? o.orderNo + ' · ' + o.customer.company : 'no works order') + '</span></div>'
       + '<div class="station"><b>This bench is</b>'
@@ -1410,6 +1433,7 @@
     if ((el = up('data-go'))) { go(el.getAttribute('data-go')); return; }
     if ((el = up('data-modal'))) { S.modal = el.getAttribute('data-modal'); save(); render(); return; }
     if (t.id === 'scrim' || t.id === 'm-close') { S.modal = null; save(); render(); return; }
+    if (t.id === 'burger') { S.navOpen = !S.navOpen; save(); render(); return; }
     if (t.id === 'back') { if (S.hist.length) { S.route = S.hist.pop(); S.modal = null; save(); render(); } return; }
     if (t.id === 'tnote') { S.notes = !S.notes; save(); render(); return; }
     if (t.id === 'reset') {

@@ -16,6 +16,23 @@ it the way a customer, a sales desk, a technician and we would.
 The address bar is part of the point: everything the customer touches is on
 Clean Cell's own domains, and our name is nowhere on them.
 
+## Brand
+
+Two real brands, neither of them invented here.
+
+**Clean Cell** (`cleancell.us`) — cyan `#3FAFC6` on white, near-black
+`#0B2733` headlines, a coral `#EE5A4F` accent, the bolt out of their
+wordmark, Poppins. Their hero splits a headline into a black line and a cyan
+line over a pale cyan wash, with the bolt as a watermark; the site, the
+portal, the studio and the bench tablet all wear it.
+
+**ClearSky OMEGA** (`clearskyomega.com`) — a blueprint: warm paper with a
+blue grid, `#1B57C9` for structure, an orange `#E4502A` call to action,
+monospace sheet labels and a SHEET tag, Inter.
+
+The sandbox bar and the browser frame around them are deliberately neutral
+grey so they belong to neither.
+
     node scripts/sandbox/build.js     # -> scripts/sandbox/index.html
     node scripts/sandbox/drive.js     # clicks the whole thing in Chromium
     node scripts/sandbox/look.js      # screenshots for eyeballing
