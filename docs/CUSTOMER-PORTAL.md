@@ -467,13 +467,28 @@ So this is a SUBTRACTION problem, and a copied file is the wrong tool for it:
 |---|---|
 | Three tools only | `billing/current.toolAccess = ['editor','gridatlas']` — already live, already tested by `scripts/tests/ttoolaccess.js`. Projects is core, not a tool. |
 | Clean Cell branding | `OmegaWhiteLabel.hydrate()`, already wired at `editor.html:21370` |
-| The dashboard | `shells/cleancell/` or `tenants/cleancell/index.html` — three tiles, their mark |
+| The dashboard | `shells/cleancell/index.html` — three tiles, their mark. The other `shells/*/` are README-only placeholders; this is the first real one. |
 | BESS-only, no compute | `editorMode: 'bess-lite'` on the plan, read once at boot |
 
 `editorMode` is the one new extension point: a single flag that hides the
 compute/data-centre paths and pins the guided build to BESS. It is read from
 the tenant record, so turning it off for a different tenant is a field, not a
-deploy. The file already has `MODE_KEY` and a `BessOnly` hook to build on.
+deploy.
+
+**Corrected while building.** An earlier draft of this section claimed
+`editor.html` already had `MODE_KEY` and a `BessOnly` hook to build on. It
+does not: `MODE_KEY` is `'omega.site.mode'`, the live/frozen state of a site,
+and `BessOnly` is `savingBessOnly`, a financial field. Neither has anything to
+do with product tiers, and citing them overstated what was already there.
+
+What IS there, and is a genuine precedent, is **OMEGA PATCH 59 — Compute
+Mode** (`editor.html`, ~line 165630): a mode that curates the ribbon by
+MOVING nodes rather than recreating them, so every handler, tooltip and
+gating hook travels with them and `off()` puts them all back.
+`omega-editor-mode.js` follows that discipline. The seams it hides against
+are the ribbon's own `data-page` attributes (home, draw, insert, modify,
+annotate, view, analyze, compute, estimate, output, validation, settings) and
+the equipment browser's `TABS` registry (bess, site, datacenter, solar, ev).
 
 ### What is genuinely new work
 

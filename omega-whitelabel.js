@@ -383,6 +383,13 @@
         if (o.logoUrl) c.tenant.logo = o.logoUrl;
         if (o.colors) c.tenant.colors = o.colors;
         if (o.exportBrand) c.tenant.exportBrand = o.exportBrand;
+        /* WHICH PRODUCT, not which paint. omega-editor-mode.js reads this to
+           decide whether the editor is the full platform or the cut-down BESS
+           designer a partner resells. It rides this read because this document
+           is already being fetched; a second read for one string would be a
+           second thing to keep in step. Absent means 'full' — see that file's
+           header on why the mode fails OPEN. */
+        if (o.editorMode) c.tenant.editorMode = String(o.editorMode);
         c.tenant.whiteLabel = o.whiteLabel || null;
         if (pv && org === pv) c.tenant.wlPreviewOf = pv;
         apply();

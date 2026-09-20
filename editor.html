@@ -120,6 +120,11 @@ function openFinancingApply(){
 <script src="/omega-brand.js"></script>
 <script src="/omega-editor-gate.js"></script>
 <script src="/omega-whitelabel.js"></script>
+<!-- Which PRODUCT of the editor this tenant bought. Loads directly after
+     omega-whitelabel.js because it reads the tenant record that hydrate()
+     puts on CLEARSKY_CONFIG. Fails OPEN: no record, unknown mode, or a read
+     that threw all resolve to the full platform. -->
+<script src="/omega-editor-mode.js"></script>
 <script src="/omega-caps.js"></script>
 <script src="/omega-bess-products.js"></script>
 <script src="/omega-storefront-handoff.js"></script>
@@ -21378,6 +21383,14 @@ try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
           if (OmegaWhiteLabel.active()) {
             document.title = OmegaWhiteLabel.platformName() + ' — Site Designer';
           }
+        } catch (e) {}
+        /* WHICH PRODUCT. hydrate() has just put editorMode on the tenant, so
+           this is the first moment the answer exists. boot() is a no-op on
+           'full', which is every tenant that has not explicitly bought the
+           cut-down designer — including every tenant with no omega_orgs
+           record at all. See omega-editor-mode.js § FAILS OPEN. */
+        try {
+          if (window.OmegaEditorMode) OmegaEditorMode.boot();
         } catch (e) {}
       }, function () {});
     } catch (e) {}
