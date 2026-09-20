@@ -230,7 +230,7 @@
     var h = '';
     for (var i = 0; i < recent.length; i++) {
       var r = recent[i];
-      h += '<span class="r ' + (r.ok ? 'ok' : 'bad') + '">' + String(r.s).slice(-9) + ' · '
+      h += '<span class="r ' + (r.ok ? 'ok' : 'bad') + '">' + pretty(String(r.s)).slice(-14) + ' · '
          + ('0' + r.t.getHours()).slice(-2) + ':' + ('0' + r.t.getMinutes()).slice(-2) + '</span>';
     }
     $('recent').innerHTML = h;
@@ -320,6 +320,18 @@
   document.addEventListener('click', focusScan);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) focusScan(); });
 
+  /* DISPLAY ONLY. A label carries a URL so a supervisor can scan it with a
+     phone camera, and the operator should not have to read that URL back to
+     themselves while the scan is in flight. The endpoint runs the real
+     serialFrom() out of api/_lib/plant.js and its answer replaces this a
+     moment later, so drift here is cosmetic by construction — which is why a
+     second copy of the real parser is NOT kept on this page. Nothing is
+     decided on this value; it is never sent. */
+  function pretty(s) {
+    if (s.indexOf('/') < 0) return s;
+    return s.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() || s;
+  }
+
   function submit(raw) {
     var s = String(raw || '').trim();
     input.value = '';
@@ -327,8 +339,14 @@
     var gun = null, m = s.match(GUN_PREFIX);
     if (m) { gun = m[1]; s = s.replace(GUN_PREFIX, ''); }
     /* Show it immediately. The queue guarantees delivery; the operator should
-       never watch a spinner to find out whether their scan registered. */
-    show('wait', '·', s, 'Sent', queue.length ? (queue.length + 1) + ' in the queue' : '');
+       never watch a spinner to find out whether their scan registered. Say
+       which of the two it is: 'Sent' when there is a network to send it on,
+       'Queued' when there is not, because a bench that reads 'Sent' by the
+       roll-up door teaches people not to believe the screen. */
+    var up = navigator.onLine !== false;
+    show('wait', '·', pretty(s), up ? 'Sent' : 'Queued',
+         queue.length ? (queue.length + 1) + ' in the queue'
+                      : (up ? '' : 'held until the signal is back'));
     enqueue(s, gun);
   }
   input.addEventListener('keydown', function (e) {
