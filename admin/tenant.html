@@ -73,7 +73,16 @@
   button.mini{font:600 13px inherit;background:transparent;border:1px solid var(--line);
     border-radius:8px;padding:7px 11px;cursor:pointer;color:var(--sub)}
   button.mini:hover{border-color:var(--accent);color:var(--accent)}
-  dialog{border:1px solid var(--line);border-radius:14px;padding:0;max-width:640px;width:92vw}
+  /* HIDDEN BY DEFAULT, explicitly. A browser without native <dialog> treats
+     it as an unknown block element, so the whole edit form — terms, credit
+     limit, every user on the account — renders inline on page load for
+     anyone who can open this page. The UA stylesheet that normally hides it
+     is the only thing that was doing so. */
+  dialog{display:none;border:1px solid var(--line);border-radius:14px;padding:0;
+    max-width:640px;width:92vw;background:var(--panel);color:var(--ink);
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)}
+  dialog[open]{display:block}
+  dialog::backdrop{background:rgba(14,27,36,.45)}
   dialog .hd{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:700}
   dialog .bd{padding:20px;max-height:66vh;overflow:auto}
   dialog .ft{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end}
@@ -112,7 +121,7 @@
 </main>
 
 <dialog id="dlg">
-  <form method="dialog">
+  <form id="dlg-form">
     <div class="hd" id="dlg-t">Customer</div>
     <div class="bd">
       <label>Company</label><input id="f-name">
@@ -138,7 +147,7 @@
       <div id="dlg-users" style="margin-top:18px"></div>
     </div>
     <div class="ft">
-      <button type="submit" class="mini" value="cancel">Cancel</button>
+      <button type="button" class="mini" id="cancel">Cancel</button>
       <button type="button" class="mini save" id="save">Save</button>
     </div>
   </form>
@@ -166,6 +175,19 @@
 
   var ORG = String(qp('org') || '').toLowerCase().trim();
   var db = null, current = null;
+
+  /* showModal()/close() are native-<dialog> only, and method="dialog" needs
+     the element too. Both are shimmed so the page works where <dialog> does
+     not, rather than leaving a form that cannot be dismissed. */
+  var DLG = document.getElementById('dlg');
+  function dlgOpen() {
+    if (DLG.showModal) { try { DLG.showModal(); return; } catch (e) {} }
+    DLG.setAttribute('open', 'open'); DLG.style.display = 'block';
+  }
+  function dlgClose() {
+    if (DLG.close) { try { DLG.close(); } catch (e) {} }
+    DLG.removeAttribute('open'); DLG.style.display = 'none';
+  }
 
   if (!ORG) { $('tname').textContent = 'No org given'; return; }
   $('torg').textContent = ORG;
@@ -282,7 +304,7 @@
         $('f-po').value     = t.poRequired ? 'true' : 'false';
         $('f-notes').value  = t.notes || '';
         $('dlg-users').innerHTML = '<p class="muted">Loading users…</p>';
-        $('dlg').showModal();
+        dlgOpen();
         db.collection('omega_orgs').doc(ORG).collection('customers').doc(id)
           .collection('users').get().then(function (us) {
             var h = '<table><thead><tr><th>User</th><th>Role</th><th>Last seen</th></tr></thead><tbody>';
@@ -323,10 +345,13 @@
     };
     db.collection('omega_orgs').doc(ORG).collection('customers').doc(current.id)
       .set(patch, { merge: true })
-      .then(function () { $('dlg').close(); loadCustomers(); loadSystems(); },
+      .then(function () { dlgClose(); loadCustomers(); loadSystems(); },
             function (e) { alert('Refused: ' + ((e && e.message) || 'unknown')); });
   });
 
+  $('cancel').addEventListener('click', dlgClose);
+  $('dlg-form').addEventListener('submit', function (ev) { ev.preventDefault(); dlgClose(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') dlgClose(); });
   $('refresh').addEventListener('click', loadSystems);
 
   firebase.auth().onAuthStateChanged(function (u) {

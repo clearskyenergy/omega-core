@@ -84,62 +84,86 @@ function project(customerId, c, userDoc, orderCount) {
   };
 }
 
-/* One account per (tenant, email). The KEY is the lowercased email, for the
-   same reason org_members/{emailLower} is: an order placed with no account
-   at all carries customer.email and nothing else, so email is the claim path
-   whether we choose it or not. */
+/* One account per (tenant, email), found through a POINTER DOCUMENT:
+
+       omega_orgs/{org}/customer_index/{emailLower} -> { customerId }
+
+   The first version used db.collectionGroup('users').where('email','==',...)
+   and it was wrong twice over:
+
+   1. A collection-group query needs a COLLECTION_GROUP-scoped index, and
+      Firestore only auto-creates COLLECTION-scoped ones. The query would have
+      thrown FAILED_PRECONDITION on the very first customer sign-in — and the
+      lookup's own .catch() swallowed that into "no account found", so the
+      endpoint would have walked into the CREATE branch and made a second
+      account on every single request.
+
+   2. It scanned every tenant's users and filtered by path prefix afterwards,
+      which is both wasteful and one string-comparison bug away from reading
+      across a tenant boundary.
+
+   A pointer is a direct get(): no index, no cross-tenant scan, no prefix
+   test. And create() on it is ATOMIC — two sign-ins racing on the same
+   address cannot both win, so the duplicate-account race closes with it. */
 function findOrCreate(db, org, email, caller) {
   var orgRef = db.collection('omega_orgs').doc(org);
+  var ptrRef = orgRef.collection('customer_index').doc(email);
 
-  return db.collectionGroup('users').where('email', '==', email).limit(20).get()
-    .then(function (snap) {
-      var mine = null;
-      snap.forEach(function (d) {
-        /* collectionGroup spans every tenant — keep only this one's. */
-        var path = d.ref.path || '';
-        if (path.indexOf('omega_orgs/' + org + '/customers/') === 0) mine = d;
+  return ptrRef.get().then(function (ptr) {
+    if (!ptr.exists) return null;
+    var cid = String((ptr.data() || {}).customerId || '');
+    if (!cid) return null;
+    var cRef = orgRef.collection('customers').doc(cid);
+    return Promise.all([cRef.get(), cRef.collection('users').doc(email).get()])
+      .then(function (r) {
+        if (!r[0].exists) return null;          /* pointer to a deleted account */
+        return { id: cid, data: r[0].data() || {},
+                 user: r[1].exists ? (r[1].data() || {}) : {}, created: false };
       });
-      if (mine) {
-        var parts = mine.ref.path.split('/');
-        var cid = parts[3];
-        return orgRef.collection('customers').doc(cid).get().then(function (c) {
-          return { id: cid, data: c.exists ? c.data() : {}, user: mine.data() || {}, created: false };
-        });
-      }
-      return null;
-    }, function () { return null; })
-    .then(function (found) {
-      if (found) return found;
+  }).then(function (found) {
+    if (found) return found;
 
-      /* First sign-in. Seed the company name from an order they already
-         placed, so their account does not open empty for somebody who has
-         been a customer for a month. */
-      return db.collection('orders').where('orgId', '==', org)
-        .where('customer.email', '==', email).limit(1).get()
-        .then(function (s) { return s.empty ? null : (s.docs[0].data() || {}).customer || null; },
-              function () { return null; })
-        .then(function (fromOrder) {
-          var cid = orgRef.collection('customers').doc().id;
-          var now = new Date().toISOString();
-          var cdoc = {
-            orgId: org,
-            name: clean(fromOrder && fromOrder.company, 160) || clean(fromOrder && fromOrder.name, 160) || email.split('@')[1],
-            plan: 'free', status: 'active', source: 'self',
-            terms: {}, agreements: [], hasOrders: !!fromOrder,
-            createdAt: now
-          };
-          var udoc = {
-            email: email, name: clean(fromOrder && fromOrder.name, 120),
-            phone: clean(fromOrder && fromOrder.phone, 40),
-            role: 'owner', uid: caller.uid, createdAt: now, lastSeenAt: now
-          };
-          return orgRef.collection('customers').doc(cid).set(cdoc)
-            .then(function () {
-              return orgRef.collection('customers').doc(cid).collection('users').doc(email).set(udoc);
-            })
-            .then(function () { return { id: cid, data: cdoc, user: udoc, created: true }; });
-        });
-    });
+    /* First sign-in. Seed the company name from an order they already placed,
+       so the account does not open empty for somebody who has been a customer
+       for a month. */
+    return db.collection('orders').where('orgId', '==', org)
+      .where('customer.email', '==', email).limit(1).get()
+      .then(function (s) { return s.empty ? null : (s.docs[0].data() || {}).customer || null; },
+            function () { return null; })
+      .then(function (fromOrder) {
+        var cid = orgRef.collection('customers').doc().id;
+        var now = new Date().toISOString();
+        var cdoc = {
+          orgId: org,
+          name: clean(fromOrder && fromOrder.company, 160)
+                || clean(fromOrder && fromOrder.name, 160) || email.split('@')[1],
+          plan: 'free', status: 'active', source: 'self',
+          terms: {}, agreements: [], hasOrders: !!fromOrder,
+          createdAt: now
+        };
+        var udoc = {
+          email: email, name: clean(fromOrder && fromOrder.name, 120),
+          phone: clean(fromOrder && fromOrder.phone, 40),
+          role: 'owner', uid: caller.uid, createdAt: now, lastSeenAt: now
+        };
+
+        /* create() — NOT set(). If a concurrent request got here first this
+           rejects with ALREADY_EXISTS, and we re-read their pointer instead
+           of writing a second account over the top of it. */
+        return ptrRef.create({ customerId: cid, email: email, createdAt: now })
+          .then(function () {
+            return orgRef.collection('customers').doc(cid).set(cdoc)
+              .then(function () {
+                return orgRef.collection('customers').doc(cid)
+                  .collection('users').doc(email).set(udoc);
+              })
+              .then(function () { return { id: cid, data: cdoc, user: udoc, created: true }; });
+          }, function () {
+            /* Lost the race. The winner's account is the real one. */
+            return findOrCreate(db, org, email, caller);
+          });
+      });
+  });
 }
 
 function countOrders(db, org, email) {
@@ -160,6 +184,11 @@ module.exports = A.handler(function (req) {
     var org = A.safeOrg((req.query && req.query.org) || body.org || '');
     if (!org) throw A.httpError(400, 'a valid org is required');
 
+    /* Guarded so the 503 says something a customer can act on, rather than
+       naming our environment variables. */
+    if (typeof A.isDegraded === 'function' && A.isDegraded()) {
+      throw A.httpError(503, 'Your account are temporarily unavailable. Please try again shortly.');
+    }
     var db = A.db();
     var orgRef = db.collection('omega_orgs').doc(org);
 
@@ -180,12 +209,20 @@ module.exports = A.handler(function (req) {
          allowlist: terms, plan, status, uid, source and customerId are not
          in it, so a client that sends them is simply not obeyed. */
       var cpatch = {}, upatch = {};
-      if (body.company !== undefined) cpatch.name = clean(body.company, 160);
-      if (body.address && typeof body.address === 'object') {
-        cpatch.address = {
-          line1: clean(body.address.line1, 200), city: clean(body.address.city, 100),
-          state: clean(body.address.state, 40), zip: clean(body.address.zip, 20)
-        };
+      /* ACCOUNT-LEVEL identity belongs to the account OWNER — that is what
+         docs/CUSTOMER-PORTAL.md §2 says, and the first version did not
+         enforce it: any colleague on a shared account could rename the
+         company and move the delivery address. Dropped rather than refused,
+         so the rest of a well-meant PATCH still applies. */
+      var isOwner = String((acct.user && acct.user.role) || 'user') === 'owner' || caller.staff;
+      if (isOwner) {
+        if (body.company !== undefined) cpatch.name = clean(body.company, 160);
+        if (body.address && typeof body.address === 'object') {
+          cpatch.address = {
+            line1: clean(body.address.line1, 200), city: clean(body.address.city, 100),
+            state: clean(body.address.state, 40), zip: clean(body.address.zip, 20)
+          };
+        }
       }
       if (body.name !== undefined) upatch.name = clean(body.name, 120);
       if (body.phone !== undefined) upatch.phone = clean(body.phone, 40);

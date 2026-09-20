@@ -175,6 +175,16 @@
 /* ES5 — CLAUDE.md's rule for every page outside the few ES2015 core ones. */
 (function () {
   'use strict';
+
+  /* Every compat page in this repo creates the default app itself — see
+     orders.html:128. This page loads no omega-tenant.js to do it, so without
+     this line firebase.auth() throws "No Firebase App '[DEFAULT]'" on the
+     first call and the portal renders nothing at all. */
+  var _cfg = window.CLEARSKY_CONFIG || {};
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(_cfg.firebase || _cfg);
+  } catch (e) {}
+
   function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {

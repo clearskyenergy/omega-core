@@ -83,11 +83,29 @@ match /omega_orgs/{orgId}/customers/{customerId}/users/{emailLower} {
   allow delete: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
 }
 
+/* ── the pointer collection ────────────────────────────────────────────── */
+match /omega_orgs/{orgId}/customer_index/{emailLower} {
+  /* email -> customerId, written by api/my-account.js with create() so two
+     concurrent first sign-ins cannot both make an account. It exists because
+     a collectionGroup('users') lookup needed a COLLECTION_GROUP index that
+     Firestore does not auto-create, and the failed query was being swallowed
+     into "no account found" — which made a duplicate account on every
+     request rather than failing loudly.
+
+     Admin SDK only. It is an index, not a record: nothing reads it but the
+     endpoint, and a client that could write it could point somebody else's
+     email at an account of its choosing. */
+  allow read:  if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+  allow write: if false;
+}
+
 /* ── indexes to create alongside this ──────────────────────────────────────
    customers            : plan ASC, createdAt DESC            (designer seats)
    customers            : hasOrders ASC, createdAt DESC       (the admin list)
    orders               : orgId ASC, customerId ASC, createdAt DESC
    orders               : orgId ASC, customer.email ASC, createdAt DESC
                           ^ the claim path — docs/CUSTOMER-PORTAL.md §3
-   collection group users: email ASC                (find a person's accounts)
+   NOT NEEDED: a collection-group index on users.email. The pointer document
+   above replaced that query — a direct get() needs no index, does not scan
+   other tenants, and cannot be swallowed into a duplicate-account create.
    ───────────────────────────────────────────────────────────────────────── */

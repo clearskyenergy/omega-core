@@ -145,16 +145,24 @@ function stationMilestone(units) {
   for (var i = 0; i < units.length; i++) {
     var u = units[i] || {};
     var at = norm(u.at);
-    var m = BY_STATION[at];
+    /* hasOwnProperty, not a bare lookup: norm() lets 'constructor' and
+       '__proto__' through, and both would otherwise resolve to something
+       inherited from Object.prototype rather than to undefined. */
+    var m = Object.prototype.hasOwnProperty.call(BY_STATION, at) ? BY_STATION[at] : null;
     if (!m) {
-      /* Not yet kitted. Ranked AT 'production' rather than at 0: pinning it
-         to zero made it unbeatable, so a unit held back at Kitting (which
-         ranks lower once its hold is applied) could never be recognised as
-         the furthest behind. */
-      if (!at) {
-        var pr = ladderIndex('production');
-        if (pr < worstRank) { worstRank = pr; worst = 'production'; }
-      }
+      /* Not yet kitted, OR at a station this routing does not know. Both
+         pin the order to the floor. The unknown-station case used to
+         `continue` without touching worstRank, so that unit stopped
+         participating in the furthest-behind decision entirely — a tenant
+         who renames one station would have had orders reported by their
+         REMAINING units, which is exactly the over-reporting this function
+         exists to prevent.
+
+         Ranked AT 'production' rather than at 0: pinning it to zero made it
+         unbeatable, so a unit held back at Kitting could never be recognised
+         as the furthest behind. */
+      var pr = ladderIndex('production');
+      if (pr < worstRank) { worstRank = pr; worst = 'production'; }
       continue;
     }
     var r = ladderIndex(m);

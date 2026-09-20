@@ -256,8 +256,19 @@ ok('a 500-item order is capped rather than echoed whole',
   var mo = fs.readFileSync(path.join(__dirname, '..', 'api', 'my-orders.js'), 'utf8');
   ok('my-orders narrows by orderNo IN THE QUERY, not after the limit',
      /q = q\.where\('orderNo', '==', wanted\)/.test(mo));
-  ok('  and sorts through when(), not String(createdAt)',
-     /P\.when\(b\.createdAt\)/.test(mo) && !/String\(b\.createdAt/.test(mo));
+  ok('  and orders in the query rather than sorting Timestamps in JS',
+     /orderBy\('createdAt', 'desc'\)/.test(mo) && !/String\(b\.createdAt/.test(mo));
+  /* The four-field composite that a sorted orderNo lookup would need does
+     not exist in firestore.indexes.json, so the lookup must not sort. */
+  ok('  and does NOT sort the single-order lookup (no such index)',
+     /q = q\.where\('orderNo'[^)]*\);[\s\S]{0,40}\} else \{/.test(mo));
+  var idx = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
+  var needed = (idx.indexes || []).some(function (i) {
+    if (i.collectionGroup !== 'orders') return false;
+    var f = (i.fields || []).map(function (x) { return x.fieldPath; }).join(',');
+    return f === 'orgId,customer.email,createdAt';
+  });
+  ok('  the composite the list query needs is in firestore.indexes.json', needed);
 
   /* CLAUDE.md: the shared runtime is ES5. globalThis is ES2020. */
   var em = fs.readFileSync(path.join(__dirname, '..', 'omega-editor-mode.js'), 'utf8');
