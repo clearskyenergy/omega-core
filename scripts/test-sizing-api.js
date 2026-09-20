@@ -3,6 +3,7 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 const tool=require('../api/_lib/battery-tool-engine');
 const adapter=require('../api/_lib/bess-size-adapter');
+const units=require('../api/_lib/bess-units');
 const design=require('../api/_lib/bess-design-engine');
 function stubAuth(tier,staff,billing){return{authenticateWithTier:()=>Promise.resolve({tier,caller:{staff},billing:billing||{}}),httpError:(status,message)=>Object.assign(new Error(message),{status})};}
 /* Map every module bess-size.js requires. A stub that falls through to one
@@ -12,6 +13,7 @@ function handler(tier,staff){const box={module:{exports:{}},require:n=>{
   if(n.includes('verify-token'))return stubAuth(tier,staff);
   if(n.includes('battery-tool-engine'))return tool;
   if(n.includes('bess-size-adapter'))return adapter;
+  if(n.includes('bess-units'))return units;
   throw new Error('bess-size.js required an unstubbed module: '+n);
 }};vm.runInNewContext(fs.readFileSync('api/bess-size.js','utf8'),box);return box.module.exports;}
 /* The design endpoint carries the same gate as the sizer, so it gets the
@@ -19,7 +21,12 @@ function handler(tier,staff){const box={module:{exports:{}},require:n=>{
    number and a cross-field contradiction all have to be refused BEFORE the
    engine runs, because the engine will happily divide by whatever it is
    handed. */
-function designHandler(tier,staff,billing){const box={module:{exports:{}},require:n=>n.includes('verify-token')?stubAuth(tier,staff,billing):design,Date};vm.runInNewContext(fs.readFileSync('api/bess-design.js','utf8'),box);return box.module.exports;}
+function designHandler(tier,staff,billing){const box={module:{exports:{}},require:n=>{
+  if(n.includes('verify-token'))return stubAuth(tier,staff,billing);
+  if(n.includes('bess-design-engine'))return design;
+  if(n.includes('bess-units'))return units;
+  throw new Error('bess-design.js required an unstubbed module: '+n);
+},Date};vm.runInNewContext(fs.readFileSync('api/bess-design.js','utf8'),box);return box.module.exports;}
 async function call(h,body,method='POST'){const result={};const res={setHeader(){},status(n){result.status=n;return this;},json(j){result.body=j;return this;}};await h({method,body},res);return result;}
 (async()=>{
  assert.equal((await call(handler('trial',false),{})).status,403);

@@ -3,6 +3,7 @@
 var auth = require('./_lib/verify-token');
 var toolEngine = require('./_lib/battery-tool-engine');
 var adapter = require('./_lib/bess-size-adapter');
+var UNITS = require('./_lib/bess-units');
 module.exports = function(req,res){
   res.setHeader('Cache-Control','private, no-store');
   if(req.method!=='POST') return res.status(405).json({error:'POST required'});
@@ -11,6 +12,18 @@ module.exports = function(req,res){
     var overrides=a.billing.toolOverrides||{};
     if(!a.caller.staff && (overrides.batterysizer===false || (['standard','deluxe','enterprise','partner','internal'].indexOf(a.tier)<0 && overrides.batterysizer!==true && addons.indexOf('engineering')<0))) throw auth.httpError(403,'Battery sizing requires Battery Sizer access.');
     var b=req.body||{};
+
+    /* UNITS ARE A BOUNDARY CONCERN. A 300 kW store and a 40 MW campus are
+       the same arithmetic at a thousand times the scale, so the caller may
+       state site data in either - but the engine sees kW and kWh and
+       nothing else. Scale once, here, and echo the unit back so the page
+       can render in what the user asked for.
+       RATES ARE NOT SCALED. Demand charges, $/kWh and installed $/kWh are
+       quoted per kW and per kWh whatever the size of the site; scaling
+       them alongside the load is how a tariff silently becomes 1000x. */
+    var unit = UNITS.resolve(b.unit, 'kw');
+    var uf = unit.toKw;
+    function scaleKw(v){ var n=Number(v); return isFinite(n) ? n*uf : v; }
     if (b.mode==='tool-interval' || b.mode==='tool-monthly') {
       if(!Array.isArray(b.data)||!b.data.length||b.data.length>24||!Array.isArray(b.durations)||!b.durations.length||b.durations.length>6||b.durations.some(function(v){return [1,2,3,4,6,8].indexOf(v)<0;}))throw auth.httpError(400,'Invalid months or battery durations.');
       var cfg=b.settings||{}, numberKeys=['rte','dod','cRate','otherEff','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin'];
@@ -21,6 +34,11 @@ module.exports = function(req,res){
       if(cfg.term!=null&&(!(Number(cfg.term)>=1)||Number(cfg.term)>50))throw auth.httpError(400,'Analysis term must be 1 to 50 years.');
       if(cfg.subBlock!=null&&!(Number(cfg.subBlock)>0))throw auth.httpError(400,'Subscription block must be positive.');
       var count=0;
+      if(uf!==1) b.data.forEach(function(m){
+        if(!m||typeof m!=='object')return;
+        if(Array.isArray(m.load)) m.load=m.load.map(scaleKw);
+        ['peak','min','kwh'].forEach(function(k){ if(m[k]!=null&&m[k]!=='') m[k]=scaleKw(m[k]); });
+      });
       b.data.forEach(function(m){
         if(b.mode==='tool-interval'){
           if(!Array.isArray(m.load)||!m.load.length||[1/12,1/6,0.25,0.5,1].indexOf(m.dt)<0)throw auth.httpError(400,'Invalid interval data.');
@@ -30,7 +48,9 @@ module.exports = function(req,res){
         }else if(!(m.peak>0)||!isFinite(m.peak)||!(m.days>0)||m.days>366||!(m.kwh>=0)||!isFinite(m.kwh)||!(m.rate>=0)||!isFinite(m.rate))throw auth.httpError(400,'Invalid monthly bill.');
       });
       if(count>105408)throw auth.httpError(400,'Too many interval readings.');
-      return res.status(200).json(toolEngine(b));
+      var toolOut=toolEngine(b);
+      toolOut.units={input:unit.key,power:unit.label,energy:unit.energyLabel};
+      return res.status(200).json(toolOut);
     }
     /* The site-map editor's two modes. They used to fork into bess-engine.js,
        a second sizing model that disagreed with the standalone tool by 24%
@@ -68,7 +88,8 @@ module.exports = function(req,res){
 
     var legacy;
     if(b.mode==='interval'){
-      if(b.data.some(function(v){return typeof v!=='number'||!isFinite(v)||v<0;}))throw auth.httpError(400,'Load readings must be finite nonnegative kW.');
+      if(b.data.some(function(v){return typeof v!=='number'||!isFinite(v)||v<0;}))throw auth.httpError(400,'Load readings must be finite nonnegative '+unit.label+'.');
+      if(uf!==1) b.data=b.data.map(scaleKw);
       var iv=Number(o.intervalMin);
       if(o.intervalMin!=null&&[5,10,15,20,30,60].indexOf(iv)<0)throw auth.httpError(400,'Interval length must be 5, 10, 15, 20, 30 or 60 minutes.');
       var series=adapter.intervalToMonths(b.data,o.intervalMin,o.startMonth);
@@ -76,9 +97,16 @@ module.exports = function(req,res){
       legacy=size('tool-interval',series,o,'interval');
     }else{
       if(b.data.some(function(r){return !r||!(Number(r.demandKw)>0)||!isFinite(Number(r.demandKw))||!(Number(r.kwh)>=0)||!isFinite(Number(r.kwh));}))throw auth.httpError(400,'Each month needs a billed demand above zero and a nonnegative usage figure.');
+      if(uf!==1) b.data=b.data.map(function(r){
+        var c={},k; for(k in r) if(Object.prototype.hasOwnProperty.call(r,k)) c[k]=r[k];
+        if(c.demandKw!=null&&c.demandKw!=='') c.demandKw=scaleKw(c.demandKw);
+        if(c.kwh!=null&&c.kwh!=='') c.kwh=scaleKw(c.kwh);
+        return c;
+      });
       var bills=adapter.monthlyToBills(b.data,tariff);
       legacy=size('tool-monthly',bills,o,'monthly');
     }
+    legacy.units={input:unit.key,power:unit.label,energy:unit.energyLabel};
     return res.status(200).json(legacy);
   }).catch(function(e){res.status(e.status||500).json({error:e.status?e.message:'Sizing failed; check the inputs and retry.'});});
 };

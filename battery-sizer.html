@@ -292,6 +292,21 @@ body.nohelp .hb{display:none}
       <div class="tab on" id="tabInt" onclick="setMode('interval')" data-help="tabInt">Interval / 8760</div>
       <div class="tab" id="tabBill" onclick="setMode('bill')" data-help="tabBill">Utility bills</div>
     </div>
+    <div class="card-b" style="padding-bottom:0">
+      <div class="row">
+        <div><label class="fl" data-help="dataScale">Scale of the numbers you enter</label>
+          <select id="dataScale" onchange="scaleChanged()">
+            <option value="kw">kW and kWh</option>
+            <option value="mw">MW and MWh</option>
+          </select></div>
+        <div><label class="fl" data-help="showScale">Show results in</label>
+          <select id="showScale" onchange="if(RESULT)render()">
+            <option value="auto">Auto</option>
+            <option value="kw">kW and kWh</option>
+            <option value="mw">MW and MWh</option>
+          </select></div>
+      </div>
+    </div>
 
     <!-- interval mode -->
     <div class="card-b" id="paneInt">
@@ -787,6 +802,10 @@ var HELP = {
  'The three resistances in the protection CT secondary loop: the CT winding itself (Rct, from the CT datasheet), the round-trip lead resistance (Rl), and the relay burden (Rr, from the relay datasheet or its VA burden divided by the square of the secondary current).<p>Required knee-point voltage is 2 \u00d7 fault current at the secondary \u00d7 the sum of the three. They are placeholders until the CT and relay are chosen.</p>'],
 'dAlf':['Accuracy limit factor',
  'How many times rated current a protection CT stays accurate to before its core saturates. Common values are 10 and 20.<p>The tool computes what the fault current actually requires. If the stated ALF is lower, the CT saturates before full fault current and the relay sees a false low reading exactly when it needs a true one — use the Class PX knee-point specification instead.</p>'],
+'dataScale':['Scale of the numbers you enter',
+ 'Whether the demand and usage figures you type or paste are in <b>kW and kWh</b> or <b>MW and MWh</b>.<p>This is the single most expensive field on the page to get wrong. A campus load pasted as 40 into a kW field is a 40 kW battery instead of a 40 MW one, and both numbers look perfectly reasonable on screen — nothing goes red, the payback still computes, and the error only surfaces when somebody tries to order it.</p><p>Tariff rates are <b>never</b> scaled by this. Demand charges, energy rates and installed cost are quoted per kW and per kWh whatever the size of the site, so enter them that way in step 3 regardless of what you choose here.</p>'],
+'showScale':['Show results in',
+ 'Presentation only — it changes nothing about the calculation.<p><b>Auto</b> reads in kW below 10 MW and MW above it, which is roughly where the digits stop being readable. Pin it to one or the other if you are comparing against a document that uses a particular unit.</p>'],
 'cRate':['Maximum C-rate',
  'The highest rate the cells may charge or discharge at, as a fraction of capacity per hour. 0.5C means a 10,000 kWh pack can move 5,000 kW.<p>This puts a <b>floor</b> on capacity that has nothing to do with energy. A 1-hour battery at 0.5C cannot exist: to deliver its rated power it needs twice the energy the duration implies, so the pack grows and the extra sits unused every cycle. When that happens the result is tagged <b>power-limited</b>.</p><p>Check the datasheet. Most containerised LFP is 0.25C to 0.5C continuous; short-duration units go higher and cost more per kWh.</p>'],
 'otherEff':['Other efficiency',
@@ -1024,6 +1043,43 @@ function fmt(n,d){
 }
 function money(n,d){ return '$'+fmt(n,(d===undefined)?0:d); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ---- display scale ------------------------------------------------
+   PRESENTATION ONLY. Everything above and everything sent to the API is
+   kW and kWh; this decides what the reader sees. A 40 MW campus printed
+   as 40,000 kW is correct and unreadable, and 0.3 MW for a corner store
+   is correct and useless. The engine is never asked to care.
+   ------------------------------------------------------------------- */
+function showUnit(kw){
+  var el = $('showScale'), v = el ? el.value : 'auto';
+  if(v === 'kw' || v === 'mw') return v;
+  return (isFinite(kw) && Math.abs(kw) >= 10000) ? 'mw' : 'kw';
+}
+/* Power, in the unit the reader picked. */
+function pw(kw, unit){
+  var u = unit || showUnit(kw);
+  if(u === 'mw') return fmt(kw/1000, Math.abs(kw/1000) < 10 ? 3 : 2);
+  return fmt(kw);
+}
+/* Energy, scaled by the SAME factor as the power beside it - a 4-hour
+   battery shown as MW next to kWh reads as a 4,000-hour one. */
+function en(kwh, unit){
+  var u = unit || showUnit(kwh);
+  if(u === 'mw') return fmt(kwh/1000, Math.abs(kwh/1000) < 10 ? 3 : 2);
+  return fmt(kwh);
+}
+function uLabel(u){ return u === 'mw' ? 'MW' : 'kW'; }
+function uLabelE(u){ return u === 'mw' ? 'MWh' : 'kWh'; }
+
+/* Changing the input scale invalidates a result computed at the old one. */
+function scaleChanged(){
+  if(!RESULT) return;
+  RESULT = null; DESIGN = null;
+  sizingRequest++;
+  var o=$('out'); if(o) o.style.display='none';
+  var p=$('prog'); if(p) p.style.display='none';
+  var d=$('designCard'); if(d) d.style.display='none';
+}
 
 /* ============================================================
    RETURN TO PORTAL
@@ -2824,9 +2880,11 @@ function remoteSizing(mode,data){
  if(!user){alert('Sign in to run battery sizing.');return;}
  var settings={},keys=['rte','dod','cRate','otherEff','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin','obj','rateStruct','curRate'];
  keys.forEach(function(k){var el=$(k);if(el)settings[k]=el.type==='checkbox'?el.checked:el.value;});
+ settings.dataScale=undefined; delete settings.dataScale;
+ var scaleEl=$('dataScale'), scale=scaleEl?scaleEl.value:'kw';
  var request=++sizingRequest;
  $('prog').style.display='block';$('progTxt').textContent='Running battery sizing';$('out').style.display='none';RESULT=null;
- return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({mode:mode,data:data,settings:settings,durations:durations()})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Sizing failed');return j;});}).then(function(result){
+ return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({mode:mode,data:data,settings:settings,durations:durations(),unit:scale})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Sizing failed');return j;});}).then(function(result){
  if(request!==sizingRequest)return;[result.best,result.rec,result.durationProbe].concat(result.sweep||[]).forEach(function(c){if(c&&c.payback===null)c.payback=Infinity;});RESULT=result;$('prog').style.display='none';$('out').style.display='';render();
  }).catch(function(e){if(request!==sizingRequest)return;$('prog').style.display='none';alert(e.message);});
 }
@@ -2866,12 +2924,13 @@ function render(){
   R.rec = REC;
 
   /* ---- spec block ---- */
+  var U = showUnit(recKW);
   h += '<div class="card-b tight"><div class="spec">'
     +  '<div class="lbl" data-help="rSpec">Recommended system</div>'
-    +  '<div class="big">'+fmt(recKW)+' <em>kW</em> / '+fmt(recKWh)+' <em>kWh</em></div>'
-    +  '<div class="sub">'+b.dur+'-hour duration &middot; '+fmt(REC.nameplate)+' kWh nameplate at '+fmt(dod*100)+'% usable DoD and '+fmt(nv('rte',88))+'% round-trip &middot; '
+    +  '<div class="big">'+pw(recKW,U)+' <em>'+uLabel(U)+'</em> / '+en(recKWh,U)+' <em>'+uLabelE(U)+'</em></div>'
+    +  '<div class="sub">'+b.dur+'-hour duration &middot; '+en(REC.nameplate,U)+' '+uLabelE(U)+' nameplate at '+fmt(dod*100)+'% usable DoD and '+fmt(nv('rte',88))+'% round-trip &middot; '
     +  fmt(REC.effectiveCRate,2)+'C discharge'+(REC.cRateBound?' <span class="pill a">power-limited</span>':'')+'<br>'
-    +  'Includes '+head+'% sizing headroom over the '+fmt(b.kW)+' kW / '+fmt(b.kWh)+' kWh modeled optimum.</div>'
+    +  'Includes '+head+'% sizing headroom over the '+pw(b.kW,U)+' '+uLabel(U)+' / '+en(b.kWh,U)+' '+uLabelE(U)+' modeled optimum.</div>'
     +  '</div>';
 
   /* ---- KPIs ---- */

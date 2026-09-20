@@ -20,6 +20,7 @@ var ROOT = path.join(__dirname, '..');
 var CAP = require('../api/_lib/bess-capacity');
 var tool = require('../api/_lib/battery-tool-engine');
 var adapter = require('../api/_lib/bess-size-adapter');
+var units = require('../api/_lib/bess-units');
 
 var pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -43,6 +44,7 @@ function handler() {
     };
     if (n.indexOf('battery-tool-engine') >= 0) return tool;
     if (n.indexOf('bess-size-adapter') >= 0) return adapter;
+    if (n.indexOf('bess-units') >= 0) return units;
     return require(path.join(ROOT, 'api', n.replace('./', '')));
   } };
   vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'api', 'bess-size.js'), 'utf8'), box);
@@ -199,6 +201,42 @@ ok('a ratchet changes the answer', withRatchet.body.recommended.savingsYr !== no
 ok('0.8 was read as 80%, not 0.8%',
    adapter.toSettings({ ratchetPct: 0.8 }).ratchet === 80,
    adapter.toSettings({ ratchetPct: 0.8 }).ratchet);
+
+section('kW and MW are the same site at a thousand times the scale');
+var U = require('../api/_lib/bess-units');
+ok('kWh resolves to the kW scale', U.resolve('kWh').key === 'kw');
+ok('MWh resolves to the MW scale', U.resolve('MWh').key === 'mw');
+ok('an unrecognised unit falls back to kW rather than guessing',
+   U.resolve('furlongs').key === 'kw');
+near('1.5 MW is 1500 kW', U.toKw(1.5, 'mw'), 1500);
+near('and converts back', U.fromKw(1500, 'mw'), 1.5);
+
+var smallKw = await call({ mode: 'monthly', opts: { tariff: TARIFF },
+  data: PEAKS.map(function (p, i) { return { month: i, demandKw: p, kwh: Math.round(p * 24 * MD[i] * 0.42) }; }) });
+var sameMw = await call({ mode: 'monthly', unit: 'mw', opts: { tariff: TARIFF },
+  data: PEAKS.map(function (p, i) { return { month: i, demandKw: p / 1000, kwh: Math.round(p * 24 * MD[i] * 0.42) / 1000 }; }) });
+ok('the MW request is accepted', sameMw.status === 200, JSON.stringify(sameMw.body).slice(0, 140));
+near('the same site stated in MW sizes identically',
+     sameMw.body.recommended.powerKw, smallKw.body.recommended.powerKw, 1);
+near('and prices identically',
+     sameMw.body.recommended.capex, smallKw.body.recommended.capex, 50);
+ok('the response echoes the unit it was given',
+   sameMw.body.units && sameMw.body.units.input === 'mw', JSON.stringify(sameMw.body.units));
+ok('a kW request echoes kW',
+   smallKw.body.units.input === 'kw', JSON.stringify(smallKw.body.units));
+
+/* The failure this guards: rates scaled alongside the load. A demand
+   charge is quoted per kW at every site size, so scaling it with the data
+   turns $18.50/kW-mo into $18,500/MW-mo and the savings with it. */
+ok('tariff rates are NOT scaled by the unit flag',
+   Math.abs(sameMw.body.recommended.savingsYr - smallKw.body.recommended.savingsYr) < 50,
+   sameMw.body.recommended.savingsYr + ' vs ' + smallKw.body.recommended.savingsYr);
+
+var mwInterval = await call({ mode: 'interval', unit: 'mw',
+  data: hourlyYear().map(function (v) { return v / 1000; }),
+  opts: { intervalMin: 60, startMonth: 0, tariff: TARIFF } });
+near('interval data in MW sizes the same as in kW',
+     mwInterval.body.recommended.powerKw, edInt.body.recommended.powerKw, 1);
 
 section('No headroom is applied on the editor path');
 ok('headroom stays at zero so nothing is silently grossed up',

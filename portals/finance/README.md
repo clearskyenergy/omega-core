@@ -25,7 +25,7 @@ to this folder:
 |----------------------------------|------------------------------------|
 | `/`, `/index.html`               | 307 → `/finance` → `/portals/finance/index.html` (a rewrite of `/` loses to the root `index.html` on the filesystem; a redirect runs first) |
 | `/dealroom`, `/dealroom.html`    | `/portals/finance/dealroom.html`   |
-| `/battery-sizer`                 | `/portals/finance/battery-sizer.html` |
+| `/battery-sizer`                 | `/battery-sizer.html` (the ONE canonical sizer; the copy that used to live in this folder is now a redirect — see below) |
 | `/api/*`                         | the root `api/` functions          |
 | `/omega-*.js`, `/portals/finance/*` | the same files as on silmarillion |
 
@@ -637,3 +637,26 @@ is the same deployment under the customer-facing host.
   `fin_projects` collection to the browser and filters there. That is fine into
   the low thousands of deals; past that, move filtering into Firestore queries
   or a Cloud Function.
+
+
+## The battery sizer is not in this folder any more
+
+`portals/finance/battery-sizer.html` was a copy of the root tool, taken before
+the sizing engine moved server-side. It carried the whole engine inline — the
+load duration curve, the dispatch, the sweep and the economics — so the logic
+shipped to every browser that opened it, and it had drifted: it still computed
+nameplate as usable divided by depth of discharge, omitting the discharge half
+of the round trip, and under-sized every system by about 6.6% against what the
+canonical tool returned for the same bills.
+
+A finance partner and a developer looking at the same meter got different
+numbers, on two customer-facing hostnames.
+
+There was nothing finance-specific in it. `finance.csebuilders.com/battery-sizer`
+and `financing.csebuilders.com/battery-sizer` now serve `/battery-sizer.html`
+directly (the four host rewrites that pointed here were removed — the default
+route already resolves that path on every host), and the file that remains is a
+redirect for anyone holding a deep link.
+
+Do not copy a tool into this folder. If the finance portal needs different
+behaviour from a core tool, add an extension point to the core one.

@@ -2,6 +2,25 @@
 'use strict';
 var auth = require('./_lib/verify-token');
 var engine = require('./_lib/bess-design-engine');
+var UNITS = require('./_lib/bess-units');
+
+/* The design engine speaks MW because the workbook it was ported from
+   does. A 300 kW store is 0.3 in that vocabulary, which is awkward to type
+   and easy to mistype by a factor of ten.
+   So each MW field has a kW ALIAS. The unit is in the field NAME rather
+   than in a separate flag, because a flag that changes what `loadMw` means
+   is a trap: the field would still be called Mw while holding kW, and the
+   next person to read the payload would have no way to tell.
+   Sending both forms of the same quantity is refused rather than resolved
+   by precedence - there is no reading of that request that is safely a
+   guess. */
+var KW_ALIASES = {
+  loadKw:          'loadMw',
+  unitKwh:         'unitMwh',
+  pcsUnitKw:       'pcsUnitMw',
+  chargeGridKw:    'chargeGridMw',
+  chargeOtherKw:   'chargeOtherMw'
+};
 
 /* Every number the design engine reads, with the range it has to sit in.
    A value outside the range is refused rather than clamped: a power factor
@@ -151,6 +170,24 @@ module.exports = function (req, res) {
       throw auth.httpError(400, 'Design inputs must be an object.');
     }
 
+    /* Fold the kW aliases into the MW fields before anything validates
+       ranges, so a kW caller is range-checked against the same bounds. */
+    for (var alias in KW_ALIASES) {
+      if (!Object.prototype.hasOwnProperty.call(KW_ALIASES, alias)) continue;
+      if (b[alias] == null || b[alias] === '') continue;
+      var target = KW_ALIASES[alias];
+      if (b[target] != null && b[target] !== '') {
+        throw auth.httpError(400, 'Send ' + alias + ' or ' + target +
+          ', not both - they are the same quantity in different units.');
+      }
+      var kw = Number(b[alias]);
+      if (!isFinite(kw) || kw < 0) {
+        throw auth.httpError(400, alias + ' must be a finite nonnegative number.');
+      }
+      b[target] = kw / 1000;
+      delete b[alias];
+    }
+
     checkNumbers(b, NUMERIC, '');
     checkEnums(b);
 
@@ -174,6 +211,13 @@ module.exports = function (req, res) {
     }
 
     var out = engine.design(b);
+    /* Echo the unit the answer reads best in, so a page that did not state
+       one has a sensible default instead of printing 0.3 MW to a customer
+       who thinks in kW. Purely presentational: every figure in the payload
+       stays in the unit its field name says. */
+    var suggested = UNITS.suggest(out.capacity.loadMw * 1000);
+    out.units = { suggested: suggested.key, power: suggested.label,
+                  energy: suggested.energyLabel };
     return res.status(200).json(out);
   }).catch(function (e) {
     res.status(e.status || 500).json({
