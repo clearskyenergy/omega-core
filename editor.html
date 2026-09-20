@@ -132,6 +132,7 @@ function openFinancingApply(){
      needs the grid fetched rather than read. Same client the site finder uses. -->
 <script src="/omega-grid-atlas-client.js"></script>
 <script src="/omega-compute-lease.js"></script>
+<script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
@@ -16021,12 +16022,31 @@ function parseUtilityBill(text){
 
 /* Battery derates. Nameplate kWh is not usable kWh: usable capacity is
    limited by depth of discharge, and energy delivered to the meter is
-   further reduced by round-trip efficiency. Sizing straight off the raw
-   energy above the shave line - which is what this did before - undersizes
-   the battery by roughly 16%. */
-var BESS_DOD = 0.95;
+   further reduced by the DISCHARGE half of the round trip.
+
+   That last word matters and this used to get it wrong. Round-trip
+   efficiency is the product of BOTH legs - what goes in to charge and what
+   comes out to discharge - so the discharge leg alone is its square root.
+   Applying the whole round trip to the discharge charged the losses twice
+   and over-sized the pack by about 6.6%.
+
+   Depth of discharge drops from 0.95 to 0.90 to match the shared engine's
+   default and most containerised LFP warranties; 0.95 was carried over
+   from the retired bess-engine, which could never read a caller's value at
+   all. The two corrections pull in opposite directions and very nearly
+   cancel - the derate moves from 0.836 to 0.844, about 1% - so this is a
+   consistency fix rather than a repricing. It matters because these
+   constants feed the browser-side shave estimates in the bill importer,
+   and those write into the project alongside results from the shared
+   engine. Two derates in one project is how a drawing and its own sizing
+   come to disagree.
+
+   THE AUTHORITY IS api/_lib/bess-capacity.js. These constants exist for
+   the quick client-side estimates only; anything that reaches a customer
+   should come from /api/bess-size, which uses that module. */
+var BESS_DOD = 0.90;
 var BESS_RTE = 0.88;
-var BESS_DERATE = BESS_DOD * BESS_RTE;
+var BESS_DERATE = BESS_DOD * Math.sqrt(BESS_RTE);
 
 /* Estimate a BESS demand-shaving target from parsed bill fields.
    A single monthly bill carries no load SHAPE, so this returns a
@@ -116747,6 +116767,20 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         annualDemandSave: s.savingsYr, monthlyDemandSave: Math.round(s.savingsYr / 12),
         basis: s.basis, confidence: s.confidence, fromSizer: true, at: Date.now()
       };
+      /* billBessHint is this editor's own shorthand and other parts of the
+         drawing read it. The RECORD is what leaves the editor: the
+         financing application and the deal room read it, so it carries the
+         basis and the assumptions rather than four loose numbers. Both are
+         written because they answer different questions. */
+      if (window.OmegaBessResult) {
+        var rec = window.OmegaBessResult.fromApi(S.result, {
+          source: 'editor-sizer',
+          by: (window.firebase && firebase.auth().currentUser &&
+               firebase.auth().currentUser.email) || null,
+          projectId: (window.S && (window.S.projectId || window.S.id)) || null
+        });
+        if (rec) window.S[window.OmegaBessResult.FIELD] = rec;
+      }
       if (typeof window.pushHist === 'function') window.pushHist();
       if (typeof window.showBanner === 'function') {
         window.showBanner('cal', '  Sized ' + n0(s.kw) + ' kW / ' + n0(s.kwh) +

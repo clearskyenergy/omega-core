@@ -1346,3 +1346,97 @@ three years is not a default.
 - `touSpread` on the editor's tariff form is carried but not yet priced; the
   shared engine prices time-of-use per month from parsed bill data, which the
   editor does not supply.
+
+---
+
+## Sizing reaches the marketplace, and units (2026-09-20)
+
+### Every surface that sizes from energy usage
+
+| surface | before | now |
+|---|---|---|
+| `battery-sizer.html` | shared engine | shared engine |
+| `editor.html` BESS Sizer | its own engine | shared engine |
+| `portals/finance/battery-sizer.html` | **whole engine inline, in the browser** | redirect to the canonical tool |
+| `editor.html` bill-import 8760 shave | `BESS_DERATE`, a third derate | corrected derate, flagged as an estimate |
+| `editor.html` `shaveAnalysis` | same | same |
+| `site-optimizer.html` | **already correct** | unchanged |
+
+`site-optimizer.html` was checked and left alone deliberately. It splits
+round-trip efficiency correctly across both legs (`out = min(kW, soc*√RTE)`,
+`soc -= out/√RTE`) and its objective — co-optimising storage, solar and EV
+against three value streams — is a different question from peak shaving.
+Forcing it onto the shaving engine would lose function and gain nothing.
+
+### The finance portal's sizer
+
+`portals/finance/battery-sizer.html` was a copy of the root tool taken before
+the engine moved server-side, and `vercel.json` served it on
+`finance.csebuilders.com` and `financing.csebuilders.com`. It carried the
+whole engine inline — load duration curve, dispatch, sweep, economics — so the
+logic shipped to every browser that opened it, and it still computed
+`nameplate = usable / DoD`, under-sizing by ~6.6% against the canonical tool
+on the same bills. A finance partner and a developer looking at the same meter
+got different numbers, on two customer-facing hostnames.
+
+Nothing in it was finance-specific. The four host rewrites are removed — the
+default route already resolves `/battery-sizer` on every host — and the file is
+a redirect that carries the query string through.
+
+### The editor's derate constant
+
+`BESS_DERATE` was `DoD × RTE` = 0.836. Round-trip efficiency is the product of
+both legs, so the discharge leg alone is its square root; applying the whole
+round trip charged the losses twice and **over-sized** by ~6.6% — the opposite
+of the engines' error. Depth of discharge also drops 0.95 → 0.90 to match the
+shared default. The two corrections nearly cancel (0.836 → 0.844, ~1%), so this
+is a consistency fix rather than a repricing. It matters because these
+constants feed the bill importer's quick estimates, which write into the
+project alongside results from the shared engine.
+
+### kW and MW
+
+`api/_lib/bess-units.js` normalises at the boundary. The engine only ever sees
+kW and kWh; the caller states a unit and the answer echoes it back.
+
+- `/api/bess-size` takes `unit: 'kw' | 'mw'` and scales **measured site data
+  only**. Rates are never scaled — a demand charge is quoted per kW at every
+  site size, so scaling it alongside the load turns $18.50/kW-mo into
+  $18,500/MW-mo and the savings with it.
+- `/api/bess-design` takes kW aliases (`loadKw`, `unitKwh`, `pcsUnitKw`,
+  `chargeGridKw`, `chargeOtherKw`). The unit is in the field **name**, not a
+  flag: a flag that changes what `loadMw` means leaves the field still called
+  `Mw` while holding kW. Sending both forms of one quantity is refused.
+- `battery-sizer.html` has an input scale and a display scale. Different
+  concerns: the first is accuracy (pasting MW into a kW field is a 1000× error
+  that computes happily and looks reasonable), the second is presentation.
+
+### The sizing record
+
+`omega-bess-result.js` is the shape a sizing run leaves behind. Written by both
+sizers onto `projects/{id}.bessSizing`; read by `financing.html` and by the two
+deal-room paths.
+
+It is a **record, not a model** — every field comes from an `/api/` response,
+and the only arithmetic is unit conversion and multiplying a percentage out.
+Anything else would be a way to smuggle a second opinion into the browser.
+
+It carries its **basis**. A megawatt figure alone tells a capital partner
+nothing about whether it came from a year of interval data or one bill and an
+assumption, and those underwrite differently. Every record states the engine,
+the kind of data, the number of months, and a grade — `measured`,
+`twelve bills`, `partial year`, `single bill` — which the consumers print
+beside the figure rather than under a tooltip.
+
+| consumer | what it takes |
+|---|---|
+| `financing.html` | financed amount, annual throughput, year-1 savings, ITC % and amount, term in months, a scope line stating the basis — and a banner that warns when the grade is soft. Never overwrites a field the person has already filled, and fills nothing it cannot know (no legal entity, industry or address). |
+| `api/dealroom-refer.js` | project → marketplace. Fills `mw`, `mwh` and `capexUsd` only when nobody typed them, so a project sized in the tool does not reach the market as 0 MW. |
+| `api/dealroom-open.js` | deal → marketplace. The record lives on the project, so this follows `projectId` rather than looking on the deal; a deal with no project named simply carries no sizing. |
+
+### Still open
+
+- `ceThruSizerCalc` (Solar → BESS) sizes from generation rather than usage, so
+  it is a different question and was not migrated. It still computes in the
+  browser.
+- `touSpread` on the editor's tariff form is carried but not priced.

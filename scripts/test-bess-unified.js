@@ -242,6 +242,60 @@ section('No headroom is applied on the editor path');
 ok('headroom stays at zero so nothing is silently grossed up',
    adapter.toSettings({}).headroom === 0, adapter.toSettings({}).headroom);
 
+section('The sizing record travels: sizer -> project -> application -> deal room');
+var REC = require('../omega-bess-result');
+var nativeRes = tool({ mode: 'tool-monthly', durations: adapter.DURATIONS,
+  settings: adapter.toSettings(TARIFF),
+  data: PEAKS.map(function (p, i) { return { label: 'm' + i, key: 'm' + i, peak: p,
+    kwh: Math.round(p * 24 * MD[i] * 0.42), days: MD[i], rate: TARIFF.demandChargePerKw, month: i }; }) });
+var fromStandalone = REC.fromApi(nativeRes, { source: 'battery-sizer',
+  settings: adapter.toSettings(TARIFF) });
+var fromEditor = REC.fromApi(edMonthly.body, { source: 'editor-sizer' });
+
+ok('the standalone tool produces a record', !!fromStandalone && fromStandalone.powerKw > 0);
+ok('the editor produces a record', !!fromEditor && fromEditor.powerKw > 0);
+['powerKw','nameplateKwh','durationH','capex','paybackYr','annualSavings','npv'].forEach(function (k) {
+  near('both screens record the same ' + k, fromStandalone[k], fromEditor[k], 0.01);
+});
+ok('the record is versioned', fromStandalone.v === REC.VERSION, fromStandalone.v);
+ok('it carries its basis', !!fromStandalone.basis && !!fromStandalone.confidence,
+   fromStandalone.basis + ' / ' + fromStandalone.confidence);
+ok('it carries the assumptions the economics used',
+   fromStandalone.assumptions.itcPct === 30 && fromStandalone.assumptions.demandRatePerKw === 18.5,
+   JSON.stringify(fromStandalone.assumptions));
+ok('it records which screen ran it', fromStandalone.source === 'battery-sizer');
+
+/* The grade is what stops a screening estimate reading as a measurement. */
+ok('twelve bills grade as "twelve bills"', REC.grade(fromStandalone) === 'twelve bills',
+   REC.grade(fromStandalone));
+ok('one bill grades as "single bill"',
+   REC.grade({ basis: 'monthly', monthsAnalyzed: 1 }) === 'single bill');
+ok('interval data grades as "measured"',
+   REC.grade({ basis: 'interval', monthsAnalyzed: 12 }) === 'measured');
+
+var app = REC.toApplicationFields(fromStandalone);
+ok('the financing application gets a financed amount', app.financedAmount > 0, app.financedAmount);
+ok('and year-one savings', app.savingsY1 > 0, app.savingsY1);
+ok('and the ITC percent AND amount, consistent with each other',
+   app.itcPct === 30 && Math.abs(app.itcAmount - app.financedAmount * 0.3) < 1,
+   app.itcAmount);
+ok('and a term in MONTHS, not years', app.termMonths === 120, app.termMonths);
+ok('and a scope line that states the basis',
+   /utility bills|interval meter data/.test(app.scope), app.scope);
+ok('it fills nothing it cannot know - no legal entity, industry or address',
+   !app.legalName && !app.industry && !app.projectAddress && !app.hqAddress,
+   Object.keys(app).join(','));
+
+var deal = REC.toDealFields(fromStandalone);
+ok('the deal room gets MW, not kW, in its mw field',
+   deal.mw > 0 && deal.mw < 10 && Math.abs(deal.mw * 1000 - deal.bessKw) < 1, deal.mw);
+ok('and the grade travels with it', deal.sizingGrade === 'twelve bills', deal.sizingGrade);
+ok('and the engine that produced it', deal.sizingEngine === 'battery-tool-engine');
+ok('summary rows render without a null', REC.summaryRows(fromStandalone)
+   .every(function (r) { return r[0] && r[1] != null; }));
+ok('a record from an unsized project is refused rather than faked',
+   REC.fromApi(null, {}) === null && REC.fromApi({}, {}) === null);
+
 console.log('\n' + (fail ? fail + ' FAILED, ' : '') + pass + ' checks passed');
 if (fail) process.exitCode = 1;
 })().catch(function (e) { console.error(e); process.exitCode = 1; });

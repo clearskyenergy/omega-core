@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="/omega-bess-result.js"></script>
 <style>
 :root{
   --navy:#0E1C2B;
@@ -2886,7 +2887,44 @@ function remoteSizing(mode,data){
  $('prog').style.display='block';$('progTxt').textContent='Running battery sizing';$('out').style.display='none';RESULT=null;
  return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({mode:mode,data:data,settings:settings,durations:durations(),unit:scale})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Sizing failed');return j;});}).then(function(result){
  if(request!==sizingRequest)return;[result.best,result.rec,result.durationProbe].concat(result.sweep||[]).forEach(function(c){if(c&&c.payback===null)c.payback=Infinity;});RESULT=result;$('prog').style.display='none';$('out').style.display='';render();
+ saveSizingToProject(result,settings);
  }).catch(function(e){if(request!==sizingRequest)return;$('prog').style.display='none';alert(e.message);});
+}
+/* If the tool was opened from a project, the answer belongs to that
+   project: the financing application and the deal room read it from there
+   rather than asking somebody to retype it. Opened standalone there is
+   nowhere to put it, and the tool simply does not try. */
+function saveSizingToProject(result, settings){
+  var pid = _qs('project');
+  var R = window.OmegaBessResult;
+  if(!pid || !R || !window.firebase || !firebase.firestore) return;
+  var user = firebase.auth().currentUser;
+  if(!user) return;
+  var rec;
+  try{
+    rec = R.fromApi(result, { source:'battery-sizer', by:user.email||null,
+                              projectId:pid, settings:settings });
+  }catch(e){ return; }
+  if(!rec || !rec.powerKw) return;
+  var patch = {};
+  patch[R.FIELD] = rec;
+  /* merge, never set: this tool knows the battery and nothing else about
+     the project, and a set() without merge would take the drawing with it. */
+  firebase.firestore().collection('projects').doc(pid).set(patch, {merge:true})
+    .then(function(){ sizingSavedNote(rec); })
+    .catch(function(){ /* a read-only viewer is not an error worth a dialog */ });
+}
+function sizingSavedNote(rec){
+  var el = $('out');
+  if(!el || !window.OmegaBessResult) return;
+  var note = document.createElement('div');
+  note.className = 'note ok';
+  note.style.margin = '0 14px 14px';
+  note.innerHTML = '<b>Saved to the project.</b> '
+    + esc(window.OmegaBessResult.describe(rec))
+    + ' \u2014 the financing application and the deal room prefill from this, '
+    + 'with its basis attached.';
+  el.insertBefore(note, el.firstChild);
 }
 function runInterval(){return remoteSizing('tool-interval',MONTHS);}
 function runBills(bills){return remoteSizing('tool-monthly',bills);}
