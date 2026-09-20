@@ -67,8 +67,8 @@
   .mapsec{background:var(--card);border-bottom:1px solid var(--line)}
   .mapsec .wrap{padding-block:clamp(28px,4vw,44px)}
   .mapscroll{overflow-x:auto;margin-top:22px;padding-bottom:6px}
-  .map{display:grid;grid-template-columns:132px repeat(13,minmax(50px,1fr));
-    row-gap:0;min-width:760px}
+  .map{display:grid;grid-template-columns:150px repeat(13,minmax(50px,1fr));
+    row-gap:0;min-width:790px}
   .lane-h{font:600 11px var(--m);letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);
     display:flex;align-items:center;gap:7px;padding:0 12px 0 0;border-right:1px solid var(--line);
     height:52px;white-space:nowrap}
@@ -84,6 +84,47 @@
   .l-cust{color:var(--cc)} .l-off{color:var(--ink2)} .l-plant{color:var(--coral)} .l-cs{color:var(--cs)}
   .maplegend{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:16px;font-size:13px;color:var(--ink2)}
   .maplegend b{font-weight:600}
+
+
+  /* ── the two layers ─────────────────────────────────────────────────── */
+  .layers{background:var(--paper);border-bottom:1px solid var(--line)}
+  .layers .wrap{padding-block:clamp(32px,4.5vw,56px)}
+  .stack{margin-top:24px}
+  .band{border-radius:14px;padding:20px 22px}
+  .band.seen{background:var(--cc-soft);border:1px solid var(--cc)}
+  .band.runs{background:var(--cs-soft);border:1px solid var(--cs)}
+  .bl{font:600 10.5px var(--m);letter-spacing:.16em;text-transform:uppercase;margin-bottom:13px}
+  .band.seen .bl{color:var(--cc)} .band.runs .bl{color:var(--cs)}
+  .surf{display:flex;gap:8px;flex-wrap:wrap}
+  .surf span{font:500 12.5px var(--m);background:var(--card);border:1px solid var(--cc);
+    color:var(--ink);border-radius:999px;padding:6px 13px}
+  .bn{margin-top:14px;font-size:15px;color:var(--ink2);max-width:72ch}
+  .bn b{color:var(--ink);font-weight:600}
+  .joiner{display:flex;align-items:center;gap:12px;padding:12px 4px}
+  .joiner .jl{flex:1;height:1px;background:var(--line)}
+  .joiner .jt{font:600 11px var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+  .omegabar{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .og{font:700 20px var(--b);letter-spacing:-.025em;color:var(--ink)}
+  .og i{color:var(--cs);font-style:normal}
+  .od{font-size:14px;color:var(--ink2)}
+  .caps{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+  .caps span{font:500 11.5px var(--m);color:var(--cs);background:var(--card);
+    border:1px solid var(--line);border-radius:4px;padding:4px 9px}
+  .onlyone{margin-top:22px;font-size:15.5px;color:var(--ink2);max-width:74ch;
+    border-left:3px solid var(--cs);padding-left:16px}
+  .onlyone b{color:var(--ink);font-weight:600}
+  .railcell{height:46px;display:flex;align-items:center;padding-left:10px}
+  .rail{display:block;width:100%;background:var(--cs);color:#fff;border-radius:6px;
+    padding:8px 14px;font:600 11.5px var(--m);letter-spacing:.06em;white-space:nowrap}
+
+  /* ── caption strip under each screen ────────────────────────────────── */
+  .cap2{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:9px 12px;
+    background:var(--card);border-top:1px solid var(--line)}
+  .tg{font:600 9.5px var(--m);letter-spacing:.11em;text-transform:uppercase;border-radius:3px;
+    padding:3px 9px;white-space:nowrap}
+  .tg.cc{background:var(--cc-soft);color:var(--cc)}
+  .tg.cs2{background:var(--cs-soft);color:var(--cs)}
+  .tg.om{background:var(--paper);color:var(--ink3);border:1px solid var(--line)}
 
   /* ── steps ──────────────────────────────────────────────────────────── */
   .steps{padding-block:clamp(30px,4vw,52px)}
@@ -235,14 +276,43 @@
     <span class="cs">Ω ClearSky <i>OMEGA</i></span>
   </div>
   <div class="eyebrow">Order to shipped · thirteen steps</div>
-  <h1 style="margin-top:12px">One order, three companies, nobody typing a status.</h1>
-  <p class="lead">A customer sizes a battery on Clean Cell's own website and never sees ours. Their
-    request becomes a works order on Clean Cell's floor. A technician pulls a trigger on a scanner,
-    and the ship date on a stranger's account moves. Three companies touch that order — the buyer,
-    Clean Cell, and us — and this is every hand-off between them, in order, with the screen each one
-    happens on.</p>
+  <h1 style="margin-top:12px">Clean Cell on every screen.<br>ClearSky underneath all of it.</h1>
+  <p class="lead">A customer sizes a battery on Clean Cell's website. Their request becomes a works
+    order on Clean Cell's floor. A technician pulls a trigger on a scanner, and the ship date on a
+    stranger's account moves — with nobody re-keying anything into a second system, because there is
+    no second system. Three companies touch that order. <b>The customer sees one name and the plant
+    sees the same one.</b></p>
   <a class="cta" href="https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x">Open the working demo <span class="arw">→</span></a>
 </div></header>
+
+<section class="layers"><div class="wrap">
+  <div class="eyebrow">The arrangement</div>
+  <h2 style="margin-top:8px">One system. One name on it.</h2>
+  <div class="stack">
+    <div class="band seen">
+      <div class="bl">What the customer and the plant see</div>
+      <div class="surf">
+        <span>cleancell.us</span><span>portal.cleancell.us</span>
+        <span>design.cleancell.us</span><span>plant.cleancell.us</span></div>
+      <p class="bn">Four surfaces — the storefront, the buyer's account, the designer and the bench
+        tablet on the floor. <b>One brand across all of them, and it is not ours.</b> Not in a footer,
+        not in an email header, not under the home-screen icon on a technician's phone.</p>
+    </div>
+    <div class="joiner"><span class="jl"></span><span class="jt">every one of them runs on</span><span class="jl"></span></div>
+    <div class="band runs">
+      <div class="bl">What runs it</div>
+      <div class="omegabar"><span class="og">Ω ClearSky <i>OMEGA</i></span>
+        <span class="od">one order record · thirteen hand-offs · nothing re-keyed</span></div>
+      <div class="caps">
+        <span>storefront embed</span><span>site study</span><span>order desk</span><span>pricing</span>
+        <span>works orders</span><span>scan engine</span><span>buyer projection</span>
+        <span>documents</span><span>billing</span><span>white label</span></div>
+    </div>
+  </div>
+  <p class="onlyone"><b>The only ClearSky-branded screen in the entire chain is our staff console</b> —
+    and neither the customer nor the floor can open it. That is the whole arrangement: they own the
+    relationship, we own the machinery.</p>
+</div></section>
 
 <section class="mapsec"><div class="wrap">
   <div class="eyebrow">The chain</div>
@@ -288,6 +358,8 @@
     <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
     <div class="cell"></div>
     <div class="cell l-cs on"><a class="node l-cs" href="#s13"><span>13</span></a></div>
+    <div class="lane-h" style="border-right-color:var(--cs)"><span class="sw" style="background:var(--cs)"></span>Runs on</div>
+    <div class="railcell" style="grid-column:span 13"><span class="rail">Ω ClearSky OMEGA — the same record, all thirteen steps</span></div>
   </div></div>
   <div class="maplegend">
     <span><b>1–5</b> the customer, with no account until step 5</span>
@@ -314,7 +386,7 @@
           <span><b style="color:var(--s-ink);font-size:13px">412 MWh</b><br>shipped since 2021</span>
           <span><b style="color:var(--s-ink);font-size:13px">12 weeks</b><br>lead time</span>
           <span><b style="color:var(--s-ink);font-size:13px">10 year</b><br>warranty</span></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · storefront embed</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Arrive from a search or a rep's email. No sign-in wall, no chat bubble, no form before they are allowed to see anything.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Serves a page with <b>no platform name anywhere on it</b>. The whole product is running underneath — the customer will never see the word ClearSky, on any screen, at any point in this chain.</p></div>
@@ -340,7 +412,7 @@
           <div class="kv"><span>System</span><b>1,000 kW · 2,090 kWh</b></div>
           <div class="kv"><span>Duration</span><b>2.1 h</b></div>
           <div class="kv"><span>Indicative</span><b>$560,000</b></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · sizing</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Type peak demand and hours. A system comes back before they have decided whether to talk to anybody.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Picks the <b>tightest fit</b> from Clean Cell's own product list, not the biggest box on it — five cabinets rather than one oversized container. The sizing runs server-side and returns a result, never the inputs that produced it.</p></div>
@@ -376,7 +448,7 @@
           <text x="66" y="404" font-size="13" fill="var(--s-ink2)" font-family="Inter,sans-serif">50 ft</text>
           <text x="486" y="404" font-size="13" fill="var(--s-ink3)" text-anchor="end" font-family="Inter,sans-serif">184 × 139 ft · 22 ft setback</text>
         </svg>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · site study</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Type their address. Their parcel comes back with the cabinets on it, the setback marked and the fire clearance drawn.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>This is the <b>one public call that costs money</b> — it reaches a metered parcel service. So it is gated on a named lead, capped per tenant per day inside a transaction, and a cache hit never spends the allowance. The parcel owner's name and APN are never echoed back to the page.</p></div>
@@ -401,7 +473,7 @@
         <div class="row" style="justify-content:space-between">
           <span class="btn">Place the request</span>
           <span class="xs" style="color:var(--s-ink3)">Deposit 30% on confirmation</span></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · order desk</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Fill in four fields and send it. They are told plainly that this is a request, not a purchase, and that a person at Clean Cell confirms it.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Writes the order with its status <b>pinned to <code>new</code></b>. A browser cannot set any other value, whatever it posts. That single constraint is what makes an order desk safe to leave open to the public.</p></div>
@@ -423,7 +495,7 @@
           <div class="kv"><span>5 × CellCube 418</span><b>2,090 kWh</b></div>
           <div class="kv"><span>Price</span><b>Pending</b></div>
           <div class="kv"><span>Sold by</span><b>Clean Cell</b></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · buyer portal</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Sign in with the same work email. They do not quote a reference, and nobody at Clean Cell had to set them up first.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Creates the account from the <b>verified sign-in token</b> and claims every past order on that address onto it. A verified email is the entire security model for this portal — which is also why the customer opens their own account rather than waiting to be provisioned.</p></div>
@@ -451,7 +523,7 @@
             <span style="font-size:11px;color:var(--s-ink3);flex:1.4">Halsted Logistics</span>
             <span class="chip ok">shipped</span></div></div>
         <p class="xs" style="color:var(--s-ink3);margin-top:9px">One queue — their own storefront and anything ClearSky sends over.</p>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · order desk</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Read the order, check the site, accept it. Nothing downstream — no serials, no bench, no promised date — exists until somebody here says yes.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Moves it off <code>new</code> and stamps who accepted it. The same queue holds orders from Clean Cell's own website and orders ClearSky took directly, so the floor never has <b>two inboxes to reconcile</b>.</p></div>
@@ -475,7 +547,7 @@
           <div class="kv"><span>Clean Cell sells at</span><b>$560,000</b></div>
           <div class="kv"><span>Customer can see it</span><b>No — priced is not published</b></div></div>
         <div class="row" style="margin-top:10px"><span class="btn sq">Publish to the customer</span></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cs2">ClearSky — staff only</span><span class="tg om">OMEGA · pricing</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Price the order to Clean Cell. Reprice it as many times as the deal needs — the customer sees nothing while they do.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Keeps <b>priced</b> and <b>published</b> as two separate facts. Every number on this screen — our cost, our margin, our price to the tenant — lives on the same order record the customer can open, and is kept off their screen by a projection that rebuilds the card field by field rather than by a rule that hides the document.</p></div>
@@ -498,7 +570,7 @@
             <div class="kv" style="border:0"><span>Price</span><b>$560,000</b></div></div></div>
         <p class="xs" style="color:var(--s-ink3);margin-top:10px">The customer's own account, on Clean Cell's domain.
           Their price — not the one ClearSky quoted Clean Cell.</p>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · buyer projection</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Set their own margin on top and publish. The buyer's portal changes the moment they do.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Shows the buyer <b>Clean Cell's price and only Clean Cell's price</b>. Two prices exist on one record; which one a reader gets is decided by who is asking, not by which page they opened.</p></div>
@@ -523,7 +595,7 @@
         <div class="chiprow" style="margin-top:9px">
           <span class="chip">CC418-26-44190</span><span class="chip">…91</span><span class="chip">…92</span>
           <span class="chip">…93</span><span class="chip">…94</span></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · works orders</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Record the deposit, then release it. Two separate acts, because money arriving and the floor starting work are two separate decisions.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Allocates serials <b>here and nowhere else</b>. Nothing can be scanned onto a bench that nobody has been paid for. Each serial becomes a paired record, and from this point the order belongs to the floor.</p></div>
@@ -554,7 +626,7 @@
           <div class="bc"><div class="h2">Enclosure</div></div>
           <div class="bc"><div class="h2">Electrical</div></div>
           <div class="bc"><div class="h2">EOL test</div></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · scan engine</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Pull the trigger on a unit label. If the unit is not where the bench expects it, the tablet says so in a sentence the operator can act on.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>A scan can only <b>advance one station or be a duplicate</b>. It can never skip, reverse, release a hold, close a non-conformance or mark anything shipped — so the worst a stolen scanner achieves is marking units present at one bench, in order. Two stations are written by the test rig and refuse a human scan outright. The station comes off the <b>paired tablet</b>, never off the scan, which is only a string a stranger could type.</p></div>
@@ -583,7 +655,7 @@
           <div class="box" style="flex:1"><div class="lbl">Customer reads</div>
             <div class="kv" style="border:0"><span>was</span><b>In production</b></div>
             <div class="kv" style="border:0"><span>now</span><b>Confirmed</b></div></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · scan engine + projection</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Quality holds one cabinet against a non-conformance. Four units carry on; one does not.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>The <b>furthest-behind unit decides</b> what the customer is told, and a held unit is ranked below where it stands. So the order does not stall on the buyer's screen — it <b>goes back a milestone</b>. Nobody has to remember to tell them, and nobody can quietly report an order as nearly done while a cabinet sits on a hold.</p></div>
@@ -608,7 +680,7 @@
           <div class="s dn"><span class="dt"></span><span class="tx">Inspection &amp; test</span></div>
           <div class="s nw"><span class="dt"></span><span class="tx">Ready to ship — packed and staged for collection.</span></div>
           <div class="s"><span class="dt"></span><span class="tx">Shipped</span></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · buyer projection</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>Nothing. They open their account when they feel like it and the position is already right.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Shows <b>six public milestones</b>, not the seventeen internal states the record actually carries. <code>quoted</code> is never shown to a buyer: it is true, about the wrong transaction — it means ClearSky has priced it to the seller.</p></div>
@@ -633,7 +705,7 @@
           <div class="kv"><span>ClearSky price</span><b style="color:#12704A">absent</b></div>
           <div class="kv"><span>"clearsky" anywhere</span><b style="color:#12704A">absent</b></div>
           <div class="kv"><span>staff audit trail</span><b style="color:#12704A">absent</b></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cs2">ClearSky — staff only</span><span class="tg om">OMEGA · billing + projection</span></div></div>
     <div class="says">
       <div><span class="t">What they do</span><p>A person marks it complete once every unit is staged — the one thing a trigger pull cannot cause. The balance falls due on shipment, and the order closes.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Runs the real projection over the real record and shows the result. The order holds our cost, our margin, our price and a staff audit trail the whole way through this chain; the test searches <b>what the buyer actually receives</b> for each of them. That is the difference between a demo and a claim.</p></div>
@@ -667,7 +739,7 @@
               <div class="kv"><span>Energy</span><b>2,090 kWh</b></div>
               <div class="kv" style="border:0"><span>Yard</span><b>169 sq ft</b></div></div>
             <div class="row" style="margin-top:8px"><span class="btn" style="font-size:10.5px;padding:5px 11px">Order this from Clean Cell</span></div></div></div>
-      </div></div>
+      </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · designer · bess-lite</span></div></div>
     <div class="says">
       <div><span class="t">What they buy</span><p>A subscription to the designer — Site Map and Grid Atlas, on Clean Cell's domain, in Clean Cell's colours. They lay out their own next site and order the bill of materials straight out of the drawing, which starts this chain again at step 4.</p></div>
       <div class="sysline"><span class="t">What the system does</span><p>Writes <b>one field</b>: the tools this account may open. It is an allowlist that beats the plan, the add-ons and every override, and every endpoint checks it independently — so a tool that is not on the list refuses the call even if somebody finds the URL. What they get is a <b>mode of the one editor</b>, not a second copy of it: compute and the data-centre and EV categories are hidden, solar stays, and every export travels with it.</p></div>
