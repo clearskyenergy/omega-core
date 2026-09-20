@@ -106,7 +106,8 @@ rather than pretending it already fires.
 `chain.html` is the presentation companion to the demo: the same thirteen
 hand-offs laid out in order, each with the screen it happens on, who is
 holding the order, and what crosses to the next step. It opens with a
-swimlane map of the four parties so the whole chain reads at a glance, and
+swimlane map of the three companies across four desks — Clean Cell's office and
+its floor are one company, two rooms — so the whole chain reads at a glance, and
 closes with an honest three-column split of what is running code, what is
 designed but not written, and what is drawn for the demo.
 
