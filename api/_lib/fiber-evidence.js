@@ -2,6 +2,7 @@
 'use strict';
 var fs = require('fs');
 var path = require('path');
+var zlib = require('zlib');
 var R = 6371008.8;
 var cached;
 
@@ -392,7 +393,7 @@ module.exports.normalizeRing = normalizeRing;
    resident for the life of the container.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-var USA_ROOT = path.join(__dirname, '../../data/usa-fiber');
+var USA_ROOT = path.join(__dirname, '../../data/fiber-api');
 var usaManifest = null, usaCache = {}, usaOrder = [];
 var USA_CACHE_MAX = 6;
 
@@ -404,7 +405,7 @@ function bboxHit(a, b) { return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && 
 
 function usaState(code) {
   if (usaCache[code]) return usaCache[code];
-  var fc = JSON.parse(fs.readFileSync(path.join(USA_ROOT, code + '.geojson'), 'utf8'));
+  var fc = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(USA_ROOT, code + '.json.gz'))).toString('utf8'));
   usaCache[code] = fc.features || [];
   usaOrder.push(code);
   while (usaOrder.length > USA_CACHE_MAX) { delete usaCache[usaOrder.shift()]; }
@@ -437,7 +438,7 @@ function usaAdapt(f) {
       feature_kind: kind, proximity_eligible: eligible,
       source_url: p.sourceUrl, retrieved_at: p.retrievedAt,
       geometry_quality: p.evidence === 'approximate_project_route'
-        ? 'generalized_public_design' : 'agency_published',
+        ? 'generalized_public_design' : 'publisher_geometry_accuracy_unverified',
       operational_status: p.routeStatus && p.routeStatus !== 'Unknown'
         ? p.routeStatus : (cat === 'unknown' ? 'not stated by the publisher' : cat),
       serviceability: 'unconfirmed',
@@ -459,15 +460,18 @@ function usaAdapt(f) {
 /* Candidate features whose own bbox meets the query box. */
 function usaCandidates(box) {
   var m;
-  try { m = usaLoadManifest(); } catch (e) { return []; }
-  var out = [];
+  m = usaLoadManifest();
+  var out = [], seen = {};
   (m.states || []).forEach(function (s) {
     if (!s.segments || !s.bbox || !bboxHit(s.bbox, box)) return;
     var feats;
-    try { feats = usaState(s.code); } catch (e) { return; }
+    feats = usaState(s.code);
     for (var i = 0; i < feats.length; i++) {
       var f = feats[i];
       if (f.bbox && !bboxHit(f.bbox, box)) continue;
+      // Cross-border source records occur in multiple shards; count once.
+      if(seen[f.properties.id])continue;
+      seen[f.properties.id]=true;
       out.push(usaAdapt(f));
     }
   });
