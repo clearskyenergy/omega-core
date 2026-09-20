@@ -1,61 +1,81 @@
-# The walkthrough
+# The live demo
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Three guided stories over one world, built to be presented:
+Five product surfaces inside a browser frame, sharing one world. You click
+it the way a customer, a sales desk, a technician and we would.
 
-**A · The customer buys.** A visitor on `cleancell.us` sizes a system, sees it
-drawn on their own lot, creates their own account, orders, hits the locked
-designer, subscribes, designs a site, and orders the BOM out of the drawing.
+| Surface | Address it shows | Who |
+|---|---|---|
+| Public storefront | `cleancell.us` | anybody |
+| Customer portal | `portal.cleancell.us` | the buyer |
+| Design studio | `design.cleancell.us` | the buyer, on the Designer plan |
+| Bench tablet | `plant.cleancell.us/bench/2` | the plant |
+| ClearSky console | `console.clearskyomega.com` | us |
 
-**B · Clean Cell builds it.** The works queue takes an order — from their own
-storefront or sent over by ClearSky — raises the works order, allocates
-serials, and walks them across ten benches: a refused scan, a QA hold, the
-hold cleared, and a human marking it complete.
-
-**C · ClearSky sells direct.** A client order taken at the console, priced,
-published, deposited, pushed to Clean Cell's floor, fulfilled, shipped,
-invoiced and closed — ending with the estate and the leak test.
+The address bar is part of the point: everything the customer touches is on
+Clean Cell's own domains, and our name is nowhere on them.
 
     node scripts/sandbox/build.js     # -> scripts/sandbox/index.html
-    node scripts/sandbox/drive.js     # drives all three stories in Chromium
+    node scripts/sandbox/drive.js     # clicks the whole thing in Chromium
     node scripts/sandbox/look.js      # screenshots for eyeballing
 
 `index.html` is generated and deliberately not committed; `build.js` rebuilds
 it in under a second.
 
+## The walk
+
+Size a system on the home page → see it drawn on your own lot → place the
+request **with no account** → create the account afterwards and watch the
+order you already placed get claimed by email → hit the locked design studio
+→ subscribe → run the guided build, flip through the plot plan, single-line,
+BOM, proposal and drawing set → order the BOM out of the drawing. Switch to
+Rob at Clean Cell to accept it, record the deposit and release it to the
+floor. Switch to Marco on the bench and scan — at the wrong station first, so
+it refuses. Switch to us to price it, publish it, push a direct order to the
+same floor, and run the leak test on what the buyer actually receives.
+
+The **Show what is real** toggle in the sandbox bar puts one paragraph under
+each screen saying which committed file decided what you just saw.
+
 ## Why it is trustworthy
 
 `build.js` reads `api/_lib/plant.js` and `api/_lib/portal.js` **verbatim** out
 of the repo and rewrites exactly one line in each — `module.exports` becomes a
-`window.` global. No logic is copied, re-implemented or adjusted, and the
-build throws if that rewrite fails. So the scan verdicts, the furthest-behind
-milestone and the buyer projection are the ones production computes. Change
-`portal.js` and the walkthrough changes with it.
+`window.` global — and throws if that rewrite fails. Scan verdicts, the
+furthest-behind milestone and the buyer projection are the functions
+production calls. Change `portal.js` and the demo changes with it.
 
-What is simulated, and only this: Firestore (a `localStorage` object), auth (a
-sign-up form), Stripe (a button), and the two screens that stand in for
-`embed/storefront.html` and `editor.html`. Every decision in between is real
-code, and each step's panel says which of the two it is.
+Simulated, and only this: Firestore (a `localStorage` object), auth (a sign-in
+modal), payments (a button), and two screens — the storefront stands in for
+`embed/storefront.html` and the studio for `editor.html`. Each of those two
+says so under **Show what is real**.
 
-## What `drive.js` asserts
+## What `drive.js` asserts (52)
 
+- ClearSky's name appears nowhere on Clean Cell's site
 - the tightest-fit sizer, not the biggest box
-- a customer creates their own account; terms are an overlay applied after
-- **another company's order never appears on this customer's account**
+- an order can be placed with no account, and signing up afterwards claims it
+  by verified email
+- the internal status vocabulary (`quoted`) never reaches the buyer
 - priced is not published — repricing crosses nothing
-- a scan out of sequence is refused (`out_of_sequence`)
+- **another company's order never appears on this customer's account**
+- the designer is gated, and compute is disabled rather than hidden
+- a scan at the wrong station is refused (`out_of_sequence`)
 - a scan at a station the test rig owns is refused (`machine_station`)
-- a unit on hold does not move the customer's milestone
-- mark-complete unlocks only when every unit is at Ready to ship
+- a double-fire is a duplicate, not an error; a typed label scans identically
+- **one held unit pulls the whole order back a milestone** — "In production"
+  becomes "Confirmed", because the furthest-behind unit decides
+- mark-complete appears only when every unit is at Ready to ship
+- terms Clean Cell sets afterwards appear on the customer's portal
 - the buyer's projection carries no cost basis, margin, ClearSky price,
   provenance, audit history or `placedBy`
-- state survives a reload, no horizontal scroll at 390px, dark mode paints,
-  no JS errors
+- state survives a reload, no horizontal scroll at 390px across 18 pages,
+  dark mode paints, no JS errors
 
-## Known stand-ins
+## Known stand-in
 
 The deposit is a button. In the product the Stripe milestone webhook that
 raises the works order is designed (`docs/CUSTOMER-PORTAL.md`) and not
-written, so story C names it as the first thing to automate rather than
-pretending it already fires.
+written, so the ClearSky console names it as the first thing to automate
+rather than pretending it already fires.
