@@ -1135,3 +1135,99 @@ Nothing about the two datasets is de-duplicated across sources. They publish
 different records from different agencies, and silently collapsing them would
 drop provenance a user is entitled to see; each source already guarantees
 uniqueness by id within itself.
+
+---
+
+## Battery Sizer — engineering design engine (2026-09-20)
+
+Three ClearSky electrical-engineering workbooks were ported into omega-core:
+*Electrical Engineering Design Calculator R3.0i*, *BESS Sizing Calculator
+R2.3+* and *Payback Period Table Rev.0*.
+
+### Why it exists
+
+The Battery Sizer answered one question well — **how many kW and kWh does the
+utility bill justify** — and then stopped. Nobody can order kW and kWh. The
+questions that follow it are the ones the workbooks answer: how many
+containers is that, how many converters, what transformer, what breaker, what
+cable after derating, what is the fault current at the bus the gear is bolted
+to, can the pack actually be recharged before the peak period comes round
+again, and does it reach end of cycle life before the end of the analysis.
+
+### Logic moved to `/api/` (per the IP-protection rule)
+
+**None of this shipped to the browser.** Both new files are server-side from
+the start:
+
+| file | what it holds |
+|---|---|
+| `api/_lib/bess-design-engine.js` | the whole engine: capacity chain, converter count, charge-window feasibility, transformer selection, breaker/cable/busduct sizing with derating and voltage drop, IEC 60909 fault level, switchgear Icu, metering and protection CT sizing, solar string limits, the 20-year degradation/replacement lifecycle, scenario sensitivity, design checks, bill of quantities |
+| `api/bess-design.js` | auth + the same tier gate as `api/bess-size.js` (`standard`+ tier, the `engineering` addon, or a `batterysizer` override), plus per-field range validation and two cross-field rules |
+
+The standard-size tables (IEC 60076 kVA, breaker frames, busduct ampacity, CT
+ratios, Icu steps, cable ampacity and mV/A/m) live in the engine, not in the
+page. They are the product.
+
+### Verification
+
+The engine reproduces the R3.0i workbook cell for cell on its own example:
+
+| figure | workbook | engine |
+|---|---|---|
+| capacity after DoD / after RTE | 4.4445 / 4.6088 MWh | 4.4445 / 4.6088 MWh |
+| converter count | 8 × 135 kW | 8 × 135 kW |
+| transformer duty → rating | 1,589 kVA → 1.6 MVA | 1,589 kVA → 1.6 MVA |
+| primary current / breaker | 1,834 A → 2,500 A | 1,834 A → 2,500 A |
+| AC cable after derating | 300 mm², 9 runs | 300 mm², 9 runs |
+| full charge time | 9.4 h | 9.4 h |
+| payback / discounted payback | 3.91 / 4.86 yr | 3.91 / 4.86 yr |
+| NPV / IRR | 1,422,244 / 26.11% | 1,422,244 / 26.11% |
+
+### Two places the port deliberately departs from the workbook
+
+1. **The fault level is taken at the bus the gear sits on.** The workbook
+   computes one fault figure and warns, in prose, when the busduct and
+   switchgear sheets are pointed at a different voltage. For a step-up BESS
+   that is not a footnote: the same transformer impedance referred to 0.4 kV
+   and to 33 kV differs by the square of the turns ratio, so a figure taken at
+   the wrong bus is two orders of magnitude out and still looks plausible. The
+   engine computes the fault at the converter bus and at the system bus and
+   reports both; the breaker, cable, busduct and CTs are checked against the
+   one they are bolted to.
+
+2. **Converter fault contribution is included.** A battery converter is a
+   fault source, firmware-limited to a fixed multiple of rated current
+   (default 1.2×). On the low-voltage bus it is not small, and LV switchgear
+   sized on the grid contribution alone is under-rated. It is reported as its
+   own column, not folded silently into the total.
+
+A third, smaller correction: the workbook's *Payback Period Table Rev.0*
+divides by round-trip efficiency where *R3.0i* takes its square root. The
+square root is right — only the discharge half of the round trip is spent
+getting energy to the meter — so the engine follows R3.0i.
+
+### Surfaces
+
+- `battery-sizer.html` — step 5, "Engineering design". **Pull from sizing**
+  carries the recommended system across; the schedule invalidates itself when
+  the sizing changes rather than sitting stale beside a new number.
+- `editor.html` — a fifth tab, "Engineering", on `OmegaBessSizer`, between
+  *Recommended Size* and *Hand Off*. Same engine, same endpoint.
+- `tenants/cleancell/tenant.json` — `batterysizer` added to `requiredTools`
+  so it is pinned on the Clean Cell dashboard. Visibility only; the gate is
+  still the serverless function. Takes effect on the next
+  `scripts/seed-omega-orgs.js --apply`.
+
+### Open
+
+- The workbook's *Hourly Dispatch (Off Grid)* sheet (520 rows of an 8760-style
+  dispatch) was **not** ported. `api/_lib/battery-tool-engine.js` already
+  simulates dispatch against real interval data, which is a better answer than
+  a modelled day; porting the sheet would give the tool two dispatch engines
+  that disagree.
+- %Z, X/R, busduct impedance per metre and CT winding resistance are
+  placeholders until equipment is selected, and every one of them moves the
+  fault duty. The UI says so on every run; it is not a stamped drawing.
+- Cable ampacities are the direct-burial table. Tray, conduit and free-air
+  installations need their own table before the schedule is trustworthy for
+  those methods; today they are approximated through the Ci derating factor.

@@ -112,6 +112,26 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--teal);bo
 .f{margin-bottom:10px}
 .hint{font-size:11px;color:var(--sub);margin-top:4px;line-height:1.4}
 .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:6px 0;cursor:pointer}
+.dgrp{border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:10px;background:#FBFDFE}
+.dgrp>summary{cursor:pointer;user-select:none;padding:8px 11px;font-size:11.5px;font-weight:600;color:var(--sub);list-style:none}
+.dgrp>summary::-webkit-details-marker{display:none}
+.dgrp>summary:before{content:'\25B8';display:inline-block;margin-right:7px;color:var(--teal);transition:transform .12s}
+.dgrp[open]>summary:before{transform:rotate(90deg)}
+.dgrp[open]>summary{border-bottom:1px solid var(--border2);color:var(--text)}
+.dgrp>*:not(summary){margin-left:11px;margin-right:11px}
+.dgrp>summary+*{margin-top:10px}
+.dgrp>*:last-child{margin-bottom:11px}
+.stat{border:1px solid var(--border);border-radius:var(--radius);padding:9px 11px;background:#fff}
+.stat .k{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--sub);font-weight:600}
+.stat .v{font-size:17px;font-weight:600;font-family:var(--mono);margin-top:3px}
+.stat .v em{font-style:normal;font-size:11px;color:var(--sub);margin-left:3px}
+.stat .s{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+.chain{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;margin:10px 0}
+.chain span{background:#F3F7FA;border:1px solid var(--border2);border-radius:2px;padding:4px 8px}
+.chain i{font-style:normal;color:var(--sub)}
+.chain span.bind{background:#E4F3EA;border-color:var(--green);color:var(--green);font-weight:600}
+
 .chk input{width:15px;height:15px;accent-color:var(--teal)}
 
 /* ---------- dropzone ---------- */
@@ -496,6 +516,169 @@ body.nohelp .hb{display:none}
     </div>
   </div>
 
+  <!-- 5. ENGINEERING DESIGN -->
+  <div class="card">
+    <div class="card-h" data-help="sDesign"><span class="n">5</span> Engineering design</div>
+    <div class="card-b">
+      <div class="hint" style="padding-top:0">Sizing says how many kW and kWh the bill justifies. This says what that
+        system <i>is</i> &mdash; containers, converters, transformer, breakers, cable, fault duty, CTs &mdash; and whether it is
+        buildable. Size the battery first and these fields fill themselves; every one of them is still yours to override.</div>
+
+      <div class="row3">
+        <div><label class="fl" data-help="dLoad">Load to support MW</label><input type="number" id="dLoadMw" value="1" step="0.05" min="0.001"></div>
+        <div><label class="fl">Duration h</label><input type="number" id="dDurH" value="4" step="0.5" min="0.1"></div>
+        <div><label class="fl" data-help="dUnit">Container MWh</label><input type="number" id="dUnitMwh" value="5" step="0.1" min="0.001"></div>
+      </div>
+      <div class="row3">
+        <div><label class="fl" data-help="dDod">Usable DoD %</label><input type="number" id="dDod" value="90" step="1" min="1" max="100"></div>
+        <div><label class="fl">Round-trip %</label><input type="number" id="dRte" value="88" step="1" min="1" max="100"></div>
+        <div><label class="fl" data-help="dOther">Other eff %</label><input type="number" id="dOther" value="100" step="1" min="1" max="100"></div>
+      </div>
+      <div class="row3">
+        <div><label class="fl" data-help="dCrate">Max C-rate</label><input type="number" id="dCrate" value="0.5" step="0.05" min="0.01"></div>
+        <div><label class="fl" data-help="dPcs">PCS unit MW</label><input type="number" id="dPcsMw" value="0.135" step="0.005" min="0.001"></div>
+        <div><label class="fl">Power factor</label><input type="number" id="dPf" value="0.9" step="0.01" min="0.1" max="1"></div>
+      </div>
+      <div class="row3">
+        <div><label class="fl" data-help="dKv">Converter kV</label><input type="number" id="dPcsKv" value="0.48" step="0.01" min="0.1"></div>
+        <div><label class="fl" data-help="dSysKv">System kV</label><input type="number" id="dSysKv" value="13.8" step="0.1" min="0.1"></div>
+        <div><label class="fl">Phase</label><select id="dPhase"><option>Three-Phase</option><option>Single-Phase</option></select></div>
+      </div>
+      <div class="row3">
+        <div><label class="fl" data-help="dCharge">Grid charge MW</label><input type="number" id="dChgGrid" value="0.5" step="0.05" min="0"></div>
+        <div><label class="fl">Other charge MW</label><input type="number" id="dChgOther" value="0" step="0.05" min="0"></div>
+        <div><label class="fl" data-help="dWindow">Charge window h</label><input type="number" id="dWindow" value="16" step="1" min="0.1" max="24"></div>
+      </div>
+
+      <details class="dgrp">
+        <summary>Transformer &amp; protection</summary>
+        <div class="row3">
+          <div><label class="fl" data-help="dTxBuf">Transformer buffer</label><input type="number" id="dTxBuf" value="1.25" step="0.05" min="1" max="3"></div>
+          <div><label class="fl" data-help="dNec">NEC buffer</label><input type="number" id="dNec" value="1.25" step="0.05" min="1" max="3"></div>
+          <div><label class="fl" data-help="dZ">Impedance %Z</label><input type="number" id="dZ" value="6" step="0.5" min="0.5" max="30"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Category</label><select id="dTxCat"><option>Dry Type</option><option>Oil-Immersed</option></select></div>
+          <div><label class="fl" data-help="dVec">Vector group</label><select id="dVec"><option>Dyn11</option><option>Dyn1</option><option>Yyn0</option><option>Yzn11</option><option>Dd0</option><option>Yy0</option><option>Dyn5</option></select></div>
+          <div><label class="fl" data-help="dNeutral">PCS has neutral</label><select id="dNeutral"><option>No</option><option>Yes</option></select></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Connection</label><select id="dConn"><option>3P4W+E</option><option>3P3W+E (No Neutral)</option></select></div>
+          <div><label class="fl">Grid stability</label><select id="dStab"><option>Stable</option><option>Unstable</option><option>Off-Grid</option></select></div>
+          <div><label class="fl">Black start</label><select id="dBlack"><option>Not Required</option><option>Required</option></select></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl" data-help="dGridMva">Source fault MVA</label><input type="number" id="dGridMva" value="500" step="10" min="0"></div>
+          <div><label class="fl">Transformer X/R</label><input type="number" id="dTxXr" value="10" step="0.5" min="0.5"></div>
+          <div><label class="fl">Source X/R</label><input type="number" id="dGridXr" value="10" step="0.5" min="0.5"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl" data-help="dMethod">Fault method</label><select id="dMethod"><option value="rx">R and X (IEC 60909)</option><option value="quick">Reactance only</option></select></div>
+          <div><label class="fl" data-help="dBusArr">Bus arrangement</label><select id="dBusArr"><option value="common">Common bus</option><option value="separate">Separate sections</option></select></div>
+          <div><label class="fl" data-help="dInvMult">Inverter fault &times;In</label><input type="number" id="dInvMult" value="1.2" step="0.1" min="0" max="5"></div>
+        </div>
+        <div class="row"><div><label class="fl" data-help="dIcuM">Icu margin</label><input type="number" id="dIcuM" value="1.2" step="0.05" min="1" max="3"></div>
+          <div><label class="fl">Fault duration s</label><input type="number" id="dFaultS" value="1" step="0.5" min="0.1" max="10"></div></div>
+      </details>
+
+      <details class="dgrp">
+        <summary>Cable, busduct &amp; CTs</summary>
+        <div class="row3">
+          <div><label class="fl" data-help="dCa">Ambient Ca</label><input type="number" id="dCa" value="0.94" step="0.01" min="0.1" max="1.5"></div>
+          <div><label class="fl" data-help="dCg">Grouping Cg</label><input type="number" id="dCg" value="0.8" step="0.01" min="0.1" max="1.5"></div>
+          <div><label class="fl" data-help="dCi">Install Ci</label><input type="number" id="dCi" value="1" step="0.01" min="0.1" max="1.5"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Cable route m</label><input type="number" id="dCableM" value="50" step="5" min="1"></div>
+          <div><label class="fl">Drop limit %</label><input type="number" id="dVdLim" value="3" step="0.5" min="0.1" max="20"></div>
+          <div><label class="fl" data-help="dRuns">Max runs</label><input type="number" id="dMaxRuns" value="4" step="1" min="1" max="64"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Busduct run m</label><input type="number" id="dBdM" value="20" step="1" min="1"></div>
+          <div><label class="fl">Busduct R m&Omega;/m</label><input type="number" id="dBdR" value="0.1" step="0.01" min="0.0001"></div>
+          <div><label class="fl">Busduct X m&Omega;/m</label><input type="number" id="dBdX" value="0.08" step="0.01" min="0.0001"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">CT secondary A</label><input type="number" id="dCtSec" value="5" step="1" min="0.5" max="10"></div>
+          <div><label class="fl">Meter burden VA</label><input type="number" id="dCtVa" value="5" step="0.5" min="0.1"></div>
+          <div><label class="fl">CT class</label><select id="dCtCls"><option>0.5S</option><option>0.2S</option><option>1</option></select></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">CT lead m</label><input type="number" id="dCtLeadM" value="20" step="1" min="0.1"></div>
+          <div><label class="fl">CT lead mm&sup2;</label><input type="number" id="dCtLeadMm" value="2.5" step="0.5" min="0.5"></div>
+          <div><label class="fl" data-help="dCtTemp">CT lead &deg;C</label><input type="number" id="dCtTemp" value="75" step="5" min="-40" max="200"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl" data-help="dCtR">CT winding Rct &Omega;</label><input type="number" id="dCtRct" value="0.5" step="0.1" min="0.01"></div>
+          <div><label class="fl">Lead Rl &Omega;</label><input type="number" id="dCtRl" value="0.3" step="0.1" min="0.001"></div>
+          <div><label class="fl">Relay Rr &Omega;</label><input type="number" id="dCtRr" value="0.1" step="0.05" min="0.001"></div>
+        </div>
+        <div class="row">
+          <div><label class="fl" data-help="dAlf">Stated ALF</label><input type="number" id="dCtAlf" value="20" step="5" min="1" max="100"></div>
+        </div>
+      </details>
+
+      <details class="dgrp">
+        <summary>Solar strings (optional)</summary>
+        <div class="row"><div><label class="fl"><input type="checkbox" id="dSolarOn" style="width:auto;margin-right:6px">Check string length too</label></div></div>
+        <div class="row3">
+          <div><label class="fl">Inverter Vdc max</label><input type="number" id="dSVdc" value="1500" step="50" min="50"></div>
+          <div><label class="fl">Module Voc</label><input type="number" id="dSVoc" value="49.04" step="0.1" min="1"></div>
+          <div><label class="fl">Module Vmp</label><input type="number" id="dSVmp" value="40.89" step="0.1" min="1"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Site min &deg;C</label><input type="number" id="dSTmin" value="-15" step="1" min="-60" max="60"></div>
+          <div><label class="fl">Site max &deg;C</label><input type="number" id="dSTmax" value="45" step="1" min="-20" max="100"></div>
+          <div><label class="fl">Kv Voc %/&deg;C</label><input type="number" id="dSKvoc" value="-0.25" step="0.01" min="-2" max="2"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Kv Vmp %/&deg;C</label><input type="number" id="dSKvmp" value="-0.29" step="0.01" min="-2" max="2"></div>
+          <div><label class="fl">MPPT min V</label><input type="number" id="dSMpptMin" value="250" step="10" min="10"></div>
+          <div><label class="fl">MPPT max V</label><input type="number" id="dSMpptMax" value="1450" step="10" min="10"></div>
+        </div>
+      </details>
+
+      <details class="dgrp">
+        <summary>Lifecycle economics</summary>
+        <div class="row3">
+          <div><label class="fl" data-help="dCapex">Installed CAPEX $</label><input type="number" id="dCapex" value="" placeholder="from sizing" step="1000" min="0"></div>
+          <div><label class="fl">O&amp;M % of CAPEX</label><input type="number" id="dOpexPct" value="2" step="0.25" min="0" max="25"></div>
+          <div><label class="fl">Analysis years</label><input type="number" id="dYears" value="20" step="1" min="1" max="40"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Discount %</label><input type="number" id="dDisc" value="8" step="0.5" min="0" max="50"></div>
+          <div><label class="fl" data-help="dEsc">Tariff escalation %</label><input type="number" id="dEsc" value="3" step="0.25" min="-10" max="25"></div>
+          <div><label class="fl" data-help="dAux">Auxiliary % of charge</label><input type="number" id="dAux" value="1.5" step="0.5" min="0" max="25"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl" data-help="dSoh">Min usable SOH %</label><input type="number" id="dMinSoh" value="70" step="1" min="1" max="100"></div>
+          <div><label class="fl" data-help="dFade">SOH fade %/yr</label><input type="number" id="dFade" value="1.5" step="0.1" min="0" max="20"></div>
+          <div><label class="fl">Demand $/kW-mo</label><input type="number" id="dDemRate" value="18.5" step="0.5" min="0"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">On-peak $/kWh</label><input type="number" id="dOnRate" value="0.16" step="0.01" min="0"></div>
+          <div><label class="fl">Off-peak $/kWh</label><input type="number" id="dOffRate" value="0.08" step="0.01" min="0"></div>
+          <div><label class="fl" data-help="dFuelAdj">Fuel adj $/kWh</label><input type="number" id="dFuelAdj" value="0" step="0.001" min="-1"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl" data-help="dUtilTax">Utility tax %</label><input type="number" id="dUtilTax" value="0" step="0.1" min="0" max="50"></div>
+          <div><label class="fl" data-help="dPeakDays">Peak days/month</label><input type="number" id="dPeakDays" value="22" step="1" min="1" max="31"></div>
+          <div><label class="fl" data-help="dCycLife">Rated cycles</label><input type="number" id="dCycLife" value="6000" step="500" min="100"></div>
+        </div>
+        <div class="row3">
+          <div><label class="fl">Cycles/day</label><input type="number" id="dCycDay" value="1" step="0.25" min="0.1" max="10"></div>
+          <div><label class="fl">Operating days/yr</label><input type="number" id="dCycDays" value="300" step="10" min="1" max="366"></div>
+          <div><label class="fl" data-help="dMinLife">Min life yrs</label><input type="number" id="dMinLife" value="10" step="1" min="1" max="40"></div>
+        </div>
+      </details>
+
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn btn-out btn-sm" style="flex:1" onclick="designFromSizing()">Pull from sizing</button>
+        <button class="btn btn-pri btn-sm" style="flex:1" id="designBtn" onclick="runDesign()">Run engineering design</button>
+      </div>
+    </div>
+  </div>
+
   <button class="btn btn-pri" id="runBtn" style="width:100%;padding:12px;font-size:14px" onclick="run()">Size the battery</button>
   <div style="height:20px"></div>
 </div>
@@ -510,6 +693,10 @@ body.nohelp .hb{display:none}
         <div class="e2">Upload interval data or enter at least one utility bill, then size the battery. With a single month, the tool reports what that month alone would have required and what it would have saved.</div>
       </div>
     </div>
+  </div>
+  <div class="card" id="designCard" style="display:none">
+    <div id="designProg" style="display:none"><div class="bar"><div class="fill" style="width:60%"></div></div><div class="txt">Running the engineering design&hellip;</div></div>
+    <div id="outDesign"></div>
   </div>
 </div>
 
@@ -529,6 +716,7 @@ var RAW = null;        /* {header:[], rows:[[]]}                */
 var SERIES = null;     /* {t:[Date], kw:[Number], dt:hours}      */
 var MONTHS = null;     /* [{key,label,load:[],dt,peak,kwh,days}] */
 var RESULT = null;     /* last computed result                   */
+var DESIGN = null;     /* last engineering design result         */
 var MONNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 /* ============================================================
@@ -537,6 +725,84 @@ var MONNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
    copy lives in one place instead of scattered through markup.
    ============================================================ */
 var HELP = {
+
+/* --- step 5: engineering design --- */
+'sDesign':['What this step is for',
+ 'Sizing tells you how many kW and kWh the utility bill justifies. It does not tell you what to order. This step turns that number into equipment: how many containers, how many converters, what transformer, what breaker, what cable, what the fault current is and what CTs can survive it.<p>It also runs the design checks that decide whether the thing is buildable — whether the battery can be recharged inside the overnight window, whether the cable answer is a practical number of runs or a trench full of them, and whether the pack reaches the end of its cycle life before the end of the analysis.</p><p>Press <b>Pull from sizing</b> after a sizing run and the load, duration, efficiency and cost fields fill themselves. Everything is still yours to override.</p>'],
+'dLoad':['Load the battery has to support',
+ 'In MW, at the meter. This is the power the battery discharges, not the site peak.<p>Pulled across from the sizing run as the recommended power rating including your headroom. Type over it if you are designing to a fixed customer requirement instead.</p>'],
+'dUnit':['Container or cabinet size',
+ 'Batteries are bought in units, not in decimals. A 4.6 MWh requirement served by 5 MWh containers is one container and 0.4 MWh of spare capacity — that is normal and the tool shows you how much.<p>Set this to the unit your supplier actually ships. Getting it wrong does not change the required capacity, only how much you overbuy to reach it.</p>'],
+'dDod':['Depth of discharge',
+ 'How much of the nameplate the cells are allowed to give up. 90% is typical for a modern LFP container under warranty; going deeper voids most of them.<p>This is the first of three divisions between the energy the load wants and the energy the pack has to hold.</p>'],
+'dOther':['Other efficiency',
+ 'Everything the round-trip figure does not already cover: transformer losses, auxiliary load, cable losses between the container and the meter.<p>Leave at 100% if your round-trip number is already measured at the point of connection. Set 97-98% if it is measured at the battery terminals.</p>'],
+'dCrate':['Maximum C-rate',
+ 'The highest rate the cells may charge or discharge at, as a fraction of capacity per hour. 0.5C means a 10 MWh pack can move 5 MW.<p>This sets a <b>floor</b> on capacity that has nothing to do with energy. A 1 MW duty at 0.5C cannot be served by less than 2 MWh however short the discharge is. When that floor governs, the tool says the design is power-limited and shows you the capacity you are buying purely for power.</p>'],
+'dPcs':['Converter unit size',
+ 'The rated output of one power conversion system skid. The count comes from the larger of the discharge duty and the charging duty — a site that charges at 2 MW needs the converters for it even if it never discharges above 1 MW.'],
+'dKv':['Converter output voltage',
+ 'The AC voltage at the converter terminals, in kV. 0.48 kV is the common US low-voltage answer; 0.4 kV is the IEC one.<p>All the low-voltage gear — primary breaker, AC cable, busduct, CTs — is sized and fault-checked at this bus.</p>'],
+'dSysKv':['System / point of connection voltage',
+ 'The customer or utility voltage the system ties into. If it differs from the converter voltage a transformer is required, and the tool works out which way it steps and what size.<p>If they are equal, a transformer is only required when island or black-start duty needs a local neutral the converters do not provide.</p>'],
+'dCharge':['Charging power available',
+ 'How much power the grid connection can actually spare for charging, in MW. This is not the size of the service — it is what is left after the site load.<p>If your main breaker allows 800 A and the load is already drawing 760 A during the charging window, you have 40 A to charge with. Charging harder than that trips the breaker, overheats the busbar and saturates the CT.</p><p>Leave both charging fields at zero for a solar-charged system; the charging-window check then does not apply.</p>'],
+'dWindow':['Charging window',
+ 'How many hours a day are available to put the energy back. Typically the off-peak period.<p>The tool computes how long a full recharge actually takes at the narrowest of the three limits — converter rating, C-rate, available power — and fails the design if it does not fit.</p>'],
+'dTxBuf':['Transformer sizing buffer',
+ 'Headroom over the calculated kVA duty, for load growth and for the fact that a transformer running at its nameplate all day does not last. 125% is the common rule.'],
+'dNec':['NEC continuous-duty buffer',
+ 'NEC 210.20(A) and 215.3: an overcurrent device serving a continuous load is rated at 125% of that load. A battery discharging for four hours is continuous by any definition.<p>This multiplies the breaker frame size and the cable design current, not the energy or the savings.</p>'],
+'dZ':['Transformer impedance',
+ 'Percentage impedance from the nameplate. Typical: about 4% up to 630 kVA, 5-6% for 800-2000 kVA, 6-7% above 2500 kVA.<p>This is a placeholder until a transformer is selected, and it drives the fault current directly — halving it roughly doubles the fault duty the switchgear has to break.</p>'],
+'dVec':['Vector group',
+ 'How the windings are connected. It matters here for one reason: only Dyn11, Dyn1, Yyn0 and Yzn11 provide a neutral point on the secondary.<p>If the system has to run islanded or black-start and the converters have no neutral, the transformer has to supply one. Any other vector group leaves the island with no voltage reference and the design check fails rather than warns.</p>'],
+'dNeutral':['Do the converters provide a neutral',
+ 'Most grid-following battery converters do not. Answer No unless the datasheet says otherwise.<p>Combined with the connection type and the black-start requirement, this decides whether an isolation transformer is needed even when the voltages match.</p>'],
+'dGridMva':['Source fault level at the point of connection',
+ 'From the utility connection offer or grid study, in MVA.<p>Leave it at zero to assume an infinite (stiff) source. That is the worst case and the conservative one — but it will oversize the switchgear, so get the real figure before ordering.</p>'],
+'dMethod':['Fault calculation method',
+ '<b>R and X</b> splits each impedance into resistance and reactance using the X/R ratios and adds them as vectors. This is what IEC 60909 and a protection study do.<p><b>Reactance only</b> ignores resistance and adds the magnitudes. Quicker, slightly conservative, and it uses the flat 2.5× peak factor instead of deriving one.</p>'],
+'dBusArr':['Bus arrangement',
+ 'Transformers feeding a common busbar put their impedances in parallel, so the fault current rises roughly in proportion to how many there are.<p>Separate bus sections with a normally-open coupler each see one transformer. Common bus is the default because it is the conservative case — set it to match your single line diagram.</p>'],
+'dInvMult':['Converter fault contribution',
+ 'A battery converter is a fault source too, but unlike a machine its contribution is limited by firmware to a fixed multiple of rated current, typically 1.1 to 1.5.<p>On the low-voltage bus this is not a small number, and switchgear sized on the grid contribution alone can be under-rated. Set it to zero to exclude it and compare.</p>'],
+'dIcuM':['Breaking capacity margin',
+ 'Safety margin above the calculated fault level when selecting the breaker Icu rating, for future fault-level growth. 15-25% is typical.<p>Never select a breaker with Icu below the calculated fault current even without margin.</p>'],
+'dCa':['Ambient derating factor',
+ 'Cable ampacity tables are published at a reference temperature. Ca corrects for the ambient air or soil temperature your route actually runs through. 1.00 at the table reference, lower when it is hotter.'],
+'dCg':['Grouping derating factor',
+ 'For cables bunched together or laid in the same trench, which cannot shed heat as well as a single circuit. 1.00 for one circuit on its own; 0.8 is typical for a small group.'],
+'dCi':['Installation derating factor',
+ 'Soil thermal resistivity, depth of burial, or enclosure and trunking. 1.00 for the table reference condition.<p>Ca × Cg × Ci is what the required ampacity is divided by. All three at 1.00 means you believe the installation matches the table exactly, which is rarely true.</p>'],
+'dRuns':['Maximum practical cable runs',
+ 'Past a handful of parallel runs, cable stops being the sensible answer and busduct starts. This sets where the tool flags it.<p>The tool sizes both either way, so you can compare.</p>'],
+'dCtTemp':['CT lead operating temperature',
+ 'Copper resistance rises about 0.4% per degree C, and lead resistance is part of the CT burden. Use 20°C for a cold check and 75°C for the worst hot case.'],
+'dCtR':['Knee-point resistances',
+ 'The three resistances in the protection CT secondary loop: the CT winding itself (Rct, from the CT datasheet), the round-trip lead resistance (Rl), and the relay burden (Rr, from the relay datasheet or its VA burden divided by the square of the secondary current).<p>Required knee-point voltage is 2 \u00d7 fault current at the secondary \u00d7 the sum of the three. They are placeholders until the CT and relay are chosen.</p>'],
+'dAlf':['Accuracy limit factor',
+ 'How many times rated current a protection CT stays accurate to before its core saturates. Common values are 10 and 20.<p>The tool computes what the fault current actually requires. If the stated ALF is lower, the CT saturates before full fault current and the relay sees a false low reading exactly when it needs a true one — use the Class PX knee-point specification instead.</p>'],
+'dCapex':['Installed cost',
+ 'All-in installed cost of the system. Left blank, it is carried across from the sizing run; blank with no sizing run and it is built from the unit rates in step 3.<p>This is the number every payback figure on this page divides by, so it is worth getting from a real quotation rather than a rule of thumb.</p>'],
+'dEsc':['Tariff escalation',
+ 'How fast the tariff itself grows, compounding from year 2. This is a different thing from the discount rate: escalation grows the future dollar amount, the discount rate converts a future dollar into today’s. Both apply, in that order.'],
+'dAux':['Auxiliary consumption',
+ 'Cooling, the battery management system and controls, as a percentage of charging energy and priced at the off-peak rate. Zero for an air-cooled cabinet; 1-3% for a liquid-cooled container.'],
+'dSoh':['Minimum usable state of health',
+ 'The capacity fraction below which the pack is replaced. 70% is the common warranty end-of-life point.<p>The lifecycle table watches the fade curve and books a replacement in the year it crosses this line, then resets the curve — so a 20-year analysis on a 10-year pack shows the second one being bought.</p>'],
+'dFade':['Capacity fade',
+ 'How fast usable capacity declines, per year. 1.5%/yr takes a pack from nameplate to 70% in twenty years.<p>This is not cosmetic: a faded pack cuts less demand, so the savings in the table decline even as the tariff escalates.</p>'],
+'dFuelAdj':['Fuel adjustment',
+ 'A per-kWh rider that rides on metered energy — the round-trip losses pay it too, so it is a cost, not a saving. Leave at zero if your tariff has no such rider.'],
+'dUtilTax':['Utility tax or levy',
+ 'A percentage that follows the bill. A lower bill means a lower levy, so it shows up as a saving.'],
+'dPeakDays':['Peak days per month',
+ 'How many days a month the on-peak period actually applies. Weekdays only on most time-of-use tariffs, so 21-23, not 30.'],
+'dCycLife':['Rated cycle life',
+ 'Cycles to end-of-life state of health, from the cell datasheet.<p>Divided by cycles per day and operating days per year, this gives the years the pack lasts on duty — which the tool checks against your minimum. A pack rated 6,000 cycles at one cycle a day over 300 operating days is a twenty-year pack; the same pack cycled twice a day is a ten-year one.</p>'],
+'dMinLife':['Minimum acceptable battery life',
+ 'The service life you need from one pack. If the cycle life does not reach it, the check flags a review and the lifecycle table shows the replacement.'],
 
 /* --- step 1: data --- */
 'sData':['Start here: get the load data in',
@@ -2719,6 +2985,17 @@ function render(){
   $('out').innerHTML = h;
   wireHelp($('out'));
 
+  /* The engineering design is a separate run against a separate endpoint,
+     so a new sizing result does not silently redraw it - but leaving the
+     OLD one on screen beside a new size is worse than either. Prefill the
+     inputs from the new result and say the schedule is stale. */
+  designFromSizing(true);
+  if(DESIGN){
+    DESIGN = null;
+    designMsg('The sizing changed. The inputs below have been refreshed from it — '
+      + 'run the engineering design again for a schedule that matches.', '');
+  }
+
   if(noGood && $('durProbe')){
     $('durProbe').innerHTML = '<br><br>Checking the durations you did not tick\u2026';
     setTimeout(function(){
@@ -2740,6 +3017,417 @@ function render(){
   drawMonthly();
   drawSweep();
   if(R.mode==='interval') drawPeakDay();
+}
+
+
+/* ============================================================
+   ENGINEERING DESIGN
+   ------------------------------------------------------------
+   The sizing sweep answers "how many kW and kWh". This answers
+   "what is that, and can it be built". Every formula runs in
+   /api/bess-design - the standard-size tables, the derating
+   method and the degradation schedule are the product, and this
+   file is public. Here we collect inputs and render the answer.
+   ============================================================ */
+
+/* Carry the sized system across. The sizer reports usable kWh at the
+   meter and a kW rating; the design engine wants MW of load and hours of
+   duration, which is the same system stated the way an engineer states
+   it. Anything the user has already typed over is left alone. */
+function designFromSizing(quiet){
+  if(!RESULT || !RESULT.best){
+    if(!quiet) designMsg('Size the battery first - there is nothing to carry across yet.', 'bad');
+    return false;
+  }
+  var b = RESULT.best, REC = RESULT.rec || b;
+  var head = 1 + Math.round(nv('headroom',10))/100;
+  var kW  = b.kW*head, kWh = b.kWh*head;
+
+  /* Prefill runs from render(), which is the results pane. A design field
+     that is not on the page must not take the whole pane down with it. */
+  function set(id, v){ var e = $(id); if(e) e.value = v; }
+
+  set('dLoadMw', +(kW/1000).toFixed(4));
+  set('dDurH',   b.dur);
+  set('dDod',    Math.round(nv('dod',90)));
+  set('dRte',    Math.round(nv('rte',88)));
+  set('dCapex',  Math.round(REC.capex || 0));
+
+  /* Demand rate: bills mode prices each month separately, so carry the
+     newest one rather than an average that no future month will be
+     charged at. */
+  set('dDemRate', (RESULT.mode === 'bill' && RESULT.curRate)
+    ? +Number(RESULT.curRate).toFixed(2)
+    : +Number(nv('dRate',18.5)).toFixed(2));
+
+  set('dOnRate',  +Number(nv('eRate',0.075)).toFixed(3));
+  set('dOffRate', +Number(nv('eRate',0.075)).toFixed(3));
+  set('dYears',   Math.round(nv('term',10)));
+  set('dDisc',    nv('disc',8));
+  set('dEsc',     nv('escal',3));
+
+  /* Container count should not come out as a fraction of a unit for a
+     small system: below a container, quote the cabinet it is actually
+     sold in. */
+  var mwh = kWh/1000;
+  set('dUnitMwh', mwh <= 0.6 ? 0.1 : (mwh <= 3 ? 0.5 : (mwh <= 12 ? 5 : 20)));
+
+  /* PCS: pick the largest standard block that still divides the duty into
+     a sane number of units, so the schedule does not call for 300 skids. */
+  var mw = kW/1000;
+  set('dPcsMw', mw <= 0.3 ? 0.06 : (mw <= 1.5 ? 0.135 : (mw <= 6 ? 0.5 : 2.5)));
+
+  if(!quiet){
+    designMsg('Carried '+fmt(kW)+' kW / '+fmt(kWh)+' kWh across from the sizing run. '
+      + 'Check the voltages and the charging power, then run the design.', 'ok');
+  }
+  return true;
+}
+
+function designMsg(m, kind){
+  var card = $('designCard'), out = $('outDesign');
+  if(card) card.style.display = '';
+  if(out) out.innerHTML = '<div class="note '+(kind||'')+'" style="margin:14px">'+esc(m)+'</div>';
+}
+
+function designPayload(){
+  function v(id, d){ return nv(id, d); }
+  function sel(id, d){ var e=$(id); return e ? e.value : d; }
+  var p = {
+    loadMw: v('dLoadMw',1), durationH: v('dDurH',4), unitMwh: v('dUnitMwh',5),
+    dodPct: v('dDod',90), rtePct: v('dRte',88), otherEffPct: v('dOther',100),
+    cRate: v('dCrate',0.5), pcsUnitMw: v('dPcsMw',0.135), powerFactor: v('dPf',0.9),
+    pcsOutputKv: v('dPcsKv',0.48), systemKv: v('dSysKv',13.8), phase: sel('dPhase','Three-Phase'),
+    chargeGridMw: v('dChgGrid',0), chargeOtherMw: v('dChgOther',0), chargeWindowH: v('dWindow',16),
+
+    transformerBuffer: v('dTxBuf',1.25), breakerBuffer: v('dNec',1.25), impedancePct: v('dZ',6),
+    transformerCategory: sel('dTxCat','Dry Type'), vectorGroup: sel('dVec','Dyn11'),
+    pcsHasNeutral: sel('dNeutral','No'), connectionType: sel('dConn','3P4W+E'),
+    gridStability: sel('dStab','Stable'), blackStart: sel('dBlack','Not Required'),
+    gridFaultMva: v('dGridMva',500), transformerXr: v('dTxXr',10), gridXr: v('dGridXr',10),
+    faultMethod: sel('dMethod','rx'), busArrangement: sel('dBusArr','common'),
+    inverterFaultMultiple: v('dInvMult',1.2), breakingCapacityMargin: v('dIcuM',1.2),
+    faultDurationS: v('dFaultS',1),
+
+    cableCa: v('dCa',0.94), cableCg: v('dCg',0.8), cableCi: v('dCi',1),
+    cableLengthM: v('dCableM',50), cableVdLimitPct: v('dVdLim',3), maxCableRuns: v('dMaxRuns',4),
+    busductLengthM: v('dBdM',20), busductRmOhmPerM: v('dBdR',0.1), busductXmOhmPerM: v('dBdX',0.08),
+
+    ctSecondaryA: v('dCtSec',5), ctBurdenVa: v('dCtVa',5), ctAccuracyClass: sel('dCtCls','0.5S'),
+    ctLeadLengthM: v('dCtLeadM',20), ctLeadMm2: v('dCtLeadMm',2.5), ctLeadTempC: v('dCtTemp',75),
+    ctRct: v('dCtRct',0.5), ctRl: v('dCtRl',0.3), ctRr: v('dCtRr',0.1),
+    ctAlf: v('dCtAlf',20),
+
+    capex: v('dCapex',0), opexPctOfCapex: v('dOpexPct',2), analysisYears: v('dYears',20),
+    discountRate: v('dDisc',8), escalation: v('dEsc',3), auxPct: v('dAux',1.5),
+    minSohPct: v('dMinSoh',70), sohFadePctPerYear: v('dFade',1.5),
+    demandRatePerKw: v('dDemRate',18.5), onPeakRate: v('dOnRate',0.16),
+    offPeakRate: v('dOffRate',0.08), fuelAdjRate: v('dFuelAdj',0),
+    utilityTaxPct: v('dUtilTax',0), peakDaysPerMonth: v('dPeakDays',22),
+    demandWindowH: v('dDurH',4),
+    cycleLife: v('dCycLife',6000), cyclesPerDay: v('dCycDay',1),
+    cycleDaysPerYear: v('dCycDays',300), minimumBatteryLifeYears: v('dMinLife',10),
+    ambient: 'Inland', cooling: 'Liquid Cooling System'
+  };
+  if(!(p.capex > 0)) delete p.capex;
+  var sOn = $('dSolarOn');
+  if(sOn && sOn.checked){
+    p.solar = { enabled:true, vdcMaxV:v('dSVdc',1500), vocV:v('dSVoc',49.04), vmpV:v('dSVmp',40.89),
+                tMinC:v('dSTmin',-15), tMaxC:v('dSTmax',45), kvVocPctPerC:v('dSKvoc',-0.25),
+                kvVmpPctPerC:v('dSKvmp',-0.29), mpptMinV:v('dSMpptMin',250), mpptMaxV:v('dSMpptMax',1450) };
+  }
+  return p;
+}
+
+var designRequest = 0;
+function runDesign(){
+  var user = window.firebase && firebase.auth().currentUser;
+  if(!user){ alert('Sign in to run the engineering design.'); return; }
+  var req = ++designRequest;
+  if($('designCard')) $('designCard').style.display = '';
+  if($('designProg')) $('designProg').style.display = 'block';
+  if($('outDesign')) $('outDesign').innerHTML = '';
+  return user.getIdToken().then(function(token){
+    return fetch('/api/bess-design', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', Authorization:'Bearer '+token},
+      body: JSON.stringify(designPayload())
+    });
+  }).then(function(r){
+    return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'Design run failed'); return j; });
+  }).then(function(d){
+    if(req !== designRequest) return;
+    DESIGN = d;
+    if($('designProg')) $('designProg').style.display = 'none';
+    renderDesign();
+  }).catch(function(e){
+    if(req !== designRequest) return;
+    if($('designProg')) $('designProg').style.display = 'none';
+    designMsg(e.message, 'bad');
+  });
+}
+
+function dStat(k,v,u,s){
+  return '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+(u?'<em>'+u+'</em>':'')+'</div>'
+       + (s?'<div class="s">'+s+'</div>':'')+'</div>';
+}
+function dRow(k,v,n){
+  return '<tr><td class="tx" style="color:var(--sub);white-space:nowrap">'+k+'</td>'
+       + '<td style="padding-left:18px">'+v+'</td>'
+       + '<td class="tx" style="color:var(--sub);font-size:11px">'+(n||'')+'</td></tr>';
+}
+function statusPill(st){
+  var cls = st==='FAIL' ? 'r' : (st==='REVIEW' ? 'a' : (st==='N/A' ? '' : 'g'));
+  return '<span class="pill '+cls+'">'+st+'</span>';
+}
+
+function renderDesign(){
+  var d = DESIGN, i;
+  var c = d.capacity, p = d.pcs, t = d.transformer, el = d.electrical;
+  var h = '';
+
+  /* ---- verdict first. An engineer reads the status line, not the tables. ---- */
+  var vcls = d.checks.overall==='FAIL' ? 'bad' : (d.checks.overall==='REVIEW' ? '' : 'ok');
+  h += '<div class="card-h">Engineering design <span style="float:right">'+statusPill(d.checks.overall)+'</span></div>';
+  h += '<div class="card-b tight">';
+  h += '<div class="note '+vcls+'" style="margin-top:0"><b>'+esc(d.checks.summary)+'</b></div>';
+
+  /* ---- the system ---- */
+  h += '<div class="stats">'
+    +  dStat('Installed capacity', fmt(c.installedMwh,3), 'MWh', c.units+' × '+fmt(c.unitMwh*1000)+' kWh unit'+(c.units>1?'s':''))
+    +  dStat('Converter power', fmt(p.totalMw,3), 'MW', p.units+' × '+fmt(p.unitMw*1000)+' kW')
+    +  dStat('Usable energy', fmt(c.usableMwh,3), 'MWh', 'after '+fmt(c.dodPct)+'% DoD and the discharge half of '+fmt(c.rtePct)+'% round-trip')
+    +  dStat('Transformer', t.needed ? fmt(t.ratingMva,3)+' MVA' : 'None', '', t.needed ? t.units+' × '+t.category+', '+t.primaryKv+'/'+t.secondaryKv+' kV' : esc(t.neutralNote))
+    +  '</div>';
+
+  /* ---- capacity chain. The single most useful thing this tool shows: why
+         the battery is bigger than the arithmetic the customer did. ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">How the capacity got there</div>';
+  h += '<div class="chain" style="margin:12px 0 4px">'
+    +  '<span>'+fmt(c.loadMw,3)+' MW × '+fmt(c.durationH,1)+' h = '+fmt(c.initialMwh,3)+' MWh</span>'
+    +  '<i>÷ '+fmt(c.dodPct)+'% DoD →</i><span>'+fmt(c.afterDodMwh,4)+'</span>'
+    +  '<i>÷ √'+fmt(c.rtePct)+'% →</i><span>'+fmt(c.afterRteMwh,4)+'</span>'
+    +  (c.otherEffPct<100 ? '<i>÷ '+fmt(c.otherEffPct)+'% other →</i><span>'+fmt(c.afterOtherMwh,4)+'</span>' : '')
+    +  '<i>vs C-rate floor</i><span'+(c.cRateBound?' class="bind"':'')+'>'+fmt(c.cRateFloorMwh,3)+' MWh</span>'
+    +  '<i>→ required</i><span class="bind">'+fmt(c.requiredMwh,4)+' MWh</span>'
+    +  '</div>';
+  h += '<div class="hint">'
+    +  (c.cRateBound
+        ? '<b>Power-limited.</b> A '+c.cRate+'C battery cannot deliver '+fmt(c.loadMw,3)+' MW out of less than '
+          + fmt(c.cRateFloorMwh,3)+' MWh, so the C-rate sets the size, not the energy the duty needs. '
+          + 'The extra '+fmt(c.cRateFloorMwh-c.afterOtherMwh,3)+' MWh is bought for power, and it will sit unused every cycle.'
+        : '<b>Energy-limited.</b> The duty needs '+fmt(c.afterOtherMwh,4)+' MWh in the pack, which is above the '
+          + fmt(c.cRateFloorMwh,3)+' MWh the '+c.cRate+'C limit would force. Energy is what is being bought.')
+    +  ' Quantised to '+c.units+' unit'+(c.units>1?'s':'')+' leaves '+fmt(c.spareMwh,4)+' MWh spare.</div>';
+
+  /* ---- charging ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Charging</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><tbody>';
+  h += dRow('Energy back into the pack', fmt(p.rechargeMwh,3)+' MWh', 'one full cycle at the battery terminals');
+  h += dRow('Available charging power', fmt(p.chargeMw,3)+' MW',
+            'grid '+fmt(p.chargeGridMw,3)+' MW + other '+fmt(p.chargeOtherMw,3)+' MW');
+  h += dRow('C-rate ceiling', fmt(p.cRateLimitMw,3)+' MW', c.cRate+'C on '+fmt(c.installedMwh,3)+' MWh installed');
+  h += dRow('Full charge time', p.solarOnly ? 'Solar only' : fmt(p.fullChargeH,1)+' h',
+            p.solarOnly ? 'no grid or generator charging power set'
+                        : 'limited by '+esc(p.chargeLimitedBy)+', against a '+fmt(p.chargeWindowH,1)+' h window');
+  h += '</tbody></table></div>';
+
+  /* ---- electrical schedule ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Electrical schedule</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><tbody>';
+  h += dRow('Converter bus', fmt(t.primaryKv,2)+' kV, '+el.phase.toLowerCase()+', PF '+el.powerFactor, '');
+  h += dRow('Design current', fmt(el.primaryBreaker.designA)+' A',
+            fmt(el.primaryCurrentA)+' A continuous × '+el.necBuffer+' (NEC 125% continuous-duty rule)');
+  h += dRow('Primary breaker', esc(el.primaryBreaker.spec),
+            el.primaryBreaker.aboveLargestStandard ? 'above the largest standard frame, paralleled' : 'standard frame size');
+  if(el.primaryCable.valid){
+    h += dRow('AC cable', esc(el.primaryCable.spec),
+              'table ampacity '+fmt(el.primaryCable.requiredAmpacity)+' A after derating '+el.primaryCable.totalDerating
+              +' · drop '+el.primaryCable.dropPct+'% over '+fmt(el.primaryCable.lengthM)+' m');
+  } else {
+    h += dRow('AC cable', '<span class="pill r">invalid</span>', esc(el.primaryCable.note));
+  }
+  h += dRow('Busduct alternative', fmt(el.busduct.ratingA)+' A rated',
+            'carries '+fmt(el.busduct.currentA)+' A, drop '+el.busduct.dropPct+'%'
+            + (el.busduct.requiredIcwKa!=null ? ' · needs Icw ≥ '+el.busduct.requiredIcwKa+' kA for '+el.busduct.faultDurationS+' s' : ''));
+  if(t.needed){
+    h += dRow('Transformer', t.ratingMva+' MVA × '+t.units,
+              t.primaryKv+'/'+t.secondaryKv+' kV '+t.category+', '+t.vectorGroup+', %Z='+t.impedancePct
+              +' · duty '+fmt(t.requiredKva)+' kVA at buffer '+t.buffer);
+    if(el.secondaryBreaker) h += dRow('Secondary breaker', esc(el.secondaryBreaker.spec),
+              'design current '+fmt(el.secondaryBreaker.designA)+' A at '+t.secondaryKv+' kV');
+    if(el.secondaryCable && el.secondaryCable.valid) h += dRow('Secondary cable', esc(el.secondaryCable.spec),
+              'drop '+el.secondaryCable.dropPct+'%');
+  }
+  h += '</tbody></table></div>';
+
+  /* ---- fault duty ---- */
+  if(el.fault.applicable){
+    h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Fault duty</div>';
+    h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><thead><tr>'
+      +  '<th>Bus</th><th class="num">Grid via transformer</th><th class="num">Converters</th>'
+      +  '<th class="num">Symmetrical Isc</th><th class="num">Peak make Ip</th></tr></thead><tbody>';
+    [el.fault, el.systemFault].forEach(function(f){
+      if(!f || !f.applicable) return;
+      h += '<tr><td class="tx">'+esc(f.busLabel)+'</td><td class="num">'+f.gridSideKa+' kA</td>'
+        +  '<td class="num">'+f.inverterKa+' kA</td><td class="num"><b>'+f.iscKa+' kA</b></td>'
+        +  '<td class="num">'+f.peakKa+' kA</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="hint">'+esc(el.fault.method)+', κ='+el.fault.kappa+' at X/R '+el.fault.xOverR
+      +  '. Converter contribution is firmware-limited at '+el.fault.inverterFaultMultiple+'× rated current, '
+      +  'not an impedance — it is bounded, but on the low-voltage bus it is not small. '
+      +  (el.fault.stiffSourceAssumed
+          ? '<b>Source fault level left at zero</b>, so an infinite bus is assumed. That is the conservative case; '
+            + 'replace it with the figure from the utility connection study.'
+          : 'Source fault level '+fmt(el.fault.gridFaultMva)+' MVA at the point of connection.')
+      +  '</div>';
+    if(el.switchgear){
+      h += '<div class="note'+(el.switchgear.icuAboveLargestStandard?' bad':'')+'"><b>Switchgear:</b> '
+        +  el.switchgear.ratedCurrentA+' A rated, breaking capacity Icu '+el.switchgear.icuKa+' kA '
+        +  '('+el.switchgear.faultKa+' kA × '+el.switchgear.margin+' margin) on the '+esc(el.switchgear.bus)+'. '
+        +  'Peak withstand Icm must be at least '+el.switchgear.peakWithstandKa+' kA.'
+        +  (el.switchgear.icuAboveLargestStandard
+            ? ' This is above the largest standard Icu in the table — the fault duty needs a current-limiting '
+              + 'scheme or a higher-impedance transformer, not a bigger breaker.' : '')
+        +  '</div>';
+    }
+  } else {
+    h += '<div class="note" style="margin-top:14px"><b>Fault duty not computed.</b> '+esc(el.fault.note)+'</div>';
+  }
+
+  /* ---- CTs ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Instrument transformers</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><tbody>';
+  h += dRow('Metering CT', esc(el.ct.meteringSpec),
+            'burden '+el.ct.connectedBurdenVa+' VA meter + '+el.ct.leadBurdenVa+' VA leads = '+el.ct.totalBurdenVa+' VA');
+  if(el.ct.protection){
+    h += dRow('Protection CT', esc(el.ct.protection.spec),
+              'fault referred to secondary '+el.ct.protection.faultAtSecondaryA+' A');
+    h += dRow('Accuracy limit factor', el.ct.protection.requiredAlf+' required',
+              esc(el.ct.protection.note));
+  }
+  h += '</tbody></table></div>';
+
+  /* ---- solar ---- */
+  if(d.solar){
+    h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Solar string length</div>';
+    h += '<div class="note '+(d.solar.feasible?'ok':'bad')+'" style="margin-top:12px"><b>'+esc(d.solar.note)+'</b></div>';
+    h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><tbody>';
+    h += dRow('Voc at coldest', d.solar.vocAtMinTempV+' V', 'destruction limit: '+d.solar.maxByVoc+' modules max against inverter Vdc max');
+    h += dRow('Vmp at hottest', d.solar.vmpAtMaxTempV+' V', 'MPPT minimum needs '+d.solar.minByMppt+' modules');
+    h += dRow('Vmp at coldest', d.solar.vmpAtMinTempV+' V', 'MPPT maximum allows '+d.solar.maxByMppt+' modules');
+    h += '</tbody></table></div>';
+  }
+
+  /* ---- design checks ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Design checks</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><thead><tr>'
+    +  '<th>Check</th><th>Status</th><th>Result</th></tr></thead><tbody>';
+  for(i=0;i<d.checks.checks.length;i++){
+    var ck = d.checks.checks[i];
+    h += '<tr><td class="tx" style="white-space:nowrap">'+esc(ck.name)+'</td>'
+      +  '<td>'+statusPill(ck.status)+'</td>'
+      +  '<td class="tx" style="font-size:11.5px">'+esc(ck.detail)+'</td></tr>';
+  }
+  h += '</tbody></table></div>';
+
+  /* ---- BOQ ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">Bill of quantities</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><thead><tr>'
+    +  '<th>Equipment</th><th class="num">Qty</th><th>Specification</th></tr></thead><tbody>';
+  for(i=0;i<d.boq.length;i++){
+    h += '<tr><td class="tx">'+esc(d.boq[i].item)+'</td><td class="num">'+d.boq[i].qty+'</td>'
+      +  '<td class="tx" style="font-size:11.5px">'+esc(d.boq[i].remark)+'</td></tr>';
+  }
+  h += '</tbody></table></div>';
+
+  /* ---- lifecycle ---- */
+  var L = d.economics.lifecycle;
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">'
+    +  L.years+'-year lifecycle</div>';
+  h += '<div class="stats">'
+    +  dStat('Simple payback', L.paybackYears!=null?fmt(L.paybackYears,2):'&gt; '+L.years, L.paybackYears!=null?'yrs':'', money(d.economics.capex)+' installed'+(d.economics.capexDerived?' (derived)':''))
+    +  dStat('Discounted payback', L.discountedPaybackYears!=null?fmt(L.discountedPaybackYears,2):'&gt; '+L.years, L.discountedPaybackYears!=null?'yrs':'', 'at '+fmt(L.discountRate*100,1)+'% discount')
+    +  dStat('NPV', money(L.npv), '', L.irr!=null?fmt(L.irr*100,1)+'% IRR':'no IRR solution')
+    +  dStat('Cumulative', money(L.cumulativeSavings), '', L.replacements ? L.replacements+' replacement'+(L.replacements>1?'s':'')+', first in year '+L.firstReplacementYear : 'no replacement inside the term')
+    +  '</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><thead><tr>'
+    +  '<th>Yr</th><th class="num">SOH</th><th class="num">kW cut</th><th class="num">Demand</th>'
+    +  '<th class="num">Discharge</th><th class="num">Recharge</th><th class="num">O&amp;M</th>'
+    +  '<th class="num">Replace</th><th class="num">Net</th><th class="num">Cumulative</th></tr></thead><tbody>';
+  for(i=0;i<L.rows.length;i++){
+    var r = L.rows[i];
+    h += '<tr'+(r.replacementCapex<0?' style="background:#FCF2F1"':'')+'>'
+      +  '<td>'+r.year+'</td><td class="num">'+fmt(r.sohPct,1)+'%</td>'
+      +  '<td class="num">'+fmt(r.mdReductionKw)+'</td><td class="num">'+money(r.demandSavings)+'</td>'
+      +  '<td class="num">'+money(r.dischargeValue)+'</td><td class="num">'+money(r.chargeCost)+'</td>'
+      +  '<td class="num">'+money(r.opex)+'</td>'
+      +  '<td class="num">'+(r.replacementCapex?money(r.replacementCapex):'—')+'</td>'
+      +  '<td class="num"><b>'+money(r.net)+'</b></td><td class="num">'+money(r.cumulative)+'</td></tr>';
+  }
+  h += '</tbody></table></div>';
+
+  /* ---- scenarios ---- */
+  h += '<div class="card-h" style="border-top:1px solid var(--border2);margin:14px -14px 0;padding-left:14px">If the assumptions are wrong</div>';
+  h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><thead><tr>'
+    +  '<th>Scenario</th><th class="num">CAPEX</th><th class="num">Payback</th>'
+    +  '<th class="num">Discounted</th><th class="num">NPV</th><th class="num">IRR</th></tr></thead><tbody>';
+  for(i=0;i<d.economics.scenarios.length;i++){
+    var sc = d.economics.scenarios[i];
+    h += '<tr'+(sc.key==='base'?' style="background:#F0FAF9"':'')+'><td class="tx">'+esc(sc.label)+'</td>'
+      +  '<td class="num">'+money(sc.capex)+'</td>'
+      +  '<td class="num">'+(sc.paybackYears!=null?fmt(sc.paybackYears,2)+' yr':'&gt; term')+'</td>'
+      +  '<td class="num">'+(sc.discountedPaybackYears!=null?fmt(sc.discountedPaybackYears,2)+' yr':'&gt; term')+'</td>'
+      +  '<td class="num">'+money(sc.npv)+'</td>'
+      +  '<td class="num">'+(sc.irr!=null?fmt(sc.irr*100,1)+'%':'—')+'</td></tr>';
+  }
+  h += '</tbody></table></div>';
+
+  h += '<div class="hint" style="padding-top:12px">Standard sizes are IEC 60076 (transformers) and common breaker, busduct '
+    +  'and CT ranges; cable ampacities are for direct burial and must be re-checked against the installation method '
+    +  'actually used. %Z, X/R, busduct impedance and CT winding resistance are placeholders until the equipment is '
+    +  'selected — every one of them moves the fault duty. This is a design basis for a quotation, not a stamped drawing.</div>';
+  h += '<div style="display:flex;gap:6px;margin-top:12px">'
+    +  '<button class="btn btn-out btn-sm" style="flex:1" onclick="exportDesignCSV()">Download schedule CSV</button></div>';
+  h += '</div>';
+
+  var host = $('outDesign');
+  if(!host) return;
+  host.innerHTML = h;
+  wireHelp(host);
+}
+
+function exportDesignCSV(){
+  if(!DESIGN) return;
+  var d = DESIGN, L = d.economics.lifecycle, i;
+  function q(s){ return '"'+String(s).replace(/"/g,'""')+'"'; }
+  var out = [];
+  out.push(['Section','Item','Value','Note'].map(q).join(','));
+  out.push(['Capacity','Installed MWh',d.capacity.installedMwh,d.capacity.units+' units'].map(q).join(','));
+  out.push(['Capacity','Required MWh',d.capacity.requiredMwh,'binding constraint: '+d.capacity.binding].map(q).join(','));
+  out.push(['Capacity','Usable MWh',d.capacity.usableMwh,''].map(q).join(','));
+  out.push(['PCS','Total MW',d.pcs.totalMw,d.pcs.units+' x '+d.pcs.unitMw+' MW'].map(q).join(','));
+  if(d.transformer.needed) out.push(['Transformer','Rating MVA',d.transformer.ratingMva,d.transformer.units+' units, '+d.transformer.vectorGroup].map(q).join(','));
+  out.push(['Electrical','Primary breaker',d.electrical.primaryBreaker.spec,'design '+d.electrical.primaryBreaker.designA+' A'].map(q).join(','));
+  if(d.electrical.primaryCable.valid) out.push(['Electrical','AC cable',d.electrical.primaryCable.spec,'drop '+d.electrical.primaryCable.dropPct+'%'].map(q).join(','));
+  if(d.electrical.fault.applicable) out.push(['Fault',d.electrical.fault.busLabel,d.electrical.fault.iscKa+' kA','peak '+d.electrical.fault.peakKa+' kA'].map(q).join(','));
+  for(i=0;i<d.boq.length;i++) out.push(['BOQ',d.boq[i].item,d.boq[i].qty,d.boq[i].remark].map(q).join(','));
+  for(i=0;i<d.checks.checks.length;i++) out.push(['Check',d.checks.checks[i].name,d.checks.checks[i].status,d.checks.checks[i].detail].map(q).join(','));
+  out.push('');
+  out.push(['Year','SOH %','kW cut','Demand savings','Discharge value','Recharge cost','Fuel adj','Aux','Tax','O&M','Replacement','Net','Cumulative','Discounted cumulative'].map(q).join(','));
+  for(i=0;i<L.rows.length;i++){
+    var r = L.rows[i];
+    out.push([r.year,r.sohPct,r.mdReductionKw,r.demandSavings,r.dischargeValue,r.chargeCost,
+              r.fuelAdjCost,r.auxCost,r.taxSaving,r.opex,r.replacementCapex,r.net,
+              r.cumulative,r.discountedCumulative].join(','));
+  }
+  var blob = new Blob([out.join('\n')], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bess-engineering-design.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.parentNode.removeChild(a); }, 0);
 }
 
 function kpi(k,v,u,s,hl,hk){
