@@ -528,6 +528,14 @@
         raw:         (d.grid||{}).raw || null
       },
 
+      /* ── The compute screen ─────────────────────────────────────────────
+         /api/compute-lease's four gates (power, fiber, zoning, site control)
+         and its verdict, as run from the console on a referred site. Kept
+         beside `grid` for the same reason `grid` is beside `viability`: it
+         is a measurement with a verdict attached, not a judgement, and the
+         judgement (the score) may cite it. Null until run. */
+      leaseScreen: d.leaseScreen || null,
+
       /* ── Design handoff ────────────────────────────────────────────────
          Pre-development is where the project actually gets built: the site map
          drawn, the equipment laid out, and the price falls out of it. That is a
@@ -1735,7 +1743,7 @@
      in saveGrid has to mean "a machine wrote this" and not "Grid Atlas wrote
      this" — otherwise a site-intel prescreen looks hand-typed and is never
      updated again. */
-  var MACHINE_PRESCREEN = ['grid-atlas', 'site-intel'];
+  var MACHINE_PRESCREEN = ['grid-atlas', 'site-intel', 'compute-lease'];
   function isMachinePrescreen(p) {
     return !!p && MACHINE_PRESCREEN.indexOf(p.source) >= 0;
   }
@@ -1798,6 +1806,22 @@
         + (pre ? ', prescreen ' + pre.verdict : '')
         + (g.substations && g.substations.length && g.substations[0].distanceKm != null
            ? ', nearest substation ' + g.substations[0].distanceKm + ' km' : '') });
+  }
+
+  /* ── The compute screen onto the deal ─────────────────────────────────
+     Same guard as saveGrid: the verdict becomes the prescreen only where no
+     person has written one. A compute screen is the fuller measurement —
+     it ran Grid Atlas on the way — so it replaces a Grid Atlas prescreen,
+     and a person's still outranks it. */
+  function saveLeaseScreen(deal, rec, pre) {
+    var fields = { leaseScreen: rec };
+    if (pre && (!deal.prescreen || isMachinePrescreen(deal.prescreen))) fields.prescreen = pre;
+    var g = rec && rec.gates || {};
+    var short = Object.keys(g).map(function (k) { return k + ' ' + (g[k].status || '?'); }).join(', ');
+    return patch(deal, fields, { type:'prescreen',
+      message:'Compute screen: ' + ((rec && rec.verdict) || 'no verdict')
+            + (short ? ' — ' + short : '')
+            + (fields.prescreen ? ', prescreen ' + pre.verdict : '') });
   }
 
   function requestScore(deal, onState) {
@@ -2562,7 +2586,7 @@
     'viability','viabilityHistory','permitting','assignment','finProjectId','adoptedFrom',
     'adoptedAt','importBatch','externalIds','projectType','prescreen',
     'discardReason','discardedAt','discardedBy','links','reevaluateReason',
-    'siteNotes','energy','design','grid'];
+    'siteNotes','energy','design','grid','leaseScreen'];
   function unmapped(deal) {
     var raw = deal._raw || {}, out = {}, n = 0;
     for (var k in raw) { if (!raw.hasOwnProperty(k) || KNOWN.indexOf(k) >= 0) continue; out[k] = raw[k]; n++; }
@@ -2598,7 +2622,7 @@
     releaseStage:releaseStage,
     criteriaSet:criteriaSet, threshold:threshold, computeScore:computeScore,
     saveScore:saveScore, postScore:postScore, overrideViability:overrideViability,
-    saveGrid:saveGrid, gridPrescreen:gridPrescreen,
+    saveGrid:saveGrid, gridPrescreen:gridPrescreen, saveLeaseScreen:saveLeaseScreen,
     scoringEnabled:scoringEnabled, skillFor:skillFor, skillLabel:skillLabel,
     skillAxis:skillAxis, skillProvider:skillProvider,
     scoringPayload:scoringPayload, requestScore:requestScore,

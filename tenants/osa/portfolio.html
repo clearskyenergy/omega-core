@@ -842,6 +842,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       <div class="card">
         <div class="card-h"><h2>Deals</h2>
           <div class="chips" id="pipe-chips" style="margin-left:auto"></div>
+          <button class="btn-x" onclick="doScreenCompute()" title="Run the four compute gates on every compute deal in this filter that has an address">Screen for compute…</button>
           <button class="btn-x" onclick="doImportReferrals()">Import referrals…</button></div>
         <div class="tbl-wrap"><table>
           <thead><tr><th>Site</th><th>Brought by</th><th>Stage</th><th class="num">Size</th>
@@ -1140,12 +1141,21 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
 <script src="/tenants/osa/config.js?v=16"></script>
 <script src="/tenants/osa/forms.js?v=4"></script>
 <script src="/tenants/osa/access-data.js?v=6"></script>
-<script src="/tenants/osa/portfolio-data.js?v=26"></script>
+<script src="/tenants/osa/portfolio-data.js?v=27"></script>
 <!-- SheetJS, for the Excel importer only. Loaded here rather than bundled so a
      CDN outage costs you the importer and nothing else. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="/omega-import.js?v=1"></script>
-<script src="/tenants/osa/ingest-data.js?v=6"></script>
+<!-- A partner's site list and their screening scorecard, onto the deals:
+     aliases, site identity, the scorecard parser, the compute-screen mapping.
+     Pure, no Firestore; ingest-data.js does the writes. -->
+<script src="/tenants/osa/site-screen.js?v=1"></script>
+<!-- The compute screen from the console. The client fans out to Grid Atlas,
+     Network Proximity and the parcel record and posts to /api/compute-lease;
+     the four gates live in the function, not here. -->
+<script src="/omega-grid-atlas-client.js"></script>
+<script src="/omega-compute-lease.js"></script>
+<script src="/tenants/osa/ingest-data.js?v=7"></script>
 <script src="/tenants/osa/grid-atlas-adapter.js?v=9"></script>
 <!-- Scores a site from the KMZ the site team already drew. Grid Atlas is a
      page with no API and the OGI endpoint is not configured, so this is the
@@ -4102,8 +4112,19 @@ function renderDesign(){
 /* New tab, deliberately. The editor is a long-running canvas with unsaved
    state; replacing this console with it would throw away whatever the person
    was in the middle of here. */
-function openEditor(projectId){
-  window.open(IN.editorUrl(projectId), '_blank', 'noopener');
+/* With a deal, the link carries the autopilot's parameters for a compute
+   site: the address it will locate and `auto=compute`, which the editor
+   dispatches to the modular build once core carries that mode and, until
+   then, runs as the map/parcel/roads/score pass on the loaded project.
+   Without a deal it is the plain project link, as before. */
+function openEditor(projectId, dealId){
+  var url=IN.editorUrl(projectId);
+  var d=dealId?findDeal(dealId):null;
+  if(d&&typeof SiteScreen!=='undefined'){
+    var base=(window.CLEARSKY_CONFIG&&window.CLEARSKY_CONFIG.portfolio||{}).editorUrl||'/editor.html';
+    url=SiteScreen.editorLink(base,projectId,d);
+  }
+  window.open(url, '_blank', 'noopener');
 }
 
 function doLinkDesign(projectId){
@@ -4190,12 +4211,20 @@ function doImportReferrals(){
       {type:'static',html:'Every row needs a <b>site name</b> and <b>who brought it</b>. '
         + 'Rows without an originator are refused rather than imported blank: attribution '
         + 'decides who gets paid, and adding it later means arguing about it later.'},
+      {type:'static',html:'<b>A portfolio, not one referral.</b> Rows land as sites to be '
+        + 'screened. Put <b>yes</b> in <i>Promote to project</i> on the ones that are projects now: '
+        + 'they advance to Screening and get an editor project in the same upload. A '
+        + '<i>Ref</i> column (the partner\u2019s own site id) lets their scorecard land on the right '
+        + 'deal and makes a re-upload an update instead of a second copy.'},
       {key:'what',type:'radio',label:'What now',required:true,value:'template',
         options:[
           {value:'template',label:'Download the template',
            hint:'CSV, opens in Excel or Sheets.'},
           {value:'upload',label:'Upload a filled-in file',
-           hint:'CSV or Excel. Everything lands as a referral.'}
+           hint:'CSV or Excel. Sites land at Referred; promoted rows go to Screening with a drawing.'},
+          {value:'scorecard',label:'Upload a screening scorecard',
+           hint:'The partner\u2019s scored shortlist. Matched to the deals by ref or site name; '
+              + 'each row becomes a viability score, and passing rows can be promoted.'}
         ]}
     ],
     submitLabel:'Continue'
@@ -4206,6 +4235,7 @@ function doImportReferrals(){
       toast('Template downloaded \u2014 fill it in and upload it back');
       return;
     }
+    if(v.what==='scorecard'){ openScorecardImport(); return; }
     openImport();
   });
 }
@@ -4245,10 +4275,10 @@ function pickSheet(file, sheet){
      remove. */
   var tpl=IN.mapFromTemplate(headers);
   if(tpl){
-    var rows=IN.buildRows(sheet,tpl.map,{headerRow:0});
+    var rows=IN.buildRows(sheet,tpl.map,{headerRow:0,existing:S.deals});
     S.imp={ file:file.name, sheet:sheet, headers:headers, mapping:tpl.map, rows:rows,
             fromTemplate:true };
-    showImportPreview();
+    importDefaults();
     return;
   }
 
@@ -4273,8 +4303,82 @@ function pickSheet(file, sheet){
     if(!v) return;
     var mapping={};
     IN.FIELDS.forEach(function(fl){ if(v[fl.key]!=='') mapping[fl.key]=Number(v[fl.key]); });
-    var rows=IN.buildRows(sheet,mapping,{headerRow:0});
+    var rows=IN.buildRows(sheet,mapping,{headerRow:0,existing:S.deals});
     S.imp={ file:file.name, sheet:sheet, headers:headers, mapping:mapping, rows:rows };
+    importDefaults();
+  });
+}
+
+/* ── THE BATCH DECISIONS, ONCE ─────────────────────────────────────────────
+   Three things a partner's file leaves to the person uploading it, asked on
+   one form before the preview rather than guessed per row:
+
+     · a target size for rows that have none. iQGen's file says "every row
+       targets 1.0 MW" in its notes and leaves eleven cells empty. The
+       importer never invents a number; the person sets one for the batch.
+     · a project type for rows that have none.
+     · the partner registry. A domain the file names that is not yet a
+       partner card is offered for creation here — name, kind, JD flag —
+       because agreeing the partnership and bringing the sites in are one
+       act when the sites are what you are holding.
+
+   And whether to honour the Promote column at all, said plainly with the
+   count, so nobody promotes fifty sites because a column was filled in
+   by accident. */
+function _fkey(s){ return String(s||'').replace(/[^a-z0-9]+/gi,'_'); }
+function importDefaults(){
+  var m=S.imp; if(!m) return;
+  var good=m.rows.filter(function(r){return r.ok;});
+  var noSize=good.filter(function(r){ return r.values.sizeMw==null; }).length;
+  var noType=good.filter(function(r){ return !r.values.projectType; }).length;
+  var promo=good.filter(function(r){ return r.values.promote; }).length;
+  var reg=A.orgs()||{}, unknown={}, byOrg={};
+  good.forEach(function(r){ var o=r.values.partnerOrg; if(!o) return;
+    byOrg[o]=(byOrg[o]||0)+1; if(!reg[o]) unknown[o]=1; });
+  var unk=Object.keys(unknown);
+
+  var fields=[
+    {type:'static',html:'<b>'+good.length+' row'+(good.length===1?'':'s')+'</b> from '
+      + Object.keys(byOrg).map(function(o){ return esc(A.orgName(o)||o)+' ('+byOrg[o]+')'; }).join(', ')
+      + '. Decide the batch-wide things here; the preview follows.'}
+  ];
+  if(noSize) fields.push({key:'defaultSizeMw',type:'number',label:'Target size for the '+noSize
+      +' row'+(noSize===1?'':'s')+' without one (MW)',step:'0.1',value:'1',
+      hint:'Leave empty to import those rows with no size. Nothing is invented per row.'});
+  if(noType) fields.push({key:'defaultProjectType',type:'select',label:'Project type for the '+noType
+      +' row'+(noType===1?'':'s')+' without one',value:'',
+      options:[{value:'',label:'— leave blank —'}].concat(optTypes())});
+  if(promo) fields.push({key:'promote',type:'radio',label:'"Promote to project" column',required:true,
+      value:'yes',
+      options:[{value:'yes',label:'Promote the '+promo+' marked row'+(promo===1?'':'s'),
+                hint:'Each advances to Screening with you as rep and gets an editor project in '
+                   + 'your workspace with the partner on its roster.'},
+               {value:'no',label:'Ignore the column',hint:'Everything lands at Referred.'}]});
+  unk.forEach(function(o){
+    var k=_fkey(o);
+    fields.push({type:'divider',label:o+' is not in the partner registry'});
+    fields.push({key:'reg_'+k,type:'radio',label:'Add '+o+' as a partner',required:true,value:'yes',
+      options:[{value:'yes',label:'Add it now',hint:'The deals attribute to it either way; the '
+                + 'card is what carries the name, the kind and the JD flag.'},
+               {value:'no',label:'Not now'}]});
+    fields.push({key:'name_'+k,type:'text',label:'Organisation name',value:o.split('.')[0]});
+    fields.push({key:'kind_'+k,type:'select',label:'Kind',value:'developer',
+      options:A.ORG_KINDS.map(function(x){ return {value:x.key,label:x.label}; })});
+    fields.push({key:'jd_'+k,type:'radio',label:'Joint development partner',value:'yes',
+      options:[{value:'yes',label:'Yes — we co-develop these sites'},{value:'no',label:'No'}]});
+  });
+
+  Forms.open({ title:'Before the preview', intro:m.file, fields:fields, submitLabel:'Preview' })
+  .then(function(v){
+    if(!v){ S.imp=null; return; }
+    m.defaults={ defaultSizeMw:v.defaultSizeMw, defaultProjectType:v.defaultProjectType||'',
+                 promote:(promo&&v.promote==='yes') };
+    m.newOrgs=unk.filter(function(o){ return v['reg_'+_fkey(o)]==='yes'; }).map(function(o){
+      var k=_fkey(o);
+      return { id:o, name:String(v['name_'+k]||'').trim()||o, kind:v['kind_'+k]||'developer',
+               jd:v['jd_'+k]==='yes' }; });
+    m.rows=IN.buildRows(m.sheet,m.mapping,{headerRow:0,existing:S.deals,
+      defaultSizeMw:m.defaults.defaultSizeMw, defaultProjectType:m.defaults.defaultProjectType});
     showImportPreview();
   });
 }
@@ -4283,6 +4387,9 @@ function showImportPreview(){
   var m=S.imp; if(!m) return;
   var good=m.rows.filter(function(r){return r.ok;});
   var bad=m.rows.filter(function(r){return !r.ok;});
+  var df=m.rows.defaulted||{};
+  var upd=good.filter(function(r){ return r.updates; }).length;
+  var promo=(m.defaults&&m.defaults.promote)?good.filter(function(r){ return r.values.promote; }).length:0;
 
   if(!good.length){
     Forms.open({ title:'Nothing importable', intro:m.file,
@@ -4300,10 +4407,23 @@ function showImportPreview(){
     title:'Import '+good.length+' referral'+(good.length===1?'':'s'),
     intro:m.file+(m.fromTemplate?' \u00b7 recognised as the template':''),
     fields:[
-      {type:'static',html:'<b>'+good.length+' importable</b>'
+      {type:'static',html:'<b>'+(good.length-upd)+' new</b>'
+        + (upd?' \u00b7 <b>'+upd+' update'+(upd===1?'':'s')+'</b> an existing deal (same partner, '
+              + 'same ref or site name \u2014 only what the sheet carries is written)':'')
+        + (promo?' \u00b7 <b>'+promo+' promoted</b> to Screening with an editor project':'')
         + (bad.length?' \u00b7 <b>'+bad.length+' refused</b>':'')
         + (m.rows.skippedExamples?' \u00b7 '+m.rows.skippedExamples
             +' example row(s) skipped':'')
+        + ((df.sizeMw||df.projectType||df.aliased)
+            ? '<br><span class="sub">'
+              + [df.aliased?df.aliased+' project type'+(df.aliased===1?'':'s')+' read from the partner\u2019s wording':'',
+                 df.sizeMw?df.sizeMw+' given the batch size':'',
+                 df.projectType?df.projectType+' given the batch project type':''].filter(Boolean).join(' \u00b7 ')
+              + '</span>' : '')
+        + ((m.newOrgs||[]).length
+            ? '<br><span class="sub">Adding to the registry: '
+              + m.newOrgs.map(function(o){ return esc(o.name)+' ('+esc(o.id)+(o.jd?', JD':'')+')'; }).join(', ')
+              + '</span>' : '')
         + (warned.length?'<br><br><b>'+warned.length+' with warnings:</b><br>'
             + warned.slice(0,4).map(function(r){
                 return 'Row '+r.row+': '+Forms.esc(r.warnings.join(' ')); }).join('<br>'):'')
@@ -4322,16 +4442,234 @@ function showImportPreview(){
   }).then(function(v){
     if(!v||v.go!=='yes'){ S.imp=null; return; }
     var batch=m.file+' \u00b7 '+new Date().toISOString().slice(0,16).replace('T',' ');
+    var me=A.me&&A.me();
+    /* The registry first, sequentially: a partner card is what the deals
+       will be attributed to, and it is one write each. */
+    var regs=(m.newOrgs||[]).slice();
+    function registerNext(){
+      if(!regs.length) return Promise.resolve();
+      var o=regs.shift(), f={ name:o.name, kind:o.kind, active:true };
+      if(o.jd) f.jd={ active:true };
+      return A.saveOrg(o.id,f)['catch'](function(e){
+        toast('Could not add '+o.id+' to the registry: '+((e&&e.message)||e),true); })
+        .then(registerNext);
+    }
     toast('Importing\u2026');
-    IN.runImport(m.rows,batch,function(done,total){
-      if(done%10===0||done===total) toast('Imported '+done+' of '+total+'\u2026');
+    registerNext().then(function(){ return A.loadOrgs(); }).then(function(){
+      return IN.runImport(m.rows,batch,function(done,total){
+        if(done%10===0||done===total) toast('Imported '+done+' of '+total+'\u2026');
+      },{ promote:!!(m.defaults&&m.defaults.promote),
+          me:me&&me.email, myOrg:me&&me.orgId });
     }).then(function(r){
       S.imp=null;
-      toast(r.created+' imported'+(r.failed?', '+r.failed+' failed':''), r.failed>0);
-      if(r.errors.length) console.warn('[import] failures:', r.errors);
+      toast(r.created+' imported'
+        +(r.updated?', '+r.updated+' updated':'')
+        +(r.promoted?', '+r.promoted+' promoted':'')
+        +(r.failed?', '+r.failed+' failed':''), r.failed>0);
+      if(r.errors.length){
+        console.warn('[import] failures:', r.errors);
+        Forms.open({ title:'Import notes', intro:batch,
+          fields:[{type:'static',html:r.errors.slice(0,12).map(function(x){
+            return 'Row '+x.row+' \u00b7 '+Forms.esc(x.name)+': '+Forms.esc(x.message); }).join('<br>')
+            +(r.errors.length>12?'<br>\u2026and '+(r.errors.length-12)+' more':'')}],
+          submitLabel:'Close', cancelLabel:'Close' });
+      }
       return refresh();
     })['catch'](function(e){ toast((e&&e.message)||'Import failed',true); });
   });
+}
+
+/* \u2500\u2500 THE SCORECARD \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+   The partner's scored shortlist: a ref, a site, nine axes against a
+   100-point rubric, a total, a recommendation. Matched to the deals by ref
+   or by site name (shown, correctable), then each row is an appended
+   viability score on its deal \u2014 same block, same history, same gate. The
+   rubric's own bands set the pass line. A row that passes can be promoted
+   (Screening, Qualified, an editor project); a row that does not keeps its
+   score as information and stays where it was. */
+function openScorecardImport(){
+  if(!A.can('write_deal')){ toast('Scoring deals is ClearSky\u2019s to do \u2014 ask us to run the file.',true); return; }
+  if(typeof SiteScreen==='undefined'){ toast('site-screen.js did not load. Reload the page.',true); return; }
+  var inp=document.createElement('input');
+  inp.type='file'; inp.accept='.xlsx,.xls,.csv';
+  inp.onchange=function(){
+    var f=inp.files&&inp.files[0]; if(!f) return;
+    toast('Reading '+f.name+'\u2026');
+    IN.parseWorkbook(f).then(function(sheets){
+      /* The scorecard is whichever sheet parses as one. A workbook often
+         carries a cost model or notes beside it. */
+      var card=null, why=[];
+      for(var i=0;i<sheets.length&&!card;i++){
+        var c=SiteScreen.parseScorecard(sheets[i].rows);
+        if(c.ok&&c.rows.length){ card=c; card.sheet=sheets[i].name; } else why.push(sheets[i].name+': '+(c.why||'no scored rows'));
+      }
+      if(!card){ toast('No sheet in that file reads as a scorecard \u2014 '+why.join('; '),true); return; }
+      scorecardSetup(f.name,card);
+    })['catch'](function(e){ toast((e&&e.message)||'Could not read that file',true); });
+  };
+  inp.click();
+}
+
+function scorecardSetup(fileName, card){
+  /* The partner is whoever brought the matching deals. Guessed from the
+     names, confirmed on the form: matching is scoped to one partner so a
+     "Main St" from somebody else is never scored by mistake. */
+  var guess='', counts={};
+  SiteScreen.matchScorecard(card,S.deals,'').forEach(function(m){
+    if(m.deal){ var o=m.deal.origination.partnerOrg; counts[o]=(counts[o]||0)+1; } });
+  Object.keys(counts).forEach(function(o){ if(!guess||counts[o]>counts[guess]) guess=o; });
+
+  Forms.open({
+    title:'Screening scorecard', intro:fileName+' \u00b7 '+card.sheet+' \u00b7 '+card.rows.length+' scored site'+(card.rows.length===1?'':'s'),
+    fields:[
+      {type:'static',html:'<b>'+card.axes.length+' axes</b>: '+card.axes.map(function(a){
+          return Forms.esc(a.label)+(a.max!=null?' /'+a.max:''); }).join(', ')
+        + (card.hasMaxRow?'':'<br><span class="sub">No "Maximum available" row \u2014 totals are taken as already out of 100.</span>')
+        + (card.bands.length?'<br>Bands from the sheet: '+card.bands.map(function(b){
+            return b.lo+'\u2013'+b.hi+' '+Forms.esc(b.meaning.split('.')[0]); }).join(' \u00b7 ')
+          :'<br><span class="sub">No band table \u2014 the pass line below is the default.</span>')},
+      {key:'partnerOrg',type:'orgpick',label:'Whose sites these are',required:true,options:optOrgs(),
+        value:guess, validate:function(v){ return A.validateDomain(v); }},
+      {key:'threshold',type:'number',label:'Pass line (score out of 100)',required:true,
+        value:String(card.threshold),step:'1',
+        hint:'From the rubric\u2019s own bands: the lowest band that still says pursue. '
+           + 'At or above it the row passes viability; below it the score is kept as information.'},
+      {key:'promote',type:'radio',label:'Rows that pass',required:true,value:'yes',
+        options:[{value:'yes',label:'Promote them',
+                  hint:'Screening with you as rep, then Qualified through the gate, and an editor '
+                     + 'project in your workspace with the partner on its roster.'},
+                 {value:'no',label:'Score only',hint:'Write the score and leave the stage alone.'}]}
+    ],
+    submitLabel:'Match the sites'
+  }).then(function(v){
+    if(!v) return;
+    card.threshold=Number(v.threshold);
+    var matches=SiteScreen.matchScorecard(card,S.deals,v.partnerOrg);
+    scorecardPreview(fileName,card,matches,{ partnerOrg:v.partnerOrg, promote:v.promote==='yes' });
+  });
+}
+
+function scorecardPreview(fileName, card, matches, opts){
+  var hit=matches.filter(function(m){ return m.deal; });
+  var miss=matches.filter(function(m){ return !m.deal; });
+  var pass=hit.filter(function(m){ return SiteScreen.scorePayload(m.row,card).passes; });
+  var fields=[
+    {type:'static',html:'<b>'+hit.length+' matched</b>'
+      + (miss.length?' \u00b7 <b>'+miss.length+' not matched</b> (skipped)':'')
+      + ' \u00b7 <b>'+pass.length+' pass</b> at '+card.threshold
+      + (opts.promote&&pass.length?' and will be promoted':'')
+      + '<br><br>'
+      + hit.map(function(m){
+          var p=SiteScreen.scorePayload(m.row,card);
+          return Forms.esc(m.row.site)+' \u2192 <b>'+Forms.esc(m.deal.name)+'</b>'
+            + ' <span class="sub">('+(m.how==='ref'?'by ref':'by name')+')</span> \u00b7 '
+            + p.score+' '+Forms.esc(m.row.recommendation||'')
+            + (p.passes?' <span style="color:var(--ok)">pass</span>':''); }).join('<br>')
+      + (miss.length?'<br><br><b>Not matched:</b><br>'+miss.map(function(m){
+          return Forms.esc(m.row.site)+(m.candidates.length
+            ? ' <span class="sub">\u2014 could be '+m.candidates.map(function(c){ return Forms.esc(c.name); }).join(' or ')+'; pick one below</span>'
+            : ' <span class="sub">\u2014 no deal by that name for this partner. Import the referral file first.</span>'); }).join('<br>'):'')}
+  ];
+  /* A near miss with two candidates is a choice the person makes, not one
+     the matcher guesses. */
+  miss.forEach(function(m,i){
+    if(!m.candidates.length) return;
+    fields.push({key:'pick_'+i,type:'select',label:m.row.site+' is',value:'',
+      options:[{value:'',label:'\u2014 skip \u2014'}].concat(m.candidates.map(function(c){
+        return {value:c.id,label:c.name+' \u2014 '+F.stageOf(c.stage).label}; }))});
+  });
+  fields.push({key:'go',type:'radio',label:'Proceed',required:true,value:'yes',
+    options:[{value:'yes',label:'Score the '+hit.length+' matched row'+(hit.length===1?'':'s')},
+             {value:'no',label:'Cancel'}]});
+
+  Forms.open({ title:'Apply the scorecard', intro:fileName, fields:fields, submitLabel:'Apply' })
+  .then(function(v){
+    if(!v||v.go!=='yes') return;
+    miss.forEach(function(m,i){
+      var id=v['pick_'+i]; if(!id) return;
+      m.deal=m.candidates.filter(function(c){ return c.id===id; })[0]||null; m.how='picked';
+    });
+    var me=A.me&&A.me();
+    toast('Scoring\u2026');
+    IN.applyScorecard(matches,card,{ promote:opts.promote, me:me&&me.email, myOrg:me&&me.orgId },
+      function(done,total){ if(done%5===0||done===total) toast('Scored '+done+' of '+total+'\u2026'); })
+    .then(function(r){
+      toast(r.scored+' scored'
+        +(r.promoted?', '+r.promoted+' promoted':'')
+        +(r.qualified?', '+r.qualified+' qualified':'')
+        +(r.failed?', '+r.failed+' failed':''), r.failed>0);
+      if(r.errors.length){
+        console.warn('[scorecard] notes:', r.errors);
+        Forms.open({ title:'Scorecard notes', intro:fileName,
+          fields:[{type:'static',html:r.errors.map(function(x){
+            return Forms.esc(x.name)+': '+Forms.esc(x.message); }).join('<br>')}],
+          submitLabel:'Close', cancelLabel:'Close' });
+      }
+      return refresh();
+    })['catch'](function(e){ toast((e&&e.message)||'Scoring failed',true); });
+  });
+}
+
+/* \u2500\u2500 THE COMPUTE SCREEN, ON THE LIST \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+   Forty sites just imported and nobody has looked at any of them. The four
+   gates (power, fiber, zoning, site control) run on every compute deal in
+   the current filter that has an address, one at a time, writing Grid Atlas
+   onto `grid` and the verdict onto `leaseScreen` and the prescreen. The
+   fiber lookup is time-boxed near a minute, so this is a tab you leave open;
+   the toast says where it is. */
+function screenCandidates(all){
+  var week=7*86400000;
+  return pipeRows(S.pipeFilter).filter(function(d){
+    if(d._demo) return false;
+    if(['referred','screening','reevaluate'].indexOf(d.stage)<0) return false;
+    if(!SiteScreen.isComputeType(d.projectType) && (d.categories||[]).indexOf('compute')<0) return false;
+    if(!d.address && !(d.grid&&d.grid.lat!=null)) return false;
+    if(!all && d.leaseScreen && d.leaseScreen.ranAt && (Date.now()-F.ms(d.leaseScreen.ranAt))<week) return false;
+    return true;
+  });
+}
+function doScreenCompute(){
+  if(!A.can('write_deal')){ toast('Screening writes to the deals, which is ClearSky\u2019s to do.',true); return; }
+  if(typeof SiteScreen==='undefined'||!window.OmegaComputeLease){ toast('The compute screen did not load. Reload the page.',true); return; }
+  var fresh=screenCandidates(false), every=screenCandidates(true);
+  if(!every.length){ toast('No compute deals with an address in this filter \u2014 nothing to screen',true); return; }
+  Forms.open({
+    title:'Screen for compute', intro:every.length+' compute deal'+(every.length===1?'':'s')+' with an address in this filter',
+    fields:[
+      {type:'static',html:'Runs the four gates \u2014 <b>power, fiber, zoning, site control</b> \u2014 on each '
+        + 'site: Grid Atlas for the substation, Network Proximity for the fiber, the county for the '
+        + 'parcel. Nothing is scored here; the gates and the verdict come from the service and are '
+        + 'written to the deal as its prescreen. Questions only a person can answer (will-serve, '
+        + 'fiber on site, the owner\u2019s appetite) come back as <i>asks</i> on each deal.'
+        + '<br><br>About a minute a site. Leave the tab open.'},
+      {key:'which',type:'radio',label:'Which',required:true,value:fresh.length?'fresh':'all',
+        options:[{value:'fresh',label:'Not screened this week \u2014 '+fresh.length},
+                 {value:'all',label:'All of them \u2014 '+every.length,hint:'Re-runs the ones already screened.'}]}
+    ],
+    submitLabel:'Screen'
+  }).then(function(v){
+    if(!v) return;
+    var list=v.which==='all'?every:fresh;
+    if(!list.length){ toast('Nothing to screen'); return; }
+    toast('Screening 1 of '+list.length+'\u2026');
+    IN.screenMany(list,function(done,total,d,res){
+      toast((res?Forms.esc(d.name)+': '+res.verdict:Forms.esc(d.name)+': skipped')+' \u00b7 '+done+' of '+total);
+    }).then(function(r){
+      var vs=Object.keys(r.verdicts).map(function(k){ return r.verdicts[k]+' '+k; }).join(', ');
+      toast(r.screened+' screened'+(vs?' ('+vs+')':'')+(r.skipped?', '+r.skipped+' skipped':'')
+        +(r.failed?', '+r.failed+' failed':''), r.failed>0);
+      if(r.errors.length) console.warn('[compute screen]', r.errors);
+      return refresh();
+    })['catch'](function(e){ toast((e&&e.message)||'Screening failed',true); });
+  });
+}
+function doScreenComputeOne(){
+  var d=guard(); if(!d) return;
+  if(typeof SiteScreen==='undefined'||!window.OmegaComputeLease){ toast('The compute screen did not load. Reload the page.',true); return; }
+  toast('Screening '+d.name+'\u2026');
+  IN.screenCompute(d,function(key,state,text){ if(state!=='busy') toast(key+': '+text); })
+    .then(function(res){ toast('Compute screen: '+res.verdict); return refresh(); })
+    ['catch'](function(e){ toast((e&&e.message)||'Screening failed',true); });
 }
 
 /* ── Users ────────────────────────────────────────────────────────────── */
@@ -5592,7 +5930,7 @@ function tabOverview(d){
         ? '<div style="margin-top:13px;display:flex;gap:8px;flex-wrap:wrap">'
           + (d.projectId
               ? '<button class="btn-a" style="padding:8px 14px" onclick="openEditor(\''
-                + esc(d.projectId)+'\')">Open the editor</button>'
+                + esc(d.projectId)+'\',\''+esc(d.id)+'\')">Open the editor</button>'
               : '<button class="btn-a" style="padding:8px 14px" onclick="doCreateProject()">'
                 + 'Create it in the editor</button>')
           + '<button class="btn-o" onclick="doAssignDesign()">'
@@ -5619,7 +5957,7 @@ function tabOverview(d){
         + (F.ms(d.assignment.dueAt) && F.ms(d.assignment.dueAt)<Date.now() && !F.isExit(d.stage)
            ? ' <span style="color:var(--bad);font-weight:600">overdue</span>':''), d.assignment.dueAt)
     + rowIf('Editor project',
-        '<button class="btn-x" style="padding:0" onclick="openEditor(\''+esc(d.projectId)+'\')">'
+        '<button class="btn-x" style="padding:0" onclick="openEditor(\''+esc(d.projectId)+'\',\''+esc(d.id)+'\')">'
         + 'Open the drawing</button>', d.projectId)
     + rowIf('Marketplace', '<span class="mono">'+esc(d.finProjectId)+'</span>', d.finProjectId)
     + '</dl>'
@@ -5628,7 +5966,7 @@ function tabOverview(d){
           + '<button class="btn-x" onclick="doAssign()">Assign\u2026</button>'
           + (d.projectId
              ? '<button class="btn-a" style="padding:6px 12px;font-size:12px" '
-               + 'onclick="openEditor(\''+esc(d.projectId)+'\')">Open in editor</button>'
+               + 'onclick="openEditor(\''+esc(d.projectId)+'\',\''+esc(d.id)+'\')">Open in editor</button>'
              : '<button class="btn-x" onclick="doCreateProject()">Create in editor\u2026</button>')
           + (d.finProjectId ? '' : '<button class="btn-x" onclick="doPushMarketplace()">Push to marketplace\u2026</button>')
           + '</div>':'')
@@ -5741,8 +6079,36 @@ function tabOverview(d){
           + 'Not prescreened. Skip it if you are confident \u2014 the screening tool is the '
           + 'real judgement.</div>')
       + (A.can('write_deal')&&!d._demo
-          ? '<div style="margin-top:12px"><button class="btn-x" onclick="doPrescreen()">'
-            + (pre?'Re-run prescreen':'Prescreen it')+'</button></div>':'')
+          ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+            + '<button class="btn-x" onclick="doPrescreen()">'+(pre?'Re-run prescreen':'Prescreen it')+'</button>'
+            + ((d.address||(d.grid&&d.grid.lat!=null))&&(typeof SiteScreen!=='undefined')
+                &&(SiteScreen.isComputeType(d.projectType)||(d.categories||[]).indexOf('compute')>=0)
+               ? '<button class="btn-x" onclick="doScreenComputeOne()" title="Power, fiber, zoning and site control from the service">'
+                 + (d.leaseScreen?'Re-run the compute screen':'Screen for compute')+'</button>':'')
+            + '</div>':'')
+      + '</div></div>';
+  }
+
+  /* The compute screen's four gates, as the service returned them. Read-only:
+     the asks are the questions only a person can answer, and answering them
+     is a re-run, not an edit. */
+  var ls=d.leaseScreen;
+  if(ls&&ls.gates){
+    var vcol=ls.verdict==='qualified'?'var(--ok)':ls.verdict==='disqualified'?'var(--bad)':'var(--warn)';
+    h+='<div class="sec"><div class="sec-h">Compute screen'
+      + '<span class="r">'+esc(F.fmtDate(ls.ranAt))+(ls.ranBy?' · '+esc(ls.ranBy):'')+'</span></div>'
+      + '<div class="sec-b"><dl class="kv">'
+      + row('Verdict','<b style="color:'+vcol+'">'+esc(String(ls.verdict||'').toUpperCase())+'</b>'
+          + (ls.verdictReason?' <span class="sub">'+esc(ls.verdictReason)+'</span>':''))
+      + (ls.gateOrder||Object.keys(ls.gates)).map(function(k){ var g=ls.gates[k]; if(!g) return '';
+          var gc=g.status==='pass'?'var(--ok)':g.status==='fail'?'var(--bad)':g.status==='conditional'?'var(--warn)':'var(--ink-3)';
+          return row(g.label||k,'<b style="color:'+gc+'">'+esc(g.status)+'</b>'
+            + (g.score!=null?' <span class="mono sub">'+g.score+'</span>':'')
+            + (g.headline?' — '+esc(g.headline):'')); }).join('')
+      + rowIf('Tranche', esc(ls.tranche&&ls.tranche.label||''), ls.tranche&&ls.tranche.label)
+      + '</dl>'
+      + ((ls.asks||[]).length?'<div style="margin-top:10px;font-size:12.5px"><b>Asks</b> — answer these and re-run:<br>'
+          + ls.asks.map(function(a){ return '• '+esc(a); }).join('<br>')+'</div>':'')
       + '</div></div>';
   }
 
@@ -5843,7 +6209,7 @@ function tabFiles(d){
   if(d.projectId||d.finProjectId){
     h+='<div class="sec"><div class="sec-h">Elsewhere</div><div class="sec-b"><dl class="kv">'
       + (d.projectId?row('Editor drawing',
-          '<button class="btn-x" style="padding:0" onclick="openEditor(\''+esc(d.projectId)+'\')">'
+          '<button class="btn-x" style="padding:0" onclick="openEditor(\''+esc(d.projectId)+'\',\''+esc(d.id)+'\')">'
           + 'Open in editor</button>'):'')
       + (d.finProjectId?row('Marketplace listing',
           '<span class="mono">'+esc(d.finProjectId)+'</span>'):'')
@@ -7301,7 +7667,7 @@ function doCreateProject(){
     if(!v) return;
     IN.createEditorProject(d,v).then(function(id){
       toast('Project created — opening the editor');
-      openEditor(id);
+      openEditor(id,d.id);
       /* Creating the drawing IS sending it to design. Leaving the status at
          "not started" afterwards would have the board claim nobody is working
          on something the team already has open. */
