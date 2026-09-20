@@ -17,7 +17,7 @@ vm.createContext(box);vm.runInContext(funcs.join('\n'),box);box.$=k=>nodes[k]||n
 for(const mode of ['tool-interval','tool-monthly']){
  const load=Array.from({length:744},(_,i)=>i%24>=10&&i%24<15?1000:300);
  const data=[{load,dt:1,peak:1000,min:300,days:31,label:'Jan 2025',key:'2025-01',kwh:300000,rate:18.5}];
- box.DESIGN=null;
+ box.DESIGN=null;box.TARIFF=null;
  DESIGN_IDS.forEach(id=>{nodes[id].value='';});
  box.RESULT=JSON.parse(JSON.stringify(tool({mode,data,settings:{obj:'npv'},durations:[2,4]})));
  box.SERIES={kw:load,t:load.map((_,i)=>new Date(2025,0,1,i)),dt:1,dtMin:60};box.RESULT.best.payback??=Infinity;box.RESULT.rec.payback??=Infinity;

@@ -1528,3 +1528,100 @@ crediting the floor pack and measuring degradation both raise returns,
 booking the replacement lowers them. The engine is more accurate in both
 directions rather than uniformly more optimistic — and it is now fast enough
 that the accurate method is the affordable one.
+
+---
+
+## Tariff engine (2026-09-20)
+
+### The gap this closes
+
+Benchmarked against EnergyToolbase, whose moat is precise tariff modelling.
+OMEGA valued **every shaved kW at one `$/kW-mo`**. Almost no commercial
+schedule works that way. A typical C&I tariff bills:
+
+- a **facility** (non-coincident) demand charge on the month's highest kW,
+- an **on-peak** demand charge on the highest kW *during* its window,
+- sometimes a part-peak charge on a third window,
+- energy at a different price in each window,
+- all of it seasonal,
+- and a ratchet on some components and not others.
+
+Those are different determinants, and a battery cannot shave them all at
+once — shaving the 4pm coincident peak and the 11am facility peak are
+different dispatches worth different money.
+
+**Measured, on a summer-only demand charge** ($6.10/kW all year + $28.10/kW
+on-peak, Jun–Sep), for the same 250 kW battery:
+
+| how the flat rate was chosen | claims | error |
+|---|---|---|
+| read off a July bill | $102,600 | **+54%** |
+| read off a January bill | $18,300 | **−73%** |
+| a correct 12-month blend | $46,400 | **−31%** |
+| exact, billed per determinant | **$66,825** | — |
+
+Even the *right* blended rate is 31% out, because the battery earns the
+summer rate on the summer peak and the blend averages it across months where
+it earns less. Run through the sizing engine end to end, the flat model
+overstated annual savings by 32% and payback by 28%.
+
+That is larger than every other correction in this codebase combined.
+
+### `api/_lib/bess-tariff.js`
+
+Exact, line-item billing from either an interval profile or month
+aggregates. Every figure in the tests is hand-computed and written out.
+
+**The schema is OpenEI URDB's, deliberately.** URDB is public, free and
+carries thousands of US tariffs; building to anything else would mean
+writing an importer later and getting the edge cases wrong. A URDB record
+drops in essentially as-is — which is the answer to the one thing ETB has
+that we do not, a rate library.
+
+Handles: tiered energy and demand (cumulative, with the marginal rate
+reported — what a battery actually saves on the margin), 12×24 weekday and
+weekend period schedules, seasonal facility charges via `flatdemandmonths`,
+coincident TOU demand, ratchets on the trailing 11 months, fixed charges,
+per-kWh riders and tax.
+
+A flat rate is expressed in the same schema and reproduces the old
+arithmetic exactly, so there is one billing path rather than two.
+
+### Wired in
+
+`/api/bess-size` takes an optional `tariff`, bounded before the engine sees
+it (periods, tiers, schedule shape, rate ranges — a negative rate is a
+sell-back price this engine does not model, and a rate above $1,000 is a
+misplaced decimal). With no tariff the engine is byte-identical to before.
+
+`battery-sizer.html` gains a third rate mode. It takes pasted URDB JSON and
+**reads back a plain-English summary of what it understood** — grouped by
+season, with non-contiguous windows described as such, because an off-peak
+period is usually the night *plus* the evening and printing "0:00–24:00" for
+it says the opposite of the truth.
+
+### Honest limits
+
+- **A monthly bill cannot carry a coincident demand figure.** On the Utility
+  bills tab only the facility determinant is priced, and the summary says so
+  rather than quietly understating what a well-targeted battery is worth.
+  Interval data prices everything.
+- **The dispatch is not yet tariff-aware.** It still shaves the monthly
+  maximum. Pricing is now exact; *targeting* the highest-value determinant is
+  the next step and is where the remaining value sits.
+- **No rate library.** The schema makes URDB import a mapping rather than a
+  rewrite, but the import is not built. Pasting a schedule is manual today.
+- The template button ships a **shape, not a real schedule** — every number
+  is a placeholder. Shipping a real utility's rates would be shipping numbers
+  that go stale silently.
+
+### Also fixed
+
+`ES_TAX = 0.0635` was hardcoded in the shared engine — a Massachusetts
+utility tax applied to every site in the country, including the ones in
+California. It is an input now, defaulting to zero.
+
+Zero-rate demand periods no longer emit a `$0.00` line. That was not
+cosmetic: a caller reading the first demand line got the period that never
+moves, so a battery shaving the window that *is* billed looked like it
+achieved nothing.

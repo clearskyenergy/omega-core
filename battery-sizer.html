@@ -426,6 +426,7 @@ body.nohelp .hb{display:none}
         <select id="rateStruct" onchange="rateStructUI()">
           <option value="kw" selected>$ per kW of peak demand</option>
           <option value="sub">Subscribed kW blocks (PG&amp;E BEV, SDG&amp;E EV-HP)</option>
+          <option value="tariff">Full tariff &mdash; seasonal, time-of-use, several demand charges</option>
         </select>
       </div>
       <div class="row" id="rateRow">
@@ -442,7 +443,21 @@ body.nohelp .hb{display:none}
           nothing unless it crosses a block boundary, and nothing at all below the floor. Enter the block price from the current
           tariff sheet &mdash; these escalate, and a stale number is the whole error.</div>
       </div>
-      <label class="chk" style="margin:0 0 8px"><input type="checkbox" id="curRate" checked>
+      <div id="tariffRow" style="display:none">
+        <div class="hint" style="padding-top:0" data-help="tariffJson">Paste the rate in
+          <b>OpenEI URDB</b> form. That is the schema the free public rate database publishes,
+          so a schedule copied from it drops straight in. Everything the tool understands is
+          summarised below &mdash; read that back before you trust the answer.</div>
+        <textarea id="tariffJson" rows="7" spellcheck="false" placeholder='{ "name": "...", "flatdemandstructure": [[{"rate": 6.10}], [{"rate": 28.10}]], "flatdemandmonths": [0,0,0,0,0,1,1,1,1,0,0,0], ... }'
+          style="width:100%;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--border);border-radius:var(--radius)"
+          oninput="tariffChanged()"></textarea>
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button class="btn btn-out btn-sm" style="flex:1" onclick="tariffTemplate()">Load a seasonal template</button>
+          <button class="btn btn-out btn-sm" style="flex:1" onclick="tariffClear()">Clear</button>
+        </div>
+        <div id="tariffSummary"></div>
+      </div>
+      <label class="chk" style="margin:0 0 8px" id="curRateWrap"><input type="checkbox" id="curRate" checked>
         <span>Price every month at the newest rate on the packet</span></label>
       <div class="row">
         <div><label class="fl" data-help="ratchet">Demand ratchet %</label><input type="number" id="ratchet" value="0" min="0" max="100" step="5"></div>
@@ -741,6 +756,7 @@ var SERIES = null;     /* {t:[Date], kw:[Number], dt:hours}      */
 var MONTHS = null;     /* [{key,label,load:[],dt,peak,kwh,days}] */
 var RESULT = null;     /* last computed result                   */
 var DESIGN = null;     /* last engineering design result         */
+var TARIFF = null;     /* pasted structured tariff, or null      */
 var MONNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 /* ============================================================
@@ -807,6 +823,8 @@ var HELP = {
  'The three resistances in the protection CT secondary loop: the CT winding itself (Rct, from the CT datasheet), the round-trip lead resistance (Rl), and the relay burden (Rr, from the relay datasheet or its VA burden divided by the square of the secondary current).<p>Required knee-point voltage is 2 \u00d7 fault current at the secondary \u00d7 the sum of the three. They are placeholders until the CT and relay are chosen.</p>'],
 'dAlf':['Accuracy limit factor',
  'How many times rated current a protection CT stays accurate to before its core saturates. Common values are 10 and 20.<p>The tool computes what the fault current actually requires. If the stated ALF is lower, the CT saturates before full fault current and the relay sees a false low reading exactly when it needs a true one — use the Class PX knee-point specification instead.</p>'],
+'tariffJson':['Pasting a full tariff',
+ 'The schema is <b>OpenEI URDB</b> \u2014 the free public utility rate database. A schedule copied from there drops in unchanged, and anything you build by hand follows the same shape.<p>The pieces that matter:</p><ul style="margin:6px 0 0 18px;padding:0"><li><b>flatdemandstructure</b> + <b>flatdemandmonths</b> \u2014 the facility (non-coincident) charge, billed on the month\u2019s highest kW, with a per-month index so a summer rate can differ from a winter one.</li><li><b>demandratestructure</b> + <b>demandweekdayschedule</b> \u2014 the coincident charge, billed on the highest kW <i>inside</i> its window. This is the one a flat rate cannot express and the one a battery is usually bought for.</li><li><b>energyratestructure</b> + <b>energyweekdayschedule</b> \u2014 per-kWh prices by period, with tiers if the tariff has them.</li></ul><p>Read the summary underneath before trusting the run. A schedule that is wrong in a way nobody notices is worse than one the tool refuses.</p>'],
 'minSoh':['Replace below this state of health',
  'The usable-capacity fraction at which the pack is replaced. 70% is the common warranty end-of-life point.<p>The analysis watches the fade curve and books a replacement in the year it crosses this line, then resets the curve \u2014 so a twenty-year term on a pack that fades at 3%/yr shows the second one being bought in year thirteen. A term that never books a replacement is telling a funder the cells are free after year ten.</p>'],
 'replKwh':['Replacement cost',
@@ -2891,9 +2909,10 @@ function remoteSizing(mode,data){
  keys.forEach(function(k){var el=$(k);if(el)settings[k]=el.type==='checkbox'?el.checked:el.value;});
  settings.dataScale=undefined; delete settings.dataScale;
  var scaleEl=$('dataScale'), scale=scaleEl?scaleEl.value:'kw';
+ var useTariff = (($('rateStruct')||{}).value === 'tariff') ? TARIFF : null;
  var request=++sizingRequest;
  $('prog').style.display='block';$('progTxt').textContent='Running battery sizing';$('out').style.display='none';RESULT=null;
- return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({mode:mode,data:data,settings:settings,durations:durations(),unit:scale})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Sizing failed');return j;});}).then(function(result){
+ return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({mode:mode,data:data,settings:settings,durations:durations(),unit:scale,tariff:useTariff})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Sizing failed');return j;});}).then(function(result){
  if(request!==sizingRequest)return;[result.best,result.rec,result.durationProbe].concat(result.sweep||[]).forEach(function(c){if(c&&c.payback===null)c.payback=Infinity;});RESULT=result;$('prog').style.display='none';$('out').style.display='';render();
  saveSizingToProject(result,settings);
  }).catch(function(e){if(request!==sizingRequest)return;$('prog').style.display='none';alert(e.message);});
@@ -3087,7 +3106,10 @@ function render(){
   h += '<div class="scrollx" style="margin:0 -14px"><table class="t"><tbody>';
   h += bRow('Data source', R.mode==='interval' ? (fmt(SERIES.kw.length)+' intervals at '+SERIES.dtMin+' min') : (R.nMon+' utility bill'+(R.nMon>1?'s':'')+' (modeled load shape)'));
   h += bRow('Billing months analyzed', String(R.nMon) + (R.nMon<12 ? ' \u2014 annualized \u00d7'+fmt(12/R.nMon,2) : ''));
-  h += bRow('Demand charge', R.mode==='bill' ? 'per-month, as entered' : money(R.dRate,2)+' /kW-mo');
+  h += bRow('Demand charge', TARIFF
+    ? 'from the pasted tariff' + (TARIFF.name ? ' &mdash; ' + esc(TARIFF.name) : '')
+      + ', priced month by month at its own determinants'
+    : (R.mode==='bill' ? 'per-month, as entered' : money(R.dRate,2)+' /kW-mo'));
   h += bRow('Ratchet', nv('ratchet',0) ? fmt(nv('ratchet',0))+'% of prior 11-month peak' : 'none');
   h += bRow('Round-trip efficiency', fmt(nv('rte',88))+'% \u2014 '+fmt(b.disAnn)+' kWh/yr discharged, '+money(b.lossCost)+'/yr in losses');
   h += bRow('Largest discharge event', fmt(b.maxEvt)+' kWh ('+fmt(b.maxEvt/b.kWh*100)+'% of usable)');
@@ -3727,10 +3749,183 @@ function auditRun(){
 }
 
 function rateStructUI(){
-  var sub = subMode();
-  $('subRow').style.display = sub ? '' : 'none';
-  $('rateRow').style.display = sub ? 'none' : '';
+  var v = ($('rateStruct')||{}).value || 'kw';
+  var sub = v === 'sub', tar = v === 'tariff';
+  $('subRow').style.display    = sub ? '' : 'none';
+  $('rateRow').style.display   = (sub || tar) ? 'none' : '';
+  $('tariffRow').style.display = tar ? '' : 'none';
+  /* "Price every month at the newest rate" is a way of guessing at
+     seasonality from a stack of bills. A real tariff states it, so the
+     control would be fighting the schedule. */
+  var w = $('curRateWrap'); if(w) w.style.display = tar ? 'none' : '';
+  if(tar) tariffChanged(); else { TARIFF = null; invalidateResult(); }
 }
+
+/* ---- full tariff ---------------------------------------------------
+   The engine reads the tariff server-side; this only parses it far
+   enough to say what was understood, because a schedule that is wrong
+   in a way nobody notices is worse than one the tool refuses.
+   -------------------------------------------------------------------- */
+function invalidateResult(){
+  if(!RESULT) return;
+  RESULT = null; DESIGN = null; sizingRequest++;
+  var o=$('out'); if(o) o.style.display='none';
+  var d=$('designCard'); if(d) d.style.display='none';
+}
+
+function tariffChanged(){
+  var el = $('tariffJson'), box = $('tariffSummary');
+  if(!el || !box) return;
+  var txt = el.value.trim();
+  TARIFF = null;
+  invalidateResult();
+  if(!txt){ box.innerHTML = ''; return; }
+  var t;
+  try { t = JSON.parse(txt); }
+  catch(e){
+    box.innerHTML = '<div class="note bad" style="margin:0">That is not valid JSON &mdash; '
+      + esc(e.message) + '</div>';
+    return;
+  }
+  if(!t || typeof t !== 'object' || Array.isArray(t)){
+    box.innerHTML = '<div class="note bad" style="margin:0">A tariff has to be a JSON object.</div>';
+    return;
+  }
+  TARIFF = t;
+  box.innerHTML = tariffSummary(t);
+}
+
+var MONLABEL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function tariffSummary(t){
+  var rows = [], i;
+  var flat = t.flatdemandstructure || [], fm = t.flatdemandmonths || [];
+  var dem  = t.demandratestructure || [];
+  var en   = t.energyratestructure || [];
+
+  if(flat.length && fm.length === 12){
+    /* Group the months that share a rate, so a reader sees "Jun-Sep at
+       $28.10" rather than twelve lines. */
+    var byRate = {};
+    for(i=0;i<12;i++){
+      var idx = fm[i];
+      var r = (flat[idx] && flat[idx][0] && flat[idx][0].rate) || 0;
+      (byRate[r] = byRate[r] || []).push(MONLABEL[i]);
+    }
+    var keys = Object.keys(byRate).sort(function(a,b){ return b-a; });
+    for(i=0;i<keys.length;i++){
+      rows.push(['Facility demand', money(+keys[i],2)+'/kW &middot; '
+        + (byRate[keys[i]].length === 12 ? 'every month' : byRate[keys[i]].join(' '))]);
+    }
+  } else if(flat.length){
+    rows.push(['Facility demand', money((flat[0][0]||{}).rate||0,2)+'/kW, every month']);
+  }
+
+  for(i=0;i<dem.length;i++){
+    var dr = (dem[i][0]||{}).rate || 0;
+    if(!dr) continue;
+    rows.push(['On-peak demand, period '+i, money(dr,2)+'/kW &middot; '+scheduleWindow(t,'demand',i)]);
+  }
+  for(i=0;i<en.length;i++){
+    var er = (en[i][0]||{}).rate || 0;
+    var tierNote = en[i].length > 1 ? ' ('+en[i].length+' tiers)' : '';
+    rows.push(['Energy, period '+i, money(er,3)+'/kWh'+tierNote+' &middot; '+scheduleWindow(t,'energy',i)]);
+  }
+  if(t.fixedchargefirstmeter) rows.push(['Customer charge', money(t.fixedchargefirstmeter,2)+'/month']);
+  if(t.demandratchetpercentage) rows.push(['Ratchet', fmt(t.demandratchetpercentage)+'% of the prior 11 months']);
+
+  var warn = [];
+  if(!flat.length && !dem.length) warn.push('No demand charge at all. A battery sized on this tariff earns nothing from peak shaving — check you pasted the whole schedule.');
+  if(dem.length && dem.some(function(p){ return (p[0]||{}).rate > 0; })){
+    warn.push('This tariff has a <b>coincident</b> demand charge, billed on the peak <i>inside</i> its window. Monthly bills do not carry that figure, so it is priced only from interval data. On the Utility bills tab only the facility charge is applied, and the result will understate what a well-targeted battery is worth.');
+  }
+  if(!en.length) warn.push('No energy rates. Round-trip losses will be priced at the Energy $/kWh field instead.');
+
+  var h = '<div class="scrollx" style="margin:0"><table class="t"><tbody>';
+  if(t.name) h += '<tr><td class="tx" style="color:var(--sub)">Rate</td><td class="tx"><b>'+esc(t.name)+'</b></td></tr>';
+  for(i=0;i<rows.length;i++){
+    h += '<tr><td class="tx" style="color:var(--sub);white-space:nowrap">'+rows[i][0]+'</td><td class="tx">'+rows[i][1]+'</td></tr>';
+  }
+  h += '</tbody></table></div>';
+  if(!rows.length) h += '<div class="note bad" style="margin:8px 0 0">Nothing in this object was recognised as a rate.</div>';
+  for(i=0;i<warn.length;i++) h += '<div class="note" style="margin:8px 0 0">'+warn[i]+'</div>';
+  return h;
+}
+
+/* The hours a period covers, read off the 12x24 schedule.
+
+   Off-peak periods are usually NOT contiguous - they are the night plus
+   the evening, either side of the peak window. Reporting the first and
+   last hour of such a period gives "0:00-24:00", which says the opposite
+   of the truth. Runs are described individually. */
+function hourRuns(row, period){
+  var runs = [], h, start = -1;
+  for(h=0;h<=24;h++){
+    var on = (h < 24) && row && row[h] === period;
+    if(on && start < 0) start = h;
+    if(!on && start >= 0){ runs.push([start, h]); start = -1; }
+  }
+  return runs;
+}
+function describeMonths(list){
+  if(list.length === 12) return 'every month';
+  return list.map(function(m){ return MONLABEL[m]; }).join(' ');
+}
+function scheduleWindow(t, which, period){
+  var wk = t[which+'weekdayschedule'];
+  if(!wk || !wk.length) return 'all hours';
+  var months = [], shapes = {}, m;
+  for(m=0;m<12;m++){
+    var runs = hourRuns(wk[m], period);
+    if(!runs.length) continue;
+    months.push(m);
+    var key = runs.map(function(r){ return r[0]+'-'+r[1]; }).join(',');
+    (shapes[key] = shapes[key] || []).push(m);
+  }
+  if(!months.length) return 'never scheduled';
+
+  var parts = [], key;
+  for(key in shapes){
+    if(!Object.prototype.hasOwnProperty.call(shapes,key)) continue;
+    var runs2 = key.split(',').map(function(r){ return r.split('-').map(Number); });
+    var total = 0, i2;
+    for(i2=0;i2<runs2.length;i2++) total += runs2[i2][1]-runs2[i2][0];
+    if(total === 24){ parts.push(describeMonths(shapes[key])+' all hours'); continue; }
+    var span = runs2.map(function(r){ return r[0]+':00\u2013'+(r[1]===24?'24':r[1])+':00'; }).join(' and ');
+    parts.push(describeMonths(shapes[key]) + ' ' + span);
+  }
+  var weekendDiffers = false, wke = t[which+'weekendschedule'];
+  if(wke && wke.length){
+    for(m=0;m<12;m++){
+      if(hourRuns(wke[m], period).join('|') !== hourRuns(wk[m], period).join('|')){ weekendDiffers = true; break; }
+    }
+  }
+  return parts.join('; ') + (weekendDiffers ? ' (weekdays only)' : '');
+}
+
+function tariffTemplate(){
+  /* A shape, not a real schedule. Every number here is a placeholder to be
+     replaced from the customer's own tariff sheet - shipping a real
+     utility's rates would be shipping numbers that go stale silently. */
+  function sched(fn){ var o=[],m,h; for(m=0;m<12;m++){ var r=[]; for(h=0;h<24;h++) r.push(fn(m,h)); o.push(r); } return o; }
+  var summer = function(m){ return m>=5 && m<=8; };
+  var t = {
+    name: 'TEMPLATE — replace every number from the tariff sheet',
+    energyratestructure: [[{rate:0.12}],[{rate:0.18}],[{rate:0.28}]],
+    energyweekdayschedule: sched(function(m,h){ if(summer(m)&&h>=16&&h<21) return 2; if(h>=8&&h<21) return 1; return 0; }),
+    energyweekendschedule: sched(function(m,h){ return (h>=8&&h<21)?1:0; }),
+    demandratestructure: [[{rate:0}],[{rate:22.00}]],
+    demandweekdayschedule: sched(function(m,h){ return (summer(m)&&h>=16&&h<21)?1:0; }),
+    demandweekendschedule: sched(function(){ return 0; }),
+    flatdemandstructure: [[{rate:6.10}]],
+    flatdemandmonths: [0,0,0,0,0,0,0,0,0,0,0,0],
+    fixedchargefirstmeter: 250,
+    demandratchetpercentage: 0
+  };
+  $('tariffJson').value = JSON.stringify(t, null, 1);
+  tariffChanged();
+}
+function tariffClear(){ $('tariffJson').value = ''; tariffChanged(); }
 
 /* ============================================================
    CHARTS

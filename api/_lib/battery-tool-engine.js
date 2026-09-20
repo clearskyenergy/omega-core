@@ -1,8 +1,24 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var CAP = require('./bess-capacity');
+var TARIFF = require('./bess-tariff');
 module.exports=function(input){
- var cfg=input.settings||{}, MONTHS=input.data, RESULT=null, ES_TAX=0.0635;
+ var cfg=input.settings||{}, MONTHS=input.data, RESULT=null;
+ /* Was a hardcoded 0.0635 - a Massachusetts utility tax applied to every
+    site in the country, including the ones in California. It is an input
+    now, defaulting to zero: a tax nobody stated should not appear on a
+    Nevada project's savings. */
+ var ES_TAX = nv0('utilTax', 0)/100;
+ function nv0(k,d){var n=Number((input.settings||{})[k]);return (input.settings||{})[k]==null||(input.settings||{})[k]===''||!isFinite(n)?d:n;}
+
+ /* An optional structured tariff, OpenEI URDB shaped. Without one the
+    engine prices every shaved kW at a single $/kW-mo, which is what it
+    always did and is wrong on any seasonal or time-of-use schedule: the
+    same battery is worth -73% to +54% of the flat answer depending on
+    which month's bill the rate was read off. With one, each month's shave
+    is priced at THAT month's determinants. */
+ var TAR = null;
+ try { if(input.tariff) TAR = TARIFF.normalize(input.tariff); } catch(e){ TAR = null; }
  var MONNAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
  function nv(k,d){var n=Number(cfg[k]);return cfg[k]==null||cfg[k]===''||!isFinite(n)?d:n;}
 function clampPct(v){ return v<1?1:(v>100?100:v); }
@@ -102,7 +118,33 @@ function demandCost(kw, m){
     var blocks = Math.ceil(need/blk);
     return blocks*price;
   }
-  return Math.max(0, kw - ((m && m.adj) || 0)) * billRate(m);
+  var billable = Math.max(0, kw - ((m && m.adj) || 0));
+
+  /* With a structured tariff, this month's demand is priced at THIS
+     month's determinants. A summer-only on-peak charge earns nothing in
+     January, and a flat annual rate cannot express that.
+
+     Only the facility (non-coincident) determinant can be priced from a
+     monthly bill, because that is the only demand figure a bill states
+     without a load shape. A coincident on-peak charge needs the peak
+     DURING its window, which monthly totals do not carry - so it is
+     priced only when the caller supplies it as m.onPeakKw, and otherwise
+     its absence is reported rather than guessed at. */
+  if(TAR && m){
+    var mi = (m.month != null) ? m.month : 0;
+    var rates = TARIFF.marginalDemandRates(mi, TAR);
+    var cost = billable * (rates.facility || 0);
+    if(m.onPeakKw != null && isFinite(m.onPeakKw)){
+      var onKw = Math.max(0, Math.min(m.onPeakKw, billable));
+      var p;
+      for(p in rates.byPeriod){
+        if(!Object.prototype.hasOwnProperty.call(rates.byPeriod,p)) continue;
+        cost += onKw * rates.byPeriod[p];
+      }
+    }
+    return cost;
+  }
+  return billable * billRate(m);
 }
 function runBills(bills){
   var durs = durations(), i, j;

@@ -4,6 +4,101 @@ var auth = require('./_lib/verify-token');
 var toolEngine = require('./_lib/battery-tool-engine');
 var adapter = require('./_lib/bess-size-adapter');
 var UNITS = require('./_lib/bess-units');
+
+/* A structured tariff is the largest and least trusted thing this endpoint
+   takes, so it is bounded before the engine ever sees it. The shape is
+   OpenEI URDB's; the limits are generous against any real schedule and
+   tight against a payload meant to exhaust the function. */
+var TARIFF_LIMITS = { periods: 24, tiers: 12, months: 12, hours: 24 };
+
+function checkTariff(t, httpError) {
+  if (t == null) return null;
+  if (typeof t !== 'object' || Array.isArray(t)) {
+    throw httpError(400, 'tariff must be an object in the OpenEI URDB shape.');
+  }
+  function rateTable(v, name) {
+    if (v == null) return;
+    if (!Array.isArray(v) || v.length > TARIFF_LIMITS.periods) {
+      throw httpError(400, name + ' must be an array of at most ' +
+                            TARIFF_LIMITS.periods + ' periods.');
+    }
+    v.forEach(function (period, pi) {
+      if (!Array.isArray(period) || period.length > TARIFF_LIMITS.tiers) {
+        throw httpError(400, name + ' period ' + pi + ' must be an array of at most ' +
+                              TARIFF_LIMITS.tiers + ' tiers.');
+      }
+      period.forEach(function (tier, ti) {
+        if (tier == null || typeof tier !== 'object') {
+          throw httpError(400, name + ' period ' + pi + ' tier ' + ti + ' must be an object.');
+        }
+        ['rate', 'adj', 'max'].forEach(function (k) {
+          if (tier[k] == null || tier[k] === '') return;
+          var n = Number(tier[k]);
+          if (!isFinite(n)) throw httpError(400, name + '[' + pi + '][' + ti + '].' + k +
+                                                 ' must be a finite number.');
+          /* A negative rate is a sell-back price, which this engine does not
+             model; a rate above $1000 is a decimal in the wrong place. */
+          if (k !== 'max' && (n < 0 || n > 1000)) {
+            throw httpError(400, name + '[' + pi + '][' + ti + '].' + k +
+                                 ' must be between 0 and 1000.');
+          }
+          if (k === 'max' && n < 0) {
+            throw httpError(400, name + '[' + pi + '][' + ti + '].max cannot be negative.');
+          }
+        });
+      });
+    });
+  }
+  function matrix(v, name, periodCount) {
+    if (v == null) return;
+    if (!Array.isArray(v) || v.length !== TARIFF_LIMITS.months) {
+      throw httpError(400, name + ' must be a 12-month schedule.');
+    }
+    v.forEach(function (row, ri) {
+      if (!Array.isArray(row) || row.length !== TARIFF_LIMITS.hours) {
+        throw httpError(400, name + ' month ' + ri + ' must have 24 hours.');
+      }
+      row.forEach(function (cell, ci) {
+        var n = Number(cell);
+        if (!isFinite(n) || n < 0 || n !== Math.floor(n)) {
+          throw httpError(400, name + '[' + ri + '][' + ci + '] must be a period index.');
+        }
+        if (periodCount > 0 && n >= periodCount) {
+          throw httpError(400, name + '[' + ri + '][' + ci + '] names period ' + n +
+                               ' but only ' + periodCount + ' are defined.');
+        }
+      });
+    });
+  }
+  rateTable(t.energyratestructure, 'energyratestructure');
+  rateTable(t.demandratestructure, 'demandratestructure');
+  rateTable(t.flatdemandstructure, 'flatdemandstructure');
+  matrix(t.energyweekdayschedule, 'energyweekdayschedule', (t.energyratestructure || []).length);
+  matrix(t.energyweekendschedule, 'energyweekendschedule', (t.energyratestructure || []).length);
+  matrix(t.demandweekdayschedule, 'demandweekdayschedule', (t.demandratestructure || []).length);
+  matrix(t.demandweekendschedule, 'demandweekendschedule', (t.demandratestructure || []).length);
+  if (t.flatdemandmonths != null) {
+    if (!Array.isArray(t.flatdemandmonths) || t.flatdemandmonths.length !== 12) {
+      throw httpError(400, 'flatdemandmonths must be 12 period indices.');
+    }
+    var fl = (t.flatdemandstructure || []).length;
+    t.flatdemandmonths.forEach(function (v, i) {
+      var n = Number(v);
+      if (!isFinite(n) || n < 0 || (fl > 0 && n >= fl)) {
+        throw httpError(400, 'flatdemandmonths[' + i + '] does not name a defined period.');
+      }
+    });
+  }
+  ['fixedchargefirstmeter', 'demandratchetpercentage', 'adderPerKwh', 'taxPct'].forEach(function (k) {
+    if (t[k] == null || t[k] === '') return;
+    var n = Number(t[k]);
+    if (!isFinite(n) || n < 0) throw httpError(400, 'tariff.' + k + ' must be a nonnegative number.');
+  });
+  if (Number(t.demandratchetpercentage) > 100) {
+    throw httpError(400, 'demandratchetpercentage is a percentage between 0 and 100.');
+  }
+  return t;
+}
 module.exports = function(req,res){
   res.setHeader('Cache-Control','private, no-store');
   if(req.method!=='POST') return res.status(405).json({error:'POST required'});
@@ -49,6 +144,7 @@ module.exports = function(req,res){
         }else if(!(m.peak>0)||!isFinite(m.peak)||!(m.days>0)||m.days>366||!(m.kwh>=0)||!isFinite(m.kwh)||!(m.rate>=0)||!isFinite(m.rate))throw auth.httpError(400,'Invalid monthly bill.');
       });
       if(count>105408)throw auth.httpError(400,'Too many interval readings.');
+      b.tariff = checkTariff(b.tariff, auth.httpError);
       var toolOut=toolEngine(b);
       toolOut.units={input:unit.key,power:unit.label,energy:unit.energyLabel};
       return res.status(200).json(toolOut);
@@ -77,7 +173,8 @@ module.exports = function(req,res){
       var raw;
       try{
         raw = toolEngine({mode:mode, data:data, durations:adapter.DURATIONS,
-                          settings:adapter.toSettings(tariff)});
+                          settings:adapter.toSettings(tariff),
+                          tariff:structuredTariff});
       }catch(err){
         throw auth.httpError(422, err && err.message
           ? 'Could not size from this data: ' + err.message
@@ -86,6 +183,8 @@ module.exports = function(req,res){
       if(!raw || !raw.best) throw auth.httpError(422,'Could not size from this data.');
       return adapter.adapt(raw, opts2, basis);
     }
+
+    var structuredTariff = checkTariff(o.rateStructure || b.tariff, auth.httpError);
 
     var legacy;
     if(b.mode==='interval'){
