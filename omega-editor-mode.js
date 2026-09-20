@@ -188,4 +188,8 @@
 
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (global) global.OmegaEditorMode = API;
-})(typeof window !== 'undefined' ? window : globalThis);
+/* ES5 — CLAUDE.md requires it for the shared runtime, and `globalThis` is
+   ES2020. Function('return this')() is the portable form and works in the
+   embedded browsers this file exists for. */
+})(typeof window !== 'undefined' ? window
+   : (typeof global !== 'undefined' ? global : Function('return this')()));

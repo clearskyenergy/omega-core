@@ -204,5 +204,74 @@ ok('a 500-item order is capped rather than echoed whole',
   });
 })();
 
+/* ── found by the adversarial pass, 2026-09-20 ──────────────────────────
+   Three of these were real and shipped for a few minutes. The dates were
+   the worst: createdAt is written with FieldValue.serverTimestamp(), so it
+   comes back as a Timestamp OBJECT — String()-ing it gave the customer
+   "[object Object]" as their order date, and made every row compare equal
+   in the newest-first sort. */
+(function adversarial() {
+  var TS = function (iso) { return { toDate: function () { return new Date(iso); } }; };
+
+  ok('a Firestore Timestamp becomes an ISO string, not [object Object]',
+     P.when(TS('2026-09-01T10:00:00Z')) === '2026-09-01T10:00:00.000Z');
+  ok('  the _seconds shape works too (a decoded Timestamp)',
+     typeof P.when({ _seconds: 1788000000 }) === 'string');
+  ok('  a Date works', P.when(new Date('2026-09-01T10:00:00Z')) === '2026-09-01T10:00:00.000Z');
+  ok('  an ISO string passes through', P.when('2026-09-01T10:00:00Z') === '2026-09-01T10:00:00Z');
+  ok('  a junk object becomes null rather than "[object Object]"', P.when({}) === null);
+  ok('  null stays null', P.when(null) === null && P.when(undefined) === null);
+  var dated = P.publicOrder({ createdAt: TS('2026-09-01T10:00:00Z'),
+                              promisedShipAt: TS('2026-11-14T00:00:00Z') }, {});
+  ok('placedAt is rendered from a Timestamp', dated.placedAt === '2026-09-01T10:00:00.000Z');
+  ok('promisedShipAt too', String(dated.promisedShipAt).indexOf('2026-11-14') === 0);
+  ok('  and "[object Object]" appears nowhere in the projection',
+     JSON.stringify(dated).indexOf('[object') < 0);
+
+  /* A HELD UNIT IS NOT PROGRESSING. Its station alone would report the line
+     as moving when the unit is stuck with an NCR against it. */
+  ok('a unit held at QA does not report Inspection & test',
+     P.milestoneOf({ status: 'in_fulfilment' }, [{ at: 'qa', hold: 'NCR-26-89' }]).key === 'production');
+  ok('  the same unit NOT held does report it',
+     P.milestoneOf({ status: 'in_fulfilment' }, [{ at: 'qa' }]).key === 'testing');
+  ok('a unit held at Ready does not report Ready to ship',
+     P.milestoneOf({ status: 'in_fulfilment' }, [{ at: 'ready', hold: 'x' }]).key !== 'ready');
+  ok('one held unit holds the whole order back',
+     P.milestoneOf({ status: 'in_fulfilment' },
+       [{ at: 'ready' }, { at: 'pack' }, { at: 'qa', hold: 'x' }]).key === 'production');
+  ok('  and the customer is never told WHY — the NCR is the tenant\u2019s business',
+     JSON.stringify(P.publicOrder({ status: 'in_fulfilment' },
+       { units: [{ at: 'qa', hold: 'NCR-26-89' }] })).indexOf('NCR') < 0);
+
+  /* The not-yet-kitted branch used to pin worstRank to 0, which made it
+     unbeatable — so a unit held further back could never win. */
+  ok('a unit held at Kitting outranks one that is merely un-started',
+     P.milestoneOf({ status: 'in_fulfilment' },
+       [{ at: '' }, { at: 'kit', hold: 'x' }]).key === 'confirmed');
+  ok('  an un-started unit alone still reads In production',
+     P.milestoneOf({ status: 'in_fulfilment' }, [{ at: '' }]).key === 'production');
+
+  /* The endpoint must narrow in the query, not after the page limit. */
+  var fs = require('fs'), path = require('path');
+  var mo = fs.readFileSync(path.join(__dirname, '..', 'api', 'my-orders.js'), 'utf8');
+  ok('my-orders narrows by orderNo IN THE QUERY, not after the limit',
+     /q = q\.where\('orderNo', '==', wanted\)/.test(mo));
+  ok('  and sorts through when(), not String(createdAt)',
+     /P\.when\(b\.createdAt\)/.test(mo) && !/String\(b\.createdAt/.test(mo));
+
+  /* CLAUDE.md: the shared runtime is ES5. globalThis is ES2020. */
+  var em = fs.readFileSync(path.join(__dirname, '..', 'omega-editor-mode.js'), 'utf8');
+  /* Strip comments first. The previous version of this assertion matched the
+     comment that EXPLAINS why globalThis was removed, which is the same trap
+     that caught a check on the portal page earlier the same day: a source
+     scan that does not strip prose tests the prose. */
+  var code = em.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  ok('omega-editor-mode.js uses no globalThis (ES2020) in CODE',
+     code.indexOf('globalThis') < 0);
+  ok('  and no arrow functions, const or let', !/=>|\bconst\s|\blet\s/.test(code));
+  ok('  the comment explaining the removal is still there',
+     em.indexOf('globalThis') > 0);
+})();
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed  (including the org-shape control)\n');
 process.exit(fail ? 1 : 0);

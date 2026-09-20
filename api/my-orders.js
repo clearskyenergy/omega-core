@@ -114,6 +114,11 @@ module.exports = A.handler(function (req) {
     var q = db.collection('orders')
       .where('orgId', '==', org)
       .where('customer.email', '==', email);
+    /* Narrow in the QUERY, not after the limit. Filtering a 50-row page in
+       JavaScript meant a customer with more than fifty orders could ask for
+       one by reference and be told it did not exist, because it fell outside
+       the page the query happened to return. */
+    if (wanted) q = q.where('orderNo', '==', wanted);
 
     return Promise.all([q.limit(MAX_ORDERS).get(), milestoneMapOf(db, org)])
       .then(function (r) {
@@ -121,14 +126,18 @@ module.exports = A.handler(function (req) {
         var rows = [];
         snap.forEach(function (d) {
           var v = d.data() || {};
-          if (wanted && String(v.orderNo || '') !== wanted) return;
           v.id = d.id;
           rows.push(v);
         });
         /* Newest first, sorted here rather than in the query so this needs
-           one composite index instead of two. 50 rows is nothing. */
+           one composite index instead of two. 50 rows is nothing.
+
+           Sorted through P.when() because createdAt is a Firestore Timestamp,
+           not a string: String()-ing it gives "[object Object]" for EVERY
+           row, so the comparator returned 0 throughout and the list came back
+           in whatever order Firestore happened to yield. */
         rows.sort(function (a, b) {
-          return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+          return String(P.when(b.createdAt) || '').localeCompare(String(P.when(a.createdAt) || ''));
         });
 
         return Promise.all(rows.map(function (o) {
@@ -136,7 +145,10 @@ module.exports = A.handler(function (req) {
             return P.publicOrder(o, { units: units, milestoneMap: cfg.map, showPrice: cfg.showPrice });
           });
         })).then(function (orders) {
-          return { orders: orders, count: orders.length, truncated: snap.size >= MAX_ORDERS };
+          /* Reported off the rows actually returned, so a single-order
+             lookup never claims the list was cut short. */
+          return { orders: orders, count: orders.length,
+                   truncated: !wanted && rows.length >= MAX_ORDERS };
         });
       });
   })['catch'](function (e) {

@@ -96,6 +96,26 @@ var BY_STATION = {
 };
 
 function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+/* Firestore writes createdAt with FieldValue.serverTimestamp(), so what comes
+   back is a TIMESTAMP OBJECT, not a string. String()-ing it yields
+   "[object Object]" — which is what a customer would have seen as their order
+   date, and what would have silently defeated the newest-first sort in
+   api/my-orders.js, because every row compares equal. Accepts a Timestamp, a
+   Date, epoch millis or an ISO string; returns an ISO string or null. */
+function when(v) {
+  if (v == null) return null;
+  try {
+    if (typeof v.toDate === 'function') return v.toDate().toISOString();
+    if (v instanceof Date) return isFinite(v.getTime()) ? v.toISOString() : null;
+    if (typeof v === 'number' && isFinite(v)) return new Date(v).toISOString();
+    if (typeof v === 'object' && typeof v._seconds === 'number') {
+      return new Date(v._seconds * 1000).toISOString();
+    }
+    var s = String(v).trim();
+    return s && s.indexOf('[object') !== 0 ? s.slice(0, 40) : null;
+  } catch (e) { return null; }
+}
 function clip(v, n) { return v == null ? null : String(v).slice(0, n || 400); }
 function numOrNull(v) { var n = Number(v); return isFinite(n) ? n : null; }
 
@@ -111,16 +131,36 @@ function step(key) {
 /* The FURTHEST-BEHIND unit decides, not the furthest ahead. An order of six
    units where five are packed and one is still at Electrical is "in
    production": telling a customer their order is ready when a sixth of it is
-   on a bench is the kind of true-ish answer that costs a delivery date. */
+   on a bench is the kind of true-ish answer that costs a delivery date.
+
+   A UNIT ON HOLD IS NOT PROGRESSING. It may be sitting at QA with a failed
+   capacity test against it, and its station alone would report "Inspection &
+   test" as though the line were moving. A held unit is pinned to the last
+   milestone it genuinely completed, so the order cannot read further ahead
+   than its most stuck unit. The customer is not told WHY — an NCR number is
+   the tenant's business — only that it has not moved on. */
 function stationMilestone(units) {
   if (!units || !units.length) return null;
   var worst = null, worstRank = 99;
   for (var i = 0; i < units.length; i++) {
-    var at = norm(units[i] && units[i].at);
+    var u = units[i] || {};
+    var at = norm(u.at);
     var m = BY_STATION[at];
-    if (!m) { if (!at) { worst = 'production'; worstRank = 0; } continue; }
+    if (!m) {
+      /* Not yet kitted. Ranked AT 'production' rather than at 0: pinning it
+         to zero made it unbeatable, so a unit held back at Kitting (which
+         ranks lower once its hold is applied) could never be recognised as
+         the furthest behind. */
+      if (!at) {
+        var pr = ladderIndex('production');
+        if (pr < worstRank) { worstRank = pr; worst = 'production'; }
+      }
+      continue;
+    }
     var r = ladderIndex(m);
-    if (r < worstRank) { worstRank = r; worst = m; }
+    /* Held: do not credit the station it is stuck AT. */
+    if (u.hold) r = Math.max(0, r - 1);
+    if (r < worstRank) { worstRank = r; worst = LADDER[r] ? LADDER[r].key : m; }
   }
   return worst;
 }
@@ -194,7 +234,7 @@ function publicOrder(order, opts) {
     /* The brand they think they bought from — the white-label seller's own
        name, never orgId, which is an internal partition key. */
     soldBy: clip(o.orgName, 160),
-    placedAt: clip(o.createdAt, 40),
+    placedAt: when(o.createdAt),
     milestone: ms,
     /* The internal status is NOT echoed. 'quoted' and 'accepted' are
        commercial states and 'in_fulfilment' tells a customer nothing. */
@@ -219,7 +259,7 @@ function publicOrder(order, opts) {
       kw: numOrNull(o.system.kw), kwh: numOrNull(o.system.kwh),
       durationH: numOrNull(o.system.durationH)
     } : null,
-    promisedShipAt: clip(o.promisedShipAt, 40),
+    promisedShipAt: when(o.promisedShipAt),
     cancelRequested: !!o.cancelRequested
   };
 
@@ -235,6 +275,7 @@ function publicOrder(order, opts) {
 
 module.exports = {
   LADDER: LADDER,
+  when: when,
   CANCELLED: CANCELLED,
   BY_STATUS: BY_STATUS,
   BY_STATION: BY_STATION,
