@@ -162,7 +162,8 @@ module.exports = function (req, res) {
         (overrides.batterysizer === false ||
          (paidTiers.indexOf(a.tier) < 0 && overrides.batterysizer !== true &&
           addons.indexOf('engineering') < 0))) {
-      throw auth.httpError(403, 'Battery sizing requires Battery Sizer access.');
+      throw auth.httpError(403, 'The Battery Sizer is not included in the ' + a.tier +
+        ' plan. It is available on Standard and above, or with the Engineering add-on.');
     }
 
     var b = req.body || {};

@@ -105,7 +105,8 @@ module.exports = function(req,res){
   return auth.authenticateWithTier(req).then(function(a){
     var addons=a.billing.addons||[];
     var overrides=a.billing.toolOverrides||{};
-    if(!a.caller.staff && (overrides.batterysizer===false || (['standard','deluxe','enterprise','partner','internal'].indexOf(a.tier)<0 && overrides.batterysizer!==true && addons.indexOf('engineering')<0))) throw auth.httpError(403,'Battery sizing requires Battery Sizer access.');
+    if(!a.caller.staff && (overrides.batterysizer===false || (['standard','deluxe','enterprise','partner','internal'].indexOf(a.tier)<0 && overrides.batterysizer!==true && addons.indexOf('engineering')<0))) throw auth.httpError(403,'The Battery Sizer is not included in the '+a.tier+' plan. '
+      +'It is available on Standard and above, or with the Engineering add-on.');
     var b=req.body||{};
 
     /* UNITS ARE A BOUNDARY CONCERN. A 300 kW store and a 40 MW campus are

@@ -131,8 +131,22 @@
      opened its marketplace to "All 0 · No applications match" on day one
      (Thomas, 2026-09-16). While the trial runs it holds the top level; when
      it lapses, standing() closes the account, not the tier. */
-  var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, enterprise: 3, internal: 3, partner: 2 };
-  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
+  /* The tier ladder the tool gate compares against. The canonical list of
+     tier STRINGS is TIERS in api/tenant-billing.js:
+     trial, standard, deluxe, enterprise, partner, internal.
+
+     `deluxe` was missing here. A missing key falls through to level 1 at
+     both call sites below, so a deluxe account was gated as standard and
+     any DELUXE-tier tool was hidden from a tenant paying for it. Same bug,
+     same cause, as the one in scripts/seed-omega-orgs.js: a tier added to
+     the product and not to every map that spells it out.
+
+     `pro` is in no tenant file and is not in the canonical list; it stays
+     only because a billing record may already carry the string. */
+  var TIER_LEVEL = { trial: 3, standard: 1, deluxe: 2, pro: 2,
+                     enterprise: 3, internal: 3, partner: 2 };
+  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', deluxe: 'Deluxe', pro: 'Pro',
+                     enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
 
   function cfg() { return global.CLEARSKY_CONFIG || (global.CLEARSKY_CONFIG = {}); }
   function host() { return String(global.location && global.location.hostname || '').toLowerCase(); }
