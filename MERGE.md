@@ -165,11 +165,26 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
     catalogue are done (`poweredByLine()` reads the white-label block;
     `omega-bess-products.js` merges the tenant's own products into
     `BESS_CATALOG` and leads the dropdown with them; both are defensive and
-    no-op when the tenant has nothing configured). Still ClearSky-branded: ~29 literal strings, the
-    `<title>`, the `apple-mobile-web-app-title`/`application-name` meta, the
-    inline web-app manifest, and its OWN brand resolver (`CS_TENANTS` /
-    `CS_BRAND` / `brandName()`, ≈ line 69840) which predates
-    `omega-brand.js` and does not consult it.
+    no-op when the tenant has nothing configured). **The head block is now DONE** (2026-09-20):
+    `OmegaWhiteLabel.paintHead()` rewrites `apple-mobile-web-app-title`,
+    `application-name`, `og:site_name`, the `description`, both icon links
+    and the inline manifest from the tenant record, on every page that loads
+    `omega-whitelabel.js`. It rewrites rather than find-and-replaces, so a
+    head edited later needs no second pass, and it is a no-op for a tenant
+    with no white label. Verified in Chromium; the `<title>` was already
+    handled by the `brand()` block.
+     **The count was wrong.** A full line-by-line read of all 175,813 lines
+    found **45** user-visible branding strings, not ~29. The undercount was
+    two families a grep for "ClearSky" cannot see: nine DXF/SCR/GeoJSON/PPTX
+    export-provenance strings saying `Omega Site Pro` / `Omega Editor`
+    (≈ lines 63014, 63405, 63942, 63952, 105755, 108768, 114869, 122125,
+    123737) and four CRM-integration modal strings (≈ 2354, 72917, 72960,
+    72145). Grep for `Omega` as well as `ClearSky` when finishing this.
+     Still ClearSky-branded after the head fix: those two families, five PDF
+    export headers (≈ 30628, 32039, 32078, 32104, 32412), three
+    `createdBy:'ClearSky'` seed records (≈ 32770, 32824, 32843), and its OWN
+    brand resolver (`CS_TENANTS` / `CS_BRAND` / `brandName()`, ≈ line 69840)
+    which predates `omega-brand.js` and does not consult it.
     ⚠ NOT a ride-along on another change. The page loads neither
     `omega-brand.js` nor `omega-tenant.js`; adding them brings the HOSTNAME
     LOCK to a page that currently boots on hosts nobody has registered, so it

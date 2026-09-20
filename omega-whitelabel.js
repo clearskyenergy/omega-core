@@ -252,12 +252,78 @@
     }
   }
 
+  /* ── The document head ────────────────────────────────────────────────────
+     The chrome is not the only place a platform name shows. A tenant's staff
+     add the designer to a phone home screen and get "ClearSky OMEGA" under
+     the icon; they share the URL and a preview card names us; they read the
+     browser tab. MERGE.md §11 listed these as outstanding and they are the
+     cheapest of the lot to fix, because every one is a DOM node.
+
+     Deliberately NOT a list of literal strings to find-and-replace: this
+     rewrites whatever the head currently says to whatever the tenant is
+     called, so a head edited later needs no second pass here.
+
+     The manifest is a data: URI, so it is rebuilt rather than patched. Safari
+     and Chrome both read it at add-to-home-screen time rather than at parse,
+     so replacing the node after hydrate is in time. */
+  function paintHead() {
+    if (!global.document || !active()) return;
+    /* querySelector is not guaranteed. This file runs on every page, and some
+       of those pages are embedded browsers, print contexts and test harnesses
+       whose document is a stub. A painter that throws takes the whole apply()
+       chain with it and un-brands the page it was meant to brand — which is
+       exactly what happened the first time this was written. */
+    var qs  = global.document.querySelector    ? function (s) { return global.document.querySelector(s); }    : null;
+    var qsa = global.document.querySelectorAll ? function (s) { return global.document.querySelectorAll(s); } : null;
+    if (!qs) return;
+
+    var name = platformName();
+    var short = shortName() || name;
+
+    function meta(sel, value) {
+      var el = qs(sel);
+      if (el && value && el.setAttribute) el.setAttribute('content', value);
+    }
+    meta('meta[name="apple-mobile-web-app-title"]', short);
+    meta('meta[name="application-name"]', name);
+    meta('meta[property="og:site_name"]', name);
+
+    /* The description keeps its own sentence and swaps only the platform it
+       names, so a tenant does not lose the words that describe the product. */
+    var d = qs('meta[name="description"]');
+    if (d) {
+      var txt = String(d.getAttribute('content') || '');
+      var swapped = txt.replace(/ClearSky[\s-]*OMEGA|ClearSky|OMEGA/gi, name);
+      if (swapped !== txt) d.setAttribute('content', swapped);
+    }
+
+    var mark = markUrl();
+    if (mark) {
+      var icons = qsa ? qsa('link[rel="icon"], link[rel="apple-touch-icon"]') : [];
+      for (var i = 0; i < icons.length; i++) {
+        if (icons[i] && icons[i].setAttribute) icons[i].setAttribute('href', mark);
+      }
+    }
+
+    var man = qs('link[rel="manifest"]');
+    if (man && man.setAttribute) {
+      try {
+        var j = { name: name + ' Site Designer', short_name: short,
+                  description: 'BESS site design and energy analysis',
+                  display: 'standalone', start_url: '/editor.html' };
+        if (mark) j.icons = [{ src: mark, sizes: '512x512', type: 'image/png' }];
+        man.setAttribute('href', 'data:application/json,' + encodeURIComponent(JSON.stringify(j)));
+      } catch (e) {}
+    }
+  }
+
   function apply() {
     wrapBrand();
     setTokens();
     paintPlatformText();
     paintMarks();
     paintAttribution();
+    try { paintHead(); } catch (e) {}
     paintPreviewBanner();
   }
 
