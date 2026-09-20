@@ -16,12 +16,33 @@ var root = path.join(__dirname, '..', 'tenants');
 var seeds = fs.readdirSync(root).filter(function (d) { return fs.existsSync(path.join(root, d, 'tenant.json')); })
   .map(function (d) { var t = JSON.parse(fs.readFileSync(path.join(root, d, 'tenant.json'))); t.slug = d; return t; });
 
-var TIER_PUBLIC = { trial: 'trial', standard: 'standard', pro: 'pro', enterprise: 'enterprise', internal: 'internal', partner: 'partner' };
+/* The tier string mirrored into tenant_public, which is the record the
+   browser can read. It is NOT the entitlement - api/_lib/verify-token reads
+   billing/current server-side - but it is what the account pages, the
+   upgrade prompts and the admin console display.
+
+   `deluxe` was missing from this map. The `|| 'standard'` fallback below
+   meant a deluxe tenant was published as standard, silently, and Clean Cell
+   is the only deluxe account on the platform, so the bug was invisible
+   until somebody looked at their plan. `pro` was in the map and is used by
+   no tenant; it stays only because a record may already carry it.
+
+   An unrecognised tier now STOPS the seed. A wrong plan written confidently
+   is worse than a run that refuses and names the tenant. */
+var TIER_PUBLIC = { trial: 'trial', standard: 'standard', deluxe: 'deluxe',
+                    pro: 'pro', enterprise: 'enterprise', internal: 'internal',
+                    partner: 'partner' };
 function plan(t) {
   var org = { name: t.name, slug: t.slug, domains: t.domains || [], logoUrl: t.logoUrl || '', vertical: t.vertical || null, shell: t.shell || 'default',
     status: t.status || 'active', receivesFullBom: !!t.receivesFullBom, exportBrand: t.exportBrand || { name: t.name, logo: t.logoUrl || '' } };
   var billing = { tier: t.tier || 'standard', addons: t.addons || [], toolOverrides: t.toolOverrides || {}, paymentProvider: t.paymentProvider || 'manual', trialEndsAt: t.trialEndsAt || null, subscriptionDue: t.subscriptionDue || null };
-  var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier] || 'standard',
+  if (!TIER_PUBLIC[billing.tier]) {
+    throw new Error('tenants/' + t.slug + '/tenant.json has tier "' + billing.tier +
+      '", which is not a tier this script knows how to publish. Add it to ' +
+      'TIER_PUBLIC (and check api/bess-size.js agrees it is a paid tier) ' +
+      'rather than letting it fall through to standard.');
+  }
+  var pub = { orgId: t.orgId, name: t.name, logoUrl: t.logoUrl || '', colors: t.colors || null, exportBrand: org.exportBrand, tier: TIER_PUBLIC[billing.tier],
     vertical: org.vertical, shell: org.shell, domains: org.domains, requiredTools: t.requiredTools || null, allowedEmails: t.allowedEmails || [] };
   return { orgId: t.orgId, org: org, billing: billing, pub: pub, owner: t.ownerEmail || null };
 }
