@@ -66,87 +66,90 @@ partnership; this is the only thing standing between those two outcomes.
 
 ---
 
-## 2. The buyer record
+## 2. The customer account, and the people in it
+
+**Revised 2026-09-20, second pass.** The first two drafts made a buyer a
+PERSON. That is wrong: Clean Cell sells to companies, and *"under each
+customer we need to be able to open their account and see their order history,
+their users, their terms, their agreements"* — **their users, plural**.
+
+So there are three levels, not two:
 
 ```
-omega_orgs/{orgId}/buyers/{emailLower}
-  email, name, company, phone, address{}      the BUYER writes these
-  uid                 stamped on first sign-in; audit only, never the key
-  source              'self' | 'tenant'       who created the row
-  plan                'free' | 'designer'     the TENANT writes these
-  status              'active' | 'suspended'
-  terms {
-    netDays, discountPct, priceList, creditLimit, poRequired, notes
-  }
-  termsSource         'manual' | 'salesforce'
+ClearSky                                    isOmegaStaff() — sees everything
+└── omega_orgs/{orgId}                      the white-label tenant (Clean Cell)
+    └── customers/{customerId}              a CUSTOMER ACCOUNT — a company
+        └── users/{emailLower}              the people who may see it
+```
+
+```
+omega_orgs/{orgId}/customers/{customerId}
+  name, company, status: 'active'|'suspended'
+  plan            'free' | 'designer'        the TENANT writes these
+  terms { netDays, discountPct, priceList, creditLimit, poRequired, notes }
+  agreements[]    { kind, ref, signedAt, url }
+  termsSource     'manual' | 'salesforce'
   termsUpdatedAt, termsUpdatedBy
-  createdAt, lastSeenAt, hasOrders
+  source          'self' | 'tenant'
+  createdAt, hasOrders
+
+omega_orgs/{orgId}/customers/{customerId}/users/{emailLower}
+  email, name, phone                         the USER writes these
+  role            'owner' | 'user'
+  uid             stamped on first sign-in; audit only, never the key
+  addedBy, createdAt, lastSeenAt
 ```
 
-### The buyer creates it. The tenant enriches it.
+Terms, agreements and the plan hang off the **account**, because that is what
+a commercial relationship is with. Two people at the same customer see the
+same net terms, because they are the same customer.
 
-**Corrected 2026-09-20, and this is the important half of this section.**
+### The self-serve flow still holds
 
-The first draft had Clean Cell pre-provisioning buyers so terms would exist
-before the first order. That is a B2B sales motion, and it **contradicts the
-funnel in `docs/WHITE-LABEL.md`**: the storefront's whole premise is *no
-account needed, order anyway*. A customer who ordered at 02:00 cannot wait for
-somebody to provision them before they can see that order, and a signup gated
-on a sales action is not self-serve.
+Nothing about the previous correction is undone. A stranger orders with no
+account; they sign in later; `api/my-account.js` creates **a customer account
+with them as its only user**, `source: 'self'`, company name from what they
+typed; their orders are claimed by verified email. Clean Cell enriches it
+afterwards.
 
-So the flow is:
+What changes is the shape of the row, not who creates it.
 
-1. A visitor orders from the storefront. No account. The order carries
-   `customer.email`.
-2. Later they sign in to the portal. The endpoint creates their buyer record
-   on first sign-in, `source: 'self'`, and claims every order matching their
-   verified email.
-3. **They type their own details** — company, phone, address. They are the
-   authority on those; a salesperson copying them off a business card is how
-   a delivery goes to the wrong dock.
-4. Clean Cell opens the record afterwards and sets terms, plan, status.
+### Merging is the one dangerous operation
 
-**Terms are an overlay, not a prerequisite.** A buyer with none set gets the
-tenant's defaults. Nothing about the first order waits on Clean Cell.
+Three people at Amperage Capital order separately over two months and
+self-serve into three single-user accounts. Clean Cell then wants one account
+with three users and all six orders.
 
-Pre-creating a record is still *allowed* — sales-led accounts are real, and
-"we signed an MSA with them, set them up at Net 60" should work. It is simply
-not required, and `source: 'tenant'` records it. The key permits both; only
-one of them is the default path.
+That is a real operation and it MOVES ORDERS between accounts, so:
+`scripts/`-only, never a browser button in v1; the losing account is **flagged
+`mergedInto`, never deleted** (CLAUDE.md: *never delete a Firestore document
+in a migration script — flag, don't drop*); and an order's `customer.email`
+is never rewritten, only its `customerId` pointer.
 
-### Why the key is still the lowercased email
+### Why the user key is still the lowercased email
 
-The original justification (pre-provisioning) is gone, but the key survives on
-better grounds:
-
-- **Email is already the join to orders.** `api/embed-order.js` writes
-  `customer.email` on an order placed with no account at all. Whatever we key
-  the buyer on, the order history is claimed by email — so email is the
-  identity spine whether we choose it or not.
-- **One person can end up with more than one uid.** Magic link today, Google
-  next month, and account linking is not guaranteed. Keyed by email that is
-  one buyer with one set of terms; keyed by uid it is two records and the
-  terms are on whichever one they did not use.
-- **Precedent**: `org_members/{emailLower}` and `team_members/{orgId}__{email}`
-  are both already keyed this way.
-
-The honest cost is unchanged and unsolved either way: **a buyer who changes
-their email loses their history**, because the order join is by email too. A
-`emails[]` array on the record fixes it and is not v1.
+Unchanged and for the same reasons as the previous draft: `api/embed-order.js`
+writes `customer.email` on an order placed with no account in sight, so email
+is the claim path whether we choose it or not; one person can end up with two
+uids across magic link and Google; and `org_members/{emailLower}` is the
+precedent. `customerId` is a generated id, because a company has no natural
+key and its name changes.
 
 ### Who may write what
 
 The buyer never touches Firestore — the same rule as orders — so this split is
 enforced in `api/my-account.js`, not in rules:
 
-| Field | Buyer | Tenant admin | ClearSky staff |
+| Field | Account user | Tenant admin | ClearSky staff |
 |---|---|---|---|
-| name, company, phone, address | write | write | write |
-| terms{}, plan, status | — | write | write |
-| uid, source, createdAt, hasOrders | — | — | system |
+| their own name, phone | write | write | write |
+| the account's company, address | owner only | write | write |
+| terms{}, agreements[], plan, status | — | write | write |
+| other users on the account | owner only | write | write |
+| uid, source, customerId, createdAt | — | — | system |
 
-A buyer who could write their own `terms.discountPct` would be a buyer who
-sets their own price. The endpoint drops those keys from a buyer's PATCH
+A customer who could write their own `terms.discountPct` would be a customer
+who sets their own price. The endpoint drops those keys from a buyer's PATCH
 rather than refusing the whole request, so a client that sends too much does
 not break.
 
@@ -381,6 +384,115 @@ a customer does not phone anybody.
 4. Cancellation requests.
 5. Stripe milestone payment from the portal.
 6. `POST /api/buyers-sync` for Salesforce, when there is one to point at.
+
+Running alongside, because they answer to different people:
+
+- **A** · the tenant page in the admin console (§11), customers drill-down
+  first, Systems panel second.
+- **B** · `editorMode: 'bess-lite'` plus the Clean Cell shell (§12), which
+  starts by finishing `MERGE.md` §11's branding strings.
+
+## 11. The tenant page in the ClearSky admin console
+
+`admin/index.html` + `admin/admin-console.js` is the master index at
+`tools.csebuilders.com`. **Every white-label account gets one page there**, and
+it is the only place a ClearSky operator has to look.
+
+```
+Clean Cell  ·  cleancell.us  ·  active  ·  deluxe + whitelabel
+├── Control plane      domains, whiteLabel block, embed keys, storefront config
+├── Commercials        billing/current, tier, addons, toolAccess, subscriptionDue
+├── Customers          ── the drill-down ──────────────────────────────
+│     Amperage Capital · 6 orders · Net 30 · designer · 3 users
+│       ├── Users          names, roles, last seen, invite/remove
+│       ├── Orders         every order + milestone + documents
+│       ├── Terms          net days, discount, credit limit, PO required
+│       └── Agreements     MSA, NDA, warranty — kind, ref, signed, link
+├── Plant              works orders, benches, units in flight, refusal log
+└── Systems            links + health, for reporting (below)
+```
+
+Everything under **Customers** is editable by a ClearSky operator and by a
+Clean Cell admin — the same page, the same fields, gated by
+`isTenantAdmin(orgId) || isOmegaStaff()`. Clean Cell reaches it through their
+own console; ClearSky reaches it through this index. One implementation, two
+doors, because two implementations of an editable customer record is how the
+two drift.
+
+### The Systems panel exists to be read by something other than a person
+
+Each tenant page carries a manifest of every surface we run for them and its
+current state:
+
+| Surface | Where | Health |
+|---|---|---|
+| Storefront embed | their site, via `embed/loader.js` | key active, origins, orders today vs cap |
+| Site study | `api/embed-layout.js` | parcel calls today vs `dailyParcelCap` |
+| Order desk | `orders.html` | open orders by status |
+| Plant floor | `plant/station.html` | benches paired, units in flight, holds |
+| Buyer portal | `portals/customer/` | accounts, users, sign-ins this week |
+| Designer | `editor.html` + `toolAccess` | seats on `plan: 'designer'` |
+
+Served as JSON from one endpoint as well as rendered, so an agent can report
+on the whole estate without scraping a page. A panel that only a human can
+read is a panel somebody has to remember to open.
+
+---
+
+## 12. "Editor Lite" is a MODE, not a file
+
+The ask: a Clean Cell-branded editor limited to Site Map, Grid Atlas and
+Projects; design mode only; BESS-focused; guided build and draw tools; no
+compute; solar left in; exporting plot plan, one-line, proposal and
+blueprints; electrical estimate BOM; push to marketplace.
+
+**Every one of those already exists inside `editor.html`.** Counting
+references in the file: one-line 234, plot plan 59, proposal 163, blueprints
+114, BOM 203, marketplace 41, guided build 440.
+
+So this is a SUBTRACTION problem, and a copied file is the wrong tool for it:
+
+- **`editor.html` is 11.1 MB and 175,800 lines.** A `cleancell-editor.html`
+  doubles the largest file in the repo, and every fix to the drawing engine,
+  the wizard or an exporter then has to be made twice by somebody who
+  remembers both exist.
+- **CLAUDE.md forbids it outright**: *"A tenant folder may contain: a custom
+  index.html shell, tool files, logos. It may NOT contain copies of core
+  files."* and *"Core files are never edited for one tenant. If a tenant needs
+  different behaviour, add an extension point to core."*
+
+### What it is instead
+
+| Piece | How |
+|---|---|
+| Three tools only | `billing/current.toolAccess = ['editor','gridatlas']` — already live, already tested by `scripts/tests/ttoolaccess.js`. Projects is core, not a tool. |
+| Clean Cell branding | `OmegaWhiteLabel.hydrate()`, already wired at `editor.html:21370` |
+| The dashboard | `shells/cleancell/` or `tenants/cleancell/index.html` — three tiles, their mark |
+| BESS-only, no compute | `editorMode: 'bess-lite'` on the plan, read once at boot |
+
+`editorMode` is the one new extension point: a single flag that hides the
+compute/data-centre paths and pins the guided build to BESS. It is read from
+the tenant record, so turning it off for a different tenant is a field, not a
+deploy. The file already has `MODE_KEY` and a `BessOnly` hook to build on.
+
+### What is genuinely new work
+
+- The `editorMode: 'bess-lite'` flag and every place it hides something. This
+  is the real cost, and it is a careful pass through a very large file rather
+  than a hard problem.
+- The three-tile Clean Cell shell.
+- `MERGE.md` §11 still lists ~29 ClearSky-branded literal strings, the
+  `<title>`, the app-name meta and the inline manifest in `editor.html`.
+  A white-labelled designer cannot ship with those. That is now on the
+  critical path rather than a known-provisional.
+
+### Not decided
+
+`portals/finance/battery-sizer.html` is a separate 124 KB surface. Whether the
+lite dashboard links it, embeds it, or leaves sizing to the guided build is a
+product call nobody has made.
+
+---
 
 ## What is NOT built
 
