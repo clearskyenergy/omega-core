@@ -70,32 +70,102 @@ partnership; this is the only thing standing between those two outcomes.
 
 ```
 omega_orgs/{orgId}/buyers/{emailLower}
-  email, name, company, phone
+  email, name, company, phone, address{}      the BUYER writes these
   uid                 stamped on first sign-in; audit only, never the key
-  plan                'free' | 'designer'
+  source              'self' | 'tenant'       who created the row
+  plan                'free' | 'designer'     the TENANT writes these
   status              'active' | 'suspended'
   terms {
     netDays, discountPct, priceList, creditLimit, poRequired, notes
   }
   termsSource         'manual' | 'salesforce'
   termsUpdatedAt, termsUpdatedBy
-  createdAt, lastSeenAt
+  createdAt, lastSeenAt, hasOrders
 ```
 
-**Keyed by lowercased email, not uid**, for the same reason
-`org_members/{emailLower}` already is: Clean Cell must be able to set a
-customer's terms BEFORE that person has ever signed in. A uid-keyed record
-cannot exist until the account does, which would mean no terms on the first
-order — exactly when they matter.
+### The buyer creates it. The tenant enriches it.
 
-**The record lives under the tenant, not globally.** A buyer's relationship is
-with Clean Cell, not with OMEGA. The same person buying from two OMEGA tenants
-gets two buyer records, and that is correct rather than a duplication bug:
-their terms with Clean Cell are not their terms with anybody else.
+**Corrected 2026-09-20, and this is the important half of this section.**
 
-Rules: `allow read, write: if isTenantAdmin(orgId) || isOmegaStaff()`. The
-buyer never reads this collection directly either — their own view is
-projected by the endpoint, same as orders.
+The first draft had Clean Cell pre-provisioning buyers so terms would exist
+before the first order. That is a B2B sales motion, and it **contradicts the
+funnel in `docs/WHITE-LABEL.md`**: the storefront's whole premise is *no
+account needed, order anyway*. A customer who ordered at 02:00 cannot wait for
+somebody to provision them before they can see that order, and a signup gated
+on a sales action is not self-serve.
+
+So the flow is:
+
+1. A visitor orders from the storefront. No account. The order carries
+   `customer.email`.
+2. Later they sign in to the portal. The endpoint creates their buyer record
+   on first sign-in, `source: 'self'`, and claims every order matching their
+   verified email.
+3. **They type their own details** — company, phone, address. They are the
+   authority on those; a salesperson copying them off a business card is how
+   a delivery goes to the wrong dock.
+4. Clean Cell opens the record afterwards and sets terms, plan, status.
+
+**Terms are an overlay, not a prerequisite.** A buyer with none set gets the
+tenant's defaults. Nothing about the first order waits on Clean Cell.
+
+Pre-creating a record is still *allowed* — sales-led accounts are real, and
+"we signed an MSA with them, set them up at Net 60" should work. It is simply
+not required, and `source: 'tenant'` records it. The key permits both; only
+one of them is the default path.
+
+### Why the key is still the lowercased email
+
+The original justification (pre-provisioning) is gone, but the key survives on
+better grounds:
+
+- **Email is already the join to orders.** `api/embed-order.js` writes
+  `customer.email` on an order placed with no account at all. Whatever we key
+  the buyer on, the order history is claimed by email — so email is the
+  identity spine whether we choose it or not.
+- **One person can end up with more than one uid.** Magic link today, Google
+  next month, and account linking is not guaranteed. Keyed by email that is
+  one buyer with one set of terms; keyed by uid it is two records and the
+  terms are on whichever one they did not use.
+- **Precedent**: `org_members/{emailLower}` and `team_members/{orgId}__{email}`
+  are both already keyed this way.
+
+The honest cost is unchanged and unsolved either way: **a buyer who changes
+their email loses their history**, because the order join is by email too. A
+`emails[]` array on the record fixes it and is not v1.
+
+### Who may write what
+
+The buyer never touches Firestore — the same rule as orders — so this split is
+enforced in `api/my-account.js`, not in rules:
+
+| Field | Buyer | Tenant admin | ClearSky staff |
+|---|---|---|---|
+| name, company, phone, address | write | write | write |
+| terms{}, plan, status | — | write | write |
+| uid, source, createdAt, hasOrders | — | — | system |
+
+A buyer who could write their own `terms.discountPct` would be a buyer who
+sets their own price. The endpoint drops those keys from a buyer's PATCH
+rather than refusing the whole request, so a client that sends too much does
+not break.
+
+Firestore rules stay: `allow read, write: if isTenantAdmin(orgId) ||
+isOmegaStaff()`. Every buyer-side read and write goes through the endpoint.
+
+### The record lives under the tenant, not globally
+
+A buyer's relationship is with Clean Cell, not with OMEGA. The same person
+buying from two OMEGA tenants gets two buyer records, and that is correct
+rather than a duplication bug: their terms with Clean Cell are not their terms
+with anybody else.
+
+### Spam signups are a list problem, not a security one
+
+`email_verified` stops anybody claiming an address they do not hold, but it
+does not stop a real person signing up out of curiosity. Those land as
+`source: 'self'`, `hasOrders: false`. The admin list defaults to buyers with
+orders; everyone else is one filter away.
 
 ### Terms are a field, not an integration
 
@@ -117,7 +187,8 @@ maps to which field.
 | `portals/customer/index.html` | a buyer | Sign in, orders, status, documents, terms |
 | `portals/customer/admin.html` | Clean Cell admin, ClearSky staff | Manage buyers, terms, plan |
 | `api/my-orders.js` | a buyer's token | Projects orders key by key |
-| `api/buyers.js` | tenant admin / staff | CRUD on the buyer record |
+| `api/my-account.js` | a buyer's token | Creates the record on first sign-in; PATCHes own profile |
+| `api/buyers.js` | tenant admin / staff | Terms, plan and status on any buyer |
 
 ### This page must NOT load `omega-tenant.js`
 
@@ -299,10 +370,13 @@ a customer does not phone anybody.
 
 ## 10. Build order
 
-1. `api/my-orders.js` + `portals/customer/index.html` — read-only, magic-link
-   auth, milestones. The whole value is here.
-2. `omega_orgs/{org}/buyers/{emailLower}` + rules + `api/buyers.js` +
-   `portals/customer/admin.html` — terms and plan, manually set.
+1. `api/my-orders.js` + `api/my-account.js` + `portals/customer/index.html` —
+   magic-link auth, the record created on first sign-in, orders claimed by
+   verified email, milestones, and the buyer editing their own details. The
+   whole value is here, and it needs nothing from Clean Cell to work.
+2. `omega_orgs/{org}/buyers/{emailLower}` rules + `api/buyers.js` +
+   `portals/customer/admin.html` — the tenant enriching records that already
+   exist: terms, plan, status.
 3. Documents on the order (invoice, DG paperwork, FAT certificate).
 4. Cancellation requests.
 5. Stripe milestone payment from the portal.

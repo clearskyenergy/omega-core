@@ -961,6 +961,11 @@ document's surfaces:
   resolves the `_noteFunnel` question as *neither* — a buyer gets a portal,
   not a workspace, and becoming a tenant stays a later event with its own
   commercial trigger.
+- **The buyer creates their own record; the tenant enriches it.** The funnel
+  above is *no account needed, order anyway*, so a portal that required the
+  tenant to provision somebody first would contradict it. They sign in, their
+  orders are claimed by verified email, they type their own details, and the
+  tenant sets terms afterwards. Terms are an overlay, never a prerequisite.
 - **A buyer never reads `orders/{id}`.** The document carries `pricing`,
   `cost`, `margin` and `tenantPricing`, and rules hide documents rather than
   fields, so the portal reads through an endpoint that projects key by key —
