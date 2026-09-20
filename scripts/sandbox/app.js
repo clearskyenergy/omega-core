@@ -310,7 +310,7 @@
   function part(i) { return S.route.split('/')[i] || ''; }
   function go(r) {
     if (r !== S.route) { S.hist.push(S.route); S.hist = S.hist.slice(-40); }
-    S.route = r; S.modal = null; S.navOpen = false;
+    S.route = r; S.modal = null; S.navOpen = false; S.tour = null;
     /* A flash belongs to the page that raised it. Letting it survive a
        navigation put one order's confirmation on another order's screen. */
     if (!S.keepFlash) S.flash = '';
@@ -373,15 +373,19 @@
     return f;
   }
 
-  /* Their wordmark: Clean in cyan, ce in ink, and the bolt standing in for
-     the final ll, with a small US after it. */
+  /* Their wordmark, drawn from the real one: Clean in cyan, ce in ink, then
+     the double-l rendered as an upright bar beside a lightning bolt, and a
+     small US on the baseline. Vector rather than their PNG — cleancell.us
+     serves a bot-protection interstitial to any automated fetch, so the file
+     itself could not be pulled; this scales and recolours instead. */
   function bolt(cls) {
-    return '<svg class="' + (cls || 'bolt') + '" viewBox="0 0 26 46" aria-hidden="true">'
-      + '<path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg>';
+    return '<svg class="' + (cls || 'bolt') + '" viewBox="0 0 28 46" aria-hidden="true">'
+      + '<path d="M0 0h6.6v46H0z" fill="currentColor"/>'
+      + '<path d="M25.5 0 9.5 25.5h7.8L13.6 46 28 18.8h-7.6z" fill="currentColor"/></svg>';
   }
   function wordmark(extra) {
-    return '<span class="logo"' + (extra || '') + '><span class="c1">Clean</span>ce'
-      + bolt() + '<span class="us">US</span></span>';
+    return '<span class="logo"' + (extra || '') + ' role="img" aria-label="Cleancell US">'
+      + '<span class="c1">Clean</span>ce' + bolt() + '<span class="us">US</span></span>';
   }
 
   /* ══ PUBLIC SITE ═══════════════════════════════════════════════════════ */
@@ -1319,6 +1323,295 @@
     return NOTES[two] || NOTES[r.split('/')[0]] || DEFAULT_NOTE;
   }
 
+
+  /* ══ GUIDED TOUR ═══════════════════════════════════════════════════════
+     One button that drives the whole system. Each step SETS the state it
+     needs rather than depending on the step before it, so jumping back and
+     forth cannot desynchronise the demo from its own narration. ══════════ */
+  function tourOrder() {
+    if (S.tourNo) { var f = find(S.tourNo); if (f) return f; }
+    return S.orders.length ? S.orders[S.orders.length - 1] : null;
+  }
+  function sizeIt(kw, h) { S.sized = fit(kw, h); return S.sized; }
+
+  var TOUR = [
+    { who: 'buyer', lead: 'Their website',
+      say: 'A customer lands on cleancell.us. Our name is on none of it \u2014 not the page, not the '
+         + 'domain, not the email they will get.',
+      run: function () { S = seed(); S.who = 'buyer'; S.route = 'home'; } },
+
+    { who: 'buyer', lead: 'Two numbers',
+      say: 'They type what their utility bill says. No account, no form, no sales call.',
+      run: function () { sizeIt(900, 2); S.route = 'size'; } },
+
+    { who: 'buyer', lead: 'The tightest fit',
+      say: 'Five cabinets, not one oversized container \u2014 the sizer minimises overshoot against '
+         + 'Clean Cell\u2019s own product list.',
+      run: function () { sizeIt(900, 2); S.route = 'size'; } },
+
+    { who: 'buyer', lead: 'On their own lot',
+      say: 'Their parcel, drawn to scale, with the setback and the fire clearance. This is the one '
+         + 'public call that costs money, so it is capped per day and a cache hit never spends it.',
+      run: function () {
+        var z = S.sized || sizeIt(900, 2);
+        S.study = { address: '4400 W Ferdinand St, Chicago IL', sku: z.sku, qty: z.qty,
+                    tkw: z.tkw, tkwh: z.tkwh, kw: z.kw, h: z.h };
+        S.route = 'study';
+      } },
+
+    { who: 'buyer', lead: 'They order \u2014 with no account',
+      say: 'A request, not a purchase. The order is written with its status pinned to new; a browser '
+         + 'cannot set any other value.',
+      run: function () { S.route = 'checkout'; } },
+
+    { who: 'buyer', lead: 'Received',
+      say: 'Placed as a stranger. Clean Cell will confirm it, and nobody has had to create an account '
+         + 'to get this far.',
+      run: function () {
+        var o = tourOrder();
+        if (!o) {
+          var z = S.sized || sizeIt(900, 2);
+          S.account.name = 'Dana Ruiz'; S.account.company = 'Riverside Cold Chain';
+          S.account.email = 'ops@riverside.example'; S.account.phone = '312 555 0110';
+          o = makeOrder({ sku: z.sku, qty: z.qty, channel: 'storefront',
+            originLabel: 'from cleancell.us', via: 'api/embed-order create', by: 'storefront',
+            customer: S.account });
+          note('customer', 'Placed ' + o.orderNo);
+          S.tourNo = o.orderNo;
+        }
+        S.route = 'thanks/' + o.orderNo;
+      } },
+
+    { who: 'buyer', lead: 'The account comes after',
+      say: 'They sign in with the same work email \u2014 and the order they placed as a stranger is '
+         + 'already in the account. A verified email is the whole join.',
+      run: function () {
+        S.account.created = true; S.account.signedIn = true;
+        S.keepFlash = true; S.flash = '1 order already on this address was added to your account.';
+        S.route = 'p/orders';
+      } },
+
+    { who: 'buyer', lead: 'What a buyer may see',
+      say: 'Six public milestones, not the seventeen states the record actually carries. No price yet '
+         + '\u2014 nobody has published one.',
+      run: function () { var o = tourOrder(); S.route = o ? 'p/order/' + o.orderNo : 'p/orders'; } },
+
+    { who: 'cc', lead: 'Clean Cell\u2019s desk',
+      say: 'The same order, on their side. One queue \u2014 their own storefront and anything we send '
+         + 'over land in the same place.',
+      run: function () { S.route = 'a/orders'; } },
+
+    { who: 'cc', lead: 'A person accepts it',
+      say: 'Nothing downstream exists until somebody here says yes. No serials, no bench, no promised '
+         + 'date.',
+      run: function () {
+        var o = tourOrder();
+        if (o && o.status === 'new') {
+          o.status = 'confirmed'; S.focusA2 = o.orderNo;
+          o.history.push({ at: nowISO(), by: 'rob@cleancell.us', what: 'accepted into production' });
+          note('cleancell', 'Accepted ' + o.orderNo);
+        }
+        S.route = o ? 'a/order/' + o.orderNo : 'a/orders';
+      } },
+
+    { who: 'omega', lead: 'Only we may price it',
+      say: 'Our cost, our margin and our price to Clean Cell all live on the very record the customer '
+         + 'can open. Keeping them off her screen is a projection, not a hidden page.',
+      run: function () {
+        var o = tourOrder();
+        if (o && !o.pricing) {
+          o.pricing = { total: Math.round(o.cost * 1.18), currency: 'USD',
+            pricedBy: 'thomas@csebuilders.com', pricedAt: nowISO() };
+          o.status = 'quoted'; note('clearsky', 'Priced ' + o.orderNo);
+        }
+        S.route = o ? 'o/order/' + o.orderNo : 'o/orders';
+      } },
+
+    { who: 'buyer', lead: 'Priced is not published',
+      say: 'We have priced it. Her portal still reads \u201cPending\u201d. Reprice it as often as the '
+         + 'deal needs \u2014 nothing crosses until somebody publishes.',
+      run: function () { var o = tourOrder(); S.route = o ? 'p/order/' + o.orderNo : 'p/orders'; } },
+
+    { who: 'omega', lead: 'Publish it',
+      say: 'Clean Cell\u2019s price goes to their customer. Ours never does.',
+      run: function () {
+        var o = tourOrder();
+        if (o) { o.tenantPricing.publishedToCustomer = true;
+          note('clearsky', 'Published the price on ' + o.orderNo); }
+        S.route = o ? 'o/order/' + o.orderNo : 'o/orders';
+      } },
+
+    { who: 'buyer', lead: 'Now there is a number',
+      say: 'Her account, on their domain, showing their price. Two prices exist on one record; who is '
+         + 'asking decides which one comes back.',
+      run: function () { var o = tourOrder(); S.route = o ? 'p/order/' + o.orderNo : 'p/orders'; } },
+
+    { who: 'cc', lead: 'Money, then serials',
+      say: 'The deposit clears and the works order is raised. Serials are allocated here and nowhere '
+         + 'else \u2014 nothing reaches a bench that nobody has been paid for.',
+      run: function () {
+        var o = tourOrder();
+        if (o) {
+          if (!o.deposit) {
+            o.deposit = true; o.status = 'accepted';
+            o.documents.push({ kind: 'invoice', name: 'Deposit invoice ' + o.orderNo,
+              at: nowISO(), audience: 'customer' });
+            o.documents.push({ kind: 'internal', name: 'Margin sheet (internal)',
+              at: nowISO(), audience: 'internal' });
+            note('finance', 'Deposit cleared on ' + o.orderNo);
+          }
+          release(o);
+        }
+        S.route = o ? 'a/order/' + o.orderNo : 'a/orders';
+      } },
+
+    { who: 'bench', lead: 'The floor',
+      say: 'Five serialised cabinets, on a tablet paired to one bench. The station comes off that '
+         + 'pairing, never off the scan.',
+      run: function () { S.bench = 'kit'; S.lastScan = null; S.route = 'b/scan'; } },
+
+    { who: 'bench', lead: 'It refuses',
+      say: 'Scanned at Rack assembly before it has been kitted. The refusal is the product \u2014 the '
+         + 'easy build would have recorded two stations this cabinet never visited.',
+      run: function () {
+        var o = tourOrder(), u = o ? unitsOf(o.orderNo) : [];
+        S.bench = 'rack';
+        if (u.length) doScan('https://plant.cleancell.us/u/' + u[0].serial);
+        S.route = 'b/scan';
+      } },
+
+    { who: 'bench', lead: 'And then it accepts',
+      say: 'Same cabinet, right bench. A scan can only advance one station or be a duplicate \u2014 it '
+         + 'can never skip, reverse, or mark anything shipped.',
+      run: function () {
+        var o = tourOrder(), u = o ? unitsOf(o.orderNo) : [];
+        S.bench = 'kit';
+        if (u.length) doScan('https://plant.cleancell.us/u/' + u[0].serial);
+        S.route = 'b/scan';
+      } },
+
+    { who: 'bench', lead: 'Down the line',
+      say: 'The bay runs. Every one of these is the committed scan engine deciding, not a status '
+         + 'somebody typed.',
+      run: function () {
+        var o = tourOrder();
+        if (o) { for (var i = 0; i < 4; i++) runBay(o.orderNo); }
+        S.bench = 'kit'; S.lastScan = null; S.route = 'b/scan';
+      } },
+
+    { who: 'bench', lead: 'One fails',
+      say: 'Quality holds a cabinet against a non-conformance. Four carry on; one does not.',
+      run: function () {
+        var o = tourOrder(), a = o ? unitsOf(o.orderNo) : [];
+        for (var i = 0; i < a.length; i++) if (!a[i].hold && a[i].at) {
+          a[i].hold = 'Capacity below limit at end-of-line test'; a[i].ncr = 'NCR-26-89';
+          note('quality', 'Held ' + a[i].serial + ' \u2014 NCR-26-89'); break;
+        }
+        S.route = 'b/scan';
+      } },
+
+    { who: 'buyer', lead: 'Her screen goes backwards',
+      say: 'The furthest-behind unit decides, and a held one ranks below where it stands \u2014 so the '
+         + 'order does not stall, it steps back a milestone. Nobody had to remember to tell her.',
+      run: function () { var o = tourOrder(); S.route = o ? 'p/order/' + o.orderNo : 'p/orders'; } },
+
+    { who: 'bench', lead: 'Cleared, and finished',
+      say: 'Closing the non-conformance is a separate authority \u2014 a scanner cannot wave it '
+         + 'through. Then the bay runs to Ready to ship.',
+      run: function () {
+        for (var k in S.units) if (S.units[k].hold) {
+          S.units[k].hold = null; S.units[k].ncr = null;
+          note('quality', 'Closed the NCR on ' + S.units[k].serial); break;
+        }
+        var o = tourOrder();
+        if (o) { for (var i = 0; i < 12; i++) runBay(o.orderNo); }
+        S.lastScan = null; S.route = 'b/scan';
+      } },
+
+    { who: 'cc', lead: 'A person ships it',
+      say: 'The one thing a trigger pull cannot cause. Every cabinet has to be staged first, and then '
+         + 'somebody with the authority decides.',
+      run: function () {
+        var o = tourOrder();
+        if (o && allReady(o.orderNo) && o.status !== 'shipped') markComplete(o);
+        S.route = o ? 'a/order/' + o.orderNo : 'a/orders';
+      } },
+
+    { who: 'buyer', lead: 'It already moved',
+      say: 'Shipped, with the packing list on her account. Nobody typed a status into a portal \u2014 a '
+         + 'technician pulled a trigger and a stranger\u2019s screen changed.',
+      run: function () { var o = tourOrder(); S.route = o ? 'p/order/' + o.orderNo : 'p/orders'; } },
+
+    { who: 'omega', lead: 'Prove it',
+      say: 'The record holds our cost, our margin, our price and a staff audit trail. This searches '
+         + 'what she actually received for every one of them.',
+      run: function () {
+        var o = tourOrder();
+        if (o) leakTest(o);
+        S.route = o ? 'o/order/' + o.orderNo : 'o/orders';
+      } },
+
+    { who: 'buyer', lead: 'The second sale',
+      say: 'Selling a battery and selling the platform are two different sales. The storefront pitches '
+         + 'the designer and never links into it.',
+      run: function () { S.account.plan = 'free'; S.route = 'p/design'; } },
+
+    { who: 'buyer', lead: 'One field unlocks it',
+      say: 'Subscribing writes the list of tools this account may open \u2014 an allowlist that beats '
+         + 'the plan, the add-ons and every override, checked independently by every endpoint.',
+      run: function () {
+        S.account.plan = 'designer';
+        note('customer', 'Subscribed to the designer');
+        S.route = 'p/design';
+      } },
+
+    { who: 'buyer', lead: 'A mode, not a second editor',
+      say: 'Site Map in their colours, on their domain, cut down to storage. Compute and the '
+         + 'data-centre tools are disabled rather than hidden, and solar stays.',
+      run: function () {
+        var z = fit(1000, 2);
+        S.design = { sku: z.sku, qty: z.qty, kw: 1000, h: 2, tkw: z.tkw, tkwh: z.tkwh,
+                     address: S.study ? S.study.address : '', pushed: false };
+        S.view = 'plan'; S.route = 'd/studio';
+      } },
+
+    { who: 'buyer', lead: 'And it starts again',
+      say: 'Plot plan, single-line, estimate BOM, proposal, drawing set \u2014 then the bill of '
+         + 'materials is ordered straight out of the drawing, which re-enters this chain at step five.',
+      run: function () { S.view = 'bom'; S.route = 'd/studio'; } },
+
+    { who: 'omega', lead: 'One order, three companies',
+      say: 'The customer saw one brand. The floor saw the same one. Every hand-off you just watched ran '
+         + 'on one record, and nobody re-keyed anything into a second system.',
+      run: function () { S.route = 'o/tenant/cleancell.us'; } }
+  ];
+
+  function tourGo(i) {
+    var idx = Math.max(0, Math.min(i, TOUR.length - 1));
+    var step = TOUR[idx];
+    /* The first step calls seed(), which REPLACES S. Anything written to the
+       old object before run() is thrown away with it, so the tour index and
+       the persona are set afterwards, on whatever S the step left behind. */
+    try { step.run(); } catch (e) {}
+    S.tour = idx;
+    S.who = step.who;
+    save(); render();
+  }
+  function tourStop() { S.tour = null; save(); render(); }
+  function paintTour() {
+    var on = S.tour !== null && S.tour !== undefined;
+    document.body.classList.toggle('tour', on);
+    $('tourbar').hidden = !on;
+    if (!on) return;
+    var step = TOUR[S.tour];
+    $('tb-n').textContent = (S.tour + 1) + ' / ' + TOUR.length;
+    $('tb-who').textContent = step.lead;
+    $('tb-say').textContent = step.say;
+    $('tb-back').disabled = S.tour === 0;
+    $('tb-next').textContent = S.tour === TOUR.length - 1 ? 'Finish' : 'Next \u2192';
+    $('tb-rail').style.width = ((S.tour + 1) / TOUR.length * 100).toFixed(1) + '%';
+  }
+
   /* ══ RENDER ════════════════════════════════════════════════════════════ */
   function page() {
     var r = S.route, a = r.split('/')[0];
@@ -1378,6 +1671,7 @@
     $('note').hidden = !S.notes;
     if (n) $('note').innerHTML = '<span class="k">' + esc(n[0]) + '</span>' + n[1];
     $('tnote').setAttribute('aria-pressed', String(!!S.notes));
+    paintTour();
     var f = $('b-input'); if (f) f.focus();
   }
   window.__demoRender = render;
@@ -1436,26 +1730,37 @@
   document.addEventListener('click', function (ev) {
     var t = ev.target, el = null;
     function up(attr) { var n = t; while (n && n !== document) { if (n.getAttribute && n.getAttribute(attr) != null) return n; n = n.parentNode; } return null; }
+    /* A click can land on a label span inside a button, and then t.id is ''.
+       Resolve to the nearest button that has an id before matching on it. */
+    var host = t.closest ? t.closest('button[id]') : null;
+    var bid = host ? host.id : t.id;
 
     if ((el = up('data-who'))) {
-      S.who = el.getAttribute('data-who'); S.hist = []; S.modal = null;
+      S.who = el.getAttribute('data-who'); S.hist = []; S.modal = null; S.tour = null;
       S.route = homeOf(S.who); save(); render(); return;
     }
     if ((el = up('data-go'))) { go(el.getAttribute('data-go')); return; }
     if ((el = up('data-modal'))) { S.modal = el.getAttribute('data-modal'); save(); render(); return; }
-    if (t.id === 'scrim' || t.id === 'm-close') { S.modal = null; save(); render(); return; }
-    if (t.id === 'burger') { S.navOpen = !S.navOpen; save(); render(); return; }
-    if (t.id === 'back') { if (S.hist.length) { S.route = S.hist.pop(); S.modal = null; save(); render(); } return; }
-    if (t.id === 'tnote') { S.notes = !S.notes; save(); render(); return; }
-    if (t.id === 'reset') {
+    if (bid === 'scrim' || bid === 'm-close') { S.modal = null; save(); render(); return; }
+    if (bid === 'burger') { S.navOpen = !S.navOpen; save(); render(); return; }
+    if (bid === 'back') { if (S.hist.length) { S.route = S.hist.pop(); S.modal = null; save(); render(); } return; }
+    if (bid === 'tnote') { S.notes = !S.notes; save(); render(); return; }
+    if (bid === 'tour') { tourGo(0); return; }
+    if (bid === 'tb-next') {
+      if (S.tour >= TOUR.length - 1) { tourStop(); } else { tourGo(S.tour + 1); }
+      return;
+    }
+    if (bid === 'tb-back') { tourGo(S.tour - 1); return; }
+    if (bid === 'tb-exit') { tourStop(); return; }
+    if (bid === 'reset') {
       if (!window.confirm('Clear every order, unit, account and drawing and start again?')) return;
       S = seed(); save(); render(); return;
     }
 
     /* ── public site ── */
-    if (t.id === 'h-size' || t.id === 's-go') {
-      var kw = Number(val(t.id === 'h-size' ? 'h-kw' : 's-kw')) || 0;
-      var hr = Number(val(t.id === 'h-size' ? 'h-h' : 's-h')) || 1;
+    if (bid === 'h-size' || bid === 's-go') {
+      var kw = Number(val(bid === 'h-size' ? 'h-kw' : 's-kw')) || 0;
+      var hr = Number(val(bid === 'h-size' ? 'h-h' : 's-h')) || 1;
       S.sized = fit(kw, hr);
       note('visitor', 'Sized ' + kw + ' kW × ' + hr + ' h → ' + S.sized.qty + ' × ' + S.sized.name);
       save(); go('size'); return;
@@ -1465,26 +1770,26 @@
       S.sized = fit(c.kw * 4, Math.round((c.kwh / c.kw) * 10) / 10);
       save(); go('size'); return;
     }
-    if (t.id === 'st-go') {
+    if (bid === 'st-go') {
       var z = S.sized || fit(900, 2);
       S.study = { address: val('st-addr'), sku: z.sku, qty: z.qty, tkw: z.tkw, tkwh: z.tkwh, kw: z.kw, h: z.h };
       note('visitor', 'Site study drawn for ' + S.study.address);
       save(); render(); return;
     }
-    if (t.id === 'c-place') { var o1 = placeOrder('storefront'); go('thanks/' + o1.orderNo); return; }
+    if (bid === 'c-place') { var o1 = placeOrder('storefront'); go('thanks/' + o1.orderNo); return; }
 
     /* ── account ── */
-    if (t.id === 'm-signin' || t.id === 'm-google') { signUp(t.id === 'm-google' ? 'Google' : 'email link'); return; }
-    if (t.id === 'm-signup') { signUp('email link'); return; }
-    if (t.id === 'signout') { S.account.signedIn = false; S.hist = []; go('home'); return; }
-    if (t.id === 'm-upgrade') {
+    if (bid === 'm-signin' || bid === 'm-google') { signUp(bid === 'm-google' ? 'Google' : 'email link'); return; }
+    if (bid === 'm-signup') { signUp('email link'); return; }
+    if (bid === 'signout') { S.account.signedIn = false; S.hist = []; go('home'); return; }
+    if (bid === 'm-upgrade') {
       S.account.plan = 'designer';
       note('customer', 'Subscribed to the designer — toolAccess [editor, gridatlas]');
       S.keepFlash = true;
       S.flash = 'Designer plan active. Site Map and Grid Atlas are on your account.';
       S.modal = null; go('p/design'); return;
     }
-    if (t.id === 't-save') {
+    if (bid === 't-save') {
       var te = String(val('t-email')).toLowerCase();
       S.termsBy = S.termsBy || {};
       S.termsBy[te] = { netDays: Number(val('t-net')) || null,
@@ -1495,11 +1800,11 @@
       S.flash = 'Terms saved. They are on the customer\u2019s portal now.';
       save(); render(); return;
     }
-    if (t.id === 'ac-save') {
+    if (bid === 'ac-save') {
       S.account.name = val('ac-name', S.account.name); S.account.company = val('ac-co', S.account.company);
       S.account.phone = val('ac-ph', S.account.phone); S.flash = 'Profile saved.'; save(); render(); return;
     }
-    if (t.id === 'ac-invite') {
+    if (bid === 'ac-invite') {
       S.account.users = S.account.users || [];
       S.account.users.push({ name: 'Sam Okafor', email: 'sam@' + String(S.account.email).split('@')[1], role: 'member' });
       S.flash = 'Invitation sent.'; note('customer', 'Invited a colleague onto the account'); save(); render(); return;
@@ -1515,7 +1820,7 @@
     /* ── designer ── */
     if ((el = up('data-tool'))) { S.tool = el.getAttribute('data-tool'); save(); render(); return; }
     if ((el = up('data-view'))) { S.view = el.getAttribute('data-view'); save(); render(); return; }
-    if (t.id === 'd-build') {
+    if (bid === 'd-build') {
       var dk = Number(val('d-kw')) || 0, dh = Number(val('d-h')) || 1, z2 = fit(dk, dh);
       S.design = { sku: z2.sku, qty: z2.qty, kw: dk, h: dh, tkw: z2.tkw, tkwh: z2.tkwh,
         address: S.study ? S.study.address : '', pushed: S.design ? S.design.pushed : false };
@@ -1523,11 +1828,11 @@
       note('designer', 'Guided build placed ' + z2.qty + ' × ' + z2.name + ' — ' + z2.tkw + ' kW');
       save(); render(); return;
     }
-    if (t.id === 'd-push') {
+    if (bid === 'd-push') {
       if (S.design) { S.design.pushed = true; note('designer', 'Pushed the BOM to the marketplace'); }
       save(); render(); return;
     }
-    if (t.id === 'd-order') {
+    if (bid === 'd-order') {
       if (!S.design) return;
       var zz = S.design;
       var o2 = makeOrder({ sku: zz.sku, qty: zz.qty, channel: 'designer', originLabel: 'from the design studio',
@@ -1545,8 +1850,8 @@
       doScan('https://plant.cleancell.us/u/' + el.getAttribute('data-serial'));
       render(); return;
     }
-    if (t.id === 'b-scan') { var iv = val('b-input'); if (iv) { doScan(iv); var i2 = $('b-input'); if (i2) i2.value = ''; render(); } return; }
-    if (t.id === 'b-hold') {
+    if (bid === 'b-scan') { var iv = val('b-input'); if (iv) { doScan(iv); var i2 = $('b-input'); if (i2) i2.value = ''; render(); } return; }
+    if (bid === 'b-hold') {
       var bo = benchOrder(); if (!bo) return;
       var list = unitsOf(bo.orderNo);
       for (var i = 0; i < list.length; i++) if (!list[i].hold && list[i].at) {
@@ -1555,18 +1860,18 @@
       }
       save(); render(); return;
     }
-    if (t.id === 'b-clear') {
+    if (bid === 'b-clear') {
       for (var k in S.units) if (S.units[k].hold) {
         S.units[k].hold = null; S.units[k].ncr = null;
         note('quality', 'Closed the NCR on ' + S.units[k].serial); break; }
       save(); render(); return;
     }
-    if (t.id === 'b-run' || t.id === 'a-run' || t.id === 'o-run') {
+    if (bid === 'b-run' || bid === 'a-run' || bid === 'o-run') {
       var ro = benchOrder(); if (ro) runBay(ro.orderNo); render(); return;
     }
 
     /* ── ClearSky ── */
-    if (t.id === 'm-newcs') {
+    if (bid === 'm-newcs') {
       var mk = Number(val('m-kw')) || 1500, mh = Number(val('m-h')) || 2, z3 = fit(mk, mh);
       var co = val('m-co') || 'Halsted Logistics';
       var o3 = makeOrder({ sku: z3.sku, qty: z3.qty, channel: 'clearsky', originLabel: 'ClearSky direct',
@@ -1614,7 +1919,15 @@
       ev.preventDefault();
       var v = ev.target.value; if (v) { doScan(v); ev.target.value = ''; render(); }
     }
-    if (ev.key === 'Escape' && S.modal) { S.modal = null; save(); render(); }
+    if (ev.key === 'Escape' && S.modal) { S.modal = null; save(); render(); return; }
+    if (S.tour === null || S.tour === undefined) return;
+    if (ev.target && /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
+    if (ev.key === 'ArrowRight' || ev.key === ' ') {
+      ev.preventDefault();
+      if (S.tour >= TOUR.length - 1) tourStop(); else tourGo(S.tour + 1);
+    }
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); tourGo(S.tour - 1); }
+    if (ev.key === 'Escape') { tourStop(); }
   });
 
   render();
