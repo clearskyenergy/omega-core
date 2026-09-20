@@ -39,7 +39,8 @@
     function notify(fs,detail,error){if(host.onRender)host.onRender(fs,detail,error);}
     function get(file){
       if(cache[file])return cache[file];
-      var promise=fetch('/data/usa-fiber/'+file).then(function(r){if(!r.ok)throw Error('Route data unavailable (HTTP '+r.status+')');return r.json();}).then(function(fc){
+      var version=encodeURIComponent(manifest.integratedAt||manifest.builtAt||manifest.uniqueSegments);
+      var promise=fetch('/data/usa-fiber/'+file+'?v='+version).then(function(r){if(!r.ok)throw Error('Route data unavailable (HTTP '+r.status+')');return r.json();}).then(function(fc){
         if(!fc||fc.type!=='FeatureCollection'||!Array.isArray(fc.features))throw Error('Invalid route data');return fc;
       }).catch(function(e){delete cache[file];throw e;});
       cache[file]=promise;order.push(file);
@@ -94,7 +95,7 @@
     state.onchange=navigate;category.onchange=refresh;source.onchange=refresh;
     map.on('moveend',function(){clearTimeout(timer);timer=setTimeout(refresh,150);});
     host.controller={setVisible:function(on){if(shown===on)return;shown=on;refresh();},refresh:refresh};
-    fetch('/data/usa-fiber/manifest.json').then(function(r){if(!r.ok)throw Error('Inventory manifest unavailable');return r.json();}).then(function(m){
+    fetch('/data/usa-fiber/manifest.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw Error('Inventory manifest unavailable');return r.json();}).then(function(m){
       manifest=m;m.sources.forEach(function(s){sources[s.id]=s;});
       var priorities=document.createElement('optgroup');priorities.label='Priority states';state.appendChild(priorities);
       var rest=document.createElement('optgroup');rest.label='All remaining states / DC';state.appendChild(rest);
