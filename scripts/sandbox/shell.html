@@ -53,6 +53,7 @@
     padding:6px 12px;cursor:pointer;font:600 12.5px var(--cs);white-space:nowrap}
   .who button:hover{border-color:#9AA4AC;color:#1B242B}
   .who button[aria-current="true"]{background:#1B242B;border-color:#1B242B;color:#fff}
+  .rolenow{font-size:12.5px;color:#8A949C;white-space:nowrap}
   .demo .sp{flex:1}
   .demo .mini{background:#fff;border:1px solid #DFE3E6;color:#5A646D;border-radius:7px;
     padding:6px 10px;cursor:pointer;font:600 12px var(--cs)}
@@ -62,6 +63,7 @@
   @media (max-width:760px){
     .demo{padding:6px 10px;gap:6px}
     .demo .as{display:none}
+    .rolenow{display:none}
     .demo .sp{display:none}
     .demo .tag{font-size:9px;padding:3px 6px}
     .demo .lbl-long{display:none} .demo .lbl-short{display:inline}
@@ -373,7 +375,8 @@
 <div class="demo">
   <span class="tag">DEMO</span>
   <span class="as">Viewing as</span>
-  <nav class="who" id="who" aria-label="Who you are"></nav>
+  <nav class="who" id="who" aria-label="Which role you are in"></nav>
+  <span class="rolenow" id="rolenow"></span>
   <span class="sp"></span>
   <button type="button" class="mini" id="tnote" aria-pressed="false">
     <span class="lbl-long">Show what is real</span><span class="lbl-short">What's real</span></button>

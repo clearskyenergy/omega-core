@@ -5,13 +5,17 @@
 Five product surfaces inside a browser frame, sharing one world. You click
 it the way a customer, a sales desk, a technician and we would.
 
-| Surface | Address it shows | Who |
+| Role you switch to | Surface | Address it shows |
 |---|---|---|
-| Public storefront | `cleancell.us` | anybody |
-| Customer portal | `portal.cleancell.us` | the buyer |
-| Design studio | `design.cleancell.us` | the buyer, on the Designer plan |
-| Bench tablet | `plant.cleancell.us/bench/2` | the plant |
-| ClearSky console | `console.clearskyomega.com` | us |
+| **Customer** | the public storefront, then their account | `cleancell.us`, `portal.cleancell.us` |
+| **Customer** (on the Designer plan) | the design studio | `design.cleancell.us` |
+| **Clean Cell · office** | the order desk and customer accounts | `admin.cleancell.us` |
+| **Clean Cell · plant** | the bench tablet on the floor | `plant.cleancell.us/bench/2` |
+| **ClearSky** | the staff console | `console.clearskyomega.com` |
+
+The switcher names the role, never a person: the question it has to answer at
+a glance is whether you are a customer buying, Clean Cell in the office, Clean
+Cell on the floor, or us.
 
 The address bar is part of the point: everything the customer touches is on
 Clean Cell's own domains, and our name is nowhere on them.

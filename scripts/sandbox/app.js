@@ -287,12 +287,20 @@
   }
 
   /* ══ ROUTING ═══════════════════════════════════════════════════════════ */
+  /* The switcher names the ROLE, not a person. The question it has to answer
+     at a glance is "whose screen am I on" — a customer buying, Clean Cell in
+     the office, Clean Cell on the floor, or us. */
   var WHO = [
-    { key: 'buyer', label: 'Dana Ruiz', short: 'Dana', sub: 'Riverside Cold Chain — a customer' },
-    { key: 'cc',    label: 'Rob Ellery', short: 'Rob', sub: 'Clean Cell — order desk' },
-    { key: 'bench', label: 'Marco Dias', short: 'Marco', sub: 'Clean Cell — Bay 2 bench' },
-    { key: 'omega', label: 'Thomas Gilmer', short: 'Thomas', sub: 'ClearSky — console' }
+    { key: 'buyer', label: 'Customer', short: 'Customer',
+      sub: 'A customer buying on cleancell.us' },
+    { key: 'cc',    label: 'Clean Cell · office', short: 'CC office',
+      sub: 'Clean Cell — the order desk' },
+    { key: 'bench', label: 'Clean Cell · plant', short: 'CC plant',
+      sub: 'Clean Cell — the bench tablet on the floor' },
+    { key: 'omega', label: 'ClearSky', short: 'ClearSky',
+      sub: 'ClearSky — the staff console' }
   ];
+  function whoDef(k) { for (var i = 0; i < WHO.length; i++) if (WHO[i].key === k) return WHO[i]; return WHO[0]; }
   function homeOf(w) {
     if (w === 'cc') return 'a/orders';
     if (w === 'bench') return 'b/scan';
@@ -599,7 +607,8 @@
             { r: 'p/terms', t: 'Terms & agreements' },
             { grp: 'Design' }, { r: 'p/design', t: 'Design studio' },
             { grp: 'You' }, { r: 'p/account', t: 'Account' }],
-      foot: esc(S.account.email) + '<br><button class="b sm" id="signout" style="margin-top:8px">Sign out</button>',
+      foot: '<b>Customer account</b><br>' + esc(S.account.email)
+        + '<br><button class="b sm" id="signout" style="margin-top:8px">Sign out</button>',
       body: body
     });
   }
@@ -610,7 +619,7 @@
       nav: [{ grp: 'Sales' }, { r: 'a/orders', t: 'Orders', pre: 'a/order' },
             { r: 'a/customers', t: 'Customers', pre: 'a/customer' },
             { grp: 'Production' }, { r: 'a/production', t: 'Works orders' }, { r: 'b/scan', t: 'Bench tablet' }],
-      foot: 'rob@cleancell.us<br>Owner',
+      foot: '<b>Clean Cell · owner</b><br>rob@cleancell.us',
       body: body
     });
   }
@@ -621,7 +630,7 @@
         + '<span style="color:var(--brand)">OMEGA</span></span>',
       nav: [{ grp: 'Operations' }, { r: 'o/orders', t: 'Orders', pre: 'o/order' },
             { r: 'o/tenants', t: 'Tenants', pre: 'o/tenant' }, { r: 'o/systems', t: 'Systems' }],
-      foot: 'thomas@csebuilders.com<br>Staff — admin'
+      foot: '<b>ClearSky · staff admin</b><br>thomas@csebuilders.com'
         + '<div class="sheettag">SHEET G-002</div>',
       body: body
     });
@@ -1264,7 +1273,7 @@
     }
     if (S.who === 'cc') {
       var nw = S.orders.filter(function (o) { return o.status === 'new'; });
-      if (!S.orders.length) return ['Nothing in the queue.', 'Switch to Dana and place an order, or to ClearSky and send one over.'];
+      if (!S.orders.length) return ['Nothing in the queue.', 'Switch to <b>Customer</b> and place an order, or to <b>ClearSky</b> and send one over.'];
       if (nw.length) return ['', 'Open the order marked <b>new</b> and accept it into production.'];
       var o = benchOrder();
       if (o && !o.deposit) return ['', 'Record the deposit on the open order.'];
@@ -1274,7 +1283,7 @@
     }
     if (S.who === 'bench') {
       var bo = benchOrder();
-      if (!bo || !unitsOf(bo.orderNo).length) return ['No works order.', 'Switch to Rob and release an order to the floor.'];
+      if (!bo || !unitsOf(bo.orderNo).length) return ['No works order.', 'Switch to <b>Clean Cell · office</b> and release an order to the floor.'];
       return ['', 'Try scanning at the <b>wrong</b> station first — then set the bench to Kitting and scan again.'];
     }
     var co = S.orders.filter(function (x) { return !x.pricing; })[0];
@@ -1357,6 +1366,7 @@
       return '<button type="button" data-who="' + w.key + '" aria-current="' + (w.key === S.who) + '" title="'
         + esc(w.sub) + '"><span class="lbl-long">' + esc(w.label) + '</span>'
         + '<span class="lbl-short">' + esc(w.short) + '</span></button>'; }).join('');
+    $('rolenow').textContent = whoDef(S.who).sub;
     var u = URLS(S.route);
     $('urltext').innerHTML = '<span class="dom">' + esc(u[0]) + '</span>' + esc(u[1]);
     $('back').disabled = !S.hist.length;
