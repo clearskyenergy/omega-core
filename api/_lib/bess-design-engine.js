@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+var CAP = require('./bess-capacity');
 /* ====================================================================== *
  *  BESS ELECTRICAL DESIGN ENGINE                                         *
  *  ------------------------------------------------------------------    *
@@ -105,45 +106,40 @@ function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
  *  two governs and the tool says which one bound the answer.
  * ====================================================================== */
 function capacityChain(inp) {
-  var loadMw   = num(inp.loadMw, 1);
-  var durationH= num(inp.durationH, 4);
-  var dodPct   = clamp(num(inp.dodPct, 90), 1, 100);
-  var rtePct   = clamp(num(inp.rtePct, 88), 1, 100);
-  var otherPct = clamp(num(inp.otherEffPct, 100), 1, 100);
-  var cRate    = num(inp.cRate, 0.5);
-  var unitMwh  = num(inp.unitMwh, 5);
+  var loadMw    = num(inp.loadMw, 1);
+  var durationH = num(inp.durationH, 4);
+  var unitMwh   = num(inp.unitMwh, 5);
 
-  var initialMwh  = loadMw * durationH;
-  var afterDod    = roundUp(initialMwh / (dodPct / 100), 4);
-  var afterRte    = roundUp(afterDod / Math.sqrt(rtePct / 100), 4);
-  var afterOther  = roundUp(afterRte / (otherPct / 100), 4);
-
-  /* The C-rate floor, in MWh: power the battery must deliver divided by
-     the highest C it is allowed to run at. */
-  var cRateFloorMwh = cRate > 0 ? loadMw / cRate : 0;
-  var cRateBound    = cRateFloorMwh > afterOther;
-  var requiredMwh   = cRateBound ? cRateFloorMwh : afterOther;
-
-  var units       = unitMwh > 0 ? Math.ceil(requiredMwh / unitMwh - 1e-9) : 0;
-  var installedMwh= round(units * unitMwh, 4);
+  /* The chain itself lives in bess-capacity.js, shared with the sizing
+     engine. Two copies of this arithmetic is how the sizer and the
+     schedule came to disagree about what "nameplate" meant. */
+  var c = CAP.chain(loadMw * durationH, loadMw, {
+    dodPct: inp.dodPct, rtePct: inp.rtePct, otherEffPct: inp.otherEffPct,
+    cRate: inp.cRate, unitMwh: unitMwh
+  });
 
   return {
     loadMw: loadMw, durationH: durationH,
-    dodPct: dodPct, rtePct: rtePct, otherEffPct: otherPct,
-    cRate: cRate, unitMwh: unitMwh,
-    initialMwh: initialMwh,
-    afterDodMwh: afterDod,
-    afterRteMwh: afterRte,
-    afterOtherMwh: afterOther,
-    cRateFloorMwh: round(cRateFloorMwh, 4),
-    cRateBound: cRateBound,
-    requiredMwh: round(requiredMwh, 4),
-    units: units,
-    installedMwh: installedMwh,
-    spareMwh: round(installedMwh - requiredMwh, 4),
-    usableMwh: round(installedMwh * (dodPct / 100) * Math.sqrt(rtePct / 100), 4),
+    dodPct: c.dodPct, rtePct: c.rtePct, otherEffPct: c.otherEffPct,
+    cRate: c.cRate, unitMwh: unitMwh,
+    initialMwh: c.usableMwh,
+    afterDodMwh: c.afterDodMwh,
+    afterRteMwh: c.afterRteMwh,
+    afterOtherMwh: c.afterOtherMwh,
+    cRateFloorMwh: c.cRateFloorMwh,
+    cRateBound: c.cRateBound,
+    requiredMwh: c.requiredMwh,
+    units: c.units,
+    installedMwh: c.installedMwh,
+    spareMwh: c.spareMwh,
+    /* What the INSTALLED pack delivers, not what the duty asked for: the
+       quantised pack is usually larger, and the lifecycle table has to
+       know the real number. */
+    usableMwh: round(CAP.usableFromNameplateMwh(c.installedMwh, {
+      dodPct: c.dodPct, rtePct: c.rtePct, otherEffPct: c.otherEffPct }), 4),
+    effectiveCRate: c.installedMwh > 0 ? round(loadMw / c.installedMwh, 4) : 0,
     /* What bound the answer, in one word, so the UI never has to guess. */
-    binding: cRateBound ? 'c-rate' : 'energy'
+    binding: c.binding
   };
 }
 

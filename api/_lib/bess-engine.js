@@ -1,4 +1,33 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+/* ====================================================================== *
+ *  RETIRED 2026-09-20 — NOT ON THE LIVE PATH.
+ *  ------------------------------------------------------------------    *
+ *  This was the sizing engine behind the site-map editor's `interval` and
+ *  `monthly` modes, while the standalone Battery Sizer ran a different
+ *  one. On identical input the two disagreed by 24% on energy from bills
+ *  and 52% on a real 8760, and payback by roughly 70% - largely because
+ *  this file computes payback as GROSS capex over savings, with no
+ *  investment tax credit, no O&M, no capacity fade, no escalation and no
+ *  discounting, while the other charged all five.
+ *
+ *  api/bess-size.js now routes BOTH modes to battery-tool-engine.js
+ *  through bess-size-adapter.js. Nothing calls this file any more.
+ *
+ *  It is kept, rather than deleted, for two reasons. Its 29 tests in
+ *  scripts/test-bess-sizer.js are the behavioural reference the
+ *  replacement had to match - ratchet windows, leap years, meter-side
+ *  accounting, and the rule that savings are credited off the peak the
+ *  meter ACTUALLY saw rather than the one the sweep asked for. And a
+ *  quoted project sized before this date was sized here, so the file is
+ *  the only way to reproduce a number a customer is already holding.
+ *
+ *  Do not add features here, and do not route anything back to it.
+ *
+ *  ONE THING TO KNOW IF YOU READ IT: `var window = {}` below means the
+ *  `window.BESS_DOD` lookup in derate() can never resolve server-side, so
+ *  this engine always ran at a hardcoded 95% depth of discharge no matter
+ *  what the caller set. That is one of the reasons its sizes differed.
+ * ====================================================================== */
 var window = {};
 (function () {
   'use strict';

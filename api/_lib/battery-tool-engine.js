@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
+var CAP = require('./bess-capacity');
 module.exports=function(input){
  var cfg=input.settings||{}, MONTHS=input.data, RESULT=null, ES_TAX=0.0635;
  var MONNAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -204,7 +205,20 @@ function irr(cf){
 }
 function econ(kW, kWhUsable, annSav, lossCost){
   var dod = nv('dod',90)/100;
-  var name = kWhUsable/dod;
+  /* Nameplate is not usable energy divided by depth of discharge. That
+     skips the DISCHARGE half of the round trip, which is sqrt(RTE), and it
+     under-sizes the pack by about 6.6% at 88% - small enough to read as
+     rounding, large enough to under-price every project the tool prices.
+     The C-rate floor comes with it: a 0.5C battery cannot deliver its kW
+     out of a pack sized only for its kWh, so a short-duration candidate
+     has to grow whether the energy needs it or not.
+     Both live in bess-capacity.js, shared with the design engine, so the
+     sizer and the equipment schedule cannot disagree about nameplate. */
+  var cap = CAP.chainKwh(kWhUsable, kW, {
+    dodPct: nv('dod',90), rtePct: nv('rte',88),
+    otherEffPct: nv('otherEff',100), cRate: nv('cRate',0.5)
+  });
+  var name = cap.nameplateKwh;
   var capex = name*nv('cKwh',450) + kW*nv('cKw',0);
   var itc = nv('itc',30)/100;
   /* A contingent incentive is not equity until it is awarded. The haircut is
@@ -233,6 +247,9 @@ function econ(kW, kWhUsable, annSav, lossCost){
   var r = irr(cf);
   return {
     kW:kW, kWh:kWhUsable, nameplate:name, capex:capex, net:net, om:om,
+    cRateBound:cap.cRateBound, binding:cap.binding,
+    effectiveCRate: name>0 ? Math.round(kW/name*10000)/10000 : 0,
+    cRateFloorKwh: cap.cRateFloorKwh,
     incGross:incGross, incNet:incNet,
     annSav:annSav, lossCost:lossCost, yr1:yr1,
     payback: payback, npv:npv, irr:r,
@@ -326,6 +343,44 @@ function pickBest(sweep){
   if(!best){
     best = sweep[0];
     for(i=0;i<sweep.length;i++) if(sweep[i].npv > best.npv) best = sweep[i];
+    return best;
+  }
+
+  /* NOTHING PENCILS IS NOT THE SAME AS "BUILD A TINY ONE".
+     On a flat demand tariff the return per dollar is CONSTANT across most
+     of the sweep - the battery shaves proportionally until the load
+     duration curve flattens - so when that constant return sits below the
+     hurdle, every size is equally unviable and NPV just approaches zero
+     from below as the battery approaches nothing. Ranking by NPV then
+     returns 17 kW, and ranking by payback returns much the same. Neither
+     is an answer; both are artefacts of ranking a set with no winner.
+     When no size clears the hurdle, show the DEEPEST size that still holds
+     the best available return per dollar. That says something true and
+     useful next to the banner reporting that none of them pay back: this
+     is the most the site can do, and this is how far short it falls. */
+  var anyViable = false;
+  for(i=0;i<sweep.length;i++) if(sweep[i].npv > 0){ anyViable = true; break; }
+  if(!anyViable){
+    var bestRatio = 0;
+    for(i=0;i<sweep.length;i++){
+      var c0 = sweep[i];
+      if(!(c0.net > 0) || c0.annSav <= 0) continue;
+      var r0 = c0.annSav / c0.net;
+      if(r0 > bestRatio) bestRatio = r0;
+    }
+    if(bestRatio > 0){
+      var deepest = null;
+      for(i=0;i<sweep.length;i++){
+        var c1 = sweep[i];
+        if(!(c1.net > 0) || c1.annSav <= 0) continue;
+        /* Within half a percent of the best return counts as the same
+           return; among those, take the most capable system. */
+        if(c1.annSav / c1.net >= bestRatio * 0.995){
+          if(!deepest || c1.kW > deepest.kW) deepest = c1;
+        }
+      }
+      if(deepest) best = deepest;
+    }
   }
   return best;
 }
@@ -348,9 +403,10 @@ function breakEven(R, b, REC){
   }
   var needSav = (REC.net + (b.lossCost + REC.om)*B) / A;
   var mult = b.annSav > 0 ? needSav/b.annSav : Infinity;
-  /* cost side: net = nameplate * $/kWh * (1-itc) */
-  var dod = nv('dod',90)/100;
-  var nameplate = REC.kWh/dod;
+  /* cost side: net = nameplate * $/kWh * (1-itc). Read the nameplate the
+     economics were actually priced against rather than deriving a second,
+     lower one here - that is how the break-even cost came out optimistic. */
+  var nameplate = REC.nameplate;
   var affordNet = b.annSav*A - (b.lossCost + REC.om)*B;
   var retention=1-nv('itc',30)/100;
   var costBe=nameplate>0&&retention>0 ? (affordNet+REC.incNet-REC.kW*nv('cKw',0)*retention)/(nameplate*retention) : null;

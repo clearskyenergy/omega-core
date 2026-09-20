@@ -115953,16 +115953,30 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
  * ====================================================================== */
 (function () {
 'use strict';
+  /* These are the inputs to the ONE sizing engine, shared with the
+     standalone Battery Sizer. The financial fields used to be absent
+     here, which meant this screen reported payback on GROSS cost with no
+     incentive, no O&M and no discounting, while the other screen reported
+     it net of all four. Same site, two answers. They are on the form now
+     because a hidden assumption that moves payback by three years is not
+     a default, it is a finding waiting to happen. */
   function defaultTariff() {
     return {
       demandChargePerKw: 18,      /* $/kW-month                            */
-      energyRate: 0.11,           /* $/kWh flat, used only for arbitrage   */
+      energyRate: 0.11,           /* $/kWh, prices round-trip losses        */
       touSpread: 0,               /* $/kWh on-peak minus off-peak          */
       ratchetPct: 0,              /* 0 = no ratchet; 0.8 = 80% of 11-mo max */
-      capexPerKwh: 400,           /* installed $/kWh                        */
+      capexPerKwh: 400,           /* installed $/kWh of NAMEPLATE           */
       capexPerKw: 250,            /* installed $/kW of power                */
       maxC: 0.5,                  /* power / energy limit, 0.5C = 2 h min   */
-      targetPaybackYr: 7
+      targetPaybackYr: 7,
+      dodPct: 90,                 /* usable depth of discharge              */
+      rtePct: 88,                 /* round-trip; its SQUARE ROOT is the     */
+                                  /* discharge leg that sets nameplate      */
+      itcPct: 30,                 /* investment tax credit                  */
+      omPerKwYr: 10,              /* O&M, $/kW-yr                           */
+      termYr: 10,                 /* analysis term                          */
+      discountPct: 8              /* discount rate for NPV                  */
     };
   }
 
@@ -116252,12 +116266,25 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
         fld('Max C-rate', 'maxC', 0.05) +
         fld('Target payback yr', 'targetPaybackYr', 0.5) +
       '</div>' +
+      '<div class="d4-grp" style="margin-top:12px">Battery and finance</div>' +
+      '<div class="e3-facets">' +
+        fld('Usable DoD %', 'dodPct', 1) +
+        fld('Round-trip %', 'rtePct', 1) +
+        fld('ITC %', 'itcPct', 1) +
+        fld('O&M $/kW-yr', 'omPerKwYr', 1) +
+        fld('Term yr', 'termYr', 1) +
+        fld('Discount %', 'discountPct', 0.5) +
+      '</div>' +
       '<div class="e3-facets" style="margin-top:10px">' +
         '<div style="flex:1"></div>' +
         '<button class="e3-btn pri" data-sz-act="run">Size the battery</button>' +
       '</div>' +
       '<div class="e3-note warn" style="margin-top:8px">A ratchet clause means one un-shaved peak ' +
-      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>';
+      'sets the billed floor for a year. Leave it at 0 only if the tariff genuinely has none.</div>' +
+      '<div class="e3-note info" style="margin-top:6px">Installed $/kWh is priced against ' +
+      '<b>nameplate</b>, not usable energy. Nameplate is the usable figure divided by depth of ' +
+      'discharge and again by the square root of round-trip efficiency — the discharge half of ' +
+      'the trip — so at 90% and 88% a 1,000 kWh duty is a 1,185 kWh pack.</div>';
   }
 
   function fld(label, key, step) {

@@ -1,8 +1,8 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var auth = require('./_lib/verify-token');
-var engine = require('./_lib/bess-engine');
 var toolEngine = require('./_lib/battery-tool-engine');
+var adapter = require('./_lib/bess-size-adapter');
 module.exports = function(req,res){
   res.setHeader('Cache-Control','private, no-store');
   if(req.method!=='POST') return res.status(405).json({error:'POST required'});
@@ -13,9 +13,10 @@ module.exports = function(req,res){
     var b=req.body||{};
     if (b.mode==='tool-interval' || b.mode==='tool-monthly') {
       if(!Array.isArray(b.data)||!b.data.length||b.data.length>24||!Array.isArray(b.durations)||!b.durations.length||b.durations.length>6||b.durations.some(function(v){return [1,2,3,4,6,8].indexOf(v)<0;}))throw auth.httpError(400,'Invalid months or battery durations.');
-      var cfg=b.settings||{}, numberKeys=['rte','dod','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin'];
+      var cfg=b.settings||{}, numberKeys=['rte','dod','cRate','otherEff','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin'];
       numberKeys.forEach(function(k){if(cfg[k]!=null&&cfg[k]!==''&&(!isFinite(Number(cfg[k]))||Number(cfg[k])<0))throw auth.httpError(400,'Invalid '+k);});
-      ['rte','dod'].forEach(function(k){if(cfg[k]!=null&&(!(Number(cfg[k])>0)||Number(cfg[k])>100))throw auth.httpError(400,k+' must be greater than zero and at most 100');});
+      ['rte','dod','otherEff'].forEach(function(k){if(cfg[k]!=null&&(!(Number(cfg[k])>0)||Number(cfg[k])>100))throw auth.httpError(400,k+' must be greater than zero and at most 100');});
+      if(cfg.cRate!=null&&cfg.cRate!==''&&(!(Number(cfg.cRate)>0)||Number(cfg.cRate)>10))throw auth.httpError(400,'C-rate must be greater than zero and at most 10.');
       ['ratchet','itc','incHair','fade'].forEach(function(k){if(Number(cfg[k])>100)throw auth.httpError(400,k+' exceeds 100%');});
       if(cfg.term!=null&&(!(Number(cfg.term)>=1)||Number(cfg.term)>50))throw auth.httpError(400,'Analysis term must be 1 to 50 years.');
       if(cfg.subBlock!=null&&!(Number(cfg.subBlock)>0))throw auth.httpError(400,'Subscription block must be positive.');
@@ -31,8 +32,53 @@ module.exports = function(req,res){
       if(count>105408)throw auth.httpError(400,'Too many interval readings.');
       return res.status(200).json(toolEngine(b));
     }
-    if(['interval','monthly'].indexOf(b.mode)<0 || !Array.isArray(b.data) || b.data.length>(b.mode==='interval'?105408:12)) throw auth.httpError(400,'Invalid sizing request or too many readings.');
-    var result=b.mode==='interval'?engine.sizeFromInterval(b.data,b.opts):engine.sizeFromMonthly(b.data,b.opts);
-    return res.status(result.ok?200:422).json(result);
+    /* The site-map editor's two modes. They used to fork into bess-engine.js,
+       a second sizing model that disagreed with the standalone tool by 24%
+       on bills and 52% on interval data. Both now run the SAME engine; the
+       adapter translates in and out so the editor's UI is unchanged. */
+    if(['interval','monthly'].indexOf(b.mode)<0 || !Array.isArray(b.data) || !b.data.length || b.data.length>(b.mode==='interval'?105408:12)) throw auth.httpError(400,'Invalid sizing request or too many readings.');
+    var o=b.opts||{}, tariff=o.tariff||{};
+    ['demandChargePerKw','energyRate','capexPerKwh','capexPerKw','maxC','targetPaybackYr','ratchetPct','touSpread','dodPct','rtePct','otherEffPct','itcPct','omPerKwYr','termYr','discountPct','fadePctYr','escalPctYr'].forEach(function(k){
+      if(tariff[k]==null||tariff[k]==='')return;
+      var v=Number(tariff[k]);
+      if(!isFinite(v)||v<0)throw auth.httpError(400,'Tariff value '+k+' must be a finite nonnegative number.');
+    });
+    if(tariff.maxC!=null&&tariff.maxC!==''&&(!(Number(tariff.maxC)>0)||Number(tariff.maxC)>10))throw auth.httpError(400,'Max C-rate must be greater than zero and at most 10.');
+    if(tariff.ratchetPct!=null&&Number(tariff.ratchetPct)>1)throw auth.httpError(400,'Ratchet is a fraction between 0 and 1.');
+    ['dodPct','rtePct','otherEffPct','itcPct'].forEach(function(k){if(tariff[k]!=null&&tariff[k]!==''&&Number(tariff[k])>100)throw auth.httpError(400,k+' cannot exceed 100.');});
+
+    /* A request the engine accepts but cannot turn into a size is
+       unprocessable, not a server fault: surface it as 422 with the
+       engine's own reason rather than a generic 500. A MALFORMED request
+       (no readings at all, a negative kW) is refused as 400 above, before
+       the engine is asked. */
+    function size(mode, data, opts2, basis){
+      var raw;
+      try{
+        raw = toolEngine({mode:mode, data:data, durations:adapter.DURATIONS,
+                          settings:adapter.toSettings(tariff)});
+      }catch(err){
+        throw auth.httpError(422, err && err.message
+          ? 'Could not size from this data: ' + err.message
+          : 'Could not size from this data.');
+      }
+      if(!raw || !raw.best) throw auth.httpError(422,'Could not size from this data.');
+      return adapter.adapt(raw, opts2, basis);
+    }
+
+    var legacy;
+    if(b.mode==='interval'){
+      if(b.data.some(function(v){return typeof v!=='number'||!isFinite(v)||v<0;}))throw auth.httpError(400,'Load readings must be finite nonnegative kW.');
+      var iv=Number(o.intervalMin);
+      if(o.intervalMin!=null&&[5,10,15,20,30,60].indexOf(iv)<0)throw auth.httpError(400,'Interval length must be 5, 10, 15, 20, 30 or 60 minutes.');
+      var series=adapter.intervalToMonths(b.data,o.intervalMin,o.startMonth);
+      if(!series.length)throw auth.httpError(400,'Not enough interval data to cover a billing month.');
+      legacy=size('tool-interval',series,o,'interval');
+    }else{
+      if(b.data.some(function(r){return !r||!(Number(r.demandKw)>0)||!isFinite(Number(r.demandKw))||!(Number(r.kwh)>=0)||!isFinite(Number(r.kwh));}))throw auth.httpError(400,'Each month needs a billed demand above zero and a nonnegative usage figure.');
+      var bills=adapter.monthlyToBills(b.data,tariff);
+      legacy=size('tool-monthly',bills,o,'monthly');
+    }
+    return res.status(200).json(legacy);
   }).catch(function(e){res.status(e.status||500).json({error:e.status?e.message:'Sizing failed; check the inputs and retry.'});});
 };
