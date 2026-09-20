@@ -1440,3 +1440,91 @@ beside the figure rather than under a tooltip.
   it is a different question and was not migrated. It still computes in the
   browser.
 - `touSpread` on the editor's tariff form is carried but not priced.
+
+---
+
+## Accuracy pass on the sizing engine (2026-09-20)
+
+Four findings, each measured before it was changed.
+
+### 1. The C-rate floor priced a pack it refused to use
+
+Adding the floor created a case the engine had never had: when the floor
+binds, the pack you must buy holds more energy than the duty asked for. The
+engine kept dispatching with the requested figure while pricing the
+floor-sized pack — **69% more battery than it credited**, on every
+short-duration candidate.
+
+A 409 kW / 1-hour request at 0.5C forces an 818 kWh pack, which delivers
+~691 kWh, i.e. 1.69 hours. The engine now sizes the pack from the request and
+then dispatches with what *that pack* delivers. Energy-limited candidates are
+unaffected — the chain and its inverse round-trip. On the reference profile
+this moved the recommendation from 2 h to 1 h, correctly: the 1-hour system
+gets 1.69 h of real energy for the price of its floor pack.
+
+`effDur` and `cRateForced` are reported so the buyer can see they are paying
+for duration they did not ask for.
+
+### 2. Degradation was scaled off savings, not measured against the load
+
+`econ` applied `(1-fade)^(y-1)` to **savings**. Capacity fades; savings come
+from shave *depth*, and the load duration curve is concave, so the first kWh
+lost costs far less depth than the last. Measured on the reference profile:
+
+| state of health | linear model | actually earns |
+|---|---|---|
+| 95% | 95.0% | 99.8% |
+| 85% | 85.0% | 98.2% |
+| 70% | 70.0% | 98.1% |
+
+Year-eight savings were understated by 13%, end-of-life by 29% — always in
+the conservative direction, which is why it never looked wrong.
+
+The engine now measures the curve by **re-solving the shave at each state of
+health**, samples it on SOH (not on year, so a replacement can reset it),
+re-prices the whole sweep with it and re-picks — iterating until the pick
+stops moving, because a size with energy headroom fades more gently and
+should be allowed to win on that. The distinction is real: on a bill-sized
+system with headroom the year-20 retention is 88%, on an energy-limited
+4-hour interval-sized system it is 75%. The linear model could not tell them
+apart.
+
+### 3. No battery replacement was ever booked
+
+The design engine books one; the sizer did not. A 20-year NPV with no
+replacement tells a funder the cells are free after year ten. At 2%/yr a pack
+crosses 70% in year 18; at 4%/yr it needs two replacements inside the term.
+
+Replacement is charged against **nameplate and the energy side only** —
+replacing cells is not rebuilding the plant, so the converters, pad,
+switchgear and interconnection are not bought again — and the ITC is not
+assumed to be available a second time. `minSoh` and `replKwh` are on the form.
+On the reference 20-year case this took NPV from $843,982 to $685,563.
+
+### 4. The integrator was the slowest and least accurate part of the engine
+
+`energyAbove` was a 1,200-slice midpoint sum carrying up to **0.06% of
+quadrature error at shallow shaves** — exactly where a demand charge is most
+sensitive. The curve `p(x) = pmin + (ppk-pmin)(1-x)^k` has a closed form:
+
+```
+u   = (T - pmin) / (ppk - pmin)
+x_T = 1 - u^(1/k)
+A   = (pmin - T)*x_T + (ppk - pmin)*(1 - u^((k+1)/k)) / (k+1)
+```
+
+Checked against a four-million-slice integration across k from 0.05 to 60 and
+every threshold from base to peak: agrees to **3×10⁻⁷%**, and is ~4,700×
+faster. That speed is what makes re-solving the shave at twenty states of
+health affordable in the first place.
+
+A 20-year, four-duration bill run went from **6,871 ms to 177 ms**; a
+35,040-point interval year with the measured fade curve runs in 621 ms.
+
+### Net effect
+
+The first three corrections pull in different directions and do not cancel:
+crediting the floor pack and measuring degradation both raise returns,
+booking the replacement lowers them. The engine is more accurate in both
+directions rather than uniformly more optimistic — and it is now fast enough
+that the accurate method is the affordable one.

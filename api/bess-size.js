@@ -26,11 +26,12 @@ module.exports = function(req,res){
     function scaleKw(v){ var n=Number(v); return isFinite(n) ? n*uf : v; }
     if (b.mode==='tool-interval' || b.mode==='tool-monthly') {
       if(!Array.isArray(b.data)||!b.data.length||b.data.length>24||!Array.isArray(b.durations)||!b.durations.length||b.durations.length>6||b.durations.some(function(v){return [1,2,3,4,6,8].indexOf(v)<0;}))throw auth.httpError(400,'Invalid months or battery durations.');
-      var cfg=b.settings||{}, numberKeys=['rte','dod','cRate','otherEff','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin'];
+      var cfg=b.settings||{}, numberKeys=['rte','dod','cRate','otherEff','minSoh','replKwh','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin'];
       numberKeys.forEach(function(k){if(cfg[k]!=null&&cfg[k]!==''&&(!isFinite(Number(cfg[k]))||Number(cfg[k])<0))throw auth.httpError(400,'Invalid '+k);});
       ['rte','dod','otherEff'].forEach(function(k){if(cfg[k]!=null&&(!(Number(cfg[k])>0)||Number(cfg[k])>100))throw auth.httpError(400,k+' must be greater than zero and at most 100');});
       if(cfg.cRate!=null&&cfg.cRate!==''&&(!(Number(cfg.cRate)>0)||Number(cfg.cRate)>10))throw auth.httpError(400,'C-rate must be greater than zero and at most 10.');
       ['ratchet','itc','incHair','fade'].forEach(function(k){if(Number(cfg[k])>100)throw auth.httpError(400,k+' exceeds 100%');});
+      if(cfg.minSoh!=null&&cfg.minSoh!==''&&(!(Number(cfg.minSoh)>0)||Number(cfg.minSoh)>100))throw auth.httpError(400,'Minimum state of health must be between 0 and 100%.');
       if(cfg.term!=null&&(!(Number(cfg.term)>=1)||Number(cfg.term)>50))throw auth.httpError(400,'Analysis term must be 1 to 50 years.');
       if(cfg.subBlock!=null&&!(Number(cfg.subBlock)>0))throw auth.httpError(400,'Subscription block must be positive.');
       var count=0;

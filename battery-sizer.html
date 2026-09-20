@@ -474,6 +474,10 @@ body.nohelp .hb{display:none}
         <div><label class="fl" data-help="otherEff">Other efficiency %</label><input type="number" id="otherEff" value="100" min="80" max="100" step="1"></div>
       </div>
       <div class="row">
+        <div><label class="fl" data-help="minSoh">Replace below SOH %</label><input type="number" id="minSoh" value="70" min="30" max="100" step="1"></div>
+        <div><label class="fl" data-help="replKwh">Replacement $/kWh</label><input type="number" id="replKwh" value="" placeholder="same as install" step="10"></div>
+      </div>
+      <div class="row">
         <div><label class="fl" data-help="cKwh">Cost $/kWh installed</label><input type="number" id="cKwh" value="450" step="10"></div>
         <div><label class="fl" data-help="cKw">Cost $/kW installed</label><input type="number" id="cKw" value="0" step="10"></div>
       </div>
@@ -803,6 +807,10 @@ var HELP = {
  'The three resistances in the protection CT secondary loop: the CT winding itself (Rct, from the CT datasheet), the round-trip lead resistance (Rl), and the relay burden (Rr, from the relay datasheet or its VA burden divided by the square of the secondary current).<p>Required knee-point voltage is 2 \u00d7 fault current at the secondary \u00d7 the sum of the three. They are placeholders until the CT and relay are chosen.</p>'],
 'dAlf':['Accuracy limit factor',
  'How many times rated current a protection CT stays accurate to before its core saturates. Common values are 10 and 20.<p>The tool computes what the fault current actually requires. If the stated ALF is lower, the CT saturates before full fault current and the relay sees a false low reading exactly when it needs a true one — use the Class PX knee-point specification instead.</p>'],
+'minSoh':['Replace below this state of health',
+ 'The usable-capacity fraction at which the pack is replaced. 70% is the common warranty end-of-life point.<p>The analysis watches the fade curve and books a replacement in the year it crosses this line, then resets the curve \u2014 so a twenty-year term on a pack that fades at 3%/yr shows the second one being bought in year thirteen. A term that never books a replacement is telling a funder the cells are free after year ten.</p>'],
+'replKwh':['Replacement cost',
+ 'Installed $/kWh for the replacement. Left blank it matches the original install cost.<p>It is charged against <b>nameplate</b>, and only the energy side: replacing cells is not rebuilding the plant, so the converters, the pad, the switchgear and the interconnection are not bought again. The investment tax credit is not assumed to be available a second time either \u2014 if you have a view on that, reduce this figure to reflect it.</p>'],
 'dataScale':['Scale of the numbers you enter',
  'Whether the demand and usage figures you type or paste are in <b>kW and kWh</b> or <b>MW and MWh</b>.<p>This is the single most expensive field on the page to get wrong. A campus load pasted as 40 into a kW field is a 40 kW battery instead of a 40 MW one, and both numbers look perfectly reasonable on screen — nothing goes red, the payback still computes, and the error only surfaces when somebody tries to order it.</p><p>Tariff rates are <b>never</b> scaled by this. Demand charges, energy rates and installed cost are quoted per kW and per kWh whatever the size of the site, so enter them that way in step 3 regardless of what you choose here.</p>'],
 'showScale':['Show results in',
@@ -2879,7 +2887,7 @@ var sizingRequest=0;
 function remoteSizing(mode,data){
  var user=window.firebase&&firebase.auth().currentUser;
  if(!user){alert('Sign in to run battery sizing.');return;}
- var settings={},keys=['rte','dod','cRate','otherEff','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin','obj','rateStruct','curRate'];
+ var settings={},keys=['rte','dod','cRate','otherEff','minSoh','replKwh','dRate','ratchet','eRate','cKwh','cKw','itc','incent','incHair','om','term','disc','fade','escal','headroom','baseFrac','pkHrs','dayUp','subBlock','subPrice','subMin','obj','rateStruct','curRate'];
  keys.forEach(function(k){var el=$(k);if(el)settings[k]=el.type==='checkbox'?el.checked:el.value;});
  settings.dataScale=undefined; delete settings.dataScale;
  var scaleEl=$('dataScale'), scale=scaleEl?scaleEl.value:'kw';
@@ -2966,8 +2974,11 @@ function render(){
   h += '<div class="card-b tight"><div class="spec">'
     +  '<div class="lbl" data-help="rSpec">Recommended system</div>'
     +  '<div class="big">'+pw(recKW,U)+' <em>'+uLabel(U)+'</em> / '+en(recKWh,U)+' <em>'+uLabelE(U)+'</em></div>'
-    +  '<div class="sub">'+b.dur+'-hour duration &middot; '+en(REC.nameplate,U)+' '+uLabelE(U)+' nameplate at '+fmt(dod*100)+'% usable DoD and '+fmt(nv('rte',88))+'% round-trip &middot; '
-    +  fmt(REC.effectiveCRate,2)+'C discharge'+(REC.cRateBound?' <span class="pill a">power-limited</span>':'')+'<br>'
+    +  '<div class="sub">'+(b.cRateForced
+         ? b.effDur+'-hour duration (you asked for '+b.dur+'; the '+fmt(nv('cRate',0.5),2)+'C limit forces a pack that holds more)'
+         : b.dur+'-hour duration')
+    +  ' &middot; '+en(REC.nameplate,U)+' '+uLabelE(U)+' nameplate at '+fmt(dod*100)+'% usable DoD and '+fmt(nv('rte',88))+'% round-trip &middot; '
+    +  fmt(REC.effectiveCRate,2)+'C discharge'+(b.cRateForced?' <span class="pill a">C-rate sets the size</span>':'')+'<br>'
     +  'Includes '+head+'% sizing headroom over the '+pw(b.kW,U)+' '+uLabel(U)+' / '+en(b.kWh,U)+' '+uLabelE(U)+' modeled optimum.</div>'
     +  '</div>';
 
@@ -3084,6 +3095,13 @@ function render(){
   h += bRow('Installed cost', money(REC.capex)+' gross \u00b7 '+money(REC.net)+' after '+fmt(nv('itc',30))+'% ITC');
   h += bRow('O&amp;M', money(REC.om)+'/yr at '+money(nv('om',10),2)+'/kW-yr');
   h += bRow('Headroom treatment', 'priced as built, credited with no additional savings');
+  h += bRow('Degradation', REC.degradation === 'measured'
+    ? 'measured &mdash; the shave is re-solved at each year\u2019s state of health, not scaled'
+    : 'scaled linearly with capacity (no measured curve available)');
+  h += bRow('Battery replacement', REC.replacements
+    ? REC.replacements + ' inside the ' + term + '-year term, first in year ' + REC.firstReplacementYear
+      + ' at ' + money(REC.replacementCost) + ' &mdash; booked below ' + fmt(REC.minSohPct) + '% state of health'
+    : 'none inside the ' + term + '-year term at ' + fmt(nv('fade',2),1) + '%/yr fade');
   h += '</tbody></table></div>';
   h += '</div>';
 
