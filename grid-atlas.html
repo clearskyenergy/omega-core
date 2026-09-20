@@ -24,11 +24,11 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>
   :root{
-    /* SAP-style light theme */
-    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f0f2f5; --line:#dfe3e8;
-    --ink:#1a2733; --muted:#5b6b7b; --dim:#9aa7b4;
-    --amp:#0a6ed1;        /* signature accent — SAP-style blue-grey, calm not gold */
-    --accent:#0a6ed1;
+    /* Full-screen atlas shell: quiet map, one focused inspection drawer. */
+    --bg:#d9e0e6; --panel:#102030; --panel2:#162b3c; --line:#36516a;
+    --ink:#ecf5fb; --muted:#a9bfd0; --dim:#718aa0;
+    --amp:#4ed4d0;
+    --accent:#4ed4d0;
     --tx:#e0533d;         /* transmission */
     --sub:#c98a2b;        /* substations */
     --plant:#1aa39a;      /* generation */
@@ -36,19 +36,19 @@
     --ev:#3d7fd6;         /* ev chargers */
     --bess:#2ea043;       /* storage */
     --ok:#2ea043; --warn:#c98a2b; --bad:#e0533d;
-    --topbar:#ffffff; --topbar-ink:#1a2733;
+    --topbar:#0d1b2a; --topbar-ink:#ecf5fb;
     --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden}
-  #map{position:absolute;top:60px;left:0;right:0;bottom:0;background:#e8ebef}
-  .leaflet-container{background:#e8ebef;font-family:var(--sans)}
+  #map{position:absolute;top:72px;left:0;right:0;bottom:0;background:#d9e0e6}
+  .leaflet-container{background:#d9e0e6;font-family:var(--sans)}
 
-  /* OMEGA topbar — clean white (SAP style) */
-  #topbar{position:absolute;top:0;left:0;right:0;height:60px;z-index:1200;
-    display:flex;align-items:center;gap:16px;padding:0 20px;
-    background:var(--topbar);border-bottom:1px solid var(--line);box-shadow:0 1px 3px rgba(26,39,51,.06)}
+  /* Compact full-screen atlas header. */
+  #topbar{position:absolute;top:0;left:0;right:0;height:72px;z-index:1200;
+    display:flex;align-items:center;gap:16px;padding:0 28px;
+    background:var(--topbar);border-bottom:1px solid var(--line);box-shadow:0 2px 12px rgba(0,0,0,.28)}
   .tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
   .tb-omega{height:30px;width:auto;display:block;border-radius:7px}
   .tb-logo-txt{color:var(--ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
@@ -72,15 +72,21 @@
     border-radius:20px;padding:6px 12px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;user-select:none;white-space:nowrap}
   .modechip.on{background:rgba(255,176,32,.16);border-color:var(--amp)}
 
-  /* Left layer rail */
-  #rail{position:absolute;left:12px;top:72px;z-index:1150;width:216px;
-    background:var(--panel);border:1px solid var(--line);border-radius:11px;overflow:hidden;
-    box-shadow:0 14px 40px rgba(0,0,0,.5);max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+  /* One left drawer: Project/site inspection first, layer controls in Settings. */
+  #rail{position:absolute;left:12px;top:84px;bottom:12px;z-index:1150;width:330px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.42);display:flex;flex-direction:column}
+  #rail.site-active #settingsShell{display:none}
+  #rail:not(.site-active) #panel{display:none!important}
+  #sideTabs{height:48px;display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:#0d1b2a;flex:0 0 auto}
+  .side-tab{flex:1;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);font:700 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  .side-tab:last-child{border-right:0}.side-tab.on{color:var(--accent);background:rgba(78,212,208,.08)}
+  #settingsShell{display:flex;flex:1;min-height:0;flex-direction:column}
   #layers{overflow-y:auto;flex:1 1 auto}
-  .rail-h{padding:10px 12px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+  .rail-h{padding:10px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
     text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex:0 0 auto}
   .rail-h .cnt{color:var(--dim)}
-  #presets{flex:0 0 auto;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  #presets{display:none}
   .preset-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
   #presetChips{display:flex;flex-wrap:wrap;gap:5px}
   .pchip{font-size:11px;padding:5px 9px;border-radius:14px;border:1px solid var(--line);background:var(--panel);
@@ -89,12 +95,12 @@
   .pchip.on{background:var(--amp);border-color:var(--amp);color:#fff;font-weight:700}
   .pchip .pi{font-size:11px}
   #railFilter{position:relative;flex:0 0 auto;border-bottom:1px solid var(--line)}
-  #railFilter input{width:100%;height:30px;border:0;background:var(--panel2);color:var(--ink);
+  #railFilter input{width:100%;height:36px;border:0;background:var(--panel2);color:var(--ink);
     padding:0 26px 0 12px;font-size:12px;font-family:var(--sans);outline:none}
   #railFilter input::placeholder{color:var(--dim)}
   #railFilter .fx{position:absolute;right:9px;top:7px;color:var(--dim);font-size:11px;cursor:pointer}
   /* category header (collapsible) */
-  .cat-h{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;
+  .cat-h{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;
     background:var(--panel2);border-bottom:1px solid var(--line);user-select:none}
   .cat-h:hover{background:var(--line)}
   .cat-h .car{font-size:9px;color:var(--muted);transition:transform .15s;width:8px}
@@ -102,7 +108,7 @@
   .cat-h .cnm{flex:1;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
   .cat-h .con{font-family:var(--mono);font-size:9px;color:var(--amp)}
   .cat-body.collapsed{display:none}
-  .lyr{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 20px;cursor:pointer;border-bottom:1px solid rgba(30,43,58,.5)}
+  .lyr{display:flex;align-items:center;gap:10px;padding:9px 14px 9px 22px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06)}
   .lyr:last-child{border-bottom:0}
   .lyr:hover{background:var(--panel2)}
   .lyr.hidden{display:none}
@@ -116,17 +122,18 @@
   .lyr:not(.off) .tick:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
     border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 
-  /* Analysis panel (right) */
-  #panel{position:absolute;right:12px;top:72px;bottom:12px;z-index:1150;width:326px;
-    background:var(--panel);border:1px solid var(--line);border-radius:11px;
-    display:flex;flex-direction:column;box-shadow:0 14px 40px rgba(0,0,0,.5);transform:translateX(360px);
-    transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  /* Site analysis occupies the same drawer—no competing floating cards. */
+  #panel{display:flex;position:static;z-index:auto;width:auto;min-height:0;flex:1;
+    background:var(--panel);border:0;border-radius:0;flex-direction:column;box-shadow:none;transform:none}
   #panel.open{transform:none}
-  .p-h{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .p-h{padding:15px 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
   .p-h .dot{width:8px;height:8px;border-radius:50%;background:var(--amp);box-shadow:0 0 10px var(--amp)}
   .p-h .ti{font-weight:700;font-size:13px}
   .p-h .x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
-  .p-b{padding:6px 14px 16px;overflow:auto;flex:1}
+  .p-b{padding:6px 16px 18px;overflow:auto;flex:1}
+  #projectControl{padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.025)}
+  #projectControl label{display:block;font:10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+  #projectSelect{width:100%;height:38px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink);padding:0 10px;font:600 13px var(--sans);outline:0}
   .coord{font-family:var(--mono);font-size:11px;color:var(--muted);margin:8px 0 14px;padding:8px 10px;
     background:var(--panel2);border:1px solid var(--line);border-radius:7px}
   .sec{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:16px 0 8px}
@@ -148,7 +155,7 @@
   .empty .t{font-size:13px;color:var(--muted);line-height:1.5}
 
   /* legend / status bottom-left */
-  #status{position:absolute;left:12px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
+  #status{position:absolute;left:354px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
     color:var(--muted);background:rgba(15,22,32,.88);border:1px solid var(--line);border-radius:7px;padding:7px 11px;
     display:flex;gap:12px;align-items:center;max-width:calc(100vw - 24px);overflow:hidden}
   #status .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
@@ -180,11 +187,10 @@
   .leaflet-bar a:hover{background:var(--line)}
 
   @media(max-width:720px){
-    #rail{width:170px;top:60px;left:8px}
-    #panel{width:calc(100vw - 16px);right:8px;top:auto;bottom:8px;height:52vh}
-    #panel.open{transform:none}
+    #topbar{height:60px;padding:0 12px;gap:9px}#map{top:60px}
+    #rail{width:calc(100vw - 16px);left:8px;top:auto;bottom:8px;height:54vh}
     #search{width:38vw}
-    .brand .sub{display:none}
+    .brand .sub{display:none}#status{left:12px;bottom:calc(54vh + 18px);max-width:calc(100vw - 24px)}
   }
   .pin-drop{cursor:crosshair!important}
   #eiaPanel{position:absolute;left:12px;bottom:52px;z-index:1150;width:236px;
@@ -218,26 +224,30 @@
   <a href="/" id="tb-back-link" class="tb-back">← Platform</a>
 </div>
 
-<div id="rail">
-  <div class="rail-h"><span>Grid Layers</span><span class="cnt" id="railCnt">—</span></div>
-  <div id="presets">
-    <div class="preset-lbl">Quick views</div>
-    <div id="presetChips"></div>
+<div id="rail" class="site-active">
+  <div id="sideTabs" role="tablist" aria-label="Grid Atlas controls">
+    <button class="side-tab on" data-tab="site" role="tab">Project</button>
+    <button class="side-tab" data-tab="settings" role="tab">Settings <span id="railCnt">—</span></button>
   </div>
-  <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
-  <div id="layers"></div>
-  <div class="rail-h" style="border-top:1px solid var(--line)"><span>Voltage</span></div>
-  <div id="voltLegend"></div>
+  <div id="settingsShell">
+    <div class="rail-h"><span>Selected layers</span><span class="cnt">Toggle map data</span></div>
+    <div id="presets"><div id="presetChips"></div></div>
+    <div id="railFilter"><input id="lyrFilter" placeholder="Filter layers…" autocomplete="off"><span class="fx" id="lyrFilterClear" style="display:none">✕</span></div>
+    <div id="layers"></div>
+    <div class="rail-h" style="border-top:1px solid var(--line)"><span>Voltage</span></div>
+    <div id="voltLegend"></div>
+  </div>
 </div>
 
 <div id="eiaPanel" style="display:none"></div>
 
 <div id="panel">
   <div class="p-h"><span class="dot"></span><span class="ti">Site Analysis</span><span class="x" id="pClose">✕</span></div>
+  <div id="projectControl"><label for="projectSelect">Screen for</label><select id="projectSelect" aria-label="Project type"></select></div>
   <div class="p-b" id="pBody">
     <div class="empty">
       <div class="big">◎</div>
-      <div class="t">Drop a pin anywhere on the map to score interconnection proximity — nearest substation, transmission voltage, generation, data-center clusters, and EV/BESS context.</div>
+      <div class="t">Choose a project type, then drop a pin anywhere on the map. Grid Atlas keeps fiber evidence, interconnection proximity, and data-center context together without implying service availability.</div>
     </div>
   </div>
 </div>
@@ -1386,31 +1396,26 @@ function applyPreset(p){
     if(anyOn) catCollapsed[cat.key]=false;
   });
   activePreset=p.key;
-  buildRail(); updateRailCounts(); renderPresetChips();
+  buildRail(); updateRailCounts(); renderProjectSelect();
   loadVisible();
   status("Preset: "+p.name+" — "+p.layers.length+" layers on",false);
 }
-function renderPresetChips(){
-  var el=document.getElementById("presetChips"); if(!el) return;
-  var h="";
+function renderProjectSelect(){
+  var el=document.getElementById("projectSelect"); if(!el) return;
+  var h='<option value="">Choose project profile…</option>';
   for(var i=0;i<PRESETS.length;i++){
     var p=PRESETS[i];
-    h+='<span class="pchip'+(activePreset===p.key?" on":"")+'" data-p="'+p.key+'">'+
-       '<span class="pi">'+p.icon+'</span>'+p.name+'</span>';
+    h+='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
   }
   el.innerHTML=h;
-  var chips=el.querySelectorAll(".pchip");
-  for(var j=0;j<chips.length;j++){
-    (function(chip){
-      chip.onclick=function(){
-        var key=chip.getAttribute("data-p");
-        var p=null; for(var k=0;k<PRESETS.length;k++){ if(PRESETS[k].key===key) p=PRESETS[k]; }
-        if(p) applyPreset(p);
-      };
-    })(chips[j]);
-  }
+  el.onchange=function(){
+    var key=el.value, p=null;
+    for(var j=0;j<PRESETS.length;j++){ if(PRESETS[j].key===key) p=PRESETS[j]; }
+    if(p) applyPreset(p);
+  };
 }
-function buildPresets(){ renderPresetChips(); }
+function renderPresetChips(){ renderProjectSelect(); }
+function buildPresets(){ renderProjectSelect(); }
 
 function buildRail(){
   layersEl.innerHTML="";
@@ -1443,7 +1448,7 @@ function buildRail(){
         el.className="lyr"+(L2.on?"":" off");
         if(L2.on){ groups[k].addTo(map); loadVisible(); }
         else { map.removeLayer(groups[k]); }
-        if(activePreset){ activePreset=null; renderPresetChips(); } // manual edit breaks preset match
+        if(activePreset){ activePreset=null; renderProjectSelect(); } // manual edit breaks preset match
         updateRailCounts();
       };
       body.appendChild(el);
@@ -1980,9 +1985,22 @@ function fmtKm(km){ return km<1?Math.round(km*1000)+" m":km.toFixed(1)+" km"; }
 function copy(t){ try{var i=document.createElement("textarea");i.value=t;document.body.appendChild(i);i.select();document.execCommand("copy");document.body.removeChild(i);}catch(e){} }
 
 /* ---------- Panel ---------- */
-var panel=document.getElementById("panel");
-function openPanel(){ panel.className="open"; }
-document.getElementById("pClose").onclick=function(){ panel.className=""; };
+var panel=document.getElementById("panel"), rail=document.getElementById("rail");
+/* Keep site analysis in the same left drawer as the selected project. */
+if(rail&&panel) rail.appendChild(panel);
+function setDrawer(tab){
+  var site=tab!=="settings";
+  rail.className=site?"site-active":"";
+  var tabs=document.querySelectorAll(".side-tab");
+  for(var i=0;i<tabs.length;i++) tabs[i].className="side-tab"+(tabs[i].getAttribute("data-tab")===tab?" on":"");
+  if(!site) setTimeout(function(){ map.invalidateSize(); },10);
+}
+function openPanel(){ panel.className="open"; setDrawer("site"); }
+document.getElementById("pClose").onclick=function(){ setDrawer("settings"); };
+(function wireDrawerTabs(){
+  var tabs=document.querySelectorAll(".side-tab");
+  for(var i=0;i<tabs.length;i++) tabs[i].onclick=function(){ setDrawer(this.getAttribute("data-tab")); };
+})();
 
 /* ---------- Geocode search (OSM Nominatim) with fallback chain ----------
    Full street addresses often miss in OSM (new industrial streets aren't mapped).
