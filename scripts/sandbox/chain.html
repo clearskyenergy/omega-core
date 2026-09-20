@@ -1,0 +1,718 @@
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     Published as an Artifact; it is not served from this repo. Every figure
+     on it is invented for the demo — no tenant cost basis appears here. -->
+<title>Clean Cell Order Chain</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap">
+<style>
+  :root{
+    --d:'Poppins',ui-sans-serif,system-ui,sans-serif;
+    --b:'Inter',ui-sans-serif,system-ui,sans-serif;
+    --m:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+    /* Neutrals biased toward the Clean Cell teal rather than a default grey */
+    --paper:#FBFDFD; --card:#FFFFFF; --ink:#0B2733; --ink2:#42606B; --ink3:#89A2AB;
+    --line:#DFEBEF; --line2:#EEF5F7;
+    --cc:#2F9FB7; --cc-soft:#E3F4F8;       /* Clean Cell cyan   */
+    --coral:#E24D41; --coral-soft:#FCEAE8; /* Clean Cell coral  */
+    --cs:#1B57C9; --cs-soft:#E6EDFB;       /* ClearSky blue     */
+    --warm:#F7F5EF;                        /* ClearSky paper    */
+    --gap:#8A6A08; --gap-soft:#FBF2DA;
+  }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --paper:#081419; --card:#0E2029; --ink:#E9F3F6; --ink2:#AAC3CC; --ink3:#7793A0;
+    --line:#1D343E; --line2:#152730;
+    --cc:#54C4DA; --cc-soft:#0D2E37; --coral:#FF8073; --coral-soft:#331916;
+    --cs:#6EA3F2; --cs-soft:#122139; --warm:#141C22;
+    --gap:#E0B458; --gap-soft:#2C2411;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#081419; --card:#0E2029; --ink:#E9F3F6; --ink2:#AAC3CC; --ink3:#7793A0;
+    --line:#1D343E; --line2:#152730;
+    --cc:#54C4DA; --cc-soft:#0D2E37; --coral:#FF8073; --coral-soft:#331916;
+    --cs:#6EA3F2; --cs-soft:#122139; --warm:#141C22;
+    --gap:#E0B458; --gap-soft:#2C2411;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.65 var(--b)}
+  .wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:0}
+  h1,h2,h3,h4{margin:0;font-family:var(--d);line-height:1.15;letter-spacing:-.025em;text-wrap:balance}
+  h1{font-size:clamp(32px,5vw,52px);font-weight:700}
+  h2{font-size:clamp(22px,2.8vw,30px);font-weight:600}
+  h3{font-size:19px;font-weight:600}
+  p{margin:0}
+  a{color:var(--cc)}
+  .lead{color:var(--ink2);font-size:clamp(16px,1.7vw,18.5px);max-width:64ch}
+  .mut{color:var(--ink3)}
+  .sm{font-size:14px} .xs{font-size:12.5px}
+  .eyebrow{font:600 11px var(--m);letter-spacing:.2em;text-transform:uppercase;color:var(--ink3)}
+  code{font:500 12.5px var(--m);background:var(--line2);padding:2px 6px;border-radius:4px;
+    word-break:break-word;color:var(--ink2)}
+
+  /* ── masthead ───────────────────────────────────────────────────────── */
+  header.top{border-bottom:1px solid var(--line);background:var(--card)}
+  header.top .wrap{padding-block:clamp(34px,5vw,60px)}
+  .kicker{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+  .brandbolt{width:12px;height:24px;color:var(--ink)}
+  .kicker .nm{font:700 17px var(--d);letter-spacing:-.02em}
+  .kicker .nm i{color:var(--cc);font-style:normal}
+  .kicker .x{color:var(--ink3);font-size:13px}
+  .kicker .cs{font:700 16px var(--b);letter-spacing:-.02em}
+  .kicker .cs i{color:var(--cs);font-style:normal}
+  header.top p.lead{margin-top:18px}
+  .cta{display:inline-flex;align-items:center;gap:9px;margin-top:26px;background:var(--cc);color:#fff;
+    text-decoration:none;font:600 15px var(--b);padding:12px 22px;border-radius:999px}
+  .cta:hover{filter:brightness(.93)}
+  .cta .arw{font-size:17px;line-height:1}
+
+  /* ── lane map ───────────────────────────────────────────────────────── */
+  .mapsec{background:var(--card);border-bottom:1px solid var(--line)}
+  .mapsec .wrap{padding-block:clamp(28px,4vw,44px)}
+  .mapscroll{overflow-x:auto;margin-top:22px;padding-bottom:6px}
+  .map{display:grid;grid-template-columns:132px repeat(13,minmax(50px,1fr));
+    row-gap:0;min-width:760px}
+  .lane-h{font:600 11px var(--m);letter-spacing:.09em;text-transform:uppercase;color:var(--ink2);
+    display:flex;align-items:center;gap:7px;padding:0 12px 0 0;border-right:1px solid var(--line);
+    height:52px;white-space:nowrap}
+  .lane-h .sw{width:9px;height:9px;border-radius:2px;flex:none}
+  .cell{height:52px;position:relative;border-bottom:1px solid var(--line2)}
+  .cell:after{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:var(--line2)}
+  .cell.on:after{background:currentColor;opacity:.28}
+  .node{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:26px;height:26px;
+    border-radius:50%;display:grid;place-items:center;font:600 11px var(--m);color:#fff;
+    text-decoration:none;z-index:1;background:currentColor}
+  .node span{color:#fff}
+  .node:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .l-cust{color:var(--cc)} .l-off{color:var(--ink2)} .l-plant{color:var(--coral)} .l-cs{color:var(--cs)}
+  .maplegend{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:16px;font-size:13px;color:var(--ink2)}
+  .maplegend b{font-weight:600}
+
+  /* ── steps ──────────────────────────────────────────────────────────── */
+  .steps{padding-block:clamp(30px,4vw,52px)}
+  .step{margin-bottom:14px;scroll-margin-top:20px}
+  .sh{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:14px}
+  .no{font:600 13px var(--m);color:#fff;background:var(--ink);width:30px;height:30px;border-radius:50%;
+    display:grid;place-items:center;flex:none;align-self:flex-start;margin-top:1px}
+  .step.cust .no{background:var(--cc)} .step.off .no{background:var(--ink2)}
+  .step.plant .no{background:var(--coral)} .step.cs .no{background:var(--cs)}
+  .sh .who{font:600 11px var(--m);letter-spacing:.11em;text-transform:uppercase}
+  .step.cust .who{color:var(--cc)} .step.off .who{color:var(--ink2)}
+  .step.plant .who{color:var(--coral)} .step.cs .who{color:var(--cs)}
+  .sh h3{flex-basis:100%;margin-left:44px}
+  .body{margin-left:44px}
+  @media (max-width:560px){ .sh h3,.body{margin-left:0} }
+  .grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start;margin-top:14px}
+  @media (max-width:820px){ .grid2{grid-template-columns:minmax(0,1fr)} }
+  .says{display:flex;flex-direction:column;gap:14px}
+  .says .t{font:600 10.5px var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);
+    display:block;margin-bottom:5px}
+  .says p{font-size:15px;color:var(--ink2)}
+  .says p b{color:var(--ink);font-weight:600}
+  .sysline{border-left:2px solid var(--line);padding-left:14px}
+  .step.cust .sysline{border-color:var(--cc)} .step.off .sysline{border-color:var(--ink2)}
+  .step.plant .sysline{border-color:var(--coral)} .step.cs .sysline{border-color:var(--cs)}
+
+  /* ── hand-off between steps ─────────────────────────────────────────── */
+  .handoff{display:flex;align-items:center;gap:12px;margin:0 0 14px 44px;padding:10px 0}
+  @media (max-width:560px){ .handoff{margin-left:0} }
+  .handoff .ln{flex:none;width:2px;height:34px;background:var(--line);margin-left:14px}
+  .handoff .pill{font:500 12.5px var(--b);color:var(--ink2);background:var(--line2);
+    border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+  .handoff .pill b{font:600 11px var(--m);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);
+    margin-right:7px}
+
+  /* ── the screen mocks. Pinned light in both themes: they are pictures of
+        two light products, and inverting them would show a brand that does
+        not exist. ────────────────────────────────────────────────────── */
+  .shot{--s-paper:#FFFFFF;--s-sunk:#F1FAFC;--s-ink:#0B2733;--s-ink2:#3F5D68;--s-ink3:#86A0A9;
+    --s-line:#DCECF1;--s-line2:#EFF8FA;--s-brand:#3FAFC6;--s-brand-soft:#E2F4F8;--s-accent:#EE5A4F;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#EDEFF1;
+    box-shadow:0 1px 2px rgba(11,39,51,.05),0 14px 34px -22px rgba(11,39,51,.4)}
+  .shot.omega{--s-paper:#FFFFFF;--s-sunk:#F7F5EF;--s-ink:#10161C;--s-ink2:#44505C;--s-ink3:#7C8794;
+    --s-line:#E2E1D8;--s-line2:#F1EFE7;--s-brand:#1B57C9;--s-brand-soft:#E6EDFB;--s-accent:#E4502A}
+  .bar{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#EDEFF1}
+  .bar i{width:8px;height:8px;border-radius:50%;background:#C8CED3;flex:none}
+  .bar i:first-child{background:#F0645A} .bar i:nth-child(2){background:#F1BE4F}
+  .bar i:nth-child(3){background:#5FC474}
+  .bar .u{flex:1;min-width:0;background:#fff;border:1px solid #E1E5E8;border-radius:999px;
+    padding:4px 12px;font:500 11px var(--m);color:#5A646D;text-align:center;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .bar .u b{color:#1B242B;font-weight:600}
+  .pane{background:var(--s-paper);color:var(--s-ink);padding:16px;font-family:var(--b);font-size:13px}
+  .pane.sunk{background:var(--s-sunk)}
+  .pane.grid{background:var(--s-sunk);
+    background-image:linear-gradient(rgba(27,87,201,.07) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(27,87,201,.07) 1px,transparent 1px);
+    background-size:22px 22px}
+  .mk{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding-bottom:11px;margin-bottom:13px;border-bottom:1px solid var(--s-line)}
+  .wm{font:700 17px var(--d);letter-spacing:-.03em;color:var(--s-ink);display:flex;align-items:flex-end;gap:1px}
+  .wm .c1{color:var(--s-brand)} .wm svg{width:8px;height:17px;color:var(--s-ink)}
+  .wm .us{font:600 7px var(--d);margin-left:2px;padding-bottom:2px}
+  .omg{font:700 14px var(--b);letter-spacing:-.02em;color:var(--s-ink)}
+  .omg i{color:var(--s-brand);font-style:normal}
+  .burger{display:flex;flex-direction:column;gap:2.5px}
+  .burger b{width:16px;height:2.5px;border-radius:2px;background:var(--s-accent)}
+  .btn{display:inline-block;background:var(--s-brand);color:#fff;border-radius:999px;
+    padding:6px 13px;font:600 11.5px var(--b)}
+  .btn.o{background:transparent;color:var(--s-ink);border:1px solid var(--s-line)}
+  .btn.sq{border-radius:4px;background:var(--s-accent)}
+  .hl{font:700 20px var(--d);letter-spacing:-.03em;line-height:1.12;color:var(--s-ink)}
+  .hl em{color:var(--s-brand);font-style:normal;display:block}
+  .fld{background:var(--s-paper);border:1px solid var(--s-line);border-radius:7px;padding:7px 9px;
+    font-size:12px;color:var(--s-ink)}
+  .lbl{font:600 8.5px var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--s-ink3);
+    margin-bottom:4px}
+  .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .rowb{display:flex;gap:9px;align-items:flex-end}
+  .rowb>div{flex:1;min-width:0}
+  .box{background:var(--s-paper);border:1px solid var(--s-line);border-radius:9px;padding:12px}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12px;
+    border-bottom:1px solid var(--s-line2)}
+  .kv:last-child{border-bottom:0}
+  .kv span{color:var(--s-ink3)} .kv b{font-weight:600;font-variant-numeric:tabular-nums}
+  .chiprow{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font:600 9.5px var(--m);letter-spacing:.07em;text-transform:uppercase;border-radius:999px;
+    padding:3px 9px;background:var(--s-line2);color:var(--s-ink2)}
+  .chip.br{background:var(--s-brand-soft);color:var(--s-brand)}
+  .chip.ok{background:#E4F3EA;color:#12704A} .chip.bad{background:#FBE8E5;color:#A6241A}
+  .chip.wrn{background:#FBF0DA;color:#8C5A06}
+  .tl2{display:flex;flex-direction:column;gap:0;margin-top:3px}
+  .tl2 .s{display:flex;gap:9px;align-items:flex-start}
+  .tl2 .dt{width:9px;height:9px;border-radius:50%;background:var(--s-line);margin-top:4px;flex:none}
+  .tl2 .s.dn .dt{background:#12704A} .tl2 .s.nw .dt{background:var(--s-brand);
+    box-shadow:0 0 0 3px var(--s-brand-soft)}
+  .tl2 .s+.s{margin-top:8px}
+  .tl2 .tx{font-size:12px;color:var(--s-ink3)}
+  .tl2 .s.dn .tx,.tl2 .s.nw .tx{color:var(--s-ink);font-weight:600}
+  .verd{display:flex;gap:11px;align-items:center;border-radius:9px;padding:12px;border:1px solid}
+  .verd.bad{background:#FBE8E5;border-color:#E24D41;color:#A6241A}
+  .verd.ok{background:#E4F3EA;border-color:#12704A;color:#12704A}
+  .verd .m2{font:700 19px var(--m);flex:none}
+  .verd .t2{font:600 13px var(--b);line-height:1.3}
+  .verd .s2{font:500 10.5px var(--m);opacity:.75;margin-top:2px}
+  .board2{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+  .bc{background:var(--s-sunk);border:1px solid var(--s-line);border-radius:6px;padding:5px 3px;min-height:52px}
+  .bc .h2{font:600 6.5px var(--m);letter-spacing:.04em;text-transform:uppercase;color:var(--s-ink3);
+    line-height:1.2;margin-bottom:4px;min-height:16px}
+  .cp{font:600 8px var(--m);background:var(--s-brand);color:#fff;border-radius:3px;padding:2px 1px;
+    margin-bottom:2px;text-align:center}
+  .cp.h{background:var(--s-accent)}
+  .plan svg{display:block;width:100%;height:auto}
+  .tools2{display:flex;gap:10px}
+  .tools2 .tl3{flex:none;width:86px;display:flex;flex-direction:column;gap:3px}
+  .tools2 .tl3 div{font-size:10px;color:var(--s-ink2);padding:4px 6px;border-radius:5px}
+  .tools2 .tl3 div.on{background:var(--s-brand);color:#fff;font-weight:600}
+  .tools2 .tl3 div.off{opacity:.35}
+  .cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .cards3 .c3{border:1px solid var(--s-line);border-radius:7px;padding:8px;background:var(--s-paper)}
+  .cards3 .c3 .nm2{font:600 11px var(--b);margin-top:2px}
+  .cards3 .c3 .pr2{font:600 11px var(--b);margin-top:5px}
+
+  /* ── closing sections ───────────────────────────────────────────────── */
+  .real{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .real .wrap{padding-block:clamp(30px,4vw,50px)}
+  .two3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:22px}
+  .rc{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--paper)}
+  .rc h4{font-size:15px;margin-bottom:9px}
+  .rc ul{margin:0;padding-left:18px;font-size:14.5px;color:var(--ink2);line-height:1.7}
+  .rc ul li::marker{color:var(--ink3)}
+  .gapbox{border:1px solid var(--gap);background:var(--gap-soft);border-radius:12px;padding:20px;
+    margin-top:26px}
+  .gapbox .t{font:600 10.5px var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--gap);
+    display:block;margin-bottom:8px}
+  .gapbox p{font-size:15px;color:var(--ink2);max-width:70ch}
+  .gapbox p b{color:var(--ink)}
+  footer{padding-block:34px}
+  footer .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--ink3)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;
+    scroll-behavior:auto!important}}
+  html{scroll-behavior:smooth}
+</style>
+
+<header class="top"><div class="wrap">
+  <div class="kicker">
+    <span class="nm"><i>Clean</i>ce<svg class="brandbolt" viewBox="0 0 26 46" aria-hidden="true"><path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg><span style="font:600 8px var(--d)">US</span></span>
+    <span class="x">powered by</span>
+    <span class="cs">Ω ClearSky <i>OMEGA</i></span>
+  </div>
+  <div class="eyebrow">Order to shipped · thirteen steps</div>
+  <h1 style="margin-top:12px">One order, four companies, nobody typing a status.</h1>
+  <p class="lead">A customer sizes a battery on Clean Cell's own website and never sees ours. Their
+    request becomes a works order on Clean Cell's floor. A technician pulls a trigger on a scanner,
+    and the ship date on a stranger's account moves. This is every hand-off in that chain, in order,
+    with the screen each one happens on.</p>
+  <a class="cta" href="https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x">Open the working demo <span class="arw">→</span></a>
+</div></header>
+
+<section class="mapsec"><div class="wrap">
+  <div class="eyebrow">The chain</div>
+  <h2 style="margin-top:8px">Who holds it, and when</h2>
+  <p class="lead sm" style="margin-top:10px">Four parties, thirteen hand-offs. The dot sits in the
+    lane that owns the step — jump to any of them.</p>
+  <div class="mapscroll"><div class="map">
+    <div class="lane-h"><span class="sw" style="background:var(--cc)"></span>Customer</div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s1"><span>1</span></a></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s2"><span>2</span></a></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s3"><span>3</span></a></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s4"><span>4</span></a></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s5"><span>5</span></a></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s12"><span>12</span></a></div>
+    <div class="cell l-cust on"><a class="node l-cust" href="#s13"><span>13</span></a></div>
+
+    <div class="lane-h"><span class="sw" style="background:var(--ink2)"></span>Clean Cell office</div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div>
+    <div class="cell l-off on"><a class="node l-off" href="#s6"><span>6</span></a></div>
+    <div class="cell"></div>
+    <div class="cell l-off on"><a class="node l-off" href="#s8"><span>8</span></a></div>
+    <div class="cell l-off on"><a class="node l-off" href="#s9"><span>9</span></a></div>
+    <div class="cell"></div>
+    <div class="cell l-off on"><a class="node l-off" href="#s11"><span>11</span></a></div>
+    <div class="cell"></div>
+    <div class="cell l-off on"><a class="node l-off" href="#s13"><span>13</span></a></div>
+
+    <div class="lane-h"><span class="sw" style="background:var(--coral)"></span>Clean Cell plant</div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div>
+    <div class="cell l-plant on"><a class="node l-plant" href="#s10"><span>10</span></a></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+
+    <div class="lane-h"><span class="sw" style="background:var(--cs)"></span>ClearSky</div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div>
+    <div class="cell l-cs on"><a class="node l-cs" href="#s7"><span>7</span></a></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div>
+    <div class="cell l-cs on"><a class="node l-cs" href="#s13"><span>13</span></a></div>
+  </div></div>
+  <div class="maplegend">
+    <span><b>1–5</b> the customer, with no account until step 5</span>
+    <span><b>6–9</b> Clean Cell accept, price, publish, take money</span>
+    <span><b>10–11</b> the floor builds it and says when it is done</span>
+    <span><b>12–13</b> the customer's screen moves on its own</span>
+  </div>
+</div></section>
+
+<section class="steps"><div class="wrap">
+
+<!-- 1 ───────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s1">
+  <div class="sh"><span class="no">1</span><span class="who">Customer · cleancell.us</span>
+    <h3>They land on Clean Cell's website</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>cleancell.us</b>/</span></div>
+      <div class="pane">
+        <div class="mk"><span class="wm"><span class="c1">Clean</span>ce<svg viewBox="0 0 26 46"><path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg><span class="us">US</span></span>
+          <span class="burger"><b></b><b></b><b></b></span></div>
+        <div class="hl">Storage that ships in twelve weeks.<em>Sized in about a minute.</em></div>
+        <div class="row" style="margin-top:13px"><span class="btn">Size my system</span><span class="btn o">See the range</span></div>
+        <div class="row" style="margin-top:14px;gap:18px;color:var(--s-ink3);font-size:10.5px">
+          <span><b style="color:var(--s-ink);font-size:13px">412 MWh</b><br>shipped since 2021</span>
+          <span><b style="color:var(--s-ink);font-size:13px">12 weeks</b><br>lead time</span>
+          <span><b style="color:var(--s-ink);font-size:13px">10 year</b><br>warranty</span></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Arrive from a search or a rep's email. No sign-in wall, no chat bubble, no form before they are allowed to see anything.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Serves a page with <b>no platform name anywhere on it</b>. The whole product is running underneath — the customer will never see the word ClearSky, on any screen, at any point in this chain.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>carries</b>nothing yet — they are anonymous</span></div>
+
+<!-- 2 ───────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s2">
+  <div class="sh"><span class="no">2</span><span class="who">Customer · cleancell.us</span>
+    <h3>Two numbers off their utility bill</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>cleancell.us</b>/size-my-system</span></div>
+      <div class="pane">
+        <div class="rowb" style="margin-bottom:12px">
+          <div><div class="lbl">Peak demand (kW)</div><div class="fld">900</div></div>
+          <div><div class="lbl">Hours of backup</div><div class="fld">2</div></div>
+          <span class="btn">Size it</span></div>
+        <div class="box"><div class="row" style="justify-content:space-between;margin-bottom:8px">
+            <b style="font:600 12px var(--b)">Recommended system</b><span class="chip br">5 × CC-418</span></div>
+          <div class="kv"><span>Product</span><b>CellCube 418</b></div>
+          <div class="kv"><span>System</span><b>1,000 kW · 2,090 kWh</b></div>
+          <div class="kv"><span>Duration</span><b>2.1 h</b></div>
+          <div class="kv"><span>Indicative</span><b>$560,000</b></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Type peak demand and hours. A system comes back before they have decided whether to talk to anybody.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Picks the <b>tightest fit</b> from Clean Cell's own product list, not the biggest box on it — five cabinets rather than one oversized container. The sizing runs server-side and returns a result, never the inputs that produced it.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>carries</b>a sized system, held in the browser</span></div>
+
+<!-- 3 ───────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s3">
+  <div class="sh"><span class="no">3</span><span class="who">Customer · cleancell.us</span>
+    <h3>Drawn on their own lot, to scale</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>cleancell.us</b>/size-my-system/site</span></div>
+      <div class="pane plan">
+        <div class="lbl">Site address</div><div class="fld" style="margin-bottom:11px">4400 W Ferdinand St, Chicago IL</div>
+        <svg viewBox="-6 -6 564 432" role="img" aria-label="Site plan: five cabinets inside a fenced compound, drawn to scale on the lot">
+          <rect x="0" y="0" width="552" height="420" rx="3" fill="var(--s-paper)" stroke="var(--s-ink2)" stroke-width="1.5"/>
+          <rect x="66" y="66" width="420" height="288" fill="none" stroke="var(--s-ink3)" stroke-width="1" stroke-dasharray="6 5"/>
+          <rect x="78" y="78" width="216" height="126" rx="2" fill="var(--s-line2)" stroke="var(--s-ink3)" stroke-width="1.5"/>
+          <text x="102" y="150" font-size="17" font-weight="600" fill="var(--s-ink2)" font-family="Inter,sans-serif">Existing building</text>
+          <rect x="102" y="240" width="220" height="70" rx="3" fill="var(--s-brand-soft)" stroke="var(--s-brand)" stroke-width="1.5" stroke-dasharray="7 4"/>
+          <text x="102" y="231" font-size="14" font-weight="600" fill="var(--s-brand)" font-family="Inter,sans-serif">BESS compound · fenced, 8 ft clear</text>
+          <g fill="var(--s-brand)">
+            <rect x="113" y="252" width="34" height="46" rx="2"/><rect x="155" y="252" width="34" height="46" rx="2"/>
+            <rect x="197" y="252" width="34" height="46" rx="2"/><rect x="239" y="252" width="34" height="46" rx="2"/>
+            <rect x="281" y="252" width="30" height="46" rx="2"/></g>
+          <rect x="410" y="84" width="54" height="42" rx="2" fill="var(--s-accent)"/>
+          <text x="437" y="142" font-size="13" font-weight="600" fill="var(--s-ink2)" text-anchor="middle" font-family="Inter,sans-serif">XFMR</text>
+          <rect x="410" y="168" width="54" height="36" rx="2" fill="var(--s-ink2)"/>
+          <text x="437" y="220" font-size="13" font-weight="600" fill="var(--s-ink2)" text-anchor="middle" font-family="Inter,sans-serif">SWGR</text>
+          <line x1="66" y1="384" x2="216" y2="384" stroke="var(--s-ink2)" stroke-width="2"/>
+          <text x="66" y="404" font-size="13" fill="var(--s-ink2)" font-family="Inter,sans-serif">50 ft</text>
+          <text x="486" y="404" font-size="13" fill="var(--s-ink3)" text-anchor="end" font-family="Inter,sans-serif">184 × 139 ft · 22 ft setback</text>
+        </svg>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Type their address. Their parcel comes back with the cabinets on it, the setback marked and the fire clearance drawn.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>This is the <b>one public call that costs money</b> — it reaches a metered parcel service. So it is gated on a named lead, capped per tenant per day inside a transaction, and a cache hit never spends the allowance. The parcel owner's name and APN are never echoed back to the page.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>carries</b>a system, a site, and still no account</span></div>
+
+<!-- 4 ───────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s4">
+  <div class="sh"><span class="no">4</span><span class="who">Customer · cleancell.us</span>
+    <h3>They place the request — with no account</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>cleancell.us</b>/request</span></div>
+      <div class="pane">
+        <div class="rowb" style="margin-bottom:9px">
+          <div><div class="lbl">Your name</div><div class="fld">Dana Ruiz</div></div>
+          <div><div class="lbl">Company</div><div class="fld">Riverside Cold Chain</div></div></div>
+        <div class="rowb" style="margin-bottom:12px">
+          <div><div class="lbl">Work email</div><div class="fld">ops@riverside.example</div></div>
+          <div><div class="lbl">Phone</div><div class="fld">312 555 0110</div></div></div>
+        <div class="row" style="justify-content:space-between">
+          <span class="btn">Place the request</span>
+          <span class="xs" style="color:var(--s-ink3)">Deposit 30% on confirmation</span></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Fill in four fields and send it. They are told plainly that this is a request, not a purchase, and that a person at Clean Cell confirms it.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Writes the order with its status <b>pinned to <code>new</code></b>. A browser cannot set any other value, whatever it posts. That single constraint is what makes an order desk safe to leave open to the public.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>an order record, keyed to their email address</span></div>
+
+<!-- 5 ───────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s5">
+  <div class="sh"><span class="no">5</span><span class="who">Customer · portal.cleancell.us</span>
+    <h3>They make an account afterwards, and the order is already in it</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>portal.cleancell.us</b>/orders</span></div>
+      <div class="pane sunk">
+        <div class="chip ok" style="margin-bottom:10px">1 order already on this address was added to your account</div>
+        <div class="box"><div class="row" style="justify-content:space-between;margin-bottom:7px">
+            <b style="font:500 12px var(--m)">CC-26-4419</b><span class="chip br">Received</span></div>
+          <div class="kv"><span>5 × CellCube 418</span><b>2,090 kWh</b></div>
+          <div class="kv"><span>Price</span><b>Pending</b></div>
+          <div class="kv"><span>Sold by</span><b>Clean Cell</b></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Sign in with the same work email. They do not quote a reference, and nobody at Clean Cell had to set them up first.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Creates the account from the <b>verified sign-in token</b> and claims every past order on that address onto it. A verified email is the entire security model for this portal — which is also why the customer opens their own account rather than waiting to be provisioned.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>the order, now visible to a signed-in person</span></div>
+
+<!-- 6 ───────────────────────────────────────────────────────────────── -->
+<article class="step off" id="s6">
+  <div class="sh"><span class="no">6</span><span class="who">Clean Cell · office</span>
+    <h3>A person accepts it into production</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>admin.cleancell.us</b>/orders</span></div>
+      <div class="pane">
+        <div class="mk"><span class="wm" style="font-size:14px"><span class="c1">Clean</span>ce<svg viewBox="0 0 26 46"><path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg><span class="us">US</span></span>
+          <span class="xs" style="color:var(--s-ink3)">Order desk</span></div>
+        <div class="box" style="padding:0;overflow:hidden">
+          <div style="display:flex;gap:9px;padding:9px 11px;border-bottom:1px solid var(--s-line2);align-items:center">
+            <b style="font:500 11px var(--m);flex:1">CC-26-4419</b>
+            <span style="font-size:11px;color:var(--s-ink3);flex:1.4">Riverside Cold Chain</span>
+            <span class="chip wrn">new</span><span class="btn" style="padding:4px 10px;font-size:10px">Accept</span></div>
+          <div style="display:flex;gap:9px;padding:9px 11px;align-items:center;opacity:.6">
+            <b style="font:500 11px var(--m);flex:1">CC-26-4402</b>
+            <span style="font-size:11px;color:var(--s-ink3);flex:1.4">Halsted Logistics</span>
+            <span class="chip ok">shipped</span></div></div>
+        <p class="xs" style="color:var(--s-ink3);margin-top:9px">One queue — their own storefront and anything ClearSky sends over.</p>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Read the order, check the site, accept it. Nothing downstream — no serials, no bench, no promised date — exists until somebody here says yes.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Moves it off <code>new</code> and stamps who accepted it. The same queue holds orders from Clean Cell's own website and orders ClearSky took directly, so the floor never has <b>two inboxes to reconcile</b>.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a confirmed order, unpriced</span></div>
+
+<!-- 7 ───────────────────────────────────────────────────────────────── -->
+<article class="step cs" id="s7">
+  <div class="sh"><span class="no">7</span><span class="who">ClearSky · console</span>
+    <h3>Only ClearSky may price it</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot omega"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>console.clearskyomega.com</b>/order/CC-26-4419</span></div>
+      <div class="pane grid">
+        <div class="mk"><span class="omg">Ω ClearSky <i>OMEGA</i></span><span class="chip br">confirmed</span></div>
+        <div class="box"><div class="lbl" style="margin-bottom:7px">Pricing — ClearSky only</div>
+          <div class="kv"><span>Our cost</span><b>$341,600</b></div>
+          <div class="kv"><span>Margin</span><b>22%</b></div>
+          <div class="kv"><span>Priced to Clean Cell</span><b>$403,088</b></div>
+          <div class="kv"><span>Clean Cell sells at</span><b>$560,000</b></div>
+          <div class="kv"><span>Customer can see it</span><b>No — priced is not published</b></div></div>
+        <div class="row" style="margin-top:10px"><span class="btn sq">Publish to the customer</span></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Price the order to Clean Cell. Reprice it as many times as the deal needs — the customer sees nothing while they do.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Keeps <b>priced</b> and <b>published</b> as two separate facts. Every number on this screen — our cost, our margin, our price to the tenant — lives on the same order record the customer can open, and is kept off their screen by a projection that rebuilds the card field by field rather than by a rule that hides the document.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a price — to the tenant, not to the buyer</span></div>
+
+<!-- 8 ───────────────────────────────────────────────────────────────── -->
+<article class="step off" id="s8">
+  <div class="sh"><span class="no">8</span><span class="who">Clean Cell · office</span>
+    <h3>Clean Cell publishes their own number</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>portal.cleancell.us</b>/order/CC-26-4419</span></div>
+      <div class="pane sunk">
+        <div class="row" style="gap:10px;align-items:stretch">
+          <div class="box" style="flex:1"><div class="lbl">Before</div>
+            <div class="kv" style="border:0"><span>Price</span><b style="color:var(--s-ink3)">Pending</b></div></div>
+          <div class="box" style="flex:1;border-color:var(--s-brand)"><div class="lbl">After</div>
+            <div class="kv" style="border:0"><span>Price</span><b>$560,000</b></div></div></div>
+        <p class="xs" style="color:var(--s-ink3);margin-top:10px">The customer's own account, on Clean Cell's domain.
+          Their price — not the one ClearSky quoted Clean Cell.</p>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Set their own margin on top and publish. The buyer's portal changes the moment they do.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Shows the buyer <b>Clean Cell's price and only Clean Cell's price</b>. Two prices exist on one record; which one a reader gets is decided by who is asking, not by which page they opened.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a quotation the customer can accept</span></div>
+
+<!-- 9 ───────────────────────────────────────────────────────────────── -->
+<article class="step off" id="s9">
+  <div class="sh"><span class="no">9</span><span class="who">Clean Cell · office</span>
+    <h3>The deposit clears, and only then do serials exist</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>admin.cleancell.us</b>/order/CC-26-4419</span></div>
+      <div class="pane">
+        <div class="row" style="margin-bottom:11px"><span class="chip ok">deposit cleared</span>
+          <span class="btn">Release to the floor</span></div>
+        <div class="box"><div class="lbl" style="margin-bottom:7px">Works order raised</div>
+          <div class="kv"><span>Serials allocated</span><b>5 units</b></div>
+          <div class="kv"><span>Routing</span><b>10 benches</b></div>
+          <div class="kv"><span>Promised</span><b>2026-11-14</b></div></div>
+        <div class="chiprow" style="margin-top:9px">
+          <span class="chip">CC418-26-44190</span><span class="chip">…91</span><span class="chip">…92</span>
+          <span class="chip">…93</span><span class="chip">…94</span></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Record the deposit, then release it. Two separate acts, because money arriving and the floor starting work are two separate decisions.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Allocates serials <b>here and nowhere else</b>. Nothing can be scanned onto a bench that nobody has been paid for. Each serial becomes a paired record, and from this point the order belongs to the floor.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a works order and 5 serialised units</span></div>
+
+<!-- 10 ──────────────────────────────────────────────────────────────── -->
+<article class="step plant" id="s10">
+  <div class="sh"><span class="no">10</span><span class="who">Clean Cell · plant floor</span>
+    <h3>A scanner that refuses — and that is the product</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>plant.cleancell.us</b>/bench/2</span></div>
+      <div class="pane">
+        <div class="mk"><b style="font:700 14px var(--d);letter-spacing:-.02em">Bay 2 · bench tablet</b>
+          <span class="chip ok">Online</span></div>
+        <div class="row" style="margin-bottom:11px;gap:7px">
+          <span class="xs" style="color:var(--s-ink3)">This bench is</span>
+          <span class="fld" style="padding:4px 9px;font-size:11px">Rack assembly</span></div>
+        <div class="verd bad"><span class="m2">✕</span><div>
+          <div class="t2">This has not been kitted yet — Kitting is first.</div>
+          <div class="s2">CC418-26-44190 · out_of_sequence</div></div></div>
+        <div class="board2" style="margin-top:11px">
+          <div class="bc"><div class="h2">Kitting</div><div class="cp">44190</div><div class="cp">44191</div></div>
+          <div class="bc"><div class="h2">Module</div></div>
+          <div class="bc"><div class="h2">Rack</div></div>
+          <div class="bc"><div class="h2">Enclosure</div></div>
+          <div class="bc"><div class="h2">Electrical</div></div>
+          <div class="bc"><div class="h2">EOL test</div></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Pull the trigger on a unit label. If the unit is not where the bench expects it, the tablet says so in a sentence the operator can act on.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>A scan can only <b>advance one station or be a duplicate</b>. It can never skip, reverse, release a hold, close a non-conformance or mark anything shipped — so the worst a stolen scanner achieves is marking units present at one bench, in order. Two stations are written by the test rig and refuse a human scan outright. The station comes off the <b>paired tablet</b>, never off the scan, which is only a string a stranger could type.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a unit's true position, one bench at a time</span></div>
+
+<!-- 11 ──────────────────────────────────────────────────────────────── -->
+<article class="step off" id="s11">
+  <div class="sh"><span class="no">11</span><span class="who">Clean Cell · quality</span>
+    <h3>One unit fails, and the whole order steps backwards</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>plant.cleancell.us</b>/bench/2</span></div>
+      <div class="pane">
+        <div class="board2" style="margin-bottom:12px">
+          <div class="bc"><div class="h2">Enclosure</div><div class="cp h">44190</div></div>
+          <div class="bc"><div class="h2">Electrical</div><div class="cp">44191</div><div class="cp">44192</div></div>
+          <div class="bc"><div class="h2">BMS</div><div class="cp">44193</div></div>
+          <div class="bc"><div class="h2">EOL test</div><div class="cp">44194</div></div>
+          <div class="bc"><div class="h2">QA / FAT</div></div>
+          <div class="bc"><div class="h2">Pack</div></div></div>
+        <div class="row" style="gap:9px;align-items:stretch">
+          <div class="box" style="flex:1"><div class="lbl">On the floor</div>
+            <div class="kv" style="border:0"><span>44190</span><b style="color:var(--s-accent)">NCR-26-89</b></div></div>
+          <div class="box" style="flex:1"><div class="lbl">Customer reads</div>
+            <div class="kv" style="border:0"><span>was</span><b>In production</b></div>
+            <div class="kv" style="border:0"><span>now</span><b>Confirmed</b></div></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Quality holds one cabinet against a non-conformance. Four units carry on; one does not.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>The <b>furthest-behind unit decides</b> what the customer is told, and a held unit is ranked below where it stands. So the order does not stall on the buyer's screen — it <b>goes back a milestone</b>. Nobody has to remember to tell them, and nobody can quietly report an order as nearly done while a cabinet sits on a hold.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a true position, including the bad news</span></div>
+
+<!-- 12 ──────────────────────────────────────────────────────────────── -->
+<article class="step cust" id="s12">
+  <div class="sh"><span class="no">12</span><span class="who">Customer · portal.cleancell.us</span>
+    <h3>Their screen moved, and nobody typed a status</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>portal.cleancell.us</b>/order/CC-26-4419</span></div>
+      <div class="pane">
+        <div class="row" style="justify-content:space-between;margin-bottom:11px">
+          <b style="font:500 13px var(--m)">CC-26-4419</b><span class="chip ok">Ready to ship</span></div>
+        <div class="tl2">
+          <div class="s dn"><span class="dt"></span><span class="tx">Received</span></div>
+          <div class="s dn"><span class="dt"></span><span class="tx">Confirmed</span></div>
+          <div class="s dn"><span class="dt"></span><span class="tx">In production</span></div>
+          <div class="s dn"><span class="dt"></span><span class="tx">Inspection &amp; test</span></div>
+          <div class="s nw"><span class="dt"></span><span class="tx">Ready to ship — packed and staged for collection.</span></div>
+          <div class="s"><span class="dt"></span><span class="tx">Shipped</span></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>Nothing. They open their account when they feel like it and the position is already right.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Shows <b>six public milestones</b>, not the seventeen internal states the record actually carries. <code>quoted</code> is never shown to a buyer: it is true, about the wrong transaction — it means ClearSky has priced it to the seller.</p></div>
+    </div>
+  </div></div>
+</article>
+<div class="handoff"><span class="ln"></span><span class="pill"><b>hands over</b>a customer who has not had to chase anybody</span></div>
+
+<!-- 13 ──────────────────────────────────────────────────────────────── -->
+<article class="step cs" id="s13">
+  <div class="sh"><span class="no">13</span><span class="who">Clean Cell · office &amp; ClearSky</span>
+    <h3>Ship, invoice, close — and prove nothing crossed</h3></div>
+  <div class="body"><div class="grid2">
+    <div class="shot omega"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>console.clearskyomega.com</b>/order/CC-26-4419</span></div>
+      <div class="pane grid">
+        <div class="row" style="justify-content:space-between;margin-bottom:11px">
+          <span class="omg">Ω ClearSky <i>OMEGA</i></span>
+          <span class="chip ok">shipped · paid</span></div>
+        <div class="box"><div class="lbl" style="margin-bottom:7px">Leak test — what the buyer receives</div>
+          <div class="kv"><span>our cost $341,600</span><b style="color:#12704A">absent</b></div>
+          <div class="kv"><span>margin</span><b style="color:#12704A">absent</b></div>
+          <div class="kv"><span>ClearSky price</span><b style="color:#12704A">absent</b></div>
+          <div class="kv"><span>"clearsky" anywhere</span><b style="color:#12704A">absent</b></div>
+          <div class="kv"><span>staff audit trail</span><b style="color:#12704A">absent</b></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they do</span><p>A person marks it complete once every unit is staged — the one thing a trigger pull cannot cause. The balance falls due on shipment, and the order closes.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Runs the real projection over the real record and shows the result. The order holds our cost, our margin, our price and a staff audit trail the whole way through this chain; the test searches <b>what the buyer actually receives</b> for each of them. That is the difference between a demo and a claim.</p></div>
+    </div>
+  </div></div>
+</article>
+
+<!-- the branch ──────────────────────────────────────────────────────── -->
+<article class="step cust" id="branch" style="margin-top:34px">
+  <div class="sh"><span class="no" style="background:var(--cc)">+</span>
+    <span class="who">Customer · design.cleancell.us</span>
+    <h3>The branch: the second sale</h3></div>
+  <div class="body">
+    <p class="lead sm" style="margin-bottom:16px">Everything above is the battery sale. A customer who
+      keeps coming back is offered the platform itself — which is a different sale, at a different
+      margin, to somebody who has already bought once.</p>
+    <div class="grid2">
+    <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>design.cleancell.us</b>/project/riverside-cold-chain-1</span></div>
+      <div class="pane">
+        <div class="mk"><span class="wm" style="font-size:14px"><span class="c1">Clean</span>ce<svg viewBox="0 0 26 46"><path d="M15.5 0 0 27h8.6L6.2 46 26 17h-9.6z" fill="currentColor"/></svg><span class="us">US</span></span>
+          <span class="xs" style="color:var(--s-ink3)">Site Map · design mode</span></div>
+        <div class="tools2">
+          <div class="tl3">
+            <div class="on">Plot plan</div><div>Single-line</div><div>Estimate BOM</div>
+            <div>Proposal</div><div>Drawing set</div>
+            <div class="off">Compute &amp; data centre</div><div class="off">EV charging</div></div>
+          <div style="flex:1;min-width:0">
+            <div class="box" style="padding:9px">
+              <div class="kv"><span>Units</span><b>5 × CC-418</b></div>
+              <div class="kv"><span>Power</span><b>1,000 kW</b></div>
+              <div class="kv"><span>Energy</span><b>2,090 kWh</b></div>
+              <div class="kv" style="border:0"><span>Yard</span><b>169 sq ft</b></div></div>
+            <div class="row" style="margin-top:8px"><span class="btn" style="font-size:10.5px;padding:5px 11px">Order this from Clean Cell</span></div></div></div>
+      </div></div>
+    <div class="says">
+      <div><span class="t">What they buy</span><p>A subscription to the designer — Site Map and Grid Atlas, on Clean Cell's domain, in Clean Cell's colours. They lay out their own next site and order the bill of materials straight out of the drawing, which starts this chain again at step 4.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Writes <b>one field</b>: the tools this account may open. It is an allowlist that beats the plan, the add-ons and every override, and every endpoint checks it independently — so a tool that is not on the list refuses the call even if somebody finds the URL. What they get is a <b>mode of the one editor</b>, not a second copy of it: compute and the data-centre and EV categories are hidden, solar stays, and every export travels with it.</p></div>
+    </div></div>
+  </div>
+</article>
+
+</div></section>
+
+<section class="real"><div class="wrap">
+  <div class="eyebrow">Before anyone asks</div>
+  <h2 style="margin-top:8px">What is built, and what is drawn</h2>
+  <p class="lead sm" style="margin-top:10px">The screens above are how it looks. This is how much of
+    it is real, so nobody finds out the awkward way in a meeting.</p>
+  <div class="two3">
+    <div class="rc"><h4>Running code today</h4>
+      <ul>
+        <li>The scan engine, with every refusal above</li>
+        <li>The buyer projection that decides steps 5, 8, 11 and 12</li>
+        <li>The tool allowlist behind the branch</li>
+        <li>The order desk, the site study and its spend cap</li>
+        <li>The white-label paint, down to the home-screen icon</li>
+      </ul></div>
+    <div class="rc"><h4>Designed, not yet written</h4>
+      <ul>
+        <li>The payment hook that turns a cleared deposit into a works order — today a person presses the button in step 9</li>
+        <li>Five counters on the estate panel that report zero rather than invent a number</li>
+        <li>Whether a designer subscription gets its own workspace or a seat in Clean Cell's</li>
+      </ul></div>
+    <div class="rc"><h4>Drawn for this demo</h4>
+      <ul>
+        <li>The storefront page and the studio canvas — both stand in for the real ones</li>
+        <li>Clean Cell's product list: four placeholder capacity slots until they send theirs</li>
+        <li>Every figure on these screens, including the prices</li>
+      </ul></div>
+  </div>
+  <div class="gapbox">
+    <span class="t">The one gap worth naming out loud</span>
+    <p>Step 9 is the only hand-off in the chain a person still makes by hand. <b>Everything either side
+      of it already runs on its own</b> — the order arrives without anyone rekeying it, and the ship
+      date moves without anyone updating it. Closing that one gap is what turns thirteen steps into
+      one continuous system, and it is the first thing to build next.</p>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>Clean Cell USA × ClearSky Energy Solutions</span>
+  <span class="sp" style="flex:1"></span>
+  <a href="https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x">Open the working demo →</a>
+</div></footer>

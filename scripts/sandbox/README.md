@@ -100,3 +100,17 @@ The deposit is a button. In the product the Stripe milestone webhook that
 raises the works order is designed (`docs/CUSTOMER-PORTAL.md`) and not
 written, so the ClearSky console names it as the first thing to automate
 rather than pretending it already fires.
+
+## chain.html — the step-by-step version
+
+`chain.html` is the presentation companion to the demo: the same thirteen
+hand-offs laid out in order, each with the screen it happens on, who is
+holding the order, and what crosses to the next step. It opens with a
+swimlane map of the four parties so the whole chain reads at a glance, and
+closes with an honest three-column split of what is running code, what is
+designed but not written, and what is drawn for the demo.
+
+It is a static page published as an Artifact — nothing serves it from this
+repo, and the screens in it are hand-built mocks in both brands rather than
+screenshots, so they do not go stale silently when the product moves. Every
+figure on it is invented.
