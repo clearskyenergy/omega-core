@@ -32,22 +32,14 @@
     --accent:#E4502A; --accent-soft:#FCEAE3;
     --r:6px;
   }
-  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-    --paper:#0F2027; --sunk:#0A181E; --ink:#E8F4F7; --ink2:#AFC9D1; --ink3:#7F9AA3;
-    --line:#1E363F; --line2:#16282F; --brand:#5CCBE0; --brand-d:#3FAFC6; --brand-soft:#0E2E37;
-    --accent:#FF8175; --accent-soft:#3A1B18;
-    --ok:#4FCB96; --ok-bg:#0E2C22; --warn:#E3AC55; --warn-bg:#2E2411; --bad:#F2796A; --bad-bg:#331714;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px -18px rgba(0,0,0,.8);
-  }
-    [data-skin="omega"]{ --paper:#111720; --sunk:#0B1016; --ink:#EAEEF3; --ink2:#AEBAC7;
-      --ink3:#7E8C9B; --line:#22303F; --line2:#18222E; --brand:#6699F0; --brand-d:#4E82DC;
-      --brand-soft:#132239; --accent:#FF7A4D; --accent-soft:#361B12; }
-  }
+  /* No dark mode. Both of these are light brands; repainting a white-label
+     demo navy because the viewer's phone is in dark mode shows them a brand
+     that does not exist. color-scheme pins the form controls too. */
+  :root{color-scheme:light}
   *{box-sizing:border-box}
   [hidden]{display:none!important}
   html,body{margin:0}
   body{background:#E9ECEE;color:var(--ink);font:400 15px/1.6 var(--f);-webkit-font-smoothing:antialiased}
-  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) body{background:#070F14} }
   button,input,select,textarea{font:inherit;color:inherit}
 
   /* ══ sandbox bar — neutral, so it belongs to neither brand ══ */
@@ -56,7 +48,7 @@
   .demo .tag{font:700 10px var(--m);letter-spacing:.14em;background:#EE5A4F;color:#fff;
     padding:4px 8px;border-radius:4px}
   .demo .as{font-size:12.5px;color:#8A949C}
-  .who{display:flex;gap:4px;flex-wrap:wrap}
+  .who{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
   .who button{background:#fff;border:1px solid #DFE3E6;color:#48525A;border-radius:999px;
     padding:6px 12px;cursor:pointer;font:600 12.5px var(--cs);white-space:nowrap}
   .who button:hover{border-color:#9AA4AC;color:#1B242B}
@@ -67,7 +59,27 @@
   .demo .mini:hover{color:#1B242B;border-color:#9AA4AC}
   .demo .mini[aria-pressed="true"]{background:#1B242B;border-color:#1B242B;color:#fff}
   .hint{width:100%;display:flex;align-items:center;gap:8px;color:#5A646D;font:400 12.5px var(--cs);padding-top:1px}
+  @media (max-width:760px){
+    .demo{padding:6px 10px;gap:6px}
+    .demo .as{display:none}
+    .demo .sp{display:none}
+    .demo .tag{font-size:9px;padding:3px 6px}
+    .demo .lbl-long{display:none} .demo .lbl-short{display:inline}
+    .who{flex:1 1 auto;flex-wrap:nowrap;overflow-x:auto;gap:5px;scrollbar-width:none;
+      -webkit-overflow-scrolling:touch}
+    .who::-webkit-scrollbar{display:none}
+    .who button{padding:5px 10px;font-size:12px}
+    .demo .mini{padding:4px 9px;font-size:11px;order:3;flex:none}
+    .hint{order:4;flex:1 1 100%;display:block;font-size:11.5px;line-height:1.45;padding-top:2px;white-space:normal}
+    .chrome{padding:6px 10px;gap:7px}
+    .url{padding:6px 12px;font-size:11.5px;justify-content:flex-start}
+    .dots{display:none}
+  }
   .hint b{color:#1B242B;font-weight:600}
+  /* The click handler matches on the button's id, so the label spans must
+     not become the event target. */
+  .lbl-long,.lbl-short{pointer-events:none}
+  .lbl-short{display:none}
 
   /* ══ browser frame — light, like the phone it will be shown on ══ */
   .chrome{position:sticky;top:0;z-index:50;background:#EDEFF1;padding:8px 12px;display:flex;
@@ -83,6 +95,7 @@
     overflow:hidden;white-space:nowrap;text-overflow:ellipsis;justify-content:center}
   .url .lock{color:#5FC474;flex:none;font-size:11px}
   .url .dom{color:#1B242B;font-weight:600}
+  #urltext{overflow:hidden;text-overflow:ellipsis;min-width:0}
 
   /* ══ page ══ */
   .vp{background:var(--paper);min-height:78vh;color:var(--ink);position:relative}
@@ -118,7 +131,7 @@
   .burger i{display:block;width:26px;height:4px;border-radius:2px;background:var(--accent)}
   @media (max-width:800px){
     .burger{display:inline-flex}
-    .nlinks{display:none;order:9;width:100%;flex-direction:column;gap:15px;padding:6px 0 2px}
+    .nav .nlinks{display:none;order:9;width:100%;flex-direction:column;gap:15px;padding:6px 0 2px}
     .nav.open .nlinks{display:flex}
     .nav .in{gap:14px}
   }
@@ -132,8 +145,6 @@
   .nlinks button:hover{color:var(--brand)}
   .hero{position:relative;overflow:hidden;padding:clamp(48px,8vw,104px) 0 clamp(40px,6vw,76px);
     background:linear-gradient(170deg,#FFFFFF 0%,#EAF6F9 55%,#DDF0F5 100%)}
-  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .hero{
-    background:linear-gradient(170deg,#0F2027 0%,#0E2B34 55%,#0D323E 100%)} }
   .hero .wm{position:absolute;right:-4%;top:-14%;height:150%;opacity:.5;pointer-events:none}
   .hero .in{position:relative;z-index:1}
   .hero h1 .b2{color:var(--brand);display:block}
@@ -207,6 +218,19 @@
   [data-skin="omega"] .snav button[aria-current="true"]{background:var(--brand-soft);color:var(--brand-d)}
   .snav .grp{font:600 10px var(--m);letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);
     padding:16px 12px 6px}
+  .sidefoot{margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+  /* On a phone the sidebar becomes a scrolling strip, so the page starts at
+     the content instead of 600px of navigation. */
+  @media (max-width:840px){
+    .side{display:flex;align-items:center;gap:10px;overflow-x:auto;padding:9px 12px;
+      border-right:0;border-bottom:1px solid var(--line);scrollbar-width:none}
+    .side::-webkit-scrollbar{display:none}
+    .side .brandrow{margin:0;flex:none}
+    .snav{flex-direction:row;gap:6px;flex:none}
+    .snav button{white-space:nowrap;padding:7px 13px;border-radius:999px;
+      border:1px solid var(--line);background:var(--paper)}
+    .snav .grp,.sidefoot{display:none}
+  }
   .main{padding:28px 28px 64px;min-width:0}
   @media (max-width:640px){ .main{padding:20px 16px 46px} .wrap{padding:0 18px} }
   .ph{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:22px}
@@ -295,7 +319,8 @@
   .scanbox{display:flex;gap:11px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
   .scanbox input{flex:1;min-width:230px;font:500 15px var(--m)}
   .verdict{border-radius:var(--r);padding:22px;margin-bottom:20px;border:1.5px solid var(--line);
-    background:var(--sunk);display:flex;gap:18px;align-items:center;flex-wrap:wrap;min-height:92px}
+    background:var(--sunk);display:flex;gap:16px;align-items:center;min-height:92px}
+  .verdict>div{min-width:0}
   .verdict .mk{font-size:36px;line-height:1;width:46px;text-align:center;flex:none}
   .verdict .msg{font-size:20px;font-weight:600;letter-spacing:-.02em}
   .verdict .sn{font:500 13px var(--m);color:var(--ink3);margin-top:4px}
@@ -350,7 +375,8 @@
   <span class="as">Viewing as</span>
   <nav class="who" id="who" aria-label="Who you are"></nav>
   <span class="sp"></span>
-  <button type="button" class="mini" id="tnote" aria-pressed="false">Show what is real</button>
+  <button type="button" class="mini" id="tnote" aria-pressed="false">
+    <span class="lbl-long">Show what is real</span><span class="lbl-short">What's real</span></button>
   <button type="button" class="mini" id="reset">Reset</button>
   <div class="hint" id="hint"></div>
 </div>

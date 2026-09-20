@@ -220,9 +220,24 @@ const srv = http.createServer((_, res) => {
   ok(bad.length === 0, 'no horizontal scroll at 390px on ' + pages.length + ' pages' + (bad.length ? ': ' + bad.join(', ') : ''));
 
   await p.setViewportSize({ width: 1320, height: 980 });
-  await p.emulateMedia({ colorScheme: 'dark' }); await p.waitForTimeout(160);
-  const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  ok(bg !== 'rgba(0, 0, 0, 0)', 'dark mode paints a background: ' + bg);
+  /* A white-label demo must not repaint itself in a brand that does not
+     exist just because the viewer's phone is in dark mode. */
+  await p.emulateMedia({ colorScheme: 'dark' }); await p.waitForTimeout(200);
+  const shades = await p.evaluate(() => {
+    const s = window.__demoState();
+    const out = {};
+    for (const r of ['home', 'p/orders', 'o/tenant/cleancell.us', 'b/scan']) {
+      s.route = r; window.__demoRender();
+      out[r] = getComputedStyle(document.querySelector('.vp')).backgroundColor;
+    }
+    return out;
+  });
+  const lum = c => { const m = c.match(/\d+/g); return m ? (+m[0] + +m[1] + +m[2]) / 3 : 0; };
+  const darkOnes = Object.keys(shades).filter(k => lum(shades[k]) < 200);
+  ok(darkOnes.length === 0, 'stays light when the phone is in dark mode' +
+     (darkOnes.length ? ' — ' + darkOnes.map(k => k + '=' + shades[k]).join(', ')
+                      : ' (' + shades['home'] + ')'));
+  await p.emulateMedia({ colorScheme: 'light' });
   ok(errs.length === 0, 'js errors: ' + (errs.length ? errs.join(' | ') : 'none'));
 
   console.log('\n' + n + ' assertions');

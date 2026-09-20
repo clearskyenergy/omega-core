@@ -288,10 +288,10 @@
 
   /* ══ ROUTING ═══════════════════════════════════════════════════════════ */
   var WHO = [
-    { key: 'buyer', label: 'Dana Ruiz', sub: 'Riverside Cold Chain — a customer' },
-    { key: 'cc',    label: 'Rob Ellery', sub: 'Clean Cell — order desk' },
-    { key: 'bench', label: 'Marco Dias', sub: 'Clean Cell — Bay 2 bench' },
-    { key: 'omega', label: 'Thomas Gilmer', sub: 'ClearSky — console' }
+    { key: 'buyer', label: 'Dana Ruiz', short: 'Dana', sub: 'Riverside Cold Chain — a customer' },
+    { key: 'cc',    label: 'Rob Ellery', short: 'Rob', sub: 'Clean Cell — order desk' },
+    { key: 'bench', label: 'Marco Dias', short: 'Marco', sub: 'Clean Cell — Bay 2 bench' },
+    { key: 'omega', label: 'Thomas Gilmer', short: 'Thomas', sub: 'ClearSky — console' }
   ];
   function homeOf(w) {
     if (w === 'cc') return 'a/orders';
@@ -589,7 +589,7 @@
     return '<div class="app"><div class="side">'
       + '<div class="brandrow">' + o.mark + '</div>'
       + '<nav class="snav">' + nav + '</nav>'
-      + (o.foot ? '<div class="xs mut" style="margin-top:22px;border-top:1px solid var(--line);padding-top:12px">' + o.foot + '</div>' : '')
+      + (o.foot ? '<div class="sidefoot xs mut">' + o.foot + '</div>' : '')
       + '</div><div class="main">' + o.body + '</div></div>';
   }
   function portalShell(body) {
@@ -1355,7 +1355,8 @@
     document.documentElement.setAttribute('data-skin', skinOf(S.route));
     $('who').innerHTML = WHO.map(function (w) {
       return '<button type="button" data-who="' + w.key + '" aria-current="' + (w.key === S.who) + '" title="'
-        + esc(w.sub) + '">' + esc(w.label) + '</button>'; }).join('');
+        + esc(w.sub) + '"><span class="lbl-long">' + esc(w.label) + '</span>'
+        + '<span class="lbl-short">' + esc(w.short) + '</span></button>'; }).join('');
     var u = URLS(S.route);
     $('urltext').innerHTML = '<span class="dom">' + esc(u[0]) + '</span>' + esc(u[1]);
     $('back').disabled = !S.hist.length;
