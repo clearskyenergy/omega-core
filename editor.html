@@ -2054,7 +2054,8 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="rb-flyout" id="fly-dc">
             <div class="rb-fly-head">Compute</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',openDcClusterDialog)"><span class="fi-ico">▦</span> Data-Ctr Cluster</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_ztmm1')})" title="ZTMM Container Data Center — IT POD + ELE POD, 6 × 150 kW liquid-cooled racks, external 2 × 1200 kW air-cooled chillers. From the vendor's Layout-01 drawing."><span class="fi-ico">▦</span> ZTMM 1 MW Block <span class="fi-sub">40 × 25 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft · nominal</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
@@ -5970,6 +5971,16 @@ const ICONS={
 
   // 1MW modular data center (40ft class)
   dc_mdc1:(s=60)=>ICONS.dc_triton(s),
+  // ZTMM 1 MW container DC: two 40 ft containers (IT POD over ELE POD)
+  dc_ztmm1:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="28" cy="28" r="28" fill="#2E2450"/>
+    <rect x="5" y="13" width="46" height="14" rx="1.5" fill="#4C3B87" stroke="#A78BFA" stroke-width="1.4"/>
+    ${[8,15,22,29,36,43].map(x=>`<rect x="${x}" y="16" width="5" height="8" rx=".6" fill="#2B2050" stroke="#8B6FE0" stroke-width=".8"/>`).join('')}
+    <rect x="5" y="29" width="46" height="14" rx="1.5" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.4"/>
+    ${[8,18,28,38].map(x=>`<rect x="${x}" y="32" width="8" height="8" rx=".6" fill="#241C3E" stroke="#A78BFA" stroke-width=".8"/>`).join('')}
+    <text x="28" y="52" font-size="4.2" fill="#C4B5FD" text-anchor="middle" font-family="monospace" font-weight="bold">ZTMM 1 MW</text>
+  </svg>`,
+  dc_ztmm1b:(s=60)=>ICONS.dc_ztmm1(s),
   dc_leviathan:(s=60)=>`<svg width="${s}" height="${s}" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
     <circle cx="28" cy="28" r="28" fill="#241C3E"/>
     <rect x="3" y="13" width="50" height="32" rx="2" fill="#3E3170" stroke="#C4B5FD" stroke-width="1.8"/>
@@ -6148,6 +6159,7 @@ const EQ=[
   {id:'dc_triton',    label:'Compute Container 40ft'},
   {id:'dc_mdc1',      label:'1 MW MDC'},
   {id:'dc_leviathan', label:'1.77 MW MDC'},
+  {id:'dc_ztmm1',     label:'ZTMM 1 MW DC'},
 ];
 
 // == MODULAR DATA-CENTER FOOTPRINTS (real-world ft, for correct drop scale) =
@@ -6210,8 +6222,214 @@ var DC_CATALOG = {
                   ups:'integrated', volts:480, acres:0.12,
                   spec:'1.77 MW IT · closed-circuit direct-to-chip, '
                      + 'air-cooled N+1, no site water · 480 V / 60 Hz',
-                  verified:'armada.ai/product/leviathan' }
+                  verified:'armada.ai/product/leviathan' },
+  /* ── ZTMM CONTAINER DATA CENTER — THE FIRST 1 MW UNIT WITH A DRAWING ──
+     Zhejiang Zhiting (ZTMM) "Container Data Center", Layout-01 dated
+     2026-09-18, drawn for the Manus Bio Augusta concept and published in
+     the "Modular AI Data Center Design Concept" (1 / 3 / 5 MW options).
+     Everything on these rows is read off that drawing; nothing is a
+     planning estimate, which is the difference from dc_mdc1 above.
+
+     What the unit is: TWO 40 ft containers (12192 mm) side by side, each
+     3800 mm (12'-6") wide — an IT POD and an ELE POD — so the pad is
+     40 x 25 ft, not the 40 x 10 the nominal row assumed for "a 1 MW box".
+
+       IT POD   6 x 150 kW liquid-cooled compute racks + 1 x 20 kW network
+                rack on a hot aisle; 2 x CDU >= 900 kW (1 main / 1 spare);
+                3 x 60 kW in-row precision AC (2 main / 1 spare); FM200.
+       ELE POD  ATS -> UPS1/UPS2 input maintenance bypass -> 1125 kVA UPS
+                + 500 kVA UPS -> UPS output 1/2 -> AC output cabinet;
+                2 x 45 kW in-room AC (1 main / 1 spare); FM200.
+       PLANT    outside the containers, NOT on the pad: 2 x 1200 kW
+                air-cooled magnetic-levitation chillers (1 main / 1 spare),
+                a chilled-water storage tank and a hydraulic module. The
+                drawing does not dimension the plant, so this row carries
+                no plant footprint and the build must reserve a chiller
+                yard rather than pretend the pad is the whole site.
+
+     Cooling is 90% liquid / 10% air at the rack: cold plate -> CDU
+     (25% propylene glycol, 35/45 C) -> hydraulic module -> chiller
+     (25% ethylene glycol, 18/26 C). Air-cooled and non-evaporative, with
+     free cooling when ambient allows, so water:0 is a datasheet fact.
+
+     `kw` is IT: 6 x 150 + 20 = 920 kW. The vendor calls the block "1 MW"
+     because the design envelope is 1 MW; sizing off the envelope would
+     overstate what six racks draw by 8%. Option B (dc_ztmm1b) fills a
+     seventh rack for 1.05 MW of compute and, per the concept, needs the
+     CDU, chiller and electrical resized with it — the drawing shown is
+     Option A, so B carries the envelope numbers and says so. */
+  dc_ztmm1:     { label:'ZTMM 1 MW Container DC (6 racks)', kw:920, lf:40, wf:25,
+                  family:'ztmm', racks:6, rackKw:150, networkKw:20,
+                  itPods:1, elePods:1, containers:2,
+                  cooling:'external-chiller', coolKw:1200, water:0,
+                  ups:'integrated', upsKva:1625, volts:null,
+                  spec:'2 × 40 ft containers (IT POD + ELE POD, 12′-6″ wide each) '
+                     + '· 6 × 150 kW liquid-cooled racks + 20 kW network '
+                     + '· 2 × CDU ≥900 kW (1+1) · 3 × 60 kW in-row AC (2+1) '
+                     + '· 1125 + 500 kVA UPS behind ATS + maintenance bypass · FM200 '
+                     + '· external 2 × 1200 kW air-cooled mag-lev chillers (1+1), '
+                     + 'chilled-water tank + hydraulic module, non-evaporative, no site water',
+                  verified:'ZTMM Container Data Center Layout-01 (2026-09-18) '
+                         + '+ Modular AI Data Center Design Concept EN §2' },
+  dc_ztmm1b:    { label:'ZTMM 1 MW Container DC (7 racks, Option B)', kw:1070, lf:40, wf:25,
+                  family:'ztmm', racks:7, rackKw:150, networkKw:20,
+                  itPods:1, elePods:1, containers:2,
+                  cooling:'external-chiller', coolKw:1200, water:0,
+                  ups:'integrated', upsKva:null, volts:null,
+                  spec:'Option B — 7 × 150 kW racks (1.05 MW compute) + 20 kW network '
+                     + 'in the same two 40 ft containers. Maximises rack capacity; the '
+                     + 'concept says CDU, chiller and electrical sizing rise with it and '
+                     + 'must be evaluated against the cooling redundancy target, so the '
+                     + 'plant on this row is the Option A plant until the vendor resizes it.',
+                  verified:'ZTMM Modular AI Data Center Design Concept EN §2 Option B (2026-09-18)' }
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   ZTMM REFERENCE BLOCKS — 1 / 3 / 5 MW, AS PUBLISHED
+
+   The concept is explicit that 3 MW and 5 MW are NOT five copies of the
+   1 MW block: IT PODs stay modular, the chiller plant, tanks and hydraulic
+   module are shared, and the UPS chain is scaled per ELE POD. So a 3 MW
+   ask placed as three 1 MW units would draw six chillers where the vendor
+   draws four, and six containers where the vendor draws four. These rows
+   are the vendor's own arrangement, read off the three layouts, and
+   ztmmPlan() below picks and tiles them instead of multiplying the small
+   block.
+
+   Every container is 40 ft (12192 mm) x 12'-6" (3800 mm); the block is
+   the containers stacked long-side to long-side, so the pad is 40 ft by
+   12.5 ft per container. `stack` is the order they are drawn in, top to
+   bottom, and is what the site plan draws. The chiller plant, tanks and
+   hydraulic module sit beside the stack and are undimensioned on every
+   sheet, so they are counted here and NOT given a footprint.
+
+   `racks` is compute racks at 150 kW; network racks are counted apart
+   because they are 20 kW and do not scale the CDU. `itKw` is what the
+   racks actually draw, not the MW in the title. The 5 MW sheet labels a
+   "1250kVA UPS5" in two different ELE PODs — counted once, as labelled,
+   and flagged in `notes` rather than silently made six.
+   ══════════════════════════════════════════════════════════════════════ */
+var ZTMM_BLOCKS = [
+  { mw:1, label:'ZTMM 1 MW reference block',
+    racks:6, rackKw:150, networkRacks:1, networkKw:20, itKw:920,
+    itPods:1, elePods:1, containers:2, lf:40, wf:25, stack:['IT','ELE'],
+    cdu:{ n:2, kw:900, main:1, spare:1 },
+    inRowAc:{ n:3, kw:60, main:2, spare:1 },
+    inRoomAc:{ n:2, kw:45, main:1, spare:1 },
+    ups:[ { n:1, kva:1125 }, { n:1, kva:500 } ],
+    chillers:{ n:2, kw:1200, main:1, spare:1 }, tanks:1, hydraulic:'1 module',
+    verified:'Layout-01, 2026-09-18', notes:[] },
+  { mw:3, label:'ZTMM 3 MW block — shared plant',
+    racks:20, rackKw:150, networkRacks:4, networkKw:20, itKw:3080,
+    itPods:2, elePods:2, containers:4, lf:40, wf:50, stack:['ELE','IT','IT','ELE'],
+    cdu:{ n:4, kw:1500, main:2, spare:2 },
+    inRowAc:{ n:12, kw:60, main:8, spare:4 },
+    inRoomAc:{ n:4, kw:60, main:2, spare:2 },
+    ups:[ { n:4, kva:1000 } ],
+    chillers:{ n:4, kw:1200, main:3, spare:1 }, tanks:2, hydraulic:'1 module',
+    verified:'Design Concept EN §3 layout, 2026-09-18',
+    notes:['Each IT POD is two rows of 5 racks + a network rack, CDU 1 main / 1 spare per POD, in-row AC 4 main / 2 spare per POD.'] },
+  { mw:5, label:'ZTMM 5 MW block — optimised multi-POD',
+    racks:35, rackKw:150, networkRacks:5, networkKw:20, itKw:5350,
+    itPods:3, elePods:4, containers:7, lf:40, wf:87.5, stack:['ELE','ELE','IT','IT','IT','ELE','ELE'],
+    cdu:{ n:6, kw:2100, main:3, spare:3 },
+    inRowAc:{ n:15, kw:60, main:10, spare:5 },
+    inRoomAc:{ n:8, kw:60, main:4, spare:4 },
+    ups:[ { n:5, kva:1250 } ],
+    chillers:{ n:4, kw:2000, main:3, spare:1 }, tanks:2, hydraulic:'40 ft + 20 ft',
+    verified:'Design Concept EN §4 layout, 2026-09-18',
+    notes:['IT POD-1 and POD-3 are two rows of 7 racks with CDU ≥2100 kW; POD-2 is one row of 7 with CDU ≥1050 kW.',
+           'Two of the four ELE PODs carry 45 kW in-room AC, two carry 60 kW; the sheet labels UPS5 (1250 kVA) in two PODs — counted once, as labelled.'] }
+];
+
+/* IT load -> the ZTMM blocks that carry it.
+
+   The block is chosen on the vendor's NOMINAL size: a 1 MW ask is the
+   1 MW block, because that is what the vendor calls it and what a rep
+   has asked the vendor for. Inside the block the concept's own rule
+   applies — rack quantity first, at 150 kW — so the racks the load
+   actually populates are counted against the racks drawn, and the
+   difference is reported either way: spare positions when the load is
+   light, and racks OVER the drawing when it is heavy (a 1,000 kW ask
+   is 6.5 racks in a six-rack IT POD, which is exactly the case Option B
+   exists for, and the note says so). Only past the 5 MW sheet do blocks
+   tile — 5 MW blocks first, then the smallest block that holds the rest
+   — and `extrapolated:true` says the vendor has not drawn that.
+
+   `unit` is the catalogue row that was picked; a 7-rack Option B unit
+   re-rates the 1 MW block to seven racks and carries the concept's own
+   caveat that the plant is not resized on the drawing. */
+function ztmmPlan(itKw, unit){
+  itKw = Math.max(0, +itKw || 0);
+  var rackKw = (unit && +unit.rackKw > 0) ? +unit.rackKw : 150;
+  var optionB = !!(unit && +unit.racks === 7);
+  var lib = ZTMM_BLOCKS.map(function(b){
+    var c = {}; for (var k in b) if (Object.prototype.hasOwnProperty.call(b, k)) c[k] = b[k];
+    c.notes = (b.notes || []).slice();
+    if (optionB && b.mw === 1) {
+      c.racks = 7; c.itKw = 7 * rackKw + c.networkRacks * c.networkKw; c.optionB = true;
+      c.label = 'ZTMM 1 MW reference block (Option B, 7 racks)';
+      c.notes.push('Option B: CDU, chiller and electrical sizing rise with the seventh rack and are not resized on the published drawing.');
+    }
+    return c;
+  });
+  /* Racks the load populates within one block's share of it. Network
+     racks are drawn per block and come off the top; the rest is compute
+     at the base density. */
+  function racksFor(b, shareKw){
+    var comp = Math.max(0, shareKw - b.networkRacks * b.networkKw);
+    return shareKw > 0 ? Math.max(1, Math.ceil(comp / rackKw)) : 0;
+  }
+  /* A block takes a load up to the larger of its nominal size and what
+     its racks actually draw: the 1 MW block is "1 MW" although six racks
+     draw 920 kW, and the 3 MW sheet draws 3,080 kW although it is called
+     3 MW. Option B's 1,070 kW must not fall through to the 3 MW block. */
+  function capKw(b){ return Math.max(b.mw * 1000, b.itKw); }
+  var blocks = [], shares = [], extrapolated = false, rem = itKw, i;
+  if (itKw > 0) {
+    var fit = null;
+    for (i = 0; i < lib.length; i++) { if (itKw <= capKw(lib[i])) { fit = lib[i]; break; } }
+    if (fit) { blocks.push(fit); shares.push(itKw); }
+    else {
+      var big = lib[lib.length - 1];
+      while (rem > capKw(big)) { blocks.push(big); shares.push(capKw(big)); rem -= capKw(big); }
+      for (i = 0; i < lib.length; i++) { if (rem <= capKw(lib[i])) { blocks.push(lib[i]); shares.push(rem); break; } }
+      extrapolated = true;
+    }
+  }
+  var t = { containers:0, itPods:0, elePods:0, racksEnvelope:0, networkRacks:0, itKwEnvelope:0,
+            cdu:0, cduKwMax:0, inRowAc:0, inRoomAc:0, tanks:0, sqft:0,
+            chillers:{ n:0, main:0, spare:0, kw:0, coolKw:0 }, upsKva:0, ups:[] };
+  var upsBy = {}, racks = 0, overRacks = 0;
+  blocks.forEach(function(b, bi){
+    var rk = racksFor(b, shares[bi]);
+    racks += Math.min(rk, b.racks); overRacks += Math.max(0, rk - b.racks);
+    t.containers += b.containers; t.itPods += b.itPods; t.elePods += b.elePods;
+    t.racksEnvelope += b.racks; t.networkRacks += b.networkRacks; t.itKwEnvelope += b.itKw;
+    t.cdu += b.cdu.n; t.cduKwMax = Math.max(t.cduKwMax, b.cdu.kw);
+    t.inRowAc += b.inRowAc.n; t.inRoomAc += b.inRoomAc.n; t.tanks += b.tanks;
+    t.sqft += b.lf * b.wf;
+    t.chillers.n += b.chillers.n; t.chillers.main += b.chillers.main; t.chillers.spare += b.chillers.spare;
+    t.chillers.kw = Math.max(t.chillers.kw, b.chillers.kw);
+    t.chillers.coolKw += b.chillers.main * b.chillers.kw;
+    b.ups.forEach(function(u){ upsBy[u.kva] = (upsBy[u.kva] || 0) + u.n; t.upsKva += u.n * u.kva; });
+  });
+  for (var kva in upsBy) if (Object.prototype.hasOwnProperty.call(upsBy, kva)) t.ups.push({ kva:+kva, n:upsBy[kva] });
+  t.ups.sort(function(a, b){ return b.kva - a.kva; });
+  t.acres = +(t.sqft / 43560).toFixed(3);
+  var notes = [];
+  blocks.forEach(function(b){ b.notes.forEach(function(n){ if (notes.indexOf(n) < 0) notes.push(n); }); });
+  if (overRacks > 0) notes.unshift('The load needs ' + overRacks + ' more rack' + (overRacks > 1 ? 's' : '') + ' at ' + rackKw
+    + ' kW than the block draws (' + t.racksEnvelope + '): the drawn racks carry ' + (t.itKwEnvelope / 1000).toFixed(2)
+    + ' MW IT against ' + (itKw / 1000).toFixed(2) + ' MW asked. '
+    + (optionB ? 'Step up to the next block, or accept the shortfall.' : 'Option B (7 racks) or the next block closes it; the vendor resizes the plant either way.'));
+  if (extrapolated) notes.unshift('Beyond the published 5 MW sheet — tiled from the 5 MW block; the vendor has not drawn this arrangement and the shared plant may consolidate further.');
+  notes.push('Chiller plant, chilled-water tanks and hydraulic module are beside the containers and undimensioned on the drawings — reserve a chiller yard; the pad above is containers only.');
+  return { itKw:itKw, rackKw:rackKw, racks:racks, overRacks:overRacks,
+           spareRacks:Math.max(0, t.racksEnvelope - racks),
+           blocks:blocks, extrapolated:extrapolated, totals:t, notes:notes, optionB:optionB };
+}
+/* END ZTMM PLANNER */
 // Compute drop width (px) for an equipment id. DC units scale to real footprint
 // when the map is calibrated; everything else keeps the 60px default.
 // == GENERIC INSERT-TAB EQUIPMENT FOOTPRINTS (real-world ft) ================
@@ -54449,6 +54667,33 @@ function _derRenderDc(g, sh){
      was labelled with, and two units placed side by side needed more
      ground than the datasheet says they do. The pad is now exactly the
      stored footprint and everything is inset within it. */
+  /* ── ZTMM: DRAW THE CONTAINERS THE VENDOR DRAWS ───────────────────
+     A ZTMM block is a stack of 40 ft containers, long side to long side,
+     each an IT POD or an ELE POD in the order the sheet shows. Drawing
+     one slatted box for a 5 MW block hides that it is seven containers
+     and that the IT PODs sit in the middle; a reader of the site plan
+     wants to see the pods. The chiller plant is NOT drawn — the vendor
+     has not dimensioned it — and the label says so. */
+  if(sh.ztmm && sh.ztmm.stack && sh.ztmm.stack.length){
+    var st=sh.ztmm.stack, n=st.length, ch=h/n;
+    _derRect(g, x, y, w, h, '#3C4043', '#9a9a9a', 1);
+    var mz=Math.max(0.4, 0.6*ppf);
+    for(var zi=0; zi<n; zi++){
+      var isIt = st[zi]==='IT';
+      var cy0 = y + zi*ch;
+      _derRect(g, x+mz, cy0+mz, Math.max(1,w-mz*2), Math.max(1,ch-mz*2),
+               isIt ? '#EDE9FE' : '#E8EAED', isIt ? '#6D28D9' : '#5F6368', 1);
+      if(ppf*12.5 >= 9){
+        _derText(g, x+w/2, cy0+ch/2+Math.max(3,Math.min(5,ppf*0.35)),
+                 isIt ? 'IT POD' : 'ELE POD', Math.max(6,Math.min(11,ppf*0.7)),
+                 isIt ? '#6D28D9' : '#5F6368', 'middle', '700');
+      }
+    }
+    _derText(g, x+w/2, y+h+11, (sh.model||'ZTMM')+' • '+(sh.kw||0)+' kW IT • '+n+' × 40 ft • chillers off-pad',
+             Math.max(7,Math.min(12,ppf*0.8)), '#6D28D9', 'middle', '700');
+    return;
+  }
+
   var zoned = (+sh.lf||0) >= 80;
   if(!zoned){
     /* Pad is the footprint; the container sits on it. */
@@ -101524,7 +101769,19 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       podSpec=best;
     }catch(e){}
     var podKw=(podSpec&&podSpec.kw)?podSpec.kw:1000;
-    var pods=itKw>0?Math.ceil(itKw/podKw):0;
+
+    /* ── ZTMM: THE BLOCK IS PICKED FROM THE VENDOR'S OWN SHEETS ──────
+       For every other unit a pod is a pod and the count is load over
+       unit. The ZTMM family publishes 1, 3 and 5 MW arrangements that
+       share plant, so the count comes from ztmmPlan(): rack-first, the
+       smallest published block that holds the racks, tiled only past
+       5 MW and flagged when it is. Each block carries its own footprint
+       and IT kW, which is what placeAt() draws. */
+    var ztmm=null;
+    try{
+      if(podSpec && podSpec.family==='ztmm' && typeof ztmmPlan==='function') ztmm=ztmmPlan(itKw, podSpec);
+    }catch(e){ ztmm=null; }
+    var pods=ztmm?ztmm.blocks.length:(itKw>0?Math.ceil(itKw/podKw):0);
 
     /* Verdict against the grid ceiling. */
     var verdict, level;
@@ -101590,7 +101847,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       heatRate:heatRate,
       gasMmbtuHr:gasMmbtuHr, gasScfh:gasScfhApprox,
       bessKw:bessKw, bessKwh:bessKwh, rideMin:minutes,
-      pods:pods, podKw:podKw, podSpec:podSpec,
+      pods:pods, podKw:podKw, podSpec:podSpec, ztmm:ztmm,
       island:cfg.island, redundancy:cfg.redundancy,
       ogi:ogi,
       verdict:verdict, level:level
@@ -101673,6 +101930,24 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           +'</div>'
         +'</div>'
         +'<div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#A78BFA;margin-bottom:6px">2 \u00b7 Load</div>'
+        /* The unit used to be whichever catalogue row sorted largest,
+           which made every dialog run a Leviathan run. It is a choice,
+           and the MW-class rows are listed with their footprint and
+           whether a datasheet stands behind them. */
+        +'<div style="margin-bottom:9px"><label style="'+lbl+'">Compute unit</label><select id="ocb-unit" style="'+inp+'">'
+          +(function(){
+              var o='';
+              try{
+                for(var uk in DC_CATALOG){
+                  if(!Object.prototype.hasOwnProperty.call(DC_CATALOG,uk)) continue;
+                  var u=DC_CATALOG[uk]; if(!(u.kw>=500)) continue;
+                  o+='<option value="'+uk+'"'+(uk==='dc_ztmm1'?' selected':'')+'>'+u.label
+                    +' \u00b7 '+u.kw+' kW IT \u00b7 '+u.lf+'\u00d7'+u.wf+' ft'+(u.verified?'':' \u00b7 nominal')+'</option>';
+                }
+              }catch(e){}
+              return o;
+            })()
+          +'</select></div>'
         +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:11px">'
           +'<div><label style="'+lbl+'">IT load (MW)</label><input id="ocb-it" type="number" step="0.5" min="0.1" value="5" style="'+inp+'"></div>'
           +'<div><label style="'+lbl+'">Design PUE</label><input id="ocb-pue" type="number" step="0.05" min="1.05" value="1.3" style="'+inp+'"></div>'
@@ -101746,7 +102021,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +tg.map(function(t){ return '<option value="'+t.id+'">'+t.label+'</option>'; }).join('');
       if(!tg.length) sel.innerHTML='<option value="">no generation placed yet</option>';
     })();
-    ['ocb-it','ocb-pue','ocb-ride','ocb-red','ocb-isl',
+    ['ocb-unit','ocb-it','ocb-pue','ocb-ride','ocb-red','ocb-isl',
      'ocb-cert','ocb-typ','ocb-role','ocb-tech','ocb-ac'].forEach(function(id){
       var e=document.getElementById(id); if(e){ e.oninput=recalc; e.onchange=recalc; }
     });
@@ -101757,7 +102032,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var g=function(id){ var e=document.getElementById(id); return e?e.value:''; };
     _r=size({ itMw:parseFloat(g('ocb-it')), pue:parseFloat(g('ocb-pue')),
               rideMin:parseFloat(g('ocb-ride')), redundancy:g('ocb-red'),
-              island:g('ocb-isl'),
+              island:g('ocb-isl'), unitId:g('ocb-unit')||null,
               certaintyTier:parseInt(g('ocb-cert'),10), typology:g('ocb-typ'),
               genRole:g('ocb-role'), genTech:g('ocb-tech'),
               usableAc:parseFloat(g('ocb-ac'))||0 });
@@ -101778,8 +102053,11 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +row('IT load', mw(r.itKw))
         +row('Mechanical / cooling', mw(r.mechKw))
         +row('Total facility @ PUE '+r.pue.toFixed(2), mw(r.facKw), '#F59E0B')
-        +row('Compute pods', r.pods+' \u00d7 '+(r.podSpec?r.podSpec.label:'pod')+' ('+r.podKw+' kW)')
+        +(r.ztmm
+          ? row('Compute blocks', r.ztmm.blocks.map(function(b){ return b.mw+' MW'; }).join(' + ')+' \u00b7 '+(r.podSpec?r.podSpec.label:'ZTMM'))
+          : row('Compute pods', r.pods+' \u00d7 '+(r.podSpec?r.podSpec.label:'pod')+' ('+r.podKw+' kW)'))
       +'</div>'
+      +ztmmPanel(r)
       +'<div style="background:rgba(0,0,0,.24);border:1px solid #26364d;border-radius:8px;padding:10px 12px;margin-bottom:9px">'
         +'<div style="font-size:9px;font-weight:700;letter-spacing:.5px;color:#A78BFA;text-transform:uppercase;margin-bottom:5px">Grid ceiling</div>'
         +(r.utilKw!=null
@@ -101797,6 +102075,41 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         +'<div style="font-size:8px;color:#6B7280;margin-top:4px;line-height:1.5">Gas at '+(r.heatRate||SOFC_BTU_PER_KWH)+' Btu/kWh LHV. BESS energy = critical load \u00d7 '+r.rideMin+' min \u00f7 '+derate().toFixed(3)+' derate. BESS is sized here and placed by the BESS guided build.</div>'
       +'</div>'
       +ogiPanel(r);
+  }
+
+  /* ── ZTMM: THE PLANT THE VENDOR DRAWS, NOT A PUE GUESS ─────────────
+     Racks, PODs, CDUs, chillers and UPS off the published sheets for the
+     block(s) the load lands in. Shown here because the chiller yard and
+     the UPS chain are what the site plan and the one-line have to make
+     room for, and a PUE slider tells you neither. */
+  function ztmmPanel(r){
+    var Z=r.ztmm; if(!Z || !Z.blocks.length) return '';
+    var T=Z.totals;
+    var row=function(l,v,c){ return '<div style="display:flex;justify-content:space-between;padding:2.5px 0;gap:10px">'
+      +'<span style="color:#8FA3B8;font-size:10px">'+l+'</span>'
+      +'<strong style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:'+(c||'#E2EEF9')+';text-align:right">'+v+'</strong></div>'; };
+    var ups=T.ups.map(function(u){ return u.n+' × '+u.kva+' kVA'; }).join(' + ');
+    var pads=Z.blocks.map(function(b){ return b.lf+'×'+b.wf+' ft'; }).join(', ');
+    return '<div style="background:rgba(0,0,0,.24);border:1px solid '+(Z.extrapolated?'#F59E0B':'#26364d')+';border-radius:8px;padding:10px 12px;margin-bottom:9px">'
+      +'<div style="font-size:9px;font-weight:700;letter-spacing:.5px;color:#A78BFA;text-transform:uppercase;margin-bottom:5px">Modular plant · ZTMM'+(Z.extrapolated?' · extrapolated':'')+'</div>'
+      +row('Compute racks @ '+Z.rackKw+' kW', Z.racks+' of '+T.racksEnvelope
+             +(Z.spareRacks?(' · '+Z.spareRacks+' spare'):'')
+             +(Z.overRacks?(' · '+Z.overRacks+' over'):''),
+           Z.overRacks?'#F87171':(Z.spareRacks?'#F59E0B':'#E2EEF9'))
+      +row('IT envelope', (T.itKwEnvelope/1000).toFixed(2)+' MW incl. '+T.networkRacks+' × 20 kW network')
+      +row('Containers', T.containers+' × 40 ft ('+T.itPods+' IT POD'+(T.itPods>1?'s':'')+', '+T.elePods+' ELE POD'+(T.elePods>1?'s':'')+')')
+      +row('Container pad', pads+' · '+T.acres+' ac')
+      +row('Chillers (air-cooled mag-lev)', T.chillers.n+' × '+T.chillers.kw+' kW · '+T.chillers.main+' main / '+T.chillers.spare+' spare', '#F59E0B')
+      +row('CDU (1+1 per IT POD)', T.cdu+' × ≥'+T.cduKwMax+' kW')
+      +row('In-row / in-room AC', T.inRowAc+' × 60 kW · '+T.inRoomAc+' in ELE PODs')
+      +row('UPS', ups+' = '+(T.upsKva/1000).toFixed(2)+' MVA')
+      +row('Chilled-water tanks', T.tanks+' · hydraulic '+Z.blocks.map(function(b){ return b.hydraulic; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(' / '))
+      +row('Site water', 'none — non-evaporative', '#4ADE80')
+      +'<div style="font-size:8.5px;color:#94A3B8;margin-top:5px;line-height:1.55">'
+        +Z.notes.map(function(n){ return '• '+n; }).join('<br>')
+      +'</div>'
+      +'<div style="font-size:8px;color:#6B7280;margin-top:4px;line-height:1.5">Source: '+Z.blocks.map(function(b){ return b.verified; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join('; ')+'. Preliminary concept for technical and budgetary discussion; final equipment against the confirmed server OEM and the project one-line.</div>'
+      +'</div>';
   }
 
   /* ── PATCH 122: the OGI gates, shown before anyone places anything ──
@@ -101954,13 +102267,21 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        first and everything else is arranged to serve it. */
     var pSpec=r.podSpec||{id:'dc_leviathan',label:'MDC',kw:1000,lf:40,wf:10};
     var pCols=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(r.pods))));
+    /* ZTMM blocks each carry their own footprint and IT kW (a 3 MW block
+       is four containers on one 40 x 50 pad, not three 1 MW pads), so the
+       row pitch follows the tallest block placed. */
+    var zb=(r.ztmm&&r.ztmm.blocks)||null;
+    var pitchWf=pSpec.wf;
+    if(zb) zb.forEach(function(b){ if(b.wf>pitchWf) pitchWf=b.wf; });
     for(var i=0;i<r.pods;i++){
       var pc=i%pCols, pr=Math.floor(i/pCols);
+      var blk=zb?zb[i]:null;
       S.shapes.push({ id:(typeof uid==='function'?uid():'p'+i+Date.now()),
         kind:'derdc', dcId:pSpec.id||'dc_leviathan',
-        pts:[{x:x0+pc*(pSpec.lf+14)*ppf, y:y0+pr*(pSpec.wf+16)*ppf}],
-        style:(S.shapeStyle||''), lf:pSpec.lf, wf:pSpec.wf,
-        model:pSpec.label, kw:pSpec.kw, scaled:!!(S.pxPerFt>0),
+        pts:[{x:x0+pc*(pSpec.lf+14)*ppf, y:y0+pr*(pitchWf+16)*ppf}],
+        style:(S.shapeStyle||''), lf:blk?blk.lf:pSpec.lf, wf:blk?blk.wf:pSpec.wf,
+        model:blk?blk.label:pSpec.label, kw:blk?blk.itKw:pSpec.kw, scaled:!!(S.pxPerFt>0),
+        ztmm:blk?{ mw:blk.mw, stack:blk.stack.slice(), racks:blk.racks }:undefined,
         omegaCompute:true });
       made++;
     }
@@ -101996,6 +102317,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         ogi:r.ogi||null,
         gasMmbtuHr:r.gasMmbtuHr, gasScfh:r.gasScfh,
         bess:{ kw:r.bessKw, kwh:r.bessKwh, rideMin:r.rideMin },
+        unitId:r.podSpec?r.podSpec.id:null,
+        ztmm:r.ztmm?{ racks:r.ztmm.racks, rackKw:r.ztmm.rackKw, spareRacks:r.ztmm.spareRacks,
+                      blocks:r.ztmm.blocks.map(function(b){ return b.mw; }),
+                      extrapolated:r.ztmm.extrapolated, totals:r.ztmm.totals }:null,
         island:r.island, redundancy:r.redundancy, at:Date.now()
       };
       /* So the BESS guided build opens pre-sized. */
@@ -102062,6 +102387,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       +(O&&O.air?(', NOX '+O.air.noxTpy+' TPY AGAINST A 95 TPY SYNTHETIC-MINOR CAP'):'')+'. '
       +(O&&O.hourFive&&!O.hourFive.ok?('UPTIME: '+O.hourFive.text.toUpperCase()+' '):'')
       +'RIDE-THROUGH STORAGE '+C.bess.kw.toLocaleString()+' KW / '+C.bess.kwh.toLocaleString()+' KWH AT '+C.bess.rideMin+' MIN. '
+      +(C.ztmm&&C.ztmm.totals?('MODULAR PLANT (ZTMM): '+C.ztmm.racks+' × '+C.ztmm.rackKw+' KW LIQUID-COOLED RACKS IN '
+          +C.ztmm.totals.containers+' × 40 FT CONTAINERS ('+C.ztmm.blocks.map(function(m){ return m+' MW'; }).join(' + ')+' BLOCK'+(C.ztmm.blocks.length>1?'S':'')+'), '
+          +C.ztmm.totals.chillers.n+' × '+C.ztmm.totals.chillers.kw+' KW AIR-COOLED MAGNETIC-LEVITATION CHILLERS ('+C.ztmm.totals.chillers.main+' MAIN / '+C.ztmm.totals.chillers.spare+' SPARE), '
+          +C.ztmm.totals.cdu+' CDU, UPS '+(C.ztmm.totals.upsKva/1000).toFixed(2)+' MVA. NON-EVAPORATIVE, NO SITE WATER. '
+          +'CHILLER YARD, TANKS AND HYDRAULIC MODULE ARE NOT DIMENSIONED ON THE VENDOR DRAWING AND ARE NOT ON THE PAD SHOWN. '
+          +(C.ztmm.extrapolated?'ARRANGEMENT BEYOND THE PUBLISHED 5 MW SHEET; VENDOR TO CONFIRM. ':'')):'')
       +'GRID RELATIONSHIP: '+(C.island==='independent'?'GRID-INDEPENDENT, UTILITY AS BACKUP':'GRID-PARALLEL')+'. '
       +'GENERATION SIZING ASSUMES UTILITY CAPACITY PER THE SUBSTATION SCREENING ESTIMATE AND IS SUBJECT TO THE '
       +'UTILITY INTERCONNECTION STUDY AND A GAS CAPACITY CONFIRMATION.';
@@ -102980,7 +103311,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
             subMw:20, genType:'fuelcell_sofc', genMw:6, computeMw:5, incBess:true, incCool:true,
             incSub:true, incGen:true, incGenset:true, incBldg:true, topo:'RADIAL',
             bldg:null, bldg0:null, keyBound:false, fmt:'guided', seeded:{},
-            unitId:'dc_mdc1' };
+            unitId:'dc_ztmm1' };
 
   /* ── THE TWO FORMATS DO NOT SHARE A STARTING POINT ────────────────────
      The dialog opened with campus numbers — a 20 MW substation, 6 MW of gas
@@ -102997,8 +103328,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     /* One unit on a site that already runs solar: a megawatt of utility
        capacity, the PV that is already there, a megawatt of compute. */
     /* The 1 MW container is the main offering; the Leviathan is the
-       larger block, picked per project. */
-    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1, unitId:'dc_mdc1' }
+       larger block, picked per project. The default is the ZTMM block
+       because it is the one 1 MW unit with a vendor drawing behind it —
+       dc_mdc1 is still in the list, marked nominal. */
+    modular: { subMw:1,  genType:'solar',         genMw:1.3, computeMw:1, unitId:'dc_ztmm1' }
   };
   function seedFor(fmtKey){
     var d=CGB_SEED[fmtKey]; if(!d) return;
@@ -133003,6 +133336,7 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
     bollard: 'bollard', jbox: 'handhole', charger: 'dcfc-disp',
     ups: 'ups-cab', pole: 'pole', hydrant: 'bollard',
     dc_cruiser: 'dc-mod', dc_triton: 'dc-mod', dc_leviathan: 'dc-mod',
+    dc_mdc1: 'dc-mod', dc_ztmm1: 'dc-mod', dc_ztmm1b: 'dc-mod',
     solar: 'pv-1up-10', building: null, fence: null, camera: null
   };
   /* Element type -> block, for the elements that are not type:'eq' */
@@ -133114,7 +133448,8 @@ SEL.split(', ').map(function (s) { return s + ' label, ' + s + ' td, ' + s + ' t
     bess: 5, pcs: 4, xfmr: 6, disco: 3, panel: 2, meter: 1.5, building: 3,
     hydrant: 1.5, genset: 12, solar: 6.5, pad: 10, bollard: 0.5, fence: 8,
     jbox: 1.5, charger: 2.5, camera: 1, ups: 3, pole: 1.25,
-    dc_cruiser: 20, dc_triton: 30, dc_leviathan: 40
+    dc_cruiser: 20, dc_triton: 30, dc_leviathan: 40,
+    dc_mdc1: 40, dc_ztmm1: 40, dc_ztmm1b: 40
   };
 
   /* Conduit type -> its own layer, so the runs stay separable on the sheet
@@ -140958,7 +141293,8 @@ var EQ_ARCH = {
   ems:'ems',
   /* Modular data-center units are compute, not storage */
   dc_cruiser:'compute-pod', dc_triton:'compute-pod',
-  dc_leviathan:'compute-pod'
+  dc_leviathan:'compute-pod', dc_mdc1:'compute-pod',
+  dc_ztmm1:'compute-pod', dc_ztmm1b:'compute-pod'
 };
 
 /* THE GUIDED BUILDS DO NOT SET eqId.
@@ -159167,6 +159503,15 @@ if (root.console && console.info) {
     clearPrevious();
 
     var pSpec = r.podSpec || { id: 'dc_leviathan', label: 'MDC', kw: 1000, lf: 40, wf: 10 };
+    /* ZTMM blocks are not all the same size (1 MW is two containers, the
+       5 MW block is seven). Slots are packed at the largest block so each
+       one fits, and every shape is then written at its own block's size. */
+    var zBlocks = (r.ztmm && r.ztmm.blocks && r.ztmm.blocks.length) ? r.ztmm.blocks : null;
+    if (zBlocks) {
+      var zMax = { lf: pSpec.lf, wf: pSpec.wf };
+      zBlocks.forEach(function (b) { if (b.lf > zMax.lf) zMax.lf = b.lf; if (b.wf > zMax.wf) zMax.wf = b.wf; });
+      pSpec = { id: pSpec.id, label: pSpec.label, kw: pSpec.kw, lf: zMax.lf, wf: zMax.wf };
+    }
     var fSpec = r.fcSpec || { label: 'SOFC Fuel Cell (NG)', kw: 300, lf: 9, wf: 6,
                               abbr: 'FC', fuel: 'natural gas' };
 
@@ -159285,12 +159630,14 @@ if (root.console && console.info) {
     }
 
     podSlots.forEach(function (s, i) {
+      var blk = zBlocks ? zBlocks[i] : null;
       push({
         id: (typeof uid === 'function' ? uid() : 'p' + i + Date.now()),
         kind: 'derdc', dcId: pSpec.id || 'dc_leviathan',
         pts: [{ x: s.x, y: s.y }],
-        style: (S.shapeStyle || ''), lf: pSpec.lf, wf: pSpec.wf,
-        model: pSpec.label, kw: pSpec.kw,
+        style: (S.shapeStyle || ''), lf: blk ? blk.lf : pSpec.lf, wf: blk ? blk.wf : pSpec.wf,
+        model: blk ? blk.label : pSpec.label, kw: blk ? blk.itKw : pSpec.kw,
+        ztmm: blk ? { mw: blk.mw, stack: blk.stack.slice(), racks: blk.racks } : undefined,
         scaled: !!(S.pxPerFt > 0), omegaCompute: true
       });
     });
