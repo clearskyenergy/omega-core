@@ -2140,6 +2140,80 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
+       From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
+       ADAPTED: the addendum's plantOrg() fell back to myOrg(), which does
+       not exist in these rules. userOrg() is the real name and it already
+       folds through orgAlias(), so the alias handling the addendum wrote by
+       hand is redundant here rather than missing.
+
+       NONE of the collections that MOVE a unit are client-writable. A unit
+       advances only through /api/mes-scan, which checks the routing in
+       api/_lib/plant.js before it writes. If a browser could set `at`
+       directly, every guarantee in that engine evaporates — a unit could
+       skip EOL test, jump to Ready, or move backwards, and the board would
+       report it as fact. Same arrangement `orders` already has.
+
+       READ IS isOmegaStaff() HERE AND isAdmin() ON `orders`, deliberately.
+       An order carries the customer, the pricing, the cost and the margin.
+       A unit carries a serial and a bench. A rep who is working the floor
+       with a tenant needs the second and has no business in the first. */
+
+    match /plant_works_orders/{woId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* Admin SDK only — raised on deposit paid */
+    }
+
+    match /plant_units/{unitId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      /* A unit's station is decided by api/_lib/plant.js against the works
+         order's own routing. There is no shape of client write that could be
+         checked here instead. */
+      allow write:  if false;
+    }
+
+    match /plant_scans/{scanId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* append-only log, refusals included */
+    }
+
+    match /plant_stations/{stationId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+
+      /* A tenant admin may create, relabel and DEACTIVATE their own benches.
+         Deactivating is how a lost tablet is killed, and waiting on us to do
+         it is how a lost tablet stays live over a weekend.
+
+         They may not mint a token by writing tokenHash themselves: a hash the
+         client chose is a token the client chose, and the console's one-time
+         reveal becomes meaningless. Mint goes through the Admin SDK.
+
+         Firestore rules cannot hide a FIELD, only a document, and a tenant
+         admin must see their own benches — so the document stores a SHA-256
+         of the token and never the token. Reading the hash buys an attacker
+         nothing they can replay. */
+      allow create: if isOmegaStaff();
+      allow update: if isOmegaStaff()
+                    || (isTenantAdmin(resource.data.get('orgId', ''))
+                        && request.resource.data.get('orgId', '') == resource.data.get('orgId', '')
+                        && request.resource.data.get('station', '') == resource.data.get('station', '')
+                        && request.resource.data.get('tokenHash', '') == resource.data.get('tokenHash', '')
+                        && request.resource.data.get('machine', false) == resource.data.get('machine', false));
+      allow delete: if isOmegaStaff();
+    }
+
     match /fin_applications/{appId} {
 
       function appOrg() { return resource.data.get('orgId', ''); }

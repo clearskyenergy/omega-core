@@ -1,5 +1,5 @@
 {
-  "//": "© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.",
+  "//": "\u00a9 2025\u20132026 ClearSky Energy Solutions LLC. Proprietary and Confidential.",
   "//1": "A collection-group query needs an index whose scope is COLLECTION_GROUP.",
   "//2": "Firestore auto-creates single-field indexes at COLLECTION scope only, so",
   "//3": "the Quote Desk's collectionGroup('recipients').where('vendorOrgId','==',org)",
@@ -16,17 +16,132 @@
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "orgId",     "order": "ASCENDING"  },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "orgId",          "order": "ASCENDING"  },
-        { "fieldPath": "customer.email", "order": "ASCENDING"  },
-        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "customer.email",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_units",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "woId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_units",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "hold",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "stationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ok",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "plant_works_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "orgId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "orderNo",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
@@ -38,37 +153,74 @@
       "collectionGroup": "recipients",
       "fieldPath": "vendorOrgId",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "offers",
       "fieldPath": "partnerUid",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "fin_views",
       "fieldPath": "sponsorOrgKey",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     },
     {
       "collectionGroup": "billing",
       "fieldPath": "stripeCustomerId",
       "indexes": [
-        { "order": "ASCENDING",  "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" },
-        { "order": "ASCENDING",  "queryScope": "COLLECTION_GROUP" }
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
       ]
     }
-  ]
+  ],
+  "//9a": "PLANT FLOOR (2026-09-20). Listed in docs/firestore.rules.plant.addendum and never added here, so api/my-orders.js's units join and api/tenant-systems.js's hold counts would have thrown FAILED_PRECONDITION the first time a works order existed."
 }
