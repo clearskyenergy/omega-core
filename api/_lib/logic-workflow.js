@@ -159,6 +159,7 @@ async function finish(orderId, caller, shipment) {
     units.docs.forEach(function (d) { var u = d.data(); if (u.shipUnit) wanted[u.sku] = (wanted[u.sku] || 0) - 1; });
     if (Object.keys(wanted).some(function (sku) { return wanted[sku] !== 0; })) throw A.httpError(409, 'Shipping units do not match the complete order');
     if (shipment) {
+      if (o.delivery) throw A.httpError(409, 'Use Logistics and receiving for orders with a destination plan');
       if (l.commercial.balanceCents && !(l.invoices.balance || {}).satisfied) throw A.httpError(409, 'Final payment must be recorded before shipment');
       if (!shipment.carrier || !shipment.tracking) throw A.httpError(400, 'Carrier and tracking / bill-of-lading number required');
       tx.update(ref, { status: 'shipped', shipment: { carrier: String(shipment.carrier).slice(0, 80), tracking: String(shipment.tracking).slice(0, 120), shippedAt: new Date().toISOString() } });

@@ -1,0 +1,59 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+'use strict';
+var assert=require('node:assert/strict');
+function clone(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
+function field(v,k){return k.split('.').reduce(function(x,p){return x==null?undefined:x[p];},v);}
+function update(v,b){Object.keys(b).forEach(function(k){var ps=k.split('.'),last=ps.pop(),dest=v;ps.forEach(function(p){dest=dest[p]||(dest[p]={});});dest[last]=clone(b[k]);});return v;}
+class DB{
+  constructor(){this.rows=new Map();this.seq=0;this.queue=Promise.resolve();}
+  doc(path){return new Ref(this,path);}
+  collection(path){return new Query(this,path);}
+  seed(path,d){this.rows.set(path,clone(d));}
+  runTransaction(fn){var self=this,run=this.queue.then(async function(){var writes=[],started=false;var out=await fn({get:async function(r){assert(!started,'No reads after writes');return r.get();},create:function(r,d){started=true;writes.push(function(){assert(!self.rows.has(r.path));self.seed(r.path,d);});},update:function(r,d){started=true;writes.push(function(){assert(self.rows.has(r.path));self.seed(r.path,update(clone(self.rows.get(r.path)),d));});}});writes.forEach(function(w){w();});return out;});this.queue=run.catch(function(){});return run;}
+}
+class Ref{
+  constructor(db,path){this.db=db;this.path=path;this.id=path.split('/').pop();}
+  collection(path){return new Query(this.db,this.path+'/'+path);}
+  async get(){var d=this.db.rows.get(this.path);return {exists:d!==undefined,id:this.id,ref:this,data:function(){return clone(d);}};}
+}
+class Query{
+  constructor(db,path,filters,cap){this.db=db;this.path=path;this.filters=filters||[];this.cap=cap||Infinity;}
+  doc(id){return new Ref(this.db,this.path+'/'+(id||'event'+(++this.db.seq)));}
+  where(k,op,v){assert.equal(op,'==');return new Query(this.db,this.path,this.filters.concat([[k,v]]),this.cap);}
+  orderBy(){return this;}
+  limit(n){return new Query(this.db,this.path,this.filters,n);}
+  async get(){var docs=[];for(var entry of this.db.rows){if(entry[0].startsWith(this.path+'/')&&entry[0].split('/').length===this.path.split('/').length+1&&this.filters.every(function(f){return field(entry[1],f[0])===f[1];})){docs.push(await this.db.doc(entry[0]).get());}}docs=docs.slice(0,this.cap);return {docs:docs,size:docs.length,empty:!docs.length};}
+}
+var db=new DB(),A={db:function(){return db;},httpError:function(s,m){var e=new Error(m);e.status=s;return e;},safeOrg:function(s){return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s||'')?s:'';},authenticate:async function(r){return r.caller;},handler:function(f){return f;},canActInOrg:async function(c,o){return c.orgId===o;},FieldValue:function(){return {serverTimestamp:function(){return 123;}};}};
+require.cache[require.resolve('../api/_lib/admin')]={exports:A};
+var reconcile=true;
+require.cache[require.resolve('../api/_lib/logic-workflow')]={exports:{processOrder:async function(){return {ok:reconcile};}}};
+var L=require('../api/_lib/order-lifecycle'),po=require('../api/customer-po'),logistics=require('../api/logic-logistics');
+var buyer={uid:'buyer',email:'buyer@example.com',claims:{email_verified:true}},staff={uid:'staff',email:'office@cleancell.us',orgId:'cleancell.us',claims:{email_verified:true}},res={setHeader:function(){}};
+function call(api,body,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},body),caller:c||buyer},res);}
+function input(){return {action:'submit',poNumber:'PO-56',items:[{sku:'CAB',qty:56}],destinations:[{id:'a',address:{name:'Site A',line1:'1 Example St',city:'Chicago',state:'IL',zip:'60601',country:'US'},items:[{sku:'CAB',qty:30}]},{id:'b',address:{name:'Site B',line1:'2 Example St',city:'Chicago',state:'IL',zip:'60602',country:'US'},items:[{sku:'CAB',qty:26}]}]};}
+var count=0;async function test(name,fn){await fn();count++;console.log('PASS '+name);}
+function seed(){db=new DB();db.seed('omega_orgs/cleancell.us',{status:'active',name:'CleanCell'});db.seed('omega_orgs/cleancell.us/billing/current',{addons:['omega-logic']});db.seed('omega_orgs/cleancell.us/fulfillment/config',{enabled:true,terms:{depositPct:30,dueDays:0}});db.seed('omega_orgs/cleancell.us/members/staff',{role:'admin',status:'active'});db.seed('omega_orgs/cleancell.us/customer_index/buyer@example.com',{customerId:'buyer'});db.seed('omega_orgs/cleancell.us/customers/buyer',{status:'active',name:'Buyer',terms:{depositPct:20}});db.seed('omega_orgs/cleancell.us/customers/buyer/users/buyer@example.com',{email:buyer.email,role:'owner',status:'active'});db.seed('omega_orgs/cleancell.us/storefront/config',{products:[{sku:'CAB',name:'Cabinet',kind:'product',active:true}]});}
+async function orderReady(){seed();var out=await call(po,input()),path='orders/'+out.orderId,o=db.rows.get(path);o.logic={releasedAt:'today',acceptedAt:'today',invoices:{deposit:{amountCents:10,satisfied:true},balance:{amountCents:90,satisfied:true}}};db.seed(path,o);['S1','S2'].forEach(function(s){db.seed('plant_units/cleancell.us__'+s,{serial:s,rootSerial:s,orgId:'cleancell.us',orderId:out.orderId,sku:'CAB',shipUnit:true,at:'ready',test:{result:'pass'}});});return out.orderId;}
+function plan(id){return {action:'plan',orderId:id,revision:0,legId:'load1',destinationId:'a',serials:['S1','S2'],carrier:'Example broker',tracking:'TEST-BOL',evidence:'Test booking reference only'};}
+async function main(){
+await test('56-unit PO preserves account terms, destinations and ignores client pricing',async function(){seed();var b=input();b.price=1;b.status='paid';b.customer={email:'victim@example.com'};var r=await call(po,b),o=db.rows.get('orders/'+r.orderId);assert.equal(o.status,'new');assert.equal(o.customer.email,buyer.email);assert.equal(o.items[0].qty,56);assert.equal(o.requestedTerms.depositPct,20);assert.equal(o.logic,undefined);assert.equal(o.pricing,undefined);assert.equal(o.delivery.destinations.length,2);});
+await test('concurrent identical PO retries create only one order',async function(){seed();var r=await Promise.all([call(po,input()),call(po,input())]);assert.equal(r[0].orderId,r[1].orderId);assert.equal(r[1].duplicate,true);assert.equal(Array.from(db.rows.keys()).filter(function(k){return /^orders\/[^/]+$/.test(k);}).length,1);});
+await test('same PO number with changed allocation is rejected',async function(){seed();await call(po,input());var b=input();b.destinations[0].items[0].qty=29;b.destinations[1].items[0].qty=27;await assert.rejects(call(po,b),/different details/);});
+await test('under or over allocated orders are rejected',async function(){seed();for(var n of [29,31]){var b=input();b.destinations[0].items[0].qty=n;await assert.rejects(call(po,b),/exactly match/);}});
+await test('invalid SKU, generic templates and duplicate destinations are rejected',async function(){seed();var b=input();b.items=[{sku:'GENERIC-BESS',qty:56}];await assert.rejects(call(po,b),/published/);b=input();b.destinations[1].id='a';await assert.rejects(call(po,b),/unique/);});
+await test('unverified, suspended and foreign-customer requests cannot submit',async function(){seed();await assert.rejects(call(po,input(),Object.assign({},buyer,{claims:{email_verified:false}})),/Verify/);await assert.rejects(call(po,input(),Object.assign({},buyer,{email:'other@example.com'})),/disabled|account/);db.seed('omega_orgs/cleancell.us/customers/buyer',{status:'suspended'});await assert.rejects(call(po,input()),/disabled/);});
+await test('expired tenant subscription is rejected',async function(){seed();db.seed('omega_orgs/cleancell.us/billing/current',{});await assert.rejects(call(po,input()),/not active/);});
+await test('customer projection excludes internal evidence, staff identity and pricing',async function(){var s=JSON.stringify(L.buyerOrder({pricing:'SECRET',delivery:{legs:[{id:'l',serials:[],lastEvent:{by:'SECRET',evidence:'SECRET'}}]}},'o'));assert(!s.includes('SECRET'));});
+await test('serial allocation is atomic and duplicate assignment is rejected',async function(){var id=await orderReady();await call(logistics,plan(id),staff);assert.equal(db.rows.get('plant_units/cleancell.us__S1').logisticsLegId,'load1');var b=plan(id);b.legId='load2';b.revision=1;await assert.rejects(call(logistics,b,staff),/unassigned/);});
+await test('foreign order and non-admin office caller are rejected',async function(){var id=await orderReady();await assert.rejects(call(logistics,plan(id),buyer),/workspace/);db.seed('omega_orgs/cleancell.us/members/staff',{role:'viewer',status:'active'});await assert.rejects(call(logistics,plan(id),staff),/administrator/);});
+await test('stale revisions fail without appending a new event',async function(){var id=await orderReady();await call(logistics,plan(id),staff);var before=db.rows.size;await assert.rejects(call(logistics,{action:'pickup',orderId:id,legId:'load1',revision:0,evidence:'Pickup signed TEST',location:'Factory'},staff),/changed/);assert.equal(db.rows.size,before);});
+await test('payment reversals block pickup',async function(){var id=await orderReady();await call(logistics,plan(id),staff);var o=db.rows.get('orders/'+id);o.logic.paymentException='reversed';db.seed('orders/'+id,o);await assert.rejects(call(logistics,{action:'pickup',orderId:id,legId:'load1',revision:1,evidence:'Pickup signed TEST',location:'Factory'},staff),/payments/);});
+await test('failed live reconciliation blocks pickup even with previously paid invoices',async function(){var id=await orderReady();await call(logistics,plan(id),staff);reconcile=false;try{await assert.rejects(call(logistics,{action:'pickup',orderId:id,legId:'load1',revision:1,evidence:'Pickup signed TEST',location:'Factory'},staff),/Reconcile/);}finally{reconcile=true;}});
+await test('failed component blocks pickup of passed shipping root',async function(){var id=await orderReady();await call(logistics,plan(id),staff);db.seed('plant_units/cleancell.us__CELL',{orgId:'cleancell.us',orderId:id,serial:'CELL',rootSerial:'S1',at:'ready',test:{result:'fail'}});await assert.rejects(call(logistics,{action:'pickup',orderId:id,legId:'load1',revision:1,evidence:'Pickup signed TEST',location:'Factory'},staff),/component/);});
+await test('pickup to delivery to damaged receipt retains manual evidence and separate state',async function(){var id=await orderReady();await call(logistics,plan(id),staff);await call(logistics,{action:'pickup',orderId:id,legId:'load1',revision:1,evidence:'Pickup signed TEST',location:'Factory'},staff);await call(logistics,{action:'delivered',orderId:id,legId:'load1',revision:2,evidence:'Delivery signed TEST',location:'Site A'},staff);var r=await call(logistics,{action:'inspect',orderId:id,legId:'load1',revision:3,evidence:'Receipt photo TEST damage',receipts:[{serial:'S1',condition:'accepted'},{serial:'S2',condition:'damaged'}]},staff);assert.equal(r.leg.status,'exception');assert.equal(r.leg.lastConfirmedLocation.source,'manual');assert.equal(db.rows.get('orders/'+id).status,'new');});
+await test('delivery cannot skip pickup and inspection must account for every serial',function(){var leg={status:'planned',serials:['S1','S2']};assert.throws(function(){L.transition(leg,'delivered',{evidence:'Signed receiving proof',location:'Site'},'staff','now');},/pickup/);leg.status='delivered';assert.throws(function(){L.transition(leg,'inspect',{evidence:'Signed receiving proof',receipts:[{serial:'S1',condition:'accepted'},{serial:'S1',condition:'accepted'}]},'staff','now');},/duplicate/);});
+await test('account order read never returns another buyer order',async function(){seed();await call(po,input());db.seed('orders/foreign',{orgId:'cleancell.us',customer:{email:'foreign@example.com'},orderNo:'SECRET'});var r=await po({method:'GET',query:{org:'cleancell.us'},caller:buyer},res);assert.equal(r.orders.length,1);assert(!JSON.stringify(r).includes('SECRET'));});
+console.log(count+' lifecycle checks passed');
+}
+main().catch(function(e){console.error(e);process.exitCode=1;});
