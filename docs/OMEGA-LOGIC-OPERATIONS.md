@@ -11,6 +11,10 @@ customer payments, office operations, factory records, white-label setup/editor,
 and `/mission?view=logic&org=cleancell.us`. No customer domain or hostname is
 invented: links remain on the currently deployed origin.
 
+ClearSky can exclude a prospect from the directory with
+`omega_orgs/{orgId}.logicDirectoryHidden: true`. This is a presentation flag,
+not an access grant or revocation; the account and its records remain intact.
+
 OEM admins/members can open their org-specific workspace; the cross-tenant
 directory, commercial approval, accounting configuration and wire ledger are
 restricted to the verified owner account. Buyers still use `/api/my-orders`
