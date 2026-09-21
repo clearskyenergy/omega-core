@@ -105,6 +105,22 @@ function billingOf(orgId) {
     .then(function (s) { return s.exists ? s.data() : { tier: 'standard', addons: [], toolOverrides: {} }; });
 }
 
+/* An orgId is an EMAIL DOMAIN, and that shape is strict. This exists because
+   Firestore's .doc() takes multi-segment paths: collection('omega_orgs')
+   .doc('cleancell.us/customers/x') resolves to a four-segment path, which is
+   a perfectly valid DOCUMENT — so an unvalidated org parameter from a query
+   string is a path-injection primitive, not merely a bad lookup.
+
+   Every endpoint that takes an org from a caller runs it through here, so
+   there is ONE definition of the shape rather than a regex per file. Returns
+   '' for anything that is not a plain domain; callers 400 on that. */
+function safeOrg(v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  if (!s || s.length > 253) return '';
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)) return '';
+  return ORG_ALIAS[s] || s;   /* the same fold orgOf() applies */
+}
+
 function httpError(status, msg) { var e = new Error(msg); e.status = status; return e; }
 
 /* Uniform handler wrapper: JSON in/out, CORS for the portal origins, errors → status. */
@@ -131,6 +147,6 @@ function cors(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
-module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, isStaffEmail: isStaffEmail, authenticate: authenticate,
+module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, safeOrg: safeOrg, isStaffEmail: isStaffEmail, authenticate: authenticate,
   canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };

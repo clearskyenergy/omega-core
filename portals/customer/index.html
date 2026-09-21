@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your orders</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     portals/customer/index.html — the buyer's portal
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     A battery customer signs in here to see their orders moving. It is a
+     FOURTH product surface, sibling to /portals/finance/, and the first page
+     in this codebase whose user is not a tenant member.
+
+     IT DOES NOT LOAD omega-tenant.js, DELIBERATELY. That runtime derives an
+     org from the signed-in email domain, and api/_lib/public-domains.js
+     refuses public providers outright — so a customer on Gmail would be
+     bounced to /start.html and asked to create a company workspace. Wrong
+     door entirely, and a confusing one. This page signs a person in and
+     resolves BRANDING ONLY from the hostname; it never resolves a workspace.
+
+     IT NEVER READS FIRESTORE. An `orders` document carries pricing, cost,
+     margin and staff emails, and rules hide documents rather than fields, so
+     there is no read rule that would work. Everything on this page comes
+     from /api/my-orders and /api/my-account, which project key by key.
+
+     AUTH IS EMAIL MAGIC LINK, PLUS GOOGLE. No password to forget, works for
+     any address, and the email is verified by construction — which matters
+     because email_verified is the whole security model behind the endpoints.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{
+    --ink:#0E1B24; --paper:#F4F7F9; --panel:#FFFFFF; --line:#DCE6EB; --sub:#5A7280;
+    --accent:#0E7C8B; --accent-soft:#E6F6F9; --cta:#0E7C8B;
+    --ok:#1B7F4B; --ok-bg:#E6F5EC; --wait:#A8690B; --wait-bg:#FBF0DD;
+    --bad:#B3261E; --bad-bg:#FBE9E7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper); color:var(--ink); min-height:100vh;
+    font:400 15px/1.55 'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Verdana,sans-serif}
+  .top{display:flex;align-items:center;gap:13px;padding:16px 24px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  .top img{height:28px;width:auto;display:block}
+  .top .nm{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .top .sp{flex:1}
+  .top .who{font-size:13.5px;color:var(--sub)}
+  .btn{font:600 14px/1 inherit;border-radius:9px;padding:10px 14px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--sub)}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.p{background:var(--cta);border-color:var(--cta);color:#fff}
+  .btn.p:hover{opacity:.9;color:#fff}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  main{max-width:820px;margin:0 auto;padding:30px 20px 70px}
+  h1{font-size:27px;font-weight:700;letter-spacing:-.02em;margin:0 0 6px}
+  .lede{color:var(--sub);margin:0 0 26px;max-width:58ch}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:20px;margin-bottom:16px}
+  h2{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--sub);margin:0 0 14px}
+  /* ── an order ─────────────────────────────────────────────────────── */
+  .ord{border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+  .ord:last-child{margin-bottom:0}
+  .ord .hd{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .ord .no{font:600 15px/1.2 ui-monospace,Menlo,Consolas,monospace}
+  .ord .when{font-size:13px;color:var(--sub)}
+  .ord .sp{flex:1}
+  .pill{font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px;white-space:nowrap}
+  .pill.go{background:var(--ok-bg);color:var(--ok)}
+  .pill.wait{background:var(--wait-bg);color:var(--wait)}
+  .pill.stop{background:var(--bad-bg);color:var(--bad)}
+  .say{margin:10px 0 0;color:var(--sub);font-size:14.5px}
+  .track{display:flex;gap:4px;margin-top:14px}
+  .track i{flex:1;height:5px;border-radius:3px;background:var(--line)}
+  .track i.on{background:var(--accent)}
+  .track i.done{background:var(--ok)}
+  .steps{display:flex;gap:4px;margin-top:6px;font-size:10.5px;color:var(--sub)}
+  .steps span{flex:1;text-align:center;line-height:1.25}
+  .lines{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;
+    display:flex;flex-direction:column;gap:6px}
+  .lines div{display:flex;gap:10px;font-size:14px}
+  .lines .q{font-weight:600;font-variant-numeric:tabular-nums;min-width:32px}
+  .lines .n{flex:1}
+  .meta{margin-top:12px;display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;color:var(--sub)}
+  .docs{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .docs a{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;
+    border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+  .docs a:hover{border-color:var(--accent)}
+  /* ── account ──────────────────────────────────────────────────────── */
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+  .kv .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700}
+  .kv .v{font-size:15px;font-weight:600;margin-top:3px}
+  label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--sub);font-weight:700;margin:14px 0 5px}
+  input{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px}
+  input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .actions{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+  .muted{color:var(--sub)}
+  .err{color:var(--bad);font-weight:600}
+  .empty{text-align:center;padding:30px 12px;color:var(--sub)}
+  /* ── sign in ──────────────────────────────────────────────────────── */
+  #gate{max-width:420px;margin:60px auto;padding:0 20px}
+  #gate section{padding:26px}
+  #gate h1{font-size:23px}
+  @media (max-width:560px){ main{padding:22px 16px 60px} .row2{grid-template-columns:1fr}
+    .steps{display:none} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <img id="mark" alt="" hidden>
+  <span class="nm" id="brand">Your orders</span>
+  <span class="sp"></span>
+  <span class="who" id="who"></span>
+  <button type="button" class="btn" id="out" hidden>Sign out</button>
+</header>
+
+<div id="gate" hidden>
+  <section>
+    <h1 id="g-h">Sign in</h1>
+    <p class="lede" id="g-p">We will email you a link. No password to remember.</p>
+    <label for="g-email">Email address</label>
+    <input id="g-email" type="email" autocomplete="email" placeholder="you@company.com">
+    <div class="actions">
+      <button type="button" class="btn p" id="g-link">Email me a link</button>
+      <button type="button" class="btn" id="g-google">Use Google</button>
+    </div>
+    <p class="muted" id="g-msg" style="margin-top:14px;font-size:13.5px"></p>
+  </section>
+</div>
+
+<main id="app" hidden>
+  <h1 id="hello">Your orders</h1>
+  <p class="lede" id="sub">Everything you have ordered, and where each one has got to.</p>
+
+  <section id="s-orders">
+    <h2>Orders</h2>
+    <div id="orders"><p class="muted">Loading…</p></div>
+  </section>
+
+  <section id="s-acct">
+    <h2>Your account</h2>
+    <div class="kv" id="acct"></div>
+    <div id="terms-wrap" hidden>
+      <h2 style="margin-top:22px">Your terms</h2>
+      <div class="kv" id="terms"></div>
+      <p class="muted" id="terms-note" style="font-size:13px;margin-top:12px"></p>
+    </div>
+    <h2 style="margin-top:22px">Your details</h2>
+    <label for="f-name">Your name</label><input id="f-name">
+    <div class="row2">
+      <div><label for="f-company">Company</label><input id="f-company"></div>
+      <div><label for="f-phone">Phone</label><input id="f-phone"></div>
+    </div>
+    <label for="f-line1">Delivery address</label><input id="f-line1" placeholder="Street">
+    <div class="row2">
+      <div><label for="f-city">City</label><input id="f-city"></div>
+      <div><label for="f-state">State / ZIP</label><input id="f-state" placeholder="IL 60616"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn p" id="save">Save my details</button>
+      <span class="muted" id="save-msg" style="align-self:center;font-size:13.5px"></span>
+    </div>
+  </section>
+</main>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script>
+/* ES5 — CLAUDE.md's rule for every page outside the few ES2015 core ones. */
+(function () {
+  'use strict';
+
+  /* Every compat page in this repo creates the default app itself — see
+     orders.html:128. This page loads no omega-tenant.js to do it, so without
+     this line firebase.auth() throws "No Firebase App '[DEFAULT]'" on the
+     first call and the portal renders nothing at all. */
+  var _cfg = window.CLEARSKY_CONFIG || {};
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(_cfg.firebase || _cfg);
+  } catch (e) {}
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function qp(k) {
+    var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  /* The tenant whose portal this is. From the hostname, which is theirs —
+     never from anything a caller types. The endpoints scope by the VERIFIED
+     email regardless, so this decides which tenant's portal you are looking
+     at, not what you may see. */
+  var ORG = String(qp('org') || (window.CLEARSKY_CONFIG &&
+            CLEARSKY_CONFIG.tenant && CLEARSKY_CONFIG.tenant.orgId) || '').toLowerCase();
+
+  var LS_EMAIL = 'omega.portal.email';
+
+  function paint() {
+    try {
+      var WL = window.OmegaWhiteLabel;
+      if (WL && WL.active && WL.active()) {
+        var n = WL.platformName();
+        $('brand').textContent = n;
+        document.title = 'Your orders · ' + n;
+        var m = WL.markUrl && WL.markUrl();
+        if (m) { $('mark').src = m; $('mark').hidden = false; }
+      }
+    } catch (e) {}
+  }
+
+  function tok() {
+    var u = firebase.auth().currentUser;
+    return u ? u.getIdToken() : Promise.reject(new Error('signed out'));
+  }
+  function api(path, init) {
+    return tok().then(function (t) {
+      var o = init || {};
+      o.headers = o.headers || {};
+      o.headers.Authorization = 'Bearer ' + t;
+      if (o.body) o.headers['Content-Type'] = 'application/json';
+      return fetch(path, o);
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; },
+                           function () { return { ok: false, status: r.status, j: {} }; });
+    });
+  }
+
+  /* ── orders ─────────────────────────────────────────────────────────── */
+  var TONE = { shipped: 'go', cancelled: 'stop' };
+  function drawOrders(list) {
+    if (!list.length) {
+      $('orders').innerHTML = '<div class="empty">Nothing here yet.<br>'
+        + 'Orders you place will appear as soon as they are received.</div>';
+      return;
+    }
+    $('orders').innerHTML = list.map(function (o) {
+      var ms = o.milestone || {};
+      var tone = TONE[ms.key] || 'wait';
+      var track = '';
+      if (ms.index !== null && ms.index !== undefined) {
+        for (var i = 0; i < (ms.of || 6); i++) {
+          track += '<i class="' + (i < ms.index ? 'done' : i === ms.index ? 'on' : '') + '"></i>';
+        }
+      }
+      var lines = (o.items || []).map(function (it) {
+        return '<div><span class="q">' + esc(it.qty || 1) + '&times;</span>'
+             + '<span class="n">' + esc(it.name || it.sku || 'Item')
+             + (it.kwh ? ' <span class="muted">' + esc(it.kwh) + ' kWh</span>' : '')
+             + '</span></div>';
+      }).join('');
+      var docs = (o.documents || []).map(function (d) {
+        return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.name || d.kind) + '</a>';
+      }).join('');
+      var meta = [];
+      if (o.site && o.site.city) meta.push('Delivering to ' + esc(o.site.city) + (o.site.state ? ', ' + esc(o.site.state) : ''));
+      if (o.system && o.system.kwh) meta.push(esc(o.system.kwh) + ' kWh · ' + esc(o.system.kw || '—') + ' kW');
+      if (o.promisedShipAt) meta.push('Ships by ' + esc(String(o.promisedShipAt).slice(0, 10)));
+      if (o.price && o.price.total) meta.push('$' + Number(o.price.total).toLocaleString());
+
+      return '<div class="ord">'
+        + '<div class="hd"><span class="no">' + esc(o.orderNo || '—') + '</span>'
+        +   '<span class="when">' + esc(String(o.placedAt || '').slice(0, 10)) + '</span>'
+        +   '<span class="sp"></span>'
+        +   '<span class="pill ' + tone + '">' + esc(ms.label || 'Received') + '</span></div>'
+        + (o.cancelRequested ? '<p class="say"><b>Cancellation requested.</b> '
+            + esc(o.soldBy || 'The team') + ' will be in touch.</p>' : '')
+        + '<p class="say">' + esc(ms.say || '') + '</p>'
+        + (track ? '<div class="track">' + track + '</div>'
+            + '<div class="steps"><span>Received</span><span>Confirmed</span><span>Building</span>'
+            + '<span>Testing</span><span>Ready</span><span>Shipped</span></div>' : '')
+        + (lines ? '<div class="lines">' + lines + '</div>' : '')
+        + (meta.length ? '<div class="meta">' + meta.join('<span>·</span>') + '</div>' : '')
+        + (docs ? '<div class="docs">' + docs + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  function loadOrders() {
+    api('/api/my-orders?org=' + encodeURIComponent(ORG)).then(function (r) {
+      if (!r.ok) { $('orders').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your orders.') + '</p>'; return; }
+      drawOrders(r.j.orders || []);
+    })['catch'](function () {
+      $('orders').innerHTML = '<p class="err">Could not reach the server. Please try again.</p>';
+    });
+  }
+
+  /* ── account ────────────────────────────────────────────────────────── */
+  function drawAccount(a) {
+    $('acct').innerHTML =
+        '<div><div class="k">Company</div><div class="v">' + esc(a.company || '—') + '</div></div>'
+      + '<div><div class="k">Signed in as</div><div class="v">' + esc(a.you.email) + '</div></div>'
+      + '<div><div class="k">Orders</div><div class="v">' + esc(a.orders) + '</div></div>'
+      + (a.plan === 'designer'
+          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '');
+
+    var t = a.terms || {};
+    var any = t.netDays !== null || t.discountPct !== null || t.poRequired;
+    $('terms-wrap').hidden = !any;
+    if (any) {
+      $('terms').innerHTML =
+          (t.netDays !== null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
+        + (t.discountPct !== null ? '<div><div class="k">Your discount</div><div class="v">' + esc(t.discountPct) + '%</div></div>' : '')
+        + (t.poRequired ? '<div><div class="k">Purchase order</div><div class="v">Required</div></div>' : '');
+      $('terms-note').textContent = 'Set by ' + (a.company ? 'your account manager' : 'the team') + '. Ask them if anything here looks wrong.';
+    }
+
+    $('f-name').value = a.you.name || '';
+    $('f-company').value = a.company || '';
+    $('f-phone').value = a.you.phone || '';
+    var ad = a.address || {};
+    $('f-line1').value = ad.line1 || '';
+    $('f-city').value = ad.city || '';
+    $('f-state').value = [ad.state, ad.zip].filter(Boolean).join(' ');
+  }
+
+  function loadAccount() {
+    api('/api/my-account?org=' + encodeURIComponent(ORG)).then(function (r) {
+      if (!r.ok) { $('acct').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; return; }
+      drawAccount(r.j);
+      if (r.j.company) $('hello').textContent = 'Orders for ' + r.j.company;
+    })['catch'](function () {});
+  }
+
+  $('save').addEventListener('click', function () {
+    var sp = String($('f-state').value || '').trim().split(/\s+/);
+    $('save-msg').textContent = 'Saving…';
+    api('/api/my-account', { method: 'POST', body: JSON.stringify({
+      org: ORG,
+      name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value,
+      address: { line1: $('f-line1').value, city: $('f-city').value,
+                 state: sp[0] || '', zip: sp[1] || '' }
+    }) }).then(function (r) {
+      if (!r.ok) { $('save-msg').textContent = r.j.error || 'Could not save.'; return; }
+      $('save-msg').textContent = 'Saved.';
+      drawAccount(r.j);
+    })['catch'](function () { $('save-msg').textContent = 'Could not reach the server.'; });
+  });
+
+  /* ── sign in ────────────────────────────────────────────────────────── */
+  function sendLink() {
+    var e = String($('g-email').value || '').trim();
+    if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }
+    try { localStorage.setItem(LS_EMAIL, e); } catch (x) {}
+    firebase.auth().sendSignInLinkToEmail(e, {
+      url: location.origin + location.pathname + (ORG ? '?org=' + encodeURIComponent(ORG) : ''),
+      handleCodeInApp: true
+    }).then(function () {
+      $('g-msg').textContent = 'Check your inbox — we have emailed a link to ' + e + '.';
+    }, function (err) {
+      $('g-msg').className = 'err';
+      $('g-msg').textContent = (err && err.message) || 'Could not send the link.';
+    });
+  }
+  $('g-link').addEventListener('click', sendLink);
+  $('g-email').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') sendLink(); });
+  $('g-google').addEventListener('click', function () {
+    var p = new firebase.auth.GoogleAuthProvider();
+    firebase.auth().signInWithPopup(p)['catch'](function (err) {
+      $('g-msg').className = 'err';
+      $('g-msg').textContent = (err && err.message) || 'Could not sign in.';
+    });
+  });
+  $('out').addEventListener('click', function () { try { firebase.auth().signOut(); } catch (e) {} });
+
+  /* Completing a magic link when they come back from the email. */
+  try {
+    if (firebase.auth().isSignInWithEmailLink(location.href)) {
+      var saved = '';
+      try { saved = localStorage.getItem(LS_EMAIL) || ''; } catch (x) {}
+      if (!saved) saved = window.prompt('Confirm the email address you used') || '';
+      firebase.auth().signInWithEmailLink(saved, location.href)['catch'](function (err) {
+        $('g-msg').className = 'err';
+        $('g-msg').textContent = (err && err.message) || 'That link has expired. Please ask for a new one.';
+      });
+    }
+  } catch (e) {}
+
+  firebase.auth().onAuthStateChanged(function (u) {
+    paint();
+    if (!u) {
+      $('gate').hidden = false; $('app').hidden = true;
+      $('out').hidden = true; $('who').textContent = '';
+      return;
+    }
+    $('gate').hidden = true; $('app').hidden = false;
+    $('out').hidden = false; $('who').textContent = u.email || '';
+    if (!ORG) {
+      $('orders').innerHTML = '<p class="err">This portal link is missing its account. '
+        + 'Please use the link your supplier sent you.</p>';
+      return;
+    }
+    loadAccount();
+    loadOrders();
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>

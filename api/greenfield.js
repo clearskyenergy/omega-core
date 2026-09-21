@@ -348,26 +348,20 @@ async function geocode(addr) {
   CACHE.geo[addr] = ll || null;
   return ll;
 }
+// Census then Nominatim now live in api/_lib/geocode.js, which is the one copy
+// (api/embed-layout.js needs the same two sources and CLAUDE.md records what
+// three copies of one decision cost). These wrappers keep this file's `lon`
+// spelling, because the callers below use it and renaming a field is not a
+// geocoding change. The lib never rejects, so the try//catch these replaced is
+// no longer load-bearing.
+var GEO = require("./_lib/geocode");
 async function geocodeCensus(addr) {
-  try {
-    var url = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress" +
-      "?benchmark=Public_AR_Current&format=json&address=" + encodeURIComponent(addr);
-    var r = await fetch(url, { headers: { "User-Agent": UA } });
-    var j = await r.json();
-    var m = j && j.result && j.result.addressMatches && j.result.addressMatches[0];
-    if (m && m.coordinates) return { lat: m.coordinates.y, lon: m.coordinates.x };
-  } catch (e) {}
-  return null;
+  var h = await GEO.census(addr);
+  return h ? { lat: h.lat, lon: h.lng } : null;
 }
 async function geocodeNominatim(addr) {
-  try {
-    var url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" +
-      encodeURIComponent(addr);
-    var r = await fetch(url, { headers: { "User-Agent": UA } });
-    var j = await r.json();
-    if (j && j[0]) return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon) };
-  } catch (e) {}
-  return null;
+  var h = await GEO.nominatim(addr);
+  return h ? { lat: h.lat, lon: h.lng } : null;
 }
 
 // State FIPS -> USPS (for LandSearch county slugs)

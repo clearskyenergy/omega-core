@@ -219,6 +219,15 @@ const FIREBASE_CONFIG = {
   appId:             "1:742134484347:web:ab0f95fd221536158481de"
 };
 const ENDPOINT = 'https://us-central1-clearsky-portal.cloudfunctions.net/twinChat';
+/* Factory questions are answered by the OMEGA control plane, not by the mail
+   twin. A tenant can be pinned in the link, for example
+   /jarvis.html?org=cleancell.us; an explicit domain in a question wins too.
+   The server verifies that the signed-in person administers that tenant. */
+const OPS_ENDPOINT = '/api/jarvis-operations';
+const OPS_ORG = (() => {
+  const v = new URLSearchParams(location.search).get('org') || '';
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(v) ? v.toLowerCase() : '';
+})();
 
 const V = 'https://www.gstatic.com/firebasejs/10.12.5/';
 const [appMod, authMod] = await Promise.all([
@@ -302,6 +311,28 @@ async function call(method, body) {
   return data;
 }
 
+function operationsQuestion(text) {
+  return /\b(fulfil+ment|factory|plant(?:\s+floor)?|quality\s+hold|\bncr\b|cell\s+trace|module\s+trace|serial|scan(?:ned|ning)?|end[- ]?of[- ]?line|\beol\b|work[- ]?order|ready\s+to\s+ship|shipping\s+unit)\b/i.test(text);
+}
+function tenantInQuestion(text) {
+  const m = String(text || '').toLowerCase().match(/\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\b/);
+  return m ? m[0] : OPS_ORG;
+}
+async function operationsCall(text) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('not signed in');
+  const token = await user.getIdToken();
+  const org = tenantInQuestion(text);
+  const res = await fetch(OPS_ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(org ? { message: text, org } : { message: text })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
 async function submit() {
   const text = input.value.trim();
   if (!text || busy) return;
@@ -310,7 +341,13 @@ async function submit() {
   bubble('you', text, new Date().toISOString());
   const pending = thinking();
   try {
-    const { reply, costUsd } = await call('POST', { message: text });
+    /* A factory read is an evidence-backed capability. It cannot inherit the
+       mail agent's freedom to infer or act, and its response costs no model
+       tokens because the plant state already answers the question. */
+    const answer = operationsQuestion(text)
+      ? await operationsCall(text)
+      : await call('POST', { message: text });
+    const { reply, costUsd } = answer;
     pending.remove();
     bubble('jarvis', reply, new Date().toISOString(), costUsd);
   } catch (e) {
@@ -333,6 +370,10 @@ input.addEventListener('input', () => {
 document.querySelectorAll('.chip').forEach(c => {
   c.addEventListener('click', () => { input.value = c.textContent; submit(); });
 });
+
+if (OPS_ORG) {
+  document.querySelector('header .sub').textContent = 'ClearSky OMEGA operating twin · ' + OPS_ORG + ' operations';
+}
 
 el('signin').addEventListener('click', async () => {
   try {

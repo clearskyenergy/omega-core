@@ -2028,6 +2028,192 @@ service cloud.firestore {
        Same reasoning as legal_acceptances. A withdrawn application is
        'withdrawn'; what was asked for and when survives, because that is the
        half a dispute turns on. */
+    /* ════════════════════════════════════════════════════════════════════
+       WHITE-LABEL STOREFRONT  —  embed_keys, embed_configs, orders
+       ════════════════════════════════════════════════════════════════════
+       A white-labelled tenant runs an ordering surface on their OWN website.
+       Their customer has no account here and must never be asked for one, so
+       the three collections below are reached by a caller with no
+       request.auth at all.
+
+       THE RULE FOR ALL THREE IS THE SAME AND IT IS THE SHORT ONE:
+       NO UNAUTHENTICATED ACCESS. NONE. The public path goes through
+       /api/embed-* on the Admin SDK, which bypasses this file, and those
+       functions are where the public contract is enforced — a publishable
+       key, an origin allowlist, a rate limit, and a response built key by key
+       so nothing leaks by being present.
+
+       Writing `allow read: if true` on any of these to "make the embed work"
+       would hand the whole collection to anybody with a browser. The embed
+       does not need it and never did.
+       ════════════════════════════════════════════════════════════════════ */
+
+    /* ── EMBED KEYS ──  embed_keys/{key}
+       Doc id IS the publishable key (omega_pk_…). It names an orgId, the
+       origins it may be framed by, and whether it is still live.
+
+       NOT READABLE BY THE TENANT, which looks wrong for thirty seconds and is
+       right. The key is already in the page source of their own website —
+       they have it. What this document additionally holds is `origins`,
+       `active` and `scopes`, which are OUR controls over their installation:
+       a tenant who could edit origins could point their key at any site, and
+       a tenant who could flip `active` could not be switched off. Staff read
+       and write; the server reads with the Admin SDK.
+
+       /api/order-link.js hands a tenant's own key back to their own designer
+       when building a customer link — through a function that has already
+       checked they may act in that org, which is the difference. */
+    match /embed_keys/{key} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ── PUBLISHED CONFIGURATIONS ──  embed_configs/{id}
+       A snapshot of a system a designer published for one customer to order:
+       the label, the sizes, the BOM, an expiry.
+
+       CREATED ONLY BY /api/order-link.js. A browser create is refused
+       outright — not narrowed, refused — because the snapshot is the evidence
+       of what was offered, and a client that could write one could offer
+       terms nobody approved and then point at the document.
+
+       Read is the owning org's (so a designer can list what they published)
+       plus ClearSky. The PUBLIC read goes through /api/embed-config, which
+       reshapes the document key by key: the stored doc carries createdBy, an
+       internal email address that has no business on a customer's screen.
+
+       Update is refused too. Withdrawing a link sets `revoked` through
+       /api/order-link.js action:'revoke' — a flag, never a delete, because an
+       order already placed against this configuration references it. */
+    match /embed_configs/{configId} {
+      allow read:   if signedIn()
+                    && (resource.data.get('orgId', '') == userOrg()
+                     || ownsDemoBucket(resource.data.get('orgId', ''))
+                     || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* ── ORDERS ──  orders/{orderId}
+       What a storefront customer asked for, and what we are doing about it.
+
+       ── WHO READS ──
+       The tenant reads their own rows: their storefront, their customer,
+       their relationship. ClearSky reads all, because ClearSky fulfils.
+       `.get('orgId','')` and not a bare reference — a bare one fails the
+       WHOLE evaluation on any document written before the field existed, the
+       same trap orgsInvolved documents at length above.
+
+       That the read filters on the SAME field the client queries is what
+       makes the LIST in orders.html legal: Firestore refuses a list the
+       moment one returned document would fail.
+
+       ── WHO WRITES: NOBODY, FROM A BROWSER ──
+       Every write is /api/orders.js or /api/embed-order.js. This is not
+       belt-and-braces over a client that behaves; the rules genuinely cannot
+       express what has to hold:
+
+         · Only ClearSky may set `pricing`. The tenant's margin sits on top of
+           our number; two parties writing one price makes an invoice nobody
+           can reconcile.
+         · Only ClearSky may advance `status` — EXCEPT 'cancelled', which the
+           tenant may always set on their own order. Their customer, their
+           right to call it off.
+         · `history` may only be appended to. An order whose price changed
+           with no record of who changed it is the argument you lose.
+         · A status change notifies the other side, which is a write to a
+           document the caller cannot touch.
+
+       Expressing the first two in a rules file would mean encoding a
+       commercial arrangement in firestore.rules, where it cannot be read by
+       the people who negotiate it. It lives in api/orders.js, next to the
+       comment explaining it.
+
+       ── DELETE IS REFUSED FOR EVERYONE, INCLUDING US ──
+       Same reasoning as legal_acceptances and fin_applications. A cancelled
+       order is 'cancelled'; what was asked for and when survives, because
+       that is the half a dispute turns on. CLAUDE.md: flag, don't drop. */
+    match /orders/{orderId} {
+      allow read:   if signedIn()
+                    && (resource.data.get('orgId', '') == userOrg()
+                     || ownsDemoBucket(resource.data.get('orgId', ''))
+                     || isAdmin());
+      allow create, update: if false;
+      allow delete: if false;
+    }
+
+    /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
+       From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
+       ADAPTED: the addendum's plantOrg() fell back to myOrg(), which does
+       not exist in these rules. userOrg() is the real name and it already
+       folds through orgAlias(), so the alias handling the addendum wrote by
+       hand is redundant here rather than missing.
+
+       NONE of the collections that MOVE a unit are client-writable. A unit
+       advances only through /api/mes-scan, which checks the routing in
+       api/_lib/plant.js before it writes. If a browser could set `at`
+       directly, every guarantee in that engine evaporates — a unit could
+       skip EOL test, jump to Ready, or move backwards, and the board would
+       report it as fact. Same arrangement `orders` already has.
+
+       READ IS isOmegaStaff() HERE AND isAdmin() ON `orders`, deliberately.
+       An order carries the customer, the pricing, the cost and the margin.
+       A unit carries a serial and a bench. A rep who is working the floor
+       with a tenant needs the second and has no business in the first. */
+
+    match /plant_works_orders/{woId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* Admin SDK only — raised on deposit paid */
+    }
+
+    match /plant_units/{unitId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      /* A unit's station is decided by api/_lib/plant.js against the works
+         order's own routing. There is no shape of client write that could be
+         checked here instead. */
+      allow write:  if false;
+    }
+
+    match /plant_scans/{scanId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+      allow write:  if false;        /* append-only log, refusals included */
+    }
+
+    match /plant_stations/{stationId} {
+      allow read:   if isOmegaStaff()
+                    || (signedIn()
+                        && (resource.data.get('orgId', '') == userOrg()
+                         || ownsDemoBucket(resource.data.get('orgId', ''))));
+
+      /* A tenant admin may create, relabel and DEACTIVATE their own benches.
+         Deactivating is how a lost tablet is killed, and waiting on us to do
+         it is how a lost tablet stays live over a weekend.
+
+         They may not mint a token by writing tokenHash themselves: a hash the
+         client chose is a token the client chose, and the console's one-time
+         reveal becomes meaningless. Mint goes through the Admin SDK.
+
+         Firestore rules cannot hide a FIELD, only a document, and a tenant
+         admin must see their own benches — so the document stores a SHA-256
+         of the token and never the token. Reading the hash buys an attacker
+         nothing they can replay. */
+      allow create: if isOmegaStaff();
+      allow update: if isOmegaStaff()
+                    || (isTenantAdmin(resource.data.get('orgId', ''))
+                        && request.resource.data.get('orgId', '') == resource.data.get('orgId', '')
+                        && request.resource.data.get('station', '') == resource.data.get('station', '')
+                        && request.resource.data.get('tokenHash', '') == resource.data.get('tokenHash', '')
+                        && request.resource.data.get('machine', false) == resource.data.get('machine', false));
+      allow delete: if isOmegaStaff();
+    }
+
     match /fin_applications/{appId} {
 
       function appOrg() { return resource.data.get('orgId', ''); }
@@ -2521,6 +2707,34 @@ service cloud.firestore {
         allow update: if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId))
                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
         allow create, delete: if isAdmin();
+      }
+
+      /* ── STOREFRONT ──  omega_orgs/{orgId}/storefront/{docId}
+         ← WHITE LABEL. The public storefront's configuration: the published
+         product list, the copy, the cost basis the sizer runs on, and the
+         daily order counter.
+
+         READ is the tenant's own. WRITE is ClearSky's alone, and that is not
+         an oversight to be tidied away later:
+
+           · `products[].listPrice` is what a stranger on the open internet
+             sees. A tenant admin who could edit it from a browser could put
+             a price in front of the public that nobody at ClearSky agreed to
+             fulfil at — and we are the ones fulfilling.
+           · `capexPerKwh` / `capexPerKw` are the COST BASIS the sizer sweeps
+             against. Writable by the tenant means discoverable by the
+             tenant, and it is our number, not theirs.
+           · `counters` is the durable order rate limit (api/embed-order.js).
+             A writable counter is not a limit.
+
+         The server reaches it through the Admin SDK, which bypasses this
+         block entirely; the block is what stops a BROWSER. A self-serve
+         catalogue editor for tenants is a real feature and a separate one —
+         it needs an endpoint that validates a price change, not a rule that
+         waves it through. See docs/WHITE-LABEL.md § Not built yet. */
+      match /storefront/{docId} {
+        allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
+        allow write: if isAdmin();
       }
     }
 

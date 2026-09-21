@@ -31,8 +31,12 @@ touching anything.
 /                       core pages (index, editor, projects, marketplace,
                         account-settings) + ALL tool pages at the root, because
                         omega-tools.js registers them by root path
-/omega-*.js             shared runtime: sso, brand, TENANT (new), tools, terms,
-                        assets, delivery, legal, capacity-ledger…
+/omega-*.js             shared runtime: sso, brand, TENANT (new), WHITELABEL
+                        (new), tools, terms, assets, delivery, legal,
+                        capacity-ledger…
+/embed/                 the PUBLIC, unauthenticated storefront: one iframe-able
+                        page + the loader a tenant pastes on their own site.
+                        No Firebase SDK, no sign-in, no platform name.
 /api/                   Vercel serverless; api/_lib/admin.js is the shared auth
 /admin/                 master index (tools.csebuilders.com) — admin-console.js
 /console/               ops console (alpha.clearskyomega.com)
@@ -90,6 +94,13 @@ opportunities/{id}                    # editor-generated, anonymous parent
 opportunities/{id}/private/contact    # identity; vendor reads after reveal
 rfqs/{id}                             # customer's full BOM
 rfqs/{id}/recipients/{vendorOrgId}    # each vendor's slice + quote
+
+omega_orgs/{orgId}.whiteLabel         # what the PLATFORM is called here
+omega_orgs/{orgId}/storefront/config  # published products + copy + cost basis
+omega_orgs/{orgId}/storefront/counters# the durable daily order limit
+embed_keys/{omega_pk_…}               # a publishable key = ONE installation
+embed_configs/{id}                    # a designer's published quote, snapshot
+orders/{id}                           # tenant sells, ClearSky fulfils
 ```
 
 Already-existing role/identity collections — use, don't duplicate:
@@ -188,6 +199,119 @@ more from the palette; tenant admin can set an org-level default layout.
   `receivesFullBom` (whole BOM).
 - Identity is revealed only when the customer accepts a quote.
 - Notifications via `api/notify.js` on write.
+
+## White label
+
+`omega-whitelabel.js` owns ONE question: what is the platform called here, and
+what carries its mark? It wraps `OmegaBrand.platformName` and loads directly
+after `omega-tenant.js`. A `whiteLabel` block on `omega_orgs/{orgId}` drives
+it; `api/_lib/whitelabel.js` is the ONE allowlist of keys that may cross into
+world-readable `tenant_public` (the login page has to paint before there is a
+user). Do not add a second copy of that list — see what three copies of
+`orgAlias()` already cost.
+
+- `whiteLabel` is **staff-written**. It decides whether our name appears on a
+  product we operate, which is a contract line item, not a tenant preference.
+  `attribution` defaults to `'powered-by'` so removing our name is always a
+  decision somebody made.
+- `/embed/` is served to the PUBLIC with no token. Its gate is a publishable
+  key plus an origin allowlist — **accounting and hygiene, not a security
+  boundary.** What holds instead: nothing confidential is reachable, pricing
+  and sizing are server-side and return results never inputs, an order is a
+  request with `status` pinned to `new` that a human confirms, and there are
+  rate limits. Read the header of `api/_lib/embed.js` before changing any of
+  it.
+- The site study (`api/embed-layout.js` + `_lib/site-fit.js`) is the one
+  public call that COSTS MONEY — `api/parcel.js` reaches metered Regrid. It is
+  gated on a named lead (an enquiry receipt), capped per org per day in a
+  transaction, and a cache hit never spends the allowance. It is NOT
+  `api/site-plan.js` and must not become it: that one demands a surveyed
+  parcel and a confirmed service wall and would return `needs_input` to every
+  visitor. A parcel record's owner name and APN are never echoed to the
+  public page.
+- A tenant's cost basis (`storefront.capexPerKwh`/`capexPerKw`) must NEVER be
+  in the repo. `scripts/seed-omega-orgs.js` throws if a `tenant.json` carries
+  either.
+- A tenant's product list is imported with `scripts/import-products.js` from a
+  CSV (`docs/product-list-template.csv` is the sheet to send them). It refuses
+  a cost-basis column outright, converts `dimUnits` (datasheets print mm) and
+  refuses an implausible footprint rather than drawing it, and REPORTS blank
+  integration flags instead of taking them as "external".
+- **ONE product list per tenant**: `omega_orgs/{org}/storefront/config.products`
+  feeds the public storefront, the site study's footprints AND the editor's
+  BESS Guided Build (`omega-bess-products.js` merges it into `BESS_CATALOG`).
+  Its ENGINEERING fields — `inverter`, `transformer`, `disconnect`,
+  `usableKwh`, `integrates{}` — are read only by the signed-in product;
+  `api/embed-config.js` builds the public response key by key, which is the
+  only thing keeping them private. Never replace that with a spread.
+  The merge is ADDITIVE and namespaced by org: a saved project references a
+  catalogue key, so a shipped entry is never removed or overwritten.
+- `orders` is read from Firestore and written ONLY through `api/orders.js`:
+  "only ClearSky may price, but the tenant may always cancel their own" is a
+  commercial arrangement and does not belong in a rules file.
+
+- **The storefront is the taste; the designer is the next sale.** Size, site
+  study and product order are open to anybody. The EDITOR is not:
+  `omega-editor-gate.js` requires a signed-in user of an ACTIVE tenant, and
+  the storefront only PITCHES the designer (a lead in the same `orders` queue,
+  marked `interest:'platform'`). Do not add a public link into `/editor`.
+- That gate **fails OPEN on a missing `omega_orgs` record**, exactly as
+  `tenantActive()` does in the rules and for the same reason — every legacy
+  tenant has no record until the seed runs. Only an explicit
+  pending/suspended/cancelled, or `toolOverrides.editor === false`, refuses.
+  Getting this backwards locks out every paying customer.
+- The gate is a COMMERCIAL control, not the security boundary;
+  `firestore.rules` already scopes every project read and write by orgId.
+- `omega-storefront-handoff.js` still pre-configures the designer from
+  `/editor?k=&sku=&qty=&addr=` for somebody who HAS an account. The gate
+  decides, not the link.
+- `editor.html` gets its white label from `OmegaWhiteLabel.hydrate()`, which
+  reads `omega_orgs/{org}` directly. It deliberately does NOT load
+  `omega-tenant.js`: that would bring the hostname lock to a page that
+  currently boots anywhere. The lock is a real control and a SEPARATE,
+  separately-tested change. hydrate() adds branding and removes nothing.
+
+- `?wlpreview=<orgId>` paints a signed-in page as one tenant, for staff only.
+  It exists because `orgId` IS the email domain, so nobody here has an account
+  that resolves to a customer's workspace and a white label was otherwise
+  unviewable by the people who sold it. **It changes the paint and never the
+  scope** — `hydrate()` pins `CLEARSKY_CONFIG.tenant.orgId` to the signed-in
+  org and copies only presentation keys off the previewed record. The gate is
+  Firestore (`isAdmin()` on `omega_orgs/{other}`), not the JavaScript. Not
+  sticky: URL only, with a banner. `scripts/test-wl-preview.js` mutation-tests
+  the one line that would turn it into impersonation.
+- `whitelabel-setup.html` is the staff last mile: it turns `tenants/<slug>/`
+  into a live storefront from the browser, using only writes the rules already
+  grant an `@csebuilders.com` token. It does NOT write `tenant_public` — that
+  needs the one allowlist in `api/_lib/whitelabel.js` and stays with
+  `scripts/seed-omega-orgs.js`, which remains canonical for a bulk seed and
+  for rotating, re-scoping or disabling an embed key.
+- **The second sale is a TWO-TOOL PRODUCT, not the whole editor.** What Clean
+  Cell resells is Site Map (`editor`) + Grid Atlas (`gridatlas`), white-labelled
+  and reached from their own site. That is `billing/current.toolAccess =
+  ['editor','gridatlas']` — an allowlist that wins over the tier, the addons,
+  `toolOverrides`, `requiredTools` and `unlockedTools`. No new gating code: the
+  master console has written this field for a while.
+  - `omega-tenant.js` read only `members/{uid}.toolAccess`, so the org-level
+    allowlist held on `index.html` (which carries its own copy of the merge)
+    and nowhere else — a colleague who auto-joined got all 41 tools. It now
+    reads both and **intersects**: a member list may narrow the product, never
+    widen past what the org bought (`members/*` is tenant-admin-writable).
+  - **Absent ≠ empty.** `null` means "whatever the plan includes"; a present
+    array is authoritative at any length, including `[]` = nothing. That is
+    what `api/fiber-screen.js`, `api/compute-lease.js` and `effectiveTools()`
+    already did; `omega-tools.js` was the outlier and showed a tile that the
+    endpoint then refused with a 403.
+  - `scripts/tests/ttoolaccess.js` asserts the product against the REAL
+    `OMEGATools.catalog()`, so tool 43 cannot quietly join it.
+- One product list, one mapping. `scripts/import-products.js` converts a
+  manufacturer's CSV and is the ONLY place the column names, the unit
+  conversion (datasheets print mm) and the footprint sanity check live. Its
+  `--out` artifact, `tenants/<slug>/products.json`, is what the setup page and
+  the local preview read — so no second parser exists in a browser.
+
+Design and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
+Demo runbook for the Clean Cell account: `docs/DEMO-CLEANCELL.md`.
 
 ## Silmarillion 2.0 — joint development
 
