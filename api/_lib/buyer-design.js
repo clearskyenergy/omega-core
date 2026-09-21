@@ -1,13 +1,16 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A = require('./admin'), B = require('./buyer-accounts');
+var A = require('./admin'), B = require('./buyer-accounts'), X = require('./logic-access');
 var MODULES = ['bess', 'compute', 'ev', 'solar'];
-function entitlement(ctx, account) {
+function entitlement(ctx, account, caller) {
   var lite = ctx.billing.editorLite || {}, grant = account.editorLite || {}, expiry = Date.parse(grant.expiresAt || '');
-  var active = lite.enabled === true && ['active', 'trial'].indexOf(grant.status) >= 0 &&
+  // Only the authenticated, verified ClearSky owner gets support access. This
+  // does not create a subscription or widen the supplier's enabled modules.
+  var ownerAccess = !!(caller && caller.claims && X.owner(caller)) && lite.enabled === true;
+  var active = ownerAccess || (lite.enabled === true && ['active', 'trial'].indexOf(grant.status) >= 0 &&
     isFinite(expiry) && expiry > Date.now() &&
-    (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
-  return { active: active, status: active ? grant.status : 'inactive', expiresAt: grant.expiresAt || null,
+    (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial')));
+  return { active: active, status: ownerAccess ? 'owner-access' : active ? grant.status : 'inactive', expiresAt: ownerAccess ? null : grant.expiresAt || null,
     modules: MODULES.filter(function (m) { return Array.isArray(lite.modules) && lite.modules.indexOf(m) >= 0; }) };
 }
 async function access(caller, org) {
@@ -15,7 +18,7 @@ async function access(caller, org) {
   var ctx = await B.context(org), acct = await B.lookup(A.db(), org, B.email(caller.email));
   if (!acct) throw A.httpError(403, 'Open your customer account before creating a design');
   B.active(acct);
-  return { ctx: ctx, account: acct, grant: entitlement(ctx, acct.data),
+  return { ctx: ctx, account: acct, grant: entitlement(ctx, acct.data, caller),
     projects: A.db().collection('omega_orgs').doc(org).collection('customers').doc(acct.id).collection('projects') };
 }
 function requireEditor(scope) {

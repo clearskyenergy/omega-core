@@ -155,6 +155,36 @@ await check('office customer profile updates are scoped and audited without chan
   var c=await B.lookup(db,'cleancell.us','buyer@example.com');assert.equal(c.id,created.customerId);assert.equal(c.user.name,'New name');assert.equal(c.data.status,'suspended');assert.equal(c.data.plan,'free');assert.deepEqual(c.data.terms,{});
   assert(Array.from(db.data.values()).some(function(d){return d.action==='buyer-profile'&&d.by===admin.email;}));
 });
+await check('verified ClearSky owner can use customer designs without granting subscriptions or crossing account boundaries',async function(){
+  setup();var buyers=require('../api/buyers'),design=require('../api/customer-design'),B=require('../api/_lib/buyer-accounts'),D=require('../api/_lib/buyer-design'),res={setHeader:function(){}};
+  var other={email:'other@clearsky-usa.com',uid:'other',staff:true,claims:{email_verified:true}};
+  await post(buyers,{action:'create',email:owner.email,name:'Tom',company:'ClearSky owner'},admin);
+  await post(buyers,{action:'create',email:other.email,name:'Other',company:'Other customer'},admin);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  function list(c){return design({method:'GET',query:{org:'cleancell.us'},caller:c},res);}
+  var out=await list(owner);assert.equal(out.access.active,true);assert.equal(out.access.status,'owner-access');assert.equal(out.access.expiresAt,null);assert.deepEqual(out.access.modules,['bess']);
+  assert.equal((await list(other)).access.active,false);
+  assert.equal(D.entitlement({billing:{editorLite:{enabled:true}}},{},null).active,false);
+  var save={action:'save',projectId:'owner-site',revision:0,name:'Owner site',module:'bess',kw:1000,hours:2,canvas:{elements:[]},owner:true,email:owner.email,customerId:'forged'};
+  await assert.rejects(post(design,save,other),/subscription or approved trial/);
+  assert.equal((await post(design,save,owner)).revision,1);
+  assert.equal((await post(design,{action:'size',module:'bess',sku:'GENERIC-BESS',kw:1000,hours:2},owner)).kwh,2000);
+  var opened=await design({method:'GET',query:{org:'cleancell.us',project:'owner-site'},caller:owner},res);assert.equal(opened.project.customerId,out.customerId);assert.equal(opened.project.createdBy,owner.uid);
+  await post(buyers,{action:'editor-trial',email:other.email,days:7});
+  await assert.rejects(design({method:'GET',query:{org:'cleancell.us',project:'owner-site'},caller:other},res),/not found/);
+  assert.equal((await list(other)).projects.length,0);
+  db.seed('omega_orgs/cleancell.us/storefront/config',{products:[{sku:'CAB',name:'Fixture cabinet'}]});
+  var quote=await post(design,{action:'quote',projectId:'owner-site',revision:1,sku:'CAB',qty:1},owner);assert.equal(db.data.get('orders/'+quote.orderId).customer.email,owner.email);
+  var acct=await B.lookup(db,'cleancell.us',owner.email);assert.equal(acct.data.editorLite,undefined);assert.equal(acct.data.plan,'free');
+  await assert.rejects(post(design,Object.assign({},save,{revision:1,module:'compute'}),owner),/not enabled/);
+  await assert.rejects(list(Object.assign({},owner,{claims:{email_verified:false}})),/Verify/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:false,modules:['bess']}});
+  await assert.rejects(post(design,Object.assign({},save,{revision:1}),owner),/subscription or approved trial/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  await db.doc('omega_orgs/cleancell.us/customers/'+acct.id).update({status:'suspended'});await assert.rejects(list(owner),/disabled/);
+  await db.doc('omega_orgs/cleancell.us/customers/'+acct.id).update({status:'active'});
+  await db.doc('omega_orgs/cleancell.us').update({status:'suspended'});await assert.rejects(list(owner),/not active/);
+});
 await check('buyer design isolation, expiring trials, version conflicts and body privilege injection',async function(){
   setup();var buyers=require('../api/buyers'),design=require('../api/customer-design'),B=require('../api/_lib/buyer-accounts');
   var buyer={email:'buyer@example.com',uid:'buyer',orgId:'example.com',claims:{email_verified:true}},other={email:'other@example.com',uid:'other',orgId:'example.com',claims:{email_verified:true}},res={setHeader:function(){}};
