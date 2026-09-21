@@ -43,8 +43,14 @@
    catalog is the one document three surfaces read; the number does not
    belong there and this module never asks for it. No supplier ordering:
    the output is a list a person sends to a supplier, with the order-by
-   date computed from the lead time they entered. No scrap or yield factor
-   yet — quantities are the datasheet's, and the plan says so.
+   date computed from the lead time they entered.
+
+   YIELD. A bill line may carry `yieldPct` (1–100, default 100): the share of
+   what is issued that ends up in a good assembly. Cells that fail incoming
+   test, paste that is wasted, harness cut to length — the plan divides the
+   net demand by it (98% yield on 104 cells means 106.12 issued), and every
+   row fed by such a line is marked `yielded` so the page can say the number
+   is not the datasheet's. Default 100 keeps an unmarked bill exact.
 
    Pure: no Firestore, no clock unless one is passed in. api/logic-materials.js
    loads the inputs and writes the stock counts; this decides nothing about
@@ -77,11 +83,17 @@ function qtyOf(v, what) {
   if (!isFinite(n) || n <= 0 || n > 1000000) fail(400, (what || 'Quantity') + ' must be greater than zero and at most 1,000,000');
   return Math.round(n * 10000) / 10000;   /* 0.0001 — a gram of paste, a metre of harness */
 }
+function yieldOf(v, sku) {
+  if (v == null || v === '') return 100;
+  var n = Number(v);
+  if (!isFinite(n) || n <= 0 || n > 100) fail(400, 'Yield for ' + sku + ' must be a percentage between 1 and 100');
+  return Math.round(n * 100) / 100;
+}
 function line(raw) {
   if (!isPlain(raw)) fail(400, 'Each bill-of-materials line needs a component SKU and a quantity');
   var sku = clean(raw.sku, 64);
   if (!SKU.test(sku) || !safeKey(sku)) fail(400, 'Bill of materials: invalid component SKU "' + sku + '"');
-  return { sku: sku, qty: qtyOf(raw.qty, 'Quantity of ' + sku), unit: unitOf(raw.unit) };
+  return { sku: sku, qty: qtyOf(raw.qty, 'Quantity of ' + sku), unit: unitOf(raw.unit), yieldPct: yieldOf(raw.yieldPct, sku) };
 }
 function bomLines(raw) {
   if (raw == null || raw === '') return [];
@@ -196,7 +208,7 @@ function emptyRow(p) {
     leadTimeDays: num(p.leadTimeDays) > 0 ? Math.round(num(p.leadTimeDays)) : null,
     gross: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
     onHand: 0, onOrder: 0, net: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
-    suggestedOrder: 0, needBy: null, orderBy: null, late: false, drivers: [], unknownSkus: [] };
+    suggestedOrder: 0, needBy: null, orderBy: null, late: false, drivers: [], worksOrders: [], yielded: false };
 }
 function roundQty(n) { return Math.round(n * 10000) / 10000; }
 function addDays(day, n) { var d = new Date(day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -223,6 +235,7 @@ function plan(input) {
     row.gross[d.bucket] += d.qty;
     row.needBy = earlier(row.needBy, d.needBy);
     driver(row, { kind: d.bucket, ref: d.ref, qty: d.qty, needBy: d.needBy || null });
+    if (d.bucket === 'committed' && d.ref && row.worksOrders.indexOf(d.ref) < 0 && row.worksOrders.length < MAX_DRIVERS) row.worksOrders.push(d.ref);
   });
 
   /* Net and explode, parents strictly before children. */
@@ -248,10 +261,14 @@ function plan(input) {
       r.late = firm > 0 && r.orderBy < today;
     }
     (by[sku].bom || []).forEach(function (l) {
-      var child = rows[l.sku];
-      BUCKETS.forEach(function (b) { child.gross[b] += r.net[b] * l.qty; });
+      var child = rows[l.sku], per = l.qty / ((Number(l.yieldPct) > 0 && Number(l.yieldPct) <= 100 ? Number(l.yieldPct) : 100) / 100);
+      BUCKETS.forEach(function (b) { child.gross[b] += r.net[b] * per; });
       child.needBy = earlier(child.needBy, r.needBy);
-      if (r.net.total > 0) driver(child, { kind: 'assembly', ref: sku, qty: roundQty(r.net.total * l.qty), needBy: r.needBy || null });
+      if (r.net.total > 0) {
+        driver(child, { kind: 'assembly', ref: sku, qty: roundQty(r.net.total * per), needBy: r.needBy || null });
+        if (per !== l.qty || r.yielded) child.yielded = true;
+        r.worksOrders.forEach(function (w) { if (child.worksOrders.indexOf(w) < 0 && child.worksOrders.length < MAX_DRIVERS) child.worksOrders.push(w); });
+      }
     });
   });
 
@@ -273,7 +290,24 @@ function plan(input) {
   return { asOf: today, rows: list, unknownSkus: unknown,
     summary: { components: list.filter(function (r) { return r.kind === 'component'; }).length,
       short: list.filter(function (r) { return r.kind === 'component' && r.net.committed + r.net.pipeline > 0; }).length,
-      late: list.filter(function (r) { return r.late; }).length } };
+      late: list.filter(function (r) { return r.late; }).length,
+      yielded: list.filter(function (r) { return r.yielded; }).length } };
+}
+
+/* Per works order: which components stand between it and the floor. Rows
+   are the plan's, so the netting is the same; this only groups them. */
+function shortfallsByWorksOrder(planned) {
+  var by = Object.create(null);
+  (planned.rows || []).forEach(function (r) {
+    if (r.kind !== 'component') return;
+    var firm = r.net.committed + r.net.pipeline;
+    if (firm <= 0) return;
+    r.worksOrders.forEach(function (w) {
+      if (!safeKey(w)) return;
+      (by[w] = by[w] || []).push({ sku: r.sku, name: r.name, unit: r.unit, short: roundQty(firm), onHand: r.onHand, onOrder: r.onOrder, orderBy: r.orderBy, late: r.late });
+    });
+  });
+  return by;
 }
 
 /* The purchase list is the plan filtered to what a buyer sends out today. */
@@ -282,5 +316,5 @@ function purchaseList(planned) {
 }
 
 module.exports = { bomLines: bomLines, validateCatalog: validateCatalog, lowLevelCodes: lowLevelCodes,
-  demandsFrom: demandsFrom, plan: plan, purchaseList: purchaseList, UNITS: UNITS,
+  demandsFrom: demandsFrom, plan: plan, purchaseList: purchaseList, shortfallsByWorksOrder: shortfallsByWorksOrder, UNITS: UNITS,
   MAX_LINES: MAX_LINES, MAX_DEPTH: MAX_DEPTH };

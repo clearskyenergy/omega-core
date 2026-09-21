@@ -2,8 +2,9 @@
 
 For: Astra (ChatGPT / Codex), to finalize.
 From: the Claude session that built it. Branch `claude/white-label-cleancell-usa-st5trq`
-on `clearskyenergy/omega-core`, head `bee71ab`, two commits past merged PR #45.
-Everything below is committed and pushed; `npm test` is green at that head.
+on `clearskyenergy/omega-core`, three commits past merged PR #45 plus this
+handoff and the follow-up that closed items 1, 4 and 5 of §3.
+Everything below is committed and pushed; `npm test` is green at the head.
 
 Read `CLAUDE.md` first. The rules in it that bite hardest here: no build step
 and ES5 in the shared runtime; Firestore rules are the security boundary;
@@ -67,8 +68,9 @@ that is before today and there is firm net demand.
 ## 2. How to verify what is there
 
 ```
-npm test                                   # whole suite, green at bee71ab
-node scripts/test-materials.js             # 72 assertions
+npm test                                   # whole suite, green at the head
+node scripts/test-materials.js             # 91 assertions
+node scripts/test-plant-agent.js           # 15, eight of them materials
 node scripts/import-products.js --org cleancell.us \
   --file docs/product-list-template.csv --bom docs/bom-template.csv
 #   → 2 orderable · 5 components · 2 with a bill of materials, 5 line(s)
@@ -89,35 +91,36 @@ with `auth().currentUser.getIdToken()` and `onAuthStateChanged`, and answer
 
 ## 3. What is deliberately NOT built — decide, then build
 
-Each of these is a product decision I did not want to improvise. Pick,
-record the decision in `docs/OMEGA-LOGIC-STATIONS-CATALOG.md`, then build.
+Each of these was a product decision I did not want to improvise. Items 1, 4
+and 5 were then built with the obvious default (the owner asked for whatever
+could be completed unattended); 2, 3 and 6 still need a decision first.
 
-1. **Scrap / yield.** Quantities are the bill's. The natural shape is an
-   optional `yieldPct` (0–100, default 100) on a BOM line, applied in
-   `plan()` as `child.gross += net × qty / (yieldPct/100)`. One field, one
-   line in the explosion, one importer column, one test. Say so on the
-   page's footnote when any line carries one.
+1. ~~**Scrap / yield.**~~ **Done** (commit after `3256e20`): `yieldPct` on a
+   BOM line, applied in the explosion, `yielded` flag on rows, footnote on
+   the page, `yieldPct` column on the BOM sheet, catalog-editor input.
 2. **Purchase orders and receiving.** Today "on order" is a number a person
    types after sending the CSV. The next step is a `fulfillment/purchase_orders`
    record (supplier, lines, expected date, status) that feeds `onOrder`
-   automatically and, on receipt, moves quantity to `onHand`. Check first
-   whether `api/logic-logistics.js` receiving should be the thing that writes
-   `fulfillment/materials.stock[sku].onHand` — it may already own "goods
-   arrived". Rules: `fulfillment/*` is already `allow read, write: if false`,
-   so any new doc there is Admin-SDK-only by default. Keep it that way.
+   automatically and, on receipt, moves quantity to `onHand`. Checked:
+   `api/logic-logistics.js` is OUTBOUND only (plan / pickup / delivered /
+   inspect on a customer delivery leg) — it does not own inbound goods, so
+   receiving is new. Rules: `fulfillment/*` is already `allow read, write:
+   if false`, so any new doc there is Admin-SDK-only by default. Keep it
+   that way, and write receipts through the same revision-checked, audited
+   path `POST action:'stock'` uses.
 3. **Component costs → spend forecast.** A buy price on a component is exactly
    what `CLAUDE.md` forbids in the repo and the importer refuses in both
    sheets. If Clean Cell wants a dollar forecast, the number must live only in
    Firestore, set by hand or by a staff-only endpoint, and `api/embed-config.js`
    must still never name it. Do not add it to the CSV path.
-4. **Plant agent.** `api/_lib/plant-agent.js` `advise()` is the deterministic
-   "what next" queue. Two cheap actions to add there, fed by `plan()`:
-   *"CELL is late — order-by was 2026-09-15"* and *"works order CC-1 cannot
-   start: 3,492 cells short"*. Pure module, so a test is a fixture.
-5. **Per-works-order feasibility** on `plant/manager.html`'s work-order
-   detail: run `plan()` with `works: [thisOne]` and show shortfalls. Same
-   engine, one more GET parameter (`?workOrder=` already exists on
-   `api/logic-plant.js`; the materials endpoint would take the same).
+4. ~~**Plant agent.**~~ **Done**: `advise({materials})` adds `order_material`
+   (late component, priority 1) and `material_shortfall` (works order short
+   of stock, priority 2); `api/jarvis-operations.js` computes the plan
+   best-effort and passes it. `replyFor()` names late material.
+5. ~~**Per-works-order feasibility.**~~ **Done**: `GET /api/logic-materials
+   ?org=&workOrder=<id>` → `{feasible, short[]}`; `plant/manager.html`'s
+   work-order detail shows a Materials section. Rows carry `worksOrders[]`
+   (the committed works orders whose demand reaches them).
 6. **Demo.** `scripts/sandbox/` (the Clean Cell walkthrough artifact) has no
    materials step. If it should, it is one more page in `app.js` and one more
    `TOUR` entry after step 15 ("Money, then serials"), reading `M.plan()`

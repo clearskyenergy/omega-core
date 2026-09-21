@@ -67,8 +67,9 @@
    module, a BMS. It needs no kW or kWh, is never published, drawn or priced,
    and may carry `unit`, `supplier`, `supplierSku`, `moq` and `leadTimeDays`
    for the materials plan (api/_lib/materials.js). A second sheet,
-   `--bom bom.csv`, with columns  parentSku, componentSku, qty, unit  lists
-   what goes into ONE of each product or sub-assembly. Every componentSku must
+   `--bom bom.csv`, with columns  parentSku, componentSku, qty, unit,
+   yieldPct (optional, 1–100, blank = 100)  lists what goes into ONE of each
+   product or sub-assembly and how much of what is issued survives. Every componentSku must
    be a row in the products file, none may be a service, and the whole thing
    must be loop-free — the same checks api/logic-catalog.js makes on save,
    because a loop hangs the plan and a missing SKU silently under-buys.
@@ -286,7 +287,7 @@ if (bomRead) {
     if (!parent || !child) { problems.push('bom row ' + (i + 2) + ': needs parentSku and componentSku'); return; }
     if (!seen[parent]) { problems.push('bom row ' + (i + 2) + ': parent ' + parent + ' is not in the products file'); return; }
     if (!seen[child]) { problems.push('bom row ' + (i + 2) + ': component ' + child + ' is not in the products file — add it as a kind=component row'); return; }
-    (pending[parent] = pending[parent] || []).push({ sku: child, qty: r.qty || r.quantity || r.qtyper, unit: r.unit || 'ea' });
+    (pending[parent] = pending[parent] || []).push({ sku: child, qty: r.qty || r.quantity || r.qtyper, unit: r.unit || 'ea', yieldPct: r.yieldpct || r.yield || r.yieldpercent || '' });
   });
   Object.keys(pending).forEach(function (parent) {
     var p = products.filter(function (x) { return x.sku === parent; })[0];

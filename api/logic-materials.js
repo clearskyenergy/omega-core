@@ -39,6 +39,22 @@ module.exports = A.handler(async function (req, res) {
   var db = A.db(), root = db.collection('omega_orgs').doc(org);
   var catalogRef = root.collection('storefront').doc('config'), stockRef = root.collection('fulfillment').doc('materials');
 
+  if (req.method === 'GET' && req.query.workOrder) {
+    /* One works order: can it be built from what is on hand and on order?
+       Same engine, demand restricted to this record, so the answer is the
+       plan's answer for it in isolation — other open work is not competing
+       for the same stock in this view, and the page says so. */
+    var woId = String(req.query.workOrder || '');
+    if (!/^[A-Za-z0-9_-]{1,120}$/.test(woId)) throw A.httpError(400, 'Invalid works order');
+    var one = await Promise.all([catalogRef.get(), stockRef.get(), db.collection('plant_works_orders').doc(woId).get()]);
+    if (!one[2].exists || one[2].data().orgId !== org) throw A.httpError(404, 'Works order not found');
+    var wo = Object.assign({ id: one[2].id }, one[2].data());
+    var solo = M.plan({ products: one[0].exists ? (one[0].data().products || []) : [], stock: one[1].exists ? (one[1].data().stock || {}) : {}, works: [wo], orders: [] });
+    var short = M.shortfallsByWorksOrder(solo)[String(wo.orderNo || wo.id)] || [];
+    return { org: org, workOrder: { id: wo.id, orderNo: wo.orderNo || null, status: wo.status || null, dueDate: wo.dueDate || null },
+      feasible: short.length === 0, short: short, unknownSkus: solo.unknownSkus,
+      hasBom: solo.rows.some(function (r) { return r.kind === 'component'; }) };
+  }
   if (req.method === 'GET') {
     var rows = await Promise.all([
       catalogRef.get(), stockRef.get(),

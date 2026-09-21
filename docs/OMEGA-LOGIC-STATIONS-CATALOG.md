@@ -87,10 +87,29 @@ Stock counts are recorded from the same page (`POST action:'stock'`) into
 `omega_orgs/{org}/fulfillment/materials`, which the rules already close to
 browsers; each count is dated, attributed, revision-checked and audited. There
 is no purchase order object: "on order" is the count a person enters after
-sending the list to a supplier. No scrap or yield factor yet — quantities are
-the bill's, and the page says so. Import: `--bom bom.csv`
-(`parentSku, componentSku, qty, unit`, template in `docs/bom-template.csv`)
-alongside a products file whose component rows carry `kind=component`.
+sending the list to a supplier.
+
+**Yield.** A bill line may carry `yieldPct` (1–100, blank = 100): the share of
+what is issued that ends up in a good assembly. The plan divides net demand by
+it — 98% on 104 cells means 106.12 issued per module — and marks every row fed
+by such a line `yielded`, so the page says when a quantity is not the
+datasheet's. Import: `--bom bom.csv` (`parentSku, componentSku, qty, unit,
+yieldPct`, template in `docs/bom-template.csv`) alongside a products file whose
+component rows carry `kind=component`.
+
+**Per works order.** `GET /api/logic-materials?org=&workOrder=<id>` runs the
+same engine with demand restricted to that one record and returns `feasible`
+plus the components it is short of, on its own — other open work is not
+competing for the same stock in that view, and the plant manager's work-order
+detail says so. Every plan row also carries `worksOrders[]`: the committed
+works orders whose demand reaches it, traced down through the bills.
+
+**Jarvis.** `api/jarvis-operations.js` computes the plan (best-effort: a
+catalog whose bills fail validation is skipped, never a crash) and hands it to
+`api/_lib/plant-agent.js`, which adds two bounded actions — a component past
+its order-by date (`order_material`, priority 1) and a works order that cannot
+be built from stock (`material_shortfall`, priority 2). Naming them is the
+whole remit; nothing in the queue can place an order.
 
 ## Production versioning and evidence
 

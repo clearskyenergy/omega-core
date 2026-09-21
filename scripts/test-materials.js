@@ -117,6 +117,32 @@ console.log('\nmaterials plan — late, and the order of the list');
   ok('  fully covered cells are not late and not on the list', row(covered, 'CELL').late === false && row(covered, 'CELL').suggestedOrder === 0);
 })();
 
+console.log('\nmaterials plan — yield, and which works order a shortfall belongs to');
+(function () {
+  var cat = JSON.parse(JSON.stringify(CATALOG));
+  cat[1].bom[0].yieldPct = 98;          /* 2% of cells fail incoming test */
+  cat[1].bom[1].yieldPct = 95;          /* harness offcuts */
+  var p = M.plan({ now: NOW, products: cat,
+    works: [{ id: 'wo_1', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-01' },
+            { id: 'wo_2', orderNo: 'CC-2', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-15' }] });
+  ok('yield divides the issued quantity: 2 × 8 × 104 / 0.98 = 1697.96 cells, to four places', Math.abs(row(p, 'CELL').gross.committed - 2 * 8 * 104 / 0.98) < 0.0001, row(p, 'CELL').gross);
+  ok('  harness at 95%: 2 × 8 × 2.5 / 0.95', Math.abs(row(p, 'HARN').gross.committed - 42.1053) < 0.001, row(p, 'HARN').gross);
+  ok('  rows fed by a yielded line are marked, unyielded ones are not', row(p, 'CELL').yielded === true && row(p, 'HARN').yielded === true && row(p, 'BMS').yielded === false && row(p, 'MOD').yielded === false);
+  ok('  and the summary counts them', p.summary.yielded === 2, p.summary);
+  ok('the suggested cell order still rounds to the MOQ', row(p, 'CELL').suggestedOrder === 2000);
+  ok('every component knows which works orders it is short for', row(p, 'CELL').worksOrders.join(',') === 'CC-1,CC-2' && row(p, 'ENC').worksOrders.join(',') === 'CC-1,CC-2', row(p, 'CELL').worksOrders);
+  var by = M.shortfallsByWorksOrder(p);
+  ok('shortfalls group by works order', Object.keys(by).sort().join(',') === 'CC-1,CC-2' && by['CC-1'].length === 5 && by['CC-1'][0].short > 0);
+  var stocked = M.plan({ now: NOW, products: cat, stock: { MOD: { onHand: 8 }, BMS: { onHand: 1 }, ENC: { onOrder: 1 } },
+    works: [{ id: 'wo_1', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-01' }] });
+  ok('  a works order that stock covers has no shortfall entry, and the cells it never needed are not even a row', Object.keys(M.shortfallsByWorksOrder(stocked)).length === 0 && row(stocked, 'CELL') === undefined, row(stocked, 'MOD'));
+  ok('  the module row still knows the works order whose demand reached it — tracing is by demand, shortfall is by net', row(stocked, 'MOD').worksOrders.join(',') === 'CC-1' && row(stocked, 'MOD').net.total === 0);
+  ok('a blank yield is 100', M.bomLines([{ sku: 'X', qty: 1 }])[0].yieldPct === 100 && M.bomLines([{ sku: 'X', qty: 1, yieldPct: '' }])[0].yieldPct === 100);
+  rejects('a zero yield', function () { M.bomLines([{ sku: 'X', qty: 1, yieldPct: 0 }]); }, 'between 1 and 100');
+  rejects('a yield over 100', function () { M.bomLines([{ sku: 'X', qty: 1, yieldPct: 101 }]); }, 'between 1 and 100');
+  ok('a fractional yield is kept to two places', M.bomLines([{ sku: 'X', qty: 1, yieldPct: 97.555 }])[0].yieldPct === 97.56);
+})();
+
 console.log('\nbills of materials — the graph is checked');
 (function () {
   rejects('a loop is refused, and the message shows the path', function () {
@@ -233,6 +259,17 @@ console.log('\nthe endpoint');
   ok('a stale revision is refused, so two counters cannot overwrite each other', true);
   got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
   ok('the plan now nets against the count', row(got, 'CELL').onHand === 500 && row(got, 'CELL').onOrder === 1000 && row(got, 'CELL').net.total === 3 * 8 * 104 - 1500, row(got, 'CELL'));
+
+  var solo = await api({ method: 'GET', query: { org: 'cleancell.us', workOrder: 'wo_1' }, caller: member }, res);
+  ok('one works order, on its own: infeasible, and it names what is short', solo.feasible === false && solo.hasBom && solo.short.length === 4 && solo.workOrder.orderNo === 'CC-0', solo);
+  ok('  one cabinet needs 832 cells and 1,500 are on hand or on order, so cells are NOT short for it', !solo.short.some(function (c) { return c.sku === 'CELL'; }), solo.short);
+  ok('  while in the whole plan (three cabinets) they are', row(got, 'CELL').net.total > 0);
+  ok('  the modules are short by exactly this order\'s eight', solo.short.filter(function (c) { return c.sku === 'MOD'; })[0].short === 8);
+  db.seed('plant_works_orders/wo_other', { orgId: 'other.com', orderNo: 'X', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }] });
+  await assert.rejects(api({ method: 'GET', query: { org: 'cleancell.us', workOrder: 'wo_other' }, caller: member }, res), /not found/);
+  ok('another tenant\'s works order is not found, not refused by name', true);
+  await assert.rejects(api({ method: 'GET', query: { org: 'cleancell.us', workOrder: '../x' }, caller: member }, res), /Invalid works order/);
+  ok('  and a malformed id is refused', true);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);
