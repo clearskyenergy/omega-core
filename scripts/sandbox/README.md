@@ -96,10 +96,11 @@ says so under **Show what is real**.
 
 ## Known stand-in
 
-The deposit is a button. In the product the Stripe milestone webhook that
-raises the works order is designed (`docs/CUSTOMER-PORTAL.md`) and not
-written, so the ClearSky console names it as the first thing to automate
-rather than pretending it already fires.
+The deposit is a button. In the product it is a QuickBooks installment
+invoice raised by Omega Logic, and `api/_lib/logic-workflow.js` `release()`
+raises the works order on its own once the payment reconciles — the demo has
+no QuickBooks company to reconcile against, so a click stands in for the
+five-minute cron, and the ClearSky console says so.
 
 ## chain.html — the step-by-step version
 

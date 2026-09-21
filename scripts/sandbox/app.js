@@ -1165,7 +1165,7 @@
         S.account.created ? plural(customers().length, 'customer account') + ', 1 signed-in user.' : 'No accounts yet.', 'api/my-orders.js'],
       ['Designer', S.account.plan === 'designer' ? 'ok' : 'off',
         S.account.plan === 'designer' ? '1 account on the designer.' : 'Nobody is subscribed yet.', 'omega-editor-mode.js'],
-      ['Payments', 'off', 'The milestone webhook is designed and not written. The deposit button stands in for it.', 'not built']
+      ['Payments', 'off', 'QuickBooks is not connected here. In the product the deposit is an installment invoice and the works order is raised when it reconciles.', 'api/_lib/logic-workflow.js']
     ];
   }
   function sysRows() {
@@ -1311,7 +1311,7 @@
     'b/scan': ['It refuses, and that is the product', 'A scan can only advance one station or be a duplicate. It can never skip, reverse, release a hold, close an NCR or mark anything shipped — so the worst a stolen scanner achieves is marking units present at one bench, in order. Two stations are machine-written by the test rig and refuse a human scan outright. <b>Every verdict on this screen is the real <code>api/_lib/plant.js</code>.</b>'],
     'o/order': ['Priced is not published', 'Pricing, scoring, eligibility and every financial model run in <code>/api/</code> and never in a browser. Until somebody publishes it the customer’s portal reads “Price pending”, so you can reprice as often as you like and nothing crosses. The leak test runs the committed projection over this record and shows you the output.'],
     'o/tenant': ['What the platform is called here', 'A <code>whiteLabel</code> block on the tenant record drives it, and it is staff-written: whether our name appears on a product we operate is a contract line item, not a tenant preference. Attribution defaults to showing, so removing it is always a decision somebody made.'],
-    'o/systems': ['A state and a sentence', 'Served as JSON as well as rendered, so an agent can report on the estate without scraping a page. <code>off</code> is deliberately not <code>down</code>. Payments reads <code>off</code> because the milestone webhook is designed and not written — a status feed that invents a number is worse than one that admits a gap.']
+    'o/systems': ['A state and a sentence', 'Served as JSON as well as rendered, so an agent can report on the estate without scraping a page. <code>off</code> is deliberately not <code>down</code>. Payments reads <code>off</code> because this demo has no QuickBooks company to reconcile against — in the product <code>api/_lib/logic-workflow.js</code> raises the works order the moment the deposit invoice reconciles. A status feed that invents a number is worse than one that admits a gap.']
   };
   var DEFAULT_NOTE = ['One world, five surfaces',
     'Everything on this screen shares one set of records with the other four. The two engines that decide anything '

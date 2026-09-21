@@ -32,14 +32,17 @@
                    give it away. Echoing the field in JSON does the same
                    thing more quietly.
 
-     customer.notes LOOKS like the customer's own words and is not. At
-                   api/orders.js:258 it is written as
+     customer.notes LOOKED like the customer's own words and was not.
+                   api/orders.js used to write it as
                    `clean(customer.notes || b.note, 2000)` — so when a
-                   customer left it blank, the REP'S OWN note lands there. A
+                   customer left it blank, the REP'S OWN note landed there. A
                    rep typing "shopping us against Tesla, do not go below X"
                    would have it handed back to that customer as "what you
-                   told us". Excluded here on purpose; the alias itself
-                   should be fixed in api/orders.js separately.
+                   told us". The write is fixed (the rep's note now goes on
+                   the history thread), but every row created BEFORE the fix
+                   still carries the alias and nothing on the record says
+                   which ones. So the exclusion stays: an old order with a
+                   rep's deal commentary in this field is one order too many.
 
      status        'quoted' means CLEARSKY has priced it to the TENANT. A
                    customer seeing that before their own reseller has quoted

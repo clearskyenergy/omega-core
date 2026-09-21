@@ -922,8 +922,11 @@ Listed so nobody mistakes any of it for done.
   are the ones fulfilling at it. Giving tenants this needs an endpoint that
   validates a price change, not a rule that waves it through.
 - **A tenant sending domain.** See above.
-- **Payment.** An order is a request. When that changes it goes through
-  `/api/` and Stripe, never a browser.
+- **Payment on the PUBLIC path.** An embed order is a request, and stays
+  one. Money enters once a tenant prices it under Omega Logic
+  (`api/_lib/logic-workflow.js`): QuickBooks installment invoices, a
+  five-minute cron reconciling them, and the works order raised on a
+  verified deposit. Nothing about money ever runs in a browser.
 - **Per-tenant `frame-ancestors`.**
 - **The editor's "publish an order link" button.** `api/order-link.js` works
   and is callable; nothing in `editor.html` calls it yet.

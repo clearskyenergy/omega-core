@@ -102,6 +102,19 @@ await check('services release as tasks, never serial demand, and final billing r
   await post(factory,{action:'services-complete',workOrderId:order.worksOrderId,evidence:'Installation inspected; acceptance fixture ABC-123'},admin);
   await W.processOrder('one');assert(db.data.get('orders/one').logic.invoices.balance);assert.equal(db.data.get('plant_works_orders/'+order.worksOrderId).serviceCompletion.by,admin.email);payments.balance=true;await W.processOrder('one');assert.equal(db.data.get('orders/one').status,'complete');assert.equal(db.data.get('orders/one').shipment,undefined);
 });
+await check('release writes the join api/my-orders.js reads: works order by (orgId, orderNo), units by (orgId, woId)',async function(){
+  // The buyer portal never reads orders/{id}. It finds the floor through two
+  // queries, and this pins release()'s write shape to them so a rename on
+  // either side cannot quietly empty every customer's milestone.
+  setup();db.seed('plant_units/CAB-0001',unit('CAB-0001'));
+  await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');
+  var o=db.data.get('orders/one');assert.equal(o.status,'in_fulfilment');
+  var wos=await db.collection('plant_works_orders').where('orgId','==','cleancell.us').where('orderNo','==',o.orderNo).limit(5).get();
+  assert.equal(wos.size,1);assert.equal(wos.docs[0].id,o.worksOrderId);
+  var units=await db.collection('plant_units').where('orgId','==','cleancell.us').where('woId','==',wos.docs[0].id).limit(401).get();
+  assert.equal(units.size,1);var u=units.docs[0].data();assert.equal(u.orderId,'one');assert.equal(u.orderNo,o.orderNo);assert('at' in u);assert('hold' in u);
+  assert.equal((await db.collection('plant_units').where('orgId','==','cleancell.us').where('woId','==','stock_1').limit(5).get()).size,0,'the allocated unit left its stock works order');
+});
 await check('catalog is tenant-scoped, versioned, preserves private fields and requires ClearSky price approval',async function(){
   setup();var catalog=require('../api/logic-catalog'),C=require('../api/_lib/logic-catalog'),res={setHeader:function(){}};
   var p={sku:'CAB-1',name:'Catalog cabinet',kind:'product',category:'bess',kw:100,kwh:200,widthFt:4,depthFt:5,designEnabled:true,priceMode:'quote',cost:100};

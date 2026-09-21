@@ -60,11 +60,14 @@ function requireVerified(caller) {
 }
 
 /* Units for one order, via the works order the release step raises.
-   TODAY THIS IS USUALLY EMPTY: the release handler (deposit → works order)
-   is designed and not built, so most orders have no plant record at all.
-   That is why it returns [] rather than throwing — an order with no units
-   is a normal order early in its life, and milestoneOf() falls back to the
-   order's own status for exactly this case. */
+   api/_lib/logic-workflow.js release() writes plant_works_orders/wo_<orderId>
+   with this order's `orderNo` once the deposit invoice reconciles as paid
+   (api/logic-worker.js runs it every five minutes), and stamps `woId` on
+   every unit it allocates or that the floor registers against it. Both
+   composite indexes are in firestore.indexes.json. Before that moment —
+   which is most of an order's early life, and every order not under Omega
+   Logic — there is no plant record, so this returns [] rather than
+   throwing, and milestoneOf() falls back to the order's own status. */
 function unitsFor(db, orgId, orderNo) {
   if (!orderNo) return Promise.resolve([]);   /* no works order yet: normal */
   return db.collection('plant_works_orders')

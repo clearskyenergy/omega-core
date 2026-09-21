@@ -13,6 +13,10 @@
 
      action:'create'  { customer:{name,email,...}, items:[{sku,qty}],
                         system:{kw,kwh}, projectId?, note? }
+                      `note` is the REP's note. It lands on the history
+                      thread, the same place action:'note' puts one, and
+                      never in customer.notes — that field is the
+                      customer's own words and nothing else.
      action:'price'   { orderId, pricing:{ subtotal, freight, tax, total,
                                            currency, validUntil, terms } }
      action:'status'  { orderId, status, note? }
@@ -259,7 +263,14 @@ function create(caller, b) {
         configId: null,
         customer: {
           name: name, company: clean(customer.company, 160), email: email,
-          phone: clean(customer.phone, 40), notes: clean(customer.notes || b.note, 2000),
+          phone: clean(customer.phone, 40),
+          /* The customer's OWN words and nothing else. This used to read
+             `customer.notes || b.note`, which put the rep's note in the
+             field orders.html labels "Customer said:" — and which
+             api/_lib/portal.js had to exclude from the buyer's projection
+             for exactly that reason. The rep's note goes on the history
+             thread below, where action:'note' already puts one. */
+          notes: clean(customer.notes, 2000),
           address: {
             line1: clean(customer.address && customer.address.line1, 200),
             city: clean(customer.address && customer.address.city, 100),
@@ -275,7 +286,12 @@ function create(caller, b) {
         items: items,
         pricing: null,                      /* ClearSky prices it */
         provenance: { placedBy: caller.email, via: 'api/orders create' },
-        history: [{ at: new Date().toISOString(), by: caller.email, what: 'created' }],
+        history: (function () {
+          var h = [{ at: new Date().toISOString(), by: caller.email, what: 'created' }];
+          var repNote = clean(b.note, 2000);
+          if (repNote) h.push({ at: new Date().toISOString(), by: caller.email, what: 'note: ' + repNote });
+          return h;
+        })(),
         createdAt: FV.serverTimestamp(),
         updatedAt: FV.serverTimestamp()
       };

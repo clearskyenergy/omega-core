@@ -586,8 +586,8 @@
   <div class="body"><div class="grid2">
     <div class="shot"><div class="bar"><i></i><i></i><i></i><span class="u">🔒 <b>admin.cleancell.us</b>/order/CC-26-4419</span></div>
       <div class="pane">
-        <div class="row" style="margin-bottom:11px"><span class="chip ok">deposit cleared</span>
-          <span class="btn">Release to the floor</span></div>
+        <div class="row" style="margin-bottom:11px"><span class="chip ok">deposit reconciled · QuickBooks</span>
+          <span class="chip">released automatically</span></div>
         <div class="box"><div class="lbl" style="margin-bottom:7px">Works order raised</div>
           <div class="kv"><span>Serials allocated</span><b>5 units</b></div>
           <div class="kv"><span>Routing</span><b>10 benches</b></div>
@@ -597,8 +597,8 @@
           <span class="chip">…93</span><span class="chip">…94</span></div>
       </div><div class="cap2"><span class="tg cc">Clean Cell branded</span><span class="tg om">OMEGA · works orders</span></div></div>
     <div class="says">
-      <div><span class="t">What they do</span><p>Record the deposit, then release it. Two separate acts, because money arriving and the floor starting work are two separate decisions.</p></div>
-      <div class="sysline"><span class="t">What the system does</span><p>Allocates serials <b>here and nowhere else</b>. Nothing can be scanned onto a bench that nobody has been paid for. Each serial becomes a paired record, and from this point the order belongs to the floor.</p></div>
+      <div><span class="t">What they do</span><p>Nothing, and that is the point. They approved the price in step 7; the deposit invoice went out from their QuickBooks with a pay link on it. Money arriving and the floor starting work are two separate decisions — the second one is taken by the payment clearing, not by a person remembering to press a button.</p></div>
+      <div class="sysline"><span class="t">What the system does</span><p>Every five minutes it asks QuickBooks what has been paid against the invoice. The moment the deposit is satisfied it allocates serials <b>here and nowhere else</b> — finished stock first, the remainder as manufacturing demand. Nothing can be scanned onto a bench that nobody has been paid for. From this point the order belongs to the floor.</p></div>
     </div>
   </div></div>
 </article>
@@ -762,10 +762,10 @@
         <li>The tool allowlist behind the branch</li>
         <li>The order desk, the site study and its spend cap</li>
         <li>The white-label paint, down to the home-screen icon</li>
+        <li>Step 9 itself: the deposit invoice, its reconciliation, and the works order it raises without a hand on it</li>
       </ul></div>
     <div class="rc"><h4>Designed, not yet written</h4>
       <ul>
-        <li>The payment hook that turns a cleared deposit into a works order — today a person presses the button in step 9</li>
         <li>Five counters on the estate panel that report zero rather than invent a number</li>
         <li>Whether a designer subscription gets its own workspace or a seat in Clean Cell's</li>
       </ul></div>
@@ -778,10 +778,11 @@
   </div>
   <div class="gapbox">
     <span class="t">The one gap worth naming out loud</span>
-    <p>Step 9 is the only hand-off in the chain a person still makes by hand. <b>Everything either side
-      of it already runs on its own</b> — the order arrives without anyone rekeying it, and the ship
-      date moves without anyone updating it. Closing that one gap is what turns thirteen steps into
-      one continuous system, and it is the first thing to build next.</p>
+    <p>Every number on these screens is a stand-in, because Clean Cell's product list is four placeholder
+      capacity slots. <b>The chain runs end to end today</b> — the order arrives without anyone rekeying
+      it, the works order raises itself when the deposit clears, and the ship date moves without anyone
+      updating it. What it is running <i>on</i> is our guess at their cabinets. The day their submittal
+      arrives as one spreadsheet, the same thirteen steps size, draw, price and build the real thing.</p>
   </div>
 </div></section>
 
