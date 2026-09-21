@@ -15,7 +15,10 @@ module.exports = A.handler(async function (req, res) {
       D.requireEditor(scope);
       var row = await scope.projects.doc(P.id(req.query.project)).get();
       if (!row.exists) throw A.httpError(404, 'Project not found in your customer account');
-      return { id: row.id, project: row.data() };
+      var project = row.data();
+      project.canvas = project.canvasJson ? JSON.parse(project.canvasJson) : project.canvas;
+      delete project.canvasJson;
+      return { id: row.id, project: project };
     }
     var rows = await scope.projects.orderBy('updatedAt', 'desc').limit(100).get();
     return { org: org, customerId: scope.account.id, brand: require('./_lib/logic-brand')(scope.ctx.org),
@@ -52,7 +55,7 @@ module.exports = A.handler(async function (req, res) {
         createdAt:A.FieldValue().serverTimestamp(),updatedAt:A.FieldValue().serverTimestamp(),
         history:[{at:now,by:caller.email,what:'Customer requested a quote for saved site design; no price accepted or payment taken.'}]});
       tx.create(orderRef.collection('events').doc(),{at:now,by:caller.email,what:'Quote requested from customer design revision '+p.revision});
-      tx.create(orderRef.collection('design').doc('submitted'),{projectId:projectId,revision:p.revision,name:p.name,target:p.target,canvas:p.canvas,submittedAt:now});
+      tx.create(orderRef.collection('design').doc('submitted'),{projectId:projectId,revision:p.revision,name:p.name,target:p.target,canvasJson:p.canvasJson||JSON.stringify(p.canvas),submittedAt:now});
       return {ok:true,orderId:orderId,orderNo:no};
     });
   }
@@ -77,7 +80,9 @@ module.exports = A.handler(async function (req, res) {
     if ((previous ? previous.revision : 0) !== b.revision) throw A.httpError(409, 'This project changed in another window. Reopen it before saving; your current canvas has not been overwritten.');
     var now = new Date().toISOString(), revision = b.revision + 1;
     var data = { name: name, orgId: org, customerId: scope.account.id, module: target.module,
-      target: target, canvas: JSON.parse(serialized), revision: revision, updatedAt: now, updatedBy: caller.uid,
+      // Geometry may contain nested coordinate arrays, which Firestore cannot
+      // store as native arrays. Persist the bounded JSON snapshot losslessly.
+      target: target, canvasJson: serialized, revision: revision, updatedAt: now, updatedBy: caller.uid,
       createdAt: previous ? previous.createdAt : now, createdBy: previous ? previous.createdBy : caller.uid };
     if (previous) tx.set(ref, data); else tx.create(ref, data);
     return { ok: true, id: id, revision: revision, updatedAt: now };

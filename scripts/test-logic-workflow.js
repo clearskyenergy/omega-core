@@ -102,7 +102,7 @@ await check('buyer design isolation, expiring trials, version conflicts and body
   var buyer={email:'buyer@example.com',uid:'buyer',orgId:'example.com',claims:{email_verified:true}},other={email:'other@example.com',uid:'other',orgId:'example.com',claims:{email_verified:true}},res={setHeader:function(){}};
   await post(buyers,{action:'create',email:buyer.email,name:'Buyer',company:'Example'},admin);await post(buyers,{action:'create',email:other.email,name:'Other',company:'Other'},admin);
   await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
-  var save={action:'save',projectId:'project-one',revision:0,name:'My site',module:'bess',kw:1000,hours:2,canvas:{elements:[]},customerId:'forged',plan:'designer'};
+  var save={action:'save',projectId:'project-one',revision:0,name:'My site',module:'bess',kw:1000,hours:2,canvas:{elements:[],shapes:[{points:[[10,20],[30,40]]}]},customerId:'forged',plan:'designer'};
   await assert.rejects(post(design,save,buyer),/subscription or approved trial/);
   await assert.rejects(post(buyers,{action:'editor-trial',email:buyer.email,days:7},admin),/owner/);
   await post(buyers,{action:'editor-trial',email:buyer.email,days:7});await post(buyers,{action:'editor-trial',email:other.email,days:7});
@@ -119,7 +119,8 @@ await check('buyer design isolation, expiring trials, version conflicts and body
   var quoted=await post(design,quote,buyer),duplicate=await post(design,quote,buyer);
   assert.equal(quoted.orderId,duplicate.orderId);assert.equal(duplicate.duplicate,true);
   var order=db.data.get('orders/'+quoted.orderId);assert.equal(order.customer.email,buyer.email);assert.equal(order.status,'new');assert.equal(order.logic,undefined);assert.equal(order.pricing,null);assert.equal(order.items[0].name,'Published fixture cabinet');
-  assert.deepEqual(db.data.get('orders/'+quoted.orderId+'/design/submitted').canvas,{elements:[]});
+  assert.deepEqual(JSON.parse(db.data.get('orders/'+quoted.orderId+'/design/submitted').canvasJson),save.canvas);
+  assert.deepEqual(open.project.canvas,save.canvas);assert.equal(open.project.canvasJson,undefined);
   await assert.rejects(post(design,Object.assign({},quote,{qty:3}),buyer),/different quote request/);
   await assert.rejects(post(design,quote,other),/design changed/);
   await post(buyers,{action:'editor-trial',email:buyer.email,days:0});
