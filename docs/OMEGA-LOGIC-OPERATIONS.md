@@ -116,11 +116,13 @@ not automatically void invoices, refund money or return serials to stock.
   the existing storefront setup. The checked-in catalog seed is intentionally
   empty; demo products are not production datasheets. Mint/reuse the allowed-
   origin embed key and install the provided snippet on cleancell.us.
-- Platform lite/sizer/site placement and the white-label sitemap editor use
-  existing shared applications. Full designer buyers still need explicit
-  account provisioning through existing signup/tenant approval. This bundle
-  does not grant anonymous visitors full editor access or move them into the
-  OEM's tenant. Automated designer-seat resale billing is not implemented here.
+- Client customers are NOT platform tenants or OEM staff. Their free accounts
+  live under the selling OEM's existing customers/customer_index paths.
+  They activate through `/portals/customer/`, never platform signup/approval.
+  Optional Editor Lite is $799/month initially, configurable by the ClearSky
+  owner in `billing/current.customerEditorLite`. This is separate from the
+  OEM's Omega Logic subscription. Checkout and buyer-owned project persistence
+  are not yet wired; the portal must not claim otherwise or grant paid access.
 - Pair each scanner and EOL rig; token displayed once and stored hashed.
   Configure the rig to post actual measurements to `/api/mes-test-result`.
   Test a pass, fail, hold/retest, duplicate scan, cancellation and shortage.
@@ -157,12 +159,41 @@ plan and other add-ons, adds Omega Logic/white-label entitlements, and records
 the four Editor Lite module selections in `billing/current.editorLite`.
 It does not charge the subscription or activate QuickBooks automation.
 
-The company administrator action creates an unverified Firebase Auth account
+Editor Lite opens at `/editor-lite.html?org=<tenant-domain>`. The four switches
+select its guided-build modules; other modules remain labeled “not in plan”.
+BESS target placement creates a generic concept until actual equipment is
+configured. Compute, EV and solar open the canonical guided configuration
+dialogs. Single-line, BOM, proposal, drawing-set and save commands use the
+existing editor, including its existing validation and tier requirements.
+This is an authenticated account feature, not the anonymous website sizer.
+
+The company administrator action normally creates an unverified Firebase Auth account
 and an `omega_orgs/{orgId}/members/{uid}` admin membership. It never resets an
 existing password or grants ClearSky/custom staff claims. Passwords are not
 written to Firestore or audit records. The account holder must verify their
-mailbox and replace the temporary password before operational use. Company
+mailbox and replace the temporary password before operational use. Explicitly
+owner-attested `admin@<tenant>` support accounts may instead be trusted by the
+provisioning endpoint. The address prefix alone never grants verification.
+Company
 admins see Office and Plant destinations at `/login`; the APIs enforce verified
 identity, active membership, tenant scope, and subscription separately from
 the fulfillment automation switch. An active bundle with automation disabled
 can read operations and register inventory, but cannot release an unpaid order.
+
+## Client customers (not OMEGA platform users)
+
+`/portals/customer/admin.html?org=<tenant>` and `/api/buyers` let the verified
+ClearSky owner or that OEM's active administrator create customer records,
+review contact order history, change future-order deposit/due terms, and send
+portal invitations. A register entry creates no Firebase Auth user, password,
+staff membership or paid editor entitlement. Email link/Google authentication
+proves the customer's address and activates the same record on first sign-in.
+Self-signup and office creation use one atomic pointer/account/user transaction.
+Existing records and negotiated terms are preserved on repeated creation.
+
+Invitations require the existing `whiteLabel.embed.mailFrom`, published
+`storefront/config.emailCustomer` opt-in, and configured delivery mailbox.
+The UI must not report success if mail was skipped or refused. The invitation
+contains a regular portal URL, never an authentication token handed to staff.
+Order reads stay bound to the verified email and OEM; contacts are not merged
+automatically merely because they share an email domain.

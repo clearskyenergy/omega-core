@@ -811,6 +811,9 @@
           name:(logicOrg.name || homeOrg)+' · Plant', desc:'Works orders, serial records, inventory and floor stations' });
         dests.unshift({ key:'logic-office', org:homeOrg, url:PORTAL+'/omega-logic'+suffix,
           name:(logicOrg.name || homeOrg)+' · Office', desc:'Orders, customer terms and fulfillment status' });
+        if (logicBill.editorLite && logicBill.editorLite.enabled === true) dests.push({
+          key:'editor-lite', org:homeOrg, url:PORTAL+'/editor-lite.html'+suffix,
+          name:(logicOrg.name || homeOrg)+' · Site Map', desc:'Your white-label guided-build editor' });
       }
 
       /* ── STAY ON THIS ORIGIN ─────────────────────────────────────────

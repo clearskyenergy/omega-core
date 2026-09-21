@@ -221,6 +221,18 @@
       var ov = (bill && bill.toolOverrides) || {};
       if (ov.editor === false) return refuse('plan');
 
+      // Lite tenants land in the small shell even from an old full-editor link.
+      // The embedded engine is still the same file; no second editor is copied.
+      if (bill && bill.editorLite && bill.editorLite.enabled === true) {
+        var inLite = false;
+        try { inLite = global.parent !== global && /^\/editor-lite(?:\.html)?\/?$/.test(global.parent.location.pathname) && global.parent.location.origin === global.location.origin; } catch (e) {}
+        if (!inLite) {
+          var q = new URLSearchParams(global.location.search); q.set('org', org);
+          global.location.replace('/editor-lite.html?' + q.toString());
+          return;
+        }
+      }
+
       return allow({ org: org, tier: (bill && bill.tier) || null, reason: 'active' });
     }, function () {
       /* The read failed — offline, rules hiccup, no network. Signed in is
@@ -233,6 +245,18 @@
   function start() {
     shield();
     var began = Date.now();
+    if (new URLSearchParams(global.location.search).get('customerEngine') === '1') {
+      // Presentation bridge only. Actual buyer data and module authorization
+      // are rechecked by /api/customer-design on every read/write/build.
+      try {
+        if (global.parent !== global && global.parent.location.origin === global.location.origin &&
+            /^\/editor-lite(?:\.html)?\/?$/.test(global.parent.location.pathname) &&
+            global.parent.OmegaBuyerEngine && global.parent.OmegaBuyerEngine.authorized === true) {
+          allow({ reason: 'customer-drawing-engine' }); return;
+        }
+      } catch (e) {}
+      refuse('signed-out'); return;
+    }
     (function watch() {
       var fb = global.firebase;
       var u = null;

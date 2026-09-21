@@ -2706,6 +2706,12 @@ service cloud.firestore {
         allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
         allow write: if isAdmin() || isTenantAdmin(orgId);
       }
+      // OEM buyers are not platform tenant members. Customer design APIs
+      // resolve the verified buyer pointer and check paid/trial entitlement.
+      // Keep these designs inaccessible through browser Firestore SDKs.
+      match /customers/{customerId}/projects/{projectId} {
+        allow read, write: if false;
+      }
 
       /* ── NOTIFICATIONS ──  omega_orgs/{orgId}/notifications/{id}
          Written server-side by /api/opportunity.js and /api/rfq.js; the

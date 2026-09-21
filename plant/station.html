@@ -113,8 +113,10 @@
     border:3px solid var(--accent);border-radius:20px}
   @media (prefers-reduced-motion:reduce){#verdict{transition:none}}
 </style>
+<link rel="stylesheet" href="/omega-logic-theme.css">
+<style>body.logic-theme{--bg:var(--paper);--panel:var(--sunk);--accent:var(--brand);--ok:#198764;--ok-dim:#E9F7F0;--bad:#C4372B;--bad-dim:#FCEAE8;--wait:#A26718;--wait-dim:#FFF5DD}#pair button{color:white}.logic-theme #verdict{border-radius:14px}.logic-theme #scan{background:white}</style>
 </head>
-<body>
+<body class="logic-theme">
 
 <header>
   <div>
@@ -162,7 +164,7 @@
   <button class="x" type="button" id="cam-x">Close</button>
 </div>
 
-<script>
+<script src="/omega-logic-theme.js"></script><script>
 /* ES5 on purpose: this runs on whatever tablet is cheapest that year. */
 (function () {
   'use strict';
@@ -396,20 +398,19 @@
     var id = $('p-id').value.trim(), tok = $('p-token').value.trim();
     if (!id || !tok) { $('p-err').textContent = 'Both fields are needed.'; return; }
     $('p-err').textContent = 'Checking…';
-    /* Pair by making one real scan call with a serial that cannot exist. A 401
-       means the token is wrong; anything else means the bench is talking to
-       the right place. No extra endpoint to keep in step. */
+    /* Authenticate the bench without creating a pretend scan or unit record.
+       Only an explicit successful response completes pairing. */
     fetch(API, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stationId: id, token: tok, scanId: uuid(), serial: '__PAIRCHECK__' })
+      body: JSON.stringify({ action: 'describe', stationId: id, token: tok })
     }).then(function (r) {
       return r.json().then(function (j) { return { status: r.status, j: j }; });
     }).then(function (out) {
-      if (out.status === 401 || out.status === 403) {
+      if (out.status !== 200 || !out.j || out.j.ok !== true) {
         $('p-err').textContent = out.j && out.j.error ? out.j.error : 'That station ID or token was not accepted.';
         return;
       }
-      cfg = { stationId: id, token: tok, label: (out.j && out.j.stationLabel) || id, station: (out.j && out.j.station) || '' };
+      cfg = { stationId: id, token: tok, label: out.j.stationLabel || id, station: out.j.station || '', brand: out.j.brand || null };
       store(LS_KEY, cfg);
       paintHeader();
       closePair();
@@ -428,6 +429,7 @@
   });
 
   function paintHeader() {
+    if (cfg && cfg.brand && window.OmegaLogicTheme) OmegaLogicTheme.apply(cfg.brand);
     $('h-station').textContent = (cfg && cfg.label) || 'Station';
     $('h-seq').textContent = cfg ? (cfg.station || cfg.stationId) : '';
   }

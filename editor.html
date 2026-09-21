@@ -4476,6 +4476,9 @@ function _projOrgId() {
 }
 
 function _initFirebase() {
+  // Customer Editor Lite owns authentication and persistence in its parent.
+  // Never initialize platform Firestore/Auth in this drawing-only iframe.
+  if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
   try {
     if (typeof firebase === 'undefined') {
       // Firebase SDK unavailable (offline or blocked) -- running in local/offline mode
@@ -174933,6 +174936,7 @@ if (root.console && console.info) {
   }
 
   function gate(){
+    if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {

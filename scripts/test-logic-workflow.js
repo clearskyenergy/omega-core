@@ -73,6 +73,142 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('scanner pairing validates its credential without producing a fake scan',async function(){
+  setup();var S=require('../api/_lib/plant-station'),scan=require('../api/mes-scan');
+  db.seed('plant_stations/pair-fixture',{orgId:'cleancell.us',station:'kit',label:'Bay 1',tokenHash:S.sha('fixture-only-token'),active:true});
+  var before=db.data.size,result=await post(scan,{action:'describe',stationId:'pair-fixture',token:'fixture-only-token'});
+  assert.equal(result.ok,true);assert.equal(result.station,'kit');assert.equal(result.brand.name,'Clean Cell');assert.equal(db.data.size,before);
+  await assert.rejects(post(scan,{action:'describe',stationId:'pair-fixture',token:'wrong'}),/not paired/);
+  await db.doc('plant_stations/pair-fixture').update({active:false});await assert.rejects(post(scan,{action:'describe',stationId:'pair-fixture',token:'fixture-only-token'}),/deactivated/);
+});
+await check('customer website entry publishes only a usable public storefront key',async function(){
+  setup();var handler=require('../api/customer-portal'),req={method:'GET',query:{org:'cleancell.us'}},res={setHeader:function(){}};
+  db.seed('embed_keys/omega_pk_live_wrongorigin',{orgId:'cleancell.us',scopes:['storefront'],origins:['other.us']});
+  db.seed('embed_keys/omega_pk_live_disabled',{orgId:'cleancell.us',scopes:['storefront'],active:false,origins:[]});
+  db.seed('embed_keys/private_admin_secret',{orgId:'cleancell.us',scopes:['storefront'],origins:[]});
+  assert.equal((await handler(req,res)).links.storefront,null);
+  db.seed('embed_keys/omega_pk_live_correctkey',{orgId:'cleancell.us',scopes:['storefront'],origins:['silmarillion.clearskyomega.com']});
+  var result=await handler(req,res);assert(result.links.start.endsWith('/customer-start.html?org=cleancell.us'));assert(result.links.storefront.endsWith('omega_pk_live_correctkey'));assert(!JSON.stringify(result).includes('private_admin_secret'));
+});
+await check('office customer profile updates are scoped and audited without changing terms or paid access',async function(){
+  setup();var buyers=require('../api/buyers'),B=require('../api/_lib/buyer-accounts');
+  var created=await post(buyers,{action:'create',email:'buyer@example.com',name:'Buyer',company:'Example'},admin);
+  await post(buyers,{action:'profile',email:'buyer@example.com',name:'New name',company:'New company',phone:'555',status:'suspended',address:{city:'Example city'},plan:'designer',terms:{depositPct:0}},admin);
+  var c=await B.lookup(db,'cleancell.us','buyer@example.com');assert.equal(c.id,created.customerId);assert.equal(c.user.name,'New name');assert.equal(c.data.status,'suspended');assert.equal(c.data.plan,'free');assert.deepEqual(c.data.terms,{});
+  assert(Array.from(db.data.values()).some(function(d){return d.action==='buyer-profile'&&d.by===admin.email;}));
+});
+await check('buyer design isolation, expiring trials, version conflicts and body privilege injection',async function(){
+  setup();var buyers=require('../api/buyers'),design=require('../api/customer-design'),B=require('../api/_lib/buyer-accounts');
+  var buyer={email:'buyer@example.com',uid:'buyer',orgId:'example.com',claims:{email_verified:true}},other={email:'other@example.com',uid:'other',orgId:'example.com',claims:{email_verified:true}},res={setHeader:function(){}};
+  await post(buyers,{action:'create',email:buyer.email,name:'Buyer',company:'Example'},admin);await post(buyers,{action:'create',email:other.email,name:'Other',company:'Other'},admin);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  var save={action:'save',projectId:'project-one',revision:0,name:'My site',module:'bess',kw:1000,hours:2,canvas:{elements:[],shapes:[{points:[[10,20],[30,40]]}]},customerId:'forged',plan:'designer'};
+  await assert.rejects(post(design,save,buyer),/subscription or approved trial/);
+  await assert.rejects(post(buyers,{action:'editor-trial',email:buyer.email,days:7},admin),/owner/);
+  await post(buyers,{action:'editor-trial',email:buyer.email,days:7});await post(buyers,{action:'editor-trial',email:other.email,days:7});
+  assert.equal((await post(design,save,buyer)).revision,1);
+  var open=await design({method:'GET',query:{org:'cleancell.us',project:'project-one'},caller:buyer},res);assert.notEqual(open.project.customerId,'forged');assert.equal(open.project.createdBy,'buyer');
+  await assert.rejects(design({method:'GET',query:{org:'cleancell.us',project:'project-one'},caller:other},res),/not found/);
+  await assert.rejects(post(design,save,buyer),/another window/);
+  await assert.rejects(post(design,Object.assign({},save,{revision:1,module:'compute'}),buyer),/not enabled/);
+  await assert.rejects(post(design,Object.assign({},save,{revision:1,canvas:{elements:[],large:'x'.repeat(750001)}}),buyer),/save limit/);
+  await assert.rejects(post(design,save,Object.assign({},buyer,{claims:{email_verified:false}})),/Verify/);
+  var quote={action:'quote',projectId:'project-one',revision:1,sku:'CATALOG-CAB',qty:2,customer:{email:'spoof@example.com'},total:1};
+  await assert.rejects(post(design,quote,buyer),/published catalog/);
+  db.seed('omega_orgs/cleancell.us/storefront/config',{products:[{sku:'CATALOG-CAB',name:'Published fixture cabinet'}]});
+  var quoted=await post(design,quote,buyer),duplicate=await post(design,quote,buyer);
+  assert.equal(quoted.orderId,duplicate.orderId);assert.equal(duplicate.duplicate,true);
+  var order=db.data.get('orders/'+quoted.orderId);assert.equal(order.customer.email,buyer.email);assert.equal(order.status,'new');assert.equal(order.logic,undefined);assert.equal(order.pricing,null);assert.equal(order.items[0].name,'Published fixture cabinet');
+  assert.deepEqual(JSON.parse(db.data.get('orders/'+quoted.orderId+'/design/submitted').canvasJson),save.canvas);
+  assert.deepEqual(open.project.canvas,save.canvas);assert.equal(open.project.canvasJson,undefined);
+  await assert.rejects(post(design,Object.assign({},quote,{qty:3}),buyer),/different quote request/);
+  await assert.rejects(post(design,quote,other),/design changed/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['solar']}});
+  await assert.rejects(design({method:'GET',query:{org:'cleancell.us',project:'project-one'},caller:buyer},res),/no longer enabled/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  await post(buyers,{action:'editor-trial',email:buyer.email,days:0});
+  await assert.rejects(post(design,Object.assign({},save,{revision:1}),buyer),/subscription or approved trial/);
+  var retained=await design({method:'GET',query:{org:'cleancell.us'},caller:buyer},res);assert.equal(retained.access.active,false);assert.equal(retained.projects.length,1);
+  assert(!Array.from(db.data.keys()).some(function(k){return /^projects\//.test(k);}));assert(!db.data.has('omega_orgs/example.com'));
+});
+await check('office creation and buyer signup converge atomically without platform membership',async function(){
+  setup();var B=require('../api/_lib/buyer-accounts'),buyers=require('../api/buyers');
+  var buyer={email:'buyer@example.com',uid:'buyer-uid',orgId:'example.com',claims:{email_verified:true},staff:false};
+  var initial=await post(buyers,{action:'create',email:buyer.email,name:'Contact',company:'Customer Company',terms:{depositPct:45,dueDays:7}},admin);
+  var copies=await Promise.all([B.ensure(db,'cleancell.us',buyer.email,{},buyer),B.ensure(db,'cleancell.us',buyer.email,{},buyer)]);
+  assert(copies.every(function(a){return a.id===initial.customerId;}));assert.equal(copies[0].data.terms.depositPct,45);
+  assert.equal(Array.from(db.data.keys()).filter(function(k){return /^omega_orgs\/cleancell.us\/customers\/[^/]+$/.test(k);}).length,1);
+  assert.equal(db.data.has('omega_orgs/cleancell.us/members/buyer-uid'),false);assert.equal(db.data.has('omega_orgs/example.com'),false);
+  await assert.rejects(post(buyers,{action:'create',email:'new@example.com',name:'N',company:'C'},buyer),/workspace/);
+  await assert.rejects(post(buyers,{action:'terms',email:buyer.email,terms:{depositPct:101}},admin),/Deposit/);
+  await post(buyers,{action:'terms',email:buyer.email,terms:{depositPct:20,dueDays:14}},admin);
+  assert.equal((await B.lookup(db,'cleancell.us',buyer.email)).data.terms.depositPct,20);
+  var me=require('../api/my-account');var r=await me({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}});
+  assert.equal(r.customerId,initial.customerId);assert.equal(r.terms.depositPct,20);
+  await post(me,{company:'Updated Company',terms:{depositPct:0},plan:'editor-lite',role:'admin'},buyer);
+  var saved=(await B.lookup(db,'cleancell.us',buyer.email)).data;assert.equal(saved.plan,'free');assert.equal(saved.terms.depositPct,20);
+  await db.doc('omega_orgs/cleancell.us/customers/'+initial.customerId).update({status:'suspended'});
+  await assert.rejects(me({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}}),/disabled/);
+  await assert.rejects(require('../api/my-orders')({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}}),/disabled/);
+});
+await check('customer creation cannot escape tenant scope, recurse on a dangling pointer or enroll under a missing OEM',async function(){
+  setup();var B=require('../api/_lib/buyer-accounts');
+  await assert.rejects(B.context('absent.us'),/not provisioned/);
+  await assert.rejects(B.ensure(db,'cleancell.us','bad/path@example.com',{},null),/valid customer email/);
+  db.seed('omega_orgs/cleancell.us/customer_index/buyer@example.com',{customerId:'missing'});
+  await assert.rejects(B.ensure(db,'cleancell.us','buyer@example.com',{},null),/office review/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'suspended'});
+  await assert.rejects(B.context('cleancell.us'),/not active/);
+});
+await check('buyer endpoints require verified identity; office read and invitation are not available to buyers',async function(){
+  setup();var buyers=require('../api/buyers'),me=require('../api/my-account'),orders=require('../api/my-orders');
+  var unverified=Object.assign({},owner,{claims:{email_verified:false}}),res={setHeader:function(){}};
+  await assert.rejects(me({method:'GET',query:{org:'cleancell.us'},caller:unverified},res),/confirm your email/);
+  await assert.rejects(orders({method:'GET',query:{org:'cleancell.us'},caller:unverified},res),/confirm your email/);
+  var buyer={uid:'buyer',email:'buyer@example.com',orgId:'example.com',claims:{email_verified:true}};
+  await assert.rejects(buyers({method:'GET',query:{org:'cleancell.us'},caller:buyer},res),/workspace/);
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},buyer),/workspace/);
+  await post(buyers,{action:'create',email:'buyer@example.com',name:'Buyer',company:'Example'},admin);
+  var sent=0;mock('../api/_lib/mail',{configured:function(){return true;},esc:String,button:function(){return '';},wlLayout:function(){return '';},send:async function(){sent++;return {skipped:true};}});
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},admin),/not configured/);assert.equal(sent,0);
+  await db.doc('omega_orgs/cleancell.us').update({whiteLabel:{embed:{mailFrom:'sales@example.invalid'}}});
+  db.seed('omega_orgs/cleancell.us/storefront/config',{emailCustomer:true});
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},admin),/not sent/);assert.equal(sent,1);
+  var c=await require('../api/_lib/buyer-accounts').lookup(db,'cleancell.us','buyer@example.com');assert.equal(c.data.lastInvitedAt,undefined);
+});
+await check('customer Editor Lite offer defaults to $799, is owner-configurable and grants no subscription',async function(){
+  setup();var portalConfig=require('../api/customer-portal'),req={method:'GET',query:{org:'cleancell.us'}},res={setHeader:function(){}};
+  var before=await portalConfig(req,res);assert.equal(before.editorLite.monthlyPriceCents,79900);assert.equal(before.editorLite.checkoutAvailable,false);assert.equal(before.account.free,true);
+  await post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:89900});
+  assert.equal((await portalConfig(req,res)).editorLite.monthlyPriceCents,89900);
+  await assert.rejects(post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:0}),/Monthly price/);
+  await assert.rejects(post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:89900},admin),/owner/);
+  assert(!JSON.stringify(before).includes('realmId'));assert(!JSON.stringify(before).includes('itemRef'));
+});
+await check('explicit support mailbox attestation is owner-only and does not trust disabled members',async function(){
+  setup();var verified=0,u={uid:'support',email:'admin@cleancell.us',emailVerified:false};
+  A.init=function(){return {auth:function(){return {getUserByEmail:async function(){return u;},updateUser:async function(){verified++;return Object.assign({},u,{emailVerified:true});}};}};};
+  var onboard=require('../api/logic-onboard'),body={action:'administrator',email:u.email,name:'Support',supportAccount:true};
+  db.seed('omega_orgs/cleancell.us/members/support',{role:'admin',status:'disabled'});
+  await assert.rejects(post(onboard,body),/disabled/);assert.equal(verified,0);
+  await db.doc('omega_orgs/cleancell.us/members/support').update({status:'active'});
+  assert.equal((await post(onboard,body)).emailVerified,true);assert.equal(verified,1);
+  await assert.rejects(post(onboard,Object.assign({},body,{email:'someone@cleancell.us'})),/admin@/);
+});
+await check('Editor Lite fails closed on module and subscription grants, including owner preview',async function(){
+  setup();var lite=require('../api/editor-lite');
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  assert.equal((await post(lite,{module:'bess',kw:1000,hours:2},admin)).kwh,2000);
+  await assert.rejects(post(lite,{module:'compute',kw:1000,hours:2}),/not included/);
+  await assert.rejects(post(lite,{module:'bess',kw:-1,hours:2}),/Target/);
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:99}),/duration/);
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2},Object.assign({},admin,{claims:{email_verified:false}})),/Verify/);
+  var response=await lite({method:'GET',query:{org:'cleancell.us'},caller:owner},{setHeader:function(){}});
+  assert.equal(response.preview,true);assert.equal(response.projectOrg,'clearsky-usa.com');assert.deepEqual(response.modules,['bess']);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'suspended'});
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
+});
 await check('portal subscription is independent of payment activation but payments remain blocked',async function(){setup();await db.doc('omega_orgs/cleancell.us/fulfillment/config').update({enabled:false});assert.equal(X.enabled(await X.authorize(admin,'cleancell.us',true)),false);await assert.rejects(W.price('one',1000,owner,true),/configuration/);await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'past_due'});await assert.rejects(X.authorize(admin,'cleancell.us',false),/subscription/);});
 await check('enrollment preserves other addons and financial setup, records modules and disables safely',async function(){setup();var onboard=require('../api/logic-onboard');await db.doc('omega_orgs/cleancell.us/billing/current').update({addons:['compute']});await post(onboard,{action:'bundle',enabled:true,modules:['bess','solar']});var b=db.data.get('omega_orgs/cleancell.us/billing/current');assert.deepEqual(b.addons,['compute','omega-logic','whitelabel']);assert.deepEqual(b.editorLite.modules,['bess','solar']);assert.equal(db.data.get('omega_orgs/cleancell.us/fulfillment/config').itemRef,'5');await post(onboard,{action:'bundle',enabled:false,modules:[]});assert.equal(X.subscribed(await X.context('cleancell.us')),false);assert(db.data.get('omega_orgs/cleancell.us/billing/current').addons.includes('compute'));await assert.rejects(post(onboard,{action:'bundle',enabled:true,modules:['root']}),/modules/);await assert.rejects(post(onboard,{action:'bundle',enabled:true,modules:['bess']},admin),/owner/);});
 await check('administrator enrollment is tenant-scoped, unverified and retry-safe without password resets',async function(){

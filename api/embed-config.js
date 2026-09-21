@@ -208,6 +208,8 @@ module.exports = E.handler(function (req) {
             cta:        str(em.cta || 'Request this system', 60)
           },
           flow: {
+            customerPortal: ctx.org.omegaLogic === true || (ctx.billing.addons || []).indexOf('omega-logic') >= 0
+              ? '/portals/customer/?org=' + encodeURIComponent(ctx.orgId) : null,
             requireAddress: bool(sf.requireAddress),
             collectBill:    sf.collectBill !== false,
             /* No products published = the storefront is a sizing tool with a

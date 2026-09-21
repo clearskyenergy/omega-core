@@ -39,6 +39,7 @@
 'use strict';
 var A = require('./_lib/admin.js');
 var P = require('./_lib/portal.js');
+var B = require('./_lib/buyer-accounts');
 
 var MAX_ORDERS = 50;
 /* A works order bigger than this is not a roster we page through on a
@@ -47,11 +48,11 @@ var UNIT_CAP = 400;
 
 function lower(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
 
-/* The customer must have PROVEN the address. Staff are exempt so a rep can
-   look at the portal as themselves while supporting somebody. */
+/* Every reader proves the address. Support-account trust is provisioned
+   explicitly in Auth, never inferred from an email prefix or staff domain. */
 function requireVerified(caller) {
   var v = caller && caller.claims && caller.claims.email_verified;
-  if (!v && !(caller && caller.staff)) {
+  if (v !== true) {
     throw A.httpError(403, 'Please confirm your email address, then sign in again.');
   }
   if (!caller.email) throw A.httpError(403, 'This account has no email address on it.');
@@ -110,10 +111,11 @@ function milestoneMapOf(db, orgId) {
     }, function () { return { map: null, showPrice: false }; });
 }
 
-module.exports = A.handler(function (req) {
+module.exports = A.handler(function (req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') throw A.httpError(405, 'GET only');
 
-  return A.authenticate(req).then(function (caller) {
+  return A.authenticate(req).then(async function (caller) {
     var email = requireVerified(caller);
     /* SHAPE-CHECKED, not merely lowercased. Firestore's .doc() accepts
        multi-segment paths, so an org of 'cleancell.us/customers/x' resolves
@@ -128,6 +130,9 @@ module.exports = A.handler(function (req) {
       throw A.httpError(503, 'Your orders are temporarily unavailable. Please try again shortly.');
     }
     var db = A.db();
+    await B.context(org);
+    var account = await B.lookup(db, org, email);
+    if (account) B.active(account);
     var wanted = String((req.query && req.query.orderNo) || '').trim().slice(0, 120);
 
     /* BOTH AXES. Without the orgId clause a customer who also bought from

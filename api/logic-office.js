@@ -5,9 +5,10 @@ var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo');
 function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
-  return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q,
+  return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q, customers: '/portals/customer/admin.html' + q,
+    start: '/customer-start.html' + q,
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
-    setup: '/whitelabel-setup.html' + q, editor: '/editor.html', preview: '/editor.html?wlpreview=' + encodeURIComponent(org),
+    setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,
     mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html' };
 }
 module.exports = A.handler(async function (req, res) {
@@ -49,7 +50,7 @@ module.exports = A.handler(async function (req, res) {
     });
     var conf = Object.assign({ enabled: false, terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, ctx.config);
     if (!owner) { delete conf.realmId; delete conf.itemRef; delete conf.accountingApproved; }
-    return { owner: owner, org: org, name: ctx.org.name || org, active: X.enabled(ctx), config: conf,
+    return { owner: owner, org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), active: X.enabled(ctx), config: conf,
       bundle: { name: 'Omega Logic', included: ['OEM order operations', 'White-label website sizer / platform lite', 'White-label sitemap editor resale'],
         subscriptionSeparate: true, subscriptionDue: ctx.billing.subscriptionDue || null },
       products: rows[2].exists ? (rows[2].data().products || []).length : 0,

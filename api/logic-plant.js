@@ -20,7 +20,7 @@ module.exports = A.handler(async function (req, res) {
       db.collection('plant_works_orders').where('orgId', '==', org).orderBy('createdAt', 'desc').limit(100).get(),
       db.collection('plant_units').where('orgId', '==', org).orderBy('createdAt', 'desc').limit(100).get()
     ]);
-    return { name: ctx.org.name || org, worksOrders: rows[0].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
+    return { name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), worksOrders: rows[0].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
       units: rows[1].docs.map(function (d) { return d.data(); }), limited: rows.some(function (s) { return s.size === 100; }) };
   }
   if (req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
