@@ -138,6 +138,7 @@
     <div id="sub"></div>
   </div>
   <div class="strip" id="strip"></div>
+  <div id="instructions" style="width:100%;max-width:860px;white-space:pre-wrap;overflow:auto;max-height:160px" role="status"></div>
   <input id="scan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
          inputmode="none" placeholder="Pull the trigger, or type a serial and press Enter">
 </main>
@@ -184,6 +185,7 @@
   }
 
   var cfg = load(LS_KEY, null);
+  var requestedStation=new URLSearchParams(location.search).get('stationId');
   var queue = load(LS_QUEUE, []);
   var recent = [];
   var sending = false;
@@ -276,9 +278,9 @@
       var j = out.j || {};
       if (out.status === 401 || out.status === 403) {
         /* The token is gone or the bench was deactivated. Stop, do not spin. */
-        queue = []; store(LS_QUEUE, queue); paintQueue();
-        cfg = null; store(LS_KEY, null);
-        openPair(j.error || 'This bench is no longer paired.');
+        // Keep pending evidence tied to this station. Never discard it or
+        // replay it with a different bench's credential after revocation.
+        openPair((j.error || 'This bench is no longer paired.')+' Pending scans are retained; restore this station or contact your manager.');
         sending = false;
         return;
       }
@@ -309,6 +311,7 @@
       beep(false);
     }
     if (j.unit && j.routing) strip(j.routing, j.unit.at);
+    $('instructions').textContent=(j.workOrder?'Work order: '+j.workOrder+'\n':'')+(j.instructions||cfg.instructions||'')+(j.parameters?'\nParameters: '+j.parameters:'');
     pushRecent(serial, !!j.ok);
   }
 
@@ -390,6 +393,7 @@
     $('pair').classList.add('on');
     $('p-err').textContent = msg || '';
     if (cfg) { $('p-id').value = cfg.stationId || ''; }
+    else if(requestedStation)$('p-id').value=requestedStation;
     setTimeout(function () { $('p-id').focus(); }, 50);
   }
   function closePair() { $('pair').classList.remove('on'); focusScan(); }
@@ -397,6 +401,7 @@
   $('p-go').addEventListener('click', function () {
     var id = $('p-id').value.trim(), tok = $('p-token').value.trim();
     if (!id || !tok) { $('p-err').textContent = 'Both fields are needed.'; return; }
+    if(queue.length&&cfg&&cfg.stationId!==id){$('p-err').textContent='Pending scans belong to the previous station. Restore that station before pairing another.';return;}
     $('p-err').textContent = 'Checking…';
     /* Authenticate the bench without creating a pretend scan or unit record.
        Only an explicit successful response completes pairing. */
@@ -410,7 +415,7 @@
         $('p-err').textContent = out.j && out.j.error ? out.j.error : 'That station ID or token was not accepted.';
         return;
       }
-      cfg = { stationId: id, token: tok, label: out.j.stationLabel || id, station: out.j.station || '', brand: out.j.brand || null };
+      cfg = { stationId: id, token: tok, label: out.j.stationLabel || id, station: out.j.station || '', brand: out.j.brand || null,lineId:out.j.lineId,location:out.j.location,instructions:out.j.instructions,machine:out.j.machine };
       store(LS_KEY, cfg);
       paintHeader();
       closePair();
@@ -422,7 +427,7 @@
   $('p-token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('p-go').click(); });
 
   $('unpair').addEventListener('click', function () {
-    if (queue.length && !confirm(queue.length + ' scans are still queued. Unpair anyway and lose them?')) return;
+    if (queue.length){show('wait','!', '', 'Pending scans must be resolved before unpairing', 'Contact your plant manager; the queue has been retained.');return;}
     cfg = null; store(LS_KEY, null);
     queue = []; store(LS_QUEUE, queue); paintQueue();
     openPair('');
@@ -431,16 +436,19 @@
   function paintHeader() {
     if (cfg && cfg.brand && window.OmegaLogicTheme) OmegaLogicTheme.apply(cfg.brand);
     $('h-station').textContent = (cfg && cfg.label) || 'Station';
-    $('h-seq').textContent = cfg ? (cfg.station || cfg.stationId) : '';
+    $('h-seq').textContent = cfg ? [cfg.lineId,cfg.location,cfg.station||cfg.stationId].filter(Boolean).join(' · ') : '';
+    $('instructions').textContent=cfg?(cfg.instructions||'')+(cfg.machine?'\nMachine station: test results must come from the paired rig.':''):'';
   }
+  function refreshStation(){if(!cfg)return;var id=cfg.stationId;fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'describe',stationId:id,token:cfg.token})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Station unavailable');return j;});}).then(function(j){if(!cfg||cfg.stationId!==id)return;var previous=$('instructions').textContent;cfg.label=j.stationLabel;cfg.lineId=j.lineId;cfg.location=j.location;cfg.instructions=j.instructions;cfg.machine=j.machine;cfg.brand=j.brand;store(LS_KEY,cfg);paintHeader();if(previous.indexOf('Work order:')===0)$('instructions').textContent=previous;}).catch(function(e){$('instructions').textContent=e.message;});}
 
   /* ── boot ───────────────────────────────────────────────────────────── */
   window.addEventListener('online', function () { paintNet(); flush(); });
   window.addEventListener('offline', paintNet);
   paintNet(); paintQueue(); paintHeader();
-  if (!cfg) openPair(''); else { focusScan(); flush(); }
+  if (!cfg) openPair(''); else if(requestedStation&&requestedStation!==cfg.stationId){openPair('This tablet is paired to '+cfg.stationId+', not the requested station. Resolve pending scans and unpair before moving it.');}else { focusScan(); flush(); }
   /* A bench runs for weeks; retry anything stuck without needing an event. */
   setInterval(flush, 15000);
+  refreshStation();setInterval(refreshStation,60000);
 })();
 </script>
 </body>

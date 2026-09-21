@@ -21,6 +21,8 @@ function officeShell(d){
   var nav=$('office-nav');if(!nav){nav=document.createElement('nav');nav.id='office-nav';nav.className='logic-nav';nav.setAttribute('aria-label','Office');shell.insertBefore(nav,main);}
   nav.innerHTML='<p class="eyebrow">Sales</p><a aria-current="page" href="'+esc(d.links.office)+'">Orders</a><a href="'+esc(d.links.customers)+'">Customers</a><p class="eyebrow">Production</p><a href="'+esc(d.links.factory)+'">Works orders</a><a href="/plant/station.html">Bench tablet</a><p class="eyebrow">Website</p><a href="'+esc(d.links.start)+'">Customer experience</a><a href="'+esc(d.links.setup)+'">Website installation</a>'+(d.owner?'<p class="eyebrow">ClearSky</p><a href="/omega-logic">All OEM accounts</a><a href="'+esc(d.links.mission)+'">Jarvis Mission</a>':'');
   document.querySelector('header b').textContent=(d.brand&&d.brand.name)||d.name;
+  nav.insertAdjacentHTML('beforeend','<a href="/logic-catalog.html?org='+encodeURIComponent(ORG)+'">Product catalog</a>');
+  nav.insertAdjacentHTML('beforeend','<p class="eyebrow">Tools &amp; management</p><a href="/logic-urls.html?org='+encodeURIComponent(ORG)+'">URL Generator</a><a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'">Plant manager</a>'+(d.owner?'<a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'#flow">Production flow</a>':''));
   document.querySelector('header .muted').textContent=d.owner?'ClearSky · managing this OEM':'Office workspace';
 }
 function load(){return api('/api/logic-office'+(ORG?'?org='+encodeURIComponent(ORG):'')).then(function(d){DATA=d;if(d.brand)OmegaLogicTheme.apply(d.brand);officeShell(d);$('content').hidden=false;draw();});}

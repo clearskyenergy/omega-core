@@ -601,6 +601,7 @@ async function findSubstations(lat, lng, radiusKm) {
       if (a.STATUS && /NOT IN SERVICE|RETIRED/i.test(a.STATUS)) continue;
       out.push({
         name: a.NAME || 'Substation',
+        lat:p.lat,lng:p.lng,
         distanceKm: distanceKm(lat, lng, p.lat, p.lng),
         voltageKv: num(a.MAX_VOLT) || num(a.MIN_VOLT),
         owner: a.OWNER || ''
@@ -621,6 +622,7 @@ async function findSubstations(lat, lng, radiusKm) {
         /* HIFLD encodes "unknown" as -999999; num() already refuses it. */
         out.push({
           name: a.NAME || a.name || 'Substation',
+          lat:p.lat,lng:p.lng,
           distanceKm: distanceKm(lat, lng, p.lat, p.lng),
           voltageKv: num(a.MAX_VOLT) || num(a.MIN_VOLT) || num(a.VOLTAGE),
           owner: a.OWNER || a.owner || '',
@@ -650,6 +652,7 @@ async function findSubstations(lat, lng, radiusKm) {
       if (t.substation && /minor_distribution/i.test(t.substation)) continue;
       out.push({
         name: t.name || t.operator || 'Substation',
+        lat:p.lat,lng:p.lng,
         distanceKm: distanceKm(lat, lng, p.lat, p.lng),
         voltageKv: osmKv(t.voltage),
         owner: t.operator || ''

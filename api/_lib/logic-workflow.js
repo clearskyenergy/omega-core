@@ -3,6 +3,7 @@
 'use strict';
 var A = require('./admin'), P = require('./logic-policy'), X = require('./logic-access');
 var Q = require('./qbo-sales'), Plant = require('./plant');
+function physical(items){var rows=(items||[]).filter(function(i){return i.kind!=='service';});return rows.length?P.quantities(rows):{};}
 function event(tx, ref, by, what) {
   tx.create(ref.collection('events').doc(), { at: new Date().toISOString(), by: by, what: what });
 }
@@ -55,7 +56,7 @@ async function release(ref) {
     if (o.cancelRequested || o.status === 'cancelled' || !l.acceptedAt || l.releasedAt) return;
     var dep = l.invoices.deposit;
     if (dep.amountCents && !dep.satisfied) return;
-    var wanted = P.quantities(o.items), selected = [], allNodes = [];
+    var wanted = physical(o.items), services=(o.items||[]).filter(function(i){return i.kind==='service';}),selected = [], allNodes = [];
     // A bounded allocation is conservative: unexamined stock becomes manufacture demand.
     var roots = await tx.get(db.collection('plant_units').where('orgId', '==', o.orgId).where('inventoryStatus', '==', 'available').limit(100));
     for (var doc of roots.docs) {
@@ -67,10 +68,12 @@ async function release(ref) {
       wanted[u.sku]--; selected.push(u.serial); allNodes = allNodes.concat(children.docs);
     }
     var woId = 'wo_' + ref.id, woRef = db.collection('plant_works_orders').doc(woId), oldWo = await tx.get(woRef);
+    var config=await tx.get(db.collection('omega_orgs').doc(o.orgId).collection('fulfillment').doc('config'));
+    var flow=require('./plant-flow').current(config.exists?config.data():{});
     if (oldWo.exists) throw A.httpError(409, 'Existing works order needs reconciliation before automatic release');
     var demand = Object.keys(wanted).filter(function (s) { return wanted[s] > 0; }).map(function (s) { return { sku: s, qty: wanted[s] }; });
-    tx.create(woRef, { orgId: o.orgId, orderId: ref.id, orderNo: o.orderNo, status: demand.length ? 'awaiting_serials' : 'ready',
-      routing: Plant.DEFAULT_ROUTING, requirements: demand, allocatedSerials: selected, registeredCounts: {},
+    tx.create(woRef, { orgId: o.orgId, orderId: ref.id, orderNo: o.orderNo, status: demand.length ? 'awaiting_serials' : services.length?'awaiting_services':'ready',serviceRequirements:services,
+      routing: flow.routing,flowVersion:flow.version,lineId:flow.lines[0].id, requirements: demand, allocatedSerials: selected, registeredCounts: {},
       createdAt: A.FieldValue().serverTimestamp(), releasedUnits: allNodes.length, shippingUnitCount: selected.length });
     allNodes.forEach(function (d) {
       var u = d.data();
@@ -124,6 +127,11 @@ async function processOrder(orderId) {
       try { await finish(orderId, { email: 'omega-logic' }); }
       catch (notReady) { if (notReady.status !== 409) throw notReady; }
     }
+    if(o.logic.releasedAt&&(o.items||[]).length&&o.items.every(function(i){return i.kind==='service';})){
+      await db.runTransaction(async function(tx){var snap=await tx.get(ref),current=snap.data(),l=current.logic,work=await tx.get(db.collection('plant_works_orders').doc(current.worksOrderId));
+        if(current.status==='complete'||current.cancelRequested||l.paymentException||!work.exists||!work.data().serviceCompletion||!l.invoices.balance||(l.commercial.balanceCents&&!l.invoices.balance.satisfied))return;
+        tx.update(ref,{status:'complete','logic.completedAt':new Date().toISOString()});event(tx,ref,'omega-logic','Services accepted and final payment verified; no hardware shipment required');});
+    }
     await ref.update({ 'logic.lastError': null, 'logic.nextRunAt': Date.now() + 300000, 'logic.leaseUntil': 0,
       'logic.lastRunAt': new Date().toISOString(), 'logic.attempts': 0 });
     return { ok: true };
@@ -145,8 +153,9 @@ async function finish(orderId, caller, shipment) {
     var o = s.data(), l = o.logic;
     if (!l || !l.releasedAt || l.paymentException || l.lastError || o.cancelRequested || o.status === 'cancelled') throw A.httpError(409, 'Order is not released or is blocked; reconcile accounting before dispatch');
     var units = await tx.get(db.collection('plant_units').where('orgId', '==', o.orgId).where('orderId', '==', ref.id).limit(401));
-    if (units.empty || units.size > 400 || units.docs.some(function (u) { return !P.ready(u.data()); })) throw A.httpError(409, 'Every serialized component must pass testing and reach Ready without a hold');
-    var wanted = P.quantities(o.items);
+    var wanted = physical(o.items),services=(o.items||[]).filter(function(i){return i.kind==='service';});
+    if(services.length){var serviceWo=await tx.get(db.collection('plant_works_orders').doc(o.worksOrderId));if(!serviceWo.exists||!serviceWo.data().serviceCompletion)throw A.httpError(409,'Record service completion evidence in Plant manager before final billing');}
+    if ((units.empty&&Object.keys(wanted).length) || units.size > 400 || units.docs.some(function (u) { return !P.ready(u.data()); })) throw A.httpError(409, 'Every serialized component must pass testing and reach Ready without a hold');
     units.docs.forEach(function (d) { var u = d.data(); if (u.shipUnit) wanted[u.sku] = (wanted[u.sku] || 0) - 1; });
     if (Object.keys(wanted).some(function (sku) { return wanted[sku] !== 0; })) throw A.httpError(409, 'Shipping units do not match the complete order');
     if (shipment) {

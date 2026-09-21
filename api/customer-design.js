@@ -23,10 +23,10 @@ module.exports = A.handler(async function (req, res) {
     }
     var rows = await scope.projects.orderBy('updatedAt', 'desc').limit(100).get();
     return { org: org, customerId: scope.account.id, brand: require('./_lib/logic-brand')(scope.ctx.org),
-      access: scope.grant, products: products.filter(function(p){return p && p.sku && p.active !== false;}).map(function(p){return {sku:B.clean(p.sku,64),name:B.clean(p.name||p.sku,120)};}),
+      access: scope.grant, designProducts:require('./_lib/logic-catalog').designs(storefront.exists?storefront.data():{}),products: products.filter(function(p){return p && p.sku && p.active !== false;}).map(function(p){return {sku:B.clean(p.sku,64),name:B.clean(p.name||p.sku,120)};}),
       projects: rows.docs.map(function (r) { var d = r.data(); return { id: r.id, name: d.name, module: d.module, updatedAt: d.updatedAt, revision: d.revision }; }), limited: rows.size === 100 };
   }
-  if (b.action === 'size') return D.sizing(scope, b);
+  if (b.action === 'size') {var sizing=D.sizing(scope,b);return b.module==='bess'?require('./_lib/logic-catalog').select(storefront.exists?storefront.data():{},b.sku,sizing):sizing;}
   if (b.action === 'quote') {
     D.requireEditor(scope);
     var projectId = P.id(b.projectId), qty = Number(b.qty), sku = B.clean(b.sku,64);
@@ -52,7 +52,7 @@ module.exports = A.handler(async function (req, res) {
       tx.create(orderRef,{orgId:org,orgName:scope.ctx.org.name||org,orderNo:no,status:'new',interest:'product',source:'customer-design',
         customerId:acct.id,sourceCustomerProjectId:projectId,sourceCustomerProjectRevision:p.revision,
         customer:{name:acct.user.name||acct.data.name,email:B.email(caller.email),company:acct.data.name,phone:acct.user.phone||'',address:acct.data.address||null},
-        system:{kw:p.target.kw,kwh:p.target.kwh,module:p.module},items:[{sku:sku,name:B.clean(product.name||sku,120),qty:qty}],pricing:null,
+        system:{kw:p.target.kw,kwh:p.target.kwh,module:p.module},items:[{sku:sku,name:B.clean(product.name||sku,120),kind:product.kind==='service'?'service':'product',qty:qty}],pricing:null,
         createdAt:A.FieldValue().serverTimestamp(),updatedAt:A.FieldValue().serverTimestamp(),
         history:[{at:now,by:caller.email,what:'Customer requested a quote for saved site design; no price accepted or payment taken.'}]});
       tx.create(orderRef.collection('events').doc(),{at:now,by:caller.email,what:'Quote requested from customer design revision '+p.revision});
@@ -78,9 +78,10 @@ module.exports = A.handler(async function (req, res) {
     B.active(acct); D.requireEditor({ grant: D.entitlement(fresh, acct.data) });
     if (D.entitlement(fresh, acct.data).modules.indexOf(target.module) < 0) throw A.httpError(403, 'This design module is no longer enabled');
     var old = await tx.get(ref), previous = old.exists ? old.data() : null;
+    if(target.module==='bess'&&b.sku){var designCatalog=await tx.get(root.collection('storefront').doc('config'));target=require('./_lib/logic-catalog').select(designCatalog.exists?designCatalog.data():{},b.sku,target);}
     if ((previous ? previous.revision : 0) !== b.revision) throw A.httpError(409, 'This project changed in another window. Reopen it before saving; your current canvas has not been overwritten.');
     var now = new Date().toISOString(), revision = b.revision + 1;
-    var data = { name: name, orgId: org, customerId: scope.account.id, module: target.module,
+    var data = { name: name, orgId: org, customerId: scope.account.id, module: target.module,siteAddress:B.clean(b.siteAddress,400),
       // Geometry may contain nested coordinate arrays, which Firestore cannot
       // store as native arrays. Persist the bounded JSON snapshot losslessly.
       target: target, canvasJson: serialized, revision: revision, updatedAt: now, updatedBy: caller.uid,

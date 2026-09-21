@@ -113,6 +113,7 @@ module.exports = A.handler(function (req) {
             var p = bySku(sku);
             items.push({
               sku: sku,
+              kind:p&&p.kind==='service'?'service':'product',
               name: clean((p && p.name) || (it && it.name) || sku, 120),
               qty: Math.max(1, Math.min(9999, num(it && it.qty) || 1)),
               kw: p ? num(p.kw) : num(it && it.kw),

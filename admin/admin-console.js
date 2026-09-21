@@ -2653,7 +2653,7 @@ function logicEnrollmentHtml(orgId, bill){
   h+='<p class="sub-txt">Creates a tenant admin membership. Ordinary sign-ins require mailbox verification; explicitly attested support accounts do not. Existing passwords are preserved. Replace temporary passwords before handing over access.</p>';
   h+='<button onclick="createLogicAdministrator(&quot;'+esc(orgId)+'&quot;)">Create / assign company administrator</button></details>';
   h+='<p id="ol-msg-'+esc(orgId)+'" class="sub-txt" role="status"></p>';
-  if(enabled) h+='<a href="/omega-logic?org='+encodeURIComponent(orgId)+'">Open office</a> · <a href="/plant/?org='+encodeURIComponent(orgId)+'">Open plant</a>';
+  if(enabled) h+='<a href="/omega-logic?org='+encodeURIComponent(orgId)+'">Open office</a> · <a href="/plant/manager?org='+encodeURIComponent(orgId)+'">Plant manager</a> · <a href="/plant/manager?org='+encodeURIComponent(orgId)+'#flow">Production flow</a> · <a href="/logic-urls?org='+encodeURIComponent(orgId)+'">URL Generator</a>';
   return h+'</fieldset>';
 }
 function saveLogicEnrollment(orgId){

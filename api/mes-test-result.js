@@ -86,6 +86,8 @@ module.exports = A.handler(function (req) {
             var verdict = P.judgeMachineResult(unit, stationKey, routing, { pass: passed });
             var currentStation = await tx.get(stationRef);
             if (!currentStation.exists || currentStation.data().active === false || currentStation.data().tokenHash !== station.tokenHash) throw A.httpError(403, 'Station credential revoked');
+            var liveStation=currentStation.data();
+            if(workOrder&&workOrder.lineId&&workOrder.lineId!==liveStation.lineId)verdict={ok:false,reason:'wrong_line',say:'Assign this station to the work order’s line before testing. Contact the plant manager.'};
             if (unit && unit.orderId) {
               var commercial = await tx.get(db.collection('orders').doc(unit.orderId));
               if (!commercial.exists || commercial.data().cancelRequested || (commercial.data().logic || {}).paymentException || ['cancelled', 'shipped', 'complete'].indexOf(commercial.data().status) >= 0) {
@@ -101,6 +103,7 @@ module.exports = A.handler(function (req) {
               ncr: ncr,
               program: S.clean(body.program, 100) || null,
               fixture: S.clean(body.fixture, 100) || null,
+              context:{lineId:liveStation.lineId||'',location:liveStation.location||'',stationRevision:liveStation.revision||0,flowVersion:workOrder&&workOrder.flowVersion||0},
               at: at
             };
             /* The event is written even for a refusal. A machine repeatedly
