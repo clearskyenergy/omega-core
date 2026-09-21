@@ -280,6 +280,7 @@
     }
   ],
   "functions": {
+    "api/site-catalog.js": { "maxDuration": 60 },
     "api/logic-worker.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
     "api/lite-atlas.js": { "maxDuration": 60 },

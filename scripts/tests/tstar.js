@@ -96,7 +96,7 @@ ok('an exempt row is not counted as a filter casualty', function () {
 ok('the star is still viewport-bound, not pinned to every view', function () {
   var body = html.slice(html.indexOf('var vb = map.getBounds();'));
   body = body.slice(0, body.indexOf('var sn = document.getElementById("savedN")'));
-  assert(/rows = \(ST\.view === "saved"\)\s*\?\s*saved/.test(body),
+  assert(/rows = ST\.view === 'catalog' \? rows : \(ST\.view === "saved"\)\s*\?\s*saved/.test(body),
     'the Starred tab no longer shows the saved list');
   assert(!/\.concat\(saved/.test(body) && !/saved\.concat\(/.test(body),
     'the saved list is being prepended to the working views again — that is the '
