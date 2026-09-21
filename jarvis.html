@@ -87,6 +87,11 @@ header .gear:hover{background:rgba(255,255,255,.16);color:#fff}
 #orb{position:fixed;right:22px;bottom:96px;width:132px;height:132px;z-index:7;
      pointer-events:none;opacity:0;transition:opacity .35s}
 #orb.on{opacity:1}
+#doom-avatar{position:fixed;right:4px;bottom:82px;width:250px;height:390px;z-index:7;pointer-events:none;opacity:0;transition:opacity .35s}
+#doom-avatar.on{opacity:1}
+#doom-avatar .doom-credit{position:absolute;bottom:-8px;left:0;right:0;text-align:center;font:8px/1.3 sans-serif;color:#54786e;z-index:2;pointer-events:none}
+#doom-avatar.on .doom-credit{pointer-events:auto}
+@media(max-width:700px){#doom-avatar{width:150px;height:245px;bottom:112px}}
 @media(max-width:700px){#orb{width:92px;height:92px;right:10px;bottom:120px}}
 .pauseAll{width:100%;margin:0 0 14px;padding:11px;border-radius:9px;cursor:pointer;
           font-family:inherit;font-size:13.5px;font-weight:600;
@@ -167,6 +172,11 @@ button.send:disabled{background:#A8B6C6;cursor:default}
     </div>
     <button class="close" id="closePanel">Close</button>
   </header>
+  <div style="padding:18px;border-bottom:1px solid var(--cs-border)">
+    <label for="voiceCharacter">Voice character</label>
+    <select id="voiceCharacter" style="width:100%;padding:10px;margin-top:8px"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Jarvis · orb</option></select>
+    <div id="voiceCharacterStatus" class="cost" role="status">Saved on this browser.</div>
+  </div>
   <div class="body" id="panelBody"></div>
 </aside>
 
@@ -192,6 +202,10 @@ button.send:disabled{background:#A8B6C6;cursor:default}
 </main>
 
 <canvas id="orb"></canvas>
+<div id="doom-avatar" aria-label="Doom voice companion"><a class="doom-credit" href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener noreferrer">Dr Doom V2 · Visiion · CC BY 4.0 · animated adaptation</a></div>
+<script src="assets/vendor/three-r128/three.min.js"></script>
+<script src="assets/vendor/three-r128/GLTFLoader.js"></script>
+<script src="omega-doom.js?v=20260921-rigged-5"></script>
 
 <div class="captions" id="captions">
   <div class="who" id="capWho">LISTENING</div>
@@ -389,6 +403,39 @@ el('signin').addEventListener('click', async () => {
    while listening and with Jarvis's while speaking. A sphere that pulses on a
    timer looks alive; one that pulses on the actual waveform IS alive, and the
    difference is obvious the moment you say a long word. */
+let doomAvatar = null, avatarGeneration = 0, avatarState = 'idle';
+let voiceCharacter = 'rigged';
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) voiceCharacter = saved; } catch (_) {}
+function loadVoiceCharacter() {
+  const generation = ++avatarGeneration, host = el('doom-avatar');
+  if (doomAvatar) { doomAvatar.destroy(); doomAvatar = null; }
+  el('orb').style.visibility = '';
+  host.querySelector('.doom-credit').hidden = true;
+  el('voiceCharacter').value = voiceCharacter;
+  if (voiceCharacter === 'classic') return;
+  try {
+    const actor = voiceCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    doomAvatar = actor;
+    actor.ready.then(() => {
+      if (generation !== avatarGeneration) return;
+      actor.setState(avatarState); el('orb').style.visibility = 'hidden';
+      host.querySelector('.doom-credit').hidden = voiceCharacter !== 'rigged';
+      el('voiceCharacterStatus').textContent = 'Character ready. Saved on this browser.';
+    }).catch(() => {
+      if (generation !== avatarGeneration) return;
+      actor.destroy(); doomAvatar = null;
+      el('voiceCharacterStatus').textContent = 'Character unavailable. Using the Jarvis orb.';
+    });
+  } catch (_) { el('voiceCharacterStatus').textContent = '3D unavailable. Using the Jarvis orb.'; }
+}
+function doomState(value) { avatarState = value; if (doomAvatar) doomAvatar.setState(value); }
+el('voiceCharacter').addEventListener('change', e => {
+  voiceCharacter = e.target.value;
+  try { localStorage.setItem('jarvisDoomCharacter', voiceCharacter); } catch (_) {}
+  loadVoiceCharacter();
+});
+loadVoiceCharacter();
+window.addEventListener('pagehide', () => { ++avatarGeneration; if (doomAvatar) doomAvatar.destroy(); });
 const orb = (() => {
   const cv = document.getElementById('orb');
   if (!cv) return { set(){}, show(){} };
@@ -444,8 +491,8 @@ const orb = (() => {
   requestAnimationFrame(frame);
 
   return {
-    set(v) { target = Math.max(0, Math.min(1, v)); },
-    show(on) { cv.classList.toggle('on', !!on); if (!on) target = 0; }
+    set(v) { target = Math.max(0, Math.min(1, v)); if (doomAvatar) doomAvatar.setEnergy(v); },
+    show(on) { cv.classList.toggle('on', !!on); document.getElementById('doom-avatar').classList.toggle('on', !!on); if (doomAvatar) doomAvatar.setState(on ? 'listening' : 'idle'); if (!on) { target = 0; if (doomAvatar) doomAvatar.setEnergy(0); } }
   };
 })();
 
@@ -515,7 +562,9 @@ function browserSpeak(text) {
                 || vs.find(v => /^en/i.test(v.lang));
       if (pref) u.voice = pref;
       u.rate = 1.02; u.pitch = 0.9;
-      u.onend = u.onerror = () => done();
+      u.onstart = () => { orb.show(true); doomState('speaking'); };
+      u.onboundary = () => { orb.set(.55); setTimeout(() => orb.set(0), 140); };
+      u.onend = u.onerror = () => { orb.set(0); done(); };
       S.speak(u);
       setTimeout(done, 15000);
     } catch (_) { done(); }
@@ -548,6 +597,7 @@ async function speakReply(text) {
       if (c) { const src = c.createMediaElementSource(a); src.connect(c.destination); m = meter(src); }
     } catch (_) { /* visualisation is optional; the audio still plays */ }
     orb.show(true);
+    doomState('speaking');
     await new Promise(done => { a.onended = a.onerror = done; a.play().catch(done); });
     if (m) m.stop();
     orb.set(0);
@@ -558,6 +608,8 @@ async function speakReply(text) {
     await browserSpeak(text);
   } finally {
     speaking = false;
+    orb.set(0);
+    doomState(listening ? 'listening' : 'idle');
     if (listening) { try { rec.start(); } catch (_) {} }
   }
 }
