@@ -58,6 +58,27 @@ var CLEARSKY_GIT_EMAILS = [
   'noreply@anthropic.com'
 ];
 
+/* ── Identities allowed as a COMMITTER but never as an AUTHOR ─────────────
+   2026-09-20. rangeIdentities() reads `%ae` and `%ce` into one list, so a
+   committer this file does not know scopes the PR exactly as an unknown
+   author would. GitHub stamps `noreply@github.com` as the COMMITTER on every
+   merge commit made through its web UI — so the moment a ClearSky PR merged
+   that way landed on main, every later branch that merged main forward
+   inherited it and failed this gate. That is not a partner reaching outside
+   their folder; it is the repository's own history.
+
+   The distinction is the whole point of listing it here rather than in
+   CLEARSKY_GIT_EMAILS. A merge commit contributes no content of its own — its
+   tree comes from its parents, which were authored by somebody this file
+   still checks. A partner who AUTHORS a commit as noreply@github.com is a
+   different claim entirely, and it is still caught.
+
+   Verified before adding: every commit carrying this identity in the range
+   that exposed it was a merge (`git log --no-merges | grep -c` returned 0). */
+var COMMITTER_ONLY_EMAILS = [
+  'noreply@github.com'
+];
+
 /* ── JV partners, and the only paths their PRs may change. ─────────────────
    A handle here is a statement about the JV agreement, not about trust — the
    point of writing it down is that the boundary survives the person who
@@ -116,15 +137,23 @@ function isClearSky(author) {
 
 /* Every git identity that wrote or committed something in this range.
    Both %ae and %ce, because a partner can push somebody else's commits. */
+/* Authors and committers are collected SEPARATELY, because they are
+   different claims. An author wrote the content; a committer only says who
+   applied it, and on a merge made through GitHub's UI that is GitHub itself.
+   Merging the two lists — which this did until 2026-09-20 — meant an
+   ordinary `git merge main` could fail the gate on a name nobody typed. */
 function rangeIdentities(base, head) {
   var range = head ? (base + '..' + head) : (base + '..HEAD');
-  var out = cp.execSync('git log --format=%ae%n%ce ' + range, { encoding: 'utf8' });
-  var seen = {}, list = [];
-  out.split('\n').forEach(function (e) {
-    e = lower(e.trim());
-    if (e && !seen[e]) { seen[e] = 1; list.push(e); }
-  });
-  return list;
+  function field(fmt) {
+    var out = cp.execSync('git log --format=' + fmt + ' ' + range, { encoding: 'utf8' });
+    var seen = {}, list = [];
+    out.split('\n').forEach(function (e) {
+      e = lower(e.trim());
+      if (e && !seen[e]) { seen[e] = 1; list.push(e); }
+    });
+    return list;
+  }
+  return { authors: field('%ae'), committers: field('%ce') };
 }
 
 /* Unrestricted requires BOTH that a ClearSky handle opened the pull request
@@ -144,14 +173,28 @@ function rangeIdentities(base, head) {
    backstop for that. */
 function unrestricted(author, base, head) {
   if (!isClearSky(author)) return false;
-  var unknown = rangeIdentities(base, head).filter(function (e) {
-    return CLEARSKY_GIT_EMAILS.map(lower).indexOf(e) < 0;
-  });
+  var ids = rangeIdentities(base, head);
+  var known = CLEARSKY_GIT_EMAILS.map(lower);
+  /* A committer may additionally be one of the identities that only ever
+     applies somebody else's work — see COMMITTER_ONLY_EMAILS. An AUTHOR is
+     held to the stricter list, so the exemption cannot be used to smuggle
+     content in under GitHub's name. */
+  var knownCommitters = known.concat(COMMITTER_ONLY_EMAILS.map(lower));
+
+  var unknownAuthors = ids.authors.filter(function (e) { return known.indexOf(e) < 0; });
+  var unknownCommitters = ids.committers.filter(function (e) { return knownCommitters.indexOf(e) < 0; });
+  var unknown = unknownAuthors.concat(unknownCommitters.filter(function (e) {
+    return unknownAuthors.indexOf(e) < 0;
+  }));
+
   if (!unknown.length) return true;
   console.log('PR opened by a ClearSky handle, but the range carries identities');
   console.log('this file does not recognise, so the scope check applies:');
-  unknown.forEach(function (e) { console.log('  ' + e); });
-  console.log('If these are ClearSky, add them to CLEARSKY_GIT_EMAILS.');
+  unknownAuthors.forEach(function (e) { console.log('  ' + e + '  (author)'); });
+  unknownCommitters.forEach(function (e) { console.log('  ' + e + '  (committer)'); });
+  console.log('If these are ClearSky, add them to CLEARSKY_GIT_EMAILS — or, for');
+  console.log('an identity that only ever applies other people’s commits,');
+  console.log('COMMITTER_ONLY_EMAILS.');
   console.log('');
   return false;
 }
