@@ -85,9 +85,19 @@ purchase-list CSV. Forecast demand is shown and never suggests a purchase.
 
 Stock counts are recorded from the same page (`POST action:'stock'`) into
 `omega_orgs/{org}/fulfillment/materials`, which the rules already close to
-browsers; each count is dated, attributed, revision-checked and audited. There
-is no purchase order object: "on order" is the count a person enters after
-sending the list to a supplier.
+browsers; each count is dated, attributed, revision-checked and audited.
+
+**Purchase orders** (`POST action:'po' | 'receive' | 'cancel-po'`) close the
+loop: a record of what was sent to a supplier in
+`omega_orgs/{org}/purchase_orders/{id}` (no rule grants it — Admin SDK only,
+named in `firestore.rules` so that is a statement rather than a default),
+written in the same transaction that adds its quantities to `onOrder`.
+Receiving moves the received quantity from `onOrder` to `onHand` and marks
+the order `partial` or `received`; cancelling releases what never arrived.
+A manual count still overrides either number — a count is a fact about the
+shelf, a PO a fact about a promise. The page raises a PO pre-filled from the
+purchase list. What is still not here is any message to the supplier: the
+record is of what a person sent, and sending is theirs.
 
 **Yield.** A bill line may carry `yieldPct` (1–100, blank = 100): the share of
 what is issued that ends up in a good assembly. The plan divides net demand by

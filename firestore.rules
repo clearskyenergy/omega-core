@@ -2147,6 +2147,12 @@ service cloud.firestore {
     match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
     match /integrations/{integrationId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
+    /* Purchase orders (api/logic-materials.js): what the plant sent a supplier
+       and what arrived. Written in the same transaction as the stock counts
+       above, Admin SDK only — a browser that could edit "received" could put
+       cells on the shelf that never came. No rule grants it, and this line
+       says so rather than leaving it to the default. */
+    match /omega_orgs/{orgId}/purchase_orders/{poId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and

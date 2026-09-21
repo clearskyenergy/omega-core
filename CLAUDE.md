@@ -251,8 +251,10 @@ user). Do not add a second copy of that list — see what three copies of
     never published, drawn, picked or ordered; every one of those surfaces
     drops the kind by name. The materials plan (`api/logic-materials.js`)
     explodes open demand through the bills and nets it against stock counts
-    held under `fulfillment/`, which is closed to browsers. Never a buy price
-    on a component: `import-products.js` refuses the column in both sheets.
+    held under `fulfillment/`, which is closed to browsers; purchase orders
+    (`purchase_orders/`, equally closed) move quantity on-order → on-hand
+    through the same audited endpoint. Never a buy price on a component:
+    `import-products.js` refuses the column in both sheets.
 - `orders` is read from Firestore and written ONLY through `api/orders.js`:
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.

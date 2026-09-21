@@ -93,21 +93,20 @@ with `auth().currentUser.getIdToken()` and `onAuthStateChanged`, and answer
 
 Each of these was a product decision I did not want to improvise. Items 1, 4
 and 5 were then built with the obvious default (the owner asked for whatever
-could be completed unattended); 2, 3 and 6 still need a decision first.
+could be completed unattended), then 2 as well; 3 and 6 still need a
+decision first.
 
 1. ~~**Scrap / yield.**~~ **Done** (commit after `3256e20`): `yieldPct` on a
    BOM line, applied in the explosion, `yielded` flag on rows, footnote on
    the page, `yieldPct` column on the BOM sheet, catalog-editor input.
-2. **Purchase orders and receiving.** Today "on order" is a number a person
-   types after sending the CSV. The next step is a `fulfillment/purchase_orders`
-   record (supplier, lines, expected date, status) that feeds `onOrder`
-   automatically and, on receipt, moves quantity to `onHand`. Checked:
-   `api/logic-logistics.js` is OUTBOUND only (plan / pickup / delivered /
-   inspect on a customer delivery leg) — it does not own inbound goods, so
-   receiving is new. Rules: `fulfillment/*` is already `allow read, write:
-   if false`, so any new doc there is Admin-SDK-only by default. Keep it
-   that way, and write receipts through the same revision-checked, audited
-   path `POST action:'stock'` uses.
+2. ~~**Purchase orders and receiving.**~~ **Done**: `POST action:'po'` records
+   `omega_orgs/{org}/purchase_orders/{id}` and adds to `onOrder` in one
+   transaction; `'receive'` moves quantity to `onHand` and marks partial /
+   received; `'cancel-po'` releases the rest. Revision-checked against the
+   stock document, audited, Admin-SDK-only (named in `firestore.rules`).
+   The page raises one pre-filled from the purchase list. `api/logic-logistics.js`
+   turned out to be OUTBOUND only (customer delivery legs), so receiving is
+   its own thing here. Still not built: any message to the supplier.
 3. **Component costs → spend forecast.** A buy price on a component is exactly
    what `CLAUDE.md` forbids in the repo and the importer refuses in both
    sheets. If Clean Cell wants a dollar forecast, the number must live only in
