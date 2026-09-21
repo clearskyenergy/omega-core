@@ -4,7 +4,7 @@
 
 Updated 2026-09-21. Client: CleanCell (`cleancell.us`).
 
-**Current release status: first increment implemented and offline-tested in an isolated branch; not deployed.** Portfolio ZIP screening, carrier integration, onward transfers and commissioning approval remain open scope.
+**Current release status: company PO launch deployed to production and live-verified on 2026-09-21 (PR #65, see the release entry below).** The earlier "not deployed" statement is superseded. Portfolio ZIP screening, carrier integration, onward transfers, commissioning approval, email intake, payments and catalog data remain open scope.
 
 This is the client delivery backlog and change record. **Prepared, tested, deployed and accepted are separate states.** No item is production-ready merely because its screen exists. The new scope comes from the September 21 call notes and subsequent user direction.
 
@@ -29,6 +29,10 @@ This is the client delivery backlog and change record. **Prepared, tested, deplo
 | CC-015 | Website installation and pilot | Planned | Install customer links/sizer embed; verify origins, mobile signup, branding and role isolation |
 | CC-016 | MOU and executive summary | Drafted | Confirm legal entity, commercial terms and signatories; counsel review before execution |
 | CC-017 | AI operations agent | Deferred | Implement only after audited workflows and integrations pass acceptance |
+| CC-018 | Corporate accounts and explicitly assigned company users | Deployed; live-verified 2026-09-21 | InCharge company account without invented email; named verified contacts; no domain-wide auto-enrollment |
+| CC-019 | Original PO upload, staff entry and review queue | Deployed; live-verified 2026-09-21 | Private PDF/PNG/JPEG up to 2 MB, duplicate-safe PO number, retained original and reviewed catalog/site mapping |
+| CC-020 | Email-to-company PO intake | Mailbox setup required | Select receiving mailbox/provider; authenticate inbound events; match approved senders; retain originals and quarantine unmatched mail |
+| CC-021 | Login-first customer entry | Deployed; live-verified 2026-09-21 | Existing-customer login is primary; new customer account creation is secondary |
 
 ## Existing baseline
 
@@ -82,6 +86,32 @@ Use an explicitly labeled test order for 56 units split across at least three de
 - Load cancellation/replanning, shortage resolution, onward transfers and commissioning approvals are not implemented in this increment.
 - Existing subscription, QuickBooks and bank setup dependencies still apply. Offline fixtures do not prove live provider behavior.
 - Concurrent editor changes were deliberately excluded; integrate and retest before deployment.
+
+### Launch integration — 2026-09-21
+
+- Merged production `origin/main` into the isolated branch, preserving already released owner/editor fixes. Main checkout's uncommitted work remains untouched.
+- PR: https://github.com/clearskyenergy/omega-core/pull/65. Implementation commit: `7802f90`.
+- Added Company accounts & POs to the office, Company POs & deliveries to the customer portal, and a public PO inbox link to URL Generator.
+- Company users are assigned by office administrators. A website/email domain is descriptive only and grants no access. No InCharge contact or password is invented.
+- Office members can enter POs; company/contact administration requires an office administrator. Customer uploads are scoped to their verified account membership.
+- Private originals use authenticated API downloads, not public Storage download tokens. File signatures/size are checked; attachments are untrusted and are not automatically executed, OCR-processed or treated as order instructions.
+- The same company PO number cannot create both an uploaded draft and a second catalog order. Conversion preserves the original document and audit trail and still requires approved catalog SKUs and a real assigned billing contact.
+- Automated portfolio/ZIP screening, order extraction, optimization and mailbox ingestion are not represented as live. Site/portfolio references can be entered with PO details; structured multi-site allocations are recorded during review.
+- Full `npm test` passed with local dependencies, plus browser inspection of the company inbox and multi-destination review page. Release checks also passed on GitHub. Live promotion and company provisioning are recorded below when verified.
+
+### Production release and live verification — 2026-09-21
+
+- Deployed: https://silmarillion.clearskyomega.com. PR #65 merged into `main` (`7f8ba54`); implementation commit `7802f90`. Promoted Vercel deployment `dpl_CWCjSWEjfvQdMtrh7xxqLmHxWKBm`. Later `main` builds may serve the same source.
+- Live company account: InCharge Energy under CleanCell, `company_2b06b22951a9dd00659e1c59c676c523cb69474e`, domain `inchargeus.com` (descriptive only), active, free customer account. No customer contact, login or access grant was created because none was supplied.
+- Live office PO entry verified with `SYSTEM-VERIFY-20260921-NOT-AN-ORDER` (`po_05cf050cf5358cc9f885c689baa6b1c4a35016a2`). Closed as `po_declined` with note "System release verification complete; not a customer order. No charge or fulfillment." Audit record preserved.
+- Live attachment upload verified with `SYSTEM-UPLOAD-20260921-NOT-AN-ORDER` (`po_0c5633c97a08f8ab51429c2491483a418aa9b147`) using the public ClearSky logo `assets/clearsky-omega-dark.png` (90,365 bytes), not a customer document. `POST /api/po-intake` returned 200; the original was stored under the private `logic-po/**` prefix.
+- Live authenticated download verified: `GET /api/po-intake?…&id=…&file=…` returned 200 with a 90,365-byte `application/octet-stream` body and the original filename. Closed as `po_declined` with note "System upload and authenticated download verification complete; not a customer order. No charge or fulfillment."
+- No invoice, charge, work order, wire, carrier booking or shipment was created by either test.
+- Navigation verified signed in as ClearSky staff: customer portal shows "Company POs & deliveries"; URL Generator lists Customer walkthrough, Customer login, Company PO inbox, Editor Lite and Battery sizer; office shows "Company accounts & POs", "Logistics & receiving" and URL Generator; logistics page loads with its manual-ledger disclaimer. No console errors on any page.
+- Test evidence: `scripts/test-order-lifecycle.js` gained a download-authorization check (28 lifecycle checks incl. cross-company denial). Full `npm test` passed before merge; mocks do not prove payment, carrier or mailbox providers.
+- Finding (open): `api/logic-logistics.js` lists every order for the org in its Order selector, so declined and unconverted PO intake records (`PO-IN-…`) appear there as "legacy order". The page refuses to plan them without a reviewed destination plan, so no movement can be recorded, but the selector should exclude `po_declined` and unconverted intake.
+- Improvement (open): the Update review action on `po-inbox.html` uses two browser `prompt()` dialogs; an inline review form would be easier to operate and to automate.
+- Unresolved launch dependencies unchanged: approved CleanCell catalog (live catalog empty), QuickBooks activation, subscription checkout ($799/month shown, not chargeable), InCharge contact emails, email-to-PO mailbox, portfolio/ZIP automation, carrier booking and GPS, processing fee and bank settlement, and scaling the 100-serial load / 400-component query limits before a large pilot.
 
 ## Update discipline
 
