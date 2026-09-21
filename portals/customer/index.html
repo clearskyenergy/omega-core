@@ -120,15 +120,16 @@
 
 <div id="gate" hidden>
   <section>
-    <h1 id="g-h">Your customer account</h1>
-    <p class="lede" id="g-p">Sign in or create your free account. We will email you a secure link—no password to remember. Use the address on your invitation or order.</p>
+    <h1 id="g-h">Customer login</h1>
+    <p class="lede" id="g-p">Log in with your work email. We will email you a secure login link—no password to remember. For a corporate account, use the email assigned by your supplier.</p>
     <label for="g-email">Email address</label>
     <input id="g-email" type="email" autocomplete="email" placeholder="you@company.com">
     <div class="actions">
-      <button type="button" class="btn p" id="g-link">Email me a link</button>
+      <button type="button" class="btn p" id="g-link">Email my login link</button>
       <button type="button" class="btn" id="g-google">Use Google</button>
     </div>
     <p class="muted" id="g-msg" style="margin-top:14px;font-size:13.5px"></p>
+    <p class="muted">New customer? <button type="button" class="btn" id="g-create">Create a customer account</button></p>
   </section>
 </div>
 
@@ -237,7 +238,7 @@
       if (PORTAL.brand.logoUrl) { $('mark').src=PORTAL.brand.logoUrl; $('mark').hidden=false; }
       $('editor-price').textContent = '$' + (PORTAL.editorLite.monthlyPriceCents / 100).toLocaleString('en-US') + ' / month';
       $('editor-availability').textContent = 'Subscription checkout is not yet enabled. No subscription has been started or charged.';
-      if(PORTAL.links){var entry=document.getElementById('customer-start');if(!entry){entry=document.createElement('a');entry.id='customer-start';entry.textContent='Size a system';document.querySelector('.logic-nav').insertBefore(entry,document.querySelector('.logic-nav').firstChild);}entry.href=PORTAL.links.start;}
+      if(PORTAL.links){var entry=document.getElementById('customer-start');if(!entry){entry=document.createElement('a');entry.id='customer-start';entry.textContent='Size a system';document.querySelector('.logic-nav').insertBefore(entry,document.querySelector('.logic-nav').firstChild);}entry.href=PORTAL.links.start;var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);}
       return;
     }
     try {
@@ -408,6 +409,7 @@
   });
 
   /* ── sign in ────────────────────────────────────────────────────────── */
+  $('g-create').onclick=function(){ $('g-h').textContent='Create a customer account';$('g-p').textContent='Verify your work email to open a free customer account. If your company already has an account, ask your supplier to assign your email before joining.';$('g-link').textContent='Verify email and continue';$('g-email').focus(); };
   function sendLink() {
     var e = String($('g-email').value || '').trim();
     if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }

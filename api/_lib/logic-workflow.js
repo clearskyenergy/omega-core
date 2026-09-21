@@ -15,6 +15,7 @@ async function price(orderId, total, caller, accept) {
   var ref = A.db().collection('orders').doc(P.id(orderId)), initial = await ref.get();
   if (!initial.exists) throw A.httpError(404, 'Order not found');
   var order = initial.data(), ctx = await X.context(order.orgId);
+  if(order.poIntake&&!order.poIntake.convertedAt)throw A.httpError(409,'Review and map the uploaded PO to catalog items before pricing');
   if (!X.enabled(ctx)) throw A.httpError(409, 'Enable the Omega Logic subscription and fulfillment configuration first');
   var conf = ctx.config;
   if (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');
@@ -159,6 +160,7 @@ async function finish(orderId, caller, shipment) {
     units.docs.forEach(function (d) { var u = d.data(); if (u.shipUnit) wanted[u.sku] = (wanted[u.sku] || 0) - 1; });
     if (Object.keys(wanted).some(function (sku) { return wanted[sku] !== 0; })) throw A.httpError(409, 'Shipping units do not match the complete order');
     if (shipment) {
+      if (o.delivery) throw A.httpError(409, 'Use Logistics and receiving for orders with a destination plan');
       if (l.commercial.balanceCents && !(l.invoices.balance || {}).satisfied) throw A.httpError(409, 'Final payment must be recorded before shipment');
       if (!shipment.carrier || !shipment.tracking) throw A.httpError(400, 'Carrier and tracking / bill-of-lading number required');
       tx.update(ref, { status: 'shipped', shipment: { carrier: String(shipment.carrier).slice(0, 80), tracking: String(shipment.tracking).slice(0, 120), shippedAt: new Date().toISOString() } });
