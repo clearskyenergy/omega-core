@@ -103,6 +103,21 @@ shelf, a PO a fact about a promise. The page raises a PO pre-filled from the
 purchase list. What is still not here is any message to the supplier: the
 record is of what a person sent, and sending is theirs.
 
+**Safety stock.** A component may carry `safetyStock`, the quantity to keep
+on the shelf at all times. The plan nets it as a fourth bucket, `buffer`,
+after committed and pipeline demand and before forecast — the shelf serves
+real orders first, and what is left below the buffer is a firm purchase with
+the driver `safety`. A shelf below its buffer with no demand at all still
+shows, marked "below safety stock", with order-by = today; it is never
+"late" and never a works order's shortfall. A buffer on a sub-assembly
+explodes into its parts like any firm demand. This is what a reorder point
+does in Katana or MRPeasy and how NetSuite treats safety stock (as demand);
+`docs/MATERIALS-COMPETITORS.md` has the comparison.
+
+**Lots.** A receipt line may carry the supplier's lot number; it is kept on
+the receipt and on the shelf (`stock[sku].lots`, last twenty), so a unit's
+`trace.lot` at registration can name the lot it was built from.
+
 **Yield.** A bill line may carry `yieldPct` (1–100, blank = 100): the share of
 what is issued that ends up in a good assembly. The plan divides net demand by
 it — 98% on 104 cells means 106.12 issued per module — and marks every row fed

@@ -167,10 +167,14 @@ module.exports = A.handler(async function (req, res) {
           var remaining = round4(Number(l.qty) - Number(l.received || 0));
           if (qty > remaining + 0.00005) throw A.httpError(409, sku + ': ' + qty + ' is more than the ' + remaining + ' still expected');
           l.received = round4(Number(l.received || 0) + qty);
-          var e = entry(sku);
+          var e = entry(sku), lot = text(a && a.lot, 100);
           e.onOrder = round4(Math.max(0, Number(e.onOrder || 0) - qty)); e.onHand = round4(Number(e.onHand || 0) + qty);
           e.countedAt = now; e.by = caller.email; e.note = 'Received on PO ' + (po.reference || po.supplier);
-          stock[sku] = e; moved.push({ sku: sku, qty: qty });
+          /* The supplier's lot travels with the shelf so the floor can put
+             it on a unit's trace at registration (plant-release.js traceOf).
+             Last twenty receipts per SKU; the PO keeps the full history. */
+          if (lot) e.lots = (Array.isArray(e.lots) ? e.lots : []).concat([{ lot: lot, qty: qty, at: now, po: poId, supplier: po.supplier || null }]).slice(-20);
+          stock[sku] = e; moved.push({ sku: sku, qty: qty, lot: lot || null });
         });
         if (!moved.length) throw A.httpError(400, 'Nothing to receive');
         var done = lines.every(function (l) { return Number(l.received || 0) + 0.00005 >= Number(l.qty); });

@@ -65,7 +65,7 @@
    ─────────────────────────────────────────────────────────────────────────────
    A row with `kind` = component is what a product is MADE OF — a cell, a
    module, a BMS. It needs no kW or kWh, is never published, drawn or priced,
-   and may carry `unit`, `supplier`, `supplierSku`, `moq` and `leadTimeDays`
+   and may carry `unit`, `supplier`, `supplierSku`, `moq`, `safetyStock` and `leadTimeDays`
    for the materials plan (api/_lib/materials.js). A second sheet,
    `--bom bom.csv`, with columns  parentSku, componentSku, qty, unit,
    yieldPct (optional, 1–100, blank = 100)  lists what goes into ONE of each
@@ -206,7 +206,7 @@ function toProduct(r, i) {
     if (materials.UNITS.indexOf(unit) < 0) { problems.push(sku + ': unit "' + unit + '" is not one of ' + materials.UNITS.join(', ')); return null; }
     var c = { sku: sku, kind: 'component', name: String(r.name || r.model || sku).trim(),
       blurb: String(r.blurb || r.description || '').trim().slice(0, 400), unit: unit, priceMode: 'quote',
-      leadTimeDays: num(r.leadtimedays || r.leadtime), moq: num(r.moq || r.minimumorder),
+      leadTimeDays: num(r.leadtimedays || r.leadtime), moq: num(r.moq || r.minimumorder), safetyStock: num(r.safetystock || r.reorderpoint || r.minstock),
       supplier: String(r.supplier || r.vendor || '').trim().slice(0, 160),
       supplierSku: String(r.suppliersku || r.supplierpartno || r.supplierpart || r.mpn || '').trim().slice(0, 80),
       integrates: { pcs: false, xfmr: false, disco: false }, bom: [] };

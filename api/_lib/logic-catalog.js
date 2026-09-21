@@ -14,7 +14,7 @@ function product(p){
   if(['bess','compute','ev','solar','other'].indexOf(category)<0||KINDS.indexOf(kind)<0)throw A.httpError(400,'Select a product category and type');
   var out={sku:sku,name:clean(p.name,120),blurb:clean(p.blurb,400),kind:kind,category:category,active:p.active!==false,priceMode:kind==='component'?'quote':(p.priceMode==='list'?'list':'quote'),designEnabled:kind==='product'&&category==='bess'&&p.designEnabled===true};
   if(!out.name)throw A.httpError(400,'Product name required');
-  ['kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','moq'].forEach(function(k){var v=p[k];if(v==null||v===''){out[k]=null;return;}var n=Number(v);if(!isFinite(n)||n<0||n>100000000)throw A.httpError(400,'Invalid '+k);out[k]=n;});
+  ['kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','moq','safetyStock'].forEach(function(k){var v=p[k];if(v==null||v===''){out[k]=null;return;}var n=Number(v);if(!isFinite(n)||n<0||n>100000000)throw A.httpError(400,'Invalid '+k);out[k]=n;});
   if(out.priceMode==='list'&&!(out.listPrice>0))throw A.httpError(400,'A published list price must be greater than zero');
   if(out.priceMode==='quote')out.listPrice=null;
   if(out.designEnabled&&!['kw','kwh','widthFt','depthFt'].every(function(k){return out[k]>0;}))throw A.httpError(400,'BESS design products require positive kW, kWh, width and depth');
@@ -26,7 +26,7 @@ function product(p){
   out.unit=kind==='component'?(clean(p.unit,8)||'ea'):null;
   if(out.unit&&M.UNITS.indexOf(out.unit)<0)throw A.httpError(400,'Unit must be one of '+M.UNITS.join(', '));
   out.supplier=kind==='component'?clean(p.supplier,160):'';out.supplierSku=kind==='component'?clean(p.supplierSku,80):'';
-  if(kind!=='component')out.moq=null;
+  if(kind!=='component'){out.moq=null;out.safetyStock=null;}
   out.bom=kind==='service'?[]:M.bomLines(p.bom);
   return out;
 }
@@ -47,5 +47,5 @@ function select(config,sku,target){
 /* The OFFICE projection — the tenant's own catalog page. Sourcing fields and
    the bill of materials are theirs to see; the public projection in
    api/embed-config.js never names them. */
-function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){return {sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};});return out;}
+function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){return {sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};});return out;}
 module.exports={product:product,designs:designs,select:select,view:view,KINDS:KINDS};

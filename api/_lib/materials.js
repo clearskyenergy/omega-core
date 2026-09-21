@@ -45,6 +45,16 @@
    the output is a list a person sends to a supplier, with the order-by
    date computed from the lead time they entered.
 
+   SAFETY STOCK. A component may carry `safetyStock`: the quantity the plant
+   wants on the shelf at all times. It is netted as a fourth bucket, `buffer`,
+   after committed and pipeline demand and before forecast — so the shelf
+   covers real orders first, and what is left below the buffer is a firm
+   purchase with the driver `safety`. A row below its buffer with no demand
+   at all still appears, marked `belowSafety`, which is what a reorder point
+   does in Katana or MRPeasy; NetSuite treats safety stock as demand the same
+   way. The buffer explodes into children like any firm demand — a buffer of
+   ten modules is ten modules' worth of cells.
+
    YIELD. A bill line may carry `yieldPct` (1–100, default 100): the share of
    what is issued that ends up in a good assembly. Cells that fail incoming
    test, paste that is wasted, harness cut to length — the plan divides the
@@ -61,7 +71,7 @@
 var MAX_LINES = 80;      /* bom lines per assembly */
 var MAX_DEPTH = 8;       /* cabinet → rack → module → cell is four */
 var MAX_DRIVERS = 24;    /* per row, so a page stays a page */
-var BUCKETS = ['committed', 'pipeline', 'forecast'];
+var BUCKETS = ['committed', 'pipeline', 'buffer', 'forecast'];
 var SKU = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 var UNITS = ['ea', 'set', 'kg', 'g', 'm', 'mm', 'ft', 'L', 'mL', 'roll', 'box'];
 var DAY = 86400000;
@@ -206,8 +216,9 @@ function emptyRow(p) {
     unit: p.kind === 'component' ? (clean(p.unit, 8) || 'ea') : 'ea', supplier: clean(p.supplier, 160) || null,
     supplierSku: clean(p.supplierSku, 80) || null, moq: num(p.moq) > 0 ? num(p.moq) : null,
     leadTimeDays: num(p.leadTimeDays) > 0 ? Math.round(num(p.leadTimeDays)) : null,
-    gross: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
-    onHand: 0, onOrder: 0, net: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
+    safetyStock: num(p.safetyStock) > 0 ? roundQty(num(p.safetyStock)) : 0, belowSafety: false,
+    gross: { committed: 0, pipeline: 0, buffer: 0, forecast: 0, total: 0 },
+    onHand: 0, onOrder: 0, net: { committed: 0, pipeline: 0, buffer: 0, forecast: 0, total: 0 },
     /* A row with its own bill is a sub-assembly: the plant MAKES it, so its
        "suggested order" is units to build and it never appears on a purchase
        list — its children do. Only a leaf component is bought. */
@@ -224,12 +235,13 @@ function plan(input) {
   var stock = isPlain(input.stock) ? input.stock : {};
   var today = dateOf(input.now) || new Date().toISOString().slice(0, 10);
   var rows = Object.create(null), unknown = [];
+  function driver(row, d) { if (row.drivers.length < MAX_DRIVERS) row.drivers.push(d); }
   Object.keys(by).forEach(function (sku) {
     var r = emptyRow(by[sku]), s = safeKey(sku) && isPlain(stock[sku]) ? stock[sku] : {};
     r.onHand = Math.max(0, num(s.onHand)); r.onOrder = Math.max(0, num(s.onOrder));
+    if (r.safetyStock > 0) { r.gross.buffer = r.safetyStock; driver(r, { kind: 'safety', ref: 'safety stock', qty: r.safetyStock, needBy: null }); }
     rows[sku] = r;
   });
-  function driver(row, d) { if (row.drivers.length < MAX_DRIVERS) row.drivers.push(d); }
 
   /* Top-level demand: what people ordered. */
   (input.demands || demandsFrom(input)).forEach(function (d) {
@@ -245,15 +257,16 @@ function plan(input) {
   /* Net and explode, parents strictly before children. */
   Object.keys(rows).sort(function (a, b) { return llc[a] - llc[b] || (a < b ? -1 : 1); }).forEach(function (sku) {
     var r = rows[sku], g = r.gross, avail = r.onHand + r.onOrder;
-    g.total = g.committed + g.pipeline + g.forecast;
+    g.total = g.committed + g.pipeline + g.buffer + g.forecast;
     var rem = avail;
     BUCKETS.forEach(function (b) {
       var short = Math.max(0, g[b] - rem);
       r.net[b] = roundQty(short);
       rem = Math.max(0, rem - g[b]);
     });
-    r.net.total = roundQty(r.net.committed + r.net.pipeline + r.net.forecast);
-    var firm = r.net.committed + r.net.pipeline;
+    r.net.total = roundQty(r.net.committed + r.net.pipeline + r.net.buffer + r.net.forecast);
+    r.belowSafety = r.net.buffer > 0;
+    var firm = r.net.committed + r.net.pipeline + r.net.buffer;
     if (r.kind === 'component' && !r.make && firm > 0) {
       var q = r.unit === 'ea' || r.unit === 'set' || r.unit === 'roll' || r.unit === 'box' ? Math.ceil(firm) : firm;
       r.suggestedOrder = roundQty(r.moq ? Math.ceil(q / r.moq) * r.moq : q);
@@ -263,8 +276,11 @@ function plan(input) {
     if (r.needBy) {
       r.orderBy = r.leadTimeDays ? addDays(r.needBy, -r.leadTimeDays) : r.needBy;
       /* "late" is a purchasing fact: a sub-assembly's start-by date is shown
-         but the alarm belongs to the parts it cannot be built without. */
-      r.late = firm > 0 && !r.make && r.orderBy < today;
+         but the alarm belongs to the parts it cannot be built without. A
+         buffer alone is never "late" — it is "below safety stock", now. */
+      r.late = r.net.committed + r.net.pipeline > 0 && !r.make && r.orderBy < today;
+    } else if (r.belowSafety && !r.make) {
+      r.orderBy = today;   /* the buffer is already breached: order now */
     }
     (by[sku].bom || []).forEach(function (l) {
       var child = rows[l.sku], per = l.qty / ((Number(l.yieldPct) > 0 && Number(l.yieldPct) <= 100 ? Number(l.yieldPct) : 100) / 100);
@@ -283,20 +299,21 @@ function plan(input) {
     BUCKETS.forEach(function (b) { r.gross[b] = roundQty(r.gross[b]); });
     r.gross.total = roundQty(r.gross.total);
     return r;
-  }).filter(function (r) { return r.gross.total > 0 || r.onHand > 0 || r.onOrder > 0; });
+  }).filter(function (r) { return r.gross.total > 0 || r.onHand > 0 || r.onOrder > 0 || r.safetyStock > 0; });
 
   /* Late first, then soonest order-by, then biggest firm shortfall. */
   list.sort(function (a, b) {
     if (a.late !== b.late) return a.late ? -1 : 1;
-    var fa = a.net.committed + a.net.pipeline, fb = b.net.committed + b.net.pipeline;
+    var fa = a.net.committed + a.net.pipeline + a.net.buffer, fb = b.net.committed + b.net.pipeline + b.net.buffer;
     if ((fa > 0) !== (fb > 0)) return fa > 0 ? -1 : 1;
     if (a.orderBy !== b.orderBy) { if (!a.orderBy) return 1; if (!b.orderBy) return -1; return a.orderBy < b.orderBy ? -1 : 1; }
     return fb - fa || (a.sku < b.sku ? -1 : 1);
   });
   return { asOf: today, rows: list, unknownSkus: unknown,
     summary: { components: list.filter(function (r) { return r.kind === 'component'; }).length,
-      short: list.filter(function (r) { return r.kind === 'component' && !r.make && r.net.committed + r.net.pipeline > 0; }).length,
-      toMake: list.filter(function (r) { return r.make && r.net.committed + r.net.pipeline > 0; }).length,
+      short: list.filter(function (r) { return r.kind === 'component' && !r.make && r.net.committed + r.net.pipeline + r.net.buffer > 0; }).length,
+      toMake: list.filter(function (r) { return r.make && r.net.committed + r.net.pipeline + r.net.buffer > 0; }).length,
+      belowSafety: list.filter(function (r) { return r.belowSafety; }).length,
       late: list.filter(function (r) { return r.late; }).length,
       yielded: list.filter(function (r) { return r.yielded; }).length } };
 }
@@ -307,7 +324,7 @@ function shortfallsByWorksOrder(planned) {
   var by = Object.create(null);
   (planned.rows || []).forEach(function (r) {
     if (r.kind !== 'component' || r.make) return;   /* what must be BOUGHT stands between it and the floor */
-    var firm = r.net.committed + r.net.pipeline;
+    var firm = r.net.committed + r.net.pipeline;   /* the buffer is not this works order's shortfall */
     if (firm <= 0) return;
     r.worksOrders.forEach(function (w) {
       if (!safeKey(w)) return;

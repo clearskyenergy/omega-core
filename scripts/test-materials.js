@@ -146,6 +146,32 @@ console.log('\nmaterials plan — yield, and which works order a shortfall belon
   ok('a fractional yield is kept to two places', M.bomLines([{ sku: 'X', qty: 1, yieldPct: 97.555 }])[0].yieldPct === 97.56);
 })();
 
+console.log('\nmaterials plan — safety stock is a firm buffer, netted after real demand');
+(function () {
+  var cat = JSON.parse(JSON.stringify(CATALOG));
+  cat[2].safetyStock = 2000;   /* keep 2,000 cells on the shelf */
+  cat[3].safetyStock = 10;     /* and ten BMS boards */
+  var idle = M.plan({ now: NOW, products: cat, stock: { CELL: { onHand: 500 }, BMS: { onHand: 12 } } });
+  ok('with no orders at all, a shelf below its buffer is still a row, still short', row(idle, 'CELL') && row(idle, 'CELL').net.buffer === 1500 && row(idle, 'CELL').belowSafety === true, row(idle, 'CELL'));
+  ok('  and the suggested order refills it to the MOQ', row(idle, 'CELL').suggestedOrder === 2000);
+  ok('  order-by is today — the buffer is already breached — but it is not "late"', row(idle, 'CELL').orderBy === NOW && row(idle, 'CELL').late === false);
+  ok('  the driver says why', row(idle, 'CELL').drivers[0].kind === 'safety');
+  ok('  a shelf above its buffer is not short', row(idle, 'BMS').net.buffer === 0 && row(idle, 'BMS').belowSafety === false);
+  ok('  and the summary counts the breach', idle.summary.belowSafety === 1 && idle.summary.short === 1, idle.summary);
+  var busy = M.plan({ now: NOW, products: cat, stock: { CELL: { onHand: 2500 } },
+    works: [{ id: 'w', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-01' }] });
+  var c = row(busy, 'CELL');
+  ok('real demand is served from the shelf BEFORE the buffer: 832 cells for the cabinet leave 1,668, so 332 to refill', c.net.committed === 0 && c.net.buffer === 332 && c.gross.committed === 832, c.net);
+  ok('  the works order itself is not short of cells — the buffer is not its problem', !(M.shortfallsByWorksOrder(busy)['CC-1'] || []).some(function (x) { return x.sku === 'CELL'; }));
+  ok('  but the purchase list carries the refill', M.purchaseList(busy).some(function (r) { return r.sku === 'CELL' && r.suggestedOrder === 1000; }));
+  var sub = JSON.parse(JSON.stringify(CATALOG)); sub[1].safetyStock = 10;   /* ten spare modules */
+  var s2 = M.plan({ now: NOW, products: sub });
+  ok('a buffer on a sub-assembly explodes into its parts', row(s2, 'MOD').net.buffer === 10 && row(s2, 'CELL').gross.buffer === 1040 && row(s2, 'HARN').gross.buffer === 25, row(s2, 'CELL').gross);
+  ok('  and the sub-assembly is listed to build, its cells to buy', row(s2, 'MOD').suggestedOrder === 10 && M.purchaseList(s2).some(function (r) { return r.sku === 'CELL'; }) && !M.purchaseList(s2).some(function (r) { return r.sku === 'MOD'; }));
+  var C = require('../api/_lib/logic-catalog');
+  ok('the catalog keeps safetyStock on a component and drops it on a product', C.product({ sku: 'X', name: 'X', kind: 'component', safetyStock: 250 }).safetyStock === 250 && C.product({ sku: 'Y', name: 'Y', kind: 'product', kw: 1, safetyStock: 250 }).safetyStock === null);
+})();
+
 console.log('\nbills of materials — the graph is checked');
 (function () {
   rejects('a loop is refused, and the message shows the path', function () {
@@ -300,10 +326,11 @@ console.log('\nthe endpoint');
   ok('receiving more than was ordered is refused', true);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'BMS', qty: 1 }], revision: got.stockRevision }, caller: admin }, res), /not on this purchase order/);
   ok('  as is a SKU not on the order', true);
-  var rcv = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'CELL', qty: 1500 }], note: 'first pallet', revision: got.stockRevision }, caller: admin }, res);
+  var rcv = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'CELL', qty: 1500, lot: 'EVE-2026-W38-0417' }], note: 'first pallet', revision: got.stockRevision }, caller: admin }, res);
   po = db.rows.get('omega_orgs/cleancell.us/purchase_orders/' + made.poId); after = db.rows.get('omega_orgs/cleancell.us/fulfillment/materials').stock;
   ok('a partial receipt moves quantity from on-order to on-hand', rcv.status === 'partial' && po.lines[0].received === 1500 && after.CELL.onOrder === 3500 && after.CELL.onHand === 2000, after.CELL);
   ok('  and is recorded on the order with who and when', po.receipts.length === 1 && po.receipts[0].by === admin.email && po.receipts[0].note === 'first pallet' && po.receipts[0].lines[0].qty === 1500);
+  ok('  the supplier lot travels onto the shelf and the receipt', after.CELL.lots.length === 1 && after.CELL.lots[0].lot === 'EVE-2026-W38-0417' && after.CELL.lots[0].qty === 1500 && after.CELL.lots[0].po === made.poId && po.receipts[0].lines[0].lot === 'EVE-2026-W38-0417', after.CELL.lots);
   got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
   rcv = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'CELL', qty: 2500 }, { sku: 'HARN', qty: 100.5 }], revision: got.stockRevision }, caller: admin }, res);
   po = db.rows.get('omega_orgs/cleancell.us/purchase_orders/' + made.poId);

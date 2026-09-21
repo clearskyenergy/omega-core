@@ -134,6 +134,15 @@ costs) still needs a decision first.
 
 ---
 
+### Added after the competitor comparison (`docs/MATERIALS-COMPETITORS.md`)
+
+- `safetyStock` on a component: a firm `buffer` bucket netted after committed
+  and pipeline, before forecast; "below safety stock" rows; importer column
+  (`safetyStock` / `reorderPoint` / `minStock`); catalog-editor field.
+- Supplier lot on a receipt line → `stock[sku].lots` and the receipt.
+- The comparison names the next three: time-phased weekly projection,
+  supplier records, a second location. Costs stay a decision.
+
 ## 4. Things only a person with credentials can do
 
 - **Deploy the rules.** `firebase deploy --only firestore:rules` against
