@@ -19,7 +19,8 @@ module.exports = A.handler(async function (req, res) {
     var query = db.collection('omega_orgs').orderBy('__name__');
     if (req.query.after) { var after = A.safeOrg(req.query.after); if (!after) throw A.httpError(400, 'Invalid cursor'); query = query.startAfter(after); }
     var all = await query.limit(100).get(), list = [];
-    all.forEach(function (s) { var d = s.data(); if (!d.supersededBy && (d.vertical === 'oem' || (d.whiteLabel || {}).enabled)) list.push({ orgId: s.id, name: d.name || s.id, status: d.status, links: links(s.id) }); });
+    // Registry-controlled presentation only; hiding a prospect neither deletes its account nor changes access.
+    all.forEach(function (s) { var d = s.data(); if (d.logicDirectoryHidden !== true && !d.supersededBy && (d.vertical === 'oem' || (d.whiteLabel || {}).enabled)) list.push({ orgId: s.id, name: d.name || s.id, status: d.status, links: links(s.id) }); });
     return { owner: true, tenants: list, next: all.size === 100 ? all.docs[99].id : null };
   }
   var ctx = await X.authorize(caller, org, req.method !== 'GET');
