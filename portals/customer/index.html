@@ -386,7 +386,7 @@
       if(!r.ok)throw new Error(r.j.error||'Could not load your site plans.');
       var d=r.j,active=d.access.active,base='/editor-lite.html?customer=1&org='+encodeURIComponent(ORG);
       $('new-project').hidden=!active;$('new-project').href=base;
-      if(active)$('editor-availability').textContent=(d.access.status==='trial'?'Approved trial':'Editor Lite access')+' · available until '+new Date(d.access.expiresAt).toLocaleDateString()+'.';
+      if(active)$('editor-availability').textContent=d.access.status==='owner-access'?'ClearSky owner access · no customer subscription required. Create and use your own site plans in this supplier’s customer workspace.':(d.access.status==='trial'?'Approved trial':'Editor Lite access')+' · available until '+new Date(d.access.expiresAt).toLocaleDateString()+'.';
       $('project-list').innerHTML=(d.projects||[]).map(function(p){return '<div class="ord"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(p.module)+' · '+esc(new Date(p.updatedAt).toLocaleString())+'</p>'+(active?'<a class="btn" href="'+base+'&project='+encodeURIComponent(p.id)+'">Open project →</a>':'<p class="muted">Retained securely. Renew Editor Lite to reopen this design.</p>')+'</div>';}).join('')||'<p class="muted">No site plans yet. '+(active?'Start a new project above.':'Your orders and customer account do not require an editor subscription.')+'</p>';
       if(d.limited)$('project-list').insertAdjacentHTML('beforeend','<p class="muted">Newest 100 projects shown.</p>');
     })['catch'](function(e){$('project-list').innerHTML='<p class="err">'+esc(e.message)+'</p>';});

@@ -40,11 +40,11 @@ module.exports = A.handler(async function (req, res) {
       var tenant=await tx.get(root),bill=await tx.get(root.collection('billing').doc('current'));
       var fresh={org:tenant.exists?tenant.data():{},billing:bill.exists?bill.data():{}};
       if(!require('./_lib/logic-access').subscribed(fresh))throw A.httpError(403,'Customer design is not active');
-      D.requireEditor({grant:D.entitlement(fresh,acct.data)});
+      D.requireEditor({grant:D.entitlement(fresh,acct.data,caller)});
       var draft=await tx.get(scope.projects.doc(projectId)),catalog=await tx.get(root.collection('storefront').doc('config')),prior=await tx.get(orderRef);
       if(!draft.exists||draft.data().revision!==b.revision)throw A.httpError(409,'Your design changed. Save and review it before requesting a quote.');
       var p=draft.data();
-      if(D.entitlement(fresh,acct.data).modules.indexOf(p.module)<0)throw A.httpError(403,'This design module is no longer enabled');
+      if(D.entitlement(fresh,acct.data,caller).modules.indexOf(p.module)<0)throw A.httpError(403,'This design module is no longer enabled');
       var product=catalog.exists&&(catalog.data().products||[]).filter(function(x){return x.sku===sku&&x.active!==false;})[0];
       if(!product)throw A.httpError(409,'Select equipment from the supplier’s current published catalog');
       if(prior.exists){var old=prior.data();if(old.items[0].sku!==sku||old.items[0].qty!==qty)throw A.httpError(409,'This saved revision already has a different quote request. Save a new revision for a new request.');return {ok:true,duplicate:true,orderId:orderId,orderNo:old.orderNo};}
@@ -75,8 +75,8 @@ module.exports = A.handler(async function (req, res) {
     var tenant = await tx.get(root), billing = await tx.get(root.collection('billing').doc('current'));
     var fresh = { org: tenant.exists ? tenant.data() : {}, billing: billing.exists ? billing.data() : {} };
     if (!require('./_lib/logic-access').subscribed(fresh)) throw A.httpError(403, 'Customer design is not active');
-    B.active(acct); D.requireEditor({ grant: D.entitlement(fresh, acct.data) });
-    if (D.entitlement(fresh, acct.data).modules.indexOf(target.module) < 0) throw A.httpError(403, 'This design module is no longer enabled');
+    B.active(acct); D.requireEditor({ grant: D.entitlement(fresh, acct.data, caller) });
+    if (D.entitlement(fresh, acct.data, caller).modules.indexOf(target.module) < 0) throw A.httpError(403, 'This design module is no longer enabled');
     var old = await tx.get(ref), previous = old.exists ? old.data() : null;
     if(target.module==='bess'&&b.sku){var designCatalog=await tx.get(root.collection('storefront').doc('config'));target=require('./_lib/logic-catalog').select(designCatalog.exists?designCatalog.data():{},b.sku,target);}
     if ((previous ? previous.revision : 0) !== b.revision) throw A.httpError(409, 'This project changed in another window. Reopen it before saving; your current canvas has not been overwritten.');
