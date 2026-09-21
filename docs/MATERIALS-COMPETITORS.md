@@ -55,7 +55,7 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
 | Open supplier orders counted as supply | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Purchase orders with receiving, partial receipts | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Supplier lot on receipt → unit genealogy | ✔ | ✔ + expiry | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Time-phased buckets (week-by-week projection) | ✘ single horizon | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Time-phased buckets (week-by-week projection) | ✔ 12 weeks, dated PO supply | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Multiple stock locations / transfers | ✘ | ✔ (paid per location) | Enterprise | ✔ | ✔ | ✔ | ✔ |
 | Supplier records, price lists, RFQ to supplier | ✘ | ◐ | ✔ | ◐ | ✔ | ✔ | ✔ |
 | Component cost / landed cost / inventory valuation | ✘ (decision) | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
@@ -71,12 +71,11 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
 
 **Where every competitor is ahead of us today**
 
-1. **Time-phased planning.** They project stock week by week and show when
-   it goes negative. We net one horizon and give the earliest need-by. A
-   plant with three overlapping works orders wants the week view. Build
-   next: bucket demand by need-by week and walk the buckets with the same
-   netting; the engine's shape (`plan()` over `demandsFrom()`) already
-   allows it, it is a loop around what exists.
+1. ~~**Time-phased planning.**~~ Built the same day: `projection()` runs
+   the plan once per week with only the demand due by then and only the
+   supply arrived by then (purchase orders count from their expected date),
+   so the week view cannot disagree with the purchase list. "Twelve weeks
+   ahead" on the plan page, red from the week a shortfall first bites.
 2. **Supplier records.** Ours is a name and a part number on the component.
    They keep suppliers as records with price lists and multiple sources per
    part. Cheap to add once costs are decided.
@@ -117,7 +116,7 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
 
 ## Build order, from this comparison
 
-1. Time-phased weekly projection (engine loop + a chart on the page).
+1. ~~Time-phased weekly projection~~ — done.
 2. Supplier record with per-part lead time and MOQ overrides.
 3. A second location, when a second location exists.
 4. Costs, after the decision.

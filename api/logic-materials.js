@@ -92,15 +92,25 @@ module.exports = A.handler(async function (req, res) {
     ]);
     var cat = rows[0].exists ? (rows[0].data() || {}) : {}, st = rows[1].exists ? (rows[1].data() || {}) : {};
     var products = Array.isArray(cat.products) ? cat.products : [];
-    var planned = M.plan({ products: products, stock: st.stock || {},
-      orders: rows[2].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }),
-      works: rows[3].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }) });
+    var orders = rows[2].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    var works = rows[3].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    var planned = M.plan({ products: products, stock: st.stock || {}, orders: orders, works: works });
+    /* Open purchase orders with an expected date are dated supply for the
+       week view; what is still expected on each line, at that date. */
+    var supplies = [];
+    rows[4].docs.forEach(function (d) {
+      var po = d.data() || {};
+      if (['open', 'partial'].indexOf(po.status) < 0 || !po.expectedAt) return;
+      (po.lines || []).forEach(function (l) { var left = Number(l.qty) - Number(l.received || 0); if (left > 0) supplies.push({ sku: l.sku, qty: left, at: po.expectedAt }); });
+    });
+    var weeks = M.projection({ products: products, stock: st.stock || {}, orders: orders, works: works, supplies: supplies }, { weeks: 12 });
     return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller),
       asOf: planned.asOf, rows: planned.rows, summary: planned.summary, unknownSkus: planned.unknownSkus,
       stockRevision: st.revision || 0, catalogRevision: cat.catalogRevision || 0,
       components: products.filter(function (p) { return p && p.kind === 'component' && p.active !== false; }).length,
       withBom: products.filter(function (p) { return p && p.active !== false && (p.bom || []).length; }).length,
       purchaseOrders: rows[4].docs.map(function (d) { return poView(d.id, d.data() || {}); }),
+      projection: weeks,
       /* 200 is the read cap on each of orders and works orders. Past it the
          plan is computed on the newest 200 and says so, rather than being
          quietly short. */

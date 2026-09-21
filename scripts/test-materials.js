@@ -172,6 +172,27 @@ console.log('\nmaterials plan — safety stock is a firm buffer, netted after re
   ok('the catalog keeps safetyStock on a component and drops it on a product', C.product({ sku: 'X', name: 'X', kind: 'component', safetyStock: 250 }).safetyStock === 250 && C.product({ sku: 'Y', name: 'Y', kind: 'product', kw: 1, safetyStock: 250 }).safetyStock === null);
 })();
 
+console.log('\nmaterials plan — twelve weeks ahead');
+(function () {
+  var w0 = M.monday(NOW);
+  var pj = M.projection({ now: NOW, products: CATALOG, stock: { CELL: { onHand: 1000, onOrder: 2000 } },
+    works: [{ id: 'a', orderNo: 'A', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-10-26' },
+            { id: 'b', orderNo: 'B', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 3 }], dueDate: '2026-11-30' }],
+    supplies: [{ sku: 'CELL', qty: 2000, at: '2026-10-12' }] }, { weeks: 12 });
+  ok('twelve Monday-dated weeks starting this week', pj.weeks.length === 12 && pj.weeks[0] === w0 && pj.weeks[1] === '2026-09-28', pj.weeks.slice(0, 3));
+  var cell = pj.rows.filter(function (r) { return r.sku === 'CELL'; })[0];
+  ok('the cell line exists and is a leaf', cell && cell.kind === 'component' && !cell.make);
+  ok('before the dated PO arrives, on order does NOT count: week 1 avail is the 1,000 on hand', cell.weeks[0].avail === 1000 && cell.weeks[2].avail === 1000, cell.weeks.map(function (c) { return c.avail; }));
+  ok('  from the week of 2026-10-12 the 2,000 count', cell.weeks[3].start === '2026-10-12' && cell.weeks[3].avail === 3000);
+  ok('order A (due 10-26, 832 cells) bites in the week of 10-26 and not before', cell.weeks[4].gross === 0 && cell.weeks[5].start === '2026-10-26' && cell.weeks[5].gross === 832 && cell.weeks[5].projected === 3000 - 832, cell.weeks[5]);
+  ok('  order B (due 11-30, 2,496 more) pushes it negative in the week of 11-30', cell.weeks[10].start === '2026-11-30' && cell.weeks[10].gross === 832 + 2496 && cell.weeks[10].projected === 3000 - 3328 && cell.weeks[10].net === 328, cell.weeks[10]);
+  ok('  and the shortfall stays through the horizon', cell.weeks[11].net === 328 && cell.firstShort === '2026-11-30');
+  ok('a row that is never short sorts after one that is', pj.rows[0].firstShort !== null || pj.rows.every(function (r) { return r.firstShort === null; }));
+  var nodate = M.projection({ now: NOW, products: CATALOG, orders: [{ id: 'x', status: 'accepted', items: [{ sku: 'CAB', qty: 1 }] }] }, { weeks: 4 });
+  ok('undated demand counts from the first week', nodate.rows.filter(function (r) { return r.sku === 'CELL'; })[0].weeks[0].gross === 832);
+  ok('the horizon is clamped to 1–26 weeks, and unset means twelve', M.projection({ now: NOW, products: CATALOG }, { weeks: 99 }).weeks.length === 26 && M.projection({ now: NOW, products: CATALOG }, { weeks: -5 }).weeks.length === 1 && M.projection({ now: NOW, products: CATALOG }).weeks.length === 12);
+})();
+
 console.log('\nbills of materials — the graph is checked');
 (function () {
   rejects('a loop is refused, and the message shows the path', function () {
@@ -268,6 +289,7 @@ console.log('\nthe endpoint');
   ok('  scoped to this org — the other tenant\'s fifty cabinets are not in it', row(got, 'CAB').gross.total === 3, row(got, 'CAB').gross);
   ok('  with the catalog and stock revisions the page needs to save against', got.catalogRevision === 3 && got.stockRevision === 0);
   ok('  and counts of what is set up', got.components === 5 && got.withBom === 2);
+  ok('  with a twelve-week projection', got.projection && got.projection.weeks.length === 12 && got.projection.rows.some(function (r) { return r.sku === 'CELL'; }));
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: 500, revision: 0 }, caller: member }, res), /administrator/);
   ok('a member cannot record a count', true);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'GHOST', onHand: 1, revision: 0 }, caller: admin }, res), /No such component/);

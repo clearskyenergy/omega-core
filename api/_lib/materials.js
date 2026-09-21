@@ -334,11 +334,70 @@ function shortfallsByWorksOrder(planned) {
   return by;
 }
 
+/* ── TIME-PHASED: the same plan, week by week ─────────────────────────────
+   Every MRP a plant would compare us to projects stock week by week and
+   shows where it goes negative. This runs plan() once per week with only
+   the demand due by the end of that week and only the supply that will
+   have arrived by then (a purchase order with an expected date counts from
+   that week; on-order quantity with no date counts from now). Cumulative,
+   so a shortfall appears in the week it first bites and stays. Twelve
+   plan() calls over a catalog of a few hundred rows is milliseconds; the
+   honesty of reusing the exact netting is worth more than a faster
+   approximation that disagrees with the purchase list. */
+function monday(day) {
+  var d = new Date(day + 'T12:00:00Z'), dow = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
+function projection(input, opts) {
+  input = input || {}; opts = opts || {};
+  var weeks = Math.max(1, Math.min(26, Math.round(num(opts.weeks) || 12)));
+  var today = dateOf(input.now) || new Date().toISOString().slice(0, 10);
+  var demands = input.demands || demandsFrom(input);
+  var supplies = (input.supplies || []).filter(function (x) { return x && SKU.test(String(x.sku || '')) && num(x.qty) > 0; });
+  var stock = isPlain(input.stock) ? input.stock : {};
+  var starts = [], first = monday(today);
+  for (var w = 0; w < weeks; w++) starts.push(addDays(first, 7 * w));
+  var per = Object.create(null), names = Object.create(null);
+  starts.forEach(function (start, i) {
+    var cutoff = addDays(start, 6);
+    /* Dated supply: an open PO's remaining quantity is on order NOW in the
+       stock document; for the week view it only counts from its expected
+       date, so subtract the part that has not arrived by this cutoff. */
+    var late = Object.create(null);
+    supplies.forEach(function (x) { var at = dateOf(x.at); if (at && at > cutoff && safeKey(x.sku)) late[x.sku] = (late[x.sku] || 0) + num(x.qty); });
+    var stockW = {};
+    Object.keys(stock).forEach(function (k) { if (!safeKey(k) || !isPlain(stock[k])) return;
+      stockW[k] = { onHand: num(stock[k].onHand), onOrder: Math.max(0, num(stock[k].onOrder) - (late[k] || 0)) }; });
+    Object.keys(late).forEach(function (k) { if (!stockW[k]) stockW[k] = { onHand: 0, onOrder: 0 }; });
+    var due = demands.filter(function (d) { return !d.needBy || d.needBy <= cutoff; });
+    var planned = plan({ products: input.products, stock: stockW, demands: due, now: today });
+    planned.rows.forEach(function (r) {
+      if (!per[r.sku]) { per[r.sku] = []; names[r.sku] = r; }
+      var firmGross = r.gross.committed + r.gross.pipeline + r.gross.buffer;
+      per[r.sku][i] = { start: start, gross: roundQty(firmGross), forecast: roundQty(r.gross.forecast), avail: roundQty(r.onHand + r.onOrder),
+        projected: roundQty(r.onHand + r.onOrder - firmGross), net: roundQty(r.net.committed + r.net.pipeline + r.net.buffer) };
+    });
+  });
+  var rows = Object.keys(per).map(function (sku) {
+    var r = names[sku], cells = starts.map(function (start, i) { return per[sku][i] || { start: start, gross: 0, forecast: 0, avail: 0, projected: 0, net: 0 }; });
+    var firstShort = null;
+    cells.forEach(function (c) { if (firstShort === null && c.net > 0) firstShort = c.start; });
+    return { sku: sku, name: r.name, kind: r.kind, make: r.make, unit: r.unit, leadTimeDays: r.leadTimeDays, firstShort: firstShort, weeks: cells };
+  }).filter(function (r) { return r.weeks.some(function (c) { return c.gross > 0 || c.net > 0; }); });
+  rows.sort(function (a, b) {
+    if ((a.firstShort === null) !== (b.firstShort === null)) return a.firstShort === null ? 1 : -1;
+    if (a.firstShort !== b.firstShort) return a.firstShort < b.firstShort ? -1 : 1;
+    return a.sku < b.sku ? -1 : 1;
+  });
+  return { asOf: today, weeks: starts, rows: rows };
+}
+
 /* The purchase list is the plan filtered to what a buyer sends out today. */
 function purchaseList(planned) {
   return (planned.rows || []).filter(function (r) { return r.kind === 'component' && !r.make && r.suggestedOrder > 0; });
 }
 
 module.exports = { bomLines: bomLines, validateCatalog: validateCatalog, lowLevelCodes: lowLevelCodes,
-  demandsFrom: demandsFrom, plan: plan, purchaseList: purchaseList, shortfallsByWorksOrder: shortfallsByWorksOrder, UNITS: UNITS,
+  demandsFrom: demandsFrom, plan: plan, projection: projection, monday: monday, purchaseList: purchaseList, shortfallsByWorksOrder: shortfallsByWorksOrder, UNITS: UNITS,
   MAX_LINES: MAX_LINES, MAX_DEPTH: MAX_DEPTH };

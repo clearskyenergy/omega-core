@@ -114,6 +114,13 @@ explodes into its parts like any firm demand. This is what a reorder point
 does in Katana or MRPeasy and how NetSuite treats safety stock (as demand);
 `docs/MATERIALS-COMPETITORS.md` has the comparison.
 
+**Twelve weeks ahead.** `projection()` runs the plan once per week with only
+the demand due by the end of that week and only the supply that will have
+arrived by then — an open purchase order counts from its expected date,
+undated on-order counts now — so the week view reuses the exact netting and
+cannot disagree with the purchase list. Cumulative: a shortfall appears in
+the week it first bites and stays. The endpoint returns it with the plan.
+
 **Lots.** A receipt line may carry the supplier's lot number; it is kept on
 the receipt and on the shelf (`stock[sku].lots`, last twenty), so a unit's
 `trace.lot` at registration can name the lot it was built from.

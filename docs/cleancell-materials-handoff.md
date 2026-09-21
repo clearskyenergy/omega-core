@@ -140,8 +140,10 @@ costs) still needs a decision first.
   and pipeline, before forecast; "below safety stock" rows; importer column
   (`safetyStock` / `reorderPoint` / `minStock`); catalog-editor field.
 - Supplier lot on a receipt line → `stock[sku].lots` and the receipt.
-- The comparison names the next three: time-phased weekly projection,
-  supplier records, a second location. Costs stay a decision.
+- Twelve-week projection: `projection()` in the engine, `projection` on the
+  GET, "Twelve weeks ahead" on the page; open POs are dated supply.
+- The comparison now names the next two: supplier records, a second
+  location. Costs stay a decision.
 
 ## 4. Things only a person with credentials can do
 
