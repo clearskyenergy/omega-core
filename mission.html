@@ -272,6 +272,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .areaHead{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--glow-cyan);
           margin:12px 0 4px;opacity:.75}
 .areaHead:first-child{margin-top:0}
+/* ── OMEGA LOGIC ─────────────────────────────────────────────────────────
+   Tracking and fulfilment. The rail at the top is the pipeline itself and it
+   is the load-bearing part of this view: four of its six stages are not
+   built, and a dashboard that showed only the two that are would read as a
+   complete picture of a complete system. A stage that is `off` is drawn
+   dimmed and struck, never hidden. */
+.logicWrap{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.logicGrid{grid-template-columns:minmax(0,1fr) 340px minmax(0,380px)}
+.logicRail{display:flex;gap:0;align-items:stretch;flex-wrap:wrap;flex:none}
+.logicStage{flex:1 1 0;min-width:112px;padding:8px 10px;border:var(--edge);
+            border-right:none;background:rgba(0,0,0,.22);position:relative}
+.logicStage:last-child{border-right:var(--edge)}
+.logicStage .sk{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;
+                color:var(--glow-cyan);text-transform:uppercase}
+.logicStage .sv{font-size:12.5px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.logicStage .sw{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:3px;
+                overflow-wrap:anywhere}
+.logicStage.off{opacity:.42}
+.logicStage.off .sk{color:var(--dim)}
+.logicStage.off .sv{text-decoration:line-through;text-decoration-thickness:1px}
+/* Neither struck nor lit. A partial stage is one whose data moves but whose
+   other half does not — work captured with no read path, or a step that
+   runs but only when a person presses it. Drawn distinctly because "half
+   done" is the state most likely to be misread as done. */
+.logicStage.partial{opacity:.82}
+.logicStage.partial .sk{color:var(--warn)}
+.logicStage.partial .sv{color:var(--ink)}
+.tileRow{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;flex:none}
+.lTile{border:var(--edge);background:rgba(0,0,0,.22);padding:9px 11px}
+.lTile .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;color:var(--dim);
+          text-transform:uppercase}
+.lTile .v{font-size:21px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.lTile .v.sm{font-size:12.5px;line-height:1.5;padding-top:5px}
+.lTile.alarm .v{color:var(--bad)}
+/* The ten benches, as a line. A bench with nothing on it still draws, because
+   an empty Rack assembly next to a full Kitting is the shape of a bottleneck
+   and a list that omitted it would hide exactly that. */
+.benchRow{display:flex;align-items:flex-end;gap:3px;padding:2px 0 0}
+.bench{flex:1 1 0;min-width:0;text-align:center}
+.bench .bar{height:46px;display:flex;flex-direction:column;justify-content:flex-end;gap:1px}
+.bench .fill{background:var(--glow-cyan);opacity:.72;min-height:2px;border-radius:1px}
+.bench .fill.held{background:var(--bad);opacity:.85}
+.bench .bn{font-family:var(--mono);font-size:12px;color:var(--ink);margin-top:4px;
+           font-variant-numeric:tabular-nums}
+/* Short labels, and NO mid-word breaking. Ten benches across a 340px panel
+   gives each one about 30px, and "Enclosure" wrapped to "Enclo / sure" —
+   which reads as a station nobody has heard of. The full name is on hover. */
+.bench .bl{font-family:var(--mono);font-size:8.5px;letter-spacing:.3px;color:var(--dim);
+           margin-top:3px;line-height:1.2;white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis}
+.bench.empty .bn{color:var(--dim);opacity:.55}
+.oRow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);
+      cursor:pointer}
+.oRow:hover{background:rgba(255,255,255,.035)}
+.oRow.on{background:rgba(255,255,255,.06)}
+.oRow .no{font-family:var(--mono);font-size:11px;color:var(--glow-cyan);flex:none}
+.oRow .wh{flex:1;min-width:0;font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.oRow .wh small{display:block;color:var(--dim);font-size:11px}
+.oRow .ms{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:var(--dim);
+          text-transform:uppercase;text-align:right}
+.oRow .ms b{display:block;color:var(--ink);font-weight:400}
+.oRow.stuck .no{color:var(--bad)}
+.dlGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin:9px 0 14px}
+.dlGrid .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;color:var(--dim);
+           text-transform:uppercase}
+.dlGrid .v{font-size:13px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.dlGrid .v.gap{color:var(--dim);font-style:italic}
+.logicNote{font-size:12px;color:var(--dim);line-height:1.55;padding:10px 0;overflow-wrap:anywhere}
+.logicNote b{color:var(--ink);font-weight:400}
+@media (max-width:1100px){ .logicGrid{grid-template-columns:minmax(0,1fr)} }
+
 .askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
@@ -1303,6 +1374,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
+      <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
@@ -1609,6 +1681,43 @@ body.arranging .scroll{pointer-events:none}
         <div class="panel platWork" style="flex:1;min-height:0">
           <div class="ptitle">Work on it</div>
           <div id="platDetail" class="scroll"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== OMEGA LOGIC ==========
+         Tracking and fulfilment, end to end: an order arrives, money clears,
+         units are built and scanned across ten benches, each one carries its
+         own record, it ships, the balance clears. Cross-tenant, staff only,
+         fed by /api/logic-summary.
+
+         FOUR OF THE SIX STAGES DO NOT EXIST YET and the rail at the top says
+         so in as many words. The endpoint returns null for every field they
+         would own rather than zero, and this view renders null as a dash —
+         so an uncollected deposit reads as "not built", never as "$0". -->
+    <section class="view" data-view="logic">
+      <div class="logicWrap">
+        <div class="logicRail" id="logicStages"></div>
+        <div class="tileRow" id="logicTiles"></div>
+        <div class="cmdGrid logicGrid">
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Orders<span class="live" id="logicN"></span></div>
+            <div id="logicOrders" class="scroll"></div>
+          </div>
+          <div class="col">
+            <div class="panel" data-widget="logicLine" style="flex:none">
+              <div class="ptitle">The line<span class="live" id="logicLineN"></span></div>
+              <div id="logicLine"></div>
+            </div>
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">Held<span class="live" id="logicHeldN"></span></div>
+              <div id="logicHolds" class="scroll"></div>
+            </div>
+          </div>
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle" id="logicDetailTitle">Order</div>
+            <div id="logicDetail" class="scroll"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -5132,6 +5241,10 @@ function showView(name){
   if(name==='outbox') loadBook(false).then(()=>{ try{ renderOutbox(); }catch(_){} });
   if(name==='calendar') { try{ renderDay(); }catch(_){} }
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
+  /* Not forced: the estate does not change between two clicks of the rail,
+     and a refetch on every visit would poll Firestore for free. The panel
+     header carries asOf; a reload of the page is the refresh. */
+  if(name==='logic'){ loadLogic(false); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
@@ -6869,6 +6982,272 @@ async function loadBook(force){
    PROPOSED backlog item — approving it is still a separate act, and the build
    loop still runs the reviewer before anything is pushed. */
 let platform=null, platPick=null;
+
+/* ══ OMEGA LOGIC ═══════════════════════════════════════════════════════════
+   Tracking and fulfilment, fed by /api/logic-summary — same origin, staff
+   token, one call. Everything it draws is arranged server-side in
+   api/_lib/logic.js so the view has no rules of its own to drift from.
+
+   THE ONE RULE HERE: null renders as a dash and never as a number. Four of
+   the six pipeline stages are not built, the endpoint returns null for every
+   field they would own, and an uncollected deposit drawn as "$0" is
+   indistinguishable from one that was genuinely zero. `dash` already exists
+   on this page for exactly that reason.
+
+   Built with createElement and textContent throughout. Customer names and
+   company names on these rows arrive from a PUBLIC storefront a stranger
+   filled in — the one input path on this dashboard that is not Thomas, the
+   twin, or an API we own. */
+let logicData=null, logicPick=null, logicBusy=false;
+
+function lFmt(n){ return n==null?dash:Number(n).toLocaleString('en-US'); }
+function lMoney(n){ return n==null?dash:'$'+Number(n).toLocaleString('en-US'); }
+function lDay(iso){ const d=new Date(iso); return isNaN(d)?dash:d.toISOString().slice(0,10); }
+
+function lCell(host, cls, text){
+  const d=document.createElement('div'); if(cls) d.className=cls;
+  d.textContent=text==null?dash:String(text); host.appendChild(d); return d;
+}
+
+/* Ten benches across a narrow panel is about 30px each, so the routing's own
+   labels do not fit. Abbreviated HERE and not in api/_lib/plant.js: that file
+   is the tenant's routing and its labels are what the floor tablet prints on
+   a refusal. An unknown key falls through to the full label rather than being
+   blanked, so a tenant with a custom routing gets something readable. */
+const BENCH_SHORT={kit:'Kit',module:'Module',rack:'Rack',encl:'Encl',elec:'Elec',
+                   bms:'BMS',eol:'EOL',qa:'QA',pack:'Pack',ready:'Ready'};
+
+function lBench(host, col){
+  const b=document.createElement('div');
+  b.className='bench'+((col.count||0)?'':' empty');
+  b.title=(col.label||col.key)+' — '+(col.count||0)+' unit'+((col.count===1)?'':'s')
+        +((col.held||0)?', '+col.held+' held':'');
+  const bar=document.createElement('div'); bar.className='bar';
+  const held=col.held||0, free=Math.max(0,(col.count||0)-held);
+  /* Held is drawn on top and in the alarm colour, so a bench that is busy
+     and a bench that is JAMMED are not the same bar. */
+  if(held){ const h=document.createElement('div'); h.className='fill held';
+    h.style.height=Math.round(46*held/col._peak)+'px'; bar.appendChild(h); }
+  if(free){ const f=document.createElement('div'); f.className='fill';
+    f.style.height=Math.round(46*free/col._peak)+'px'; bar.appendChild(f); }
+  b.appendChild(bar);
+  lCell(b,'bn',col.count||0);
+  lCell(b,'bl',BENCH_SHORT[col.key]||col.label||col.key);
+  host.appendChild(b);
+}
+
+function lBenchRow(cols){
+  const peak=Math.max(1,...cols.map(c=>c.count||0));
+  const row=document.createElement('div'); row.className='benchRow';
+  cols.forEach(c=>{ c._peak=peak; lBench(row,c); });
+  return row;
+}
+
+async function loadLogic(force){
+  if(logicBusy) return;
+  if(logicData && !force){ renderLogic(); return; }
+  const host=el('logicOrders'); if(!host) return;
+  logicBusy=true;
+  const u=auth.currentUser;
+  if(!u){ host.textContent=''; lCell(host,'logicNote','Not signed in.'); logicBusy=false; return; }
+  try{
+    const tok=await u.getIdToken();
+    const res=await fetch('/api/logic-summary?limit=60',{headers:{Authorization:'Bearer '+tok}});
+    if(res.status===403){
+      /* Worth naming precisely. This page signs in with whatever Google
+         account is to hand; /api/ accepts clearsky-usa.com and
+         csebuilders.com only (STAFF_DOMAINS in api/_lib/admin.js). A generic
+         "forbidden" here sends somebody looking for a bug in the endpoint. */
+      host.textContent='';
+      lCell(host,'logicNote','Signed in as '+(u.email||'?')+', which is not a ClearSky staff address. '
+        +'Omega Logic reads the whole estate, so /api/logic-summary accepts clearsky-usa.com and '
+        +'csebuilders.com only. Sign in with the work account.');
+      logicBusy=false; return;
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    logicData=await res.json();
+    logicBusy=false;
+    renderLogic();
+  }catch(e){
+    logicBusy=false;
+    host.textContent='';
+    lCell(host,'logicNote','Could not reach /api/logic-summary — '+(e&&e.message||'unknown error')
+      +'. Nothing is being reported rather than reported as empty.');
+  }
+}
+
+function renderLogic(){
+  const d=logicData; if(!d) return;
+
+  /* ── the pipeline rail ── */
+  const rail=el('logicStages');
+  if(rail){
+    rail.textContent='';
+    /* Three states. The caption is the state's own word rather than a
+       derived one, so a stage added to api/_lib/logic.js with a state this
+       view has never heard of is drawn dimmed and labelled with what it
+       actually said — not silently promoted to "live". */
+    const STATE_WORD={live:'live',partial:'partial',off:'not built'};
+    (d.stages||[]).forEach(s=>{
+      const box=document.createElement('div');
+      box.className='logicStage'+(s.state==='live'?'':(s.state==='partial'?' partial':' off'));
+      lCell(box,'sk',STATE_WORD[s.state]||s.state||'unknown');
+      lCell(box,'sv',s.label||s.key);
+      lCell(box,'sw',s.by||'');
+      box.title=(s.label||s.key)+' — '+(s.by||'');
+      rail.appendChild(box);
+    });
+  }
+
+  /* ── tiles ── */
+  const t=d.totals||{};
+  const tiles=el('logicTiles');
+  if(tiles){
+    tiles.textContent='';
+    const add=(label,value,alarm,small)=>{
+      const b=document.createElement('div'); b.className='lTile'+(alarm?' alarm':'');
+      lCell(b,'t',label);
+      lCell(b,'v'+(small?' sm':''),value);
+      tiles.appendChild(b);
+    };
+    add('Orders', lFmt(t.orders));
+    add('Units on the line', lFmt(t.units));
+    add('Held', lFmt(t.held), (t.held||0)>0);
+    /* null, not 0. Nothing in this codebase has collected a payment against
+       an order yet, and the tile says which stage owes the number. */
+    add('Collected', t.collected==null?'not built':lMoney(t.collected), false, t.collected==null);
+    if(t.unknownFloors) add('Floor unread', lFmt(t.unknownFloors), true);
+    add('Tenants', lFmt((d.tenants||[]).length));
+  }
+
+  /* ── the line ── */
+  const line=el('logicLine');
+  if(line){
+    line.textContent='';
+    line.appendChild(lBenchRow(d.stations||[]));
+    const n=el('logicLineN'); if(n) n.textContent=lFmt(t.units)+' UNITS';
+  }
+
+  /* ── holds ── */
+  const hh=el('logicHolds');
+  if(hh){
+    hh.textContent='';
+    const holds=d.holds||[];
+    if(!holds.length){
+      lCell(hh,'logicNote', (t.units||0)
+        ? 'Nothing held. Every unit on the line is moving.'
+        : 'No units on the line. Releasing an accepted order mints its serials (api/plant-release.js) and nothing has been released yet — the deposit that should trigger it is the stage that is still missing.');
+    } else holds.forEach(h=>{
+      const r=document.createElement('div'); r.className='oRow stuck';
+      lCell(r,'no',h.serial);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=h.hold||'on hold';
+      const s=document.createElement('small');
+      s.textContent=h.station+' · '+h.orderNo+(h.ncr?' · '+h.ncr:'');
+      w.appendChild(s); r.appendChild(w);
+      r.addEventListener('click',()=>{ logicPick=h.orderNo; renderLogic(); });
+      hh.appendChild(r);
+    });
+    const n=el('logicHeldN'); if(n) n.textContent=(holds.length||'')&&holds.length+' HELD';
+  }
+
+  /* ── orders ── */
+  const oh=el('logicOrders');
+  if(oh){
+    oh.textContent='';
+    const orders=d.orders||[];
+    if(!orders.length) lCell(oh,'logicNote','No orders yet. The storefront is live; nothing has come through it.');
+    orders.forEach(o=>{
+      const r=document.createElement('div');
+      r.className='oRow'+(o.orderNo===logicPick?' on':'')+((o.floor&&o.floor.board&&o.floor.board.held)?' stuck':'');
+      lCell(r,'no',o.orderNo);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=(o.customer&&(o.customer.company||o.customer.name))||'—';
+      const s=document.createElement('small');
+      s.textContent=(o.orgName||o.orgId||'')+(o.system&&o.system.kwh?' · '+lFmt(o.system.kwh)+' kWh':'');
+      w.appendChild(s); r.appendChild(w);
+      const m=document.createElement('div'); m.className='ms';
+      const b=document.createElement('b'); b.textContent=(o.milestone&&o.milestone.label)||o.status;
+      m.appendChild(b);
+      /* The internal status next to the public word. They are allowed to
+         differ — 'in_fulfilment' is not a word any customer should read —
+         and seeing both is the point of a staff view. */
+      m.appendChild(document.createTextNode(o.status));
+      r.appendChild(m);
+      r.addEventListener('click',()=>{ logicPick=o.orderNo; renderLogic(); });
+      oh.appendChild(r);
+    });
+    const n=el('logicN');
+    if(n) n.textContent=lFmt(orders.length)+' ORDERS'+(d.asOf?' · '+clock(d.asOf):'');
+    const np=el('nLogic'); if(np) np.textContent=t.held?String(t.held):'';
+  }
+
+  renderLogicDetail();
+}
+
+function renderLogicDetail(){
+  const host=el('logicDetail'); if(!host) return;
+  host.textContent='';
+  const d=logicData||{};
+  const o=(d.orders||[]).filter(x=>x.orderNo===logicPick)[0]||(d.orders||[])[0];
+  const title=el('logicDetailTitle');
+  if(!o){ if(title) title.textContent='Order';
+    lCell(host,'logicNote','Nothing to show.'); return; }
+  if(title) title.textContent=o.orderNo;
+
+  const g=document.createElement('div'); g.className='dlGrid';
+  const pair=(label,value,gap)=>{
+    const c=document.createElement('div');
+    lCell(c,'t',label);
+    lCell(c,'v'+(gap?' gap':''),value);
+    g.appendChild(c);
+  };
+  pair('Sold by', o.orgName||o.orgId);
+  pair('Customer', (o.customer&&(o.customer.company||o.customer.name))||dash);
+  pair('Contact', (o.customer&&o.customer.email)||dash);
+  pair('System', o.system&&o.system.kwh?lFmt(o.system.kw)+' kW / '+lFmt(o.system.kwh)+' kWh':dash);
+  pair('Placed', o.placedAt?lDay(o.placedAt):dash);
+  pair('Promised', o.promisedShipAt?lDay(o.promisedShipAt):dash);
+  pair('Public milestone', (o.milestone&&o.milestone.label)||dash);
+  pair('Internal status', o.status);
+  host.appendChild(g);
+
+  /* money — every unbuilt stage says so rather than showing a zero */
+  const m=o.money||{};
+  const g2=document.createElement('div'); g2.className='dlGrid';
+  const pair2=(label,value,gap)=>{
+    const c=document.createElement('div'); lCell(c,'t',label); lCell(c,'v'+(gap?' gap':''),value); g2.appendChild(c);
+  };
+  pair2('ClearSky price', lMoney(m.clearskyTotal));
+  pair2('Tenant price', lMoney(m.tenantTotal));
+  pair2('Our cost', lMoney(m.cost));
+  pair2('Deposit', m.depositPaidAt?(lMoney(m.depositAmount)+' · '+lDay(m.depositPaidAt)):'not built', !m.depositPaidAt);
+  pair2('Final payment', m.finalPaidAt?lDay(m.finalPaidAt):'not built', !m.finalPaidAt);
+  pair2('Shipment', o.shipment&&!o.shipment.pending
+    ? (o.shipment.carrier||'')+' '+(o.shipment.tracking||'') : 'not built', !(o.shipment&&!o.shipment.pending));
+  host.appendChild(g2);
+
+  /* the floor, for this order */
+  const f=o.floor||{};
+  const b=f.board||{columns:[],total:0};
+  if(!f.released){
+    lCell(host,'logicNote','Not released to the floor, so this order has no plant record. Release is built and idempotent (api/plant-release.js) but a staff member has to press it: the deposit that should call it is the stage that is not built.');
+  } else if(f.known===false){
+    lCell(host,'logicNote','The floor could not be read for this order. That is NOT the same as an empty floor, and the milestone above falls back to the order status rather than claiming progress.');
+  } else {
+    const head=document.createElement('div'); head.className='areaHead';
+    head.textContent=b.total+' UNITS'+(b.held?' · '+b.held+' HELD':'');
+    host.appendChild(head);
+    host.appendChild(lBenchRow(b.columns));
+    if(b.unstarted) lCell(host,'logicNote',b.unstarted+' not yet kitted.');
+    if(b.offRouting) lCell(host,'logicNote',b.offRouting+' at a station this order’s routing does not list — counted here so the columns do not claim the whole floor.');
+  }
+
+  if(m.legacyDepositFlag && !m.depositPaidAt){
+    lCell(host,'logicNote','This order carries the demo’s deposit:true flag. That is a button press, not a payment, and it is not counted as money anywhere on this page.');
+  }
+  if(o.cancelRequested) lCell(host,'logicNote','The customer has requested cancellation.');
+}
 
 async function loadPlatform(){
   if(platform) return;
