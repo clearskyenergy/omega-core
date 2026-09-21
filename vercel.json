@@ -2,9 +2,27 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "crons": [{ "path": "/api/logic-worker", "schedule": "*/5 * * * *" }],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/embed/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/((?!embed/).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -262,19 +280,22 @@
     }
   ],
   "functions": {
+    "api/logic-worker.js": { "maxDuration": 60 },
+    "api/logic-office.js": { "maxDuration": 60 },
+    "api/lite-atlas.js": { "maxDuration": 60 },
     "api/grid-atlas.js": {
       "maxDuration": 60
     },
     "api/network-proximity.js": {
       "maxDuration": 60,
-      "includeFiles": "data/{fiber,usa-fiber}/**"
+      "includeFiles": "data/{fiber,fiber-api}/**"
     },
     "api/render.js": {
       "maxDuration": 60
     },
     "api/fiber-screen.js": {
       "maxDuration": 30,
-      "includeFiles": "data/{fiber,usa-fiber}/**"
+      "includeFiles": "data/{fiber,fiber-api}/**"
     },
     "api/agent/*.js": {
       "maxDuration": 30,

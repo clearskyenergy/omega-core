@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     ClearSky-OMEGA · White-label storefront  (embed/storefront.html)
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     THE ONE PAGE IN THIS REPO WITH NO SIGN-IN AND NO FIREBASE SDK.
+
+     It is served from our origin and framed by the tenant's website, so their
+     customer sizes and orders without leaving cleancell.us and without ever
+     learning that OMEGA is underneath. Two consequences shape everything here:
+
+       1. NOTHING CONFIDENTIAL IS IN THIS FILE. No cost model, no margin, no
+          tariff library, no equipment catalogue — every number comes from
+          /api/embed-* and every one of those returns results, never inputs.
+          If you find yourself adding a constant with a dollar sign to this
+          page, it belongs in /api/. CLAUDE.md § IP protection.
+
+       2. NO PLATFORM NAME ANYWHERE. Not in the markup, not in the <title>,
+          not in a comment the customer could read in devtools. The only brand
+          on screen is the tenant's, painted from /api/embed-config. This is
+          the white label; a stray "OMEGA" in a class name is the leak.
+          (This banner is a server-side comment on a file the customer can
+          view-source — it stays because the honest version of "we host this"
+          is better than a file that pretends to be theirs. Change it if the
+          contract says otherwise.)
+
+     ES5, single file, no build step. Framed OR standalone: it works opened
+     directly, which is how you test it.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Energy storage</title>
+<style>
+  :root{
+    --accent:#2B5FA8; --ink:#14171A; --sub:#5B6672;
+    --bg:#FFFFFF; --panel:#F7F7F5; --line:rgba(20,23,26,.14);
+    --ok:#2E7D5B; --bad:#D9482B; --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 18px 30px}
+  .head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .head img{max-height:44px;max-width:190px;display:block}
+  .head h1{font-size:21px;line-height:1.25;margin:0;font-weight:700}
+  .intro{color:var(--sub);margin:0 0 20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
+  .card h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--sub);margin:0 0 14px;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+  .hint{font-size:12px;color:var(--sub);font-weight:400;margin-top:4px}
+  input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;
+    background:#fff;color:var(--ink);font:inherit;font-size:15px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  textarea{min-height:76px;resize:vertical}
+  button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:12px 20px;cursor:pointer}
+  .btn{background:var(--accent);color:#fff}
+  .btn:disabled{opacity:.55;cursor:default}
+  .btn-ghost{background:transparent;color:var(--accent);border:1px solid var(--line);padding:9px 15px;font-weight:600}
+  table.months{width:100%;border-collapse:collapse;font-size:14px}
+  table.months th{text-align:left;font-size:12px;color:var(--sub);font-weight:700;padding:0 8px 6px 0}
+  table.months td{padding:0 8px 8px 0}
+  table.months td:first-child{width:52px;color:var(--sub);font-size:13px;padding-top:11px}
+  .result{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px;margin-bottom:14px}
+  .stat .k{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+  .stat .v{font-size:26px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+  .stat .u{font-size:13px;color:var(--sub);font-weight:600}
+  .opt{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);background:#fff;
+    border-radius:8px;padding:13px;margin-bottom:9px;cursor:pointer}
+  .opt.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .opt input{width:auto;margin-top:3px;flex:0 0 auto}
+  .opt .n{font-weight:700;display:block}
+  /* block, not inline: the name and the spec ran together as
+     "CleanCell 372 cabinet100 kW · 372 kWh" on the first real render. */
+  .opt .d{font-size:13px;color:var(--sub);display:block}
+  .opt .p{margin-left:auto;text-align:right;font-weight:700;white-space:nowrap}
+  .band{font-size:13px;color:var(--sub);border-top:1px solid var(--line);padding-top:11px;margin-top:4px}
+  .band b{color:var(--ink)}
+  .note{font-size:12px;color:var(--sub);margin-top:14px}
+  .msg{padding:12px 14px;border-radius:8px;font-size:14px;margin-bottom:16px;display:none}
+  .msg.err{background:#FDECEC;color:#8A1F1F;display:block}
+  .msg.ok{background:#EAF6F0;color:#1C5B41;display:block}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .consent{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;font-weight:500;margin:6px 0 14px}
+  .consent input{width:auto;flex:0 0 auto;margin-top:3px}
+  .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+  .foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--sub);display:flex;gap:12px;flex-wrap:wrap}
+  .spin{display:none;font-size:13px;color:var(--sub)}
+  .busy .spin{display:inline}
+  /* ── the site plan ──────────────────────────────────────────────────
+     Drawn as inline SVG. No map tiles: a satellite backdrop is a metered
+     per-request API, and this has to be free to serve to anybody who asks.
+     A clean plan view also reads as engineering rather than as marketing,
+     which is the impression that sells a battery. */
+  .plan{width:100%;background:#FBFBF9;border:1px solid var(--line);border-radius:var(--r);
+    display:block;touch-action:none}
+  .plan .parcel{fill:#EDEFE9;stroke:#9AA3AD;stroke-width:1.5;vector-effect:non-scaling-stroke}
+  .plan .yard{fill:rgba(43,95,168,.08);stroke:var(--accent);stroke-width:1.5;
+    stroke-dasharray:6 4;vector-effect:non-scaling-stroke;cursor:move}
+  .plan .unit{fill:var(--accent);fill-opacity:.85;stroke:#fff;stroke-width:.5;vector-effect:non-scaling-stroke}
+  .plan .grip{fill:#fff;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;cursor:nwse-resize}
+  .plan .pad{fill:none;stroke:var(--accent);stroke-width:1.5;vector-effect:non-scaling-stroke;opacity:.65}
+  .plan .lead{stroke:var(--accent);stroke-width:1;vector-effect:non-scaling-stroke;opacity:.65}
+  .plan text.tag{font-weight:700;fill:var(--accent)}
+  .plan .scale{stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke}
+  .plan text{font:600 11px -apple-system,system-ui,sans-serif;fill:var(--sub)}
+  .planhint{font-size:12.5px;color:var(--sub);margin:8px 0 0}
+  .unver{margin:14px 0 0;padding:12px 14px;background:#FFF8EC;border:1px solid #EBDCC0;
+    border-radius:8px;font-size:12px;color:#6B5426}
+  .unver b{display:block;margin-bottom:5px;font-size:12px}
+  .unver ul{margin:0;padding-left:17px}
+  .unver li{margin:2px 0}
+  #boot{padding:40px 18px;text-align:center;color:var(--sub);font-size:14px}
+  .hide{display:none!important}
+  @media (max-width:520px){
+    .row2{grid-template-columns:1fr}
+    /* The bill row is three fields. At 390px the auto-fit grid gave two
+       columns and orphaned the third on its own line, which looked broken
+       rather than responsive. One column is plainly deliberate. */
+    .grid{grid-template-columns:1fr}
+    .stat .v{font-size:22px}
+    .result{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+
+<div id="boot">Loading…</div>
+
+<div class="wrap hide" id="app">
+  <div class="head">
+    <img id="logo" alt="" class="hide">
+    <h1 id="headline"></h1>
+  </div>
+  <p class="intro" id="intro"></p>
+
+  <div class="msg" id="msg"></div>
+
+  <!-- ── A published configuration: the designer already decided ───────── -->
+  <div class="card hide" id="cfgCard">
+    <h2 id="cfgLabel">Your proposed system</h2>
+    <div class="result" id="cfgStats"></div>
+    <div id="cfgItems"></div>
+    <p class="note" id="cfgNote"></p>
+  </div>
+
+  <!-- ── Or: size it from their own bill ──────────────────────────────── -->
+  <div class="card" id="sizeCard">
+    <h2>Your electricity bill</h2>
+    <div class="grid" style="margin-bottom:14px">
+      <div>
+        <label for="dc">Demand charge
+          <span class="hint">$/kW per month, from your bill</span>
+        </label>
+        <input id="dc" type="number" step="0.01" min="0" placeholder="18.00" inputmode="decimal">
+      </div>
+      <div>
+        <label for="er">Energy rate
+          <span class="hint">$/kWh</span>
+        </label>
+        <input id="er" type="number" step="0.001" min="0" placeholder="0.11" inputmode="decimal">
+      </div>
+      <div>
+        <label for="bh">Backup needed
+          <span class="hint">hours, optional</span>
+        </label>
+        <input id="bh" type="number" step="0.5" min="0" max="12" placeholder="2" inputmode="decimal">
+      </div>
+    </div>
+
+    <table class="months">
+      <thead><tr><th></th><th>Peak demand (kW)</th><th>Usage (kWh)</th></tr></thead>
+      <tbody id="monthRows"></tbody>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn-ghost" type="button" id="addMonth">Add a month</button>
+      <span class="hint" style="margin:0">More months, better answer. One is enough to start.</span>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="sizeBtn">Size my system</button>
+      <span class="spin">Working…</span>
+    </div>
+  </div>
+
+  <!-- ── The sized answer ─────────────────────────────────────────────── -->
+  <div class="card hide" id="resCard">
+    <h2>Recommended system</h2>
+    <div class="result" id="resStats"></div>
+    <div class="band" id="resBand"></div>
+    <div id="resEcon" class="band hide"></div>
+    <div id="optWrap" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ── See it on your site ──────────────────────────────────────────
+       The middle of the funnel, and the only step that reaches a metered
+       upstream. api/embed-layout.js refuses without the enquiry receipt this
+       step files first, so the spend and the lead always land together. -->
+  <div class="card hide" id="studyCard">
+    <h2>See it on your site</h2>
+    <p class="intro" id="studyIntro" style="margin-bottom:14px"></p>
+    <div class="row2" style="margin-bottom:12px" id="studyWho">
+      <div><label for="sName">Your name</label><input id="sName" autocomplete="name"></div>
+      <div><label for="sEmail">Email</label><input id="sEmail" type="email" autocomplete="email"></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label for="sAddr">Site address
+        <span class="hint">The property the system would go on</span>
+      </label>
+      <input id="sAddr" autocomplete="street-address" placeholder="123 Industrial Dr, Springfield IL">
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="studyBtn">Show it on my site</button>
+      <span class="spin">Looking up your property…</span>
+    </div>
+  </div>
+
+  <!-- ── The plan ─────────────────────────────────────────────────────── -->
+  <div class="card hide" id="planCard">
+    <h2 id="planTitle">Your site</h2>
+    <div class="result" id="planStats"></div>
+    <svg class="plan" id="plan" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"
+         role="img" aria-label="Indicative site plan"></svg>
+    <p class="planhint" id="planHint"></p>
+    <div class="band" id="planAssume" style="margin-top:12px"></div>
+    <div class="unver" id="planUnver"></div>
+  </div>
+
+  <!-- ── The designer, as something they ASK FOR ──────────────────────
+       This used to open the editor directly. That was wrong twice over: it
+       put strangers inside the platform, and it gave away the thing that is
+       meant to be SOLD.
+
+       The storefront is the taste — size it, see it on your lot, order the
+       product. The designer is the next sale: a ClearSky-OMEGA account
+       carrying the manufacturer's name, which the manufacturer helps sell and
+       ClearSky approves. So this card describes it and takes an enquiry; the
+       account is what unlocks it. omega-editor-gate.js is the door. -->
+  <div class="card hide" id="designCard">
+    <h2 id="designHead">Design the whole site</h2>
+    <p class="intro" id="designIntro" style="margin-bottom:14px"></p>
+    <ul style="margin:0 0 16px;padding-left:20px;color:var(--sub);font-size:14px">
+      <li>Lay the system out on your own site plan, to scale</li>
+      <li>Clearances, trenching, switchgear and the one-line</li>
+      <li>Export the drawing set, or order straight from the design</li>
+    </ul>
+    <div class="row2 hide" id="designWho" style="margin-bottom:12px">
+      <div><label for="dName">Your name</label><input id="dName" autocomplete="name"></div>
+      <div><label for="dEmail">Work email</label><input id="dEmail" type="email" autocomplete="email"></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="designBtn">Ask about an account</button>
+      <span class="spin">Sending…</span>
+    </div>
+    <p class="note" id="designNote"></p>
+  </div>
+
+  <!-- ── Contact and submit ───────────────────────────────────────────── -->
+  <div class="card hide" id="orderCard">
+    <h2>Where should we send it?</h2>
+    <div class="row2" style="margin-bottom:12px">
+      <div><label for="cName">Your name</label><input id="cName" autocomplete="name"></div>
+      <div><label for="cCo">Company</label><input id="cCo" autocomplete="organization"></div>
+    </div>
+    <div class="row2" style="margin-bottom:12px">
+      <div><label for="cEmail">Email</label><input id="cEmail" type="email" autocomplete="email"></div>
+      <div><label for="cPhone">Phone</label><input id="cPhone" type="tel" autocomplete="tel"></div>
+    </div>
+    <div id="addrWrap" style="margin-bottom:12px">
+      <label for="aLine">Installation address</label>
+      <input id="aLine" autocomplete="address-line1" style="margin-bottom:10px">
+      <div class="grid">
+        <input id="aCity" placeholder="City" autocomplete="address-level2">
+        <input id="aState" placeholder="State" autocomplete="address-level1">
+        <input id="aZip" placeholder="ZIP" autocomplete="postal-code">
+      </div>
+    </div>
+    <div style="margin-bottom:6px">
+      <label for="cNotes">Anything we should know?</label>
+      <textarea id="cNotes" placeholder="Timeline, site constraints, utility, existing equipment…"></textarea>
+    </div>
+
+    <!-- Off screen and unlabelled: a person never sees it, a bot fills it.
+         api/embed-order.js refuses any submission that has it set. -->
+    <input class="hp" id="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+    <label class="consent">
+      <input type="checkbox" id="consent">
+      <span id="consentText">Yes, contact me about this system.</span>
+    </label>
+
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <button class="btn" type="button" id="orderBtn">Request this system</button>
+      <span class="spin">Sending…</span>
+    </div>
+    <p class="note" id="disclaimer"></p>
+  </div>
+
+  <!-- ── Done ─────────────────────────────────────────────────────────── -->
+  <div class="card hide" id="doneCard">
+    <h2>Request received</h2>
+    <p id="doneMsg" style="margin:0 0 8px;font-size:16px"></p>
+    <p class="note" id="doneRef"></p>
+  </div>
+
+  <div class="foot">
+    <span id="supportEmail"></span>
+    <span id="supportPhone"></span>
+    <span id="attribution" style="margin-left:auto"></span>
+  </div>
+</div>
+
+<script src="/omega-logic-theme.js"></script><script>
+(function () {
+  'use strict';
+
+  /* ── Where are we, and who framed us? ──────────────────────────────────
+     The iframe is served from OUR origin, so every fetch below is
+     same-origin and the browser sends the server our own Origin — which says
+     nothing about whose site this widget is on. So the parent is READ here
+     and REPORTED in a header.
+
+     It is a claim, not a proof: anyone can curl the endpoint with any header
+     they like. api/_lib/embed.js says so at length and is built not to need
+     it. What it buys is accounting — which installation a lead came from —
+     and switching one site off without touching the others. */
+  function parentOrigin() {
+    try {
+      var a = window.location.ancestorOrigins;
+      if (a && a.length) return a[a.length - 1];
+    } catch (e) {}
+    try {
+      if (document.referrer) {
+        var m = /^(https?:\/\/[^/?#]+)/i.exec(document.referrer);
+        if (m) return m[1];
+      }
+    } catch (e) {}
+    /* Opened directly rather than framed — how this page is tested. */
+    return window.location.origin;
+  }
+
+  var PARENT = parentOrigin();
+
+  function qs(name) {
+    var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  }
+  var KEY = qs('k') || qs('key');
+  var CONFIG_ID = qs('c') || qs('config');
+
+  function $(id) { return document.getElementById(id); }
+  function show(el) { el.classList.remove('hide'); }
+  function hide(el) { el.classList.add('hide'); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function n0(v) { return Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function usd(v) {
+    return '$' + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+
+  /* ── Auto-resize inside the host page ─────────────────────────────────
+     The host's iframe has no idea how tall this content is. It posts its
+     height and embed/loader.js applies it. Posted to '*' because the parent
+     origin is exactly the thing we do not reliably know — and the payload is
+     a number, which discloses nothing to a listener who was going to see the
+     rendered page anyway. */
+  var lastH = 0;
+  function postHeight() {
+    try {
+      var h = Math.ceil(document.documentElement.scrollHeight);
+      if (h === lastH) return;
+      lastH = h;
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ omegaEmbed: 'height', height: h }, '*');
+      }
+    } catch (e) {}
+  }
+  setInterval(postHeight, 400);
+  window.addEventListener('resize', postHeight);
+
+  /* ── Transport ───────────────────────────────────────────────────────── */
+  function api(path, method, body) {
+    /* ?c= HAS TO BE ON THE GET. embed-config resolves the published
+       configuration server-side and reads it from the query; dropping it here
+       made every designer's order link render an empty proposal. */
+    var url = path;
+    if (method === 'GET') {
+      url += '?k=' + encodeURIComponent(KEY)
+           + (CONFIG_ID ? '&c=' + encodeURIComponent(CONFIG_ID) : '');
+    }
+    var opts = {
+      method: method,
+      headers: { 'X-Omega-Embed-Key': KEY, 'X-Omega-Parent': PARENT }
+    };
+    if (method !== 'GET') {
+      opts.headers['Content-Type'] = 'application/json';
+      body = body || {};
+      body.key = KEY;
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(url, opts).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j && j.error) || ('Request failed (' + r.status + ')'));
+        return j;
+      }, function () {
+        throw new Error('Request failed (' + r.status + ')');
+      });
+    });
+  }
+
+  function say(text, kind) {
+    var m = $('msg');
+    m.className = 'msg ' + (kind || 'err');
+    m.textContent = text;
+    if (!text) m.className = 'msg';
+    postHeight();
+  }
+  function busy(on) {
+    document.body.classList.toggle('busy', !!on);
+    var bs = document.querySelectorAll('button.btn');
+    for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on;
+  }
+
+  /* ── State ───────────────────────────────────────────────────────────── */
+  var CFG = null;       /* /api/embed-config answer */
+  var CONFIG = null;    /* a published configuration, when ?c= was given */
+  var SIZED = null;     /* /api/embed-size answer   */
+  var PICKED = null;    /* the chosen product sku   */
+  var STUDY = null;     /* /api/embed-layout answer */
+  var STUDY_AT = null;  /* the geocoded point, so dragging never re-geocodes */
+  var LEAD_ID = null;   /* the enquiry receipt embed-layout requires         */
+
+  /* ── Paint the brand ─────────────────────────────────────────────────── */
+  function paintBrand() {
+    var b = CFG.brand, c = CFG.copy;
+    if (CFG.flow.customerPortal && window.OmegaLogicTheme) {
+      if (!document.getElementById('logic-theme-style')) {
+        var link=document.createElement('link');link.id='logic-theme-style';link.rel='stylesheet';link.href='/omega-logic-theme.css';document.head.appendChild(link);
+        var style=document.createElement('style');style.textContent='body.logic-theme{--accent:var(--brand)}';document.head.appendChild(style);
+      }
+      OmegaLogicTheme.apply({name:b.platformName||b.name,primary:b.accent,ink:b.ink});
+    }
+    if (b.accent) document.documentElement.style.setProperty('--accent', b.accent);
+    if (b.ink) document.documentElement.style.setProperty('--ink', b.ink);
+    if (b.logoUrl) { var l = $('logo'); l.src = b.logoUrl; l.alt = b.name; show(l); }
+    $('headline').textContent = c.headline;
+    document.title = b.name ? (b.name + ' — energy storage') : 'Energy storage';
+    if (c.intro) $('intro').textContent = c.intro; else hide($('intro'));
+    $('disclaimer').textContent = c.disclaimer || '';
+    $('orderBtn').textContent = c.cta || 'Request this system';
+    $('consentText').textContent = 'Yes, ' + (b.name || 'we') + ' may contact me about this system.';
+    if (b.supportEmail) {
+      $('supportEmail').innerHTML = '<a href="mailto:' + esc(b.supportEmail) + '" style="color:inherit">' + esc(b.supportEmail) + '</a>';
+    }
+    if (b.supportPhone) $('supportPhone').textContent = b.supportPhone;
+    /* Empty unless the contract says otherwise — see api/embed-config.js. */
+    $('attribution').textContent = b.attribution || '';
+    if (!CFG.flow.requireAddress) { /* still shown; just not required */ }
+  }
+
+  /* ── Month rows ──────────────────────────────────────────────────────── */
+  var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var monthCount = 0;
+  function addMonthRow() {
+    if (monthCount >= 12) return;
+    var i = monthCount++;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + MONTH_NAMES[i] + '</td>'
+      + '<td><input type="number" min="0" step="1" inputmode="decimal" data-kw="' + i + '" placeholder="kW"></td>'
+      + '<td><input type="number" min="0" step="1" inputmode="decimal" data-kwh="' + i + '" placeholder="kWh"></td>';
+    $('monthRows').appendChild(tr);
+    if (monthCount >= 12) hide($('addMonth'));
+    postHeight();
+  }
+
+  function readMonths() {
+    var out = [];
+    for (var i = 0; i < monthCount; i++) {
+      var kw = $('monthRows').querySelector('[data-kw="' + i + '"]').value;
+      var kwh = $('monthRows').querySelector('[data-kwh="' + i + '"]').value;
+      if (kw === '' && kwh === '') continue;
+      if (kw === '') { say('Month ' + MONTH_NAMES[i] + ' needs a peak demand in kW.'); return null; }
+      out.push({ month: i, demandKw: Number(kw), kwh: Number(kwh || 0) });
+    }
+    if (!out.length) { say('Enter at least one month from your bill.'); return null; }
+    return out;
+  }
+
+  /* ── Size ────────────────────────────────────────────────────────────── */
+  function doSize() {
+    say('');
+    var months = readMonths();
+    if (!months) return;
+    var body = { months: months };
+    if ($('dc').value !== '') body.demandChargePerKw = Number($('dc').value);
+    if ($('er').value !== '') body.energyRate = Number($('er').value);
+    if ($('bh').value !== '') body.backupHours = Number($('bh').value);
+
+    busy(true);
+    api('/api/embed-size', 'POST', body).then(function (r) {
+      busy(false);
+      SIZED = r;
+      paintSized(r);
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not size that.');
+    });
+  }
+
+  function stat(k, v, u) {
+    return '<div class="stat"><div class="k">' + esc(k) + '</div>'
+         + '<div class="v">' + esc(v) + ' <span class="u">' + esc(u || '') + '</span></div></div>';
+  }
+
+  function paintSized(r) {
+    var s = r.system;
+    $('resStats').innerHTML = stat('Power', n0(s.kw), 'kW')
+      + stat('Energy', n0(s.kwh), 'kWh')
+      + stat('Duration', s.durationH, 'hours');
+
+    var band = 'Sized from ' + r.sizingToken.months + ' month'
+      + (r.sizingToken.months === 1 ? '' : 's') + ' of billing data.';
+    if (s.assumedDuration && r.sensitivity && r.sensitivity.length) {
+      /* The honest presentation of an assumed number is the range it moves
+         over — the same thing the signed-in sizer shows a designer. */
+      var lo = r.sensitivity[0], hi = r.sensitivity[r.sensitivity.length - 1];
+      band += ' Peak duration is estimated, so the energy could land between <b>'
+        + n0(lo.nameplateKwh) + ' kWh</b> (' + lo.hours + 'h peaks) and <b>'
+        + n0(hi.nameplateKwh) + ' kWh</b> (' + hi.hours + 'h peaks). '
+        + 'Interval data from your utility settles it.';
+    }
+    $('resBand').innerHTML = band;
+
+    var econ = $('resEcon');
+    if (r.economics && r.economics.savingsYr) {
+      var t = 'Estimated demand-charge saving: <b>' + usd(r.economics.savingsYr) + ' a year</b>'
+        + ', on the rates you entered.';
+      if (r.economics.paybackYr) t += ' Simple payback about <b>' + r.economics.paybackYr + ' years</b>.';
+      econ.innerHTML = t;
+      show(econ);
+    } else hide(econ);
+
+    paintOptions(r.products);
+    show($('resCard'));
+    offerStudy();
+    offerDesign();
+    show($('orderCard'));
+    postHeight();
+    $('resCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* The study is offered only when the tenant has it on AND the chosen
+     product has a footprint on file — embed-config decides both, so the page
+     never shows a button the endpoint would refuse. */
+  function offerStudy() {
+    if (!CFG.flow.siteStudy) return;
+    var p = productBySku(PICKED);
+    if (!p || !p.widthFt || !p.depthFt) { hide($('studyCard')); return; }
+    $('studyIntro').textContent = CFG.flow.studyNeedsContact
+      ? 'Tell us where and we will draw this system on your own property, to scale.'
+      : 'Enter the address and we will draw this system on your own property, to scale.';
+    $('studyWho').className = CFG.flow.studyNeedsContact ? 'row2' : 'row2 hide';
+    show($('studyCard'));
+  }
+
+  /* THE CATALOGUE FIRST, AND THAT ORDER IS THE WHOLE FUNCTION.
+
+     /api/embed-size returns a FITTED list — sku, kw, kwh, price, qty — and no
+     footprint, because sizing has no use for one. /api/embed-config returns
+     the full catalogue record, which has widthFt/depthFt.
+
+     Searching the fitted list first found the sku, returned early, and the
+     fallback below never ran: offerStudy() then saw a product with no
+     footprint and hid the site study on every single session. The button
+     simply never appeared, with nothing in the console to say why.
+
+     So the full record wins, and the fitted list is the fallback for a sku
+     the catalogue no longer carries. */
+  function productBySku(sku) {
+    var cat = CFG.products || [];
+    for (var i = 0; i < cat.length; i++) if (cat[i].sku === sku) return cat[i];
+    var fitted = (SIZED && SIZED.products) || [];
+    for (var j = 0; j < fitted.length; j++) if (fitted[j].sku === sku) return fitted[j];
+    return null;
+  }
+
+  function priceLabel(p) {
+    if (p.priceMode === 'list' && p.listPrice) {
+      return usd(p.listPrice * (p.qty || 1)) + (p.qty > 1 ? '<div class="d">' + p.qty + ' × ' + usd(p.listPrice) + '</div>' : '');
+    }
+    return '<span class="d">Price on request</span>';
+  }
+
+  function paintOptions(products) {
+    var w = $('optWrap');
+    if (!products || !products.length) {
+      w.innerHTML = '<div class="band">We will come back to you with the equipment options that fit this size.</div>';
+      return;
+    }
+    var h = '<h2 style="margin-bottom:10px">Choose a system</h2>';
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      h += '<label class="opt" data-sku="' + esc(p.sku) + '">'
+        + '<input type="radio" name="sku" value="' + esc(p.sku) + '"' + (i === 0 ? ' checked' : '') + '>'
+        + '<span><span class="n">' + esc(p.name) + '</span>'
+        + '<span class="d">' + (p.kw ? n0(p.kw) + ' kW' : '') + (p.kwh ? ' · ' + n0(p.kwh) + ' kWh' : '')
+        + (p.qty > 1 ? ' · ' + p.qty + ' units' : '') + '</span></span>'
+        + '<span class="p">' + priceLabel(p) + '</span></label>';
+    }
+    w.innerHTML = h;
+    PICKED = products[0].sku;
+    var opts = w.querySelectorAll('.opt');
+    for (var j = 0; j < opts.length; j++) {
+      opts[j].onclick = function () {
+        PICKED = this.getAttribute('data-sku');
+        var all = w.querySelectorAll('.opt');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('sel');
+        this.classList.add('sel');
+        /* A plan drawn for the previous product is now wrong, and silently
+           leaving it on screen next to a different selection is the kind of
+           mismatch a customer screenshots. */
+        STUDY = null;
+        hide($('planCard'));
+        offerStudy();
+        offerDesign();
+        postHeight();
+      };
+    }
+    opts[0].classList.add('sel');
+  }
+
+  /* ── A published configuration ───────────────────────────────────────── */
+  function paintConfig(c) {
+    hide($('sizeCard'));
+    $('cfgLabel').textContent = c.label || 'Your proposed system';
+    var s = c.system || {};
+    $('cfgStats').innerHTML = (s.kw ? stat('Power', n0(s.kw), 'kW') : '')
+      + (s.kwh ? stat('Energy', n0(s.kwh), 'kWh') : '')
+      + (s.durationH ? stat('Duration', s.durationH, 'hours') : '');
+    var items = c.items || [], h = '';
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      h += '<div class="opt" style="cursor:default"><span><span class="n">' + esc(it.name || it.sku) + '</span>'
+        + '<span class="d">' + it.qty + ' × ' + (it.kwh ? n0(it.kwh) + ' kWh' : it.sku) + '</span></span>'
+        + '<span class="p">' + (it.listPrice ? usd(it.listPrice * it.qty) : '<span class="d">Price on request</span>') + '</span></div>';
+    }
+    $('cfgItems').innerHTML = h;
+    var foot = c.note || '';
+    if (c.expiresAt) {
+      /* Shown, not hidden. A quote with a date on it is a quote; one without
+         is an argument later. */
+      var d = new Date(c.expiresAt);
+      if (!isNaN(d.getTime())) {
+        foot += (foot ? ' ' : '') + 'This proposal holds until ' + d.toLocaleDateString() + '.';
+      }
+    }
+    $('cfgNote').textContent = foot;
+    show($('cfgCard'));
+    show($('orderCard'));
+  }
+
+  /* ── The site study ──────────────────────────────────────────────────── */
+
+  /* Two calls, in this order and for a reason. api/embed-layout.js refuses
+     without an enquiry receipt, so the lead is filed FIRST and the metered
+     parcel lookup happens second. That is not a UI convention the page could
+     choose to skip — the server enforces it. */
+  function doStudy() {
+    say('');
+    var addr = $('sAddr').value.trim();
+    if (addr.length < 6) { say('Enter the site address.'); return; }
+
+    var needContact = CFG.flow.studyNeedsContact;
+    if (needContact) {
+      if (!$('sName').value.trim()) { say('Please enter your name.'); return; }
+      if (!$('sEmail').value.trim()) { say('Please enter an email address.'); return; }
+    }
+
+    busy(true);
+    fileLead(addr).then(function () {
+      return runLayout({ address: addr });
+    }).then(function (r) {
+      busy(false);
+      if (!r.found) {
+        /* A rural point, or a county whose GIS is down. Not the customer's
+           fault and not fixable by retrying, so it is said once and the flow
+           carries on to the order rather than dead-ending. */
+        say(r.reason, 'ok');
+        hide($('planCard'));
+        postHeight();
+        return;
+      }
+      STUDY = r;
+      STUDY_AT = r.at;
+      paintPlan(r);
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'We could not draw that site.');
+    });
+  }
+
+  /* Files the enquiry, or reuses the one already filed. embed-order dedupes
+     on the same email inside ten minutes, so a customer who adjusts their
+     yard and re-runs does not fill the tenant's queue with duplicates. */
+  function fileLead(addr) {
+    if (!CFG.flow.studyNeedsContact) return Promise.resolve(null);
+    if (LEAD_ID) return Promise.resolve(LEAD_ID);
+    return api('/api/embed-order', 'POST', {
+      consent: true, _hp: $('hp').value,
+      customer: {
+        name: $('sName').value, email: $('sEmail').value,
+        notes: 'Asked for a site study at: ' + addr,
+        address: { line1: addr }
+      },
+      system: SIZED ? SIZED.system : null
+    }).then(function (r) {
+      LEAD_ID = r.orderId || null;
+      /* Carry it into the order step so the same row is completed rather
+         than a second one created. */
+      if (!$('cName').value) $('cName').value = $('sName').value;
+      if (!$('cEmail').value) $('cEmail').value = $('sEmail').value;
+      if (!$('aLine').value) $('aLine').value = addr;
+      return LEAD_ID;
+    });
+  }
+
+  /* where is { address } the first time and { lat,lng } on every redraw —
+     re-geocoding an address the customer has not changed is a wasted call,
+     and the parcel cache is keyed on the point anyway. */
+  function runLayout(where) {
+    var body = { sku: PICKED, orderId: LEAD_ID,
+                 system: SIZED ? SIZED.system : null };
+    if (where.address) body.address = where.address;
+    else { body.lat = where.lat; body.lng = where.lng; }
+    if (where.usable) body.usable = where.usable;
+    return api('/api/embed-layout', 'POST', body);
+  }
+
+  /* ── Drawing ─────────────────────────────────────────────────────────── */
+
+  var VIEW = null;   /* { minX,minY,w,h } in FEET, the svg's own user units */
+
+  function paintPlan(r) {
+    var p = productBySku(PICKED) || {};
+    var pk = r.packing || {};
+    $('planTitle').textContent = r.at.matched ? r.at.matched : 'Your site';
+
+    $('planStats').innerHTML =
+        stat('Lot', r.site.acres, 'acres')
+      + stat('Your system', pk.unitsDrawn || pk.unitsNeeded || 0, 'units')
+      + stat('Marked yard', (r.usable && r.usable.acres) || 0, 'acres')
+      + stat('Fits', r.fits ? 'Yes' : 'No', '');
+
+    drawPlan(r);
+
+    /* ── HEADROOM AS A PHRASE, NOT AS A NUMBER ─────────────────────────
+       The capacity tile used to read "Yard could hold 350 units". That is
+       geometrically true and commercially absurd — nobody designs 350
+       cabinets onto 1.66 acres, and printing the integer invites exactly the
+       ridicule the aisle spacing was added to avoid. The USEFUL fact is that
+       there is room to grow, so it is said as a capped multiple in a
+       sentence. The exact figure stays in the API for the order desk, where
+       the reader is an engineer. */
+    var head = '';
+    if (r.fits && pk.unitsThatFit && pk.unitsNeeded) {
+      var mult = Math.floor(pk.unitsThatFit / pk.unitsNeeded);
+      if (mult >= 10) head = ' The marked area has room for well over ten times this system.';
+      else if (mult >= 2) head = ' The marked area has room for about ' + mult + '× this system.';
+    }
+    var fitLine = r.fits
+      ? ('Your system fits in the marked area.' + head)
+      : (r.reason || 'Your system does not fit in the marked area at these clearances.');
+    $('planHint').innerHTML = esc(fitLine)
+      + ' <b>Drag the dashed box</b> to the part of the lot you would actually use,'
+      + ' or pull its corner to resize — we will re-run the fit.';
+
+    var a = r.assumptions || {};
+    $('planAssume').innerHTML = 'Drawn at a <b>' + esc(a.setbackFt) + ' ft</b> property setback, <b>'
+      + esc(a.clearanceFt) + ' ft</b> between units'
+      + (a.aisleFt ? ', and a <b>' + esc(a.aisleFt) + ' ft</b> access aisle every '
+         + esc(a.rowsPerBlock) + ' rows' : '')
+      + '. ' + esc(a.basis);
+
+    $('planUnver').innerHTML = '<b>What this has NOT checked</b><ul>'
+      + (r.unverified || []).map(function (u) { return '<li>' + esc(u) + '</li>'; }).join('')
+      + '</ul>';
+
+    show($('planCard'));
+    postHeight();
+    $('planCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function svgEl(name, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  /* SVG user units ARE FEET, with y flipped so north is up — the study works
+     in local feet with y north, and screen y grows downward. One transform at
+     the group rather than a sign flip at every coordinate, which is where
+     mirrored drawings come from. */
+  function drawPlan(r) {
+    var svg = $('plan');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var pts = r.parcel || [];
+    if (!pts.length) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < pts.length; i++) {
+      if (pts[i].x < minX) minX = pts[i].x;
+      if (pts[i].x > maxX) maxX = pts[i].x;
+      if (pts[i].y < minY) minY = pts[i].y;
+      if (pts[i].y > maxY) maxY = pts[i].y;
+    }
+    var pad = Math.max(20, (maxX - minX) * 0.06);
+    VIEW = { minX: minX - pad, minY: minY - pad,
+             w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 };
+    svg.setAttribute('viewBox', '0 0 ' + VIEW.w + ' ' + VIEW.h);
+    svg.style.height = Math.round(Math.min(520, Math.max(260, 640 * (VIEW.h / VIEW.w)))) + 'px';
+
+    var g = svgEl('g', { transform: 'translate(' + (-VIEW.minX) + ',' + (VIEW.minY + VIEW.h) + ') scale(1,-1)' });
+    svg.appendChild(g);
+
+    g.appendChild(svgEl('polygon', {
+      'class': 'parcel',
+      points: pts.map(function (p) { return p.x + ',' + p.y; }).join(' ')
+    }));
+
+    var u = r.usable;
+    if (u) {
+      var yard = svgEl('rect', { 'class': 'yard', x: u.x, y: u.y, width: u.w, height: u.h });
+      g.appendChild(yard);
+      (r.packing.units || []).forEach(function (b) {
+        g.appendChild(svgEl('rect', { 'class': 'unit', x: b.x, y: b.y, width: b.w, height: b.h }));
+      });
+      /* ── A CALLOUT ROUND THE EQUIPMENT ────────────────────────────────
+         Four 8 × 4 ft cabinets on a 2.6-acre lot are four specks. That is
+         physically honest and communicates nothing — the customer came to see
+         THEIR system and cannot find it on the drawing.
+
+         So the block gets a pad outline and a label, the way a real site plan
+         calls out a detail. It adds no claim: the outline is the drawn units'
+         own extent plus the clearance already in the assumptions, and the
+         label says what it is. Zooming to the units instead would have lost
+         the lot context, which is the thing that makes the drawing theirs. */
+      var us = r.packing.units || [];
+      if (us.length) {
+        var bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        for (var k = 0; k < us.length; k++) {
+          if (us[k].x < bx0) bx0 = us[k].x;
+          if (us[k].y < by0) by0 = us[k].y;
+          if (us[k].x + us[k].w > bx1) bx1 = us[k].x + us[k].w;
+          if (us[k].y + us[k].h > by1) by1 = us[k].y + us[k].h;
+        }
+        var padFt = Math.max((r.assumptions && r.assumptions.clearanceFt) || 5, VIEW.w * 0.012);
+        g.appendChild(svgEl('rect', { 'class': 'pad',
+          x: bx0 - padFt, y: by0 - padFt,
+          width: (bx1 - bx0) + padFt * 2, height: (by1 - by0) + padFt * 2, rx: padFt * 0.3 }));
+
+        var p2 = productBySku(PICKED) || {};
+        var lead = Math.max(VIEW.h * 0.09, 40);
+        var lx = (bx0 + bx1) / 2, ly = by1 + padFt;
+        g.appendChild(svgEl('line', { 'class': 'lead', x1: lx, y1: ly, x2: lx, y2: ly + lead }));
+        var tag = svgEl('text', { 'class': 'tag', x: lx, y: -(ly + lead + Math.max(6, VIEW.h * 0.014)),
+                                  transform: 'scale(1,-1)', 'text-anchor': 'middle' });
+        tag.textContent = (r.packing.unitsDrawn || us.length) + ' × ' + (p2.name || 'unit')
+          + '  ·  ' + n0(bx1 - bx0) + ' × ' + n0(by1 - by0) + ' ft';
+        g.appendChild(tag);
+      }
+
+      /* The grip sits at the yard's north-east corner in FEET; its size is in
+         feet too, so it scales with the drawing instead of vanishing on a
+         large lot. */
+      var gs = Math.max(6, VIEW.w * 0.02);
+      var grip = svgEl('rect', { 'class': 'grip', x: u.x + u.w - gs, y: u.y + u.h - gs,
+                                 width: gs, height: gs, rx: gs * 0.2 });
+      g.appendChild(grip);
+      attachDrag(svg, g, yard, grip, u);
+    }
+
+    /* A scale bar, because a plan without one is a picture.
+
+       It lives in the PADDING below the parcel, and its label sits BELOW the
+       bar rather than above it: above put the text on top of the parcel's own
+       outline, which looked like a mistake on the first render. */
+    var barFt = niceBar(VIEW.w / 4);
+    var bx = VIEW.minX + VIEW.w * 0.04;
+    var by = VIEW.minY + pad * 0.55;
+    var tick = Math.max(3, pad * 0.12);
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by, x2: bx + barFt, y2: by }));
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx, y1: by - tick, x2: bx, y2: by + tick }));
+    g.appendChild(svgEl('line', { 'class': 'scale', x1: bx + barFt, y1: by - tick, x2: bx + barFt, y2: by + tick }));
+    var lbl = svgEl('text', { x: bx + barFt + tick * 2, y: -(by - tick * 0.9), transform: 'scale(1,-1)' });
+    lbl.textContent = n0(barFt) + ' ft';
+    g.appendChild(lbl);
+  }
+
+  function niceBar(target) {
+    var steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= target) return steps[i];
+    return steps[steps.length - 1];
+  }
+
+  /* ── Dragging the yard ─────────────────────────────────────────────────
+     THE SVG-LEVEL LISTENERS ARE BOUND ONCE, EVER.
+
+     The first version bound pointermove/up inside attachDrag, which runs on
+     every repaint. drawPlan() clears the svg's CHILDREN but the svg itself
+     survives, so listener sets accumulated: after three drags, three `up`
+     handlers fired, two of them closing over detached <rect> elements whose
+     getAttribute still answers. Each drag therefore fired several redundant
+     /api/embed-layout calls — and on a cache miss, several metered lookups.
+
+     So the handlers live here, read one mutable DRAG record, and attachDrag
+     only points that record at the current elements. */
+  var DRAG = null;      /* { yard, g, mode, start, box, u0 } while dragging */
+  var DRAG_BOUND = false;
+
+  /* Client pixels → SVG user units (feet), through the group's own CTM so it
+     stays correct at any responsive width and after a scroll. */
+  function toFeet(g, ev) {
+    var svg = $('plan');
+    if (!svg.createSVGPoint) return null;
+    var pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    var m = g.getScreenCTM();
+    if (!m) return null;
+    return pt.matrixTransform(m.inverse());
+  }
+
+  function bindDragOnce() {
+    if (DRAG_BOUND) return;
+    DRAG_BOUND = true;
+    var svg = $('plan');
+
+    svg.addEventListener('pointermove', function (ev) {
+      if (!DRAG) return;
+      var now = toFeet(DRAG.g, ev);
+      if (!now) return;
+      var dx = now.x - DRAG.start.x, dy = now.y - DRAG.start.y;
+      if (DRAG.mode === 'move') {
+        DRAG.yard.setAttribute('x', DRAG.box.x + dx);
+        DRAG.yard.setAttribute('y', DRAG.box.y + dy);
+      } else {
+        /* A minimum, so the box cannot be collapsed to nothing and lost. */
+        DRAG.yard.setAttribute('width', Math.max(20, DRAG.box.w + dx));
+        DRAG.yard.setAttribute('height', Math.max(20, DRAG.box.h + dy));
+      }
+    });
+
+    function release() {
+      if (!DRAG) return;
+      var d = DRAG;
+      DRAG = null;                     /* cleared FIRST: a pointerup and a
+                                          pointerleave both arrive, and the
+                                          second must not re-run the call. */
+      var next = {
+        x: parseFloat(d.yard.getAttribute('x')), y: parseFloat(d.yard.getAttribute('y')),
+        w: parseFloat(d.yard.getAttribute('width')), h: parseFloat(d.yard.getAttribute('height'))
+      };
+      /* Unchanged is not a request. Re-running on every pointerup would
+         spend a call — and, on a cache miss, a metered lookup — to redraw
+         exactly what is already on screen. */
+      if (Math.abs(next.x - d.u0.x) < 1 && Math.abs(next.y - d.u0.y) < 1 &&
+          Math.abs(next.w - d.u0.w) < 1 && Math.abs(next.h - d.u0.h) < 1) return;
+
+      say('');
+      busy(true);
+      runLayout({ lat: STUDY_AT.lat, lng: STUDY_AT.lng, usable: next }).then(function (r) {
+        busy(false);
+        if (!r.found) { say(r.reason); return; }
+        STUDY = r;
+        paintPlan(r);
+      })['catch'](function (e) {
+        busy(false);
+        say(e.message || 'We could not re-run that.');
+        /* Put the box back where the server last agreed it was, so the
+           drawing and the numbers under it never disagree. */
+        if (STUDY) paintPlan(STUDY);
+      });
+    }
+    svg.addEventListener('pointerup', release);
+    svg.addEventListener('pointercancel', release);
+    svg.addEventListener('pointerleave', release);
+  }
+
+  function attachDrag(svg, g, yard, grip, u0) {
+    bindDragOnce();
+
+    function down(which) {
+      return function (ev) {
+        ev.preventDefault();
+        var start = toFeet(g, ev);
+        if (!start) return;
+        DRAG = { g: g, yard: yard, mode: which, start: start, u0: u0,
+                 box: { x: u0.x, y: u0.y, w: u0.w, h: u0.h } };
+        try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+      };
+    }
+    /* These two ARE per-repaint, and correctly so: the elements are new each
+       time and are discarded with the old drawing, taking their listeners
+       with them. */
+    yard.addEventListener('pointerdown', down('move'));
+    grip.addEventListener('pointerdown', down('resize'));
+  }
+
+  /* ── The designer enquiry ────────────────────────────────────────────
+     Not a link into the editor. A stranger on a manufacturer's website is
+     not somebody we want inside the platform, and the designer is the thing
+     being SOLD — handing it over at the bottom of a storefront funnel sells
+     nothing.
+
+     So this files a lead marked interest:'platform', through the same
+     /api/embed-order the product path uses. One queue, one set of rules, one
+     place the manufacturer and ClearSky both already watch — and the Order
+     Desk shows which kind of lead it is. */
+  function offerDesign() {
+    if (!CFG.flow.designerPitch) { hide($('designCard')); return; }
+    var who = (CFG.brand && CFG.brand.name) || 'our';
+    $('designHead').textContent = 'Design the whole site';
+    $('designIntro').textContent =
+      'The sizing above is the short version. A ' + who + ' account opens the '
+      + 'site designer, where you lay the system out on your own property and '
+      + 'take it through to a drawing set.';
+    $('designWho').className = LEAD_ID ? 'row2 hide' : 'row2';
+    if (CFG.flow.customerPortal) {
+      $('designIntro').textContent = 'Create your free customer account to follow your orders and manage your details. Editor Lite is a separate monthly subscription for guided site design and exports.';
+      $('designWho').className = 'row2 hide';
+      $('designBtn').textContent = 'Explore Editor Lite';
+      $('designNote').textContent = 'Your customer login stays with this supplier. No separate platform account is required.';
+    }
+    show($('designCard'));
+  }
+
+  function doDesign() {
+    say('');
+    if (CFG.flow.customerPortal) {
+      // An ordinary branded account link, never a staff editor or bearer token.
+      window.open(CFG.flow.customerPortal + '#design', '_blank', 'noopener');
+      return;
+    }
+    var name = $('dName').value.trim() || $('sName').value.trim() || $('cName').value.trim();
+    var email = $('dEmail').value.trim() || $('sEmail').value.trim() || $('cEmail').value.trim();
+    if (!email) { say('Enter a work email and we will get in touch about an account.'); return; }
+    if (!name) { say('Please enter your name.'); return; }
+
+    busy(true);
+    api('/api/embed-order', 'POST', {
+      consent: true, _hp: $('hp').value,
+      interest: 'platform',
+      customer: {
+        name: name, email: email,
+        company: $('cCo').value,
+        notes: 'Asked about a site-designer account from the storefront.'
+               + (PICKED ? ' Looking at ' + PICKED + '.' : '')
+      },
+      system: SIZED ? SIZED.system : null
+    }).then(function (r) {
+      busy(false);
+      hide($('designWho'));
+      $('designBtn').disabled = true;
+      $('designBtn').textContent = 'Request sent \u2713';
+      $('designNote').textContent = r.message
+        || 'Thanks — we will be in touch about setting up an account.';
+      postHeight();
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not send that.');
+    });
+  }
+
+  /* ── Order ───────────────────────────────────────────────────────────── */
+  function doOrder() {
+    say('');
+    if (!$('cName').value.trim()) { say('Please enter your name.'); return; }
+    if (!$('cEmail').value.trim()) { say('Please enter an email address.'); return; }
+    if (!$('consent').checked) { say('Please tick the box so we know we may contact you.'); return; }
+    if (CFG.flow.requireAddress && !$('aLine').value.trim()) {
+      say('Please enter the installation address.'); return;
+    }
+
+    var body = {
+      consent: true,
+      _hp: $('hp').value,
+      customer: {
+        name: $('cName').value, company: $('cCo').value,
+        email: $('cEmail').value, phone: $('cPhone').value,
+        notes: $('cNotes').value,
+        address: { line1: $('aLine').value, city: $('aCity').value,
+                   state: $('aState').value, zip: $('aZip').value }
+      }
+    };
+    if (CONFIG_ID) {
+      body.configId = CONFIG_ID;
+    } else if (SIZED) {
+      body.system = SIZED.system;
+      if (PICKED) {
+        var q = 1;
+        for (var i = 0; i < SIZED.products.length; i++) {
+          if (SIZED.products[i].sku === PICKED) q = SIZED.products[i].qty || 1;
+        }
+        body.items = [{ sku: PICKED, qty: q }];
+      }
+    }
+
+    busy(true);
+    api('/api/embed-order', 'POST', body).then(function (r) {
+      busy(false);
+      hide($('sizeCard')); hide($('resCard')); hide($('orderCard')); hide($('cfgCard'));
+      $('doneMsg').textContent = r.message || 'Thank you — we will be in touch shortly.';
+      $('doneRef').textContent = r.orderNo ? ('Your reference is ' + r.orderNo + '.') : '';
+      show($('doneCard'));
+      say('');
+      postHeight();
+      $('doneCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    })['catch'](function (e) {
+      busy(false);
+      say(e.message || 'Could not send that.');
+    });
+  }
+
+  /* ── Boot ────────────────────────────────────────────────────────────── */
+  function fail(text) {
+    $('boot').textContent = text;
+    postHeight();
+  }
+
+  if (!KEY) { fail('This storefront is missing its key.'); return; }
+
+  api('/api/embed-config', 'GET').then(function (cfg) {
+    CFG = cfg;
+    hide($('boot'));
+    show($('app'));
+    paintBrand();
+
+    if (CONFIG_ID) {
+      /* embed-config resolved it for us, checking expiry, withdrawal and
+         ownership. A dead link says WHICH kind of dead and offers the sizer
+         instead, because a customer who followed a stale quote is still a
+         customer standing in front of us. */
+      if (cfg.config && cfg.config.error) {
+        say(cfg.config.error + ' You can size a system below in the meantime.', 'err');
+        CONFIG_ID = '';
+        addMonthRow();
+      } else if (cfg.config) {
+        CONFIG = cfg.config;
+        paintConfig(CONFIG);
+        if (CONFIG.items && CONFIG.items.length) { PICKED = CONFIG.items[0].sku; offerDesign(); }
+      } else {
+        CONFIG_ID = '';
+        addMonthRow();
+      }
+    } else {
+      addMonthRow();
+    }
+
+    $('addMonth').onclick = addMonthRow;
+    $('sizeBtn').onclick = doSize;
+    $('studyBtn').onclick = doStudy;
+    $('designBtn').onclick = doDesign;
+    $('orderBtn').onclick = doOrder;
+    postHeight();
+  })['catch'](function (e) {
+    fail(e.message || 'This storefront is not available right now.');
+  });
+})();
+</script>
+</body>
+</html>

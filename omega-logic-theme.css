@@ -1,0 +1,28 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Demo design language; tenant branding changes tokens, not layout. */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+:root{--brand:#3FAFC6;--brand-d:#2A8CA3;--brand-soft:#E2F4F8;--accent:#EE5A4F;--ink:#0B2733;--ink2:#3F5D68;--ink3:#86A0A9;--paper:#fff;--sunk:#F1FAFC;--line:#DCECF1;--line2:#EFF8FA;--r:14px;--muted:var(--ink2);--sub:var(--ink2);--cta:var(--brand);--green:var(--brand);--wash:var(--sunk);color-scheme:light}
+body.logic-theme{font:400 15px/1.6 'Poppins',ui-sans-serif,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
+.logic-theme *{box-sizing:border-box}.logic-theme [hidden]{display:none!important}
+.logic-theme h1,.logic-theme h2,.logic-theme h3{letter-spacing:-.025em;line-height:1.15;color:var(--ink)}
+.logic-theme h1{font-size:clamp(28px,3vw,40px);font-weight:700}.logic-theme h2{font-size:24px}.logic-theme h3{font-size:19px}
+.logic-theme button,.logic-theme .btn,.logic-theme .button{font-family:inherit;border-radius:999px;font-weight:600;cursor:pointer}
+.logic-theme button.primary,.logic-theme .btn.p{background:var(--brand);border-color:var(--brand);color:#fff}
+.logic-theme a{color:var(--brand-d)}.logic-theme input,.logic-theme select,.logic-theme textarea{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;background:white;padding:11px 13px}
+.logic-theme :focus-visible{outline:3px solid var(--brand-d);outline-offset:3px}
+.logic-theme header{background:white;color:var(--ink);border-bottom:1px solid var(--line)}.logic-theme header a{color:var(--ink2)}
+.logic-theme .card,.logic-theme .panel,.logic-theme section{border-color:var(--line);border-radius:var(--r)}
+.logic-theme .muted{color:var(--ink2)}.logic-theme .eyebrow{font:600 11px/1.5 'IBM Plex Mono',monospace;letter-spacing:.12em;color:var(--ink3);text-transform:uppercase}
+.logic-theme .track i.on{background:var(--brand)}
+.logic-shell{min-height:calc(100vh - 85px);display:grid;grid-template-columns:220px minmax(0,1fr)}
+.logic-nav{padding:28px 20px;background:var(--sunk);border-right:1px solid var(--line)}
+.logic-nav a{display:block;padding:12px 14px;margin:4px 0;border-radius:9px;text-decoration:none;color:var(--ink2)}
+.logic-nav a[aria-current=page]{background:var(--brand-soft);color:var(--brand-d);font-weight:600}
+.logic-main{padding:32px;max-width:1400px;width:100%}.logic-main .panel{padding:24px;background:white;border:1px solid var(--line);margin:20px 0}
+.logic-main label{display:block;font-size:12px;color:var(--ink2);margin:14px 0 5px}.logic-main input{width:100%}
+.logic-main .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.logic-main .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.logic-main button{padding:11px 18px;border:1px solid var(--line);background:white;color:var(--ink)}
+.logic-table{width:100%;border-collapse:collapse}.logic-table th,.logic-table td{text-align:left;padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}.logic-table th{font-size:11px;text-transform:uppercase;color:var(--ink3);letter-spacing:.09em}
+.logic-scroll{overflow-x:auto}.logic-status{padding:12px 16px;background:var(--sunk);border-radius:10px}.logic-status:empty{display:none}.logic-status.error{background:#FCEAE8;color:#C4372B}
+@media(max-width:760px){.logic-shell{grid-template-columns:1fr}.logic-nav{display:flex;overflow:auto;gap:8px;border-right:0;border-bottom:1px solid var(--line);padding:8px}.logic-nav .eyebrow{display:none}.logic-nav a{white-space:nowrap}.logic-main{padding:20px}.logic-main .form-grid{grid-template-columns:1fr}}

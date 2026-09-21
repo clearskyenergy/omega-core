@@ -1,0 +1,91 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   firestore.rules — PLANT FLOOR addendum
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+   Paste the block below inside `service cloud.firestore { match /databases/…
+   /documents {` alongside the other collections, deploy, then grep the LIVE
+   rules for `plant_scans` to confirm it landed. Nothing here is live until
+   that deploy happens — same as the control-plane addendum.
+
+   Four collections, and the interesting part is which ones a browser may
+   write: NONE of the ones that move a unit.
+
+     plant_works_orders   released by api/mes-scan's sibling on deposit paid
+     plant_units          one per physical unit; the traveler
+     plant_scans          append-only event log, including refusals
+     plant_stations       one per bench; holds the hashed pairing token
+
+   ── WHY THE FLOOR CANNOT WRITE THE FLOOR ─────────────────────────────────
+   A unit only moves through /api/mes-scan, which checks the routing before it
+   writes. If a browser could set `at` directly, every guarantee in
+   api/_lib/plant.js evaporates: a unit could skip EOL, jump to Ready, or move
+   backwards, and the board would report it as fact. So units and scans are
+   READ-ONLY to every client and written only by the Admin SDK — exactly the
+   arrangement `orders` already has, and for the same reason.
+
+   ── WHY tokenHash IS NOT IN THE CLIENT'S REACH ───────────────────────────
+   Firestore rules cannot hide a FIELD, only a document. A tenant admin needs
+   to see their own benches to manage them, so plant_stations is readable by
+   the org — which means the hash is readable by the org too. That is why the
+   document stores a SHA-256 of the token and never the token itself: the
+   console shows it once at mint time and cannot show it again. Reading the
+   hash buys an attacker nothing they can replay.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── helpers: add only if your live rules do not already define them ───── */
+function plantOrg() {
+  return request.auth != null && request.auth.token.orgId != null
+    ? string(request.auth.token.orgId).lower()
+    : myOrg();                      /* myOrg() already exists in the live rules */
+}
+
+/* ── works orders: read your own, write through the API only ───────────── */
+match /plant_works_orders/{woId} {
+  allow read:   if isOmegaStaff()
+                || (signedIn() && orgAlias(resource.data.get('orgId', '')) == orgAlias(plantOrg()));
+  allow write:  if false;           /* Admin SDK only — released on deposit paid */
+}
+
+/* ── units: the traveler. Read your own; never client-written ──────────── */
+match /plant_units/{unitId} {
+  allow read:   if isOmegaStaff()
+                || (signedIn() && orgAlias(resource.data.get('orgId', '')) == orgAlias(plantOrg()));
+  /* A unit's station is decided by api/_lib/plant.js against the routing.
+     There is no shape of client write that could be checked here instead. */
+  allow write:  if false;
+}
+
+/* ── scans: append-only log, including the refusals ────────────────────── */
+match /plant_scans/{scanId} {
+  allow read:   if isOmegaStaff()
+                || (signedIn() && orgAlias(resource.data.get('orgId', '')) == orgAlias(plantOrg()));
+  allow write:  if false;           /* the endpoint writes, nobody edits history */
+}
+
+/* ── stations: a tenant admin manages their own benches ────────────────── */
+match /plant_stations/{stationId} {
+  allow read:   if isOmegaStaff()
+                || (signedIn() && orgAlias(resource.data.get('orgId', '')) == orgAlias(plantOrg()));
+
+  /* A tenant admin may create, relabel and DEACTIVATE their own benches —
+     deactivating is how a lost tablet is killed, and waiting on us to do it
+     is how a lost tablet stays live over a weekend.
+
+     They may not mint a token by writing tokenHash themselves: a hash the
+     client chose is a token the client chose, and the console's one-time
+     reveal becomes meaningless. Mint goes through the Admin SDK. */
+  allow create: if isOmegaStaff();
+  allow update: if isOmegaStaff()
+                || (isTenantAdmin(orgAlias(resource.data.get('orgId', '')))
+                    && request.resource.data.get('orgId', '') == resource.data.get('orgId', '')
+                    && request.resource.data.get('station', '') == resource.data.get('station', '')
+                    && request.resource.data.get('tokenHash', '') == resource.data.get('tokenHash', ''));
+  allow delete: if isOmegaStaff();
+}
+
+/* ── indexes to create alongside this ──────────────────────────────────────
+   plant_units   : orgId ASC, woId ASC, at ASC          (the floor board)
+   plant_units   : orgId ASC, hold ASC, updatedAt DESC  (what is held, newest)
+   plant_scans   : orgId ASC, createdAt DESC            (the shift log)
+   plant_scans   : orgId ASC, stationId ASC, createdAt DESC  (one bench's day)
+   ───────────────────────────────────────────────────────────────────────── */

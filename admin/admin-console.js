@@ -2246,6 +2246,7 @@ function _tnDetailHtml(orgId, org, bill, members, projects, seen){
              ['partner','partner \u2014 JV / channel'],
              ['internal','internal \u2014 ClearSky']];
   h+='<div><div class="block-title" style="font-size:13px;margin-bottom:8px">Commercial terms</div>';
+  h+=logicEnrollmentHtml(orgId, bill);
   h+='<label class="sub-txt" style="display:block;margin-bottom:10px">Plan'
    + '<select id="tb-tier-'+esc(orgId)+'" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cs-border,#E1E6EC);border-radius:7px">'
    + TIERS.map(function(t){ return '<option value="'+t[0]+'"'+((bill.tier||'trial')===t[0]?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('')
@@ -2628,6 +2629,56 @@ function uploadTenantLogo(orgId){
         ? 'Storage refused the upload \u2014 that path allows an admin domain only.'
         : 'Upload failed: ' + ((e && (e.code || e.message)) || 'unknown'));
     });
+}
+
+/* Enrollment uses the authenticated server; a visible switch is not a grant. */
+function logicEnrollmentHtml(orgId, bill){
+  if (!currentUser || String(currentUser.email).toLowerCase() !== 'tom@clearsky-usa.com') return '';
+  var lite=bill.editorLite||{}, enabled=(bill.addons||[]).indexOf('omega-logic')>=0 || bill.omegaLogic===true;
+  var mods=Array.isArray(lite.modules)?lite.modules:['bess'];
+  var h='<fieldset style="border:1px solid #abd8d7;border-radius:8px;padding:14px;margin:0 0 18px"><legend>Omega Logic bundle</legend>';
+  h+='<label><input type="checkbox" id="ol-enabled-'+esc(orgId)+'"'+(enabled?' checked':'')+'> Enroll this tenant in Omega Logic</label>';
+  h+='<p class="sub-txt">Office + plant portals, website sizer / platform lite, and white-label Editor Lite. Subscription pricing remains in commercial terms below. No charge is made by enrollment.</p><div>Editor Lite modules</div>';
+  [['bess','BESS'],['compute','Compute'],['ev','EV charging'],['solar','Solar']].forEach(function(m){
+    h+='<label style="display:inline-block;margin:8px 12px 8px 0"><input type="checkbox" id="ol-'+m[0]+'-'+esc(orgId)+'"'+(mods.indexOf(m[0])>=0?' checked':'')+'> '+m[1]+'</label>';
+  });
+  h+='<div><button onclick="saveLogicEnrollment(&quot;'+esc(orgId)+'&quot;)">Save Omega Logic bundle</button></div>';
+  h+='<label>Customer Editor Lite price · USD per month<input id="ol-customer-price-'+esc(orgId)+'" type="number" min="1" max="100000" step="0.01" value="'+esc(((bill.customerEditorLite||{}).monthlyPriceCents||79900)/100)+'"></label><p class="sub-txt">For this OEM’s customers, not platform users. Free customer accounts remain available. Changing the offer does not charge anyone or reprice existing subscriptions.</p><button onclick="saveLogicCustomerPrice(&quot;'+esc(orgId)+'&quot;)">Save customer subscription price</button><p><a href="/portals/customer/admin.html?org='+encodeURIComponent(orgId)+'">Manage this client’s customers →</a></p>';
+  h+='<p class="sub-txt">Payment automation stays separately gated on QuickBooks setup. Turning the bundle off preserves all tenant data.</p>';
+  h+='<details><summary>Company administrator</summary>';
+  h+=_tnField('Full name','ol-name-'+orgId,'','text','Company administrator');
+  h+=_tnField('Work email','ol-email-'+orgId,'','email','admin@'+orgId);
+  h+=_tnField('Temporary password — new account only','ol-password-'+orgId,'','password','Never saved in tenant settings');
+  h+='<label style="display:block;margin:12px 0"><input type="checkbox" id="ol-support-'+esc(orgId)+'"> ClearSky-managed support account (admin@ only): I control this mailbox; skip email verification</label>';
+  h+='<p class="sub-txt">Creates a tenant admin membership. Ordinary sign-ins require mailbox verification; explicitly attested support accounts do not. Existing passwords are preserved. Replace temporary passwords before handing over access.</p>';
+  h+='<button onclick="createLogicAdministrator(&quot;'+esc(orgId)+'&quot;)">Create / assign company administrator</button></details>';
+  h+='<p id="ol-msg-'+esc(orgId)+'" class="sub-txt" role="status"></p>';
+  if(enabled) h+='<a href="/omega-logic?org='+encodeURIComponent(orgId)+'">Open office</a> · <a href="/plant/manager?org='+encodeURIComponent(orgId)+'">Plant manager</a> · <a href="/plant/manager?org='+encodeURIComponent(orgId)+'#flow">Production flow</a> · <a href="/logic-urls?org='+encodeURIComponent(orgId)+'">URL Generator</a>';
+  return h+'</fieldset>';
+}
+function saveLogicEnrollment(orgId){
+  var msg=document.getElementById('ol-msg-'+orgId), mods=['bess','compute','ev','solar'].filter(function(m){return document.getElementById('ol-'+m+'-'+orgId).checked;});
+  msg.textContent='Saving enrollment…';
+  _authedPost('/api/logic-onboard',{action:'bundle',org:orgId,enabled:document.getElementById('ol-enabled-'+orgId).checked,modules:mods})
+    .then(function(){msg.textContent='Saved. Financial automation is unchanged.';loadTenants();})
+    .catch(function(e){msg.textContent='Not saved: '+e.message;});
+}
+function saveLogicCustomerPrice(orgId){
+  var msg=document.getElementById('ol-msg-'+orgId);
+  var value=Number(document.getElementById('ol-customer-price-'+orgId).value);
+  msg.textContent='Saving customer offer…';
+  _authedPost('/api/logic-onboard',{action:'customer-editor-price',org:orgId,monthlyPriceCents:Math.round(value*100)})
+    .then(function(r){msg.textContent=r.note;}).catch(function(e){msg.textContent='Not saved: '+e.message;});
+}
+function createLogicAdministrator(orgId){
+  var msg=document.getElementById('ol-msg-'+orgId), pw=document.getElementById('ol-password-'+orgId);
+  var email=document.getElementById('ol-email-'+orgId).value.trim();
+  if(!confirm('Assign '+email+' as a company administrator for '+orgId+'? This grants office and plant administration, not ClearSky access.'+(document.getElementById('ol-support-'+orgId).checked?' You attest that you control this support mailbox; it will be trusted without an email verification step.':''))) return;
+  msg.textContent='Provisioning administrator…';
+  var body={action:'administrator',org:orgId,name:document.getElementById('ol-name-'+orgId).value,email:email,password:pw.value,supportAccount:document.getElementById('ol-support-'+orgId).checked};
+  pw.value='';
+  _authedPost('/api/logic-onboard',body).then(function(r){msg.textContent=(r.created?'Account created. ':'Existing sign-in retained. ')+r.note;})
+    .catch(function(e){msg.textContent='Not completed: '+e.message;});
 }
 
 function saveTenantBilling(orgId){

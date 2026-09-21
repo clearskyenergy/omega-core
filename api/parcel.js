@@ -435,8 +435,25 @@ function lookup(caller, ent, lat, lng) {
   });
 }
 
-/* For scripts/tests/tparcel.js — the pure parts, runnable with no network. */
+/* ── THE SEAM ────────────────────────────────────────────────────────────
+   Two groups, and the distinction matters to a reader:
+
+   PURE — for scripts/tests/tparcel.js. Runnable with no network and no
+   credential; which county a point belongs to, a ring turned into [lat,lng],
+   acres measured off that ring.
+
+   IMPURE — lookup/cached/remember, exported so /api/embed-layout.js can reach
+   THIS chain and THIS cache instead of carrying a second copy of the source
+   order, the timeouts and the "a source that failed is not 'no parcel'" rule.
+   Regrid is metered and the county layers move (Cook did in 2026); two copies
+   of that would drift and the second one would be the one serving the public.
+   CLAUDE.md records what three copies of orgAlias() already cost.
+
+   `lookup` takes a caller only to log an orgId — it makes no authorisation
+   decision, which is why the public caller can pass a bare { orgId } and must
+   do its own gating first. Same shape as site-plan.js's _helpers. */
 module.exports._helpers = {
+  lookup: lookup, cached: cached, remember: remember, entitle: entitle,
   num: num, countiesAt: countiesAt, cleanRing: cleanRing,
   ringFromEsri: ringFromEsri, ringFromGeoJson: ringFromGeoJson, ringAcres: ringAcres,
   fieldMatching: fieldMatching, acresFromAttrs: acresFromAttrs, zoningFromAttrs: zoningFromAttrs,
