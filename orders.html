@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order Desk · ClearSky-OMEGA</title>
+<!--
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  ORDER DESK — what a white-labelled storefront sent us, and what we did about it.
+
+  ── ONE PAGE, TWO SEATS ──────────────────────────────────────────────────
+  CLEARSKY sees every order across every storefront, prices them, and moves
+  them through fulfilment. That is the service being sold: the tenant sells,
+  we deliver.
+
+  A TENANT sees their own orders only, read-mostly. They may annotate, assign
+  and cancel. They may not price and they may not mark anything shipped —
+  api/orders.js refuses both, and the refusal is the real gate; the buttons
+  being absent here is only courtesy.
+
+  Which seat you get is decided by your email domain, exactly as the rules
+  decide it. There is no toggle: a page that let you choose would be a page
+  whose UI disagrees with the server about who you are.
+
+  ── READS COME STRAIGHT FROM FIRESTORE, WRITES GO THROUGH /api/orders ─────
+  Same split as rfq.html and for the same reason. The rules can express "your
+  own org's rows, or all of them if you are staff" precisely, so reads need no
+  function. They CANNOT express "only ClearSky may set a price, but anyone may
+  cancel their own" without encoding a commercial arrangement in a rules file,
+  and a status change has to notify the other side. So every write is a POST.
+
+  ── WHAT IS NOT HERE ─────────────────────────────────────────────────────
+  Payment. An order is a request until a human confirms it; nothing on this
+  page charges anybody. When that changes it goes through /api/ and Stripe,
+  not through a browser.
+-->
+<style>
+:root{--cs-navy:#0A1628;--cs-blue:#0070F2;--cs-teal:#00A9A4;--cs-border:#E1E6EC;
+      --cs-text:#0F2733;--cs-muted:#6B7C8C;--cs-bg:#F6F8FA}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cs-bg);color:var(--cs-text);font:400 14px/1.5 'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{background:var(--cs-navy);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top a{color:#9fd4ff;text-decoration:none;font-weight:600;font-size:13px}
+.top h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.bar select,.bar input{padding:7px 10px;border:1px solid var(--cs-border);border-radius:8px;font:inherit;font-size:13px;background:#fff;color:var(--cs-text)}
+.card{background:#fff;border:1px solid var(--cs-border);border-radius:12px;padding:16px;margin-bottom:12px}
+.rowhead{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rowhead .t{font-size:14.5px;font-weight:700;margin:0}
+.meta{color:var(--cs-muted);font-size:12.5px;margin:3px 0 0}
+.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--cs-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--cs-border)}
+td{padding:8px 10px;border-bottom:1px solid #EEF1F4;vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font:600 11px/1.6 inherit;background:#EAF2FF;color:var(--cs-blue)}
+.chip.ok{background:#E6F7EE;color:#1F7A45}.chip.warn{background:#FFF4E5;color:#9A6300}
+.chip.none{background:#EEF1F4;color:var(--cs-muted)}.chip.bad{background:#FDECEC;color:#A32020}
+button{background:var(--cs-blue);color:#fff;border:none;border-radius:8px;padding:7px 13px;font:600 12.5px inherit;cursor:pointer}
+button.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border)}
+button.danger{background:#fff;color:#A32020;border:1px solid #F0CFCF}
+button:disabled{opacity:.5;cursor:not-allowed}
+.panel{border:1px solid var(--cs-border);border-radius:9px;padding:14px;margin-top:12px;background:#FBFCFD}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px}
+.fld label{display:block;font-size:11px;color:var(--cs-muted);font-weight:600;margin-bottom:3px}
+.fld input,.fld select{width:100%;padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px;background:#fff;color:var(--cs-text)}
+textarea{width:100%;resize:vertical;padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px}
+.empty{color:var(--cs-muted);padding:22px;text-align:center}
+.msg{font-size:12.5px;margin-top:8px;min-height:16px}
+.msg.bad{color:#A32020}.msg.good{color:#1F7A45}
+.hist{margin-top:10px;font-size:12px;color:var(--cs-muted)}
+.hist div{padding:2px 0}
+.kv{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:3px 12px;font-size:13px}
+.kv .k{color:var(--cs-muted)}
+.warnbox{background:#FFF4E5;border:1px solid #F0DDBB;color:#7A4E00;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:14px}
+.hide{display:none}
+@media (max-width:900px){.wrap{padding:14px}.card{padding:13px}.acts{margin-left:0;width:100%}}
+</style>
+</head>
+<body>
+<div class="top">
+  <a href="/">&#8592; Portal</a>
+  <h1>Order Desk</h1>
+  <span id="who" style="margin-left:auto;font-size:12.5px;opacity:.8"></span>
+</div>
+
+<div class="wrap">
+  <div id="seatNote" class="warnbox hide"></div>
+
+  <div class="bar">
+    <select id="fStatus">
+      <option value="">All statuses</option>
+      <option value="open" selected>Open (not complete or cancelled)</option>
+      <option value="new">New</option>
+      <option value="confirmed">Confirmed</option>
+      <option value="quoted">Quoted</option>
+      <option value="accepted">Accepted</option>
+      <option value="in_fulfilment">In fulfilment</option>
+      <option value="shipped">Shipped</option>
+      <option value="complete">Complete</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+    <select id="fKind">
+      <option value="">Product orders and account enquiries</option>
+      <option value="product">Product orders only</option>
+      <option value="platform">Designer-account enquiries only</option>
+    </select>
+    <input id="fText" placeholder="Search customer, order no, storefront" style="min-width:230px">
+    <span id="count" style="color:var(--cs-muted);font-size:12.5px;margin-left:auto"></span>
+    <button class="ghost" id="reload">Refresh</button>
+  </div>
+
+  <div id="list"><div class="empty">Loading…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script>
+'use strict';
+var cfg = (window.CLEARSKY_CONFIG || {});
+var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg.firebase || cfg);
+var auth = firebase.auth(), db = firebase.firestore();
+
+var ME = null, MYORG = '', STAFF = false, ROWS = [];
+var STAFF_DOMAINS = ['clearsky-usa.com', 'csebuilders.com'];
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
+function usd(n,cur){ return (typeof n==='number'&&isFinite(n)) ? (cur==='USD'||!cur?'$':cur+' ')+n.toLocaleString(undefined,{maximumFractionDigits:0}) : '—'; }
+function n0(v){ return (typeof v==='number'&&isFinite(v)) ? v.toLocaleString(undefined,{maximumFractionDigits:0}) : '—'; }
+function when(t){
+  var ms = t && t.toMillis ? t.toMillis() : (typeof t==='number'?t:0);
+  return ms ? new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '—';
+}
+function setMsg(id,text,bad){ var el=document.getElementById(id); if(!el) return; el.className='msg '+(bad?'bad':'good'); el.textContent=text; }
+
+/* The same vocabulary api/orders.js enforces. Kept as one map so the wording
+   and the colour are decided once — a queue where two people spell a status
+   differently cannot be counted. */
+var STATUS = {
+  'new':           { label:'New',            cls:'warn' },
+  confirmed:       { label:'Confirmed',      cls:''     },
+  quoted:          { label:'Quoted',         cls:''     },
+  accepted:        { label:'Accepted',       cls:'ok'   },
+  in_fulfilment:   { label:'In fulfilment',  cls:'ok'   },
+  shipped:         { label:'Shipped',        cls:'ok'   },
+  complete:        { label:'Complete',       cls:'ok'   },
+  cancelled:       { label:'Cancelled',      cls:'bad'  }
+};
+/* What a STAFF user may move an order to next. Advisory: api/orders.js is the
+   authority and will refuse anything this list gets wrong. */
+var NEXT = {
+  'new':         ['confirmed','cancelled'],
+  confirmed:     ['quoted','in_fulfilment','cancelled'],
+  quoted:        ['accepted','cancelled'],
+  accepted:      ['in_fulfilment','cancelled'],
+  in_fulfilment: ['shipped','cancelled'],
+  shipped:       ['complete'],
+  complete:      [],
+  cancelled:     []
+};
+function statusChip(s){
+  var m = STATUS[s] || { label:s||'—', cls:'none' };
+  return '<span class="chip '+m.cls+'">'+esc(m.label)+'</span>';
+}
+
+/* A null on the first callback is the SDK still restoring, not a signed-out
+   user — and this page NAVIGATES on it, which cannot be taken back. Same
+   guard as rfq.html and projects.html. */
+var _nulls = 0;
+auth.onAuthStateChanged(function(u){
+  if(!u){
+    var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    var cap = had ? 20 : 4;
+    if (_nulls++ < cap && !auth.currentUser) {
+      setTimeout(function(){ if (!auth.currentUser && _nulls >= cap) location.href='/'; }, 400);
+      return;
+    }
+    if (!auth.currentUser) location.href='/';
+    return;
+  }
+  _nulls = 0;
+  ME = u;
+  MYORG = orgOf(u.email);
+  STAFF = STAFF_DOMAINS.indexOf(MYORG) >= 0;
+  document.getElementById('who').textContent = u.email + ' · ' + (STAFF ? 'ClearSky' : MYORG);
+  if (!STAFF) {
+    var note = document.getElementById('seatNote');
+    note.textContent = 'These are the orders your storefront has taken. ClearSky prices them and '
+      + 'manages fulfilment — you can add notes, assign an owner, and cancel.';
+    note.className = 'warnbox';
+  }
+  load();
+});
+
+/* ── Read ─────────────────────────────────────────────────────────────────
+   Staff read the whole collection; a tenant reads their own rows. The tenant
+   query filters on the SAME field the rule tests, which is what makes the
+   LIST legal: Firestore refuses a list the moment one returned document would
+   fail, so the queried orgId and userOrg() have to be the same string. They
+   are, because orgOf() folds the aliases exactly as the rules do. */
+function query(){
+  var c = db.collection('orders');
+  if (!STAFF) c = c.where('orgId','==',MYORG);
+  return c.orderBy('createdAt','desc').limit(300).get();
+}
+
+function load(){
+  document.getElementById('list').innerHTML = '<div class="empty">Loading…</div>';
+  return query().then(function(sn){
+    ROWS = [];
+    sn.forEach(function(d){ var v=d.data()||{}; v._id=d.id; ROWS.push(v); });
+    render();
+  })['catch'](function(e){
+    document.getElementById('list').innerHTML =
+      '<div class="empty">Could not load orders. '+esc(e.message||'')+'</div>';
+  });
+}
+
+function passes(o){
+  /* A designer-account enquiry and a battery order are worked by different
+     people. Same queue — a second desk is the one nobody checks — but the
+     filter has to be there or one kind buries the other. */
+  var k = document.getElementById('fKind').value;
+  if (k && (o.interest || 'product') !== k) return false;
+  var f = document.getElementById('fStatus').value;
+  if (f === 'open') { if (o.status==='complete'||o.status==='cancelled') return false; }
+  else if (f && o.status !== f) return false;
+  var q = document.getElementById('fText').value.trim().toLowerCase();
+  if (!q) return true;
+  var hay = [o.orderNo, o.orgName, o.orgId, o.customer&&o.customer.name,
+             o.customer&&o.customer.company, o.customer&&o.customer.email,
+             o.owner].join(' ').toLowerCase();
+  return hay.indexOf(q) >= 0;
+}
+
+function render(){
+  var out = ROWS.filter(passes);
+  document.getElementById('count').textContent = out.length + ' of ' + ROWS.length;
+  if (!out.length){
+    document.getElementById('list').innerHTML = '<div class="empty">Nothing matches.</div>';
+    return;
+  }
+  document.getElementById('list').innerHTML = out.map(card).join('');
+}
+
+function card(o){
+  var a = (o.customer && o.customer.address) || {};
+  var site = [a.line1,a.city,a.state,a.zip].filter(Boolean).join(', ');
+  var items = (o.items||[]).map(function(i){
+    return '<tr><td>'+esc(i.name||i.sku)+'</td><td class="num">'+i.qty+'</td>'
+      + '<td class="num">'+n0(i.kwh)+'</td>'
+      + '<td class="num">'+(i.listPrice?usd(i.listPrice*i.qty):'—')+'</td></tr>';
+  }).join('');
+
+  var hist = (o.history||[]).slice(-6).reverse().map(function(h){
+    return '<div>'+esc(String(h.at||'').slice(0,16).replace('T',' '))+' · '+esc(h.by||'')+' — '+esc(h.what||'')+'</div>';
+  }).join('');
+
+  /* Provenance is labelled a CLAIM because that is what it is: the embedding
+     page reported it. api/_lib/embed.js explains at length why it cannot be
+     more than that, and this label is how somebody reading the queue knows
+     not to treat it as proof of where a lead came from. */
+  var prov = o.provenance || {};
+  var provLine = prov.claimedOrigin
+    ? esc(prov.claimedOrigin) + (prov.originAllowlisted ? ' (allowlisted)' : ' (not on the allowlist)')
+    : 'unknown';
+
+  return '<div class="card" id="o-'+esc(o._id)+'">'
+    + '<div class="rowhead">'
+    +   '<div>'
+    +     '<p class="t">'+esc(o.orderNo||o._id)+' · '+esc((o.customer&&o.customer.company)||(o.customer&&o.customer.name)||'—')+'</p>'
+    +     '<p class="meta">'+esc(o.orgName||o.orgId||'')+' · '+when(o.createdAt)
+    +       ' · '+n0(o.system&&o.system.kw)+' kW / '+n0(o.system&&o.system.kwh)+' kWh'
+    +       (o.owner?' · '+esc(o.owner):'')+'</p>'
+    +   '</div>'
+    +   '<div class="acts">'
+    +     (o.interest==='platform'
+            ? '<span class="chip" style="background:#EDE9FE;color:#5B21B6">Designer account</span> ' : '')
+    +     statusChip(o.status)
+    +     (o.pricing&&o.pricing.total!=null?' <span class="chip ok">'+esc(usd(o.pricing.total,o.pricing.currency))+'</span>':'')
+    +     ' <button class="ghost" onclick="toggle(\''+esc(o._id)+'\')">Work it</button>'
+    +   '</div>'
+    + '</div>'
+
+    + '<div class="panel hide" id="p-'+esc(o._id)+'">'
+    +   '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">'
+    +     '<div class="kv">'
+    +       '<span class="k">Contact</span><span>'+esc((o.customer&&o.customer.name)||'—')+'</span>'
+    +       '<span class="k">Email</span><span><a href="mailto:'+esc(o.customer&&o.customer.email)+'">'+esc((o.customer&&o.customer.email)||'—')+'</a></span>'
+    +       '<span class="k">Phone</span><span>'+esc((o.customer&&o.customer.phone)||'—')+'</span>'
+    +       '<span class="k">Site</span><span>'+esc(site||'—')+'</span>'
+    +     '</div>'
+    +     '<div class="kv">'
+    +       '<span class="k">Source</span><span>'+esc(o.source||'—')+'</span>'
+    +       '<span class="k">From</span><span>'+provLine+'</span>'
+    +       '<span class="k">Sizing</span><span>'+esc((o.system&&o.system.basis)||'—')+'</span>'
+    +       '<span class="k">Fulfilled by</span><span>'+esc(o.fulfilledBy||'clearsky')+'</span>'
+    +     '</div>'
+    +   '</div>'
+
+    +   (o.customer&&o.customer.notes
+          ? '<div style="margin:10px 0;font-size:13px"><b>Customer said:</b> '+esc(o.customer.notes)+'</div>' : '')
+
+  +   siteStudyBlock(o)
+
+    +   (items
+          ? '<table style="margin-top:8px"><thead><tr><th>Item</th><th class="num">Qty</th>'
+            + '<th class="num">kWh ea</th><th class="num">List</th></tr></thead><tbody>'+items+'</tbody></table>'
+          : '<p class="meta" style="margin-top:8px">No items — sizing enquiry only.</p>')
+
+    +   (STAFF ? priceForm(o) : '')
+    +   moveForm(o)
+    +   noteForm(o)
+    +   (hist ? '<div class="hist"><b>History</b>'+hist+'</div>' : '')
+    +   '<div class="msg" id="m-'+esc(o._id)+'"></div>'
+    + '</div></div>';
+}
+
+/* What the customer was SHOWN, if they ran a site study. Written server-side
+   by api/embed-layout.js from its own computation, so unlike the system size
+   on an enquiry these are our numbers and not a browser's claim — which is
+   why they are presented plainly rather than hedged.
+
+   Still a FIT STUDY and not a layout: no service location, no survey, no code
+   review. Said here too, because the person about to ring this customer is
+   exactly who must not over-promise on it. */
+function siteStudyBlock(o){
+  var s = o.siteStudy;
+  if (!s) return '';
+  var yard = s.yardAcres ? (s.yardAcres+' ac'+(s.yardChosenByCustomer?' (they picked it)':' (we proposed it)')) : '—';
+  return '<div class="panel" style="margin-top:10px;background:#F3F8FF;border-color:#D5E6FB">'
+    + '<div style="font-weight:700;font-size:13px;margin-bottom:6px">They saw a site study '
+    +   (s.fits ? '<span class="chip ok">it fit</span>' : '<span class="chip warn">it did not fit</span>') + '</div>'
+    + '<div class="kv">'
+    +   '<span class="k">Property</span><span>'+esc(s.address||'—')+'</span>'
+    +   '<span class="k">Lot</span><span>'+esc(s.acres||'?')+' acres'+(s.zoning?' · zoned '+esc(s.zoning):'')+'</span>'
+    +   '<span class="k">Marked yard</span><span>'+esc(yard)+'</span>'
+    +   '<span class="k">Units</span><span>'+esc(s.unitsNeeded||'?')+' needed of '+esc(s.unitsThatFit||'?')
+    +     ' the yard holds'+(s.sku?' · '+esc(s.sku):'')+'</span>'
+    +   '<span class="k">Drawn at</span><span>'+esc(s.setbackFt)+' ft setback · '+esc(s.clearanceFt)
+    +     ' ft between units'+(s.aisleFt?' · '+esc(s.aisleFt)+' ft aisles':'')+'</span>'
+    + '</div>'
+    + '<div class="meta" style="margin-top:7px">Geometric fit only — no service location, survey, '
+    + 'zoning or code review. Do not quote it as a layout.</div>'
+    + '</div>';
+}
+
+/* ClearSky only. The tenant's margin sits on top of this number; two parties
+   writing one price makes an invoice nobody can reconcile. */
+function priceForm(o){
+  var p = o.pricing || {};
+  return '<div style="margin-top:14px;border-top:1px solid var(--cs-border);padding-top:12px">'
+    + '<div class="grid">'
+    +   '<div class="fld"><label>Subtotal</label><input type="number" step="0.01" id="ps-'+esc(o._id)+'" value="'+(p.subtotal!=null?p.subtotal:'')+'"></div>'
+    +   '<div class="fld"><label>Freight</label><input type="number" step="0.01" id="pf-'+esc(o._id)+'" value="'+(p.freight!=null?p.freight:'')+'"></div>'
+    +   '<div class="fld"><label>Tax</label><input type="number" step="0.01" id="px-'+esc(o._id)+'" value="'+(p.tax!=null?p.tax:'')+'"></div>'
+    +   '<div class="fld"><label>Total</label><input type="number" step="0.01" id="pt-'+esc(o._id)+'" value="'+(p.total!=null?p.total:'')+'"></div>'
+    +   '<div class="fld"><label>Valid until</label><input type="date" id="pv-'+esc(o._id)+'" value="'+esc(String(p.validUntil||'').slice(0,10))+'"></div>'
+    + '</div>'
+    + '<div class="fld" style="margin-bottom:8px"><label>Terms</label><input id="pr-'+esc(o._id)+'" value="'+esc(p.terms||'')+'"></div>'
+    + '<button onclick="price(\''+esc(o._id)+'\')">Save price &amp; mark quoted</button>'
+    + (p.pricedBy?' <span class="meta">last priced by '+esc(p.pricedBy)+'</span>':'')
+    + '</div>';
+}
+
+/* Staff get the lifecycle. A tenant gets one button, because cancelling their
+   own customer's order is theirs to do and everything else is ours. */
+function moveForm(o){
+  var opts = STAFF ? (NEXT[o.status]||[]) : (o.status==='complete'||o.status==='cancelled'?[]:['cancelled']);
+  if (!opts.length) return '';
+  var sel = '<select id="st-'+esc(o._id)+'" style="padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px">'
+    + opts.map(function(s){ return '<option value="'+esc(s)+'">'+esc((STATUS[s]||{}).label||s)+'</option>'; }).join('')
+    + '</select>';
+  return '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<span class="meta">Move to</span>' + sel
+    + '<button class="ghost" onclick="move(\''+esc(o._id)+'\')">Apply</button>'
+    + (STAFF ? '<input id="ow-'+esc(o._id)+'" placeholder="assign to (email)" value="'+esc(o.owner||'')+'"'
+             + ' style="padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px">'
+             + '<button class="ghost" onclick="assign(\''+esc(o._id)+'\')">Assign</button>' : '')
+    + '</div>';
+}
+
+function noteForm(o){
+  return '<div style="margin-top:12px">'
+    + '<textarea id="nt-'+esc(o._id)+'" rows="2" placeholder="Add a note — both sides see it"></textarea>'
+    + '<button class="ghost" style="margin-top:6px" onclick="note(\''+esc(o._id)+'\')">Add note</button>'
+    + '</div>';
+}
+
+function toggle(id){
+  var p = document.getElementById('p-'+id);
+  if (p) p.classList.toggle('hide');
+}
+
+/* ── the one place that talks to /api/orders ──────────────────────────── */
+function post(body){
+  if(!ME) return Promise.reject(new Error('Sign in first.'));
+  return ME.getIdToken().then(function(tok){
+    return fetch('/api/orders', { method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+tok },
+      body: JSON.stringify(body) });
+  }).then(function(r){
+    return r.text().then(function(t){
+      var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(r.ok) return j||{};
+      var d=(j&&(j.detail||j.error))||t.slice(0,200)||('HTTP '+r.status);
+      /* A deployment missing its credential and a refused request are fixed in
+         completely different places, so they must not read the same. */
+      if(r.status===500 && /SERVICE_ACCOUNT/i.test(d)){
+        throw new Error('The order desk is not switched on yet — the server is missing its '
+          + 'Firebase credential. Nothing was changed.');
+      }
+      throw new Error(d);
+    });
+  });
+}
+
+function val(id){ var el=document.getElementById(id); return el?el.value:''; }
+function numOrNull(v){ return v===''||v==null ? null : Number(v); }
+
+function price(id){
+  setMsg('m-'+id,'Saving…');
+  post({ action:'price', orderId:id, pricing:{
+    subtotal:numOrNull(val('ps-'+id)), freight:numOrNull(val('pf-'+id)),
+    tax:numOrNull(val('px-'+id)), total:numOrNull(val('pt-'+id)),
+    validUntil:val('pv-'+id), terms:val('pr-'+id), currency:'USD'
+  }}).then(function(){ setMsg('m-'+id,'Priced.'); load(); })
+    ['catch'](function(e){ setMsg('m-'+id, e.message||'Failed.', true); });
+}
+
+function move(id){
+  var next = val('st-'+id);
+  if (next==='cancelled' && !confirm('Cancel this order? The other side is notified.')) return;
+  setMsg('m-'+id,'Updating…');
+  post({ action:'status', orderId:id, status:next })
+    .then(function(){ setMsg('m-'+id,'Updated.'); load(); })
+    ['catch'](function(e){ setMsg('m-'+id, e.message||'Failed.', true); });
+}
+
+function assign(id){
+  setMsg('m-'+id,'Saving…');
+  post({ action:'assign', orderId:id, owner:val('ow-'+id) })
+    .then(function(){ setMsg('m-'+id,'Assigned.'); load(); })
+    ['catch'](function(e){ setMsg('m-'+id, e.message||'Failed.', true); });
+}
+
+function note(id){
+  var t = val('nt-'+id).trim();
+  if (!t) { setMsg('m-'+id,'Nothing to add.', true); return; }
+  setMsg('m-'+id,'Saving…');
+  post({ action:'note', orderId:id, note:t })
+    .then(function(){ setMsg('m-'+id,'Noted.'); load(); })
+    ['catch'](function(e){ setMsg('m-'+id, e.message||'Failed.', true); });
+}
+
+document.getElementById('fStatus').onchange = render;
+document.getElementById('fKind').onchange = render;
+document.getElementById('fText').oninput = render;
+document.getElementById('reload').onclick = load;
+</script>
+</body>
+</html>

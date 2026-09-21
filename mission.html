@@ -272,6 +272,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .areaHead{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--glow-cyan);
           margin:12px 0 4px;opacity:.75}
 .areaHead:first-child{margin-top:0}
+/* ── OMEGA LOGIC ─────────────────────────────────────────────────────────
+   Tracking and fulfilment. The rail at the top is the pipeline itself and it
+   is the load-bearing part of this view: four of its six stages are not
+   built, and a dashboard that showed only the two that are would read as a
+   complete picture of a complete system. A stage that is `off` is drawn
+   dimmed and struck, never hidden. */
+.logicWrap{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.logicGrid{grid-template-columns:minmax(0,1fr) 340px minmax(0,380px)}
+.logicRail{display:flex;gap:0;align-items:stretch;flex-wrap:wrap;flex:none}
+.logicStage{flex:1 1 0;min-width:112px;padding:8px 10px;border:var(--edge);
+            border-right:none;background:rgba(0,0,0,.22);position:relative}
+.logicStage:last-child{border-right:var(--edge)}
+.logicStage .sk{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;
+                color:var(--glow-cyan);text-transform:uppercase}
+.logicStage .sv{font-size:12.5px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.logicStage .sw{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:3px;
+                overflow-wrap:anywhere}
+.logicStage.off{opacity:.42}
+.logicStage.off .sk{color:var(--dim)}
+.logicStage.off .sv{text-decoration:line-through;text-decoration-thickness:1px}
+/* Neither struck nor lit. A partial stage is one whose data moves but whose
+   other half does not — work captured with no read path, or a step that
+   runs but only when a person presses it. Drawn distinctly because "half
+   done" is the state most likely to be misread as done. */
+.logicStage.partial{opacity:.82}
+.logicStage.partial .sk{color:var(--warn)}
+.logicStage.partial .sv{color:var(--ink)}
+.tileRow{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;flex:none}
+.lTile{border:var(--edge);background:rgba(0,0,0,.22);padding:9px 11px}
+.lTile .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.6px;color:var(--dim);
+          text-transform:uppercase}
+.lTile .v{font-size:21px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.lTile .v.sm{font-size:12.5px;line-height:1.5;padding-top:5px}
+.lTile.alarm .v{color:var(--bad)}
+/* The ten benches, as a line. A bench with nothing on it still draws, because
+   an empty Rack assembly next to a full Kitting is the shape of a bottleneck
+   and a list that omitted it would hide exactly that. */
+.benchRow{display:flex;align-items:flex-end;gap:3px;padding:2px 0 0}
+.bench{flex:1 1 0;min-width:0;text-align:center}
+.bench .bar{height:46px;display:flex;flex-direction:column;justify-content:flex-end;gap:1px}
+.bench .fill{background:var(--glow-cyan);opacity:.72;min-height:2px;border-radius:1px}
+.bench .fill.held{background:var(--bad);opacity:.85}
+.bench .bn{font-family:var(--mono);font-size:12px;color:var(--ink);margin-top:4px;
+           font-variant-numeric:tabular-nums}
+/* Short labels, and NO mid-word breaking. Ten benches across a 340px panel
+   gives each one about 30px, and "Enclosure" wrapped to "Enclo / sure" —
+   which reads as a station nobody has heard of. The full name is on hover. */
+.bench .bl{font-family:var(--mono);font-size:8.5px;letter-spacing:.3px;color:var(--dim);
+           margin-top:3px;line-height:1.2;white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis}
+.bench.empty .bn{color:var(--dim);opacity:.55}
+.oRow{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);
+      cursor:pointer}
+.oRow:hover{background:rgba(255,255,255,.035)}
+.oRow.on{background:rgba(255,255,255,.06)}
+.oRow .no{font-family:var(--mono);font-size:11px;color:var(--glow-cyan);flex:none}
+.oRow .wh{flex:1;min-width:0;font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.oRow .wh small{display:block;color:var(--dim);font-size:11px}
+.oRow .ms{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:var(--dim);
+          text-transform:uppercase;text-align:right}
+.oRow .ms b{display:block;color:var(--ink);font-weight:400}
+.oRow.stuck .no{color:var(--bad)}
+.dlGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin:9px 0 14px}
+.dlGrid .t{font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;color:var(--dim);
+           text-transform:uppercase}
+.dlGrid .v{font-size:13px;color:var(--ink);margin-top:3px;overflow-wrap:anywhere}
+.dlGrid .v.gap{color:var(--dim);font-style:italic}
+.logicNote{font-size:12px;color:var(--dim);line-height:1.55;padding:10px 0;overflow-wrap:anywhere}
+.logicNote b{color:var(--ink);font-weight:400}
+@media (max-width:1100px){ .logicGrid{grid-template-columns:minmax(0,1fr)} }
+
 .askBox{width:100%;min-height:92px;background:rgba(0,0,0,.25);border:var(--edge);border-radius:6px;
         color:var(--ink);font-family:var(--ui);font-size:13px;padding:9px 11px;resize:vertical}
 .askBox:focus{outline:none;border-color:var(--glow-cyan)}
@@ -441,6 +512,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
            transition:opacity .5s ease}
 .coreLayer.on{opacity:1}
+#missionDoom{position:absolute;inset:4% 12% 9%;display:none}
+#missionDoomCredit{display:none;position:absolute;bottom:5%;left:0;right:0;text-align:center;font-size:9px;color:var(--dim);pointer-events:auto}
+.coreLayer.characterReady #arc{visibility:hidden}
+.coreLayer.characterReady #missionDoom{display:block}
+.coreLayer.characterReady #missionDoomCredit{display:block}
+.coreLayer.characterReady .coreLabel{justify-content:flex-end;padding-bottom:2%}
+.characterSettings{padding:14px;display:grid;gap:10px}
+.characterSettings select{width:100%;padding:10px;background:#102029;color:#e5f4ee;border:1px solid #44645b;border-radius:5px}
+
 .coreLayer canvas{width:100%;height:100%;display:block}
 /* transform:none matters. The older .coreLabel rule centres a SMALL box with
    translate(-50%,-50%); inherit that on a box stretched to inset:0 and it
@@ -1303,6 +1383,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="routines">⟳  Routines<span class="pill" id="nRout"></span></button>
       <button class="navItem" data-view="clients">◈  Clients<span class="pill" id="nClients"></span></button>
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
+      <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
@@ -1332,6 +1413,8 @@ body.arranging .scroll{pointer-events:none}
          is standing in front of something. Only lit on the command view. -->
     <div class="coreLayer" id="coreLayer">
       <canvas id="arc"></canvas>
+      <div id="missionDoom" aria-label="Animated Doom character"></div>
+      <a id="missionDoomCredit" href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener">Dr Doom V2 · Visiion · CC BY 4.0 · animated adaptation</a>
       <div class="coreLabel">
         <div class="cName">J.A.R.V.I.S</div>
         <div class="cSub">AI CORE</div>
@@ -1613,11 +1696,59 @@ body.arranging .scroll{pointer-events:none}
       </div>
     </section>
 
+    <!-- ========== OMEGA LOGIC ==========
+         Tracking and fulfilment, end to end: an order arrives, money clears,
+         units are built and scanned across ten benches, each one carries its
+         own record, it ships, the balance clears. Cross-tenant, staff only,
+         fed by /api/logic-summary.
+
+         FOUR OF THE SIX STAGES DO NOT EXIST YET and the rail at the top says
+         so in as many words. The endpoint returns null for every field they
+         would own rather than zero, and this view renders null as a dash —
+         so an uncollected deposit reads as "not built", never as "$0". -->
+    <section class="view" data-view="logic">
+      <div class="logicWrap">
+        <div class="logicNote"><a href="/omega-logic" id="logicOfficeLink">OPEN OMEGA LOGIC · OEM WORKSPACES ↗</a></div>
+        <div class="logicRail" id="logicStages"></div>
+        <div class="tileRow" id="logicTiles"></div>
+        <div class="cmdGrid logicGrid">
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle">Orders<span class="live" id="logicN"></span></div>
+            <div id="logicOrders" class="scroll"></div>
+          </div>
+          <div class="col">
+            <div class="panel" data-widget="logicLine" style="flex:none">
+              <div class="ptitle">The line<span class="live" id="logicLineN"></span></div>
+              <div id="logicLine"></div>
+            </div>
+            <div class="panel" style="flex:1;min-height:0">
+              <div class="ptitle">Held<span class="live" id="logicHeldN"></span></div>
+              <div id="logicHolds" class="scroll"></div>
+            </div>
+          </div>
+          <div class="panel" style="flex:1;min-height:0">
+            <div class="ptitle" id="logicDetailTitle">Order</div>
+            <div id="logicDetail" class="scroll"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ========== SYSTEM ========== -->
     <section class="view" data-view="system">
       <div class="cmdGrid">
         <div class="col">
           <div class="panel" data-widget="pipeline" style="flex:none">
+            <div class="ptitle">Character & appearance</div>
+            <div class="characterSettings">
+              <label for="characterMode">Jarvis character</label>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <label for="doomCharacter">Doom appearance</label>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
+            </div>
+          </div>
+          <div class="panel" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
             <!-- The ingest health warning lived on the command view, under the
@@ -1669,6 +1800,9 @@ body.arranging .scroll{pointer-events:none}
   <div id="captext"></div>
 </div>
 
+<script src="assets/vendor/three-r128/three.min.js"></script>
+<script src="assets/vendor/three-r128/GLTFLoader.js"></script>
+<script src="omega-doom.js?v=20260921-rigged-5"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -1970,6 +2104,17 @@ function makeCore(id, opts) {
   /* Where the shoulders have got to. Same idea as the cape: the body is
      always catching up with the head. */
   let headLag = 0;
+  /* THE GESTURE CLOCK. Speech is not a wave, it is beats — a hand goes out on
+     a stressed word and comes back over the next two, and the giveaway that
+     something is animated rather than alive is that its arms move at the same
+     rate as its voice. So a gesture is FIRED on a syllable and then runs on
+     its own clock for the better part of a second, ignoring whatever the
+     voice does in the meantime; the refractory period is what stops a long
+     sentence turning him into a windmill. */
+  let gestT = -1e9, gestDur = 40, gestAmp = 0, gestSgn = 1, gPrev = 0;
+  /* And where the arms WERE, a few frames ago. He is a projection: the parts
+     of him that move fastest are the parts a projection smears. */
+  let armGhostR = 0, armGhostL = 0, armGhostS = 0;
   /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
      the envelope rather than on a timer, so the count and the spacing are the
      speech's, not a decoration's. */
@@ -2157,7 +2302,14 @@ function makeCore(id, opts) {
            what makes this man recognisable rather than a silhouette of any
            man in a cloak. The cloak lands near 0.33, the hood edge near 0.62,
            the faceplate at 1.0. */
-        var pos = [], lums = [];
+        /* RAW luminance is kept alongside the rendered one. `lums` below is the
+           drawing brightness — tone stretched, plus a rim term that fires on the
+           depth map's slope. That is the right number to DRAW with and the wrong
+           one to MEASURE with: the rim lights every edge in the picture, so the
+           cloak's outline scores as high as polished steel, and the one thing
+           that separates an arm from a cape in this artwork is that the arm is
+           the only metal below the mask. */
+        var pos = [], lums = [], rawl = [];
         var dat = function (x, y) {           /* depth, clamped at the border */
           if (x < 0) x = 0; if (y < 0) y = 0;
           if (x > w - 1) x = w - 1; if (y > h - 1) y = h - 1;
@@ -2192,6 +2344,7 @@ function makeCore(id, opts) {
           var rim = Math.pow(Math.min(1, Math.sqrt(gx * gx + gy * gy) / 0.22), 0.8);
 
           lums.push(Math.min(1, 0.14 + 0.52 * tone + 0.42 * rim));
+          rawl.push(lum);
         }
         /* THE ARTWORK'S OWN ASPECT, carried out of here. Both axes were
            normalised to ±0.5 and then multiplied by ONE scale, which forces
@@ -2277,6 +2430,113 @@ function makeCore(id, opts) {
                 : 0;
         }
 
+        /* --- A FOURTH BONE: THE FOREARMS, FOUND BY THEIR OWN LIGHT ---------
+           The previous author looked for the arms in the DEPTH map, found a
+           smooth unimodal relief with no valley, and concluded correctly that
+           there is no "arm in front of chest" layer to separate. That is still
+           true and this does not contradict it. The arms are not separable by
+           depth. They are separable by MATERIAL.
+
+           MEASURED on this asset (132x218, 10,919 kept samples): raw luminance
+           has a median of 0.056 and a 90th percentile of 0.263 — the figure is
+           cloth in shadow. The fraction of each row above that p90 has exactly
+           two peaks, and nothing else anywhere on the body:
+
+             d 0.00-0.13   0.15-0.43   the mask. Polished steel, already used
+                                       to find `mask` thirty lines up.
+             d 0.16-0.28   0.26-0.66   the crossed gauntlets. Peak 0.59 at 0.20.
+             d 0.28-0.36   0.000       the belly. Not "low" — zero, for eight
+                                       per cent of his height, on both edges of
+                                       the band at once.
+             d 0.36-0.86   0.00-0.09   cloak, skirt, boots. Scattered.
+
+           A band whose neighbours on both sides are a hard zero is not a
+           threshold that happened to work; it is the armour ending. So the
+           band is found rather than written down — peak below the head, walked
+           outwards while the smoothed fraction holds a third of its peak —
+           and a redrawn figure with its arms somewhere else re-derives it.
+
+           AND THE WEIGHT IS THE BRIGHTNESS, not the band. Inside those rows
+           sit both the gauntlets and the cape behind them. Weighting by light
+           puts most of the motion on the steel and leaves the cloak nearly
+           still, which is what an arm moving in front of a body looks like;
+           a floor of 0.30 keeps the band whole so nothing tears at its edge. */
+        var aw = new Float32Array(lums.length);
+        var elbow = null;
+        (function () {
+          var NB = 48, i, bi;
+          var srt = rawl.slice().sort(function (a, b) { return a - b; });
+          var hi90 = srt[(srt.length * 0.90) | 0];
+          var cnt = new Float32Array(NB), bri = new Float32Array(NB);
+          for (i = 0; i < rawl.length; i++) {
+            bi = ((pos[i * 3 + 1] - top) / span * NB) | 0;
+            if (bi < 0) bi = 0; if (bi > NB - 1) bi = NB - 1;
+            cnt[bi]++; if (rawl[i] > hi90) bri[bi]++;
+          }
+          var f = new Float32Array(NB);
+          for (i = 0; i < NB; i++) f[i] = cnt[i] > 20 ? bri[i] / cnt[i] : 0;
+          var sm = new Float32Array(NB);           /* three bins ~ seven rows */
+          for (i = 0; i < NB; i++) {
+            sm[i] = (f[Math.max(0, i - 1)] + f[i] + f[Math.min(NB - 1, i + 1)]) / 3;
+          }
+          /* the peak BELOW the head, so the mask cannot win its own search */
+          var lo0 = Math.ceil(0.14 * NB), pk = lo0;
+          for (i = lo0; i < NB; i++) if (sm[i] > sm[pk]) pk = i;
+          if (sm[pk] < 0.12) return;               /* no metal down there: no arms */
+          var cutv = sm[pk] * 0.35, a = pk, b = pk;
+          while (a > lo0 && sm[a - 1] > cutv) a--;
+          while (b < NB - 1 && sm[b + 1] > cutv) b++;
+          var d0 = a / NB, d1 = (b + 1) / NB;
+          /* The ramp is as deep as the band itself. It is not a taste: a slab
+             of samples translated against its neighbours tears at its edge,
+             and how far it can move before the tear shows is set by how long
+             the ramp has to hide the difference. Half a band either side
+             turns the edge into a gradient nothing can find. */
+          var pad = (d1 - d0) * 0.60;
+          if (pad < 0.01) return;
+
+          /* the light gate, taken inside the band rather than over the figure:
+             the band is already the brightest part of the body and a global
+             percentile would keep all of it */
+          var inb = [];
+          for (i = 0; i < rawl.length; i++) {
+            var di = (pos[i * 3 + 1] - top) / span;
+            if (di > d0 - pad && di < d1 + pad) inb.push(rawl[i]);
+          }
+          if (inb.length < 60) return;
+          inb.sort(function (x, y) { return x - y; });
+          var glo = inb[(inb.length * 0.62) | 0], ghi = inb[(inb.length * 0.94) | 0];
+          if (ghi - glo < 0.02) return;
+
+          var ex = 0, ey = 0, ew = 0;
+          for (i = 0; i < rawl.length; i++) {
+            var dd = (pos[i * 3 + 1] - top) / span, band;
+            if (dd <= d0 - pad || dd >= d1 + pad) continue;
+            band = dd < d0 ? (dd - (d0 - pad)) / pad
+                 : dd <= d1 ? 1
+                 : ((d1 + pad) - dd) / pad;
+            var g = (rawl[i] - glo) / (ghi - glo);
+            if (g < 0) g = 0; if (g > 1) g = 1;
+            /* SQUARED, AND NO FLOOR. This is the whole difference between an
+               arm and a landslide. Give every sample in the band a share of
+               the movement and the band becomes a slab: it slides as one
+               piece, opens a hole at the shoulder and cuts a straight line
+               across the ribs — measured, and it looks exactly as bad as it
+               sounds. Weight it by light squared and only the gauntlets move.
+               They are the one thing in those rows the eye can see — the
+               cloak behind them is unlit and featureless, so there is nothing
+               there to tear and nothing to notice staying still. */
+            aw[i] = band * g * g;
+            ex += pos[i * 3] * aw[i]; ey += pos[i * 3 + 1] * aw[i]; ew += aw[i];
+          }
+          /* THE ELBOW. Not a joint — this drawing has no joints. It is the
+             point the forearm block turns about, and the block's own centre of
+             light is the only defensible choice: turn it about the body's
+             midline instead and the near arm swings twice as far as the far
+             one for no reason anyone drew. */
+          if (ew > 1) elbow = { x: ex / ew, y: ey / ew };
+        })();
+
         /* THE NECK, which is what the head turns on. A fifth of the way down
            is where the width profile stops being hood and starts being
            shoulder (24% of the frame at 0.11, 42% by 0.16, 52% by 0.21), so
@@ -2300,7 +2560,7 @@ function makeCore(id, opts) {
 
         cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
                   n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, sw: sw,
-                  neck: neck, waist: waist };
+                  neck: neck, waist: waist, arm: elbow ? aw : null, elbow: elbow };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -2350,9 +2610,13 @@ function makeCore(id, opts) {
        real thing — invisible here, and it keeps a trig pair out of a loop
        that runs eleven thousand times a frame. */
     const HW = cloud.hw, CW = cloud.cw, SW = cloud.sw, NK = cloud.neck, WS = cloud.waist;
+    const AW = cloud.arm, EL = cloud.elbow;
     const hy = o.headYaw || 0, hn = o.headNod || 0, cx2 = o.capeX || 0, hr = o.headRoll || 0;
     const sr = o.bodyRoll || 0, bz = o.breath || 0;
-    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz));
+    const ga = o.armRoll || 0, gl = o.armLift || 0, gs = o.armSpread || 0;
+    const glit = o.armLit || 0;
+    const gest = !!(AW && EL && (ga || gl || gs));
+    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz || gest));
     /* The roll has to be circular ON SCREEN, and x and y are not drawn at the
        same scale — sy is `ar` times sx. Rotating in the stored units would
        shear the head into an ellipse. So y is carried into x-proportional
@@ -2362,6 +2626,8 @@ function makeCore(id, opts) {
     for (let k = 0; k < cloud.n; k += step) {
       const lum = lu[k];
       if (o.bright && lum < 0.80) continue;       /* the bloom takes highlights only */
+      /* the ghost pass carries the arms and nothing else */
+      if (o.armOnly && (!AW || AW[k] < 0.22)) continue;
       let px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
 
       if (bones) {
@@ -2409,6 +2675,30 @@ function makeCore(id, opts) {
           if (bz) py = WS.y + (py - WS.y) * (1 + bz * swk);
         }
 
+        /* AND HE GESTURES. The forearms turn about their own centre of light,
+           lift, and open — three channels, all in the plane of the image, for
+           the reason the head's roll is: this drawing has one face and no
+           second view to swing through, so anything that tries to move an arm
+           through depth moves it by two per cent of nothing. In-plane, three
+           degrees is three degrees.
+
+           The spread is measured from the elbow and not from the body's
+           midline. His arms are crossed: the hands sit near the centre and the
+           gauntlets run outwards past the ribs, so opening them is the block
+           growing about its own middle, which is what unfolding looks like
+           from the front. */
+        if (gest && AW[k] > 0) {
+          const ak = AW[k];
+          if (ga) {
+            const b3 = ga * ak, cb3 = 1 - b3 * b3 * 0.5;
+            const gx = px - EL.x, gy2 = (py - EL.y) * AR;
+            px = EL.x + gx * cb3 - gy2 * b3;
+            py = EL.y + (gx * b3 + gy2 * cb3) / AR;
+          }
+          if (gs) px = EL.x + (px - EL.x) * (1 + gs * ak);
+          if (gl) py += gl * ak;
+        }
+
         /* AND THE HEM TRAILS. Cloth follows the body a beat late; a cape that
            moves with the hips is a painted cape. */
         if (CW[k] > 0) px += cx2 * CW[k];
@@ -2429,6 +2719,11 @@ function makeCore(id, opts) {
         const d = Math.abs(py - sweep);
         if (d < 0.085) a += (1 - d / 0.085) * 0.60 * lum;
       }
+      /* THE STEEL CATCHES IT. A gesture in a dark room is a shape you have to
+         look for; the same gesture with the light coming up off the armour as
+         it moves is the one thing on this canvas that is unmistakably a limb.
+         Rides `lum` so it lands on the plate and not on the cloth behind it. */
+      if (glit && AW && AW[k] > 0) a += AW[k] * glit * lum;
       if (a < 0.025) continue;                    /* below this nothing lands */
       let ai = (a * CL_A) | 0; if (ai > CL_A - 1) ai = CL_A - 1;
       let si = (Math.max(0, z) * 2.2) | 0; if (si > CL_S - 1) si = CL_S - 1;
@@ -2573,8 +2868,60 @@ function makeCore(id, opts) {
          supposed to be noticed — it is supposed to be missed when it stops. */
       const breath = Math.sin(t * 0.026) * 0.006;
 
+      /* --- HE GESTURES WHILE HE TALKS -------------------------------------
+         Fired on the rising edge of a syllable, the same edge that spawns a
+         ring at the mask, and then let go of: the beat runs half to a whole
+         second on its own clock while the voice does whatever it likes. Only
+         a third of the eligible syllables get one, because a man who gestures
+         on every word is not emphasising anything.
+
+         The envelope is fast out, slow back — 30% of the beat to reach the
+         extent and 70% to return — which is the shape of a hand thrown out on
+         a word and drawn back over the phrase after it. A symmetric envelope
+         reads as a pendulum. */
+      const onset = voice > 0.30 && gPrev <= 0.30;
+      gPrev = voice;
+      if (onset && talk > 0.25 && (t - gestT) > 30 && Math.random() < 0.34) {
+        gestT = t;
+        gestDur = 38 + Math.random() * 30;
+        gestAmp = 0.55 + Math.random() * 0.45;
+        gestSgn = Math.random() < 0.5 ? -1 : 1;
+      }
+      const gp = (t - gestT) / gestDur;
+      const beat = (gp < 0 || gp > 1) ? 0 : gestAmp * (gp < 0.30
+        ? 0.5 - 0.5 * Math.cos(gp / 0.30 * Math.PI)
+        : 0.5 + 0.5 * Math.cos((gp - 0.30) / 0.70 * Math.PI));
+
+      /* IDLE, HE IS NOT A STATUE EITHER. A slow settle at its own period, cut
+         to a fifth while he is speaking so the beats above own the movement.
+         Nothing on this canvas is ever allowed to be perfectly still. */
+      const armRoll   = beat * gestSgn * 0.105
+                      + Math.sin(t * 0.0021 + 0.4) * 0.016 * (1 - talk * 0.8);
+      /* Up is negative y. The lift carries most of the read: a forearm block
+         rising two per cent of his height is a hand coming up to make a
+         point, and it is the channel that survives being watched from across
+         the room. A touch of `voice` on top so the arms tighten on the
+         syllable itself rather than only on the beat. */
+      const armLift   = -(beat * 0.013 + voice * 0.004)
+                      + Math.sin(t * 0.0019 + 2.2) * 0.004;
+      /* And they open. Six per cent about the elbow, never inwards — crossed
+         arms can unfold and cannot fold further. */
+      const armSpread = beat * 0.026;
+      const armLit    = beat * 0.30;
+
+      /* THE GHOST. Three tenths a frame puts it about three frames behind,
+         which is nothing on a body that barely moves and is very visible on
+         the one part of him that snaps. Drawn later, additively, at a fifth
+         of the brightness: a projection whose fast-moving parts arrive late,
+         which is the difference between a figure that gestures and a
+         HOLOGRAM that gestures. */
+      armGhostR += (armRoll - armGhostR) * 0.30;
+      armGhostL += (armLift - armGhostL) * 0.30;
+      armGhostS += (armSpread - armGhostS) * 0.30;
+
       const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll,
-                      bodyRoll: bodyRoll, breath: breath, capeX: capeX };
+                      bodyRoll: bodyRoll, breath: breath, capeX: capeX,
+                      armRoll: armRoll, armLift: armLift, armSpread: armSpread };
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
@@ -2620,9 +2967,17 @@ function makeCore(id, opts) {
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
-      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95 }, BONES));
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95, armLit: armLit }, BONES));
       ctx.globalCompositeOperation = 'lighter';
       drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.26, grow: 2.4, bright: true }, BONES));
+      /* The arms, where they were three frames ago. Only while they are
+         actually moving — a ghost of a stationary arm is just a second arm in
+         the same place, drawn twice as bright. */
+      if (Math.abs(armRoll - armGhostR) > 0.004 || Math.abs(armLift - armGhostL) > 0.0012) {
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col,
+          Object.assign({ step: 2, gain: 0.50, grow: 1.0, armOnly: true }, BONES,
+            { armRoll: armGhostR, armLift: armGhostL, armSpread: armGhostS, armLit: 0 }));
+      }
 
       /* ── THE VOICE, AT HIS FACE ──────────────────────────────────────
          Everything else on this canvas already answers `energy`: the smoke,
@@ -2855,7 +3210,7 @@ function makeCore(id, opts) {
        Doom — and whichever is not on duty returns WITHOUT clearing. Clearing
        is what would make them fight: each would wipe the other's frame and you
        would get a flicker at 60fps rather than a picture. */
-    if (opts.doomOnly && !doomNow) { requestAnimationFrame(frame); return; }
+    if (opts.doomOnly && (!doomNow || el('coreLayer').classList.contains('characterReady'))) { requestAnimationFrame(frame); return; }
     ctx.clearRect(0, 0, W, H);
 
     const cx = W / 2, cy = H / 2;
@@ -3311,7 +3666,46 @@ function makeQuantum(id, opts){
    in front of all day is the one that had to come alive. */
 const arc = makeBurst('arc', { scale: 0.60 });
 /* The Doom figure he drew, still on the same canvas, still only in doom mode. */
-const doomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+let missionDoom = null, characterGeneration = 0, characterState = 'idle';
+let doomCharacter = 'rigged';
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+function syncDoomCharacter() {
+  const generation = ++characterGeneration;
+  const layer = el('coreLayer'), host = el('missionDoom');
+  if (missionDoom) { missionDoom.destroy(); missionDoom = null; }
+  layer.classList.remove('characterReady'); host.style.display = 'none';
+  el('doomCharacter').value = doomCharacter;
+  if (document.documentElement.dataset.mode !== 'doom' || doomCharacter === 'classic') return;
+  host.style.display = 'block';
+  el('characterStatus').textContent = 'Loading character…';
+  try {
+    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    missionDoom = actor;
+    actor.ready.then(() => {
+      if (generation !== characterGeneration) return;
+      actor.setState(characterState); layer.classList.add('characterReady');
+      el('missionDoomCredit').style.visibility = doomCharacter === 'rigged' ? 'visible' : 'hidden';
+      el('characterStatus').textContent = 'Character ready. Saved on this browser.';
+    }).catch(() => {
+      if (generation !== characterGeneration) return;
+      actor.destroy(); missionDoom = null; host.style.display = 'none';
+      el('characterStatus').textContent = '3D character unavailable. Showing the classic Doom visual.';
+    });
+  } catch (_) { host.style.display = 'none'; el('characterStatus').textContent = '3D unavailable. Showing the classic Doom visual.'; }
+}
+const doomCore = {
+  set(v) { classicDoomCore.set(v); if (missionDoom) missionDoom.setEnergy(v); },
+  say(v) { classicDoomCore.say(v); characterState = v > 0 ? 'speaking' : 'idle'; if (missionDoom) { missionDoom.setState(characterState); missionDoom.setEnergy(v); } },
+  resize() { classicDoomCore.resize(); }
+};
+el('characterMode').addEventListener('change', e => setMode(e.target.value, false));
+el('doomCharacter').addEventListener('change', e => {
+  doomCharacter = e.target.value;
+  try { localStorage.setItem('jarvisDoomCharacter', doomCharacter); } catch (_) {}
+  if (document.documentElement.dataset.mode !== 'doom') setMode('doom', false); else syncDoomCharacter();
+});
+window.addEventListener('pagehide', () => { ++characterGeneration; if (missionDoom) missionDoom.destroy(); });
 /* The gold sphere for the command centre, same canvas, only in quantum mode. */
 const quantumCore = makeQuantum('arc', { scale: 0.60 });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
@@ -4203,6 +4597,8 @@ function setMode(mode, announce){
   const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
   const doom = m==='doom', quantum = m==='quantum';
   document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  el('characterMode').value = m;
+  syncDoomCharacter();
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
   const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
   const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
@@ -4381,6 +4777,8 @@ async function relayReminders(){
 }
 /* The face follows the voice: this page speaks, so this page says so. */
 function face(state){
+  characterState = state === 'speaking' ? 'speaking' : state === 'listening' ? 'listening' : 'idle';
+  if (missionDoom) missionDoom.setState(characterState);
   if(!brainOn) return;
   try{ fetch(BRAIN+'/face',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})}).catch(()=>{}); }catch(_){}
 }
@@ -4911,6 +5309,10 @@ function showView(name){
   if(name==='outbox') loadBook(false).then(()=>{ try{ renderOutbox(); }catch(_){} });
   if(name==='calendar') { try{ renderDay(); }catch(_){} }
   if(name==='platform'){ loadPlatform(); requestAnimationFrame(fitStone); }
+  /* Not forced: the estate does not change between two clicks of the rail,
+     and a refetch on every visit would poll Firestore for free. The panel
+     header carries asOf; a reload of the page is the refresh. */
+  if(name==='logic'){ loadLogic(false); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
@@ -6648,6 +7050,279 @@ async function loadBook(force){
    PROPOSED backlog item — approving it is still a separate act, and the build
    loop still runs the reviewer before anything is pushed. */
 let platform=null, platPick=null;
+
+/* ══ OMEGA LOGIC ═══════════════════════════════════════════════════════════
+   Tracking and fulfilment, fed by /api/logic-summary — same origin, staff
+   token, one call. Everything it draws is arranged server-side in
+   api/_lib/logic.js so the view has no rules of its own to drift from.
+
+   THE ONE RULE HERE: null renders as a dash and never as a number. Four of
+   the six pipeline stages are not built, the endpoint returns null for every
+   field they would own, and an uncollected deposit drawn as "$0" is
+   indistinguishable from one that was genuinely zero. `dash` already exists
+   on this page for exactly that reason.
+
+   Built with createElement and textContent throughout. Customer names and
+   company names on these rows arrive from a PUBLIC storefront a stranger
+   filled in — the one input path on this dashboard that is not Thomas, the
+   twin, or an API we own. */
+const logicParams=new URLSearchParams(location.search);
+let logicData=null, logicPick=logicParams.get('order')||null, logicBusy=false;
+
+function lFmt(n){ return n==null?dash:Number(n).toLocaleString('en-US'); }
+function lMoney(n){ return n==null?dash:'$'+Number(n).toLocaleString('en-US'); }
+function lDay(iso){ const d=new Date(iso); return isNaN(d)?dash:d.toISOString().slice(0,10); }
+
+function lCell(host, cls, text){
+  const d=document.createElement('div'); if(cls) d.className=cls;
+  d.textContent=text==null?dash:String(text); host.appendChild(d); return d;
+}
+
+/* Ten benches across a narrow panel is about 30px each, so the routing's own
+   labels do not fit. Abbreviated HERE and not in api/_lib/plant.js: that file
+   is the tenant's routing and its labels are what the floor tablet prints on
+   a refusal. An unknown key falls through to the full label rather than being
+   blanked, so a tenant with a custom routing gets something readable. */
+const BENCH_SHORT={kit:'Kit',module:'Module',rack:'Rack',encl:'Encl',elec:'Elec',
+                   bms:'BMS',eol:'EOL',qa:'QA',pack:'Pack',ready:'Ready'};
+
+function lBench(host, col){
+  const b=document.createElement('div');
+  b.className='bench'+((col.count||0)?'':' empty');
+  b.title=(col.label||col.key)+' — '+(col.count||0)+' unit'+((col.count===1)?'':'s')
+        +((col.held||0)?', '+col.held+' held':'');
+  const bar=document.createElement('div'); bar.className='bar';
+  const held=col.held||0, free=Math.max(0,(col.count||0)-held);
+  /* Held is drawn on top and in the alarm colour, so a bench that is busy
+     and a bench that is JAMMED are not the same bar. */
+  if(held){ const h=document.createElement('div'); h.className='fill held';
+    h.style.height=Math.round(46*held/col._peak)+'px'; bar.appendChild(h); }
+  if(free){ const f=document.createElement('div'); f.className='fill';
+    f.style.height=Math.round(46*free/col._peak)+'px'; bar.appendChild(f); }
+  b.appendChild(bar);
+  lCell(b,'bn',col.count||0);
+  lCell(b,'bl',BENCH_SHORT[col.key]||col.label||col.key);
+  host.appendChild(b);
+}
+
+function lBenchRow(cols){
+  const peak=Math.max(1,...cols.map(c=>c.count||0));
+  const row=document.createElement('div'); row.className='benchRow';
+  cols.forEach(c=>{ c._peak=peak; lBench(row,c); });
+  return row;
+}
+
+async function loadLogic(force){
+  if(logicBusy) return;
+  if(logicData && !force){ renderLogic(); return; }
+  const host=el('logicOrders'); if(!host) return;
+  logicBusy=true;
+  const u=auth.currentUser;
+  if(!u){ host.textContent=''; lCell(host,'logicNote','Not signed in.'); logicBusy=false; return; }
+  try{
+    const tok=await u.getIdToken();
+    const org=logicParams.get('org')||'';
+    el('logicOfficeLink').href='/omega-logic'+(org?'?org='+encodeURIComponent(org):'');
+    const res=await fetch('/api/logic-summary?limit=60'+(org?'&org='+encodeURIComponent(org):''),{headers:{Authorization:'Bearer '+tok}});
+    if(res.status===403){
+      /* Worth naming precisely. This page signs in with whatever Google
+         account is to hand; /api/ accepts clearsky-usa.com and
+         csebuilders.com only (STAFF_DOMAINS in api/_lib/admin.js). A generic
+         "forbidden" here sends somebody looking for a bug in the endpoint. */
+      host.textContent='';
+      lCell(host,'logicNote','Signed in as '+(u.email||'?')+', which is not a ClearSky staff address. '
+        +'Omega Logic reads the whole estate, so /api/logic-summary accepts clearsky-usa.com and '
+        +'csebuilders.com only. Sign in with the work account.');
+      logicBusy=false; return;
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    logicData=await res.json();
+    logicBusy=false;
+    renderLogic();
+  }catch(e){
+    logicBusy=false;
+    host.textContent='';
+    lCell(host,'logicNote','Could not reach /api/logic-summary — '+(e&&e.message||'unknown error')
+      +'. Nothing is being reported rather than reported as empty.');
+  }
+}
+
+function renderLogic(){
+  const d=logicData; if(!d) return;
+
+  /* ── the pipeline rail ── */
+  const rail=el('logicStages');
+  if(rail){
+    rail.textContent='';
+    /* Three states. The caption is the state's own word rather than a
+       derived one, so a stage added to api/_lib/logic.js with a state this
+       view has never heard of is drawn dimmed and labelled with what it
+       actually said — not silently promoted to "live". */
+    const STATE_WORD={live:'live',partial:'partial',off:'not built'};
+    (d.stages||[]).forEach(s=>{
+      const box=document.createElement('div');
+      box.className='logicStage'+(s.state==='live'?'':(s.state==='partial'?' partial':' off'));
+      lCell(box,'sk',STATE_WORD[s.state]||s.state||'unknown');
+      lCell(box,'sv',s.label||s.key);
+      lCell(box,'sw',s.by||'');
+      box.title=(s.label||s.key)+' — '+(s.by||'');
+      rail.appendChild(box);
+    });
+  }
+
+  /* ── tiles ── */
+  const t=d.totals||{};
+  const tiles=el('logicTiles');
+  if(tiles){
+    tiles.textContent='';
+    const add=(label,value,alarm,small)=>{
+      const b=document.createElement('div'); b.className='lTile'+(alarm?' alarm':'');
+      lCell(b,'t',label);
+      lCell(b,'v'+(small?' sm':''),value);
+      tiles.appendChild(b);
+    };
+    add('Orders', lFmt(t.orders));
+    add('Units on the line', lFmt(t.units));
+    add('Held', lFmt(t.held), (t.held||0)>0);
+    /* null, not 0. Nothing in this codebase has collected a payment against
+       an order yet, and the tile says which stage owes the number. */
+    add('Recorded · shown orders', t.collected==null?'no payment records':lMoney(t.collected), false, t.collected==null);
+    if(t.unknownFloors) add('Floor unread', lFmt(t.unknownFloors), true);
+    add('Tenants', lFmt((d.tenants||[]).length));
+  }
+
+  /* ── the line ── */
+  const line=el('logicLine');
+  if(line){
+    line.textContent='';
+    line.appendChild(lBenchRow(d.stations||[]));
+    const n=el('logicLineN'); if(n) n.textContent=lFmt(t.units)+' UNITS';
+  }
+
+  /* ── holds ── */
+  const hh=el('logicHolds');
+  if(hh){
+    hh.textContent='';
+    const holds=d.holds||[];
+    if(!holds.length){
+      lCell(hh,'logicNote', (t.units||0)
+        ? 'Nothing held. Every unit on the line is moving.'
+        : 'No units on the line. Omega Logic releases accepted orders after a verified deposit, reserves eligible finished stock and sends shortages to the factory. Register actual serials in the factory workspace.');
+    } else holds.forEach(h=>{
+      const r=document.createElement('div'); r.className='oRow stuck';
+      lCell(r,'no',h.serial);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=h.hold||'on hold';
+      const s=document.createElement('small');
+      s.textContent=h.station+' · '+h.orderNo+(h.ncr?' · '+h.ncr:'');
+      w.appendChild(s); r.appendChild(w);
+      r.addEventListener('click',()=>{ logicPick=h.orderNo; renderLogic(); });
+      hh.appendChild(r);
+    });
+    const n=el('logicHeldN'); if(n) n.textContent=(holds.length||'')&&holds.length+' HELD';
+  }
+
+  /* ── orders ── */
+  const oh=el('logicOrders');
+  if(oh){
+    oh.textContent='';
+    const orders=d.orders||[];
+    if(!orders.length) lCell(oh,'logicNote','No orders yet. The storefront is live; nothing has come through it.');
+    orders.forEach(o=>{
+      const r=document.createElement('div');
+      r.className='oRow'+(o.orderNo===logicPick?' on':'')+((o.floor&&o.floor.board&&o.floor.board.held)?' stuck':'');
+      lCell(r,'no',o.orderNo);
+      const w=document.createElement('div'); w.className='wh';
+      w.textContent=(o.customer&&(o.customer.company||o.customer.name))||'—';
+      const s=document.createElement('small');
+      s.textContent=(o.orgName||o.orgId||'')+(o.system&&o.system.kwh?' · '+lFmt(o.system.kwh)+' kWh':'');
+      w.appendChild(s); r.appendChild(w);
+      const m=document.createElement('div'); m.className='ms';
+      const b=document.createElement('b'); b.textContent=(o.milestone&&o.milestone.label)||o.status;
+      m.appendChild(b);
+      /* The internal status next to the public word. They are allowed to
+         differ — 'in_fulfilment' is not a word any customer should read —
+         and seeing both is the point of a staff view. */
+      m.appendChild(document.createTextNode(o.status));
+      r.appendChild(m);
+      r.addEventListener('click',()=>{ logicPick=o.orderNo; renderLogic(); });
+      oh.appendChild(r);
+    });
+    const n=el('logicN');
+    if(n) n.textContent=lFmt(orders.length)+' ORDERS'+(d.asOf?' · '+clock(d.asOf):'');
+    const np=el('nLogic'); if(np) np.textContent=t.held?String(t.held):'';
+  }
+
+  renderLogicDetail();
+}
+
+function renderLogicDetail(){
+  const host=el('logicDetail'); if(!host) return;
+  host.textContent='';
+  const d=logicData||{};
+  const o=(d.orders||[]).filter(x=>x.orderNo===logicPick)[0]||(d.orders||[])[0];
+  const title=el('logicDetailTitle');
+  if(!o){ if(title) title.textContent='Order';
+    lCell(host,'logicNote','Nothing to show.'); return; }
+  if(title) title.textContent=o.orderNo;
+  const officeLink=document.createElement('a');
+  officeLink.href='/omega-logic?org='+encodeURIComponent(o.orgId)+'&order='+encodeURIComponent(o.id||'');
+  officeLink.textContent='OPEN THIS ORDER IN OMEGA LOGIC ↗'; host.appendChild(officeLink);
+
+  const g=document.createElement('div'); g.className='dlGrid';
+  const pair=(label,value,gap)=>{
+    const c=document.createElement('div');
+    lCell(c,'t',label);
+    lCell(c,'v'+(gap?' gap':''),value);
+    g.appendChild(c);
+  };
+  pair('Sold by', o.orgName||o.orgId);
+  pair('Customer', (o.customer&&(o.customer.company||o.customer.name))||dash);
+  pair('Contact', (o.customer&&o.customer.email)||dash);
+  pair('System', o.system&&o.system.kwh?lFmt(o.system.kw)+' kW / '+lFmt(o.system.kwh)+' kWh':dash);
+  pair('Placed', o.placedAt?lDay(o.placedAt):dash);
+  pair('Promised', o.promisedShipAt?lDay(o.promisedShipAt):dash);
+  pair('Public milestone', (o.milestone&&o.milestone.label)||dash);
+  pair('Internal status', o.status);
+  host.appendChild(g);
+
+  /* money — every unbuilt stage says so rather than showing a zero */
+  const m=o.money||{};
+  const g2=document.createElement('div'); g2.className='dlGrid';
+  const pair2=(label,value,gap)=>{
+    const c=document.createElement('div'); lCell(c,'t',label); lCell(c,'v'+(gap?' gap':''),value); g2.appendChild(c);
+  };
+  pair2('ClearSky price', lMoney(m.clearskyTotal));
+  pair2('Tenant price', lMoney(m.tenantTotal));
+  pair2('Our cost', lMoney(m.cost));
+  pair2('Deposit', m.depositPaidAt?(lMoney(m.depositAmount)+' · '+lDay(m.depositPaidAt)):'not recorded', !m.depositPaidAt);
+  pair2('Final payment', m.finalPaidAt?lDay(m.finalPaidAt):'not recorded', !m.finalPaidAt);
+  pair2('Shipment', o.shipment&&!o.shipment.pending
+    ? (o.shipment.carrier||'')+' '+(o.shipment.tracking||'') : 'not recorded', !(o.shipment&&!o.shipment.pending));
+  host.appendChild(g2);
+
+  /* the floor, for this order */
+  const f=o.floor||{};
+  const b=f.board||{columns:[],total:0};
+  if(!f.released){
+    lCell(host,'logicNote','Not released to the floor. In Omega Logic, release requires an accepted customer price and verified deposit. Open the order office to inspect its invoice and configuration.');
+  } else if(f.known===false){
+    lCell(host,'logicNote','The floor could not be read for this order. That is NOT the same as an empty floor, and the milestone above falls back to the order status rather than claiming progress.');
+  } else {
+    const head=document.createElement('div'); head.className='areaHead';
+    head.textContent=b.total+' UNITS'+(b.held?' · '+b.held+' HELD':'');
+    host.appendChild(head);
+    host.appendChild(lBenchRow(b.columns));
+    if(b.unstarted) lCell(host,'logicNote',b.unstarted+' not yet kitted.');
+    if(b.offRouting) lCell(host,'logicNote',b.offRouting+' at a station this order’s routing does not list — counted here so the columns do not claim the whole floor.');
+  }
+
+  if(m.legacyDepositFlag && !m.depositPaidAt){
+    lCell(host,'logicNote','This order carries the demo’s deposit:true flag. That is a button press, not a payment, and it is not counted as money anywhere on this page.');
+  }
+  if(o.cancelRequested) lCell(host,'logicNote','The customer has requested cancellation.');
+  if(m.error) lCell(host,'logicNote',m.error);
+}
 
 async function loadPlatform(){
   if(platform) return;
@@ -9067,7 +9742,7 @@ authMod.onAuthStateChanged(auth,u=>{
      first measurement has to happen after sign-in, not at load. */
   requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
-  if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
+  if(u){ try{ showView(logicParams.get('view')==='logic'?'logic':(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
          load(); loadThread(); setInterval(load,30000); }
 });
 

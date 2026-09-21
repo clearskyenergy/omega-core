@@ -1,0 +1,103 @@
+[
+  {
+    "sku": "CC-C215",
+    "name": "215 kWh outdoor cabinet",
+    "blurb": "Single outdoor-rated cabinet with integrated PCS and thermal management. Pad or pier mount.",
+    "kw": 100,
+    "kwh": 215,
+    "chemistry": "LFP",
+    "warrantyYears": 10,
+    "leadTimeDays": 120,
+    "priceMode": "quote",
+    "widthFt": 4.5,
+    "depthFt": 3.5,
+    "usableKwh": 200,
+    "durationH": 2.15,
+    "inverterKva": 100,
+    "dcv": "1331V",
+    "inverter": "Integrated PCS",
+    "disconnect": "400A 480V",
+    "notes": "PLACEHOLDER SPEC — a capacity slot on the standard C&I ladder. Replace every number with Clean Cell's own submittal before a customer sees this.",
+    "integrates": {
+      "pcs": true,
+      "xfmr": false,
+      "disco": true
+    }
+  },
+  {
+    "sku": "CC-C418",
+    "name": "418 kWh outdoor cabinet",
+    "blurb": "Two-bay outdoor cabinet. Same footprint family as the 215 so a site can be phased.",
+    "kw": 200,
+    "kwh": 418,
+    "chemistry": "LFP",
+    "warrantyYears": 10,
+    "leadTimeDays": 140,
+    "priceMode": "quote",
+    "widthFt": 7.5,
+    "depthFt": 4.5,
+    "usableKwh": 390,
+    "durationH": 2.09,
+    "inverterKva": 200,
+    "dcv": "1331V",
+    "inverter": "Integrated PCS",
+    "disconnect": "600A 480V",
+    "notes": "PLACEHOLDER SPEC — replace with Clean Cell's own submittal.",
+    "integrates": {
+      "pcs": true,
+      "xfmr": false,
+      "disco": true
+    }
+  },
+  {
+    "sku": "CC-S1250",
+    "name": "1.25 MWh skid",
+    "blurb": "Skid-mounted stack for a single large service. Craned into place on a prepared pad.",
+    "kw": 500,
+    "kwh": 1250,
+    "chemistry": "LFP",
+    "warrantyYears": 10,
+    "leadTimeDays": 180,
+    "priceMode": "quote",
+    "widthFt": 20,
+    "depthFt": 8,
+    "usableKwh": 1180,
+    "durationH": 2.5,
+    "inverterKva": 500,
+    "dcv": "1331V",
+    "inverter": "Integrated PCS",
+    "disconnect": "800A 480V",
+    "notes": "PLACEHOLDER SPEC — replace with Clean Cell's own submittal.",
+    "integrates": {
+      "pcs": true,
+      "xfmr": false,
+      "disco": true
+    }
+  },
+  {
+    "sku": "CC-K5000",
+    "name": "5 MWh 20 ft container",
+    "blurb": "Liquid-cooled 20 ft ISO container with integrated PCS, transformer, fire suppression and EMS.",
+    "kw": 2500,
+    "kwh": 5000,
+    "chemistry": "LFP",
+    "warrantyYears": 10,
+    "leadTimeDays": 240,
+    "priceMode": "quote",
+    "widthFt": 19.88,
+    "depthFt": 8,
+    "usableKwh": 4750,
+    "durationH": 2,
+    "inverterKva": 2500,
+    "dcv": "1500V",
+    "inverter": "Integrated PCS",
+    "transformer": "3000KVA 480/13800V",
+    "disconnect": "3000A 480V",
+    "notes": "PLACEHOLDER SPEC — dimUnits is mm because container datasheets print mm. Replace with Clean Cell's own submittal.",
+    "integrates": {
+      "pcs": true,
+      "xfmr": true,
+      "disco": true
+    }
+  }
+]

@@ -117,7 +117,17 @@ function openFinancingApply(){
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
 </script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-editor-gate.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<!-- Which PRODUCT of the editor this tenant bought. Loads directly after
+     omega-whitelabel.js because it reads the tenant record that hydrate()
+     puts on CLEARSKY_CONFIG. Fails OPEN: no record, unknown mode, or a read
+     that threw all resolve to the full platform. -->
+<script src="/omega-editor-mode.js"></script>
 <script src="/omega-caps.js"></script>
+<script src="/omega-bess-products.js"></script>
+<script src="/omega-storefront-handoff.js"></script>
 <script src="omega-equipment-visuals.js"></script>
 <!-- Spreadsheet in, records out, with a preview before anything is written.
      The equipment library uses it to bulk-load modular data-center units
@@ -4005,7 +4015,7 @@ if(document.readyState==='loading'){
   <span class="s">|</span>
   <span id="nn-lock-ind" onclick="nnToggleMapLock()" style="cursor:pointer;user-select:none" title="Click to lock/unlock the map">🔓 Map unlocked</span>
   <div style="flex:1"></div>
-  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)">ClearSky OMEGA v4.24</span>
+  <span id="tb-footer-ver" style="color:rgba(255,255,255,.2)"><span data-omega-platform>ClearSky OMEGA</span> v4.24</span>
 </div>
 
 <!-- BESS Config Modal -->
@@ -4474,6 +4484,9 @@ function _projOrgId() {
 }
 
 function _initFirebase() {
+  // Customer Editor Lite owns authentication and persistence in its parent.
+  // Never initialize platform Firestore/Auth in this drawing-only iframe.
+  if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
   try {
     if (typeof firebase === 'undefined') {
       // Firebase SDK unavailable (offline or blocked) -- running in local/offline mode
@@ -6517,9 +6530,37 @@ function brandName(){
   return 'Your Company';
 }
 function brandLogo(){ return _BRAND.logoDataUrl || ''; }
-// Platform attribution shown on exports. Constant across tenants (like
-// "Powered by Salesforce"); never the NextNRG-specific string.
-function poweredByLine(){ return 'Powered by ClearSky-OMEGA'; }
+/* Platform attribution shown on exports. Was a constant across tenants (like
+   "Powered by Salesforce"); never the NextNRG-specific string.
+
+   ── STILL A CONSTANT, EXCEPT FOR A WHITE-LABELLED TENANT ────────────────
+   A white label is bought precisely so the proposal a designer hands their
+   customer does not carry our name. This is the line on twelve exports — the
+   proposal, the energy balance, the DER summary, the site estimate — so it is
+   the single highest-value place in this file to honour it.
+
+   THREE SOURCES, MOST AUTHORITATIVE FIRST, ALL OPTIONAL. Today the editor
+   loads neither omega-brand.js nor omega-tenant.js (it has its own brand
+   resolution, above), so in production this still returns the constant and
+   nothing changes. It starts working the moment the runtime is wired in —
+   which is the tracked next step in MERGE.md, deliberately NOT bundled here:
+   omega-tenant.js enforces a hostname lock and adding it to a 162k-line page
+   needs its own test pass, not a ride-along on someone else's change.
+
+   'none' returns '' and the callers already tolerate an empty attribution —
+   the line is user-editable as 'ol-developer2', so a blank one is a state
+   this file has always been able to reach. */
+function poweredByLine(){
+  try {
+    if (window.OmegaWhiteLabel && OmegaWhiteLabel.active()) return OmegaWhiteLabel.attribution();
+    var wl = (window.OMEGA_WORKSPACE && window.OMEGA_WORKSPACE.whiteLabel)
+          || ((window.CLEARSKY_CONFIG || {}).tenant || {}).whiteLabel;
+    if (wl && wl.enabled !== false && wl.platformName) {
+      return (wl.attribution === 'none') ? '' : (wl.attributionText || 'Powered by ClearSky OMEGA');
+    }
+  } catch (e) {}
+  return 'Powered by ClearSky-OMEGA';
+}
 // EMS/product label for exports -- follows the resolved tenant brand so a
 // tenant's proposal doesn't advertise another tenant's EMS.
 function emsBrandName(){ return brandName() + ' EMS'; }
@@ -21277,6 +21318,116 @@ const BESS_CATALOG = {
     dims:'20-ft container',certs:'NFPA855, NFPA69, NFPA72, NFPA70E (opt. NFPA68), UL9540/UL9540A',
     notes:'Canadian Solar / e-STORAGE SolBank 3.0 (S-5016-2H / S-5016-4H), 20-ft containerized DC block: 5,016 kWh nominal, up to 2.35 MW at the DC terminal (1.2-2.35 MW depending on paired PCS). 314Ah LFP, ~45% higher density than SolBank 1.0. DC-COUPLED -- needs an external/central PCS + step-up transformer (unlike the all-in-one Energy Station / PowerBlock). Mid-size building block between the KuBank C&I cabinets and the 14 MWh Energy Station; parallels to utility scale. PRICE: quote required. CSI Solar / e-STORAGE. Datasheet SolBank 3.0 v1.6x NA.'},
 };
+
+/* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────
+   BESS_CATALOG above ships 29 products from 7 manufacturers, and the
+   manufacturer field below defaults to "Gotion". Correct for a developer or
+   an EPC, who buys from whoever quotes best — and the worst possible default
+   for a white-labelled battery MANUFACTURER, whose own guided build would
+   otherwise lay out a competitor's container.
+
+   omega-bess-products.js reads the org's own product list (the same one the
+   public storefront and the site study use — one catalogue, not four) and
+   this merges it in. Three things happen, all additive and all no-ops for a
+   tenant with no list:
+
+     1. The entries join BESS_CATALOG, namespaced by org so a tenant SKU can
+        never collide with or silently replace a shipped one. Nothing shipped
+        is removed: a saved drawing may reference a key, and re-rendering it
+        as a different battery is worse than a crowded dropdown.
+     2. Their products are PREPENDED to the model dropdown, in their own
+        optgroup, so theirs is what a designer reaches first.
+     3. The manufacturer field stops saying Gotion.
+
+   Deferred until a user exists, because the read is scoped to their org.
+   Wrapped so a failure — no Firestore, no products, an offline editor —
+   leaves the shipped catalogue exactly as it was. */
+/* Exposed for omega-storefront-handoff.js, the same way window.S is exposed
+   above: BESS_CATALOG is a const in this script's scope, so it is not on
+   window by default, and an anonymous visitor arriving from the storefront
+   has no account to read the tenant catalogue with. */
+try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
+
+(function () {
+  var done = false;
+  function apply(t) {
+    if (done || !t || !t.count) return;
+    done = true;
+    try {
+      for (var i = 0; i < t.keys.length; i++) {
+        var k = t.keys[i];
+        if (!BESS_CATALOG[k]) BESS_CATALOG[k] = t.entries[k];
+      }
+      var sel = document.getElementById('bm-catalog');
+      if (sel && !document.getElementById('bm-cat-tenant')) {
+        var grp = document.createElement('optgroup');
+        grp.id = 'bm-cat-tenant';
+        grp.label = t.brand + ' — your products';
+        for (var j = 0; j < t.keys.length; j++) {
+          var key = t.keys[j], e = t.entries[key];
+          var o = document.createElement('option');
+          o.value = key;
+          o.textContent = e.model + ' — ' + (e.kw || '?') + 'kW / ' + (e.kwh || '?') + 'kWh'
+            + (e._incPCS ? ' · PCS integrated' : '');
+          grp.appendChild(o);
+        }
+        /* After the placeholder option, before every shipped optgroup. */
+        var first = sel.querySelector('optgroup');
+        if (first) sel.insertBefore(grp, first); else sel.appendChild(grp);
+      }
+      var mfr = document.getElementById('bm-mfr');
+      if (mfr && (!mfr.value || mfr.value === 'Gotion')) { mfr.value = t.brand; mfr.placeholder = t.brand; }
+    } catch (e) { /* the shipped catalogue is a perfectly good answer */ }
+  }
+  /* ── THE WHITE LABEL, ON THE SAME TRIGGER ─────────────────────────────
+     Both answers come from the tenant's own org record and both need a
+     signed-in user, so they ride the same wait rather than racing two.
+
+     OmegaWhiteLabel.hydrate() reads omega_orgs/{org} directly — editor.html
+     loads no omega-tenant.js, and adding it would bring the hostname lock to
+     a page that currently boots anywhere. That is a real control and a
+     separate, separately-tested change; this adds branding and removes
+     nothing. See omega-whitelabel.js § HYDRATE. */
+  function brand() {
+    if (!window.OmegaWhiteLabel || !OmegaWhiteLabel.hydrate) return;
+    try {
+      OmegaWhiteLabel.hydrate().then(function () {
+        /* The <title> is the one string the tenant runtime cannot reach on
+           its own, because paintTitle() is never called here — the editor
+           sets its own title. A tab reading "ClearSky OMEGA" is the leak a
+           customer screenshots. */
+        try {
+          if (OmegaWhiteLabel.active()) {
+            document.title = OmegaWhiteLabel.platformName() + ' — Site Designer';
+          }
+        } catch (e) {}
+        /* WHICH PRODUCT. hydrate() has just put editorMode on the tenant, so
+           this is the first moment the answer exists. boot() is a no-op on
+           'full', which is every tenant that has not explicitly bought the
+           cut-down designer — including every tenant with no omega_orgs
+           record at all. See omega-editor-mode.js § FAILS OPEN. */
+        try {
+          if (window.OmegaEditorMode) OmegaEditorMode.boot();
+        } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  }
+
+  function go() {
+    brand();
+    if (!window.OmegaBessProducts) return;
+    try { OmegaBessProducts.load().then(apply, function () {}); } catch (e) {}
+  }
+  function watch(tries) {
+    if (done || (tries || 0) > 40) return;
+    var u = null;
+    try { u = window.firebase && firebase.apps && firebase.apps.length && firebase.auth().currentUser; } catch (e) {}
+    if (u) { go(); return; }
+    setTimeout(function () { watch((tries || 0) + 1); }, 400);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { watch(0); });
+  else watch(0);
+})();
 
 function applyBMCatalog() {
   const key = document.getElementById('bm-catalog').value;
@@ -38290,7 +38441,7 @@ function exportSpecSheet() {
 <body>
 <div class="header">
   <div class="header-left">
-    <div class="badge">${(typeof brandName==='function'?brandName():'ClearSky OMEGA').toUpperCase()} -- SYSTEM SPECIFICATION</div>
+    <div class="badge">${(typeof brandName==='function'?brandName():(window.OmegaWhiteLabel?OmegaWhiteLabel.platformName():'ClearSky OMEGA')).toUpperCase()} -- SYSTEM SPECIFICATION</div>
     <h1>${projectName}</h1>
     <p>${address}</p>
   </div>
@@ -175045,6 +175196,7 @@ if (root.console && console.info) {
   }
 
   function gate(){
+    if (new URLSearchParams(location.search).get('customerEngine') === '1') return;
     if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length ||
         typeof OmegaCaps === 'undefined') { setTimeout(gate, 200); return; }
     firebase.auth().onAuthStateChanged(function (u) {

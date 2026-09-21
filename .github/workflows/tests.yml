@@ -44,6 +44,15 @@ jobs:
           node scripts/test-bess-sizer.js
           node scripts/test-site-intel.js
 
+      - name: published fiber geometry, screening and auth contracts
+        run: npm run test:fiber
+
+      - name: OEM accounting, fulfillment and plant safety contracts
+        run: |
+          npm run test:logic
+          npm run test:plant
+          npm run test:portal
+
       # extract.js regenerates sweep/geo/pv/fence/rfq from editor.html, so the
       # tests always run against what is actually in the file rather than a
       # copy that has drifted.

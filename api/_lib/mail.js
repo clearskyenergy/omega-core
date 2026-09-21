@@ -84,6 +84,30 @@ function layout(title, bodyHtml) {
     + '<div style="margin-top:28px;padding-top:16px;border-top:1px solid #22354F;font-size:12px;color:#8BA3C4">ClearSky Energy Solutions · Clinton, Iowa · <a href="mailto:support@csebuilders.com" style="color:#00A9A4">support@csebuilders.com</a></div>'
     + '</div></div>';
 }
+/* ── THE SAME CARD WITH NONE OF OUR MARKS ─────────────────────────────────
+   layout() above prints CLEARSKY-OMEGA in the eyebrow and our address in the
+   footer. Correct for product mail; a disclosure for a white label's customer.
+
+   This takes the brand as an argument instead of knowing one. No eyebrow when
+   the tenant gives no name, a footer built from THEIR support address, and our
+   name appears only if `attribution` is passed — which is the contract term,
+   not a default. See omega-whitelabel.js for the same rule on screen. */
+function wlLayout(brand, title, bodyHtml) {
+  brand = brand || {};
+  var accent = /^#[0-9a-f]{3,8}$/i.test(String(brand.accent || '')) ? brand.accent : '#2B5FA8';
+  var eyebrow = brand.name
+    ? '<div style="font-size:11px;letter-spacing:.22em;color:' + esc(accent) + ';font-weight:700;margin-bottom:12px">'
+      + esc(String(brand.name).toUpperCase()) + '</div>' : '';
+  var foot = [brand.name, brand.supportEmail].filter(Boolean).map(esc).join(' · ');
+  if (brand.attribution) foot += (foot ? ' · ' : '') + esc(brand.attribution);
+  return '<div style="background:#F5F4F0;padding:32px 16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">'
+    + '<div style="max-width:560px;margin:0 auto;background:#FFFFFF;border:1px solid rgba(20,23,26,0.16);border-radius:14px;padding:32px;color:#14171A">'
+    + eyebrow
+    + '<div style="font-size:22px;font-weight:700;margin-bottom:12px">' + esc(title) + '</div>'
+    + '<div style="font-size:15px;line-height:1.6;color:#3A4450">' + bodyHtml + '</div>'
+    + (foot ? '<div style="margin-top:28px;padding-top:16px;border-top:1px solid rgba(20,23,26,0.16);font-size:12px;color:#5B6672">' + foot + '</div>' : '')
+    + '</div></div>';
+}
 function button(href, label) {
   return '<p style="margin:24px 0"><a href="' + esc(href) + '" style="display:inline-block;background:linear-gradient(135deg,#006F9A,#00A9A4);color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:10px">' + esc(label) + '</a></p>';
 }
@@ -93,7 +117,23 @@ function send(to, subject, html, text, opts) {
   var got = tx(opts.profile);
   if (!got) { console.warn('[mail] no mailbox configured; skipped:', subject, '->', to); return Promise.resolve({ skipped: true }); }
   if (got.c.fellBack) console.warn('[mail] profile', got.c.fellBack, 'not configured; sending as', got.c.user);
-  var from = got.c.from || ('ClearSky-OMEGA <' + got.c.user + '>');
+  /* ── opts.from: A WHITE-LABELLED SENDER ─────────────────────────────────
+     A white-labelled tenant's customer must not receive mail whose From line
+     reads support@csebuilders.com — that single header undoes everything the
+     white label is bought to do. So an explicit From may be passed.
+
+     ⚠ READ THE GMAIL RULE ABOVE BEFORE USING IT. Gmail will not send as an
+     address the authenticated mailbox does not own: an unverified From is
+     refused outright or rewritten back to the mailbox. Passing opts.from
+     therefore only works once that address has been added under Gmail →
+     Settings → Accounts → "Send mail as" and confirmed, or the tenant's own
+     SMTP has been wired up. It is NOT a way to spoof a sender; it is a way to
+     USE one we have already been granted.
+
+     Which is why the one caller that uses it (api/embed-order.js) requires
+     the operator to set mailFrom AND flip emailCustomer on. An unconfigured
+     tenant sends no customer mail at all, which reveals nothing. */
+  var from = opts.from || got.c.from || ('ClearSky-OMEGA <' + got.c.user + '>');
   var msg = { from: from, to: to, subject: subject, html: html,
     text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() };
   if (opts.replyTo) msg.replyTo = opts.replyTo;
@@ -167,5 +207,5 @@ var T = {
 };
 function row(k, v) { return '<tr><td style="padding:4px 12px 4px 0;color:#8BA3C4;white-space:nowrap;vertical-align:top">' + esc(k) + '</td><td style="padding:4px 0">' + esc(v) + '</td></tr>'; }
 
-module.exports = { send: send, templates: T, layout: layout, button: button, esc: esc, row: row,
+module.exports = { send: send, templates: T, layout: layout, wlLayout: wlLayout, button: button, esc: esc, row: row,
   configured: function (p) { return !!tx(p); } };

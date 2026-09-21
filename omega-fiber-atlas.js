@@ -16,9 +16,10 @@
       L.DomEvent.disableClickPropagation(el);L.DomEvent.disableScrollPropagation(el);
       return el;
     };
-    control.addTo(map);
-    var el=control.getContainer(),resultEl=el.querySelector('.of-result'),button=el.querySelector('.of-screen'),exportButton=el.querySelector('.of-export');
-    map.on('click',function(e){last=e.latlng;button.textContent='Check selected site';});
+    var el;
+    if(host.element){el=control.onAdd();host.element.appendChild(el);}else{control.addTo(map);el=control.getContainer();}
+    var resultEl=el.querySelector('.of-result'),button=el.querySelector('.of-screen'),exportButton=el.querySelector('.of-export');
+    map.on('click',function(e){last=e.latlng;requestId++;button.textContent='Check selected site';exportButton.disabled=true;resultEl.textContent='Site changed. Run a new fiber check.';});
     function popup(feature){
       var p=feature.properties,s=p.fiber_strands_reported;
       return '<b>'+text(p.name)+'</b><br>'+text(p.operator)+'<br>'+text(p.feature_kind.replace(/_/g,' '))+'<br>'+text(p.operational_status)+
@@ -40,6 +41,7 @@
     }
     json(base+'manifest.json').then(function(m){
       manifest=m;el.querySelector('.of-counts').textContent='Snapshot: '+m.built_at.slice(0,10)+' · availability and capacity unconfirmed';
+      if(host.nativeLayers){el.querySelector('.of-layers').textContent='Map layers are controlled in Settings. Site checks use the full detailed inventory regardless of visible filters.';return;}
       /* OMEGA CHANGE: default OFF, configurable. Upstream shipped these two
          ON, which cost every Grid Atlas visitor ~5.8 MB of GeoJSON and ~6,200
          features before touching anything — against a page whose own
@@ -53,9 +55,19 @@
       if(u && u.count)addLayer('Telecom routes · medium unknown',u.file,false);
     }).catch(function(){el.querySelector('.of-counts').textContent='Data unavailable — no site conclusion can be drawn.';});
     function token(){
-      var user=w.firebase && w.firebase.auth && w.firebase.auth().currentUser;
-      if(!user) return Promise.reject(new Error('Sign in to Omega to check a site.'));
-      return user.getIdToken();
+      // Restore the existing same-origin Omega session. API auth, tenant and
+      // billing checks remain authoritative; public route display needs no login.
+      return new Promise(function(resolve,reject){
+        try{
+          if(!w.firebase||!w.firebase.auth)throw Error('Sign in to Omega to check a site.');
+          if(!w.firebase.apps.length)w.firebase.initializeApp((w.CLEARSKY_CONFIG||{}).firebase);
+          var auth=w.firebase.auth();
+          if(auth.currentUser){resolve(auth.currentUser.getIdToken());return;}
+          var unsubscribe=auth.onAuthStateChanged(function(user){
+            unsubscribe();if(user)resolve(user.getIdToken());else reject(Error('Sign in to Omega on this host, then check the site.'));
+          },reject);
+        }catch(e){reject(e);}
+      });
     }
     button.onclick=function(){
       var ll=last||map.getCenter(),capacity=el.querySelector('.of-cap').value,id=++requestId;
@@ -69,7 +81,8 @@
         if(id!==requestId)return;
         var h='<div style="border-top:1px solid #344458;padding-top:9px"><b>Serviceability: unconfirmed</b><br>Available capacity: unknown<br>'+text(data.query.lat.toFixed(5))+', '+text(data.query.lon.toFixed(5))+'</div>';
         h+='<p>'+data.counts_in_radius.routes+' mapped fiber route record(s) within 25 km. '+data.counts_in_radius.facilities+' telecom facility record(s).</p>';
-        data.routes.slice(0,3).forEach(function(r){h+='<div style="margin:6px 0"><b>'+text(r.operator||r.name)+'</b><br>'+(r.mapped_distance_m/1000).toFixed(2)+' km to published route geometry<br><a style="color:#6ee7d0" href="'+text(r.source_url)+'" target="_blank" rel="noopener">Source ↗</a></div>';});
+        data.routes.slice(0,5).forEach(function(r){h+='<div style="margin:6px 0"><b>'+text(r.operator||r.name)+'</b><br>'+(r.mapped_distance_m/1000).toFixed(2)+' km to published route geometry<br>Status: '+text(r.operational_status)+'<br><a style="color:#6ee7d0" href="'+text(r.source_url)+'" target="_blank" rel="noopener">Source ↗</a></div>';});
+        if(data.counts_in_radius.planning)h+='<p>'+data.counts_in_radius.planning+' planned/inactive record(s), excluded from existing-route evidence.</p>';
         if(!data.routes.length)h+='<p>No mapped fiber route in these sources within the radius. Fiber may still be present.</p>';
         h+='<p style="color:#f3c47c">Confirm bandwidth, splice access, a constructible lateral and physically diverse paths with the carrier.</p>';
         resultEl.innerHTML=h;exportButton.disabled=false;

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clean Cell Power Platform</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     shells/cleancell/index.html — the designer subscriber's front door
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     THREE TILES, NOT FORTY-ONE. A Clean Cell designer subscriber bought Site
+     Map and Grid Atlas plus their projects; this is what that looks like.
+
+     THIS PAGE IS NOT THE LOCK. billing/current.toolAccess is, and every api/
+     endpoint checks it independently — CLAUDE.md is explicit that a hidden
+     link is not a gate and a function that refuses is. Removing a tile here
+     would not grant anything; adding one would not either.
+
+     It is a THIN WRAPPER: the same omega-*.js runtime every other page loads,
+     in the same order, with a different layout. Never a fork of the root
+     index — that is the rule shells/oem/README.md already states.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{
+    --ink:#0E1B24; --paper:#FDFEFE; --panel:#FFFFFF; --line:#D6EFF4;
+    --sub:#55707C; --accent:#19C2D4; --accent-ink:#0E7C8B; --wash:#F4FCFD;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink); min-height:100vh;
+    font:400 16px/1.5 'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Verdana,sans-serif;
+  }
+  .top{
+    display:flex; align-items:center; gap:14px;
+    padding:18px 28px; border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  .top img{height:30px;width:auto;display:block}
+  .top .name{font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .top .spacer{flex:1}
+  .top .who{font-size:14px;color:var(--sub)}
+  .top button{
+    font:600 14px/1 inherit; color:var(--sub); background:transparent;
+    border:1px solid var(--line); border-radius:9px; padding:9px 13px; cursor:pointer;
+  }
+  .top button:hover{border-color:var(--accent); color:var(--accent-ink)}
+  main{max-width:1100px; margin:0 auto; padding:44px 28px 80px}
+  h1{font-size:34px; font-weight:700; letter-spacing:-.02em; margin:0 0 6px}
+  .lede{font-size:17px; color:var(--sub); margin:0 0 34px; max-width:60ch}
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px}
+  .tile{
+    display:flex; flex-direction:column; gap:10px; text-align:left;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:26px; cursor:pointer; font:inherit; color:inherit;
+    transition:border-color .15s, transform .15s;
+  }
+  .tile:hover{border-color:var(--accent); transform:translateY(-2px)}
+  .tile:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .tile .ic{
+    width:42px;height:42px;border-radius:11px;background:var(--wash);
+    display:flex;align-items:center;justify-content:center;color:var(--accent-ink);
+  }
+  .tile h2{font-size:20px;font-weight:700;margin:4px 0 0}
+  .tile p{font-size:15px;color:var(--sub);margin:0;line-height:1.45}
+  .note{margin-top:34px;font-size:14px;color:var(--sub)}
+  .att{margin-top:10px;font-size:13px;color:var(--sub)}
+  #gate{display:none;padding:44px 28px;max-width:60ch;margin:0 auto}
+  #gate h1{font-size:26px}
+  @media (max-width:640px){ main{padding:28px 18px 60px} h1{font-size:27px} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <img id="mark" alt="" hidden>
+  <span class="name" id="brand">Clean Cell Power Platform</span>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button type="button" id="out">Sign out</button>
+</header>
+
+<main id="app">
+  <h1 id="hello">Design a battery system</h1>
+  <p class="lede">Lay out a site, check the interconnection, and pick up any project you have already started.</p>
+
+  <div class="tiles">
+    <button type="button" class="tile" data-tool="editor">
+      <span class="ic" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M2 7h20v14H2zM16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+        </svg>
+      </span>
+      <h2>Site Map</h2>
+      <p>Guided build, equipment on live satellite, plot plan, one-line and proposal.</p>
+    </button>
+
+    <button type="button" class="tile" data-tool="gridatlas">
+      <span class="ic" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/>
+        </svg>
+      </span>
+      <h2>Grid Atlas</h2>
+      <p>Substations, lines and grid proximity for the site you are looking at.</p>
+    </button>
+
+    <button type="button" class="tile" data-tool="projects">
+      <span class="ic" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+      </span>
+      <h2>Projects</h2>
+      <p>Everything your team has saved, with its status and its documents.</p>
+    </button>
+  </div>
+
+  <p class="note" id="note"></p>
+  <p class="att" id="att"></p>
+</main>
+
+<section id="gate">
+  <h1 id="gate-h">Signing you in…</h1>
+  <p id="gate-p" class="lede"></p>
+</section>
+
+<!-- The same runtime, in the same order, as every other signed-in page.
+     omega-tenant.js loads directly after omega-brand.js — CLAUDE.md's rule
+     for any page that signs users in, and this one does. -->
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-sso.js"></script>
+<script>
+/* ES5 on purpose — CLAUDE.md: the shared runtime and the tool pages run in
+   every embedded browser a field rep might have. */
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+
+  /* WHERE EACH TILE GOES. Kept here rather than inlined on the buttons so the
+     three destinations are one list somebody can read. `editor` opens the
+     same editor.html everybody uses; editorMode cuts it down, not this. */
+  var DEST = {
+    editor:    '/editor.html',
+    gridatlas: '/grid-atlas.html',
+    projects:  '/projects.html'
+  };
+
+  function paint() {
+    try {
+      var WL = window.OmegaWhiteLabel;
+      if (WL && WL.active && WL.active()) {
+        $('brand').textContent = WL.platformName();
+        document.title = WL.platformName();
+        var m = WL.markUrl && WL.markUrl();
+        if (m) { $('mark').src = m; $('mark').hidden = false; }
+        /* Attribution is a contract term, not a default — omega-whitelabel.js
+           decides, this only renders what it decided. */
+        if (WL.attribution && WL.attribution() === 'powered-by') {
+          var t = (WL.block && WL.block() && WL.block().attributionText) || '';
+          if (t) $('att').textContent = t;
+        }
+      }
+    } catch (e) {}
+  }
+
+  function go(tool) {
+    var href = DEST[tool];
+    if (!href) return;
+    window.location.href = href;
+  }
+
+  var tiles = document.querySelectorAll('.tile');
+  for (var i = 0; i < tiles.length; i++) {
+    (function (b) {
+      b.addEventListener('click', function () { go(b.getAttribute('data-tool')); });
+    })(tiles[i]);
+  }
+
+  $('out').addEventListener('click', function () {
+    try { firebase.auth().signOut(); } catch (e) {}
+  });
+
+  try {
+    firebase.auth().onAuthStateChanged(function (u) {
+      if (u && u.email) $('who').textContent = u.email;
+      paint();
+    });
+  } catch (e) { paint(); }
+
+  paint();
+})();
+</script>
+</body>
+</html>

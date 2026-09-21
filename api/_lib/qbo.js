@@ -1,19 +1,12 @@
 /* api/_lib/qbo.js — QuickBooks Online plumbing shared by the endpoints.
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   ── PULL, NOT PUSH ──
-   QuickBooks is the system of record. ClearSky already raises invoices and
-   holds customer information there, so OMEGA reads status and never writes.
-   That is a security decision before it is an architectural one: what OMEGA
-   never stores, OMEGA cannot leak. No names, no addresses, no contact
-   details — an invoice id, an amount, a status, a date, and a link back to
-   QuickBooks for anything more.
-
-   ⚠ INTUIT HAS NO READ-ONLY SCOPE. com.intuit.quickbooks.accounting is
-   read/write and there is no narrower one to ask for. The protection is that
-   nothing in this codebase calls a mutating endpoint — a discipline held
-   here, not a guarantee from Intuit. Any future write path should be an
-   argument, not a patch.
+   The original read-only policy was superseded by the owner's explicit
+   QuickBooks invoice/payment-link workflow on 2026-09-20. Authorized
+   customer + installment invoice writes live in qbo-sales.js. The accounting
+   OAuth scope is read/write; the API authorization and immutable per-order
+   commercial snapshot constrain its use. This module owns credentials,
+   refresh serialization and queries only. No bank transfer API is called.
 
    ── WHERE TOKENS LIVE ──
    integrations/quickbooks, written only by the Admin SDK, which bypasses
@@ -68,6 +61,7 @@ function form(obj) {
 function tokenCall(body) {
   return fetch(TOKEN_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       'Authorization': basicAuth(),
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -112,20 +106,31 @@ function save(tok, realmId, extra) {
    Sixty seconds of slack, because a token that expires mid-request fails in a
    way that looks like a permissions problem. */
 function accessToken() {
+  var lease = require('crypto').randomBytes(16).toString('hex');
   return load().then(function (t) {
     if (!t || !t.refreshToken) throw A.httpError(409, 'QuickBooks is not connected');
+    if (t.env !== ENV) throw A.httpError(409, 'QuickBooks environment mismatch; reconnect');
     if (t.refreshExpiresAt && Date.now() > t.refreshExpiresAt) {
       throw A.httpError(409, 'QuickBooks refresh token expired — reconnect from the admin console');
     }
     if (t.accessToken && t.expiresAt && Date.now() < (t.expiresAt - 60000)) {
       return { token: t.accessToken, realmId: t.realmId };
     }
-    return tokenCall({ grant_type: 'refresh_token', refresh_token: t.refreshToken })
+    return A.db().runTransaction(async function (tx) {
+      var snap = await tx.get(ref()), current = snap.data();
+      if (current.expiresAt > Date.now() + 60000) return current;
+      if (current.refreshLeaseUntil > Date.now()) throw A.httpError(503, 'QuickBooks token refresh in progress; retry');
+      tx.update(ref(), { refreshLease: lease, refreshLeaseUntil: Date.now() + 60000 });
+      return current;
+    }).then(function (current) {
+      if (current.expiresAt > Date.now() + 60000) return { token: current.accessToken, realmId: current.realmId };
+      return tokenCall({ grant_type: 'refresh_token', refresh_token: current.refreshToken })
       .then(function (fresh) {
-        return save(fresh, t.realmId).then(function (saved) {
+        return save(fresh, current.realmId, { refreshLeaseUntil: 0 }).then(function (saved) {
           return { token: saved.accessToken, realmId: saved.realmId };
         });
       });
+    });
   });
 }
 
@@ -164,5 +169,5 @@ function authorizeUrl(state) {
 module.exports = {
   ENV: ENV, IS_SANDBOX: IS_SANDBOX, DOC: DOC,
   cfg: cfg, load: load, save: save, tokenCall: tokenCall,
-  accessToken: accessToken, query: query, authorizeUrl: authorizeUrl
+  accessToken: accessToken, query: query, authorizeUrl: authorizeUrl, API_BASE: API_BASE
 };

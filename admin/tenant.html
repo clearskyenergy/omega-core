@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tenant — ClearSky OMEGA admin</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     admin/tenant.html — one white-label account, everything we run for it
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     Opened as /admin/tenant.html?org=cleancell.us from the master index.
+
+     TWO DOORS, ONE IMPLEMENTATION. A ClearSky operator reaches this through
+     the master index; a tenant admin reaches the same fields through their
+     own console. The gate is isTenantAdmin(orgId) || isOmegaStaff(), checked
+     by Firestore and again by api/tenant-systems.js. Two implementations of
+     an editable customer record is how the two drift, so there is one.
+
+     THE SYSTEMS PANEL IS A RENDER OF JSON, NOT A SECOND SOURCE. It draws
+     exactly what GET /api/tenant-systems returns, so what an operator reads
+     on this page and what an agent reports are the same sentences. A panel
+     only a human can read is a panel somebody has to remember to open.
+
+     WHAT IT DOES NOT SHOW: the tenant's cost basis. api/_lib/systems.js never
+     receives capexPerKwh/capexPerKw and this page never asks for the
+     storefront config, so there is nothing here to leak.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{
+    --ink:#0E1B24;--paper:#F4F7F9;--panel:#FFFFFF;--line:#DCE6EB;--sub:#5A7280;
+    --accent:#0E7C8B;--wash:#F0FAFC;
+    --ok:#1B8A4B;--warn:#B4700A;--down:#B3261E;--off:#7A8B94;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font:400 15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Verdana,sans-serif}
+  header{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px}
+  header a{color:#9FE8F1;text-decoration:none;font-size:14px}
+  header .t{font-size:17px;font-weight:700}
+  header .spacer{flex:1}
+  header .pill{font-size:12px;border:1px solid #3A5A6B;border-radius:999px;padding:4px 10px;color:#BBD3DC}
+  main{max-width:1180px;margin:0 auto;padding:24px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:20px;margin-bottom:18px}
+  h2{font-size:16px;font-weight:700;margin:0 0 14px;letter-spacing:.02em;text-transform:uppercase;color:var(--sub)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--wash)}
+  .card .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);font-weight:700}
+  .card .val{font-size:20px;font-weight:700;margin-top:4px;word-break:break-word}
+  .sf{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+  .sf:first-child{border-top:none}
+  .dot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none}
+  .s-ok .dot{background:var(--ok)} .s-warn .dot{background:var(--warn)}
+  .s-down .dot{background:var(--down)} .s-off .dot{background:var(--off)}
+  .sf .body{flex:1}
+  .sf .nm{font-weight:700}
+  .sf .st{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+  .s-ok .st{color:var(--ok)} .s-warn .st{color:var(--warn)}
+  .s-down .st{color:var(--down)} .s-off .st{color:var(--off)}
+  .sf .say{color:var(--sub);margin-top:2px}
+  .sf .mx{font-size:12px;color:var(--sub);margin-top:6px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub)}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:var(--wash)}
+  .tag{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;
+    background:var(--wash);border:1px solid var(--line);color:var(--sub)}
+  .tag.designer{background:#E6F8FB;border-color:#9FE8F1;color:var(--accent)}
+  .muted{color:var(--sub)}
+  .err{color:var(--down);font-weight:600}
+  button.mini{font:600 13px inherit;background:transparent;border:1px solid var(--line);
+    border-radius:8px;padding:7px 11px;cursor:pointer;color:var(--sub)}
+  button.mini:hover{border-color:var(--accent);color:var(--accent)}
+  /* HIDDEN BY DEFAULT, explicitly. A browser without native <dialog> treats
+     it as an unknown block element, so the whole edit form — terms, credit
+     limit, every user on the account — renders inline on page load for
+     anyone who can open this page. The UA stylesheet that normally hides it
+     is the only thing that was doing so. */
+  dialog{display:none;border:1px solid var(--line);border-radius:14px;padding:0;
+    max-width:640px;width:92vw;background:var(--panel);color:var(--ink);
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)}
+  dialog[open]{display:block}
+  dialog::backdrop{background:rgba(14,27,36,.45)}
+  dialog .hd{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:700}
+  dialog .bd{padding:20px;max-height:66vh;overflow:auto}
+  dialog .ft{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);
+    font-weight:700;margin:12px 0 4px}
+  input,select{font:inherit;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .save{background:var(--accent);color:#fff;border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/admin/">&larr; All tenants</a>
+  <span class="t" id="tname">Loading…</span>
+  <span class="pill" id="torg"></span>
+  <span class="spacer"></span>
+  <span class="pill" id="tmode"></span>
+  <span class="pill" id="ttier"></span>
+</header>
+
+<main>
+  <section>
+    <h2>Systems <button type="button" class="mini" id="refresh">Refresh</button>
+      <a class="mini" id="asjson" href="#" style="text-decoration:none;padding:7px 11px;border:1px solid var(--line);border-radius:8px">JSON</a></h2>
+    <div id="systems"><p class="muted">Loading…</p></div>
+  </section>
+
+  <section>
+    <h2>Customers</h2>
+    <table>
+      <thead><tr><th style="width:30%">Account</th><th>Plan</th><th>Terms</th><th>Users</th><th>Orders</th><th>Status</th></tr></thead>
+      <tbody id="custs"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <form id="dlg-form">
+    <div class="hd" id="dlg-t">Customer</div>
+    <div class="bd">
+      <label>Company</label><input id="f-name">
+      <div class="row2">
+        <div><label>Plan</label>
+          <select id="f-plan"><option value="free">free</option><option value="designer">designer</option></select></div>
+        <div><label>Status</label>
+          <select id="f-status"><option value="active">active</option><option value="suspended">suspended</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label>Net days</label><input id="f-net" type="number" min="0" step="1"></div>
+        <div><label>Discount %</label><input id="f-disc" type="number" min="0" max="100" step="0.1"></div>
+      </div>
+      <div class="row2">
+        <div><label>Credit limit</label><input id="f-credit" type="number" min="0" step="1"></div>
+        <div><label>PO required</label>
+          <select id="f-po"><option value="false">no</option><option value="true">yes</option></select></div>
+      </div>
+      <label>Notes</label><input id="f-notes">
+      <p class="muted" style="margin-top:14px;font-size:13px">
+        Terms are an overlay. A customer with none set gets this tenant&rsquo;s defaults &mdash;
+        nothing about their first order waits on this form.</p>
+      <div id="dlg-users" style="margin-top:18px"></div>
+    </div>
+    <div class="ft">
+      <button type="button" class="mini" id="cancel">Cancel</button>
+      <button type="button" class="mini save" id="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="/omega-brand.js"></script>
+<script>
+/* ES5 — this is a tool page, and CLAUDE.md's rule is the same for all of them. */
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function qp(k) {
+    var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  var ORG = String(qp('org') || '').toLowerCase().trim();
+  var db = null, current = null;
+
+  /* showModal()/close() are native-<dialog> only, and method="dialog" needs
+     the element too. Both are shimmed so the page works where <dialog> does
+     not, rather than leaving a form that cannot be dismissed. */
+  var DLG = document.getElementById('dlg');
+  function dlgOpen() {
+    if (DLG.showModal) { try { DLG.showModal(); return; } catch (e) {} }
+    DLG.setAttribute('open', 'open'); DLG.style.display = 'block';
+  }
+  function dlgClose() {
+    if (DLG.close) { try { DLG.close(); } catch (e) {} }
+    DLG.removeAttribute('open'); DLG.style.display = 'none';
+  }
+
+  if (!ORG) { $('tname').textContent = 'No org given'; return; }
+  $('torg').textContent = ORG;
+  $('asjson').href = '/api/tenant-systems?org=' + encodeURIComponent(ORG);
+
+  /* ── the systems panel: a render of the endpoint, never a second source ── */
+  function drawSystems(m) {
+    $('tname').textContent = m.name || ORG;
+    $('tmode').textContent = 'editor: ' + (m.editorMode || 'full');
+    $('ttier').textContent = m.tier ? ('tier: ' + m.tier) : '';
+    var h = '';
+    (m.surfaces || []).forEach(function (s) {
+      var mx = '';
+      if (s.metrics) {
+        var parts = [];
+        for (var k in s.metrics) {
+          if (s.metrics[k] === null || s.metrics[k] === undefined) continue;
+          parts.push(k + '=' + (Array.isArray(s.metrics[k]) ? s.metrics[k].join('|') : s.metrics[k]));
+        }
+        mx = parts.join('  ');
+      }
+      h += '<div class="sf s-' + esc(s.state) + '"><span class="dot"></span><div class="body">'
+         +   '<div class="nm">' + esc(s.label) + ' <span class="st">' + esc(s.state) + '</span></div>'
+         +   '<div class="say">' + esc(s.say) + '</div>'
+         +   (mx ? '<div class="mx">' + esc(mx) + '</div>' : '')
+         + '</div></div>';
+    });
+    $('systems').innerHTML = h || '<p class="muted">No surfaces.</p>';
+  }
+
+  function loadSystems() {
+    $('systems').innerHTML = '<p class="muted">Loading…</p>';
+    var u = firebase.auth().currentUser;
+    if (!u) { $('systems').innerHTML = '<p class="err">Sign in required.</p>'; return; }
+    u.getIdToken().then(function (tok) {
+      return fetch('/api/tenant-systems?org=' + encodeURIComponent(ORG),
+                   { headers: { Authorization: 'Bearer ' + tok } });
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+    }).then(function (o) {
+      if (!o.ok) { $('systems').innerHTML = '<p class="err">' + esc(o.j.error || 'refused') + '</p>'; return; }
+      drawSystems(o.j);
+    })['catch'](function () {
+      $('systems').innerHTML = '<p class="err">Could not reach /api/tenant-systems.</p>';
+    });
+  }
+
+  /* ── customers ──────────────────────────────────────────────────────────── */
+  function drawCustomers(rows) {
+    if (!rows.length) {
+      $('custs').innerHTML = '<tr><td colspan="6" class="muted">No customer accounts yet. '
+        + 'They appear here when somebody signs in to the portal.</td></tr>';
+      return;
+    }
+    var h = '';
+    rows.forEach(function (c) {
+      var t = c.terms || {};
+      var terms = t.netDays ? ('Net ' + t.netDays) : 'default';
+      if (t.discountPct) terms += ' · ' + t.discountPct + '%';
+      h += '<tr data-id="' + esc(c.id) + '">'
+         + '<td><b>' + esc(c.name || c.company || c.id) + '</b></td>'
+         + '<td><span class="tag' + (c.plan === 'designer' ? ' designer' : '') + '">'
+         +   esc(c.plan || 'free') + '</span></td>'
+         + '<td>' + esc(terms) + '</td>'
+         + '<td>' + esc(c.userCount == null ? '—' : c.userCount) + '</td>'
+         + '<td>' + (c.hasOrders ? 'yes' : '<span class="muted">none</span>') + '</td>'
+         + '<td>' + esc(c.status || 'active') + '</td></tr>';
+    });
+    $('custs').innerHTML = h;
+    var trs = $('custs').querySelectorAll('tr[data-id]');
+    for (var i = 0; i < trs.length; i++) {
+      (function (tr) {
+        tr.addEventListener('click', function () { open_(tr.getAttribute('data-id')); });
+      })(trs[i]);
+    }
+  }
+
+  function loadCustomers() {
+    db.collection('omega_orgs').doc(ORG).collection('customers').limit(200).get()
+      .then(function (snap) {
+        var rows = [];
+        snap.forEach(function (d) { var v = d.data() || {}; v.id = d.id; rows.push(v); });
+        rows.sort(function (a, b) { return String(a.name || a.id).localeCompare(String(b.name || b.id)); });
+        drawCustomers(rows);
+        /* User counts are a per-account read; done lazily so 200 accounts do
+           not become 200 blocking reads before the table paints. */
+        rows.forEach(function (c) {
+          db.collection('omega_orgs').doc(ORG).collection('customers').doc(c.id)
+            .collection('users').get().then(function (us) {
+              var tr = $('custs').querySelector('tr[data-id="' + c.id + '"]');
+              if (tr) tr.children[3].textContent = us.size;
+            }, function () {});
+        });
+      }, function (e) {
+        $('custs').innerHTML = '<tr><td colspan="6" class="err">'
+          + esc((e && e.message) || 'refused') + '</td></tr>';
+      });
+  }
+
+  /* ── edit one account ───────────────────────────────────────────────────── */
+  function open_(id) {
+    db.collection('omega_orgs').doc(ORG).collection('customers').doc(id).get()
+      .then(function (d) {
+        if (!d.exists) return;
+        current = d.data() || {}; current.id = id;
+        var t = current.terms || {};
+        $('dlg-t').textContent = current.name || current.company || id;
+        $('f-name').value   = current.name || current.company || '';
+        $('f-plan').value   = current.plan || 'free';
+        $('f-status').value = current.status || 'active';
+        $('f-net').value    = t.netDays == null ? '' : t.netDays;
+        $('f-disc').value   = t.discountPct == null ? '' : t.discountPct;
+        $('f-credit').value = t.creditLimit == null ? '' : t.creditLimit;
+        $('f-po').value     = t.poRequired ? 'true' : 'false';
+        $('f-notes').value  = t.notes || '';
+        $('dlg-users').innerHTML = '<p class="muted">Loading users…</p>';
+        dlgOpen();
+        db.collection('omega_orgs').doc(ORG).collection('customers').doc(id)
+          .collection('users').get().then(function (us) {
+            var h = '<table><thead><tr><th>User</th><th>Role</th><th>Last seen</th></tr></thead><tbody>';
+            if (!us.size) h += '<tr><td colspan="3" class="muted">Nobody has signed in yet.</td></tr>';
+            us.forEach(function (u) {
+              var v = u.data() || {};
+              h += '<tr><td>' + esc(v.email || u.id) + (v.name ? '<br><span class="muted">' + esc(v.name) + '</span>' : '')
+                 + '</td><td>' + esc(v.role || 'user') + '</td><td class="muted">'
+                 + esc(String(v.lastSeenAt || '').slice(0, 10) || '—') + '</td></tr>';
+            });
+            $('dlg-users').innerHTML = h + '</tbody></table>';
+          }, function () { $('dlg-users').innerHTML = '<p class="err">Could not read users.</p>'; });
+      });
+  }
+
+  function numOrNull(v) { var s = String(v).trim(); if (!s) return null; var n = Number(s); return isFinite(n) ? n : null; }
+
+  $('save').addEventListener('click', function () {
+    if (!current) return;
+    var u = firebase.auth().currentUser;
+    /* Named fields only. orgId, createdAt and mergedInto are never sent —
+       the rules refuse a write that touches them, and not sending them is
+       how this page stays honest about what it edits. */
+    var patch = {
+      name: $('f-name').value.trim(),
+      plan: $('f-plan').value,
+      status: $('f-status').value,
+      terms: {
+        netDays: numOrNull($('f-net').value),
+        discountPct: numOrNull($('f-disc').value),
+        creditLimit: numOrNull($('f-credit').value),
+        poRequired: $('f-po').value === 'true',
+        notes: $('f-notes').value.trim()
+      },
+      termsSource: 'manual',
+      termsUpdatedAt: new Date().toISOString(),
+      termsUpdatedBy: (u && u.email) || ''
+    };
+    db.collection('omega_orgs').doc(ORG).collection('customers').doc(current.id)
+      .set(patch, { merge: true })
+      .then(function () { dlgClose(); loadCustomers(); loadSystems(); },
+            function (e) { alert('Refused: ' + ((e && e.message) || 'unknown')); });
+  });
+
+  $('cancel').addEventListener('click', dlgClose);
+  $('dlg-form').addEventListener('submit', function (ev) { ev.preventDefault(); dlgClose(); });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') dlgClose(); });
+  $('refresh').addEventListener('click', loadSystems);
+
+  firebase.auth().onAuthStateChanged(function (u) {
+    if (!u) { $('tname').textContent = 'Sign in required'; return; }
+    db = firebase.firestore();
+    loadSystems();
+    loadCustomers();
+  });
+})();
+</script>
+</body>
+</html>

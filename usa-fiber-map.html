@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>USA Fiber Map · OMEGA Grid Atlas</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0d1826;color:#e7edf5;font:14px/1.5 system-ui,sans-serif}header{height:72px;padding:12px 22px;border-bottom:1px solid #344458;display:flex;align-items:center;justify-content:space-between}h1{font-size:22px;margin:0}header p{margin:0;color:#a8b8ce;font-size:13px}a{color:#64dcd0}aside{position:absolute;top:72px;bottom:0;width:330px;overflow:auto;background:#101f30;padding:16px}#map{position:absolute;top:72px;bottom:0;right:0;left:330px}h3{margin-top:0}label{display:block;margin:9px 0 4px}select{width:100%;padding:9px;background:#203147;color:#fff;border:1px solid #50647e;border-radius:5px}small{color:#adbed3}.leaflet-popup-content{color:#102136;font-size:13px;line-height:1.5}.leaflet-popup-content a{color:#126257}@media(max-width:650px){header{height:85px;padding:10px}h1{font-size:18px}header a{font-size:12px}aside{top:auto;bottom:0;height:42vh;width:100%;z-index:500}#map{top:85px;left:0;bottom:42vh}}
+</style></head><body><header><div><h1>USA fiber map</h1><p>OMEGA Grid Atlas · Published routes for site screening</p></div><a id="atlasLink" href="/grid-atlas">Open Grid Atlas site checks</a></header>
+<aside><div id="fiberRouteControls"></div></aside><main id="map" aria-label="Published United States fiber routes"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script><script>
+var fiberMap=L.map('map',{preferCanvas:true}).setView([39,-98],4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(fiberMap);
+L.control.scale().addTo(fiberMap);
+window.OmegaPublishedFiberHost={map:fiberMap,L:L,element:document.getElementById('fiberRouteControls'),visible:true};
+document.getElementById('atlasLink').onclick=function(){this.href='/grid-atlas'+window.location.search;};
+</script><script src="/omega-published-fiber.js"></script></body></html>

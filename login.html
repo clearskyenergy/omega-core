@@ -329,6 +329,7 @@
         <h2>Where to?</h2>
         <p class="sub">Your account reaches more than one OMEGA workspace. Pick one &mdash; you can come back here any time.</p>
         <div id="choiceList"></div>
+        <div id="logicVerify" hidden><p>Verify your work email before opening the office or plant. Replace any temporary password using “Forgot password” on the sign-in screen.</p><button type="button" id="logicVerifySend" class="btn-ghost">Send verification email</button> <button type="button" id="logicVerifyRefresh" class="btn-ghost">I’ve verified my email</button><p id="logicVerifyMsg" role="status"></p></div>
         <!-- Says who can switch on a surface the account reaches but that is
              not live yet. Hidden until there is something to say. -->
         <p class="form-msg info" id="chooseMsg" style="display:none;margin-top:12px"></p>
@@ -624,6 +625,9 @@
          order     lower sorts first; ties keep table order
     */
     const SURFACES = [
+      { key: "omega-logic", order: 5, name: "Omega Logic", url: PORTAL + "/omega-logic",
+        desc: () => "White-label OEM customers, orders, factory and payments",
+        requires: (c) => c.email === "tom@clearsky-usa.com" && c.emailVerified },
       /* ORDER IS FIXED, NOT LEARNED. The workspace is where nearly everyone
          is going, so it sits at the top every time — a list that reshuffles
          to put yesterday's choice first means the thing you want is in a
@@ -742,7 +746,7 @@
         if (fin.approved === false) return { blocked: "unapproved", role: fin.role };
       }
 
-      const ctx = { email, org, uid, isAdminDomain, staffRole, staff, member, fin, mkt, vdc, extra: {} };
+      const ctx = { email, org, uid, emailVerified: user.emailVerified === true, isAdminDomain, staffRole, staff, member, fin, mkt, vdc, extra: {} };
 
       /* A Firestore surface can require a profile document this file has
          never heard of, so those collections are read on demand — once, and
@@ -763,6 +767,7 @@
       const table = SURFACES.slice();
       (added || []).forEach((sd) => {
         if (!sd || !sd.key || sd.enabled === false) return;
+        if (sd.key === 'omega-logic') return; // private owner door cannot be widened by a surface override
         const entry = {
           key: String(sd.key),
           order: sd.order != null ? +sd.order : 60,
@@ -790,6 +795,26 @@
          email domain — that is exactly what org_members is for. */
       const grantOrg = (member && member.active !== false && member.orgId) ? member.orgId : "";
       const homeOrg = grantOrg || org;
+      // Company portals are offered independently of QuickBooks activation.
+      // API authorization remains authoritative for subscription + membership.
+      const [logicOrg, logicBill, logicMember] = await Promise.all([
+        readDoc(['omega_orgs', homeOrg]),
+        readDoc(['omega_orgs', homeOrg, 'billing', 'current']),
+        readDoc(['omega_orgs', homeOrg, 'members', uid])
+      ]);
+      if (logicOrg && logicOrg.status === 'active' && logicBill &&
+          ((logicBill.addons || []).indexOf('omega-logic') >= 0 || logicBill.omegaLogic === true) &&
+          ['suspended','cancelled','past_due'].indexOf(logicBill.status) < 0 &&
+          logicMember && logicMember.role && logicMember.status !== 'disabled') {
+        const suffix = '?org=' + encodeURIComponent(homeOrg);
+        dests.unshift({ key:'logic-plant', org:homeOrg, url:PORTAL+'/plant/'+suffix,
+          name:(logicOrg.name || homeOrg)+' · Plant', desc:'Works orders, serial records, inventory and floor stations' });
+        dests.unshift({ key:'logic-office', org:homeOrg, url:PORTAL+'/omega-logic'+suffix,
+          name:(logicOrg.name || homeOrg)+' · Office', desc:'Orders, customer terms and fulfillment status' });
+        if (logicBill.editorLite && logicBill.editorLite.enabled === true) dests.push({
+          key:'editor-lite', org:homeOrg, url:PORTAL+'/editor-lite.html'+suffix,
+          name:(logicOrg.name || homeOrg)+' · Site Map', desc:'Your white-label guided-build editor' });
+      }
 
       /* ── STAY ON THIS ORIGIN ─────────────────────────────────────────
          This looked up omega_orgs.domains and sent people to the tenant's
@@ -910,6 +935,17 @@
     function chooser(found, user) {
       const list = $("choiceList");
       list.innerHTML = "";
+      $('logicVerify').hidden = user.emailVerified || !found.dests.some(d => d.key === 'logic-office');
+      $('logicVerifySend').onclick = async function () {
+        this.disabled = true;
+        try { await auth.sendEmailVerification(user); $('logicVerifyMsg').textContent = 'Verification email sent. Check the company mailbox.'; }
+        catch (e) { $('logicVerifyMsg').textContent = e.message; }
+        this.disabled = false;
+      };
+      $('logicVerifyRefresh').onclick = async function () {
+        try { await auth.reload(user); await user.getIdToken(true); location.reload(); }
+        catch (e) { $('logicVerifyMsg').textContent = e.message; }
+      };
       /* The order resolve() built, kept. It sorted the last-used entry to the
          top for a while, which meant the list was in a different order on
          every visit — the workspace is where nearly everyone is going and it
