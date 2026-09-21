@@ -36,14 +36,14 @@
    about them is a judgement, not an agreement.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var A = require('./_lib/admin.js');
+var A = require('./_lib/admin.js'), B = require('./_lib/buyer-accounts');
 
 function lower(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
 function clean(v, n) { return String(v == null ? '' : v).trim().slice(0, n || 200); }
 
 function requireVerified(caller) {
   var v = caller && caller.claims && caller.claims.email_verified;
-  if (!v && !(caller && caller.staff)) {
+  if (v !== true) {
     throw A.httpError(403, 'Please confirm your email address, then sign in again.');
   }
   if (!caller.email) throw A.httpError(403, 'This account has no email address on it.');
@@ -105,66 +105,15 @@ function project(customerId, c, userDoc, orderCount, defaults) {
       across a tenant boundary.
 
    A pointer is a direct get(): no index, no cross-tenant scan, no prefix
-   test. And create() on it is ATOMIC — two sign-ins racing on the same
-   address cannot both win, so the duplicate-account race closes with it. */
+   test. The shared helper creates the pointer, account and contact together
+   in ONE transaction. Two sign-ins cannot create duplicate/partial accounts. */
 function findOrCreate(db, org, email, caller) {
-  var orgRef = db.collection('omega_orgs').doc(org);
-  var ptrRef = orgRef.collection('customer_index').doc(email);
-
-  return ptrRef.get().then(function (ptr) {
-    if (!ptr.exists) return null;
-    var cid = String((ptr.data() || {}).customerId || '');
-    if (!cid) return null;
-    var cRef = orgRef.collection('customers').doc(cid);
-    return Promise.all([cRef.get(), cRef.collection('users').doc(email).get()])
-      .then(function (r) {
-        if (!r[0].exists) return null;          /* pointer to a deleted account */
-        return { id: cid, data: r[0].data() || {},
-                 user: r[1].exists ? (r[1].data() || {}) : {}, created: false };
-      });
-  }).then(function (found) {
-    if (found) return found;
-
-    /* First sign-in. Seed the company name from an order they already placed,
-       so the account does not open empty for somebody who has been a customer
-       for a month. */
-    return db.collection('orders').where('orgId', '==', org)
-      .where('customer.email', '==', email).limit(1).get()
-      .then(function (s) { return s.empty ? null : (s.docs[0].data() || {}).customer || null; },
-            function () { return null; })
-      .then(function (fromOrder) {
-        var cid = orgRef.collection('customers').doc().id;
-        var now = new Date().toISOString();
-        var cdoc = {
-          orgId: org,
-          name: clean(fromOrder && fromOrder.company, 160)
-                || clean(fromOrder && fromOrder.name, 160) || email.split('@')[1],
-          plan: 'free', status: 'active', source: 'self',
-          terms: {}, agreements: [], hasOrders: !!fromOrder,
-          createdAt: now
-        };
-        var udoc = {
-          email: email, name: clean(fromOrder && fromOrder.name, 120),
-          phone: clean(fromOrder && fromOrder.phone, 40),
-          role: 'owner', uid: caller.uid, createdAt: now, lastSeenAt: now
-        };
-
-        /* create() — NOT set(). If a concurrent request got here first this
-           rejects with ALREADY_EXISTS, and we re-read their pointer instead
-           of writing a second account over the top of it. */
-        return ptrRef.create({ customerId: cid, email: email, createdAt: now })
-          .then(function () {
-            return orgRef.collection('customers').doc(cid).set(cdoc)
-              .then(function () {
-                return orgRef.collection('customers').doc(cid)
-                  .collection('users').doc(email).set(udoc);
-              })
-              .then(function () { return { id: cid, data: cdoc, user: udoc, created: true }; });
-          }, function () {
-            /* Lost the race. The winner's account is the real one. */
-            return findOrCreate(db, org, email, caller);
-          });
-      });
+  return B.lookup(db, org, email).then(function (found) {
+    if (found) return B.active(found);
+    return db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).limit(1).get().then(function (s) {
+      var seed = s.empty ? {} : Object.assign({}, s.docs[0].data().customer, { hasOrders: true });
+      return B.ensure(db, org, email, seed, caller);
+    });
   });
 }
 
@@ -174,7 +123,8 @@ function countOrders(db, org, email) {
     .then(function (s) { return s.size; }, function () { return 0; });
 }
 
-module.exports = A.handler(function (req) {
+module.exports = A.handler(function (req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   var method = req.method;
   if (method !== 'GET' && method !== 'POST') throw A.httpError(405, 'GET or POST only');
 
@@ -194,7 +144,7 @@ module.exports = A.handler(function (req) {
     var db = A.db();
     var orgRef = db.collection('omega_orgs').doc(org);
 
-    return findOrCreate(db, org, email, caller).then(async function (acct) {
+    return B.context(org).then(function () { return findOrCreate(db, org, email, caller); }).then(async function (acct) {
       var settings = await orgRef.collection('fulfillment').doc('config').get();
       var defaults = settings.exists ? settings.data().terms : null;
       if (method === 'GET') {
@@ -249,7 +199,7 @@ module.exports = A.handler(function (req) {
           }); });
     });
   })['catch'](function (e) {
-    if (e && e.status) throw e;
+    if (e && e.status && e.status < 500) throw e;
     console.error('[my-account]', e);
     throw A.httpError(500, 'Something went wrong on our side. Please try again.');
   });

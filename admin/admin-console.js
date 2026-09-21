@@ -2643,12 +2643,14 @@ function logicEnrollmentHtml(orgId, bill){
     h+='<label style="display:inline-block;margin:8px 12px 8px 0"><input type="checkbox" id="ol-'+m[0]+'-'+esc(orgId)+'"'+(mods.indexOf(m[0])>=0?' checked':'')+'> '+m[1]+'</label>';
   });
   h+='<div><button onclick="saveLogicEnrollment(&quot;'+esc(orgId)+'&quot;)">Save Omega Logic bundle</button></div>';
+  h+='<label>Customer Editor Lite price · USD per month<input id="ol-customer-price-'+esc(orgId)+'" type="number" min="1" max="100000" step="0.01" value="'+esc(((bill.customerEditorLite||{}).monthlyPriceCents||79900)/100)+'"></label><p class="sub-txt">For this OEM’s customers, not platform users. Free customer accounts remain available. Changing the offer does not charge anyone or reprice existing subscriptions.</p><button onclick="saveLogicCustomerPrice(&quot;'+esc(orgId)+'&quot;)">Save customer subscription price</button><p><a href="/portals/customer/admin.html?org='+encodeURIComponent(orgId)+'">Manage this client’s customers →</a></p>';
   h+='<p class="sub-txt">Payment automation stays separately gated on QuickBooks setup. Turning the bundle off preserves all tenant data.</p>';
   h+='<details><summary>Company administrator</summary>';
   h+=_tnField('Full name','ol-name-'+orgId,'','text','Company administrator');
   h+=_tnField('Work email','ol-email-'+orgId,'','email','admin@'+orgId);
   h+=_tnField('Temporary password — new account only','ol-password-'+orgId,'','password','Never saved in tenant settings');
-  h+='<p class="sub-txt">Creates an unverified sign-in and tenant admin membership. An existing sign-in keeps its password. The administrator must verify their mailbox and replace the temporary password.</p>';
+  h+='<label style="display:block;margin:12px 0"><input type="checkbox" id="ol-support-'+esc(orgId)+'"> ClearSky-managed support account (admin@ only): I control this mailbox; skip email verification</label>';
+  h+='<p class="sub-txt">Creates a tenant admin membership. Ordinary sign-ins require mailbox verification; explicitly attested support accounts do not. Existing passwords are preserved. Replace temporary passwords before handing over access.</p>';
   h+='<button onclick="createLogicAdministrator(&quot;'+esc(orgId)+'&quot;)">Create / assign company administrator</button></details>';
   h+='<p id="ol-msg-'+esc(orgId)+'" class="sub-txt" role="status"></p>';
   if(enabled) h+='<a href="/omega-logic?org='+encodeURIComponent(orgId)+'">Open office</a> · <a href="/plant/?org='+encodeURIComponent(orgId)+'">Open plant</a>';
@@ -2661,12 +2663,19 @@ function saveLogicEnrollment(orgId){
     .then(function(){msg.textContent='Saved. Financial automation is unchanged.';loadTenants();})
     .catch(function(e){msg.textContent='Not saved: '+e.message;});
 }
+function saveLogicCustomerPrice(orgId){
+  var msg=document.getElementById('ol-msg-'+orgId);
+  var value=Number(document.getElementById('ol-customer-price-'+orgId).value);
+  msg.textContent='Saving customer offer…';
+  _authedPost('/api/logic-onboard',{action:'customer-editor-price',org:orgId,monthlyPriceCents:Math.round(value*100)})
+    .then(function(r){msg.textContent=r.note;}).catch(function(e){msg.textContent='Not saved: '+e.message;});
+}
 function createLogicAdministrator(orgId){
   var msg=document.getElementById('ol-msg-'+orgId), pw=document.getElementById('ol-password-'+orgId);
   var email=document.getElementById('ol-email-'+orgId).value.trim();
-  if(!confirm('Assign '+email+' as a company administrator for '+orgId+'? This grants office and plant administration, not ClearSky access.')) return;
+  if(!confirm('Assign '+email+' as a company administrator for '+orgId+'? This grants office and plant administration, not ClearSky access.'+(document.getElementById('ol-support-'+orgId).checked?' You attest that you control this support mailbox; it will be trusted without an email verification step.':''))) return;
   msg.textContent='Provisioning administrator…';
-  var body={action:'administrator',org:orgId,name:document.getElementById('ol-name-'+orgId).value,email:email,password:pw.value};
+  var body={action:'administrator',org:orgId,name:document.getElementById('ol-name-'+orgId).value,email:email,password:pw.value,supportAccount:document.getElementById('ol-support-'+orgId).checked};
   pw.value='';
   _authedPost('/api/logic-onboard',body).then(function(r){msg.textContent=(r.created?'Account created. ':'Existing sign-in retained. ')+r.note;})
     .catch(function(e){msg.textContent='Not completed: '+e.message;});

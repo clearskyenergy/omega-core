@@ -73,6 +73,70 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('office creation and buyer signup converge atomically without platform membership',async function(){
+  setup();var B=require('../api/_lib/buyer-accounts'),buyers=require('../api/buyers');
+  var buyer={email:'buyer@example.com',uid:'buyer-uid',orgId:'example.com',claims:{email_verified:true},staff:false};
+  var initial=await post(buyers,{action:'create',email:buyer.email,name:'Contact',company:'Customer Company',terms:{depositPct:45,dueDays:7}},admin);
+  var copies=await Promise.all([B.ensure(db,'cleancell.us',buyer.email,{},buyer),B.ensure(db,'cleancell.us',buyer.email,{},buyer)]);
+  assert(copies.every(function(a){return a.id===initial.customerId;}));assert.equal(copies[0].data.terms.depositPct,45);
+  assert.equal(Array.from(db.data.keys()).filter(function(k){return /^omega_orgs\/cleancell.us\/customers\/[^/]+$/.test(k);}).length,1);
+  assert.equal(db.data.has('omega_orgs/cleancell.us/members/buyer-uid'),false);assert.equal(db.data.has('omega_orgs/example.com'),false);
+  await assert.rejects(post(buyers,{action:'create',email:'new@example.com',name:'N',company:'C'},buyer),/workspace/);
+  await assert.rejects(post(buyers,{action:'terms',email:buyer.email,terms:{depositPct:101}},admin),/Deposit/);
+  await post(buyers,{action:'terms',email:buyer.email,terms:{depositPct:20,dueDays:14}},admin);
+  assert.equal((await B.lookup(db,'cleancell.us',buyer.email)).data.terms.depositPct,20);
+  var me=require('../api/my-account');var r=await me({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}});
+  assert.equal(r.customerId,initial.customerId);assert.equal(r.terms.depositPct,20);
+  await post(me,{company:'Updated Company',terms:{depositPct:0},plan:'editor-lite',role:'admin'},buyer);
+  var saved=(await B.lookup(db,'cleancell.us',buyer.email)).data;assert.equal(saved.plan,'free');assert.equal(saved.terms.depositPct,20);
+  await db.doc('omega_orgs/cleancell.us/customers/'+initial.customerId).update({status:'suspended'});
+  await assert.rejects(me({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}}),/disabled/);
+  await assert.rejects(require('../api/my-orders')({method:'GET',query:{org:'cleancell.us'},caller:buyer},{setHeader:function(){}}),/disabled/);
+});
+await check('customer creation cannot escape tenant scope, recurse on a dangling pointer or enroll under a missing OEM',async function(){
+  setup();var B=require('../api/_lib/buyer-accounts');
+  await assert.rejects(B.context('absent.us'),/not provisioned/);
+  await assert.rejects(B.ensure(db,'cleancell.us','bad/path@example.com',{},null),/valid customer email/);
+  db.seed('omega_orgs/cleancell.us/customer_index/buyer@example.com',{customerId:'missing'});
+  await assert.rejects(B.ensure(db,'cleancell.us','buyer@example.com',{},null),/office review/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'suspended'});
+  await assert.rejects(B.context('cleancell.us'),/not active/);
+});
+await check('buyer endpoints require verified identity; office read and invitation are not available to buyers',async function(){
+  setup();var buyers=require('../api/buyers'),me=require('../api/my-account'),orders=require('../api/my-orders');
+  var unverified=Object.assign({},owner,{claims:{email_verified:false}}),res={setHeader:function(){}};
+  await assert.rejects(me({method:'GET',query:{org:'cleancell.us'},caller:unverified},res),/confirm your email/);
+  await assert.rejects(orders({method:'GET',query:{org:'cleancell.us'},caller:unverified},res),/confirm your email/);
+  var buyer={uid:'buyer',email:'buyer@example.com',orgId:'example.com',claims:{email_verified:true}};
+  await assert.rejects(buyers({method:'GET',query:{org:'cleancell.us'},caller:buyer},res),/workspace/);
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},buyer),/workspace/);
+  await post(buyers,{action:'create',email:'buyer@example.com',name:'Buyer',company:'Example'},admin);
+  var sent=0;mock('../api/_lib/mail',{configured:function(){return true;},esc:String,button:function(){return '';},wlLayout:function(){return '';},send:async function(){sent++;return {skipped:true};}});
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},admin),/not configured/);assert.equal(sent,0);
+  await db.doc('omega_orgs/cleancell.us').update({whiteLabel:{embed:{mailFrom:'sales@example.invalid'}}});
+  db.seed('omega_orgs/cleancell.us/storefront/config',{emailCustomer:true});
+  await assert.rejects(post(buyers,{action:'invite',email:'buyer@example.com'},admin),/not sent/);assert.equal(sent,1);
+  var c=await require('../api/_lib/buyer-accounts').lookup(db,'cleancell.us','buyer@example.com');assert.equal(c.data.lastInvitedAt,undefined);
+});
+await check('customer Editor Lite offer defaults to $799, is owner-configurable and grants no subscription',async function(){
+  setup();var portalConfig=require('../api/customer-portal'),req={method:'GET',query:{org:'cleancell.us'}},res={setHeader:function(){}};
+  var before=await portalConfig(req,res);assert.equal(before.editorLite.monthlyPriceCents,79900);assert.equal(before.editorLite.checkoutAvailable,false);assert.equal(before.account.free,true);
+  await post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:89900});
+  assert.equal((await portalConfig(req,res)).editorLite.monthlyPriceCents,89900);
+  await assert.rejects(post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:0}),/Monthly price/);
+  await assert.rejects(post(require('../api/logic-onboard'),{action:'customer-editor-price',monthlyPriceCents:89900},admin),/owner/);
+  assert(!JSON.stringify(before).includes('realmId'));assert(!JSON.stringify(before).includes('itemRef'));
+});
+await check('explicit support mailbox attestation is owner-only and does not trust disabled members',async function(){
+  setup();var verified=0,u={uid:'support',email:'admin@cleancell.us',emailVerified:false};
+  A.init=function(){return {auth:function(){return {getUserByEmail:async function(){return u;},updateUser:async function(){verified++;return Object.assign({},u,{emailVerified:true});}};}};};
+  var onboard=require('../api/logic-onboard'),body={action:'administrator',email:u.email,name:'Support',supportAccount:true};
+  db.seed('omega_orgs/cleancell.us/members/support',{role:'admin',status:'disabled'});
+  await assert.rejects(post(onboard,body),/disabled/);assert.equal(verified,0);
+  await db.doc('omega_orgs/cleancell.us/members/support').update({status:'active'});
+  assert.equal((await post(onboard,body)).emailVerified,true);assert.equal(verified,1);
+  await assert.rejects(post(onboard,Object.assign({},body,{email:'someone@cleancell.us'})),/admin@/);
+});
 await check('Editor Lite fails closed on module and subscription grants, including owner preview',async function(){
   setup();var lite=require('../api/editor-lite');
   await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
