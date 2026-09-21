@@ -5605,13 +5605,17 @@ function renderImport(host, bar){
     });
     box.appendChild(list);
 
+    /* Once the last row is filed the button goes, rather than sitting there
+       offering to file nothing. The message below says what happened. */
     const ticked=rows.filter(r=>r.on).length;
-    const go=document.createElement('button');
-    go.textContent=impBusy?'FILING…':('FILE '+ticked+' ITEM'+(ticked===1?'':'S'));
-    go.disabled=impBusy||!ticked;
-    go.style.cssText='font-size:9.5px;padding:7px 12px;margin-top:10px';
-    go.addEventListener('click',impFile);
-    box.appendChild(go);
+    if(ticked || !rows.some(r=>r.filed)){
+      const go=document.createElement('button');
+      go.textContent=impBusy?'FILING…':('FILE '+ticked+' ITEM'+(ticked===1?'':'S'));
+      go.disabled=impBusy||!ticked;
+      go.style.cssText='font-size:9.5px;padding:7px 12px;margin-top:10px';
+      go.addEventListener('click',impFile);
+      box.appendChild(go);
+    }
   }
 
   if(impMsg){
