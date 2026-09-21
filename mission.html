@@ -1970,6 +1970,17 @@ function makeCore(id, opts) {
   /* Where the shoulders have got to. Same idea as the cape: the body is
      always catching up with the head. */
   let headLag = 0;
+  /* THE GESTURE CLOCK. Speech is not a wave, it is beats — a hand goes out on
+     a stressed word and comes back over the next two, and the giveaway that
+     something is animated rather than alive is that its arms move at the same
+     rate as its voice. So a gesture is FIRED on a syllable and then runs on
+     its own clock for the better part of a second, ignoring whatever the
+     voice does in the meantime; the refractory period is what stops a long
+     sentence turning him into a windmill. */
+  let gestT = -1e9, gestDur = 40, gestAmp = 0, gestSgn = 1, gPrev = 0;
+  /* And where the arms WERE, a few frames ago. He is a projection: the parts
+     of him that move fastest are the parts a projection smears. */
+  let armGhostR = 0, armGhostL = 0, armGhostS = 0;
   /* One ring per syllable, leaving the mask. Spawned on the RISING edge of
      the envelope rather than on a timer, so the count and the spacing are the
      speech's, not a decoration's. */
@@ -2157,7 +2168,14 @@ function makeCore(id, opts) {
            what makes this man recognisable rather than a silhouette of any
            man in a cloak. The cloak lands near 0.33, the hood edge near 0.62,
            the faceplate at 1.0. */
-        var pos = [], lums = [];
+        /* RAW luminance is kept alongside the rendered one. `lums` below is the
+           drawing brightness — tone stretched, plus a rim term that fires on the
+           depth map's slope. That is the right number to DRAW with and the wrong
+           one to MEASURE with: the rim lights every edge in the picture, so the
+           cloak's outline scores as high as polished steel, and the one thing
+           that separates an arm from a cape in this artwork is that the arm is
+           the only metal below the mask. */
+        var pos = [], lums = [], rawl = [];
         var dat = function (x, y) {           /* depth, clamped at the border */
           if (x < 0) x = 0; if (y < 0) y = 0;
           if (x > w - 1) x = w - 1; if (y > h - 1) y = h - 1;
@@ -2192,6 +2210,7 @@ function makeCore(id, opts) {
           var rim = Math.pow(Math.min(1, Math.sqrt(gx * gx + gy * gy) / 0.22), 0.8);
 
           lums.push(Math.min(1, 0.14 + 0.52 * tone + 0.42 * rim));
+          rawl.push(lum);
         }
         /* THE ARTWORK'S OWN ASPECT, carried out of here. Both axes were
            normalised to ±0.5 and then multiplied by ONE scale, which forces
@@ -2277,6 +2296,113 @@ function makeCore(id, opts) {
                 : 0;
         }
 
+        /* --- A FOURTH BONE: THE FOREARMS, FOUND BY THEIR OWN LIGHT ---------
+           The previous author looked for the arms in the DEPTH map, found a
+           smooth unimodal relief with no valley, and concluded correctly that
+           there is no "arm in front of chest" layer to separate. That is still
+           true and this does not contradict it. The arms are not separable by
+           depth. They are separable by MATERIAL.
+
+           MEASURED on this asset (132x218, 10,919 kept samples): raw luminance
+           has a median of 0.056 and a 90th percentile of 0.263 — the figure is
+           cloth in shadow. The fraction of each row above that p90 has exactly
+           two peaks, and nothing else anywhere on the body:
+
+             d 0.00-0.13   0.15-0.43   the mask. Polished steel, already used
+                                       to find `mask` thirty lines up.
+             d 0.16-0.28   0.26-0.66   the crossed gauntlets. Peak 0.59 at 0.20.
+             d 0.28-0.36   0.000       the belly. Not "low" — zero, for eight
+                                       per cent of his height, on both edges of
+                                       the band at once.
+             d 0.36-0.86   0.00-0.09   cloak, skirt, boots. Scattered.
+
+           A band whose neighbours on both sides are a hard zero is not a
+           threshold that happened to work; it is the armour ending. So the
+           band is found rather than written down — peak below the head, walked
+           outwards while the smoothed fraction holds a third of its peak —
+           and a redrawn figure with its arms somewhere else re-derives it.
+
+           AND THE WEIGHT IS THE BRIGHTNESS, not the band. Inside those rows
+           sit both the gauntlets and the cape behind them. Weighting by light
+           puts most of the motion on the steel and leaves the cloak nearly
+           still, which is what an arm moving in front of a body looks like;
+           a floor of 0.30 keeps the band whole so nothing tears at its edge. */
+        var aw = new Float32Array(lums.length);
+        var elbow = null;
+        (function () {
+          var NB = 48, i, bi;
+          var srt = rawl.slice().sort(function (a, b) { return a - b; });
+          var hi90 = srt[(srt.length * 0.90) | 0];
+          var cnt = new Float32Array(NB), bri = new Float32Array(NB);
+          for (i = 0; i < rawl.length; i++) {
+            bi = ((pos[i * 3 + 1] - top) / span * NB) | 0;
+            if (bi < 0) bi = 0; if (bi > NB - 1) bi = NB - 1;
+            cnt[bi]++; if (rawl[i] > hi90) bri[bi]++;
+          }
+          var f = new Float32Array(NB);
+          for (i = 0; i < NB; i++) f[i] = cnt[i] > 20 ? bri[i] / cnt[i] : 0;
+          var sm = new Float32Array(NB);           /* three bins ~ seven rows */
+          for (i = 0; i < NB; i++) {
+            sm[i] = (f[Math.max(0, i - 1)] + f[i] + f[Math.min(NB - 1, i + 1)]) / 3;
+          }
+          /* the peak BELOW the head, so the mask cannot win its own search */
+          var lo0 = Math.ceil(0.14 * NB), pk = lo0;
+          for (i = lo0; i < NB; i++) if (sm[i] > sm[pk]) pk = i;
+          if (sm[pk] < 0.12) return;               /* no metal down there: no arms */
+          var cutv = sm[pk] * 0.35, a = pk, b = pk;
+          while (a > lo0 && sm[a - 1] > cutv) a--;
+          while (b < NB - 1 && sm[b + 1] > cutv) b++;
+          var d0 = a / NB, d1 = (b + 1) / NB;
+          /* The ramp is as deep as the band itself. It is not a taste: a slab
+             of samples translated against its neighbours tears at its edge,
+             and how far it can move before the tear shows is set by how long
+             the ramp has to hide the difference. Half a band either side
+             turns the edge into a gradient nothing can find. */
+          var pad = (d1 - d0) * 0.60;
+          if (pad < 0.01) return;
+
+          /* the light gate, taken inside the band rather than over the figure:
+             the band is already the brightest part of the body and a global
+             percentile would keep all of it */
+          var inb = [];
+          for (i = 0; i < rawl.length; i++) {
+            var di = (pos[i * 3 + 1] - top) / span;
+            if (di > d0 - pad && di < d1 + pad) inb.push(rawl[i]);
+          }
+          if (inb.length < 60) return;
+          inb.sort(function (x, y) { return x - y; });
+          var glo = inb[(inb.length * 0.62) | 0], ghi = inb[(inb.length * 0.94) | 0];
+          if (ghi - glo < 0.02) return;
+
+          var ex = 0, ey = 0, ew = 0;
+          for (i = 0; i < rawl.length; i++) {
+            var dd = (pos[i * 3 + 1] - top) / span, band;
+            if (dd <= d0 - pad || dd >= d1 + pad) continue;
+            band = dd < d0 ? (dd - (d0 - pad)) / pad
+                 : dd <= d1 ? 1
+                 : ((d1 + pad) - dd) / pad;
+            var g = (rawl[i] - glo) / (ghi - glo);
+            if (g < 0) g = 0; if (g > 1) g = 1;
+            /* SQUARED, AND NO FLOOR. This is the whole difference between an
+               arm and a landslide. Give every sample in the band a share of
+               the movement and the band becomes a slab: it slides as one
+               piece, opens a hole at the shoulder and cuts a straight line
+               across the ribs — measured, and it looks exactly as bad as it
+               sounds. Weight it by light squared and only the gauntlets move.
+               They are the one thing in those rows the eye can see — the
+               cloak behind them is unlit and featureless, so there is nothing
+               there to tear and nothing to notice staying still. */
+            aw[i] = band * g * g;
+            ex += pos[i * 3] * aw[i]; ey += pos[i * 3 + 1] * aw[i]; ew += aw[i];
+          }
+          /* THE ELBOW. Not a joint — this drawing has no joints. It is the
+             point the forearm block turns about, and the block's own centre of
+             light is the only defensible choice: turn it about the body's
+             midline instead and the near arm swings twice as far as the far
+             one for no reason anyone drew. */
+          if (ew > 1) elbow = { x: ex / ew, y: ey / ew };
+        })();
+
         /* THE NECK, which is what the head turns on. A fifth of the way down
            is where the width profile stops being hood and starts being
            shoulder (24% of the frame at 0.11, 42% by 0.16, 52% by 0.21), so
@@ -2300,7 +2426,7 @@ function makeCore(id, opts) {
 
         cloud = { pos: new Float32Array(pos), lum: new Float32Array(lums),
                   n: lums.length, ar: h / w, mask: mask, hw: hw, cw: cw, sw: sw,
-                  neck: neck, waist: waist };
+                  neck: neck, waist: waist, arm: elbow ? aw : null, elbow: elbow };
         cloudState = cloud.n > 200 ? 'ready' : 'failed';
       } catch (e) {
         /* A canvas that cannot be read must not take the core down with it —
@@ -2350,9 +2476,13 @@ function makeCore(id, opts) {
        real thing — invisible here, and it keeps a trig pair out of a loop
        that runs eleven thousand times a frame. */
     const HW = cloud.hw, CW = cloud.cw, SW = cloud.sw, NK = cloud.neck, WS = cloud.waist;
+    const AW = cloud.arm, EL = cloud.elbow;
     const hy = o.headYaw || 0, hn = o.headNod || 0, cx2 = o.capeX || 0, hr = o.headRoll || 0;
     const sr = o.bodyRoll || 0, bz = o.breath || 0;
-    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz));
+    const ga = o.armRoll || 0, gl = o.armLift || 0, gs = o.armSpread || 0;
+    const glit = o.armLit || 0;
+    const gest = !!(AW && EL && (ga || gl || gs));
+    const bones = !!(HW && NK && (hy || hn || cx2 || hr || sr || bz || gest));
     /* The roll has to be circular ON SCREEN, and x and y are not drawn at the
        same scale — sy is `ar` times sx. Rotating in the stored units would
        shear the head into an ellipse. So y is carried into x-proportional
@@ -2362,6 +2492,8 @@ function makeCore(id, opts) {
     for (let k = 0; k < cloud.n; k += step) {
       const lum = lu[k];
       if (o.bright && lum < 0.80) continue;       /* the bloom takes highlights only */
+      /* the ghost pass carries the arms and nothing else */
+      if (o.armOnly && (!AW || AW[k] < 0.22)) continue;
       let px = p[k * 3], py = p[k * 3 + 1], pz = p[k * 3 + 2];
 
       if (bones) {
@@ -2409,6 +2541,30 @@ function makeCore(id, opts) {
           if (bz) py = WS.y + (py - WS.y) * (1 + bz * swk);
         }
 
+        /* AND HE GESTURES. The forearms turn about their own centre of light,
+           lift, and open — three channels, all in the plane of the image, for
+           the reason the head's roll is: this drawing has one face and no
+           second view to swing through, so anything that tries to move an arm
+           through depth moves it by two per cent of nothing. In-plane, three
+           degrees is three degrees.
+
+           The spread is measured from the elbow and not from the body's
+           midline. His arms are crossed: the hands sit near the centre and the
+           gauntlets run outwards past the ribs, so opening them is the block
+           growing about its own middle, which is what unfolding looks like
+           from the front. */
+        if (gest && AW[k] > 0) {
+          const ak = AW[k];
+          if (ga) {
+            const b3 = ga * ak, cb3 = 1 - b3 * b3 * 0.5;
+            const gx = px - EL.x, gy2 = (py - EL.y) * AR;
+            px = EL.x + gx * cb3 - gy2 * b3;
+            py = EL.y + (gx * b3 + gy2 * cb3) / AR;
+          }
+          if (gs) px = EL.x + (px - EL.x) * (1 + gs * ak);
+          if (gl) py += gl * ak;
+        }
+
         /* AND THE HEM TRAILS. Cloth follows the body a beat late; a cape that
            moves with the hips is a painted cape. */
         if (CW[k] > 0) px += cx2 * CW[k];
@@ -2429,6 +2585,11 @@ function makeCore(id, opts) {
         const d = Math.abs(py - sweep);
         if (d < 0.085) a += (1 - d / 0.085) * 0.60 * lum;
       }
+      /* THE STEEL CATCHES IT. A gesture in a dark room is a shape you have to
+         look for; the same gesture with the light coming up off the armour as
+         it moves is the one thing on this canvas that is unmistakably a limb.
+         Rides `lum` so it lands on the plate and not on the cloth behind it. */
+      if (glit && AW && AW[k] > 0) a += AW[k] * glit * lum;
       if (a < 0.025) continue;                    /* below this nothing lands */
       let ai = (a * CL_A) | 0; if (ai > CL_A - 1) ai = CL_A - 1;
       let si = (Math.max(0, z) * 2.2) | 0; if (si > CL_S - 1) si = CL_S - 1;
@@ -2573,8 +2734,60 @@ function makeCore(id, opts) {
          supposed to be noticed — it is supposed to be missed when it stops. */
       const breath = Math.sin(t * 0.026) * 0.006;
 
+      /* --- HE GESTURES WHILE HE TALKS -------------------------------------
+         Fired on the rising edge of a syllable, the same edge that spawns a
+         ring at the mask, and then let go of: the beat runs half to a whole
+         second on its own clock while the voice does whatever it likes. Only
+         a third of the eligible syllables get one, because a man who gestures
+         on every word is not emphasising anything.
+
+         The envelope is fast out, slow back — 30% of the beat to reach the
+         extent and 70% to return — which is the shape of a hand thrown out on
+         a word and drawn back over the phrase after it. A symmetric envelope
+         reads as a pendulum. */
+      const onset = voice > 0.30 && gPrev <= 0.30;
+      gPrev = voice;
+      if (onset && talk > 0.25 && (t - gestT) > 30 && Math.random() < 0.34) {
+        gestT = t;
+        gestDur = 38 + Math.random() * 30;
+        gestAmp = 0.55 + Math.random() * 0.45;
+        gestSgn = Math.random() < 0.5 ? -1 : 1;
+      }
+      const gp = (t - gestT) / gestDur;
+      const beat = (gp < 0 || gp > 1) ? 0 : gestAmp * (gp < 0.30
+        ? 0.5 - 0.5 * Math.cos(gp / 0.30 * Math.PI)
+        : 0.5 + 0.5 * Math.cos((gp - 0.30) / 0.70 * Math.PI));
+
+      /* IDLE, HE IS NOT A STATUE EITHER. A slow settle at its own period, cut
+         to a fifth while he is speaking so the beats above own the movement.
+         Nothing on this canvas is ever allowed to be perfectly still. */
+      const armRoll   = beat * gestSgn * 0.105
+                      + Math.sin(t * 0.0021 + 0.4) * 0.016 * (1 - talk * 0.8);
+      /* Up is negative y. The lift carries most of the read: a forearm block
+         rising two per cent of his height is a hand coming up to make a
+         point, and it is the channel that survives being watched from across
+         the room. A touch of `voice` on top so the arms tighten on the
+         syllable itself rather than only on the beat. */
+      const armLift   = -(beat * 0.013 + voice * 0.004)
+                      + Math.sin(t * 0.0019 + 2.2) * 0.004;
+      /* And they open. Six per cent about the elbow, never inwards — crossed
+         arms can unfold and cannot fold further. */
+      const armSpread = beat * 0.026;
+      const armLit    = beat * 0.30;
+
+      /* THE GHOST. Three tenths a frame puts it about three frames behind,
+         which is nothing on a body that barely moves and is very visible on
+         the one part of him that snaps. Drawn later, additively, at a fifth
+         of the brightness: a projection whose fast-moving parts arrive late,
+         which is the difference between a figure that gestures and a
+         HOLOGRAM that gestures. */
+      armGhostR += (armRoll - armGhostR) * 0.30;
+      armGhostL += (armLift - armGhostL) * 0.30;
+      armGhostS += (armSpread - armGhostS) * 0.30;
+
       const BONES = { headYaw: headYaw, headNod: headNod, headRoll: headRoll,
-                      bodyRoll: bodyRoll, breath: breath, capeX: capeX };
+                      bodyRoll: bodyRoll, breath: breath, capeX: capeX,
+                      armRoll: armRoll, armLift: armLift, armSpread: armSpread };
       const y0 = cy + R * 0.86;                   /* the floor, at the cloak hem */
 
       /* THE ROOM. He was standing in nothing, which is what made him read as
@@ -2620,9 +2833,17 @@ function makeCore(id, opts) {
       if (ent > 0) {
         ctx.translate(cx, cy); ctx.scale(1 + ent * 0.5, 1 + ent * 0.5); ctx.translate(-cx, -cy);
       }
-      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95 }, BONES));
+      drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ sweep: ((t * 0.0024) % 1.9) - 0.95, armLit: armLit }, BONES));
       ctx.globalCompositeOperation = 'lighter';
       drawCloud(cx, cy - R * 0.04, R, cyaw, col, Object.assign({ step: 2, gain: 0.26, grow: 2.4, bright: true }, BONES));
+      /* The arms, where they were three frames ago. Only while they are
+         actually moving — a ghost of a stationary arm is just a second arm in
+         the same place, drawn twice as bright. */
+      if (Math.abs(armRoll - armGhostR) > 0.004 || Math.abs(armLift - armGhostL) > 0.0012) {
+        drawCloud(cx, cy - R * 0.04, R, cyaw, col,
+          Object.assign({ step: 2, gain: 0.50, grow: 1.0, armOnly: true }, BONES,
+            { armRoll: armGhostR, armLift: armGhostL, armSpread: armGhostS, armLit: 0 }));
+      }
 
       /* ── THE VOICE, AT HIS FACE ──────────────────────────────────────
          Everything else on this canvas already answers `energy`: the smoke,

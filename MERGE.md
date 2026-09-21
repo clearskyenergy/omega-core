@@ -1243,3 +1243,30 @@ Nothing about the two datasets is de-duplicated across sources. They publish
 different records from different agencies, and silently collapsing them would
 drop provenance a user is entitled to see; each source already guarantees
 uniqueness by id within itself.
+
+## 2026-09-20 — detailed priority-state fiber maps
+
+Merged the supplied nationwide inventory additively into the current core:
+30,580 source map records / 218,350 published line parts, with partial geometry
+in 40 states plus DC. Added CNS Massachusetts and Nichols/STN New York public
+route sources. All baseline detailed coordinates are retained. New Jersey,
+New York, Connecticut and Massachusetts remain especially incomplete statewide.
+
+Grid Atlas and `usa-fiber-map.html` now share `omega-published-fiber.js`:
+priority state navigation, status/source filters, publisher popups, overview
+and detailed state loading, bounded caching and cancellation of stale draws.
+State links open the Fiber project profile. Layer selection remains in Settings.
+Public fiber checks occupy the same drawer; duplicate floating layers are removed.
+
+The shared server evidence library reads lossless `data/fiber-api/*.json.gz`;
+Vercel explicitly bundles `data/{fiber,fiber-api}/**`. Border-state records are
+deduplicated by source ID. Missing deployed data now fails visibly. Authenticated
+site checks calculate distances server-side; display overviews are never used for
+site distances. The existing legacy grid scoring code is unchanged except that
+synthetic, estimated and design-only layers no longer feed the nearest-fiber
+input. Historical road-derived corridors are absent from project presets.
+
+No editor, tenant, billing, Firestore schema or deployment-project replacement.
+The editor's existing `publicFiber` integration automatically receives the same
+expanded inventory. See `docs/FIBER-PRIORITY-STATES.md` for counts, acquisition
+gaps, source references, refresh commands and verification.
