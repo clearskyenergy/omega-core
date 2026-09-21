@@ -72,7 +72,7 @@ module.exports = A.handler(function (req, res) {
   var serial = P.serialFrom(b.serial);
 
   if (!stationId || !token) throw A.httpError(401, 'this scanner is not paired');
-  if (!scanId) throw A.httpError(400, 'scanId required');
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(scanId)) throw A.httpError(400, 'Valid scanId required');
   if (!serial) return { ok: false, reason: 'unreadable', say: 'That code did not read as a serial. Scan the label on the frame.' };
 
   if (!rateLimit(stationId)) throw A.httpError(429, 'too many scans from this station');
@@ -90,6 +90,7 @@ module.exports = A.handler(function (req, res) {
         if (prev.exists) {
           /* A replay. Hand back what we decided the first time. */
           var p = prev.data() || {};
+          if (p.serial !== serial || p.stationId !== stationId) throw A.httpError(409, 'Scan identifier already belongs to another event');
           return { replayed: true, verdict: p.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' } };
         }
         var uRef = db.collection('plant_units').doc(orgId + '__' + serial);
@@ -101,10 +102,18 @@ module.exports = A.handler(function (req, res) {
             ? tx.get(db.collection('plant_works_orders').doc(unit.woId))
             : Promise.resolve(null);
 
-          return Promise.resolve(woP).then(function (wos) {
+          return Promise.resolve(woP).then(async function (wos) {
             var wo = wos && wos.exists ? wos.data() : null;
             var routing = P.routingOf(wo);
             var verdict = P.judgeScan(unit, station, routing);
+            var currentStation = await tx.get(stRef);
+            if (!currentStation.exists || currentStation.data().active === false || currentStation.data().tokenHash !== st.tokenHash) throw A.httpError(403, 'Station credential revoked');
+            if (unit && unit.orderId) {
+              var commercial = await tx.get(db.collection('orders').doc(unit.orderId));
+              if (!commercial.exists || commercial.data().cancelRequested || (commercial.data().logic || {}).paymentException || ['cancelled', 'shipped', 'complete'].indexOf(commercial.data().status) >= 0) {
+                verdict = { ok: false, reason: 'order_blocked', say: 'This order is stopped or already shipped. Contact the office.' };
+              }
+            }
             var now = new Date().toISOString();
 
             /* Every scan is recorded, including the refused ones. A bench that
@@ -121,6 +130,7 @@ module.exports = A.handler(function (req, res) {
 
             var patch = P.applyScan(unit, verdict, now);
             if (patch) {
+              if (patch.at === 'ready' && unit.shipUnit && !unit.orderId) patch.inventoryStatus = 'available';
               patch.updatedAt = FV.serverTimestamp();
               patch.lastStationId = stationId;
               tx.update(uRef, patch);

@@ -52,15 +52,15 @@ var NO_FLOOR = { 'new': true, 'quoted': true, 'cancelled': true };
    there and already validated. Both are wrong in a way that costs work. */
 var STAGES = [
   { key: 'intake',     label: 'Order intake',    state: 'live',    by: 'api/embed-order.js' },
-  { key: 'payment',    label: 'Deposit',         state: 'off',     by: 'not built — QuickBooks invoice + payment link' },
+  { key: 'payment',    label: 'Deposit',         state: 'partial', by: 'QuickBooks installments + verified payments; requires connected company and worker' },
   /* Built and idempotent, but a person presses it. api/plant-release.js's own
      header says the payment provider should call it "while payment automation
      is being connected" — so this stage is live and its TRIGGER is the gap. */
-  { key: 'release',    label: 'Works order',     state: 'partial', by: 'api/plant-release.js — staff-triggered until payment automation lands' },
+  { key: 'release',    label: 'Works order',     state: 'partial', by: 'Omega Logic: accepted + deposit recorded → stock allocation / manufacture; enable per OEM' },
   { key: 'production', label: 'Production line', state: 'live',    by: 'api/mes-scan.js + api/mes-test-result.js' },
-  { key: 'unitdata',   label: 'Unit record',     state: 'partial', by: 'captured at release (lot, firmware, capacity, genealogy); no read path yet' },
-  { key: 'shipment',   label: 'Shipment',        state: 'off',     by: 'not built' },
-  { key: 'finalpay',   label: 'Final payment',   state: 'off',     by: 'not built' }
+  { key: 'unitdata',   label: 'Unit record',     state: 'live', by: '/plant — identity, genealogy, machine measurements and scan history' },
+  { key: 'shipment',   label: 'Shipment',        state: 'partial', by: 'Office records carrier/tracking after passed serials + final payment; no carrier booking integration' },
+  { key: 'finalpay',   label: 'Final payment',   state: 'partial', by: 'Ready release queues balance invoice; bank wires require clearance evidence and bank confirmation' }
 ];
 
 function norm(v) { return String(v == null ? '' : v).trim(); }
@@ -110,6 +110,15 @@ function board(units, routing) {
    estate where ClearSky's number may sit next to the tenant's. */
 function moneyOf(order) {
   var o = order || {};
+  if (o.logic && o.logic.commercial) {
+    var l = o.logic, depInvoice = l.invoices.deposit || {}, finalInvoice = l.invoices.balance || {};
+    return { currency: 'USD', clearskyTotal: null, tenantTotal: l.commercial.totalCents / 100, cost: null,
+      depositPaidAt: depInvoice.satisfied ? depInvoice.checkedAt : null, depositAmount: (depInvoice.paidCents || 0) / 100,
+      finalPaidAt: finalInvoice.satisfied ? finalInvoice.checkedAt : null, invoiceRef: depInvoice.id || null,
+      recorded: ((depInvoice.paidCents || 0) + (finalInvoice.paidCents || 0)) / 100, legacyDepositFlag: false,
+      pending: [!depInvoice.satisfied && depInvoice.amountCents ? 'deposit' : null, !finalInvoice.satisfied && l.commercial.balanceCents ? 'final' : null].filter(Boolean),
+      error: l.paymentException || l.lastError || null };
+  }
   var tp = o.tenantPricing || {};
   var pr = o.pricing || {};
   var pending = [];
@@ -170,6 +179,7 @@ function row(order, floor) {
   var b = board(f.known ? f.units : [], routing);
 
   return {
+    id: o._id || o.id || null,
     orderNo: clip(o.orderNo, 120),
     orgId: lower(o.orgId), orgName: clip(o.orgName, 120),
     status: lower(o.status) || 'new',
@@ -265,7 +275,7 @@ function rollup(orders, floors, asOf) {
       byMilestone: byMilestone,
       /* Absent, not zero: nothing in this codebase has collected a payment
          against an order yet. */
-      collected: null
+      collected: rows.some(function (r) { return r.money.recorded != null; }) ? rows.reduce(function (n, r) { return n + (r.money.recorded || 0); }, 0) : null
     },
     tenants: tenantList,
     stations: stationList,

@@ -52,7 +52,7 @@ function requireVerified(caller) {
 
 /* The customer's own view of their account. Key by key: `terms` here is a
    narrowed copy, not the stored object. */
-function project(customerId, c, userDoc, orderCount) {
+function project(customerId, c, userDoc, orderCount, defaults) {
   var t = (c && c.terms) || {};
   return {
     customerId: customerId,
@@ -72,6 +72,8 @@ function project(customerId, c, userDoc, orderCount) {
     /* Net days and a discount are terms they agreed. creditLimit and the
        tenant's notes are judgements about them and stay internal. */
     terms: {
+      depositPct: require('./_lib/logic-policy').terms(defaults, t).depositPct,
+      dueDays: require('./_lib/logic-policy').terms(defaults, t).dueDays,
       netDays: (t.netDays === 0 || t.netDays) ? Number(t.netDays) : null,
       discountPct: (t.discountPct === 0 || t.discountPct) ? Number(t.discountPct) : null,
       poRequired: t.poRequired === true
@@ -192,14 +194,16 @@ module.exports = A.handler(function (req) {
     var db = A.db();
     var orgRef = db.collection('omega_orgs').doc(org);
 
-    return findOrCreate(db, org, email, caller).then(function (acct) {
+    return findOrCreate(db, org, email, caller).then(async function (acct) {
+      var settings = await orgRef.collection('fulfillment').doc('config').get();
+      var defaults = settings.exists ? settings.data().terms : null;
       if (method === 'GET') {
         /* Touch lastSeenAt; a failure here must never fail the read. */
         orgRef.collection('customers').doc(acct.id).collection('users').doc(email)
           .set({ lastSeenAt: new Date().toISOString(), uid: caller.uid }, { merge: true })
           ['catch'](function () {});
         return countOrders(db, org, email).then(function (n) {
-          var out = project(acct.id, acct.data, acct.user, n);
+          var out = project(acct.id, acct.data, acct.user, n, defaults);
           out.createdNow = acct.created;
           return out;
         });
@@ -240,7 +244,7 @@ module.exports = A.handler(function (req) {
         .then(function (c) { return cref.collection('users').doc(email).get()
           .then(function (u) {
             return countOrders(db, org, email).then(function (n) {
-              return project(acct.id, c.exists ? c.data() : {}, u.exists ? u.data() : {}, n);
+              return project(acct.id, c.exists ? c.data() : {}, u.exists ? u.data() : {}, n, defaults);
             });
           }); });
     });

@@ -78,6 +78,10 @@ module.exports = A.handler(function (req) {
       var order = s.data() || {};
       var orgId = String(order.orgId || '').toLowerCase();
 
+      if (order.logic && ['price', 'status'].indexOf(b.action) >= 0) {
+        throw A.httpError(409, 'This order is managed by Omega Logic. Use its office workflow so invoice, payment, cancellation and shipment controls remain consistent.');
+      }
+
       return A.canActInOrg(caller, orgId).then(function (inOrg) {
         /* Two different capabilities, kept as two variables rather than one
            `allowed`, because every branch below needs to say WHICH. */

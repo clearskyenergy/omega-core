@@ -40,9 +40,12 @@ module.exports = A.handler(function (req) {
     if (!caller.staff) throw A.httpError(403, 'Only ClearSky may release a works order.');
     var db = A.db(), FV = A.FieldValue();
     var orderRef = db.collection('orders').doc(orderId);
-    return orderRef.get().then(function (orderSnap) {
+    return orderRef.get().then(async function (orderSnap) {
       if (!orderSnap.exists) throw A.httpError(404, 'order not found');
       var firstOrder = orderSnap.data() || {};
+      if (firstOrder.logic) throw A.httpError(409, 'Omega Logic releases work after verified payment. Register serials against its existing works order from the factory workspace.');
+      var logicContext = await require('./_lib/logic-access').context(firstOrder.orgId);
+      if (logicContext.config.enabled) throw A.httpError(409, 'This OEM uses Omega Logic; approve the customer price and deposit in the order office before release.');
       if (firstOrder.status !== 'accepted' && firstOrder.status !== 'in_fulfilment') {
         throw A.httpError(409, 'Only an accepted order can be released to the plant.');
       }

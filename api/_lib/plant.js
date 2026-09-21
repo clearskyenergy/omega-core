@@ -114,6 +114,10 @@ function judgeScan(unit, station, routing, opts) {
 
   var at = norm(unit.at);
   var ai = at ? indexOf(routing, at) : -1;
+  if (at && ai < 0) return { ok: false, reason: 'unknown_position', say: 'This unit has an unknown position; supervisor review is required.' };
+  if (unit.test && unit.test.result === 'fail' && !opts.machine) {
+    return { ok: false, reason: 'retest_required', say: 'A failed test requires a passing machine retest before this unit can move.' };
+  }
 
   if (unit.hold) {
     return { ok: false, reason: 'on_hold', at: at, say: 'On hold — ' + (norm(unit.hold) || 'see the supervisor') + '. A scan cannot release it.',
@@ -199,6 +203,9 @@ function judgeMachineResult(unit, station, routing, result) {
 
 function applyMachineResult(unit, verdict, at, record) {
   record = record || {};
+  if (verdict && verdict.ok && verdict.action === 'duplicate' && record.result === 'pass' && unit.test && unit.test.result === 'fail') {
+    return { test: record, testFailedAt: null };
+  }
   if (verdict && verdict.ok && verdict.action === 'advance') {
     var pass = applyScan(unit, verdict, at);
     pass.test = record;

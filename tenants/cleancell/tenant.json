@@ -23,7 +23,8 @@
     "schematics",
     "exports",
     "permitting",
-    "whitelabel"
+    "whitelabel",
+    "omega-logic"
   ],
   "subscriptionDue": "09/30/2026",
   "whiteLabel": {

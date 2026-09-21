@@ -187,6 +187,10 @@ function milestoneOf(order, units, map) {
   if (key === null) {
     key = stationMilestone(units) || 'production';
   }
+  // Some items may be allocated ready stock while other items are not yet
+  // serialized. Those ready units cannot speak for an incomplete order.
+  if (order && order.logic && key === 'ready' && !order.logic.readyAt) key = 'production';
+  if (order && order.logic && (order.cancelRequested || order.logic.paymentException) && key !== 'shipped') key = 'confirmed';
 
   var s = step(key) || LADDER[0];
   var label = s.label, say = s.say;
@@ -278,6 +282,17 @@ function publicOrder(order, opts) {
       currency: clip(o.tenantPricing.currency || 'USD', 8)
     };
   }
+  if (o.logic && o.logic.commercial && o.tenantPricing && o.tenantPricing.publishedToCustomer === true) {
+    var policy = require('./logic-policy'), commercial = o.logic.commercial;
+    out.checkout = { currency: 'USD', base: commercial.baseCents / 100, processingFee: commercial.feeCents / 100,
+      total: commercial.totalCents / 100, depositPercent: commercial.terms.depositPct,
+      invoices: Object.keys(o.logic.invoices || {}).map(function (stage) {
+        var invoice = o.logic.invoices[stage];
+        return { stage: stage, amount: invoice.amountCents / 100, recorded: (invoice.paidCents || 0) / 100,
+          status: invoice.status, payUrl: o.cancelRequested || o.logic.paymentException ? null : policy.paymentLink(invoice.payUrl), dueDays: commercial.terms.dueDays };
+      }) };
+  }
+  if (o.shipment) out.shipment = { carrier: clip(o.shipment.carrier, 80), tracking: clip(o.shipment.tracking, 120), shippedAt: when(o.shipment.shippedAt) };
   return out;
 }
 

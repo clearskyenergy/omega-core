@@ -1360,3 +1360,50 @@ grep -n 'match /plant_units' firestore.rules
 The addendum could not be pasted verbatim: its `plantOrg()` fell back to
 `myOrg()`, which does not exist in these rules. `userOrg()` is the real name
 and already folds through `orgAlias()`.
+
+## Omega Logic OEM workspace and accounting workflow — 2026-09-21
+
+Built on the merged `main` implementation, not a second orders system.
+`/omega-logic` is the private owner destination in the Where to chooser;
+`?org=cleancell.us` opens the OEM office and links its existing public embed,
+customer portal, white-label designer/setup, new `/plant/` workspace and the
+scoped Mission view. The private directory and commercial/bank controls require
+verified `tom@clearsky-usa.com` server-side. Active OEM members/admins can use
+their org-scoped operational surfaces; buyers keep the existing email-isolated
+projection API. No agent was created: the user deferred that separate priority.
+
+Commercial logic lives entirely in `api/_lib/logic-policy.js`,
+`logic-workflow.js` and `qbo-sales.js`. Explicit customer-price approval is
+separate from the legacy internal fulfillment price. Terms snapshot to each
+order: 30% down on receipt by default, account overrides respected. ClearSky's
+configurable initial 0.25% processing fee is added to the price and disclosed
+separately; actual provider fees are not guessed. Omega Logic subscription
+billing stays on the existing SaaS billing rail; the bundle includes platform
+lite and white-label sitemap resale, not anonymous full-editor access.
+
+The authorized exception to the former read-only QuickBooks policy is now
+implemented: owner OAuth connection, company-pinned customer/invoice writes,
+stable request IDs, serialized token refresh, HMAC webhooks, durable worker
+leases/retries, invoice links and verified Payment allocations. Accepted +
+deposit-paid orders reserve eligible serialized stock transactionally and
+release the manufacturing shortage. Actual serial registration, genealogy and
+scan/test readback live in the factory workspace. Ready orders queue the balance
+invoice; shipment records require complete passed units and reconciled payment.
+No client-paid boolean or invoice credit balance can release work.
+
+The bank rail is intentionally **not represented as complete**. The user plans
+to wire CleanCell but has not selected a bank integration. The office prepares
+OEM proceeds from bank-confirmed cleared receipts and records completed wires;
+it never calls a bank or treats a QuickBooks accounting entry as a sent transfer.
+Settlement-provider automation, beneficiary verification and automatic wires
+remain launch dependencies, as do accountant-approved installment/tax mapping,
+Intuit sandbox validation, deployment, real catalog/website installation and
+applicable subscription configuration. See `docs/OMEGA-LOGIC-OPERATIONS.md` for
+the rollout checklist, operational caps and known exclusions.
+
+Verification: `npm test`, `npm run test:logic`, inline HTML/script resolution,
+structural rules checks and local browser fixture inspection. Workflow tests
+mock Firestore/Intuit; no live invoices, transfers or production data were
+created by these tests. Rules/index changes in this worktree are not live until
+deployed. `scripts/preview-logic.js` is a loopback-only, read-only UI fixture,
+clearly labelled as test data, with no Firebase/payment connection.
