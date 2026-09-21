@@ -1,0 +1,126 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doom · Hologram Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050e12;color:#deeee8;font:14px system-ui,sans-serif}main{min-height:100vh;display:grid;grid-template-columns:1fr 330px}header{position:absolute;top:32px;left:38px;z-index:2}header small,.label{color:#64c9ae;font:11px monospace;letter-spacing:3px}h1{font-size:32px;font-weight:400;letter-spacing:5px;margin:10px 0}#stage{height:100vh;min-height:580px;position:relative;background:radial-gradient(ellipse at 50% 65%,#12332f 0,transparent 58%);overflow:hidden}#stage:before{content:'';position:absolute;width:47%;height:10%;bottom:7%;left:26%;border:1px solid #398c75;border-radius:50%;box-shadow:0 0 35px #3be4b321,inset 0 0 30px #3be4b318;pointer-events:none}canvas{position:relative}aside{padding:40px 28px;border-left:1px solid #20332f;background:#0a1519;display:flex;flex-direction:column;gap:24px}h2{font-weight:400;font-size:20px;margin:9px 0}p{color:#91a9a1;line-height:1.65}button,a.download{border:1px solid #35554a;background:#122720;color:#d5eee4;padding:12px 14px;border-radius:6px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block}button:hover,button.active{background:#225c48;border-color:#69d6ae}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}textarea{width:100%;height:95px;background:#06100f;border:1px solid #35554a;color:#dae9e2;padding:12px;border-radius:6px;font:inherit;resize:vertical}#status{font:12px monospace;color:#7de5ba}.hint{position:absolute;bottom:28px;left:38px;color:#79958b;font:11px monospace;letter-spacing:1px}.reference{display:flex;gap:15px;align-items:center;margin-top:auto;font-size:12px;color:#7e978e}.reference img{width:62px;height:100px;object-fit:cover;border-radius:4px}@media(max-width:760px){main{grid-template-columns:1fr}#stage{height:68vh;min-height:480px}aside{border-left:0;border-top:1px solid #20332f;padding:24px}header{top:20px;left:24px}h1{font-size:24px}}
+
+select{display:block;width:100%;margin-top:12px;padding:11px;background:#122720;color:#deeee8;border:1px solid #35554a;border-radius:6px;font:inherit}
+button:disabled{opacity:.35;cursor:not-allowed}button:disabled:hover{background:#122720;border-color:#35554a}.sculpture-frame{position:absolute;inset:120px 0 52px;width:100%;height:calc(100% - 172px);border:0;z-index:1}.credit{font-size:12px;line-height:1.65;margin:0}.credit a{color:#80d5bb}.sculpture-mode:before{display:none}.holo-effect .sculpture-frame{filter:grayscale(.8) sepia(.25) hue-rotate(95deg)}.voice-active #status{color:#c5fff0}header{pointer-events:none}.hint{z-index:2;pointer-events:none}
+</style></head><body><main><section id="stage"><header><small>JARVIS / RIGGED DOOM · V5</small><h1>DOOM</h1><span id="status" role="status">Constructing hologram…</span></header><div class="hint">DRAG FOR DEPTH · ORIGINAL IMAGE</div></section><aside><div><span class="label">01 / PRESENCE</span><h2>Your selected Doom.</h2><label for="sourceMode" class="label">CHARACTER SOURCE</label><select id="sourceMode"><option value="rigged">Dr Doom V2 · rigged character</option><option value="sculpture">Rui Barbosa · 3D sculpture</option><option value="portrait">Your original · depth portrait</option></select><p id="model-note"></p><div class="buttons"><button data-state="idle" class="active">Stand</button><button data-state="walk">Walk</button><button id="still">Pause motion</button><button data-state="listening">Listen</button><button data-state="speaking">Gesture</button></div></div><div><span class="label">02 / VOICE</span><p><label for="line">Give him something to say.</label></p><textarea id="line">I have reviewed the situation. Let us proceed with precision.</textarea><div class="buttons" style="margin-top:8px"><button id="speak">Speak</button><button id="stop">Stop</button></div></div><div class="buttons"><button id="material">Hologram effect</button><button id="reset">Front view</button></div><p id="rig-credit" class="credit"><a href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener noreferrer">Dr Doom V2</a> by <a href="https://sketchfab.com/VisiionLovesYou" target="_blank" rel="noopener noreferrer">Visiion</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>. Procedural animation added for this preview.</p><p id="credit" class="credit"><a href="https://sketchfab.com/3d-models/dr-doom-marvel-3d-print-ready-8c5a5ce64b1a464f997dbdbcfe201d10" target="_blank" rel="noopener noreferrer">Dr Doom - Marvel - 3D Print ready</a> by <a href="https://sketchfab.com/ruibarbosa.art" target="_blank" rel="noopener noreferrer">Rui Barbosa</a> on <a href="https://sketchfab.com" target="_blank" rel="noopener noreferrer">Sketchfab</a>.</p><a class="download" href="assets/doom/dr-doom-v2-animated.glb" download>Download animated Doom GLB ↗</a><div><label class="label" for="modelFile">IMPORT FULL 3D MODEL</label><p style="font-size:12px">Choose a GLB with embedded textures. The model stays on this device.</p><input id="modelFile" type="file" accept=".glb" style="max-width:100%"></div><div class="reference"><img src="assets/doom-figure.png" alt="Original Doom reference"><span>Your original reference.<br>Available under Character source.</span></div></aside></main><script src="assets/vendor/three-r128/three.min.js"></script><script src="assets/vendor/three-r128/GLTFLoader.js"></script><script src="omega-doom.js?v=20260921-rigged-5"></script><script>
+(function () {
+  'use strict';
+  var status = document.getElementById('status'), stage = document.getElementById('stage');
+  var actor = null, solid = true, utterance = null, still = false, mode = 'sculpture', generation = 0;
+  var modelUrl = 'https://sketchfab.com/models/8c5a5ce64b1a464f997dbdbcfe201d10/embed';
+  var frame = document.createElement('iframe');
+  frame.title = 'Dr Doom - Marvel - 3D Print ready by Rui Barbosa';
+  frame.className = 'sculpture-frame';
+  frame.setAttribute('allow', 'autoplay; fullscreen; xr-spatial-tracking');
+  frame.setAttribute('allowfullscreen', '');
+  stage.appendChild(frame);
+  var hint = document.querySelector('.hint');
+  function showStatus(s) { status.textContent = s; }
+  function state(s) {
+    if (actor) actor.setState(s);
+    showStatus(mode === 'sculpture' ? '3D SCULPTURE / FIXED POSE' : 'ONLINE / ' + s.toUpperCase());
+    Array.prototype.forEach.call(document.querySelectorAll('[data-state]'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-state') === s);
+    });
+  }
+  function stop() {
+    utterance = null;
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (actor) actor.setEnergy(0);
+    stage.classList.remove('voice-active');
+    state('idle');
+  }
+  function updateControls() {
+    var sculpture = mode === 'sculpture';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-state],#still'), function (b) { b.disabled = sculpture || (b.getAttribute('data-state') === 'walk' && mode === 'portrait'); });
+    document.getElementById('sourceMode').value = mode === 'import' ? 'rigged' : mode;
+    document.getElementById('material').textContent = solid ? 'Hologram effect' : 'Original colors';
+    document.getElementById('still').textContent = 'Pause motion';
+    document.getElementById('still').classList.remove('active');
+    document.getElementById('model-note').textContent = sculpture
+      ? 'Full 3D sculpture. Drag to rotate; scroll to zoom. Its pose is fixed. Voice playback does not animate the limbs.'
+      : 'Original-image depth portrait. Limited turn and subtle speech reactions; arms remain crossed.';
+    document.getElementById('credit').hidden = !sculpture;
+    document.getElementById('rig-credit').hidden = mode !== 'rigged';
+    if(mode === 'rigged'){document.getElementById('model-note').textContent='Your supplied 3D character: idle breathing, attentive head movement, varied speaking gestures and a procedural walk cycle.';}
+    hint.textContent = sculpture ? 'FULL 3D SCULPTURE · DRAG TO ROTATE' : mode === 'rigged' ? 'RIGGED 3D CHARACTER · DRAG TO ROTATE' : '2.5D DEPTH · ORIGINAL IMAGE';
+    frame.style.display = sculpture ? 'block' : 'none';
+    stage.classList.toggle('sculpture-mode', sculpture);
+    stage.classList.remove('holo-effect');
+  }
+  function selectMode(value) {
+    generation++;
+    stop();
+    if (actor) { actor.destroy(); actor = null; }
+    mode = value; solid = true; still = false;
+    updateControls();
+    if (mode === 'sculpture') {
+      frame.src = modelUrl + '?autostart=1&transparent=1';
+      showStatus('3D SCULPTURE / FIXED POSE');
+    } else {
+      frame.removeAttribute('src');
+      var ticket = generation;
+      try {
+        actor = mode === 'rigged' ? OmegaDoom.create(stage) : OmegaDoom.createPortrait(stage);
+        actor.ready.then(function () { if (ticket === generation) state('idle'); }).catch(function (e) { if (ticket === generation) showStatus('Unable to render: ' + e.message); });
+      } catch (e) { showStatus('Unable to render: ' + e.message); }
+    }
+  }
+  document.getElementById('sourceMode').onchange = function () { selectMode(this.value); };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-state]'), function (b) {
+    b.onclick = function () { stop(); state(b.getAttribute('data-state')); };
+  });
+  document.getElementById('speak').onclick = function () {
+    stop();
+    if (!window.speechSynthesis) { showStatus('Speech unavailable in this browser'); return; }
+    var text = document.getElementById('line').value.trim();
+    if (!text) return;
+    var u = new SpeechSynthesisUtterance(text); utterance = u; u.rate = .85; u.pitch = .7;
+    u.onstart = function () { if (utterance !== u) return; if (actor) actor.setState('speaking'); stage.classList.add('voice-active'); showStatus(mode === 'sculpture' ? 'VOICE PLAYING / SCULPTURE POSE FIXED' : 'ONLINE / SPEAKING'); };
+    u.onboundary = function () { if (utterance === u && actor) { actor.setEnergy(.6); setTimeout(function () { if (utterance === u && actor) actor.setEnergy(0); }, 150); } };
+    u.onend = u.onerror = function () { if (utterance === u) { utterance = null; if (actor) actor.setEnergy(0); stage.classList.remove('voice-active'); state('idle'); } };
+    window.speechSynthesis.speak(u);
+  };
+  document.getElementById('stop').onclick = stop;
+  document.getElementById('material').onclick = function () {
+    solid = !solid;
+    if (actor) actor.setSolid(solid);
+    stage.classList.toggle('holo-effect', mode === 'sculpture' && !solid);
+    this.textContent = solid ? 'Hologram effect' : 'Original colors';
+  };
+  document.getElementById('still').onclick = function () {
+    still = !still; if (actor) actor.setPaused(still);
+    this.textContent = still ? 'Resume motion' : 'Pause motion'; this.classList.toggle('active', still);
+  };
+  document.getElementById('reset').onclick = function () { if (actor) actor.reset(); else frame.src = modelUrl + '?autostart=1&transparent=1'; };
+  document.getElementById('modelFile').onchange = function () {
+    var file = this.files[0]; if (!file) return;
+    var ticket = ++generation; stop(); showStatus('LOADING LOCAL GLB…');
+    var reader = new FileReader();
+    reader.onerror = function () { if (ticket === generation) showStatus('Could not read the model'); };
+    reader.onload = function () {
+      if (ticket !== generation) return;
+      var next;
+      try {
+        next = OmegaDoom.createModel(stage, reader.result);
+        next.ready.then(function (info) {
+          if (ticket !== generation) { next.destroy(); return; }
+          if (actor) actor.destroy(); actor = next; mode = 'import'; solid = true; still = false;
+          frame.removeAttribute('src'); updateControls();
+          showStatus('LOCAL 3D / ' + info.bones + ' BONES / ' + info.clips.length + ' CLIPS');
+          hint.textContent = 'IMPORTED FULL 3D MODEL · DRAG TO ROTATE';
+          document.getElementById('model-note').textContent = 'Local GLB model. Motion depends on its skeleton, bone names and included animation clips.';
+        }).catch(function (e) { next.destroy(); if (ticket === generation) showStatus('Import failed: ' + e.message); });
+      } catch (e) { showStatus('Import failed: ' + e.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  window.addEventListener('pagehide', function () { generation++; stop(); if (actor) actor.destroy(); frame.removeAttribute('src'); });
+  selectMode('rigged');
+})();
+
+</script></body></html>

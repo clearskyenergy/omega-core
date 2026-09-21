@@ -512,6 +512,15 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .coreLayer{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:0;
            transition:opacity .5s ease}
 .coreLayer.on{opacity:1}
+#missionDoom{position:absolute;inset:4% 12% 9%;display:none}
+#missionDoomCredit{display:none;position:absolute;bottom:5%;left:0;right:0;text-align:center;font-size:9px;color:var(--dim);pointer-events:auto}
+.coreLayer.characterReady #arc{visibility:hidden}
+.coreLayer.characterReady #missionDoom{display:block}
+.coreLayer.characterReady #missionDoomCredit{display:block}
+.coreLayer.characterReady .coreLabel{justify-content:flex-end;padding-bottom:2%}
+.characterSettings{padding:14px;display:grid;gap:10px}
+.characterSettings select{width:100%;padding:10px;background:#102029;color:#e5f4ee;border:1px solid #44645b;border-radius:5px}
+
 .coreLayer canvas{width:100%;height:100%;display:block}
 /* transform:none matters. The older .coreLabel rule centres a SMALL box with
    translate(-50%,-50%); inherit that on a box stretched to inset:0 and it
@@ -1404,6 +1413,8 @@ body.arranging .scroll{pointer-events:none}
          is standing in front of something. Only lit on the command view. -->
     <div class="coreLayer" id="coreLayer">
       <canvas id="arc"></canvas>
+      <div id="missionDoom" aria-label="Animated Doom character"></div>
+      <a id="missionDoomCredit" href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener">Dr Doom V2 · Visiion · CC BY 4.0 · animated adaptation</a>
       <div class="coreLabel">
         <div class="cName">J.A.R.V.I.S</div>
         <div class="cSub">AI CORE</div>
@@ -1728,6 +1739,16 @@ body.arranging .scroll{pointer-events:none}
       <div class="cmdGrid">
         <div class="col">
           <div class="panel" data-widget="pipeline" style="flex:none">
+            <div class="ptitle">Character & appearance</div>
+            <div class="characterSettings">
+              <label for="characterMode">Jarvis character</label>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <label for="doomCharacter">Doom appearance</label>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
+            </div>
+          </div>
+          <div class="panel" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
             <!-- The ingest health warning lived on the command view, under the
@@ -1779,6 +1800,9 @@ body.arranging .scroll{pointer-events:none}
   <div id="captext"></div>
 </div>
 
+<script src="assets/vendor/three-r128/three.min.js"></script>
+<script src="assets/vendor/three-r128/GLTFLoader.js"></script>
+<script src="omega-doom.js?v=20260921-rigged-5"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -3186,7 +3210,7 @@ function makeCore(id, opts) {
        Doom — and whichever is not on duty returns WITHOUT clearing. Clearing
        is what would make them fight: each would wipe the other's frame and you
        would get a flicker at 60fps rather than a picture. */
-    if (opts.doomOnly && !doomNow) { requestAnimationFrame(frame); return; }
+    if (opts.doomOnly && (!doomNow || el('coreLayer').classList.contains('characterReady'))) { requestAnimationFrame(frame); return; }
     ctx.clearRect(0, 0, W, H);
 
     const cx = W / 2, cy = H / 2;
@@ -3642,7 +3666,46 @@ function makeQuantum(id, opts){
    in front of all day is the one that had to come alive. */
 const arc = makeBurst('arc', { scale: 0.60 });
 /* The Doom figure he drew, still on the same canvas, still only in doom mode. */
-const doomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
+let missionDoom = null, characterGeneration = 0, characterState = 'idle';
+let doomCharacter = 'rigged';
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+function syncDoomCharacter() {
+  const generation = ++characterGeneration;
+  const layer = el('coreLayer'), host = el('missionDoom');
+  if (missionDoom) { missionDoom.destroy(); missionDoom = null; }
+  layer.classList.remove('characterReady'); host.style.display = 'none';
+  el('doomCharacter').value = doomCharacter;
+  if (document.documentElement.dataset.mode !== 'doom' || doomCharacter === 'classic') return;
+  host.style.display = 'block';
+  el('characterStatus').textContent = 'Loading character…';
+  try {
+    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    missionDoom = actor;
+    actor.ready.then(() => {
+      if (generation !== characterGeneration) return;
+      actor.setState(characterState); layer.classList.add('characterReady');
+      el('missionDoomCredit').style.visibility = doomCharacter === 'rigged' ? 'visible' : 'hidden';
+      el('characterStatus').textContent = 'Character ready. Saved on this browser.';
+    }).catch(() => {
+      if (generation !== characterGeneration) return;
+      actor.destroy(); missionDoom = null; host.style.display = 'none';
+      el('characterStatus').textContent = '3D character unavailable. Showing the classic Doom visual.';
+    });
+  } catch (_) { host.style.display = 'none'; el('characterStatus').textContent = '3D unavailable. Showing the classic Doom visual.'; }
+}
+const doomCore = {
+  set(v) { classicDoomCore.set(v); if (missionDoom) missionDoom.setEnergy(v); },
+  say(v) { classicDoomCore.say(v); characterState = v > 0 ? 'speaking' : 'idle'; if (missionDoom) { missionDoom.setState(characterState); missionDoom.setEnergy(v); } },
+  resize() { classicDoomCore.resize(); }
+};
+el('characterMode').addEventListener('change', e => setMode(e.target.value, false));
+el('doomCharacter').addEventListener('change', e => {
+  doomCharacter = e.target.value;
+  try { localStorage.setItem('jarvisDoomCharacter', doomCharacter); } catch (_) {}
+  if (document.documentElement.dataset.mode !== 'doom') setMode('doom', false); else syncDoomCharacter();
+});
+window.addEventListener('pagehide', () => { ++characterGeneration; if (missionDoom) missionDoom.destroy(); });
 /* The gold sphere for the command centre, same canvas, only in quantum mode. */
 const quantumCore = makeQuantum('arc', { scale: 0.60 });
 const gateCore = makeCore('gateArc', { scale: 0.34 });
@@ -4534,6 +4597,8 @@ function setMode(mode, announce){
   const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
   const doom = m==='doom', quantum = m==='quantum';
   document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  el('characterMode').value = m;
+  syncDoomCharacter();
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
   const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
   const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
@@ -4712,6 +4777,8 @@ async function relayReminders(){
 }
 /* The face follows the voice: this page speaks, so this page says so. */
 function face(state){
+  characterState = state === 'speaking' ? 'speaking' : state === 'listening' ? 'listening' : 'idle';
+  if (missionDoom) missionDoom.setState(characterState);
   if(!brainOn) return;
   try{ fetch(BRAIN+'/face',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state})}).catch(()=>{}); }catch(_){}
 }
