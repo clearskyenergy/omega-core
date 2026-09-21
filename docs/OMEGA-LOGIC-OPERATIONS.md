@@ -157,6 +157,14 @@ plan and other add-ons, adds Omega Logic/white-label entitlements, and records
 the four Editor Lite module selections in `billing/current.editorLite`.
 It does not charge the subscription or activate QuickBooks automation.
 
+Editor Lite opens at `/editor-lite.html?org=<tenant-domain>`. The four switches
+select its guided-build modules; other modules remain labeled “not in plan”.
+BESS target placement creates a generic concept until actual equipment is
+configured. Compute, EV and solar open the canonical guided configuration
+dialogs. Single-line, BOM, proposal, drawing-set and save commands use the
+existing editor, including its existing validation and tier requirements.
+This is an authenticated account feature, not the anonymous website sizer.
+
 The company administrator action creates an unverified Firebase Auth account
 and an `omega_orgs/{orgId}/members/{uid}` admin membership. It never resets an
 existing password or grants ClearSky/custom staff claims. Passwords are not

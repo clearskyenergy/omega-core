@@ -7,7 +7,7 @@ function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
   return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q,
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
-    setup: '/whitelabel-setup.html' + q, editor: '/editor.html', preview: '/editor.html?wlpreview=' + encodeURIComponent(org),
+    setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,
     mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html' };
 }
 module.exports = A.handler(async function (req, res) {

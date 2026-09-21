@@ -221,6 +221,18 @@
       var ov = (bill && bill.toolOverrides) || {};
       if (ov.editor === false) return refuse('plan');
 
+      // Lite tenants land in the small shell even from an old full-editor link.
+      // The embedded engine is still the same file; no second editor is copied.
+      if (bill && bill.editorLite && bill.editorLite.enabled === true) {
+        var inLite = false;
+        try { inLite = global.parent !== global && /^\/editor-lite(?:\.html)?\/?$/.test(global.parent.location.pathname) && global.parent.location.origin === global.location.origin; } catch (e) {}
+        if (!inLite) {
+          var q = new URLSearchParams(global.location.search); q.set('org', org);
+          global.location.replace('/editor-lite.html?' + q.toString());
+          return;
+        }
+      }
+
       return allow({ org: org, tier: (bill && bill.tier) || null, reason: 'active' });
     }, function () {
       /* The read failed — offline, rules hiccup, no network. Signed in is

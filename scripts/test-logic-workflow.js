@@ -73,6 +73,20 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('Editor Lite fails closed on module and subscription grants, including owner preview',async function(){
+  setup();var lite=require('../api/editor-lite');
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
+  assert.equal((await post(lite,{module:'bess',kw:1000,hours:2},admin)).kwh,2000);
+  await assert.rejects(post(lite,{module:'compute',kw:1000,hours:2}),/not included/);
+  await assert.rejects(post(lite,{module:'bess',kw:-1,hours:2}),/Target/);
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:99}),/duration/);
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2},Object.assign({},admin,{claims:{email_verified:false}})),/Verify/);
+  var response=await lite({method:'GET',query:{org:'cleancell.us'},caller:owner},{setHeader:function(){}});
+  assert.equal(response.preview,true);assert.equal(response.projectOrg,'clearsky-usa.com');assert.deepEqual(response.modules,['bess']);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'suspended'});
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
+});
 await check('portal subscription is independent of payment activation but payments remain blocked',async function(){setup();await db.doc('omega_orgs/cleancell.us/fulfillment/config').update({enabled:false});assert.equal(X.enabled(await X.authorize(admin,'cleancell.us',true)),false);await assert.rejects(W.price('one',1000,owner,true),/configuration/);await db.doc('omega_orgs/cleancell.us/billing/current').update({status:'past_due'});await assert.rejects(X.authorize(admin,'cleancell.us',false),/subscription/);});
 await check('enrollment preserves other addons and financial setup, records modules and disables safely',async function(){setup();var onboard=require('../api/logic-onboard');await db.doc('omega_orgs/cleancell.us/billing/current').update({addons:['compute']});await post(onboard,{action:'bundle',enabled:true,modules:['bess','solar']});var b=db.data.get('omega_orgs/cleancell.us/billing/current');assert.deepEqual(b.addons,['compute','omega-logic','whitelabel']);assert.deepEqual(b.editorLite.modules,['bess','solar']);assert.equal(db.data.get('omega_orgs/cleancell.us/fulfillment/config').itemRef,'5');await post(onboard,{action:'bundle',enabled:false,modules:[]});assert.equal(X.subscribed(await X.context('cleancell.us')),false);assert(db.data.get('omega_orgs/cleancell.us/billing/current').addons.includes('compute'));await assert.rejects(post(onboard,{action:'bundle',enabled:true,modules:['root']}),/modules/);await assert.rejects(post(onboard,{action:'bundle',enabled:true,modules:['bess']},admin),/owner/);});
 await check('administrator enrollment is tenant-scoped, unverified and retry-safe without password resets',async function(){
