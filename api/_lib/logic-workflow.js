@@ -15,6 +15,7 @@ async function price(orderId, total, caller, accept) {
   var ref = A.db().collection('orders').doc(P.id(orderId)), initial = await ref.get();
   if (!initial.exists) throw A.httpError(404, 'Order not found');
   var order = initial.data(), ctx = await X.context(order.orgId);
+  if(order.poIntake&&!order.poIntake.convertedAt)throw A.httpError(409,'Review and map the uploaded PO to catalog items before pricing');
   if (!X.enabled(ctx)) throw A.httpError(409, 'Enable the Omega Logic subscription and fulfillment configuration first');
   var conf = ctx.config;
   if (!conf.realmId || !conf.itemRef || conf.accountingApproved !== true) throw A.httpError(409, 'Connect ClearSky QuickBooks and approve the installment item/tax treatment first');

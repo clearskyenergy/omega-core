@@ -23,6 +23,7 @@ function officeShell(d){
   document.querySelector('header b').textContent=(d.brand&&d.brand.name)||d.name;
   nav.insertAdjacentHTML('beforeend','<a href="/logic-catalog.html?org='+encodeURIComponent(ORG)+'">Product catalog</a>');
   nav.insertAdjacentHTML('beforeend','<a href="/logic-logistics.html?org='+encodeURIComponent(ORG)+'">Logistics &amp; receiving</a>');
+  nav.insertAdjacentHTML('beforeend','<a href="/po-inbox?office=1&org='+encodeURIComponent(ORG)+'">Company accounts &amp; POs</a>');
   nav.insertAdjacentHTML('beforeend','<p class="eyebrow">Tools &amp; management</p><a href="/logic-urls.html?org='+encodeURIComponent(ORG)+'">URL Generator</a><a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'">Plant manager</a>'+(d.owner?'<a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'#flow">Production flow</a>':''));
   document.querySelector('header .muted').textContent=d.owner?'ClearSky · managing this OEM':'Office workspace';
   if(d.owner)nav.insertAdjacentHTML('beforeend','<p class="eyebrow">Settings</p><a href="#tenant-theme">Tenant theme</a>');
