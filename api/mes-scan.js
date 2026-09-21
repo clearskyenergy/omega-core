@@ -45,9 +45,9 @@
    by the roll-up door walks a unit two stations forward.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var crypto = require('crypto');
 var A = require('./_lib/admin');
 var P = require('./_lib/plant');
+var S = require('./_lib/plant-station');
 
 /* A bench cannot legitimately scan faster than this. Generous enough that a
    fast operator never sees it, tight enough that a loop does. */
@@ -62,18 +62,13 @@ function rateLimit(id) {
   return true;
 }
 
-function clean(v, max) {
-  return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max || 120);
-}
-function sha(v) { return crypto.createHash('sha256').update(String(v), 'utf8').digest('hex'); }
-
 module.exports = A.handler(function (req, res) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
 
-  var stationId = clean(b.stationId, 120);
-  var token = clean(b.token, 200);
-  var scanId = clean(b.scanId, 64);
+  var stationId = S.stationIdOf(b.stationId);
+  var token = S.tokenOf(b.token);
+  var scanId = S.clean(b.scanId, 64);
   var serial = P.serialFrom(b.serial);
 
   if (!stationId || !token) throw A.httpError(401, 'this scanner is not paired');
@@ -83,20 +78,8 @@ module.exports = A.handler(function (req, res) {
   if (!rateLimit(stationId)) throw A.httpError(429, 'too many scans from this station');
 
   var db = A.db(), FV = A.FieldValue();
-  var stRef = db.collection('plant_stations').doc(stationId);
-
-  return stRef.get().then(function (ss) {
-    if (!ss.exists) throw A.httpError(401, 'unknown scanner');
-    var st = ss.data() || {};
-    if (st.active === false) throw A.httpError(403, 'this scanner has been deactivated');
-    /* Constant-time compare on the hash, so a wrong token cannot be narrowed
-       down by timing the response. */
-    var want = Buffer.from(String(st.tokenHash || ''), 'utf8');
-    var got = Buffer.from(sha(token), 'utf8');
-    if (want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
-      throw A.httpError(401, 'this scanner is not paired');
-    }
-
+  return S.verify(db, stationId, token).then(function (checked) {
+    var stRef = checked.ref, st = checked.data;
     var orgId = String(st.orgId || '').toLowerCase();
     /* THE STATION COMES OFF THE RECORD, NEVER THE REQUEST. */
     var station = String(st.station || '');
@@ -130,8 +113,8 @@ module.exports = A.handler(function (req, res) {
             tx.set(scanRef, {
               orgId: orgId, scanId: scanId, stationId: stationId, station: station,
               serial: serial, woId: (unit && unit.woId) || null,
-              gun: clean(b.gun, 40) || null,
-              at: now, clientAt: clean(b.at, 40) || null,
+              gun: S.clean(b.gun, 40) || null,
+              at: now, clientAt: S.clean(b.at, 40) || null,
               verdict: verdict, ok: !!verdict.ok,
               createdAt: FV.serverTimestamp()
             });

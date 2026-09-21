@@ -74,6 +74,7 @@ module.exports = A.handler(function (req) {
         countOf(db.collection('plant_units').where('orgId', '==', org).where('hold', '==', null)),
         countOf(db.collection('plant_units').where('orgId', '==', org).where('hold', '!=', null)),
         countOf(db.collection('plant_scans').where('orgId', '==', org).where('createdAt', '>=', since)),
+        countOf(db.collection('plant_scans').where('orgId', '==', org).where('ok', '==', false).where('createdAt', '>=', since)),
         countOf(orgRef.collection('customers')),
         countOf(orgRef.collection('customers').where('plan', '==', 'designer'))
       ]).then(function (r) {
@@ -119,10 +120,10 @@ module.exports = A.handler(function (req) {
 
           benches: r[10], benchesActive: r[11],
           unitsInFlight: r[12], unitsOnHold: r[13],
-          scansToday: r[14], refusalsToday: 0,
+          scansToday: r[14], refusalsToday: r[15],
 
-          customers: r[15], portalUsers: 0, signInsThisWeek: 0, customersWithOrders: 0,
-          designerSeats: r[16]
+          customers: r[16], portalUsers: 0, signInsThisWeek: 0, customersWithOrders: 0,
+          designerSeats: r[17]
         }, new Date().toISOString());
       });
     });
@@ -130,12 +131,11 @@ module.exports = A.handler(function (req) {
 });
 
 /* ── KNOWN-PARTIAL, stated rather than implied ──────────────────────────────
-   parcelToday, refusalsToday, portalUsers, signInsThisWeek and
+   parcelToday, portalUsers, signInsThisWeek and
    customersWithOrders are reported as 0 until the counters they need exist:
    the parcel allowance lives in a per-org daily counter document the site
-   study writes, the portal's users are a collection-group query that needs
-   its own index, and refusals need plant_scans filtered on ok == false. Each
-   is a small addition; none of them should be guessed at in the meantime,
+   study writes, and the portal's users are a collection-group query that needs
+   its own index. Each is a small addition; none of them should be guessed at in the meantime,
    because a status feed that invents a number is worse than one that admits
    a gap. They read 0 with the surface still reporting its real state.
    ────────────────────────────────────────────────────────────────────────── */

@@ -155,6 +155,66 @@ function applyScan(unit, verdict, at) {
   return { at: verdict.to, done: done, arrivedAt: at, hold: null };
 }
 
+/* Test-rig payloads are evidence, not a free-form diagnostic dump. Keeping
+   the measurement map numeric, named and bounded means one malformed PLC
+   response cannot make a traveler exceed Firestore's document limit. The raw
+   vendor report can be attached separately; these are the values that explain
+   a pass/fail in the OMEGA trace. */
+function measurementsOf(raw) {
+  if (raw == null) return {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('measurements must be an object');
+  var keys = Object.keys(raw), out = {};
+  if (keys.length > 32) throw new Error('too many measurements');
+  keys.forEach(function (key) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(key)) throw new Error('invalid measurement name');
+    var n = Number(raw[key]);
+    if (!isFinite(n) || Math.abs(n) > 1000000000) throw new Error('invalid measurement value');
+    out[key] = n;
+  });
+  return out;
+}
+
+/* A test rig may advance only a station marked machine-only. A failed test
+   deliberately does NOT advance the unit: it records the result, places the
+   unit on hold at its prior station and requires a human disposition. */
+function judgeMachineResult(unit, station, routing, result) {
+  station = norm(station);
+  if (MACHINE_STATIONS.indexOf(station) < 0) {
+    return { ok: false, reason: 'not_machine_station', say: 'This station does not accept machine results.' };
+  }
+  var base = judgeScan(unit, station, routing, { machine: true });
+  if (!base.ok) return base;
+  if (!result || (result.pass !== true && result.pass !== false)) {
+    return { ok: false, reason: 'invalid_result', say: 'The test rig did not send a pass or fail result.' };
+  }
+  /* A duplicate pass is harmless—the original result already moved the
+     traveler. A NEW failed test at that same station is not harmless: it
+     supersedes the earlier pass and must place the unit on hold. */
+  if (result.pass || (base.action !== 'advance' && base.action !== 'duplicate')) return base;
+  return {
+    ok: false, action: 'hold', reason: 'test_failed', at: norm(unit && unit.at), station: station,
+    say: 'Test failed — this unit is on hold for quality review.'
+  };
+}
+
+function applyMachineResult(unit, verdict, at, record) {
+  record = record || {};
+  if (verdict && verdict.ok && verdict.action === 'advance') {
+    var pass = applyScan(unit, verdict, at);
+    pass.test = record;
+    return pass;
+  }
+  if (verdict && verdict.action === 'hold') {
+    return {
+      hold: record.failureCode || 'Test failed',
+      ncr: record.ncr || null,
+      test: record,
+      testFailedAt: at
+    };
+  }
+  return null;
+}
+
 module.exports = {
   DEFAULT_ROUTING: DEFAULT_ROUTING,
   MACHINE_STATIONS: MACHINE_STATIONS,
@@ -163,5 +223,8 @@ module.exports = {
   labelOf: labelOf,
   serialFrom: serialFrom,
   judgeScan: judgeScan,
-  applyScan: applyScan
+  applyScan: applyScan,
+  measurementsOf: measurementsOf,
+  judgeMachineResult: judgeMachineResult,
+  applyMachineResult: applyMachineResult
 };

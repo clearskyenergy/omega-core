@@ -59,6 +59,19 @@ ok('REFUSES a human scan at a machine station', !v.ok && v.reason === 'machine_s
 v = P.judgeScan(unit('bms'), 'eol', R, { machine: true });
 ok('  but the test rig itself may post it', v.ok && v.action === 'advance', v);
 
+/* ── the EOL rig supplies evidence; it cannot be impersonated by a gun ─── */
+var testUnit = unit('bms');
+v = P.judgeMachineResult(testUnit, 'eol', R, { pass: true });
+var testPatch = P.applyMachineResult(testUnit, v, '2026-09-21T11:00:00Z', { result: 'pass', measurements: { insulationMohm: 500 } });
+ok('a passing machine test advances exactly one machine-only station', v.ok && v.to === 'eol' && testPatch.at === 'eol', v);
+ok('  and retains its measurements on the traveler', testPatch.test.measurements.insulationMohm === 500, testPatch);
+v = P.judgeMachineResult(unit('bms'), 'eol', R, { pass: false });
+testPatch = P.applyMachineResult(unit('bms'), v, '2026-09-21T11:01:00Z', { result: 'fail', failureCode: 'CAP_LOW', ncr: 'NCR-001' });
+ok('a failed machine test places a hold without advancing the unit', !v.ok && v.action === 'hold' && !Object.prototype.hasOwnProperty.call(testPatch, 'at') && testPatch.hold === 'CAP_LOW', testPatch);
+v = P.judgeMachineResult(unit('eol'), 'eol', R, { pass: false });
+ok('a later failed retest still places an EOL unit on hold', !v.ok && v.action === 'hold' && v.at === 'eol', v);
+ok('measurements reject an arbitrary diagnostic blob', (function () { try { P.measurementsOf({ bad: 'not-a-number' }); return false; } catch (e) { return true; } })());
+
 v = P.judgeScan(unit('kit'), 'welding', R);
 ok('REFUSES a station that is not on this routing', !v.ok && v.reason === 'unknown_station', v);
 
