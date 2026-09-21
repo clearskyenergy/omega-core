@@ -1270,3 +1270,93 @@ No editor, tenant, billing, Firestore schema or deployment-project replacement.
 The editor's existing `publicFiber` integration automatically receives the same
 expanded inventory. See `docs/FIBER-PRIORITY-STATES.md` for counts, acquisition
 gaps, source references, refresh commands and verification.
+
+---
+
+## Omega Logic — tracking and fulfilment (2026-09-20)
+
+The umbrella over the whole chain: an order arrives, money clears, a works
+order is raised, units are scanned across ten benches, each carries its own
+record, it ships, the balance clears. `⬢ Omega Logic` on `mission.html`,
+fed by `api/logic-summary.js`, arranged by `api/_lib/logic.js` (pure, 59
+assertions in `scripts/test-logic.js`).
+
+**Staff-only and cross-tenant, and that is the product decision.** This is
+ClearSky's view of every tenant's floor at once. `admin/tenant.html` is
+already one tenant's view of themselves, and `portals/customer/` is one
+buyer's view of their own order. Three surfaces, three audiences, one set of
+facts underneath — `api/_lib/plant.js` decides where a unit may move and
+`api/_lib/portal.js` decides what milestone an order is at, and neither
+decision is re-implemented anywhere else.
+
+**It is an endpoint although `api/orders.js` says reads are not.** That file
+is right for `orders.html`, which is scoped to one tenant and lets the rules
+decide. This is a join across `orders` → `plant_works_orders` →
+`plant_units` on `orderNo`, which no rule can follow, and staff read
+everything so there is no scoping work left to do.
+
+### What is actually built, as of this entry
+
+| stage | state | owner |
+|---|---|---|
+| Order intake | live | `api/embed-order.js` |
+| Deposit | **not built** | QuickBooks invoice + payment link (decided 2026-09-20) |
+| Works order | **partial** | `api/plant-release.js` — runs, idempotent, but staff press it |
+| Production line | live | `api/mes-scan.js`, `api/mes-test-result.js`, `api/plant-control.js` |
+| Unit record | **partial** | captured at release (lot, firmware, capacity, genealogy); no read path |
+| Shipment | **not built** | — |
+| Final payment | **not built** | — |
+
+`partial` is a real third state and not a hedge. Release runs but nothing
+triggers it; the unit record is written but nothing reads it back. Calling
+either `live` would promise a warranty surface that does not exist; calling
+either `off` would send somebody to rebuild a capture path that
+`api/_lib/plant-release.js` already validates.
+
+### The rule the whole view is built on
+
+**A stage that is not built reports as absent, never as zero.** `collected`
+is `null`, not `0`. An unshipped order has no shipment record rather than an
+empty one. And `deposit: true` — the boolean the Clean Cell demo carried as
+a stand-in — is explicitly NOT money: only an object with a paid timestamp
+counts, and the view labels any order still carrying the flag. The first
+collected-cash number in this estate is the one people will believe.
+
+The same discipline covers the floor: a failed or clipped unit read returns
+`known:false`, the board renders empty, `milestoneOf()` falls back to the
+order status rather than claiming progress, and `totals.unknownFloors`
+counts those rows — so "nothing on the line" and "we could not see the line"
+are never the same number.
+
+### The payment rail, and the rule it will break
+
+Thomas chose **QuickBooks invoice + payment link** over Stripe on
+2026-09-20, having been shown that it breaks the never-write discipline in
+`api/_lib/qbo.js`. That header says a write path "should be an argument, not
+a patch", so when it is built:
+
+- the write path goes in its own module, not spread through `qbo.js`;
+- `qbo.js`'s header is rewritten to record the decision rather than left
+  claiming OMEGA never writes, which would then be false;
+- the Stripe code on `main` is NOT the model. It is platform SaaS billing —
+  `billing/current`, tiers, subscriptions, `invoice.paid → lastPaidAt` — and
+  shares nothing with an order payment but the vendor.
+
+`portals/finance/` is the project-finance deal room (`fin_*`, developers and
+capital partners). It has nothing to do with order payments but the word.
+
+### Rules and indexes
+
+`docs/firestore.rules.plant.addendum` had never been applied — `grep -c
+plant_ firestore.rules` was 0 — and its four indexes were not in
+`firestore.indexes.json`. Both are now in the tree and **neither is live
+until `firebase deploy --only firestore:rules,firestore:indexes` runs**.
+Confirm the way CLAUDE.md says to, against the LIVE rules:
+
+```
+grep -n 'match /plant_units' firestore.rules
+```
+
+The addendum could not be pasted verbatim: its `plantOrg()` fell back to
+`myOrg()`, which does not exist in these rules. `userOrg()` is the real name
+and already folds through `orgAlias()`.
