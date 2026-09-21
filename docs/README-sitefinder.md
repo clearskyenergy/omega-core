@@ -1,8 +1,37 @@
 # Site Finder — property browser with a circuit capacity ledger
 
-A Zillow-shaped browser over C&I property where the headline number is
-**deliverable kW**, not price — and where selling a circuit removes it from
-everyone else's inventory the moment it is saved.
+A property browser over C&I sites, led by energy score, available hosting
+capacity, and a selected battery size. Saving a site keeps it in the workspace;
+placing a hold records the team's allocation against its named feeder.
+
+## September 2026 workflow update
+
+Cards and detail panels lead with the server-calculated energy assessment.
+Filters include minimum energy score, available hosting kW range, battery kW,
+and metered/modelled/unknown load evidence. Saved sites remain visible when
+prospecting filters change. Unknown capacity does not qualify for a numeric
+hosting threshold. ComEd is the fully connected capacity territory; other
+locations retain site and market details without an invented feeder.
+
+The detail workflow connects energy, battery sizing, feeder, hold, contacts,
+and the cost estimator. Address searches use the same canonical saved-site ID
+for both saving and holding. Holds use the selected kW/duration and keep the
+site in the saved list. They are internal team allocations, not utility
+reservations or guarantees of interconnection.
+
+`omega-site-saves.js` stores sites, size, service evidence and estimates in the
+existing `sites` collection; `capacityAllocations` remains the feeder ledger.
+Local fallback requires a resolved org and user and is explicitly labelled.
+Legacy unscoped browser records require explicit migration, and local changes
+are not silently uploaded when connectivity returns.
+
+Scoring, energy modelling, pricing and value-stack arithmetic run in the
+authenticated APIs. Public cost/value-stack files retain presentation metadata
+only. See [server configuration and contracts](sitefinder-server-config.md)
+for deployment, Crexi credentials, field mapping and endpoint verification.
+Crexi owner, occupant and broker roles remain separate; an absent listing is
+not evidence that a property is off market. Live feed verification requires
+the actual access details and a representative response.
 
 ## Files
 
@@ -528,13 +557,12 @@ park.
    here. A withdrawn application that nobody updates blocks a circuit forever.
    A 12- or 18-month review prompt would catch it without weakening the lock.
 
-4. **How does this relate to the `sites` collection?** A claim and a CRM row
-   are both keyed on a parcel and both carry a stage, and right now they are
-   independent. Options: leave them separate (a claim is a grid fact, a site is
-   a sales fact), mirror the stage between them, or fold the ledger fields into
-   `sites`. I kept them separate because the ledger has to be org-wide readable
-   and `sites` is not necessarily, but this is worth a decision before reps
-   start using both.
+4. **Resolved: saved-site persistence.** Saved Site Finder records use the
+   existing `sites` collection; holds remain in `capacityAllocations`, joined
+   by `siteId`. Saving does not change a CRM stage or place a capacity hold.
+   Existing attribution, notes and human edits are preserved. New rows start
+   at the existing `target` stage. Existing county-PIN CRM rows are not merged
+   speculatively into coordinate-keyed records.
 
 5. **Which hosting-capacity field is authoritative for a BESS claim?**
    `BESS_HC` is used as nameplate. If load-side interconnection should net

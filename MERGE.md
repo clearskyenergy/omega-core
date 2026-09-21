@@ -22,6 +22,15 @@ ports Claude Code does next, in order.
 
 ## What moved where
 
+2026-09-21 pricing boundary: `omega-cost-model.js` and `omega-value-stack.js`
+engines moved to `api/_lib/cost-model.js` and `api/_lib/value-stack.js`.
+The root cost module now contains display labels/default duration and quote
+badges only; the root value-stack file contains no engine. The estimator and
+Site Finder request Firebase-authenticated `/api/price-site` results, including
+accuracy bounds and financial outputs. Saved Site Finder estimates retain the
+server response through `OmegaSiteSaves`; packet export waits for pricing.
+Supplier/installer edits must be saved before the estimator can price them.
+
 | destination | contents | from |
 |---|---|---|
 | `/admin/` | tools.csebuilders.com hub + `admin-console.js` (the MASTER INDEX) | clearsky-portal |
@@ -1451,3 +1460,30 @@ The shared demo theme now covers the customer entry, account, editor and plant.
 Scanner pairing uses a read-only authenticated description rather than logging
 a deliberately nonexistent serial. Existing core financial-modeling debt is
 unchanged; no new pricing model was moved to the browser.
+
+## Site Finder workflow integration — September 21, 2026
+
+Completed the interrupted Site Finder modules and connected the property
+browser to energy score/hosting filters, workspace saves, selected battery
+size, feeder holds, ownership/listing details, and estimator handoff.
+Address lookup now opens the same canonical record as its saved card.
+Unknown feeders remain unclaimable; property/market details remain visible.
+
+Pricing and value-stack engines moved into `api/_lib/cost-model.js` and
+`api/_lib/value-stack.js`. Score/load models live in `api/_lib/site-score.js`.
+`api/site-score.js`, `api/price-site.js`, and `api/listings.js` authenticate,
+scope the org, and check billing/access. Browser files collect and render;
+they do not fall back to local financial/scoring calculations.
+
+Saved sites use the existing `sites` collection and retain estimates and
+selected size. Browser fallback is scoped by org/user and labelled. Holds
+remain in `capacityAllocations`; rejected writes roll back optimistic state.
+The legacy ledger's capacity guard remains client-side: simultaneous holds
+are not a server-transactional capacity reservation. No rules, production
+data, credentials, or deployment changed in this pass.
+
+Configuration and live-Crexi requirements: `docs/sitefinder-server-config.md`.
+Verification covers mocked authenticated endpoints, client batching and stale
+responses, save isolation, hold rollback, pricing parity, and a fixture-only
+desktop/mobile browser workflow. Live Crexi and live Firestore verification
+remain environment-dependent.

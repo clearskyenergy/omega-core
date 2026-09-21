@@ -16,7 +16,7 @@
    — the working panel filling with already-filed sites — and a fix for the
    disappearing card that brings it back is not a fix. */
 'use strict';
-var fs = require('fs'), path = require('path'), assert = require('assert');
+var fs = require('fs'), path = require('path'), assert = require('assert'), vm = require('vm');
 var html = fs.readFileSync(
   path.join(__dirname, '..', '..', 'clearsky-sitefinder.html'), 'utf8');
 var fails = 0;
@@ -31,11 +31,43 @@ function fn(name, stop) {
 
 console.log('star keeps the site in the finder');
 
+/* Exercise the page functions with the real persistence module in scoped
+   local mode. Durable records are copies, so object identity is not the
+   guarantee: the current card survives and refreshed fields reach storage. */
+function savedHarness() {
+  var storage = {}, context = {
+    ST: { saved: [], byId: {}, current: null }, _estimates: {},
+    _savedBaseline: {}, _savedUnsubscribe: null, _savedAuth: '',
+    _savedViewContext: '', _savedViewMode: '',
+    render: function () {}, document: { getElementById: function () { return null; } },
+    nearestKnown: function () { return null; }, LAY: { inTerritory: function () { return true; } },
+    window: { alert: function (message) { context.lastAlert = message; }, localStorage: {
+      getItem: function (k) { return storage[k] || null; },
+      setItem: function (k, v) { storage[k] = v; }
+    } }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../omega-site-saves.js'), 'utf8'), context);
+  ['loadSaved', 'savedWriteDone', 'syncSavedView', 'persistSaved', 'starSite',
+    'isSaved', 'recordFromLookup', 'setCurrent'].forEach(function (name) {
+    var body = html.slice(html.indexOf('  function ' + name + '('));
+    var end = body.indexOf('\n  }');
+    assert(end >= 0, 'Missing function ' + name);
+    vm.runInContext(body.slice(0, end + 4), context);
+  });
+  var saves = context.window.OmegaSiteSaves;
+  saves.onChange(context.syncSavedView);
+  saves.init('test.com', { uid: 'rep', email: 'rep@test.com' }, function () {});
+  return context;
+}
+
 ok('starring the current lookup does not clear it', function () {
-  var body = fn('starSite', '\n  /*');
-  assert(/ST\.saved\.unshift\(rec\)/.test(body), 'starSite no longer keeps the record');
-  assert(!/ST\.current\s*=\s*null/.test(body),
-    'starSite still clears ST.current — the card will vanish the moment it is starred');
+  var c = savedHarness(), record = { id: 'site:41.00000,-87.00000', src: 'lookup', addr: 'A' };
+  c.ST.current = record;
+  c.starSite(record);
+  assert.strictEqual(c.ST.current, record, 'the working lookup was cleared or replaced');
+  assert(c.isSaved(record.id), 'star did not persist the site');
+  assert.strictEqual(c.ST.saved[0].src, 'lookup', 'original source was lost');
 });
 
 ok('dismissing a site DOES still clear it', function () {
@@ -71,16 +103,51 @@ ok('the star is still viewport-bound, not pinned to every view', function () {
     + 'defect this design removed: the panel fills with already-filed sites');
 });
 
-ok('the starred site and the lookup are one record, so a refresh updates both',
+ok('refreshing the lookup persists its new source fields and keeps saved decisions',
   function () {
-    var body = fn('starSite', '\n  /*');
-    assert(/ST\.saved\.unshift\(rec\)/.test(body) && !/JSON\.parse\(JSON\.stringify/.test(body),
-      'the starred copy is cloned, so refreshing the lookup will not update it');
+    var c = savedHarness(), rec = { id: 'site:41.00000,-87.00000', lat: 41, lon: -87,
+      addr: 'Old', src: 'lookup', feederId: 'F1', service: { phase: '3', confirmed: true },
+      sizePick: { kw: 25, hours: 2 } };
+    c.ST.current = rec; c.starSite(rec);
+    var current = c.setCurrent({ label: 'New', parcel: null, feederId: 'F2',
+      state: { nameplate: 300, queue: 40 }, rows: [], sub: 'Sub', geoSrc: 'utility' }, 41, -87);
+    var saved = c.window.OmegaSiteSaves.get(rec.id);
+    ['id', 'addr', 'src', 'feederId', 'lat', 'lon', 'nameplate', 'queue', 'geoSrc'].forEach(function (field) {
+      assert.strictEqual(saved[field], current[field], field + ' did not refresh in durable storage');
+    });
+    assert.strictEqual(saved.addr, 'New');
+    assert.strictEqual(current.service.phase, '3', 'refresh lost confirmed phase');
+    assert.strictEqual(current.sizePick.kw, 25, 'refresh lost chosen size');
+    assert.strictEqual(saved.src, 'lookup', 'refresh lost original source');
   });
 
 ok('the card shows which state it is in', function () {
   assert(/isSaved\(r\.id\) \? "\\u2605" : "\\u2606"/.test(html),
     'the card star does not fill when the site is starred');
+});
+
+ok('save hydration does not write back and changing accounts clears saved context', function () {
+  var c = savedHarness(), record = { id: 'site:41.00000,-87.00000', src: 'lookup', addr: 'A' };
+  c.ST.current = record; c.starSite(record); c.ST.byId[record.id] = record;
+  c._estimates[record.id] = { total: 42 };
+  var saves = c.window.OmegaSiteSaves, writes = 0;
+  saves.save = saves.patch = function () { writes++; };
+  c.syncSavedView();
+  assert.strictEqual(writes, 0, 'stream hydration fed back into persistence');
+  saves.init('other.com', { uid: 'other', email: 'other@other.com' }, function () {});
+  assert.strictEqual(c.ST.saved.length, 0);
+  assert.strictEqual(c.ST.current, null);
+  assert.strictEqual(c.ST.byId[record.id], undefined);
+  assert.strictEqual(Object.keys(c._estimates).length, 0);
+});
+
+ok('detached starring explains sign-in and keeps the current lookup visible', function () {
+  var c = savedHarness(); c.window.OmegaSiteSaves.detach();
+  var record = { id: 'site:41.00000,-87.00000', src: 'lookup', addr: 'A' };
+  c.ST.current = record; c.starSite(record);
+  assert(/Sign in/.test(c.lastAlert), 'detached save silently did nothing');
+  assert.strictEqual(c.ST.current, record, 'failed save discarded the working lookup');
+  assert.strictEqual(c.ST.saved.length, 0);
 });
 
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');

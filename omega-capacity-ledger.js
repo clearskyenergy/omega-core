@@ -1,5 +1,6 @@
 /* ==========================================================================
    omega-capacity-ledger.js  ·  ClearSky-OMEGA shared platform file
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    --------------------------------------------------------------------------
    Circuit capacity is a SHARED, FINITE resource. Two reps working two
    different addresses can be working the same feeder without knowing it, and
@@ -59,6 +60,7 @@
   var ALLOCS  = {};   /* allocId  -> allocation record                             */
   var LISTEN  = [];
   var DB = null, ORG = "", UNSUB = null, UNSUB_CAP = null;
+  var SHARED = false, WRITE_FAILED = false, GENERATION = 0, PENDING = {};
 
   function now() { return Date.now(); }
   function num(v) { var x = parseFloat(v); return isNaN(x) ? null : x; }
@@ -171,7 +173,7 @@
 
   /* --------------------------------------------------------- allocations */
   function expired(a) {
-    return L.statusOf(a.status).kind === "soft" && a.expiresAt && a.expiresAt < now();
+    return L.statusOf(a.status).kind === "soft" && a.expiresAt && a.expiresAt <= now();
   }
   L.isExpired = expired;
 
@@ -227,9 +229,9 @@
       a = list[i];
       kind = L.statusOf(a.status).kind;
       if (kind === "none") continue;
+      if (expired(a)) { lapsed += (a.kw || 0); continue; }
       if (excludeSiteId && String(a.siteId) === String(excludeSiteId)) { mine += (a.kw || 0); continue; }
       if (kind === "firm") { firm += (a.kw || 0); continue; }
-      if (expired(a)) { lapsed += (a.kw || 0); continue; }
       soft += (a.kw || 0);
     }
 
@@ -329,11 +331,44 @@
   }
   L.allocId = allocId;
 
+  function copy(rec) {
+    var out = {}, k;
+    for (k in rec) if (rec.hasOwnProperty(k)) out[k] = rec[k];
+    return out;
+  }
+
+  /* Local serialization prevents overlapping rollback chains. This is NOT a
+     cross-client lock: capacity checks and Firestore writes are not atomic. */
+  function mutate(rec, cb) {
+    var id = rec.id;
+    if (PENDING[id]) { cb(new Error("This claim is still saving. Try again after it finishes.")); return; }
+    if (DB && ORG && !ME.uid) { cb(new Error("Sign in to save a shared claim.")); return; }
+    var pending = { previous: ALLOCS[id], record: rec, generation: GENERATION };
+    PENDING[id] = pending;
+    ALLOCS[id] = rec;
+    emit();
+    push(rec, function (err) {
+      if (pending.generation !== GENERATION) {
+        cb(err || new Error("Ledger session changed while this claim was saving.")); return;
+      }
+      delete PENDING[id];
+      if (err) {
+        if (pending.previous) ALLOCS[id] = pending.previous;
+        else delete ALLOCS[id];
+        SHARED = false;
+        WRITE_FAILED = true;
+      }
+      else WRITE_FAILED = false;
+      emit();
+      cb(err || null, err ? null : rec);
+    });
+  }
+
   L.reserve = function (o, cb) {
     cb = cb || function () {};
     if (!o || !o.feederId || !o.siteId) { cb(new Error("A reservation needs a circuit and a site.")); return; }
     var kw = num(o.kw);
-    if (kw == null || kw <= 0) { cb(new Error("Enter how many kW to hold.")); return; }
+    if (kw == null || !isFinite(kw) || Math.round(kw) <= 0) { cb(new Error("Enter how many kW to hold.")); return; }
 
     var status = L.STATUS[o.status] ? o.status : "reserved";
     var kind = L.statusOf(status).kind;
@@ -370,13 +405,14 @@
       expiresAt: null
     };
     if (kind === "soft") {
-      rec.expiresAt = o.expiresAt || (prev && prev.status === status && prev.expiresAt) ||
+      if (o.expiresAt != null && (!isFinite(o.expiresAt) || Number(o.expiresAt) <= now())) {
+        cb(new Error("A soft hold needs a future expiry.")); return;
+      }
+      rec.expiresAt = (o.expiresAt != null ? Number(o.expiresAt) : null) || (prev && prev.status === status && !expired(prev) && prev.expiresAt) ||
                       (now() + L.SOFT_HOLD_DAYS * 86400000);
     }
 
-    ALLOCS[id] = rec;
-    emit();
-    push(rec, function (err) { cb(err || null, rec); });
+    mutate(rec, cb);
     return rec;
   };
 
@@ -384,21 +420,29 @@
     cb = cb || function () {};
     var rec = ALLOCS[id];
     if (!rec) { cb(new Error("No such claim.")); return; }
+    rec = copy(rec);
     rec.status = "lost";
     rec.updatedAt = now();
     rec.expiresAt = null;
-    emit();
-    push(rec, cb);
+    mutate(rec, cb);
   };
 
   L.renew = function (id, days, cb) {
     cb = cb || function () {};
     var rec = ALLOCS[id];
     if (!rec) { cb(new Error("No such claim.")); return; }
-    rec.expiresAt = now() + (days || L.SOFT_HOLD_DAYS) * 86400000;
+    if (L.statusOf(rec.status).kind !== "soft") { cb(new Error("Only soft holds can be renewed.")); return; }
+    days = days == null ? L.SOFT_HOLD_DAYS : Number(days);
+    if (!isFinite(days) || days <= 0) { cb(new Error("Enter a positive renewal period.")); return; }
+    var st = L.feederState(rec.feederId, rec.siteId);
+    if (st.known && rec.kw > st.sellable + 0.5) {
+      var err = new Error("Only " + st.sellable + " kW remains. Resize the hold before renewing.");
+      err.code = "OVERSELL"; err.available = st.sellable; cb(err); return;
+    }
+    rec = copy(rec);
+    rec.expiresAt = now() + days * 86400000;
     rec.updatedAt = now();
-    emit();
-    push(rec, cb);
+    mutate(rec, cb);
   };
 
   /* --------------------------------------------------------- persistence
@@ -419,8 +463,20 @@
      refused every claim, because a name is not an address. */
   var ME = { uid: "", email: "" };
   L.setIdentity = function (uid, email) {
+    var changed = ME.uid !== (uid ? String(uid) : "");
+    if (changed) {
+      GENERATION++;
+      for (var id in PENDING) {
+        if (PENDING[id].previous) ALLOCS[id] = PENDING[id].previous;
+        else delete ALLOCS[id];
+      }
+      PENDING = {};
+      SHARED = false;
+    }
     ME.uid = uid ? String(uid) : "";
     ME.email = email ? String(email).toLowerCase() : "";
+    if (changed && DB && ORG) L.attach(DB, ORG);
+    emit();
   };
 
   function push(rec, cb) {
@@ -441,10 +497,19 @@
 
   L.attach = function (db, orgId, cb) {
     cb = cb || function () {};
-    DB = db || null; ORG = orgId || "";
-    if (!DB || !ORG) { cb(new Error("Ledger is running locally — claims are not shared.")); return; }
     if (UNSUB) { try { UNSUB(); } catch (e) {} UNSUB = null; }
     if (UNSUB_CAP) { try { UNSUB_CAP(); } catch (e) {} UNSUB_CAP = null; }
+    GENERATION++;
+    var generation = GENERATION;
+    for (var pendingId in PENDING) {
+      if (PENDING[pendingId].previous) ALLOCS[pendingId] = PENDING[pendingId].previous;
+      else delete ALLOCS[pendingId];
+    }
+    SHARED = false; WRITE_FAILED = false; PENDING = {};
+    if (ORG !== (orgId || "")) ALLOCS = {};
+    DB = db || null; ORG = orgId || "";
+    emit();
+    if (!DB || !ORG) { cb(new Error("Ledger is running locally — claims are not shared.")); return; }
 
     /* What the rest of the team has read about circuits. Merged in, never
        overwriting a figure this session read live — the local one is at
@@ -452,6 +517,7 @@
     try {
       UNSUB_CAP = DB.collection("circuitCapacity").where("orgId", "==", ORG)
         .onSnapshot(function (snap) {
+          if (generation !== GENERATION) return;
           var changed = false;
           snap.forEach(function (d) {
             var v = d.data();
@@ -473,22 +539,34 @@
     setTimeout(pushFeeders, 0);
 
     var first = true;
-    UNSUB = DB.collection("capacityAllocations").where("orgId", "==", ORG)
-      .onSnapshot(function (snap) {
+    try { UNSUB = DB.collection("capacityAllocations").where("orgId", "==", ORG)
+      .onSnapshot({ includeMetadataChanges: true }, function (snap) {
+        if (generation !== GENERATION) return;
+        if (snap.metadata && (snap.metadata.hasPendingWrites || snap.metadata.fromCache)) {
+          SHARED = false; emit(); return;
+        }
         var next = {};
         snap.forEach(function (d) {
           var v = d.data();
           if (v && v.id && v.feederId) next[v.id] = v;
         });
+        for (var id in PENDING) {
+          PENDING[id].previous = next[id];
+          next[id] = PENDING[id].record;
+        }
         ALLOCS = next;
+        SHARED = !!ME.uid;
         emit();
         if (first) { first = false; cb(null); }
       }, function (err) {
+        if (generation !== GENERATION) return;
+        SHARED = false; emit();
         if (first) { first = false; cb(err); }
       });
+    } catch (err) { SHARED = false; if (first) { first = false; cb(err); } }
   };
 
-  L.mode = function () { return (DB && ORG) ? "shared" : "local"; };
+  L.mode = function () { return (DB && ORG && ME.uid && SHARED && !WRITE_FAILED) ? "shared" : "local"; };
 
   /* Seed from a plain array — used by the mock provider, by an imported
      harvest file, and by tests. */

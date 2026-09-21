@@ -14,7 +14,7 @@
 'use strict';
 const path = require('path'), assert = require('assert');
 global.window = global;
-const M = require(path.join(__dirname, '..', '..', 'omega-cost-model.js'));
+const M = require(path.join(__dirname, '..', '..', 'api/_lib/cost-model.js'));
 let fails = 0;
 function ok(name, fn){
   try { fn(); console.log('  ✓ ' + name); }

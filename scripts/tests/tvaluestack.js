@@ -9,7 +9,7 @@
 'use strict';
 const path = require('path'), assert = require('assert');
 global.window = global;
-const V = require(path.join(__dirname, '..', '..', 'omega-value-stack.js'));
+const V = require(path.join(__dirname, '..', '..', 'api/_lib/value-stack.js'));
 let fails = 0;
 function ok(name, fn){
   try { fn(); console.log('  ✓ ' + name); }

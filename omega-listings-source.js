@@ -1,4 +1,5 @@
 /* ==========================================================================
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    omega-listings-source.js  ·  ClearSky-OMEGA shared platform file
    --------------------------------------------------------------------------
    One normalized property shape, several interchangeable sources behind it.
@@ -50,30 +51,7 @@
              "Office","Retail","Data Center","Multifamily","Institutional",
              "Vacant Land","Other"];
 
-  /* ------------------------------------------------------------ energy model
-     ONE table, here, because three files were each keeping their own and they
-     had drifted: the demo provider modelled cold storage at 140 kBtu/sqft-yr
-     and the ComEd provider at 96, so the SAME building switched between
-     providers moved its headline kW by 46%. A comment in
-     omega-comed-listings.js asserted the two were identical, which made the
-     drift invisible to anyone reading rather than measuring.
-
-     These are screening figures — CBECS/ENERGY STAR order-of-magnitude
-     medians for the type, not a metered result for a building. Everything
-     derived from them carries src "modelled" or "proxy" and the UI says so.
-     If a tenant has metered data for a segment, correct it HERE and both
-     providers move together. */
-  S.EUI = { "Warehouse": 22, "Industrial": 48, "Manufacturing": 68,
-            "Cold Storage": 96, "Flex": 38, "Office": 62, "Retail": 54,
-            "Data Center": 220, "Institutional": 58, "Multifamily": 44,
-            "Vacant Land": 0, "Other": 45 };
-
-  /* Load factor: average demand over peak demand. Turns annual kWh into an
-     estimated peak, which is what the demand-charge screen is sized against. */
-  S.EUI_LF = { "Warehouse": 0.38, "Industrial": 0.55, "Manufacturing": 0.60,
-               "Cold Storage": 0.72, "Flex": 0.50, "Retail": 0.45,
-               "Office": 0.50, "Data Center": 0.85, "Institutional": 0.42,
-               "Multifamily": 0.55, "Vacant Land": 0, "Other": 0.50 };
+  /* Annual energy and load-factor models live in /api/site-score. */
 
   /* ══════════════════════════════════════════════════════════════════════
      PARCEL UNDER A POINT
@@ -586,19 +564,19 @@
      sample data everywhere it surfaces.
      ==================================================================== */
   var DEMO_TYPES = [
-    { t: "Warehouse",     sub: "Warehouse, distribution",       lf: 0.38, w: 26 },
-    { t: "Industrial",    sub: "Industrial, light",             lf: 0.55, w: 18 },
-    { t: "Manufacturing", sub: "Manufacturing plant",           lf: 0.60, w: 12 },
-    { t: "Cold Storage",  sub: "Refrigerated warehouse",        lf: 0.72, w: 6  },
-    { t: "Flex",          sub: "Flex / R&D",                    lf: 0.50, w: 8  },
-    { t: "Retail",        sub: "Retail, big box",               lf: 0.45, w: 9  },
-    { t: "Office",        sub: "Office, low-rise",              lf: 0.50, w: 8  },
+    { t: "Warehouse",     sub: "Warehouse, distribution",       w: 26 },
+    { t: "Industrial",    sub: "Industrial, light",             w: 18 },
+    { t: "Manufacturing", sub: "Manufacturing plant",           w: 12 },
+    { t: "Cold Storage",  sub: "Refrigerated warehouse",        w: 6  },
+    { t: "Flex",          sub: "Flex / R&D",                    w: 8  },
+    { t: "Retail",        sub: "Retail, big box",               w: 9  },
+    { t: "Office",        sub: "Office, low-rise",              w: 8  },
     /* Deliberately rare. A colocation building is the best demand-charge
        target on any list, so it sorts to the top every time — at realistic
        frequency that is a signal, at demo frequency it is just noise. */
-    { t: "Data Center",   sub: "Colocation",                    lf: 0.85, w: 1  },
-    { t: "Institutional", sub: "School / campus",               lf: 0.42, w: 6  },
-    { t: "Vacant Land",   sub: "Vacant industrial land",        lf: 0,    w: 5  }
+    { t: "Data Center",   sub: "Colocation",                    w: 1  },
+    { t: "Institutional", sub: "School / campus",               w: 6  },
+    { t: "Vacant Land",   sub: "Vacant industrial land",        w: 5  }
   ];
   /* Chicago's address grid: 0/0 is State & Madison, 800 address units to the
      mile on both axes. Encoding it lets a demo address AGREE with the pin it
@@ -802,13 +780,9 @@
              : Math.round((8000 + rnd() * 420000) / 500) * 500;
     var lot = Math.round((sqft / 43560 * (1.6 + rnd() * 2.4) + rnd() * 2) * 100) / 100;
 
-    /* EUI (kBtu/sf/yr) from the shared table, converted to kWh. Modelled, and
-       flagged as modelled — never shown as if it came off a meter. It reads
-       S.EUI rather than a local copy so a sample record and a real record are
-       never scaled differently; a demo that quotes a bigger building than
-       production would is a demo that oversells. */
-    var EUI = S.EUI[ty.t] != null ? S.EUI[ty.t] : S.EUI.Other;
-    var kwh = sqft ? Math.round(sqft * EUI * (0.75 + rnd() * 0.5) / 3.412) : null;
+    /* Keep the random sequence stable for unrelated sample fields. Annual
+       energy is supplied later by the scoring service. */
+    if (sqft) rnd();
 
     return {
       id: "D" + h.toString(36).toUpperCase(),
@@ -828,8 +802,7 @@
                   price: sqft ? Math.round(sqft * (38 + rnd() * 95) / 1000) * 1000 : null },
       assessedValue: sqft ? Math.round(sqft * (22 + rnd() * 60) / 1000) * 1000 : null,
       photos: [],
-      annualKwh: kwh ? { value: kwh, src: "modelled" } : null,
-      loadFactor: ty.lf,
+      annualKwh: null,
       feederId: f.feederId, sub: f.sub,
       src: "demo", sample: true
     };
