@@ -16,6 +16,7 @@ module.exports = A.handler(async function (req, res) {
       var row = await scope.projects.doc(P.id(req.query.project)).get();
       if (!row.exists) throw A.httpError(404, 'Project not found in your customer account');
       var project = row.data();
+      if (scope.grant.modules.indexOf(project.module) < 0) throw A.httpError(403, 'This design module is no longer enabled');
       project.canvas = project.canvasJson ? JSON.parse(project.canvasJson) : project.canvas;
       delete project.canvasJson;
       return { id: row.id, project: project };

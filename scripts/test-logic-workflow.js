@@ -123,6 +123,9 @@ await check('buyer design isolation, expiring trials, version conflicts and body
   assert.deepEqual(open.project.canvas,save.canvas);assert.equal(open.project.canvasJson,undefined);
   await assert.rejects(post(design,Object.assign({},quote,{qty:3}),buyer),/different quote request/);
   await assert.rejects(post(design,quote,other),/design changed/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['solar']}});
+  await assert.rejects(design({method:'GET',query:{org:'cleancell.us',project:'project-one'},caller:buyer},res),/no longer enabled/);
+  await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
   await post(buyers,{action:'editor-trial',email:buyer.email,days:0});
   await assert.rejects(post(design,Object.assign({},save,{revision:1}),buyer),/subscription or approved trial/);
   var retained=await design({method:'GET',query:{org:'cleancell.us'},caller:buyer},res);assert.equal(retained.access.active,false);assert.equal(retained.projects.length,1);
