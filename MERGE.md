@@ -1424,3 +1424,30 @@ data. Existing engine pricing/modeling debt is not represented as fixed here.
 White-label owner previews paint the OEM brand but save to the owner's own
 workspace; they never impersonate the OEM. Ordinary Lite accounts opening an
 old full-editor link are redirected by `omega-editor-gate.js` to the shell.
+
+## Customer Editor Lite boundary — September 21, 2026
+
+The same shell now supports `?customer=1&org=<supplier>`. Buyer auth is owned
+by the shell and deliberately does not run platform tenant auto-enrollment.
+The canonical engine iframe uses `?customerEngine=1`: `_initFirebase` and the
+platform capability resolver do not initialize there. It is a drawing engine,
+not an alternate route into platform projects. A same-origin parent bridge
+controls presentation; it is not a security boundary or DRM.
+
+`api/customer-design.js` resolves verified email through the existing supplier
+customer pointer and writes only `omega_orgs/{org}/customers/{id}/projects`.
+Browser rules deny that subtree. Server-side module/entitlement checks, bounded
+snapshot size and transactional revisions guard saves. Pricing and accepted
+order totals never come from the drawing. Quote requests accept published SKUs
+only, stamp buyer identity, retain a submitted snapshot, and use one idempotent
+order ID per project revision. Customer subscription checkout is still disabled
+pending processor selection; owner-issued trials are explicit, audited and
+expire within fourteen days, without charging or changing platform membership.
+
+The public `customer-start.html?org=...` is a reusable website-button target.
+Public configuration publishes only a usable storefront publishable key. It
+never publishes staff credentials, customer records or payment-provider secrets.
+The shared demo theme now covers the customer entry, account, editor and plant.
+Scanner pairing uses a read-only authenticated description rather than logging
+a deliberately nonexistent serial. Existing core financial-modeling debt is
+unchanged; no new pricing model was moved to the browser.

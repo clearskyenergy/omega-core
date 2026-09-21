@@ -18,7 +18,7 @@ module.exports = A.handler(async function (req, res) {
     if (b.module === 'bess' && (!isFinite(hours) || hours <= 0 || hours > 48)) throw A.httpError(400, 'Storage duration must be greater than zero and no more than 48 hours');
     return { module: b.module, kw: kw, kwh: b.module === 'bess' ? kw * hours : null, conceptOnly: true };
   }
-  return { org: org, name: ctx.org.name || org, logoUrl: ctx.org.logoUrl || null, modules: modules,
+  return { org: org, name: ctx.org.name || org, logoUrl: ctx.org.logoUrl || null, brand: require('./_lib/logic-brand')(ctx.org), modules: modules,
     preview: caller.orgId !== org, projectOrg: caller.orgId,
     note: 'Concept design. Review actual equipment, clearances, electrical design and pricing before ordering.' };
 });

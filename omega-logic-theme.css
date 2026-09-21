@@ -3,6 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
 :root{--brand:#3FAFC6;--brand-d:#2A8CA3;--brand-soft:#E2F4F8;--accent:#EE5A4F;--ink:#0B2733;--ink2:#3F5D68;--ink3:#86A0A9;--paper:#fff;--sunk:#F1FAFC;--line:#DCECF1;--line2:#EFF8FA;--r:14px;--muted:var(--ink2);--sub:var(--ink2);--cta:var(--brand);--green:var(--brand);--wash:var(--sunk);color-scheme:light}
 body.logic-theme{font:400 15px/1.6 'Poppins',ui-sans-serif,system-ui,sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-theme *{box-sizing:border-box}.logic-theme [hidden]{display:none!important}
 .logic-theme h1,.logic-theme h2,.logic-theme h3{letter-spacing:-.025em;line-height:1.15;color:var(--ink)}
 .logic-theme h1{font-size:clamp(28px,3vw,40px);font-weight:700}.logic-theme h2{font-size:24px}.logic-theme h3{font-size:19px}

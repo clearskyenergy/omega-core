@@ -225,7 +225,8 @@ var sf = fs.readFileSync(path.join(ROOT, 'embed', 'storefront.html'), 'utf8');
 var sfCode = sf.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 ok('the storefront does NOT link into the editor', !/\/editor/.test(sfCode),
    (/.{0,60}\/editor.{0,60}/.exec(sfCode) || [])[0]);
-ok('and opens no new tab at all', !/window\.open/.test(sfCode));
+ok('Omega Logic opens only its customer account, never the platform editor',
+   /if \(CFG.flow.customerPortal\)/.test(sfCode) && /window\.open\(CFG.flow.customerPortal \+ '#design', '_blank', 'noopener'\)/.test(sfCode) && !/window\.open\([^\n]*editor\.html/.test(sfCode));
 ok('it pitches the designer instead', /id="designBtn"/.test(sf));
 ok('the pitch files a lead marked as a platform interest',
    /interest: 'platform'/.test(sfCode));

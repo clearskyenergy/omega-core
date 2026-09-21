@@ -63,6 +63,7 @@ function rateLimit(id) {
 }
 
 module.exports = A.handler(function (req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = req.body || {};
 
@@ -72,6 +73,14 @@ module.exports = A.handler(function (req, res) {
   var serial = P.serialFrom(b.serial);
 
   if (!stationId || !token) throw A.httpError(401, 'this scanner is not paired');
+  if (b.action === 'describe') {
+    if (!rateLimit(stationId)) throw A.httpError(429, 'too many requests from this station');
+    return S.verify(A.db(), stationId, token).then(async function (checked) {
+      var st = checked.data, org = await A.db().collection('omega_orgs').doc(st.orgId).get();
+      return { ok: true, station: st.station, stationLabel: st.label || st.station,
+        brand: require('./_lib/logic-brand')(org.exists ? org.data() : { name: 'Plant' }) };
+    });
+  }
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(scanId)) throw A.httpError(400, 'Valid scanId required');
   if (!serial) return { ok: false, reason: 'unreadable', say: 'That code did not read as a serial. Scan the label on the frame.' };
 

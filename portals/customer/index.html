@@ -138,6 +138,7 @@
   <h1 id="hello">Orders</h1>
   <p class="lede" id="sub">Everything you have ordered from your supplier.</p>
   <section id="editor-offer" data-page="design" hidden><h2>Site Map · Editor Lite</h2><p id="editor-price">Loading subscription details…</p><p>Lay out your own sites, run the guided build, and export plot plans, single-lines, proposals, drawing sets and estimated bills of materials. Quote projects and place orders with your supplier.</p><p>This subscription is separate from your free customer account.</p><p id="editor-availability" class="muted">Checking availability…</p></section>
+  <section id="design-projects" data-page="design" hidden><div class="actions"><a id="new-project" class="btn p" hidden>New site plan</a></div><h2>Your site plans</h2><div id="project-list"><p class="muted">Loading your designs…</p></div></section>
   <section id="s-documents" data-page="documents" hidden><h2>Documents</h2><div id="customer-documents"><p class="muted">Loading documents…</p></div></section>
   <section id="s-terms" data-page="terms" hidden><h2>Terms &amp; agreements</h2><div id="agreements"></div></section>
 
@@ -221,7 +222,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'),function(e){if(e.getAttribute('data-view')===key)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});
   }
   window.addEventListener('hashchange',function(){view(location.hash.slice(1));});
-  view(location.hash.slice(1));
+  view(location.hash.slice(1)||qp('view'));
   var PORTAL = null;
   var portalReady = fetch('/api/customer-portal?org=' + encodeURIComponent(ORG)).then(function(r) {
     return r.json().then(function(d) { if (!r.ok) throw new Error(d.error || 'Customer portal is unavailable.'); PORTAL = d; paint(); return d; });
@@ -236,6 +237,7 @@
       if (PORTAL.brand.logoUrl) { $('mark').src=PORTAL.brand.logoUrl; $('mark').hidden=false; }
       $('editor-price').textContent = '$' + (PORTAL.editorLite.monthlyPriceCents / 100).toLocaleString('en-US') + ' / month';
       $('editor-availability').textContent = 'Subscription checkout is not yet enabled. No subscription has been started or charged.';
+      if(PORTAL.links){var entry=document.getElementById('customer-start');if(!entry){entry=document.createElement('a');entry.id='customer-start';entry.textContent='Size a system';document.querySelector('.logic-nav').insertBefore(entry,document.querySelector('.logic-nav').firstChild);}entry.href=PORTAL.links.start;}
       return;
     }
     try {
@@ -375,8 +377,19 @@
     api('/api/my-account?org=' + encodeURIComponent(ORG)).then(function (r) {
       if (!r.ok) { $('acct').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; return; }
       drawAccount(r.j);
+      loadDesigns();
       $('agreements').innerHTML='<h3>Agreements</h3>'+((r.j.agreements||[]).map(function(a){return '<p>'+esc(a.kind)+' · '+esc(a.ref)+' · '+esc(a.signedAt)+'</p>';}).join('')||'<p class="muted">No agreements recorded yet.</p>');
     })['catch'](function () {});
+  }
+  function loadDesigns() {
+    api('/api/customer-design?org='+encodeURIComponent(ORG)).then(function(r){
+      if(!r.ok)throw new Error(r.j.error||'Could not load your site plans.');
+      var d=r.j,active=d.access.active,base='/editor-lite.html?customer=1&org='+encodeURIComponent(ORG);
+      $('new-project').hidden=!active;$('new-project').href=base;
+      if(active)$('editor-availability').textContent=(d.access.status==='trial'?'Approved trial':'Editor Lite access')+' · available until '+new Date(d.access.expiresAt).toLocaleDateString()+'.';
+      $('project-list').innerHTML=(d.projects||[]).map(function(p){return '<div class="ord"><h3>'+esc(p.name)+'</h3><p class="muted">'+esc(p.module)+' · '+esc(new Date(p.updatedAt).toLocaleString())+'</p>'+(active?'<a class="btn" href="'+base+'&project='+encodeURIComponent(p.id)+'">Open project →</a>':'<p class="muted">Retained securely. Renew Editor Lite to reopen this design.</p>')+'</div>';}).join('')||'<p class="muted">No site plans yet. '+(active?'Start a new project above.':'Your orders and customer account do not require an editor subscription.')+'</p>';
+      if(d.limited)$('project-list').insertAdjacentHTML('beforeend','<p class="muted">Newest 100 projects shown.</p>');
+    })['catch'](function(e){$('project-list').innerHTML='<p class="err">'+esc(e.message)+'</p>';});
   }
 
   $('save').addEventListener('click', function () {
@@ -400,7 +413,7 @@
     if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }
     try { localStorage.setItem(LS_EMAIL, e); } catch (x) {}
     firebase.auth().sendSignInLinkToEmail(e, {
-      url: location.origin + location.pathname + (ORG ? '?org=' + encodeURIComponent(ORG) : ''),
+      url: location.origin + location.pathname + '?org=' + encodeURIComponent(ORG) + '&view=' + encodeURIComponent(views[location.hash.slice(1)] ? location.hash.slice(1) : 'orders'),
       handleCodeInApp: true
     }).then(function () {
       $('g-msg').textContent = 'Check your inbox — we have emailed a link to ' + e + '.';
@@ -426,7 +439,11 @@
       var saved = '';
       try { saved = localStorage.getItem(LS_EMAIL) || ''; } catch (x) {}
       if (!saved) saved = window.prompt('Confirm the email address you used') || '';
-      firebase.auth().signInWithEmailLink(saved, location.href)['catch'](function (err) {
+      firebase.auth().signInWithEmailLink(saved, location.href).then(function () {
+        var nextView=views[qp('view')]?qp('view'):'orders';
+        history.replaceState(null,'',location.pathname+'?org='+encodeURIComponent(ORG)+'#'+nextView);
+        view(nextView);try{localStorage.removeItem(LS_EMAIL);}catch(e){}
+      })['catch'](function (err) {
         $('g-msg').className = 'err';
         $('g-msg').textContent = (err && err.message) || 'That link has expired. Please ask for a new one.';
       });

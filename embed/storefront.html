@@ -314,7 +314,7 @@
   </div>
 </div>
 
-<script>
+<script src="/omega-logic-theme.js"></script><script>
 (function () {
   'use strict';
 
@@ -422,7 +422,7 @@
     postHeight();
   }
   function busy(on) {
-    document.body.className = on ? 'busy' : '';
+    document.body.classList.toggle('busy', !!on);
     var bs = document.querySelectorAll('button.btn');
     for (var i = 0; i < bs.length; i++) bs[i].disabled = !!on;
   }
@@ -439,6 +439,13 @@
   /* ── Paint the brand ─────────────────────────────────────────────────── */
   function paintBrand() {
     var b = CFG.brand, c = CFG.copy;
+    if (CFG.flow.customerPortal && window.OmegaLogicTheme) {
+      if (!document.getElementById('logic-theme-style')) {
+        var link=document.createElement('link');link.id='logic-theme-style';link.rel='stylesheet';link.href='/omega-logic-theme.css';document.head.appendChild(link);
+        var style=document.createElement('style');style.textContent='body.logic-theme{--accent:var(--brand)}';document.head.appendChild(style);
+      }
+      OmegaLogicTheme.apply({name:b.platformName||b.name,primary:b.accent,ink:b.ink});
+    }
     if (b.accent) document.documentElement.style.setProperty('--accent', b.accent);
     if (b.ink) document.documentElement.style.setProperty('--ink', b.ink);
     if (b.logoUrl) { var l = $('logo'); l.src = b.logoUrl; l.alt = b.name; show(l); }
@@ -1023,11 +1030,22 @@
       + 'site designer, where you lay the system out on your own property and '
       + 'take it through to a drawing set.';
     $('designWho').className = LEAD_ID ? 'row2 hide' : 'row2';
+    if (CFG.flow.customerPortal) {
+      $('designIntro').textContent = 'Create your free customer account to follow your orders and manage your details. Editor Lite is a separate monthly subscription for guided site design and exports.';
+      $('designWho').className = 'row2 hide';
+      $('designBtn').textContent = 'Explore Editor Lite';
+      $('designNote').textContent = 'Your customer login stays with this supplier. No separate platform account is required.';
+    }
     show($('designCard'));
   }
 
   function doDesign() {
     say('');
+    if (CFG.flow.customerPortal) {
+      // An ordinary branded account link, never a staff editor or bearer token.
+      window.open(CFG.flow.customerPortal + '#design', '_blank', 'noopener');
+      return;
+    }
     var name = $('dName').value.trim() || $('sName').value.trim() || $('cName').value.trim();
     var email = $('dEmail').value.trim() || $('sEmail').value.trim() || $('cEmail').value.trim();
     if (!email) { say('Enter a work email and we will get in touch about an account.'); return; }

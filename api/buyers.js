@@ -16,6 +16,10 @@ module.exports = A.handler(async function (req, res) {
       if (!acct) throw A.httpError(404, 'Customer not found');
       var orders = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', acct.user.email).orderBy('createdAt', 'desc').limit(100).get();
       return { customerId: acct.id, company: acct.data.name, name: acct.user.name || '', email: acct.user.email,
+        owner: X.owner(caller), editorAccess: require('./_lib/buyer-design').entitlement(ctx, acct.data),
+        phone: acct.user.phone || '', address: acct.data.address || null, activated: !!acct.user.uid,
+        createdAt: acct.data.createdAt || null, lastSeenAt: acct.user.lastSeenAt || null,
+        plan: acct.data.plan || 'free', contactStatus: acct.user.status || 'active',
         status: acct.data.status, terms: P.terms(ctx.config.terms, acct.data.terms), portalUrl: portalUrl,
         orders: orders.docs.map(function (r) { var o = r.data(); return { id: r.id, orderNo: o.orderNo, status: o.status }; }), limited: orders.size === 100 };
     }
@@ -30,6 +34,37 @@ module.exports = A.handler(async function (req, res) {
     return { org: org, name: ctx.org.name || org, customers: customers, portalUrl: portalUrl, next: rows.size === 50 ? rows.docs[49].id : null };
   }
   var address = B.email(b.email);
+  if (b.action === 'editor-trial') {
+    X.requireOwner(caller);
+    var days = Number(b.days);
+    if (!Number.isInteger(days) || days < 0 || days > 14) throw A.httpError(400, 'Choose zero to revoke, or 1–14 trial days');
+    return db.runTransaction(async function (tx) {
+      var found = B.active(await B.lookup(db, org, address, tx)), prior = found.data.editorLite || {};
+      if (prior.source === 'provider' && prior.status === 'active') throw A.httpError(409, 'Manage the existing paid subscription through its billing provider');
+      var now = new Date(), grant = { status: days ? 'trial' : 'inactive', source: 'owner-trial',
+        expiresAt: new Date(now.getTime() + days * 86400000).toISOString(), grantedBy: caller.email, grantedAt: now.toISOString() };
+      tx.update(root.collection('customers').doc(found.id), { editorLite: grant });
+      tx.create(db.collection('omega_audit').doc(), { action: 'buyer-editor-trial', orgId: org, customerId: found.id, by: caller.email, at: now.toISOString(), was: prior, grant: grant });
+      return { ok: true, note: days ? 'Time-limited Editor Lite trial granted. No subscription or charge was created.' : 'Trial access revoked. Saved projects were retained.' };
+    });
+  }
+  if (b.action === 'profile') {
+    if (!B.clean(b.company) || !B.clean(b.name)) throw A.httpError(400, 'Company and contact name are required');
+    if (['active', 'suspended'].indexOf(b.status) < 0) throw A.httpError(400, 'Choose active or suspended access');
+    var ad = b.address || {}, company = B.clean(b.company), contactName = B.clean(b.name, 120), phone = B.clean(b.phone, 40);
+    var shipping = { line1: B.clean(ad.line1, 200), city: B.clean(ad.city, 100), state: B.clean(ad.state, 40), zip: B.clean(ad.zip, 20) };
+    return db.runTransaction(async function (tx) {
+      var found = await B.lookup(db, org, address, tx);
+      if (!found) throw A.httpError(404, 'Customer not found');
+      var ref = root.collection('customers').doc(found.id), now = new Date().toISOString();
+      tx.update(ref, { name: company, address: shipping, status: b.status, updatedAt: now });
+      tx.update(ref.collection('users').doc(address), { name: contactName, phone: phone, updatedAt: now });
+      tx.create(db.collection('omega_audit').doc(), { action: 'buyer-profile', orgId: org, customerId: found.id, by: caller.email, at: now,
+        was: { name: found.data.name || '', address: found.data.address || null, status: found.data.status || 'active', contactName: found.user.name || '', phone: found.user.phone || '' },
+        profile: { name: company, address: shipping, status: b.status, contactName: contactName, phone: phone } });
+      return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' };
+    });
+  }
   if (b.action === 'create') {
     if (!B.clean(b.company) || !B.clean(b.name)) throw A.httpError(400, 'Company and contact name are required');
     var terms = b.terms ? P.terms(ctx.config.terms, b.terms) : {};
