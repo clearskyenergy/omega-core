@@ -112,6 +112,9 @@
      invisible and would change what somebody's drawing says. */
   function toCatalogEntry(orgKey, p) {
     if (!p || !p.sku) return null;
+    /* A component (a battery MODULE has a kWh figure) or a service is not a
+       thing the designer places. api/_lib/materials.js owns that kind. */
+    if (p.kind === 'component' || p.kind === 'service') return null;
     var kwh = num(p.kwh), kw = num(p.kw);
     if (!(kwh > 0) && !(kw > 0)) return null;
 

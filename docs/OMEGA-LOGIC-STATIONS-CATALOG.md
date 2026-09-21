@@ -48,6 +48,50 @@ service-completion evidence before final billing. Service-only orders complete
 after that evidence and verified final payment; no fake serial or shipment is made.
 Mixed orders still need every physical component passed and ready.
 
+## Components and bills of materials
+
+A catalog row may be a third kind, `component`: what a product is **made of**
+— a cell, a module, a BMS, an enclosure. It lives in the same list as the
+products because bills of materials reference it by SKU and two lists drift
+apart the first time somebody renames one. It is never sold: `api/embed-config.js`
+drops the kind before projecting, `omega-bess-products.js` refuses to turn a
+module's kWh into a battery the designer can place, `designs()` never offers it
+to the BESS picker, and `api/orders.js` refuses it on an order line. A
+component carries `unit`, `supplier`, `supplierSku`, `moq` and `leadTimeDays`
+— and never a buy price. That number is exactly what turns up on a supplier's
+sheet, and `scripts/import-products.js` refuses the column in both files.
+
+Any product or component may carry `bom: [{ sku, qty, unit }]`, the quantity
+of each component in **one** of it. Multi-level is the normal case (cabinet →
+module → cell). `api/_lib/materials.js` `validateCatalog()` runs on every
+catalog save and every import, against the whole list as a graph: every
+referenced SKU must exist, none may be a service, nothing may contain itself,
+no loop, no more than eight levels. A loop hangs a plan; a missing SKU
+under-buys silently; both are refused with the path in the message.
+
+**The materials plan** (`/logic-materials.html`, `GET /api/logic-materials`)
+is an MRP explosion netted level by level. Demand is classified by how firm it
+is: works orders still to be built are *committed* (requirements minus
+`registeredCounts`), priced orders awaiting a deposit are *pipeline*, unpriced
+requests are *forecast*; an order that already has a works order is counted
+once, through the works order. Each SKU is processed only after every assembly
+that uses it (low-level code), netted against on-hand and on-order — stock goes
+to committed first, then pipeline, then forecast — and only the remainder is
+exploded into its children, so forty modules on the shelf mean forty modules'
+worth of cells that are not bought. The page lists what to buy (suggested
+order rounded up to the MOQ, need-by from the earliest works order, order-by =
+need-by minus lead time, late when that is already past), what to build, and a
+purchase-list CSV. Forecast demand is shown and never suggests a purchase.
+
+Stock counts are recorded from the same page (`POST action:'stock'`) into
+`omega_orgs/{org}/fulfillment/materials`, which the rules already close to
+browsers; each count is dated, attributed, revision-checked and audited. There
+is no purchase order object: "on order" is the count a person enters after
+sending the list to a supplier. No scrap or yield factor yet — quantities are
+the bill's, and the page says so. Import: `--bom bom.csv`
+(`parentSku, componentSku, qty, unit`, template in `docs/bom-template.csv`)
+alongside a products file whose component rows carry `kind=component`.
+
 ## Production versioning and evidence
 
 Configuration is `fulfillment/config.production`, not a new collection. Owner

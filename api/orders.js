@@ -221,7 +221,10 @@ function create(caller, b) {
         projectId = clean(b.projectId, 120);
       }
 
-      var published = Array.isArray(sf.products) ? sf.products : [];
+      /* Components (api/_lib/materials.js) are what a product is made of,
+         not a thing that is sold; an order line naming one is refused. */
+      var published = (Array.isArray(sf.products) ? sf.products : []).filter(function (p) { return p && p.kind !== 'component'; });
+      var components = (Array.isArray(sf.products) ? sf.products : []).filter(function (p) { return p && p.kind === 'component'; });
       function bySku(sku) {
         for (var i = 0; i < published.length; i++) if (String(published[i].sku) === sku) return published[i];
         return null;
@@ -231,6 +234,7 @@ function create(caller, b) {
       (Array.isArray(b.items) ? b.items : []).slice(0, 40).forEach(function (it) {
         var sku = clean(it && it.sku, 64);
         if (!sku) return;
+        if (components.some(function (c) { return String(c.sku) === sku; })) throw A.httpError(400, sku + ' is a component, not a product');
         var p = bySku(sku);
         items.push({
           sku: sku,

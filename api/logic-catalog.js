@@ -19,6 +19,11 @@ module.exports=A.handler(async function(req,res){
     // them and the public endpoints still construct an explicit projection.
     var saved=Object.assign({},old||{},product);
     rows=rows.map(function(p){return p.sku===product.sku?saved:p;});if(!old)rows.push(saved);
+    // A bill of materials is checked against the LIST, not the row: every
+    // component it names must exist, none may be a service, and the whole
+    // catalog must stay loop-free — a cycle hangs the materials plan.
+    require('./_lib/materials').validateCatalog(rows);
+    if(old&&old.kind!==product.kind&&rows.some(function(p){return p.sku!==product.sku&&(p.bom||[]).some(function(l){return l.sku===product.sku;});})&&product.kind==='service')throw A.httpError(409,product.sku+' is used in a bill of materials and cannot become a service');
     var revision=(d.catalogRevision||0)+1,at=new Date().toISOString();
     tx.set(ref,{products:rows,catalogRevision:revision,catalogUpdatedAt:at,catalogUpdatedBy:caller.email},{merge:true});
     tx.create(A.db().collection('omega_audit').doc(),{action:'logic-catalog',orgId:org,sku:product.sku,before:old||null,after:product,by:caller.email,at:at});return {ok:true,revision:revision};

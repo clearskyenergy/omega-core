@@ -167,6 +167,59 @@ var HEAD = 'sku,name,kw,kwh,widthFt,depthFt,dimUnits,integratesPcs,integratesXfm
      fs.readFileSync(f, 'utf8').indexOf(',mm,') > 0);
 })();
 
+/* ── 7 · Components and the bill-of-materials sheet ───────────────────── */
+(function bom() {
+  function run2(products, bom, extra) {
+    var f = path.join(TMP, 'p' + Math.random().toString(36).slice(2) + '.csv'), g = path.join(TMP, 'b' + Math.random().toString(36).slice(2) + '.csv');
+    fs.writeFileSync(f, products); fs.writeFileSync(g, bom);
+    var r = cp.spawnSync(process.execPath, [SCRIPT, '--org', 'test.com', '--file', f, '--bom', g].concat(extra || []), { encoding: 'utf8' });
+    return { out: (r.stdout || '') + (r.stderr || ''), code: r.status };
+  }
+  var PH = 'sku,name,kind,kw,kwh,widthFt,depthFt,dimUnits,integratesPcs,integratesXfmr,integratesDisco,priceMode,listPrice,unit,supplier,supplierSku,moq,leadTimeDays\n';
+  var P = PH + 'CAB,Cabinet,product,100,215,8,4,ft,yes,no,yes,quote,,,,,,20\n'
+    + 'MOD,Module,component,,5.2,,,,,,,,,ea,,,,10\n'
+    + 'CELL,Cell,component,,,,,,,,,,,ea,EVE,LF280K,1000,60\n'
+    + 'HARN,Harness,component,,,,,,,,,,,m,,,,14\n'
+    + 'INSTALL,Commissioning,service,,,,,,,,,,,,,,,\n';
+  var B = 'parentSku,componentSku,qty,unit\nCAB,MOD,8,ea\nMOD,CELL,104,ea\nMOD,HARN,2.5,m\n';
+  var r = run2(P, B);
+  ok('a component row imports with no kW or kWh', !/needs a kW or a kWh/.test(r.out) && /3  components/.test(r.out), r.out.slice(0, 500));
+  ok('  the product and the service are orderable; the three components are not', /2  orderable/.test(r.out), (/\d+  orderable/.exec(r.out) || [])[0]);
+  ok('the bill attaches to its parents, level by level', /2  with a bill of materials, 3 line\(s\)/.test(r.out), r.out.slice(0, 500));
+  ok('  and is stored on the row', /"bom": \[/.test(r.out) && /"sku": "MOD",\s*"qty": 8/.test(r.out));
+  ok('  a fractional quantity in metres survives', (function () { var rr = run2(P, B, ['--out', path.join(TMP, 'o.json')]); var j = JSON.parse(fs.readFileSync(path.join(TMP, 'o.json'), 'utf8')); var m = j.filter(function (x) { return x.sku === 'MOD'; })[0]; return m.bom[1].qty === 2.5 && m.bom[1].unit === 'm' && j.filter(function (x) { return x.sku === 'CELL'; })[0].moq === 1000; })());
+  ok('  and the run is clean', r.code === 0, r.code);
+
+  r = run2(P, 'parentSku,componentSku,qty,unit\nCAB,GHOST,1,ea\n');
+  ok('a component that is not in the products file is a PROBLEM, not a dropped line', /GHOST is not in the products file/.test(r.out) && r.code !== 0, r.out.slice(-400));
+
+  r = run2(P, 'parentSku,componentSku,qty,unit\nCAB,MOD,8,ea\nMOD,CAB,1,ea\n');
+  ok('a loop is refused, with the path', /loops: CAB → MOD → CAB|loops: MOD → CAB → MOD/.test(r.out) && r.code !== 0, r.out.slice(-400));
+  ok('  and no bill survives it', !/"bom": \[\s*\{/.test(r.out));
+
+  r = run2(P, 'parentSku,componentSku,qty,unit\nINSTALL,MOD,1,ea\n');
+  ok('a service cannot have a bill of materials', /service cannot have a bill/.test(r.out));
+
+  r = run2(P, 'parentSku,componentSku,qty,unit\nCAB,MOD,0,ea\n');
+  ok('a zero quantity is refused', /greater than zero/.test(r.out));
+
+  r = run2(P, 'parentSku,componentSku,qty,unit,cost\nCAB,MOD,8,ea,12\n');
+  ok('a cost column on the BOM sheet is the same hard stop', /COST BASIS column/.test(r.out) && !/orderable/.test(r.out));
+
+  r = run2(PH + 'CELL,Cell,component,,,,,,,,,,,bushel,,,,60\n', 'parentSku,componentSku,qty,unit\n');
+  ok('a component unit is validated by name', /unit "bushel" is not one of/.test(r.out));
+
+  r = run2(PH + 'X,Thing,gadget,1,1,,,,,,,,,,,,,\n', 'parentSku,componentSku,qty,unit\n');
+  ok('an unknown kind is refused', /kind must be product, service or component/.test(r.out));
+
+  var f = path.join(ROOT, 'docs', 'product-list-template.csv'), g = path.join(ROOT, 'docs', 'bom-template.csv');
+  ok('the BOM template exists', fs.existsSync(g));
+  var rr = cp.spawnSync(process.execPath, [SCRIPT, '--org', 'test.com', '--file', f, '--bom', g], { encoding: 'utf8' });
+  var out = (rr.stdout || '') + (rr.stderr || '');
+  ok('the two templates import together, cleanly', rr.status === 0 && /5  components/.test(out) && /2  with a bill of materials, 5 line/.test(out), out.slice(0, 500));
+  ok('  and the products file alone still reports two orderable', /2  orderable/.test(out));
+})();
+
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
 console.log('\nproduct import: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

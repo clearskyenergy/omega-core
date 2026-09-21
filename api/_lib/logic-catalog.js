@@ -1,23 +1,37 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('./admin');
+var A=require('./admin'),M=require('./materials');
 function clean(v,n){return String(v==null?'':v).trim().slice(0,n);}
+/* Three kinds. A `component` is what a product is MADE OF — a cell, a BMS, a
+   module — and is never sold, published, drawn or priced: api/embed-config.js,
+   omega-bess-products.js and designs() below each drop it on sight. It lives
+   in the same list as the products because bills of materials reference it
+   by SKU and two lists drift. See api/_lib/materials.js. */
+var KINDS=['product','service','component'];
 function product(p){
   p=p||{};var sku=clean(p.sku,64),category=p.category||'bess',kind=p.kind||'product';
   if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(sku)||sku==='GENERIC-BESS')throw A.httpError(400,'Use a unique product SKU (letters, numbers, dot, dash, underscore)');
-  if(['bess','compute','ev','solar','other'].indexOf(category)<0||['product','service'].indexOf(kind)<0)throw A.httpError(400,'Select a product category and type');
-  var out={sku:sku,name:clean(p.name,120),blurb:clean(p.blurb,400),kind:kind,category:category,active:p.active!==false,priceMode:p.priceMode==='list'?'list':'quote',designEnabled:kind==='product'&&category==='bess'&&p.designEnabled===true};
+  if(['bess','compute','ev','solar','other'].indexOf(category)<0||KINDS.indexOf(kind)<0)throw A.httpError(400,'Select a product category and type');
+  var out={sku:sku,name:clean(p.name,120),blurb:clean(p.blurb,400),kind:kind,category:category,active:p.active!==false,priceMode:kind==='component'?'quote':(p.priceMode==='list'?'list':'quote'),designEnabled:kind==='product'&&category==='bess'&&p.designEnabled===true};
   if(!out.name)throw A.httpError(400,'Product name required');
-  ['kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays'].forEach(function(k){var v=p[k];if(v==null||v===''){out[k]=null;return;}var n=Number(v);if(!isFinite(n)||n<0||n>100000000)throw A.httpError(400,'Invalid '+k);out[k]=n;});
+  ['kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','moq'].forEach(function(k){var v=p[k];if(v==null||v===''){out[k]=null;return;}var n=Number(v);if(!isFinite(n)||n<0||n>100000000)throw A.httpError(400,'Invalid '+k);out[k]=n;});
   if(out.priceMode==='list'&&!(out.listPrice>0))throw A.httpError(400,'A published list price must be greater than zero');
   if(out.priceMode==='quote')out.listPrice=null;
   if(out.designEnabled&&!['kw','kwh','widthFt','depthFt'].every(function(k){return out[k]>0;}))throw A.httpError(400,'BESS design products require positive kW, kWh, width and depth');
   out.chemistry=clean(p.chemistry,40);out.imageUrl=clean(p.imageUrl,400);
   if(out.imageUrl&&!/^https:\/\//.test(out.imageUrl)&&!/^\/(?!\/)/.test(out.imageUrl))throw A.httpError(400,'Use an HTTPS image or a local image path');
-  var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};return out;
+  var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};
+  /* Sourcing fields belong to a component. A product's bill of materials is
+     what the materials plan explodes; a service has none. */
+  out.unit=kind==='component'?(clean(p.unit,8)||'ea'):null;
+  if(out.unit&&M.UNITS.indexOf(out.unit)<0)throw A.httpError(400,'Unit must be one of '+M.UNITS.join(', '));
+  out.supplier=kind==='component'?clean(p.supplier,160):'';out.supplierSku=kind==='component'?clean(p.supplierSku,80):'';
+  if(kind!=='component')out.moq=null;
+  out.bom=kind==='service'?[]:M.bomLines(p.bom);
+  return out;
 }
 function designs(config){
-  var rows=(config.products||[]).filter(function(p){return p.active!==false&&p.kind!=='service'&&(p.category||'bess')==='bess'&&p.designEnabled!==false&&Number(p.kw)>0&&Number(p.kwh)>0&&Number(p.widthFt)>0&&Number(p.depthFt)>0;});
+  var rows=(config.products||[]).filter(function(p){return p.active!==false&&(p.kind||'product')==='product'&&(p.category||'bess')==='bess'&&p.designEnabled!==false&&Number(p.kw)>0&&Number(p.kwh)>0&&Number(p.widthFt)>0&&Number(p.depthFt)>0;});
   // The same canonical generic capacity concept used by the full editor.
   // Never published to the storefront or accepted as an orderable SKU.
   if(!rows.length)return config.genericDesign===false?[]:[{sku:'GENERIC-BESS',name:'Generic BESS · make/model TBD',placeholder:true}];
@@ -30,5 +44,8 @@ function select(config,sku,target){
   if(qty>9999)throw A.httpError(400,'This target requires more than 9999 units');
   return Object.assign({},target,{product:p,qty:qty,selectedKw:p.placeholder?target.kw:qty*p.kw,selectedKwh:p.placeholder?target.kwh:qty*p.kwh});
 }
-function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl'].forEach(function(k){if(p[k]!=null)out[k]=p[k];});var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};return out;}
-module.exports={product:product,designs:designs,select:select,view:view};
+/* The OFFICE projection — the tenant's own catalog page. Sourcing fields and
+   the bill of materials are theirs to see; the public projection in
+   api/embed-config.js never names them. */
+function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){return {sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea')};});return out;}
+module.exports={product:product,designs:designs,select:select,view:view,KINDS:KINDS};

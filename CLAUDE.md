@@ -246,6 +246,13 @@ user). Do not add a second copy of that list — see what three copies of
   only thing keeping them private. Never replace that with a spread.
   The merge is ADDITIVE and namespaced by org: a saved project references a
   catalogue key, so a shipped entry is never removed or overwritten.
+  - A row may be `kind: 'component'` — what a product is MADE OF, with a
+    `bom[]` on any product or component (`api/_lib/materials.js`). It is
+    never published, drawn, picked or ordered; every one of those surfaces
+    drops the kind by name. The materials plan (`api/logic-materials.js`)
+    explodes open demand through the bills and nets it against stock counts
+    held under `fulfillment/`, which is closed to browsers. Never a buy price
+    on a component: `import-products.js` refuses the column in both sheets.
 - `orders` is read from Firestore and written ONLY through `api/orders.js`:
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.

@@ -22,6 +22,7 @@ function officeShell(d){
   nav.innerHTML='<p class="eyebrow">Sales</p><a aria-current="page" href="'+esc(d.links.office)+'">Orders</a><a href="'+esc(d.links.customers)+'">Customers</a><p class="eyebrow">Production</p><a href="'+esc(d.links.factory)+'">Works orders</a><a href="/plant/station.html">Bench tablet</a><p class="eyebrow">Website</p><a href="'+esc(d.links.start)+'">Customer experience</a><a href="'+esc(d.links.setup)+'">Website installation</a>'+(d.owner?'<p class="eyebrow">ClearSky</p><a href="/omega-logic">All OEM accounts</a><a href="'+esc(d.links.mission)+'">Jarvis Mission</a>':'');
   document.querySelector('header b').textContent=(d.brand&&d.brand.name)||d.name;
   nav.insertAdjacentHTML('beforeend','<a href="/logic-catalog.html?org='+encodeURIComponent(ORG)+'">Product catalog</a>');
+  nav.insertAdjacentHTML('beforeend','<a href="/logic-materials.html?org='+encodeURIComponent(ORG)+'">Materials plan</a>');
   nav.insertAdjacentHTML('beforeend','<a href="/logic-logistics.html?org='+encodeURIComponent(ORG)+'">Logistics &amp; receiving</a>');
   nav.insertAdjacentHTML('beforeend','<a href="/po-inbox?office=1&org='+encodeURIComponent(ORG)+'">Company accounts &amp; POs</a>');
   nav.insertAdjacentHTML('beforeend','<p class="eyebrow">Tools &amp; management</p><a href="/logic-urls.html?org='+encodeURIComponent(ORG)+'">URL Generator</a><a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'">Plant manager</a>'+(d.owner?'<a href="/plant/manager.html?org='+encodeURIComponent(ORG)+'#flow">Production flow</a>':''));

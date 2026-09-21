@@ -1,0 +1,239 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Bills of materials and the materials plan. Offline: no credentials, no
+   network. Three layers:
+
+     1 · api/_lib/materials.js — the explosion is netted level by level, in
+         low-level-code order, and stock is consumed by the firmest demand
+         first. Every one of those clauses has a case below that fails if it
+         is dropped.
+     2 · api/_lib/logic-catalog.js — a component is a third kind that the
+         BESS picker drops; a bill of materials is validated as a graph.
+     3 · the surfaces that could publish a component — api/embed-config.js,
+         omega-bess-products.js, api/orders.js — refuse it.
+
+   node scripts/test-materials.js */
+'use strict';
+var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
+var ROOT = path.join(__dirname, '..');
+var M = require('../api/_lib/materials');
+/* api/_lib/admin.js needs firebase-admin; nothing here does. The mock is
+   installed before anything that requires it (logic-catalog, the endpoint). */
+var db = null;
+var A = { db: function () { return db; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; },
+  safeOrg: function (s) { return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s || '') ? s : ''; },
+  authenticate: async function (r) { return r.caller; }, handler: function (f) { return f; }, FieldValue: function () { return { serverTimestamp: function () { return 1; } }; } };
+function mock(p, e) { require.cache[require.resolve(p)] = { id: require.resolve(p), filename: require.resolve(p), loaded: true, exports: e }; }
+mock('../api/_lib/admin', A);
+var pass = 0, fail = 0;
+function ok(label, yes, detail) {
+  console.log('  ' + (yes ? 'PASS' : 'FAIL') + '  ' + label + (detail !== undefined && !yes ? '  got: ' + JSON.stringify(detail) : ''));
+  if (yes) pass++; else fail++;
+}
+function rejects(label, fn, words) {
+  try { fn(); ok(label, false, 'did not reject'); }
+  catch (e) { ok(label, (!words || String(e.message).indexOf(words) >= 0) && e.status === 400, e.message); }
+}
+function row(planned, sku) { return planned.rows.filter(function (r) { return r.sku === sku; })[0]; }
+
+/* A cabinet of eight modules; a module of 104 cells and 2.5 m of harness. */
+var CATALOG = [
+  { sku: 'CAB', name: 'Cabinet', kind: 'product', leadTimeDays: 20, bom: [{ sku: 'MOD', qty: 8, unit: 'ea' }, { sku: 'BMS', qty: 1, unit: 'ea' }, { sku: 'ENC', qty: 1, unit: 'ea' }] },
+  { sku: 'MOD', name: 'Module', kind: 'component', kwh: 5.2, leadTimeDays: 10, bom: [{ sku: 'CELL', qty: 104, unit: 'ea' }, { sku: 'HARN', qty: 2.5, unit: 'm' }] },
+  { sku: 'CELL', name: 'LFP cell 280Ah', kind: 'component', unit: 'ea', moq: 1000, leadTimeDays: 60, supplier: 'EVE' },
+  { sku: 'BMS', name: 'Master BMS', kind: 'component', unit: 'ea', leadTimeDays: 30 },
+  { sku: 'ENC', name: 'Enclosure', kind: 'component', unit: 'ea', leadTimeDays: 45 },
+  { sku: 'HARN', name: 'Harness', kind: 'component', unit: 'm', leadTimeDays: 14 },
+  { sku: 'INSTALL', name: 'Installation', kind: 'service' }
+];
+var NOW = '2026-09-21';
+
+console.log('\nmaterials plan — the explosion');
+(function () {
+  var p = M.plan({ now: NOW, products: CATALOG, stock: { MOD: { onHand: 8 } },
+    works: [{ id: 'wo_1', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 5 }], registeredCounts: {}, dueDate: '2026-12-01' }] });
+  ok('five cabinets to build', row(p, 'CAB').net.committed === 5 && row(p, 'CAB').suggestedOrder === 5);
+  ok('forty modules gross, eight on the shelf, thirty-two to make', row(p, 'MOD').gross.committed === 40 && row(p, 'MOD').net.committed === 32, row(p, 'MOD'));
+  ok('cells are exploded from the NET modules, not the gross', row(p, 'CELL').gross.committed === 32 * 104, row(p, 'CELL').gross);
+  ok('  so the eight shelf modules save 832 cells', row(p, 'CELL').gross.committed === 4160 - 832);
+  ok('  and the suggested order rounds up to the MOQ', row(p, 'CELL').suggestedOrder === 4000, row(p, 'CELL').suggestedOrder);
+  ok('harness is fractional in metres', row(p, 'HARN').net.committed === 80 && row(p, 'HARN').unit === 'm' && row(p, 'HARN').suggestedOrder === 80);
+  ok('the enclosure and BMS follow the cabinet count', row(p, 'ENC').net.committed === 5 && row(p, 'BMS').net.committed === 5);
+  ok('order-by is need-by minus the lead time', row(p, 'CELL').needBy === '2026-12-01' && row(p, 'CELL').orderBy === '2026-10-02', row(p, 'CELL'));
+  ok('  and need-by propagates down the tree', row(p, 'HARN').needBy === '2026-12-01');
+  ok('nothing is late yet', p.summary.late === 0 && !row(p, 'CELL').late);
+  ok('a service never appears', !row(p, 'INSTALL'));
+  ok('the driver names the works order, and the child names its assembly',
+     row(p, 'CAB').drivers[0].ref === 'CC-1' && row(p, 'CELL').drivers[0].kind === 'assembly' && row(p, 'CELL').drivers[0].ref === 'MOD');
+  ok('summary: six components carried, five short', p.summary.components === 5 && p.summary.short === 5, p.summary);
+})();
+
+console.log('\nmaterials plan — stock goes to the firmest demand first');
+(function () {
+  var p = M.plan({ now: NOW, products: CATALOG, stock: { CAB: { onHand: 2 } },
+    orders: [{ id: 'a', orderNo: 'A', status: 'accepted', items: [{ sku: 'CAB', qty: 2 }] },
+             { id: 'b', orderNo: 'B', status: 'new', items: [{ sku: 'CAB', qty: 3 }, { sku: 'INSTALL', qty: 1, kind: 'service' }] }] });
+  var cab = row(p, 'CAB');
+  ok('two finished cabinets cover the priced order entirely', cab.gross.pipeline === 2 && cab.net.pipeline === 0);
+  ok('  and none of the forecast', cab.net.forecast === 3);
+  ok('so the cells below are forecast only', row(p, 'CELL').net.forecast === 3 * 8 * 104 && row(p, 'CELL').net.committed === 0 && row(p, 'CELL').net.pipeline === 0);
+  ok('  which does NOT make a purchase suggestion', row(p, 'CELL').suggestedOrder === 0 && p.summary.short === 0);
+  ok('  and appears on nobody\'s purchase list', M.purchaseList(p).length === 0);
+  var q = M.plan({ now: NOW, products: CATALOG, stock: { CAB: { onHand: 1 } },
+    works: [{ id: 'w', orderNo: 'W', status: 'released', requirements: [{ sku: 'CAB', qty: 3 }], registeredCounts: { CAB: 1 } }],
+    orders: [{ id: 'a', orderNo: 'A', status: 'quoted', items: [{ sku: 'CAB', qty: 2 }] }] });
+  ok('a started unit comes off the committed count', row(q, 'CAB').gross.committed === 2, row(q, 'CAB').gross);
+  ok('  the shelf unit goes to committed before pipeline', row(q, 'CAB').net.committed === 1 && row(q, 'CAB').net.pipeline === 2);
+})();
+
+console.log('\nmaterials plan — what is NOT counted');
+(function () {
+  var p = M.plan({ now: NOW, products: CATALOG,
+    works: [{ id: 'done', status: 'complete', requirements: [{ sku: 'CAB', qty: 9 }] },
+            { id: 'live', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }] }],
+    orders: [{ id: 'released', status: 'in_fulfilment', worksOrderId: 'live', items: [{ sku: 'CAB', qty: 1 }] },
+             { id: 'x', status: 'cancelled', items: [{ sku: 'CAB', qty: 7 }] },
+             { id: 'y', status: 'accepted', cancelRequested: true, items: [{ sku: 'CAB', qty: 7 }] },
+             { id: 'z', status: 'shipped', items: [{ sku: 'CAB', qty: 7 }] },
+             { id: 'odd', status: 'new', items: [{ sku: 'NOT-IN-CATALOG', qty: 1 }] }] });
+  ok('a finished works order is not demand', row(p, 'CAB').gross.committed === 1);
+  ok('an order with a works order is counted ONCE, through the works order', row(p, 'CAB').gross.total === 1, row(p, 'CAB').gross);
+  ok('cancelled, cancel-requested and shipped orders are ignored', row(p, 'CAB').gross.pipeline === 0 && row(p, 'CAB').gross.forecast === 0);
+  ok('a SKU the catalog does not know is reported, not thrown', p.unknownSkus.length === 1 && p.unknownSkus[0] === 'NOT-IN-CATALOG');
+  ok('a component with no demand and no stock is not a row', !row(p, 'HARN') === false && row(p, 'HARN').gross.total > 0 && !row(M.plan({ products: CATALOG }), 'HARN'));
+})();
+
+console.log('\nmaterials plan — late, and the order of the list');
+(function () {
+  var p = M.plan({ now: NOW, products: CATALOG,
+    works: [{ id: 'soon', orderNo: 'SOON', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-10-15' }] });
+  ok('cells with a 60-day lead and a need-by 24 days out are late', row(p, 'CELL').late === true && row(p, 'CELL').orderBy === '2026-08-16');
+  ok('  the enclosure (45 days) is late too, the harness (14) is not', row(p, 'ENC').late === true && row(p, 'HARN').late === false);
+  ok('late rows come first', p.rows[0].late === true && p.summary.late === 3, p.rows.map(function (r) { return r.sku + (r.late ? '!' : ''); }));
+  var stocked = M.plan({ now: NOW, products: CATALOG, stock: { CELL: { onHand: 0, onOrder: 104 } },
+    works: [{ id: 'soon', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-10-15' }] });
+  ok('material already on order is not late — there is nothing left to order', row(stocked, 'CELL').net.total === 8 * 104 - 104 && row(stocked, 'CELL').late === true);
+  var covered = M.plan({ now: NOW, products: CATALOG, stock: { CELL: { onOrder: 832 } },
+    works: [{ id: 'soon', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-10-15' }] });
+  ok('  fully covered cells are not late and not on the list', row(covered, 'CELL').late === false && row(covered, 'CELL').suggestedOrder === 0);
+})();
+
+console.log('\nbills of materials — the graph is checked');
+(function () {
+  rejects('a loop is refused, and the message shows the path', function () {
+    M.validateCatalog([{ sku: 'A', bom: [{ sku: 'B', qty: 1 }] }, { sku: 'B', bom: [{ sku: 'A', qty: 1 }] }]);
+  }, 'A → B → A');
+  rejects('a component that is not in the catalog', function () { M.validateCatalog([{ sku: 'A', bom: [{ sku: 'GHOST', qty: 1 }] }]); }, 'no such SKU');
+  rejects('a service used as a material', function () { M.validateCatalog([{ sku: 'A', bom: [{ sku: 'S', qty: 1 }] }, { sku: 'S', kind: 'service' }]); }, 'is a service');
+  rejects('self-reference', function () { M.validateCatalog([{ sku: 'A', bom: [{ sku: 'A', qty: 1 }] }]); }, 'itself');
+  var deep = []; for (var i = 0; i < 11; i++) deep.push({ sku: 'L' + i, bom: i < 10 ? [{ sku: 'L' + (i + 1), qty: 1 }] : [] });
+  rejects('more than ' + M.MAX_DEPTH + ' levels', function () { M.validateCatalog(deep); }, 'levels');
+  ok('a four-level tree is fine', !!M.validateCatalog(deep.slice(6)));
+  rejects('a duplicated line', function () { M.bomLines([{ sku: 'X', qty: 1 }, { sku: 'X', qty: 2 }]); }, 'twice');
+  rejects('a zero quantity', function () { M.bomLines([{ sku: 'X', qty: 0 }]); }, 'greater than zero');
+  rejects('an unknown unit', function () { M.bomLines([{ sku: 'X', qty: 1, unit: 'furlong' }]); }, 'Unit must be');
+  rejects('a poisoned SKU', function () { M.bomLines([{ sku: '__proto__', qty: 1 }]); }, 'invalid');
+  var many = []; for (var j = 0; j <= M.MAX_LINES; j++) many.push({ sku: 'P' + j, qty: 1 });
+  rejects('more than ' + M.MAX_LINES + ' lines', function () { M.bomLines(many); }, 'at most');
+  ok('a gram of thermal paste is a valid quantity', M.bomLines([{ sku: 'PASTE', qty: 0.0001, unit: 'g' }])[0].qty === 0.0001);
+  ok('a blank bill is an empty list, not an error', M.bomLines(undefined).length === 0 && M.bomLines('').length === 0);
+  var llc = M.lowLevelCodes(M.validateCatalog([
+    { sku: 'CAB', bom: [{ sku: 'MOD', qty: 1 }, { sku: 'CELL', qty: 4 }] },   /* a loose cell at level 1 */
+    { sku: 'MOD', bom: [{ sku: 'CELL', qty: 100 }] }, { sku: 'CELL' }]));
+  ok('a shared component takes its DEEPEST level, so it is netted after every parent', llc.CELL === 2 && llc.MOD === 1 && llc.CAB === 0, llc);
+})();
+
+console.log('\ncatalog — a third kind, dropped by the picker');
+(function () {
+  var C = require('../api/_lib/logic-catalog');
+  var comp = C.product({ sku: 'CELL', name: 'Cell', kind: 'component', unit: 'ea', moq: 1000, supplier: 'EVE', supplierSku: 'LF280K', leadTimeDays: 60, priceMode: 'list', listPrice: 9 });
+  ok('a component keeps its sourcing fields', comp.kind === 'component' && comp.unit === 'ea' && comp.moq === 1000 && comp.supplier === 'EVE' && comp.supplierSku === 'LF280K');
+  ok('  and can never carry a public list price', comp.priceMode === 'quote' && comp.listPrice === null);
+  ok('  nor be a design product', comp.designEnabled === false);
+  var prod = C.product({ sku: 'CAB', name: 'Cabinet', kind: 'product', bom: [{ sku: 'MOD', qty: 8 }] });
+  ok('a product carries its bill of materials', prod.bom.length === 1 && prod.bom[0].sku === 'MOD' && prod.bom[0].qty === 8 && prod.bom[0].unit === 'ea');
+  ok('  and no sourcing fields', prod.unit === null && prod.moq === null && prod.supplier === '');
+  ok('a service has no bill of materials, whatever was sent', C.product({ sku: 'S', name: 'S', kind: 'service', bom: [{ sku: 'X', qty: 1 }] }).bom.length === 0);
+  assert.throws(function () { C.product({ sku: 'X', name: 'X', kind: 'component', unit: 'bushel' }); }, /Unit must be/);
+  var cfg = { products: [{ sku: 'MOD', name: 'Module', kind: 'component', kw: 10, kwh: 5, widthFt: 2, depthFt: 1, designEnabled: true },
+                         { sku: 'CAB', name: 'Cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4, depthFt: 3, designEnabled: true }] };
+  ok('the BESS picker never offers a component, even one with kW, kWh and a footprint',
+     C.designs(cfg).length === 1 && C.designs(cfg)[0].sku === 'CAB');
+  ok('the office projection shows the bill and the unit', C.view(comp).unit === 'ea' && Array.isArray(C.view(prod).bom) && C.view(prod).bom[0].qty === 8);
+})();
+
+console.log('\nthe surfaces that could publish a component');
+(function () {
+  var cfgSrc = fs.readFileSync(path.join(ROOT, 'api/embed-config.js'), 'utf8');
+  ok('api/embed-config.js drops kind:component before projecting', /p\.kind!=='component'/.test(cfgSrc));
+  ok('  and never names bom in its projection', !/\bbom\b/.test(cfgSrc.replace(/\/\*[\s\S]*?\*\//g, '')));
+  var B = require('../omega-bess-products.js');
+  ok('omega-bess-products.js will not turn a module into a battery', B.toCatalogEntry('cc', { sku: 'MOD', kind: 'component', kwh: 5.2, kw: 2 }) === null);
+  ok('  nor a service', B.toCatalogEntry('cc', { sku: 'S', kind: 'service', kwh: 5 }) === null);
+  ok('  but still takes a product', B.toCatalogEntry('cc', { sku: 'CAB', kind: 'product', kwh: 215, kw: 100 }) !== null);
+  var ordersSrc = fs.readFileSync(path.join(ROOT, 'api/orders.js'), 'utf8');
+  ok('api/orders.js refuses a component on an order line', /is a component, not a product/.test(ordersSrc));
+})();
+
+console.log('\nthe endpoint');
+(async function () {
+  function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+  function field(v, k) { return k.split('.').reduce(function (x, p) { return x == null ? undefined : x[p]; }, v); }
+  function merge(a, b) { Object.keys(b).forEach(function (k) { a[k] = (a[k] && typeof a[k] === 'object' && !Array.isArray(a[k]) && b[k] && typeof b[k] === 'object' && !Array.isArray(b[k])) ? merge(a[k], b[k]) : clone(b[k]); }); return a; }
+  class DB {
+    constructor() { this.rows = new Map(); this.seq = 0; }
+    seed(p, d) { this.rows.set(p, clone(d)); }
+    doc(p) { return new Ref(this, p); }
+    collection(p) { return new Query(this, p); }
+    runTransaction(fn) { var self = this, writes = []; return Promise.resolve(fn({
+      get: function (r) { return r.get(); },
+      set: function (r, v, o) { writes.push(function () { self.seed(r.path, o && o.merge ? merge(clone(self.rows.get(r.path) || {}), v) : v); }); },
+      create: function (r, v) { writes.push(function () { assert(!self.rows.has(r.path)); self.seed(r.path, v); }); }
+    })).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
+  }
+  class Ref { constructor(db, p) { this.db = db; this.path = p; this.id = p.split('/').pop(); }
+    collection(n) { return new Query(this.db, this.path + '/' + n); }
+    async get() { var d = this.db.rows.get(this.path); return { exists: d !== undefined, id: this.id, data: function () { return clone(d); } }; } }
+  class Query { constructor(db, p, f, cap) { this.db = db; this.path = p; this.f = f || []; this.cap = cap || Infinity; }
+    doc(id) { return new Ref(this.db, this.path + '/' + (id || 'auto' + (++this.db.seq))); }
+    where(k, op, v) { return new Query(this.db, this.path, this.f.concat([[k, v]]), this.cap); }
+    orderBy() { return this; } limit(n) { return new Query(this.db, this.path, this.f, n); }
+    async get() { var docs = []; for (var e of this.db.rows) { if (e[0].startsWith(this.path + '/') && e[0].split('/').length === this.path.split('/').length + 1 && this.f.every(function (f) { return field(e[1], f[0]) === f[1]; })) docs.push(await this.db.doc(e[0]).get()); } docs = docs.slice(0, this.cap); return { docs: docs, size: docs.length, empty: !docs.length }; } }
+  db = new DB();
+  var X = { owner: function () { return false; }, authorize: async function (c, org, write) { if (!org) throw A.httpError(400, 'Valid org required'); if (write && !c.admin) throw A.httpError(403, 'An active OEM administrator is required'); return { orgId: org, org: { name: 'Clean Cell' }, billing: {}, config: {} }; } };
+  mock('../api/_lib/logic-access', X); mock('../api/_lib/logic-brand', function () { return { name: 'Clean Cell' }; });
+  var api = require('../api/logic-materials');
+  var admin = { email: 'plant@cleancell.us', admin: true }, member = { email: 'm@cleancell.us', admin: false };
+  db.seed('omega_orgs/cleancell.us/storefront/config', { products: CATALOG, catalogRevision: 3 });
+  db.seed('orders/o1', { orgId: 'cleancell.us', orderNo: 'CC-1', status: 'accepted', items: [{ sku: 'CAB', qty: 2 }], createdAt: 1 });
+  db.seed('orders/other', { orgId: 'other.com', orderNo: 'X', status: 'accepted', items: [{ sku: 'CAB', qty: 50 }], createdAt: 1 });
+  db.seed('plant_works_orders/wo_1', { orgId: 'cleancell.us', orderNo: 'CC-0', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-01', createdAt: 1 });
+  var res = { setHeader: function () {} };
+  var got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
+  ok('a member reads the plan', got.rows.length > 0 && got.summary.components === 5);
+  ok('  scoped to this org — the other tenant\'s fifty cabinets are not in it', row(got, 'CAB').gross.total === 3, row(got, 'CAB').gross);
+  ok('  with the catalog and stock revisions the page needs to save against', got.catalogRevision === 3 && got.stockRevision === 0);
+  ok('  and counts of what is set up', got.components === 5 && got.withBom === 2);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: 500, revision: 0 }, caller: member }, res), /administrator/);
+  ok('a member cannot record a count', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'GHOST', onHand: 1, revision: 0 }, caller: admin }, res), /No such component/);
+  ok('a count against a SKU not in the catalog is refused', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'INSTALL', onHand: 1, revision: 0 }, caller: admin }, res), /No such component/);
+  ok('  as is one against a service', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: '__proto__', onHand: 1, revision: 0 }, caller: admin }, res), /Invalid SKU/);
+  ok('  and a poisoned key', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: -1, revision: 0 }, caller: admin }, res), /between 0/);
+  ok('  and a negative count', true);
+  var saved = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: 500, onOrder: 1000, note: 'shelf B', revision: 0 }, caller: admin }, res);
+  ok('an admin records a count', saved.ok && saved.revision === 1);
+  var st = db.rows.get('omega_orgs/cleancell.us/fulfillment/materials');
+  ok('  written under fulfillment/, with who and when', st.stock.CELL.onHand === 500 && st.stock.CELL.onOrder === 1000 && st.stock.CELL.by === admin.email && !!st.stock.CELL.countedAt && st.revision === 1, st);
+  var audit = []; for (var e of db.rows) if (e[0].startsWith('omega_audit/')) audit.push(e[1]);
+  ok('  and audited with the previous value', audit.length === 1 && audit[0].action === 'materials-stock' && audit[0].before === null && audit[0].after.onHand === 500);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'stock', sku: 'CELL', onHand: 1, revision: 0 }, caller: admin }, res), /changed/);
+  ok('a stale revision is refused, so two counters cannot overwrite each other', true);
+  got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
+  ok('the plan now nets against the count', row(got, 'CELL').onHand === 500 && row(got, 'CELL').onOrder === 1000 && row(got, 'CELL').net.total === 3 * 8 * 104 - 1500, row(got, 'CELL'));
+
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
+  process.exit(fail ? 1 : 0);
+})().catch(function (e) { console.error(e); process.exit(1); });
