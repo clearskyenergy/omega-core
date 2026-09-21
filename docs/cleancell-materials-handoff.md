@@ -2,8 +2,11 @@
 
 For: Astra (ChatGPT / Codex), to finalize.
 From: the Claude session that built it. Branch `claude/white-label-cleancell-usa-st5trq`
-on `clearskyenergy/omega-core`, three commits past merged PR #45 plus this
-handoff and the follow-up that closed items 1, 4 and 5 of §3.
+on `clearskyenergy/omega-core`. Commits past merged PR #45, oldest first:
+`5f96d8d` loose ends · `bee71ab` components, BOM, materials plan ·
+`3256e20` this handoff · `bd2c452` yield, per-works-order feasibility,
+plant-agent actions · `f83a2d3` purchase orders and receiving · `c50b29f`
+the demo step, and sub-assemblies are built not bought.
 Everything below is committed and pushed; `npm test` is green at the head.
 
 Read `CLAUDE.md` first. The rules in it that bite hardest here: no build step
@@ -14,7 +17,7 @@ key by key and must never be replaced with a spread.
 
 ---
 
-## 1. What is on the branch (two commits)
+## 1. What is on the branch
 
 ### `5f96d8d` — three loose ends from PR #45
 
@@ -42,10 +45,10 @@ key by key and must never be replaced with a spread.
 
 | Piece | File | What it does |
 |---|---|---|
-| Engine | `api/_lib/materials.js` | Pure. `bomLines()`, `validateCatalog()` (graph: missing SKU, service as material, self-ref, loop, >8 levels), `lowLevelCodes()`, `demandsFrom()`, `plan()`, `purchaseList()`. |
+| Engine | `api/_lib/materials.js` | Pure. `bomLines()` (with `yieldPct`), `validateCatalog()` (graph: missing SKU, service as material, self-ref, loop, >8 levels), `lowLevelCodes()`, `demandsFrom()`, `plan()` (rows carry `make`, `worksOrders[]`, `yielded`), `purchaseList()` (leaf parts only), `shortfallsByWorksOrder()`. |
 | Catalog lib | `api/_lib/logic-catalog.js` | Third `kind: 'component'`; sourcing fields `unit, supplier, supplierSku, moq`; `bom[]` on product/component; `designs()` drops components; `view()` includes bom + sourcing. |
 | Catalog endpoint | `api/logic-catalog.js` | Runs `validateCatalog()` over the merged list on every save; refuses turning a referenced SKU into a service. |
-| Plan endpoint | `api/logic-materials.js` | `GET ?org=` → plan from 4 reads (catalog, `fulfillment/materials`, newest 200 orders, newest 200 works orders). `POST action:'stock'` → dated, attributed, revision-checked, audited count into `omega_orgs/{org}/fulfillment/materials.stock[sku]`. |
+| Plan endpoint | `api/logic-materials.js` | `GET ?org=` → plan from 5 reads (catalog, `fulfillment/materials`, newest 200 orders, newest 200 works orders, newest 100 purchase orders); `GET ?org=&workOrder=` → `{feasible, short[]}` for one. `POST action:'stock' | 'po' | 'receive' | 'cancel-po'` — all revision-checked against the stock document and audited. |
 | Pages | `logic-materials.html` (new), `logic-catalog.html` | Plan page: tiles, what-to-buy table, purchase-list CSV, what-to-build, Count form. Catalog page: Component type, sourcing fields, BOM row editor. |
 | Nav | `omega-logic.html`, `plant/manager.html`, `api/logic-office.js` | "Materials plan" link; `links.materials`. |
 | Leak guards | `api/embed-config.js`, `omega-bess-products.js`, `api/orders.js` | Public projection filters `kind!=='component'`; designer merge returns null for component/service; a component on an order line is a 400. |
@@ -69,7 +72,7 @@ that is before today and there is firm net demand.
 
 ```
 npm test                                   # whole suite, green at the head
-node scripts/test-materials.js             # 91 assertions
+node scripts/test-materials.js             # 114 assertions
 node scripts/test-plant-agent.js           # 15, eight of them materials
 node scripts/import-products.js --org cleancell.us \
   --file docs/product-list-template.csv --bom docs/bom-template.csv
