@@ -37,14 +37,14 @@
   a{color:var(--accent)}
 
   /* ------------------------------------------------------------ top bar */
-  #top{position:absolute;top:0;left:0;right:0;height:var(--topH);z-index:1300;display:flex;
-    align-items:center;gap:14px;padding:0 16px;background:#fff;border-bottom:1px solid var(--line)}
+  #top{position:absolute;top:0;left:0;right:0;min-height:56px;z-index:1300;display:flex;
+    flex-wrap:wrap;align-items:center;gap:10px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
   .logo{display:flex;align-items:center;gap:9px;text-decoration:none;flex:none}
   .logo img{height:26px;border-radius:6px}
   .logo .t{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap}
   .logo .t span{color:var(--accent)}
   .seprt{width:1px;height:22px;background:var(--line);flex:none}
-  #search{position:relative;flex:1;max-width:460px}
+  #search{position:relative;flex:1 1 250px;max-width:460px;min-width:180px}
   #search input{width:100%;height:34px;border:1px solid var(--line);background:var(--panel2);
     color:var(--ink);border-radius:8px;padding:0 66px 0 34px;font-size:13px;outline:none}
   #search input:focus{border-color:var(--accent);background:#fff}
@@ -53,7 +53,7 @@
     color:#fff;border-radius:6px;padding:0 11px;font-size:12px;font-weight:600;cursor:pointer}
 
   .views{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
-    padding:2px;gap:2px;flex:none}
+    padding:2px;gap:2px;flex:0 1 auto;flex-wrap:wrap;max-width:100%}
   .views button{border:0;background:transparent;color:var(--muted);font-size:12px;font-weight:600;
     padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap}
   .views button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(26,39,51,.12)}
@@ -69,10 +69,18 @@
     color:var(--amber);background:#fdf6e8;border:1px solid #f0dcb4;border-radius:5px;padding:3px 7px;flex:none}
 
   /* ---------------------------------------------------------- filter bar */
-  #filters{position:absolute;top:var(--topH);left:0;right:0;height:var(--filtH);z-index:1250;
-    display:flex;align-items:center;gap:8px;padding:0 16px;background:#fff;
-    border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+  #filters{position:absolute;top:var(--topH);left:0;right:0;z-index:1250;
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 16px;background:#fff;
+    border-bottom:1px solid var(--line);overflow-x:hidden;overflow-y:auto;max-height:42vh;
     box-shadow:0 1px 3px rgba(26,39,51,.05)}
+  #filters .f{height:44px;border-radius:8px;flex:1 1 205px;min-width:0;max-width:300px}
+  #filters .f label{text-transform:none;letter-spacing:0;font-size:12px;white-space:normal}
+  #filters .f select,#filters .f input{min-width:0;max-width:100%;flex:1;font-size:14px}
+  #filters .btn{height:40px;font-size:13px}
+  #filters .extraFilter{display:none}
+  #filters.filtersExpanded .extraFilter{display:flex}
+  #filters .spacer{display:none}
+  #filterHelp{flex:1 0 100%;margin:0;color:var(--muted);font-size:12px}
   #filters::-webkit-scrollbar{height:5px}
   #filters::-webkit-scrollbar-thumb{background:#c3cdd7;border-radius:4px}
   /* ── FILTERS AS PILLS ──────────────────────────────────────────────
@@ -322,8 +330,11 @@
     :root{--topH:96px;--filtH:54px}
     #top{flex-wrap:wrap;gap:6px;padding:8px 10px;align-content:center}
     #search{max-width:none;min-width:180px}
-    #top .views{order:5;width:100%;overflow-x:auto;justify-content:space-between}
+    #top .views{order:5;width:100%;overflow:visible;justify-content:space-between}
     #top .views button{padding:6px 9px}
+    #filters{padding:8px;gap:6px}
+    #filters .f{flex-basis:calc(50% - 6px);max-width:none;flex-direction:column;align-items:stretch;height:62px;gap:2px;padding:5px 8px}
+    #filters .f input[type=number]{width:100%}
     #top .srcTag,#top .seprt,#top .spacer,#repChip{display:none}
     #drawer{width:100vw}
     body.v-list #cards,body.v-saved #cards{grid-template-columns:minmax(0,1fr)}
@@ -619,28 +630,28 @@
 </div>
 
 <div id="filters">
-  <div class="f">
-    <label for="fKw">Battery kW ≥</label>
+  <div class="f extraFilter" id="filterBattery">
+    <label for="fKw">Min. battery (kW)</label>
     <input id="fKw" type="number" min="0" step="50" value="0">
   </div>
   <div class="f">
-    <label for="fScore">Energy score ≥</label>
+    <label for="fScore">Min. energy score</label>
     <input id="fScore" type="number" min="0" max="100" step="5" value="0">
   </div>
   <div class="f">
-    <label for="fHost">Hosting kW ≥</label>
+    <label for="fHost">Min. hosting (kW)</label>
     <input id="fHost" type="number" min="0" step="100" value="0">
   </div>
-  <div class="f">
-    <label for="fHostMax">Hosting kW ≤</label>
+  <div class="f extraFilter" id="filterHostMax">
+    <label for="fHostMax">Max. hosting (kW)</label>
     <input id="fHostMax" type="number" min="0" step="100" placeholder="Any">
   </div>
-  <div class="f">
+  <div class="f extraFilter" id="filterEvidence">
     <label for="fEnergy">Load evidence</label>
     <select id="fEnergy"><option value="">Any</option><option value="metered">Metered</option><option value="modelled">Modelled / proxy</option><option value="unknown">Unknown</option></select>
   </div>
   <div class="f">
-    <label for="fType">Use</label>
+    <label for="fType">Property type</label>
     <select id="fType">
       <option value="">Any</option>
       <option value="__ci">Industrial &amp; warehouse</option>
@@ -648,12 +659,12 @@
       <option value="__vacant">Vacant land only</option>
     </select>
   </div>
-  <div class="f">
-    <label for="fSqft">Size</label>
+  <div class="f extraFilter" id="filterSize">
+    <label for="fSqft">Min. area (sq ft)</label>
     <input id="fSqft" type="number" min="0" step="5000" value="20000">
   </div>
-  <div class="f">
-    <label for="fCirc">Circuit</label>
+  <div class="f extraFilter" id="filterCircuit">
+    <label for="fCirc">Circuit status</label>
     <select id="fCirc">
       <option value="">Any status</option>
       <option value="sellable">Has capacity left</option>
@@ -664,7 +675,7 @@
     </select>
   </div>
   <div class="f">
-    <label for="fSort">Sort</label>
+    <label for="fSort">Sort results</label>
     <select id="fSort">
       <option value="score">Energy score · battery</option>
       <option value="kw">Deliverable kW</option>
@@ -674,12 +685,14 @@
       <option value="load">Peak load</option>
     </select>
   </div>
+  <button class="btn" id="moreFilters" type="button" aria-expanded="false" aria-controls="filterBattery filterHostMax filterEvidence filterSize filterCircuit">More filters</button>
   <label class="toggle mapOnly"><input type="checkbox" id="fFollow" checked> Search as I move</label>
   <button class="btn pri mapOnly" id="run" type="button">Search this area</button>
   <div class="spacer"></div>
   <button class="btn ghost" id="setOpen" type="button">Settings</button>
   <button class="btn ghost" id="expCsv" type="button">Export</button>
   <button class="btn ghost" id="clearFilters" type="button">Reset filters</button>
+  <p id="filterHelp">Use the main filters to narrow sites. More filters includes building area and circuit status.</p>
 </div>
 
 <div id="stage">
@@ -917,6 +930,37 @@
   "use strict";
 
   var L = window.OmegaLedger, SRC = window.OmegaListings;
+  /* Measure wrapped controls instead of assuming one fixed-height row. */
+  var filterBar = document.getElementById('filters'), topBar = document.getElementById('top');
+  var moreFilters = document.getElementById('moreFilters');
+  function layoutControls() {
+    document.documentElement.style.setProperty('--topH', topBar.offsetHeight + 'px');
+    document.documentElement.style.setProperty('--filtH', filterBar.offsetHeight + 'px');
+    if (typeof map !== 'undefined' && map && map.invalidateSize) map.invalidateSize({pan:false});
+  }
+  function filterDisclosure() {
+    var count = ['fKw','fHostMax','fEnergy','fSqft','fCirc'].filter(function(id) {
+      var value = document.getElementById(id).value;
+      return value !== '' && value !== '0';
+    }).length;
+    var expanded = moreFilters.getAttribute('aria-expanded') === 'true';
+    moreFilters.textContent = (expanded ? 'Fewer filters' : 'More filters') + (count ? ' (' + count + ' active)' : '');
+  }
+  moreFilters.onclick = function () {
+    var expanded = moreFilters.getAttribute('aria-expanded') !== 'true';
+    moreFilters.setAttribute('aria-expanded', String(expanded));
+    filterBar.classList.toggle('filtersExpanded', expanded);
+    filterDisclosure(); layoutControls();
+  };
+  filterBar.addEventListener('input', filterDisclosure);
+  filterBar.addEventListener('change', filterDisclosure);
+  filterBar.addEventListener('click', function(){setTimeout(filterDisclosure,0);});
+  window.addEventListener('resize', layoutControls);
+  if (window.ResizeObserver) {
+    var controlsObserver = new ResizeObserver(layoutControls);
+    controlsObserver.observe(topBar); controlsObserver.observe(filterBar);
+  }
+  filterDisclosure(); layoutControls();
   /* One duration default for the whole page, read from the shared cost model
      where it is available so the finder and the estimator cannot drift. The
      literal is the fallback for the moment before that script loads. */
