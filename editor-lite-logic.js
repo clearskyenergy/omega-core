@@ -36,6 +36,12 @@
   function setModule(module) {
     if (!permitted(module)) return;
     if (engine && typeof engine._bgbCancel === 'function') engine._bgbCancel();
+    if (engine) {
+      if (engine.OmegaCGB && engine.OmegaCGB.state().active) engine.OmegaCGB.cancel();
+      if (typeof engine._dcfcState === 'function' && engine._dcfcState().active) engine._dcfcCancel();
+      ['bgb-modal','cgb-modal','derb-modal','dcfc-modal'].forEach(function (id) { var modal=engine.document.getElementById(id);if(modal)modal.remove(); });
+      if (typeof engine.setMode === 'function') engine.setMode('select');
+    }
     $('module').value = module; $('hoursRow').hidden = module !== 'bess';
     $('build').textContent = module === 'bess' ? 'Place them' : 'Start guided build';
     Array.prototype.forEach.call($('moduleList').children, function (b) { b.classList.toggle('active', b.getAttribute('data-module') === module); });
@@ -51,6 +57,16 @@
       '#sld-sheet{min-width:0!important}#zc{bottom:12px!important}#banner{max-width:calc(100% - 24px)!important}' +
       '#bgb-modal,#cgb-modal,#derb-modal,#dcfc-modal{padding:12px!important}' +
       '#bgb-modal>div,#cgb-modal>div,#derb-modal>div,#dcfc-modal>div{max-height:95vh!important;overflow:auto!important}';
+    // Retain the canonical guide's controls, with the same light presentation
+    // and tenant accent as the outer shell. No duplicate sizing engine.
+    var brand=getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()||'#3fafc6';
+    ['bgb-modal','cgb-modal','derb-modal','dcfc-modal'].forEach(function(id){
+      var p='#'+id;
+      s.textContent+=p+'>div,'+p+'>div div{background:#fff!important;color:#14303c!important}'+
+        p+' label,'+p+' p,'+p+' strong{color:#3f5d68!important}'+
+        p+' input,'+p+' select{background:#f1fafc!important;color:#14303c!important;border:1px solid #dcecf1!important;border-radius:9px!important}'+
+        p+' button{background:'+brand+'!important;background-image:none!important;color:white!important;border-radius:999px!important;box-shadow:none!important}';
+    });
     if (customer) s.textContent += '#bom-rfq{display:none!important}#bom-modal>div{background:white!important;border-color:#dcecf1!important}#bom-modal td,#bom-modal th,#bom-modal span,#bom-modal label{color:#14303c!important}#bom-modal button{border-radius:999px!important}';
     doc.head.appendChild(s);
   }
@@ -180,13 +196,20 @@
         say('Click the canvas to begin guided placement. This is a generic capacity concept—not a selected supplier product or an order.');
       } else if (module === 'compute') {
         if (!engine.OmegaCGB) throw new Error('Compute guided build is unavailable.');
-        engine.OmegaCGB.state().computeMw = sizing.kw / 1000; engine.OmegaCGB.open();
+        // The canonical guide applies its format defaults while opening.
+        // Set the customer's target after that reset, then recompute its plan.
+        engine.OmegaCGB.open();
+        engine.document.getElementById('cgb-itmw').value = sizing.kw / 1000;
+        engine.OmegaCGB.sync();
       } else if (module === 'ev') { call('openDcfcBuild'); say('Select the charger model and count in the guide; the target is a planning input, not a product quote.'); }
       else {
         call('openDerBuild');
         var source = engine.document.getElementById('derb-src');
         Array.prototype.slice.call(source.options).forEach(function (o) { if (o.value !== 'pv') o.remove(); });
-        source.value = 'pv'; engine.document.getElementById('derb-mw').value = sizing.kw / 1000;
+        source.value = 'pv';
+        var solarTarget = engine.document.getElementById('derb-mw');
+        solarTarget.value = sizing.kw / 1000;
+        solarTarget.dispatchEvent(new engine.Event('input', { bubbles: true }));
       }
     }).catch(function (e) { say(e.message, true); }).then(function () { busy = false; $('build').disabled = false; });
   }
