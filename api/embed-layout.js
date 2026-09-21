@@ -80,7 +80,7 @@ function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
    footprint would be a made-up number drawn to scale on a customer's own lot,
    which is the most convincing kind of wrong. */
 function unitFrom(sf, sku) {
-  var list = Array.isArray(sf.products) ? sf.products : [];
+  var list = (Array.isArray(sf.products) ? sf.products : []).filter(function(p){return p&&p.active!==false&&p.kind!=='service'&&(p.category||'bess')==='bess';});
   var p = null;
   for (var i = 0; i < list.length; i++) {
     if (String(list[i].sku) === sku) { p = list[i]; break; }

@@ -36,16 +36,18 @@ class Ref {
   async create(v){assert(!this.db.data.has(this.path));this.db.seed(this.path,v);}
 }
 class Query {
-  constructor(db,path,filters,sort,cap){this.db=db;this.path=path;this.filters=filters||[];this.sort=sort;this.cap=cap||Infinity;}
+  constructor(db,path,filters,sort,cap,cursor){this.db=db;this.path=path;this.filters=filters||[];this.sort=sort;this.cap=cap||Infinity;this.cursor=cursor;}
   doc(id){return new Ref(this.db,this.path+'/'+(id||'auto'+(++this.db.seq)));}
   where(k,op,v){return new Query(this.db,this.path,this.filters.concat([[k,op,v]]),this.sort,this.cap);}
   orderBy(k,dir){return new Query(this.db,this.path,this.filters,[k,dir],this.cap);}
-  limit(n){return new Query(this.db,this.path,this.filters,this.sort,n);}
+  limit(n){return new Query(this.db,this.path,this.filters,this.sort,n,this.cursor);}
+  startAfter(s){return new Query(this.db,this.path,this.filters,this.sort,this.cap,typeof s==='string'?s:s.id);}
   async get(){var self=this,docs=[];for(var entry of this.db.data.entries()){var path=entry[0],d=entry[1];
     if(path.split('/').length!==this.path.split('/').length+1||!path.startsWith(this.path+'/'))continue;
     if(!this.filters.every(function(f){return f[1]==='=='?get(d,f[0])===f[2]:get(d,f[0])<=f[2];}))continue;
     docs.push(await new Ref(this.db,path).get());}
-    if(this.sort)docs.sort(function(a,b){var av=get(a.data(),self.sort[0]),bv=get(b.data(),self.sort[0]);return (av<bv?-1:av>bv?1:0)*(self.sort[1]==='desc'?-1:1);});
+    if(this.sort)docs.sort(function(a,b){var av=self.sort[0]==='__name__'?a.id:get(a.data(),self.sort[0]),bv=self.sort[0]==='__name__'?b.id:get(b.data(),self.sort[0]);return (av<bv?-1:av>bv?1:0)*(self.sort[1]==='desc'?-1:1);});
+    if(this.cursor)docs=docs.filter(function(d){return d.id>self.cursor;});
     docs=docs.slice(0,this.cap);return {docs:docs,size:docs.length,empty:!docs.length,forEach:function(f){docs.forEach(f);}};
   }
 }
@@ -73,6 +75,62 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('URL Generator omits staff links and Grid Atlas enforces entitlement before calling its engine',async function(){
+  setup();var urls=require('../api/logic-urls'),res={setHeader:function(){}},out=await urls({method:'GET',query:{org:'cleancell.us'},caller:admin},res);assert.equal(out.rows.length,4);assert(!out.rows.some(function(r){return /plant|omega-logic|token=/.test(r.url||'');}));assert.equal(out.rows[3].url,null);
+  var calls=0,gridPath=require.resolve('../api/grid-atlas'),previous=require.cache[gridPath];mock('../api/grid-atlas',async function(req,res){calls++;assert.equal(req.body.radiusKm,25);res.status(200).json({summary:'fixture',substations:[]});});
+  try{var atlas=require('../api/lite-atlas');await assert.rejects(post(atlas,{lat:41,lng:-87,sizeMw:1},admin),/Editor Lite/);assert.equal(calls,0);await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});await assert.rejects(post(atlas,{lat:100,lng:-87,sizeMw:1},admin),/location/);assert.equal(calls,0);assert.equal((await post(atlas,{lat:41,lng:-87,sizeMw:1},admin)).summary,'fixture');assert.equal(calls,1);}finally{if(previous)require.cache[gridPath]=previous;else delete require.cache[gridPath];}
+});
+await check('services release as tasks, never serial demand, and final billing requires recorded evidence',async function(){
+  setup();await db.doc('orders/one').update({items:[{sku:'INSTALL',name:'Installation',kind:'service',qty:1}]});await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');var order=db.data.get('orders/one'),wo=db.data.get('plant_works_orders/'+order.worksOrderId);assert.deepEqual(wo.requirements,[]);assert.equal(wo.serviceRequirements.length,1);assert.equal(order.logic.invoices.balance,undefined);
+  await assert.rejects(post(factory,{action:'services-complete',workOrderId:order.worksOrderId,evidence:'done'},admin),/evidence/);
+  await post(factory,{action:'services-complete',workOrderId:order.worksOrderId,evidence:'Installation inspected; acceptance fixture ABC-123'},admin);
+  await W.processOrder('one');assert(db.data.get('orders/one').logic.invoices.balance);assert.equal(db.data.get('plant_works_orders/'+order.worksOrderId).serviceCompletion.by,admin.email);payments.balance=true;await W.processOrder('one');assert.equal(db.data.get('orders/one').status,'complete');assert.equal(db.data.get('orders/one').shipment,undefined);
+});
+await check('catalog is tenant-scoped, versioned, preserves private fields and requires ClearSky price approval',async function(){
+  setup();var catalog=require('../api/logic-catalog'),C=require('../api/_lib/logic-catalog'),res={setHeader:function(){}};
+  var p={sku:'CAB-1',name:'Catalog cabinet',kind:'product',category:'bess',kw:100,kwh:200,widthFt:4,depthFt:5,designEnabled:true,priceMode:'quote',cost:100};
+  await post(catalog,{action:'save',revision:0,product:p},admin);
+  await assert.rejects(post(catalog,{action:'save',revision:0,product:p},admin),/changed/);
+  var view=await catalog({method:'GET',query:{org:'cleancell.us'},caller:admin},res);assert.equal(view.products.length,1);assert.equal(view.products[0].cost,undefined);assert.equal(view.designProducts[0].sku,'CAB-1');
+  var c=db.data.get('omega_orgs/cleancell.us/storefront/config');c.products[0].privateEngineering='preserve';db.seed('omega_orgs/cleancell.us/storefront/config',c);
+  await post(catalog,{action:'save',revision:1,product:Object.assign({},p,{name:'Updated'})},admin);assert.equal(db.data.get('omega_orgs/cleancell.us/storefront/config').products[0].privateEngineering,'preserve');
+  await assert.rejects(post(catalog,{action:'save',revision:2,product:Object.assign({},p,{priceMode:'list',listPrice:2000})},admin),/ClearSky/);
+  await post(catalog,{action:'save',revision:2,product:{sku:'INSTALL',name:'Installation',kind:'service',category:'bess'}},admin);
+  view=await catalog({method:'GET',query:{org:'cleancell.us'},caller:admin},res);assert.equal(view.products.length,2);assert.equal(view.designProducts.length,1);
+  assert.throws(function(){C.product(Object.assign({},p,{widthFt:0}));},/dimensions|width/);
+  assert.equal(C.select(c,'CAB-1',{kw:250,kwh:500}).qty,3);assert.throws(function(){C.select(c,'RIVAL-SKU',{kw:100,kwh:200});},/supplier/);
+  assert.equal(C.designs({})[0].placeholder,true);assert.deepEqual(C.designs({genericDesign:false}),[]);
+  await assert.rejects(catalog({method:'GET',query:{org:'cleancell.us'},caller:Object.assign({},admin,{uid:'outsider',orgId:'other.us'})},res),/workspace/);
+});
+await check('production templates preserve quality gates, require owner and pin future work orders',async function(){
+  setup();var F=require('../api/_lib/plant-flow'),flow=F.current({});flow.routing[0].instructions='Check label';flow.routing[0].parameters='Record lot';flow.lines=[{id:'north',name:'North line',location:'Building A'}];
+  await assert.rejects(post(factory,{action:'flow',version:0,flow:flow},admin),/owner/);
+  await post(factory,{action:'flow',version:0,flow:flow});await assert.rejects(post(factory,{action:'flow',version:0,flow:flow}),/changed/);
+  assert.throws(function(){F.normalize({routing:flow.routing.filter(function(s){return s.key!=='eol';})});},/EOL/);
+  await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');var id=db.data.get('orders/one').worksOrderId,wo=db.data.get('plant_works_orders/'+id);assert.equal(wo.flowVersion,1);assert.equal(wo.lineId,'north');assert.equal(wo.routing[0].parameters,'Record lot');
+  flow.routing[0].instructions='New instructions';await post(factory,{action:'flow',version:1,flow:flow});assert.equal(db.data.get('plant_works_orders/'+id).routing[0].instructions,'Check label');
+  await post(factory,{action:'work-order',workOrderId:id,revision:0,lineId:'north',priority:'urgent',dueDate:'2026-10-01',notes:'Expedite',routing:[],status:'ready'},admin);
+  wo=db.data.get('plant_works_orders/'+id);assert.equal(wo.priority,'urgent');assert.equal(wo.flowVersion,1);assert.notEqual(wo.status,'ready');
+  await assert.rejects(post(factory,{action:'work-order',workOrderId:id,revision:0,lineId:'north',priority:'urgent'},admin),/changed/);
+  await assert.rejects(post(factory,{action:'work-order',workOrderId:id,revision:1,lineId:'north',priority:'normal',dueDate:'2026-02-31'},admin),/valid/);
+});
+await check('station scans capture routing context, reject wrong line and preserve idempotency',async function(){
+  setup();var scan=require('../api/mes-scan'),S=require('../api/_lib/plant-station'),route=clone(Plant.DEFAULT_ROUTING);route[0].instructions='Inspect label';route[0].parameters='Match lot';
+  db.seed('plant_works_orders/stock_1',{orgId:'cleancell.us',lineId:'north',flowVersion:3,routing:route});db.seed('plant_units/cleancell.us__SCAN-1',unit('SCAN-1',{at:'',test:null}));
+  db.seed('plant_stations/scan-test',{orgId:'cleancell.us',station:route[0].key,lineId:'south',location:'Bay 2',revision:4,tokenHash:S.sha('fixture-token'),active:true});
+  var body={stationId:'scan-test',token:'fixture-token',scanId:'arrival-one',serial:'SCAN-1'};var rejected=await post(scan,body);assert.equal(rejected.reason,'wrong_line');assert.equal(db.data.get('plant_units/cleancell.us__SCAN-1').at,'');
+  await db.doc('plant_stations/scan-test').update({lineId:'north'});var accepted=await post(scan,Object.assign({},body,{scanId:'arrival-two'}));assert.equal(accepted.ok,true);assert.equal(accepted.instructions,'Inspect label');
+  var event=db.data.get('plant_scans/cleancell.us__arrival-two');assert.equal(event.context.flowVersion,3);assert.equal(event.context.stationRevision,4);assert.equal(event.context.parameters,'Match lot');
+  assert.equal((await post(scan,Object.assign({},body,{scanId:'arrival-two'}))).replayed,true);
+  await assert.rejects(post(scan,Object.assign({},body,{scanId:'arrival-two',serial:'OTHER'})),/another event/);
+});
+await check('plant manager pages are scoped and station projections never contain credentials',async function(){
+  setup();for(var i=0;i<101;i++)db.seed('plant_stations/station-'+String(i).padStart(3,'0'),{orgId:'cleancell.us',station:'kit',tokenHash:'SECRET',active:true});db.seed('plant_stations/other',{orgId:'other.us',tokenHash:'PRIVATE'});
+  var res={setHeader:function(){}},first=await factory({method:'GET',query:{org:'cleancell.us',page:'stations'},caller:admin},res);assert.equal(first.rows.length,100);assert(!JSON.stringify(first).includes('SECRET'));var last=await factory({method:'GET',query:{org:'cleancell.us',page:'stations',after:first.next},caller:admin},res);assert.equal(last.rows.length,1);assert.equal(last.next,null);
+  await assert.rejects(factory({method:'GET',query:{org:'cleancell.us',page:'stations',after:'other'},caller:admin},res),/cursor/);
+  await post(factory,{action:'station-edit',stationId:'station-000',revision:0,lineId:'main',label:'Bench A',location:'Bay',instructions:'Scan arrival',active:true,tokenHash:'forged',station:'ready'},admin);
+  var saved=db.data.get('plant_stations/station-000');assert.equal(saved.station,'kit');assert.equal(saved.tokenHash,'SECRET');assert.equal(saved.revision,1);
+});
 await check('scanner pairing validates its credential without producing a fake scan',async function(){
   setup();var S=require('../api/_lib/plant-station'),scan=require('../api/mes-scan');
   db.seed('plant_stations/pair-fixture',{orgId:'cleancell.us',station:'kit',label:'Bay 1',tokenHash:S.sha('fixture-only-token'),active:true});
@@ -199,7 +257,8 @@ await check('Editor Lite fails closed on module and subscription grants, includi
   setup();var lite=require('../api/editor-lite');
   await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2}),/not enabled/);
   await db.doc('omega_orgs/cleancell.us/billing/current').update({editorLite:{enabled:true,modules:['bess']}});
-  assert.equal((await post(lite,{module:'bess',kw:1000,hours:2},admin)).kwh,2000);
+  assert.equal((await post(lite,{module:'bess',kw:1000,hours:2,sku:'GENERIC-BESS'},admin)).kwh,2000);
+  await assert.rejects(post(lite,{module:'bess',kw:1000,hours:2,sku:'OTHER-TENANT'},admin),/supplier/);
   await assert.rejects(post(lite,{module:'compute',kw:1000,hours:2}),/not included/);
   await assert.rejects(post(lite,{module:'bess',kw:-1,hours:2}),/Target/);
   await assert.rejects(post(lite,{module:'bess',kw:1000,hours:99}),/duration/);

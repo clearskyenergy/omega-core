@@ -172,7 +172,7 @@ module.exports = E.handler(function (req) {
          the tenant's own published catalogue by SKU. An item whose SKU is not
          published is dropped rather than refused — a stale cached page should
          still be able to send us a lead. */
-      var published = Array.isArray(sf.products) ? sf.products : [];
+      var published = (Array.isArray(sf.products) ? sf.products : []).filter(function(p){return p&&p.active!==false;});
       function bySku(sku) {
         for (var i = 0; i < published.length; i++) {
           if (String(published[i].sku) === sku) return published[i];
@@ -184,7 +184,7 @@ module.exports = E.handler(function (req) {
       if (config && Array.isArray(config.items)) {
         items = config.items.map(function (it) {
           return { sku: clean(it.sku, 64), name: clean(it.name, 120), qty: Math.max(1, Math.min(9999, num(it.qty) || 1)),
-                   kw: num(it.kw), kwh: num(it.kwh), listPrice: num(it.listPrice), source: 'config' };
+                   kind:it.kind==='service'?'service':'product',kw: num(it.kw), kwh: num(it.kwh), listPrice: num(it.listPrice), source: 'config' };
         }).slice(0, 40);
       } else if (Array.isArray(b.items)) {
         b.items.slice(0, 20).forEach(function (it) {
@@ -193,7 +193,7 @@ module.exports = E.handler(function (req) {
           var p = bySku(sku);
           if (!p) return;
           items.push({
-            sku: sku, name: clean(p.name || sku, 120),
+            sku: sku, name: clean(p.name || sku, 120),kind:p.kind==='service'?'service':'product',
             qty: Math.max(1, Math.min(9999, num(it.qty) || 1)),
             kw: num(p.kw), kwh: num(p.kwh),
             /* From the CATALOGUE, not the request. */

@@ -16,9 +16,11 @@ module.exports = A.handler(async function (req, res) {
     var kw = Number(b.kw), hours = Number(b.hours);
     if (!isFinite(kw) || kw <= 0 || kw > 10000000) throw A.httpError(400, 'Target must be greater than zero and no more than 10 GW');
     if (b.module === 'bess' && (!isFinite(hours) || hours <= 0 || hours > 48)) throw A.httpError(400, 'Storage duration must be greater than zero and no more than 48 hours');
-    return { module: b.module, kw: kw, kwh: b.module === 'bess' ? kw * hours : null, conceptOnly: true };
+    var target={ module: b.module, kw: kw, kwh: b.module === 'bess' ? kw * hours : null, conceptOnly: true };
+    if(b.module==='bess'){var catalog=await A.db().doc('omega_orgs/'+org+'/storefront/config').get();return require('./_lib/logic-catalog').select(catalog.exists?catalog.data():{},b.sku,target);}return target;
   }
-  return { org: org, name: ctx.org.name || org, logoUrl: ctx.org.logoUrl || null, brand: require('./_lib/logic-brand')(ctx.org), modules: modules,
+  var catalog=await A.db().doc('omega_orgs/'+org+'/storefront/config').get();
+  return { org: org, name: ctx.org.name || org, logoUrl: ctx.org.logoUrl || null, brand: require('./_lib/logic-brand')(ctx.org), modules: modules,designProducts:require('./_lib/logic-catalog').designs(catalog.exists?catalog.data():{}),
     preview: caller.orgId !== org, projectOrg: caller.orgId,
     note: 'Concept design. Review actual equipment, clearances, electrical design and pricing before ordering.' };
 });

@@ -78,6 +78,7 @@ module.exports = A.handler(function (req, res) {
     return S.verify(A.db(), stationId, token).then(async function (checked) {
       var st = checked.data, org = await A.db().collection('omega_orgs').doc(st.orgId).get();
       return { ok: true, station: st.station, stationLabel: st.label || st.station,
+        lineId:st.lineId||'',location:st.location||'',instructions:st.instructions||'',revision:st.revision||0,machine:!!st.machine,
         brand: require('./_lib/logic-brand')(org.exists ? org.data() : { name: 'Plant' }) };
     });
   }
@@ -100,7 +101,7 @@ module.exports = A.handler(function (req, res) {
           /* A replay. Hand back what we decided the first time. */
           var p = prev.data() || {};
           if (p.serial !== serial || p.stationId !== stationId) throw A.httpError(409, 'Scan identifier already belongs to another event');
-          return { replayed: true, verdict: p.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' } };
+          return { replayed: true, verdict: p.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' },instructions:(p.context||{}).instructions||'',parameters:(p.context||{}).parameters||'',workOrder:p.woId||null };
         }
         var uRef = db.collection('plant_units').doc(orgId + '__' + serial);
         return tx.get(uRef).then(function (us) {
@@ -117,6 +118,9 @@ module.exports = A.handler(function (req, res) {
             var verdict = P.judgeScan(unit, station, routing);
             var currentStation = await tx.get(stRef);
             if (!currentStation.exists || currentStation.data().active === false || currentStation.data().tokenHash !== st.tokenHash) throw A.httpError(403, 'Station credential revoked');
+            var liveStation=currentStation.data();
+            if(wo&&wo.lineId&&wo.lineId!==liveStation.lineId)verdict={ok:false,reason:'wrong_line',say:'Assign this station to the work order’s line before scanning. Ask the plant manager to review it.'};
+            var step=wo&&(wo.routing||[]).filter(function(s){return s.key===station;})[0]||{};
             if (unit && unit.orderId) {
               var commercial = await tx.get(db.collection('orders').doc(unit.orderId));
               if (!commercial.exists || commercial.data().cancelRequested || (commercial.data().logic || {}).paymentException || ['cancelled', 'shipped', 'complete'].indexOf(commercial.data().status) >= 0) {
@@ -133,6 +137,8 @@ module.exports = A.handler(function (req, res) {
               serial: serial, woId: (unit && unit.woId) || null,
               gun: S.clean(b.gun, 40) || null,
               at: now, clientAt: S.clean(b.at, 40) || null,
+              context:{lineId:liveStation.lineId||null,location:liveStation.location||'',stationRevision:liveStation.revision||0,flowVersion:wo&&wo.flowVersion||0,
+                instructions:step.instructions||liveStation.instructions||'',parameters:step.parameters||''},
               verdict: verdict, ok: !!verdict.ok,
               createdAt: FV.serverTimestamp()
             });
@@ -150,6 +156,7 @@ module.exports = A.handler(function (req, res) {
               replayed: false, verdict: verdict,
               unit: unit ? { serial: serial, wo: unit.woId || null, at: patch ? patch.at : String(unit.at || '') } : null,
               routing: routing.map(function (s) { return { key: s.key, label: s.label }; })
+              ,instructions:step.instructions||liveStation.instructions||'',parameters:step.parameters||'',workOrder:unit&&unit.woId||null
             };
           });
         });
@@ -160,6 +167,7 @@ module.exports = A.handler(function (req, res) {
         ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say || '',
         serial: serial, station: station, stationLabel: String(st.label || station),
         replayed: !!out.replayed, unit: out.unit || null, routing: out.routing || null
+        ,instructions:out.instructions||'',parameters:out.parameters||'',workOrder:out.workOrder||null
       };
     });
   });

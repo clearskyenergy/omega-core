@@ -8,6 +8,21 @@
   if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
   var auth = firebase.auth(), context = null, engine = null, busy = false, timer = null;
   var customer = params.get('customer') === '1', revision = 0, projectId = params.get('project'), savedSnapshot = '', saveBusy = false, loaded = false, authVersion = 0;
+  var siteAddress=params.get('address')||'',mapReady=false,atlasItems=[];
+  var catalogBox=document.createElement('div');catalogBox.id='catalog-box';catalogBox.innerHTML='<label for="bess-sku">Supplier BESS catalog</label><select id="bess-sku"></select><p id="catalog-note" class="note"></p>';$('hoursRow').after(catalogBox);
+  // One map workspace. Output documents are actions, not competing views.
+  var left=document.querySelector('aside.left'),exportGroup=document.createElement('details');
+  exportGroup.innerHTML='<summary>Exports</summary>';
+  ['storage','transformer','measure'].forEach(function(name){var e=document.querySelector('[data-command="'+name+'"]');if(e)e.remove();});
+  ['sld','bom','proposal','drawings'].forEach(function(name){exportGroup.appendChild(document.querySelector('[data-command="'+name+'"]'));});
+  document.querySelector('[data-command="plot"]').textContent='Site';
+  var atlasButton=document.createElement('button');atlasButton.textContent='Grid Atlas';atlasButton.setAttribute('data-command','atlas');
+  document.querySelector('[data-command="plot"]').after(atlasButton);left.appendChild(exportGroup);
+  $('moduleList').hidden=true;var moduleLabel=$('moduleList').previousElementSibling;if(moduleLabel)moduleLabel.hidden=true;
+  var siteBar=document.createElement('form');siteBar.id='site-address-form';siteBar.innerHTML='<label for="site-address">Site address</label><input id="site-address" placeholder="Enter your site address" required><button type="submit">Load site</button><span id="map-status" role="status"></span>';
+  document.querySelector('header').after(siteBar);$('site-address').value=siteAddress;
+  var style=document.createElement('style');style.textContent='#site-address-form{display:flex;gap:10px;align-items:center;padding:8px 32px;flex-wrap:wrap}#site-address{flex:1;min-width:200px}#map-status{font-size:12px}.workspace{height:calc(100dvh - 242px)}aside.left details{margin-top:24px}#atlas-panel{position:absolute;z-index:8;right:12px;top:12px;max-width:330px;max-height:80%;overflow:auto;background:white;padding:18px;border:1px solid #dcecf1;border-radius:12px;font-size:12px}';document.head.appendChild(style);
+  var atlasPanel=document.createElement('section');atlasPanel.id='atlas-panel';atlasPanel.hidden=true;document.querySelector('.canvas').appendChild(atlasPanel);
   if (customer) {
     var back = '/portals/customer/?org=' + encodeURIComponent(params.get('org') || '') + '#design';
     $('close').href = back; document.querySelector('#gate a').href = back;
@@ -43,6 +58,7 @@
       if (typeof engine.setMode === 'function') engine.setMode('select');
     }
     $('module').value = module; $('hoursRow').hidden = module !== 'bess';
+    catalogBox.hidden=module!=='bess';$('configure').hidden=module==='bess';
     $('build').textContent = module === 'bess' ? 'Place them' : 'Start guided build';
     Array.prototype.forEach.call($('moduleList').children, function (b) { b.classList.toggle('active', b.getAttribute('data-module') === module); });
     say(module === 'bess' ? 'Set a target, then place the system step by step on the canvas.' : 'The guided build will confirm the equipment and layout before placement.');
@@ -68,6 +84,7 @@
         p+' button{background:'+brand+'!important;background-image:none!important;color:white!important;border-radius:999px!important;box-shadow:none!important}';
     });
     if (customer) s.textContent += '#bom-rfq{display:none!important}#bom-modal>div{background:white!important;border-color:#dcecf1!important}#bom-modal td,#bom-modal th,#bom-modal span,#bom-modal label{color:#14303c!important}#bom-modal button{border-radius:999px!important}';
+    s.textContent+='#dcfc-guide,#dcfc-guide div{background:#fff!important;color:#14303c!important;border-color:#dcecf1!important}#dcfc-guide{max-width:270px!important;max-height:75vh!important;overflow:auto!important;border-radius:14px!important}#dcfc-guide span{color:#3f5d68!important}#dcfc-guide button{background:'+brand+'!important;color:white!important;border-radius:999px!important}';
     doc.head.appendChild(s);
   }
   function mountEngine() {
@@ -82,6 +99,8 @@
       if(version !== authVersion)return;
       try {
         engine = frame.contentWindow; engineStyle(engine.document);
+        // The Lite entry point never exposes the platform-wide BESS picker.
+        engine._bgbOpenConfig=function(){var modal=engine.document.getElementById('bgb-modal');if(modal)modal.remove();$('bess-sku').focus();say('Choose equipment from your supplier catalog in this panel.');};
         if (typeof engine.setMode !== 'function' || typeof engine._bgbState !== 'function') throw new Error('The design engine did not finish loading. Reload to retry.');
         if (customer) {
           // Branding only; this does not initialize a tenant or change identity.
@@ -94,6 +113,7 @@
             loaded = true; frame.style.visibility = 'visible'; $('curtain').hidden = true;
             $('build').disabled = !context.modules.length; $('configure').disabled = !context.modules.length;
             engine.dispatchEvent(new Event('resize'));
+            if(siteAddress)loadSite();else $('map-status').textContent='Enter a site address to begin.';
             timer = setInterval(function () {
               if (Date.parse(context.expiresAt) <= Date.now()) { $('gate').hidden = false; $('gateMessage').textContent = 'Your Editor Lite access has expired. Your saved projects are retained.'; return; }
               saveCustomer(true);
@@ -104,6 +124,7 @@
         frame.style.visibility = 'visible'; $('curtain').hidden = true;
         $('build').disabled = !context.modules.length; $('configure').disabled = !context.modules.length;
         engine.dispatchEvent(new Event('resize'));
+        siteAddress=siteAddress||engine._lastAddr||'';$('site-address').value=siteAddress;if(siteAddress)loadSite();
         timer = setInterval(function () {
           var name = engine.document.getElementById('pname'), saved = engine.document.getElementById('pn-saved');
           if (name && document.activeElement !== $('title')) $('title').value = name.value;
@@ -119,7 +140,7 @@
   function projectRequest(id) {
     return auth.currentUser.getIdToken().then(function (t) { return fetch('/api/customer-design?org=' + encodeURIComponent(context.org) + '&project=' + encodeURIComponent(id), {headers:{Authorization:'Bearer '+t}}); }).then(function (r) { return r.json().then(function (d) { if(!r.ok)throw new Error(d.error||'Could not open this project.');return d.project; }); });
   }
-  function snapshot() { return JSON.stringify({ name: $('title').value.trim() || 'Untitled site plan', module: selected(), kw: $('kw').value, hours: $('hours').value, canvas: call('_serializeCanvas') }); }
+  function snapshot() { return JSON.stringify({ name: $('title').value.trim() || 'Untitled site plan', module: selected(), kw: $('kw').value, hours: $('hours').value,sku:$('bess-sku').value,siteAddress:siteAddress, canvas: call('_serializeCanvas') }); }
   function loadCustomer() {
     var version=authVersion;
     if (!projectId) {
@@ -132,7 +153,9 @@
       if(version !== authVersion)throw new Error('Your sign-in changed. Reopen this project.');
       if (!permitted(p.module)) throw new Error('This project uses a module that is no longer enabled. Contact your supplier.');
       revision = p.revision; $('title').value = p.name; setModule(p.module);
+      siteAddress=p.siteAddress||siteAddress;$('site-address').value=siteAddress;
       $('kw').value = p.target.kw; $('hours').value = p.target.hours || 2;
+      if(p.target.product&&Array.prototype.some.call($('bess-sku').options,function(o){return o.value===p.target.product.sku;}))$('bess-sku').value=p.target.product.sku;
       call('_restoreCanvas', [p.canvas]);
       var name = engine.document.getElementById('pname'); if (name) name.value = p.name;
       savedSnapshot = snapshot(); $('status').textContent = 'Site Map · saved ' + new Date(p.updatedAt).toLocaleString();
@@ -177,23 +200,23 @@
   window.addEventListener('beforeunload', function (e) { if (customer && loaded && engine && snapshot() !== savedSnapshot) { e.preventDefault(); e.returnValue = ''; } });
   function guide(onlyConfigure) {
     if (busy || !engine) return;
+    if(!mapReady){say('Load your site address before starting a guided build.',true);return;}
     var module = selected();
     if (!permitted(module)) { say('This module is not included in this account.', true); return; }
     busy = true; $('build').disabled = true;
-    request({ module: module, kw: $('kw').value, hours: $('hours').value }).then(function (sizing) {
+    request({ module: module, kw: $('kw').value, hours: $('hours').value,sku:$('bess-sku').value }).then(function (sizing) {
       call('switchTab', ['site']);
       if (module === 'bess') {
-        if (onlyConfigure) { call('openBessGuidedBuild'); call('_bgbOpenConfig'); return; }
-        var state = call('_bgbState'), s = engine.S;
-        if (s && s.bessList && s.bessList.length) {
-          call('openBessGuidedBuild');
-          say('Review the configured equipment and quantity. Existing equipment settings take precedence over a new concept target.');
-          return;
-        }
-        state.kw = sizing.kw; state.kwh = sizing.kwh; state.cfg = call('_bgbGenericCfg', [sizing.kw, sizing.kwh]);
+        var state=call('_bgbState'),product=sizing.product;
+        if(!product)throw new Error('Reload to obtain the supplier catalog before placing BESS.');
+        state.kw=sizing.selectedKw;state.kwh=sizing.selectedKwh;state.cfg=call('_bgbGenericCfg',[state.kw,state.kwh]);
+        if(!product.placeholder){state.cfg.id=product.sku;state.cfg.model=String(product.name||'').replace(/[<>&"']/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];});state.cfg.placeholder=false;state.cfg.kw=product.kw;state.cfg.kwh=product.kwh;state.cfg.qty=sizing.qty;state.cfg.chem=String(product.chemistry||'TBD').replace(/[<>]/g,'');state.cfg.notes='Supplier catalog concept; equipment clearances and engineering require review.';state.cfg.usable=null;state.cfg.inv='TBD';}
+        state.units=sizing.qty;state.unitKw=product.kw||state.kw;state.unitKwh=product.kwh||state.kwh;
+        state.incPcs=product.placeholder?true:!!product.integrates.pcs;state.incXfmr=product.placeholder?false:!!product.integrates.xfmr;state.incDisco=product.placeholder?false:!!product.integrates.disco;
         state.sizeLocked = true; state.mode = 'BTM';
+        engine.__omegaForceMode='BTM';call('setMapInteractive',[false]);
         call('_bgbStartPlacing');
-        say('Click the canvas to begin guided placement. This is a generic capacity concept—not a selected supplier product or an order.');
+        say(product.placeholder?'Click the canvas to begin. Generic design placeholder—not a specified product or an order.':sizing.qty+' × '+product.name+' · '+sizing.selectedKw+' kW / '+sizing.selectedKwh+' kWh. Click the canvas to begin the concept layout.');
       } else if (module === 'compute') {
         if (!engine.OmegaCGB) throw new Error('Compute guided build is unavailable.');
         // The canonical guide applies its format defaults while opening.
@@ -221,6 +244,7 @@
       else if (name === 'transformer') { if (!context.modules.length) throw new Error('Enable a design module first.'); call('rbInsert', ['xfmr']); }
       else if (name === 'measure') call('setMode', ['dimension']);
       else if (name === 'plot') call('switchTab', ['site']);
+      else if (name === 'atlas') { showAtlas();return; }
       else if (name === 'sld') { call('sldFromSite'); call('switchTab', ['sld']); }
       else if (name === 'bom') {
         call('openBomSourcing');
@@ -233,22 +257,50 @@
       }
       else if (name === 'proposal') call('openProposalExport');
       else if (name === 'drawings') call('openPermitSetModal');
-      if (button) { var group = ['plot','sld','bom','proposal','drawings'].indexOf(name) >= 0;
-        document.querySelectorAll('[data-command]').forEach(function (b) { if ((['plot','sld','bom','proposal','drawings'].indexOf(b.getAttribute('data-command')) >= 0) === group) b.classList.toggle('active', b === button); }); }
+      if (button && ['plot','select','pan'].indexOf(name)>=0) {var group=name==='plot'?['plot','atlas']:['select','pan'];document.querySelectorAll('[data-command]').forEach(function(b){if(group.indexOf(b.getAttribute('data-command'))>=0)b.classList.toggle('active',b===button);});}
     } catch (e) { say(e.message, true); }
   }
   document.querySelectorAll('[data-command]').forEach(function (b) { b.onclick = function () { command(b.getAttribute('data-command'), b); }; });
+  document.querySelector('[data-command="plot"]').addEventListener('click',function(){atlasPanel.hidden=true;atlasItems.forEach(function(m){m.setMap(null);});atlasItems=[];});
+  function loadSite(){
+    var address=$('site-address').value.trim();if(!engine||!address)return;
+    if(mapReady&&siteAddress!==address&&call('_serializeCanvas').elements.length&&!confirm('Change the map location? Existing equipment stays in this project. Verify every placement at the new site.'))return;
+    siteAddress=address;mapReady=false;$('map-status').textContent='Loading Google Maps…';
+    engine.document.getElementById('addr-in').value=address;
+    engine.document.getElementById('gmap-status').textContent='Loading';
+    try{call('fetchMap');}catch(e){$('map-status').textContent=e.message;return;}
+    var attempt=0,version=authVersion;var poll=setInterval(function(){
+      if(version!==authVersion||!engine){clearInterval(poll);return;}
+      var status=engine.document.getElementById('gmap-status').textContent;
+      if(engine._gmap&&/Satellite loaded/i.test(status)){clearInterval(poll);mapReady=true;call('setMapInteractive',[true]);$('map-status').textContent='Site loaded · pan to review, then start a guided build.';}
+      else if(++attempt>=60||/not found|failed|blocked/i.test(status)){clearInterval(poll);$('map-status').textContent='Map could not load. Check the address and the Google Maps configuration.';}
+    },500);
+  }
+  siteBar.onsubmit=function(e){e.preventDefault();loadSite();};
+  function showAtlas(){
+    if(!mapReady){say('Load your site address first.',true);return;}
+    call('switchTab',['site']);atlasPanel.hidden=false;atlasPanel.textContent='Checking Grid Atlas…';var center=engine._gmap.getCenter();
+    auth.currentUser.getIdToken().then(function(t){return fetch('/api/lite-atlas',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({org:context.org,customer:customer,lat:center.lat(),lng:center.lng(),sizeMw:Number($('kw').value)/1000})});}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||'Grid Atlas unavailable');return d;});}).then(function(d){
+      atlasPanel.textContent='';var h=document.createElement('h3');h.textContent='Grid Atlas';atlasPanel.appendChild(h);
+      [d.summary,'Nearby infrastructure is not proof of available utility capacity.'].concat((d.findings||[]).map(function(f){return f.text;})).forEach(function(text){var p=document.createElement('p');p.textContent=text;atlasPanel.appendChild(p);});
+      atlasItems.forEach(function(m){m.setMap(null);});atlasItems=[];
+      (d.substations||[]).slice(0,50).forEach(function(s){if(!isFinite(Number(s.lat))||!isFinite(Number(s.lng)))return;atlasItems.push(new engine.google.maps.Marker({position:{lat:Number(s.lat),lng:Number(s.lng)},map:engine._gmap,title:String(s.name||'Substation')}));});
+      var sources=document.createElement('p');sources.textContent='Sources: '+JSON.stringify(d.sources||{});atlasPanel.appendChild(sources);
+    }).catch(function(e){atlasPanel.textContent=e.message;});
+  }
   $('module').onchange = function () { setModule(selected()); };
   $('build').onclick = function () { guide(false); }; $('configure').onclick = function () { guide(true); };
   $('title').oninput = function () { if (!engine) return; var n = engine.document.getElementById('pname'); if (n) { n.value = $('title').value; n.dispatchEvent(new Event('input', { bubbles: true })); } };
   $('save').onclick = function () { try { Promise.resolve(call('saveProject')).catch(function (e) { say(e.message, true); }); } catch (e) { say(e.message, true); } };
   auth.onAuthStateChanged(function (user) {
     var version=++authVersion;
-    clearInterval(timer); loaded = false; engine = null; $('engine').src = 'about:blank'; $('engine').style.visibility = 'hidden'; $('gate').hidden = false;
+    clearInterval(timer); loaded = false;mapReady=false;atlasPanel.hidden=true;engine = null; $('engine').src = 'about:blank'; $('engine').style.visibility = 'hidden'; $('gate').hidden = false;
     if (customer) window.OmegaBuyerEngine.authorized = false;
     if (!user) { $('gateMessage').textContent = 'Sign in with your licensed company account to open Editor Lite.'; return; }
     request().then(function (data) {
       if(version !== authVersion)return;
+      $('bess-sku').textContent='';(data.designProducts||[]).forEach(function(p){var o=document.createElement('option');o.value=p.sku;o.textContent=p.name+(p.placeholder?'':' · '+p.kw+' kW / '+p.kwh+' kWh');$('bess-sku').appendChild(o);});
+      $('catalog-note').textContent=(data.designProducts||[]).some(function(p){return p.placeholder;})?'Generic design template only. Your supplier has not published a dimensioned BESS product yet.':'Only this supplier’s enabled BESS products appear here.';
       if (customer) {
         if (!data.access.active) throw new Error('Editor Lite requires an active customer subscription or an approved trial. Your free customer account remains available.');
         quoteControls(data.products);
@@ -264,7 +316,6 @@
         var b = document.createElement('button'); b.textContent = labels[m] + (permitted(m) ? '' : ' · not in plan'); b.disabled = !permitted(m); b.setAttribute('data-module', m); b.onclick = function () { setModule(m); }; $('moduleList').appendChild(b);
         if (permitted(m)) { var o = document.createElement('option'); o.value = m; o.textContent = labels[m]; $('module').appendChild(o); }
       });
-      document.querySelector('[data-command="storage"]').disabled = !permitted('bess');
       $('scope').textContent = data.preview ? 'Brand preview. Projects save to your own ' + data.projectOrg + ' workspace—not this customer’s account.' : data.note;
       $('scope').className = data.preview ? 'note preview' : 'note';
       if (data.modules.length) setModule(data.modules[0]); else say('No design modules enabled. Ask your account administrator.', true);

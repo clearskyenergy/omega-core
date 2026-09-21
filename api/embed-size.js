@@ -126,7 +126,7 @@ module.exports = E.handler(function (req) {
           return { hours: r.hours, nameplateKwh: r.nameplateKwh };
         });
 
-        var products = (Array.isArray(sf.products) ? sf.products : []);
+        var products = (Array.isArray(sf.products) ? sf.products : []).filter(function(p){return p&&p.active!==false&&p.kind!=='service'&&(p.category||'bess')==='bess';});
         var fits = fitProducts(products, sum.kw, sum.kwh).map(function (f) {
           var p = f.p;
           return {

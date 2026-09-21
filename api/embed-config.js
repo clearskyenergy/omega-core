@@ -55,6 +55,8 @@ function publicProduct(p) {
   if (!sku) return null;
   var mode = (p.priceMode === 'list') ? 'list' : 'quote';
   var out = {
+    kind:          p.kind === 'service' ? 'service' : 'product',
+    category:      str(p.category || 'bess', 20),
     sku:           sku,
     name:          str(p.name, 120) || sku,
     blurb:         str(p.blurb, 400),
@@ -164,6 +166,7 @@ module.exports = E.handler(function (req) {
         var wl = ctx.whiteLabel || {};
 
         var products = (Array.isArray(sf.products) ? sf.products : [])
+          .filter(function(p){return p&&p.active!==false;})
           .map(publicProduct).filter(Boolean).slice(0, 60);
 
         return {
