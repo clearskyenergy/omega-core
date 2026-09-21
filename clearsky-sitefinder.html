@@ -609,6 +609,7 @@
     <button type="button" data-view="split" class="on">Split</button>
     <button type="button" data-view="map">Map</button>
     <button type="button" data-view="list">List</button>
+    <button type="button" data-view="catalog">Crexi listings</button>
     <button type="button" data-view="saved">Starred sites <span id="savedN"></span></button>
     <button type="button" data-view="ledger">Circuit ledger</button>
   </div>
@@ -693,6 +694,19 @@
         <button type="button" class="btn ghost" id="backupLegacyStars">Download original cards</button>
         <button type="button" class="btn ghost" id="restoreLegacyStars">Restore original stars</button>
       </div>
+    </div>
+    <div id="catalogBar" hidden style="padding:12px;border-bottom:1px solid #dce2eb">
+      <label for="catalogQuery">Search imported listings</label>
+      <input id="catalogQuery" type="search" placeholder="Address, city, or property type" style="width:100%;margin:6px 0">
+      <button id="catalogSearch" type="button">Search listings</button>
+      <button id="catalogPrev" type="button">Previous</button>
+      <button id="catalogNext" type="button">Next</button>
+      <p id="catalogStatus" role="status">Sign in to browse your workspace's imported listings.</p>
+      <details id="catalogImport" hidden><summary>Staff: import verified listing snapshot</summary>
+        <label for="catalogFile">Prepared catalog JSON</label><input id="catalogFile" type="file" accept="application/json,.json">
+        <button id="catalogUpload" type="button">Import into this workspace</button>
+        <p>Creates a shared listing snapshot. Does not modify starred sites or holds.</p>
+      </details>
     </div>
     <div id="cards"></div>
   </div>
@@ -926,12 +940,57 @@
     /* Sites uploaded from a CSV. Persisted, and treated exactly like any
        other record once they have coordinates. */
     imported: [],
+    catalog: [],
     byId: {},
     view: "split",
     sel: null,
     busy: false,
     lastKey: "",
     rep: ""
+  };
+
+  var catalogPage = 0, catalogEpoch = 0, catalogMore = false;
+  function loadCatalog(page) {
+    var el = document.getElementById('catalogStatus');
+    var user = window.firebase && firebase.auth().currentUser;
+    var epoch = ++catalogEpoch, org = ORG;
+    if (!user) { el.textContent = 'Sign in to browse the shared listing catalog.'; return; }
+    el.textContent = 'Loading shared listings…';
+    user.getIdToken().then(function (token) {
+      return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+        body:JSON.stringify({orgId:org,page:page,q:document.getElementById('catalogQuery').value}) });
+    }).then(function (res) { return res.json().then(function (data) { if (!res.ok) throw new Error(data.error || 'Catalog unavailable'); return data; }); })
+    .then(function (data) {
+      if (epoch !== catalogEpoch || org !== ORG || firebase.auth().currentUser !== user) return;
+      catalogPage = page; catalogMore = data.hasMore;
+      ST.catalog = (data.rows || []).map(function (r) { return enrich(r); });
+      el.textContent = data.manifest ? data.total.toLocaleString() + ' listings · page ' + (page+1) +
+        ' · snapshot, not a live Crexi feed. ' + data.manifest.located + ' of ' + data.manifest.count +
+        ' have approximate Census map locations. Energy filters apply to this page.' : 'No listing snapshot imported for this workspace.';
+      document.getElementById('catalogPrev').disabled = page === 0;
+      document.getElementById('catalogNext').disabled = !catalogMore;
+      render();
+    })['catch'](function (err) { if(epoch===catalogEpoch) el.textContent = err.message; });
+  }
+  document.getElementById('catalogSearch').onclick = function () { loadCatalog(0); };
+  document.getElementById('catalogQuery').onkeydown = function (e) { if(e.key === 'Enter')loadCatalog(0); };
+  document.getElementById('catalogPrev').onclick = function () { if(catalogPage>0)loadCatalog(catalogPage-1); };
+  document.getElementById('catalogNext').onclick = function () { if(catalogMore)loadCatalog(catalogPage+1); };
+  document.getElementById('catalogUpload').onclick = function () {
+    var file = document.getElementById('catalogFile').files[0], user = window.firebase && firebase.auth().currentUser;
+    var status = document.getElementById('catalogStatus'), org = ORG;
+    if (!file || !user) { status.textContent = 'Select the prepared JSON file and sign in first.'; return; }
+    if(file.size>4400000){status.textContent='File too large. Use compact prepared JSON under 4.4 MB.';return;}
+    if (!window.confirm('Import this listing snapshot into '+org+'? Existing starred sites and holds will not be changed.')) return;
+    var reader=new FileReader();reader.onload=function(){
+      var data;try{data=JSON.parse(reader.result);}catch(e){status.textContent='Invalid JSON';return;}
+      if(!data.manifest||data.manifest.orgId!==org){status.textContent='The file belongs to a different workspace.';return;}
+      status.textContent='Importing and verifying shared listing snapshot…';
+      user.getIdToken().then(function(token){return fetch('/api/site-catalog',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({action:'import',orgId:org,catalog:data})});})
+        .then(function(res){return res.json().then(function(d){if(!res.ok)throw Error(d.error||'Import failed');return d;});})
+        .then(function(d){if(ORG!==org)return;status.textContent='Verified '+d.imported+' imported listings. Starred sites unchanged.';loadCatalog(0);})
+        ['catch'](function(e){status.textContent='Import not confirmed: '+e.message;});
+    };reader.readAsText(file);
   };
 
   window.onOmegaSiteSavesStatus = function (err, state) {
@@ -2232,7 +2291,7 @@
        looking like an empty corridor. */
     var cut = { kw: 0, sf: 0, type: 0, circ: 0, sfUnknown: 0, energy: 0 };
 
-    var out = ST.rows.filter(function (r) {
+    var out = (ST.view === 'catalog' ? ST.catalog : ST.rows).filter(function (r) {
       /* A DELIBERATE KEEP OUTRANKS A FILTER. A rep who starred this site
          did so knowing what it is; hiding it again behind a minimum kW they
          set for prospecting means the one site they are working disappears
@@ -2888,6 +2947,7 @@
     var vb = map.getBounds();
     rows = rows.filter(function (r) {
       if (isHidden(r.id)) return false;     /* dismissed by the rep */
+      if (ST.view === 'catalog') return true;
       /* Starred sites are NOT excluded here any more. One that genuinely
          sits in this viewport belongs in the list like anything else; it is
          only the unconditional pinning to the top that was wrong. */
@@ -2930,7 +2990,7 @@
       rows = rows.filter(function (r) { return r.id !== current.id; });
       imported = imported.filter(function (r) { return r.id !== current.id; });
     }
-    rows = (ST.view === "saved")
+    rows = ST.view === 'catalog' ? rows : (ST.view === "saved")
       ? saved
       : (current ? [current] : []).concat(imported, rows);
     /* Index everything on screen so the star can find a record by id
@@ -2944,7 +3004,12 @@
        six of them does not mean this viewport has anything in it, and
        pretending otherwise is how the panel used to look busy while showing
        nothing relevant. They are one click away and the message says so. */
-    if (ST.view !== "saved" && !ST.rows.length && !current && !imported.length) {
+    if (ST.view === 'catalog' && !rows.length) {
+      head('Imported Crexi listings', 'Search the shared catalog above. Try Reset filters if the current page is filtered out.');
+      wrap.innerHTML = '<div class="empty"><h3>No listings on this page match</h3><p>Listings without verified coordinates remain searchable; they do not get guessed map pins.</p></div>';
+      drawMarkers([]); return;
+    }
+    if (ST.view !== 'catalog' && ST.view !== "saved" && !ST.rows.length && !current && !imported.length) {
       head("Search an address, or search this area",
            "Every result is scored on what the circuit will still accept, not on " +
            "what the building could theoretically host.");
@@ -3380,6 +3445,11 @@
       '</div>' +
       '<div class="bd">' +
         energyLeadHtml(r) +
+        (r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || '')
+          ? '<p><a data-noselect="1" href="' + esc(r.listed.url) + '" target="_blank" rel="noopener noreferrer"><b>Open Crexi listing &amp; photos ↗</b></a>' +
+            (r.listed.askPrice != null ? ' · ' + money(r.listed.askPrice) : '') +
+            '<br><small>Listing snapshot ' + esc((r.observedAt || '').slice(0,10)) + ' · availability not reverified</small>' +
+            (r.geocode ? '<br><small>' + (r.lat == null ? 'Location unresolved — no map pin' : esc(r.geocode.accuracy)) + '</small>' : '') + '</p>' : '') +
         '<div class="kw">' + kwTxt + ' <small>kW deliverable</small></div>' +
         '<div class="kwsub">' + sub + '</div>' +
         '<div class="siteMetrics"><div>Available hosting<strong>' +
@@ -3401,7 +3471,7 @@
            here changes a filter, a score or what was loaded. */
         (shows("size") || shows("type")
           ? '<div class="mt">' +
-            (shows("size") ? (r.sqft ? fmt(r.sqft) + " SF" : "Land, " + (r.lotAcres || "?") + " ac") : "") +
+            (shows("size") ? (r.sqft ? fmt(r.sqft) + " SF" : "Building size unknown · " + (r.lotAcres || "?") + " ac") : "") +
             (shows("size") && shows("type") ? ' &middot; ' : '') +
             (shows("type") ? esc(r.subtype || r.type) +
               (r.yearBuilt ? ' &middot; built ' + r.yearBuilt : '') : '') + '</div>'
@@ -3486,6 +3556,12 @@
      return no photo at all, and an empty grey box on every card makes the
      whole list read as broken. */
   function photo(r) {
+    var photos = r.photos || [], photoUrl = photos.length ? photos[0] : '';
+    if (photoUrl && typeof photoUrl === 'object') photoUrl = photoUrl.url || photoUrl.src;
+    if (typeof photoUrl === 'string' && /^https:\/\//i.test(photoUrl)) {
+      return '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(photoUrl) + '" alt="Property photo: ' + esc(r.addr) + '">';
+    }
+    if (r.src === 'crexi-import') return '<div style="padding:24px;text-align:center;color:#53647a">Listing photo not supplied<br><small>Open the Crexi listing for photographs</small></div>';
     var pal = { "Warehouse":["#e6ecf2","#b9c8d6","#8fa2b4"], "Industrial":["#e9eae6","#c2c7bf","#98a094"],
                 "Manufacturing":["#ece7e1","#cbc0b2","#a2947f"], "Cold Storage":["#e2eef4","#b4cfdd","#87aabf"],
                 "Flex":["#eae8ef","#c6c0d5","#9a92b3"], "Retail":["#f0e6e2","#d5bdb4","#b0938a"],
@@ -3570,7 +3646,8 @@
       '<stop offset="1" stop-color="' + pal[0] + '"/></linearGradient></defs>' +
       '<rect width="320" height="132" fill="url(#sky' + esc(r.id) + ')"/>' +
       art +
-      '<rect y="118" width="320" height="14" fill="' + dark + '" opacity=".28"/></svg>';
+      '<rect y="118" width="320" height="14" fill="' + dark + '" opacity=".28"/></svg>' +
+      '<span style="position:absolute;bottom:5px;left:8px;background:#fff;padding:2px 5px;font-size:10px">Illustration · property photo unavailable</span>';
   }
 
   /* --------------------------------------------------------------- map */
@@ -4033,6 +4110,7 @@
     var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
+      if (r.lat == null || r.lon == null) continue;
       var m = window.L.marker([r.lat, r.lon], {
         icon: markerIcon(r, r.id === selId ? " sel" : ""),
         riseOnHover: true
@@ -4225,6 +4303,11 @@
   }
 
   function verifyRecord(r) {
+    if (r.lat == null || r.lon == null) {
+      var unplaced = document.getElementById('dVerify');
+      if(unplaced)unplaced.innerHTML = '<h4>Location not verified</h4><p>No circuit or parcel lookup was made. Confirm this listing address before sizing or holding grid capacity.</p>';
+      return;
+    }
     var live = { covering: 0 }, pending = 2;
     function done() {
       if (--pending) return;
@@ -6693,6 +6776,8 @@
       this.className = "on";
       document.body.className = "v-" + name;
       ST.view = name;
+      document.getElementById('catalogBar').hidden = name !== 'catalog';
+      if (name === 'catalog') loadCatalog(catalogPage);
       if (name === "ledger") { closeDrawer(); renderLedger(); }
       else {
         /* Starred is the list restricted to sites the rep kept. It reuses
@@ -6753,7 +6838,7 @@
 
   map.on("moveend", function () {
     refreshLayers();
-    if (ST.view === "ledger" || ST.view === "list") return;
+    if (ST.view === 'catalog' || ST.view === "ledger" || ST.view === "list") return;
     /* A pan the TOOL performed is not the rep moving the map. Following a
        card to its pin would otherwise re-run the viewport search, rebuild
        the list under them and quite possibly drop the card they just
@@ -7093,6 +7178,12 @@
     catch (e) { localMode("Firestore unavailable: " + (e.message || e)); return; }
 
     firebase.auth().onAuthStateChanged(function (u) {
+      catalogEpoch++;
+      ST.catalog.forEach(function(r){delete ST.byId[r.id];});
+      if(ST.view === 'catalog') { closeDrawer(); document.getElementById('cards').innerHTML = ''; drawMarkers([]); }
+      ST.catalog = []; catalogPage = 0;
+      document.getElementById('catalogImport').hidden = !(u && /@(clearsky-usa\.com|csebuilders\.com)$/i.test(u.email || ''));
+      document.getElementById('catalogStatus').textContent = 'Sign in to browse the shared listing catalog.';
       L.attach(null, '', function () {});
       if (L.setIdentity) L.setIdentity('', '');
       if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
@@ -7146,7 +7237,10 @@
         return;
       }
 
-      if (mine !== ORG) {
+      /* Staff may preview a requested tenant; the server verifies authorization.
+         Ordinary tenant users continue to resolve from their own email domain. */
+      var staffPreview = /^(clearsky-usa\.com|csebuilders\.com)$/.test(mine) && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(ORG);
+      if (mine !== ORG && !staffPreview) {
         var was = ORG;
         ORG = mine;
         attachNow(u, "Opened with ?org=" + was + " but signed in as " +
@@ -7156,6 +7250,7 @@
       }
 
       function attachNow(u2, note) {
+        if (ST.view === 'catalog') loadCatalog(0);
         if (window.OmegaSiteSaves) {
           window.OmegaSiteSaves.init(ORG, u2, function (err) {
             if (_savedAuth !== u2.uid) return;

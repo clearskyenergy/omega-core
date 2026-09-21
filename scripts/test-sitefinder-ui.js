@@ -39,6 +39,12 @@ const rows = [
         });
         await route.fulfill({ json: { scored, weightsSource: 'test fixture', asOf: '2026-09-21' } }); return;
       }
+      if (url.pathname === '/api/site-catalog') {
+        await route.fulfill({json:{total:2,hasMore:false,manifest:{count:2,located:1},rows:[
+          {id:'crexi:123',addr:'1 Listed Warehouse',city:'Chicago',state:'IL',zip:'60601',type:'Industrial',sqft:50000,lat:41.8,lon:-87.7,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/123/test',askPrice:100000},geocode:{accuracy:'street-interpolated'},photos:[]},
+          {id:'crexi:124',addr:'2 Unplaced Listing',city:'Chicago',state:'IL',zip:'60601',type:'Office',sqft:null,lat:null,lon:null,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/124/test'},photos:[]}
+        ]}});return;
+      }
       if (url.pathname.startsWith('/api/')) { await route.fulfill({ status: 503, json: { error: 'Deliberate test service failure' } }); return; }
       const file = path.join(root, decodeURIComponent(url.pathname));
       if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
@@ -92,6 +98,13 @@ const rows = [
     await page.evaluate(() => { window.__siteTest.ST.rows = []; window.__siteTest.ST.current = null; });
     await page.locator('[data-view="saved"]').click();
     assert.equal(await page.locator('.card').count(), 1, 'saved view works before any fresh search');
+    await page.locator('[data-view="catalog"]').click();
+    await page.locator('.card[data-id="crexi:124"]').waitFor();
+    assert.equal(await page.locator('.card').count(),2,'located and unplaced listings both render');
+    assert.equal(await page.locator('a[href="https://www.crexi.com/properties/123/test"]').count(),1);
+    await page.locator('.card[data-id="crexi:124"] .energyLead').click();
+    assert.equal(await page.locator('#rSave').count(),0,'unplaced listings cannot hold capacity');
+    assert.match(await page.locator('#dVerify').innerText(),/Location not verified/i);
     assert.deepEqual(errors, []);
     console.log('Site Finder browser workflow passed: score/hosting filters, saved visibility, sizing/hold consistency, unknown feeder, mobile layout.');
   } finally { await browser.close(); }

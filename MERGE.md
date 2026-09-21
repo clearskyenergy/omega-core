@@ -1463,6 +1463,18 @@ unchanged; no new pricing model was moved to the browser.
 
 ## Site Finder workflow integration — September 21, 2026
 
+Follow-up: the authenticated `/api/site-catalog` reads a tenant listing snapshot
+from existing `toolData/{orgId}/tools` documents. Staff-only imports create
+immutable version pages, verify their counts, then atomically switch the
+manifest. No `sites` or `capacityAllocations` writes occur. The Crexi listings
+tab paginates and searches all records, including ungeocoded listings; only
+located records get pins. Census positions are labelled street-interpolated,
+not rooftop. Direct Crexi links and snapshot dates remain visible. Supplied
+HTTPS photo URLs render; missing images are explicitly labelled. No paid
+imagery provider or live outbound Crexi feed has been configured. Staff tenant
+preview now retains the requested workspace, with API authorization enforced.
+No pricing or scoring logic was added to the browser.
+
 Completed the interrupted Site Finder modules and connected the property
 browser to energy score/hosting filters, workspace saves, selected battery
 size, feeder holds, ownership/listing details, and estimator handoff.
