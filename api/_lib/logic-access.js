@@ -11,12 +11,13 @@ async function context(orgId) {
   if (!rows[0].exists) throw A.httpError(404, 'OEM account not provisioned');
   return { orgId: orgId, org: rows[0].data(), billing: rows[1].exists ? rows[1].data() : {}, config: rows[2].exists ? rows[2].data() : {} };
 }
-function enabled(ctx) {
+function subscribed(ctx) {
   var b = ctx.billing;
-  return ctx.org.status === 'active' && ctx.config.enabled === true &&
+  return ctx.org.status === 'active' &&
     ((b.addons || []).indexOf('omega-logic') >= 0 || b.omegaLogic === true) &&
     ['suspended', 'cancelled', 'past_due'].indexOf(b.status) < 0;
 }
+function enabled(ctx) { return subscribed(ctx) && ctx.config.enabled === true; }
 async function authorize(c, org, write) {
   if (!c.claims.email_verified) throw A.httpError(403, 'Verify your email first');
   var ctx = await context(org);
@@ -25,7 +26,7 @@ async function authorize(c, org, write) {
   var m = await A.db().doc('omega_orgs/' + ctx.orgId + '/members/' + c.uid).get();
   var d = m.exists ? m.data() : {};
   if (d.status === 'disabled' || !d.role || (write && ['owner', 'admin'].indexOf(d.role) < 0)) throw A.httpError(403, 'An active OEM ' + (write ? 'administrator' : 'member') + ' is required');
-  if (!enabled(ctx)) throw A.httpError(403, 'Omega Logic subscription is not active');
+  if (!subscribed(ctx)) throw A.httpError(403, 'Omega Logic subscription is not active');
   return ctx;
 }
-module.exports = { owner: owner, requireOwner: requireOwner, context: context, enabled: enabled, authorize: authorize };
+module.exports = { owner: owner, requireOwner: requireOwner, context: context, subscribed: subscribed, enabled: enabled, authorize: authorize };

@@ -149,3 +149,20 @@ serial registration, wire limits, subscription suspension and buyer privacy.
 
 The separate AI operator remains deferred. The deterministic, auditable
 workflow is the substrate it can eventually invoke, not something it may bypass.
+# Tenant enrollment and company sign-in
+
+The verified ClearSky owner can enroll an existing tenant through **Admin →
+Tenants & Users → Manage → Omega Logic bundle**. Enrollment retains the tenant's
+plan and other add-ons, adds Omega Logic/white-label entitlements, and records
+the four Editor Lite module selections in `billing/current.editorLite`.
+It does not charge the subscription or activate QuickBooks automation.
+
+The company administrator action creates an unverified Firebase Auth account
+and an `omega_orgs/{orgId}/members/{uid}` admin membership. It never resets an
+existing password or grants ClearSky/custom staff claims. Passwords are not
+written to Firestore or audit records. The account holder must verify their
+mailbox and replace the temporary password before operational use. Company
+admins see Office and Plant destinations at `/login`; the APIs enforce verified
+identity, active membership, tenant scope, and subscription separately from
+the fulfillment automation switch. An active bundle with automation disabled
+can read operations and register inventory, but cannot release an unpaid order.
