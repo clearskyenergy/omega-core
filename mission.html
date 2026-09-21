@@ -327,6 +327,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .addBar .brainQ{flex:1;min-width:190px}
 .urgPick{display:flex;gap:5px}
 
+/* A whole list at once. The box only appears once IMPORT is pressed, so the
+   panel still opens on the thing you came for — the list. */
+.impBox{border:1px solid rgba(0,243,255,.18);border-radius:7px;background:var(--panel);
+        padding:11px 12px;margin:0 0 12px}
+.impList{max-height:270px;overflow-y:auto;margin-top:10px}
+.impFiled{opacity:.45}
+.impMsg{font-size:12px;line-height:1.55;color:var(--dim);margin-top:10px}
+
 .triBar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 8px;position:sticky;top:0;
         background:linear-gradient(var(--bg) 70%,transparent);z-index:2}
 .triChip{flex:none;font-family:var(--mono);font-size:8.5px;letter-spacing:1.3px;
@@ -5415,10 +5423,218 @@ async function taskAct(id, verb, text){
 
 
 
+/* ── a list that already exists, read as work ────────────────────────────
+   Work turns up as a markdown list far more often than it turns up one line
+   at a time: a notebook page typed out, a TASKS.md, the bullets at the foot
+   of a meeting note. Retyping thirteen of them into the ADD box above is how
+   a list stays in a file instead of on the board, so the board reads the file.
+
+   This is a reader, not a judge. It turns bullets into candidate rows and
+   nothing leaves the browser until FILE is pressed; each one then goes
+   through /task like anything else, so ranking, triage and dedupe stay the
+   twin's and an imported line arrives proposed like every other item.
+
+   Kept as plain named functions on purpose — scripts/tests/ttaskimport.js
+   pulls them out of this page by name and runs them, so a rename fails the
+   test instead of passing against a copy that no longer ships. */
+function mdPlain(s){
+  return String(s==null?'':s)
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1')   /* a link: keep the words */
+    .replace(/`([^`]*)`/g,'$1')
+    .replace(/\*\*([^*]+)\*\*/g,'$1')
+    .replace(/(^|[\s(])[*_]([^*_\n]+)[*_](?=[\s).,;:!?]|$)/g,'$1$2')
+    .replace(/\s+/g,' ').trim();
+}
+function parseTaskList(md){
+  const rows=[]; let section='', group='', fence=false;
+  String(md==null?'':md).split(/\r?\n/).forEach(raw=>{
+    const line=raw.replace(/\s+$/,'');
+    if(/^\s*(```|~~~)/.test(line)){ fence=!fence; return; }
+    if(fence || !line.trim()) return;
+    const h=line.match(/^(#{1,6})\s+(.+)$/);
+    if(h){
+      /* A top-level heading is the section, and it is where the urgency
+         comes from. A deeper one is the thing being worked on and becomes
+         the prefix, so "Order intake" on the board still says which order. */
+      if(h[1].length<=2){ section=mdPlain(h[2]); group=''; }
+      else group=mdPlain(h[2]).replace(/^\d+[.)]\s*/,'');
+      return;
+    }
+    if(/^\s*>/.test(line)) return;                        /* a note about the list */
+    if(/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) return;   /* a rule, not a bullet */
+    const b=line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+    if(!b) return;
+    let text=b[1], done=false, box=false;
+    const cb=text.match(/^\[([ xX])\]\s*(.*)$/);
+    if(cb){ box=true; done=cb[1]!==' '; text=cb[2]; }
+    text=mdPlain(text);
+    if(!text) return;
+    rows.push({
+      title:[group||section, text].filter(Boolean).join(' — ').slice(0,300),
+      item:text, section:section, group:group, done:done, checkbox:box,
+      /* Inferred from a heading the author already wrote, not guessed and
+         hidden: the preview prints what each row will be filed as, and one
+         chip overrides the lot. */
+      urgency:/\b(asap|urgent|immediate|now|today)\b/i.test(section)?'today':'queue'
+    });
+  });
+  return rows;
+}
+
+/* The import box lives in the tasks panel, below the ADD bar. Its state is
+   out here because load() re-renders that panel every thirty seconds — a
+   paste held in the DOM would be wiped mid-import. */
+let impOpen=false, impText='', impRows=null, impUrg='file', impMsg='',
+    impBusy=false, impCaret=null;
+
+function impScan(prefix){
+  impRows=parseTaskList(impText);
+  impRows.forEach(r=>{ r.on=!r.done; });
+  const n=impRows.filter(r=>r.on).length;
+  const head=(typeof prefix==='string' && prefix) ? prefix+' ' : '';
+  impMsg = impRows.length
+    ? head+impRows.length+' bullet'+(impRows.length===1?'':'s')+' found, '+n+
+      ' ticked to file. Click a row to change your mind — ticked ones already '+
+      'done in the file are left alone.'
+    : head+'No bullets in that. A line has to start with -, * or 1.';
+  renderTasks();
+}
+
+/* Sequential on purpose: file order is the order he wrote them in, and the
+   twin ranks what it is given. A filed row unticks itself, so a failure
+   halfway through can be retried without filing the first half twice. */
+async function impFile(){
+  const queue=(impRows||[]).filter(r=>r.on);
+  if(!queue.length || impBusy) return;
+  impBusy=true; impMsg='Filing 0 of '+queue.length+'…'; renderTasks();
+  let n=0;
+  try{
+    const t=await token();
+    if(!t) throw new Error('not signed in');
+    for(const r of queue){
+      const res=await fetch(CHAT+'/task',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:r.title, urgency:impUrg==='file'?r.urgency:impUrg})});
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(j.error||('HTTP '+res.status));
+      r.on=false; r.filed=true; n++;
+      impMsg='Filing '+n+' of '+queue.length+'…'; renderTasks();
+    }
+    impMsg=n+' item'+(n===1?'':'s')+' on the backlog, in the order they were written.';
+    say('jarvis', n+' item'+(n===1?'':'s')+' on the list.', 0);
+  }catch(e){
+    impMsg=n+' of '+queue.length+' filed, then it stopped — '+e.message+
+           '. The ones that landed are marked FILED; press FILE again for the rest.';
+    say('jarvis','Import stopped — '+e.message, 0);
+  }
+  impBusy=false; renderTasks(); load();
+}
+
+/* Paste or pick, look at what it found, then file it. Two steps on purpose:
+   a button that silently posts thirteen items to a backlog is one nobody
+   presses a second time. */
+function renderImport(host, bar){
+  const open=document.createElement('button');
+  open.textContent=impOpen?'CLOSE IMPORT':'IMPORT A LIST';
+  open.style.cssText='font-size:9.5px;padding:7px 12px';
+  open.title='Paste or open a markdown list — every bullet becomes a candidate task';
+  open.addEventListener('click',()=>{ impOpen=!impOpen; renderTasks(); });
+  bar.appendChild(open);
+  if(!impOpen) return;
+
+  const box=document.createElement('div'); box.className='impBox';
+
+  const ta=document.createElement('textarea');
+  ta.className='askBox'; ta.id='impPaste';
+  ta.placeholder='Paste a markdown list. Headings give each bullet its context, - [ ] marks the items, [x] ones are treated as already done.';
+  ta.value=impText;
+  /* No re-render on input: it would take the caret out of your hands. */
+  ta.addEventListener('input',()=>{ impText=ta.value; });
+  box.appendChild(ta);
+
+  const acts=document.createElement('div'); acts.className='addBar'; acts.style.padding='9px 0 0';
+
+  const file=document.createElement('input');
+  file.type='file'; file.accept='.md,.markdown,.txt,text/markdown,text/plain';
+  file.style.display='none';
+  file.addEventListener('change',()=>{
+    const f=file.files && file.files[0]; if(!f) return;
+    const fr=new FileReader();
+    fr.onload=()=>{ impText=String(fr.result||''); impScan('Read '+f.name+'.'); };
+    fr.onerror=()=>{ impMsg='Could not read '+f.name+'.'; renderTasks(); };
+    fr.readAsText(f);
+  });
+  const pick=document.createElement('button'); pick.textContent='OPEN A .MD FILE';
+  pick.style.cssText='font-size:9.5px;padding:7px 12px';
+  pick.addEventListener('click',()=>file.click());
+  acts.appendChild(pick); acts.appendChild(file);
+
+  const scan=document.createElement('button'); scan.textContent='READ THE LIST';
+  scan.style.cssText='font-size:9.5px;padding:7px 12px';
+  scan.addEventListener('click',()=>impScan());
+  acts.appendChild(scan);
+
+  /* One chip overrides what the headings implied, for all of them. */
+  const urg=document.createElement('div'); urg.className='urgPick';
+  [['AS WRITTEN','file'],['NOW','now'],['TODAY','today'],['QUEUE','queue']].forEach(([label,val])=>{
+    const c=document.createElement('span');
+    c.className='ixChip'+(val===impUrg?' on':''); c.textContent=label;
+    c.addEventListener('click',()=>{ impUrg=val; renderTasks(); });
+    urg.appendChild(c);
+  });
+  acts.appendChild(urg);
+  box.appendChild(acts);
+
+  const rows=impRows||[];
+  if(rows.length){
+    const list=document.createElement('div'); list.className='impList';
+    rows.forEach(r=>{
+      const row=document.createElement('div');
+      row.className='row'+(r.filed?' impFiled':(impBusy?'':' rowClick'));
+      const chip=document.createElement('span');
+      chip.className='triChip'+(r.filed||r.on?'':' warn');
+      chip.textContent=r.filed?'FILED':(r.on?'FILE':'SKIP');
+      const k=document.createElement('span'); k.className='k clamp'; k.textContent=r.title;
+      const why=document.createElement('span'); why.className='triWhy';
+      why.textContent=r.done?'ticked in the file':(r.checkbox?'':'no checkbox');
+      const v=document.createElement('span'); v.className='v';
+      v.textContent=(impUrg==='file'?r.urgency:impUrg).toUpperCase();
+      row.append(chip,k,why,v);
+      if(!r.filed && !impBusy) row.addEventListener('click',()=>{ r.on=!r.on; renderTasks(); });
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+
+    const ticked=rows.filter(r=>r.on).length;
+    const go=document.createElement('button');
+    go.textContent=impBusy?'FILING…':('FILE '+ticked+' ITEM'+(ticked===1?'':'S'));
+    go.disabled=impBusy||!ticked;
+    go.style.cssText='font-size:9.5px;padding:7px 12px;margin-top:10px';
+    go.addEventListener('click',impFile);
+    box.appendChild(go);
+  }
+
+  if(impMsg){
+    const m=document.createElement('div'); m.className='impMsg'; m.textContent=impMsg;
+    box.appendChild(m);
+  }
+  host.appendChild(box);
+
+  /* Put the caret back where the poll found it. */
+  if(impCaret){
+    try{ ta.focus(); ta.setSelectionRange(impCaret[0], impCaret[1]); }catch(_){}
+    impCaret=null;
+  }
+}
+
 /* The task list, in the order it actually deserves. */
 const SIZE={S:'small',M:'medium',L:'large',XL:'x-large'};
 function renderTasks(){
   const host=el('todos'); if(!host) return;
+  /* load() re-renders this panel every thirty seconds. Remember where the
+     caret was, so a paste in progress survives the refresh. */
+  const act=document.activeElement;
+  if(act && act.id==='impPaste') impCaret=[act.selectionStart, act.selectionEnd];
   host.textContent='';
 
   const hidden=triaged.filter(r=>r.noise||r.dupeOf).length;
@@ -5473,6 +5689,8 @@ function renderTasks(){
   go.style.cssText='font-size:9.5px;padding:7px 12px'; go.addEventListener('click',send);
   addBar.appendChild(go);
   host.appendChild(addBar);
+  /* The IMPORT button joins the bar above; the box, when open, sits under it. */
+  renderImport(host, addBar);
 
   const v=visibleTasks();
   if(!v.length){ const d=document.createElement('div'); d.className='note';
