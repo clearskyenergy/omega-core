@@ -45,6 +45,11 @@ const rows = [
           {id:'crexi:124',addr:'2 Unplaced Listing',city:'Chicago',state:'IL',zip:'60601',type:'Office',sqft:null,lat:null,lon:null,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/124/test'},photos:[]}
         ]}});return;
       }
+      if (url.pathname === '/api/price-site' && process.env.SITEFINDER_WALKTHROUGH) {
+        const result=require('../api/price-site')._helpers.finish({staff:false},'example.com',route.request().postDataJSON(),{rates:null,installer:null,supplier:null,note:'Illustrative walkthrough using generic model rates, not a supplier quote.'});
+        fs.writeFileSync(path.join(process.env.SITEFINDER_WALKTHROUGH,'example-estimate.json'),JSON.stringify(result,null,2));
+        await route.fulfill({json:result});return;
+      }
       if (url.pathname.startsWith('/api/')) { await route.fulfill({ status: 503, json: { error: 'Deliberate test service failure' } }); return; }
       const file = path.join(root, decodeURIComponent(url.pathname));
       if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
@@ -68,6 +73,25 @@ const rows = [
       window.__siteTest.ingest(rows); window.__siteTest.render();
     }, rows);
     await page.waitForFunction(() => window.__siteTest.ST.rows.every(r => r.scoreState === 'ready'));
+    if (process.env.SITEFINDER_WALKTHROUGH) {
+      const out=process.env.SITEFINDER_WALKTHROUGH;
+      await page.evaluate(()=>{const r=window.__siteTest.ST.rows.find(r=>r.id==='fixture-a');r.addr='Illustrative warehouse';window.__siteTest.render();});
+      await page.locator('#fHost').fill('1000');
+      await page.locator('#top').screenshot({path:path.join(out,'navigation.png')});
+      await page.locator('#filters').screenshot({path:path.join(out,'filters.png')});
+      await page.locator('.card[data-id="fixture-a"]').screenshot({path:path.join(out,'site-card.png')});
+      await page.locator('.card[data-id="fixture-a"] .energyLead').click();
+      await page.locator('#szKwN').fill('250');await page.locator('#szKwN').press('Tab');
+      await page.locator('#siteBattery').screenshot({path:path.join(out,'battery.png')});
+      await page.locator('#costSite').scrollIntoViewIfNeeded();
+      const priceButtons=page.getByRole('button',{name:'Price this site',exact:true});
+      console.log('Pricing buttons',await priceButtons.allTextContents());
+      await priceButtons.first().click();
+      await page.waitForFunction(()=>/Estimated installed cost/i.test(document.getElementById('costBack').innerText));
+      await page.locator('#costBack').screenshot({path:path.join(out,'cost.png')});
+      await page.locator('.card[data-id="fixture-a"]').screenshot({path:path.join(out,'priced-card.png')});
+      console.log('Walkthrough screenshots complete');return;
+    }
     assert.equal(await page.locator('.card').count(), 3);
     await page.locator('#fHost').fill('1000');
     assert.equal(await page.locator('.card').count(), 1);
@@ -95,6 +119,28 @@ const rows = [
     await page.screenshot({ path: '/tmp/sitefinder-mobile.png', fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.locator('#dClose').click();
+    for (const width of [1920,1440,1024,768,390]) {
+      await page.setViewportSize({width,height:900});
+      for (const expanded of [false,true]) {
+        const toggle=page.locator('#moreFilters');
+        if ((await toggle.getAttribute('aria-expanded')) !== String(expanded)) await toggle.click();
+        await page.waitForFunction(() => Math.abs(document.getElementById('stage').getBoundingClientRect().top-document.getElementById('filters').getBoundingClientRect().bottom)<2);
+        const fit=await page.evaluate(() => ['top','filters'].map(id=>{const e=document.getElementById(id);return {id,overflow:e.scrollWidth>e.clientWidth+1};}));
+        assert.ok(fit.every(x=>!x.overflow),'controls fit without horizontal scrolling at '+width);
+        assert.equal(await page.locator('#fScore').isVisible(),true);
+        assert.equal(await page.locator('#fKw').isVisible(),expanded);
+      }
+    }
+    await page.locator('#fKw').fill('125');
+    await page.locator('#moreFilters').click();
+    assert.match(await page.locator('#moreFilters').innerText(),/active/);
+    await page.locator('#moreFilters').click();
+    assert.equal(await page.locator('#fKw').inputValue(),'125','collapsing preserves filter values');
+    await page.locator('#clearFilters').click();
+    await page.locator('#moreFilters').click();
+    await page.screenshot({path:'/tmp/sitefinder-controls-mobile.png',fullPage:true});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.screenshot({path:'/tmp/sitefinder-controls-desktop.png',fullPage:true});
     await page.evaluate(() => { window.__siteTest.ST.rows = []; window.__siteTest.ST.current = null; });
     await page.locator('[data-view="saved"]').click();
     assert.equal(await page.locator('.card').count(), 1, 'saved view works before any fresh search');
