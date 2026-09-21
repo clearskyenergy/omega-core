@@ -1,4 +1,5 @@
 /* ==========================================================================
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    omega-comed-listings.js  ·  ClearSky-OMEGA shared platform file
    --------------------------------------------------------------------------
    Registers the ComEd Capacity Finder's own data as a Site Finder property
@@ -59,17 +60,7 @@
     return Math.sqrt(x * x + y * y);
   }
 
-  /* C&I energy-use intensity, kBtu/sqft-yr, converted at 3.412 kBtu/kWh.
-     Read from the shared table in omega-listings-source.js rather than copied,
-     because a copy is what let the demo provider drift 46% above this one on
-     cold storage while a comment here claimed they matched. */
-  var EUI = S.EUI || {};
-
-  function modelKwh(sqft, type) {
-    if (!sqft) return null;
-    var e = EUI[type] != null ? EUI[type] : (EUI.Other != null ? EUI.Other : 45);
-    return Math.round(sqft * e / 3.412);
-  }
+  /* Annual energy is modelled by /api/site-score from type and floor area. */
 
   /* The assessor's class words vary by county. Everything in the CS_CI bundle
      is industrially classed by definition, so the default is Industrial and
@@ -138,17 +129,11 @@
   function fromParcel(r) {
     if (!r || r.lat == null || r.lon == null) return null;
     var acres = num(r.acres != null ? r.acres : r.ac);
-    /* The business kind outranks the assessor class because it is the more
-       specific of the two and it moves a number. Everything in this bundle
-       is industrially classed by definition, so `clsLabel` is "Industrial"
-       on a foundry and on a cold store alike — and those model at 48 and 96
-       kBtu/sqft. Letting the coarse label win halves the modelled load on
-       exactly the sites worth calling. `subtype` below already reads it in
-       this order; this line was the one disagreeing. */
+    /* Prefer the more specific business kind to a broad assessor class.
+       The server receives that raw type when it models annual energy. */
     var type = typeOf(r.bizKind || r.cls || r.clsLabel);
     var sqft = CFG.estimateSqftFromAcres && acres
       ? Math.round(acres * 43560 * CFG.coverage) : null;
-    var kwh = modelKwh(sqft, type);
 
     return {
       id: str(r.pin) || ("ci" + r.lat.toFixed(5) + "," + r.lon.toFixed(5)),
@@ -179,7 +164,7 @@
       lastSale: { date: "", price: null },
       assessedValue: num(r.val),
       photos: [],
-      annualKwh: kwh != null ? { value: kwh, src: "proxy" } : null,
+      annualKwh: null,
       feederId: null,
       src: "comed"
     };
@@ -189,7 +174,6 @@
     if (!e || e.lat == null || e.lon == null) return null;
     var sqft = num(e.sf);
     var type = typeOf(e.zone || e.kind);
-    var kwh = modelKwh(sqft, type);
 
     return {
       id: "edc:" + (str(e.id) || str(e.n) || (e.lat.toFixed(5) + "," + e.lon.toFixed(5))),
@@ -213,7 +197,7 @@
       lastSale: { date: "", price: null },
       assessedValue: null,
       photos: [],
-      annualKwh: kwh != null ? { value: kwh, src: "modelled" } : null,
+      annualKwh: null,
       /* Read by the "On the market" card field. A listed site changes the
          sales approach: the BUYER signs the twenty-year lease, not the
          seller, so it earns its own line rather than being buried. */
