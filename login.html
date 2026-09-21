@@ -624,6 +624,9 @@
          order     lower sorts first; ties keep table order
     */
     const SURFACES = [
+      { key: "omega-logic", order: 5, name: "Omega Logic", url: PORTAL + "/omega-logic",
+        desc: () => "White-label OEM customers, orders, factory and payments",
+        requires: (c) => c.email === "tom@clearsky-usa.com" && c.emailVerified },
       /* ORDER IS FIXED, NOT LEARNED. The workspace is where nearly everyone
          is going, so it sits at the top every time — a list that reshuffles
          to put yesterday's choice first means the thing you want is in a
@@ -742,7 +745,7 @@
         if (fin.approved === false) return { blocked: "unapproved", role: fin.role };
       }
 
-      const ctx = { email, org, uid, isAdminDomain, staffRole, staff, member, fin, mkt, vdc, extra: {} };
+      const ctx = { email, org, uid, emailVerified: user.emailVerified === true, isAdminDomain, staffRole, staff, member, fin, mkt, vdc, extra: {} };
 
       /* A Firestore surface can require a profile document this file has
          never heard of, so those collections are read on demand — once, and
@@ -763,6 +766,7 @@
       const table = SURFACES.slice();
       (added || []).forEach((sd) => {
         if (!sd || !sd.key || sd.enabled === false) return;
+        if (sd.key === 'omega-logic') return; // private owner door cannot be widened by a surface override
         const entry = {
           key: String(sd.key),
           order: sd.order != null ? +sd.order : 60,

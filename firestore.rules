@@ -2138,7 +2138,15 @@ service cloud.firestore {
                      || isAdmin());
       allow create, update: if false;
       allow delete: if false;
+      // Workflow audit is served through authenticated APIs, never client-writable.
+      match /events/{eventId} { allow read, write: if false; }
     }
+
+    // Omega Logic accounting credentials and commercial configuration are
+    // Admin SDK only. Tenant branding permissions do not extend to these paths.
+    match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
+    match /integrations/{integrationId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and

@@ -118,7 +118,13 @@ module.exports = A.handler(function (req) {
     /* orderBy on a single field needs no composite. createdAt is a Timestamp,
        so this cannot be done in JavaScript afterwards — every row
        stringifies identically and the comparator returns 0 throughout. */
-    return db.collection('orders').orderBy('createdAt', 'desc').limit(limit).get()
+    var query = db.collection('orders');
+    if (req.query && req.query.org) {
+      var org = A.safeOrg(req.query.org);
+      if (!org) throw A.httpError(400, 'Invalid OEM account');
+      query = query.where('orgId', '==', org);
+    }
+    return query.orderBy('createdAt', 'desc').limit(limit).get()
       .then(function (snap) {
         var orders = [];
         snap.forEach(function (d) { var v = d.data() || {}; v._id = d.id; orders.push(v); });

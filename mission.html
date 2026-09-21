@@ -1697,6 +1697,7 @@ body.arranging .scroll{pointer-events:none}
          so an uncollected deposit reads as "not built", never as "$0". -->
     <section class="view" data-view="logic">
       <div class="logicWrap">
+        <div class="logicNote"><a href="/omega-logic" id="logicOfficeLink">OPEN OMEGA LOGIC · OEM WORKSPACES ↗</a></div>
         <div class="logicRail" id="logicStages"></div>
         <div class="tileRow" id="logicTiles"></div>
         <div class="cmdGrid logicGrid">
@@ -6998,7 +6999,8 @@ let platform=null, platPick=null;
    company names on these rows arrive from a PUBLIC storefront a stranger
    filled in — the one input path on this dashboard that is not Thomas, the
    twin, or an API we own. */
-let logicData=null, logicPick=null, logicBusy=false;
+const logicParams=new URLSearchParams(location.search);
+let logicData=null, logicPick=logicParams.get('order')||null, logicBusy=false;
 
 function lFmt(n){ return n==null?dash:Number(n).toLocaleString('en-US'); }
 function lMoney(n){ return n==null?dash:'$'+Number(n).toLocaleString('en-US'); }
@@ -7052,7 +7054,9 @@ async function loadLogic(force){
   if(!u){ host.textContent=''; lCell(host,'logicNote','Not signed in.'); logicBusy=false; return; }
   try{
     const tok=await u.getIdToken();
-    const res=await fetch('/api/logic-summary?limit=60',{headers:{Authorization:'Bearer '+tok}});
+    const org=logicParams.get('org')||'';
+    el('logicOfficeLink').href='/omega-logic'+(org?'?org='+encodeURIComponent(org):'');
+    const res=await fetch('/api/logic-summary?limit=60'+(org?'&org='+encodeURIComponent(org):''),{headers:{Authorization:'Bearer '+tok}});
     if(res.status===403){
       /* Worth naming precisely. This page signs in with whatever Google
          account is to hand; /api/ accepts clearsky-usa.com and
@@ -7115,7 +7119,7 @@ function renderLogic(){
     add('Held', lFmt(t.held), (t.held||0)>0);
     /* null, not 0. Nothing in this codebase has collected a payment against
        an order yet, and the tile says which stage owes the number. */
-    add('Collected', t.collected==null?'not built':lMoney(t.collected), false, t.collected==null);
+    add('Recorded · shown orders', t.collected==null?'no payment records':lMoney(t.collected), false, t.collected==null);
     if(t.unknownFloors) add('Floor unread', lFmt(t.unknownFloors), true);
     add('Tenants', lFmt((d.tenants||[]).length));
   }
@@ -7136,7 +7140,7 @@ function renderLogic(){
     if(!holds.length){
       lCell(hh,'logicNote', (t.units||0)
         ? 'Nothing held. Every unit on the line is moving.'
-        : 'No units on the line. Releasing an accepted order mints its serials (api/plant-release.js) and nothing has been released yet — the deposit that should trigger it is the stage that is still missing.');
+        : 'No units on the line. Omega Logic releases accepted orders after a verified deposit, reserves eligible finished stock and sends shortages to the factory. Register actual serials in the factory workspace.');
     } else holds.forEach(h=>{
       const r=document.createElement('div'); r.className='oRow stuck';
       lCell(r,'no',h.serial);
@@ -7194,6 +7198,9 @@ function renderLogicDetail(){
   if(!o){ if(title) title.textContent='Order';
     lCell(host,'logicNote','Nothing to show.'); return; }
   if(title) title.textContent=o.orderNo;
+  const officeLink=document.createElement('a');
+  officeLink.href='/omega-logic?org='+encodeURIComponent(o.orgId)+'&order='+encodeURIComponent(o.id||'');
+  officeLink.textContent='OPEN THIS ORDER IN OMEGA LOGIC ↗'; host.appendChild(officeLink);
 
   const g=document.createElement('div'); g.className='dlGrid';
   const pair=(label,value,gap)=>{
@@ -7221,17 +7228,17 @@ function renderLogicDetail(){
   pair2('ClearSky price', lMoney(m.clearskyTotal));
   pair2('Tenant price', lMoney(m.tenantTotal));
   pair2('Our cost', lMoney(m.cost));
-  pair2('Deposit', m.depositPaidAt?(lMoney(m.depositAmount)+' · '+lDay(m.depositPaidAt)):'not built', !m.depositPaidAt);
-  pair2('Final payment', m.finalPaidAt?lDay(m.finalPaidAt):'not built', !m.finalPaidAt);
+  pair2('Deposit', m.depositPaidAt?(lMoney(m.depositAmount)+' · '+lDay(m.depositPaidAt)):'not recorded', !m.depositPaidAt);
+  pair2('Final payment', m.finalPaidAt?lDay(m.finalPaidAt):'not recorded', !m.finalPaidAt);
   pair2('Shipment', o.shipment&&!o.shipment.pending
-    ? (o.shipment.carrier||'')+' '+(o.shipment.tracking||'') : 'not built', !(o.shipment&&!o.shipment.pending));
+    ? (o.shipment.carrier||'')+' '+(o.shipment.tracking||'') : 'not recorded', !(o.shipment&&!o.shipment.pending));
   host.appendChild(g2);
 
   /* the floor, for this order */
   const f=o.floor||{};
   const b=f.board||{columns:[],total:0};
   if(!f.released){
-    lCell(host,'logicNote','Not released to the floor, so this order has no plant record. Release is built and idempotent (api/plant-release.js) but a staff member has to press it: the deposit that should call it is the stage that is not built.');
+    lCell(host,'logicNote','Not released to the floor. In Omega Logic, release requires an accepted customer price and verified deposit. Open the order office to inspect its invoice and configuration.');
   } else if(f.known===false){
     lCell(host,'logicNote','The floor could not be read for this order. That is NOT the same as an empty floor, and the milestone above falls back to the order status rather than claiming progress.');
   } else {
@@ -7247,6 +7254,7 @@ function renderLogicDetail(){
     lCell(host,'logicNote','This order carries the demo’s deposit:true flag. That is a button press, not a payment, and it is not counted as money anywhere on this page.');
   }
   if(o.cancelRequested) lCell(host,'logicNote','The customer has requested cancellation.');
+  if(m.error) lCell(host,'logicNote',m.error);
 }
 
 async function loadPlatform(){
@@ -9667,7 +9675,7 @@ authMod.onAuthStateChanged(auth,u=>{
      first measurement has to happen after sign-in, not at load. */
   requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
-  if(u){ try{ showView(localStorage.getItem('jarvisView')||'command'); }catch(_){ showView('command'); }
+  if(u){ try{ showView(logicParams.get('view')==='logic'?'logic':(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
          load(); loadThread(); setInterval(load,30000); }
 });
 

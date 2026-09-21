@@ -262,6 +262,17 @@
         return '<a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.name || d.kind) + '</a>';
       }).join('');
       var meta = [];
+      var checkout = '';
+      if (o.checkout) {
+        checkout = '<div class="lines"><b>Order total $' + Number(o.checkout.total).toFixed(2) + '</b>'
+          + '<p class="muted">Includes a ClearSky processing fee of $' + Number(o.checkout.processingFee).toFixed(2) + '. '
+          + esc(o.checkout.depositPercent) + '% deposit; collected by ClearSky for fulfillment.</p>'
+          + (o.checkout.invoices || []).map(function (i) {
+            return '<p>' + esc(i.stage) + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(i.status)
+              + (i.payUrl && /^https:\/\/([a-z0-9-]+\.)*intuit\.com\//i.test(i.payUrl) ? ' · <a target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">View / pay secure QuickBooks invoice →</a>' : '') + '</p>';
+          }).join('') + '</div>';
+      }
+      if (o.shipment) meta.push('Shipment: ' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking));
       if (o.site && o.site.city) meta.push('Delivering to ' + esc(o.site.city) + (o.site.state ? ', ' + esc(o.site.state) : ''));
       if (o.system && o.system.kwh) meta.push(esc(o.system.kwh) + ' kWh · ' + esc(o.system.kw || '—') + ' kW');
       if (o.promisedShipAt) meta.push('Ships by ' + esc(String(o.promisedShipAt).slice(0, 10)));
@@ -279,6 +290,7 @@
             + '<div class="steps"><span>Received</span><span>Confirmed</span><span>Building</span>'
             + '<span>Testing</span><span>Ready</span><span>Shipped</span></div>' : '')
         + (lines ? '<div class="lines">' + lines + '</div>' : '')
+        + checkout
         + (meta.length ? '<div class="meta">' + meta.join('<span>·</span>') + '</div>' : '')
         + (docs ? '<div class="docs">' + docs + '</div>' : '')
         + '</div>';
@@ -304,11 +316,12 @@
           ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '');
 
     var t = a.terms || {};
-    var any = t.netDays !== null || t.discountPct !== null || t.poRequired;
+    var any = t.depositPct != null || t.netDays !== null || t.discountPct !== null || t.poRequired;
     $('terms-wrap').hidden = !any;
     if (any) {
       $('terms').innerHTML =
-          (t.netDays !== null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
+          (t.depositPct != null ? '<div><div class="k">Deposit</div><div class="v">' + esc(t.depositPct) + '% · ' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</div></div>' : '')
+        + (t.netDays !== null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
         + (t.discountPct !== null ? '<div><div class="k">Your discount</div><div class="v">' + esc(t.discountPct) + '%</div></div>' : '')
         + (t.poRequired ? '<div><div class="k">Purchase order</div><div class="v">Required</div></div>' : '');
       $('terms-note').textContent = 'Set by ' + (a.company ? 'your account manager' : 'the team') + '. Ask them if anything here looks wrong.';

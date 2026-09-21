@@ -1,0 +1,108 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Offline contracts + transactional workflow tests. No credentials or network. */
+'use strict';
+var assert = require('node:assert/strict'), P = require('../api/_lib/logic-policy');
+var Plant = require('../api/_lib/plant'), portal = require('../api/_lib/portal'), rollup = require('../api/_lib/logic');
+var count = 0;
+function check(name, fn) { return Promise.resolve().then(fn).then(function () { count++; console.log('PASS ' + name); }); }
+function clone(v) { return v == null ? v : JSON.parse(JSON.stringify(v)); }
+function get(o, key) { return key.split('.').reduce(function (v, k) { return v == null ? undefined : v[k]; }, o); }
+function patch(o, values) {
+  Object.keys(values).forEach(function (key) { var parts = key.split('.'), last = parts.pop(), target = o;
+    parts.forEach(function (p) { target = target[p] || (target[p] = {}); });
+    var v = values[key]; target[last] = v && v.union ? Array.from(new Set((target[last] || []).concat(v.union))) : clone(v);
+  }); return o;
+}
+class DB {
+  constructor() { this.data = new Map(); this.queue = Promise.resolve(); this.seq = 0; }
+  collection(path) { return new Query(this, path); }
+  doc(path) { return new Ref(this, path); }
+  seed(path, value) { this.data.set(path, clone(value)); }
+  batch() { var writes = [], db = this; return { set: function (r,v,opt) { writes.push(function(){return r.set(v,opt);}); }, commit: async function(){for(var w of writes)await w();} }; }
+  runTransaction(fn) { var db=this; var run=this.queue.then(async function(){var writes=[],writing=false;
+    var tx={get:async function(r){assert.equal(writing,false,'Firestore forbids reads after writes');return r.get();},
+      create:function(r,v){writing=true;writes.push(function(){assert(!db.data.has(r.path),'create must not overwrite');db.seed(r.path,v);});},
+      set:function(r,v,opt){writing=true;writes.push(function(){db.seed(r.path,opt&&opt.merge?Object.assign({},db.data.get(r.path),v):v);});},
+      update:function(r,v){writing=true;writes.push(function(){assert(db.data.has(r.path),'update requires document');db.data.set(r.path,patch(clone(db.data.get(r.path)),v));});}};
+    var result=await fn(tx);writes.forEach(function(w){w();});return result;
+  }); this.queue=run.catch(function(){});return run; }
+}
+class Ref {
+  constructor(db,path){this.db=db;this.path=path;this.id=path.split('/').pop();}
+  collection(name){return new Query(this.db,this.path+'/'+name);}
+  async get(){var v=this.db.data.get(this.path),ref=this;return {id:this.id,ref:ref,exists:v!==undefined,data:function(){return clone(v);}};}
+  async set(v,opt){this.db.seed(this.path,opt&&opt.merge?patch(clone(this.db.data.get(this.path)||{}),v):v);}
+  async update(v){assert(this.db.data.has(this.path));this.db.data.set(this.path,patch(clone(this.db.data.get(this.path)),v));}
+  async create(v){assert(!this.db.data.has(this.path));this.db.seed(this.path,v);}
+}
+class Query {
+  constructor(db,path,filters,sort,cap){this.db=db;this.path=path;this.filters=filters||[];this.sort=sort;this.cap=cap||Infinity;}
+  doc(id){return new Ref(this.db,this.path+'/'+(id||'auto'+(++this.db.seq)));}
+  where(k,op,v){return new Query(this.db,this.path,this.filters.concat([[k,op,v]]),this.sort,this.cap);}
+  orderBy(k,dir){return new Query(this.db,this.path,this.filters,[k,dir],this.cap);}
+  limit(n){return new Query(this.db,this.path,this.filters,this.sort,n);}
+  async get(){var self=this,docs=[];for(var entry of this.db.data.entries()){var path=entry[0],d=entry[1];
+    if(path.split('/').length!==this.path.split('/').length+1||!path.startsWith(this.path+'/'))continue;
+    if(!this.filters.every(function(f){return f[1]==='=='?get(d,f[0])===f[2]:get(d,f[0])<=f[2];}))continue;
+    docs.push(await new Ref(this.db,path).get());}
+    if(this.sort)docs.sort(function(a,b){var av=get(a.data(),self.sort[0]),bv=get(b.data(),self.sort[0]);return (av<bv?-1:av>bv?1:0)*(self.sort[1]==='desc'?-1:1);});
+    docs=docs.slice(0,this.cap);return {docs:docs,size:docs.length,empty:!docs.length,forEach:function(f){docs.forEach(f);}};
+  }
+}
+var db, payments={}, invoices={}, crash=false, invoiceWrites=0;
+var A={db:function(){return db;},safeOrg:function(v){return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v||'')?v:'';},
+  httpError:function(status,msg){var e=new Error(msg);e.status=status;return e;},
+  authenticate:async function(req){return req.caller;}, handler:function(fn){return fn;},
+  canActInOrg:async function(c,org){return c.orgId===org||c.staff;},
+  isTenantAdmin:async function(c,org){return c.staff||(c.orgId===org&&c.uid==='plant');},
+  FieldValue:function(){return {serverTimestamp:function(){return Date.now();},arrayUnion:function(){return {union:Array.from(arguments)};}};}};
+var sales={invoice:async function(o,stage){var p=o.logic.invoices[stage];if(!invoices[p.requestId]){invoices[p.requestId]='inv_'+Object.keys(invoices).length;invoiceWrites++;}if(crash){crash=false;throw new Error('timeout after provider committed');}return {id:invoices[p.requestId],customerRef:'buyer'};},
+  reconcile:async function(o,stage){var p=o.logic.invoices[stage],amount=payments[stage]===true?p.amountCents:(payments[stage]||0);return {paidCents:amount,satisfied:amount>=p.amountCents,paymentIds:amount?['payment_'+stage]:[],payUrl:'https://connect.intuit.com/portal/test',balanceCents:p.amountCents-amount};}};
+function mock(path,exports){require.cache[require.resolve(path)]={id:require.resolve(path),filename:require.resolve(path),loaded:true,exports:exports};}
+mock('../api/_lib/admin',A);mock('../api/_lib/qbo-sales',sales);mock('../api/_lib/qbo',{load:async function(){return {realmId:'123'};}});
+var W=require('../api/_lib/logic-workflow'),X=require('../api/_lib/logic-access'),office=require('../api/logic-office'),factory=require('../api/logic-plant');
+var owner={email:'tom@clearsky-usa.com',uid:'tom',orgId:'clearsky-usa.com',staff:true,claims:{email_verified:true}};
+var admin={email:'factory@cleancell.us',uid:'plant',orgId:'cleancell.us',staff:false,claims:{email_verified:true}};
+function setup(){db=new DB();payments={};invoices={};invoiceWrites=0;crash=false;
+  db.seed('omega_orgs/cleancell.us',{name:'Clean Cell',status:'active',vertical:'oem'});
+  db.seed('omega_orgs/cleancell.us/billing/current',{addons:['omega-logic']});
+  db.seed('omega_orgs/cleancell.us/fulfillment/config',{enabled:true,realmId:'123',itemRef:'5',accountingApproved:true,terms:{depositPct:30,dueDays:0},fee:{percent:0.25,fixed:0}});
+  db.seed('omega_orgs/cleancell.us/members/plant',{role:'admin',status:'active'});
+  newOrder('one');}
+function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+id,status:'new',items:[{sku:'CAB',qty:1}],customer:{name:'Buyer',email:'buyer@example.com'},createdAt:1});}
+function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
+function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
+async function main(){
+await check('30% due on receipt; customer terms override defaults including zero',function(){assert.deepEqual(P.terms(),{depositPct:30,dueDays:0});assert.deepEqual(P.terms({depositPct:30},{depositPct:0,dueDays:15}),{depositPct:0,dueDays:15});assert.throws(function(){P.terms(null,{depositPct:101});});});
+await check('fee is added, never deducted; cents sum exactly',function(){var s=P.snapshot(1000);assert.equal(s.baseCents,100000);assert.equal(s.feeCents,250);assert.equal(s.depositCents,30075);assert.equal(s.depositCents+s.balanceCents,s.totalCents);for(var n=1;n<1000;n++){var v=P.snapshot(n/100);assert.equal(v.depositCents+v.balanceCents,v.totalCents);}});
+await check('only exact Intuit HTTPS payment links pass',function(){assert(P.paymentLink('https://connect.intuit.com/pay/one'));['javascript:alert(1)','https://intuit.com.evil.test/','https://evilintuit.com','https://user@intuit.com/','http://intuit.com/'].forEach(function(url){assert.equal(P.paymentLink(url),null);});});
+await check('credit/balance zero is not proof of payment; linked allocation is required',function(){var inv={Id:'1',TotalAmt:100,Balance:0,CustomerRef:{value:'C'}};assert.equal(P.receipt(inv,[],10000,'C').satisfied,false);var pay={Id:'P',TotalAmt:100,CustomerRef:{value:'C'},Line:[{Amount:100,LinkedTxn:[{TxnId:'1',TxnType:'Invoice'}]}]};assert.equal(P.receipt(inv,[pay,pay],10000,'C').paidCents,10000);assert.throws(function(){P.receipt(Object.assign({},inv,{TotalAmt:99}),[pay],10000,'C');});});
+await check('failed EOL retest cannot be bypassed by human scan',function(){var u={at:'eol',test:{result:'fail'}};assert.equal(Plant.judgeScan(u,'qa').ok,false);var verdict=Plant.judgeMachineResult(u,'eol',null,{pass:true});assert.equal(Plant.applyMachineResult(u,verdict,'now',{result:'pass'}).test.result,'pass');});
+await check('private owner gate rejects other staff, unverified account and cross-tenant',async function(){setup();assert.equal(X.owner(owner),true);assert.equal(X.owner(Object.assign({},owner,{claims:{email_verified:false}})),false);await assert.rejects(X.authorize(Object.assign({},owner,{email:'other@clearsky-usa.com'}),'cleancell.us',true));await assert.rejects(X.authorize(Object.assign({},admin,{orgId:'other.us'}),'cleancell.us',true));});
+await check('unpaid accepted order does not release; generic deposit flag does nothing',async function(){setup();await W.price('one',1000,owner,true);await db.doc('orders/one').update({deposit:true});await W.processOrder('one');assert.equal(db.data.get('orders/one').worksOrderId,undefined);assert.equal(invoiceWrites,1);});
+await check('timeout after invoice creation retries with stable key; one provider invoice',async function(){setup();await W.price('one',1000,owner,true);crash=true;assert.equal((await W.processOrder('one')).ok,false);assert.equal(invoiceWrites,1);assert.equal((await W.processOrder('one')).ok,true);assert.equal(invoiceWrites,1);assert(db.data.get('orders/one').logic.invoices.deposit.id);});
+await check('account terms snapshot is applied before invoice and remains immutable',async function(){setup();db.seed('omega_orgs/cleancell.us/customer_index/buyer@example.com',{customerId:'buyer'});db.seed('omega_orgs/cleancell.us/customers/buyer',{terms:{depositPct:50,dueDays:10}});await W.price('one',1000,owner);assert.equal(db.data.get('orders/one').logic.commercial.depositCents,50125);await assert.rejects(W.price('one',2000,owner));});
+await check('cash without acceptance waits; acceptance releases shortage exactly once',async function(){setup();await W.price('one',1000,owner);payments.deposit=true;await W.processOrder('one');assert.equal(db.data.get('orders/one').worksOrderId,undefined);await W.price('one',1000,owner,true);await Promise.all([W.processOrder('one'),W.processOrder('one')]);assert.deepEqual(db.data.get('plant_works_orders/wo_one').requirements,[{sku:'CAB',qty:1}]);assert.equal(Array.from(db.data.keys()).filter(function(k){return k.startsWith('plant_works_orders/');}).length,1);});
+await check('one finished assembly cannot be double allocated; genealogy follows the order',async function(){setup();db.seed('plant_units/cleancell.us__ROOT',unit('ROOT'));db.seed('plant_units/cleancell.us__CELL',unit('CELL',{unitType:'cell',shipUnit:false,parentSerial:'ROOT',rootSerial:'ROOT',sku:'CELL'}));newOrder('two');await W.price('one',1000,owner,true);await W.price('two',1000,owner,true);payments.deposit=true;await Promise.all([W.processOrder('one'),W.processOrder('two')]);var a=db.data.get('plant_units/cleancell.us__ROOT');assert.equal(a.orderId,'one');assert.equal(db.data.get('plant_units/cleancell.us__CELL').orderId,'one');assert.equal(a.trace.lot,'L001');assert.equal(a.sourceWoId,'stock_1');assert.equal(db.data.get('plant_works_orders/wo_one').requirements.length,0);assert.equal(db.data.get('plant_works_orders/wo_two').requirements[0].qty,1);assert(db.data.get('orders/one').logic.invoices.balance);});
+await check('held child makes whole finished assembly unavailable',async function(){setup();db.seed('plant_units/cleancell.us__ROOT',unit('ROOT'));db.seed('plant_units/cleancell.us__CELL',unit('CELL',{shipUnit:false,parentSerial:'ROOT',rootSerial:'ROOT',hold:'quality hold'}));await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');assert.equal(db.data.get('plant_units/cleancell.us__ROOT').orderId,null);assert.equal(db.data.get('plant_works_orders/wo_one').requirements[0].qty,1);});
+await check('payment reversal blocks final release and shipment',async function(){setup();await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');payments.deposit=0;await W.processOrder('one');assert(db.data.get('orders/one').logic.paymentException);await assert.rejects(W.finish('one',owner,{carrier:'X',tracking:'123'}));});
+await check('serial registration is atomic, replay-safe, and cannot exceed demand',async function(){setup();await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');var b={action:'register',workOrderId:'wo_one',requestId:'reg_1',units:[{serial:'ACTUAL001',sku:'CAB',unitType:'cabinet',shipUnit:true,trace:{lot:'L'}}]};await post(factory,b,admin);assert.equal((await post(factory,b,admin)).duplicate,true);assert.equal(db.data.get('plant_units/cleancell.us__ACTUAL001').test,null);assert.equal(db.data.get('plant_units/cleancell.us__ACTUAL001').rootSerial,'ACTUAL001');await assert.rejects(post(factory,Object.assign({},b,{requestId:'reg_2',units:[{serial:'ACTUAL002',sku:'CAB',unitType:'cabinet',shipUnit:true}]}),admin));});
+await check('wire ledger cannot spend unrecorded or uncleared money; confirmations are cumulative',async function(){setup();await W.price('one',1000,owner,true);await assert.rejects(post(office,{action:'cleared',orderId:'one',amount:300.75,bankReference:'bank-1'}));payments.deposit=true;await W.processOrder('one');await post(office,{action:'cleared',orderId:'one',amount:300.75,bankReference:'bank-1'});var payout=db.data.get('orders/one').logic.payout;assert.equal(payout.pendingCents,30000);await assert.rejects(post(office,{action:'wire_sent',orderId:'one',amount:301,bankReference:'wire-1'}));await post(office,{action:'wire_sent',orderId:'one',amount:300,bankReference:'wire-1'});await post(office,{action:'wire_sent',orderId:'one',amount:300,bankReference:'wire-1'});assert.equal(db.data.get('orders/one').logic.payout.sentCents,30000);});
+await check('buyer checkout exposes neither realm, wire record, fee policy nor internal costs',async function(){var o=db.data.get('orders/one');o.cost=12345;o.logic.payout.secret='wire-private';var pub=portal.publicOrder(o),txt=JSON.stringify(pub);assert.equal(pub.checkout.processingFee,2.5);assert(!txt.includes('realmId'));assert(!txt.includes('wire-private'));assert(!txt.includes('feePolicy'));assert(!txt.includes('12345'));assert.equal(rollup.rollup([o],[{units:[],known:true}]).totals.collected,300.75);});
+await check('subscription suspension blocks new prices and worker writes',async function(){setup();await W.price('one',1000,owner,true);db.seed('omega_orgs/cleancell.us/billing/current',{addons:['omega-logic'],status:'suspended'});newOrder('two');await assert.rejects(W.price('two',1000,owner,true));assert.equal((await W.processOrder('one')).ok,false);assert.equal(invoiceWrites,0);});
+await check('unpriced cancellation does not create a malformed accounting workflow',async function(){setup();await post(office,{action:'cancel',orderId:'one'},admin);assert.equal(db.data.get('orders/one').logic,undefined);await assert.rejects(W.price('one',1000,owner));});
+await check('ready allocated stock cannot hide an unbuilt remainder in the buyer milestone',function(){assert.equal(portal.milestoneOf({status:'in_fulfilment',logic:{enabled:true}},[{at:'ready'}]).key,'production');});
+await check('accounting failure prevents shipment against stale payment evidence',async function(){setup();await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');await db.doc('orders/one').update({'logic.lastError':'Invoice changed'});await assert.rejects(W.finish('one',owner,{carrier:'Carrier',tracking:'123'}),/reconcile accounting/);});
+await check('quality disposition closes active NCR but retains audit and cannot waive a failed test',async function(){setup();db.seed('plant_units/cleancell.us__ROOT',unit('ROOT',{at:'eol',hold:'Test failure',ncr:'NCR-001',test:{result:'fail'}}));var control=require('../api/plant-control');await post(control,{action:'release',actionId:'release_0001',orgId:'cleancell.us',serial:'ROOT',reason:'Repair completed; retest required'},admin);var u=db.data.get('plant_units/cleancell.us__ROOT');assert.equal(u.ncr,null);assert.equal(u.lastNcr,'NCR-001');assert.equal(u.test.result,'fail');assert.equal(Plant.judgeScan(u,'qa').ok,false);assert.equal(db.data.get('plant_scans/cleancell.us__control_release_0001').control.ncr,'NCR-001');});
+await check('ready queues final invoice once and shipment waits for verified balance',async function(){setup();db.seed('plant_units/cleancell.us__ROOT',unit('ROOT'));await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');assert(db.data.get('orders/one').logic.invoices.balance);await assert.rejects(W.finish('one',owner,{carrier:'Example',tracking:'BOL-123'}),/Final payment/);await W.processOrder('one');assert.equal(invoiceWrites,2);payments.balance=true;await W.processOrder('one');await W.finish('one',owner,{carrier:'Example',tracking:'BOL-123'});assert.equal(db.data.get('orders/one').status,'shipped');assert.equal(invoiceWrites,2);});
+await check('webhook signature, deduplication and company boundary are enforced',async function(){setup();db.seed('integrations/quickbooks',{realmId:'123'});var hook=require('../api/logic-webhook'),Readable=require('stream').Readable,crypto=require('crypto'),oldSecret=process.env.QBO_WEBHOOK_VERIFIER_TOKEN;process.env.QBO_WEBHOOK_VERIFIER_TOKEN='fixture-verifier';
+  function req(realm,tamper){var raw=Buffer.from(JSON.stringify({eventNotifications:[{realmId:realm,dataChangeEvent:{entities:[{name:'Payment',id:'p1'}]}}]}));var sig=crypto.createHmac('sha256','fixture-verifier').update(raw).digest('base64');var r=Readable.from([tamper?Buffer.from('{}'):raw]);r.method='POST';r.headers={'intuit-signature':sig};return r;}
+  try{await hook(req('123'));await hook(req('123'));assert.equal(Array.from(db.data.keys()).filter(function(k){return k.startsWith('integrations/quickbooks/events/');}).length,1);assert.equal((await hook(req('other'))).ignored,true);await assert.rejects(hook(req('123',true)),/Invalid Intuit signature/);}finally{if(oldSecret===undefined)delete process.env.QBO_WEBHOOK_VERIFIER_TOKEN;else process.env.QBO_WEBHOOK_VERIFIER_TOKEN=oldSecret;}
+});
+await check('QuickBooks write contract pins realm, sends request IDs and separates added fee exactly',async function(){setup();await W.price('one',1000,owner,true);var o=db.data.get('orders/one'),q=require('../api/_lib/qbo'),savedFetch=global.fetch,captured=[];q.API_BASE='https://fixture.invalid';q.accessToken=async function(){return {token:'fixture',realmId:'123'};};delete require.cache[require.resolve('../api/_lib/qbo-sales')];var real=require('../api/_lib/qbo-sales');
+  global.fetch=async function(url,options){assert(url.startsWith('https://fixture.invalid/'));captured.push({url:url,body:options.body&&JSON.parse(options.body)});return {ok:true,status:200,json:async function(){return url.includes('/query')?{QueryResponse:{Customer:[{Id:'C'}]}}:{Invoice:{Id:'I'}};}};};
+  try{await real.invoice(o,'deposit');var call=captured.find(function(c){return c.body&&c.body.Line;});assert(call.url.includes('requestid='));assert.equal(call.body.Line.length,2);assert.equal(P.cents(call.body.Line[0].Amount)+P.cents(call.body.Line[1].Amount),o.logic.commercial.depositCents);assert(call.body.Line[1].Description.includes('processing fee'));await assert.rejects(real.request('invoice/1',null,null,'wrong'),/company does not match/);}finally{global.fetch=savedFetch;}
+});
+console.log('\n'+count+' Omega Logic workflow tests passed. No network calls.');
+}
+main().catch(function(e){console.error(e);process.exitCode=1;});

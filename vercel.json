@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "crons": [{ "path": "/api/logic-worker", "schedule": "*/5 * * * *" }],
   "headers": [
     {
       "source": "/embed/(.*)",
@@ -279,6 +280,8 @@
     }
   ],
   "functions": {
+    "api/logic-worker.js": { "maxDuration": 60 },
+    "api/logic-office.js": { "maxDuration": 60 },
     "api/grid-atlas.js": {
       "maxDuration": 60
     },

@@ -12,6 +12,13 @@
   "//6d": "falls back to CREATING the order if its query fails, so a missing",
   "//6e": "index costs a duplicate row rather than a lost order - but one every time.",
   "indexes": [
+    { "collectionGroup": "projects", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "inventoryStatus", "order": "ASCENDING" } ] },
+    { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "rootSerial", "order": "ASCENDING" } ] },
+    { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "orderId", "order": "ASCENDING" } ] },
+    { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "plant_works_orders", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "plant_scans", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "serial", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     {
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",

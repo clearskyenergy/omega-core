@@ -43,7 +43,7 @@ module.exports = A.handler(function (req) {
   var scanId = S.clean(body.scanId, 64);
   var serial = P.serialFrom(body.serial);
   if (!stationId || !token) throw A.httpError(401, 'this test rig is not paired');
-  if (!scanId) throw A.httpError(400, 'scanId required');
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(scanId)) throw A.httpError(400, 'Valid scanId required');
   if (!serial) throw A.httpError(400, 'serial is unreadable');
   if (!rateLimit(stationId)) throw A.httpError(429, 'too many results from this test rig');
   var passed = resultOf(body.result);
@@ -66,6 +66,12 @@ module.exports = A.handler(function (req) {
       return tx.get(scanRef).then(function (prior) {
         if (prior.exists) {
           var old = prior.data() || {};
+          if (old.serial !== serial || old.stationId !== stationId) throw A.httpError(409, 'Test identifier already belongs to another event');
+          if (old.test && (old.test.result !== (passed ? 'pass' : 'fail') ||
+              JSON.stringify(Object.keys(old.test.measurements || {}).sort().map(function (k) { return [k, old.test.measurements[k]]; })) !==
+              JSON.stringify(Object.keys(measurements).sort().map(function (k) { return [k, measurements[k]]; })))) {
+            throw A.httpError(409, 'Test identifier was reused for different evidence; submit a new test event ID');
+          }
           return { replayed: true, verdict: old.verdict || { ok: true, action: 'duplicate', say: 'Already recorded.' }, test: old.test || null };
         }
         var unitRef = db.collection('plant_units').doc(orgId + '__' + serial);
@@ -74,10 +80,18 @@ module.exports = A.handler(function (req) {
           if (unit && String(unit.orgId || '').toLowerCase() !== orgId) unit = null;
           var worksOrderRead = unit && unit.woId
             ? tx.get(db.collection('plant_works_orders').doc(unit.woId)) : Promise.resolve(null);
-          return Promise.resolve(worksOrderRead).then(function (woSnap) {
+          return Promise.resolve(worksOrderRead).then(async function (woSnap) {
             var workOrder = woSnap && woSnap.exists ? woSnap.data() : null;
             var routing = P.routingOf(workOrder);
             var verdict = P.judgeMachineResult(unit, stationKey, routing, { pass: passed });
+            var currentStation = await tx.get(stationRef);
+            if (!currentStation.exists || currentStation.data().active === false || currentStation.data().tokenHash !== station.tokenHash) throw A.httpError(403, 'Station credential revoked');
+            if (unit && unit.orderId) {
+              var commercial = await tx.get(db.collection('orders').doc(unit.orderId));
+              if (!commercial.exists || commercial.data().cancelRequested || (commercial.data().logic || {}).paymentException || ['cancelled', 'shipped', 'complete'].indexOf(commercial.data().status) >= 0) {
+                verdict = { ok: false, reason: 'order_blocked', say: 'This order is stopped or already shipped. Contact the office.' };
+              }
+            }
             var at = new Date().toISOString();
             var test = {
               station: stationKey,

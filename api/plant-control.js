@@ -53,7 +53,10 @@ module.exports = A.handler(function (req) {
             var unitSnap = rows[0], old = rows[1];
             if (!unitSnap.exists) throw A.httpError(404, 'unit not found');
             var unit = unitSnap.data() || {};
-            if (old.exists) return { ok: true, duplicate: true, unit: { serial: serial, at: unit.at || '', hold: unit.hold || null, ncr: unit.ncr || null } };
+            if (old.exists) {
+              if (old.data().serial !== serial || (old.data().control || {}).action !== action) throw A.httpError(409, 'Action identifier belongs to a different quality event');
+              return { ok: true, duplicate: true, unit: { serial: serial, at: unit.at || '', hold: unit.hold || null, ncr: unit.ncr || null } };
+            }
             var reason = clean(body.reason, 500);
             var now = new Date().toISOString();
             var ncr = ncrOf(body.ncr) || unit.ncr || ('NCR-' + Date.now().toString(36).toUpperCase());
@@ -65,7 +68,7 @@ module.exports = A.handler(function (req) {
             } else {
               if (!unit.hold) throw A.httpError(409, 'unit is not on hold');
               if (!reason) throw A.httpError(400, 'disposition is required to release a hold');
-              patch = { hold: null, holdReleasedAt: now, holdReleasedBy: caller.email, holdDisposition: reason, updatedAt: FV.serverTimestamp() };
+              patch = { hold: null, ncr: null, lastNcr: ncr, holdReleasedAt: now, holdReleasedBy: caller.email, holdDisposition: reason, updatedAt: FV.serverTimestamp() };
               what = 'hold released';
             }
             tx.update(unitRef, patch);
@@ -75,7 +78,7 @@ module.exports = A.handler(function (req) {
               verdict: { ok: true, action: action, say: what }, ok: true,
               createdAt: FV.serverTimestamp()
             });
-            return { ok: true, unit: { serial: serial, at: unit.at || '', hold: patch.hold, ncr: ncr }, action: action };
+            return { ok: true, unit: { serial: serial, at: unit.at || '', hold: patch.hold, ncr: action === 'release' ? null : ncr }, action: action };
           });
         });
       });

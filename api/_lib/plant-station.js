@@ -8,7 +8,7 @@ var A = require('./admin');
 function clean(value, max) {
   return String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max || 120);
 }
-function stationIdOf(value) { return clean(value, 120); }
+function stationIdOf(value) { var id = clean(value, 120); return /^[A-Za-z0-9_-]{1,120}$/.test(id) ? id : ''; }
 function tokenOf(value) { return clean(value, 200); }
 function sha(value) { return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex'); }
 

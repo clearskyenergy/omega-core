@@ -85,18 +85,16 @@ function stageKeys(r, state) {
   return r.stages.filter(function (s) { return s.state === state; }).map(function (s) { return s.key; });
 }
 var offStages = stageKeys(rNone, 'off');
-ok('the three unbuilt stages declare themselves',
-  offStages.length === 3 && offStages.indexOf('payment') >= 0
-  && offStages.indexOf('shipment') >= 0 && offStages.indexOf('finalpay') >= 0, offStages);
+ok('implemented stages are not labelled unbuilt', offStages.length === 0, offStages);
 /* A stage whose data is captured but never read back is neither. Calling
    unitdata `live` would promise a warranty surface that does not exist;
    calling it `off` would send somebody to rebuild a capture path that
    api/_lib/plant-release.js already validates. */
 var partial = stageKeys(rNone, 'partial');
-ok('release and unitdata are partial, not live and not off',
-  partial.length === 2 && partial.indexOf('release') >= 0 && partial.indexOf('unitdata') >= 0, partial);
-ok('  intake and production are the only live ones',
-  stageKeys(rNone, 'live').join(',') === 'intake,production', stageKeys(rNone, 'live'));
+ok('accounting, release and shipment still disclose integration/setup requirements',
+  partial.join(',') === 'payment,release,shipment,finalpay', partial);
+ok('  intake, production and serial lookup have implemented read paths',
+  stageKeys(rNone, 'live').join(',') === 'intake,production,unitdata', stageKeys(rNone, 'live'));
 ok('  every stage carries the file that owns it',
   rNone.stages.every(function (s) { return s.by && s.label && s.key; }));
 
