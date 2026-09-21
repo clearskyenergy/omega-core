@@ -64,7 +64,9 @@ console.log('\nmaterials plan — the explosion');
   ok('a service never appears', !row(p, 'INSTALL'));
   ok('the driver names the works order, and the child names its assembly',
      row(p, 'CAB').drivers[0].ref === 'CC-1' && row(p, 'CELL').drivers[0].kind === 'assembly' && row(p, 'CELL').drivers[0].ref === 'MOD');
-  ok('summary: six components carried, five short', p.summary.components === 5 && p.summary.short === 5, p.summary);
+  ok('summary: five components carried, four leaf parts short, one sub-assembly to make', p.summary.components === 5 && p.summary.short === 4 && p.summary.toMake === 2, p.summary);
+  ok('the module is a sub-assembly: 32 to BUILD, never on the purchase list', row(p, 'MOD').make === true && row(p, 'MOD').suggestedOrder === 32 && !M.purchaseList(p).some(function (r) { return r.sku === 'MOD'; }));
+  ok('  and the purchase list is exactly the four leaf parts', M.purchaseList(p).map(function (r) { return r.sku; }).sort().join(',') === 'BMS,CELL,ENC,HARN');
 })();
 
 console.log('\nmaterials plan — stock goes to the firmest demand first');
@@ -109,6 +111,7 @@ console.log('\nmaterials plan — late, and the order of the list');
   ok('cells with a 60-day lead and a need-by 24 days out are late', row(p, 'CELL').late === true && row(p, 'CELL').orderBy === '2026-08-16');
   ok('  the enclosure (45 days) is late too, the harness (14) is not', row(p, 'ENC').late === true && row(p, 'HARN').late === false);
   ok('late rows come first', p.rows[0].late === true && p.summary.late === 3, p.rows.map(function (r) { return r.sku + (r.late ? '!' : ''); }));
+  ok('  a sub-assembly is never "late" — its parts are', row(p, 'MOD').late === false && row(p, 'MOD').orderBy !== null);
   var stocked = M.plan({ now: NOW, products: CATALOG, stock: { CELL: { onHand: 0, onOrder: 104 } },
     works: [{ id: 'soon', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-10-15' }] });
   ok('material already on order is not late — there is nothing left to order', row(stocked, 'CELL').net.total === 8 * 104 - 104 && row(stocked, 'CELL').late === true);
@@ -132,7 +135,7 @@ console.log('\nmaterials plan — yield, and which works order a shortfall belon
   ok('the suggested cell order still rounds to the MOQ', row(p, 'CELL').suggestedOrder === 2000);
   ok('every component knows which works orders it is short for', row(p, 'CELL').worksOrders.join(',') === 'CC-1,CC-2' && row(p, 'ENC').worksOrders.join(',') === 'CC-1,CC-2', row(p, 'CELL').worksOrders);
   var by = M.shortfallsByWorksOrder(p);
-  ok('shortfalls group by works order', Object.keys(by).sort().join(',') === 'CC-1,CC-2' && by['CC-1'].length === 5 && by['CC-1'][0].short > 0);
+  ok('shortfalls group by works order, leaf parts only', Object.keys(by).sort().join(',') === 'CC-1,CC-2' && by['CC-1'].length === 4 && by['CC-1'][0].short > 0 && !by['CC-1'].some(function (c) { return c.sku === 'MOD'; }));
   var stocked = M.plan({ now: NOW, products: cat, stock: { MOD: { onHand: 8 }, BMS: { onHand: 1 }, ENC: { onOrder: 1 } },
     works: [{ id: 'wo_1', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }], dueDate: '2026-12-01' }] });
   ok('  a works order that stock covers has no shortfall entry, and the cells it never needed are not even a row', Object.keys(M.shortfallsByWorksOrder(stocked)).length === 0 && row(stocked, 'CELL') === undefined, row(stocked, 'MOD'));
@@ -261,10 +264,10 @@ console.log('\nthe endpoint');
   ok('the plan now nets against the count', row(got, 'CELL').onHand === 500 && row(got, 'CELL').onOrder === 1000 && row(got, 'CELL').net.total === 3 * 8 * 104 - 1500, row(got, 'CELL'));
 
   var solo = await api({ method: 'GET', query: { org: 'cleancell.us', workOrder: 'wo_1' }, caller: member }, res);
-  ok('one works order, on its own: infeasible, and it names what is short', solo.feasible === false && solo.hasBom && solo.short.length === 4 && solo.workOrder.orderNo === 'CC-0', solo);
+  ok('one works order, on its own: infeasible, and it names what must be bought', solo.feasible === false && solo.hasBom && solo.short.length === 3 && solo.workOrder.orderNo === 'CC-0', solo);
   ok('  one cabinet needs 832 cells and 1,500 are on hand or on order, so cells are NOT short for it', !solo.short.some(function (c) { return c.sku === 'CELL'; }), solo.short);
   ok('  while in the whole plan (three cabinets) they are', row(got, 'CELL').net.total > 0);
-  ok('  the modules are short by exactly this order\'s eight', solo.short.filter(function (c) { return c.sku === 'MOD'; })[0].short === 8);
+  ok('  the modules it needs are built, not bought, so they are not in the list', !solo.short.some(function (c) { return c.sku === 'MOD'; }));
   db.seed('plant_works_orders/wo_other', { orgId: 'other.com', orderNo: 'X', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }] });
   await assert.rejects(api({ method: 'GET', query: { org: 'cleancell.us', workOrder: 'wo_other' }, caller: member }, res), /not found/);
   ok('another tenant\'s works order is not found, not refused by name', true);

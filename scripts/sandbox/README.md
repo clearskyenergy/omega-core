@@ -94,6 +94,16 @@ says so under **Show what is real**.
 - state survives a reload, no horizontal scroll at 390px across 18 pages,
   dark mode paints, no JS errors
 
+## The materials plan
+
+`admin.cleancell.us/materials` is the third engine in the bundle:
+`api/_lib/materials.js`, read verbatim. The demo catalogue carries a bill of
+materials (cabinet → 41 modules → 104 cells at 98% yield), a seeded shelf, and
+the released works order explodes through it. Recording a purchase order and
+receiving it stand in for `api/logic-materials.js`; the arithmetic — netting
+level by level, stock to the firmest demand first, order-by from the lead
+time — is production's.
+
 ## Known stand-in
 
 The deposit is a button. In the product it is a QuickBooks installment

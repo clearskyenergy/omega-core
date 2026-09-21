@@ -82,6 +82,10 @@ worth of cells that are not bought. The page lists what to buy (suggested
 order rounded up to the MOQ, need-by from the earliest works order, order-by =
 need-by minus lead time, late when that is already past), what to build, and a
 purchase-list CSV. Forecast demand is shown and never suggests a purchase.
+A component that has its own bill is a **sub-assembly** — the plant makes
+it. It is listed under what to build, never on the purchase list, is never
+"late", and does not block a works order; the parts it cannot be built
+without do.
 
 Stock counts are recorded from the same page (`POST action:'stock'`) into
 `omega_orgs/{org}/fulfillment/materials`, which the rules already close to

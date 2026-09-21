@@ -208,6 +208,10 @@ function emptyRow(p) {
     leadTimeDays: num(p.leadTimeDays) > 0 ? Math.round(num(p.leadTimeDays)) : null,
     gross: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
     onHand: 0, onOrder: 0, net: { committed: 0, pipeline: 0, forecast: 0, total: 0 },
+    /* A row with its own bill is a sub-assembly: the plant MAKES it, so its
+       "suggested order" is units to build and it never appears on a purchase
+       list — its children do. Only a leaf component is bought. */
+    make: !!(p.bom && p.bom.length),
     suggestedOrder: 0, needBy: null, orderBy: null, late: false, drivers: [], worksOrders: [], yielded: false };
 }
 function roundQty(n) { return Math.round(n * 10000) / 10000; }
@@ -250,15 +254,17 @@ function plan(input) {
     });
     r.net.total = roundQty(r.net.committed + r.net.pipeline + r.net.forecast);
     var firm = r.net.committed + r.net.pipeline;
-    if (r.kind === 'component' && firm > 0) {
+    if (r.kind === 'component' && !r.make && firm > 0) {
       var q = r.unit === 'ea' || r.unit === 'set' || r.unit === 'roll' || r.unit === 'box' ? Math.ceil(firm) : firm;
       r.suggestedOrder = roundQty(r.moq ? Math.ceil(q / r.moq) * r.moq : q);
-    } else if (r.kind !== 'component' && firm > 0) {
+    } else if (firm > 0) {
       r.suggestedOrder = Math.ceil(firm);   /* units to build */
     }
     if (r.needBy) {
       r.orderBy = r.leadTimeDays ? addDays(r.needBy, -r.leadTimeDays) : r.needBy;
-      r.late = firm > 0 && r.orderBy < today;
+      /* "late" is a purchasing fact: a sub-assembly's start-by date is shown
+         but the alarm belongs to the parts it cannot be built without. */
+      r.late = firm > 0 && !r.make && r.orderBy < today;
     }
     (by[sku].bom || []).forEach(function (l) {
       var child = rows[l.sku], per = l.qty / ((Number(l.yieldPct) > 0 && Number(l.yieldPct) <= 100 ? Number(l.yieldPct) : 100) / 100);
@@ -289,7 +295,8 @@ function plan(input) {
   });
   return { asOf: today, rows: list, unknownSkus: unknown,
     summary: { components: list.filter(function (r) { return r.kind === 'component'; }).length,
-      short: list.filter(function (r) { return r.kind === 'component' && r.net.committed + r.net.pipeline > 0; }).length,
+      short: list.filter(function (r) { return r.kind === 'component' && !r.make && r.net.committed + r.net.pipeline > 0; }).length,
+      toMake: list.filter(function (r) { return r.make && r.net.committed + r.net.pipeline > 0; }).length,
       late: list.filter(function (r) { return r.late; }).length,
       yielded: list.filter(function (r) { return r.yielded; }).length } };
 }
@@ -299,7 +306,7 @@ function plan(input) {
 function shortfallsByWorksOrder(planned) {
   var by = Object.create(null);
   (planned.rows || []).forEach(function (r) {
-    if (r.kind !== 'component') return;
+    if (r.kind !== 'component' || r.make) return;   /* what must be BOUGHT stands between it and the floor */
     var firm = r.net.committed + r.net.pipeline;
     if (firm <= 0) return;
     r.worksOrders.forEach(function (w) {
@@ -312,7 +319,7 @@ function shortfallsByWorksOrder(planned) {
 
 /* The purchase list is the plan filtered to what a buyer sends out today. */
 function purchaseList(planned) {
-  return (planned.rows || []).filter(function (r) { return r.kind === 'component' && r.suggestedOrder > 0; });
+  return (planned.rows || []).filter(function (r) { return r.kind === 'component' && !r.make && r.suggestedOrder > 0; });
 }
 
 module.exports = { bomLines: bomLines, validateCatalog: validateCatalog, lowLevelCodes: lowLevelCodes,

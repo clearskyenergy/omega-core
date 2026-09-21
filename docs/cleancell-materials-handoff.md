@@ -93,8 +93,8 @@ with `auth().currentUser.getIdToken()` and `onAuthStateChanged`, and answer
 
 Each of these was a product decision I did not want to improvise. Items 1, 4
 and 5 were then built with the obvious default (the owner asked for whatever
-could be completed unattended), then 2 as well; 3 and 6 still need a
-decision first.
+could be completed unattended), then 2 and 6 as well; only 3 (component
+costs) still needs a decision first.
 
 1. ~~**Scrap / yield.**~~ **Done** (commit after `3256e20`): `yieldPct` on a
    BOM line, applied in the explosion, `yielded` flag on rows, footnote on
@@ -120,10 +120,14 @@ decision first.
    ?org=&workOrder=<id>` → `{feasible, short[]}`; `plant/manager.html`'s
    work-order detail shows a Materials section. Rows carry `worksOrders[]`
    (the committed works orders whose demand reaches them).
-6. **Demo.** `scripts/sandbox/` (the Clean Cell walkthrough artifact) has no
-   materials step. If it should, it is one more page in `app.js` and one more
-   `TOUR` entry after step 15 ("Money, then serials"), reading `M.plan()`
-   through `build.js`'s verbatim-engine mechanism like `plant.js` already is.
+6. ~~**Demo.**~~ **Done**: `build.js` bundles `api/_lib/materials.js` as the
+   third verbatim engine; `admin.cleancell.us/materials` in the sandbox shows
+   the plan for the released works order (demo BOM: cabinet → 41 modules →
+   104 cells at 98% yield, a seeded shelf), records a purchase order and
+   receives it; three tour steps after "Money, then serials" (tour is now
+   33). `drive.js` 52 → 60 assertions. Republish the artifact after any
+   change: `node scripts/sandbox/build.js`, then publish `index.html` to
+   https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x.
 
 ---
 
@@ -184,5 +188,5 @@ decision first.
    title.
 
 Demo artifacts (already published, not served from the repo):
-walkthrough with the 30-step tour https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x ·
+walkthrough with the 33-step tour https://claude.ai/artifact/T8JRXaeisQJMxskt4cbV3x ·
 thirteen-step chain page https://claude.ai/artifact/E6NgSaH2ZW9ixU72Tz9q2P.

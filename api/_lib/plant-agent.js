@@ -144,7 +144,7 @@ function advise(input) {
   if (materials && Array.isArray(materials.rows)) {
     var late = [], shortByWo = Object.create(null);
     materials.rows.forEach(function (r) {
-      if (!r || r.kind !== 'component') return;
+      if (!r || r.kind !== 'component' || r.make) return;   /* a sub-assembly is built, not bought */
       var firm = number(r.net && r.net.committed) + number(r.net && r.net.pipeline);
       if (firm <= 0) return;
       summary.materialsShort++;
