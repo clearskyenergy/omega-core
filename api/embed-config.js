@@ -197,8 +197,8 @@ module.exports = E.handler(function (req) {
             platformName: str((ctx.whiteLabel || {}).platformName || '', 80),
             shortName:    str((ctx.whiteLabel || {}).shortName || '', 60),
             logoUrl:   str(ctx.org.logoUrl, 400),
-            accent:    str(em.accent || wl.accent || '', 32),
-            ink:       str(em.ink || wl.ink || '', 32),
+            accent:    str(/^#[0-9a-f]{6}$/i.test((ctx.org.colors || {}).primary || '') ? ctx.org.colors.primary : em.accent || wl.accent || '', 32),
+            ink:       str(/^#[0-9a-f]{6}$/i.test((ctx.org.colors || {}).ink || '') ? ctx.org.colors.ink : em.ink || wl.ink || '', 32),
             supportEmail: str(em.supportEmail || wl.supportEmail || '', 160),
             supportPhone: str(em.supportPhone || '', 40),
             attribution: em.attribution === 'powered-by'

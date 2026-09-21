@@ -75,6 +75,22 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('tenant colors persist through the existing branding boundary and drive shared theme tokens',async function(){
+  setup();var branding=require('../api/tenant-branding'),brand=require('../api/_lib/logic-brand');
+  await db.doc('omega_orgs/cleancell.us').update({domains:['design.cleancell.us'],logoUrl:'/tenants/cleancell/logo.png',whiteLabel:{platformName:'CleanCell Studio'}});
+  var colors={primary:'#234567',accent:'#AABBCC',ink:'#102030'};
+  var stranger={email:'buyer@elsewhere.com',uid:'buyer',orgId:'elsewhere.com',staff:false,claims:{email_verified:true}};
+  await assert.rejects(post(branding,{orgId:'cleancell.us',colors:colors},stranger),/tenant admin/);
+  await post(branding,{orgId:'cleancell.us',colors:colors},owner);
+  var org=(await db.doc('omega_orgs/cleancell.us').get()).data();assert.deepEqual(org.colors,colors);assert.equal(org.logoUrl,'/tenants/cleancell/logo.png');assert.equal(org.whiteLabel.platformName,'CleanCell Studio');
+  assert.deepEqual((await db.doc('tenant_public/design.cleancell.us').get()).data().colors,colors);
+  assert.deepEqual(brand(org),{name:'CleanCell Studio',logoUrl:'/tenants/cleancell/logo.png',primary:colors.primary,accent:colors.accent,ink:colors.ink});
+  assert.equal(brand({colors:{primary:'red;display:none'}}).primary,'#3FAFC6');
+  var styles={},sandbox={window:{},document:{documentElement:{style:{setProperty:function(k,v){styles[k]=v;}}},body:{classList:{add:function(){}}},querySelectorAll:function(){return [];}}};
+  require('node:vm').runInNewContext(require('node:fs').readFileSync(require('node:path').join(__dirname,'../omega-logic-theme.js'),'utf8'),sandbox);
+  sandbox.window.OmegaLogicTheme.apply(brand(org));assert.equal(styles['--brand'],colors.primary);assert.equal(styles['--accent'],colors.accent);assert.equal(styles['--ink'],colors.ink);assert.equal(styles['--brand-soft'],'rgba(35,69,103,0.13)');
+  assert.deepEqual((await db.doc('omega_orgs/cleancell.us/billing/current').get()).data(),{addons:['omega-logic']});
+});
 await check('URL Generator omits staff links and Grid Atlas enforces entitlement before calling its engine',async function(){
   setup();var urls=require('../api/logic-urls'),res={setHeader:function(){}},out=await urls({method:'GET',query:{org:'cleancell.us'},caller:admin},res);assert.equal(out.rows.length,4);assert(!out.rows.some(function(r){return /plant|omega-logic|token=/.test(r.url||'');}));assert.equal(out.rows[3].url,null);
   var calls=0,gridPath=require.resolve('../api/grid-atlas'),previous=require.cache[gridPath];mock('../api/grid-atlas',async function(req,res){calls++;assert.equal(req.body.radiusKm,25);res.status(200).json({summary:'fixture',substations:[]});});
