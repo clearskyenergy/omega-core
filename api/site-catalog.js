@@ -2,7 +2,10 @@
  * Read-only, authenticated listing snapshots in existing tenant toolData.
  */
 'use strict';
-var A=require('./_lib/admin'),access=require('./site-score')._helpers.entitle,importer=require('./_lib/site-catalog');
+var A=require('./_lib/admin'),access=require('./site-score')._helpers.entitle,importer=require('./_lib/site-catalog'),geo=require('./_lib/geocode-listings');
+/* One staff call finishes as much of the unplaced remainder as fits in the function's
+   60 s ceiling (vercel.json) and publishes; the page calls again until `done`. */
+var GEOCODE_BUDGET_MS=38000;
 var CACHE=Object.create(null);
 async function catalog(db,org){
   var root=db.collection('toolData').doc(org).collection('tools'),snap=await root.doc('sitefinderCatalog').get();
@@ -32,7 +35,30 @@ module.exports=A.handler(async function(req,res){
     try{importer.validate(b.catalog,org);}catch(e){throw A.httpError(400,e.message);}
     var result=await importer.publish(A.db(),org,b.catalog);delete CACHE[org];return result;
   }
+  if(b.action==='geocode'){
+    if(!caller.staff)throw A.httpError(403,'ClearSky staff required');
+    return finishMatching(A.db(),org,b);
+  }
   if(b.action&&b.action!=='search')throw A.httpError(400,'Invalid action');
   return select(await catalog(A.db(),org),b);
 });
-module.exports._helpers={select:select,catalog:catalog};
+/* Match the remaining listings to the map. Pass 1 runs the Census geocoder over rows it
+   has not tried yet (a time budget, not a row count, bounds one call); once every row
+   has been tried, the leftovers take an area centre derived from their matched
+   neighbours. Each call publishes a new catalogue version so nothing is lost if the
+   browser closes. `reset:true` clears the "attempted" marks and starts over. */
+async function finishMatching(db,org,b){
+  var data=await catalog(db,org);if(!data.manifest)throw A.httpError(404,'No listing snapshot imported for this workspace');
+  var rows=data.rows.map(function(r){return JSON.parse(JSON.stringify(r));});
+  if(b.reset)rows.forEach(function(r){if(r.lat==null)r.geocode={status:'unmatched',source:'US Census',accuracy:'unknown'};});
+  var pass=await geo.geocodeRows(rows,b._fetchJson||geo.fetchJson,{budgetMs:GEOCODE_BUDGET_MS,concurrency:6});
+  var approximate=0;
+  if(pass.remaining===0&&!pass.transportError)approximate=geo.areaFallback(rows);
+  var changed=pass.matched+approximate>0;
+  var result=changed?await importer.publish(db,org,{manifest:{orgId:org,source:data.manifest.source},rows:rows}):null;
+  if(changed)delete CACHE[org];
+  var m=result?result.manifest:data.manifest,unmatched=rows.filter(function(r){return r.lat==null;}).length;
+  return {attempted:pass.attempted,matched:pass.matched,approximate:approximate,transportError:pass.transportError,
+    count:m.count,located:m.located,unmatched:unmatched,remainingToTry:pass.remaining,done:pass.remaining===0&&!pass.transportError,version:m.version||null};
+}
+module.exports._helpers={select:select,catalog:catalog,finishMatching:finishMatching};

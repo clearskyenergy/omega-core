@@ -9,14 +9,20 @@ function validate(data,org){
     ids.add(r.id);var placed=r.lat!==null&&r.lon!==null;
     if(r.id!=='crexi:'+r.listed.url.split('/')[4])throw Error('Listing identity does not match URL');
     if(placed&&(!(typeof r.lat==='number')||!(typeof r.lon==='number')||!isFinite(r.lat)||!isFinite(r.lon)||Math.abs(r.lat)>90||Math.abs(r.lon)>180))throw Error('Invalid coordinates');
-    if(placed&&(!r.geocode||r.geocode.status!=='matched'))throw Error('Location evidence required');
+    /* A placed row carries its evidence: a Census match, or an area centre derived from
+       matched neighbours (api/_lib/geocode-listings.js). Either way the card can say
+       how good the pin is; a bare coordinate cannot. */
+    if(placed&&(!r.geocode||(r.geocode.status!=='matched'&&!(r.geocode.status==='approximate'&&typeof r.geocode.accuracy==='string'))))throw Error('Location evidence required');
     var out={};['id','listingId','addr','city','state','zip','fullAddress','type','subtype','sqft','lotAcres','observedAt','sourceText','geocode'].forEach(function(k){if(r[k]!==undefined)out[k]=r[k];});
     out.lat=placed?r.lat:null;out.lon=placed?r.lon:null;out.photos=[];out.owner={name:''};out.feederId='';out.annualKwh=null;out.src='crexi-import';
     out.listed={forSale:true,url:r.listed.url,askPrice:typeof r.listed.askPrice==='number'&&isFinite(r.listed.askPrice)?r.listed.askPrice:null,asOf:r.observedAt||''};
     if(Buffer.byteLength(JSON.stringify(out))>12000)throw Error('Listing too large');return out;
   });
   return {rows:rows,version:crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0,20),
-    manifest:{orgId:org,count:rows.length,located:rows.filter(function(r){return r.lat!==null;}).length,source:String(data.manifest.source||'Imported Crexi snapshot').slice(0,200),snapshot:true}};
+    manifest:{orgId:org,count:rows.length,located:rows.filter(function(r){return r.lat!==null;}).length,
+      approximate:rows.filter(function(r){return r.lat!==null&&r.geocode.status==='approximate';}).length,
+      unmatched:rows.filter(function(r){return r.lat===null;}).length,
+      source:String(data.manifest.source||'Imported Crexi snapshot').slice(0,200),snapshot:true}};
 }
 async function publish(db,org,input){
   var data=validate(input,org),root=db.collection('toolData').doc(org).collection('tools'),ref=root.doc('sitefinderCatalog'),old=await ref.get();

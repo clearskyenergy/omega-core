@@ -404,6 +404,64 @@ pins appear. Don't:
 Live per-site enrichment is a real and separate thing, and it belongs on the
 card a rep opens rather than on every pan.
 
+### The imported Crexi snapshot: finishing the map
+
+The Cook County snapshot (3,677 listings for `chileasing.com`) was geocoded
+once, in `scripts/prepare-site-catalog.js`, with the Census batch geocoder —
+and only a batch `Exact` match on a cleanly parsed address was kept. A
+quarter of the catalogue (881 rows: suites, ranges, corner listings, and
+anything the address regex could not split) had no pin and only appeared in
+a text search.
+
+`api/_lib/geocode-listings.js` is the second and third pass, shared by the
+prepare script and the staff **Match remaining locations** button in the
+catalogue panel (`POST /api/site-catalog {action:'geocode'}`, staff only):
+
+1. Census one-line geocoder, several spellings per address (range → first
+   number, suite/unit dropped, `NWC A & B` → each street). A hit is
+   `geocode.status:'matched'`, street-interpolated, never rooftop.
+2. Whatever the geocoder cannot place takes the median position of the
+   MATCHED listings in its ZIP, else its city — `status:'approximate'`,
+   `area:'ZIP 60077'`. The row is on the map and in a bounds search, the
+   card says the pin is an area centre, and it carries the same `approx`
+   flags as a ZIP-centroid search pin: no circuit attributed, capacity
+   cannot be held, and opening the card tries to fix the pin first.
+
+Each server call works for about 38 s, publishes a new catalogue version
+and reports progress; the page loops until `done`. A row with no ZIP or
+city that any matched listing shares stays unplaced and searchable. The
+manifest now carries `located`, `approximate` and `unmatched`.
+
+### The property card
+
+A listing card leads with what a buyer asks first: asking price, value,
+last sale, days on market, owner and contact. The imported snapshot carries
+the asking price and the size; every other figure prints **pending API
+integration** until the Crexi data agreement is live, at which point
+`omega-site-market.js` fills the same lines from the metered detail lookup
+(and the assessor layer already fills value and owner where a county
+publishes them).
+
+### Which product, how many
+
+"What fits here" ranks FEWEST UNITS FIRST, then closest to the need
+(`OmegaBessCatalog.fit`, `scripts/test-catalog-fit.js`). A 3 MWh need is
+one 3.4 MWh container, not four 760 kWh cabinets; a 1,000 kWh ask is one
+760 kWh cabinet at 3 h, flagged as the closest single product. Where the
+sheet states AC kW the count must cover the power too.
+
+### The host lease offer
+
+Step 7 of the drawer, and **Lease offer** on the card: "rent us the pad
+for this battery and we pay you X a month for N years." `POST
+/api/site-lease` prices it from the seed rate card in
+`api/_lib/site-lease.js` (pad rent per acre plus a capacity rent per kW,
+escalated over the term, floored for small systems). A rep receives the
+low/base/high rent and never the rates; staff see the build-up.
+`omega-site-lease.js` prints the two-page host proposal (Print / Save as
+PDF). It is the battery sibling of the compute land lease
+(`api/compute-lease.js`), which is fiber-gated and prices a different pad.
+
 ### About Crexi
 
 Crexi **does** publish a Listing API, unlike PropertyShark. Two things before
