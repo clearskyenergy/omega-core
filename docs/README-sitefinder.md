@@ -482,6 +482,14 @@ and `ownerPhone`); and a call log that appends to the site's notes so the
 team sees it. Logging a call on an unsaved site stars it first. Nothing
 dials: numbers are tel: links.
 
+### The phone app
+
+`/sitefinder-app` (`portals/sitefinder-app/`) is the same sales process on a
+phone, installable from the home screen like the SkyFund app: Find (near
+me, or a search, sorted by available kW), Site (facts, fit, lease offer and
+proposal, call sheet, star), Saved, Account. Same workspace, same APIs and
+shared runtime files, nothing copied. `scripts/test-sitefinder-app.js`.
+
 ### Which product, how many
 
 "What fits here" ranks FEWEST UNITS FIRST, then closest to the need
