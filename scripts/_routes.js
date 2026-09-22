@@ -48,6 +48,9 @@ function fileExists(rel) {
   const p = path.join(ROOT, rel.replace(/^\//, ''));
   if (fs.existsSync(p) && fs.statSync(p).isFile()) return true;
   if (fs.existsSync(path.join(p, 'index.html'))) return true;
+  /* A Vercel serverless function: /api/name is api/name.js, and a rewrite may
+     name one (/comed-proxy -> /api/comed-proxy). */
+  if (/^\/?api\//.test(rel) && fs.existsSync(p + '.js')) return true;
   return fs.existsSync(p + '.html');
 }
 

@@ -25,10 +25,19 @@
   var M = {};
 
   /* ---------------------------------------------------------------- config */
-  M.PROXY = "https://comed-proxy.clearsky-omega.workers.dev/comed";
+  /* ComEd's gateway answers only with their own app's Referer, which a
+     browser cannot send, so every read goes through a proxy. The same-origin
+     one (api/comed-proxy.js, via the /comed-proxy rewrite) is preferred: it
+     names the current service in api/_lib/comed-service.js and ships with
+     the platform. The Cloudflare worker is the older hop for the parcel and
+     Socrata routes and for pages served off another host. The service name
+     ROTATES MONTHLY (JUN2026 -> SEP2026 ...); when every circuit reads
+     unknown at once, that constant is the first thing to check. */
+  M.PROXY = "/comed-proxy";
+  M.DATA_PROXY = "https://comed-proxy.clearsky-omega.workers.dev";
   M.DIRECT = "https://utility.arcgis.com/usrsvcs/servers/" +
-             "c0f9178a756c4246a99acdb3fe7de103/rest/services/" +
-             "ComEd_BESS_Hosting_Capacity_JUN2026/FeatureServer";
+             "2ee23dc46a374272ac3fe1528a451819/rest/services/" +
+             "ComEd_BESS_Hosting_Capacity_SEP2026/FeatureServer";
   /* Same origin first, then the shared tools host. */
   /* Same-origin only. The legacy host (tools.csebuilders.com) was a separate
      Vercel project, so a fallback to it silently served the old data bundles
@@ -39,7 +48,7 @@
   M.EDC_URL = "edc-sites.js";
 
   function base() { return M.PROXY || M.DIRECT; }
-  function proxyRoot() { return M.PROXY ? M.PROXY.replace(/\/comed\/?$/, "") : null; }
+  function proxyRoot() { return M.DATA_PROXY || null; }
   M.proxyRoot = proxyRoot;
 
   var map = null, panes = {};
