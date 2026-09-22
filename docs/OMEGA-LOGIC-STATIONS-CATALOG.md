@@ -18,8 +18,10 @@ by the URL. Office navigation links the catalog, URL Generator and plant manager
   units' scan/test/hold evidence, audited manager edits (line, priority, target
   date, assignee, notes), parts required vs registered, services and units.
   Progress is computed in `api/_lib/plant-board.js`, never in the browser.
-- `/plant/manager`: line overview, paginated work orders, stations and units;
-  links to immutable serial/test history and existing quality disposition.
+- `/plant/manager`: the plant board — Today, Needs a person (stuck, held,
+  quiet benches, exceptions from `api/_lib/plant-attention.js`), the station
+  map, board-style work orders with audited edits, quality, stations & devices
+  with pairing, filterable units. Links to immutable serial/test history.
 - `/plant/manager#flow`: ClearSky-owner production routing/version editor.
 - `/plant/station?stationId=<id>`: screen hint only; pairing still requires a
   station credential. A tablet with pending scans cannot be repurposed silently.

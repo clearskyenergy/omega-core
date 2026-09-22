@@ -131,14 +131,48 @@ orders with a balance and which invoice they are waiting on.
 
 ## 4. The plant, by screen
 
+### The plant board (`/plant/manager`)
+
+The plant manager's desk, in five views (the *On this page* links):
+
+- **Plant overview** — **Today** (scans advanced, units reached Ready,
+  refusals and test fails today, open work orders with late/held counts,
+  finished stock, where the units are), **Needs a person** (units stuck at
+  one bench past a threshold, units on hold with the reason, NCR and how
+  long, benches that have not scanned in a working day, routing exceptions
+  and unheld failed tests) and **The line** (the station map with dwell
+  times and the bottleneck).
+- **Work orders** — the board's rows (stage, line, priority, target, built
+  %, ready units, next operation, assignee) with a search and stage filter;
+  *Manage* edits line, priority, target date, assignee and notes (audited)
+  and shows materials, services and every unit's step progress.
+- **Quality** — holds, failed machine tests, stuck units and routing
+  exceptions, each linking to the serial record where a disposition is made.
+- **Stations & devices** — every paired tablet, rig and roaming phone with
+  when it last reported (quiet benches flagged), plus **Pair a new device**:
+  choose the operation (or *Roaming phone*), the line and a label; the token
+  is shown once.
+- **All units** — filter by station and hold; how long each unit has been at
+  its bench; test result; link to the serial record.
+
+Thresholds: stuck = 24 h at one bench, quiet bench = 8 h without a scan
+(`GET /api/logic-plant?page=attention&stuckHours=…&silentHours=…`).
+
 ### The phone app (`/plant/app`)
 
-Open it once from the office link, then **Add to Home Screen**. Four tabs:
+Open it once from the office link, then **Add to Home Screen**. Five tabs:
 
-- **Work** — open work orders, urgent first, then by due date, each with
-  progress. Tap one: status, due date, line, notes, where its units are,
-  what it is **short of**, every unit with its station and step progress.
-  *Scan at a bench* opens the scanner.
+- **Today** — today's scans, units finished, refusals and test fails; what
+  **needs a person** (held, stuck, unheld failures, quiet benches — tap a
+  unit to open it); **my work** (work orders assigned to you) or what is up
+  next; *Scan at a bench*.
+- **Work** — open work orders from the board (late first, then urgent, then
+  by target date) with **All / Mine / Late / Holds / Ready** filters and each
+  one's built %, ready units and next operation. Tap one: stage, target,
+  assignee, built %, ready units, holds, next operation, where its units
+  are, what it is **short of**, every unit with its station and step
+  progress. *Scan at a bench* opens the scanner. A unit shows its bench, the
+  next bench, the steps open at this bench, its last test and work order.
 - **Scan** — opens the scanner (paired once as a Roaming phone), or looks
   up a serial.
 - **Stock** — finished units by product and the parts short for the open

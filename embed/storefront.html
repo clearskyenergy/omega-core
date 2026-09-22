@@ -455,10 +455,14 @@
     $('disclaimer').textContent = c.disclaimer || '';
     $('orderBtn').textContent = c.cta || 'Request this system';
     $('consentText').textContent = 'Yes, ' + (b.name || 'we') + ' may contact me about this system.';
-    if (b.supportEmail) {
+    /* plain=1: the tenant's own customer page frames this sizer under its own
+       header, so the supplier contact line is not repeated inside the frame. */
+    var plain = /[?&]plain=1(&|$)/.test(location.search);
+    if (b.supportEmail && !plain) {
       $('supportEmail').innerHTML = '<a href="mailto:' + esc(b.supportEmail) + '" style="color:inherit">' + esc(b.supportEmail) + '</a>';
     }
-    if (b.supportPhone) $('supportPhone').textContent = b.supportPhone;
+    if (b.supportPhone && !plain) $('supportPhone').textContent = b.supportPhone;
+    if (plain) { var sp = $('supportEmail'); while (sp && sp.parentNode && sp.parentNode !== document.body && !/^(footer|p|div)$/i.test(sp.parentNode.tagName)) sp = sp.parentNode; if (sp && sp.parentNode && /^(footer|p|div)$/i.test(sp.parentNode.tagName)) sp.parentNode.style.display = 'none'; }
     /* Empty unless the contract says otherwise — see api/embed-config.js. */
     $('attribution').textContent = b.attribution || '';
     if (!CFG.flow.requireAddress) { /* still shown; just not required */ }
