@@ -556,6 +556,29 @@ the sources.
 PDF). It is the battery sibling of the compute land lease
 (`api/compute-lease.js`), which is fiber-gated and prices a different pad.
 
+### Cost to us: buy the building or lease the pad
+
+The lease offer is what we would pay the owner. **Cost to us** (section 8
+on the desktop card, the "Cost to deploy" card in the app) is the
+company's own number: what it costs to put the battery here under either
+route. `POST /api/project-cost` prices the build through the same gate,
+org pricing record and model as `/api/price-site`, prices the rent with
+the site-lease rate card, and `api/_lib/project-cost.js` composes them:
+
+- **Build**: the installed system at the estimate class the model gives it,
+  with the screening incentives shown as a net figure.
+- **Buy the building**: asking price (from the captured listing page, else
+  the listing, else typed on the card) plus the build. No asking price means
+  the route reads "pending API integration"; nothing is made up.
+- **Lease the pad**: rent over the term at the base offer plus the build.
+- **The verdict**: which route costs less over the term, by how much, and
+  the year cumulative rent reaches the asking price. Buying leaves the
+  company owning the building, which the sentence says.
+
+`omega-project-cost.js` renders the block in both products; nothing in the
+browser adds a number. Tests: `tests/project-cost.test.js` and the two
+browser tests.
+
 ### About Crexi
 
 Crexi **does** publish a Listing API, unlike PropertyShark. Two things before

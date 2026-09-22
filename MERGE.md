@@ -1543,3 +1543,10 @@ attributes each matched listing's circuit once (`api/_lib/circuit-attribution.js
 rank the whole catalogue on the server and the phone app's list is the
 county's shortlist rather than the first hundred rows. A staff import still
 strips circuits; only a server re-publish keeps them.
+
+
+**Cost to us** is server-side: `api/project-cost.js` composes the build
+(the `/api/price-site` path: same gate, org pricing and model), the host rent
+(`api/_lib/site-lease.js`) and the asking price into buy-versus-lease
+(`api/_lib/project-cost.js`); `omega-project-cost.js` only renders it. No
+rules, data or deployment changed.

@@ -69,6 +69,8 @@ a{color:var(--teal)}
 .tabs a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none;color:var(--dim);font-size:11px;font-weight:600}
 .tabs a svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .tabs a.on{color:var(--teal)}
+/* A fixed top bar and tab bar: anything scrolled into view (a focused field, a button a test or a screen reader reaches) must land clear of both. */
+html{scroll-padding-top:calc(var(--top-h) + env(safe-area-inset-top) + 12px);scroll-padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom) + 12px)}
 .view{padding:14px 14px 20px;max-width:720px;margin:0 auto}
 .view>*{min-width:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow)}
@@ -118,8 +120,8 @@ a{color:var(--teal)}
 .form label{font-size:11.5px;color:var(--dim);display:flex;flex-direction:column;gap:4px}
 .form input,.form select{padding:8px 9px;border:1px solid var(--line);border-radius:8px;font-size:15px;width:110px;background:#fff}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
-.tiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--dim)}
-.tiles b{display:block;font-size:17px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
+.tiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--dim);min-width:0;overflow-wrap:anywhere}
+.tiles b{display:block;font-size:16px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
 textarea.script{width:100%;min-height:150px;font:13px/1.45 inherit;padding:9px;border:1px solid var(--line);border-radius:8px;resize:vertical}
 textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;border:1px solid var(--line);border-radius:8px}
 .who{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:13px;margin:8px 0}
@@ -219,6 +221,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
 <script src="/omega-comed-layers.js"></script>
 <script src="/omega-bess-catalog.js"></script>
 <script src="/omega-site-lease.js"></script>
+<script src="/omega-project-cost.js"></script>
 <script>
 (function () {
   "use strict";
@@ -226,7 +229,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
   var DEFAULT_HOURS = 4, MAX_FIT_UNITS = 4;
   var ORG_ALIAS = { "fenecon.de": "fenecon.com", "fenecon.us": "fenecon.com" };
   var STAFF = /^(clearsky-usa\.com|csebuilders\.com)$/;
-  var ST = { user: null, org: "", staff: false, rows: [], byId: {}, sel: null, leases: {}, leaseBusy: {}, epoch: 0, view: "find", installPrompt: null, db: null };
+  var ST = { user: null, org: "", staff: false, rows: [], byId: {}, sel: null, leases: {}, leaseBusy: {}, projects: {}, projectBusy: {}, epoch: 0, view: "find", installPrompt: null, db: null };
 
   /* ── small helpers ─────────────────────────────────────────────────── */
   function $(id) { return document.getElementById(id); }
@@ -392,7 +395,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     v = String(v || "").trim().toLowerCase();
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(v)) return;
     setPref("sfapp.org", v); ST.org = v; $("topOrg").textContent = v;
-    ST.rows = []; ST.byId = {}; ST.leases = {}; ST.epoch++;
+    ST.rows = []; ST.byId = {}; ST.leases = {}; ST.projects = {}; ST.epoch++;
     if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
     if (SAVES) SAVES.init(v, ST.user, function () {}, ST.db);
     L.attach(ST.db, v, function () {});
@@ -623,6 +626,20 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       }
     }
     h += "</div>";
+    /* Cost to us: the build plus the building or the pad, from /api/project-cost. */
+    h += '<div class="card"><h3>Cost to deploy</h3><p class="note">What it costs <b>us</b> to put this battery here: the build, plus the building at its asking price or the pad at the host rent over ' + esc(r.leaseTerm || 15) + ' years.</p>';
+    if (p.kw == null) h += '<p class="note">Size the battery first.</p>';
+    else {
+      var pj = ST.projects[r.id], pb = ST.projectBusy[r.id], ask = r.askOverride != null ? r.askOverride : askOf(r);
+      h += '<div class="form"><label>Asking $<input id="projectAsk" type="number" min="0" step="1000" placeholder="pending" value="' + (ask != null ? ask : "") + '"></label><button class="btn sm primary" id="projectQuote" type="button"' + (pb ? " disabled" : "") + ">" + (pj && pj.result ? "Re-cost" : "Cost this project") + "</button></div>";
+      if (pb) h += '<p class="note" role="status">Costing…</p>';
+      else if (pj && pj.error) h += '<p class="note bad">' + esc(pj.error) + "</p>";
+      else if (pj && pj.result) {
+        if (pj.key !== JSON.stringify(projectInput(r))) h += '<p class="note bad">The size or inputs changed. Re-cost before quoting it.</p>';
+        h += window.OmegaProjectCost.html(pj.result, { tiles: "tiles" }) + '<div class="row"><button class="btn sm" id="projectShare" type="button">Share summary</button></div>';
+      }
+    }
+    h += "</div>";
     h += callHtml(r);
     v.innerHTML = h;
     wireSite(r);
@@ -645,6 +662,32 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       ST.leases[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
       if (ST.sel === r.id) renderSite(r);
       if (!err && open) openProposal(r, result);
+    });
+  }
+  function askOf(r) {
+    var d = r.detail || {};
+    if (typeof d.askPrice === "number" && isFinite(d.askPrice)) return d.askPrice;
+    if (r.listed && typeof r.listed.askPrice === "number" && isFinite(r.listed.askPrice)) return r.listed.askPrice;
+    return null;
+  }
+  function projectInput(r) {
+    var p = sizePick(r), a = $("projectAsk");
+    var ask = a && a.value !== "" ? Number(a.value) : (r.askOverride != null ? r.askOverride : askOf(r));
+    return { orgId: ST.org, kw: p.kw, hours: p.hours, assumedSize: !(r.circ && r.circ.known), askPrice: ask != null && isFinite(ask) && ask >= 0 ? ask : null,
+      termYears: r.leaseTerm || 15, acres: r.leaseAcres || undefined, sqft: r.sqft || undefined,
+      site: { id: r.id, address: r.addr || "", feederId: r.feederId || "", positionIsBuilding: !r.approx } };
+  }
+  function costProject(r) {
+    if (!window.OmegaProjectCost) return;
+    var input = projectInput(r), key = JSON.stringify(input), cached = ST.projects[r.id];
+    if (input.askPrice != null) r.askOverride = input.askPrice;
+    if (cached && cached.key === key && cached.result) { renderSite(r); return; }
+    if (ST.projectBusy[r.id]) return;
+    ST.projectBusy[r.id] = true; renderSite(r);
+    window.OmegaProjectCost.quote(input, function (err, result) {
+      delete ST.projectBusy[r.id];
+      ST.projects[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      if (ST.sel === r.id) renderSite(r);
     });
   }
   function openProposal(r, result) {
@@ -712,6 +755,13 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     };
     if ((b = $("szKw"))) b.onchange = function () { r.sizePick = { kw: +this.value, hours: +$("szHrs").value }; renderSite(r); };
     if ((b = $("szHrs"))) b.onchange = function () { r.sizePick = { kw: +$("szKw").value, hours: +this.value }; renderSite(r); };
+    if ((b = $("projectQuote"))) b.onclick = function () { costProject(r); };
+    if ((b = $("projectShare"))) b.onclick = function () { var btn = this;
+      var pj = ST.projects[r.id], text = pj && pj.result ? window.OmegaProjectCost.summary(pj.result) + " " + r.addr : "";
+      if (!text) return;
+      if (navigator.share) navigator.share({ title: "Cost to deploy — " + r.addr, text: text })["catch"](function () {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { btn.textContent = "Copied"; });
+    };
     if ((b = $("leaseQuote"))) b.onclick = function () { priceLease(r, false); };
     if ((b = $("leaseOpen"))) b.onclick = function () { priceLease(r, true); };
     if ((b = $("leaseShare"))) b.onclick = function () { var btn = this;
@@ -801,7 +851,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     try { ST.db = firebase.firestore(); } catch (e) { ST.db = null; }
     ensureMap();
     firebase.auth().onAuthStateChanged(function (u) {
-      ST.user = u; ST.rows = []; ST.byId = {}; ST.leases = {}; ST.epoch++;
+      ST.user = u; ST.rows = []; ST.byId = {}; ST.leases = {}; ST.projects = {}; ST.epoch++;
       if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
       if (SAVES) SAVES.detach();
       L.attach(null, "", function () {});
