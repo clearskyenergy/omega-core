@@ -453,7 +453,13 @@ Details grid, the broker cards and "Listed by …") into typed fields on the
 row (`detail`, plus the trimmed `detailText` for re-parsing), via `POST
 /api/site-catalog {action:'details'}`, staff only, 100 captures per call.
 A capture for a listing that is not in the catalogue is reported and
-skipped. Owner and sale history live on Crexi's Record tab behind the
+skipped. **A page at a time:** **Copy listing links for this page** puts
+the links of every listing on the current catalogue page that has no
+details yet on the clipboard; on Crexi, the bookmark's **Capture a list**
+takes that paste and walks the listings in a second window, about five
+seconds each (a human pace, at most 150 per run), saving each and
+downloading the file when it finishes. `scripts/test-crexi-capture.js`
+runs the bookmarklet against a stand-in for crexi.com. Owner and sale history live on Crexi's Record tab behind the
 Intelligence subscription and are not on the page, so those lines still
 say "pending API integration". Phone and email are masked until "View
 phone number" is clicked on the page; click first, then capture. One page

@@ -174,9 +174,14 @@ const rows = [
     assert.match(walgreens,/Alex Geanakos, JLL\nMohsin Mirza, JLL · \(312\) 555-0142/,'brokers from the captured page are the contact');
     assert.equal((walgreens.match(/pending API integration/g)||[]).length,3,'value, last sale and owner still say why they are missing');
     assert.match(await page.locator('#catalogStatus').innerText(),/2 of 4 have Census street positions, 1 sit at the centre of their ZIP, 1 still need a location/);
-    await page.evaluate(()=>{document.getElementById('catalogDetails').hidden=false;});
+    await page.evaluate(()=>{const d=document.getElementById('catalogDetails');d.hidden=false;d.open=true;});
     assert.match(await page.locator('#captureBookmarklet').getAttribute('href'),/^javascript:\(function crexiCaptureBookmarklet\(\)/,'the bookmarklet is built from the page\'s own function');
     assert.doesNotMatch(await page.locator('#captureBookmarklet').getAttribute('href'),/\/\/ /,'no line comments inside a javascript: URL');
+    await page.locator('#catalogLinks').click();
+    const queue=JSON.parse(await page.locator('#catalogLinksOut').inputValue());
+    assert.equal(queue.kind,'crexi-capture-queue');
+    assert.deepEqual(queue.urls,['https://www.crexi.com/properties/123/test','https://www.crexi.com/properties/124/test','https://www.crexi.com/properties/125/test'],'the list is every listing on the page without captured details');
+    assert.match(await page.locator('#catalogStatus').innerText(),/1 carry listing page details/);
     assert.equal(await page.locator('a[href="https://www.crexi.com/properties/123/test"]').count(),1);
     const facts=await page.locator('.card[data-id="crexi:123"] .facts').innerText();
     assert.match(facts,/Asking\s+\$100,000/,'the snapshot\'s asking price is on the card');
