@@ -44,6 +44,7 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
         if (local && fs.existsSync(local)) { await route.fulfill({ body: fs.readFileSync(local), contentType: local.endsWith('.css') ? 'text/css' : 'application/javascript' }); return; }
         await route.continue(); return;
       }
+      if (url.hostname === 'geocoding.geo.census.gov') { await route.fulfill({ json: { result: { addressMatches: [{ coordinates: { x: -87.62, y: 41.81 }, matchedAddress: '4643 S MICHIGAN AVE, CHICAGO, IL, 60653' }] } } }); return; }
       if (url.hostname !== 'app.test') { await route.fulfill({ status: 200, body: '', contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/javascript' }); return; }
       if (url.pathname === '/api/site-catalog') {
         const b = route.request().postDataJSON(); assert.equal(b.orgId, 'chileasing.com', 'the workspace is the email domain');
@@ -114,6 +115,17 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     await page.locator('.log li').waitFor();
     assert.match(await page.locator('.log li').first().innerText(), /Call · Spoke — interested · Alex Geanakos · Walk Tuesday/);
     assert.equal(await page.locator('#starBtn').innerText(), '★', 'logging a call saved the site');
+    /* an address is looked up as a site: geocoded, circuit read, opened, listings around it */
+    await page.locator('.tabs a[data-tab=find]').click();
+    await page.evaluate(() => { window.OmegaComEdLayers.feederNear = () => ({ row: { feeder: 'Z9', sub: 'Bridgeport', bess: 900, queue: 0 }, contains: true, beyond: false, distance: 0 }); });
+    await page.locator('#q').fill('4643 s Michigan Ave Chicago il'); await page.locator('#go').click();
+    await until(page, () => /^#\/site\/site%3A41\.81000%2C-87\.62000$/.test(location.hash) && /Z9/.test(document.getElementById('viewSite').innerText), 'the address lookup');
+    const looked = await page.locator('#viewSite').innerText();
+    assert.match(looked, /4643 s Michigan Ave Chicago il[\s\S]*900 kW available on Z9[\s\S]*Address lookup: 4643 S MICHIGAN AVE/);
+    assert.match(looked, /Not a listing; owner and property facts are pending API integration/);
+    await page.locator('#viewSite .back').click();
+    assert.match(await page.locator('#findList .site').first().innerText(), /4643 s Michigan Ave Chicago il[\s\S]*Looking at now/, 'the looked-up site leads the list');
+    assert.equal(await page.locator('#findList .site').count(), 4, 'the listings around it follow');
     /* saved list, account */
     await page.locator('.tabs a[data-tab=saved]').click();
     await page.locator('#savedList .site').waitFor();

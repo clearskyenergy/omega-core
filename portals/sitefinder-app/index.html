@@ -345,7 +345,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     for (i = 0; i < ST.rows.length; i++) {
       r = ST.rows[i];
       if (r.lat == null || r.lon == null) continue;
-      var m = window.L.marker([r.lat, r.lon], { icon: window.L.divIcon({ className: "csPin", iconSize: null, iconAnchor: [0, 0], html: pinHtml(r, false) }) });
+      var m = window.L.marker([r.lat, r.lon], { icon: window.L.divIcon({ className: "csPin", iconSize: null, iconAnchor: [0, 0], html: pinHtml(r, r.src === "lookup") }) });
       (function (row) { m.on("click", function () { location.hash = "#/site/" + encodeURIComponent(row.id); }); })(r);
       m.addTo(markers); MARK[r.id] = m; bounds.push([r.lat, r.lon]);
     }
@@ -445,6 +445,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     var minKw = +$("minKw").value || 0, list = $("findList");
     var rows = ST.rows.filter(function (r) { return !minKw || (r.circ.known && r.circ.sellable >= minKw); });
     rows.sort(function (a, b) {
+      if ((a.src === "lookup") !== (b.src === "lookup")) return a.src === "lookup" ? -1 : 1;
       var sa = a.circ.known ? a.circ.sellable : -1, sb = b.circ.known ? b.circ.sellable : -1;
       if (sa !== sb) return sb - sa;
       return (b.score || 0) - (a.score || 0);
@@ -457,12 +458,59 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     var pill = r.circ.known ? (r.circ.sellable > 0 ? (r.cst.key === "partial" ? "partial" : "open") : "blocked") : "unknown";
     var d = r.detail || {}, ask = has(d.askPrice) ? money(d.askPrice) : has(r.listed && r.listed.askPrice) ? money(r.listed.askPrice) : d.unpriced ? "Unpriced" : "";
     return '<a class="card site" href="#/site/' + encodeURIComponent(r.id) + '">' +
-      '<div class="head"><div><div class="addr">' + esc(r.addr) + '</div><div class="sub">' + esc([r.city, r.subtype || r.type, r.sqft ? fmt(r.sqft) + " SF" : (r.lotAcres ? r.lotAcres + " ac" : "")].filter(Boolean).join(" · ")) + '</div></div>' +
+      '<div class="head"><div><div class="addr">' + esc(r.addr) + '</div><div class="sub">' + esc([r.src === "lookup" ? "Looking at now" : r.city, r.subtype || r.type, r.sqft ? fmt(r.sqft) + " SF" : (r.lotAcres ? r.lotAcres + " ac" : "")].filter(Boolean).join(" · ")) + '</div></div>' +
       '<span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW free" : "No capacity") : (r.approx ? "Area pin" : "Circuit unknown")) + '</span></div>' +
       '<div class="metrics"><div>Energy score<b>' + (r.score == null ? "—" : r.score) + '</b></div><div>Battery<b>' + (r.sz && r.sz.kw ? fmt(r.sz.kw) + " kW" : "—") + '</b></div><div>Asking<b>' + (ask || "—") + '</b></div></div>' +
       (isSaved(r.id) ? '<div class="note" style="margin-top:6px;color:#C98A2B">★ Saved</div>' : "") + '</a>';
   }
-  $("go").onclick = function () { loadListings({ q: $("q").value, page: 0 }, "for “" + $("q").value + "”"); };
+  /* A street address (it starts with a number) is looked up as a SITE: the
+     map moves there, the circuit is read, and it opens as a card with the
+     listings around it. Anything else searches the catalogue text. */
+  $("go").onclick = function () {
+    var q = $("q").value.trim();
+    if (/^\d+\s+\S/.test(q)) { lookupAddress(q); return; }
+    loadListings({ q: q, page: 0 }, "for “" + q + "”");
+  };
+  function geocode(q, cb) {
+    var one = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=" + encodeURIComponent(q) + "&benchmark=Public_AR_Current&format=json";
+    fetch(one).then(function (r) { return r.json(); }).then(function (j) {
+      var m = j && j.result && j.result.addressMatches && j.result.addressMatches[0];
+      if (m && m.coordinates) { cb(null, { lat: +m.coordinates.y, lon: +m.coordinates.x, matched: m.matchedAddress || q, src: "census" }); return; }
+      return fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=" + encodeURIComponent(q)).then(function (r) { return r.json(); }).then(function (a) {
+        if (a && a[0]) cb(null, { lat: +a[0].lat, lon: +a[0].lon, matched: a[0].display_name || q, src: "nominatim" }); else cb(new Error("That address could not be placed. Try adding the city and ZIP."));
+      });
+    })["catch"](function (e) { cb(new Error("The geocoder did not answer: " + (e.message || e))); });
+  }
+  function lookupAddress(q) {
+    var status = $("findStatus"), epoch = ++ST.epoch;
+    status.textContent = "Placing " + q + "…";
+    geocode(q + (/\b(IL|Illinois)\b/i.test(q) ? "" : ", IL"), function (err, hit) {
+      if (epoch !== ST.epoch) return;
+      if (err) { status.textContent = err.message; return; }
+      var id = "site:" + hit.lat.toFixed(5) + "," + hit.lon.toFixed(5);
+      var rec = prepare({ id: id, addr: q, city: "", state: "IL", zip: "", lat: hit.lat, lon: hit.lon, type: "Site lookup", subtype: "Checked address",
+        geocode: { status: "matched", source: hit.src, accuracy: hit.src === "census" ? "street-interpolated, not rooftop" : "OpenStreetMap match", matchedAddress: hit.matched },
+        owner: { name: "" }, photos: [], src: "lookup", lookedUpAt: new Date().toISOString() });
+      ST.byId[id] = rec;
+      if (map) map.setView([hit.lat, hit.lon], 15);
+      status.textContent = "Reading the circuit at " + q + "…";
+      resolveCircuits([rec], function () {
+        if (epoch !== ST.epoch) return;
+        /* The looked-up site leads the list; the catalogue around it follows. */
+        var body = { orgId: ST.org, bbox: { n: hit.lat + 0.02, s: hit.lat - 0.02, e: hit.lon + 0.027, w: hit.lon - 0.027 }, page: 0 };
+        api("/api/site-catalog", body, function (e2, d) {
+          if (epoch !== ST.epoch) return;
+          var rows = (!e2 && d && d.rows ? d.rows : []).map(prepare);
+          rows.forEach(function (r) { ST.byId[r.id] = r; });
+          ST.rows = [rec].concat(rows); ST.fitPins = false;
+          renderFind();
+          status.textContent = (rec.circ.known ? fmt(rec.circ.sellable) + " kW available on " + rec.feederId + " at " + q : "No published circuit at " + q) + (rows.length ? " · " + rows.length + " listings nearby, reading their circuits…" : ".");
+          location.hash = "#/site/" + encodeURIComponent(id);
+          if (rows.length) resolveCircuits(rows, function () { if (epoch === ST.epoch) { renderFind(); status.textContent = status.textContent.replace(", reading their circuits…", "."); } });
+        });
+      });
+    });
+  }
   $("q").onkeydown = function (e) { if (e.key === "Enter") $("go").onclick(); };
   $("minKw").onchange = renderFind;
   $("here").onclick = function () {
@@ -502,6 +550,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     return C.fit(C.products(), p.kw, p.kwh, { maxUnits: MAX_FIT_UNITS }).map(function (o) { o.hours = o.kwh / p.kw; return o; });
   }
   function factsHtml(r) {
+    if (r.src === "lookup") return '<p class="note" style="margin:8px 0 0">Address lookup: ' + esc(r.geocode && r.geocode.matchedAddress || r.addr) + ' (' + esc(r.geocode && r.geocode.accuracy || "") + '). Not a listing; owner and property facts are <i class="pend">pending API integration</i>.</p>';
     var d = r.detail || {}, listed = r.listed || {}, P = '<i class="pend">pending API integration</i>';
     var ask = has(d.askPrice) ? money(d.askPrice) : has(listed.askPrice) ? money(listed.askPrice) : d.unpriced ? "Unpriced · call for offers" : P;
     var contact = d.brokers && d.brokers.length ? d.brokers.map(function (b) {
