@@ -24,14 +24,23 @@ Three places to be:
 |---|---|---|
 | **Office** | project manager, procurement, commissioning | `/omega-logic?org=<org>` — every office page shares one left menu |
 | **Plant board** | whoever runs the floor | `/plant/manager.html?org=<org>` |
-| **Phone app** | the two builders | `/plant/app?org=<org>` — install it from the browser menu |
+| **Office app** | the same four people, away from the desk | `/office/app?org=<org>` — install it from the browser menu |
+| **Plant app** | the two builders | `/plant/app?org=<org>` — install it from the browser menu |
 | **Bench screen** | a tablet bolted to a bench, or a builder's phone | `/plant/station.html` — paired once |
 | **Customer portal** | the customer | `/portals/customer/?org=<org>` |
+| **Customer app** | the customer, on a phone | `/portals/customer/app?org=<org>` — Editor Lite first |
+
+Three phone apps, one pattern: open the link once, then **Add to Home
+Screen** (iPhone: Share → Add to Home Screen; Android: the browser's
+Install). Each wears the tenant's own name and icon (`omega_orgs/{org}.appIcon`,
+with a set per app under `appIcon.office` and `appIcon.customer`), opens
+offline and says so, and never shows yesterday's data — the shell is cached,
+the data never is.
 
 Sign out is top right on every office page. The left menu runs in the order
 the business runs: **Run the business** (Dashboard, Orders, Company POs,
-Customers) → **Build** (Work orders, Plant board, Stations & tablets, Phone
-app) → **Stock & supply** (Inventory, Materials plan, Purchase orders,
+Customers, Office app) → **Build** (Work orders, Plant board, Stations &
+tablets, Plant app) → **Stock & supply** (Inventory, Materials plan, Purchase orders,
 Vendors & prices) → **Deliver** (Shipping & receiving, Quality & serial
 records) → **Money** (Cash flow) → **Setup** (Products & bills, Settings).
 Website, installation and the URL generator are ClearSky's to maintain and
@@ -110,6 +119,36 @@ appear only for ClearSky.
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
 
+### The office app (`/office/app`)
+
+The office in a pocket, for whoever is not at the desk. Five tabs:
+
+- **Today** — the stage counts (to price, awaiting deposit, in build,
+  ready · shipped); **needs a person**: company POs to review, orders with
+  an open customer request, orders that need attention, orders to price
+  (tap one to open it); money (invoiced, received, outstanding, deposits
+  awaiting, payment exceptions, purchase list value); the plant (open, late,
+  with holds, ready) with the late and held work orders named.
+- **Orders** — every order with **All / Needs attention / To price /
+  Awaiting deposit / In build / Ready · shipped / Customer requests**
+  filters; each card carries the customer, lines, total and balance, and the
+  work order's built % when it is on the floor. Tap one: lines, money and
+  invoices, build progress and the units assigned from stock, shipment, and
+  the customer's requests — **answer & close** a request here. *Verify ready
+  · invoice the balance* is on an order in production; pricing, acceptance,
+  shipment and wires stay on the desktop, next to the QuickBooks evidence.
+- **POs** — PO loads: choose the company (or add one), the billing contact,
+  paste the lines — same sheet as Company POs — and *Enter these purchase
+  orders*. The company's uploaded POs under review and its orders are
+  listed beneath.
+- **Customers** — every account with its terms and logins; tap one for
+  invoiced, received, balance and open requests, the terms to edit (deposit
+  %, due days — future prices only), every order with its money, and the
+  portal link to send them.
+- **Stock** — finished units by product with **assign to an order** on each
+  available serial, the parts short for the open work, and the supplier
+  purchase orders still open.
+
 ### Procurement — stock, materials, vendors
 
 - **Materials plan.** What to buy, what to build, twelve weeks ahead,
@@ -178,7 +217,7 @@ The plant manager's desk, in five views (the *On this page* links):
 Thresholds: stuck = 24 h at one bench, quiet bench = 8 h without a scan
 (`GET /api/logic-plant?page=attention&stuckHours=…&silentHours=…`).
 
-### The phone app (`/plant/app`)
+### The plant app (`/plant/app`)
 
 Open it once from the office link, then **Add to Home Screen**. Five tabs:
 
@@ -221,7 +260,7 @@ Work orders page → *Register units & component genealogy*: the real serials
 off the labels, parent and children in one batch. Serials are never
 invented; the label printer's sheet is the source.
 
-## 5. The customer portal
+## 5. The customer portal and the customer app
 
 Orders with a six-step milestone track, invoices with a QuickBooks pay link,
 documents the tenant marked customer-facing, shipment carrier and tracking,
@@ -243,6 +282,39 @@ per-site reports; a sized site can be added to the customer's projects and
 opened in Design Studio. Design, statuses and the honest list of what is not
 built: `docs/PORTFOLIO-SCREENING.md`.
 
+### The customer app (`/portals/customer/app`)
+
+The customer's account on their phone, and **Design is the home tab**
+because Site Map · Editor Lite is the thing that earns the next sale. It
+signs in the way the portal does (email link or Google; the link comes back
+into the app), loads no workspace runtime, and reads the same customer
+endpoints as the desktop portal. Four tabs:
+
+- **Design** — Editor Lite's status (trial to a date, active, or the price
+  and what it includes, with the account rep to ask); **new site plan** from
+  a site address; **quick size** — kW and hours against the supplier's own
+  design catalog, sized on the platform, with *Lay it out* (Editor Lite) and
+  *Send as a PO* (lands on the PO sheet with the line filled in); every site
+  plan with a tap to open it in Editor Lite; the supplier's bill-based sizer.
+- **Orders** — each order with its six-step milestone, lines with the
+  warranty date, order total and invoices with the pay link, destinations
+  and loads, documents, the requests and answers, and *Request a change or
+  ask a question*.
+- **POs** — PO loads for the customer: paste the same sheet (`PO number,
+  SKU, qty, ship-to name, address, city, state, ZIP, requested date,
+  notes`) and *Send these purchase orders*; each is received for pricing and
+  nothing is charged. A PO number that already exists is named, never
+  overwritten; fifty per day from a customer login. Beneath: their uploaded
+  POs under review and the orders their POs became, with loads. Links for
+  one PO to several sites and for uploading a PO document.
+- **Account** — account number, company, rep, orders; the terms the
+  supplier set; their own details to edit (name, company, phone, delivery
+  address); agreements; how to install the app; the desktop portal.
+
+A customer login that has no company account yet is told to open Account
+first (the record is created on first sign-in) or to ask the supplier to
+assign the email to the company.
+
 ## 6. Build notes — what landed in this pass, and what did not
 
 Built on `claude/white-label-cleancell-usa-st5trq` after PR #45 (commits
@@ -250,12 +322,18 @@ newest last): supplier records and prices · stations do the work (steps and
 parts per bench, issued on scan; check steps; roaming phones) · one office
 chrome with sign-out, the dashboard, settings, inventory with assignment,
 customer financials · the plant map · customer requests and warranty, bulk
-PO entry · the phone app.
+PO entry · the plant app · then the **office app** and the **customer app**
+(Editor Lite first, PO loads), one manifest endpoint for all three apps
+(`api/app-manifest.js?app=`), one bulk-PO parser (`omega-po-bulk.js`) shared
+by the PO inbox and both apps, the batch PO path opened to a customer login
+for its own company, and Clean Cell's office and customer icons
+(`scripts/make-tenant-icons.js` renders a tenant's `<app>-icon.svg` set).
 
-Tests: `npm test` (the plant chain now runs `test-plant-work`,
-`test-plant-stats`, `test-office-ops`); `npm run check:pages` renders the
-office dashboard, settings, inventory, materials, catalog, plant board and
-map, the bench (tablet and roaming phone) and the phone app in Chromium.
+Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
+`test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk`);
+`npm run check:pages` renders the office dashboard, settings, inventory,
+materials, catalog, plant board and map, the bench (tablet and roaming
+phone), the plant app, the office app and the customer app in Chromium.
 
 **Needs a person with credentials**
 
@@ -277,7 +355,13 @@ map, the bench (tablet and roaming phone) and the phone app in Chromium.
 - Carrier booking or live tracking (shipping is a manual evidence ledger).
 - Cash settlement from a bank (QuickBooks records are the source; wires are
   recorded, not sent).
-- Push notifications to the phone; the app polls when opened.
+- Push notifications to the phones; the apps poll when opened.
+- Pricing, acceptance, shipment and wire settlement from the office app
+  (desktop only, on purpose: the QuickBooks evidence is there).
+- Editor Lite's canvas on a phone (the app opens it in the browser; it lays
+  out at desktop width and folds below 760 px, but it is a drawing tool).
+- A customer subscribing to Editor Lite from the app (checkout is not
+  enabled anywhere yet; the supplier grants a trial).
 - Icons for tenants other than Clean Cell (each needs a mark of its own).
 - Time per step (the map times stations from arrival to arrival; issues are
   logged with a time but not yet summarised per step).

@@ -132,8 +132,12 @@ var ORG = 'cleancell.us', admin = { email: 'pm@cleancell.us', admin: true, uid: 
   ok('  each is a mapped order awaiting pricing, with its destination and terms', made.status === 'new' && made.items.length === 2 && made.delivery.destinations[0].address.city === 'Bakersfield' && made.delivery.destinations[0].requestedDate === '2026-11-15' && made.requestedTerms.depositPct === 40 && made.purchaseOrder.number === 'INC-4471' && made.poIntake.source === 'office-bulk', made);
   var again = await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'INC-4472', lines: [{ sku: 'CAB', qty: 9 }], destination: dest }] }, caller: admin }, res);
   ok('an existing PO number is skipped, never overwritten', again.created.length === 0 && /already exists/.test(again.skipped[0].error) && rows.get('orders/' + batch.created[1].id).items[0].qty === 2, again);
-  await rejects('a customer login cannot use the batch path', function () { return intake({ method: 'POST', body: { org: ORG, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [] }, caller: buyer }, res); }, 'Office');
   ok('the company counts the batch against its day', rows.get('omega_orgs/' + ORG + '/customers/company_riverside').poIntakeUsage.count === 2);
+  await rejects('an empty batch is refused', function () { return intake({ method: 'POST', body: { org: ORG, customerId: 'company_riverside', action: 'submit-many', pos: [] }, caller: buyer }, res); }, '1–50');
+  var own = await intake({ method: 'POST', body: { org: ORG, customerId: 'company_other', action: 'submit-many', email: 'somebody@else.example', pos: [{ number: 'INC-4480', lines: [{ sku: 'CAB', qty: 6 }], destination: dest, requestedDate: '2026-12-01' }] }, caller: buyer }, res);
+  var ownRow = rows.get('orders/' + own.created[0].id);
+  ok('the customer\'s own login keys in a batch for ITS company, whatever customerId and email it sends', own.created.length === 1 && ownRow.customerId === 'company_riverside' && ownRow.customer.email === 'ops@riverside.example' && ownRow.poIntake.source === 'customer-bulk' && ownRow.status === 'new' && !ownRow.logic, ownRow);
+  ok('  and the same PO number from the customer is then a duplicate for the office', (await intake({ method: 'POST', body: { org: ORG, office: true, customerId: 'company_riverside', action: 'submit-many', email: 'ops@riverside.example', pos: [{ number: 'INC-4480', lines: [{ sku: 'CAB', qty: 1 }], destination: dest }] }, caller: admin }, res)).skipped[0].error.indexOf('already exists') >= 0);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);
