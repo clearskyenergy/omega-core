@@ -13,7 +13,7 @@ The company PO launch is live and was live-verified on 2026-09-21. Every step un
 - Production: https://silmarillion.clearskyomega.com (Vercel projects `omega-core` and `omega-doom-production` both deployed `main`).
 - PR #65 merged (`7f8ba54`, implementation `7802f90`): company accounts, PO intake, private uploads, reviewed order entry, logistics ledger.
 - PR #67 merged (`7676079`): upgrade log release entry and the download-authorization lifecycle test. Production deployment of `7676079` recorded 2026-09-22T00:01Z.
-- Follow-up branch `codex/po-launch-followups` (PR number in `git log` / GitHub): logistics order list excludes unconverted and declined PO intake server-side; the inbox "Update review" action is an inline form instead of two browser `prompt()` dialogs.
+- PR #68 (`codex/po-launch-followups`): logistics order list excludes unconverted and declined PO intake server-side; the inbox "Update review" action is an inline form instead of two browser `prompt()` dialogs.
 - Live InCharge Energy company under CleanCell: `company_2b06b22951a9dd00659e1c59c676c523cb69474e`, domain `inchargeus.com` (descriptive only), active, free customer account. No customer contact, login or access grant exists because none was supplied.
 
 ## Completed 2026-09-21 (do not repeat)
