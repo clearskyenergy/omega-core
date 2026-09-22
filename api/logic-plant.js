@@ -2,13 +2,31 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow');
+var Flow=require('./_lib/plant-flow'),Board=require('./_lib/plant-board');
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
   var ctx = await X.authorize(caller, org, req.method !== 'GET'), db = A.db();
   var flow=Flow.current(ctx.config), configRef=db.collection('omega_orgs').doc(org).collection('fulfillment').doc('config');
   if (req.method === 'GET') {
+    if(req.query.page==='board'){
+      /* The CMMS-style board: newest 100 works orders with progress derived
+         from their units. Units are read in works-order chunks with a field
+         projection; the numbers are computed by plant-board.js, never in the
+         browser, so the percentage the office quotes has one source. */
+      var boardRows=await db.collection('plant_works_orders').where('orgId','==',org).orderBy('createdAt','desc').limit(100).get();
+      var works=boardRows.docs.map(function(d){return Object.assign({id:d.id},d.data());}),ids=works.map(function(w){return w.id;}),unitsByWo={},unitsLimited=false;
+      for(var i=0;i<ids.length;i+=10){
+        var chunk=await db.collection('plant_units').where('orgId','==',org).where('woId','in',ids.slice(i,i+10))
+          .select('woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test').limit(Board.UNIT_CAP).get();
+        if(chunk.size===Board.UNIT_CAP)unitsLimited=true;
+        chunk.docs.forEach(function(d){var u=d.data();(unitsByWo[u.woId]=unitsByWo[u.woId]||[]).push(u);});
+      }
+      var now=new Date().toISOString();
+      return {name:ctx.org.name||org,owner:X.owner(caller),flow:flow,brand:require('./_lib/logic-brand')(ctx.org),asOf:now,
+        rows:works.map(function(w){return Board.row(w,unitsByWo[w.id]||[],now);}),limited:boardRows.size===100,unitsLimited:unitsLimited,
+        links:{office:'/omega-logic?org='+encodeURIComponent(org),factory:'/plant/?org='+encodeURIComponent(org),manager:'/plant/manager?org='+encodeURIComponent(org)}};
+    }
     if(req.query.page){
       var collections={works:'plant_works_orders',units:'plant_units',stations:'plant_stations'},collection=collections[req.query.page];
       if(!collection)throw A.httpError(400,'Unknown plant page');
@@ -21,7 +39,8 @@ module.exports = A.handler(async function (req, res) {
       var wr=db.collection('plant_works_orders').doc(P.id(req.query.workOrder)),ws=await wr.get();
       if(!ws.exists||ws.data().orgId!==org)throw A.httpError(404,'Work order not found');
       var members=await db.collection('plant_units').where('orgId','==',org).where('woId','==',ws.id).limit(401).get();
-      return {workOrder:Object.assign({id:ws.id},ws.data()),units:members.docs.slice(0,400).map(function(d){return d.data();}),limited:members.size>400};
+      var detailUnits=members.docs.slice(0,400).map(function(d){return d.data();}),detailWo=Object.assign({id:ws.id},ws.data());
+      return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60)};
     }
     if (req.query.serial) {
       var serial = Plant.serialFrom(req.query.serial);
@@ -60,8 +79,8 @@ module.exports = A.handler(async function (req, res) {
     var date=String(b.dueDate||'');if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date))throw A.httpError(400,'Use a valid YYYY-MM-DD date');
     return db.runTransaction(async function(tx){var old=await tx.get(editRef);if(!old.exists||old.data().orgId!==org)throw A.httpError(404,'Work order not found');var w=old.data();
       if((w.managerRevision||0)!==b.revision)throw A.httpError(409,'Work order changed. Reload first.');
-      var changes={lineId:b.lineId,priority:b.priority,dueDate:date,managerNotes:Flow.clean(b.notes,3000),managerRevision:(w.managerRevision||0)+1,updatedBy:caller.email,updatedAt:A.FieldValue().serverTimestamp()};
-      tx.update(editRef,changes);tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-work-order',workOrderId:old.id,by:caller.email,before:{lineId:w.lineId||'',priority:w.priority||'normal',dueDate:w.dueDate||'',notes:w.managerNotes||''},after:changes,at:new Date().toISOString()});return {ok:true};});
+      var changes={lineId:b.lineId,priority:b.priority,dueDate:date,assignee:Flow.clean(b.assignee,120),managerNotes:Flow.clean(b.notes,3000),managerRevision:(w.managerRevision||0)+1,updatedBy:caller.email,updatedAt:A.FieldValue().serverTimestamp()};
+      tx.update(editRef,changes);tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-work-order',workOrderId:old.id,by:caller.email,before:{lineId:w.lineId||'',priority:w.priority||'normal',dueDate:w.dueDate||'',assignee:w.assignee||'',notes:w.managerNotes||''},after:changes,at:new Date().toISOString()});return {ok:true};});
   }
   if(b.action==='station-edit'){
     var stationRef=db.collection('plant_stations').doc(P.id(b.stationId));

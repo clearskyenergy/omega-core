@@ -11,6 +11,13 @@ by the URL. Office navigation links the catalog, URL Generator and plant manager
 - `/logic-urls`: customer walkthrough, customer login, licensed design studio,
   and the existing public battery-sizer key/embed. No station tokens or office
   credentials are included. Allow the actual website origin in Website installation.
+- `/plant/work-orders`: the work-order board — a filterable grid (line, stage,
+  priority, target date, progress, ready units, holds, next operation, assignee)
+  with a location/stage tree, column filters, CSV/print, and a per-order detail
+  card: step progress, operations checklist, activity feed derived from the
+  units' scan/test/hold evidence, audited manager edits (line, priority, target
+  date, assignee, notes), parts required vs registered, services and units.
+  Progress is computed in `api/_lib/plant-board.js`, never in the browser.
 - `/plant/manager`: line overview, paginated work orders, stations and units;
   links to immutable serial/test history and existing quality disposition.
 - `/plant/manager#flow`: ClearSky-owner production routing/version editor.
