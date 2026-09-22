@@ -1175,7 +1175,8 @@ function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
    (6 ports, 22 Sep 2026) — the engine's sheet against the rep's:
 
      EVSE hardware       $714/port  + $1,520/port install  ->  $1,850/port
-     Pedestal & mounting $450/unit                         ->  $2,035/port
+     Pedestal & mounting $450/unit                         ->  half the hardware
+                                                               ($925/port)
      Freight, activation billed separately                 ->  folded in
      Concrete pads       none                              ->  $512.50 + $1,012.50 each
      Panels, new service $570 labor                        ->  +$200
@@ -1186,7 +1187,9 @@ function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
    (civil, conduit, design, networking) keeps the rate card. */
 var NG_PRICE = {
   hardwarePerPort: 1850,
-  mountingPerPort: 2035,
+  /* The rep's first sheet carried $2,035; corrected the same day to HALF
+     the charger amount, so it follows the hardware price when that moves. */
+  mountingShare: 0.5,
   pad: { mat:512.50, lab:1012.50 },
   newServicePanelLab: 200
 };
@@ -1217,7 +1220,7 @@ function ngPriceLines(src){
       if(mounting) continue;
       mounting=true; c=copy(l);
       c.row='pedestal'; c.bucket='evse'; c.desc='Pedestals & mounting';
-      c.mat=r2(NG_PRICE.mountingPerPort*ports); c.lab=0; c.qty=ports; c.fp=0;
+      c.mat=r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports); c.lab=0; c.qty=ports; c.fp=0;
       out.push(c); continue;
     }
     if(l.row==='concrete' && l.bucket==='mr' && money(l)) pad=true;
@@ -1232,7 +1235,7 @@ function ngPriceLines(src){
                mat:r2(NG_PRICE.hardwarePerPort*ports), lab:0 });
   if(ports>0 && !mounting)
     out.push({ desc:'Pedestals & mounting', bucket:'evse', row:'pedestal', qty:ports, fp:0,
-               mat:r2(NG_PRICE.mountingPerPort*ports), lab:0 });
+               mat:r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports), lab:0 });
   /* Pads: the drawing's count when it has one, otherwise one per pedestal
      placed, otherwise one per dual-port pedestal. */
   if(ports>0 && !pad){
