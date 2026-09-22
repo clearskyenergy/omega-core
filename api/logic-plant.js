@@ -2,13 +2,26 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work');
+var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats');
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
   var ctx = await X.authorize(caller, org, req.method !== 'GET'), db = A.db();
   var flow=Flow.current(ctx.config), configRef=db.collection('omega_orgs').doc(org).collection('fulfillment').doc('config');
   if (req.method === 'GET') {
+    if(req.query.map){
+      /* The plant as a map (api/_lib/plant-stats.js): the newest units,
+         the routing, and the steps each station carries off the product
+         list. Numbers are what the benches reported; nothing is invented. */
+      var mapRows=await Promise.all([
+        db.collection('plant_units').where('orgId','==',org).orderBy('createdAt','desc').limit(Stats.MAX_UNITS).get(),
+        db.collection('omega_orgs').doc(org).collection('storefront').doc('config').get()]);
+      var mapUnits=mapRows[0].docs.map(function(d){return d.data();}),products=mapRows[1].exists?(mapRows[1].data().products||[]):[];
+      var map=Stats.stationMap(flow.routing,mapUnits,Date.now(),{shipUnitsOnly:true});
+      map.steps=Stats.stepsByStation(flow.routing,products,W.stepsFor);
+      map.lines=flow.lines;map.sampledLimit=mapRows[0].size===Stats.MAX_UNITS;
+      return {name:ctx.org.name||org,owner:X.owner(caller),brand:require('./_lib/logic-brand')(ctx.org),map:map};
+    }
     if(req.query.page){
       var collections={works:'plant_works_orders',units:'plant_units',stations:'plant_stations'},collection=collections[req.query.page];
       if(!collection)throw A.httpError(400,'Unknown plant page');

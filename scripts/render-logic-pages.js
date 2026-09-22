@@ -55,9 +55,30 @@ var solo = M.plan({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, ord
 var soloJson = { org: 'cleancell.us', workOrder: { id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', dueDate: '2026-11-14' }, feasible: false, short: M.shortfallsByWorksOrder(solo)['CC-26-4419'] || [], unknownSkus: [], hasBom: true };
 var flow = { version: 1, lines: [{ id: 'line_1', name: 'North line', location: 'Building A' }], routing: [{ key: 'kit', label: 'Kitting' }, { key: 'eol', label: 'EOL test' }, { key: 'ready', label: 'Ready' }] };
 var wo = { id: 'wo_1', orgId: 'cleancell.us', orderNo: 'CC-26-4419', status: 'awaiting_serials', lineId: 'line_1', routing: flow.routing, flowVersion: 1, requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14', managerRevision: 0 };
+/* the plant map: six cabinets with real timings off done{} */
+var Stats = require('../api/_lib/plant-stats');
+function T(h) { return new Date(Date.now() - (200 - h) * 3600000).toISOString(); }
+var mapUnits = [
+  { serial: 'CC418-26-44190', sku: 'CC-C215', shipUnit: true, startedAt: T(0), done: { kit: T(2), module: T(10), rack: T(14), encl: T(16), elec: T(20), bms: T(22), eol: T(23), qa: T(25), pack: T(26) }, at: 'ready', arrivedAt: T(26), inventoryStatus: 'available', unitType: 'cabinet' },
+  { serial: 'CC418-26-44191', sku: 'CC-C215', shipUnit: true, startedAt: T(1), done: { kit: T(3), module: T(15), rack: T(18), encl: T(20), elec: T(24), bms: T(26), eol: T(27), qa: T(29), pack: T(30) }, at: 'ready', arrivedAt: T(30), inventoryStatus: 'available', unitType: 'cabinet' },
+  { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' },
+  { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', unitType: 'cabinet' },
+  { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet' },
+  { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
+];
+function mapJson() { var routing = Plant.DEFAULT_ROUTING.map(function (s) { return s.key === 'bms' ? { key: s.key, label: s.label, checks: ['Load firmware'] } : s; }); var m = Stats.stationMap(routing, mapUnits, Date.now(), { shipUnitsOnly: true }); m.steps = Stats.stepsByStation(routing, [benchCab].concat(CATALOG), W.stepsFor); m.lines = flow.lines; m.sampledLimit = false; return { name: 'Clean Cell', owner: false, brand: brand, map: m }; }
+var officeJson = { owner: false, org: 'cleancell.us', name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
+  links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
+  orders: [
+    { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', customer: { name: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example' }] },
+    { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
+    { id: 'o3', orderNo: 'CC-26-4421', status: 'new', customer: { name: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
+  ], limited: false };
 function plantJson(q) {
+  if (/map=1/.test(q)) return mapJson();
   if (/page=works/.test(q)) return { rows: [wo], next: null };
-  if (/page=units|page=stations/.test(q)) return { rows: [], next: null };
+  if (/page=units/.test(q)) return { rows: mapUnits.map(function (u) { return Object.assign({ id: 'cleancell.us__' + u.serial, orgId: 'cleancell.us', woId: 'wo_1' }, u); }), next: null };
+  if (/page=stations/.test(q)) return { rows: [], next: null };
   if (/workOrder=/.test(q)) return { workOrder: wo, units: [], limited: false };
   return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: [], limited: false };
 }
@@ -90,9 +111,11 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/logic-plant') === 0) return json(plantJson(q));
   if (u.indexOf('/api/logic-materials') === 0) return json(/workOrder=/.test(q) ? soloJson : materialsJson);
   if (u.indexOf('/api/logic-catalog') === 0) return json(catalogJson);
+  if (u.indexOf('/api/logic-office') === 0) return json(officeJson);
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
   if (u === '/omega-brand.js' || u === '/omega-tenant.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* stub */'); }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
+  if (!fs.existsSync(f) && fs.existsSync(f + '.html')) f = f + '.html';   /* Vercel clean URLs */
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); res.end(fs.readFileSync(f));
 });
@@ -113,6 +136,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);
     var hs = await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; });
+    if (hs) console.log('  widest: ' + JSON.stringify(await p.evaluate(function () { var worst = null; Array.prototype.forEach.call(document.querySelectorAll('body *'), function (e) { var r = e.getBoundingClientRect(); if (r.right > 392 && (!worst || r.right > worst.right)) worst = { right: Math.round(r.right), tag: e.tagName, cls: String(e.className).slice(0, 40), id: e.id }; }); return worst; })));
     ok(name + ' has no horizontal scroll at 390px', !hs);
     console.log(name + ' ' + JSON.stringify(out) + ' h-scroll@390: ' + hs);
     await p.close();
@@ -163,6 +187,51 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var shortRows = await p.$$eval('#detail table tbody tr', function (r) { return r.length; });
     ok('work-order detail shows a Materials section with shortfalls', h3s.indexOf('Materials') >= 0 && shortRows >= 1, h3s);
     return { h3s: h3s, shortRows: shortRows };
+  });
+  await check('plant-map', '/plant/manager.html?org=cleancell.us#overview', async function (p) {
+    await p.waitForTimeout(500);
+    var nodes = await p.$$eval('.pmap .node', function (r) { return r.map(function (x) { return x.className + ':' + x.querySelector('h4').textContent + ':' + x.querySelector('.big').textContent; }); });
+    var bars = await p.$$eval('.bars > div', function (r) { return r.length; });
+    var kv = await p.$$eval('#map .logic-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 40); }); });
+    var stepsOpen = await p.$$eval('.pmap details', function (r) { return r.length; });
+    ok('one node per station, in routing order, with what is there now', nodes.length === 10 && /Kitting/.test(nodes[0]) && /Module build:1/.test(nodes[1]) && /Rack assembly:1/.test(nodes[2]) && /Ready to ship:3/.test(nodes[9]), nodes);
+    ok('the bottleneck is the slow bench and a held unit is marked', /slow/.test(nodes[1]) && /held/.test(nodes[2]), nodes.slice(1, 3));
+    ok('eight weeks of throughput, lead time and bottleneck tiles', bars === 8 && kv.some(function (t) { return /Lead time/.test(t); }) && kv.some(function (t) { return /Bottleneck.*Module build/.test(t); }), [bars, kv]);
+    ok('stations carry their steps off the bills', stepsOpen >= 1, stepsOpen);
+    return { nodes: nodes.length, bars: bars, bottleneck: kv.filter(function (t) { return /Bottleneck/.test(t); })[0] };
+  });
+  await check('office', '/omega-logic?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(600);
+    var flowTiles = await p.$$eval('.logic-flow a', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 30); }); });
+    var cash = await p.$$eval('#cash .logic-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 44); }); });
+    var floor = await p.$$eval('#floor-kv div', function (r) { return r.length; });
+    var navGroups = await p.$$eval('.logic-nav .eyebrow', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var signout = await p.$eval('#signout', function (e) { return e.textContent; });
+    var rows = await p.$$eval('#orders button.row', function (r) { return r.length; });
+    ok('the flow strip has the five stages with counts', flowTiles.length === 5 && /Requests & quotes1/.test(flowTiles[0]) && /Awaiting deposit1/.test(flowTiles[1]) && /In build1/.test(flowTiles[2]), flowTiles);
+    ok('cash flow tiles: invoiced, received, outstanding, deposits awaiting, purchase list value', cash.length === 6 && /Invoiced.*\$591,475\.00/.test(cash[0]) && /Outstanding\$441,100\.00/.test(cash[2]) && /Deposits awaiting\$90,225\.00/.test(cash[3]) && /Purchase list value\$/.test(cash[4]), cash);
+    ok('the floor tiles filled from the plant', floor === 4, floor);
+    ok('the nav runs the business in order and has no website group for a tenant', navGroups.join('|') === 'Run the business|Build|Stock & supply|Deliver|Money|Setup', navGroups);
+    ok('sign out is in the header', signout === 'Sign out');
+    ok('orders are listed', rows === 3, rows);
+    return { flowTiles: flowTiles, cash: cash, nav: navGroups.length };
+  });
+  await check('settings', '/logic-settings.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(400);
+    var cards = await p.$$eval('.card h3', function (r) { return r.map(function (x) { return x.textContent; }); });
+    ok('settings cards cover business, plant and subscription', cards.length === 8 && cards.indexOf('Stations & tablets') >= 0 && cards.indexOf('Customer terms') >= 0, cards);
+    return { cards: cards.length };
+  });
+  await check('inventory', '/logic-inventory.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(600);
+    var finished = await p.$$eval('#finished tbody tr', function (r) { return r.map(function (x) { return Array.prototype.map.call(x.cells, function (c) { return c.textContent.trim(); }).join(' '); }); });
+    var assign = await p.$$eval('[data-assign]', function (r) { return r.length; });
+    var opts = await p.$$eval('select[data-for] option', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var parts = await p.$$eval('#parts tbody tr', function (r) { return r.length; });
+    ok('finished units are counted by product: 2 available, 1 assigned, 3 building', /CC-C215 2 1 3/.test(finished[0] || ''), finished);
+    ok('each available unit can be assigned to an order that needs the product', assign === 2 && opts.some(function (o) { return /CC-26-4419/.test(o); }), [assign, opts]);
+    ok('components on the shelf come from the plan', parts >= 4, parts);
+    return { finished: finished, assign: assign, parts: parts };
   });
   await check('bench', '/plant/station.html', async function (p) {
     await p.fill('#p-id', 'st-rack'); await p.fill('#p-token', 'tok'); await p.click('#p-go'); await p.waitForTimeout(300);

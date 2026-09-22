@@ -166,7 +166,11 @@ function applyScan(unit, verdict, at) {
   var done = {};
   for (var k in (unit.done || {})) if (Object.prototype.hasOwnProperty.call(unit.done, k)) done[k] = unit.done[k];
   if (verdict.from) done[verdict.from] = at;
-  return { at: verdict.to, done: done, arrivedAt: at, hold: null };
+  var out = { at: verdict.to, done: done, arrivedAt: at, hold: null };
+  /* The first arrival is the start of the unit's clock; every later dwell
+     is read off done{} (plant-stats.js). */
+  if (!verdict.from) out.startedAt = at;
+  return out;
 }
 
 /* Test-rig payloads are evidence, not a free-form diagnostic dump. Keeping
