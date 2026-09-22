@@ -9,7 +9,8 @@ module.exports=A.handler(async function(req,res){
   if(!X.subscribed(ctx))throw A.httpError(403,'Omega Logic subscription required');
   if(req.method==='GET'){
     var q=db.collection('orders').where('orgId','==',org).orderBy('createdAt','desc').limit(100),rows=await q.get();
-    return {brand:require('./_lib/logic-brand')(ctx.org),orders:rows.docs.map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.size===100,
+    // Unconverted PO intake (including declined) has no destination plan and is not an order yet; api/po-intake.js applies the same rule.
+    return {brand:require('./_lib/logic-brand')(ctx.org),orders:rows.docs.filter(function(s){var d=s.data();return !d.poIntake||d.poIntake.convertedAt;}).map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.size===100,
       notice:'Manual shipment evidence ledger. Carrier booking, live tracking and commissioning approval are not connected.'};
   }
   if(['plan','pickup','location','delivered','inspect'].indexOf(b.action)<0)throw A.httpError(400,'Unsupported action');
