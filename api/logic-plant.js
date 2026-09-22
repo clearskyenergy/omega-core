@@ -2,7 +2,7 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops');
+var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops'),Attention=require('./_lib/plant-attention');
 var UNIT_FIELDS=['woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test'];
 /* The CMMS-style board: newest 100 works orders with progress derived from
    their units. Units are read in works-order chunks with a field projection;
@@ -38,6 +38,16 @@ module.exports = A.handler(async function (req, res) {
       map.steps=Stats.stepsByStation(flow.routing,products,W.stepsFor);
       map.lines=flow.lines;map.sampledLimit=mapRows[0].size===Stats.MAX_UNITS;
       return {name:ctx.org.name||org,owner:X.owner(caller),brand:require('./_lib/logic-brand')(ctx.org),map:map};
+    }
+    if(req.query.page==='attention'){
+      /* What needs a person now (plant-attention.js): the newest 500 units
+         and every station, judged against thresholds the caller may set. */
+      var attRows=await Promise.all([
+        db.collection('plant_units').where('orgId','==',org).orderBy('createdAt','desc').select('serial','sku','unitType','shipUnit','woId','orderNo','at','arrivedAt','startedAt','hold','holdAt','holdBy','ncr','test','testFailedAt','updatedAt').limit(500).get(),
+        db.collection('plant_stations').where('orgId','==',org).orderBy('__name__').limit(100).get()]);
+      var attUnits=attRows[0].docs.map(function(d){return d.data();}),attStations=attRows[1].docs.map(function(d){return Flow.stationView(d.data(),d.id);});
+      var att=Attention.attention(attUnits,attStations,flow.routing,new Date().toISOString(),{stuckHours:Number(req.query.stuckHours)||undefined,silentHours:Number(req.query.silentHours)||undefined});
+      return Object.assign(att,{name:ctx.org.name||org,owner:X.owner(caller),brand:require('./_lib/logic-brand')(ctx.org),sampled:attUnits.length,sampledLimit:attRows[0].size===500,links:plantLinks(org)});
     }
     if(req.query.page==='board'||req.query.page==='ops'){
       var now=new Date().toISOString(),board=await boardRows(db,org,now),common={name:ctx.org.name||org,owner:X.owner(caller),flow:flow,brand:require('./_lib/logic-brand')(ctx.org),asOf:now,

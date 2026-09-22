@@ -288,6 +288,12 @@ milestone the floor is at, and the invoice link comes from QuickBooks.
 
 ---
 
+**Portfolio screening and sizing** (2026-09-22): the portal's *Size a
+system* view carries a *Portfolio upload* mode — `api/customer-portfolio.js`,
+`api/_lib/portfolio/*`, `portals/customer/portfolio.js`. A buyer uploads a
+portfolio package, reviews document matches, runs the analysis in batches and
+exports the results. See `docs/PORTFOLIO-SCREENING.md`.
+
 ## 6. Plan status, and where the platform sale lands
 
 `plan: 'free' | 'designer'` on the buyer record.

@@ -19,7 +19,11 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-nav{padding:28px 20px;background:var(--sunk);border-right:1px solid var(--line)}
 .logic-nav a{display:block;padding:12px 14px;margin:4px 0;border-radius:9px;text-decoration:none;color:var(--ink2)}
 .logic-nav a[aria-current=page]{background:var(--brand-soft);color:var(--brand-d);font-weight:600}
-.logic-main{padding:32px;max-width:1400px;width:100%}.logic-main .panel{padding:24px;background:white;border:1px solid var(--line);margin:20px 0}
+.logic-main{padding:32px;max-width:1400px;width:100%}
+/* A page's own `main{margin:auto}` would centre it VERTICALLY inside the shell's
+   tall grid row (the blank half-screen above the catalog heading). Pin it to
+   the top; horizontal centring is the shell's job. */
+.logic-shell>.logic-main{margin:0;align-self:start;justify-self:stretch}.logic-main .panel{padding:24px;background:white;border:1px solid var(--line);margin:20px 0}
 .logic-main label{display:block;font-size:12px;color:var(--ink2);margin:14px 0 5px}.logic-main input{width:100%}
 .logic-main .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}.logic-main .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
 .logic-main button{padding:11px 18px;border:1px solid var(--line);background:white;color:var(--ink)}
@@ -28,7 +32,7 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 @media(max-width:760px){.logic-shell{grid-template-columns:minmax(0,1fr)}.logic-nav{display:flex;overflow:auto;gap:8px;border-right:0;border-bottom:1px solid var(--line);padding:8px}.logic-nav .eyebrow{display:none}.logic-nav a{white-space:nowrap}.logic-main{padding:20px}.logic-main .form-grid{grid-template-columns:1fr}}
 /* one chrome for every office page (OmegaLogicTheme.chrome) */
 .logic-theme header.logic-chrome{padding:18px 4%;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
-.logic-theme header.logic-chrome b{font-size:17px;letter-spacing:-.01em}.logic-theme .logic-sub{font-size:13px;color:var(--ink2)}
+.logic-theme header.logic-chrome b{font-size:17px;letter-spacing:-.01em}.logic-theme a.logic-home{color:var(--ink);text-decoration:none}.logic-theme a.logic-home:hover b{text-decoration:underline}.logic-theme .logic-sub{font-size:13px;color:var(--ink2)}
 .logic-theme .logic-who{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--ink2)}.logic-theme .logic-who a{color:var(--ink2)}
 .logic-theme .logic-signout{padding:8px 14px;border:1px solid var(--line);background:white;color:var(--ink);font-size:13px}
 .logic-nav a.local{font-size:13px;padding:8px 14px}.logic-nav .eyebrow{margin:16px 14px 4px}.logic-nav .eyebrow:first-child{margin-top:0}

@@ -39,6 +39,26 @@ appear only for ClearSky.
 
 ## 2. Setting up a tenant (ClearSky)
 
+0. **Commission the subscriber** from *Subscribers & commissioning*
+   (`/logic-admin.html`, the ClearSky group of every office menu, or the
+   directory's *Manage* link). One form: company email domain (the tenant
+   key), name, hosts, owner email, tier, platform name and attribution,
+   deposit and due terms, ClearSky fee. It writes the tenant record, the
+   subscription (omega-logic + whitelabel add-ons, 30-day trial when the
+   tier is trial), the office terms (not activated — QuickBooks gates that),
+   the public sign-in mirror for every host and the owner's account, and
+   hands back a one-time set-password link (or emails it, if you tick the
+   box). It refuses public email providers, a second record for the same
+   domain and a hostname another tenant holds. The same page is the control
+   panel afterwards: tenant record and hosts, status, subscription (tier,
+   add-ons, tool allowlist, overrides, dates, amounts, payment link), white
+   label, storefront copy / flags / limits / cost basis, people (invite,
+   role, disable, set-password link), hosts and keys, data counts, the
+   **hand-over export** (every collection as CSV + JSON with a README —
+   uploaded documents, ClearSky settlement, QuickBooks identifiers and
+   storefront keys are not in it) and the admin audit trail. Owner-only:
+   `api/logic-admin.js` refuses everybody but the verified ClearSky owner
+   account, the same gate as the directory.
 1. **Products & bills.** Send the customer `docs/product-list-template.csv`
    and `docs/bom-template.csv`. Import with
    `node scripts/import-products.js --org <org> --file products.csv --bom bom.csv`
@@ -131,14 +151,48 @@ orders with a balance and which invoice they are waiting on.
 
 ## 4. The plant, by screen
 
+### The plant board (`/plant/manager`)
+
+The plant manager's desk, in five views (the *On this page* links):
+
+- **Plant overview** — **Today** (scans advanced, units reached Ready,
+  refusals and test fails today, open work orders with late/held counts,
+  finished stock, where the units are), **Needs a person** (units stuck at
+  one bench past a threshold, units on hold with the reason, NCR and how
+  long, benches that have not scanned in a working day, routing exceptions
+  and unheld failed tests) and **The line** (the station map with dwell
+  times and the bottleneck).
+- **Work orders** — the board's rows (stage, line, priority, target, built
+  %, ready units, next operation, assignee) with a search and stage filter;
+  *Manage* edits line, priority, target date, assignee and notes (audited)
+  and shows materials, services and every unit's step progress.
+- **Quality** — holds, failed machine tests, stuck units and routing
+  exceptions, each linking to the serial record where a disposition is made.
+- **Stations & devices** — every paired tablet, rig and roaming phone with
+  when it last reported (quiet benches flagged), plus **Pair a new device**:
+  choose the operation (or *Roaming phone*), the line and a label; the token
+  is shown once.
+- **All units** — filter by station and hold; how long each unit has been at
+  its bench; test result; link to the serial record.
+
+Thresholds: stuck = 24 h at one bench, quiet bench = 8 h without a scan
+(`GET /api/logic-plant?page=attention&stuckHours=…&silentHours=…`).
+
 ### The phone app (`/plant/app`)
 
-Open it once from the office link, then **Add to Home Screen**. Four tabs:
+Open it once from the office link, then **Add to Home Screen**. Five tabs:
 
-- **Work** — open work orders, urgent first, then by due date, each with
-  progress. Tap one: status, due date, line, notes, where its units are,
-  what it is **short of**, every unit with its station and step progress.
-  *Scan at a bench* opens the scanner.
+- **Today** — today's scans, units finished, refusals and test fails; what
+  **needs a person** (held, stuck, unheld failures, quiet benches — tap a
+  unit to open it); **my work** (work orders assigned to you) or what is up
+  next; *Scan at a bench*.
+- **Work** — open work orders from the board (late first, then urgent, then
+  by target date) with **All / Mine / Late / Holds / Ready** filters and each
+  one's built %, ready units and next operation. Tap one: stage, target,
+  assignee, built %, ready units, holds, next operation, where its units
+  are, what it is **short of**, every unit with its station and step
+  progress. *Scan at a bench* opens the scanner. A unit shows its bench, the
+  next bench, the steps open at this bench, its last test and work order.
 - **Scan** — opens the scanner (paired once as a Roaming phone), or looks
   up a serial.
 - **Stock** — finished units by product and the parts short for the open
@@ -175,6 +229,19 @@ documents the tenant marked customer-facing, shipment carrier and tracking,
 years, and **Request a change or ask a question** on any order (delivery
 address or date, a question, a change, a warranty claim). Requests and the
 tenant's answers stay on the order.
+
+**Size a system** is the first entry in the portal nav. *Single site* frames
+the supplier's battery sizer (the same one the public site carries, in its
+plain mode). *Portfolio upload* takes a ZIP, CSV or XLSX of many sites —
+site list, bills, interval files, drawings — matches every document to a
+site by ID then address, and screens and sizes each site on its own with the
+data it actually has: a detailed size from a full year of interval data, a
+preliminary size from twelve bills, a screening range from a peak or annual
+figure, and an exact request for what is missing otherwise. Every number
+carries where it came from. Results export to CSV, an executive report and
+per-site reports; a sized site can be added to the customer's projects and
+opened in Design Studio. Design, statuses and the honest list of what is not
+built: `docs/PORTFOLIO-SCREENING.md`.
 
 ## 6. Build notes — what landed in this pass, and what did not
 

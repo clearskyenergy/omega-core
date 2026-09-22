@@ -365,6 +365,18 @@ is not built.
   `/tenants/<slug>/icons/`, validated; OMEGA icons as the fallback). A
   tenant's icon set lives in its folder and its `tenant.json`; the seed
   copies `appIcon` onto the record. Never a script URL in a manifest.
+- **ClearSky commissions and controls Logic subscribers from
+  `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
+  `logic-access.requireOwner`). It owns only what no other endpoint did —
+  the structural tenant fields, storefront copy and cost basis,
+  commissioning, members, the hand-over export — and the page posts billing,
+  status and white label to `tenant-billing`, `tenant-approve` and
+  `tenant-branding` so each allowlist stays in its one file.
+  `api/_lib/whitelabel.js` now also holds `publicRecord()`, the ONE builder
+  of a `tenant_public` document; every mirror uses it. Every admin write
+  lands in `omega_orgs/{org}/admin_audit` with what changed and what it was.
+  Tests: `scripts/test-logic-admin.js` on the shared
+  `scripts/_lib/firestore-double.js`.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Silmarillion 2.0 — joint development
