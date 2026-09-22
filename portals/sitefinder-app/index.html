@@ -84,7 +84,18 @@ a{color:var(--teal)}
 .note{font-size:12.5px;color:var(--muted);line-height:1.45}
 .note.bad{color:var(--red)}
 .status{font-size:12.5px;color:var(--dim);margin:6px 2px 10px}
-#map{height:220px;border-radius:var(--r);border:1px solid var(--line);margin-bottom:10px;background:#e9eef2}
+#mapWrap{position:relative;margin-bottom:10px}
+#map{height:170px;border-radius:var(--r);border:1px solid var(--line);background:#e9eef2;transition:height .2s}
+#mapWrap.tall #map{height:62vh}
+#mapWrap.hidden #map{display:none}
+.mapBtns{position:absolute;top:8px;right:8px;z-index:500;display:flex;gap:6px}
+.mapBtns button{background:rgba(255,255,255,.95);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;color:var(--ink)}
+.mapBtns button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+#mapWrap.hidden .mapBtns{position:static;margin-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:11px;color:var(--dim);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;opacity:.85}
+.legend small{flex-basis:100%;font-size:11px}
+#mapWrap.hidden .legend{display:none}
 .site{display:block;text-decoration:none;color:inherit}
 .site .head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .site .addr{font-size:15px;font-weight:700;line-height:1.25}
@@ -174,7 +185,9 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       <button class="btn sm" id="here" type="button">Search this map</button>
       <label class="note" style="display:flex;align-items:center;gap:6px;margin-left:auto">Min kW <input id="minKw" type="number" min="0" step="50" value="0" style="width:72px;padding:6px;border:1px solid var(--line);border-radius:6px"></label>
     </div>
-    <div id="map"></div>
+    <div id="mapWrap"><div id="map"></div>
+      <div class="mapBtns"><button type="button" id="capToggle" class="on">Capacity</button><button type="button" id="baseSat">Satellite</button><button type="button" id="baseStreet">Street</button><button type="button" id="mapSize">Bigger map</button><button type="button" id="mapHide">Hide map</button></div>
+      <div class="legend" id="legend"><span><i style="background:#c8322b"></i>1,001 kW +</span><span><i style="background:#e0a020"></i>501–1,000 kW</span><span><i style="background:#9aa7b4"></i>0–500 kW</span><small id="legendNote">Hosting capacity on the serving circuits. Zoom in to draw it.</small></div></div>
     <div class="status" id="findStatus" role="status">Search the shared listing catalogue, or press Near me.</div>
     <div id="findList"></div>
   </section>
@@ -260,13 +273,66 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
   window.addEventListener("hashchange", route);
 
   /* ── the map ───────────────────────────────────────────────────────── */
-  var map = null, markers = null, MARK = {};
+  var map = null, markers = null, MARK = {}, tiles = null, CAP = { on: true };
+  function capNote(n, err) {
+    var el = $("legendNote"); if (!el) return;
+    el.textContent = !CAP.on ? "Capacity layer off." : err ? "ComEd capacity could not be read: " + (err.message || err) :
+      n === -1 ? "Zoom in to draw the hosting capacity on the circuits." : n === 0 ? "No published circuits in view." : n + " circuits in view, coloured by available hosting capacity.";
+  }
+  /* The same two basemaps the desktop tool offers. CARTO's street tiles need
+     the key the desktop tool carries (window.CS_TILE_KEY, the key saved in
+     Settings, or ClearSky's default; it is domain-registered, not secret).
+     Esri imagery needs no key and is never watermarked, and on a phone the
+     roof and the yard are what a rep wants to see, so it is the default. */
+  var CS_TILE_KEY_DEFAULT = "cb1_2diy_1_571d8ef1a64c13a11870c259";
+  function tileKey() { var k = ""; try { k = localStorage.getItem("cs.tileKey") || ""; } catch (e) {} return window.CS_TILE_KEY || k || CS_TILE_KEY_DEFAULT; }
+  var BASES = {
+    satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", opts: { maxZoom: 19, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" } },
+    street: { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=", opts: { maxZoom: 19, subdomains: "abcd", attribution: "&copy; OpenStreetMap &copy; CARTO" }, keyed: true }
+  };
+  function pref(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function setPref(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  var BASE = BASES[pref("sfapp.base", "")] ? pref("sfapp.base", "") : "satellite";
+  function drawTiles() {
+    if (!map) return;
+    if (tiles) { map.removeLayer(tiles); tiles = null; }
+    var b = BASES[BASE];
+    tiles = window.L.tileLayer(b.url + (b.keyed ? encodeURIComponent(tileKey()) : ""), b.opts).addTo(map);
+    tiles.bringToBack();
+    $("baseSat").classList.toggle("on", BASE === "satellite"); $("baseStreet").classList.toggle("on", BASE === "street");
+  }
+  function mapMode(mode) {
+    var w = $("mapWrap");
+    w.classList.toggle("tall", mode === "tall"); w.classList.toggle("hidden", mode === "hidden");
+    $("mapSize").textContent = mode === "tall" ? "Smaller map" : "Bigger map";
+    $("mapHide").textContent = mode === "hidden" ? "Show map" : "Hide map";
+    setPref("sfapp.map", mode);
+    if (map) setTimeout(function () { map.invalidateSize(); }, 220);
+  }
   function ensureMap() {
     if (map || !window.L) return;
     map = window.L.map("map", { zoomControl: false, attributionControl: true }).setView([41.85, -87.71], 11);
-    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap &copy; CARTO" }).addTo(map);
     markers = window.L.layerGroup().addTo(map);
     if (LAY && LAY.init) LAY.init(map);
+    drawTiles();
+    mapMode(pref("sfapp.map", "small"));
+    /* The hosting-capacity polygons the desktop map draws: the coloured
+       circuits are how a rep sees where the power is before opening a card.
+       Drawn from zoom 12 in, refreshed when the map settles. */
+    var pal = LAY && (LAY.prospect ? LAY.PROSPECT_COLORS : LAY.COMED_COLORS);
+    if (pal) { var sw = document.querySelectorAll("#legend i"), keys = ["hi", "mid", "lo"], si; for (si = 0; si < sw.length && si < keys.length; si++) if (pal[keys[si]]) sw[si].style.background = pal[keys[si]]; }
+    CAP.on = pref("sfapp.cap", "on") !== "off";
+    $("capToggle").classList.toggle("on", CAP.on);
+    if (LAY && LAY.hosting) LAY.hosting(CAP.on, capNote);
+    map.on("moveend", function () { if (CAP.on && LAY && LAY.refreshHosting) LAY.refreshHosting(capNote); });
+    $("capToggle").onclick = function () {
+      CAP.on = !CAP.on; setPref("sfapp.cap", CAP.on ? "on" : "off"); this.classList.toggle("on", CAP.on);
+      if (LAY && LAY.hosting) LAY.hosting(CAP.on, capNote);
+    };
+    $("baseSat").onclick = function () { BASE = "satellite"; setPref("sfapp.base", BASE); drawTiles(); };
+    $("baseStreet").onclick = function () { BASE = "street"; setPref("sfapp.base", BASE); drawTiles(); };
+    $("mapSize").onclick = function () { mapMode($("mapWrap").classList.contains("tall") ? "small" : "tall"); };
+    $("mapHide").onclick = function () { mapMode($("mapWrap").classList.contains("hidden") ? "small" : "hidden"); };
   }
   function pinHtml(r, sel) {
     var txt = r.circ && r.circ.known ? fmt(r.circ.sellable) + " kW" : (r.lat == null ? "" : "•");
@@ -294,7 +360,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     api("/api/site-catalog", body, function (err, d) {
       if (epoch !== ST.epoch) return;
       if (err) { status.textContent = err.message; return; }
-      if (!d.manifest) { status.textContent = "No listing catalogue is loaded for " + ST.org + " yet."; ST.rows = []; renderFind(); return; }
+      if (!d.manifest) { ST.rows = []; renderFind(); noCatalogue(status); return; }
       ST.rows = (d.rows || []).map(prepare);
       ST.rows.forEach(function (r) { ST.byId[r.id] = r; });
       ST.fitPins = !body.bbox;
@@ -306,6 +372,25 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
         renderFind();
       });
     });
+  }
+  /* No catalogue in this workspace. Staff work in a client's workspace, and
+     a home-screen app cannot carry ?org=, so the choice is remembered here. */
+  function noCatalogue(status) {
+    if (!ST.staff) { status.textContent = "No listing catalogue is loaded for " + ST.org + " yet."; return; }
+    status.innerHTML = 'No listing catalogue in <b>' + esc(ST.org) + '</b>. You are signed in as ClearSky staff: choose the client workspace to work in.' +
+      '<div class="form" style="margin-top:8px"><label>Workspace<input id="pickOrg" type="text" inputmode="url" autocapitalize="none" placeholder="chileasing.com" value="' + esc(pref("sfapp.org", "chileasing.com")) + '" style="width:200px"></label><button class="btn sm primary" type="button" id="pickOrgGo">Use this workspace</button></div>';
+    $("pickOrgGo").onclick = function () { switchOrg($("pickOrg").value); };
+  }
+  function switchOrg(v) {
+    v = String(v || "").trim().toLowerCase();
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(v)) return;
+    setPref("sfapp.org", v); ST.org = v; $("topOrg").textContent = v;
+    ST.rows = []; ST.byId = {}; ST.leases = {}; ST.epoch++;
+    if (window.OmegaSiteScore) window.OmegaSiteScore.reset();
+    if (SAVES) SAVES.init(v, ST.user, function () {}, ST.db);
+    L.attach(ST.db, v, function () {});
+    location.hash = "#/find"; route();
+    loadListings({ q: $("q").value, page: 0 }, $("q").value ? "for \u201c" + $("q").value + "\u201d" : "in " + v);
   }
   /* A listing row from the catalogue, with the flags the desktop tool gives
      an approximate pin: no circuit is attributed to a ZIP-area centre. */
@@ -607,13 +692,15 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
   function renderAccount() {
     var v = $("viewAccount"), standalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    v.innerHTML = '<div class="card"><h3>' + esc(repName()) + '</h3><div class="kv" style="margin-top:6px"><b>Workspace</b><span>' + esc(ST.org) + (ST.staff && param("org") ? " (staff preview)" : "") + "</span><b>Saved sites</b><span>" + esc(savesState()) + "</span></div></div>" +
+    v.innerHTML = '<div class="card"><h3>' + esc(repName()) + '</h3><div class="kv" style="margin-top:6px"><b>Workspace</b><span>' + esc(ST.org) + (ST.staff && ST.org !== orgOfEmail() ? " (client workspace)" : "") + "</span><b>Saved sites</b><span>" + esc(savesState()) + "</span></div>" +
+      (ST.staff ? '<div class="form" style="margin-top:8px"><label>Client workspace<input id="acctOrg" type="text" inputmode="url" autocapitalize="none" value="' + esc(ST.org) + '" style="width:200px"></label><button class="btn sm" type="button" id="acctOrgGo">Switch</button></div><p class="note">ClearSky staff work in a client\u2019s workspace; the choice is remembered on this phone.</p>' : "") + "</div>" +
       '<div class="card"><h3>Install on your phone</h3>' + (standalone ? '<p class="note">Installed. You are running the app from the home screen.</p>' :
         ST.installPrompt ? '<p class="note">Add Site Finder to the home screen so it opens like an app.</p><button class="btn primary" id="installBtn" type="button">Install</button>' :
         ios ? '<p class="note">In Safari: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>' : '<p class="note">In Chrome: open the browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>') + "</div>" +
       '<div class="card"><h3>Desktop tool</h3><p class="note">The full site finder with the map layers, holds and the cost estimator: <a href="/clearsky-sitefinder.html' + (ST.org ? "?org=" + encodeURIComponent(ST.org) : "") + '">open on a computer</a>.</p></div>' +
       '<div class="card"><button class="btn" id="signOut" type="button">Sign out</button></div>';
     var b;
+    if ((b = $("acctOrgGo"))) b.onclick = function () { switchOrg($("acctOrg").value); };
     if ((b = $("installBtn"))) b.onclick = function () { if (ST.installPrompt) { ST.installPrompt.prompt(); ST.installPrompt = null; } };
     if ((b = $("signOut"))) b.onclick = function () { firebase.auth().signOut(); };
   }
@@ -634,9 +721,10 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     e.preventDefault(); signinMsg("Signing in…");
     firebase.auth().signInWithEmailAndPassword($("signinEmail").value.trim(), $("signinPass").value).then(function () { signinMsg(""); }, function (err) { signinMsg(err && err.message || "Sign-in failed."); });
   };
+  function orgOfEmail() { var e = String(ST.user && ST.user.email || "").toLowerCase(), d = e.indexOf("@") > 0 ? e.split("@")[1] : ""; return ORG_ALIAS[d] || d; }
   function orgFor(u) {
     var email = String(u.email || "").toLowerCase(), domain = email.indexOf("@") > 0 ? email.split("@")[1] : "";
-    var mine = ORG_ALIAS[domain] || domain, want = param("org").toLowerCase();
+    var mine = ORG_ALIAS[domain] || domain, want = (param("org") || "").toLowerCase() || pref("sfapp.org", "");
     ST.staff = STAFF.test(mine);
     return ST.staff && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(want) ? want : mine;
   }
