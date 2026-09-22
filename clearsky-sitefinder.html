@@ -739,7 +739,7 @@
         <label for="catalogFile">Prepared catalog JSON</label><input id="catalogFile" type="file" accept="application/json,.json">
         <button id="catalogUpload" type="button">Import into this workspace</button>
         <p style="margin:10px 0 4px"><button id="catalogMatch" type="button">Match remaining locations</button>
-          <small>Runs the Census geocoder over every listing without a pin, trying several spellings of each address, then places what is left at the centre of its ZIP. Keeps going until every listing is on the map.</small></p>
+          <small>Runs the Census geocoder over every listing without a pin, trying several spellings of each address, then places what is left at the centre of its ZIP. The scheduled worker does this on its own within the hour of an import; press it for an immediate run.</small></p>
       </details>
       <details id="catalogDetails" hidden><summary>Staff: capture listing details from Crexi</summary>
         <p style="margin:6px 0"><small>The snapshot holds what the search cards showed. A listing page adds days on market, NOI, cap rate, tenancy, lease expiry, year built and the brokers. Three steps:</small></p>

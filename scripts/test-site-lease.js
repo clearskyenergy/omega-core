@@ -4,7 +4,8 @@
 var assert = require('assert'), L = require('../api/_lib/site-lease');
 var o = L.offer({ kw: 750, kwh: 3000 });
 assert.equal(o.termYears, 15); assert.equal(o.leasedAcres, 0.15); assert.equal(o.acresDerived, true);
-assert.equal(o.annual.base, Math.round(0.15 * 4000 + 750 * 35), 'pad rent plus capacity rent');
+assert.equal(o.annual.base, Math.round(0.15 * L.RATE_CARD.padPerAcreYear.base + 750 * L.RATE_CARD.capacityPerKwYear.base), 'pad rent plus capacity rent');
+assert.ok(L.RATE_CARD.sources.length >= 3, 'the bands cite their published basis');
 assert.equal(o.monthly.base, Math.round(o.annual.base / 12));
 assert.ok(o.annual.low < o.annual.base && o.annual.base < o.annual.high);
 assert.equal(o.termTotal.base, Math.round(L.escalatedTotal(o.annual.base, 0.025, 15)));
@@ -46,6 +47,6 @@ var api = box.module.exports, res = { setHeader: function () {} };
   assert.ok(limits.length && limits.every(function (k) { return k === 'site-lease:example.com'; }), 'rate limited per workspace');
   caller.staff = true;
   var s = await api({ method: 'POST', token: 1, body: { kw: 750 } }, res);
-  assert.ok(s.offer.components.base.padAnnual > 0, 'staff see the build-up');
+  assert.ok(s.offer.components.base.padAnnual > 0, 'staff see the build-up'); assert.ok(s.offer.rateCard.sources.length >= 3, 'and the sources');
   console.log('site lease: 750 kW / 3 MWh pays ' + o.monthly.base + '/mo, ' + o.termTotal.base + ' over 15 years (base band); endpoint scoping holds.');
 })().catch(function (e) { console.error(e); process.exitCode = 1; });

@@ -24,9 +24,9 @@ async function quote(db, caller, org, b) {
   var doc = await db.collection('omega_orgs').doc(org).get();
   var out = L.offer({ kw: b.kw, kwh: b.kwh, acres: b.acres, termYears: b.termYears });
   if (!caller.staff) { delete out.components; out.rateCard = { version: out.rateCard.version, asOf: out.rateCard.asOf, disclosed: false }; }
-  else out.rateCard.disclosed = true;
+  else { out.rateCard.disclosed = true; out.rateCard.sources = L.RATE_CARD.sources; }
   return { build: 'site-lease/1', offer: out, site: siteEcho(b.site), brand: brandOf(doc.exists ? doc.data() : null),
-    disclaimer: 'Indicative host lease from the ' + out.rateCard.version + ' seed rate card, not verified comparables and not a binding offer. Rent, term and conditions are subject to a signed letter of intent, utility interconnection approval and site diligence.' };
+    disclaimer: 'Indicative host lease priced from published host-lease benchmarks (' + out.rateCard.version + '), not a binding offer. Rent, term and conditions are subject to a signed letter of intent, utility interconnection approval and site diligence.' };
 }
 
 module.exports = A.handler(async function (req, res) {

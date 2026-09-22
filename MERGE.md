@@ -1526,3 +1526,9 @@ Lease pricing is server-side: `api/_lib/site-lease.js` (seed rate card) behind
 from non-staff. `omega-site-lease.js` renders the host proposal. No rules,
 production data, credentials or deployment changed; the live catalogue is
 re-matched by pressing the button once as staff.
+
+The listing catalogue finishes its own map: `api/logic-worker.js` (the
+five-minute cron) runs one `finishMatching` pass per tick for the first
+workspace whose catalogue is not marked `matchingDone`, so an import is
+fully placed within the hour with nobody pressing anything. The host lease
+rate card (v2) cites its published basis in `RATE_CARD.sources`.

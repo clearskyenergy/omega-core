@@ -428,7 +428,11 @@ catalogue panel (`POST /api/site-catalog {action:'geocode'}`, staff only):
    cannot be held, and opening the card tries to fix the pin first.
 
 Each server call works for about 38 s, publishes a new catalogue version
-and reports progress; the page loops until `done`. A row with no ZIP or
+and reports progress; the page loops until `done`. **Nobody has to press
+it:** `api/logic-worker.js` (the five-minute Vercel cron) runs one pass per
+tick for the first workspace whose catalogue is not marked `matchingDone`,
+so a 3,677-row import finishes its own map within the hour. The button
+remains for an immediate run. A row with no ZIP or
 city that any matched listing shares stays unplaced and searchable. The
 manifest now carries `located`, `approximate` and `unmatched`.
 
@@ -490,10 +494,14 @@ sheet states AC kW the count must cover the power too.
 
 Step 7 of the drawer, and **Lease offer** on the card: "rent us the pad
 for this battery and we pay you X a month for N years." `POST
-/api/site-lease` prices it from the seed rate card in
+/api/site-lease` prices it from the rate card in
 `api/_lib/site-lease.js` (pad rent per acre plus a capacity rent per kW,
-escalated over the term, floored for small systems). A rep receives the
-low/base/high rent and never the rates; staff see the build-up.
+escalated over the term, floored for small systems). The bands are built
+from published 2024–2026 host-lease benchmarks listed in
+`RATE_CARD.sources` (storage ground leases per acre, rooftop host leases
+per kW) and are tuned per market as signed comps come in. A rep receives
+the low/base/high rent and never the rates; staff see the build-up and
+the sources.
 `omega-site-lease.js` prints the two-page host proposal (Print / Save as
 PDF). It is the battery sibling of the compute land lease
 (`api/compute-lease.js`), which is fiber-gated and prices a different pad.

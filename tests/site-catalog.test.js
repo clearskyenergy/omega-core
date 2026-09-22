@@ -5,7 +5,7 @@ var C=require('../api/_lib/site-catalog');
 function sample(){return {manifest:{orgId:'example.com'},rows:[{id:'crexi:123',addr:'1 Test St',city:'Chicago',fullAddress:'1 Test St, Chicago, IL 60601',lat:null,lon:null,listed:{url:'https://www.crexi.com/properties/123/test',askPrice:100},feederId:'forged',owner:{name:'forged'},photos:['javascript:bad']}]};}
 test('catalog validation pins destination and identity; never imports holds, owners, scores or guessed capacity',function(){var v=C.validate(sample(),'example.com');assert.equal(v.rows[0].feederId,'');assert.deepEqual(v.rows[0].owner,{name:''});assert.deepEqual(v.rows[0].photos,[]);assert.equal(v.manifest.located,0);assert.throws(()=>C.validate(sample(),'other.com'));var d=sample();d.rows.push(d.rows[0]);assert.throws(()=>C.validate(d,'example.com'));d=sample();d.rows[0].listed.url='https://www.crexi.com/properties/456/test';assert.throws(()=>C.validate(d,'example.com'));});
 test('invalid or unproven coordinates are rejected',function(){var d=sample();d.rows[0].lat=41;d.rows[0].lon=-87;assert.throws(()=>C.validate(d,'example.com'));d.rows[0].geocode={status:'matched'};assert.equal(C.validate(d,'example.com').manifest.located,1);d.rows[0].lat=Infinity;assert.throws(()=>C.validate(d,'example.com'));});
-function fakeDB(){var docs=new Map(),writes=[];function ref(p){return {path:p,collection:k=>ref(p+'/'+k),doc:k=>ref(p+'/'+k),get:async()=>({exists:docs.has(p),data:()=>docs.get(p),updateTime:{toMillis:()=>1}})};}return {docs,writes,collection:ref,batch:()=>{var ops=[];return {create:(r,d)=>ops.push([r.path,d]),commit:async()=>ops.forEach(([p,d])=>{assert(!docs.has(p));docs.set(p,d);writes.push(p);})};},runTransaction:async f=>f({get:r=>r.get(),set:(r,d)=>{docs.set(r.path,d);writes.push(r.path);}})};}
+function fakeDB(){var docs=new Map(),writes=[];function ref(p){return {path:p,id:p.split('/').pop(),collection:k=>ref(p+'/'+k),doc:k=>ref(p+'/'+k),get:async()=>({exists:docs.has(p),data:()=>docs.get(p),updateTime:{toMillis:()=>1}}),set:async(d,o)=>{docs.set(p,o&&o.merge?Object.assign({},docs.get(p)||{},d):d);writes.push(p);}};}return {docs,writes,collection:ref,batch:()=>{var ops=[];return {create:(r,d)=>ops.push([r.path,d]),commit:async()=>ops.forEach(([p,d])=>{assert(!docs.has(p));docs.set(p,d);writes.push(p);})};},runTransaction:async f=>f({get:r=>r.get(),set:(r,d)=>{docs.set(r.path,d);writes.push(r.path);}})};}
 test('publish is retryable, read-back verified and writes only existing tenant toolData; stars untouched',async function(){var db=fakeDB();db.docs.set('sites/star',{saved:true,notes:'preserve'});var a=await C.publish(db,'example.com',sample());assert.equal(a.imported,1);await C.publish(db,'example.com',sample());assert.deepEqual(db.docs.get('sites/star'),{saved:true,notes:'preserve'});assert(db.writes.every(p=>p.startsWith('toolData/example.com/tools/sitefinderCatalog')));});
 function endpoint(){
   var caller={orgId:'example.com',staff:false},allowed=true,reads=0;
@@ -63,4 +63,19 @@ test('captured listing pages land on their rows as typed fields plus trimmed tex
   var pub=await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:t.rows});
   assert.equal(pub.manifest.detailed,1);
   assert.equal(db.docs.get('toolData/example.com/tools/sitefinderCatalog_'+pub.manifest.version+'_0').rows.length,3);
+});
+test('the scheduled worker finishes the map on its own: one pass per tick, marks the manifest done, then leaves it alone',async function(){
+  var db=fakeDB(),G=require('../api/_lib/geocode-listings');
+  db.collection=(function(orig){return function(k){var r=orig(k);if(k==='toolData')r.listDocuments=async()=>[orig('toolData/other.com'),orig('toolData/example.com')];return r;};})(db.collection);
+  function row(n,addr,lat,lon){return {id:'crexi:'+n,addr:addr,city:'Chicago',state:'IL',zip:'60601',fullAddress:addr+', Chicago, IL 60601',lat:lat,lon:lon,listed:{url:'https://www.crexi.com/properties/'+n+'/x',askPrice:null},geocode:lat==null?{status:'unmatched',source:'US Census',accuracy:'unknown'}:{status:'matched',source:'US Census',accuracy:'street-interpolated, not rooftop'}};}
+  await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'t'},rows:[row(1,'1 A St',41.88,-87.63),row(2,'2 A St',41.89,-87.64),row(3,'Lot 9 Nowhere',null,null)]});
+  var ticks=0,box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return Object.assign({},G,{fetchJson:async()=>{ticks++;return {result:{addressMatches:[]}};}});return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout,String};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
+  var H=box.module.exports._helpers;
+  assert.equal(await H.nextCatalogueToMatch(db),'example.com');
+  var r=await H.matchNextCatalogue(db,5000);
+  assert.equal(r.orgId,'example.com');assert.equal(r.done,true);assert.equal(r.approximate,1,'the leftover row took the area centre');assert.ok(ticks>0,'the geocoder was tried first');
+  var m=db.docs.get('toolData/example.com/tools/sitefinderCatalog');assert.equal(m.matchingDone,true);assert.equal(m.located,3);
+  assert.equal(await H.nextCatalogueToMatch(db),null,'a finished catalogue is left alone');
+  assert.equal(await H.matchNextCatalogue(db),null);
 });

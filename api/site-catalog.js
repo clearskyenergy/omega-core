@@ -60,14 +60,35 @@ async function finishMatching(db,org,b){
   var data=await catalog(db,org);if(!data.manifest)throw A.httpError(404,'No listing snapshot imported for this workspace');
   var rows=data.rows.map(function(r){return JSON.parse(JSON.stringify(r));});
   if(b.reset)rows.forEach(function(r){if(r.lat==null)r.geocode={status:'unmatched',source:'US Census',accuracy:'unknown'};});
-  var pass=await geo.geocodeRows(rows,b._fetchJson||geo.fetchJson,{budgetMs:GEOCODE_BUDGET_MS,concurrency:6});
+  var budget=Math.min(GEOCODE_BUDGET_MS,Math.max(5000,Number(b.budgetMs)||GEOCODE_BUDGET_MS));
+  var pass=await geo.geocodeRows(rows,b._fetchJson||geo.fetchJson,{budgetMs:budget,concurrency:6});
   var approximate=0;
   if(pass.remaining===0&&!pass.transportError)approximate=geo.areaFallback(rows);
   var changed=pass.matched+approximate>0;
   var result=changed?await importer.publish(db,org,{manifest:{orgId:org,source:data.manifest.source},rows:rows}):null;
   if(changed)delete CACHE[org];
   var m=result?result.manifest:data.manifest,unmatched=rows.filter(function(r){return r.lat==null;}).length;
+  var done=pass.remaining===0&&!pass.transportError;
+  /* Mark the manifest so the scheduled worker stops re-reading a finished catalogue; a fresh import writes a new manifest without the mark. */
+  if(done)await db.collection('toolData').doc(org).collection('tools').doc('sitefinderCatalog').set({matchingDone:true,matchedAt:new Date().toISOString()},{merge:true});
   return {attempted:pass.attempted,matched:pass.matched,approximate:approximate,transportError:pass.transportError,
-    count:m.count,located:m.located,unmatched:unmatched,remainingToTry:pass.remaining,done:pass.remaining===0&&!pass.transportError,version:m.version||null};
+    count:m.count,located:m.located,unmatched:unmatched,remainingToTry:pass.remaining,done:done,version:m.version||null};
 }
-module.exports._helpers={select:select,catalog:catalog,finishMatching:finishMatching};
+/* The catalogue the scheduled worker should work on next: the first workspace whose
+   catalogue is not marked finished and still has rows without a location. One pass per
+   worker tick, so a 3,677-row catalogue completes on its own within the hour of an
+   import without anyone pressing anything. */
+async function nextCatalogueToMatch(db){
+  var refs=await db.collection('toolData').listDocuments();
+  for(var i=0;i<refs.length;i++){
+    var m=await refs[i].collection('tools').doc('sitefinderCatalog').get();
+    if(!m.exists)continue;var d=m.data();
+    if(d.kind==='sitefinder-catalog'&&!d.matchingDone&&Number(d.count)>Number(d.located||0))return refs[i].id;
+  }
+  return null;
+}
+async function matchNextCatalogue(db,budgetMs){
+  var org=await nextCatalogueToMatch(db);if(!org)return null;
+  var r=await finishMatching(db,org,{budgetMs:budgetMs||25000});r.orgId=org;return r;
+}
+module.exports._helpers={select:select,catalog:catalog,finishMatching:finishMatching,nextCatalogueToMatch:nextCatalogueToMatch,matchNextCatalogue:matchNextCatalogue};
