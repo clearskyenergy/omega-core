@@ -436,6 +436,41 @@ remains for an immediate run. A row with no ZIP or
 city that any matched listing shares stays unplaced and searchable. The
 manifest now carries `located`, `approximate` and `unmatched`.
 
+### The circuits are read once, on the server
+
+A listing's serving circuit and its published hosting capacity used to be
+read in the browser from the polygons drawn for the map's current view.
+That is fine for a screen of pins and useless for a county: the phone app
+lists a hundred listings across Cook County, the polygon layer refuses an
+extent that wide (`ATTRIB_MAX_DEG`), and every card said "Circuit unknown".
+
+`api/_lib/circuit-attribution.js` asks ComEd once per matched listing (the
+same point query on layer 75 within 46 m the desktop rule uses; the
+service constants live in `api/_lib/comed-service.js`) and writes the
+answer onto the row: `feederId`, `sub`, `nameplate`, `queue` and a
+`circuit{attempted, status:'attributed'|'none', at, service}` record. An
+area-centre pin is never asked. `api/logic-worker.js` runs one pass per
+tick once geocoding is finished (`POST /api/site-catalog
+{action:'circuits'}` runs one now, staff only), the manifest carries
+`circuits` and `circuitsTried`, and a transport or service error stops a
+pass without marking anything, so a rotated service is a constant to fix
+and not 3,000 rows stamped "no circuit".
+
+With the circuits on the rows, `POST /api/site-catalog {sort:'capacity',
+minKw}` sorts the WHOLE catalogue by what is left on the circuit and
+applies the minimum there; the first page is the county's shortlist. A
+staff import strips every circuit (`validate` keeps them only for a server
+re-publish, `opts.keepCircuits`), so an uploaded file cannot name one.
+Holds are still the browser's ledger: `nameplate − queue` is what the server
+sorts by, and the card subtracts the holds it knows about.
+
+**ComEd rotates the service name monthly** (`…_JUN2026` stopped answering
+with a 403 on 22 Sep 2026; `…_SEP2026` is current). Every browser read now
+goes through the same-origin `/comed-proxy` (`api/comed-proxy.js`, edge
+cached an hour, rate-limited per address), which names the service in one
+place. The Cloudflare worker in `workers/` carries the same constant for
+its parcel and Socrata routes and is redeployed with wrangler separately.
+
 ### The property card
 
 A listing card leads with what a buyer asks first: asking price, value,
@@ -489,6 +524,13 @@ phone, installable from the home screen like the SkyFund app: Find (near
 me, or a search, sorted by available kW), Site (facts, fit, lease offer and
 proposal, call sheet, star), Saved, Account. Same workspace, same APIs and
 shared runtime files, nothing copied. `scripts/test-sitefinder-app.js`.
+
+The Find list is the county sorted by available kW: the app asks the
+server for `sort:'capacity'` with the Min kW box applied there, so "Min kW
+1000" is every listing in the workspace on a circuit with a megawatt left,
+not the hundred nearest rows filtered. A row that arrived with its circuit
+seeds the ledger and is not asked of the map layer; only a row the worker
+has not reached yet is read from the polygons in view.
 
 ### Which product, how many
 

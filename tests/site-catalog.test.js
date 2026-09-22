@@ -15,6 +15,7 @@ function endpoint(){
   var box={module:{exports:{}},require:function(n){
     if(n==='./_lib/admin')return A;
     if(n==='./site-score')return {_helpers:{entitle:async()=>{if(!allowed)throw Object.assign(Error('denied'),{status:403});}}};
+    if(n==='./_lib/circuit-attribution')return require('../api/_lib/circuit-attribution');if(n==='./_lib/comed-service')return require('../api/_lib/comed-service');
     return C;
   },Date,Number,Object,Array};
   vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
@@ -30,7 +31,7 @@ test('finish matching: geocodes untried rows within the budget, then derives are
   await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:rows});
   var urls=[];
   async function fetchJson(u){u=decodeURIComponent(u);urls.push(u);if(/100 B St/.test(u))return {result:{addressMatches:[{coordinates:{x:-87.62,y:41.87},matchedAddress:'100 B ST'}]}};if(/999 Far/.test(u))return {result:{addressMatches:[{coordinates:{x:-118,y:34},matchedAddress:'LA'}]}};return {result:{addressMatches:[]}};}
-  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return G;return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout};
+  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return G;if(n==='./_lib/circuit-attribution')return require('../api/_lib/circuit-attribution');if(n==='./_lib/comed-service')return require('../api/_lib/comed-service');return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout};
   vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
   var r=await box.module.exports._helpers.finishMatching(db,'example.com',{_fetchJson:fetchJson});
   assert.equal(r.attempted,3);assert.equal(r.matched,1);assert.equal(r.approximate,1);assert.equal(r.done,true);assert.equal(r.located,4);assert.equal(r.unmatched,1);
@@ -44,7 +45,7 @@ test('captured listing pages land on their rows as typed fields plus trimmed tex
   var db=fakeDB(),rows=[];
   for(var i=1;i<=3;i++)rows.push({id:'crexi:'+i,addr:i+' A St',city:'Chicago',state:'IL',zip:'60601',fullAddress:i+' A St, Chicago, IL 60601',lat:41.8,lon:-87.6,geocode:{status:'matched',accuracy:'street-interpolated'},listed:{url:'https://www.crexi.com/properties/'+i+'/x',askPrice:null}});
   await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:rows});
-  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return require('../api/_lib/geocode-listings');return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout,String};
+  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return require('../api/_lib/geocode-listings');if(n==='./_lib/circuit-attribution')return require('../api/_lib/circuit-attribution');if(n==='./_lib/comed-service')return require('../api/_lib/comed-service');return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout,String};
   vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
   var page='1 A St, Chicago, IL 60601 For Sale\n$2,450,000 | 12 days on market\nWarehouse\nDetails\nSquare Footage\t52,000\tYear Built\t1978\nNOI\t$100,000\nJane Broker PRO\nIL IL: #475.1\nView phone number\nAcme Realty\nListed by Acme Realty - Chicago.';
   var captures=[{listingId:'1',url:'https://www.crexi.com/properties/1/x',text:page,capturedAt:'2026-09-22T10:00:00Z'},{listingId:'999',text:'Unpriced | 1 day on market'}];
@@ -78,4 +79,46 @@ test('the scheduled worker finishes the map on its own: one pass per tick, marks
   var m=db.docs.get('toolData/example.com/tools/sitefinderCatalog');assert.equal(m.matchingDone,true);assert.equal(m.located,3);
   assert.equal(await H.nextCatalogueToMatch(db),null,'a finished catalogue is left alone');
   assert.equal(await H.matchNextCatalogue(db),null);
+});
+test('a circuit survives a server re-publish and never a staff import; the list sorts and filters by what is left on it',function(){
+  var d=sample();d.rows[0].lat=41.9;d.rows[0].lon=-87.6;d.rows[0].geocode={status:'matched'};
+  d.rows[0].feederId='C785';d.rows[0].sub='S0741';d.rows[0].nameplate=1500;d.rows[0].queue=100;d.rows[0].circuit={attempted:true,status:'attributed',at:'2026-09-22T00:00:00Z',source:'ComEd',service:'ComEd_BESS_Hosting_Capacity_SEP2026'};
+  var imported=C.validate(d,'example.com');assert.equal(imported.rows[0].feederId,'');assert.equal(imported.rows[0].nameplate,undefined);assert.equal(imported.rows[0].circuit,undefined);assert.equal(imported.manifest.circuits,0);
+  var kept=C.validate(d,'example.com',{keepCircuits:true});assert.equal(kept.rows[0].feederId,'C785');assert.equal(kept.rows[0].nameplate,1500);assert.equal(kept.rows[0].queue,100);assert.equal(kept.rows[0].sub,'S0741');assert.equal(kept.rows[0].circuit.status,'attributed');
+  assert.equal(kept.manifest.circuits,1);assert.equal(kept.manifest.circuitsTried,1);
+  d.rows[0].nameplate='1500';assert.throws(()=>C.validate(d,'example.com',{keepCircuits:true}),/circuit/);
+  d.rows[0].circuit={attempted:true,status:'none'};d.rows[0].nameplate=1500;var none=C.validate(d,'example.com',{keepCircuits:true});assert.equal(none.rows[0].feederId,'','a miss carries no circuit whatever the row says');assert.equal(none.manifest.circuits,0);assert.equal(none.manifest.circuitsTried,1);
+  var h=endpoint(),rows=[{id:'a',fullAddress:'x',lat:41,lon:-87,nameplate:1500,queue:100},{id:'b',fullAddress:'x',lat:41,lon:-87},{id:'c',fullAddress:'x',lat:41,lon:-87,nameplate:2000,queue:0},{id:'d',fullAddress:'x',lat:41,lon:-87,nameplate:0,queue:0}];
+  assert.deepEqual(h.api._helpers.select({rows},{sort:'capacity'}).rows.map(r=>r.id),['c','a','d','b'],'most available first, unknown last');
+  assert.deepEqual(h.api._helpers.select({rows},{sort:'capacity',minKw:1000}).rows.map(r=>r.id),['c','a']);
+  assert.deepEqual(h.api._helpers.select({rows},{minKw:0}).rows.map(r=>r.id),['a','b','c','d'],'no minimum keeps the catalogue order');
+  assert.throws(()=>h.api._helpers.select({rows},{sort:'price'}),{status:400});assert.throws(()=>h.api._helpers.select({rows},{minKw:-1}),{status:400});
+});
+test('circuit attribution: reads matched rows once, publishes with the circuits kept, marks the manifest, and the worker picks the next catalogue',async function(){
+  var db=fakeDB();
+  function row(n,lat,lon,status){return {id:'crexi:'+n,addr:n+' A St',city:'Chicago',state:'IL',zip:'60601',fullAddress:n+' A St, Chicago, IL 60601',lat:lat,lon:lon,listed:{url:'https://www.crexi.com/properties/'+n+'/x',askPrice:null},geocode:lat==null?{status:'unmatched',attempted:true}:{status:status||'matched',source:'US Census',accuracy:'street-interpolated'}};}
+  var rows=[row(1,42.04,-87.78),row(2,42.05,-87.79),row(3,42.06,-87.80,'approximate'),row(4,null,null)];rows[2].geocode.accuracy='area centre';
+  await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:rows});
+  await db.collection('toolData').doc('example.com').collection('tools').doc('sitefinderCatalog').set({matchingDone:true,matchedAt:'M'},{merge:true});
+  db.collection=(function(orig){return function(k){var r=orig(k);if(k==='toolData')r.listDocuments=async()=>[orig('toolData/example.com')];return r;};})(db.collection);
+  /* the worker path reads through comed-service.fetchJson; here that is a service that refuses, never the network */
+  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return require('../api/_lib/geocode-listings');if(n==='./_lib/circuit-attribution')return require('../api/_lib/circuit-attribution');if(n==='./_lib/comed-service')return Object.assign({},require('../api/_lib/comed-service'),{fetchJson:async()=>({error:{code:403,message:'Access denied'}})});return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout,String};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
+  var H=box.module.exports._helpers,asked=[];
+  async function fetchJson(u){asked.push(u);if(/42\.04/.test(u))return {features:[{attributes:{Feeder:'C785',Feeder_N:'F4661',SS_N:'S0741',BESS_HC:1500,Feeder_Q:100}}]};return {features:[]};}
+  assert.equal(await H.nextCatalogueToAttribute(db),'example.com');
+  var r=await H.attributeCircuits(db,'example.com',{_fetchJson:fetchJson});
+  assert.equal(r.attempted,2);assert.equal(r.attributed,1);assert.equal(r.none,1);assert.equal(r.done,true);assert.equal(r.circuits,1);assert.equal(r.circuitsTried,2);
+  var m=db.docs.get('toolData/example.com/tools/sitefinderCatalog');assert.equal(m.circuits,1);assert.equal(m.circuitsDone,true);assert.equal(m.matchingDone,true,'the geocoding mark survives the re-publish');assert.equal(m.matchedAt,'M');
+  var page=db.docs.get('toolData/example.com/tools/sitefinderCatalog_'+m.version+'_0').rows;
+  assert.equal(page[0].feederId,'C785');assert.equal(page[0].nameplate,1500);assert.equal(page[0].queue,100);assert.equal(page[1].circuit.status,'none');assert.equal(page[2].circuit,undefined,'an area pin is not attributed');
+  assert.equal(await H.nextCatalogueToAttribute(db),null,'a finished catalogue is not re-read');
+  var again=await H.attributeCircuits(db,'example.com',{_fetchJson:fetchJson});assert.equal(again.attempted,0);assert.equal(asked.length,2);
+  var listed=H.select(await H.catalog(db,'example.com'),{sort:'capacity'});assert.equal(listed.rows[0].id,'crexi:1');assert.equal(listed.manifest.circuits,1);
+  /* a rotated service: nothing is marked, and the worker will try again next tick */
+  var db2=fakeDB();await C.publish(db2,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:rows});
+  var err=await H.attributeCircuits(db2,'example.com',{_fetchJson:async()=>({error:{code:403,message:'Access denied'}})});
+  assert.equal(err.attempted,0);assert.equal(err.done,false);assert.match(err.transportError,/403/);assert.equal(db2.docs.get('toolData/example.com/tools/sitefinderCatalog').circuitsDone,undefined);
+  db2.collection=(function(orig){return function(k){var r=orig(k);if(k==='toolData')r.listDocuments=async()=>[orig('toolData/example.com')];return r;};})(db2.collection);
+  var tick=await H.attributeNextCatalogue(db2,5000);assert.equal(tick.orgId,'example.com','the worker keeps trying a catalogue the service refused');assert.equal(tick.attempted,0);assert.match(tick.transportError,/403/);
 });

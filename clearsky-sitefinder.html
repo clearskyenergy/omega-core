@@ -1070,7 +1070,8 @@
     return matched.toLocaleString() + ' of ' + m.count.toLocaleString() + ' have Census street positions' +
       (approx ? ', ' + approx.toLocaleString() + ' sit at the centre of their ZIP' : '') +
       (left ? ', ' + left.toLocaleString() + ' still need a location.' : '. Every listing is on the map.') +
-      (m.detailed ? ' ' + m.detailed.toLocaleString() + ' carry listing page details.' : '');
+      (m.detailed ? ' ' + m.detailed.toLocaleString() + ' carry listing page details.' : '') +
+      (m.circuitsTried ? ' ' + (m.circuits || 0).toLocaleString() + ' of ' + m.circuitsTried.toLocaleString() + ' asked sit on a published ComEd circuit.' : '');
   }
   /* Staff: finish placing the catalogue. One call does as much as fits in
      the function's time ceiling and publishes; this loops until the server

@@ -1532,3 +1532,14 @@ five-minute cron) runs one `finishMatching` pass per tick for the first
 workspace whose catalogue is not marked `matchingDone`, so an import is
 fully placed within the hour with nobody pressing anything. The host lease
 rate card (v2) cites its published basis in `RATE_CARD.sources`.
+
+ComEd retired the June hosting-capacity service (403 for everyone, the
+Cloudflare worker included) and publishes `…_SEP2026`. The service is now
+named once server-side in `api/_lib/comed-service.js`; the map reads it
+through the same-origin `/comed-proxy` (`api/comed-proxy.js`), and the
+worker's constant is updated for its own redeploy. The scheduled worker also
+attributes each matched listing's circuit once (`api/_lib/circuit-attribution.js`,
+`api/site-catalog.js` `attributeCircuits`), so `sort:'capacity'` and `minKw`
+rank the whole catalogue on the server and the phone app's list is the
+county's shortlist rather than the first hundred rows. A staff import still
+strips circuits; only a server re-publish keeps them.

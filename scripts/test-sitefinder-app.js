@@ -12,7 +12,9 @@ const L = require('../api/_lib/site-lease');
 const ROWS = [
   { id: 'crexi:126', addr: '5730 W Dempster St', city: 'Morton Grove', state: 'IL', zip: '60053', type: 'Industrial', subtype: 'Retail | Pharmacy/Drug', sqft: 44000, lat: 42.04, lon: -87.78, src: 'crexi-import', listed: { forSale: true, url: 'https://www.crexi.com/properties/126/test', askPrice: null }, geocode: { status: 'matched', accuracy: 'street-interpolated' }, photos: [],
     detail: { unpriced: true, daysOnMarket: 1, headline: 'Walgreens - Morton Grove, IL', noi: 375435, occupancy: 100, leaseType: 'NN', leaseExpiration: '07/31/2028', yearBuilt: 2001, listedBy: 'JLL', brokers: [{ name: 'Alex Geanakos', firm: 'JLL' }, { name: 'Mohsin Mirza', firm: 'JLL', phone: '(312) 555-0142' }], capturedAt: '2026-09-22T12:00:00Z', src: 'crexi-page' } },
-  { id: 'crexi:123', addr: '1 Listed Warehouse', city: 'Chicago', state: 'IL', zip: '60601', type: 'Industrial', sqft: 50000, lat: 42.03, lon: -87.79, src: 'crexi-import', listed: { forSale: true, url: 'https://www.crexi.com/properties/123/test', askPrice: 100000 }, geocode: { status: 'matched', accuracy: 'street-interpolated' }, photos: [] },
+  /* attributed on the server by the scheduled worker: arrives with its circuit, is never asked of the map layer */
+  { id: 'crexi:123', addr: '1 Listed Warehouse', city: 'Chicago', state: 'IL', zip: '60601', type: 'Industrial', sqft: 50000, lat: 42.03, lon: -87.79, src: 'crexi-import', listed: { forSale: true, url: 'https://www.crexi.com/properties/123/test', askPrice: 100000 }, geocode: { status: 'matched', accuracy: 'street-interpolated' }, photos: [],
+    feederId: 'C785', sub: 'S0741', nameplate: 1200, queue: 0, circuit: { attempted: true, status: 'attributed', at: '2026-09-22T12:00:00Z', source: 'ComEd BESS hosting capacity, layer 75 within 46 m', service: 'ComEd_BESS_Hosting_Capacity_SEP2026' } },
   { id: 'crexi:125', addr: 'Lot 3 Area Centre Listing', city: 'Chicago', state: 'IL', zip: '60601', type: 'Vacant Land', lotAcres: 2, lat: 42.02, lon: -87.77, src: 'crexi-import', listed: { forSale: true, url: 'https://www.crexi.com/properties/125/test', askPrice: 250000 }, geocode: { status: 'approximate', source: 'derived', accuracy: 'area centre of 12 matched listings in ZIP 60601; not the parcel', area: 'ZIP 60601' }, photos: [] }
 ];
 /* page.waitForFunction stalls in a mobile-emulated context here; a plain poll does not. */
@@ -48,7 +50,10 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
       if (url.hostname !== 'app.test') { await route.fulfill({ status: 200, body: '', contentType: url.pathname.endsWith('.css') ? 'text/css' : 'application/javascript' }); return; }
       if (url.pathname === '/api/site-catalog') {
         const b = route.request().postDataJSON(); assert.equal(b.orgId, 'chileasing.com', 'the workspace is the email domain');
-        await route.fulfill({ json: { total: 3, hasMore: false, manifest: { count: 3, located: 3 }, rows: b.q ? ROWS.filter(r => r.addr.indexOf(b.q) >= 0) : ROWS } }); return;
+        if (!b.bbox || b.sort) assert.equal(b.sort, 'capacity', 'the list asks for the county sorted by available capacity');
+        let rows = b.q ? ROWS.filter(r => r.addr.indexOf(b.q) >= 0) : ROWS;
+        if (b.minKw) rows = rows.filter(r => r.nameplate != null && r.nameplate - (r.queue || 0) >= b.minKw);
+        await route.fulfill({ json: { total: rows.length, hasMore: false, manifest: { count: 3, located: 3, circuits: 1, circuitsTried: 2 }, rows } }); return;
       }
       if (url.pathname === '/api/site-score') {
         const body = route.request().postDataJSON();
@@ -77,7 +82,8 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     assert.equal(await page.locator('#topOrg').innerText(), 'chileasing.com');
     /* circuits: stub the ComEd layer the way the desktop test does */
     await page.evaluate(() => {
-      window.OmegaComEdLayers.attribIn = (b, cb) => cb(null, []);
+      window.__attribCalls = [];
+      window.OmegaComEdLayers.attribIn = (b, cb) => { window.__attribCalls.push(b); cb(null, []); };
       window.OmegaComEdLayers.feederNear = (lat, lon) => lat > 42.035 ? { row: { feeder: 'Z1234', sub: 'Skokie', bess: 1500, queue: 100 }, contains: true, beyond: false, distance: 0 } : null;
       window.OmegaComEdLayers.capacityOf = row => ({ nameplate: row.bess, queue: row.queue, feederId: row.feeder, sub: row.sub });
     });
@@ -88,9 +94,16 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     assert.equal(await cards.count(), 3);
     assert.match(await cards.first().innerText(), /5730 W Dempster St[\s\S]*1,400 kW free[\s\S]*Energy score\s+82[\s\S]*Battery\s+750 kW[\s\S]*Asking\s+Unpriced/, 'the site with capacity leads, scored and sized');
     assert.match(await page.locator('#findList .site[href="#/site/crexi%3A125"]').innerText(), /Area pin/, 'an area-centre listing gets no circuit');
+    assert.match(await page.locator('#findList .site[href="#/site/crexi%3A123"]').innerText(), /1,200 kW free/, 'a server-attributed circuit shows without the map layer');
+    assert.match(await page.locator('#findList .site[href="#/site/crexi%3A125"]').innerText(), /Area pin/, 'an area-centre listing gets no circuit');
+    assert.match(await page.locator('#findStatus').innerText(), /1 of 3 carry a ComEd circuit/);
+    assert.ok((await page.evaluate(() => window.__attribCalls)).every(b => b.s > 42.035), 'only the row without a server answer was asked of the map layer');
     await page.locator('#minKw').fill('1000'); await page.locator('#minKw').dispatchEvent('change');
-    assert.equal(await cards.count(), 1, 'the minimum kW filter holds');
+    await until(page, () => /over 1,000 kW\. Sorted/.test(document.getElementById('findStatus').textContent), 'the minimum applied on the server');
+    assert.equal(await cards.count(), 1, 'the minimum kW filter holds county-wide');
+    assert.match(await cards.first().innerText(), /1 Listed Warehouse[\s\S]*1,200 kW free/, 'the server answered the minimum from the attributed circuits');
     await page.locator('#minKw').fill('0'); await page.locator('#minKw').dispatchEvent('change');
+    await until(page, () => document.querySelectorAll('#findList .site').length === 3, 'the full list again');
     /* the site screen */
     await cards.first().click();
     await page.locator('#viewSite').waitFor({ state: 'visible' });

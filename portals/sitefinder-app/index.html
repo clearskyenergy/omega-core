@@ -353,10 +353,15 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
   }
 
   /* ── listings ──────────────────────────────────────────────────────── */
+  /* The server sorts the WHOLE catalogue by what is left on each listing's
+     attributed circuit (api/site-catalog.js `sort:'capacity'`) and applies
+     the minimum kW there, so the first page is the county's shortlist, not
+     the first hundred rows of a spreadsheet. */
   function loadListings(body, label) {
-    var epoch = ++ST.epoch, status = $("findStatus");
+    var epoch = ++ST.epoch, status = $("findStatus"), minKw = +$("minKw").value || 0;
     status.textContent = "Loading " + label + "…";
-    body.orgId = ST.org;
+    body.orgId = ST.org; body.sort = "capacity"; delete body.minKw; if (minKw > 0) body.minKw = minKw;
+    ST.lastQuery = { body: body, label: label };
     api("/api/site-catalog", body, function (err, d) {
       if (epoch !== ST.epoch) return;
       if (err) { status.textContent = err.message; return; }
@@ -364,11 +369,13 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       ST.rows = (d.rows || []).map(prepare);
       ST.rows.forEach(function (r) { ST.byId[r.id] = r; });
       ST.fitPins = !body.bbox;
-      status.textContent = d.total.toLocaleString() + " listings " + label + (d.hasMore ? " (first " + d.rows.length + ")" : "") + ". Reading circuits…";
+      var m = d.manifest, coverage = m.circuits ? " · " + m.circuits.toLocaleString() + " of " + (m.count || 0).toLocaleString() + " carry a ComEd circuit" : "";
+      var head = d.total.toLocaleString() + " listings " + label + (minKw > 0 ? " over " + fmt(minKw) + " kW" : "") + (d.hasMore ? " (top " + d.rows.length + ")" : "");
+      status.textContent = head + ". Reading circuits…";
       renderFind();
       resolveCircuits(ST.rows, function () {
         if (epoch !== ST.epoch) return;
-        status.textContent = d.total.toLocaleString() + " listings " + label + ". Sorted by available capacity.";
+        status.textContent = head + ". Sorted by available capacity" + coverage + ".";
         renderFind();
       });
     });
@@ -393,10 +400,17 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     loadListings({ q: $("q").value, page: 0 }, $("q").value ? "for \u201c" + $("q").value + "\u201d" : "in " + v);
   }
   /* A listing row from the catalogue, with the flags the desktop tool gives
-     an approximate pin: no circuit is attributed to a ZIP-area centre. */
+     an approximate pin: no circuit is attributed to a ZIP-area centre. A row
+     the server already attributed (feederId, nameplate, queue, circuit{}) seeds
+     the ledger here, so its capacity shows without drawing the map. */
   function prepare(r) {
     r.approx = !!(r.geocode && r.geocode.status === "approximate");
-    r.circ = L.feederState(null, r.id); r.cst = L.circuitStatus(r.circ);
+    r.circuitTried = !!(r.circuit && r.circuit.attempted);
+    if (r.feederId && r.nameplate != null) {
+      var known = L.getFeeder && L.getFeeder(r.feederId);
+      if (!known || known.nameplate == null) L.setFeeder(r.feederId, { nameplate: r.nameplate, queue: r.queue || 0, sub: r.sub || "" });
+    }
+    r.circ = L.feederState(r.feederId || null, r.id); r.cst = L.circuitStatus(r.circ);
     r.sz = r.sz || { kw: null, kwh: null, hours: DEFAULT_HOURS };
     return r;
   }
@@ -412,11 +426,11 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
      attributed by containment or the 46 m proximity rule the desktop uses;
      a ZIP-area pin gets none. Then one batched score call. */
   function resolveCircuits(rows, done) {
-    var b = bboxOf(rows);
+    var open = rows.filter(function (r) { return r.lat != null && !r.approx && !r.circuitTried && !(r.feederId && r.nameplate != null); });
+    var b = bboxOf(open);
     if (!b || !LAY || !LAY.attribIn) { scoreRows(rows, done); return; }
     LAY.attribIn(b, function (err, attrib) {
-      rows.forEach(function (r) {
-        if (r.lat == null || r.approx) return;
+      open.forEach(function (r) {
         var near = LAY.feederNear ? LAY.feederNear(r.lat, r.lon) : null;
         if (!near || near.beyond) { r.circuitDistance = near ? near.distance : null; return; }
         var cap = LAY.capacityOf(near.row) || {};
@@ -459,7 +473,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     var d = r.detail || {}, ask = has(d.askPrice) ? money(d.askPrice) : has(r.listed && r.listed.askPrice) ? money(r.listed.askPrice) : d.unpriced ? "Unpriced" : "";
     return '<a class="card site" href="#/site/' + encodeURIComponent(r.id) + '">' +
       '<div class="head"><div><div class="addr">' + esc(r.addr) + '</div><div class="sub">' + esc([r.src === "lookup" ? "Looking at now" : r.city, r.subtype || r.type, r.sqft ? fmt(r.sqft) + " SF" : (r.lotAcres ? r.lotAcres + " ac" : "")].filter(Boolean).join(" · ")) + '</div></div>' +
-      '<span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW free" : "No capacity") : (r.approx ? "Area pin" : "Circuit unknown")) + '</span></div>' +
+      '<span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW free" : "No capacity") : (r.approx ? "Area pin" : r.circuitTried ? "No published circuit" : "Circuit unknown")) + '</span></div>' +
       '<div class="metrics"><div>Energy score<b>' + (r.score == null ? "—" : r.score) + '</b></div><div>Battery<b>' + (r.sz && r.sz.kw ? fmt(r.sz.kw) + " kW" : "—") + '</b></div><div>Asking<b>' + (ask || "—") + '</b></div></div>' +
       (isSaved(r.id) ? '<div class="note" style="margin-top:6px;color:#C98A2B">★ Saved</div>' : "") + '</a>';
   }
@@ -512,7 +526,10 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     });
   }
   $("q").onkeydown = function (e) { if (e.key === "Enter") $("go").onclick(); };
-  $("minKw").onchange = renderFind;
+  $("minKw").onchange = function () {
+    renderFind();
+    if (ST.lastQuery) loadListings(ST.lastQuery.body, ST.lastQuery.label);
+  };
   $("here").onclick = function () {
     if (!map) return;
     var b = map.getBounds();
@@ -581,7 +598,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       '<div class="card"><div class="head" style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
         '<div><div class="addr" style="font-size:18px;font-weight:800;line-height:1.2">' + esc(r.addr) + '</div><div class="sub" style="font-size:12.5px;color:var(--dim);margin-top:3px">' + esc([r.city, r.state, r.zip].filter(Boolean).join(" ")) + (r.subtype || r.type ? " · " + esc(r.subtype || r.type) : "") + "</div></div>" +
         '<button class="star' + (isSaved(r.id) ? " on" : "") + '" id="starBtn" type="button" aria-label="Save">' + (isSaved(r.id) ? "★" : "☆") + "</button></div>" +
-      '<div class="row" style="margin-top:8px"><span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW available on " + (r.feederId || "the circuit") : "No capacity left on " + (r.feederId || "the circuit")) : (r.approx ? "Area pin — no circuit attributed" : "Circuit not published here")) + "</span>" +
+      '<div class="row" style="margin-top:8px"><span class="pill ' + pill + '">' + esc(r.circ.known ? (r.circ.sellable > 0 ? fmt(r.circ.sellable) + " kW available on " + (r.feederId || "the circuit") : "No capacity left on " + (r.feederId || "the circuit")) : (r.approx ? "Area pin — no circuit attributed" : r.circuitTried ? "No published circuit within 46 m" : "Circuit not read yet")) + "</span>" +
         (r.circuitDistance ? '<span class="note">nearest circuit ' + r.circuitDistance + " m</span>" : "") + "</div>" +
       (r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || "") ? '<p class="note" style="margin:8px 0 0"><a href="' + esc(r.listed.url) + '" target="_blank" rel="noopener noreferrer"><b>Open Crexi listing &amp; photos ↗</b></a></p>' : "") +
       factsHtml(r) + "</div>";

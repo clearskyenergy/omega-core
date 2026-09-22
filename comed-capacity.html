@@ -681,9 +681,9 @@ if(typeof L==="undefined"||!L.map){fail("Map library failed to load");return;}
    so deploy comed-proxy-worker.js and put its URL here:
       var PROXY="https://comed-proxy.<you>.workers.dev/comed";
    ══════════════════════════════════════════════════════════════ */
-var PROXY="https://comed-proxy.clearsky-omega.workers.dev/comed";
+var PROXY="/comed-proxy"; /* same-origin api/comed-proxy.js; the Cloudflare worker at comed-proxy.clearsky-omega.workers.dev/comed is the older hop */
 
-var COMED_DIRECT="https://utility.arcgis.com/usrsvcs/servers/c0f9178a756c4246a99acdb3fe7de103/rest/services/ComEd_BESS_Hosting_Capacity_JUN2026/FeatureServer";
+var COMED_DIRECT="https://utility.arcgis.com/usrsvcs/servers/2ee23dc46a374272ac3fe1528a451819/rest/services/ComEd_BESS_Hosting_Capacity_SEP2026/FeatureServer";
 var COMED_BASE=PROXY||COMED_DIRECT;
 var PREFERRED=[75,73,71,74,72,70];   /* tried first; rest come from service root */
 var COMED_APP="https://exelonutilities.maps.arcgis.com/apps/webappviewer/index.html?id=c4068de162b943c9bd81fe4c4fbfe0ea";
