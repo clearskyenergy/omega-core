@@ -70,7 +70,7 @@
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><b data-brand-name>Plant</b><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Plant</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Plant</h1><p class="note">Work orders, the bench scanner, stock and quality — for the people building the units.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale. The bench scanner keeps its own queue.</div>
@@ -293,6 +293,7 @@
 
   /* ── shell ────────────────────────────────────────────────────────────── */
   Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; WO = null; UNIT = null; draw(); window.scrollTo(0, 0); }; });
+  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; WO = null; UNIT = null; draw(); window.scrollTo(0, 0); };
   $('refresh').onclick = function () { WO = null; UNIT = null; loadAll(); };
   $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
   $('signin').onclick = function () {
