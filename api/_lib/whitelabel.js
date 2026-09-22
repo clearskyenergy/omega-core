@@ -57,4 +57,17 @@ function pickPublic(wl) {
   return out;
 }
 
-module.exports = { WL_PUBLIC: WL_PUBLIC, pickPublic: pickPublic };
+/* The world-readable record itself, built the same way by every writer
+   (api/tenant-branding.js, api/logic-admin.js). Key by key, never a spread. */
+var TIER_PUBLIC = { trial: 'trial', standard: 'standard', pro: 'pro', deluxe: 'deluxe', enterprise: 'enterprise', internal: 'internal', partner: 'partner' };
+function publicRecord(orgId, org, updatedAt) {
+  org = org || {};
+  var out = { orgId: orgId, name: org.name || orgId, logoUrl: org.logoUrl || '', colors: org.colors || null, exportBrand: org.exportBrand || null,
+    tier: TIER_PUBLIC[org.publicTier] || 'standard', vertical: org.vertical || null, shell: org.shell || 'default', domains: org.domains || [],
+    whiteLabel: pickPublic(org.whiteLabel) };
+  if (org.status) out.status = org.status;
+  if (updatedAt !== undefined) out.updatedAt = updatedAt;
+  return out;
+}
+
+module.exports = { WL_PUBLIC: WL_PUBLIC, pickPublic: pickPublic, publicRecord: publicRecord, TIER_PUBLIC: TIER_PUBLIC };

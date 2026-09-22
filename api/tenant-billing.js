@@ -17,7 +17,8 @@ var A = require('./_lib/admin');
    unknown key should not fail a legitimate tier change. */
 var ALLOWED = ['tier', 'addons', 'toolOverrides', 'paymentLink', 'amountDue',
                'subscriptionDue', 'trialEndsAt', 'autopay', 'paymentProvider',
-               'stripeCustomerId'];
+               'stripeCustomerId', 'toolAccess', 'status'];
+var STATUSES = ['active', 'past_due', 'suspended', 'cancelled'];
 var TIERS = ['trial', 'standard', 'deluxe', 'enterprise', 'partner', 'internal'];
 
 module.exports = A.handler(function (req) {
@@ -44,6 +45,19 @@ module.exports = A.handler(function (req) {
     }
     if (patch.amountDue != null && typeof patch.amountDue !== 'number') {
       throw A.httpError(400, 'amountDue must be a number');
+    }
+    /* toolAccess: absent ≠ empty. null means "whatever the plan includes"; a
+       present array is authoritative at any length (CLAUDE.md, White label). */
+    if (patch.toolAccess !== undefined && patch.toolAccess !== null) {
+      if (!Array.isArray(patch.toolAccess) || !patch.toolAccess.every(function (t) { return typeof t === 'string' && /^[a-z0-9-]{1,40}$/.test(t); })) {
+        throw A.httpError(400, 'toolAccess must be null or a list of tool ids');
+      }
+    }
+    if (patch.addons !== undefined && (!Array.isArray(patch.addons) || !patch.addons.every(function (t) { return typeof t === 'string'; }))) {
+      throw A.httpError(400, 'addons must be a list');
+    }
+    if (patch.status !== undefined && STATUSES.indexOf(String(patch.status)) < 0) {
+      throw A.httpError(400, 'status must be one of ' + STATUSES.join(', '));
     }
     /* A payment link is put in front of a customer. Anything that is not an
        https URL either breaks the button or points somewhere it should not. */

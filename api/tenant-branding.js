@@ -35,7 +35,7 @@
 var A = require('./_lib/admin');
 /* WL_PUBLIC lives in ONE place — three writers mirror this block and CLAUDE.md
    already records what three copies of one decision cost with orgAlias(). */
-var pickPublic = require('./_lib/whitelabel').pickPublic;
+var publicRecord = require('./_lib/whitelabel').publicRecord;
 
 var ALLOWED = ['name', 'logoUrl', 'colors', 'exportBrand', 'defaultLayout'];
 var STAFF_ONLY = ['whiteLabel'];
@@ -66,19 +66,8 @@ module.exports = A.handler(function (req) {
       return ref.set(patch, { merge: true }).then(function () { return ref.get(); }).then(function (s) {
         var org = s.data() || {};
         var hosts = org.domains || [];
-        var pub = {
-          orgId: orgId,
-          name: org.name || orgId,
-          logoUrl: org.logoUrl || '',
-          colors: org.colors || null,
-          exportBrand: org.exportBrand || null,
-          tier: (org.publicTier || 'standard'),
-          vertical: org.vertical || null,
-          shell: org.shell || 'default',
-          domains: hosts,
-          whiteLabel: pickPublic(org.whiteLabel),
-          updatedAt: FV.serverTimestamp()
-        };
+        var pub = publicRecord(orgId, org, FV.serverTimestamp());
+        delete pub.status; /* status is tenant-approve's to mirror, not a branding save's */
         var batch = db.batch();
         hosts.forEach(function (h) {
           batch.set(db.collection('tenant_public').doc(String(h).toLowerCase()), pub, { merge: true });
