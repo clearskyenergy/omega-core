@@ -165,8 +165,11 @@ module.exports = E.handler(function (req) {
         var em = ctx.embed || {};
         var wl = ctx.whiteLabel || {};
 
+        /* kind:'component' is what a product is MADE OF (api/_lib/materials.js)
+           — a cell, a module, a BMS. Never orderable, so never listed; and
+           publicProduct() builds key by key, so a `bom` cannot leak either. */
         var products = (Array.isArray(sf.products) ? sf.products : [])
-          .filter(function(p){return p&&p.active!==false;})
+          .filter(function(p){return p&&p.active!==false&&p.kind!=='component';})
           .map(publicProduct).filter(Boolean).slice(0, 60);
 
         return {

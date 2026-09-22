@@ -25,4 +25,19 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-main button{padding:11px 18px;border:1px solid var(--line);background:white;color:var(--ink)}
 .logic-table{width:100%;border-collapse:collapse}.logic-table th,.logic-table td{text-align:left;padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}.logic-table th{font-size:11px;text-transform:uppercase;color:var(--ink3);letter-spacing:.09em}
 .logic-scroll{overflow-x:auto}.logic-status{padding:12px 16px;background:var(--sunk);border-radius:10px}.logic-status:empty{display:none}.logic-status.error{background:#FCEAE8;color:#C4372B}
-@media(max-width:760px){.logic-shell{grid-template-columns:1fr}.logic-nav{display:flex;overflow:auto;gap:8px;border-right:0;border-bottom:1px solid var(--line);padding:8px}.logic-nav .eyebrow{display:none}.logic-nav a{white-space:nowrap}.logic-main{padding:20px}.logic-main .form-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.logic-shell{grid-template-columns:minmax(0,1fr)}.logic-nav{display:flex;overflow:auto;gap:8px;border-right:0;border-bottom:1px solid var(--line);padding:8px}.logic-nav .eyebrow{display:none}.logic-nav a{white-space:nowrap}.logic-main{padding:20px}.logic-main .form-grid{grid-template-columns:1fr}}
+/* one chrome for every office page (OmegaLogicTheme.chrome) */
+.logic-theme header.logic-chrome{padding:18px 4%;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.logic-theme header.logic-chrome b{font-size:17px;letter-spacing:-.01em}.logic-theme .logic-sub{font-size:13px;color:var(--ink2)}
+.logic-theme .logic-who{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--ink2)}.logic-theme .logic-who a{color:var(--ink2)}
+.logic-theme .logic-signout{padding:8px 14px;border:1px solid var(--line);background:white;color:var(--ink);font-size:13px}
+.logic-nav a.local{font-size:13px;padding:8px 14px}.logic-nav .eyebrow{margin:16px 14px 4px}.logic-nav .eyebrow:first-child{margin-top:0}
+.logic-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
+.logic-flow a{display:block;padding:14px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--ink);background:white;position:relative}
+.logic-flow a b{display:block;font-size:26px;line-height:1.1;margin-top:4px}.logic-flow a small{color:var(--ink2);font-size:12px}
+.logic-flow a.bad b{color:#B42318}.logic-flow a.now{border-color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand)}
+.logic-flow a:after{content:'›';position:absolute;right:12px;top:12px;color:var(--ink3)}
+.logic-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}
+.logic-kv div{padding:12px 14px;border-left:3px solid var(--brand);background:var(--sunk);border-radius:0 10px 10px 0}
+.logic-kv div small{display:block;color:var(--ink2);font-size:12px}.logic-kv div b{font-size:22px}
+.logic-kv div.bad{border-left-color:#B42318}.logic-kv div.bad b{color:#B42318}

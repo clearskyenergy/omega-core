@@ -7,7 +7,7 @@ function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
   return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q, customers: '/portals/customer/admin.html' + q,
     start: '/customer-start.html' + q,
-    urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,
+    urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,materials:'/logic-materials.html'+q,
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
     setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,
     mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html' };
@@ -47,7 +47,8 @@ module.exports = A.handler(async function (req, res) {
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt,
           releasedAt: o.logic.releasedAt || null, requirements: o.logic.requirements || [], allocatedSerials: o.logic.allocatedSerials || [],
           lastError: o.logic.lastError || null, paymentException: o.logic.paymentException || null,
-          payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null };
+          payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null,
+        requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [] };
     });
     var conf = Object.assign({ enabled: false, terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, ctx.config);
     if (!owner) { delete conf.realmId; delete conf.itemRef; delete conf.accountingApproved; }
@@ -102,6 +103,25 @@ module.exports = A.handler(async function (req, res) {
     if (!fresh.ok) throw A.httpError(409, 'Reconcile QuickBooks successfully before recording shipment');
     if (!b.shipment) throw A.httpError(400, 'Shipment details required');
     return W.finish(orderId, caller, b.shipment);
+  }
+  if (b.action === 'request-resolve') {
+    /* Answer a customer's request (api/my-orders.js POST). This records the
+       answer the customer reads; the change itself — an address, a line, a
+       cancellation — goes through the control that owns it. */
+    var rid = String(b.requestId || '').slice(0, 40), answer = String(b.answer || '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, 2000);
+    if (!rid) throw A.httpError(400, 'Which request?');
+    if (answer.length < 2) throw A.httpError(400, 'Write the answer the customer will read');
+    return db.runTransaction(async function (tx) {
+      var s = await tx.get(ref), o = s.data() || {}, list = Array.isArray(o.requests) ? o.requests.slice() : [], i = -1;
+      list.forEach(function (r, k) { if (r && r.id === rid) i = k; });
+      if (i < 0) throw A.httpError(404, 'Request not found');
+      if (list[i].status !== 'open') return { ok: true, duplicate: true };
+      var now = new Date().toISOString();
+      list[i] = Object.assign({}, list[i], { status: 'resolved', answer: answer, answeredBy: caller.email, answeredAt: now });
+      tx.update(ref, { requests: list, openRequests: list.filter(function (r) { return r && r.status === 'open'; }).length, updatedAt: A.FieldValue().serverTimestamp() });
+      W.event(tx, ref, caller.email, 'Answered customer request (' + list[i].kind + '): ' + answer.slice(0, 200));
+      return { ok: true };
+    });
   }
   if (b.action === 'cancel') {
     return db.runTransaction(async function (tx) {

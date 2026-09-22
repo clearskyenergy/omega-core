@@ -76,9 +76,11 @@ ok('the raw orgId is not echoed; the seller is named instead',
    out.orgId === undefined && out.soldBy === 'Clean Cell');
 ok('the customer-facing reference is orderNo', out.orderNo === 'CLEANCELL-20260901-4A9F2');
 ok('the raw document id is not echoed', out.id === undefined);
-/* THE TRAP: api/orders.js:258 writes notes as (customer.notes || b.note), so a
-   rep's own deal commentary lands in the field that reads as the customer's. */
-ok('customer.notes is NEVER echoed, because a rep note is aliased into it',
+/* THE TRAP: api/orders.js USED TO write notes as (customer.notes || b.note),
+   so a rep's own deal commentary landed in the field that reads as the
+   customer's. The write is fixed, but rows created before it still carry the
+   alias with nothing to tell them apart — so the exclusion is permanent. */
+ok('customer.notes is NEVER echoed, because old rows carry an aliased rep note',
    blob.indexOf('Tesla') < 0 && blob.indexOf('240k') < 0);
 ok('  but the rest of their contact details are returned',
    out.contact && out.contact.name === 'Dana Ruiz' && out.contact.company === 'Riverside Cold Chain');

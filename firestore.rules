@@ -2147,6 +2147,12 @@ service cloud.firestore {
     match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
     match /integrations/{integrationId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
+    /* Purchase orders (api/logic-materials.js): what the plant sent a supplier
+       and what arrived. Written in the same transaction as the stock counts
+       above, Admin SDK only — a browser that could edit "received" could put
+       cells on the shelf that never came. No rule grants it, and this line
+       says so rather than leaving it to the default. */
+    match /omega_orgs/{orgId}/purchase_orders/{poId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
@@ -2706,11 +2712,83 @@ service cloud.firestore {
         allow read:  if signedIn() && (orgId == userOrg() || ownsDemoBucket(orgId) || isAdmin());
         allow write: if isAdmin() || isTenantAdmin(orgId);
       }
-      // OEM buyers are not platform tenant members. Customer design APIs
-      // resolve the verified buyer pointer and check paid/trial entitlement.
-      // Keep these designs inaccessible through browser Firestore SDKs.
-      match /customers/{customerId}/projects/{projectId} {
-        allow read, write: if false;
+      /* ── CUSTOMER ACCOUNTS ──  omega_orgs/{orgId}/customers/{customerId}
+         ← BUYER PORTAL (docs/CUSTOMER-PORTAL.md §2). Three levels, not two:
+         the tenant, a CUSTOMER ACCOUNT under it, and the people on it.
+
+         WHY NEITHER IS READABLE BY THE PERSON IT DESCRIBES. A customer
+         account carries `terms` — net days, discount, credit limit. A
+         customer who could read their own record could read their own
+         discount, and one who could WRITE it would set their own price.
+         Rules hide documents, not fields, so there is no read rule that
+         returns the account without the terms inside it. The portal never
+         touches Firestore: api/my-account.js and api/my-orders.js project
+         what a customer may see, key by key, exactly as api/embed-config.js
+         does for the public storefront. These grant the TENANT and us.
+
+         WHY THE TENANT MAY WRITE, BUT NOT MOVE. Terms, plan and status are
+         theirs to set — their customer, their commercial relationship. orgId
+         is not, because a customer account that can move between tenants
+         can be taken to a competitor. Same trap `deals` guards with
+         touchesAttribution() and `projects` guards on orgsInvolved.
+
+         DELETE IS NOT GRANTED. Merging duplicates moves ORDERS, and a
+         migration flags rather than drops: a merged account is marked
+         `mergedInto` and kept. Nothing in the product deletes one. */
+      match /customers/{customerId} {
+        allow read: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+
+        /* Created by api/my-account.js on first sign-in (Admin SDK, which
+           these rules do not constrain) or by a tenant admin setting up a
+           sales-led account. A browser-created record is pinned to this org. */
+        allow create: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                      && request.resource.data.get('orgId', orgId) == orgId
+                      && request.resource.data.get('status', 'active') in ['active', 'suspended'];
+
+        /* `mergedInto` is written by a script, never by a browser — a merge
+           that a page could trigger is a merge nobody reviewed. */
+        allow update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                      && request.resource.data.get('orgId', orgId) == resource.data.get('orgId', orgId)
+                      && request.resource.data.get('createdAt', '') == resource.data.get('createdAt', '')
+                      && request.resource.data.get('mergedInto', '') == resource.data.get('mergedInto', '');
+
+        allow delete: if false;          /* flag, don't drop */
+
+        /* The people on an account. A tenant admin may invite and remove
+           them; a person's own profile edits go through api/my-account.js,
+           which is also what stamps `uid` — a uid the client chose is a uid
+           the client chose, and it is the one field here that could be used
+           to impersonate. Removing somebody is not destroying a record of a
+           person: the orders they placed stay on the account. */
+        match /users/{emailLower} {
+          allow read: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+          allow create, update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                                && request.resource.data.get('role', 'user') in ['owner', 'user'];
+          allow delete: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+        }
+
+        // OEM buyers are not platform tenant members. Customer design APIs
+        // resolve the verified buyer pointer and check paid/trial entitlement.
+        // Keep these designs inaccessible through browser Firestore SDKs.
+        match /projects/{projectId} {
+          allow read, write: if false;
+        }
+      }
+
+      /* ── THE POINTER ──  omega_orgs/{orgId}/customer_index/{emailLower}
+         email -> customerId, written by api/my-account.js with create() so
+         two concurrent first sign-ins cannot both make an account. It exists
+         because a collectionGroup('users') lookup needed a COLLECTION_GROUP
+         index Firestore does not auto-create, and the failed query was being
+         swallowed into "no account found" — a duplicate account on every
+         request rather than a loud failure.
+
+         Admin SDK only. It is an index, not a record: nothing reads it but
+         the endpoint, and a client that could write it could point somebody
+         else's email at an account of its choosing. */
+      match /customer_index/{emailLower} {
+        allow read:  if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+        allow write: if false;
       }
 
       /* ── NOTIFICATIONS ──  omega_orgs/{orgId}/notifications/{id}

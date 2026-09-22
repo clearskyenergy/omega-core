@@ -10,7 +10,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
-  var P = window.OmegaPlant, Q = window.OmegaPortal;
+  var P = window.OmegaPlant, Q = window.OmegaPortal, M = window.OmegaMaterials;
   var KEY = 'omega.demo.v3';
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
@@ -39,6 +39,32 @@
       blurb: 'Utility-scale block for peak shaving above two megawatts.' }
   ];
   function skuOf(s) { for (var i = 0; i < CATALOG.length; i++) if (CATALOG[i].sku === s) return CATALOG[i]; return null; }
+
+  /* ── What each product is MADE OF ─────────────────────────────────────
+     The bill of materials the plan explodes: cabinet → modules → cells.
+     Components are never sold and never reach the storefront; they exist so
+     the plant can see what to buy. The numbers are the demo's, not Clean
+     Cell's. api/_lib/materials.js (verbatim, below) does the arithmetic. */
+  var COMPONENTS = [
+    { sku: 'CC-MOD-52',   name: 'Module 5.2 kWh',       kind: 'component', unit: 'ea', leadTimeDays: 10,
+      bom: [{ sku: 'CC-CELL-280', qty: 104, unit: 'ea', yieldPct: 98 }, { sku: 'CC-HARN', qty: 2.5, unit: 'm' }] },
+    { sku: 'CC-CELL-280', name: 'LFP cell 280 Ah',      kind: 'component', unit: 'ea', moq: 1000, leadTimeDays: 60, supplier: 'EVE Energy', supplierSku: 'LF280K' },
+    { sku: 'CC-BMS-M',    name: 'Master BMS',           kind: 'component', unit: 'ea', leadTimeDays: 30, supplier: 'Orion' },
+    { sku: 'CC-ENC-1B',   name: 'Single-bay enclosure', kind: 'component', unit: 'ea', leadTimeDays: 45, supplier: 'Midwest Metal' },
+    { sku: 'CC-ENC-2B',   name: 'Two-bay enclosure',    kind: 'component', unit: 'ea', leadTimeDays: 45, supplier: 'Midwest Metal' },
+    { sku: 'CC-HARN',     name: 'HV harness',           kind: 'component', unit: 'm',  leadTimeDays: 14, supplier: 'Amphenol' }
+  ];
+  var BOM = {
+    'CC-215':  [{ sku: 'CC-MOD-52', qty: 41,  unit: 'ea' }, { sku: 'CC-BMS-M', qty: 1,  unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1,  unit: 'ea' }],
+    'CC-418':  [{ sku: 'CC-MOD-52', qty: 80,  unit: 'ea' }, { sku: 'CC-BMS-M', qty: 2,  unit: 'ea' }, { sku: 'CC-ENC-2B', qty: 1,  unit: 'ea' }],
+    'CC-1250': [{ sku: 'CC-MOD-52', qty: 240, unit: 'ea' }, { sku: 'CC-BMS-M', qty: 6,  unit: 'ea' }, { sku: 'CC-ENC-2B', qty: 3,  unit: 'ea' }],
+    'CC-5000': [{ sku: 'CC-MOD-52', qty: 960, unit: 'ea' }, { sku: 'CC-BMS-M', qty: 24, unit: 'ea' }, { sku: 'CC-ENC-2B', qty: 12, unit: 'ea' }]
+  };
+  function planProducts() {
+    return CATALOG.map(function (c) { return { sku: c.sku, name: c.name + ' \u00b7 ' + c.sub, kind: 'product', leadTimeDays: 20, bom: BOM[c.sku] || [] }; })
+      .concat(COMPONENTS);
+  }
+  function compOf(sku) { for (var i = 0; i < COMPONENTS.length; i++) if (COMPONENTS[i].sku === sku) return COMPONENTS[i]; return null; }
 
   /* TIGHTEST FIT, never the biggest box. Walking the catalogue largest-first
      took the first product where one unit covered the need, so a 1,200 kWh
@@ -69,12 +95,17 @@
       termsBy: {},
       sized: null, study: null, design: null, view: 'plan', tool: 'select',
       bench: 'kit', lastScan: null, focusA2: null, modal: null, flash: '',
+      /* the shelf, as the plant last counted it, and what has been sent to suppliers */
+      stock: { 'CC-MOD-52': { onHand: 40 }, 'CC-CELL-280': { onHand: 500 }, 'CC-BMS-M': { onHand: 12 }, 'CC-HARN': { onHand: 400 } },
+      pos: [],
       log: []
     };
   }
   var S;
   try { S = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { S = null; }
   if (!S || !S.orders || !S.account) S = seed();
+  if (!S.stock) S.stock = seed().stock;
+  if (!S.pos) S.pos = [];
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
   function note(who, what) { S.log.unshift({ at: Date.now(), who: who, what: what }); S.log = S.log.slice(0, 80); }
 
@@ -149,6 +180,43 @@
     var open = S.orders.filter(function (x) { return x.status !== 'shipped'; });
     for (var i = 0; i < open.length; i++) if (unitsOf(open[i].orderNo).length) return open[i];
     return open.length ? open[0] : null;
+  }
+
+  /* ── THE MATERIALS PLAN. Straight into the real engine. ───────────────
+     A released order is a works order to the plan: its requirement is the
+     cabinets, and a unit that has been kitted has had its material issued,
+     so it comes off the count. Unreleased orders are pipeline or forecast. */
+  function worksFromFloor() {
+    return S.orders.filter(function (o) { return unitsOf(o.orderNo).length; }).map(function (o) {
+      var started = unitsOf(o.orderNo).filter(function (u) { return u.at; }).length, counts = {};
+      counts[o.items[0].sku] = started;
+      return { id: o.orderNo, orderNo: o.orderNo, status: o.status === 'shipped' ? 'complete' : 'released',
+        requirements: [{ sku: o.items[0].sku, qty: o.items[0].qty }], registeredCounts: counts, dueDate: day(o.promisedShipAt) };
+    });
+  }
+  function materialsPlan() {
+    try { return M.plan({ products: planProducts(), stock: S.stock, works: worksFromFloor(), orders: S.orders }); }
+    catch (e) { return null; }
+  }
+  function recordPo() {
+    var planned = materialsPlan(), lines = planned ? M.purchaseList(planned) : [];
+    if (!lines.length) return null;
+    var po = { id: 'PO-' + (1000 + S.pos.length + 1), supplier: lines[0].supplier || 'supplier', at: nowISO(), status: 'open',
+      lines: lines.map(function (r) { return { sku: r.sku, name: r.name, unit: r.unit, qty: r.suggestedOrder, received: 0 }; }) };
+    po.lines.forEach(function (l) { var e = S.stock[l.sku] || (S.stock[l.sku] = { onHand: 0, onOrder: 0 }); e.onOrder = (e.onOrder || 0) + l.qty; });
+    S.pos.unshift(po);
+    note('purchasing', po.id + ' recorded \u2014 ' + plural(po.lines.length, 'line') + ' on order');
+    save(); return po;
+  }
+  function receivePo(id) {
+    for (var i = 0; i < S.pos.length; i++) {
+      var po = S.pos[i]; if (po.id !== id || po.status !== 'open') continue;
+      po.lines.forEach(function (l) { var e = S.stock[l.sku] || (S.stock[l.sku] = { onHand: 0, onOrder: 0 });
+        e.onOrder = Math.max(0, (e.onOrder || 0) - l.qty); e.onHand = (e.onHand || 0) + l.qty; l.received = l.qty; });
+      po.status = 'received'; po.receivedAt = nowISO();
+      note('receiving', po.id + ' received \u2014 on the shelf');
+    }
+    save();
   }
 
   /* ── THE SCAN. Straight into the real engine. ─────────────────────────── */
@@ -622,7 +690,7 @@
         + '<span class="xs mut" style="margin-left:2px">admin</span>',
       nav: [{ grp: 'Sales' }, { r: 'a/orders', t: 'Orders', pre: 'a/order' },
             { r: 'a/customers', t: 'Customers', pre: 'a/customer' },
-            { grp: 'Production' }, { r: 'a/production', t: 'Works orders' }, { r: 'b/scan', t: 'Bench tablet' }],
+            { grp: 'Production' }, { r: 'a/production', t: 'Works orders' }, { r: 'a/materials', t: 'Materials plan' }, { r: 'b/scan', t: 'Bench tablet' }],
       foot: '<b>Clean Cell · owner</b><br>rob@cleancell.us',
       body: body
     });
@@ -1042,6 +1110,36 @@
             '<button class="b sm" data-go="a/order/' + o.orderNo + '">Open order</button>'); }).join('') : ''));
   }
 
+  function pgAMaterials() {
+    var planned = materialsPlan();
+    if (!planned) return adminShell('<div class="ph"><div><h2>Materials plan</h2></div></div><div class="empty">The catalogue\'s bills of materials did not validate.</div>');
+    var comps = planned.rows.filter(function (r) { return r.kind === 'component' && !r.make; });
+    var makes = planned.rows.filter(function (r) { return r.make && r.net.committed + r.net.pipeline > 0; });
+    var short = comps.filter(function (r) { return r.net.committed + r.net.pipeline > 0; });
+    var open = S.pos.filter(function (po) { return po.status === 'open'; });
+    function firm(r) { return r.net.committed + r.net.pipeline; }
+    var rows = comps.map(function (r) {
+      return '<tr><td>' + esc(r.sku) + '<div class="xs mut">' + esc(r.name) + (r.supplier ? ' \u00b7 ' + esc(r.supplier) : '') + '</div></td>'
+        + '<td class="n">' + num(r.gross.committed) + ' / ' + num(r.gross.pipeline) + (r.gross.forecast ? '<div class="xs mut">+ ' + num(r.gross.forecast) + ' forecast</div>' : '') + '</td>'
+        + '<td class="n">' + num(r.onHand) + '</td><td class="n">' + num(r.onOrder) + '</td>'
+        + '<td class="n">' + (firm(r) > 0 ? '<b>' + num(firm(r)) + '</b>' : '0') + '</td>'
+        + '<td class="n">' + (r.suggestedOrder > 0 ? '<b>' + num(r.suggestedOrder) + ' ' + esc(r.unit) + '</b>' + (r.moq ? '<div class="xs mut">MOQ ' + num(r.moq) + '</div>' : '') : '\u2014') + '</td>'
+        + '<td class="n">' + (r.orderBy ? (r.late ? tag(r.orderBy + ' \u00b7 late', 'bad') : esc(r.orderBy)) + '<div class="xs mut">' + (r.leadTimeDays || 0) + '-day lead</div>' : '\u2014') + '</td></tr>';
+    });
+    return adminShell('<div class="ph"><div><h2>Materials plan</h2>'
+      + '<div class="sub">Every open order and works order, exploded through the bill of materials and netted against the shelf. Stock goes to the firmest demand first.</div></div>'
+      + '<span class="sp"></span>' + (short.length ? '<button class="b sm p" id="a-po">Record a purchase order for the shortfall</button>' : '') + '</div>'
+      + tiles([['Components short', short.length], ['Past order-by date', planned.summary.late], ['Open purchase orders', open.length], ['As of', planned.asOf]])
+      + panel('What to buy', tbl([{ t: 'Component' }, { t: 'Need (committed / pipeline)', n: 1 }, { t: 'On hand', n: 1 }, { t: 'On order', n: 1 }, { t: 'Short', n: 1 }, { t: 'Suggested order', n: 1 }, { t: 'Order by', n: 1 }], rows, 'No component has demand or stock.'),
+          '<span class="xs mut">Quantities include the yield allowance on the module\'s cells (98%). Forecast demand never suggests a purchase.</span>')
+      + panel('What to build', makes.length ? '<table><tbody>' + makes.map(function (r) { return '<tr><td class="mono">' + esc(r.sku) + '</td><td>' + esc(r.name) + (r.kind === 'component' ? ' <span class="xs mut">sub-assembly</span>' : '') + '</td><td class="n"><b>' + num(r.suggestedOrder) + '</b> to build</td><td class="n">' + num(r.onHand) + ' on hand</td><td class="n">' + (r.needBy ? 'by ' + esc(r.needBy) : '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<div class="empty">Nothing to build.</div>',
+          '<span class="xs mut">A module has its own bill, so it is made here \u2014 never bought \u2014 and its cells are what gets ordered.</span>')
+      + (S.pos.length ? S.pos.map(function (po) {
+          return panel(po.id + ' \u00b7 ' + po.supplier,
+            '<table><tbody>' + po.lines.map(function (l) { return '<tr><td class="mono">' + esc(l.sku) + '</td><td>' + esc(l.name) + '</td><td class="n">' + num(l.qty) + ' ' + esc(l.unit) + ' ordered</td><td class="n">' + num(l.received) + ' received</td></tr>'; }).join('') + '</tbody></table>',
+            tag(po.status, po.status === 'open' ? 'ok' : '') + ' ' + (po.status === 'open' ? '<button class="b sm" id="a-rcv-' + esc(po.id) + '">Receive \u2014 it arrived</button>' : '<span class="xs mut">Received ' + esc(day(po.receivedAt)) + '</span>')); }).join('') : ''));
+  }
+
   /* ══ BENCH TABLET ══════════════════════════════════════════════════════ */
   function pgBench() {
     var routing = P.DEFAULT_ROUTING, o = benchOrder();
@@ -1165,7 +1263,7 @@
         S.account.created ? plural(customers().length, 'customer account') + ', 1 signed-in user.' : 'No accounts yet.', 'api/my-orders.js'],
       ['Designer', S.account.plan === 'designer' ? 'ok' : 'off',
         S.account.plan === 'designer' ? '1 account on the designer.' : 'Nobody is subscribed yet.', 'omega-editor-mode.js'],
-      ['Payments', 'off', 'The milestone webhook is designed and not written. The deposit button stands in for it.', 'not built']
+      ['Payments', 'off', 'QuickBooks is not connected here. In the product the deposit is an installment invoice and the works order is raised when it reconciles.', 'api/_lib/logic-workflow.js']
     ];
   }
   function sysRows() {
@@ -1307,11 +1405,12 @@
     'd/studio': ['A mode, not a second editor', '<code>editor.html</code> is 11 MB across 175,800 lines; a copy doubles the largest file in the repo and every fix has to be made twice. <code>editorMode: \'bess-lite\'</code> hides compute and the data-centre and EV categories and leaves solar in. It curates rather than deletes, so handlers travel with the nodes, and it fails open — an unknown mode gives you the full platform. <b>This screen is a stand-in for the editor; <code>omega-editor-mode.js</code> and its 39 tests are real.</b>'],
     'a/orders': ['One queue, two doors', 'An order lands here whether it came off Clean Cell’s own storefront or was sent over by ClearSky. Written only through <code>api/orders.js</code>: “only ClearSky may price, but the tenant may always cancel their own” is a commercial arrangement, not a rules file.'],
     'a/order': ['Serials exist only after money', 'Releasing to the floor is what allocates them, and it is gated on the deposit. Units and scans are <code>allow write: if false</code> — Admin SDK only — because if a browser could set a timestamp every guarantee in the scan engine evaporates.'],
+    'a/materials': ['Netted level by level', 'Demand walks down the bill of materials in low-level-code order, and each part is netted against the shelf <em>before</em> the remainder is exploded into its children \u2014 so forty modules on hand mean forty modules\u2019 worth of cells that are not bought. Stock goes to committed work first, then priced orders, then forecast; forecast never suggests a purchase. The arithmetic is <code>api/_lib/materials.js</code>, read verbatim; the purchase order and the receipt are <code>api/logic-materials.js</code>, stood in for here.'],
     'a/customer': ['Terms are an overlay', 'The customer opened this account themselves and filled in their own details. Clean Cell sets net days, discount and the plan afterwards. Nobody has to be pre-loaded before they are allowed to buy.'],
     'b/scan': ['It refuses, and that is the product', 'A scan can only advance one station or be a duplicate. It can never skip, reverse, release a hold, close an NCR or mark anything shipped — so the worst a stolen scanner achieves is marking units present at one bench, in order. Two stations are machine-written by the test rig and refuse a human scan outright. <b>Every verdict on this screen is the real <code>api/_lib/plant.js</code>.</b>'],
     'o/order': ['Priced is not published', 'Pricing, scoring, eligibility and every financial model run in <code>/api/</code> and never in a browser. Until somebody publishes it the customer’s portal reads “Price pending”, so you can reprice as often as you like and nothing crosses. The leak test runs the committed projection over this record and shows you the output.'],
     'o/tenant': ['What the platform is called here', 'A <code>whiteLabel</code> block on the tenant record drives it, and it is staff-written: whether our name appears on a product we operate is a contract line item, not a tenant preference. Attribution defaults to showing, so removing it is always a decision somebody made.'],
-    'o/systems': ['A state and a sentence', 'Served as JSON as well as rendered, so an agent can report on the estate without scraping a page. <code>off</code> is deliberately not <code>down</code>. Payments reads <code>off</code> because the milestone webhook is designed and not written — a status feed that invents a number is worse than one that admits a gap.']
+    'o/systems': ['A state and a sentence', 'Served as JSON as well as rendered, so an agent can report on the estate without scraping a page. <code>off</code> is deliberately not <code>down</code>. Payments reads <code>off</code> because this demo has no QuickBooks company to reconcile against — in the product <code>api/_lib/logic-workflow.js</code> raises the works order the moment the deposit invoice reconciles. A status feed that invents a number is worse than one that admits a gap.']
   };
   var DEFAULT_NOTE = ['One world, five surfaces',
     'Everything on this screen shares one set of records with the other four. The two engines that decide anything '
@@ -1464,6 +1563,23 @@
         }
         S.route = o ? 'a/order/' + o.orderNo : 'a/orders';
       } },
+
+    { who: 'cc', lead: 'What the floor will run out of',
+      say: 'The same works order, exploded through the bill of materials \u2014 cabinet, module, cell \u2014 '
+         + 'and netted against the shelf. Forty modules on hand are forty modules\u2019 worth of cells that are '
+         + 'not bought. Cells have a sixty-day lead; the plan says when they had to be ordered.',
+      run: function () { var o = tourOrder(); if (o) { if (!o.deposit) { o.deposit = true; o.status = 'accepted'; } release(o); } S.route = 'a/materials'; } },
+
+    { who: 'cc', lead: 'Ordered',
+      say: 'A purchase order for the shortfall \u2014 recorded here, sent by a person. The quantities move to '
+         + '\u201con order\u201d and nothing is short against this works order any more.',
+      run: function () { var o = tourOrder(); if (o) { if (!o.deposit) { o.deposit = true; o.status = 'accepted'; } release(o); }
+        if (!S.pos.length) recordPo(); S.route = 'a/materials'; } },
+
+    { who: 'cc', lead: 'On the shelf',
+      say: 'The pallet arrives. Receiving moves it from on order to on hand, and every count on every screen follows.',
+      run: function () { var o = tourOrder(); if (o) { if (!o.deposit) { o.deposit = true; o.status = 'accepted'; } release(o); }
+        if (!S.pos.length) recordPo(); S.pos.forEach(function (po) { if (po.status === 'open') receivePo(po.id); }); S.route = 'a/materials'; } },
 
     { who: 'bench', lead: 'The floor',
       say: 'Five serialised cabinets, on a tablet paired to one bench. The station comes off that '
@@ -1640,6 +1756,7 @@
       if (c === 'customers') return pgACustomers();
       if (c === 'customer') return pgACustomer();
       if (c === 'production') return pgAProduction();
+      if (c === 'materials') return pgAMaterials();
       return pgAOrders();
     }
     if (a === 'b') return pgBench();
@@ -1869,6 +1986,8 @@
     if (bid === 'b-run' || bid === 'a-run' || bid === 'o-run') {
       var ro = benchOrder(); if (ro) runBay(ro.orderNo); render(); return;
     }
+    if (bid === 'a-po') { recordPo(); render(); return; }
+    if (bid.indexOf('a-rcv-') === 0) { receivePo(bid.slice(6)); render(); return; }
 
     /* ── ClearSky ── */
     if (bid === 'm-newcs') {

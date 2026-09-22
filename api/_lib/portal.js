@@ -32,14 +32,17 @@
                    give it away. Echoing the field in JSON does the same
                    thing more quietly.
 
-     customer.notes LOOKS like the customer's own words and is not. At
-                   api/orders.js:258 it is written as
+     customer.notes LOOKED like the customer's own words and was not.
+                   api/orders.js used to write it as
                    `clean(customer.notes || b.note, 2000)` — so when a
-                   customer left it blank, the REP'S OWN note lands there. A
+                   customer left it blank, the REP'S OWN note landed there. A
                    rep typing "shopping us against Tesla, do not go below X"
                    would have it handed back to that customer as "what you
-                   told us". Excluded here on purpose; the alias itself
-                   should be fixed in api/orders.js separately.
+                   told us". The write is fixed (the rep's note now goes on
+                   the history thread), but every row created BEFORE the fix
+                   still carries the alias and nothing on the record says
+                   which ones. So the exclusion stays: an old order with a
+                   rep's deal commentary in this field is one order too many.
 
      status        'quoted' means CLEARSKY has priced it to the TENANT. A
                    customer seeing that before their own reseller has quoted
@@ -293,6 +296,30 @@ function publicOrder(order, opts) {
       }) };
   }
   if (o.shipment) out.shipment = { carrier: clip(o.shipment.carrier, 80), tracking: clip(o.shipment.tracking, 120), shippedAt: when(o.shipment.shippedAt) };
+
+  /* The customer's own requests on this order and the tenant's answers —
+     the one thing the customer writes onto an order after placing it
+     (api/my-orders.js POST). The office's internal notes are not here. */
+  out.requests = (Array.isArray(o.requests) ? o.requests : []).slice(-20).map(function (r) {
+    r = r || {};
+    return { id: clip(r.id, 40), kind: clip(r.kind, 20), message: clip(r.message, 2000), status: clip(r.status, 20) || 'open',
+      at: when(r.at), answer: r.answer ? clip(r.answer, 2000) : null, answeredAt: when(r.answeredAt),
+      address: r.address ? { line1: clip(r.address.line1, 200), city: clip(r.address.city, 100), state: clip(r.address.state, 40), zip: clip(r.address.zip, 20) } : null };
+  });
+
+  /* Warranty per line, DERIVED: the product's warranty years from the day
+     the order shipped. There is no separate warranty record to drift from
+     the catalog or the shipment; if either changes, this changes with it. */
+  var shippedIso = o.shipment && o.shipment.shippedAt ? when(o.shipment.shippedAt) : null;
+  if (op.catalogBy && shippedIso && !isNaN(Date.parse(shippedIso))) {
+    out.items.forEach(function (it) {
+      var p = it.sku && Object.prototype.hasOwnProperty.call(op.catalogBy, it.sku) ? op.catalogBy[it.sku] : null;
+      var yrs = p ? Number(p.warrantyYears) : 0;
+      if (!(yrs > 0)) return;
+      var d = new Date(shippedIso); d.setUTCFullYear(d.getUTCFullYear() + Math.floor(yrs)); d.setUTCMonth(d.getUTCMonth() + Math.round((yrs % 1) * 12));
+      it.warranty = { years: yrs, from: String(shippedIso).slice(0, 10), until: d.toISOString().slice(0, 10) };
+    });
+  }
   return out;
 }
 

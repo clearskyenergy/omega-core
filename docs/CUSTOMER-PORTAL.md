@@ -272,9 +272,19 @@ half-built unit is not a thing a web form should be able to abandon.
 **Not**: reprice, reorder at an old price, change terms, see another buyer's
 anything, or read any order they are not the named customer on.
 
-**Payment: phase two.** Order-to-cash is designed around Stripe milestones and
-wiring "pay deposit" into the portal is a natural fit, but it is a real scope
-step with a merchant-of-record question attached. Read-only portal first.
+**Payment: built, and not through Stripe.** Order-to-cash runs on QuickBooks
+installment invoices raised by Omega Logic — `api/_lib/logic-workflow.js`
+prices the order, `api/_lib/qbo-sales.js` raises the deposit invoice with
+online ACH/card payment on it, and `api/logic-worker.js` (a five-minute
+Vercel cron) reconciles the invoice's linked payments and, once the deposit
+is satisfied, calls `release()`: a `plant_works_orders/wo_<orderId>` record
+carrying this order's `orderNo`, finished stock allocated to it, the
+remainder released as manufacturing demand. The balance invoice queues when
+quality releases the last unit; shipment waits for it. The merchant of
+record is the QuickBooks company on the order — the tenant's, verified by
+realm on every write — which is the answer to the question this paragraph
+used to leave open. The portal stays read-only about money: it shows the
+milestone the floor is at, and the invoice link comes from QuickBooks.
 
 ---
 
@@ -382,7 +392,8 @@ a customer does not phone anybody.
    exist: terms, plan, status.
 3. Documents on the order (invoice, DG paperwork, FAT certificate).
 4. Cancellation requests.
-5. Stripe milestone payment from the portal.
+5. ~~Stripe milestone payment from the portal.~~ Superseded: QuickBooks
+   installments via Omega Logic (§5), which also raises the works order.
 6. `POST /api/buyers-sync` for Salesforce, when there is one to point at.
 
 Running alongside, because they answer to different people:
@@ -511,6 +522,20 @@ product call nobody has made.
 
 ## What is NOT built
 
-All of it. This document is the design, written before the code on purpose,
-because §1 and §8 are both decisions that are cheap now and expensive after
-somebody has shipped the obvious version.
+This document was written before the code, on purpose, because §1 and §8 are
+both decisions that are cheap now and expensive after somebody has shipped
+the obvious version. Since then, what landed:
+
+- §2 accounts and the pointer: `api/my-account.js`; rules in
+  `firestore.rules` (customers, users, customer_index — applied 2026-09-21
+  from `docs/firestore.rules.customers.addendum`; deploy with
+  `firebase deploy --only firestore:rules`).
+- §3–§4 the portal and milestones: `portals/customer/`, `api/my-orders.js`,
+  `api/_lib/portal.js`.
+- §5 payment and the works order: Omega Logic (see the paragraph in §5).
+- §11 the tenant page: `admin/tenant.html`, `api/tenant-systems.js`.
+- §12 Editor Lite as a mode: `omega-editor-mode.js`, `shells/cleancell/`.
+
+Still open: the `designer` upgrade's tenant-vs-`org_members` question (§6),
+the Salesforce sync (§10 item 6), and whether the lite dashboard links the
+finance sizer (§12).
