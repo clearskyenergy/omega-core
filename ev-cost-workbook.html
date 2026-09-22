@@ -132,6 +132,7 @@ table.pv td.num{text-align:right;font-variant-numeric:tabular-nums}
 .pv-ng-inel{background:#404040;color:#fff;font-weight:700}
 .pv-ng-hdr{background:#fff;color:#04415C;font-weight:700;text-align:center;border:1.5px solid #04415C!important}
 .pv-ng-lbl{font-weight:700}
+.pv-ng-blk{background:#404040}
 .pv-ng-tot{background:#437085;color:#fff;font-weight:700}
 .pvtabs{display:flex;padding:0 14px;border-bottom:1px solid var(--line2);overflow-x:auto}
 .pvtab{padding:9px 14px;font-size:11px;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);cursor:pointer;white-space:nowrap}
@@ -5482,8 +5483,10 @@ function previewFormNG(m, form){
     g=byRow[rowNo] || { mat:0, lab:0, qty:0, notes:[] };
     h+=r(td(String(label).replace(/\n/g,' '))
         +td(uniqJoin(g.notes,' \u00b7 '),'o')
-        +td(unit)+td(r2(g.qty)||0,'num')
-        +td(acct(r2(g.mat)),'num')+td(acct(r2(g.lab)),'num')
+        +td(unit)
+        +(ngBlocked(rowNo,'E') ? td('','pv-ng-blk') : td(r2(g.qty)||0,'num'))
+        +(ngBlocked(rowNo,'F') ? td('','pv-ng-blk') : td(acct(r2(g.mat)),'num'))
+        +(ngBlocked(rowNo,'G') ? td('','pv-ng-blk') : td(acct(r2(g.lab)),'num'))
         +td(acct(r2(g.mat)+r2(g.lab)),'num'));
   }
 
@@ -6564,9 +6567,10 @@ function ngFillTemplate(ws, m){
     r = NG_LAYOUT[li][0];
     g = byRow[r] || { mat:0, lab:0, qty:0, notes:[] };
     put('C'+r, uniqJoin(g.notes,' \u00b7 '));
-    put('E'+r, r2(g.qty)||0);
-    put('F'+r, r2(g.mat));
-    put('G'+r, r2(g.lab));
+    /* a shaded cell stays empty \u2014 the template ships it blank */
+    if(!ngBlocked(r,'E')) put('E'+r, r2(g.qty)||0);
+    if(!ngBlocked(r,'F')) put('F'+r, r2(g.mat));
+    if(!ngBlocked(r,'G')) put('G'+r, r2(g.lab));
     var tot=r2(r2(g.mat)+r2(g.lab));
     ws.getCell('H'+r).value = tot ? { formula:'F'+r+'+G'+r, result:tot } : 0;
   }
@@ -6781,7 +6785,37 @@ function ngRollup(m){
       if(r.note) byRow[rr].notes.push(r.note);
     }
   }
+  ngMoveBlocked(byRow);
   return byRow;
+}
+
+/* The cells National Grid shades out — navy E10:F10, black G27:G30, G32,
+   G42:G45 — take no entry. Money the model booked there is moved to the
+   cell the reviewer does read, never dropped, so every total is unchanged:
+     design is one labor figure, so its material becomes labor and it has
+     no quantity; installation labor on the EVSE hardware rows goes to
+     row 19 "Other", where all three reference jobs put it; on the fee
+     rows (freight, networking, warranty, activation, validation) the
+     whole charge is the row's cost, so it goes to material. */
+var NG_BLOCKED = { 10:{E:1,F:1}, 27:{G:1}, 28:{G:1}, 29:{G:1}, 30:{G:1},
+                   32:{G:1}, 42:{G:1}, 43:{G:1}, 44:{G:1}, 45:{G:1} };
+var NG_LABOR_TO_INSTALL = { 27:1, 28:1, 30:1 };
+function ngBlocked(row, col){ return !!(NG_BLOCKED[row] && NG_BLOCKED[row][col]); }
+function ngMoveBlocked(byRow){
+  var rr, g, lab;
+  if(byRow[10]){ byRow[10].lab += byRow[10].mat; byRow[10].mat=0; byRow[10].qty=0; }
+  for(rr in NG_BLOCKED){
+    if(!NG_BLOCKED[rr].G || !byRow[rr]) continue;
+    g=byRow[rr]; lab=g.lab; g.lab=0;
+    if(!lab) continue;
+    if(NG_LABOR_TO_INSTALL[rr]){
+      if(!byRow[19]) byRow[19]={ mat:0, lab:0, qty:num(DATA.plugs)||0, notes:[] };
+      byRow[19].lab += lab;
+      byRow[19].notes.push('EVSE installation');
+    } else {
+      g.mat += lab;
+    }
+  }
 }
 function ngSum(byRow, a, b){
   var t=0, r;
