@@ -167,6 +167,18 @@ await check('office lists real orders with stage and finance, counts unconverted
   var ops=await factory({method:'GET',query:{org:'cleancell.us',page:'ops'},caller:admin},res);
   assert.equal(ops.floor.totals.advances,1);assert.equal(ops.floor.totals.ready,1);assert.equal(ops.floor.days.length,14);assert.equal(ops.stock.available,1);assert.equal(ops.completed.readyOnOrders,1);assert(ops.demand.skus.length>=1);assert.equal(ops.queues.filter(function(q){return q.key==='ready';})[0].count,1);assert.equal(ops.rows.length,1);
 });
+await check('attention page lists stuck and held units and silent stations from real records',async function(){
+  setup();var res={setHeader:function(){}},H=3600000,now=Date.now();
+  db.seed('plant_works_orders/stock_1',{orgId:'cleancell.us',lineId:'north',flowVersion:3,routing:clone(Plant.DEFAULT_ROUTING)});
+  db.seed('plant_units/cleancell.us__STUCK',unit('STUCK',{at:'elec',arrivedAt:new Date(now-40*H).toISOString(),test:null,createdAt:3}));
+  db.seed('plant_units/cleancell.us__HELD',unit('HELD',{at:'eol',hold:'Test failure',holdAt:new Date(now-2*H).toISOString(),ncr:'NCR-9',test:{result:'fail',failureCode:'X'},createdAt:2}));
+  db.seed('plant_units/cleancell.us__FRESH',unit('FRESH',{at:'kit',arrivedAt:new Date(now-1*H).toISOString(),test:null,createdAt:1}));
+  db.seed('plant_stations/quiet',{orgId:'cleancell.us',station:'pack',label:'Pack bench',active:true,lastSeenAt:new Date(now-30*H).toISOString()});db.seed('plant_stations/busy',{orgId:'cleancell.us',station:'kit',label:'Kit bench',active:true,lastSeenAt:new Date(now-1*H).toISOString()});
+  var a=await factory({method:'GET',query:{org:'cleancell.us',page:'attention'},caller:admin},res);
+  assert.deepEqual(a.stuck.map(function(u){return u.serial;}),['STUCK']);assert.equal(a.held[0].ncr,'NCR-9');assert.equal(a.failed.length,1);assert.deepEqual(a.silent.map(function(s){return s.id;}),['quiet']);assert.equal(a.counts.wip,3);assert.equal(a.sampled,3);
+  var tight=await factory({method:'GET',query:{org:'cleancell.us',page:'attention',stuckHours:'0.5'},caller:admin},res);assert.equal(tight.stuck.length,2);assert.equal(tight.thresholds.stuckHours,0.5);
+  await assert.rejects(factory({method:'GET',query:{org:'cleancell.us',page:'attention'},caller:Object.assign({},admin,{uid:'outsider',orgId:'other.us'})},res),/workspace/);
+});
 await check('station scans capture routing context, reject wrong line and preserve idempotency',async function(){
   setup();var scan=require('../api/mes-scan'),S=require('../api/_lib/plant-station'),route=clone(Plant.DEFAULT_ROUTING);route[0].instructions='Inspect label';route[0].parameters='Match lot';
   db.seed('plant_works_orders/stock_1',{orgId:'cleancell.us',lineId:'north',flowVersion:3,routing:route});db.seed('plant_units/cleancell.us__SCAN-1',unit('SCAN-1',{at:'',test:null}));
