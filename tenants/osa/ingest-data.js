@@ -530,6 +530,21 @@
       source:     'portfolio',
       brief:      opts.brief || ''
     };
+    /* A promoted referral is joint development: our project, the partner on
+       the roster. orgsInvolved is the grant the rules read (array-contains),
+       so the partner sees and works the drawing without owning it. The
+       owner is set once here and the rules never let it move. */
+    if (opts.orgsInvolved && opts.orgsInvolved.length) {
+      doc.orgsInvolved = opts.orgsInvolved.map(function (o) { return String(o).toLowerCase(); })
+        .filter(function (o, i, a) { return o && a.indexOf(o) === i; });
+      if (doc.orgsInvolved.indexOf(orgId) < 0) doc.orgsInvolved.unshift(orgId);
+    }
+    /* wizMode already tells the editor what kind of build this is; the deal's
+       projectType is not one of the editor's `type` values, so it is not
+       written as one. The target size is, so the autopilot and the design
+       team start from the number the partner gave. */
+    doc.stage = 'candidate';
+    if (deal.sizeMw != null) doc.targetMw = deal.sizeMw;
 
     return _db.collection('projects').add(doc).then(function (ref) {
       return F().patch(deal, { projectId: ref.id }, { type:'assignment',
@@ -808,7 +823,22 @@
     { key:'channel',     header:'Channel', label:'Channel',
       example:'Shareholder introduction' },
     { key:'referredAt',  header:'Referred date', label:'Referred date',
-      example:'2026-08-31' }
+      example:'2026-08-31' },
+    /* ── Two optional columns for a portfolio, not a single referral ──
+       `ref` is the partner's own id for the site ("CT-25"). It is what lets
+       their screening scorecard land on the right deal without matching on
+       names, and what makes a corrected re-upload an update rather than a
+       second copy. `promote` marks the rows that are projects now rather
+       than sites to screen: those advance to Screening and get an editor
+       project in the same import. Both empty on a plain referral. */
+    { key:'ref',         header:'Ref', label:'Partner ref',
+      example:'CT-25',
+      hint:'The partner’s own id for the site, if they have one. Their scorecard '
+         + 'matches on it, and a re-upload updates the same deal instead of adding one.' },
+    { key:'promote',     header:'Promote to project', label:'Promote to project',
+      example:'',
+      hint:'"yes" on the rows that are projects now. They advance to Screening and get an '
+         + 'editor project; everything else lands as a site to be screened.' }
   ];
 
   /* Two example rows, marked so the importer skips them. Somebody learns the
@@ -919,11 +949,18 @@
     return map;
   }
 
+  /* The pure half: aliases, site identity, the scorecard. Loaded beside this
+     file; absent (an old page cache), the importer still runs without the
+     conveniences rather than not at all. */
+  function SS() { return global.SiteScreen || null; }
+
   function buildRows(sheet, mapping, opts) {
     opts = opts || {};
     var headerRow = opts.headerRow != null ? opts.headerRow : 0;
-    var out = [], skipped = 0;
+    var out = [], skipped = 0, defaulted = { sizeMw:0, projectType:0, aliased:0 };
     var TYPES = ((cfg().portfolio || {}).projectTypes || []).map(function (t) { return t.key; });
+    var defSize = F().num(opts.defaultSizeMw);
+    var defType = String(opts.defaultProjectType || '').trim().toLowerCase();
 
     for (var r = headerRow + 1; r < sheet.rows.length; r++) {
       var raw = sheet.rows[r];
@@ -951,10 +988,29 @@
                     + 'It decides who can sign in and see the deal.');
 
       var pt = String(v.projectType || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      /* "Edge Compute" is `compute` in our vocabulary. The alias table in
+         site-screen.js knows the words partners actually write; a key of
+         ours passes straight through. Only a word nobody recognises is
+         left blank, and it says so. */
+      /* The counters describe rows that will LAND. A refused row is not
+         "given the batch size"; it is refused. */
+      var lands = !problems.length;
       if (pt && TYPES.indexOf(pt) < 0) {
-        warnings.push('Project type "' + v.projectType + '" is not one we build \u2014 left blank.');
-        pt = '';
+        var al = SS() ? SS().aliasProjectType(v.projectType, TYPES) : '';
+        if (al) { pt = al; if (lands) defaulted.aliased++; }
+        else {
+          warnings.push('Project type "' + v.projectType + '" is not one we build \u2014 left blank.');
+          pt = '';
+        }
       }
+      if (!pt && defType && TYPES.indexOf(defType) >= 0) { pt = defType; if (lands) defaulted.projectType++; }
+
+      /* A partner's file that says "every row targets 1.0 MW" in its notes
+         and leaves the column empty on eleven rows is asking for a default,
+         and the person uploading sets it \u2014 once, for the batch, on the form.
+         Never invented here. */
+      var size = F().num(v.sizeMw);
+      if (size == null && defSize != null) { size = defSize; if (lands) defaulted.sizeMw++; }
 
       out.push({
         row: r + 1,
@@ -969,9 +1025,11 @@
           annualKwh:   F().num(v.annualKwh),
           meters:      F().num(v.meters),
           loadKw:      F().num(v.loadKw),
-          sizeMw:      F().num(v.sizeMw),
+          sizeMw:      size,
           channel:     String(v.channel || '').trim() || 'Imported',
-          referredAt:  parseDate(v.referredAt)
+          referredAt:  parseDate(v.referredAt),
+          ref:         String(v.ref || '').trim(),
+          promote:     SS() ? SS().isYes(v.promote) : /^\s*(y|yes|true|1)\s*$/i.test(String(v.promote || ''))
         },
         problems: problems,
         warnings: warnings,
@@ -979,6 +1037,16 @@
       });
     }
     out.skippedExamples = skipped;
+    out.defaulted = defaulted;
+    /* Rows that are an existing deal, by ref or by site name under the same
+       partner. Marked here so the preview can say "N update" before the
+       person commits, the same way the portfolio upload does. */
+    if (opts.existing && SS()) {
+      out.forEach(function (r) {
+        var d = SS().findExisting(r.values, opts.existing);
+        if (d) r.updates = d;
+      });
+    }
     return out;
   }
 
@@ -999,9 +1067,67 @@
   /* Sequential, not parallel. A hundred concurrent writes trips rate limits and
      leaves you unable to say which rows landed \u2014 the only question that
      matters when an import half-fails. */
-  function runImport(rows, batchLabel, onProgress) {
+  /* A deal, fresh from the database, in the normalised shape the gates read.
+     Every write in this file changes the document under the local copy, and
+     advance() checks its gate against whatever it is handed. */
+  function fresh(id) {
+    return _db.collection(F().COLLECTION).doc(id).get().then(function (s) {
+      return F().normalize(id, s.data() || {});
+    });
+  }
+
+  /* \u2500\u2500 PROMOTING A DEAL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+     "This one is a project now": a named rep, Screening, and an editor
+     project owned by OUR org with the partner on its roster. The project
+     cannot be filed in the partner's workspace \u2014 the rules let a browser
+     create a project only in the signed-in user's own org \u2014 and it does not
+     need to be: orgsInvolved is the grant that lets the partner see and
+     work it under the JDA, which is the arrangement a promoted referral is.
+
+     Every step is the ordinary one (assign, advance, createEditorProject),
+     so a promoted import and a deal somebody clicked through by hand are
+     the same record with the same history. */
+  function promote(dealId, opts) {
+    opts = opts || {};
+    var me = opts.me || (_me && _me.email) || '';
+    var myOrg = String(opts.myOrg || (_me && _me.orgId) || '').toLowerCase();
+    if (!myOrg) return Promise.reject(new Error('Cannot promote: your organisation is not resolved.'));
+    return fresh(dealId).then(function (deal) {
+      var p = Promise.resolve();
+      if (!deal.assignment.rep && me) {
+        /* assign() writes every assignment field it is handed and blanks the
+           ones it is not, so the leads already on the deal travel with the
+           new rep rather than being wiped by it. */
+        p = p.then(function () { return F().assign(deal, {
+              rep: me, designLead: deal.assignment.designLead, devLead: deal.assignment.devLead,
+              dueAt: deal.assignment.dueAt, notes: deal.assignment.notes }); })
+             .then(function () { deal.assignment.rep = me; });
+      }
+      if (deal.stage === 'referred') {
+        p = p.then(function () { return F().advance(deal, 'screening', opts.note || 'Promoted at import'); })
+             .then(function () { deal.stage = 'screening'; });
+      }
+      if (!deal.projectId) {
+        p = p.then(function () {
+          var roster = [myOrg];
+          if (deal.origination.partnerOrg && roster.indexOf(deal.origination.partnerOrg) < 0)
+            roster.push(deal.origination.partnerOrg);
+          return createEditorProject(deal, {
+            orgId: myOrg, name: deal.name, orgsInvolved: roster,
+            brief: opts.brief || ('Promoted from ' + (deal.origination.partnerName || deal.origination.partnerOrg)
+                   + '\u2019s portfolio' + (deal.sizeMw != null ? ' \u2014 target ' + deal.sizeMw + ' MW' : '')),
+            designLead: opts.designLead || '', devLead: opts.devLead || ''
+          });
+        });
+      }
+      return p.then(function () { return deal.id; });
+    });
+  }
+
+  function runImport(rows, batchLabel, onProgress, opts) {
+    opts = opts || {};
     var good = rows.filter(function (r) { return r.ok; });
-    var results = { created:0, failed:0, errors:[], batch:batchLabel };
+    var results = { created:0, updated:0, promoted:0, failed:0, errors:[], batch:batchLabel };
     var i = 0;
 
     function step() {
@@ -1009,33 +1135,68 @@
       var r = good[i++];
       var val = r.values;
       var t = F().typeOf(val.projectType) || {};
+      var p;
 
-      return F().create({
-        name: val.name,
-        partnerOrg: val.partnerOrg,
-        partnerName: (A() && A().orgName(val.partnerOrg)) || val.partnerOrg,
-        clientOrgId: val.clientOrgId,
-        address: val.address,
-        channel: val.channel,
-        categories: (t.categories || []).slice(),
-        sizeMw: val.sizeMw,
-        referredAt: val.referredAt || stamp()
-      }).then(function (ref) {
-        /* The fields create() does not know about. Same second write the
-           intake form does, so an imported referral and a typed one are the
-           same shape \u2014 anything else and the screening tool sees two
-           different kinds of deal. */
-        return _db.collection(F().COLLECTION).doc(ref.id).update({
-          projectType: val.projectType || '',
-          siteNotes:   val.siteNotes || '',
-          importBatch: batchLabel,
-          energy: {
-            monthlyBillUsd: val.monthlyBillUsd, annualKwh: val.annualKwh,
-            meters: val.meters, loadKw: val.loadKw, utilityAccount: ''
-          }
+      if (r.updates && r.updates.id) {
+        /* THE SAME SITE AGAIN IS A CORRECTION, NOT A SECOND SITE. Only what
+           the sheet carries is written over the deal; a column left empty
+           does not blank something typed in here since. Attribution is not
+           touched \u2014 it locked when the deal advanced, and the rules refuse
+           it anyway. */
+        var body = { importBatch: batchLabel };
+        if (val.name) body.name = val.name;
+        if (val.address) body.address = val.address;
+        if (val.projectType) { body.projectType = val.projectType; body.categories = (t.categories || []).slice(); }
+        if (val.siteNotes) body.siteNotes = val.siteNotes;
+        if (val.sizeMw != null) body.sizeMw = val.sizeMw;
+        if (val.clientOrgId) body.clientOrgId = val.clientOrgId;
+        if (val.ref) body['externalIds.partnerRef'] = val.ref;
+        ['monthlyBillUsd', 'annualKwh', 'meters', 'loadKw'].forEach(function (k) {
+          if (val[k] != null) body['energy.' + k] = val[k];
         });
-      }).then(function () { results.created++; })
-      ['catch'](function (e) {
+        p = F().patch(r.updates, body, { type:'import', message:'Updated by import ' + batchLabel })
+             .then(function () { results.updated++; return r.updates.id; });
+      } else {
+        p = F().create({
+          name: val.name,
+          partnerOrg: val.partnerOrg,
+          partnerName: (A() && A().orgName(val.partnerOrg)) || val.partnerOrg,
+          clientOrgId: val.clientOrgId,
+          address: val.address,
+          channel: val.channel,
+          categories: (t.categories || []).slice(),
+          sizeMw: val.sizeMw,
+          referredAt: val.referredAt || stamp()
+        }).then(function (ref) {
+          /* The fields create() does not know about. Same second write the
+             intake form does, so an imported referral and a typed one are the
+             same shape \u2014 anything else and the screening tool sees two
+             different kinds of deal. */
+          var extra = {
+            projectType: val.projectType || '',
+            siteNotes:   val.siteNotes || '',
+            importBatch: batchLabel,
+            energy: {
+              monthlyBillUsd: val.monthlyBillUsd, annualKwh: val.annualKwh,
+              meters: val.meters, loadKw: val.loadKw, utilityAccount: ''
+            }
+          };
+          if (val.ref) extra.externalIds = { partnerRef: val.ref };
+          return _db.collection(F().COLLECTION).doc(ref.id).update(extra)
+            .then(function () { results.created++; return ref.id; });
+        });
+      }
+
+      return p.then(function (id) {
+        if (!(opts.promote && val.promote)) return;
+        return promote(id, opts).then(function () { results.promoted++; })
+          ['catch'](function (e) {
+            /* The deal landed; only the promotion did not. Reported as its
+               own line rather than as a failed row, because the row is there. */
+            results.errors.push({ row:r.row, name:val.name,
+              message:'Imported, but not promoted: ' + ((e && e.message) || String(e)) });
+          });
+      })['catch'](function (e) {
         results.failed++;
         results.errors.push({ row:r.row, name:val.name,
                               message:(e && e.message) || String(e) });
@@ -1043,6 +1204,143 @@
         if (onProgress) onProgress(i, good.length);
         return step();
       });
+    }
+    return step();
+  }
+
+  /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+     A PARTNER'S SCREENING SCORECARD, ONTO THE DEALS IT SCORED
+     \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+     `matches` is SiteScreen.matchScorecard() after the person has confirmed
+     it. Each row becomes an appended viability score through postScore() \u2014
+     same block, same history, same gate \u2014 and a passing row is promoted
+     (Screening, then Qualified, then an editor project) when asked. A row
+     under the line keeps its score as information and stays where it was;
+     that is a decision about the funnel, made once, in the plan. */
+  function applyScorecard(matches, card, opts, onProgress) {
+    opts = opts || {};
+    var S = SS();
+    if (!S) return Promise.reject(new Error('site-screen.js did not load. Reload the page.'));
+    var todo = (matches || []).filter(function (m) { return m.deal && m.use !== false; });
+    var results = { scored:0, promoted:0, qualified:0, failed:0, errors:[], threshold: card.threshold };
+    var i = 0, me = opts.me || (_me && _me.email) || '';
+
+    function step() {
+      if (i >= todo.length) return Promise.resolve(results);
+      var m = todo[i++], row = m.row, pay = S.scorePayload(row, card);
+      return fresh(m.deal.id).then(function (deal) {
+        return F().postScore(deal, { score: pay.score, criteria: pay.criteria, model: pay.model,
+                                     source: pay.source, threshold: pay.threshold })
+          .then(function () {
+            var extra = { 'viability.summary': pay.summary, 'viability.agentVerdict': pay.verdictWord };
+            if (row.ref) extra['externalIds.partnerRef'] = row.ref;
+            if (row.state && !deal.state) extra.state = row.state;
+            if (row.utility && !deal.permitting.utility) extra['permitting.utility'] = row.utility;
+            /* Utility and zoning are facts the screen looked up; they go on
+               the site notes once, not on top of what somebody wrote. */
+            var facts = [];
+            if (row.utility && String(deal.siteNotes).indexOf(row.utility) < 0) facts.push('Utility: ' + row.utility);
+            if (row.zoning && String(deal.siteNotes).indexOf(row.zoning) < 0)   facts.push('Zoning: ' + row.zoning);
+            if (facts.length) extra.siteNotes = (deal.siteNotes ? deal.siteNotes + '\n' : '') + facts.join(' \u00b7 ');
+            return F().patch(deal, extra, null);
+          })
+          .then(function () { results.scored++; })
+          .then(function () {
+            if (!(pay.passes && opts.promote)) return;
+            return promote(deal.id, { me: me, myOrg: opts.myOrg,
+                                      note: 'Passed the partner\u2019s screen at ' + pay.score + '/' + pay.threshold })
+              .then(function () { results.promoted++; return fresh(deal.id); })
+              .then(function (d2) {
+                /* THROUGH THE GATE, NOT AROUND IT. Qualified needs a passing
+                   score, which postScore just wrote; advance() checks it and
+                   refuses if anything else is missing. */
+                if (d2.stage !== 'screening') return;
+                return F().advance(d2, 'qualified', 'Passed the partner\u2019s screen at ' + pay.score + '/' + pay.threshold)
+                  .then(function () { results.qualified++; })
+                  ['catch'](function (e) {
+                    var why = (e && e.missing) ? e.missing.join(', ') : ((e && e.message) || String(e));
+                    results.errors.push({ row: row.row, name: row.site,
+                      message: 'Scored and promoted, but not qualified: ' + why });
+                  });
+              });
+          });
+      })['catch'](function (e) {
+        results.failed++;
+        results.errors.push({ row: row.row, name: row.site, message: (e && e.message) || String(e) });
+      }).then(function () {
+        if (onProgress) onProgress(i, todo.length);
+        return step();
+      });
+    }
+    return step();
+  }
+
+  /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+     THE COMPUTE SCREEN, FROM THE CONSOLE
+     \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+     omega-compute-lease.js already fans out to Grid Atlas, Network Proximity
+     and the parcel record and posts the evidence to /api/compute-lease for
+     the four gates. It was reachable from the proposal tool and the editor,
+     one site at a time, and never from the list of forty sites somebody
+     just imported. This runs it on a deal and writes what comes back where
+     the console already looks: the grid measurement onto `grid` (which is
+     the prescreen), the gates onto `leaseScreen`, the verdict as the
+     prescreen. Nothing is scored here \u2014 the gates are in the function. */
+  function screenCompute(deal, onSource) {
+    var S = SS(), CL = global.OmegaComputeLease, GA = global.GridAtlasAdapter;
+    if (!S)  return Promise.reject(new Error('site-screen.js did not load. Reload the page.'));
+    if (!CL) return Promise.reject(new Error('The compute screen client (omega-compute-lease.js) did not load.'));
+    var addr = GA && GA.fullAddress ? GA.fullAddress(deal) : (deal.address || '');
+    var haveCoords = deal.grid && deal.grid.lat != null && deal.grid.lng != null;
+    if (!addr && !haveCoords)
+      return Promise.reject(new Error('No address to screen \u2014 add one first.'));
+    var site = { address: addr, sizeMw: deal.sizeMw != null ? deal.sizeMw : 1 };
+    if (haveCoords) { site.lat = deal.grid.lat; site.lng = deal.grid.lng; }
+    var meta = { at: stamp(), by: _me ? _me.email : '' };
+
+    return CL.screen(site, S.repFromDeal(deal), { onSource: onSource }).then(function (out) {
+      var ev = out.evidence || {}, res = out.result || {};
+      var p = Promise.resolve();
+      if (ev.gridAtlas && GA && GA.normalise) {
+        var g = GA.normalise(ev.gridAtlas);
+        g.lat = ev.site && ev.site.lat != null ? ev.site.lat : (deal.grid && deal.grid.lat);
+        g.lng = ev.site && ev.site.lng != null ? ev.site.lng : (deal.grid && deal.grid.lng);
+        g.resolvedAddress = (ev.site && ev.site.resolved) || addr;
+        g.ranAt = meta.at; g.ranBy = meta.by;
+        g.source = 'grid-atlas-service'; g.serviceBuild = ev.gridAtlas.build || '';
+        p = p.then(function () { return F().saveGrid(deal, g); });
+      }
+      return p.then(function () {
+        return F().saveLeaseScreen(deal, S.leaseScreenRecord(res, meta), S.leasePrescreen(res, meta));
+      }).then(function () { return res; });
+    });
+  }
+
+  /* Forty sites, one at a time. The fiber lookup is time-boxed near a
+     minute, so this is a tab you leave open, and the progress callback is
+     what makes that bearable. A deal with no address is skipped and named. */
+  function screenMany(deals, onProgress) {
+    var results = { screened:0, skipped:0, failed:0, errors:[], verdicts:{} };
+    var i = 0;
+    function step() {
+      if (i >= deals.length) return Promise.resolve(results);
+      var d = deals[i++];
+      if (!d.address && !(d.grid && d.grid.lat != null)) {
+        results.skipped++;
+        results.errors.push({ name:d.name, message:'no address' });
+        if (onProgress) onProgress(i, deals.length, d, null);
+        return step();
+      }
+      return screenCompute(d).then(function (res) {
+        results.screened++;
+        var v = res.verdict || 'none';
+        results.verdicts[v] = (results.verdicts[v] || 0) + 1;
+        if (onProgress) onProgress(i, deals.length, d, res);
+      })['catch'](function (e) {
+        results.failed++;
+        results.errors.push({ name:d.name, message:(e && e.message) || String(e) });
+        if (onProgress) onProgress(i, deals.length, d, null);
+      }).then(step);
     }
     return step();
   }
@@ -1060,6 +1358,8 @@
     parseWorkbook:parseWorkbook, suggestMapping:suggestMapping,
     templateCsv:templateCsv, downloadTemplate:downloadTemplate,
     mapFromTemplate:mapFromTemplate, isExampleRow:isExampleRow,
-    buildRows:buildRows, runImport:runImport
+    buildRows:buildRows, runImport:runImport,
+    promote:promote, applyScorecard:applyScorecard,
+    screenCompute:screenCompute, screenMany:screenMany
   };
 })(window);

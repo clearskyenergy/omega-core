@@ -3499,5 +3499,23 @@ service cloud.firestore {
                     && request.resource.data.orgId == resource.data.orgId;
       allow delete: if signedIn() && (resource.data.orgId == userOrg() || ownsDemoBucket(resource.data.orgId) || isAdmin());
     }
+
+    /* ════════════════════════════════════════════════════════════════════════
+       AGENT KEYS  —  agent_keys/{sha256(key)}                  ← SERVER ONLY
+       ════════════════════════════════════════════════════════════════════════
+       A machine credential for /api/agent/* (a ChatGPT Action, a partner's
+       script). One row per key, id = SHA-256 of the plaintext, body = orgId,
+       label, scopes[], admin, active, expiresAt, lastUsedAt. Minted by
+       scripts/agent-key.js through the Admin SDK; read by api/_lib/agent-auth.js
+       through the Admin SDK. NO BROWSER READS OR WRITES THIS, and the block
+       below says so explicitly rather than leaning on the implicit deny — an
+       unmatched path and a denied path look identical from the client, and a
+       future "allow read: if isAdmin()" pasted in a hurry would hand every
+       ClearSky sign-in a list of who holds keys. The plaintext is never in
+       the row, so a leak here is a list of labels, not a set of credentials;
+       still, nobody needs it in a browser. */
+    match /agent_keys/{keyId} {
+      allow read, write: if false;
+    }
   }
 }
