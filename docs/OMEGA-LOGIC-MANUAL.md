@@ -210,6 +210,19 @@ years, and **Request a change or ask a question** on any order (delivery
 address or date, a question, a change, a warranty claim). Requests and the
 tenant's answers stay on the order.
 
+**Size a system** is the first entry in the portal nav. *Single site* frames
+the supplier's battery sizer (the same one the public site carries, in its
+plain mode). *Portfolio upload* takes a ZIP, CSV or XLSX of many sites —
+site list, bills, interval files, drawings — matches every document to a
+site by ID then address, and screens and sizes each site on its own with the
+data it actually has: a detailed size from a full year of interval data, a
+preliminary size from twelve bills, a screening range from a peak or annual
+figure, and an exact request for what is missing otherwise. Every number
+carries where it came from. Results export to CSV, an executive report and
+per-site reports; a sized site can be added to the customer's projects and
+opened in Design Studio. Design, statuses and the honest list of what is not
+built: `docs/PORTFOLIO-SCREENING.md`.
+
 ## 6. Build notes — what landed in this pass, and what did not
 
 Built on `claude/white-label-cleancell-usa-st5trq` after PR #45 (commits
