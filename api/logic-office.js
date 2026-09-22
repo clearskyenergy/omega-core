@@ -1,13 +1,13 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
-var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo');
+var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo'), S = require('./_lib/office-stage');
 function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
   return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q, customers: '/portals/customer/admin.html' + q,
     start: '/customer-start.html' + q,
-    urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,
+    urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,board:'/plant/work-orders.html'+q,logistics:'/logic-logistics.html'+q,poInbox:'/po-inbox?office=1&org='+encodeURIComponent(org),
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
     setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,
     mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html' };
@@ -40,9 +40,18 @@ module.exports = A.handler(async function (req, res) {
       db.doc('omega_orgs/' + org + '/storefront/config').get()
     ]);
     var key = rows[1].docs.filter(function (s) { return s.data().active !== false; })[0];
-    var orders = rows[0].docs.map(function (s) {
+    /* A company PO that has not been converted is not an order yet; it has
+       its own review queue (po-inbox). The office counts it here and lists
+       only real orders — the same rule api/logic-logistics.js applies. */
+    var intake = { review: 0, needsInfo: 0, declined: 0 };
+    var orders = rows[0].docs.filter(function (s) {
+      var o = s.data(); if (!o.poIntake || o.poIntake.convertedAt) return true;
+      if (o.status === 'po_declined') intake.declined++; else if (o.status === 'po_needs_information') intake.needsInfo++; else intake.review++;
+      return false;
+    }).map(function (s) {
       var o = s.data();
-      return { id: s.id, orderNo: o.orderNo, customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '' },
+      return { id: s.id, orderNo: o.orderNo, stage: S.stageOf(o), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
+        createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '' },
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt,
           releasedAt: o.logic.releasedAt || null, requirements: o.logic.requirements || [], allocatedSerials: o.logic.allocatedSerials || [],
@@ -55,7 +64,7 @@ module.exports = A.handler(async function (req, res) {
       bundle: { name: 'Omega Logic', included: ['OEM order operations', 'White-label website sizer / platform lite', 'White-label sitemap editor resale'],
         subscriptionSeparate: true, subscriptionDue: ctx.billing.subscriptionDue || null },
       products: rows[2].exists ? (rows[2].data().products || []).length : 0,
-      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100 };
+      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100, intake: intake, totals: S.totals(orders), finance: S.finance(orders, owner) };
   }
   if (req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   if (b.action === 'configure') {

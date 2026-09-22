@@ -2,30 +2,41 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow'),Board=require('./_lib/plant-board');
+var Flow=require('./_lib/plant-flow'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops');
+var UNIT_FIELDS=['woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test'];
+/* The CMMS-style board: newest 100 works orders with progress derived from
+   their units. Units are read in works-order chunks with a field projection;
+   the numbers are computed by plant-board.js, never in the browser, so the
+   percentage the office quotes has one source. */
+async function boardRows(db,org,now){
+  var snap=await db.collection('plant_works_orders').where('orgId','==',org).orderBy('createdAt','desc').limit(100).get();
+  var works=snap.docs.map(function(d){return Object.assign({id:d.id},d.data());}),ids=works.map(function(w){return w.id;}),unitsByWo={},unitsLimited=false;
+  for(var i=0;i<ids.length;i+=10){
+    var q=db.collection('plant_units').where('orgId','==',org).where('woId','in',ids.slice(i,i+10));q=q.select.apply(q,UNIT_FIELDS);
+    var chunk=await q.limit(Board.UNIT_CAP).get();
+    if(chunk.size===Board.UNIT_CAP)unitsLimited=true;
+    chunk.docs.forEach(function(d){var u=d.data();(unitsByWo[u.woId]=unitsByWo[u.woId]||[]).push(u);});
+  }
+  return {rows:works.map(function(w){return Board.row(w,unitsByWo[w.id]||[],now);}),limited:snap.size===100,unitsLimited:unitsLimited};
+}
+function plantLinks(org){var q='?org='+encodeURIComponent(org);return {office:'/omega-logic'+q,factory:'/plant/'+q,manager:'/plant/manager'+q,board:'/plant/work-orders'+q,logistics:'/logic-logistics'+q};}
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
   var ctx = await X.authorize(caller, org, req.method !== 'GET'), db = A.db();
   var flow=Flow.current(ctx.config), configRef=db.collection('omega_orgs').doc(org).collection('fulfillment').doc('config');
   if (req.method === 'GET') {
-    if(req.query.page==='board'){
-      /* The CMMS-style board: newest 100 works orders with progress derived
-         from their units. Units are read in works-order chunks with a field
-         projection; the numbers are computed by plant-board.js, never in the
-         browser, so the percentage the office quotes has one source. */
-      var boardRows=await db.collection('plant_works_orders').where('orgId','==',org).orderBy('createdAt','desc').limit(100).get();
-      var works=boardRows.docs.map(function(d){return Object.assign({id:d.id},d.data());}),ids=works.map(function(w){return w.id;}),unitsByWo={},unitsLimited=false;
-      for(var i=0;i<ids.length;i+=10){
-        var chunk=await db.collection('plant_units').where('orgId','==',org).where('woId','in',ids.slice(i,i+10))
-          .select('woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test').limit(Board.UNIT_CAP).get();
-        if(chunk.size===Board.UNIT_CAP)unitsLimited=true;
-        chunk.docs.forEach(function(d){var u=d.data();(unitsByWo[u.woId]=unitsByWo[u.woId]||[]).push(u);});
-      }
-      var now=new Date().toISOString();
-      return {name:ctx.org.name||org,owner:X.owner(caller),flow:flow,brand:require('./_lib/logic-brand')(ctx.org),asOf:now,
-        rows:works.map(function(w){return Board.row(w,unitsByWo[w.id]||[],now);}),limited:boardRows.size===100,unitsLimited:unitsLimited,
-        links:{office:'/omega-logic?org='+encodeURIComponent(org),factory:'/plant/?org='+encodeURIComponent(org),manager:'/plant/manager?org='+encodeURIComponent(org)}};
+    if(req.query.page==='board'||req.query.page==='ops'){
+      var now=new Date().toISOString(),board=await boardRows(db,org,now),common={name:ctx.org.name||org,owner:X.owner(caller),flow:flow,brand:require('./_lib/logic-brand')(ctx.org),asOf:now,
+        rows:board.rows,limited:board.limited,unitsLimited:board.unitsLimited,links:plantLinks(org)};
+      if(req.query.page==='board')return common;
+      /* Operations: finished stock and the last 1,000 ledger events, rolled up
+         by plant-ops.js into throughput, queues, build demand and completion. */
+      var stockSnap=await db.collection('plant_units').where('orgId','==',org).where('inventoryStatus','==','available').select('serial','sku','at','hold','shipUnit').limit(1000).get();
+      var scanSnap=await db.collection('plant_scans').where('orgId','==',org).orderBy('createdAt','desc').select('at','ok','verdict','stationId','station','machine','test','control','createdAt').limit(1000).get();
+      var scans=scanSnap.docs.map(function(d){return d.data();}),stockUnits=stockSnap.docs.map(function(d){return d.data();});
+      return Object.assign(common,{floor:Ops.floor(scans,now,14),queues:Ops.queues(board.rows),demand:Ops.demand(board.rows),stock:Ops.stock(stockUnits),completed:Ops.completed(board.rows),
+        scansLimited:scanSnap.size===1000,stockLimited:stockSnap.size===1000});
     }
     if(req.query.page){
       var collections={works:'plant_works_orders',units:'plant_units',stations:'plant_stations'},collection=collections[req.query.page];

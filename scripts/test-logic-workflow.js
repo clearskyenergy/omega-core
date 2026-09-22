@@ -143,6 +143,17 @@ await check('work-order board derives progress server-side and assignee edits ar
   assert.equal((await factory({method:'GET',query:{org:'cleancell.us',page:'board'},caller:admin},res)).rows[0].assignee,'Dana Ortiz');
   await assert.rejects(factory({method:'GET',query:{org:'cleancell.us',page:'board'},caller:Object.assign({},admin,{uid:'outsider',orgId:'other.us'})},res),/workspace/);
 });
+await check('office lists real orders with stage and finance, counts unconverted company POs, and the ops page rolls up the floor',async function(){
+  setup();var res={setHeader:function(){}};await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');var id=db.data.get('orders/one').worksOrderId;
+  db.seed('orders/po_x',{orgId:'cleancell.us',orderNo:'PO-IN-X',status:'po_review',source:'po-intake',items:[],poIntake:{number:'X'},createdAt:5});db.seed('orders/po_y',{orgId:'cleancell.us',orderNo:'PO-IN-Y',status:'po_declined',source:'po-intake',items:[],poIntake:{number:'Y'},createdAt:6});
+  var o=await office({method:'GET',query:{org:'cleancell.us'},caller:admin},res);
+  assert.deepEqual(o.orders.map(function(x){return x.id;}),['one']);assert.equal(o.intake.review,1);assert.equal(o.intake.declined,1);assert.equal(o.orders[0].stage.key,'production');assert.equal(o.totals.byStage.production,1);assert.equal(o.finance.recordedCents,o.orders[0].logic.invoices.deposit.paidCents);assert.equal(o.finance.wire,null);assert.equal(o.links.board,'/plant/work-orders.html?org=cleancell.us');
+  assert((await office({method:'GET',query:{org:'cleancell.us'},caller:owner},res)).finance.wire);
+  db.seed('plant_units/cleancell.us__C-1',unit('C-1',{woId:id,orderId:'one',inventoryStatus:'allocated',at:'ready',test:null}));db.seed('plant_units/cleancell.us__STK',unit('STK',{woId:'stock_1',inventoryStatus:'available',at:'ready'}));
+  db.seed('plant_scans/cleancell.us__s1',{orgId:'cleancell.us',at:new Date().toISOString(),ok:true,verdict:{action:'advance',to:'ready'},stationId:'st1',createdAt:Date.now()});
+  var ops=await factory({method:'GET',query:{org:'cleancell.us',page:'ops'},caller:admin},res);
+  assert.equal(ops.floor.totals.advances,1);assert.equal(ops.floor.totals.ready,1);assert.equal(ops.floor.days.length,14);assert.equal(ops.stock.available,1);assert.equal(ops.completed.readyOnOrders,1);assert(ops.demand.skus.length>=1);assert.equal(ops.queues.filter(function(q){return q.key==='ready';})[0].count,1);assert.equal(ops.rows.length,1);
+});
 await check('station scans capture routing context, reject wrong line and preserve idempotency',async function(){
   setup();var scan=require('../api/mes-scan'),S=require('../api/_lib/plant-station'),route=clone(Plant.DEFAULT_ROUTING);route[0].instructions='Inspect label';route[0].parameters='Match lot';
   db.seed('plant_works_orders/stock_1',{orgId:'cleancell.us',lineId:'north',flowVersion:3,routing:route});db.seed('plant_units/cleancell.us__SCAN-1',unit('SCAN-1',{at:'',test:null}));

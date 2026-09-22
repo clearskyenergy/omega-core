@@ -311,13 +311,24 @@
           }).join('') + '</div>';
       }
       if (o.shipment) meta.push('Shipment: ' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking));
+      if (o.poNumber) meta.push('Your PO ' + esc(o.poNumber));
+      (o.destinations || []).forEach(function (d) {
+        meta.push('Ship to ' + esc(d.name || d.id) + (d.city ? ' · ' + esc(d.city) + (d.state ? ', ' + esc(d.state) : '') : '')
+          + (d.items && d.items.length ? ' · ' + d.items.map(function (i) { return esc(i.qty) + ' × ' + esc(i.sku); }).join(', ') : ''));
+      });
+      (o.loads || []).forEach(function (l) {
+        meta.push('Load ' + esc(l.id) + ' · ' + esc(String(l.status || '').replace(/_/g, ' ')) + ' · ' + esc(l.carrier) + ' ' + esc(l.tracking)
+          + (l.units ? ' · ' + esc(l.units) + ' unit' + (l.units === 1 ? '' : 's') : '')
+          + (l.lastConfirmed ? ' · last confirmed at ' + esc(l.lastConfirmed.label) : '')
+          + (l.deliveredAt ? ' · delivered ' + esc(String(l.deliveredAt).slice(0, 10)) : ''));
+      });
       if (o.site && o.site.city) meta.push('Delivering to ' + esc(o.site.city) + (o.site.state ? ', ' + esc(o.site.state) : ''));
       if (o.system && o.system.kwh) meta.push(esc(o.system.kwh) + ' kWh · ' + esc(o.system.kw || '—') + ' kW');
       if (o.promisedShipAt) meta.push('Ships by ' + esc(String(o.promisedShipAt).slice(0, 10)));
       if (o.price && o.price.total) meta.push('$' + Number(o.price.total).toLocaleString());
 
       return '<div class="ord">'
-        + '<div class="hd"><span class="no">' + esc(o.orderNo || '—') + '</span>'
+        + '<div class="hd"><span class="no">' + esc(o.orderNo || '—') + (o.poNumber ? ' <span class="muted" style="font-weight:500">· PO ' + esc(o.poNumber) + '</span>' : '') + '</span>'
         +   '<span class="when">' + esc(String(o.placedAt || '').slice(0, 10)) + '</span>'
         +   '<span class="sp"></span>'
         +   '<span class="pill ' + tone + '">' + esc(ms.label || 'Received') + '</span></div>'
@@ -346,12 +357,21 @@
 
   /* ── account ────────────────────────────────────────────────────────── */
   function drawAccount(a) {
+    /* The account card a buyer expects from any industrial supplier: account
+       number, who they are, who looks after them, what terms they have. */
+    var rep = a.rep && a.rep.name ? esc(a.rep.name) + (a.rep.email ? ' · <a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a>' : '') : '<span class="muted">Not assigned yet</span>';
+    var users = (a.users || []).filter(function (u) { return u.email !== a.you.email; });
     $('acct').innerHTML =
-        '<div><div class="k">Company</div><div class="v">' + esc(a.company || '—') + '</div></div>'
-      + '<div><div class="k">Signed in as</div><div class="v">' + esc(a.you.email) + '</div></div>'
+        '<div><div class="k">Account number</div><div class="v" style="font-family:ui-monospace,monospace;font-size:13px">' + esc(a.customerId || '—') + '</div></div>'
+      + '<div><div class="k">Company</div><div class="v">' + esc(a.company || '—') + '</div></div>'
+      + '<div><div class="k">Account type</div><div class="v">' + (a.accountType === 'company' ? 'Company account' : 'Individual account') + '</div></div>'
+      + (a.since ? '<div><div class="k">Customer since</div><div class="v">' + esc(String(a.since).slice(0, 10)) + '</div></div>' : '')
+      + '<div><div class="k">Your account rep</div><div class="v">' + rep + '</div></div>'
+      + '<div><div class="k">Signed in as</div><div class="v">' + esc(a.you.email) + (a.you.role === 'owner' ? ' <span class="muted">· account owner</span>' : '') + '</div></div>'
       + '<div><div class="k">Orders</div><div class="v">' + esc(a.orders) + '</div></div>'
       + (a.plan === 'designer'
-          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '');
+          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '')
+      + '<div><div class="k">Users on this account</div><div class="v" style="font-weight:500;font-size:14px">' + (users.length ? users.map(function (u) { return esc(u.name || u.email) + (u.role === 'owner' ? ' <span class="muted">(owner)</span>' : ''); }).join('<br>') : '<span class="muted">Only you</span>') + '</div></div>';
 
     var t = a.terms || {};
     var any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired;
@@ -362,7 +382,7 @@
         + (t.netDays != null ? '<div><div class="k">Payment terms</div><div class="v">Net ' + esc(t.netDays) + '</div></div>' : '')
         + (t.discountPct != null ? '<div><div class="k">Your discount</div><div class="v">' + esc(t.discountPct) + '%</div></div>' : '')
         + (t.poRequired ? '<div><div class="k">Purchase order</div><div class="v">Required</div></div>' : '');
-      $('terms-note').textContent = 'Set by ' + (a.company ? 'your account manager' : 'the team') + '. Ask them if anything here looks wrong.';
+      $('terms-note').textContent = 'Set by ' + (a.rep && a.rep.name ? a.rep.name : (a.company ? 'your account manager' : 'the team')) + '. Ask them if anything here looks wrong.';
     }
 
     $('f-name').value = a.you.name || '';

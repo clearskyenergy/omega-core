@@ -57,6 +57,11 @@ function project(customerId, c, userDoc, orderCount, defaults) {
   return {
     customerId: customerId,
     company: clean(c && c.name, 160) || clean(c && c.company, 160),
+    accountType: clean(c && c.accountType, 20) || 'individual',
+    since: clean(c && c.createdAt, 40) || null,
+    /* The account rep: a name and an address to write to, never the terms of
+       their agreement with the tenant. */
+    rep: c && c.rep && c.rep.name ? { name: clean(c.rep.name, 120), email: clean(c.rep.email, 160) } : null,
     plan: clean(c && c.plan, 40) || 'free',
     status: clean(c && c.status, 40) || 'active',
     you: {
@@ -155,7 +160,14 @@ module.exports = A.handler(function (req, res) {
         return countOrders(db, org, email).then(function (n) {
           var out = project(acct.id, acct.data, acct.user, n, defaults);
           out.createdNow = acct.created;
-          return out;
+          /* Colleagues on the same account: the people a buyer already works
+             with. Names and addresses only; disabled users are omitted. */
+          return orgRef.collection('customers').doc(acct.id).collection('users').limit(50).get()
+            .then(function (users) {
+              out.users = users.docs.filter(function (u) { return ['disabled', 'suspended'].indexOf(u.data().status) < 0; })
+                .map(function (u) { return { email: clean(u.id, 160), name: clean(u.data().name, 120), role: clean(u.data().role, 20) || 'user' }; });
+              return out;
+            }, function () { out.users = []; return out; });
         });
       }
 
