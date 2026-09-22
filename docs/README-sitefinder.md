@@ -442,6 +442,24 @@ integration** until the Crexi data agreement is live, at which point
 (and the assessor layer already fills value and owner where a county
 publishes them).
 
+**Capturing the listing page.** The search cards never carried the rest;
+the listing page does. In the catalogue panel, staff drag the **OMEGA
+capture** bookmarklet to the bookmarks bar, open a listing on Crexi (the
+card's link), click the bookmark once per listing, then click it anywhere
+on Crexi and press **Download file**, and import that file with **Import
+captured listing details**. `api/_lib/listing-detail.js` reads the page
+text (the price line "Unpriced | 1 day on market | Updated 1 day ago", the
+Details grid, the broker cards and "Listed by …") into typed fields on the
+row (`detail`, plus the trimmed `detailText` for re-parsing), via `POST
+/api/site-catalog {action:'details'}`, staff only, 100 captures per call.
+A capture for a listing that is not in the catalogue is reported and
+skipped. Owner and sale history live on Crexi's Record tab behind the
+Intelligence subscription and are not on the page, so those lines still
+say "pending API integration". Phone and email are masked until "View
+phone number" is clicked on the page; click first, then capture. One page
+per click for listings under review; a bulk crawl waits for the Crexi data
+agreement. Page documents now hold 50 rows (a captured row is larger).
+
 ### Which product, how many
 
 "What fits here" ranks FEWEST UNITS FIRST, then closest to the need

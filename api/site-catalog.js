@@ -10,7 +10,7 @@ var CACHE=Object.create(null);
 async function catalog(db,org){
   var root=db.collection('toolData').doc(org).collection('tools'),snap=await root.doc('sitefinderCatalog').get();
   if(!snap.exists)return {manifest:null,rows:[]};var m=snap.data();
-  if(m.kind!=='sitefinder-catalog'||m.orgId!==org||! /^[a-f0-9]{20}$/.test(m.version)||!Number.isInteger(m.pages)||m.pages<1||m.pages>100)throw A.httpError(503,'Invalid listing catalog');
+  if(m.kind!=='sitefinder-catalog'||m.orgId!==org||! /^[a-f0-9]{20}$/.test(m.version)||!Number.isInteger(m.pages)||m.pages<1||m.pages>250)throw A.httpError(503,'Invalid listing catalog');
   var c=CACHE[org];if(c&&c.manifest.version===m.version&&Date.now()-c.at<60000)return c;
   var rows=[];
   for(var i=0;i<m.pages;i++){var d=await root.doc('sitefinderCatalog_'+m.version+'_'+i).get();if(!d.exists||!Array.isArray(d.data().rows))throw A.httpError(503,'Listing catalog incomplete');rows=rows.concat(d.data().rows);}
@@ -34,6 +34,15 @@ module.exports=A.handler(async function(req,res){
     if(!caller.staff)throw A.httpError(403,'ClearSky staff import required');
     try{importer.validate(b.catalog,org);}catch(e){throw A.httpError(400,e.message);}
     var result=await importer.publish(A.db(),org,b.catalog);delete CACHE[org];return result;
+  }
+  if(b.action==='details'){
+    if(!caller.staff)throw A.httpError(403,'ClearSky staff required');
+    var data=await catalog(A.db(),org);if(!data.manifest)throw A.httpError(404,'No listing snapshot imported for this workspace');
+    var rows=data.rows.map(function(r){return JSON.parse(JSON.stringify(r));}),tally;
+    try{tally=importer.applyCaptures(rows,b.captures);}catch(e){throw A.httpError(400,e.message);}
+    var published=tally.applied?await importer.publish(A.db(),org,{manifest:{orgId:org,source:data.manifest.source},rows:rows}):null;
+    if(tally.applied)delete CACHE[org];
+    return {applied:tally.applied,unknown:tally.unknown,fields:tally.fields,detailed:published?published.manifest.detailed:(data.manifest.detailed||0),count:data.manifest.count,version:published?published.manifest.version:data.manifest.version};
   }
   if(b.action==='geocode'){
     if(!caller.staff)throw A.httpError(403,'ClearSky staff required');

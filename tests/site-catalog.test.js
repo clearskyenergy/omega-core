@@ -40,3 +40,27 @@ test('finish matching: geocodes untried rows within the budget, then derives are
   assert.equal(page[2].geocode.status,'matched');assert.equal(page[3].geocode.status,'approximate');assert.equal(page[3].lat,41.88,'the area centre includes the row matched in this pass');assert.equal(page[4].lat,null);assert.equal(page[4].geocode.attempted,true);
   var again=await box.module.exports._helpers.finishMatching(db,'example.com',{_fetchJson:fetchJson});assert.equal(again.attempted,0);assert.equal(again.done,true);
 });
+test('captured listing pages land on their rows as typed fields plus trimmed text; strays are reported, not added',async function(){
+  var db=fakeDB(),rows=[];
+  for(var i=1;i<=3;i++)rows.push({id:'crexi:'+i,addr:i+' A St',city:'Chicago',state:'IL',zip:'60601',fullAddress:i+' A St, Chicago, IL 60601',lat:41.8,lon:-87.6,geocode:{status:'matched',accuracy:'street-interpolated'},listed:{url:'https://www.crexi.com/properties/'+i+'/x',askPrice:null}});
+  await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:rows});
+  var box={module:{exports:{}},require:function(n){if(n==='./_lib/admin')return {httpError:(s,m)=>Object.assign(Error(m),{status:s}),handler:f=>f};if(n==='./site-score')return {_helpers:{entitle:async()=>{}}};if(n==='./_lib/geocode-listings')return require('../api/_lib/geocode-listings');return C;},Date,Number,Object,Array,JSON,Math,Promise,console,setTimeout,String};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../api/site-catalog'),'utf8'),box);
+  var page='1 A St, Chicago, IL 60601 For Sale\n$2,450,000 | 12 days on market\nWarehouse\nDetails\nSquare Footage\t52,000\tYear Built\t1978\nNOI\t$100,000\nJane Broker PRO\nIL IL: #475.1\nView phone number\nAcme Realty\nListed by Acme Realty - Chicago.';
+  var captures=[{listingId:'1',url:'https://www.crexi.com/properties/1/x',text:page,capturedAt:'2026-09-22T10:00:00Z'},{listingId:'999',text:'Unpriced | 1 day on market'}];
+  /* the endpoint refuses before touching the catalogue */
+  var A2=box.require('./_lib/admin');
+  assert.throws(()=>C.applyCaptures(rows,[{listingId:'1',url:'https://www.crexi.com/properties/2/x',text:'x'}]),/identity/);
+  assert.throws(()=>C.applyCaptures(rows,[{listingId:'1',url:'https://evil.example/properties/1/x',text:'x'}]),/not a Crexi/);
+  assert.throws(()=>C.applyCaptures(rows,[]),/Between/);
+  var t=C.applyCaptures(rows.map(r=>JSON.parse(JSON.stringify(r))),captures);
+  assert.equal(t.applied,1);assert.deepEqual(t.unknown,['999']);assert.equal(t.fields.noi,1);
+  var r1=t.rows[0];assert.equal(r1.detail.askPrice,2450000);assert.equal(r1.listed.askPrice,2450000,'a price read off the page updates the listing');assert.equal(r1.sqft,52000);
+  assert.equal(r1.detail.brokers[0].name,'Jane Broker');assert.equal(r1.detail.brokers[0].firm,'Acme Realty');assert.equal(r1.detail.daysOnMarket,12);
+  assert.ok(r1.detailText.length<=3000);
+  var v=C.validate({manifest:{orgId:'example.com'},rows:t.rows},'example.com');
+  assert.equal(v.rows[0].detail.noi,100000);assert.equal(v.rows[0].detail.bogus,undefined);assert.equal(v.rows[1].detail,undefined);
+  var pub=await C.publish(db,'example.com',{manifest:{orgId:'example.com',source:'test'},rows:t.rows});
+  assert.equal(pub.manifest.detailed,1);
+  assert.equal(db.docs.get('toolData/example.com/tools/sitefinderCatalog_'+pub.manifest.version+'_0').rows.length,3);
+});

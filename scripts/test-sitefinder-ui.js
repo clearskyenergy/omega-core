@@ -50,8 +50,10 @@ const rows = [
         await route.fulfill({ json: { scored, weightsSource: 'test fixture', asOf: '2026-09-21' } }); return;
       }
       if (url.pathname === '/api/site-catalog') {
-        await route.fulfill({json:{total:3,hasMore:false,manifest:{count:3,located:2,approximate:1,unmatched:1},rows:[
+        await route.fulfill({json:{total:4,hasMore:false,manifest:{count:4,located:3,approximate:1,unmatched:1,detailed:1},rows:[
           {id:'crexi:123',addr:'1 Listed Warehouse',city:'Chicago',state:'IL',zip:'60601',type:'Industrial',sqft:50000,lat:41.8,lon:-87.7,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/123/test',askPrice:100000},geocode:{status:'matched',accuracy:'street-interpolated'},photos:[]},
+          {id:'crexi:126',addr:'5730 W Dempster St',city:'Morton Grove',state:'IL',zip:'60053',type:'Industrial',subtype:'Retail | Pharmacy/Drug',sqft:44000,lat:42.04,lon:-87.78,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/126/test',askPrice:null},geocode:{status:'matched',accuracy:'street-interpolated'},photos:[],
+            detail:{unpriced:true,daysOnMarket:1,updated:'Updated 1 day ago',headline:'Walgreens - Morton Grove, IL',noi:375435,occupancy:100,leaseType:'NN',leaseExpiration:'07/31/2028',yearBuilt:2001,listedBy:'JLL',brokers:[{name:'Alex Geanakos',firm:'JLL'},{name:'Mohsin Mirza',firm:'JLL',phone:'(312) 555-0142'}],capturedAt:'2026-09-22T12:00:00Z',src:'crexi-page'}},
           {id:'crexi:124',addr:'2 Unplaced Listing',city:'Chicago',state:'IL',zip:'60601',type:'Office',sqft:null,lat:null,lon:null,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/124/test'},photos:[]},
           {id:'crexi:125',addr:'Lot 3 Area Centre Listing',city:'Chicago',state:'IL',zip:'60601',type:'Vacant Land',sqft:null,lotAcres:2,lat:41.81,lon:-87.71,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/125/test',askPrice:250000},geocode:{status:'approximate',source:'derived',accuracy:'area centre of 12 matched listings in ZIP 60601; not the parcel',area:'ZIP 60601'},photos:[]}
         ]}});return;
@@ -165,9 +167,17 @@ const rows = [
     assert.equal(await page.locator('.card').count(), 1, 'saved view works before any fresh search');
     await page.locator('[data-view="catalog"]').click();
     await page.locator('.card[data-id="crexi:124"]').waitFor();
-    assert.equal(await page.locator('.card').count(),3,'located, unplaced and area-centre listings all render');
+    assert.equal(await page.locator('.card').count(),4,'located, detailed, unplaced and area-centre listings all render');
+    const walgreens=await page.locator('.card[data-id="crexi:126"] .facts').innerText();
+    assert.match(walgreens,/Unpriced · call for offers/); assert.match(walgreens,/Days on market\s+1 · updated 1 day ago/); assert.match(walgreens,/NOI\s+\$375,435\/yr/);
+    assert.match(walgreens,/Walgreens - Morton Grove, IL · 100% occupied · NN lease · expires 07\/31\/2028/); assert.match(walgreens,/Built\s+2001/);
+    assert.match(walgreens,/Alex Geanakos, JLL\nMohsin Mirza, JLL · \(312\) 555-0142/,'brokers from the captured page are the contact');
+    assert.equal((walgreens.match(/pending API integration/g)||[]).length,3,'value, last sale and owner still say why they are missing');
+    assert.match(await page.locator('#catalogStatus').innerText(),/2 of 4 have Census street positions, 1 sit at the centre of their ZIP, 1 still need a location/);
+    await page.evaluate(()=>{document.getElementById('catalogDetails').hidden=false;});
+    assert.match(await page.locator('#captureBookmarklet').getAttribute('href'),/^javascript:\(function crexiCaptureBookmarklet\(\)/,'the bookmarklet is built from the page\'s own function');
+    assert.doesNotMatch(await page.locator('#captureBookmarklet').getAttribute('href'),/\/\/ /,'no line comments inside a javascript: URL');
     assert.equal(await page.locator('a[href="https://www.crexi.com/properties/123/test"]').count(),1);
-    assert.match(await page.locator('#catalogStatus').innerText(),/1 of 3 have Census street positions, 1 sit at the centre of their ZIP, 1 still need a location/);
     const facts=await page.locator('.card[data-id="crexi:123"] .facts').innerText();
     assert.match(facts,/Asking\s+\$100,000/,'the snapshot\'s asking price is on the card');
     assert.equal((facts.match(/pending API integration/g)||[]).length,5,'value, last sale, days on market, owner and contact say why they are missing');

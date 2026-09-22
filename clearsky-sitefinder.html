@@ -734,6 +734,16 @@
         <button id="catalogUpload" type="button">Import into this workspace</button>
         <p style="margin:10px 0 4px"><button id="catalogMatch" type="button">Match remaining locations</button>
           <small>Runs the Census geocoder over every listing without a pin, trying several spellings of each address, then places what is left at the centre of its ZIP. Keeps going until every listing is on the map.</small></p>
+      </details>
+      <details id="catalogDetails" hidden><summary>Staff: capture listing details from Crexi</summary>
+        <p style="margin:6px 0"><small>The snapshot holds what the search cards showed. A listing page adds days on market, NOI, cap rate, tenancy, lease expiry, year built and the brokers. Three steps:</small></p>
+        <ol style="margin:4px 0 8px 18px;padding:0;font-size:12px;line-height:1.5">
+          <li>Drag this to your bookmarks bar: <a id="captureBookmarklet" href="#" title="Drag me to the bookmarks bar" style="font-weight:700;padding:3px 8px;border:1px solid #c9d2de;border-radius:6px;background:#f4f7fb;text-decoration:none">OMEGA capture</a></li>
+          <li>Open a listing on Crexi (the card's <b>Open Crexi listing</b> link), then click the bookmark once. Repeat for each listing you want. Click <b>View phone number</b> first if you want the number captured.</li>
+          <li>Click the bookmark on any Crexi page and press <b>Download file</b>, then import that file here:
+            <input id="captureFile" type="file" accept="application/json,.json" style="display:block;margin:4px 0"><button id="captureUpload" type="button">Import captured listing details</button></li>
+        </ol>
+        <p style="margin:4px 0"><small>Owner and sale history are on Crexi's Record tab behind the Intelligence subscription and are not on the listing page; those lines stay "pending API integration". One page per click, for listings you are reviewing; a bulk crawl waits for the Crexi data agreement.</small></p>
         <p>Creates a shared listing snapshot. Does not modify starred sites or holds.</p>
       </details>
     </div>
@@ -1080,6 +1090,79 @@
       })['catch'](function (e) { matchRunning = false; btn.disabled = false; status.textContent = 'Matching stopped: ' + e.message; });
     }
     round(false);
+  };
+  /* THE CAPTURE BOOKMARKLET. Runs on crexi.com when a staff member clicks
+     it: on a listing page it saves that page's visible text under the
+     listing id in the browser's own storage, and shows a small panel with
+     the count and a Download button. The file it downloads is what the
+     import control below sends to /api/site-catalog {action:'details'}.
+     Kept as a real function so it is parsed with the page; the href is
+     built from its source at boot. No line comments inside it — a
+     javascript: URL loses its newlines when it is dragged to a bookmark. */
+  function crexiCaptureBookmarklet() {
+    var K = 'omegaCrexiCaptures', m = location.pathname.match(/^\/properties\/(\d+)\//), s = [];
+    try { s = JSON.parse(localStorage.getItem(K) || '[]'); } catch (e) { s = []; }
+    if (!/crexi\.com$/.test(location.hostname)) { alert('Open a Crexi listing page first.'); return; }
+    if (m) {
+      var t = document.body.innerText.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+      s = s.filter(function (x) { return x.listingId !== m[1]; });
+      s.push({ listingId: m[1], url: location.origin + location.pathname, title: document.title, text: t, capturedAt: new Date().toISOString() });
+      try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { alert('This browser is full. Download the file, press Clear, then continue.'); return; }
+    }
+    var id = 'omegaCapturePanel', p = document.getElementById(id);
+    if (p) p.parentNode.removeChild(p);
+    p = document.createElement('div'); p.id = id;
+    p.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#0f1b2a;color:#fff;padding:12px 14px;border-radius:10px;font:13px/1.45 -apple-system,Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:300px';
+    p.innerHTML = '<b>OMEGA listing capture</b><br>' + (m ? 'Saved this listing. ' : 'Not a listing page. ') + s.length + ' captured on this browser.' +
+      (s.length >= 200 ? '<br><b>Download and clear now</b> \u2014 the browser holds about 250.' : '') +
+      '<br><button id="omegaDl" style="margin:8px 6px 0 0">Download file</button><button id="omegaClr" style="margin-right:6px">Clear</button><button id="omegaX">\u00d7</button>';
+    document.body.appendChild(p);
+    document.getElementById('omegaDl').onclick = function () {
+      var b = new Blob([JSON.stringify({ kind: 'crexi-detail-capture', capturedFrom: location.hostname, count: s.length, captures: s })], { type: 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'crexi-listing-details-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+    };
+    document.getElementById('omegaClr').onclick = function () { if (confirm('Clear ' + s.length + ' captured listings from this browser? Download first if you have not.')) { localStorage.removeItem(K); p.parentNode.removeChild(p); } };
+    document.getElementById('omegaX').onclick = function () { p.parentNode.removeChild(p); };
+  }
+  (function () {
+    var a = document.getElementById('captureBookmarklet');
+    if (a) a.href = 'javascript:(' + crexiCaptureBookmarklet.toString() + ')()';
+    if (a) a.onclick = function (e) { e.preventDefault(); alert('Drag this link to your bookmarks bar, then click it on a Crexi listing page.'); };
+  })();
+  document.getElementById('captureUpload').onclick = function () {
+    var file = document.getElementById('captureFile').files[0], user = window.firebase && firebase.auth().currentUser;
+    var status = document.getElementById('catalogStatus'), org = ORG, btn = this;
+    if (!file || !user) { status.textContent = 'Choose the downloaded capture file and sign in first.'; return; }
+    var reader = new FileReader(); reader.onload = function () {
+      var data; try { data = JSON.parse(reader.result); } catch (e) { status.textContent = 'Invalid JSON'; return; }
+      var caps = data && data.kind === 'crexi-detail-capture' && Array.isArray(data.captures) ? data.captures : null;
+      if (!caps || !caps.length) { status.textContent = 'That is not a capture file from the OMEGA bookmarklet.'; return; }
+      btn.disabled = true;
+      var CHUNK = 100, at = 0, applied = 0, unknown = [], fields = {}, detailed = 0;
+      function next() {
+        if (at >= caps.length) {
+          btn.disabled = false;
+          var top = Object.keys(fields).sort(function (a, b) { return fields[b] - fields[a]; }).slice(0, 6).map(function (k) { return k + ' ' + fields[k]; }).join(', ');
+          status.textContent = 'Imported ' + applied + ' listing pages (' + detailed.toLocaleString() + ' listings now carry page details).' +
+            (unknown.length ? ' ' + unknown.length + ' captured pages are not in this catalogue and were skipped.' : '') + (top ? ' Fields read: ' + top + '.' : '');
+          if (ORG === org) loadCatalog(catalogPage);
+          return;
+        }
+        var slice = caps.slice(at, at + CHUNK); at += CHUNK;
+        status.textContent = 'Importing listing details… ' + Math.min(at, caps.length) + ' of ' + caps.length;
+        user.getIdToken().then(function (token) {
+          return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+            body:JSON.stringify({action:'details',orgId:org,captures:slice}) });
+        }).then(function (res) { return res.json().then(function (d) { if (!res.ok) throw Error(d.error || 'Import failed'); return d; }); })
+        .then(function (d) {
+          applied += d.applied || 0; unknown = unknown.concat(d.unknown || []); detailed = d.detailed || detailed;
+          Object.keys(d.fields || {}).forEach(function (k) { fields[k] = (fields[k] || 0) + d.fields[k]; });
+          next();
+        })['catch'](function (e) { btn.disabled = false; status.textContent = 'Import stopped at ' + applied + ' pages: ' + e.message; });
+      }
+      next();
+    }; reader.readAsText(file);
   };
   document.getElementById('catalogSearch').onclick = function () { loadCatalog(0); };
   document.getElementById('catalogQuery').onkeydown = function (e) { if(e.key === 'Enter')loadCatalog(0); };
@@ -3493,27 +3576,49 @@
   function propertyFactsHtml(r) {
     if (!r || !(r.listed || r.src === 'crexi-import' || r.src === 'crexi')) return '';
     var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {};
+    /* Three sources, in order: the captured Crexi listing page (staff
+       bookmarklet), the row's own fields, then the market lookup. */
+    var d = r.detail || {};
     var listing = mk.listing || {}, owner = r.owner && r.owner.name ? r.owner : (mk.owner || {}),
         broker = r.broker && r.broker.name ? r.broker : (mk.broker || {}), listed = r.listed || {};
-    function pick(a, b) { return a != null && a !== '' ? a : (b != null && b !== '' ? b : null); }
+    function pick(a, b, c) { return a != null && a !== '' ? a : (b != null && b !== '' ? b : (c != null && c !== '' ? c : null)); }
     function has(v) { return v != null && v !== ''; }
-    var ask = pick(listed.askPrice, listing.askPrice);
+    var ask = pick(d.askPrice, listed.askPrice, listing.askPrice);
     var value = has(r.assessedValue) ? r.assessedValue : null;
-    var sold = r.lastSale && has(r.lastSale.price) ? r.lastSale : null;
-    var dom = pick(listed.daysOnMarket, listing.daysOnMarket);
-    var cap = pick(listed.capRate, listing.capRate);
-    var contact = has(broker.name) ? esc(broker.name) + (broker.firm ? ', ' + esc(broker.firm) : '') +
-      (broker.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(broker.phone).replace(/[^+0-9]/g, '')) + '">' + esc(broker.phone) + '</a>' : '') +
-      (broker.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(broker.email) + '">' + esc(broker.email) + '</a>' : '') : null;
-    var ownerTxt = has(owner.name) ? esc(owner.name) + (owner.phone ? ' \u00b7 ' + esc(owner.phone) : '') : null;
+    var sold = d.lastSalePrice != null ? { price: d.lastSalePrice, date: d.lastSaleDate } : (r.lastSale && has(r.lastSale.price) ? r.lastSale : null);
+    var dom = pick(d.daysOnMarket, listed.daysOnMarket, listing.daysOnMarket);
+    var cap = pick(d.capRate, listed.capRate, listing.capRate);
+    var contact = null;
+    if (d.brokers && d.brokers.length) {
+      contact = d.brokers.map(function (b) {
+        return esc(b.name) + (b.firm ? ', ' + esc(b.firm) : '') +
+          (b.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(b.phone).replace(/[^+0-9]/g, '')) + '">' + esc(b.phone) + '</a>' : '') +
+          (b.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '');
+      }).join('<br>');
+    } else if (has(broker.name)) {
+      contact = esc(broker.name) + (broker.firm ? ', ' + esc(broker.firm) : '') +
+        (broker.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(broker.phone).replace(/[^+0-9]/g, '')) + '">' + esc(broker.phone) + '</a>' : '') +
+        (broker.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(broker.email) + '">' + esc(broker.email) + '</a>' : '');
+    } else if (d.listedBy) contact = 'Listed by ' + esc(d.listedBy);
+    var ownerTxt = has(d.ownerName) ? esc(d.ownerName) : has(owner.name) ? esc(owner.name) + (owner.phone ? ' \u00b7 ' + esc(owner.phone) : '') : null;
+    var tenancy = [];
+    if (d.tenant || d.headline) tenancy.push(esc(d.tenant || d.headline));
+    if (d.occupancy != null) tenancy.push(fmt(d.occupancy) + '% occupied');
+    if (d.leaseType) tenancy.push(esc(d.leaseType) + ' lease');
+    if (d.leaseExpiration) tenancy.push('expires ' + esc(d.leaseExpiration));
+    var captured = d.capturedAt ? '<small>Listing page captured ' + esc(String(d.capturedAt).slice(0, 10)) + '</small>' : '';
     return '<div class="facts">' +
-      '<b>Asking</b><span>' + (has(ask) ? money(ask) : PENDING_API) + '</span>' +
+      '<b>Asking</b><span>' + (has(ask) ? money(ask) : d.unpriced ? 'Unpriced \u00b7 call for offers' : PENDING_API) + '</span>' +
       '<b>Value</b><span>' + (value != null ? money(value) + ' <small>assessed</small>' : PENDING_API) + '</span>' +
       '<b>Last sold</b><span>' + (sold ? money(sold.price) + (sold.date ? ' \u00b7 ' + esc(sold.date) : '') : PENDING_API) + '</span>' +
-      '<b>Days on market</b><span>' + (has(dom) ? fmt(dom) : PENDING_API) + '</span>' +
+      '<b>Days on market</b><span>' + (has(dom) ? fmt(dom) + (d.updated ? ' <small>\u00b7 ' + esc(d.updated).toLowerCase() + '</small>' : '') : PENDING_API) + '</span>' +
       (has(cap) ? '<b>Cap rate</b><span>' + esc(cap) + (/%/.test(String(cap)) ? '' : '%') + '</span>' : '') +
+      (d.noi != null ? '<b>NOI</b><span>' + money(d.noi) + '/yr</span>' : '') +
+      (tenancy.length ? '<b>Tenant</b><span>' + tenancy.join(' \u00b7 ') + '</span>' : '') +
+      (d.yearBuilt ? '<b>Built</b><span>' + esc(d.yearBuilt) + (d.zoning ? ' \u00b7 zoned ' + esc(d.zoning) : '') + '</span>' : '') +
       '<b>Owner</b><span>' + (ownerTxt || PENDING_API) + '</span>' +
       '<b>Contact</b><span>' + (contact || PENDING_API) + '</span>' +
+      (captured ? '<span></span><span>' + captured + '</span>' : '') +
       '</div>';
   }
 
@@ -7437,6 +7542,7 @@
       if(ST.view === 'catalog') { closeDrawer(); document.getElementById('cards').innerHTML = ''; drawMarkers([]); }
       ST.catalog = []; catalogPage = 0;
       document.getElementById('catalogImport').hidden = !(u && /@(clearsky-usa\.com|csebuilders\.com)$/i.test(u.email || ''));
+      document.getElementById('catalogDetails').hidden = document.getElementById('catalogImport').hidden;
       document.getElementById('catalogStatus').textContent = 'Sign in to browse the shared listing catalog.';
       L.attach(null, '', function () {});
       if (L.setIdentity) L.setIdentity('', '');
