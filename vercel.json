@@ -88,6 +88,19 @@
       ]
     },
     {
+      "source": "/sitefinder-app/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/sitefinder-app"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(mission-sw|mission-push)\\.js",
       "headers": [
         {
@@ -277,10 +290,27 @@
     {
       "source": "/skyfund-sandbox/:path*",
       "destination": "/portals/skyfund-sandbox/:path*"
+    },
+    {
+      "source": "/sitefinder-app",
+      "destination": "/portals/sitefinder-app"
+    },
+    {
+      "source": "/sitefinder-app/:path*",
+      "destination": "/portals/sitefinder-app/:path*"
+    },
+    {
+      "source": "/comed-proxy",
+      "destination": "/api/comed-proxy"
+    },
+    {
+      "source": "/comed-proxy/:path*",
+      "destination": "/api/comed-proxy?path=:path*"
     }
   ],
   "functions": {
     "api/site-catalog.js": { "maxDuration": 60 },
+    "api/comed-proxy.js": { "maxDuration": 30 },
     "api/logic-worker.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
     "api/lite-atlas.js": { "maxDuration": 60 },

@@ -204,6 +204,26 @@
   .card .mt{font-size:12px;color:var(--muted);margin-top:3px}
   .card .own{font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap}
+  /* Property facts on a listing card. A missing figure says WHY it is
+     missing — the Crexi data connection is not live yet — rather than
+     leaving a blank that reads as "nothing to know". */
+  .card .facts{display:grid;grid-template-columns:auto 1fr;gap:2px 9px;font-size:11px;margin-top:6px;
+    color:var(--muted);line-height:1.35}
+  .card .facts b{color:var(--dim);font-weight:600;white-space:nowrap}
+  .pend{color:#8a94a0;font-style:italic}
+  .cardLease,.cardProject,.cardCall{margin-left:6px}
+  .callWho{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin:8px 0}
+  .callWho b{color:var(--dim);font-weight:600;white-space:nowrap}
+  .callScript{width:100%;min-height:150px;font:12px/1.45 inherit;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;box-sizing:border-box}
+  .callLog{font-size:12px;margin:6px 0 0;padding:0;list-style:none}
+  .callLog li{padding:5px 0;border-top:1px solid var(--line)}
+  .callLog small{color:var(--dim)}
+  .leaseTiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .leaseTiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--muted)}
+  .leaseTiles b{display:block;font-size:17px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
+  .leaseForm{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:8px 0}
+  .leaseForm label{font-size:11px;color:var(--dim);display:flex;flex-direction:column;gap:3px}
+  .leaseForm input{width:84px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font:inherit}
   .card .warn{margin-top:9px;background:#fdf1ef;border:1px solid #f3d3cc;border-radius:8px;
     padding:7px 9px;font-size:11px;color:#a3372a;line-height:1.35}
   .card .warn b{color:#8c2d21}
@@ -718,6 +738,21 @@
       <details id="catalogImport" hidden><summary>Staff: import verified listing snapshot</summary>
         <label for="catalogFile">Prepared catalog JSON</label><input id="catalogFile" type="file" accept="application/json,.json">
         <button id="catalogUpload" type="button">Import into this workspace</button>
+        <p style="margin:10px 0 4px"><button id="catalogMatch" type="button">Match remaining locations</button>
+          <small>Runs the Census geocoder over every listing without a pin, trying several spellings of each address, then places what is left at the centre of its ZIP. The scheduled worker does this on its own within the hour of an import; press it for an immediate run.</small></p>
+      </details>
+      <details id="catalogDetails" hidden><summary>Staff: capture listing details from Crexi</summary>
+        <p style="margin:6px 0"><small>The snapshot holds what the search cards showed. A listing page adds days on market, NOI, cap rate, tenancy, lease expiry, year built and the brokers. Three steps:</small></p>
+        <ol style="margin:4px 0 8px 18px;padding:0;font-size:12px;line-height:1.5">
+          <li>Drag this to your bookmarks bar: <a id="captureBookmarklet" href="#" title="Drag me to the bookmarks bar" style="font-weight:700;padding:3px 8px;border:1px solid #c9d2de;border-radius:6px;background:#f4f7fb;text-decoration:none">OMEGA capture</a></li>
+          <li>Open a listing on Crexi (the card's <b>Open Crexi listing</b> link), then click the bookmark once. Repeat for each listing you want. Click <b>View phone number</b> first if you want the number captured.<br>
+            <b>Or a whole page at once:</b> <button id="catalogLinks" type="button">Copy listing links for this page</button> <span id="catalogLinksInfo"></span>
+            <textarea id="catalogLinksOut" rows="2" readonly hidden style="width:100%;font-size:11px;margin-top:4px"></textarea>
+            <small>Then on any Crexi page click the bookmark, press <b>Capture a list</b> and paste. It walks the listings one by one in a second window (about five seconds each) and downloads the file when it finishes.</small></li>
+          <li>Click the bookmark on any Crexi page and press <b>Download file</b>, then import that file here:
+            <input id="captureFile" type="file" accept="application/json,.json" style="display:block;margin:4px 0"><button id="captureUpload" type="button">Import captured listing details</button></li>
+        </ol>
+        <p style="margin:4px 0"><small>Owner and sale history are on Crexi's Record tab behind the Intelligence subscription and are not on the listing page; those lines stay "pending API integration". One page per click, for listings you are reviewing; a bulk crawl waits for the Crexi data agreement.</small></p>
         <p>Creates a shared listing snapshot. Does not modify starred sites or holds.</p>
       </details>
     </div>
@@ -922,6 +957,8 @@
 <script src="/omega-cost-model.js"></script>
 <!-- Published product datasheets. Specs ship; prices never do. -->
 <script src="/omega-bess-catalog.js"></script>
+<script src="/omega-site-lease.js"></script>
+<script src="/omega-project-cost.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -1007,15 +1044,216 @@
     .then(function (data) {
       if (epoch !== catalogEpoch || org !== ORG || firebase.auth().currentUser !== user) return;
       catalogPage = page; catalogMore = data.hasMore;
-      ST.catalog = (data.rows || []).map(function (r) { return enrich(r); });
+      ST.catalog = (data.rows || []).map(function (r) { return enrich(catalogRow(r)); });
       el.textContent = data.manifest ? data.total.toLocaleString() + ' listings · page ' + (page+1) +
-        ' · snapshot, not a live Crexi feed. ' + data.manifest.located + ' of ' + data.manifest.count +
-        ' have approximate Census map locations. Energy filters apply to this page.' : 'No listing snapshot imported for this workspace.';
+        ' · snapshot, not a live Crexi feed. ' + catalogCoverage(data.manifest) + ' Energy filters apply to this page.' : 'No listing snapshot imported for this workspace.';
+      var matchBtn = document.getElementById('catalogMatch');
+      if (matchBtn && data.manifest) matchBtn.disabled = !(data.manifest.count - data.manifest.located > 0);
       document.getElementById('catalogPrev').disabled = page === 0;
       document.getElementById('catalogNext').disabled = !catalogMore;
       render();
     })['catch'](function (err) { if(epoch===catalogEpoch) el.textContent = err.message; });
   }
+  /* A listing row from the shared snapshot. A Census match is a street
+     position; an "approximate" row was placed at the centre of the matched
+     listings in its ZIP (api/_lib/geocode-listings.js) so it can be found on
+     the map at all. That is the same standing as a ZIP-centroid search pin,
+     so it takes the same flags: the circuit is not attributed, capacity
+     cannot be held, and opening the card tries to fix the pin first. */
+  function catalogRow(r) {
+    if (r && r.lat != null && r.geocode && r.geocode.status === 'approximate') {
+      r.approx = true; r.approxKind = 'area centre';
+    }
+    return r;
+  }
+  function catalogCoverage(m) {
+    var approx = m.approximate || 0, matched = m.located - approx, left = m.count - m.located;
+    return matched.toLocaleString() + ' of ' + m.count.toLocaleString() + ' have Census street positions' +
+      (approx ? ', ' + approx.toLocaleString() + ' sit at the centre of their ZIP' : '') +
+      (left ? ', ' + left.toLocaleString() + ' still need a location.' : '. Every listing is on the map.') +
+      (m.detailed ? ' ' + m.detailed.toLocaleString() + ' carry listing page details.' : '') +
+      (m.circuitsTried ? ' ' + (m.circuits || 0).toLocaleString() + ' of ' + m.circuitsTried.toLocaleString() + ' asked sit on a published ComEd circuit.' : '');
+  }
+  /* Staff: finish placing the catalogue. One call does as much as fits in
+     the function's time ceiling and publishes; this loops until the server
+     says it is done, so a closed tab loses nothing already placed. */
+  var matchRunning = false;
+  document.getElementById('catalogMatch').onclick = function () {
+    var user = window.firebase && firebase.auth().currentUser, status = document.getElementById('catalogStatus'), org = ORG, btn = this;
+    if (!user) { status.textContent = 'Sign in first.'; return; }
+    if (matchRunning) return;
+    matchRunning = true; btn.disabled = true;
+    var rounds = 0, placed = 0;
+    function round(reset) {
+      rounds++;
+      status.textContent = 'Matching listings to the map… round ' + rounds + (placed ? ', ' + placed.toLocaleString() + ' placed so far' : '');
+      return user.getIdToken().then(function (token) {
+        return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+          body:JSON.stringify({action:'geocode',orgId:org,reset:!!reset}) });
+      }).then(function (res) { return res.json().then(function (d) { if (!res.ok) throw Error(d.error || 'Matching failed'); return d; }); })
+      .then(function (d) {
+        placed += (d.matched || 0) + (d.approximate || 0);
+        if (d.transportError) throw Error('The Census geocoder did not answer (' + d.transportError + '). ' + placed + ' placed; run again to continue.');
+        if (!d.done && rounds < 60) return round(false);
+        matchRunning = false;
+        status.textContent = 'Matching finished: ' + placed.toLocaleString() + ' placed this run. ' + catalogCoverage({count:d.count, located:d.located, approximate:d.approximate}) +
+          (d.unmatched ? ' The remaining ' + d.unmatched + ' have no ZIP or city that any matched listing shares; they stay searchable by address.' : '');
+        if (ORG === org) loadCatalog(0);
+      })['catch'](function (e) { matchRunning = false; btn.disabled = false; status.textContent = 'Matching stopped: ' + e.message; });
+    }
+    round(false);
+  };
+  /* THE CAPTURE BOOKMARKLET. Runs on crexi.com when a staff member clicks
+     it: on a listing page it saves that page's visible text under the
+     listing id in the browser's own storage, and shows a small panel with
+     the count and a Download button. The file it downloads is what the
+     import control below sends to /api/site-catalog {action:'details'}.
+     Kept as a real function so it is parsed with the page; the href is
+     built from its source at boot. No line comments inside it — a
+     javascript: URL loses its newlines when it is dragged to a bookmark. */
+  function crexiCaptureBookmarklet() {
+    var K = 'omegaCrexiCaptures', m = location.pathname.match(/^\/properties\/(\d+)\//), s = [];
+    try { s = JSON.parse(localStorage.getItem(K) || '[]'); } catch (e) { s = []; }
+    if (!/crexi\.com$/.test(location.hostname)) { alert('Open a Crexi listing page first.'); return; }
+    if (m) {
+      var t = document.body.innerText.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+      s = s.filter(function (x) { return x.listingId !== m[1]; });
+      s.push({ listingId: m[1], url: location.origin + location.pathname, title: document.title, text: t, capturedAt: new Date().toISOString() });
+      try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { alert('This browser is full. Download the file, press Clear, then continue.'); return; }
+    }
+    var id = 'omegaCapturePanel', p = document.getElementById(id);
+    if (p) p.parentNode.removeChild(p);
+    p = document.createElement('div'); p.id = id;
+    p.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#0f1b2a;color:#fff;padding:12px 14px;border-radius:10px;font:13px/1.45 -apple-system,Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:300px';
+    p.innerHTML = '<b>OMEGA listing capture</b><br><span id="omegaMsg">' + (m ? 'Saved this listing. ' : 'Not a listing page. ') + s.length + ' captured on this browser.' +
+      (s.length >= 200 ? '<br><b>Download and clear now</b> \u2014 the browser holds about 250.' : '') + '</span>' +
+      '<br><button id="omegaDl" style="margin:8px 6px 0 0">Download file</button><button id="omegaList" style="margin-right:6px">Capture a list</button><button id="omegaClr" style="margin-right:6px">Clear</button><button id="omegaX">\u00d7</button>';
+    document.body.appendChild(p);
+    function say(t) { var e = document.getElementById('omegaMsg'); if (e) e.innerHTML = t; }
+    function download() {
+      var b = new Blob([JSON.stringify({ kind: 'crexi-detail-capture', capturedFrom: location.hostname, count: s.length, captures: s })], { type: 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'crexi-listing-details-' + new Date().toISOString().slice(0, 10) + '-' + s.length + '.json';
+      document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+    }
+    document.getElementById('omegaDl').onclick = download;
+    document.getElementById('omegaClr').onclick = function () { if (confirm('Clear ' + s.length + ' captured listings from this browser? Download first if you have not.')) { localStorage.removeItem(K); p.parentNode.removeChild(p); } };
+    document.getElementById('omegaX').onclick = function () { p.parentNode.removeChild(p); };
+    document.getElementById('omegaList').onclick = function () {
+      var raw = prompt('Paste the listing links copied from the site finder (Copy listing links for this page):'), q;
+      if (!raw) return;
+      try { q = JSON.parse(raw); } catch (e) { alert('That is not the copied list.'); return; }
+      if (!q || q.kind !== 'crexi-capture-queue' || !q.urls || !q.urls.length) { alert('That is not the copied list.'); return; }
+      var urls = q.urls.filter(function (u) { return /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(u); }).slice(0, 150);
+      var done = {}; s.forEach(function (x) { done[x.listingId] = 1; });
+      urls = urls.filter(function (u) { return !done[u.split('/')[4]]; });
+      if (!urls.length) { say('Every listing in that list is already captured here. Press Download file.'); return; }
+      var w = window.open('about:blank', 'omegaCaptureWindow', 'width=1200,height=900');
+      if (!w) { alert('Allow pop-ups for crexi.com, then try again.'); return; }
+      var i = 0, stopped = false, failed = [];
+      var stop = document.createElement('button'); stop.textContent = 'Stop'; stop.style.marginLeft = '6px';
+      document.getElementById('omegaList').parentNode.appendChild(stop);
+      stop.onclick = function () { stopped = true; };
+      function finish() {
+        try { w.close(); } catch (e) {}
+        stop.parentNode.removeChild(stop);
+        say('Captured ' + i + ' of ' + urls.length + (failed.length ? ' (' + failed.length + ' did not load: ' + failed.slice(0, 5).join(', ') + ')' : '') + '. ' + s.length + ' on this browser. Downloading the file now \u2014 import it in the site finder, then press Clear.');
+        download();
+      }
+      function capture(u, cb) {
+        var id = u.split('/')[4], started = Date.now();
+        try { w.location.href = u; } catch (e) { failed.push(id); cb(); return; }
+        function poll() {
+          if (stopped) { cb(); return; }
+          var ready = false, text = '';
+          try {
+            if (w.location.href.indexOf('/properties/' + id + '/') >= 0 && w.document.readyState === 'complete') {
+              text = w.document.body.innerText || '';
+              ready = /\bDetails\b/.test(text) && /on market|Unpriced|\$[\d,]{4,}/i.test(text);
+            }
+          } catch (e) { ready = false; }
+          if (ready) {
+            setTimeout(function () {
+              try { text = w.document.body.innerText || text; } catch (e) {}
+              text = text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').slice(0, 30000);
+              s = s.filter(function (x) { return x.listingId !== id; });
+              s.push({ listingId: id, url: u.split('?')[0], title: '', text: text, capturedAt: new Date().toISOString() });
+              try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { stopped = true; alert('This browser is full. The file will download now; import it, press Clear, and run the rest.'); }
+              cb();
+            }, 1500);
+            return;
+          }
+          if (Date.now() - started > 25000) { failed.push(id); cb(); return; }
+          setTimeout(poll, 500);
+        }
+        setTimeout(poll, 1500);
+      }
+      function next() {
+        if (stopped || i >= urls.length) { finish(); return; }
+        say('Capturing ' + (i + 1) + ' of ' + urls.length + '\u2026 ' + s.length + ' on this browser. Leave both windows open.');
+        var startedAt = Date.now();
+        capture(urls[i], function () {
+          i++;
+          var wait = Math.max(0, 4000 - (Date.now() - startedAt));
+          setTimeout(next, wait);
+        });
+      }
+      next();
+    };
+  }
+  (function () {
+    var a = document.getElementById('captureBookmarklet');
+    if (a) a.href = 'javascript:(' + crexiCaptureBookmarklet.toString() + ')()';
+    if (a) a.onclick = function (e) { e.preventDefault(); alert('Drag this link to your bookmarks bar, then click it on a Crexi listing page.'); };
+  })();
+  /* The listings on this catalogue page that have no captured detail yet,
+     as the list the bookmarklet's "Capture a list" walks. Copied to the
+     clipboard where the browser allows it and always shown in the box, so
+     it can be selected by hand. */
+  document.getElementById('catalogLinks').onclick = function () {
+    var rows = ST.catalog.filter(function (r) { return !r.detail && r.listed && /^https:\/\/www\.crexi\.com\/properties\/\d+\//.test(r.listed.url || ''); });
+    var info = document.getElementById('catalogLinksInfo'), out = document.getElementById('catalogLinksOut');
+    if (!rows.length) { info.textContent = 'Every listing on this page already has its details.'; out.hidden = true; return; }
+    var text = JSON.stringify({ kind: 'crexi-capture-queue', orgId: ORG, urls: rows.map(function (r) { return r.listed.url; }) });
+    out.value = text; out.hidden = false;
+    info.textContent = rows.length + ' listings on this page without details.';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { info.textContent = rows.length + ' listing links copied. Now click the bookmark on Crexi and press Capture a list.'; }, function () {});
+    }
+  };
+  document.getElementById('captureUpload').onclick = function () {
+    var file = document.getElementById('captureFile').files[0], user = window.firebase && firebase.auth().currentUser;
+    var status = document.getElementById('catalogStatus'), org = ORG, btn = this;
+    if (!file || !user) { status.textContent = 'Choose the downloaded capture file and sign in first.'; return; }
+    var reader = new FileReader(); reader.onload = function () {
+      var data; try { data = JSON.parse(reader.result); } catch (e) { status.textContent = 'Invalid JSON'; return; }
+      var caps = data && data.kind === 'crexi-detail-capture' && Array.isArray(data.captures) ? data.captures : null;
+      if (!caps || !caps.length) { status.textContent = 'That is not a capture file from the OMEGA bookmarklet.'; return; }
+      btn.disabled = true;
+      var CHUNK = 100, at = 0, applied = 0, unknown = [], fields = {}, detailed = 0;
+      function next() {
+        if (at >= caps.length) {
+          btn.disabled = false;
+          var top = Object.keys(fields).sort(function (a, b) { return fields[b] - fields[a]; }).slice(0, 6).map(function (k) { return k + ' ' + fields[k]; }).join(', ');
+          status.textContent = 'Imported ' + applied + ' listing pages (' + detailed.toLocaleString() + ' listings now carry page details).' +
+            (unknown.length ? ' ' + unknown.length + ' captured pages are not in this catalogue and were skipped.' : '') + (top ? ' Fields read: ' + top + '.' : '');
+          if (ORG === org) loadCatalog(catalogPage);
+          return;
+        }
+        var slice = caps.slice(at, at + CHUNK); at += CHUNK;
+        status.textContent = 'Importing listing details… ' + Math.min(at, caps.length) + ' of ' + caps.length;
+        user.getIdToken().then(function (token) {
+          return fetch('/api/site-catalog', { method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+            body:JSON.stringify({action:'details',orgId:org,captures:slice}) });
+        }).then(function (res) { return res.json().then(function (d) { if (!res.ok) throw Error(d.error || 'Import failed'); return d; }); })
+        .then(function (d) {
+          applied += d.applied || 0; unknown = unknown.concat(d.unknown || []); detailed = d.detailed || detailed;
+          Object.keys(d.fields || {}).forEach(function (k) { fields[k] = (fields[k] || 0) + d.fields[k]; });
+          next();
+        })['catch'](function (e) { btn.disabled = false; status.textContent = 'Import stopped at ' + applied + ' pages: ' + e.message; });
+      }
+      next();
+    }; reader.readAsText(file);
+  };
   document.getElementById('catalogSearch').onclick = function () { loadCatalog(0); };
   document.getElementById('catalogQuery').onkeydown = function (e) { if(e.key === 'Enter')loadCatalog(0); };
   document.getElementById('catalogPrev').onclick = function () { if(catalogPage>0)loadCatalog(catalogPage-1); };
@@ -3416,6 +3654,64 @@
     a.title = "Back to " + u.host;
   })();
 
+  /* ── WHAT A BUYER ASKS FIRST ─────────────────────────────────────────
+     Price, value, when it last sold, how long it has sat, who owns it and
+     who to call. The imported Crexi snapshot carries the asking price and
+     the size; the rest arrives with the Crexi data agreement (README:
+     "Crexi data agreement, currently in progress"). Until then every
+     missing figure says "pending API integration" so a rep reads a
+     status, not a blank — and a figure that IS on file, from the assessor
+     layer or a paid lookup, is shown with its source. */
+  var PENDING_API = '<i class="pend">pending API integration</i>';
+  function propertyFactsHtml(r) {
+    if (!r || !(r.listed || r.src === 'crexi-import' || r.src === 'crexi')) return '';
+    var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {};
+    /* Three sources, in order: the captured Crexi listing page (staff
+       bookmarklet), the row's own fields, then the market lookup. */
+    var d = r.detail || {};
+    var listing = mk.listing || {}, owner = r.owner && r.owner.name ? r.owner : (mk.owner || {}),
+        broker = r.broker && r.broker.name ? r.broker : (mk.broker || {}), listed = r.listed || {};
+    function pick(a, b, c) { return a != null && a !== '' ? a : (b != null && b !== '' ? b : (c != null && c !== '' ? c : null)); }
+    function has(v) { return v != null && v !== ''; }
+    var ask = pick(d.askPrice, listed.askPrice, listing.askPrice);
+    var value = has(r.assessedValue) ? r.assessedValue : null;
+    var sold = d.lastSalePrice != null ? { price: d.lastSalePrice, date: d.lastSaleDate } : (r.lastSale && has(r.lastSale.price) ? r.lastSale : null);
+    var dom = pick(d.daysOnMarket, listed.daysOnMarket, listing.daysOnMarket);
+    var cap = pick(d.capRate, listed.capRate, listing.capRate);
+    var contact = null;
+    if (d.brokers && d.brokers.length) {
+      contact = d.brokers.map(function (b) {
+        return esc(b.name) + (b.firm ? ', ' + esc(b.firm) : '') +
+          (b.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(b.phone).replace(/[^+0-9]/g, '')) + '">' + esc(b.phone) + '</a>' : '') +
+          (b.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '');
+      }).join('<br>');
+    } else if (has(broker.name)) {
+      contact = esc(broker.name) + (broker.firm ? ', ' + esc(broker.firm) : '') +
+        (broker.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(broker.phone).replace(/[^+0-9]/g, '')) + '">' + esc(broker.phone) + '</a>' : '') +
+        (broker.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(broker.email) + '">' + esc(broker.email) + '</a>' : '');
+    } else if (d.listedBy) contact = 'Listed by ' + esc(d.listedBy);
+    var ownerTxt = has(d.ownerName) ? esc(d.ownerName) : has(owner.name) ? esc(owner.name) + (owner.phone ? ' \u00b7 ' + esc(owner.phone) : '') : null;
+    var tenancy = [];
+    if (d.tenant || d.headline) tenancy.push(esc(d.tenant || d.headline));
+    if (d.occupancy != null) tenancy.push(fmt(d.occupancy) + '% occupied');
+    if (d.leaseType) tenancy.push(esc(d.leaseType) + ' lease');
+    if (d.leaseExpiration) tenancy.push('expires ' + esc(d.leaseExpiration));
+    var captured = d.capturedAt ? '<small>Listing page captured ' + esc(String(d.capturedAt).slice(0, 10)) + '</small>' : '';
+    return '<div class="facts">' +
+      '<b>Asking</b><span>' + (has(ask) ? money(ask) : d.unpriced ? 'Unpriced \u00b7 call for offers' : PENDING_API) + '</span>' +
+      '<b>Value</b><span>' + (value != null ? money(value) + ' <small>assessed</small>' : PENDING_API) + '</span>' +
+      '<b>Last sold</b><span>' + (sold ? money(sold.price) + (sold.date ? ' \u00b7 ' + esc(sold.date) : '') : PENDING_API) + '</span>' +
+      '<b>Days on market</b><span>' + (has(dom) ? fmt(dom) + (d.updated ? ' <small>\u00b7 ' + esc(d.updated).toLowerCase() + '</small>' : '') : PENDING_API) + '</span>' +
+      (has(cap) ? '<b>Cap rate</b><span>' + esc(cap) + (/%/.test(String(cap)) ? '' : '%') + '</span>' : '') +
+      (d.noi != null ? '<b>NOI</b><span>' + money(d.noi) + '/yr</span>' : '') +
+      (tenancy.length ? '<b>Tenant</b><span>' + tenancy.join(' \u00b7 ') + '</span>' : '') +
+      (d.yearBuilt ? '<b>Built</b><span>' + esc(d.yearBuilt) + (d.zoning ? ' \u00b7 zoned ' + esc(d.zoning) : '') + '</span>' : '') +
+      '<b>Owner</b><span>' + (ownerTxt || PENDING_API) + '</span>' +
+      '<b>Contact</b><span>' + (contact || PENDING_API) + '</span>' +
+      (captured ? '<span></span><span>' + captured + '</span>' : '') +
+      '</div>';
+  }
+
   function cardHtml(r) {
     var blockedBy = liveClaims(r);
     var warn = "";
@@ -3493,7 +3789,10 @@
           ? '<p><a data-noselect="1" href="' + esc(r.listed.url) + '" target="_blank" rel="noopener noreferrer"><b>Open Crexi listing &amp; photos ↗</b></a>' +
             (r.listed.askPrice != null ? ' · ' + money(r.listed.askPrice) : '') +
             '<br><small>Listing snapshot ' + esc((r.observedAt || '').slice(0,10)) + ' · availability not reverified</small>' +
-            (r.geocode ? '<br><small>' + (r.lat == null ? 'Location unresolved — no map pin' : esc(r.geocode.accuracy)) + '</small>' : '') + '</p>' : '') +
+            (r.geocode ? '<br><small>' + (r.lat == null ? 'Location unresolved — no map pin'
+              : r.approx && r.approxKind === 'area centre' ? 'Pin is the centre of ' + esc(r.geocode.area || 'its ZIP') + ', not the parcel — open the card to place it'
+              : esc(r.geocode.accuracy)) + '</small>' : '') + '</p>' : '') +
+        propertyFactsHtml(r) +
         '<div class="kw">' + kwTxt + ' <small>kW deliverable</small></div>' +
         '<div class="kwsub">' + sub + '</div>' +
         '<div class="siteMetrics"><div>Available hosting<strong>' +
@@ -3562,6 +3861,16 @@
             'title="Price it here \u2014 sized against this circuit, priced from the same cost model the estimator uses">' +
             'Price this site' +
           '</button>' +
+          (sizePick(r).kw != null
+            ? '<button class="cardLease" data-noselect="1" data-lease-id="' + esc(r.id) + '" ' +
+              'title="Prepare the host lease offer: rent us the pad for this battery and we pay you a fixed rent over the term">' +
+              'Lease offer' + '</button>' +
+              '<button class="cardProject" data-noselect="1" data-project-id="' + esc(r.id) + '" ' +
+              'title="What it costs us to deploy here: the build, plus buy the building at its asking price or lease the pad at the host rent">' +
+              'Cost to us' + '</button>'
+            : '') +
+          '<button class="cardCall" data-noselect="1" data-call-id="' + esc(r.id) + '" ' +
+            'title="Who to call, what to say, and a place to log the call">Call</button>' +
           (_estimates[r.id]
             ? '<span class="cardCostVal" title="' +
               esc(_estimates[r.id].estimateClassPlain || _estimates[r.id].estimateClass) + '">'
@@ -5003,44 +5312,36 @@
                                   hours:pick.hours, units:0 }, v, priced));
         continue;
       }
-      for (var pi = 0; pi < prods.length; pi++) {
-        var P = prods[pi];
-        var unit = +P.kwh;
-        if (!isFinite(unit) || unit <= 0) continue;
-        /* ── SIZED TO THE TARGET, NOT TO THE CEILING ──────────────────
-           This used to take the most energy that fitted under the 8-hour
-           cap, which is what "the maximum" literally asks for and is not
-           what anybody wants to build. On an 826 kW circuit it proposed
-           two containers for 6.5 hours when one 3.4 MWh unit gives 4.1 —
-           a second container is more land, more interconnection work and
-           roughly twice the hardware, to buy duration nobody asked for.
+      /* ── SIZED TO THE TARGET, NOT TO THE CEILING ────────────────────
+         The pick is the configuration closest to the DEFAULT DURATION at
+         this circuit's kW; the 8-hour ceiling survives only as a bound and
+         the maximum is computed separately below, because "how big could
+         this go" is a real question — just not the one the card answers.
 
-           So the recommendation is the configuration closest to the
-           DEFAULT DURATION, and the ceiling survives only as a bound. The
-           maximum is still computed and still shown in the list, because
-           "how big could this go" is a real question — it is just not the
-           question the card is answering. */
-        var n = Math.round(targetKwh / unit);
-        if (n < 1) n = 1;                    /* one unit is the minimum sale */
-        if (n > MAX_FIT_UNITS) n = MAX_FIT_UNITS;
-        var kwh = n * unit;
+         The rule itself lives in OmegaBessCatalog.fit so it can be tested
+         without a browser: FEWEST UNITS FIRST, then closest. It used to
+         rank by kWh closeness alone, and a stack of the smallest cabinet
+         won almost every time — a 3 MWh need came back as four 760 kWh
+         cabinets with a single 3.4 MWh container on the same sheet. */
+      var fits = OmegaBessCatalog.fit(prods, pick.kw, targetKwh, { maxUnits: MAX_FIT_UNITS });
+      for (var fi = 0; fi < fits.length; fi++) {
+        var F = fits[fi];
         out.push(mergeOpt(base, {
-          model: P.model || "", units: n, unitKwh: unit,
-          usableKwh: (typeof P.usableKwh === "number") ? P.usableKwh * n : null,
-          form: P.form || "", acKw: P.acKw || null,
-          kwh: kwh, hours: kwh / pick.kw,
-          overCeiling: kwh > ceilKwh
+          model: F.model, units: F.units, unitKwh: F.unitKwh,
+          usableKwh: F.usableKwh, form: F.form, acKw: F.acKw,
+          kwh: F.kwh, hours: F.kwh / pick.kw, under: F.under, ratio: F.ratio,
+          overCeiling: F.kwh > ceilKwh
         }, v, priced));
       }
     }
-    /* CLOSEST TO THE TARGET FIRST, then fewest units. One container beats
-       two cabinets at the same energy, every time — a second enclosure is
-       a second foundation, a second set of terminations and a second thing
-       to maintain, and none of that shows up in a kWh comparison. */
+    /* Across suppliers the same order holds: fewest enclosures, then the
+       nearest to the need, a shortfall counting one and a half times. */
     out.sort(function (a, b) {
-      var da = Math.abs(a.kwh - targetKwh), db = Math.abs(b.kwh - targetKwh);
+      if ((a.units || 0) !== (b.units || 0)) return (a.units || 0) - (b.units || 0);
+      var da = a.ratio == null ? 0 : (a.ratio >= 1 ? a.ratio - 1 : (1 - a.ratio) * 1.5);
+      var db = b.ratio == null ? 0 : (b.ratio >= 1 ? b.ratio - 1 : (1 - b.ratio) * 1.5);
       if (da !== db) return da - db;
-      return (a.units || 0) - (b.units || 0);
+      return a.kwh - b.kwh;
     });
     /* The largest that would still fit under the ceiling, kept separate so
        the panel can answer "how big could this go" without the card
@@ -5341,10 +5642,10 @@
         'none, because somebody will quote it.</p></div>';
     }
     var h = head + '<p class="note">The circuit allows <b>' + fmt(f.kw) + ' kW</b>, which ' +
-      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. Closest ' +
-      'to that first \u2014 a second enclosure is a second foundation, a second set ' +
-      'of terminations and a second thing to maintain, none of which shows up in a ' +
-      'kWh comparison.' +
+      'at ' + f.hours + ' h is <b>' + fmt(Math.round(f.target)) + ' kWh</b>. One unit of ' +
+      'the closest product first, then stacks \u2014 a second enclosure is a second ' +
+      'foundation, a second set of terminations and a second thing to maintain, none ' +
+      'of which shows up in a kWh comparison.' +
       (f.biggest && f.biggest.kwh > f.target * 1.2
         ? ' The circuit caps power, not energy \u2014 so if you want the most that ' +
           'would fit rather than the right size, it is <b>' + f.biggest.units +
@@ -5379,6 +5680,11 @@
         (o.overCeiling
           ? '<div class="fitNote">One unit already exceeds the ' + f.maxHours +
             ' h cap at this kW. It is shown because you cannot buy less than one.</div>'
+          : '') +
+        (o.under
+          ? '<div class="fitNote">' + Math.round((1 - o.ratio) * 100) + '% short of the ' +
+            fmt(Math.round(f.target)) + ' kWh target \u2014 ' + (o.units === 1 ? 'the closest single product' : 'one unit fewer than full coverage') + ', at ' +
+            (Math.round(o.hours * 10) / 10) + ' h rather than ' + f.hours + '.</div>'
           : '') +
         '<div class="fitPrice">' +
           (o.priced
@@ -5960,6 +6266,249 @@
       '</div></div>';
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     CALL THE OWNER
+     Who to call (every number the record knows, each labelled with what
+     it is), what to say (a talk track built from this site's numbers and
+     the lease offer when one has been priced), and where the call went
+     (appended to the saved site's notes, so the next rep sees it). A
+     found owner name or number is saved onto the site record. Nothing
+     here dials: the numbers are tel: links for the phone in the rep's
+     hand.
+     ══════════════════════════════════════════════════════════════════ */
+  function brandName() {
+    var t = window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant;
+    return (t && (t.name || t.brand)) || (ORG === 'demo' ? 'our team' : ORG);
+  }
+  function callContacts(r) {
+    var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {}, saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var d = r.detail || {}, out = [], seen = {};
+    function add(role, name, phone, email, note) {
+      name = name || ''; phone = phone || ''; email = email || '';
+      if (!name && !phone && !email) return;
+      var key = (name + '|' + phone).toLowerCase(); if (seen[key]) return; seen[key] = 1;
+      out.push({ role: role, name: name, phone: phone, email: email, note: note || '' });
+    }
+    add('Owner', (saved && saved.ownerName) || (r.owner && r.owner.name) || d.ownerName || (mk.owner && mk.owner.name), (saved && saved.ownerPhone) || (r.owner && r.owner.phone) || (mk.owner && mk.owner.phone), (r.owner && r.owner.email) || (mk.owner && mk.owner.email));
+    if (mk.occupant) add('Business on site', mk.occupant.name, mk.occupant.phone, mk.occupant.email, mk.occupant.kind);
+    (d.brokers || []).forEach(function (b) { add('Listing broker', b.name + (b.firm ? ', ' + b.firm : ''), b.phone, b.email, b.phone ? '' : 'number masked on Crexi \u2014 open the listing and press View phone number'); });
+    if (mk.broker) add('Listing broker', mk.broker.name + (mk.broker.firm ? ', ' + mk.broker.firm : ''), mk.broker.phone, mk.broker.email);
+    if (r.broker && r.broker.name) add('Listing broker', r.broker.name + (r.broker.firm ? ', ' + r.broker.firm : ''), r.broker.phone, r.broker.email);
+    if (r.listingContact && r.listingContact.name) add('Listing contact', r.listingContact.name, r.listingContact.phone, r.listingContact.email);
+    if (!out.length && d.listedBy) add('Listing firm', d.listedBy, '', '', 'main line not on the listing page');
+    return out;
+  }
+  function callScriptText(r) {
+    var pick = sizePick(r), lease = _leases[r.id] && _leases[r.id].result, o = lease && lease.offer, who = callContacts(r);
+    var first = who.length ? who[0] : null, greet = first && first.name ? first.name.split(',')[0].split(' ')[0] : 'there';
+    var lines = [];
+    lines.push('Hi ' + greet + ', this is ' + (ST.rep || '[your name]') + ' with ' + brandName() + '. I\u2019m calling about ' + (r.addr || 'your property') + (r.city ? ' in ' + r.city : '') + '.');
+    lines.push('We develop battery storage on commercial sites in Cook County, and this property has a strong grid position' +
+      (r.circ && r.circ.known && r.circ.sellable > 0 ? ' \u2014 the circuit serving it has about ' + fmt(r.circ.sellable) + ' kW available today.' : '.'));
+    if (pick.kw != null) lines.push('We would like to lease a small fenced pad' + (o ? ', about ' + o.leasedAcres + ' acres,' : '') + ' for a ' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    else lines.push('We would like to lease a small fenced pad for a battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    if (o) lines.push('You would receive about ' + money(o.monthly.base) + ' a month, rising ' + o.escalatorPct.base + '% a year, for ' + o.termYears + ' years \u2014 around ' + money(o.termTotal.base) + ' over the term.');
+    else lines.push('You would receive a fixed monthly rent, escalating, over a 15-year term. I can send the numbers today.');
+    if (first && /broker/i.test(first.role)) lines.push('I know the property is listed. A ground lease can run alongside a sale and adds income to the asset; would the owner take a 20-minute call about it?');
+    else lines.push('Would you be open to a 20-minute walk of the site next week? I will bring a one-page proposal.');
+    lines.push('If not now: who else should I speak to about the property, and is there a better time?');
+    return lines.join('\n\n');
+  }
+  function callSheetHtml(r) {
+    var who = callContacts(r), saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var notes = (saved && saved.notes && Object.prototype.toString.call(saved.notes) === '[object Array]') ? saved.notes.filter(function (n) { return n && /^Call\b/.test(n.t || ''); }).slice(-6).reverse() : [];
+    var h = '<div class="sec"><h4>Call the owner</h4>';
+    if (who.length) {
+      h += '<div class="callWho">' + who.map(function (c) {
+        return '<b>' + esc(c.role) + '</b><span>' + (c.name ? esc(c.name) : '<i class="pend">name unknown</i>') +
+          (c.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(c.phone).replace(/[^+0-9]/g, '')) + '">' + esc(c.phone) + '</a>' : '') +
+          (c.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
+          (c.note ? ' <small>' + esc(c.note) + '</small>' : '') + '</span>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="note">No name or number on file for this site yet.</p>';
+    }
+    var ownerKnown = who.some(function (c) { return c.role === 'Owner' && c.phone; });
+    if (!ownerKnown) h += '<p class="note">' + (who.some(function (c) { return c.role === 'Owner'; }) ? 'The owner\u2019s number is not on file' : 'The owner is not on file') +
+      ' \u2014 owner identity and phone are <i class="pend">pending API integration</i> (Crexi Intelligence, county records). ' +
+      (who.some(function (c) { return /broker/i.test(c.role); }) ? 'Call the listing broker: they represent the seller and can carry a ground-lease conversation to them.' : 'A listing broker, if there is one, is the fastest route to the owner.') +
+      '</p>';
+    h += '<div class="leaseForm"><label>Owner name<input id="callOwnerName" type="text" placeholder="found elsewhere?" style="width:150px"></label>' +
+      '<label>Owner phone<input id="callOwnerPhone" type="tel" placeholder="(312) 555-0100" style="width:130px"></label>' +
+      '<button type="button" id="callOwnerSave">Save to this site</button></div>';
+    h += '<p class="note" style="margin-top:10px"><b>What to say</b> \u2014 built from this site\u2019s numbers' + (_leases[r.id] && _leases[r.id].result ? ' and the lease offer you priced' : '; price the lease offer (step 7) to put the rent in it') + '.</p>' +
+      '<textarea id="callScript" class="callScript" readonly>' + esc(callScriptText(r)) + '</textarea>' +
+      '<p><button type="button" id="callCopy">Copy script</button></p>';
+    h += '<p class="note" style="margin-top:10px"><b>Log the call</b> \u2014 goes on the site\u2019s notes for the team' + (isSaved(r.id) ? '' : '; logging stars the site') + '.</p>' +
+      '<div class="leaseForm"><label>Outcome<select id="callOutcome"><option>Left a message</option><option>Spoke \u2014 interested</option><option>Spoke \u2014 call back</option><option>Spoke \u2014 not interested</option><option>Wrong number</option><option>No answer</option></select></label>' +
+      '<label>Who<input id="callWho" type="text" placeholder="name" style="width:130px" value="' + esc(who.length ? who[0].name.split(',')[0] : '') + '"></label></div>' +
+      '<textarea id="callNote" rows="2" placeholder="What they said, what happens next" style="width:100%;box-sizing:border-box;font:12px/1.4 inherit;padding:6px;border:1px solid var(--line);border-radius:6px"></textarea>' +
+      '<p><button type="button" id="callLogSave">Log call</button></p>';
+    if (notes.length) h += '<ul class="callLog">' + notes.map(function (n) {
+      var when = typeof n.ts === 'number' ? new Date(n.ts).toISOString() : String(n.ts || '');
+      return '<li>' + esc(n.t) + '<br><small>' + esc(when.slice(0, 10)) + (n.rep ? ' \u00b7 ' + esc(n.rep) : '') + '</small></li>';
+    }).join('') + '</ul>';
+    return h + '</div>';
+  }
+  function redrawCall(r) {
+    var host = document.getElementById("siteCall");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = callSheetHtml(r); wireDrawer(r); }
+  }
+  /* Owner details and call notes live on the saved site. An unsaved site is
+     starred first, with the fields on the create, so the note is never lost. */
+  function persistCallFields(r, fields, cb) {
+    if (!window.OmegaSiteSaves) { cb(); return; }
+    if (!isSaved(r.id)) {
+      var record = JSON.parse(JSON.stringify(r)), k;
+      for (k in fields) if (fields.hasOwnProperty(k)) record[k] = fields[k];
+      if (fields.ownerName) record.owner = { name: fields.ownerName, phone: fields.ownerPhone || '' };
+      OmegaSiteSaves.save(record, function (err) { savedWriteDone(err); try { render(); } catch (e) {} cb(err); });
+      return;
+    }
+    OmegaSiteSaves.patch(r.id, fields, function (err) { savedWriteDone(err); cb(err); });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     THE HOST LEASE OFFER
+     "Rent us the corner of your lot for this battery and we pay you X a
+     month for N years." The size comes from the sizer above; the rent
+     comes from /api/site-lease, where the rate card lives (CLAUDE.md, IP
+     protection: pricing never runs in the browser). The offer is cached
+     per site against the inputs that produced it, so re-opening the
+     drawer never re-asks and changing the size always does.
+     ══════════════════════════════════════════════════════════════════ */
+  var _leases = {}, _leaseBusy = {};
+  function leaseInputs(r) {
+    var pick = sizePick(r), acresEl = document.getElementById("leaseAcres"), termEl = document.getElementById("leaseTerm");
+    var acres = acresEl && acresEl.value !== '' ? Number(acresEl.value) : (r.leaseAcres || null);
+    var term = termEl && termEl.value !== '' ? Number(termEl.value) : (r.leaseTerm || 15);
+    return { orgId: ORG === 'demo' ? undefined : ORG, kw: pick.kw, kwh: pick.kwh,
+      acres: acres > 0 ? acres : undefined, termYears: term > 0 ? term : 15,
+      site: { id: r.id, addr: r.addr || '', city: r.city || '', owner: (r.owner && r.owner.name) || '',
+              feederId: r.feederId || '', type: r.type || '', lotAcres: r.lotAcres || null } };
+  }
+  function leaseHtml(r) {
+    var pick = sizePick(r), lease = _leases[r.id], busy = _leaseBusy[r.id];
+    var h = '<div class="sec"><h4>Host lease offer</h4>';
+    if (pick.kw == null) {
+      return h + '<p class="note">Size the battery first. The lease offer prices the pad and the interconnected kW, so it needs a system to price.</p></div>';
+    }
+    h += '<p class="note">What you can offer the owner to host <b>' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh</b> here: ' +
+      'a fenced pad on their lot, a fixed monthly rent, escalating, over the term. They own nothing, buy nothing and keep their meter.</p>' +
+      '<div class="leaseForm">' +
+        '<label>Pad acres<input id="leaseAcres" type="number" min="0.1" step="0.05" placeholder="auto" value="' + (r.leaseAcres != null ? esc(r.leaseAcres) : '') + '"></label>' +
+        '<label>Term (years)<input id="leaseTerm" type="number" min="5" max="30" step="1" value="' + esc(r.leaseTerm || 15) + '"></label>' +
+        '<button type="button" id="leaseQuote"' + (busy ? ' disabled' : '') + '>' + (lease ? 'Re-price offer' : 'Prepare offer') + '</button>' +
+      '</div>';
+    if (busy) h += '<p class="note" role="status">Pricing the lease\u2026</p>';
+    else if (lease && lease.error) h += '<p class="note bad">' + esc(lease.error) + '</p>';
+    else if (lease && lease.result) {
+      var o = lease.result.offer;
+      /* The size or the inputs moved since this was priced: say so above
+         the old numbers rather than letting a stale rent read as current. */
+      if (lease.key !== JSON.stringify(leaseInputs(r)))
+        h += '<p class="note bad">The battery size or the lease inputs changed since this offer was priced. Re-price before opening the proposal.</p>';
+      h += '<div class="leaseTiles">' +
+        '<div><b>' + money(o.monthly.base) + '</b>per month, year one</div>' +
+        '<div><b>' + money(o.annual.base) + '</b>per year, escalating ' + o.escalatorPct.base + '%</div>' +
+        '<div><b>' + money(o.termTotal.base) + '</b>over ' + o.termYears + ' years</div></div>' +
+        '<p class="note">Open with the base figure. Walk-away <b>' + money(o.monthly.low) + '</b>/mo; a site with a confirmed feeder and clean title can command <b>' +
+        money(o.monthly.high) + '</b>/mo. About ' + o.leasedAcres + ' acres' + (o.acresDerived ? ' (estimated from the system size)' : '') + '. ' +
+        (o.floored && o.floored.length ? 'Small system: the floor rent applies. ' : '') + esc(lease.result.disclaimer) + '</p>' +
+        '<p><button type="button" id="leaseOpen">Open the proposal</button> ' +
+        '<button type="button" id="leaseCopy">Copy summary</button></p>';
+    }
+    return h + '</div>';
+  }
+  function redrawLease(r) {
+    var host = document.getElementById("siteLease");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = leaseHtml(r); wireDrawer(r); }
+  }
+  function leaseInPlace(r, opts) {
+    opts = opts || {};
+    if (!window.OmegaSiteLease) return;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (selId !== r.id) select(r.id);
+    var input = leaseInputs(r), key = JSON.stringify(input), cached = _leases[r.id];
+    if (input.acres) r.leaseAcres = input.acres; r.leaseTerm = input.termYears;
+    if (cached && cached.key === key && cached.result) {
+      if (opts.open) OmegaSiteLease.openProposal(cached.result, { host: (r.owner && r.owner.name) || '', rep: ST.rep || '', address: r.addr });
+      else redrawLease(r);
+      return;
+    }
+    if (_leaseBusy[r.id]) return;
+    _leaseBusy[r.id] = true; redrawLease(r);
+    var org = ORG;
+    OmegaSiteLease.quote(input, function (err, result) {
+      delete _leaseBusy[r.id];
+      if (org !== ORG) return;
+      _leases[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      redrawLease(r);
+      if (!err && opts.open) OmegaSiteLease.openProposal(result, { host: (r.owner && r.owner.name) || '', rep: ST.rep || '', address: r.addr });
+      if (err && opts.open) { var st = document.getElementById("leaseQuote"); if (!st) alert(err.message); }
+    });
+  }
+
+  /* ── COST TO US: the company's own deployment cost, both routes ────────
+     The build (the same cost model as Price this site), plus site control:
+     buy the building at the asking price, or lease the pad at the host rent
+     the section above offers the owner. /api/project-cost composes it; this
+     shows it and never adds a number of its own. */
+  var _projects = {}, _projectBusy = {};
+  function askOf(r) {
+    var d = r.detail || {};
+    if (typeof d.askPrice === 'number' && isFinite(d.askPrice)) return d.askPrice;
+    if (r.listed && typeof r.listed.askPrice === 'number' && isFinite(r.listed.askPrice)) return r.listed.askPrice;
+    return null;
+  }
+  function projectInputs(r) {
+    var body = pricingRequest(r), askEl = document.getElementById("projectAsk");
+    var ask = askEl && askEl.value !== '' ? Number(askEl.value) : (r.askOverride != null ? r.askOverride : askOf(r));
+    body.orgId = ORG === 'demo' ? undefined : ORG;
+    body.askPrice = ask != null && isFinite(ask) && ask >= 0 ? ask : null;
+    body.termYears = r.leaseTerm || 15; body.acres = r.leaseAcres || undefined; body.sqft = r.sqft || undefined;
+    return body;
+  }
+  function projectHtml(r) {
+    var pick = sizePick(r), pj = _projects[r.id], busy = _projectBusy[r.id];
+    var h = '<div class="sec"><h4>Cost to us</h4>';
+    if (pick.kw == null) return h + '<p class="note">Size the battery first. The deployment cost prices the build for a system, then the building or the pad.</p></div>';
+    h += '<p class="note">What it costs <b>us</b> to put <b>' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh</b> here: the build, plus the building at its asking price, or the pad at the rent offered above over ' + esc(r.leaseTerm || 15) + ' years.</p>' +
+      '<div class="leaseForm">' +
+        '<label>Asking price $<input id="projectAsk" type="number" min="0" step="1000" placeholder="pending API integration" value="' + (r.askOverride != null ? esc(r.askOverride) : (askOf(r) != null ? esc(askOf(r)) : '')) + '"></label>' +
+        '<button type="button" id="projectQuote"' + (busy ? ' disabled' : '') + '>' + (pj && pj.result ? 'Re-cost' : 'Cost this project') + '</button>' +
+      '</div>';
+    if (busy) h += '<p class="note" role="status">Costing the project…</p>';
+    else if (pj && pj.error) h += '<p class="note bad">' + esc(pj.error) + '</p>';
+    else if (pj && pj.result) {
+      if (pj.key !== JSON.stringify(projectInputs(r))) h += '<p class="note bad">The battery size or the inputs changed since this was costed. Re-cost before quoting it.</p>';
+      h += OmegaProjectCost.html(pj.result, { tiles: 'leaseTiles' }) + '<p><button type="button" id="projectCopy">Copy summary</button></p>';
+    }
+    return h + '</div>';
+  }
+  function redrawProject(r) {
+    var host = document.getElementById("siteProject");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = projectHtml(r); wireDrawer(r); }
+  }
+  function projectInPlace(r) {
+    if (!window.OmegaProjectCost) return;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (selId !== r.id) select(r.id);
+    var input = projectInputs(r), key = JSON.stringify(input), cached = _projects[r.id];
+    if (input.askPrice != null) r.askOverride = input.askPrice;
+    if (cached && cached.key === key && cached.result) { redrawProject(r); return; }
+    if (_projectBusy[r.id]) return;
+    _projectBusy[r.id] = true; redrawProject(r);
+    var org = ORG;
+    OmegaProjectCost.quote(input, function (err, result) {
+      delete _projectBusy[r.id];
+      if (org !== ORG) return;
+      _projects[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      redrawProject(r);
+      setTimeout(function () { var sec = document.getElementById('siteProject'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30);
+    });
+  }
+
   function packetBlockHtml(r) {
     var p = sitePacket(r);
     return '<div class="sec"><h4>Review this site</h4>' +
@@ -6128,8 +6677,10 @@
       '<button type="button" data-site-section="siteBattery">2. Size battery</button>' +
       '<button type="button" data-site-section="siteCircuit">3. Feeder</button>' +
       '<button type="button" data-site-section="siteHold">4. Hold</button>' +
-      '<button type="button" data-site-section="siteMarket">5. Contacts</button>' +
-      '<button type="button" data-site-section="siteEstimate">6. Estimate</button></nav>');
+      '<button type="button" data-site-section="siteCall">5. Call &amp; contacts</button>' +
+      '<button type="button" data-site-section="siteEstimate">6. Estimate</button>' +
+      '<button type="button" data-site-section="siteLease">7. Lease offer</button>' +
+      '<button type="button" data-site-section="siteProject">8. Cost to us</button></nav>');
 
     /* The report card leads, then the save control, then the detail. A rep
        opening a card wants the verdict first and the paperwork after. */
@@ -6164,7 +6715,10 @@
         '/kW-month. Screening range, not a quote.</div>' : '') +
       '</div>');
 
+    h.push('<div id="siteLease">' + leaseHtml(r) + '</div>');
+    h.push('<div id="siteProject">' + projectHtml(r) + '</div>');
     h.push('<div id="siteEstimate">' + packetBlockHtml(r) + '</div>');
+    h.push('<div id="siteCall">' + callSheetHtml(r) + '</div>');
     h.push('<div id="siteMarket">' + marketHtml(r) + '</div>');
     h.push(phaseBlockHtml(r));
     h.push(mapsLinksHtml(r));
@@ -6254,6 +6808,8 @@
              "could be anywhere along it."
          : r.approxKind === "city and ZIP"
            ? "Only the city and ZIP matched."
+         : r.approxKind === "area centre"
+           ? "The listing address could not be geocoded, so this is the centre of the other listings in its ZIP."
            : "Only the ZIP matched, so this is the centre of a postcode.") +
         ' The circuit shown above is for THIS point, not necessarily for the ' +
         'address you typed \u2014 a hold placed on it would take capacity off ' +
@@ -6359,6 +6915,8 @@
                  ? "Street matched, not the address \u2014 could be anywhere along it"
                : r.approxKind === "city and ZIP"
                  ? "Only the city and ZIP matched \u2014 not the building"
+               : r.approxKind === "area centre"
+                 ? "Centre of the listings in its ZIP \u2014 not the building"
                  : "ZIP centroid \u2014 not the building") + '</b>'
           : r.geoStreet
               ? '<b style="color:var(--red)">Street-level only</b> \u2014 the ' +
@@ -6429,6 +6987,46 @@
   }
 
   function wireDrawer(r) {
+    var cc = document.getElementById("callCopy");
+    if (cc) cc.onclick = function () {
+      var ta = document.getElementById("callScript");
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(function () { cc.textContent = 'Copied'; }, function () { ta.select(); });
+      else ta.select();
+    };
+    var co = document.getElementById("callOwnerSave");
+    if (co) co.onclick = function () {
+      var name = document.getElementById("callOwnerName").value.trim(), phone = document.getElementById("callOwnerPhone").value.trim();
+      if (!name && !phone) return;
+      r.owner = r.owner || {}; if (name) r.owner.name = name; if (phone) r.owner.phone = phone;
+      r.ownerPhone = phone || r.ownerPhone;
+      var fields = {}; if (name) fields.ownerName = name; if (phone) fields.ownerPhone = phone;
+      persistCallFields(r, fields, function () { redrawCall(r); try { render(); } catch (e) {} });
+    };
+    var cl = document.getElementById("callLogSave");
+    if (cl) cl.onclick = function () {
+      var outcome = document.getElementById("callOutcome").value, who = document.getElementById("callWho").value.trim(), text = document.getElementById("callNote").value.trim();
+      var note = 'Call \u00b7 ' + outcome + (who ? ' \u00b7 ' + who : '') + (text ? ' \u00b7 ' + text : '');
+      cl.disabled = true;
+      persistCallFields(r, { note: note }, function () { cl.disabled = false; redrawCall(r); });
+    };
+    var lq = document.getElementById("leaseQuote");
+    if (lq) lq.onclick = function () { leaseInPlace(r, { open: false }); };
+    var lo = document.getElementById("leaseOpen");
+    if (lo) lo.onclick = function () { leaseInPlace(r, { open: true }); };
+    var lc = document.getElementById("leaseCopy");
+    if (lc) lc.onclick = function () {
+      var lease = _leases[r.id];
+      if (!lease || !navigator.clipboard) return;
+      navigator.clipboard.writeText(OmegaSiteLease.summary(lease.result) + ' ' + r.addr).then(function () { lc.textContent = 'Copied'; });
+    };
+    var pq = document.getElementById("projectQuote");
+    if (pq) pq.onclick = function () { projectInPlace(r); };
+    var pc = document.getElementById("projectCopy");
+    if (pc) pc.onclick = function () {
+      var pj = _projects[r.id];
+      if (!pj || !pj.result || !navigator.clipboard) return;
+      navigator.clipboard.writeText(OmegaProjectCost.summary(pj.result) + ' ' + r.addr).then(function () { pc.textContent = 'Copied'; });
+    };
     /* Save/remove, from the card's own panel. Re-opens so the button label
        and the list agree immediately. */
     var pk = document.getElementById("dPacket");
@@ -6738,6 +7336,31 @@
           window.OmegaSiteSaves.patch(rr.id, { size: null, estimate: null }, savedWriteDone);
         redrawDrawer(rr); try { render(); } catch (er) {}
       }
+      return;
+    }
+    var callb = e.target.closest && e.target.closest("[data-call-id]");
+    if (callb) {
+      e.preventDefault(); e.stopPropagation();
+      var callr = ST.byId[callb.getAttribute("data-call-id")];
+      if (callr) {
+        var selNow = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+        if (selNow !== callr.id) select(callr.id);
+        setTimeout(function () { var sec = document.getElementById('siteCall'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60);
+      }
+      return;
+    }
+    var lb = e.target.closest && e.target.closest("[data-lease-id]");
+    if (lb) {
+      e.preventDefault(); e.stopPropagation();
+      var lr = ST.byId[lb.getAttribute("data-lease-id")];
+      if (lr) leaseInPlace(lr, { open: true });
+      return;
+    }
+    var pb = e.target.closest && e.target.closest("[data-project-id]");
+    if (pb) {
+      e.preventDefault(); e.stopPropagation();
+      var pr = ST.byId[pb.getAttribute("data-project-id")];
+      if (pr) projectInPlace(pr);
       return;
     }
     var cb = e.target.closest && e.target.closest("[data-cost-id]");
@@ -7151,7 +7774,7 @@
           r.score, r.loadScore, r.cst.label,
           r.queueRefreshed || "", r.comedCovering || "",
           r.addressResolved === false ? "no" : "yes",
-          r.approx ? "ZIP centroid" : r.geoStreet ? "street level"
+          r.approx ? (r.approxKind === "area centre" ? "ZIP area centre" : "ZIP centroid") : r.geoStreet ? "street level"
             : r.geoInterp ? "interpolated" : r.geoSrc || "parcel centroid",
           (function () { var ph = phaseOf(r); return ph ? PHASES[ph.phase].label : ""; })(),
           (function () { var ph = phaseOf(r);
@@ -7227,6 +7850,7 @@
       if(ST.view === 'catalog') { closeDrawer(); document.getElementById('cards').innerHTML = ''; drawMarkers([]); }
       ST.catalog = []; catalogPage = 0;
       document.getElementById('catalogImport').hidden = !(u && /@(clearsky-usa\.com|csebuilders\.com)$/i.test(u.email || ''));
+      document.getElementById('catalogDetails').hidden = document.getElementById('catalogImport').hidden;
       document.getElementById('catalogStatus').textContent = 'Sign in to browse the shared listing catalog.';
       L.attach(null, '', function () {});
       if (L.setIdentity) L.setIdentity('', '');

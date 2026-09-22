@@ -2,7 +2,7 @@
  * Prepare a verified browser capture for the tenant catalogue. No DB writes.
  */
 'use strict';
-var fs = require('fs'), path = require('path');
+var fs = require('fs'), path = require('path'), geo = require('../api/_lib/geocode-listings');
 function csv(rows) { return rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n'); }
 function parseCSV(s) {
   var rows=[],row=[],cell='',quote=false;
@@ -39,10 +39,26 @@ async function main(){
     fs.writeFileSync(geoFile,JSON.stringify({at:new Date().toISOString(),response:text}),{flag:'wx',mode:384});
   }
   var geo={};parseCSV(text).forEach(function(r){geo[r[0]]=r;});
-  rows.forEach(function(r){var g=geo[r.id];if(!g||g[2]!=='Match'||g[3]!=='Exact')return;var ll=(g[5]||'').split(',').map(Number);
+  /* Batch pass: Exact and Non_Exact alike (both are the same street-interpolated
+     point; Non_Exact means the geocoder normalised the spelling). */
+  rows.forEach(function(r){var g=geo[r.id];if(!g||g[2]!=='Match')return;var ll=(g[5]||'').split(',').map(Number);
     if(ll.length!==2||ll[0]<-89||ll[0]>-87||ll[1]<41||ll[1]>43)return;
-    r.lon=ll[0];r.lat=ll[1];r.geocode={status:'matched',source:'US Census',accuracy:'street-interpolated, not rooftop',matchedAddress:g[4]};});
-  var manifest={orgId:'chileasing.com',count:rows.length,located:rows.filter(function(r){return r.lat!==null;}).length,source:'Crexi Cook County for-sale search',importedAt:new Date().toISOString(),snapshot:true};
+    r.lon=ll[0];r.lat=ll[1];r.geocode={status:'matched',source:'US Census',accuracy:'street-interpolated, not rooftop',matchedAddress:g[4],exact:g[3]==='Exact'};});
+  /* Second pass, one row at a time through several spellings; then the area
+     centre for whatever is left. Same code the staff button runs on a live
+     catalogue, so a fresh import arrives complete. --no-geocode-rows skips it. */
+  if(process.argv.indexOf('--no-geocode-rows')<0){
+    var left=rows.filter(function(r){return r.lat===null;}).length;
+    console.log('Retrying '+left+' unplaced rows with the one-line geocoder');
+    var pass=await geo.geocodeRows(rows,geo.fetchJson,{budgetMs:3600000,concurrency:4,limit:10000});
+    console.log(JSON.stringify(pass));
+    if(pass.transportError)throw Error('Census geocoder failed mid-run: '+pass.transportError);
+    console.log('Area centres for '+geo.areaFallback(rows)+' rows the geocoder could not place');
+  }
+  var manifest={orgId:'chileasing.com',count:rows.length,located:rows.filter(function(r){return r.lat!==null;}).length,
+    approximate:rows.filter(function(r){return r.lat!==null&&r.geocode.status==='approximate';}).length,
+    unmatched:rows.filter(function(r){return r.lat===null;}).length,
+    source:'Crexi Cook County for-sale search',importedAt:new Date().toISOString(),snapshot:true};
   var out=path.join(dir,'catalog-prepared.json');fs.writeFileSync(out,JSON.stringify({manifest:manifest,rows:rows},null,2),{flag:'wx',mode:384});console.log(JSON.stringify({file:out,manifest:manifest}));
 }
 if(require.main===module)main().catch(function(e){console.error(e.message);process.exitCode=1;});

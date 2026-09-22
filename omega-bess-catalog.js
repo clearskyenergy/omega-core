@@ -79,6 +79,69 @@
              fromCatalog: true };
   };
 
+  /* ── WHICH PRODUCT, HOW MANY ─────────────────────────────────────────
+     The site finder used to rank every "N × product" by kWh closeness alone,
+     which made a stack of the smallest cabinet win almost every time: a
+     3 MWh need came back as four 760 kWh cabinets when a single 3.4 MWh
+     container was on the same sheet. Four enclosures are four foundations,
+     four sets of terminations and four things to maintain, and none of that
+     appears in a kWh difference.
+
+     The rule now: FEWEST UNITS FIRST, then closest to the need. One unit of
+     the nearest product beats any stack; among stacks of equal count the
+     nearest wins. A candidate is the count that just covers the need (and,
+     where the product states AC kW, the count that covers the power), or
+     one unit fewer when that still reaches `minFill` of the need — a single
+     760 kWh cabinet for a 1,000 kWh ask is the closest product, at 3 h
+     instead of 4, and the card says so. A candidate that overshoots by more
+     than `maxOver` or needs more than `maxUnits` is dropped, except that the
+     one smallest overshoot is kept when nothing else qualifies, because you
+     cannot buy less than one unit.
+
+     Pure. `products` is any list of {model, kwh, acKw?, form?, usableKwh?};
+     the result is sorted best first. */
+  C.FIT = { maxUnits: 4, minFill: 0.75, maxOver: 2.2 };
+  C.fit = function (products, kw, kwh, opts) {
+    opts = opts || {};
+    var maxUnits = opts.maxUnits || C.FIT.maxUnits, minFill = opts.minFill != null ? opts.minFill : C.FIT.minFill,
+        maxOver = opts.maxOver || C.FIT.maxOver;
+    var out = [], spare = [], i, j;
+    if (!(kwh > 0)) return out;
+    for (i = 0; i < (products || []).length; i++) {
+      var P = products[i], unit = +P.kwh, ac = +P.acKw;
+      if (!isFinite(unit) || unit <= 0) continue;
+      var need = Math.ceil(kwh / unit - 1e-9);
+      if (isFinite(ac) && ac > 0 && kw > 0) need = Math.max(need, Math.ceil(kw / ac - 1e-9));
+      var counts = [need];
+      if (need > 1 && (need - 1) * unit >= kwh * minFill && !(isFinite(ac) && ac > 0 && kw > 0 && (need - 1) * ac < kw)) counts.push(need - 1);
+      if (need < 1) counts = [1];
+      for (j = 0; j < counts.length; j++) {
+        var n = counts[j], tot = n * unit, ratio = tot / kwh;
+        var o = { model: P.model || "", units: n, unitKwh: unit, kwh: tot, ratio: ratio,
+                  acKw: isFinite(ac) && ac > 0 ? ac * n : null,
+                  usableKwh: typeof P.usableKwh === "number" ? P.usableKwh * n : null,
+                  form: P.form || "", under: ratio < 1, hours: kw > 0 ? tot / kw : null };
+        if (n > maxUnits) continue;
+        if (ratio > maxOver) { spare.push(o); continue; }
+        out.push(o);
+      }
+    }
+    /* Distance from the need. Covering it is preferred: a shortfall counts
+       one and a half times, so a 2.7 MWh container (10% short of 3 MWh)
+       ranks behind the 3.4 MWh one (14% over), but a 760 kWh cabinet still
+       beats two of them for a 1,000 kWh ask. */
+    function dist(o) { return o.ratio >= 1 ? o.ratio - 1 : (1 - o.ratio) * 1.5; }
+    function rank(a, b) {
+      if (a.units !== b.units) return a.units - b.units;
+      var da = dist(a), db = dist(b);
+      if (da !== db) return da - db;
+      return a.kwh - b.kwh;
+    }
+    out.sort(rank);
+    if (!out.length && spare.length) { spare.sort(rank); out.push(spare[0]); }
+    return out;
+  };
+
   root.OmegaBessCatalog = C;
   if (typeof module !== "undefined" && module.exports) module.exports = C;
 })(typeof window !== "undefined" ? window : this);

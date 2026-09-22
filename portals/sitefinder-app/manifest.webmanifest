@@ -1,0 +1,16 @@
+{
+  "name": "Site Finder",
+  "short_name": "Site Finder",
+  "description": "Find the sites with the grid capacity you want, screen the listing, size the battery, and make the owner an offer.",
+  "start_url": "/sitefinder-app",
+  "scope": "/sitefinder-app",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#102A3A",
+  "theme_color": "#102A3A",
+  "icons": [
+    { "src": "/sitefinder-app/brand/sitefinder-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/sitefinder-app/brand/sitefinder-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/sitefinder-app/brand/sitefinder-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

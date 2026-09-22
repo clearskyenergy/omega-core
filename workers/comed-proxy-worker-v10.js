@@ -26,9 +26,12 @@
  * client reads `addr` so it doesn't have to hardcode per-county schemas.
  */
 
+/* ROTATES MONTHLY. Keep in step with api/_lib/comed-service.js, which is the
+   same constant for the same-origin proxy; redeploy this worker with wrangler
+   after changing it. JUN2026 stopped answering (403) on 22 Sep 2026. */
 const COMED =
-  "https://utility.arcgis.com/usrsvcs/servers/c0f9178a756c4246a99acdb3fe7de103" +
-  "/rest/services/ComEd_BESS_Hosting_Capacity_JUN2026/FeatureServer";
+  "https://utility.arcgis.com/usrsvcs/servers/2ee23dc46a374272ac3fe1528a451819" +
+  "/rest/services/ComEd_BESS_Hosting_Capacity_SEP2026/FeatureServer";
 
 const AS_REFERER =
   "https://exelonutilities.maps.arcgis.com/apps/webappviewer/index.html?id=c4068de162b943c9bd81fe4c4fbfe0ea";
