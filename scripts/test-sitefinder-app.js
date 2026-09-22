@@ -18,6 +18,10 @@ const ROWS = [
   { id: 'crexi:125', addr: 'Lot 3 Area Centre Listing', city: 'Chicago', state: 'IL', zip: '60601', type: 'Vacant Land', lotAcres: 2, lat: 42.02, lon: -87.77, src: 'crexi-import', listed: { forSale: true, url: 'https://www.crexi.com/properties/125/test', askPrice: 250000 }, geocode: { status: 'approximate', source: 'derived', accuracy: 'area centre of 12 matched listings in ZIP 60601; not the parcel', area: 'ZIP 60601' }, photos: [] }
 ];
 /* page.waitForFunction stalls in a mobile-emulated context here; a plain poll does not. */
+/* After a long page has been scrolled and typed on, the emulated visual viewport sits
+   offset from the layout viewport and a tap on the fixed tab bar lands off it; a real
+   phone re-anchors on scroll, so the test scrolls to the top before tapping a tab. */
+async function tab(page, name) { await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(100); await page.locator('.tabs a[data-tab=' + name + ']').click(); }
 async function until(page, fn, label) { const t = Date.now(); while (Date.now() - t < 30000) { if (await page.evaluate(fn)) return; await page.waitForTimeout(150); } throw new Error('Timed out waiting for ' + label); }
 (async function () {
   const browser = await chromium.launch(launchOpts);
@@ -63,6 +67,13 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
       if (url.pathname === '/api/site-lease') {
         const b = route.request().postDataJSON(); const offer = L.offer(b); delete offer.components;
         await route.fulfill({ json: { build: 'site-lease/1', offer, site: b.site, brand: { name: 'Chileasing' }, disclaimer: 'Indicative, not a binding offer.' } }); return;
+      }
+      if (url.pathname === '/api/project-cost') {
+        const b = route.request().postDataJSON(); assert.equal(b.orgId, 'chileasing.com'); assert.equal(b.askPrice, 2450000); assert.equal(b.termYears, 20);
+        const PC = require('../api/_lib/project-cost'); const kw = Number(b.kw), kwh = kw * Number(b.hours || 4), base = kwh * 250;
+        const est = { total: { base, lo: base * 0.9, hi: base * 1.2 }, kw, kwh, hours: Number(b.hours || 4), estimateClass: 'Class 5', estimateClassPlain: 'Screening estimate', accuracy: { rangeLowUsd: base * 0.7, rangeHighUsd: base * 1.5 }, financial: { incentives: { total: base * 0.3 }, netCostUsd: base * 0.7 } };
+        const offer = L.offer({ kw, kwh, acres: b.acres, termYears: b.termYears }); const result = PC.compose({ capex: est, lease: offer, askPrice: b.askPrice, sqft: b.sqft }); delete offer.components;
+        await route.fulfill({ json: { build: 'project-cost/1', result, estimate: { total: est.total }, offer, disclaimer: 'An internal deployment cost, not a bid.' } }); return;
       }
       if (url.pathname.startsWith('/api/')) { await route.fulfill({ status: 503, json: { error: 'off' } }); return; }
       if (url.pathname === '/config.js') { await route.fulfill({ body: '', contentType: 'application/javascript' }); return; }
@@ -119,6 +130,13 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     assert.match(await page.locator('#viewSite').innerText(), /per month[\s\S]*over 20 years/);
     const [popup] = await Promise.all([page.waitForEvent('popup'), page.locator('#leaseOpen').click()]);
     await popup.waitForLoadState(); assert.match(await popup.content(), /Your land\.<br>Our battery\./); await popup.close();
+    /* cost to us: the build plus buy or lease, for the company's own decision */
+    assert.equal(await page.locator('#projectAsk').inputValue(), '', 'an unpriced listing leaves the purchase route pending');
+    await page.locator('#projectAsk').fill('2450000'); await page.locator('#projectQuote').click();
+    await page.locator('#viewSite .pcVerdict').waitFor();
+    const proj = await page.locator('#viewSite').innerText();
+    assert.match(proj, /Cost to deploy[\s\S]*to build [\d,]+ kW[\s\S]*buy the building · \$2,450,000 asking \+ build[\s\S]*lease the pad · \$[\d,]+ rent over 20 yrs \+ build/);
+    assert.match(proj, /(Leasing|Buying) costs \$[\d,]+ less than (buying|leasing) over 20 years/);
     await page.locator('#szHrs').selectOption('2');
     assert.match(await page.locator('#viewSite').innerText(), /1,500 kWh · circuit allows 1,400 kW[\s\S]*inputs changed/, 'a resize re-fits and marks the offer stale');
     /* call the owner: saves the site, logs on its notes */
@@ -129,7 +147,7 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     assert.match(await page.locator('.log li').first().innerText(), /Call · Spoke — interested · Alex Geanakos · Walk Tuesday/);
     assert.equal(await page.locator('#starBtn').innerText(), '★', 'logging a call saved the site');
     /* an address is looked up as a site: geocoded, circuit read, opened, listings around it */
-    await page.locator('.tabs a[data-tab=find]').click();
+    await tab(page, 'find');
     await page.evaluate(() => { window.OmegaComEdLayers.feederNear = () => ({ row: { feeder: 'Z9', sub: 'Bridgeport', bess: 900, queue: 0 }, contains: true, beyond: false, distance: 0 }); });
     await page.locator('#q').fill('4643 s Michigan Ave Chicago il'); await page.locator('#go').click();
     await until(page, () => /^#\/site\/site%3A41\.81000%2C-87\.62000$/.test(location.hash) && /Z9/.test(document.getElementById('viewSite').innerText), 'the address lookup');
@@ -140,10 +158,10 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     assert.match(await page.locator('#findList .site').first().innerText(), /4643 s Michigan Ave Chicago il[\s\S]*Looking at now/, 'the looked-up site leads the list');
     assert.equal(await page.locator('#findList .site').count(), 4, 'the listings around it follow');
     /* saved list, account */
-    await page.locator('.tabs a[data-tab=saved]').click();
+    await tab(page, 'saved');
     await page.locator('#savedList .site').waitFor();
     assert.match(await page.locator('#savedList').innerText(), /5730 W Dempster St[\s\S]*Call · Spoke — interested/);
-    await page.locator('.tabs a[data-tab=account]').click();
+    await tab(page, 'account');
     await until(page, () => /Sign out/.test(document.getElementById('viewAccount').innerText), 'the account page');
     assert.match(await page.locator('#viewAccount').innerText(), /Test Rep[\s\S]*chileasing\.com[\s\S]*Install on your phone[\s\S]*Sign out/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'no horizontal scroll on a phone');

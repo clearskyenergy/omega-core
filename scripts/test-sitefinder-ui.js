@@ -66,6 +66,17 @@ const rows = [
         delete offer.components;
         await route.fulfill({json:{build:'site-lease/1',offer,site:b.site,brand:{name:'Example Energy'},disclaimer:'Indicative host lease, not a binding offer.'}});return;
       }
+      if (url.pathname === '/api/project-cost') {
+        const b=route.request().postDataJSON();
+        assert.equal(b.site.id,'fixture-a','the project is costed for the open site');
+        assert.equal(b.askPrice,2450000,'the asking price typed on the card is the purchase route');
+        assert.equal(b.termYears,20,'the lease term the rep chose is the lease route');
+        const SL=require('../api/_lib/site-lease'),PC=require('../api/_lib/project-cost');
+        const kw=Number(b.kw),kwh=kw*Number(b.hours||4),base=kwh*250;
+        const est={total:{base,lo:base*0.9,hi:base*1.2},kw,kwh,hours:Number(b.hours||4),estimateClass:'Class 5',estimateClassPlain:'Screening estimate',assumedSize:!!b.assumedSize,accuracy:{rangeLowUsd:base*0.7,rangeHighUsd:base*1.5},financial:{incentives:{total:base*0.3},netCostUsd:base*0.7}};
+        const offer=SL.offer({kw,kwh,acres:b.acres,termYears:b.termYears});const result=PC.compose({capex:est,lease:offer,askPrice:b.askPrice,sqft:b.sqft});delete offer.components;
+        await route.fulfill({json:{build:'project-cost/1',result,estimate:{total:est.total},offer,disclaimer:'An internal deployment cost, not a bid.'}});return;
+      }
       if (url.pathname === '/api/price-site' && process.env.SITEFINDER_WALKTHROUGH) {
         const result=require('../api/price-site')._helpers.finish({staff:false},'example.com',route.request().postDataJSON(),{rates:null,installer:null,supplier:null,note:'Illustrative walkthrough using generic model rates, not a supplier quote.'});
         fs.writeFileSync(path.join(process.env.SITEFINDER_WALKTHROUGH,'example-estimate.json'),JSON.stringify(result,null,2));
@@ -209,8 +220,19 @@ const rows = [
     assert.match(doc,/Your land\.<br>Our battery\./); assert.match(doc,/Test Owner LLC/,'the owner on the card is the host on the proposal');
     assert.match(doc,/Example Energy/,'the workspace brand is on the proposal'); assert.match(doc,/receive rent for 20 years/);
     await popup.close();
+    /* Cost to us: the build plus buy-the-building or lease-the-pad, on the same card. */
+    await page.locator('#siteProject').waitFor();
+    assert.equal(await page.locator('#projectAsk').inputValue(),'','no listed price: the purchase route is pending until one is typed');
+    await page.locator('#projectAsk').fill('2450000');
+    await page.locator('#projectQuote').click();
+    await page.locator('#siteProject .pcVerdict').waitFor();
+    const projText=await page.locator('#siteProject').innerText();
+    assert.match(projText,/to build [\d,]+ kW/); assert.match(projText,/buy the building · \$2,450,000 asking \+ build/); assert.match(projText,/lease the pad · \$[\d,]+ rent over 20 yrs \+ build/);
+    assert.match(projText,/(Leasing|Buying) costs \$[\d,]+ less than (buying|leasing) over 20 years/,'the verdict names the cheaper route');
+    assert.match(projText,/not a bid/);
     await page.locator('#szKwN').fill('200'); await page.locator('#szKwN').press('Tab');
     assert.match(await page.locator('#siteLease').innerText(),/changed since this offer was priced/,'a resize marks the offer stale');
+    assert.match(await page.locator('#siteProject').innerText(),/changed since this was costed/,'and the deployment cost too');
     /* Call the owner: who, what to say, and the log on the site's notes. */
     const call=await page.locator('#siteCall').innerText();
     assert.match(call,/Owner\s+Test Owner LLC/); assert.match(call,/number is not on file/);

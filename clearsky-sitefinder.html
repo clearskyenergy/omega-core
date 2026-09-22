@@ -211,7 +211,7 @@
     color:var(--muted);line-height:1.35}
   .card .facts b{color:var(--dim);font-weight:600;white-space:nowrap}
   .pend{color:#8a94a0;font-style:italic}
-  .cardLease,.cardCall{margin-left:6px}
+  .cardLease,.cardProject,.cardCall{margin-left:6px}
   .callWho{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin:8px 0}
   .callWho b{color:var(--dim);font-weight:600;white-space:nowrap}
   .callScript{width:100%;min-height:150px;font:12px/1.45 inherit;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;box-sizing:border-box}
@@ -958,6 +958,7 @@
 <!-- Published product datasheets. Specs ship; prices never do. -->
 <script src="/omega-bess-catalog.js"></script>
 <script src="/omega-site-lease.js"></script>
+<script src="/omega-project-cost.js"></script>
 <script>
 /* ==========================================================================
    Site Finder — application layer
@@ -3863,7 +3864,10 @@
           (sizePick(r).kw != null
             ? '<button class="cardLease" data-noselect="1" data-lease-id="' + esc(r.id) + '" ' +
               'title="Prepare the host lease offer: rent us the pad for this battery and we pay you a fixed rent over the term">' +
-              'Lease offer' + '</button>'
+              'Lease offer' + '</button>' +
+              '<button class="cardProject" data-noselect="1" data-project-id="' + esc(r.id) + '" ' +
+              'title="What it costs us to deploy here: the build, plus buy the building at its asking price or lease the pad at the host rent">' +
+              'Cost to us' + '</button>'
             : '') +
           '<button class="cardCall" data-noselect="1" data-call-id="' + esc(r.id) + '" ' +
             'title="Who to call, what to say, and a place to log the call">Call</button>' +
@@ -6445,6 +6449,66 @@
     });
   }
 
+  /* ── COST TO US: the company's own deployment cost, both routes ────────
+     The build (the same cost model as Price this site), plus site control:
+     buy the building at the asking price, or lease the pad at the host rent
+     the section above offers the owner. /api/project-cost composes it; this
+     shows it and never adds a number of its own. */
+  var _projects = {}, _projectBusy = {};
+  function askOf(r) {
+    var d = r.detail || {};
+    if (typeof d.askPrice === 'number' && isFinite(d.askPrice)) return d.askPrice;
+    if (r.listed && typeof r.listed.askPrice === 'number' && isFinite(r.listed.askPrice)) return r.listed.askPrice;
+    return null;
+  }
+  function projectInputs(r) {
+    var body = pricingRequest(r), askEl = document.getElementById("projectAsk");
+    var ask = askEl && askEl.value !== '' ? Number(askEl.value) : (r.askOverride != null ? r.askOverride : askOf(r));
+    body.orgId = ORG === 'demo' ? undefined : ORG;
+    body.askPrice = ask != null && isFinite(ask) && ask >= 0 ? ask : null;
+    body.termYears = r.leaseTerm || 15; body.acres = r.leaseAcres || undefined; body.sqft = r.sqft || undefined;
+    return body;
+  }
+  function projectHtml(r) {
+    var pick = sizePick(r), pj = _projects[r.id], busy = _projectBusy[r.id];
+    var h = '<div class="sec"><h4>Cost to us</h4>';
+    if (pick.kw == null) return h + '<p class="note">Size the battery first. The deployment cost prices the build for a system, then the building or the pad.</p></div>';
+    h += '<p class="note">What it costs <b>us</b> to put <b>' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh</b> here: the build, plus the building at its asking price, or the pad at the rent offered above over ' + esc(r.leaseTerm || 15) + ' years.</p>' +
+      '<div class="leaseForm">' +
+        '<label>Asking price $<input id="projectAsk" type="number" min="0" step="1000" placeholder="pending API integration" value="' + (r.askOverride != null ? esc(r.askOverride) : (askOf(r) != null ? esc(askOf(r)) : '')) + '"></label>' +
+        '<button type="button" id="projectQuote"' + (busy ? ' disabled' : '') + '>' + (pj && pj.result ? 'Re-cost' : 'Cost this project') + '</button>' +
+      '</div>';
+    if (busy) h += '<p class="note" role="status">Costing the project…</p>';
+    else if (pj && pj.error) h += '<p class="note bad">' + esc(pj.error) + '</p>';
+    else if (pj && pj.result) {
+      if (pj.key !== JSON.stringify(projectInputs(r))) h += '<p class="note bad">The battery size or the inputs changed since this was costed. Re-cost before quoting it.</p>';
+      h += OmegaProjectCost.html(pj.result, { tiles: 'leaseTiles' }) + '<p><button type="button" id="projectCopy">Copy summary</button></p>';
+    }
+    return h + '</div>';
+  }
+  function redrawProject(r) {
+    var host = document.getElementById("siteProject");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = projectHtml(r); wireDrawer(r); }
+  }
+  function projectInPlace(r) {
+    if (!window.OmegaProjectCost) return;
+    var selId = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+    if (selId !== r.id) select(r.id);
+    var input = projectInputs(r), key = JSON.stringify(input), cached = _projects[r.id];
+    if (input.askPrice != null) r.askOverride = input.askPrice;
+    if (cached && cached.key === key && cached.result) { redrawProject(r); return; }
+    if (_projectBusy[r.id]) return;
+    _projectBusy[r.id] = true; redrawProject(r);
+    var org = ORG;
+    OmegaProjectCost.quote(input, function (err, result) {
+      delete _projectBusy[r.id];
+      if (org !== ORG) return;
+      _projects[r.id] = err ? { key: key, error: err.message } : { key: key, result: result };
+      redrawProject(r);
+      setTimeout(function () { var sec = document.getElementById('siteProject'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30);
+    });
+  }
+
   function packetBlockHtml(r) {
     var p = sitePacket(r);
     return '<div class="sec"><h4>Review this site</h4>' +
@@ -6615,7 +6679,8 @@
       '<button type="button" data-site-section="siteHold">4. Hold</button>' +
       '<button type="button" data-site-section="siteCall">5. Call &amp; contacts</button>' +
       '<button type="button" data-site-section="siteEstimate">6. Estimate</button>' +
-      '<button type="button" data-site-section="siteLease">7. Lease offer</button></nav>');
+      '<button type="button" data-site-section="siteLease">7. Lease offer</button>' +
+      '<button type="button" data-site-section="siteProject">8. Cost to us</button></nav>');
 
     /* The report card leads, then the save control, then the detail. A rep
        opening a card wants the verdict first and the paperwork after. */
@@ -6651,6 +6716,7 @@
       '</div>');
 
     h.push('<div id="siteLease">' + leaseHtml(r) + '</div>');
+    h.push('<div id="siteProject">' + projectHtml(r) + '</div>');
     h.push('<div id="siteEstimate">' + packetBlockHtml(r) + '</div>');
     h.push('<div id="siteCall">' + callSheetHtml(r) + '</div>');
     h.push('<div id="siteMarket">' + marketHtml(r) + '</div>');
@@ -6952,6 +7018,14 @@
       var lease = _leases[r.id];
       if (!lease || !navigator.clipboard) return;
       navigator.clipboard.writeText(OmegaSiteLease.summary(lease.result) + ' ' + r.addr).then(function () { lc.textContent = 'Copied'; });
+    };
+    var pq = document.getElementById("projectQuote");
+    if (pq) pq.onclick = function () { projectInPlace(r); };
+    var pc = document.getElementById("projectCopy");
+    if (pc) pc.onclick = function () {
+      var pj = _projects[r.id];
+      if (!pj || !pj.result || !navigator.clipboard) return;
+      navigator.clipboard.writeText(OmegaProjectCost.summary(pj.result) + ' ' + r.addr).then(function () { pc.textContent = 'Copied'; });
     };
     /* Save/remove, from the card's own panel. Re-opens so the button label
        and the list agree immediately. */
@@ -7280,6 +7354,13 @@
       e.preventDefault(); e.stopPropagation();
       var lr = ST.byId[lb.getAttribute("data-lease-id")];
       if (lr) leaseInPlace(lr, { open: true });
+      return;
+    }
+    var pb = e.target.closest && e.target.closest("[data-project-id]");
+    if (pb) {
+      e.preventDefault(); e.stopPropagation();
+      var pr = ST.byId[pb.getAttribute("data-project-id")];
+      if (pr) projectInPlace(pr);
       return;
     }
     var cb = e.target.closest && e.target.closest("[data-cost-id]");
