@@ -45,7 +45,8 @@
         ['pos', 'Company POs', '/po-inbox?office=1&org=' + e],
         ['customers', 'Customers', '/portals/customer/admin.html' + q]]],
       ['Build', [
-        ['works', 'Work orders', '/plant/' + q],
+        ['woboard', 'Work order board', '/plant/work-orders.html' + q],
+        ['works', 'Work orders & registration', '/plant/' + q],
         ['board', 'Plant board', '/plant/manager.html' + q],
         ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations'],
         ['app', 'Phone app', '/plant/app' + q]]],

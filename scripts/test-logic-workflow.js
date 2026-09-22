@@ -41,10 +41,11 @@ class Query {
   where(k,op,v){return new Query(this.db,this.path,this.filters.concat([[k,op,v]]),this.sort,this.cap);}
   orderBy(k,dir){return new Query(this.db,this.path,this.filters,[k,dir],this.cap);}
   limit(n){return new Query(this.db,this.path,this.filters,this.sort,n,this.cursor);}
+  select(){return this;}
   startAfter(s){return new Query(this.db,this.path,this.filters,this.sort,this.cap,typeof s==='string'?s:s.id);}
   async get(){var self=this,docs=[];for(var entry of this.db.data.entries()){var path=entry[0],d=entry[1];
     if(path.split('/').length!==this.path.split('/').length+1||!path.startsWith(this.path+'/'))continue;
-    if(!this.filters.every(function(f){return f[1]==='=='?get(d,f[0])===f[2]:get(d,f[0])<=f[2];}))continue;
+    if(!this.filters.every(function(f){return f[1]==='=='?get(d,f[0])===f[2]:f[1]==='in'?f[2].indexOf(get(d,f[0]))>=0:get(d,f[0])<=f[2];}))continue;
     docs.push(await new Ref(this.db,path).get());}
     if(this.sort)docs.sort(function(a,b){var av=self.sort[0]==='__name__'?a.id:get(a.data(),self.sort[0]),bv=self.sort[0]==='__name__'?b.id:get(b.data(),self.sort[0]);return (av<bv?-1:av>bv?1:0)*(self.sort[1]==='desc'?-1:1);});
     if(this.cursor)docs=docs.filter(function(d){return d.id>self.cursor;});
@@ -142,6 +143,18 @@ await check('production templates preserve quality gates, require owner and pin 
   wo=db.data.get('plant_works_orders/'+id);assert.equal(wo.priority,'urgent');assert.equal(wo.flowVersion,1);assert.notEqual(wo.status,'ready');
   await assert.rejects(post(factory,{action:'work-order',workOrderId:id,revision:0,lineId:'north',priority:'urgent'},admin),/changed/);
   await assert.rejects(post(factory,{action:'work-order',workOrderId:id,revision:1,lineId:'north',priority:'normal',dueDate:'2026-02-31'},admin),/valid/);
+});
+await check('work-order board derives progress server-side and assignee edits are audited',async function(){
+  setup();var res={setHeader:function(){}};await W.price('one',1000,owner,true);payments.deposit=true;await W.processOrder('one');var id=db.data.get('orders/one').worksOrderId,line=db.data.get('plant_works_orders/'+id).lineId;
+  db.seed('plant_units/cleancell.us__B-1',unit('B-1',{woId:id,orderId:'one',at:'rack',done:{kit:'2026-09-21T08:00:00Z',module:'2026-09-21T09:00:00Z'},arrivedAt:'2026-09-21T10:00:00Z',test:null}));
+  db.seed('plant_units/cleancell.us__B-2',unit('B-2',{woId:id,orderId:'one',at:'',test:null}));db.seed('plant_units/cleancell.us__OTHER',unit('OTHER',{woId:'stock_9'}));
+  var board=await factory({method:'GET',query:{org:'cleancell.us',page:'board'},caller:admin},res),row=board.rows.filter(function(r){return r.id===id;})[0];
+  assert(row);assert.equal(row.progress.units,2);assert.equal(row.progress.done,3);assert.equal(row.stage,'in_progress');assert.equal(row.progress.nextUp.key,'rack');assert.equal(board.rows.length,1);
+  var detail=await factory({method:'GET',query:{org:'cleancell.us',workOrder:id},caller:admin},res);assert.equal(detail.board.progress.percent,row.progress.percent);assert.equal(detail.activity[0].say,'Arrived at Rack assembly');assert.equal(detail.activity.length,3);
+  await post(factory,{action:'work-order',workOrderId:id,revision:0,lineId:line,priority:'normal',dueDate:'',assignee:'  Dana Ortiz ',notes:''},admin);
+  var wo=db.data.get('plant_works_orders/'+id);assert.equal(wo.assignee,'Dana Ortiz');var audit=Array.from(db.data.entries()).filter(function(e){return e[0].indexOf('omega_audit/')===0&&e[1].action==='plant-work-order';}).pop()[1];assert.equal(audit.after.assignee,'Dana Ortiz');assert.equal(audit.before.assignee,'');
+  assert.equal((await factory({method:'GET',query:{org:'cleancell.us',page:'board'},caller:admin},res)).rows[0].assignee,'Dana Ortiz');
+  await assert.rejects(factory({method:'GET',query:{org:'cleancell.us',page:'board'},caller:Object.assign({},admin,{uid:'outsider',orgId:'other.us'})},res),/workspace/);
 });
 await check('station scans capture routing context, reject wrong line and preserve idempotency',async function(){
   setup();var scan=require('../api/mes-scan'),S=require('../api/_lib/plant-station'),route=clone(Plant.DEFAULT_ROUTING);route[0].instructions='Inspect label';route[0].parameters='Match lot';
