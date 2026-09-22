@@ -211,7 +211,13 @@
     color:var(--muted);line-height:1.35}
   .card .facts b{color:var(--dim);font-weight:600;white-space:nowrap}
   .pend{color:#8a94a0;font-style:italic}
-  .cardLease{margin-left:6px}
+  .cardLease,.cardCall{margin-left:6px}
+  .callWho{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;margin:8px 0}
+  .callWho b{color:var(--dim);font-weight:600;white-space:nowrap}
+  .callScript{width:100%;min-height:150px;font:12px/1.45 inherit;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;box-sizing:border-box}
+  .callLog{font-size:12px;margin:6px 0 0;padding:0;list-style:none}
+  .callLog li{padding:5px 0;border-top:1px solid var(--line)}
+  .callLog small{color:var(--dim)}
   .leaseTiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
   .leaseTiles div{border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:11px;color:var(--muted)}
   .leaseTiles b{display:block;font-size:17px;color:var(--ink);letter-spacing:-.01em;margin-bottom:2px}
@@ -3858,6 +3864,8 @@
               'title="Prepare the host lease offer: rent us the pad for this battery and we pay you a fixed rent over the term">' +
               'Lease offer' + '</button>'
             : '') +
+          '<button class="cardCall" data-noselect="1" data-call-id="' + esc(r.id) + '" ' +
+            'title="Who to call, what to say, and a place to log the call">Call</button>' +
           (_estimates[r.id]
             ? '<span class="cardCostVal" title="' +
               esc(_estimates[r.id].estimateClassPlain || _estimates[r.id].estimateClass) + '">'
@@ -6254,6 +6262,108 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
+     CALL THE OWNER
+     Who to call (every number the record knows, each labelled with what
+     it is), what to say (a talk track built from this site's numbers and
+     the lease offer when one has been priced), and where the call went
+     (appended to the saved site's notes, so the next rep sees it). A
+     found owner name or number is saved onto the site record. Nothing
+     here dials: the numbers are tel: links for the phone in the rep's
+     hand.
+     ══════════════════════════════════════════════════════════════════ */
+  function brandName() {
+    var t = window.CLEARSKY_CONFIG && window.CLEARSKY_CONFIG.tenant;
+    return (t && (t.name || t.brand)) || (ORG === 'demo' ? 'our team' : ORG);
+  }
+  function callContacts(r) {
+    var mk = (window.OmegaSiteMarket && OmegaSiteMarket.cached(r.id)) || {}, saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var d = r.detail || {}, out = [], seen = {};
+    function add(role, name, phone, email, note) {
+      name = name || ''; phone = phone || ''; email = email || '';
+      if (!name && !phone && !email) return;
+      var key = (name + '|' + phone).toLowerCase(); if (seen[key]) return; seen[key] = 1;
+      out.push({ role: role, name: name, phone: phone, email: email, note: note || '' });
+    }
+    add('Owner', (saved && saved.ownerName) || (r.owner && r.owner.name) || d.ownerName || (mk.owner && mk.owner.name), (saved && saved.ownerPhone) || (r.owner && r.owner.phone) || (mk.owner && mk.owner.phone), (r.owner && r.owner.email) || (mk.owner && mk.owner.email));
+    if (mk.occupant) add('Business on site', mk.occupant.name, mk.occupant.phone, mk.occupant.email, mk.occupant.kind);
+    (d.brokers || []).forEach(function (b) { add('Listing broker', b.name + (b.firm ? ', ' + b.firm : ''), b.phone, b.email, b.phone ? '' : 'number masked on Crexi \u2014 open the listing and press View phone number'); });
+    if (mk.broker) add('Listing broker', mk.broker.name + (mk.broker.firm ? ', ' + mk.broker.firm : ''), mk.broker.phone, mk.broker.email);
+    if (r.broker && r.broker.name) add('Listing broker', r.broker.name + (r.broker.firm ? ', ' + r.broker.firm : ''), r.broker.phone, r.broker.email);
+    if (r.listingContact && r.listingContact.name) add('Listing contact', r.listingContact.name, r.listingContact.phone, r.listingContact.email);
+    if (!out.length && d.listedBy) add('Listing firm', d.listedBy, '', '', 'main line not on the listing page');
+    return out;
+  }
+  function callScriptText(r) {
+    var pick = sizePick(r), lease = _leases[r.id] && _leases[r.id].result, o = lease && lease.offer, who = callContacts(r);
+    var first = who.length ? who[0] : null, greet = first && first.name ? first.name.split(',')[0].split(' ')[0] : 'there';
+    var lines = [];
+    lines.push('Hi ' + greet + ', this is ' + (ST.rep || '[your name]') + ' with ' + brandName() + '. I\u2019m calling about ' + (r.addr || 'your property') + (r.city ? ' in ' + r.city : '') + '.');
+    lines.push('We develop battery storage on commercial sites in Cook County, and this property has a strong grid position' +
+      (r.circ && r.circ.known && r.circ.sellable > 0 ? ' \u2014 the circuit serving it has about ' + fmt(r.circ.sellable) + ' kW available today.' : '.'));
+    if (pick.kw != null) lines.push('We would like to lease a small fenced pad' + (o ? ', about ' + o.leasedAcres + ' acres,' : '') + ' for a ' + fmt(pick.kw) + ' kW / ' + fmt(pick.kwh) + ' kWh battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    else lines.push('We would like to lease a small fenced pad for a battery. We pay for the equipment, the interconnection, the permits and the insurance; you keep title and your own meter, and nothing changes on your power bill.');
+    if (o) lines.push('You would receive about ' + money(o.monthly.base) + ' a month, rising ' + o.escalatorPct.base + '% a year, for ' + o.termYears + ' years \u2014 around ' + money(o.termTotal.base) + ' over the term.');
+    else lines.push('You would receive a fixed monthly rent, escalating, over a 15-year term. I can send the numbers today.');
+    if (first && /broker/i.test(first.role)) lines.push('I know the property is listed. A ground lease can run alongside a sale and adds income to the asset; would the owner take a 20-minute call about it?');
+    else lines.push('Would you be open to a 20-minute walk of the site next week? I will bring a one-page proposal.');
+    lines.push('If not now: who else should I speak to about the property, and is there a better time?');
+    return lines.join('\n\n');
+  }
+  function callSheetHtml(r) {
+    var who = callContacts(r), saved = window.OmegaSiteSaves ? OmegaSiteSaves.get(r.id) : null;
+    var notes = (saved && saved.notes && Object.prototype.toString.call(saved.notes) === '[object Array]') ? saved.notes.filter(function (n) { return n && /^Call\b/.test(n.t || ''); }).slice(-6).reverse() : [];
+    var h = '<div class="sec"><h4>Call the owner</h4>';
+    if (who.length) {
+      h += '<div class="callWho">' + who.map(function (c) {
+        return '<b>' + esc(c.role) + '</b><span>' + (c.name ? esc(c.name) : '<i class="pend">name unknown</i>') +
+          (c.phone ? ' \u00b7 <a data-noselect="1" href="tel:' + esc(String(c.phone).replace(/[^+0-9]/g, '')) + '">' + esc(c.phone) + '</a>' : '') +
+          (c.email ? ' \u00b7 <a data-noselect="1" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
+          (c.note ? ' <small>' + esc(c.note) + '</small>' : '') + '</span>';
+      }).join('') + '</div>';
+    } else {
+      h += '<p class="note">No name or number on file for this site yet.</p>';
+    }
+    var ownerKnown = who.some(function (c) { return c.role === 'Owner' && c.phone; });
+    if (!ownerKnown) h += '<p class="note">' + (who.some(function (c) { return c.role === 'Owner'; }) ? 'The owner\u2019s number is not on file' : 'The owner is not on file') +
+      ' \u2014 owner identity and phone are <i class="pend">pending API integration</i> (Crexi Intelligence, county records). ' +
+      (who.some(function (c) { return /broker/i.test(c.role); }) ? 'Call the listing broker: they represent the seller and can carry a ground-lease conversation to them.' : 'A listing broker, if there is one, is the fastest route to the owner.') +
+      '</p>';
+    h += '<div class="leaseForm"><label>Owner name<input id="callOwnerName" type="text" placeholder="found elsewhere?" style="width:150px"></label>' +
+      '<label>Owner phone<input id="callOwnerPhone" type="tel" placeholder="(312) 555-0100" style="width:130px"></label>' +
+      '<button type="button" id="callOwnerSave">Save to this site</button></div>';
+    h += '<p class="note" style="margin-top:10px"><b>What to say</b> \u2014 built from this site\u2019s numbers' + (_leases[r.id] && _leases[r.id].result ? ' and the lease offer you priced' : '; price the lease offer (step 7) to put the rent in it') + '.</p>' +
+      '<textarea id="callScript" class="callScript" readonly>' + esc(callScriptText(r)) + '</textarea>' +
+      '<p><button type="button" id="callCopy">Copy script</button></p>';
+    h += '<p class="note" style="margin-top:10px"><b>Log the call</b> \u2014 goes on the site\u2019s notes for the team' + (isSaved(r.id) ? '' : '; logging stars the site') + '.</p>' +
+      '<div class="leaseForm"><label>Outcome<select id="callOutcome"><option>Left a message</option><option>Spoke \u2014 interested</option><option>Spoke \u2014 call back</option><option>Spoke \u2014 not interested</option><option>Wrong number</option><option>No answer</option></select></label>' +
+      '<label>Who<input id="callWho" type="text" placeholder="name" style="width:130px" value="' + esc(who.length ? who[0].name.split(',')[0] : '') + '"></label></div>' +
+      '<textarea id="callNote" rows="2" placeholder="What they said, what happens next" style="width:100%;box-sizing:border-box;font:12px/1.4 inherit;padding:6px;border:1px solid var(--line);border-radius:6px"></textarea>' +
+      '<p><button type="button" id="callLogSave">Log call</button></p>';
+    if (notes.length) h += '<ul class="callLog">' + notes.map(function (n) {
+      var when = typeof n.ts === 'number' ? new Date(n.ts).toISOString() : String(n.ts || '');
+      return '<li>' + esc(n.t) + '<br><small>' + esc(when.slice(0, 10)) + (n.rep ? ' \u00b7 ' + esc(n.rep) : '') + '</small></li>';
+    }).join('') + '</ul>';
+    return h + '</div>';
+  }
+  function redrawCall(r) {
+    var host = document.getElementById("siteCall");
+    if (host && (ST.sel && ST.sel.id ? ST.sel.id : ST.sel) === r.id) { host.innerHTML = callSheetHtml(r); wireDrawer(r); }
+  }
+  /* Owner details and call notes live on the saved site. An unsaved site is
+     starred first, with the fields on the create, so the note is never lost. */
+  function persistCallFields(r, fields, cb) {
+    if (!window.OmegaSiteSaves) { cb(); return; }
+    if (!isSaved(r.id)) {
+      var record = JSON.parse(JSON.stringify(r)), k;
+      for (k in fields) if (fields.hasOwnProperty(k)) record[k] = fields[k];
+      if (fields.ownerName) record.owner = { name: fields.ownerName, phone: fields.ownerPhone || '' };
+      OmegaSiteSaves.save(record, function (err) { savedWriteDone(err); try { render(); } catch (e) {} cb(err); });
+      return;
+    }
+    OmegaSiteSaves.patch(r.id, fields, function (err) { savedWriteDone(err); cb(err); });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
      THE HOST LEASE OFFER
      "Rent us the corner of your lot for this battery and we pay you X a
      month for N years." The size comes from the sizer above; the rent
@@ -6502,7 +6612,7 @@
       '<button type="button" data-site-section="siteBattery">2. Size battery</button>' +
       '<button type="button" data-site-section="siteCircuit">3. Feeder</button>' +
       '<button type="button" data-site-section="siteHold">4. Hold</button>' +
-      '<button type="button" data-site-section="siteMarket">5. Contacts</button>' +
+      '<button type="button" data-site-section="siteCall">5. Call &amp; contacts</button>' +
       '<button type="button" data-site-section="siteEstimate">6. Estimate</button>' +
       '<button type="button" data-site-section="siteLease">7. Lease offer</button></nav>');
 
@@ -6541,6 +6651,7 @@
 
     h.push('<div id="siteLease">' + leaseHtml(r) + '</div>');
     h.push('<div id="siteEstimate">' + packetBlockHtml(r) + '</div>');
+    h.push('<div id="siteCall">' + callSheetHtml(r) + '</div>');
     h.push('<div id="siteMarket">' + marketHtml(r) + '</div>');
     h.push(phaseBlockHtml(r));
     h.push(mapsLinksHtml(r));
@@ -6809,6 +6920,28 @@
   }
 
   function wireDrawer(r) {
+    var cc = document.getElementById("callCopy");
+    if (cc) cc.onclick = function () {
+      var ta = document.getElementById("callScript");
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(function () { cc.textContent = 'Copied'; }, function () { ta.select(); });
+      else ta.select();
+    };
+    var co = document.getElementById("callOwnerSave");
+    if (co) co.onclick = function () {
+      var name = document.getElementById("callOwnerName").value.trim(), phone = document.getElementById("callOwnerPhone").value.trim();
+      if (!name && !phone) return;
+      r.owner = r.owner || {}; if (name) r.owner.name = name; if (phone) r.owner.phone = phone;
+      r.ownerPhone = phone || r.ownerPhone;
+      var fields = {}; if (name) fields.ownerName = name; if (phone) fields.ownerPhone = phone;
+      persistCallFields(r, fields, function () { redrawCall(r); try { render(); } catch (e) {} });
+    };
+    var cl = document.getElementById("callLogSave");
+    if (cl) cl.onclick = function () {
+      var outcome = document.getElementById("callOutcome").value, who = document.getElementById("callWho").value.trim(), text = document.getElementById("callNote").value.trim();
+      var note = 'Call \u00b7 ' + outcome + (who ? ' \u00b7 ' + who : '') + (text ? ' \u00b7 ' + text : '');
+      cl.disabled = true;
+      persistCallFields(r, { note: note }, function () { cl.disabled = false; redrawCall(r); });
+    };
     var lq = document.getElementById("leaseQuote");
     if (lq) lq.onclick = function () { leaseInPlace(r, { open: false }); };
     var lo = document.getElementById("leaseOpen");
@@ -7127,6 +7260,17 @@
         if (isSaved(rr.id) && window.OmegaSiteSaves)
           window.OmegaSiteSaves.patch(rr.id, { size: null, estimate: null }, savedWriteDone);
         redrawDrawer(rr); try { render(); } catch (er) {}
+      }
+      return;
+    }
+    var callb = e.target.closest && e.target.closest("[data-call-id]");
+    if (callb) {
+      e.preventDefault(); e.stopPropagation();
+      var callr = ST.byId[callb.getAttribute("data-call-id")];
+      if (callr) {
+        var selNow = ST.sel && ST.sel.id ? ST.sel.id : ST.sel;
+        if (selNow !== callr.id) select(callr.id);
+        setTimeout(function () { var sec = document.getElementById('siteCall'); if (sec) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60);
       }
       return;
     }

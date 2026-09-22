@@ -466,6 +466,18 @@ phone number" is clicked on the page; click first, then capture. One page
 per click for listings under review; a bulk crawl waits for the Crexi data
 agreement. Page documents now hold 50 rows (a captured row is larger).
 
+### Call the owner
+
+**Call** on the card, and step 5 of the drawer: every name and number the
+record knows, each labelled (owner, business on site, listing broker,
+with "number masked on Crexi" where the page hid it); a talk track built
+from this site's circuit, battery size and the priced lease offer, with a
+broker version when the first contact is a broker; a place to save an
+owner name or number found elsewhere (onto the saved site's `ownerName`
+and `ownerPhone`); and a call log that appends to the site's notes so the
+team sees it. Logging a call on an unsaved site stars it first. Nothing
+dials: numbers are tel: links.
+
 ### Which product, how many
 
 "What fits here" ranks FEWEST UNITS FIRST, then closest to the need

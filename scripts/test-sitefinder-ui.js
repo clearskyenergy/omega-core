@@ -211,6 +211,25 @@ const rows = [
     await popup.close();
     await page.locator('#szKwN').fill('200'); await page.locator('#szKwN').press('Tab');
     assert.match(await page.locator('#siteLease').innerText(),/changed since this offer was priced/,'a resize marks the offer stale');
+    /* Call the owner: who, what to say, and the log on the site's notes. */
+    const call=await page.locator('#siteCall').innerText();
+    assert.match(call,/Owner\s+Test Owner LLC/); assert.match(call,/number is not on file/);
+    const script=await page.locator('#callScript').inputValue();
+    assert.match(script,/Hi Test, this is Test Rep/); assert.match(script,/100 Test Warehouse/); assert.match(script,/\$[\d,]+ a month, rising 2\.5% a year, for 20 years/,'the priced lease offer is in the talk track');
+    await page.locator('#callOwnerPhone').fill('(312) 555-0199'); await page.locator('#callOwnerSave').click();
+    await page.locator('#siteCall a[href="tel:3125550199"]').waitFor();
+    await page.locator('#callOutcome').selectOption('Spoke — interested'); await page.locator('#callNote').fill('Walk the site Tuesday');
+    await page.locator('#callLogSave').click();
+    await page.locator('.callLog li').waitFor();
+    assert.match(await page.locator('.callLog li').first().innerText(),/Call · Spoke — interested · Test Owner LLC · Walk the site Tuesday/);
+    assert.equal(await page.evaluate(()=>window.OmegaSiteSaves.get('fixture-a').ownerPhone),'(312) 555-0199','the found number is saved on the site');
+    await page.locator('#dClose').click();
+    await page.locator('[data-view="catalog"]').click();
+    await page.locator('.card[data-id="crexi:126"] [data-call-id]').click();
+    await page.locator('#siteCall').waitFor();
+    const brokerCall=await page.locator('#siteCall').innerText();
+    assert.match(brokerCall,/Listing broker\s+Alex Geanakos, JLL number masked/); assert.match(brokerCall,/Mohsin Mirza, JLL · \(312\) 555-0142/);
+    assert.match(await page.locator('#callScript').inputValue(),/Hi Alex,[\s\S]*I know the property is listed/,'a broker gets the broker version of the script');
     await page.locator('#dClose').click();
     assert.deepEqual(errors, []);
     console.log('Site Finder browser workflow passed: score/hosting filters, saved visibility, sizing/hold consistency, unknown feeder, mobile layout, catalogue coverage and area-centre pins, property facts, host lease proposal.');
