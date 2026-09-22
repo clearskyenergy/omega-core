@@ -280,6 +280,7 @@
     }
   ],
   "functions": {
+    "api/site-catalog.js": { "maxDuration": 60 },
     "api/logic-worker.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
     "api/lite-atlas.js": { "maxDuration": 60 },
@@ -296,6 +297,10 @@
     "api/fiber-screen.js": {
       "maxDuration": 30,
       "includeFiles": "data/{fiber,fiber-api}/**"
+    },
+    "api/agent/*.js": {
+      "maxDuration": 30,
+      "includeFiles": "omega-site-intel.js"
     },
     "api/**/*.js": {
       "maxDuration": 30

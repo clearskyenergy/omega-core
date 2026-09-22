@@ -2586,7 +2586,9 @@
     'viability','viabilityHistory','permitting','assignment','finProjectId','adoptedFrom',
     'adoptedAt','importBatch','externalIds','projectType','prescreen',
     'discardReason','discardedAt','discardedBy','links','reevaluateReason',
-    'siteNotes','energy','design','grid','leaseScreen'];
+    'siteNotes','energy','design',
+    /* written by /api/agent/sites and by the KMZ button below: the traced ring */
+    'outline','acres','grid','leaseScreen'];
   function unmapped(deal) {
     var raw = deal._raw || {}, out = {}, n = 0;
     for (var k in raw) { if (!raw.hasOwnProperty(k) || KNOWN.indexOf(k) >= 0) continue; out[k] = raw[k]; n++; }

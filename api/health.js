@@ -27,6 +27,7 @@ var EXPECTED = {
   GEMINI_API_KEY:           'stencil generation (api/stencil)',
   ANTHROPIC_API_KEY:        'Jarvis in the editor and AI extraction, for every tenant without its own AI_KEY_<ORG> (create the key inside a workspace, or also set ANTHROPIC_WORKSPACE_ID)',
   REGRID_TOKEN:             'parcel lookup outside the county feeds (api/parcel falls back to county GIS)',
+  OMEGA_AGENT_LINK_SECRET:  'signs the KMZ download links /api/agent/site-outline hands to a ChatGPT agent; falls back to a digest of the service-account key when unset',
   STRIPE_SECRET_KEY:        'billing: checkout, customer portal, subscriptions',
   STRIPE_WEBHOOK_SECRET:    'billing events from Stripe (paid, cancelled) — the webhook rejects every event without it'
 };

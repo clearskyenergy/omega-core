@@ -21,7 +21,11 @@ let fails = 0;
 function ok(c, m){ console.log('  ' + (c ? 'ok  ' : 'FAIL') + '   ' + m); if(!c) fails++; }
 
 global.window = global;
-const M = require(path.join(ROOT, 'omega-cost-model.js'));
+const M = require(path.join(ROOT, 'api/_lib/cost-model.js'));
+require(path.join(ROOT, 'omega-cost-model.js'));
+const responseFixture = require('./pricing-response');
+let requests = [], fetchFailure = false;
+global.firebase = {auth:()=>({currentUser:{getIdToken:()=>Promise.resolve('fixture-token')}})};
 
 /* Load the estimator's own compute() with a stubbed page. */
 const html = fs.readFileSync(path.join(ROOT, 'clearsky-cost-estimator.html'), 'utf8');
@@ -43,7 +47,11 @@ global.document = { getElementById:()=>stubEl(), createElement:()=>stubEl(),
                     querySelector:()=>stubEl(), querySelectorAll:()=>[],
                     body:stubEl(), readyState:'complete' };
 global.navigator = { userAgent:'node' };
-global.fetch = () => Promise.resolve({ ok:false, json:()=>Promise.resolve({}) });
+global.fetch = (url, options) => {
+  requests.push({url, options});
+  if(fetchFailure) return Promise.resolve({ok:false,json:()=>Promise.resolve({error:'Access denied'})});
+  return Promise.resolve({ok:true,json:()=>Promise.resolve(responseFixture(JSON.parse(options.body)))});
+};
 global.localStorage = { getItem:()=>null, setItem:()=>{}, removeItem:()=>{} };
 /* The estimator's IIFE already exports itself for a test harness when a
    `module` object is in scope — use that seam rather than prising the
@@ -62,6 +70,7 @@ try {
 const compute = EST && EST.compute;
 const ES = EST && EST.S;
 
+(async function(){
 console.log('parity — model vs estimator');
 if (!compute) { ok(false, 'estimator compute() did not load'); process.exit(1); }
 
@@ -85,12 +94,12 @@ const CASES = [
     gold:4517336 }
 ];
 
-CASES.forEach(function (c) {
+for (const c of CASES) {
   ES.kw = c.est.kw; ES.hours = c.est.hours; ES.req = c.est.req;
   ES.packet = null; ES.carryUpgrade = false; ES.leadRelease = 'bod';
-  const a = compute();
+  const a = await compute();
   const b = M.price(c.mod);
-  if (!a || !b) { ok(false, c.name + ' — one side returned null'); return; }
+  if (!a || !b) { ok(false, c.name + ' — one side returned null'); continue; }
   const cent = (x) => Math.round(x * 100);
   ok(cent(a.total.base) === cent(b.total.base),
      c.name + '  base $' + Math.round(b.total.base).toLocaleString()
@@ -106,7 +115,7 @@ CASES.forEach(function (c) {
      (Math.round(b.total.base) === c.gold ? '' :
       '  — NOW $' + Math.round(b.total.base).toLocaleString() +
       '. If a rate was corrected on purpose, update the gold value in this test.'));
-});
+}
 
 /* ── THE DURATION DEFAULT ──────────────────────────────────────────────
    Four, not two. Two made every $/kWh this tool produced read high against
@@ -171,5 +180,16 @@ const zero = M.price({ kw:2000, hours:2, volt:'12470', utilityUpgrade:'none',
 ok(Math.round(zero.total.base) === Math.round(plain.total.base),
    'a zero is not treated as a price');
 
+ok(requests.every(r=>r.url === '/api/price-site' && r.options.headers.Authorization === 'Bearer fixture-token'), 'all pricing uses the authenticated endpoint');
+const payload = JSON.parse(requests[0].options.body);
+ok(!('rates' in payload) && !('vendor' in payload) && !('installer' in payload), 'no browser rates or evidence claims sent');
+ok(payload.poiFt === null && payload.padArea === null, 'unanswered drivers stay null');
+fetchFailure = true;
+try { await compute(); ok(false, '403 must fail closed'); } catch(e) { ok(/Access denied/.test(e.message), 'endpoint denial is surfaced without local fallback'); }
+const publicCost = require(path.join(ROOT, 'omega-cost-model.js'));
+ok(!publicCost.price && !publicCost.MODEL && !publicCost.ratesFromVendor, 'public metadata cannot price a site');
+ok(!fs.readFileSync(path.join(ROOT, 'omega-value-stack.js'), 'utf8').includes('V.stack ='), 'public value-stack file contains no engine');
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);
+
+})().catch(e=>{console.error(e);process.exit(1);});
