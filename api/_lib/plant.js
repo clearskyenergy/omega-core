@@ -94,6 +94,9 @@ function serialFrom(raw) {
    unit    { serial, at, hold, done{} }   at === '' means it has not started
    station the station key the SCANNER is bound to
    routing from the works order
+   opts    { machine, open[] }  open = the names of steps still open at the
+           unit's CURRENT station (plant-work.js); an advance is refused
+           while any remain
 
    Returns a verdict the endpoint persists and the bench displays. Every
    refusal carries `say` — the sentence the operator reads on the screen —
@@ -137,6 +140,13 @@ function judgeScan(unit, station, routing, opts) {
   }
   if (ai === routing.length - 1) {
     return { ok: false, reason: 'complete', at: at, say: 'This unit is finished and staged.' };
+  }
+  if (si === ai + 1 && at && opts.open && opts.open.length) {
+    /* The bench it is leaving still has steps open (api/_lib/plant-work.js).
+       Refuse here, at the NEXT bench, because that is where the unit turns
+       up half-built: the operator reads what is missing and sends it back. */
+    return { ok: false, reason: 'work_open', at: at, open: opts.open.slice(0, 8),
+             say: 'Not finished at ' + labelOf(routing, at) + ': ' + opts.open.slice(0, 4).join(', ') + (opts.open.length > 4 ? ' and ' + (opts.open.length - 4) + ' more' : '') + '. Complete them there first.' };
   }
   if (si !== ai + 1) {
     var expect = routing[ai + 1];

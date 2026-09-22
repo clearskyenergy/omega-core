@@ -68,6 +68,7 @@
    and may carry `unit`, `supplier`, `supplierSku`, `moq`, `safetyStock` and `leadTimeDays`
    for the materials plan (api/_lib/materials.js). A second sheet,
    `--bom bom.csv`, with columns  parentSku, componentSku, qty, unit,
+   station, step (where on the floor the line is fitted, and in which step),
    yieldPct (optional, 1–100, blank = 100)  lists what goes into ONE of each
    product or sub-assembly and how much of what is issued survives. Every componentSku must
    be a row in the products file, none may be a service, and the whole thing
@@ -287,7 +288,8 @@ if (bomRead) {
     if (!parent || !child) { problems.push('bom row ' + (i + 2) + ': needs parentSku and componentSku'); return; }
     if (!seen[parent]) { problems.push('bom row ' + (i + 2) + ': parent ' + parent + ' is not in the products file'); return; }
     if (!seen[child]) { problems.push('bom row ' + (i + 2) + ': component ' + child + ' is not in the products file — add it as a kind=component row'); return; }
-    (pending[parent] = pending[parent] || []).push({ sku: child, qty: r.qty || r.quantity || r.qtyper, unit: r.unit || 'ea', yieldPct: r.yieldpct || r.yield || r.yieldpercent || '' });
+    (pending[parent] = pending[parent] || []).push({ sku: child, qty: r.qty || r.quantity || r.qtyper, unit: r.unit || 'ea', yieldPct: r.yieldpct || r.yield || r.yieldpercent || '',
+      station: String(r.station || r.bench || r.operation || '').trim().toLowerCase(), step: String(r.step || '').trim() });
   });
   Object.keys(pending).forEach(function (parent) {
     var p = products.filter(function (x) { return x.sku === parent; })[0];

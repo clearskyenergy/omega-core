@@ -218,6 +218,7 @@ var HEAD = 'sku,name,kw,kwh,widthFt,depthFt,dimUnits,integratesPcs,integratesXfm
   var out = (rr.stdout || '') + (rr.stderr || '');
   ok('the two templates import together, cleanly', rr.status === 0 && /5  components/.test(out) && /2  with a bill of materials, 5 line/.test(out), out.slice(0, 500));
   var tj = JSON.parse(fs.readFileSync(path.join(TMP, 't.json'), 'utf8')), mod = tj.filter(function (x) { return x.sku === 'CC-MOD-52'; })[0];
+  ok('  the station and step columns land on the line, blank meaning any bench', mod.bom[0].station === 'module' && mod.bom[0].step === '1 · Fit cells' && tj.filter(function (x) { return x.sku === 'CC-215'; })[0].bom[2].station === 'encl' && !('step' in tj.filter(function (x) { return x.sku === 'CC-215'; })[0].bom[2]), mod.bom);
   ok('  the yield column lands on the line, blank meaning 100', mod.bom[0].yieldPct === 98 && mod.bom[1].yieldPct === 95 && tj.filter(function (x) { return x.sku === 'CC-215'; })[0].bom[0].yieldPct === 100, mod.bom);
   r = run2(P, 'parentSku,componentSku,qty,unit,yieldPct\nCAB,MOD,8,ea,140\n');
   ok('a yield over 100 is refused', /between 1 and 100/.test(r.out));

@@ -112,7 +112,16 @@ function line(raw) {
   if (!isPlain(raw)) fail(400, 'Each bill-of-materials line needs a component SKU and a quantity');
   var sku = clean(raw.sku, 64);
   if (!SKU.test(sku) || !safeKey(sku)) fail(400, 'Bill of materials: invalid component SKU "' + sku + '"');
-  return { sku: sku, qty: qtyOf(raw.qty, 'Quantity of ' + sku), unit: unitOf(raw.unit), yieldPct: yieldOf(raw.yieldPct, sku) };
+  var out = { sku: sku, qty: qtyOf(raw.qty, 'Quantity of ' + sku), unit: unitOf(raw.unit), yieldPct: yieldOf(raw.yieldPct, sku) };
+  /* Where on the floor this line is consumed, and in which step there. Both
+     optional: a line with no station is planned and bought but never gated
+     at a bench (api/_lib/plant-work.js). */
+  var station = clean(raw.station, 32), step = clean(raw.step, 80);
+  if (station && !/^[a-z][a-z0-9_-]{0,31}$/.test(station)) fail(400, 'Station for ' + sku + ' must be a routing station key');
+  if (step && !station) fail(400, 'A step for ' + sku + ' needs the station it happens at');
+  if (station) out.station = station;
+  if (step) out.step = step;
+  return out;
 }
 function bomLines(raw) {
   if (raw == null || raw === '') return [];
@@ -190,20 +199,38 @@ function earlier(a, b) { if (!a) return b; if (!b) return a; return a < b ? a : 
    stock. Priced orders waiting on the deposit are pipeline. Unpriced
    requests are forecast. An order that already has a works order is NOT
    counted again from its items — the works order is the truth of what is
-   still to build, because registeredCounts tracks what the floor has
-   already started. */
+   still to build. registeredCounts is what the floor has started: a started
+   unit no longer needs to be BUILT from scratch, but until readyCounts says
+   it is finished it still needs the parts of its bill that no bench has
+   issued to it (w.issued, written by api/mes-scan.js). */
 var DONE_WO = { complete: true, shipped: true, cancelled: true };
 var DONE_ORDER = { cancelled: true, shipped: true, complete: true, in_fulfilment: true };
 var PIPELINE = { accepted: true, quoted: true };
 function demandsFrom(input) {
   input = input || {};
   var out = [];
+  var by = index(input.products);
   (input.works || []).forEach(function (w) {
     if (!w || DONE_WO[w.status] || w.shippedAt) return;
-    var counts = w.registeredCounts || {}, need = dateOf(w.dueDate) || dateOf(w.promisedShipAt);
+    var counts = w.registeredCounts || {}, ready = w.readyCounts || {}, issued = isPlain(w.issued) ? w.issued : {};
+    var need = dateOf(w.dueDate) || dateOf(w.promisedShipAt), ref = clean(w.orderNo || w.id, 60);
     (w.requirements || []).forEach(function (r) {
-      var sku = clean(r && r.sku, 64), left = Math.max(0, num(r && r.qty) - num(counts[sku]));
-      if (SKU.test(sku) && left > 0) out.push({ sku: sku, qty: left, bucket: 'committed', ref: clean(w.orderNo || w.id, 60), needBy: need });
+      var sku = clean(r && r.sku, 64);
+      if (!SKU.test(sku) || !safeKey(sku)) return;
+      var registered = Math.max(0, num(counts[sku])), finished = Math.min(registered, Math.max(0, num(ready[sku])));
+      /* Not started: the whole product is demanded and explodes normally. */
+      var left = Math.max(0, num(r && r.qty) - registered);
+      if (left > 0) out.push({ sku: sku, qty: left, bucket: 'committed', ref: ref, needBy: need });
+      /* Started but not finished: the unit exists, so its PARTS are demanded
+         — one level down, less what the benches have already issued to it
+         (plant-work.js). A finished unit took exactly its bill. */
+      var open = registered - finished;
+      if (open > 0 && by[sku]) (by[sku].bom || []).forEach(function (l) {
+        if (!safeKey(l.sku)) return;
+        var per = l.qty / ((num(l.yieldPct) > 0 && num(l.yieldPct) <= 100 ? num(l.yieldPct) : 100) / 100);
+        var got = Math.max(0, num(issued[l.sku]) - finished * l.qty), q = roundQty(open * per - got);
+        if (q > 0) out.push({ sku: l.sku, qty: q, bucket: 'committed', ref: ref, needBy: need, kind: 'issue' });
+      });
     });
   });
   (input.orders || []).forEach(function (o) {

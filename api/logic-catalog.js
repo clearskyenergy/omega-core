@@ -5,7 +5,8 @@ module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
   var b=req.body||{},caller=await A.authenticate(req),org=A.safeOrg(req.method==='GET'?req.query.org:b.org),ctx=await X.authorize(caller,org,req.method==='POST');
   var ref=A.db().doc('omega_orgs/'+org+'/storefront/config');
-  if(req.method==='GET'){var snap=await ref.get(),d=snap.exists?snap.data():{};return {org:org,brand:require('./_lib/logic-brand')(ctx.org),owner:X.owner(caller),revision:d.catalogRevision||0,products:(d.products||[]).map(C.view),designProducts:C.designs(d)};}
+  if(req.method==='GET'){var snap=await ref.get(),d=snap.exists?snap.data():{};var routing=require('./_lib/plant-flow').current(ctx.config).routing.map(function(s){return {key:s.key,label:s.label};});
+    return {org:org,brand:require('./_lib/logic-brand')(ctx.org),owner:X.owner(caller),revision:d.catalogRevision||0,products:(d.products||[]).map(C.view),designProducts:C.designs(d),routing:routing};}
   if(b.action!=='save')throw A.httpError(400,'Unknown catalog action');
   var product=C.product(b.product);
   return A.db().runTransaction(async function(tx){

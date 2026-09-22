@@ -62,9 +62,31 @@ function plantJson(q) {
   return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: [], limited: false };
 }
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
+/* The bench: a paired station, one unit with two steps at Rack assembly. The
+   responses are shaped like api/mes-scan.js and computed by plant-work.js. */
+var W = require('../api/_lib/plant-work'), Plant = require('../api/_lib/plant');
+var benchBy = {}; CATALOG.forEach(function (p) { benchBy[p.sku] = p; });
+var benchCab = { sku: 'CC-C215', name: 'Cabinet', bom: [{ sku: 'CC-MOD-52', qty: 2, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }] };
+var benchUnit = { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null };
+var benchSteps = W.stepsFor(benchCab, 'rack', benchBy, ['Torque busbars']);
+function benchJson(b) {
+  var routing = Plant.DEFAULT_ROUTING.map(function (s) { return { key: s.key, label: s.label }; });
+  if (b.action === 'describe') return { ok: true, station: 'rack', stationLabel: 'Bay 2 · Rack assembly', lineId: 'main', location: 'Bay 2', instructions: 'Fit modules bottom-up.', revision: 1, machine: false, brand: brand };
+  if (b.action === 'issue' || b.action === 'step-done') {
+    var v = b.action === 'issue' ? W.judgeIssue(benchUnit, 'rack', routing, benchSteps, b.code, b.qty) : W.judgeStepDone(benchUnit, 'rack', routing, benchSteps, b.stepId);
+    var patch = b.action === 'issue' ? W.applyIssue(benchUnit, 'rack', v, 'now', b.lot) : W.applyStepDone(benchUnit, 'rack', v, 'now');
+    if (patch) benchUnit.work.rack = patch;
+    return { ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say, serial: benchUnit.serial, station: 'rack', work: W.statusOf(benchUnit, 'rack', benchSteps) };
+  }
+  var serial = Plant.serialFrom(b.serial);
+  if (serial !== benchUnit.serial) return { ok: false, reason: 'unknown_unit', say: 'That serial is not on any open works order here.', serial: serial, station: 'rack', routing: routing };
+  return { ok: true, action: 'duplicate', say: 'Already at Rack assembly.', serial: serial, station: 'rack', unit: { serial: serial, at: 'rack', wo: 'wo_1' }, routing: routing,
+    workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(benchUnit, 'rack', benchSteps), instructions: 'Fit modules bottom-up.' };
+}
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], q = req.url.split('?')[1] || '';
   function json(o) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
+  if (u === '/api/mes-scan') { var body = ''; req.on('data', function (c) { body += c; }); return req.on('end', function () { var b = {}; try { b = JSON.parse(body); } catch (e) {} json(benchJson(b)); }); }
   if (u.indexOf('/api/logic-plant') === 0) return json(plantJson(q));
   if (u.indexOf('/api/logic-materials') === 0) return json(/workOrder=/.test(q) ? soloJson : materialsJson);
   if (u.indexOf('/api/logic-catalog') === 0) return json(catalogJson);
@@ -141,6 +163,29 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var shortRows = await p.$$eval('#detail table tbody tr', function (r) { return r.length; });
     ok('work-order detail shows a Materials section with shortfalls', h3s.indexOf('Materials') >= 0 && shortRows >= 1, h3s);
     return { h3s: h3s, shortRows: shortRows };
+  });
+  await check('bench', '/plant/station.html', async function (p) {
+    await p.fill('#p-id', 'st-rack'); await p.fill('#p-token', 'tok'); await p.click('#p-go'); await p.waitForTimeout(300);
+    var paired = await p.evaluate(function () { return !document.getElementById('pair').classList.contains('on') && document.getElementById('h-station').textContent; });
+    await p.fill('#scan', 'https://plant.cleancell.us/u/CC418-26-44190'); await p.press('#scan', 'Enter'); await p.waitForTimeout(400);
+    var steps = await p.$$eval('#work .step', function (r) { return r.map(function (x) { return x.className + ':' + x.querySelector('h3').textContent.trim().slice(0, 40); }); });
+    var buttons = await p.$$eval('#work .b', function (r) { return r.map(function (x) { return x.textContent.trim(); }); });
+    /* scan a part label: the module SKU */
+    await p.fill('#scan', 'CC-MOD-52'); await p.press('#scan', 'Enter'); await p.waitForTimeout(400);
+    var afterIssue = await p.$$eval('#work .step', function (r) { return r.map(function (x) { return x.className; }); });
+    var verdict = await p.$eval('#say', function (e) { return e.textContent; });
+    /* type a lot and tap Issue on the harness */
+    await p.fill('.lot[data-sku="CC-HARN"]', 'LOT-42'); await p.click('[data-issue="CC-HARN"]'); await p.waitForTimeout(400);
+    var lotShown = await p.$$eval('#work .part small', function (r) { return r.map(function (x) { return x.textContent; }).join('|'); });
+    await p.click('[data-done]'); await p.waitForTimeout(400);
+    var foot = await p.$eval('.wfoot', function (e) { return e.className + ':' + e.textContent; });
+    ok('bench pairs from the describe response', /Rack assembly/.test(paired || ''), paired);
+    ok('a unit scan shows this bench\'s steps, first one current', steps.length === 3 && /now/.test(steps[0]) && /Fit modules/.test(steps[0]), steps);
+    ok('  with an Issue button per part and a Done button for the check', buttons.filter(function (b) { return /^Issue/.test(b); }).length === 2 && buttons.some(function (b) { return /^Done/.test(b); }), buttons);
+    ok('scanning a part label issues it and completes the step', /done/.test(afterIssue[0]) && /now/.test(afterIssue[1]) && /Issued 2 ea/.test(verdict), [afterIssue, verdict]);
+    ok('a typed lot travels with the issue', /lot LOT-42/.test(lotShown), lotShown);
+    ok('after the check the bench is complete and names the next bench', /ok/.test(foot) && /Enclosure/.test(foot), foot);
+    return { paired: paired, steps: steps.length, verdict: verdict, foot: foot.slice(0, 60) };
   });
   ok('no JS errors', errs.length === 0, errs);
   await b.close(); srv.close();

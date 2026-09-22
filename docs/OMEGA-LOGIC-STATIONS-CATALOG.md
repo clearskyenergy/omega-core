@@ -145,7 +145,7 @@ what is issued that ends up in a good assembly. The plan divides net demand by
 it — 98% on 104 cells means 106.12 issued per module — and marks every row fed
 by such a line `yielded`, so the page says when a quantity is not the
 datasheet's. Import: `--bom bom.csv` (`parentSku, componentSku, qty, unit,
-yieldPct`, template in `docs/bom-template.csv`) alongside a products file whose
+yieldPct, station, step`, template in `docs/bom-template.csv`) alongside a products file whose
 component rows carry `kind=component`.
 
 **Per works order.** `GET /api/logic-materials?org=&workOrder=<id>` runs the
