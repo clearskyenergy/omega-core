@@ -146,6 +146,13 @@ async function until(page, fn, label) { const t = Date.now(); while (Date.now() 
     await page.locator('.log li').waitFor();
     assert.match(await page.locator('.log li').first().innerText(), /Call · Spoke — interested · Alex Geanakos · Walk Tuesday/);
     assert.equal(await page.locator('#starBtn').innerText(), '★', 'logging a call saved the site');
+    /* the star says what happened: this fixture has no Firestore, so the save is phone-only and the site says so rather than claiming the office has it */
+    assert.match(await page.locator('#saveNote').innerText(), /Saved on this phone only — not shared with chileasing\.com/);
+    await page.locator('#starBtn').click();
+    await until(page, () => document.getElementById('starBtn').textContent === '☆' && /^Removed/.test((document.getElementById('saveNote') || {}).textContent || ''), 'unstar');
+    await page.locator('#starBtn').click();
+    await until(page, () => document.getElementById('starBtn').textContent === '★' && /^Saved on this phone only/.test((document.getElementById('saveNote') || {}).textContent || ''), 'star again');
+    assert.match(await page.locator('#savedList, #viewSite').first().innerText(), /5730 W Dempster St/);
     /* an address is looked up as a site: geocoded, circuit read, opened, listings around it */
     await tab(page, 'find');
     await page.evaluate(() => { window.OmegaComEdLayers.feederNear = () => ({ row: { feeder: 'Z9', sub: 'Bridgeport', bess: 900, queue: 0 }, contains: true, beyond: false, distance: 0 }); });
