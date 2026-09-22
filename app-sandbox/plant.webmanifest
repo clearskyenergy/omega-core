@@ -1,0 +1,31 @@
+{
+  "id": "/app-sandbox/plant",
+  "name": "Clean Cell · Plant",
+  "short_name": "Clean Cell",
+  "description": "Sandbox — Work orders, the bench scanner, stock and quality for the people building the units. Nothing is real.",
+  "start_url": "/app-sandbox/plant",
+  "scope": "/app-sandbox/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0B2733",
+  "icons": [
+    {
+      "src": "/tenants/cleancell/icons/plant-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/tenants/cleancell/icons/plant-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/tenants/cleancell/icons/plant-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "apple_touch_icon": "/tenants/cleancell/icons/plant-180.png"
+}

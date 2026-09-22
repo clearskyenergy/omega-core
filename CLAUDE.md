@@ -374,6 +374,14 @@ is not built.
   manifest. The customer app loads NO `omega-tenant.js`, like the portal
   and for the same reason. The apps add no endpoint of their own: pricing,
   acceptance, shipment and wires stay on the desktop.
+- **The sandboxes are a build output.** `app-sandbox/` is the four pages
+  (three apps and the bench) with `sandbox.js` in place of Firebase and
+  `/api/`: `scripts/_lib/logic-fixtures.js` (ONE sample tenant; also what
+  `check:pages` renders against) and `scripts/_lib/app-sandbox-shim.js`,
+  bundled with the pure libraries by `scripts/build-app-sandbox.js`, which
+  asserts every rewrite. Never edit the folder; `npm run build:sandbox`
+  and `scripts/tests/tappsandbox.js` fails `npm test` when it is stale.
+  Nothing in it is real and nothing in it reaches the network.
 - **PO loads, one sheet, one parser.** `omega-po-bulk.js` is the ONLY
   parser of the pasted PO sheet (PO inbox, office app, customer app);
   `api/po-intake.js` `submit-many` takes what it returns from the office

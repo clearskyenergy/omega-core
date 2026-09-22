@@ -30,6 +30,15 @@ Three places to be:
 | **Customer portal** | the customer | `/portals/customer/?org=<org>` |
 | **Customer app** | the customer, on a phone | `/portals/customer/app?org=<org>` — Editor Lite first |
 
+**Try them first, with nothing behind them.** `/app-sandbox/plant`,
+`/app-sandbox/office`, `/app-sandbox/customer` and `/app-sandbox/bench` are
+the same four pages with a sample Clean Cell on the phone instead of the
+platform: sign in with any email, answer a request, assign a unit, key in a
+stack of POs, issue parts at the bench, size a system; **Reset** in the
+purple strip starts the sample over. Install them the same way. What they
+compute is the product's own arithmetic; what they show is not real.
+`app-sandbox/README.md` says exactly what is and is not.
+
 Three phone apps, one pattern: open the link once, then **Add to Home
 Screen** (iPhone: Share → Add to Home Screen; Android: the browser's
 Install). Each wears the tenant's own name and icon (`omega_orgs/{org}.appIcon`,
@@ -330,10 +339,13 @@ for its own company, and Clean Cell's office and customer icons
 (`scripts/make-tenant-icons.js` renders a tenant's `<app>-icon.svg` set).
 
 Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
-`test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk`);
+`test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk` and
+`tests/tappsandbox`, which fails when `app-sandbox/` is not what
+`npm run build:sandbox` produces);
 `npm run check:pages` renders the office dashboard, settings, inventory,
 materials, catalog, plant board and map, the bench (tablet and roaming
-phone), the plant app, the office app and the customer app in Chromium.
+phone), the plant app, the office app, the customer app and the three
+sandboxes (sign in, change something, reload) in Chromium.
 
 **Needs a person with credentials**
 

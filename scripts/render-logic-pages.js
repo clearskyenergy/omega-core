@@ -25,156 +25,30 @@ if (!fs.existsSync(CHROME)) { console.log('render-logic-pages: Chromium not foun
 var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
 
 require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in a render check'); }, safeOrg: function (x) { return x; } } };
-var M = require(path.join(ROOT, 'api/_lib/materials')), C = require(path.join(ROOT, 'api/_lib/logic-catalog'));
-
-var CATALOG = [
-  { sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product', kw: 100, kwh: 215, widthFt: 4.5, depthFt: 3.5, leadTimeDays: 20, priceMode: 'quote', bom: [{ sku: 'CC-MOD-52', qty: 8, unit: 'ea' }, { sku: 'CC-BMS-M', qty: 1, unit: 'ea' }, { sku: 'CC-ENC-1B', qty: 1, unit: 'ea' }] },
-  { sku: 'CC-C418', name: '418 kWh outdoor cabinet', kind: 'product', kw: 200, kwh: 418, widthFt: 7.5, depthFt: 4.5, leadTimeDays: 30, priceMode: 'quote', bom: [] },
-  { sku: 'CC-MOD-52', name: '5.2 kWh module', kind: 'component', kwh: 5.2, unit: 'ea', leadTimeDays: 10, bom: [{ sku: 'CC-CELL-280', qty: 104, unit: 'ea', yieldPct: 98 }, { sku: 'CC-HARN', qty: 2.5, unit: 'm' }] },
-  { sku: 'CC-CELL-280', name: 'LFP cell 280 Ah', kind: 'component', unit: 'ea', moq: 1000, leadTimeDays: 60, supplier: 'EVE Energy', supplierSku: 'LF280K', safetyStock: 2000 },
-  { sku: 'CC-BMS-M', name: 'Master BMS', kind: 'component', unit: 'ea', leadTimeDays: 30, supplier: 'Orion' },
-  { sku: 'CC-ENC-1B', name: 'Single-bay enclosure', kind: 'component', unit: 'ea', leadTimeDays: 45 },
-  { sku: 'CC-HARN', name: 'HV harness', kind: 'component', unit: 'm', leadTimeDays: 14 },
-  { sku: 'INSTALL', name: 'Commissioning', kind: 'service' }
-];
-var SOURCING = { revision: 3,
-  suppliers: { sup_eve: { name: 'EVE Energy', contact: 'Li Wei', email: 'li@eve.example', terms: 'Net 30', leadTimeDays: 60, active: true },
-               sup_orion: { name: 'Orion', email: 'sales@orion.example', active: true } },
-  prices: { 'CC-CELL-280': [{ supplierId: 'sup_eve', unitCost: 38.5, moq: 1000, leadTimeDays: 70, supplierSku: 'LF280K', preferred: true }],
-            'CC-BMS-M': [{ supplierId: 'sup_orion', unitCost: 320, preferred: true }] } };
-var STOCK = { 'CC-MOD-52': { onHand: 8 }, 'CC-CELL-280': { onHand: 500, onOrder: 1000 } };
-var WORKS = [{ id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14' }];
-var ORDERS = [{ id: 'a', orderNo: 'CC-26-4420', status: 'accepted', items: [{ sku: 'CC-C215', qty: 2 }], promisedShipAt: '2026-12-05' }, { id: 'b', orderNo: 'CC-26-4421', status: 'new', items: [{ sku: 'CC-C418', qty: 3 }] }];
-var NOW = '2026-09-21';
-var planned = M.plan({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: ORDERS, sourcing: SOURCING });
-var brand = { name: 'Clean Cell', primary: '#3FAFC6', accent: '#EE5A4F', ink: '#0B2733' };
-var materialsJson = Object.assign({ org: 'cleancell.us', name: 'Clean Cell', brand: brand, owner: false, stockRevision: 2, catalogRevision: 5, components: 5, withBom: 2, limited: false,
-  projection: M.projection({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: ORDERS, sourcing: SOURCING, supplies: [{ sku: 'CC-CELL-280', qty: 2500, at: '2026-11-01' }] }, { weeks: 12 }),
-  bySupplier: M.purchaseBySupplier(planned), sourcingRevision: 3, prices: SOURCING.prices,
-  suppliers: Object.keys(SOURCING.suppliers).map(function (id) { return Object.assign({ id: id }, SOURCING.suppliers[id]); }),
-  purchaseOrders: [{ id: 'po1', supplier: 'EVE Energy', supplierId: 'sup_eve', reference: 'PO-1001', expectedAt: '2026-11-01', note: 'air freight', status: 'partial', createdAt: '2026-09-20T10:00:00Z', createdBy: 'plant@cleancell.us', receivedAt: null,
-    lines: [{ sku: 'CC-CELL-280', name: 'LFP cell 280 Ah', unit: 'ea', qty: 4000, received: 1500 }], receipts: [] }] }, planned);
-var catalogJson = { org: 'cleancell.us', brand: brand, owner: true, revision: 5, products: CATALOG.map(C.view), designProducts: C.designs({ products: CATALOG }) };
-var solo = M.plan({ now: NOW, products: CATALOG, stock: STOCK, works: WORKS, orders: [], sourcing: SOURCING });
-var soloJson = { org: 'cleancell.us', workOrder: { id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', dueDate: '2026-11-14' }, feasible: false, short: M.shortfallsByWorksOrder(solo)['CC-26-4419'] || [], unknownSkus: [], hasBom: true };
-var flow = { version: 1, lines: [{ id: 'line_1', name: 'North line', location: 'Building A' }], routing: [{ key: 'kit', label: 'Kitting' }, { key: 'eol', label: 'EOL test' }, { key: 'ready', label: 'Ready' }] };
-var wo = { id: 'wo_1', orgId: 'cleancell.us', orderNo: 'CC-26-4419', status: 'awaiting_serials', lineId: 'line_1', routing: flow.routing, flowVersion: 1, requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14', managerRevision: 0 };
-/* the plant map: six cabinets with real timings off done{} */
-var Stats = require('../api/_lib/plant-stats');
-function T(h) { return new Date(Date.now() - (200 - h) * 3600000).toISOString(); }
-var mapUnits = [
-  { serial: 'CC418-26-44190', sku: 'CC-C215', shipUnit: true, startedAt: T(0), done: { kit: T(2), module: T(10), rack: T(14), encl: T(16), elec: T(20), bms: T(22), eol: T(23), qa: T(25), pack: T(26) }, at: 'ready', arrivedAt: T(26), inventoryStatus: 'available', unitType: 'cabinet' },
-  { serial: 'CC418-26-44191', sku: 'CC-C215', shipUnit: true, startedAt: T(1), done: { kit: T(3), module: T(15), rack: T(18), encl: T(20), elec: T(24), bms: T(26), eol: T(27), qa: T(29), pack: T(30) }, at: 'ready', arrivedAt: T(30), inventoryStatus: 'available', unitType: 'cabinet' },
-  { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' },
-  { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', unitType: 'cabinet' },
-  { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet' },
-  { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
-];
-function mapJson() { var routing = Plant.DEFAULT_ROUTING.map(function (s) { return s.key === 'bms' ? { key: s.key, label: s.label, checks: ['Load firmware'] } : s; }); var m = Stats.stationMap(routing, mapUnits, Date.now(), { shipUnitsOnly: true }); m.steps = Stats.stepsByStation(routing, [benchCab].concat(CATALOG), W.stepsFor); m.lines = flow.lines; m.sampledLimit = false; return { name: 'Clean Cell', owner: false, brand: brand, map: m }; }
-var officeJson = { owner: false, org: 'cleancell.us', name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
-  links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
-  orders: [
-    { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', customer: { name: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example' }] },
-    { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
-    { id: 'o3', orderNo: 'CC-26-4421', status: 'new', customer: { name: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
-  ], limited: false };
-/* The board, operations and attention pages the manager and the phone app
-   read (api/logic-plant.js page=board|ops|attention), rolled up by the same
-   pure libraries the endpoint uses over the fixture's work order and units. */
-var Board = require('../api/_lib/plant-board'), Ops = require('../api/_lib/plant-ops'), Attention = require('../api/_lib/plant-attention');
-function boardJson(q) {
-  var now = new Date().toISOString(), units = mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); });
-  var rows = [Board.row(wo, units, now)], common = { name: 'Clean Cell', owner: false, flow: flow, brand: brand, asOf: now, rows: rows, limited: false, unitsLimited: false, links: {} };
-  if (/page=board/.test(q)) return common;
-  return Object.assign(common, { floor: Ops.floor([], now, 14), queues: Ops.queues(rows), demand: Ops.demand(rows), stock: Ops.stock([]), completed: Ops.completed(rows), scansLimited: false, stockLimited: false });
-}
-function plantJson(q) {
-  if (/map=1/.test(q)) return mapJson();
-  if (/page=board|page=ops/.test(q)) return boardJson(q);
-  if (/page=attention/.test(q)) return Object.assign(Attention.attention(mapUnits, [], flow.routing, new Date().toISOString(), {}), { name: 'Clean Cell', owner: false, brand: brand, sampled: mapUnits.length, sampledLimit: false, links: {} });
-  if (/page=works/.test(q)) return { rows: [wo], next: null };
-  if (/page=units/.test(q)) return { rows: mapUnits.map(function (u) { return Object.assign({ id: 'cleancell.us__' + u.serial, orgId: 'cleancell.us', woId: 'wo_1' }, u); }), next: null };
-  if (/page=stations/.test(q)) return { rows: [], next: null };
-  if (/workOrder=/.test(q)) { var wUnits = mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); }), wNow = new Date().toISOString(); return { workOrder: wo, board: Board.row(wo, wUnits, wNow), activity: Board.activity(wUnits, wo, 50), units: mapUnits.slice(3, 5).map(function (u) { return Object.assign({}, u, { woId: 'wo_1', progress: { station: u.at, done: 1, total: 3, open: ['2 · Harness', 'Torque busbars'], complete: false } }); }), limited: false }; }
-  return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); }), limited: false };
-}
+/* One sample Clean Cell for every check, shared with the phone sandboxes
+   (scripts/_lib/logic-fixtures.js): the views are computed by the same pure
+   libraries the endpoints use, and one state object carries the bench from
+   the tablet check into the roaming-phone check. */
+var F = require('./_lib/logic-fixtures');
+var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/cleancell/tenant.json');
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
-/* The bench: a paired station, one unit with two steps at Rack assembly. The
-   responses are shaped like api/mes-scan.js and computed by plant-work.js. */
-var W = require('../api/_lib/plant-work'), Plant = require('../api/_lib/plant');
-var benchBy = {}; CATALOG.forEach(function (p) { benchBy[p.sku] = p; });
-var benchCab = { sku: 'CC-C215', name: 'Cabinet', bom: [{ sku: 'CC-MOD-52', qty: 2, unit: 'ea', station: 'rack', step: '1 · Fit modules' }, { sku: 'CC-HARN', qty: 2.5, unit: 'm', station: 'rack', step: '2 · Harness' }] };
-var benchUnit = { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null };
-var benchSteps = W.stepsFor(benchCab, 'rack', benchBy, ['Torque busbars']);
-function benchJson(b) {
-  var routing = Plant.DEFAULT_ROUTING.map(function (s) { return { key: s.key, label: s.label }; });
-  if (b.action === 'describe' && b.stationId === 'st-phone') return { ok: true, station: '*', roaming: true, stationLabel: 'Marco’s phone', lineId: 'main', location: '', instructions: '', revision: 1, machine: false, brand: brand, routing: routing.filter(function (s) { return s.key !== 'eol'; }) };
-  if (b.action === 'describe') return { ok: true, station: 'rack', stationLabel: 'Bay 2 · Rack assembly', lineId: 'main', location: 'Bay 2', instructions: 'Fit modules bottom-up.', revision: 1, machine: false, brand: brand };
-  if (b.action === 'issue' || b.action === 'step-done') {
-    var v = b.action === 'issue' ? W.judgeIssue(benchUnit, 'rack', routing, benchSteps, b.code, b.qty) : W.judgeStepDone(benchUnit, 'rack', routing, benchSteps, b.stepId);
-    var patch = b.action === 'issue' ? W.applyIssue(benchUnit, 'rack', v, 'now', b.lot) : W.applyStepDone(benchUnit, 'rack', v, 'now');
-    if (patch) benchUnit.work.rack = patch;
-    return { ok: !!v.ok, action: v.action || null, reason: v.reason || null, say: v.say, serial: benchUnit.serial, station: 'rack', work: W.statusOf(benchUnit, 'rack', benchSteps) };
-  }
-  var serial = Plant.serialFrom(b.serial);
-  if (serial !== benchUnit.serial) return { ok: false, reason: 'unknown_unit', say: 'That serial is not on any open works order here.', serial: serial, station: 'rack', routing: routing };
-  return { ok: true, action: 'duplicate', say: 'Already at Rack assembly.', serial: serial, station: 'rack', unit: { serial: serial, at: 'rack', wo: 'wo_1' }, routing: routing,
-    workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(benchUnit, 'rack', benchSteps), instructions: 'Fit modules bottom-up.' };
-}
-/* The office app reads the stage the endpoint computes (api/_lib/office-stage)
-   and the totals by stage; the fixture orders get them the same way. */
-var S = require('../api/_lib/office-stage');
-function officeWithStages() { var orders = officeJson.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o) }); }); return Object.assign({}, officeJson, { orders: orders, totals: S.totals(orders) }); }
-/* The customer center and the PO intake, as api/buyers.js and api/po-intake.js
-   answer them: one company account with one login, one uploaded PO waiting. */
-var buyerDetail = { customerId: 'company_riverside', company: 'Riverside Cold Chain', name: 'Dana Ops', email: 'ops@riverside.example', phone: '', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, activated: true, createdAt: '2026-08-01T00:00:00Z', plan: 'free', status: 'active', terms: { depositPct: 40, dueDays: 0 }, portalUrl: 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us',
-  orders: [{ id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', stage: S.stageOf(officeJson.orders[0]), items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], invoicedCents: 50125000, paidCents: 15037500, balanceCents: 35087500, shippedAt: null, openRequests: 1 }],
-  totals: { invoicedCents: 50125000, paidCents: 15037500, balanceCents: 35087500, openRequests: 1 }, limited: false };
-function buyersJson(q) {
-  if (/email=/.test(q)) return buyerDetail;
-  return { org: 'cleancell.us', name: 'Clean Cell', brand: brand, owner: false, portalUrl: buyerDetail.portalUrl, next: null, customers: [
-    { id: 'company_riverside', company: 'Riverside Cold Chain', status: 'active', terms: { depositPct: 40, dueDays: 0 }, users: [{ email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner', activated: true }], usersLimited: false },
-    { id: 'company_incharge', company: 'InCharge Energy', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }] };
-}
-var companyJson = { office: true, brand: brand, company: { id: 'company_riverside', name: 'Riverside Cold Chain', rep: null }, reps: [], terms: { depositPct: 40, dueDays: 0 },
-  products: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', kind: 'product' }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet', kind: 'product' }],
-  contacts: [{ email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner' }],
-  intake: [{ id: 'po_x', orderNo: 'PO-IN-X', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
-  orders: [{ id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [] }], limited: false };
-function intakeJson(q) {
-  if (/office=1/.test(q) && !/customerId=/.test(q)) return { office: true, brand: brand, companies: buyersJson('').customers.map(function (c) { return { id: c.id, name: c.company, status: c.status, rep: null }; }), reps: [], limited: false };
-  return Object.assign({}, companyJson, { office: /office=1/.test(q) });
-}
-/* What the customer app reads: the public portal record, their account,
-   their orders as api/_lib/portal.js projects them, and their site plans. */
-var portalJson = { org: 'cleancell.us', brand: Object.assign({ logoUrl: '' }, brand), links: { start: '/customer-start.html?org=cleancell.us', account: '/portals/customer/?org=cleancell.us', design: '/portals/customer/?org=cleancell.us#design', app: '/portals/customer/app?org=cleancell.us', storefront: null }, account: { free: true, signup: true },
-  editorLite: { monthlyPriceCents: 79900, currency: 'USD', interval: 'month', checkoutAvailable: false, includes: ['Guided site design', 'Site-map exports', 'Project quoting', 'Supplier ordering'] } };
-var accountJson = { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
-  you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: [], agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 };
-var myOrdersJson = { orders: [{ orderNo: 'CC-26-4419', soldBy: 'Clean Cell', placedAt: '2026-09-01T10:00:00Z', poNumber: 'RCC-2200', milestone: { key: 'building', label: 'Building', say: 'Your units are on the line.', index: 2, of: 6 },
-  items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5, kw: 100, kwh: 215, warranty: null }], checkout: { currency: 'USD', total: 501250, processingFee: 1250, depositPercent: 30, invoices: [{ stage: 'deposit', amount: 150375, status: 'paid', payUrl: null }, { stage: 'balance', amount: 350875, status: 'open', payUrl: null }] },
-  documents: [], destinations: [{ id: 'd1', name: 'Riverside yard', city: 'Bakersfield', state: 'CA', items: [{ sku: 'CC-C215', qty: 5 }] }], loads: [], cancelRequested: false,
-  requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] }], limited: false };
-var designJson = { org: 'cleancell.us', customerId: 'company_riverside', brand: brand, access: { active: true, status: 'trial', expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), modules: ['bess'] }, designProducts: C.designs({ products: CATALOG }),
-  products: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet' }], projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }], limited: false };
-function designPost(b) { if (b.action !== 'size') return { error: 'not stubbed' }; return C.select({ products: CATALOG }, b.sku, { module: 'bess', kw: Number(b.kw), hours: Number(b.hours), kwh: Number(b.kw) * Number(b.hours), conceptOnly: true }); }
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], q = req.url.split('?')[1] || '';
   function json(o) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
   function posted(fn) { var body = ''; req.on('data', function (c) { body += c; }); req.on('end', function () { var b = {}; try { b = JSON.parse(body); } catch (e) {} json(fn(b)); }); }
-  if (u === '/api/mes-scan') return posted(benchJson);
-  if (u === '/api/customer-design' && req.method === 'POST') return posted(designPost);
-  if (u.indexOf('/api/logic-plant') === 0) return json(plantJson(q));
-  if (u.indexOf('/api/logic-materials') === 0) return json(/workOrder=/.test(q) ? soloJson : materialsJson);
-  if (u.indexOf('/api/logic-catalog') === 0) return json(catalogJson);
-  if (u.indexOf('/api/logic-office') === 0) return json(officeWithStages());
-  if (u.indexOf('/api/buyers') === 0) return json(buyersJson(q));
-  if (u.indexOf('/api/po-intake') === 0) return json(intakeJson(q));
-  if (u.indexOf('/api/customer-portal') === 0) return json(portalJson);
-  if (u.indexOf('/api/my-account') === 0) return json(accountJson);
-  if (u.indexOf('/api/my-orders') === 0) return json(myOrdersJson);
-  if (u.indexOf('/api/customer-design') === 0) return json(designJson);
-  if (u.indexOf('/api/app-manifest') === 0) return json(require('../api/app-manifest').manifestFor('cleancell.us', require('../tenants/cleancell/tenant.json'), (/app=(\w+)/.exec(q) || [])[1]));
+  if (u === '/api/mes-scan') return posted(V.benchJson);
+  if (u === '/api/customer-design' && req.method === 'POST') return posted(V.designPost);
+  if (u.indexOf('/api/logic-plant') === 0) return json(V.plantJson(q));
+  if (u.indexOf('/api/logic-materials') === 0) return json(/workOrder=/.test(q) ? V.soloJson() : V.materialsJson());
+  if (u.indexOf('/api/logic-catalog') === 0) return json(V.catalogJson());
+  if (u.indexOf('/api/logic-office') === 0) return json(V.officeJson());
+  if (u.indexOf('/api/buyers') === 0) return json(V.buyersJson(q));
+  if (u.indexOf('/api/po-intake') === 0) return json(V.intakeJson(q, 'ops@riverside.example'));
+  if (u.indexOf('/api/customer-portal') === 0) return json(V.portalJson);
+  if (u.indexOf('/api/my-account') === 0) return json(V.accountJson());
+  if (u.indexOf('/api/my-orders') === 0) return json(V.myOrdersJson());
+  if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
+  if (u.indexOf('/api/app-manifest') === 0) return json(V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT));
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
   if (u === '/omega-brand.js' || u === '/omega-tenant.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* stub */'); }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -416,6 +290,61 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var acct = await p.$$eval('#acct-body .kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     ok('  the account shows its number, rep and terms', acct.some(function (t) { return /company_riverside/.test(t); }) && acct.some(function (t) { return /Sam Rep/.test(t); }) && acct.some(function (t) { return /Deposit\s*40%/.test(t); }), acct);
     return { tabs: tabs.length, plans: plans.length, sized: sized.slice(0, 40), form: form };
+  });
+  /* The sandboxes: the same pages with sandbox.js in place of Firebase and
+     /api/. Nothing below reaches the stub server's /api/ routes — the page
+     answers itself — and what a tap changes survives a reload. */
+  await check('sandbox-office', '/app-sandbox/office', async function (p) {
+    await p.waitForTimeout(400);
+    var stripLinks = await p.$$eval('.sb-strip a', function (r) { return r.map(function (x) { return x.getAttribute('href'); }); });
+    var fb = await p.evaluate(function () { return typeof firebase.auth().signInWithPopup === 'function' && !firebase.auth().currentUser; });
+    await p.click('#signin'); await p.waitForTimeout(700);
+    var kv = await p.$$eval('#today-kv div', function (r) { return r.length; });
+    var who = await p.$eval('#who', function (e) { return e.textContent; });
+    ok('the office sandbox wears the strip, starts signed out and signs in with a tap', stripLinks.length === 4 && /\/app-sandbox\/bench/.test(stripLinks[3]) && fb && who === 'demo@cleancell.us' && kv === 4, [stripLinks, fb, who, kv]);
+    await p.click('[data-tab="orders"]'); await p.waitForTimeout(300); await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
+    await p.fill('[id^="answer-"]', 'Done — re-routed to Bakersfield, same date.'); await p.click('[data-resolve]'); await p.waitForTimeout(700);
+    var st = await p.$eval('#status', function (e) { return e.textContent; });
+    await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(700);
+    await p.click('[data-tab="orders"]'); await p.waitForTimeout(300); await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
+    var answered = await p.$$eval('.ans', function (r) { return r.map(function (x) { return x.textContent; }); }), open = await p.$$eval('[data-resolve]', function (r) { return r.length; });
+    ok('  a request answered on the phone stays answered after a reload', open === 0 && answered.some(function (t) { return /Bakersfield, same date/.test(t); }), [st, open, answered]);
+    await p.evaluate(function () { document.querySelector('a[href^="/omega-logic"]').click(); }); await p.waitForTimeout(200);
+    var toast = await p.$$eval('.sb-toast', function (r) { return r.map(function (x) { return x.textContent; }); }), url = p.url();
+    ok('  a desktop link is caught and explained, not followed', /app-sandbox\/office/.test(url) && toast.length === 1 && /desktop page/.test(toast[0]), [url, toast]);
+    return { strip: stripLinks.length, kv: kv, answered: answered.length };
+  });
+  await check('sandbox-plant', '/app-sandbox/plant', async function (p) {
+    await p.waitForTimeout(400);
+    /* the office check signed this browser in; the sandbox remembers */
+    if (await p.$eval('#gate', function (e) { return !e.hidden; })) await p.click('#signin');
+    await p.waitForTimeout(800);
+    var cards = await p.$$eval('#view .card', function (r) { return r.length; });
+    await p.click('[data-tab="scan"]'); await p.waitForTimeout(300);
+    var scan = await p.$eval('#view a.big', function (e) { return e.getAttribute('href'); }), paired = await p.$eval('#view .card .pill', function (e) { return e.textContent; });
+    ok('the plant sandbox lists the work order and its scanner is the sandbox bench, already paired', cards === 1 && scan === '/app-sandbox/bench' && paired === 'paired', [cards, scan, paired]);
+    await p.goto(base + '/app-sandbox/bench', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(700);
+    var pick = await p.$$eval('#pick option', function (r) { return r.length; });
+    await p.selectOption('#pick', 'rack'); await p.fill('#scan', 'CC418-26-44190'); await p.press('#scan', 'Enter'); await p.waitForTimeout(700);
+    var steps = await p.$$eval('#work .step', function (r) { return r.length; });
+    ok('  the bench opens as a roaming phone and a scan shows the unit\'s steps', pick >= 9 && steps === 3, [pick, steps]);
+    return { cards: cards, pick: pick, steps: steps };
+  });
+  await check('sandbox-customer', '/app-sandbox/customer', async function (p) {
+    await p.waitForTimeout(400);
+    if (await p.$eval('#gate', function (e) { return e.hidden; })) { await p.click('#signout'); await p.waitForTimeout(600); }
+    var gate = await p.$eval('#gate', function (e) { return !e.hidden; });
+    await p.fill('#g-email', 'ops@riverside.example'); await p.click('#g-link'); await p.waitForTimeout(900);
+    var hero = await p.$eval('.card.hero', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }), who = await p.$eval('#who', function (e) { return e.textContent; });
+    ok('the customer sandbox signs in with any email and opens on Editor Lite', gate && who === 'ops@riverside.example' && /Editor Lite/.test(hero) && /trial/.test(hero), [gate, who, hero.slice(0, 60)]);
+    await p.click('[data-tab="pos"]'); await p.waitForTimeout(500);
+    await p.fill('#bulk-text', 'INC-9001, CC-C215, 3, InCharge Fresno, 88 Rail Ave, Fresno, CA, 93706, 2026-12-01, dock 4');
+    p.once('dialog', function (d) { d.accept(); }); await p.click('#bulk-go'); await p.waitForTimeout(700);
+    var result = await p.$eval('#bulk-result', function (e) { return e.textContent; });
+    await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(800); await p.click('[data-tab="pos"]'); await p.waitForTimeout(500);
+    var rows = await p.$$eval('#pos-body .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 50); }); });
+    ok('  a PO sent from the phone is an order awaiting pricing after a reload', /INC-9001 → PO-IN-/.test(result) && rows.some(function (t) { return /INC-9001/.test(t); }), [result, rows]);
+    return { who: who, result: result.slice(0, 40) };
   });
   ok('no JS errors', errs.length === 0, errs);
   await b.close(); srv.close();

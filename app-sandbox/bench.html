@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E1B24">
+<title>Station — scan in · sandbox</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  plant/station.html — one bench, one station, one job
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  Open on the tablet at a bench, in kiosk mode, and leave it. There is no menu
+  and nothing to navigate: this page IS that station. An operator wearing
+  gloves has two interactions — pull the trigger on the unit's label, then on
+  each part's label as it goes in.
+
+  ── WHAT THE SCREEN SHOWS ────────────────────────────────────────────────
+  Scan a unit and it arrives here. If this bench has work for that product
+  (api/_lib/plant-work.js — the product's bill of materials names the bench
+  each part is fitted at, and the routing names the checks), the steps appear
+  under the scan box: each part with the quantity for THIS unit, a lot field,
+  an Issue button; each check with a Done button. Scanning a part's label is
+  the same as tapping Issue. When every step is done the screen says which
+  bench is next; until then the next bench refuses the unit and names what is
+  open. A bench with no work for the product behaves exactly as before: scan
+  in, move on.
+
+  ── WHY A KEYBOARD, NOT AN SDK ────────────────────────────────────────────
+  The gun is programmed as a USB/Bluetooth HID wedge: it types the code and
+  presses Enter. So this page needs no driver, no SDK and no pairing protocol,
+  and the same page works with a corded gun, a Bluetooth gun, a ring scanner
+  or the tablet camera. Swapping a dead gun for a spare is a hardware job, not
+  a software one.
+
+  ── WHY THE STATION LIVES ON THE PAGE, NOT ON THE GUN ─────────────────────
+  A gun can be programmed to prepend a station prefix, and we accept one as a
+  CROSS-CHECK (see GUN_PREFIX). It is not the control. A prefix is typed text:
+  anything with a keyboard can send it, and a gun carried to the wrong bench
+  would silently mislabel every unit it touched. The station comes off the
+  paired token server-side, so a bench can only ever report itself. The prefix
+  just catches the honest mistake of a borrowed gun.
+
+  ── OFFLINE IS THE NORMAL CASE, NOT THE ERROR CASE ────────────────────────
+  Plants have dead zones by the roll-up doors. A scan — a unit arriving or a
+  part issued — is queued locally FIRST and sent after, so the operator is
+  never waiting on wi-fi and a scan is never lost. The queue depth is on
+  screen, because the one thing that kills trust in a floor system is a scan
+  that vanished quietly. Each scan carries a scanId minted here, so replaying
+  the queue cannot advance a unit or issue a part twice.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root{
+    --bg:#0E1B24; --panel:#16252F; --line:#2A4050; --ink:#F2F7FA; --sub:#9DB3C0;
+    --ok:#2ED47A; --ok-dim:#123A27; --bad:#FF6B5E; --bad-dim:#3B1A18;
+    --wait:#F0B14A; --wait-dim:#3A2B0E; --accent:#19C2D4;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;
+    padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+
+  header{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+  header .st{font-size:22px;font-weight:800;letter-spacing:-.01em}
+  header .seq{font:12px var(--mono);color:var(--sub)}
+  header .right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  #pick{font:700 15px system-ui,sans-serif;background:var(--panel);color:var(--ink);border:2px solid var(--accent);border-radius:10px;padding:8px 10px;max-width:46vw}
+  .pill{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+  .pill.on{color:var(--ok);border-color:var(--ok)}
+  .pill.off{color:var(--wait);border-color:var(--wait)}
+  .pill.q{color:var(--wait);border-color:var(--wait)}
+  .pill button{all:unset;cursor:pointer}
+
+  main{flex:1;display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 20px;min-height:0;overflow:auto}
+  #verdict{width:100%;max-width:860px;border-radius:22px;border:2px solid var(--line);background:var(--panel);
+    padding:22px 28px;text-align:center;transition:background .12s,border-color .12s;flex:none}
+  #verdict.ok{background:var(--ok-dim);border-color:var(--ok)}
+  #verdict.bad{background:var(--bad-dim);border-color:var(--bad)}
+  #verdict.wait{background:var(--wait-dim);border-color:var(--wait)}
+  #mark{font-size:48px;line-height:1;font-weight:800}
+  #serial{font:700 26px/1.2 var(--mono);margin-top:8px;word-break:break-all}
+  #say{font-size:22px;line-height:1.35;margin-top:8px;font-weight:600}
+  #sub{font-size:16px;color:var(--sub);margin-top:6px;min-height:22px}
+
+  #scan{width:100%;max-width:860px;font:600 22px/1.3 var(--mono);text-align:center;flex:none;
+    background:var(--panel);color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:16px;
+    -webkit-user-select:text;user-select:text}
+  #scan:focus{outline:none;border-color:var(--accent)}
+  #scan::placeholder{color:#5E7382;font-family:system-ui,sans-serif;font-weight:500}
+
+  /* the work at this bench for the unit on it */
+  #work{width:100%;max-width:860px;display:none;flex-direction:column;gap:10px;flex:none}
+  #work.on{display:flex}
+  .wh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:15px;color:var(--sub);flex-wrap:wrap}
+  .wh b{color:var(--ink);font-size:18px}
+  .step{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px 14px}
+  .step.done{border-color:var(--ok)}
+  .step.now{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .step h3{margin:0;font-size:17px;display:flex;gap:10px;align-items:center}
+  .step h3 .n{font:700 12px var(--mono);color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+  .step h3 .st{margin-left:auto;font-size:13px;color:var(--sub);font-weight:600}
+  .step.done h3 .st{color:var(--ok)}
+  .part{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0 0;margin-top:9px;border-top:1px solid var(--line);font-size:15px}
+  .part small{display:block;color:var(--sub);font:12px var(--mono)}
+  .part .q{font:700 15px var(--mono);white-space:nowrap}
+  .part .q.ok{color:var(--ok)}
+  .part input{width:118px;font:14px var(--mono);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px;-webkit-user-select:text;user-select:text}
+  .part input::placeholder{color:#5E7382;font-family:system-ui,sans-serif}
+  .lotwrap{display:flex;gap:8px;align-items:center}
+  .b{all:unset;cursor:pointer;font:800 15px system-ui,sans-serif;background:var(--accent);color:#062A30;border-radius:10px;padding:11px 16px;white-space:nowrap;text-align:center}
+  .b[disabled]{background:var(--ok-dim);color:var(--ok);cursor:default}
+  .b.chk{margin-top:10px;display:inline-block}
+  .wfoot{font-size:15px;color:var(--sub);padding:2px 4px}
+  .wfoot.ok{color:var(--ok);font-weight:700}
+  @media (max-width:600px){.part{grid-template-columns:1fr}.lotwrap{justify-content:space-between}}
+
+  .strip{width:100%;max-width:860px;display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;flex:none}
+  .strip i{flex:none;font-style:normal;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+  .strip i.here{background:var(--accent);color:#062A30;border-color:var(--accent);font-weight:800}
+  .strip i.past{color:var(--ok);border-color:var(--ok)}
+  #instructions{width:100%;max-width:860px;white-space:pre-wrap;overflow:auto;max-height:160px;flex:none;color:var(--sub);font-size:14px}
+
+  footer{flex:none;border-top:1px solid var(--line);padding:10px 18px;display:flex;gap:18px;align-items:center;min-height:52px}
+  footer .recent{display:flex;gap:8px;overflow-x:auto;flex:1;min-width:0}
+  footer .r{font:11px var(--mono);padding:5px 9px;border-radius:7px;border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+  footer .r.ok{color:var(--ok);border-color:#1E5C3E}
+  footer .r.bad{color:var(--bad);border-color:#5C2723}
+  footer .cam{all:unset;cursor:pointer;font-size:13px;color:var(--sub);border:1px solid var(--line);padding:7px 12px;border-radius:9px;white-space:nowrap}
+
+  /* pairing — seen once per tablet, by the person who installs it */
+  #pair{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px;z-index:20}
+  #pair.on{display:flex}
+  #pair .box{width:100%;max-width:460px}
+  #pair h1{font-size:24px;margin:0 0 6px}
+  #pair p{color:var(--sub);font-size:15px;margin:0 0 20px;line-height:1.5}
+  #pair label{display:block;font-size:13px;color:var(--sub);margin:14px 0 6px}
+  #pair input{width:100%;font:600 17px/1.3 var(--mono);background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;padding:13px;-webkit-user-select:text;user-select:text}
+  #pair button{width:100%;margin-top:20px;font:800 17px system-ui,sans-serif;background:var(--accent);color:#062A30;
+    border:0;border-radius:11px;padding:15px;cursor:pointer}
+  #pair .err{color:var(--bad);font-size:14px;margin-top:12px;min-height:20px}
+
+  #cam{position:fixed;inset:0;background:#000;display:none;z-index:30}
+  #cam.on{display:block}
+  #cam video{width:100%;height:100%;object-fit:cover}
+  #cam .x{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));right:14px;font:800 15px system-ui,sans-serif;
+    background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:11px 15px;cursor:pointer}
+  #cam .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:74%;max-width:420px;aspect-ratio:1;
+    border:3px solid var(--accent);border-radius:20px}
+  @media (prefers-reduced-motion:reduce){#verdict{transition:none}}
+</style>
+<link rel="stylesheet" href="/omega-logic-theme.css">
+<style>body.logic-theme{--bg:var(--paper);--panel:var(--sunk);--accent:var(--brand);--ok:#198764;--ok-dim:#E9F7F0;--bad:#C4372B;--bad-dim:#FCEAE8;--wait:#A26718;--wait-dim:#FFF5DD}#pair button,.logic-theme .b{color:white}.logic-theme #verdict,.logic-theme .step{border-radius:14px}.logic-theme #scan,.logic-theme .part input{background:white}.logic-theme .step{background:white}</style>
+</head>
+<body class="logic-theme">
+
+<header>
+  <div>
+    <div class="st" id="h-station">Station</div>
+    <div class="seq" id="h-seq"></div>
+  </div>
+  <div class="right">
+    <select id="pick" hidden aria-label="The bench you are at"></select>
+    <span class="pill" id="p-net">checking</span>
+    <span class="pill q" id="p-queue" hidden></span>
+    <span class="pill"><button type="button" id="unpair" title="Unpair this tablet">unpair</button></span>
+  </div>
+</header>
+
+<main>
+  <div id="verdict">
+    <div id="mark">⌁</div>
+    <div id="serial">Ready</div>
+    <div id="say">Scan a unit</div>
+    <div id="sub"></div>
+  </div>
+  <input id="scan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+         inputmode="none" placeholder="Pull the trigger on a unit, or on a part going into it">
+  <div id="work" aria-live="polite"></div>
+  <div class="strip" id="strip"></div>
+  <div id="instructions" role="status"></div>
+</main>
+
+<footer>
+  <div class="recent" id="recent"></div>
+  <button class="cam" id="camBtn" type="button">Use camera</button>
+</footer>
+
+<div id="pair"><div class="box">
+  <h1>Pair this bench</h1>
+  <p>Done once, by whoever installs the tablet. The station is fixed to the token &mdash; this tablet can only ever report its own bench.</p>
+  <label for="p-id">Station ID</label>
+  <input id="p-id" placeholder="eol-01" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="p-token">Pairing token</label>
+  <input id="p-token" placeholder="paste from the console" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button type="button" id="p-go">Pair</button>
+  <div class="err" id="p-err"></div>
+</div></div>
+
+<div id="cam">
+  <video id="cam-v" playsinline muted></video>
+  <div class="box"></div>
+  <button class="x" type="button" id="cam-x">Close</button>
+</div>
+
+<script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script>
+/* ES5 on purpose: this runs on whatever tablet is cheapest that year. */
+(function () {
+  'use strict';
+  var API = '/api/mes-scan';
+  var LS_KEY = 'omega_station_v1';
+  var LS_QUEUE = 'omega_station_queue_v1';
+  /* A gun may be programmed to prepend this. It is a cross-check that catches
+     a borrowed gun, never the thing that decides the station. */
+  var GUN_PREFIX = /^\s*\$([A-Za-z0-9_-]{1,24})\$\s*/;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, dflt) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : dflt; } catch (e) { return dflt; } }
+  function uuid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    return 'sc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+  function n(v) { v = Number(v); if (!isFinite(v)) return '0'; return String(Math.round(v * 10000) / 10000); }
+
+  var cfg = load(LS_KEY, null);
+  var requestedStation = new URLSearchParams(location.search).get('stationId');
+  var queue = load(LS_QUEUE, []);
+  var recent = [];
+  var sending = false;
+  /* The unit on this bench right now, with the work the server said is
+     here for it. Set by an accepted unit scan; updated by every issue. */
+  var current = null;
+
+  /* ── feedback ───────────────────────────────────────────────────────── */
+  var AC = null;
+  function beep(good) {
+    try {
+      AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+      var o = AC.createOscillator(), g = AC.createGain();
+      o.connect(g); g.connect(AC.destination);
+      o.frequency.value = good ? 1180 : 320;
+      g.gain.setValueAtTime(0.0001, AC.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.22, AC.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + (good ? 0.12 : 0.34));
+      o.start(); o.stop(AC.currentTime + (good ? 0.13 : 0.35));
+    } catch (e) {}
+    try { if (navigator.vibrate) navigator.vibrate(good ? 35 : [70, 60, 70]); } catch (e) {}
+  }
+
+  function show(state, mark, serial, say, sub) {
+    var v = $('verdict');
+    v.className = state || '';
+    $('mark').textContent = mark;
+    $('serial').textContent = serial || '';
+    $('say').textContent = say || '';
+    $('sub').textContent = sub || '';
+  }
+
+  function strip(routing, at) {
+    var el = $('strip');
+    if (!routing || !routing.length) { el.innerHTML = ''; return; }
+    var ai = -1, i;
+    for (i = 0; i < routing.length; i++) if (routing[i].key === at) ai = i;
+    var html = '';
+    for (i = 0; i < routing.length; i++) {
+      var cls = i < ai ? 'past' : (i === ai ? 'here' : '');
+      html += '<i class="' + cls + '">' + esc(routing[i].label) + '</i>';
+    }
+    el.innerHTML = html;
+  }
+  function nextLabel(routing, at) {
+    if (!routing) return '';
+    for (var i = 0; i < routing.length; i++) if (routing[i].key === at) return routing[i + 1] ? routing[i + 1].label : '';
+    return '';
+  }
+
+  /* ── the work panel ─────────────────────────────────────────────────── */
+  function paintWork() {
+    var el = $('work');
+    if (!current || !current.work || !current.work.steps || !current.work.steps.length) { el.className = ''; el.innerHTML = ''; return; }
+    var w = current.work, firstOpen = null, h = '';
+    h += '<div class="wh"><span><b>' + esc(current.serial) + '</b>' + (current.product ? ' · ' + esc(current.product) : '') + '</span>'
+       + '<span>' + (current.workOrder ? 'works order ' + esc(current.workOrder) + ' · ' : '') + (w.steps.length - w.open.length) + ' of ' + w.steps.length + ' steps done</span></div>';
+    for (var i = 0; i < w.steps.length; i++) {
+      var s = w.steps[i], now = !s.done && !firstOpen;
+      if (now) firstOpen = s;
+      h += '<div class="step ' + (s.done ? 'done' : (now ? 'now' : '')) + '"><h3><span class="n">' + (i + 1) + '</span>' + esc(s.name)
+         + '<span class="st">' + (s.done ? '✓ done' : (now ? 'now' : 'next')) + '</span></h3>';
+      for (var j = 0; j < s.parts.length; j++) {
+        var p = s.parts[j], full = p.remaining <= 0;
+        h += '<div class="part"><div>' + esc(p.name) + '<small>' + esc(p.sku) + (p.lot ? ' · lot ' + esc(p.lot) : '') + '</small></div>'
+           + '<div class="q' + (full ? ' ok' : '') + '">' + n(p.issued) + ' / ' + n(p.qty) + ' ' + esc(p.unit) + '</div>'
+           + '<div class="lotwrap">' + (full ? '' : '<input class="lot" data-sku="' + esc(p.sku) + '" maxlength="80" placeholder="lot (optional)" autocapitalize="off" autocorrect="off" spellcheck="false">')
+           + '<button type="button" class="b" data-issue="' + esc(p.sku) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'Issued' : 'Issue ' + n(p.remaining) + ' ' + esc(p.unit)) + '</button></div></div>';
+      }
+      if (!s.parts.length && !s.done) h += '<button type="button" class="b chk" data-done="' + esc(s.id) + '">Done — ' + esc(s.name) + '</button>';
+      h += '</div>';
+    }
+    var nx = nextLabel(current.routing, current.at);
+    h += '<div class="wfoot' + (w.complete ? ' ok' : '') + '">' + (w.complete
+      ? ('✓ Everything at this bench is done.' + (nx ? ' Send it to ' + esc(nx) + '.' : ''))
+      : ('Scan each part’s label as it goes in, or tap Issue. ' + (nx ? esc(nx) + ' will refuse this unit until every step here is done.' : ''))) + '</div>';
+    el.innerHTML = h; el.className = 'on';
+  }
+  $('work').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b || !current) return;
+    if (b.getAttribute('data-issue')) {
+      var sku = b.getAttribute('data-issue'), lot = document.querySelector('.lot[data-sku="' + sku.replace(/"/g, '') + '"]');
+      b.disabled = true;
+      enqueue({ kind: 'issue', serial: current.serial, code: sku, lot: lot ? lot.value.trim() : '' });
+      show('wait', '·', sku, navigator.onLine !== false ? 'Sent' : 'Queued', '');
+    } else if (b.getAttribute('data-done')) {
+      b.disabled = true;
+      enqueue({ kind: 'step-done', serial: current.serial, stepId: b.getAttribute('data-done') });
+      show('wait', '·', current.serial, navigator.onLine !== false ? 'Sent' : 'Queued', '');
+    }
+  });
+  /* Is this code a part of the unit on the bench? Decided here for speed;
+     the server decides for real. */
+  function partFor(code) {
+    if (!current || !current.work) return null;
+    code = String(code || '').toLowerCase();
+    var steps = current.work.steps || [];
+    for (var i = 0; i < steps.length; i++) for (var j = 0; j < steps[i].parts.length; j++) {
+      if (steps[i].parts[j].codes && steps[i].parts[j].codes.indexOf(code) >= 0) return steps[i].parts[j];
+    }
+    return null;
+  }
+
+  function pushRecent(serial, ok) {
+    recent.unshift({ s: serial, ok: ok, t: new Date() });
+    recent = recent.slice(0, 12);
+    var h = '';
+    for (var i = 0; i < recent.length; i++) {
+      var r = recent[i];
+      h += '<span class="r ' + (r.ok ? 'ok' : 'bad') + '">' + esc(pretty(String(r.s)).slice(-14)) + ' · '
+         + ('0' + r.t.getHours()).slice(-2) + ':' + ('0' + r.t.getMinutes()).slice(-2) + '</span>';
+    }
+    $('recent').innerHTML = h;
+  }
+
+  function paintQueue() {
+    var p = $('p-queue');
+    if (!queue.length) { p.hidden = true; return; }
+    p.hidden = false;
+    p.textContent = queue.length + ' queued';
+  }
+  function paintNet() {
+    var p = $('p-net'), on = navigator.onLine !== false;
+    p.className = 'pill ' + (on ? 'on' : 'off');
+    p.textContent = on ? 'online' : 'offline · queueing';
+  }
+
+  /* ── the queue: written BEFORE the network is touched ───────────────── */
+  function enqueue(item) {
+    item.scanId = uuid(); item.at = new Date().toISOString();
+    if (cfg && cfg.roaming) {
+      var pick = $('pick').value;
+      if (!pick) { show('bad', '✕', '', 'Choose the bench you are at first', 'top right'); return; }
+      item.station = pick;
+    }
+    queue.push(item);
+    store(LS_QUEUE, queue);
+    paintQueue();
+    flush();
+  }
+
+  function flush() {
+    if (sending || !queue.length || !cfg) return;
+    if (navigator.onLine === false) return;
+    sending = true;
+    var item = queue[0];
+    var body = { stationId: cfg.stationId, token: cfg.token, scanId: item.scanId, serial: item.serial, at: item.at };
+    if (item.station) body.station = item.station;   /* a roaming phone names its bench */
+    if (item.kind === 'issue') { body.action = 'issue'; body.code = item.code; body.lot = item.lot || ''; if (item.qty) body.qty = item.qty; }
+    else if (item.kind === 'step-done') { body.action = 'step-done'; body.stepId = item.stepId; }
+    else body.gun = item.gun || null;
+    fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, j: j }; });
+    }).then(function (out) {
+      var j = out.j || {};
+      if (out.status === 401 || out.status === 403) {
+        /* The token is gone or the bench was deactivated. Stop, do not spin.
+           Keep pending evidence tied to this station. Never discard it or
+           replay it with a different bench's credential after revocation. */
+        openPair((j.error || 'This bench is no longer paired.') + ' Pending scans are retained; restore this station or contact your manager.');
+        sending = false;
+        return;
+      }
+      if (out.status === 429) { sending = false; setTimeout(flush, 2000); return; }
+      if (out.status >= 500) { sending = false; setTimeout(flush, 4000); return; }
+
+      queue.shift(); store(LS_QUEUE, queue); paintQueue();
+      render(j, item);
+      sending = false;
+      if (queue.length) setTimeout(flush, 60);
+    })['catch'](function () {
+      /* Network gone mid-flight. Leave it queued and try again. */
+      sending = false;
+      setTimeout(flush, 3000);
+    });
+  }
+
+  function render(j, item) {
+    var serial = j.serial || item.serial || '';
+    if (item.kind === 'issue' || item.kind === 'step-done') {
+      if (j.ok && (j.action === 'issue' || j.action === 'step-done')) { show('ok', '✓', item.kind === 'issue' ? item.code : serial, j.say || 'Recorded', j.replayed ? 'already recorded' : ''); beep(true); }
+      else if (j.ok && j.action === 'duplicate') { show('wait', '=', item.kind === 'issue' ? item.code : serial, j.say || 'Already done', 'nothing changed'); beep(true); }
+      else { show('bad', '✕', item.kind === 'issue' ? item.code : serial, j.say || j.error || 'Refused', j.reason || ''); beep(false); }
+      if (current && current.serial === serial && j.work) { current.work = j.work; }
+      paintWork();
+      pushRecent(item.kind === 'issue' ? item.code : serial, !!j.ok);
+      return;
+    }
+    if (j.ok && j.action === 'advance') {
+      show('ok', '✓', serial, j.say || 'Scanned in', j.replayed ? 'already recorded' : '');
+      beep(true);
+    } else if (j.ok && j.action === 'duplicate') {
+      show('wait', '=', serial, j.say || 'Already here', 'nothing changed');
+      beep(true);
+    } else {
+      show('bad', '✕', serial, j.say || j.error || 'Refused', j.reason || '');
+      beep(false);
+    }
+    if (j.ok) {
+      current = { serial: serial, work: j.work || null, routing: j.routing || null, at: j.unit ? j.unit.at : '', workOrder: j.workOrder || null, product: j.product || null };
+      if (!current.work) $('sub').textContent = ($('sub').textContent ? $('sub').textContent + ' · ' : '') + 'nothing to issue here — scan the next unit';
+    } else if (current && current.serial === serial) {
+      current = null;
+    }
+    paintWork();
+    if (j.unit && j.routing) strip(j.routing, j.unit.at);
+    $('instructions').textContent = (j.workOrder ? 'Work order: ' + j.workOrder + '\n' : '') + (j.instructions || cfg.instructions || '') + (j.parameters ? '\nParameters: ' + j.parameters : '');
+    pushRecent(serial, !!j.ok);
+  }
+
+  /* ── input: a wedge gun types and presses Enter ─────────────────────── */
+  var input = $('scan');
+  function focusScan() {
+    if ($('pair').classList.contains('on') || $('cam').classList.contains('on')) return;
+    var a = document.activeElement;
+    if (a && (a.id === 'pick' || (a.classList && a.classList.contains('lot')))) return;   /* picking a bench, typing a lot */
+    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  }
+  setInterval(focusScan, 1200);
+  document.addEventListener('click', function (e) { if (!(e.target && (e.target.id === 'pick' || (e.target.classList && e.target.classList.contains('lot'))))) focusScan(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) focusScan(); });
+  /* Enter in a lot field issues that part with the lot. */
+  $('work').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.classList.contains('lot')) return;
+    e.preventDefault();
+    var b = document.querySelector('[data-issue="' + e.target.getAttribute('data-sku').replace(/"/g, '') + '"]');
+    if (b && !b.disabled) b.click();
+  });
+
+  /* DISPLAY ONLY. A label carries a URL so a supervisor can scan it with a
+     phone camera, and the operator should not have to read that URL back to
+     themselves while the scan is in flight. The endpoint runs the real
+     serialFrom() out of api/_lib/plant.js and its answer replaces this a
+     moment later, so drift here is cosmetic by construction — which is why a
+     second copy of the real parser is NOT kept on this page. Nothing is
+     decided on this value; it is never sent. */
+  function pretty(s) {
+    if (s.indexOf('/') < 0) return s;
+    return s.split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() || s;
+  }
+
+  function submit(raw) {
+    var s = String(raw || '').trim();
+    input.value = '';
+    if (!s) return;
+    var gun = null, m = s.match(GUN_PREFIX);
+    if (m) { gun = m[1]; s = s.replace(GUN_PREFIX, ''); }
+    var up = navigator.onLine !== false;
+    /* A part's label, while a unit is on the bench: issue it to that unit. */
+    var part = partFor(s);
+    if (part) {
+      var lot = document.querySelector('.lot[data-sku="' + part.sku.replace(/"/g, '') + '"]');
+      show('wait', '·', s, up ? 'Sent' : 'Queued', part.name + ' → ' + current.serial);
+      enqueue({ kind: 'issue', serial: current.serial, code: s, lot: lot ? lot.value.trim() : '' });
+      return;
+    }
+    /* Show it immediately. The queue guarantees delivery; the operator should
+       never watch a spinner to find out whether their scan registered. Say
+       which of the two it is: 'Sent' when there is a network to send it on,
+       'Queued' when there is not, because a bench that reads 'Sent' by the
+       roll-up door teaches people not to believe the screen. */
+    show('wait', '·', pretty(s), up ? 'Sent' : 'Queued',
+         queue.length ? (queue.length + 1) + ' in the queue'
+                      : (up ? '' : 'held until the signal is back'));
+    enqueue({ kind: 'unit', serial: s, gun: gun });
+  }
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(input.value); }
+  });
+
+  /* ── camera fallback, where there is no gun ─────────────────────────── */
+  var camStream = null, camTimer = null;
+  function closeCam() {
+    $('cam').classList.remove('on');
+    if (camTimer) { clearInterval(camTimer); camTimer = null; }
+    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    focusScan();
+  }
+  $('cam-x').addEventListener('click', closeCam);
+  $('camBtn').addEventListener('click', function () {
+    if (!window.BarcodeDetector || !navigator.mediaDevices) {
+      show('bad', '✕', '', 'This tablet cannot scan with its camera', 'use the gun');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (st) {
+      camStream = st;
+      var v = $('cam-v');
+      v.srcObject = st; v.play();
+      $('cam').classList.add('on');
+      var det = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'code_128'] });
+      camTimer = setInterval(function () {
+        det.detect(v).then(function (codes) {
+          if (codes && codes.length) { var val = codes[0].rawValue; closeCam(); submit(val); }
+        })['catch'](function () {});
+      }, 300);
+    })['catch'](function () {
+      show('bad', '✕', '', 'No camera permission', 'use the gun');
+    });
+  });
+
+  /* ── pairing ────────────────────────────────────────────────────────── */
+  function openPair(msg) {
+    $('pair').classList.add('on');
+    $('p-err').textContent = msg || '';
+    if (cfg) { $('p-id').value = cfg.stationId || ''; }
+    else if (requestedStation) $('p-id').value = requestedStation;
+    setTimeout(function () { $('p-id').focus(); }, 50);
+  }
+  function closePair() { $('pair').classList.remove('on'); focusScan(); }
+  $('p-go').addEventListener('click', function () {
+    var id = $('p-id').value.trim(), tok = $('p-token').value.trim();
+    if (!id || !tok) { $('p-err').textContent = 'Both fields are needed.'; return; }
+    if (queue.length && cfg && cfg.stationId !== id) { $('p-err').textContent = 'Pending scans belong to the previous station. Restore that station before pairing another.'; return; }
+    $('p-err').textContent = 'Checking…';
+    /* Authenticate the bench without creating a pretend scan or unit record.
+       Only an explicit successful response completes pairing. */
+    fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'describe', stationId: id, token: tok })
+    }).then(function (r) {
+      return r.json().then(function (j) { return { status: r.status, j: j }; });
+    }).then(function (out) {
+      if (out.status !== 200 || !out.j || out.j.ok !== true) {
+        $('p-err').textContent = out.j && out.j.error ? out.j.error : 'That station ID or token was not accepted.';
+        return;
+      }
+      cfg = { stationId: id, token: tok, label: out.j.stationLabel || id, station: out.j.station || '', brand: out.j.brand || null, lineId: out.j.lineId, location: out.j.location, instructions: out.j.instructions, machine: out.j.machine, roaming: out.j.roaming === true, routing: out.j.routing || null };
+      store(LS_KEY, cfg);
+      paintHeader();
+      closePair();
+      show('', '⌁', 'Ready', 'Scan a unit', '');
+    })['catch'](function () {
+      $('p-err').textContent = 'No answer from the server. Check the tablet is on the network.';
+    });
+  });
+  $('p-token').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('p-go').click(); });
+
+  $('unpair').addEventListener('click', function () {
+    if (queue.length) { show('wait', '!', '', 'Pending scans must be resolved before unpairing', 'Contact your plant manager; the queue has been retained.'); return; }
+    cfg = null; store(LS_KEY, null);
+    queue = []; store(LS_QUEUE, queue); paintQueue();
+    current = null; paintWork();
+    openPair('');
+  });
+
+  function paintPick() {
+    var sel = $('pick');
+    if (!cfg || !cfg.roaming || !cfg.routing) { sel.hidden = true; return; }
+    var keep = sel.value || load('omega_station_pick', '');
+    sel.innerHTML = '<option value="">Which bench?</option>' + cfg.routing.map(function (s) { return '<option value="' + esc(s.key) + '"' + (s.key === keep ? ' selected' : '') + '>' + esc(s.label) + '</option>'; }).join('');
+    sel.hidden = false;
+    sel.onchange = function () { store('omega_station_pick', sel.value); current = null; paintWork(); show('', '⌁', 'Ready', sel.value ? 'Scan a unit at ' + sel.options[sel.selectedIndex].text : 'Choose the bench you are at', ''); focusScan(); };
+  }
+  function paintHeader() {
+    if (cfg && cfg.brand && window.OmegaLogicTheme) OmegaLogicTheme.apply(cfg.brand);
+    paintPick();
+    $('h-station').textContent = (cfg && cfg.label) || 'Station';
+    $('h-seq').textContent = cfg ? [cfg.lineId, cfg.location, cfg.roaming ? 'roaming · pick the bench per scan' : (cfg.station || cfg.stationId)].filter(Boolean).join(' · ') : '';
+    $('instructions').textContent = cfg ? (cfg.instructions || '') + (cfg.machine ? '\nMachine station: test results must come from the paired rig.' : '') : '';
+  }
+  function refreshStation() {
+    if (!cfg) return;
+    var id = cfg.stationId;
+    fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'describe', stationId: id, token: cfg.token }) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Station unavailable'); return j; }); })
+      .then(function (j) {
+        if (!cfg || cfg.stationId !== id) return;
+        var previous = $('instructions').textContent;
+        cfg.label = j.stationLabel; cfg.lineId = j.lineId; cfg.location = j.location; cfg.instructions = j.instructions; cfg.machine = j.machine; cfg.brand = j.brand; cfg.roaming = j.roaming === true; cfg.routing = j.routing || cfg.routing || null;
+        store(LS_KEY, cfg); paintHeader();
+        if (previous.indexOf('Work order:') === 0) $('instructions').textContent = previous;
+      })['catch'](function (e) { $('instructions').textContent = e.message; });
+  }
+
+  /* ── boot ───────────────────────────────────────────────────────────── */
+  window.addEventListener('online', function () { paintNet(); flush(); });
+  window.addEventListener('offline', paintNet);
+  paintNet(); paintQueue(); paintHeader();
+  if (!cfg) openPair(''); else if (requestedStation && requestedStation !== cfg.stationId) { openPair('This tablet is paired to ' + cfg.stationId + ', not the requested station. Resolve pending scans and unpair before moving it.'); } else { focusScan(); flush(); }
+  /* A bench runs for weeks; retry anything stuck without needing an event. */
+  setInterval(flush, 15000);
+  refreshStation(); setInterval(refreshStation, 60000);
+})();
+</script>
+</body>
+</html>

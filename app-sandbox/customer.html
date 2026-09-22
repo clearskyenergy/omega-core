@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2733">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Your account">
+<link rel="manifest" href="/app-sandbox/customer.webmanifest">
+<link rel="apple-touch-icon" href="/tenants/cleancell/icons/customer-180.png">
+<title>Your account · sandbox</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  portals/customer/app.html — the customer's account in a pocket
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  The buyer's phone app, and the thing on it that earns the next sale is
+  DESIGN: their site plans in Site Map · Editor Lite, a quick size from a
+  kW and a duration against the supplier's own catalog, and a new plan
+  started from a site address. Around it, everything the account already
+  had on the desktop portal — every order with its milestone, warranty and
+  a place to ask; a stack of purchase orders keyed in at once (a fleet
+  buyer sends twenty to fifty in a morning); their terms and details.
+
+  IT DOES NOT LOAD omega-tenant.js, like portals/customer/index.html and for
+  the same reason: the customer is not a tenant member, may be on any email
+  address, and must never be routed to a workspace. Branding comes from
+  /api/customer-portal (public, presentation only); everything else from
+  the same signed-in customer endpoints the desktop portal reads —
+  api/my-account.js, api/my-orders.js, api/customer-design.js,
+  api/po-intake.js — which project key by key. The phone reads Firestore
+  never.
+
+  Sign-in is the email magic link plus Google, as on the portal. The link
+  returns into this app's own scope so the installed app completes it.
+  Manifest and icon per tenant from api/app-manifest.js (app=customer); a
+  shell service worker so it opens offline and says so. Account data is
+  never served from cache.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="/omega-logic-theme.css">
+<style>
+  html,body{margin:0;height:100%}
+  body.logic-theme{display:flex;flex-direction:column;min-height:100vh;background:var(--paper);padding-bottom:calc(64px + env(safe-area-inset-bottom,0))}
+  header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
+  header.top img{height:26px;width:auto;display:block}
+  header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}
+  header.top .sp{flex:1}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px}
+  main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto;min-width:0}
+  main>*{min-width:0}
+  h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}h3{font-size:16px;margin:12px 0 6px}
+  .status{font-size:13px;color:var(--ink2);min-height:18px}
+  .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit}
+  .card.hero{background:var(--brand-soft);border-color:var(--brand)}
+  .card .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.card .h b{font-size:16px}
+  .card .m{color:var(--ink2);font-size:13px;margin-top:2px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid var(--line);white-space:nowrap}
+  .pill.go{background:#E9F7F0;color:#198764;border-color:#B8E4CD}.pill.wait{background:#FFF5DD;color:#A26718;border-color:#F3D9A4}.pill.stop{background:#FDEBE9;color:#B42318;border-color:#F4B4AE}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kv div{padding:10px 12px;background:var(--sunk);border-radius:10px;min-width:0}.kv small{display:block;color:var(--ink2);font-size:12px}.kv b{font-size:18px;overflow-wrap:anywhere}
+  .unit{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit;min-width:0}
+  .unit>div{min-width:0}.unit small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}.unit .mono{font-family:'IBM Plex Mono',monospace;font-size:14px}
+  .track{display:flex;gap:4px;margin-top:12px}.track i{flex:1;height:5px;border-radius:3px;background:var(--line)}.track i.on{background:var(--brand)}.track i.done{background:#198764}
+  .steps{display:flex;gap:4px;margin-top:6px;font-size:10px;color:var(--ink2)}.steps span{flex:1;text-align:center;line-height:1.2}
+  .big{display:block;width:100%;padding:16px;border-radius:14px;border:0;background:var(--brand);color:white;font:700 17px 'Poppins',system-ui,sans-serif;margin:12px 0;text-align:center;text-decoration:none;cursor:pointer}
+  .big.ghost{background:white;color:var(--brand-d);border:1px solid var(--brand)}
+  .big:disabled{opacity:.5}
+  input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
+  textarea.sheet{min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  .row{display:flex;gap:8px}.row>*{flex:1;min-width:0}.row button{flex:0 0 auto;padding:0 16px;border:1px solid var(--line);background:white}
+  .note{font-size:12px;color:var(--ink2)}
+  .rq{border-top:1px solid var(--line);padding:10px 0}.rq p{margin:6px 0;white-space:pre-wrap}
+  .ans{background:var(--sunk);border-radius:10px;padding:8px 12px;font-size:14px;margin-top:6px}
+  details summary{cursor:pointer;color:var(--brand-d);font-weight:600;padding:8px 0}
+  ul.plain{padding-left:18px;margin:6px 0}
+  nav.bottom{position:fixed;left:0;right:0;bottom:0;display:flex;background:white;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0);z-index:5}
+  nav.bottom button{flex:1;border:0;background:none;padding:10px 4px 8px;font:600 11px system-ui,sans-serif;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav.bottom button span{font-size:20px;line-height:1}nav.bottom button[aria-current=page]{color:var(--brand-d)}
+  #gate{padding:24px 0}#gate h1{margin-top:0}
+  .off{background:#FFF5DD;color:#A26718;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
+  .err{color:#B42318}
+</style>
+</head>
+<body class="logic-theme">
+<header class="top"><img id="mark" alt="" hidden><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Design"><b id="brand">Your account</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<main>
+  <div id="gate" hidden>
+    <h1 id="g-h">Customer login</h1>
+    <p class="note" id="g-p">Log in with your work email. We will email you a secure login link — no password to remember. For a corporate account, use the email assigned by your supplier.</p>
+    <input id="g-email" type="email" autocomplete="email" placeholder="you@company.com">
+    <button class="big" id="g-link">Email my login link</button>
+    <button class="big ghost" id="g-google">Use Google</button>
+    <p class="note" id="g-msg"></p>
+    <p class="note">New customer? <button type="button" id="g-create" style="border:0;background:none;color:var(--brand-d);font:inherit;padding:0;cursor:pointer">Create a customer account</button></p>
+  </div>
+  <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
+  <p id="status" class="status"></p>
+  <div id="view"></div>
+</main>
+<nav class="bottom" id="nav" hidden>
+  <button data-tab="design" aria-current="page"><span>▧</span>Design</button>
+  <button data-tab="orders"><span>▤</span>Orders</button>
+  <button data-tab="pos"><span>▥</span>POs</button>
+  <button data-tab="account"><span>◉</span>Account</button>
+</nav>
+<script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.CLEARSKY_CONFIG || {};
+  try { if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
+  var auth = firebase.auth(), params = new URLSearchParams(location.search);
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  /* Which supplier's portal this is: the link, the host's config, or what
+     the app remembered. It decides what the buyer looks at, never what they
+     may see — every endpoint scopes by the verified email. */
+  var ORG = String(params.get('org') || (cfg.tenant && cfg.tenant.orgId) || load('omega_customer_app_org', '') || '').toLowerCase();
+  if (ORG) store('omega_customer_app_org', ORG);
+  var q = '?org=' + encodeURIComponent(ORG), LS_EMAIL = 'omega.portal.email';
+  var TAB = params.get('tab') || 'design', PORTAL = null, ACCT = null, ORDERS = null, DESIGN = null, PO = null, SIZE = null, PO_PREFILL = '';
+  var MODULE_LABEL = { bess: 'Battery storage', compute: 'Compute', ev: 'EV charging', solar: 'Solar' };
+  var KIND = { shipping: 'Delivery address or date', information: 'Question', change: 'Change to the order', warranty: 'Warranty' };
+  var TONE = { shipped: 'go', cancelled: 'stop' };
+
+  /* The supplier's own name, colours and icon on the home screen
+     (api/app-manifest.js app=customer); the static manifest is the fallback. */
+  if (ORG) {
+    var mfUrl = '/api/app-manifest' + q + '&app=customer';
+    /* sandbox: the manifest link is static */
+    fetch(mfUrl).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      if (!m) return;
+      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
+      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
+      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
+    })['catch'](function () {});
+  }
+  var portalReady = ORG ? fetch('/api/customer-portal' + q).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'This customer portal is unavailable.'); PORTAL = d; paint(); return d; }); }) : Promise.reject(new Error('This link is missing its supplier. Please use the link your supplier sent you.'));
+  portalReady['catch'](function (e) { $('g-msg').className = 'note err'; $('g-msg').textContent = e.message; $('g-link').disabled = true; $('g-google').disabled = true; });
+  function paint() {
+    if (!PORTAL) return;
+    OmegaLogicTheme.apply(PORTAL.brand);
+    $('brand').textContent = PORTAL.brand.name; document.title = PORTAL.brand.name;
+    if (PORTAL.brand.logoUrl) { $('mark').src = PORTAL.brand.logoUrl; $('mark').hidden = false; }
+  }
+
+  function tok() { var u = auth.currentUser; return u ? u.getIdToken() : Promise.reject(new Error('Sign in first.')); }
+  function api(path, body) {
+    return tok().then(function (t) { return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(Object.assign({ org: ORG }, body)) : undefined }); })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, j: d }; }, function () { return { ok: false, status: r.status, j: {} }; }); });
+  }
+  function must(r, what) { if (!r.ok) throw new Error(r.j.error || what || 'Request failed'); return r.j; }
+  function status(t) { $('status').textContent = t || ''; }
+  function fail(e) { status(e.message || String(e)); }
+  function day(s) { return s ? String(s).slice(0, 10) : ''; }
+  function usd(v) { return '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function editorHref(extra) { return '/editor-lite.html?customer=1&org=' + encodeURIComponent(ORG) + (extra || ''); }
+
+  /* ── data ─────────────────────────────────────────────────────────────── */
+  function loadAccount() { return ACCT ? Promise.resolve(ACCT) : api('/api/my-account' + q).then(function (r) { ACCT = must(r, 'Could not load your account.'); return ACCT; }); }
+  function loadOrders() { return ORDERS ? Promise.resolve(ORDERS) : api('/api/my-orders' + q).then(function (r) { ORDERS = must(r, 'Could not load your orders.').orders || []; return ORDERS; }); }
+  function loadDesign() { return DESIGN ? Promise.resolve(DESIGN) : api('/api/customer-design' + q).then(function (r) { DESIGN = must(r, 'Could not load your site plans.'); return DESIGN; }); }
+  function loadPo() { return PO ? Promise.resolve(PO) : api('/api/po-intake' + q).then(function (r) { PO = must(r, 'Could not load your purchase orders.'); return PO; }); }
+  function refresh() { ACCT = null; ORDERS = null; DESIGN = null; PO = null; SIZE = null; draw(); }
+
+  /* ── views ────────────────────────────────────────────────────────────── */
+  function draw() {
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false'); });
+    status('');
+    if (TAB === 'design') return drawDesign();
+    if (TAB === 'orders') return drawOrders();
+    if (TAB === 'pos') return drawPos();
+    if (TAB === 'account') return drawAccount();
+  }
+
+  /* ── Design: Editor Lite is the product ──────────────────────────────── */
+  function drawDesign() {
+    var lite = PORTAL && PORTAL.editorLite || {};
+    $('view').innerHTML = '<h1>Design</h1><p class="note">Lay out your own sites with ' + esc(PORTAL ? PORTAL.brand.name : 'your supplier') + '’s equipment, size them, and turn a plan into a quote or a purchase order.</p><div id="design-body"><p class="note">Loading your site plans…</p></div>';
+    /* The account record is created on first sign-in by my-account; design
+       needs it to exist, so the two load together the first time. */
+    loadAccount()['catch'](function () { return null; }).then(loadDesign).then(function (d) {
+      var el = $('design-body'); if (!el) return;
+      var a = d.access || {}, active = !!a.active, products = (d.designProducts || []).filter(function (p) { return !p.placeholder; }), bess = active && a.modules.indexOf('bess') >= 0;
+      var when = a.expiresAt ? new Date(a.expiresAt).toLocaleDateString() : '';
+      el.innerHTML = '<div class="card hero"><div class="h"><b>Site Map · Editor Lite</b><span class="pill ' + (active ? 'go' : 'wait') + '">' + (a.status === 'owner-access' ? 'ClearSky access' : a.status === 'trial' ? 'trial' + (when ? ' to ' + when : '') : active ? 'active' + (when ? ' to ' + when : '') : 'not active') + '</span></div>'
+        + '<div class="m">' + (active ? 'Guided build, plot plans, single-lines, proposals, drawing sets and an estimated bill of materials — on your own account.' : (lite.monthlyPriceCents ? usd(lite.monthlyPriceCents / 100) + ' / month · ' : '') + esc((lite.includes || []).join(' · ')) + '. Ask ' + esc(ACCT && ACCT.rep && ACCT.rep.name ? ACCT.rep.name : 'your account rep') + ' for a trial; your orders and account need no subscription.') + '</div></div>'
+        + (active ? '<h2>New site plan</h2><input id="new-address" placeholder="Site address" autocomplete="street-address"><a class="big" id="new-plan" href="' + esc(editorHref()) + '">Open Editor Lite</a><p class="note">Editor Lite opens in the browser; the plan saves to this account and appears below.</p>' : '')
+        + (bess && products.length ? '<h2>Quick size</h2><div class="card"><div class="row"><input id="sz-kw" type="number" inputmode="decimal" min="1" placeholder="kW" value="' + (SIZE ? esc(SIZE.kw) : '') + '"><input id="sz-h" type="number" inputmode="decimal" min="0.25" step="0.25" placeholder="hours" value="' + (SIZE ? esc(SIZE.hours) : '2') + '"></div><select id="sz-sku">' + products.map(function (p) { return '<option value="' + esc(p.sku) + '"' + (SIZE && SIZE.product && SIZE.product.sku === p.sku ? ' selected' : '') + '>' + esc(p.name) + ' · ' + p.kw + ' kW / ' + p.kwh + ' kWh</option>'; }).join('') + '</select><button class="big ghost" id="sz-go">Size it</button><div id="sz-out">' + (SIZE ? sizeHtml(SIZE) : '') + '</div><p class="note">A concept from the supplier’s catalog, sized on the platform — not an engineering approval or a quotation.</p></div>' : '')
+        + '<h2>Your site plans · ' + (d.projects || []).length + '</h2>' + ((d.projects || []).map(function (p) { return active ? '<a class="unit" style="text-decoration:none" href="' + esc(editorHref('&project=' + encodeURIComponent(p.id))) + '"><div><b>' + esc(p.name || 'Untitled site plan') + '</b><small>' + esc(MODULE_LABEL[p.module] || p.module) + ' · revision ' + esc(p.revision || 0) + ' · ' + esc(new Date(p.updatedAt).toLocaleDateString()) + '</small></div><span class="pill">open</span></a>' : '<div class="unit"><div><b>' + esc(p.name || 'Untitled site plan') + '</b><small>' + esc(MODULE_LABEL[p.module] || p.module) + ' · ' + esc(new Date(p.updatedAt).toLocaleDateString()) + ' · retained securely; renew Editor Lite to reopen</small></div></div>'; }).join('') || '<p class="note">' + (active ? 'No site plans yet. Start one above.' : 'No site plans yet.') + '</p>') + (d.limited ? '<p class="note">Newest 100 shown.</p>' : '')
+        + (PORTAL && PORTAL.links && PORTAL.links.start ? '<a class="big ghost" href="' + esc(PORTAL.links.start) + '">Size a system from a utility bill</a>' : '');
+      if ($('new-plan')) { $('new-address').oninput = function () { $('new-plan').href = editorHref(this.value.trim() ? '&address=' + encodeURIComponent(this.value.trim()) : ''); }; }
+      if ($('sz-go')) $('sz-go').onclick = function () {
+        var btn = this; btn.disabled = true; status('Sizing…');
+        api('/api/customer-design', { action: 'size', module: 'bess', kw: Number($('sz-kw').value), hours: Number($('sz-h').value), sku: $('sz-sku').value }).then(function (r) { SIZE = must(r); status(''); $('sz-out').innerHTML = sizeHtml(SIZE); bindSize(); })['catch'](fail).then(function () { btn.disabled = false; });
+      };
+      bindSize();
+    })['catch'](function (e) { var el = $('design-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p>' + (/account/i.test(e.message) ? '<button class="big ghost" id="to-account">Open your account</button>' : ''); if ($('to-account')) $('to-account').onclick = function () { TAB = 'account'; draw(); }; });
+  }
+  function sizeHtml(s) {
+    if (!s || !s.product) return '';
+    return '<div class="kv"><div><small>Units</small><b>' + esc(s.qty) + ' × ' + esc(s.product.name) + '</b></div><div><small>Selected</small><b>' + esc(s.selectedKw) + ' kW · ' + esc(s.selectedKwh) + ' kWh</b></div></div><p class="note">Target ' + esc(s.kw) + ' kW for ' + esc(s.hours) + ' h = ' + esc(s.kwh) + ' kWh' + (s.product.widthFt ? ' · each ' + esc(s.product.widthFt) + ' × ' + esc(s.product.depthFt) + ' ft' : '') + '.</p><div class="row"><a class="big ghost" href="' + esc(editorHref()) + '">Lay it out</a><button class="big" id="sz-po">Send as a PO</button></div>';
+  }
+  function bindSize() { if ($('sz-po') && SIZE) $('sz-po').onclick = function () { PO_PREFILL = 'PO-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + ', ' + SIZE.product.sku + ', ' + SIZE.qty + ', ship-to name, address, city, state, ZIP, , sized ' + SIZE.kw + ' kW for ' + SIZE.hours + ' h'; TAB = 'pos'; draw(); window.scrollTo(0, 0); }; }
+
+  /* ── Orders: milestone, warranty, and a place to ask ─────────────────── */
+  function drawOrders() {
+    $('view').innerHTML = '<h1>Orders</h1><div id="orders-body"><p class="note">Loading…</p></div>';
+    loadOrders().then(function (list) {
+      var el = $('orders-body'); if (!el) return;
+      if (!list.length) { el.innerHTML = '<p class="note">Nothing here yet. Orders you place will appear as soon as they are received.</p>'; return; }
+      el.innerHTML = list.map(function (o) {
+        var ms = o.milestone || {}, track = '';
+        if (ms.index !== null && ms.index !== undefined) for (var i = 0; i < (ms.of || 6); i++) track += '<i class="' + (i < ms.index ? 'done' : i === ms.index ? 'on' : '') + '"></i>';
+        var meta = [];
+        if (o.shipment) meta.push('Shipment: ' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking));
+        (o.destinations || []).forEach(function (d) { meta.push('Ship to ' + esc(d.name || d.id) + (d.city ? ' · ' + esc(d.city) + (d.state ? ', ' + esc(d.state) : '') : '') + (d.items && d.items.length ? ' · ' + d.items.map(function (i) { return esc(i.qty) + ' × ' + esc(i.sku); }).join(', ') : '')); });
+        (o.loads || []).forEach(function (l) { meta.push('Load ' + esc(l.id) + ' · ' + esc(String(l.status || '').replace(/_/g, ' ')) + ' · ' + esc(l.carrier) + ' ' + esc(l.tracking) + (l.lastConfirmed ? ' · last confirmed at ' + esc(l.lastConfirmed.label) : '') + (l.deliveredAt ? ' · delivered ' + esc(day(l.deliveredAt)) : '')); });
+        if (o.promisedShipAt) meta.push('Ships by ' + esc(day(o.promisedShipAt)));
+        var reqs = (o.requests || []).slice().reverse();
+        return '<div class="card"><div class="h"><b>' + esc(o.orderNo || '—') + '</b><span class="pill ' + (TONE[ms.key] || 'wait') + '">' + esc(ms.label || 'Received') + '</span></div><div class="m">' + esc(day(o.placedAt)) + (o.poNumber ? ' · your PO ' + esc(o.poNumber) : '') + '</div>'
+          + (o.cancelRequested ? '<p class="note err"><b>Cancellation requested.</b> ' + esc(o.soldBy || 'The team') + ' will be in touch.</p>' : '') + '<p class="note">' + esc(ms.say || '') + '</p>'
+          + (track ? '<div class="track">' + track + '</div><div class="steps"><span>Received</span><span>Confirmed</span><span>Building</span><span>Testing</span><span>Ready</span><span>Shipped</span></div>' : '')
+          + (o.items || []).map(function (it) { return '<div class="unit"><div>' + esc(it.name || it.sku || 'Item') + '<small>' + (it.kwh ? esc(it.kwh) + ' kWh' : '') + (it.warranty ? ' · warranty to ' + esc(it.warranty.until) : '') + '</small></div><b>' + esc(it.qty || 1) + '</b></div>'; }).join('')
+          + (o.checkout ? '<div class="kv"><div><small>Order total</small><b>' + usd(o.checkout.total) + '</b></div><div><small>Deposit</small><b>' + esc(o.checkout.depositPercent) + '%</b></div></div>' + (o.checkout.invoices || []).map(function (i) { return '<div class="unit"><div>' + esc(i.stage) + ' invoice<small>' + usd(i.amount) + ' · ' + esc(i.status) + '</small></div>' + (i.payUrl && /^https:\/\/([a-z0-9-]+\.)*intuit\.com\//i.test(i.payUrl) ? '<a class="pill" target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">view / pay</a>' : '') + '</div>'; }).join('') : '')
+          + (meta.length ? '<p class="note">' + meta.join('<br>') + '</p>' : '')
+          + ((o.documents || []).filter(function (d) { return /^https:\/\//i.test(d.url || ''); }).map(function (d) { return '<a class="pill" target="_blank" rel="noopener noreferrer" href="' + esc(d.url) + '">' + esc(d.name || d.kind || 'Document') + '</a> '; }).join(''))
+          + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="note">' + esc(day(r.at)) + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.answer ? '<div class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</div>' : '') + '</div>'; }).join('') : '')
+          + '<details><summary>Request a change or ask a question</summary><form data-req="' + esc(o.orderNo) + '"><select name="kind"><option value="information">A question</option><option value="shipping">Delivery address or date</option><option value="change">Change the order</option><option value="warranty">Warranty</option></select><div class="addr" hidden><input name="line1" maxlength="200" placeholder="New delivery address"><input name="city" maxlength="100" placeholder="City"><div class="row"><input name="state" maxlength="40" placeholder="State"><input name="zip" maxlength="20" placeholder="ZIP"></div></div><textarea name="message" maxlength="2000" required placeholder="Tell us what you need. We will answer here." style="min-height:80px"></textarea><button class="big ghost" type="submit">Send request</button><span class="note rq-status"></span></form></details></div>';
+      }).join('');
+      Array.prototype.forEach.call(el.querySelectorAll('form[data-req]'), function (f) {
+        f.kind.onchange = function () { f.querySelector('.addr').hidden = f.kind.value !== 'shipping'; };
+        f.onsubmit = function (e) {
+          e.preventDefault(); var st = f.querySelector('.rq-status'); st.textContent = 'Sending…';
+          api('/api/my-orders' + q, { orderNo: f.getAttribute('data-req'), kind: f.kind.value, message: f.message.value, address: f.kind.value === 'shipping' ? { line1: f.line1.value, city: f.city.value, state: f.state.value, zip: f.zip.value } : null })
+            .then(function (r) { if (!r.ok) { st.textContent = r.j.error || 'Could not send. Please try again.'; return; } ORDERS = null; drawOrders(); status('Sent. We will answer on the order.'); });
+        };
+      });
+    })['catch'](function (e) { var el = $('orders-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  }
+
+  /* ── POs: a stack at once, the way a fleet buyer sends them ─────────── */
+  function drawPos() {
+    $('view').innerHTML = '<h1>Purchase orders</h1><div id="pos-body"><p class="note">Loading…</p></div>';
+    loadPo().then(function (p) {
+      var el = $('pos-body'); if (!el) return;
+      var queue = (p.intake || []).filter(function (x) { return !x.convertedAt; }), orders = p.orders || [];
+      el.innerHTML = '<p class="note">' + esc(p.company.name) + ' · ' + esc(p.terms.depositPct) + '% deposit, due in ' + esc(p.terms.dueDays) + ' days' + (p.company.rep ? ' · your rep ' + esc(p.company.rep.name) : '') + '</p>'
+        + '<h2>Enter purchase orders</h2><p class="note">One line per product per PO: <b>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</b>. Lines with one PO number are one order to one place. Each is received for pricing; nothing is charged.</p>'
+        + '<textarea id="bulk-text" class="sheet" placeholder="INC-4471, CC-C215, 4, InCharge Bakersfield, 1200 Depot Rd, Bakersfield, CA, 93307, 2026-11-15, dock B" autocapitalize="off" autocorrect="off" spellcheck="false">' + esc(PO_PREFILL) + '</textarea>'
+        + '<p class="note">Products: ' + esc((p.products || []).map(function (x) { return x.sku + ' (' + x.name + ')'; }).join(', ') || 'none published yet') + '</p>'
+        + '<p id="bulk-preview" class="note">' + esc(PO_PREFILL ? OmegaPoBulk.summary(OmegaPoBulk.parse(PO_PREFILL)) : 'Paste or type lines above.') + '</p><button class="big" id="bulk-go">Send these purchase orders</button><div id="bulk-result"></div>'
+        + '<p class="note"><a href="/customer-po' + q + '">One PO to several sites</a> · <a href="/po-inbox' + q + '">Upload a PO document</a></p>'
+        + '<h2>Under review · ' + queue.length + '</h2>' + (queue.map(function (x) { return '<div class="unit"><div><b>' + esc(x.poNumber) + '</b><small>' + esc(String(x.status).replace(/_/g, ' ')) + ' · ' + esc(day(x.createdAt)) + (x.reviewNote ? ' · ' + esc(x.reviewNote) : '') + '</small></div><span class="pill wait">review</span></div>'; }).join('') || '<p class="note">Nothing waiting for review.</p>')
+        + '<h2>Orders from your POs · ' + orders.length + '</h2>' + (orders.map(function (o) { return '<div class="unit"><div><b>' + esc(o.poNumber || o.orderNo) + '</b><small>' + esc(o.orderNo) + ' · ' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join('; ')) + (o.destinations.length > 1 ? ' · ' + o.destinations.length + ' sites' : '') + (o.legs.length ? ' · ' + o.legs.map(function (l) { return 'load ' + l.id + ' ' + String(l.status).replace(/_/g, ' '); }).join(', ') : '') + '</small></div><span class="pill">' + esc(o.status) + '</span></div>'; }).join('') || '<p class="note">No orders from purchase orders yet.</p>') + (p.limited ? '<p class="note">Newest 200 shown.</p>' : '');
+      PO_PREFILL = '';
+      $('bulk-text').oninput = function () { $('bulk-preview').textContent = OmegaPoBulk.summary(OmegaPoBulk.parse(this.value)); };
+      $('bulk-go').onclick = function () {
+        var r = OmegaPoBulk.parse($('bulk-text').value); $('bulk-preview').textContent = OmegaPoBulk.summary(r);
+        if (!OmegaPoBulk.ready(r)) { status('Fix the lines first.'); return; }
+        if (!confirm('Send ' + r.pos.length + ' purchase order' + (r.pos.length === 1 ? '' : 's') + ' to ' + (PORTAL ? PORTAL.brand.name : 'your supplier') + '?')) return;
+        var btn = this; btn.disabled = true; status('Sending…');
+        api('/api/po-intake', { action: 'submit-many', pos: r.pos }).then(function (res) {
+          var d = must(res); status(d.note || 'Sent.');
+          $('bulk-result').innerHTML = (d.created.length ? '<ul class="plain">' + d.created.map(function (x) { return '<li>' + esc(x.number) + ' → ' + esc(x.orderNo) + ' · ' + x.lines + ' line' + (x.lines === 1 ? '' : 's') + ' · ' + esc(x.destination) + '</li>'; }).join('') + '</ul>' : '') + (d.skipped.length ? '<p><b>Not sent:</b></p><ul class="plain">' + d.skipped.map(function (s) { return '<li>' + esc(s.number) + ': ' + esc(s.error) + '</li>'; }).join('') + '</ul>' : '');
+          if (d.created.length) { $('bulk-text').value = ''; PO = null; ORDERS = null; }
+          btn.disabled = false;
+        })['catch'](function (e) { fail(e); btn.disabled = false; });
+      };
+    })['catch'](function (e) { var el = $('pos-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p><p class="note">Purchase orders need a customer account with this supplier. Open Account first, or ask your supplier to assign your email to your company.</p>'; });
+  }
+
+  /* ── Account: who you are here, your terms, your details ─────────────── */
+  function drawAccount() {
+    $('view').innerHTML = '<h1>Account</h1><div id="acct-body"><p class="note">Loading…</p></div>';
+    loadAccount().then(function (a) {
+      var el = $('acct-body'); if (!el) return;
+      var t = a.terms || {}, any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired, ad = a.address || {}, users = (a.users || []).filter(function (u) { return u.email !== a.you.email; });
+      el.innerHTML = '<div class="kv"><div><small>Account number</small><b class="mono" style="font-size:13px">' + esc(a.customerId || '—') + '</b></div><div><small>Company</small><b style="font-size:15px">' + esc(a.company || '—') + '</b></div><div><small>Your account rep</small><b style="font-size:15px">' + (a.rep && a.rep.name ? esc(a.rep.name) : '<span class="note">not assigned yet</span>') + '</b>' + (a.rep && a.rep.email ? '<small><a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a></small>' : '') + '</div><div><small>Orders</small><b>' + esc(a.orders) + '</b></div></div>'
+        + (any ? '<h2>Your terms</h2><div class="kv">' + (t.depositPct != null ? '<div><small>Deposit</small><b>' + esc(t.depositPct) + '%</b><small>' + (t.dueDays ? 'due in ' + esc(t.dueDays) + ' days' : 'on receipt') + '</small></div>' : '') + (t.netDays != null ? '<div><small>Payment terms</small><b>Net ' + esc(t.netDays) + '</b></div>' : '') + (t.discountPct != null ? '<div><small>Your discount</small><b>' + esc(t.discountPct) + '%</b></div>' : '') + (t.poRequired ? '<div><small>Purchase order</small><b>Required</b></div>' : '') + '</div><p class="note">Set by ' + esc(a.rep && a.rep.name ? a.rep.name : 'your account manager') + '. Ask them if anything here looks wrong.</p>' : '')
+        + '<h2>Your details</h2><input id="f-name" placeholder="Your name" value="' + esc(a.you.name || '') + '"><input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"><input id="f-phone" placeholder="Phone" value="' + esc(a.you.phone || '') + '"><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div><button class="big ghost" id="save">Save my details</button>'
+        + '<p class="note">Signed in as ' + esc(a.you.email) + (a.you.role === 'owner' ? ' · account owner' : '') + (users.length ? ' · also on this account: ' + esc(users.map(function (u) { return u.name || u.email; }).join(', ')) : '') + '</p>'
+        + '<h2>Agreements</h2>' + ((a.agreements || []).map(function (g) { return '<div class="unit"><div>' + esc(g.kind) + '<small>' + esc(g.ref) + ' · ' + esc(day(g.signedAt)) + '</small></div></div>'; }).join('') || '<p class="note">No agreements recorded yet.</p>')
+        + '<h2>This app</h2><p class="note">Add it to your home screen: on iPhone, Share → <b>Add to Home Screen</b>; on Android, the browser’s <b>Install</b>. It opens to your site plans.</p>'
+        + (PORTAL && PORTAL.links && PORTAL.links.account ? '<a class="big ghost" href="' + esc(PORTAL.links.account) + '">Full portal on the desktop</a>' : '');
+      $('save').onclick = function () {
+        var sp = String($('f-state').value || '').trim().split(/\s+/), btn = this; btn.disabled = true; status('Saving…');
+        api('/api/my-account', { name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value, address: { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' } })
+          .then(function (r) { ACCT = must(r, 'Could not save.'); status('Saved.'); drawAccount(); })['catch'](fail).then(function () { btn.disabled = false; });
+      };
+    })['catch'](function (e) { var el = $('acct-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  }
+
+  /* ── sign in ──────────────────────────────────────────────────────────── */
+  $('g-create').onclick = function () { $('g-h').textContent = 'Create a customer account'; $('g-p').textContent = 'Verify your work email to open a free customer account. If your company already has an account, ask your supplier to assign your email before joining.'; $('g-link').textContent = 'Verify email and continue'; $('g-email').focus(); };
+  function sendLink() {
+    var e = String($('g-email').value || '').trim();
+    if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }
+    try { localStorage.setItem(LS_EMAIL, e); } catch (x) {}
+    /* The link comes back into THIS app's scope, so the installed app
+       finishes the sign-in instead of the browser. */
+    auth.sendSignInLinkToEmail(e, { url: location.origin + '/portals/customer/app' + q, handleCodeInApp: true })
+      .then(function () { $('g-msg').className = 'note'; $('g-msg').textContent = 'Check your inbox — we have emailed a link to ' + e + '.'; }, function (err) { $('g-msg').className = 'note err'; $('g-msg').textContent = (err && err.message) || 'Could not send the link.'; });
+  }
+  $('g-link').onclick = sendLink;
+  $('g-email').onkeydown = function (ev) { if (ev.key === 'Enter') sendLink(); };
+  $('g-google').onclick = function () { var p = new firebase.auth.GoogleAuthProvider(); auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](function (err) { $('g-msg').className = 'note err'; $('g-msg').textContent = (err && err.message) || 'Could not sign in.'; }); };
+  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }, function () { location.reload(); }); };
+  try {
+    if (typeof auth.isSignInWithEmailLink === 'function' && auth.isSignInWithEmailLink(location.href)) {
+      var saved = ''; try { saved = localStorage.getItem(LS_EMAIL) || ''; } catch (x) {}
+      if (!saved) saved = window.prompt('Confirm the email address you used') || '';
+      auth.signInWithEmailLink(saved, location.href).then(function () { history.replaceState(null, '', location.pathname + q); try { localStorage.removeItem(LS_EMAIL); } catch (e) {} })['catch'](function (err) { $('g-msg').className = 'note err'; $('g-msg').textContent = (err && err.message) || 'That link has expired. Please ask for a new one.'; });
+    }
+  } catch (e) {}
+
+  /* ── shell ────────────────────────────────────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; draw(); window.scrollTo(0, 0); }; });
+  $('home').onclick = function (e) { e.preventDefault(); TAB = 'design'; draw(); window.scrollTo(0, 0); };
+  $('refresh').onclick = refresh;
+  function paintNet() { $('offline').hidden = navigator.onLine !== false; }
+  window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
+  auth.onAuthStateChanged(function (u) {
+    paint();
+    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
+    $('who').textContent = u ? (u.email || '') : '';
+    if (!u) return;
+    portalReady.then(function () { refresh(); })['catch'](function (e) { $('view').innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  });
+  if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }
+})();
+</script>
+</body>
+</html>
