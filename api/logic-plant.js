@@ -2,7 +2,7 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow');
+var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work');
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   var caller = await A.authenticate(req), b = req.body || {}, org = A.safeOrg(req.method === 'GET' ? req.query.org : b.org);
@@ -21,7 +21,12 @@ module.exports = A.handler(async function (req, res) {
       var wr=db.collection('plant_works_orders').doc(P.id(req.query.workOrder)),ws=await wr.get();
       if(!ws.exists||ws.data().orgId!==org)throw A.httpError(404,'Work order not found');
       var members=await db.collection('plant_units').where('orgId','==',org).where('woId','==',ws.id).limit(401).get();
-      return {workOrder:Object.assign({id:ws.id},ws.data()),units:members.docs.slice(0,400).map(function(d){return d.data();}),limited:members.size>400};
+      /* Where each unit is AND how far through that bench it is: the steps
+         come off the product's bill (plant-work.js), so one catalog read. */
+      var cat=await db.collection('omega_orgs').doc(org).collection('storefront').doc('config').get(),by={};
+      (cat.exists?cat.data().products||[]:[]).forEach(function(p){if(p&&p.sku&&['__proto__','constructor','prototype'].indexOf(String(p.sku))<0)by[p.sku]=p;});
+      var wo=ws.data();
+      return {workOrder:Object.assign({id:ws.id},wo),units:members.docs.slice(0,400).map(function(d){var u=d.data();if(u.at){var st=(wo.routing||[]).filter(function(s){return s&&s.key===u.at;})[0];var steps=W.stepsFor(by[u.sku]||null,u.at,by,st&&st.checks);if(steps.length){var w=W.statusOf(u,u.at,steps);u.progress={station:u.at,done:w.steps.length-w.open.length,total:w.steps.length,open:w.open.slice(0,6),complete:w.complete};}}return u;}),limited:members.size>400};
     }
     if (req.query.serial) {
       var serial = Plant.serialFrom(req.query.serial);
@@ -80,6 +85,47 @@ module.exports = A.handler(async function (req, res) {
       tokenHash: S.sha(token), machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0, active: true,
       createdBy: caller.email, createdAt: A.FieldValue().serverTimestamp() });
     return { stationId: ref.id, token: token, machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0 };
+  }
+  if(b.action==='allocate'){
+    /* A finished unit on the shelf, assigned by a person to an order that
+       is short of it. logic-workflow.js release() does the same
+       automatically at deposit time from whatever it can see; this is the
+       office choosing a specific serial afterwards — a unit came off the
+       line for stock, or a rush order arrived. The whole assembly moves
+       (every serial under the same root), the works order builds one
+       fewer, and both records say who did it. */
+    var serial=Plant.serialFrom(b.serial);if(!serial)throw A.httpError(400,'Invalid serial');
+    var orderRef=db.collection('orders').doc(P.id(b.orderId)),unitRef=db.collection('plant_units').doc(org+'__'+serial);
+    return db.runTransaction(async function(tx){
+      var us=await tx.get(unitRef),os=await tx.get(orderRef);
+      if(!us.exists||us.data().orgId!==org)throw A.httpError(404,'Unit not found');
+      var u=us.data();
+      if(!u.shipUnit)throw A.httpError(400,'Only a shipping unit can be assigned; its components travel with it');
+      if(u.orderId||u.inventoryStatus!=='available')throw A.httpError(409,'This unit is already assigned to '+(u.orderNo||'an order'));
+      if(u.at!=='ready'||u.hold)throw A.httpError(409,'Only a finished unit with no hold can be assigned');
+      if(!os.exists||os.data().orgId!==org)throw A.httpError(404,'Order not found');
+      var o=os.data();
+      if(o.cancelRequested||(o.logic||{}).paymentException)throw A.httpError(409,'Order is on hold');
+      if(!o.worksOrderId||o.status!=='in_fulfilment')throw A.httpError(409,'The order must be accepted, paid and released to the plant before a unit is assigned');
+      var woRef=db.collection('plant_works_orders').doc(o.worksOrderId),ws=await tx.get(woRef);
+      if(!ws.exists||ws.data().orgId!==org)throw A.httpError(404,'Works order not found');
+      var w=ws.data(),req=(w.requirements||[]).map(function(r){return {sku:String(r.sku),qty:Number(r.qty)||0};}),line=req.filter(function(r){return r.sku===u.sku;})[0];
+      var started=Number((w.registeredCounts||{})[u.sku])||0;
+      if(!line||line.qty-started<=0)throw A.httpError(409,'This order does not need another '+u.sku+(line?' — the plant has already started the rest':''));
+      var fam=await tx.get(db.collection('plant_units').where('orgId','==',org).where('rootSerial','==',u.rootSerial||u.serial).limit(201));
+      if(fam.size>200)throw A.httpError(409,'This assembly has too many components to assign in one step');
+      fam.docs.forEach(function(d){var c=d.data();if(c.orderId&&c.serial!==serial)throw A.httpError(409,'Component '+c.serial+' of this unit is already assigned to '+(c.orderNo||'an order'));});
+      var now=new Date().toISOString(),patch={orderId:orderRef.id,orderNo:o.orderNo||null,woId:woRef.id,inventoryStatus:'allocated',sourceWoId:u.woId||null,allocatedAt:now,allocatedBy:caller.email,updatedAt:A.FieldValue().serverTimestamp()};
+      var seen={};fam.docs.forEach(function(d){seen[d.id]=true;tx.update(d.ref,patch);});if(!seen[unitRef.id])tx.update(unitRef,patch);
+      line.qty-=1;
+      var status=w.status;if(status==='awaiting_serials'&&!req.some(function(r){return r.qty>0;}))status=(w.serviceRequirements||[]).length&&!w.serviceCompletion?'awaiting_services':'ready';
+      var allocated=(w.allocatedSerials||[]).concat([serial]);
+      tx.update(woRef,{requirements:req,allocatedSerials:allocated,status:status,shippingUnitCount:(w.shippingUnitCount||0)+1,releasedUnits:(w.releasedUnits||0)+Math.max(1,fam.size),updatedAt:A.FieldValue().serverTimestamp()});
+      tx.update(orderRef,{'logic.allocatedSerials':((o.logic||{}).allocatedSerials||[]).concat([serial]),'logic.requirements':req,updatedAt:A.FieldValue().serverTimestamp()});
+      tx.create(orderRef.collection('events').doc(),{at:now,by:caller.email,what:'Finished unit '+serial+' assigned from stock by the office'});
+      tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-allocate',serial:serial,orderId:orderRef.id,workOrderId:woRef.id,by:caller.email,at:now,after:{requirements:req,status:status}});
+      return {ok:true,serial:serial,orderNo:o.orderNo||null,stillToBuild:Math.max(0,line.qty-started),workOrderStatus:status};
+    });
   }
   if (b.action !== 'register' && b.action !== 'stock') throw A.httpError(400, 'Unknown action');
   var requestId = P.id(b.requestId), woId = b.action === 'stock' ? 'stock_' + P.key(org + ':' + requestId) : P.id(b.workOrderId);

@@ -28,6 +28,6 @@ var flowRefresh=refresh;refresh=function(){return flowRefresh().then(function(){
   if(params.get('serial')){var serial=params.get('serial');params.delete('serial');return lookup(serial);}
 });};
 var rawApi=api;api=function(body,serial){if(body&&body.action==='station')body.lineId=$('station-line')&&$('station-line').value;return rawApi(body,serial);};
-var unbrandedPlantApi=api;api=function(body,serial){return unbrandedPlantApi(body,serial).then(function(d){if(d.brand){OmegaLogicTheme.apply(d.brand);document.querySelector('header b').textContent=d.brand.name+' · Plant';}return d;});};
+var unbrandedPlantApi=api;api=function(body,serial){return unbrandedPlantApi(body,serial).then(function(d){if(d.brand){OmegaLogicTheme.chrome({org:ORG,current:location.hash==='#records'?'quality':'works',owner:d.owner,brand:d.brand,who:auth.currentUser&&auth.currentUser.email,subtitle:'Plant · work orders, serial records and quality'});}return d;});};
 auth.onAuthStateChanged(function(u){$('gate').hidden=!!u;$('app').hidden=!u;if(u){if(!ORG){err(new Error('Open this factory from its OEM workspace.'));return;}refresh()['catch'](err);}else{$('credential').textContent='';$('serial').innerHTML='';}});
 </script></body></html>

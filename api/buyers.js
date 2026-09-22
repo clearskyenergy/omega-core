@@ -1,6 +1,20 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), B = require('./_lib/buyer-accounts'), P = require('./_lib/logic-policy');
+/* What the office sees per order in a customer's account: what was
+   invoiced, what QuickBooks has recorded as paid, the balance, whether it
+   shipped, and whether the customer is waiting on an answer. Cost and margin
+   are ClearSky's and are not here. */
+function money(id, o) {
+  var l = o.logic || {}, inv = 0, paid = 0;
+  Object.keys(l.invoices || {}).forEach(function (k) { var i = l.invoices[k] || {}; inv += Number(i.amountCents) || 0; paid += Number(i.paidCents) || 0; });
+  var at = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null);
+  return { id: id, orderNo: o.orderNo || id, status: o.status || 'new', placedAt: at, poNumber: (o.purchaseOrder || {}).number || null,
+    totalCents: l.commercial ? Number(l.commercial.totalCents) || 0 : null, invoicedCents: inv, paidCents: paid, balanceCents: Math.max(0, inv - paid),
+    shippedAt: o.shipment && o.shipment.shippedAt ? String(o.shipment.shippedAt) : null, worksOrderId: o.worksOrderId || null,
+    items: (o.items || []).slice(0, 20).map(function (i) { return { sku: i.sku, name: i.name || i.sku, qty: i.qty }; }),
+    openRequests: (o.requests || []).filter(function (r) { return r && r.status === 'open'; }).length };
+}
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
@@ -21,7 +35,8 @@ module.exports = A.handler(async function (req, res) {
         createdAt: acct.data.createdAt || null, lastSeenAt: acct.user.lastSeenAt || null,
         plan: acct.data.plan || 'free', contactStatus: acct.user.status || 'active',
         status: acct.data.status, terms: P.terms(ctx.config.terms, acct.data.terms), portalUrl: portalUrl,
-        orders: orders.docs.map(function (r) { var o = r.data(); return { id: r.id, orderNo: o.orderNo, status: o.status }; }), limited: orders.size === 100 };
+        orders: orders.docs.map(function (r) { return money(r.id, r.data()); }), totals: orders.docs.reduce(function (t, r) { var m = money(r.id, r.data()); t.invoicedCents += m.invoicedCents; t.paidCents += m.paidCents; t.balanceCents += m.balanceCents; t.openRequests += m.openRequests; return t; }, { invoicedCents: 0, paidCents: 0, balanceCents: 0, openRequests: 0 }),
+        limited: orders.size === 100 };
     }
     var q = root.collection('customers').orderBy('__name__');
     if (req.query.after) q = q.startAfter(P.id(req.query.after));
@@ -31,7 +46,7 @@ module.exports = A.handler(async function (req, res) {
       return { id: r.id, company: d.name || '', status: d.status || 'active', terms: P.terms(ctx.config.terms, d.terms),
         users: users.docs.map(function (u) { var v = u.data(); return { email: v.email, name: v.name || '', role: v.role, activated: !!v.uid }; }), usersLimited: users.size === 25 };
     }));
-    return { org: org, name: ctx.org.name || org, customers: customers, portalUrl: portalUrl, next: rows.size === 50 ? rows.docs[49].id : null };
+    return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller), customers: customers, portalUrl: portalUrl, next: rows.size === 50 ? rows.docs[49].id : null };
   }
   var address = B.email(b.email);
   if (b.action === 'editor-trial') {
