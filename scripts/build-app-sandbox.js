@@ -20,7 +20,11 @@
    against the committed one, so the sandbox cannot go stale unnoticed.
 
      node scripts/build-app-sandbox.js            # writes app-sandbox/
-     node scripts/build-app-sandbox.js /tmp/out   # elsewhere                */
+     node scripts/build-app-sandbox.js /tmp/out   # elsewhere
+     node scripts/build-app-sandbox.js --artifacts <dir> ['{"plant":"https://…"}']
+                                                  # one relative-path folder
+                                                  # per app, for private
+                                                  # test links              */
 'use strict';
 var fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '..');
@@ -100,5 +104,45 @@ function build(outDir) {
   if (outDir) { if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true }); Object.keys(files).forEach(function (f) { fs.writeFileSync(path.join(outDir, f), files[f]); }); }
   return files;
 }
-module.exports = { build: build, PAGES: PAGES };
-if (require.main === module) { var out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'app-sandbox'); var files = build(out); console.log('app-sandbox: ' + Object.keys(files).length + ' files written to ' + path.relative(ROOT, out) + '/ (sandbox.js ' + Math.round(files['sandbox.js'].length / 1024) + ' KB)'); }
+/* ── the same four pages as private test links ─────────────────────────
+   One folder per app, every reference relative, no service worker (the
+   frame has none), the other apps' links written in (each artifact is its
+   own origin, so the strip links out rather than routing). Nothing here is
+   committed; scripts/publish-app-sandbox.js hands the folders to the
+   Artifact tool. */
+var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js'];
+var TITLES = { plant: 'Clean Cell Plant', office: 'Clean Cell Office', customer: 'Clean Cell Account', bench: 'Clean Cell Bench' };
+function artifactPage(p, files, links) {
+  var s = files[p.out], icon = p.bench ? null : p.icon;
+  s = must(s, SANDBOX_SCRIPT, '<script>window.OMEGA_SANDBOX_APP=' + JSON.stringify(p.app) + ';window.OMEGA_SANDBOX_LINKS=' + JSON.stringify(links) + ';</script><script src="sandbox.js"></script>', p.out + ' sandbox script');
+  SHARED.forEach(function (f) { s = s.split('"/' + f + '"').join('"' + f + '"'); });
+  if (!p.bench) {
+    s = must(s, '<link rel="manifest" href="/app-sandbox/' + p.app + '.webmanifest">', '<link rel="manifest" href="manifest.webmanifest">', p.out + ' manifest');
+    s = must(s, '<link rel="apple-touch-icon" href="' + icon + '">', '<link rel="apple-touch-icon" href="icons/' + path.basename(icon) + '">', p.out + ' apple icon');
+    s = must(s, "if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }", '/* sandbox link: no service worker in this frame */', p.out + ' service worker');
+    s = s.split("'/app-sandbox/bench'").join(JSON.stringify(links.bench || '#')).split('href="/app-sandbox/bench"').join('href="' + (links.bench || '#') + '"');
+  }
+  s = must(s, '<title>' + p.title + ' · sandbox</title>', '<title>' + TITLES[p.app] + '</title>', p.out + ' title');
+  if (/\/app-sandbox\//.test(s)) throw new Error('build-app-sandbox: ' + p.out + ' — an /app-sandbox/ path survived the artifact rewrite');
+  return s;
+}
+function buildArtifacts(outDir, links) {
+  links = links || {}; var files = build(null), made = {};
+  PAGES.forEach(function (p) {
+    var dir = path.join(outDir, p.app); fs.mkdirSync(path.join(dir, 'icons'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.html'), artifactPage(p, files, links));
+    fs.writeFileSync(path.join(dir, 'sandbox.js'), files['sandbox.js']);
+    SHARED.forEach(function (f) { fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); });
+    var iconApp = p.bench ? 'plant' : p.app, set = iconApp === 'plant' ? TENANT.appIcon : TENANT.appIcon[iconApp];
+    ['180', '192', '512', 'maskable'].forEach(function (k) { fs.copyFileSync(path.join(ROOT, set[k]), path.join(dir, 'icons', path.basename(set[k]))); });
+    if (!p.bench) { var m = JSON.parse(files[p.app + '.webmanifest']); m.id = p.app; m.start_url = '.'; m.scope = './'; m.icons.forEach(function (i) { i.src = 'icons/' + path.basename(i.src); }); m.apple_touch_icon = 'icons/' + path.basename(m.apple_touch_icon); fs.writeFileSync(path.join(dir, 'manifest.webmanifest'), JSON.stringify(m, null, 2) + '\n'); }
+    made[p.app] = dir;
+  });
+  return made;
+}
+module.exports = { build: build, buildArtifacts: buildArtifacts, PAGES: PAGES, TITLES: TITLES };
+if (require.main === module) {
+  var ai = process.argv.indexOf('--artifacts');
+  if (ai > 0) { var linksArg = process.argv[ai + 2] ? JSON.parse(process.argv[ai + 2]) : {}; var made = buildArtifacts(path.resolve(process.argv[ai + 1]), linksArg); console.log('artifact folders: ' + Object.keys(made).map(function (k) { return k + ' → ' + made[k]; }).join('\n                  ')); }
+  else { var out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'app-sandbox'); var files = build(out); console.log('app-sandbox: ' + Object.keys(files).length + ' files written to ' + path.relative(ROOT, out) + '/ (sandbox.js ' + Math.round(files['sandbox.js'].length / 1024) + ' KB)'); }
+}

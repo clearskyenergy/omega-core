@@ -84,14 +84,23 @@
 
   /* ── the strip, reset, and the desktop links the sandbox does not have ── */
   function reset() { try { [KEY, USER_KEY, 'omega_station_v1', 'omega_station_pick', 'omega_plant_app_filter', 'omega_office_app_filter', 'omega_office_app_company'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {} location.reload(); }
-  var APP = (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
+  /* Where the other three pages are. Under /app-sandbox/ they are siblings;
+     published as private test links (one artifact per app, each its own
+     origin) the build writes OMEGA_SANDBOX_LINKS and OMEGA_SANDBOX_APP into
+     the page. A link to another origin opens as a link, not a route. */
+  var LINKS = global.OMEGA_SANDBOX_LINKS || { plant: '/app-sandbox/plant', office: '/app-sandbox/office', customer: '/app-sandbox/customer', bench: '/app-sandbox/bench' };
+  var APP = global.OMEGA_SANDBOX_APP || (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
+  /* A private test link's frame answers confirm() with false before anyone
+     sees it; the pages ask before a stack of POs or an assignment. Nothing
+     in a sandbox needs guarding, so say what would have been asked and go. */
+  global.confirm = function (msg) { toast(String(msg || '').split('?')[0] + ' — done. (The sandbox skips the confirmation.)'); return true; };
   var CSS = '.sb-strip{background:#6D5BD0;color:#fff;font:600 12px/1.3 system-ui,sans-serif;padding:6px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;z-index:6}.sb-strip b{letter-spacing:.1em;text-transform:uppercase;font-size:10.5px}.sb-strip span{opacity:.85;font-weight:500;flex:1;min-width:0}.sb-strip a,.sb-strip button{color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:6px;padding:4px 8px;font:600 12px system-ui,sans-serif;text-decoration:none;cursor:pointer}.sb-strip a[aria-current]{background:rgba(255,255,255,.34)}.sb-toast{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0));background:#0B2733;color:#fff;padding:12px 14px;border-radius:12px;font:500 14px system-ui,sans-serif;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}';
   function toast(t) { var el = document.createElement('div'); el.className = 'sb-toast'; el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, 3200); }
   function strip() {
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
     var d = document.createElement('div'); d.className = 'sb-strip';
     d.innerHTML = '<b>Sandbox</b><span>Nothing here is real — a sample plant, on this phone.</span>'
-      + [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']].map(function (x) { return '<a href="/app-sandbox/' + x[0] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>'; }).join('')
+      + [['plant', 'Plant'], ['office', 'Office'], ['customer', 'Customer'], ['bench', 'Bench']].map(function (x) { return LINKS[x[0]] ? '<a href="' + LINKS[x[0]] + '"' + (APP === x[0] ? ' aria-current="page"' : '') + '>' + x[1] + '</a>' : ''; }).join('')
       + '<button type="button" id="sb-reset">Reset</button>';
     document.body.insertBefore(d, document.body.firstChild);
     document.getElementById('sb-reset').onclick = function () { if (confirm('Start the sample over? Everything you did in this sandbox on this phone is forgotten.')) reset(); };

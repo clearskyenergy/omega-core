@@ -48,5 +48,10 @@ This folder is a BUILD OUTPUT. Do not edit it. The source is
   libraries, rewrites the pages (every rewrite asserted), writes the
   manifests and the worker
 
-Rebuild with `npm run build:sandbox`. `scripts/tests/tappsandbox.js` fails
+Rebuild with `npm run build:sandbox`. The same four pages go out as private
+test links (one Claude artifact per app, every path relative, no service
+worker, the other apps' links written into the strip) with
+`node scripts/build-app-sandbox.js --artifacts <dir> '{"plant":"https://…",…}'`;
+each artifact is its own origin, so the sample on one is not the sample on
+another. `scripts/tests/tappsandbox.js` fails
 `npm test` when the committed folder is not what a rebuild produces.
