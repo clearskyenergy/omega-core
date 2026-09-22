@@ -77,6 +77,25 @@ jobs:
             exit 1
           fi
 
+  # The only check that catches a page drawing NOTHING — a list that reads an
+  # endpoint the fixture forgot, a column scrolled off at phone width. The
+  # unit suites cannot see that. Chromium is the one dependency, so this job
+  # installs it; the script itself skips cleanly wherever it is missing.
+  render:
+    name: office, plant and portal pages draw in Chromium
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Playwright Chromium
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: render every office, plant and portal page against stubbed endpoints
+        run: node scripts/render-logic-pages.js
+
   audit:
     name: script references (reporting only)
     runs-on: ubuntu-latest
