@@ -49,7 +49,7 @@
     "demo:build": "node scripts/build-demo.js",
     "test:editor-mode": "node scripts/test-editor-mode.js",
     "test:systems": "node scripts/test-systems-manifest.js",
-    "test:portal": "node scripts/test-portal.js && node scripts/test-orders-create.js",
+    "test:portal": "node scripts/test-portal.js && node scripts/test-orders-create.js && node scripts/test-portfolio.js",
     "test:materials": "node scripts/test-materials.js",
     "test:logic": "node scripts/test-logic.js && node scripts/test-office-stage.js && node scripts/test-logic-workflow.js && node scripts/test-order-lifecycle.js",
     "test:logic-workflow": "node scripts/test-logic-workflow.js",

@@ -103,6 +103,28 @@
   #gate{max-width:420px;margin:60px auto;padding:0 20px}
   #gate section{padding:26px}
   #gate h1{font-size:23px}
+  .pf-mode{display:flex;gap:8px;margin-bottom:14px}
+  .pf-mode button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 16px;font:inherit;font-weight:600;cursor:pointer;color:var(--sub)}
+  .pf-mode button.on{background:var(--ink);color:var(--paper,#fff);border-color:var(--ink)}
+  .pf-frame{width:100%;height:960px;border:1px solid var(--line);border-radius:12px;background:transparent}
+  .pf-steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .pf-step{border:1px solid var(--line);background:transparent;border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--sub)}
+  .pf-step.on{border-color:var(--ink);color:var(--ink)}
+  .pf-step[disabled]{opacity:.45;cursor:default}
+  .pf-row{display:block;width:100%;text-align:left;border:1px solid var(--line);background:transparent;border-radius:10px;padding:10px 12px;margin-bottom:8px;font:inherit;cursor:pointer}
+  .pf-table{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}
+  .pf-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .pf-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .pf-table tr[data-site]{cursor:pointer}
+  .pf-table tr[data-site]:hover td{background:var(--wait-bg)}
+  .pf-scroll{overflow:auto;max-width:100%}
+  .pf-bar{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin:12px 0 6px}
+  .pf-bar i{display:block;height:100%;background:var(--ok);transition:width .3s}
+  .kv small{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700}
+  .kv > div > b{display:block;font-size:15px;margin-top:3px}
+  #pf-body h4{margin:16px 0 6px;font-size:14px}
+  #pf-body ul{margin:4px 0 8px 18px;padding:0}
+  #pf-body select,#pf-body input[type=search]{width:100%}
   @media (max-width:560px){ main{padding:22px 16px 60px} .row2{grid-template-columns:1fr}
     .steps{display:none} }
   .rqs{margin-top:10px;border-top:1px solid var(--line,#e6eef2);padding-top:6px}
@@ -138,10 +160,15 @@
 </div>
 
 <div id="app" class="logic-shell" hidden>
-<nav class="logic-nav" aria-label="Customer account"><a href="#orders" data-view="orders" aria-current="page">Orders</a><a href="#documents" data-view="documents">Documents</a><a href="#terms" data-view="terms">Terms &amp; agreements</a><p class="eyebrow">Design</p><a href="#design" data-view="design">Design studio</a><p class="eyebrow">You</p><a href="#account" data-view="account">Account</a></nav>
+<nav class="logic-nav" aria-label="Customer account"><p class="eyebrow">Size</p><a href="#size" data-view="size">Size a system</a><p class="eyebrow">Account</p><a href="#orders" data-view="orders" aria-current="page">Orders</a><a href="#documents" data-view="documents">Documents</a><a href="#terms" data-view="terms">Terms &amp; agreements</a><p class="eyebrow">Design</p><a href="#design" data-view="design">Design studio</a><p class="eyebrow">You</p><a href="#account" data-view="account">Account</a></nav>
 <main class="logic-main">
   <h1 id="hello">Orders</h1>
   <p class="lede" id="sub">Everything you have ordered from your supplier.</p>
+  <section id="s-size" data-page="size" hidden>
+    <div class="pf-mode" role="tablist" aria-label="Sizing mode"><button type="button" class="on" data-mode="single" role="tab" aria-selected="true">Single site</button><button type="button" data-mode="portfolio" role="tab" aria-selected="false">Portfolio upload</button></div>
+    <div id="size-single"><p class="muted">Size one site from its address and utility data with your supplier’s battery sizer, then request a quote or place an order.</p><p id="size-single-note" class="muted" hidden>The sizer is not available for this account yet.</p><iframe id="size-frame" class="pf-frame" title="Battery sizer" referrerpolicy="strict-origin-when-cross-origin" hidden></iframe><p class="muted" style="font-size:13px"><a id="size-open" href="#" target="_blank" rel="noopener">Open the sizer in its own tab</a></p></div>
+    <div id="size-portfolio" hidden><div id="portfolio-root"><p class="muted">Loading…</p></div></div>
+  </section>
   <section id="editor-offer" data-page="design" hidden><h2>Site Map · Editor Lite</h2><p id="editor-price">Loading subscription details…</p><p>Lay out your own sites, run the guided build, and export plot plans, single-lines, proposals, drawing sets and estimated bills of materials. Quote projects and place orders with your supplier.</p><p>This subscription is separate from your free customer account.</p><p id="editor-availability" class="muted">Checking availability…</p></section>
   <section id="design-projects" data-page="design" hidden><div class="actions"><a id="new-project" class="btn p" hidden>New site plan</a></div><h2>Your site plans</h2><div id="project-list"><p class="muted">Loading your designs…</p></div></section>
   <section id="s-documents" data-page="documents" hidden><h2>Documents</h2><div id="customer-documents"><p class="muted">Loading documents…</p></div></section>
@@ -185,6 +212,7 @@
 <script src="/omega-brand.js"></script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-logic-theme.js"></script>
+<script src="/portals/customer/portfolio.js"></script>
 <script>
 /* ES5 — CLAUDE.md's rule for every page outside the few ES2015 core ones. */
 (function () {
@@ -219,13 +247,20 @@
 
   var LS_EMAIL = 'omega.portal.email';
   $('s-terms').insertBefore($('terms-wrap'), $('agreements'));
-  var views = {orders:['Orders','Everything you have ordered from your supplier.'],documents:['Documents','Invoices and documents your supplier has shared with you.'],terms:['Terms & agreements','Your account terms and recorded agreements.'],design:['Design studio','Design your own sites, on your own account.'],account:['Account','Your contact details and delivery information.']};
+  var views = {size:['Size a system','Size one site with the sizer, or upload a whole portfolio to screen and size every site.'],orders:['Orders','Everything you have ordered from your supplier.'],documents:['Documents','Invoices and documents your supplier has shared with you.'],terms:['Terms & agreements','Your account terms and recorded agreements.'],design:['Design studio','Design your own sites, on your own account.'],account:['Account','Your contact details and delivery information.']};
   function view(key) {
     if (!views[key]) key='orders';
     $('hello').textContent=views[key][0];$('sub').textContent=views[key][1];
     Array.prototype.forEach.call(document.querySelectorAll('[data-page]'),function(e){e.hidden=e.getAttribute('data-page')!==key;});
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'),function(e){if(e.getAttribute('data-view')===key)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});
   }
+  var portfolioUi=null;
+  function sizeMode(mode){
+    Array.prototype.forEach.call(document.querySelectorAll('.pf-mode button'),function(b){var on=b.getAttribute('data-mode')===mode;b.className=on?'on':'';b.setAttribute('aria-selected',on?'true':'false');});
+    $('size-single').hidden=mode!=='single';$('size-portfolio').hidden=mode!=='portfolio';
+    if(mode==='portfolio'&&!portfolioUi&&window.OmegaPortfolio&&firebase.auth().currentUser)portfolioUi=OmegaPortfolio.mount($('portfolio-root'),{org:ORG,api:api,tok:tok,esc:esc});
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.pf-mode button'),function(b){b.onclick=function(){sizeMode(b.getAttribute('data-mode'));};});
   window.addEventListener('hashchange',function(){view(location.hash.slice(1));});
   view(location.hash.slice(1)||qp('view'));
   var PORTAL = null;
@@ -242,7 +277,7 @@
       if (PORTAL.brand.logoUrl) { $('mark').src=PORTAL.brand.logoUrl; $('mark').hidden=false; }
       $('editor-price').textContent = '$' + (PORTAL.editorLite.monthlyPriceCents / 100).toLocaleString('en-US') + ' / month';
       $('editor-availability').textContent = 'Subscription checkout is not yet enabled. No subscription has been started or charged.';
-      if(PORTAL.links){var entry=document.getElementById('customer-start');if(!entry){entry=document.createElement('a');entry.id='customer-start';entry.textContent='Size a system';document.querySelector('.logic-nav').insertBefore(entry,document.querySelector('.logic-nav').firstChild);}entry.href=PORTAL.links.start;var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);}
+      if(PORTAL.links){var sizer=PORTAL.links.start||'';if(sizer){$('size-frame').src=sizer+(sizer.indexOf('?')>=0?'&':'?')+'plain=1';$('size-frame').hidden=false;$('size-open').href=sizer;}else{$('size-single-note').hidden=false;$('size-open').hidden=true;}var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);}
       return;
     }
     try {
@@ -521,7 +556,7 @@
         + 'Please use the link your supplier sent you.</p>';
       return;
     }
-    portalReady.then(function() { loadAccount(); loadOrders(); })['catch'](function(e) {
+    portalReady.then(function() { loadAccount(); loadOrders(); if(!$('size-portfolio').hidden)sizeMode('portfolio'); })['catch'](function(e) {
       $('orders').innerHTML='<p class="err">'+esc(e.message)+'</p>';
     });
   });
