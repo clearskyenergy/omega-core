@@ -32,7 +32,7 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 @media(max-width:760px){.logic-shell{grid-template-columns:minmax(0,1fr)}.logic-nav{display:flex;overflow:auto;gap:8px;border-right:0;border-bottom:1px solid var(--line);padding:8px}.logic-nav .eyebrow{display:none}.logic-nav a{white-space:nowrap}.logic-main{padding:20px}.logic-main .form-grid{grid-template-columns:1fr}}
 /* one chrome for every office page (OmegaLogicTheme.chrome) */
 .logic-theme header.logic-chrome{padding:18px 4%;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
-.logic-theme header.logic-chrome b{font-size:17px;letter-spacing:-.01em}.logic-theme .logic-sub{font-size:13px;color:var(--ink2)}
+.logic-theme header.logic-chrome b{font-size:17px;letter-spacing:-.01em}.logic-theme a.logic-home{color:var(--ink);text-decoration:none}.logic-theme a.logic-home:hover b{text-decoration:underline}.logic-theme .logic-sub{font-size:13px;color:var(--ink2)}
 .logic-theme .logic-who{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--ink2)}.logic-theme .logic-who a{color:var(--ink2)}
 .logic-theme .logic-signout{padding:8px 14px;border:1px solid var(--line);background:white;color:var(--ink);font-size:13px}
 .logic-nav a.local{font-size:13px;padding:8px 14px}.logic-nav .eyebrow{margin:16px 14px 4px}.logic-nav .eyebrow:first-child{margin-top:0}

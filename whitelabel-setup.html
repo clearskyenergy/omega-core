@@ -90,7 +90,7 @@ ol{margin:6px 0 0;padding-left:22px}ol li{margin:5px 0}
 <body>
 <header>
   <h1>White-label setup</h1>
-  <span class="who" id="who">checking sign-in…</span>
+  <span class="who"><a id="office-home" href="/omega-logic" style="color:inherit;margin-right:14px">← Office home</a><span id="who">checking sign-in…</span></span>
 </header>
 
 <main>
@@ -213,7 +213,7 @@ auth.onAuthStateChanged(function (u) {
   $('boot').style.display = 'none';
   show('app');
   var o = qs('org');
-  if (o) { $('org').value = o.toLowerCase(); $('slug').value = slugOf(o); loadPlan(); }
+  if (o) { $('org').value = o.toLowerCase(); $('slug').value = slugOf(o); $('office-home').href = '/omega-logic?org=' + encodeURIComponent(o.toLowerCase()); loadPlan(); }
 });
 
 function gateOut() {

@@ -82,8 +82,12 @@
     var header = document.querySelector('header');
     if (header) {
       header.className = (header.className ? header.className + ' ' : '') + 'logic-chrome';
-      header.innerHTML = '<div><b data-brand-name>' + esc(name) + '</b><div class="muted logic-sub">' + esc(o.subtitle || (owner ? 'ClearSky · managing this OEM' : 'Office workspace')) + '</div></div>'
-        + '<nav class="logic-who" aria-label="Account"><span id="who">' + esc(o.who || '') + '</span>'
+      /* The brand is the way home from every page of the workspace, the way it is on every
+         site anyone has used; Home in the account nav says the same thing in words. An OEM's
+         home is its dashboard; ClearSky's, with no org in the URL, is the directory of accounts. */
+      var home = org ? '/omega-logic?org=' + encodeURIComponent(org) : '/omega-logic';
+      header.innerHTML = '<div><a class="logic-home" href="' + esc(home) + '" title="Home"><b data-brand-name>' + esc(name) + '</b></a><div class="muted logic-sub">' + esc(o.subtitle || (owner ? 'ClearSky · managing this OEM' : 'Office workspace')) + '</div></div>'
+        + '<nav class="logic-who" aria-label="Account"><a href="' + esc(home) + '">Home</a><span id="who">' + esc(o.who || '') + '</span>'
         + (owner ? '<a href="/login">Where to?</a>' : '')
         + '<button type="button" id="signout" class="logic-signout">Sign out</button></nav>';
       var so = document.getElementById('signout');
