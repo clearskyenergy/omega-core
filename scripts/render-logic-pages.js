@@ -18,6 +18,8 @@ var CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/
 var PW = process.env.PLAYWRIGHT || '/opt/node22/lib/node_modules/playwright';
 if (!fs.existsSync(CHROME) || !fs.existsSync(PW)) { console.log('render-logic-pages: Chromium or Playwright not found; skipped'); process.exit(0); }
 var chromium = require(PW).chromium;
+var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
+
 require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in a render check'); }, safeOrg: function (x) { return x; } } };
 var M = require(path.join(ROOT, 'api/_lib/materials')), C = require(path.join(ROOT, 'api/_lib/logic-catalog'));
 
