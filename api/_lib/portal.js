@@ -320,6 +320,28 @@ function publicOrder(order, opts) {
       it.warranty = { years: yrs, from: String(shippedIso).slice(0, 10), until: d.toISOString().slice(0, 10) };
     });
   }
+  /* Their own purchase order number, and where each part of the order is
+     going and how it is travelling — the columns any industrial supplier's
+     account page shows. Destination names, cities and carrier references
+     only; serials, evidence text and staff identities stay internal. */
+  if (o.purchaseOrder && o.purchaseOrder.number) out.poNumber = clip(o.purchaseOrder.number, 80);
+  var dl = o.delivery || {};
+  if (Array.isArray(dl.destinations) && dl.destinations.length) {
+    out.destinations = dl.destinations.slice(0, 50).map(function (d) {
+      d = d || {}; var a = d.address || {};
+      return { id: clip(d.id, 40), name: clip(a.name, 160), city: clip(a.city, 100), state: clip(a.state, 40),
+        items: (Array.isArray(d.items) ? d.items : []).slice(0, 50).map(function (i) { return { sku: clip(i && i.sku, 80), qty: numOrNull(i && i.qty) }; }) };
+    });
+  }
+  if (Array.isArray(dl.legs) && dl.legs.length) {
+    out.loads = dl.legs.slice(0, 50).map(function (l) {
+      l = l || {};
+      return { id: clip(l.id, 120), destinationId: clip(l.destinationId, 40), carrier: clip(l.carrier, 120), tracking: clip(l.tracking, 160),
+        status: clip(l.status, 40), units: Array.isArray(l.serials) ? l.serials.length : 0,
+        pickedUpAt: when(l.pickedUpAt), deliveredAt: when(l.deliveredAt),
+        lastConfirmed: l.lastConfirmedLocation && l.lastConfirmedLocation.label ? { label: clip(l.lastConfirmedLocation.label, 200), at: when(l.lastConfirmedLocation.at) } : null };
+    });
+  }
   return out;
 }
 

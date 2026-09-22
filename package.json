@@ -45,13 +45,13 @@
     "test:import": "node scripts/test-import-products.js",
     "test:wlpreview": "node scripts/test-wl-preview.js",
     "test:toolaccess": "node scripts/tests/ttoolaccess.js",
-    "test:plant": "node scripts/test-plant-scan.js && node scripts/test-plant-release.js && node scripts/test-plant-agent.js && node scripts/test-plant-board.js && node scripts/test-plant-work.js && node scripts/test-plant-stats.js && node scripts/test-office-ops.js && node scripts/test-app-manifest.js",
+    "test:plant": "node scripts/test-plant-scan.js && node scripts/test-plant-release.js && node scripts/test-plant-agent.js && node scripts/test-plant-board.js && node scripts/test-plant-work.js && node scripts/test-plant-stats.js && node scripts/test-office-ops.js && node scripts/test-app-manifest.js && node scripts/test-plant-ops.js",
     "demo:build": "node scripts/build-demo.js",
     "test:editor-mode": "node scripts/test-editor-mode.js",
     "test:systems": "node scripts/test-systems-manifest.js",
     "test:portal": "node scripts/test-portal.js && node scripts/test-orders-create.js",
     "test:materials": "node scripts/test-materials.js",
-    "test:logic": "node scripts/test-logic.js && node scripts/test-logic-workflow.js && node scripts/test-order-lifecycle.js",
+    "test:logic": "node scripts/test-logic.js && node scripts/test-office-stage.js && node scripts/test-logic-workflow.js && node scripts/test-order-lifecycle.js",
     "test:logic-workflow": "node scripts/test-logic-workflow.js",
     "test:scope": "node scripts/test-partner-scope.js"
   }
