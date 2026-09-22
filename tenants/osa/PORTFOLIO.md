@@ -262,7 +262,49 @@ sees an empty queue, and is told plainly why.
 
 ---
 
-## 8 · What this still does not do
+## 8 · A partner's portfolio, screened
+
+A partner does not bring one site. iQGen brought sixty-three in our own
+referral template and, separately, a scorecard for the ten they had run
+through the powered-land rubric. Two files, two uploads, one funnel.
+
+**The referral file** lands every row as a deal at `referred` — a site to be
+screened. Three batch decisions are asked once, before the preview: a target
+size for rows that have none (never invented per row), a project type for rows
+that have none, and whether any domain the file names that is not yet a
+partner card should become one (name, kind, JD flag). "Edge Compute" reads as
+`compute` without anybody retyping it. The same site under the same partner —
+by the partner's own `Ref`, else by name across their prefix — is an update
+that writes only what the sheet carries. A `Promote to project` column marks
+the rows that are projects now: each advances to Screening with the uploader
+as rep and gets an editor project owned by OUR org with the partner on its
+`orgsInvolved` roster. That is the JDA: a browser can only create a project in
+its own org, and the roster is what lets the partner see and work it.
+
+**The scorecard** is matched to those deals (ref first, then site name; shown
+and correctable) and each row becomes an appended viability score through
+`postScore()` — the rubric's nine axes as criteria with their ceilings as
+weights, the recommendation as the summary, the pass line taken from the
+rubric's own band table ("worth pursuing" starts at 65). A passing row can be
+promoted and then advanced to `qualified` through the gate, which reads the
+score it just wrote. A row under the line keeps its score as information and
+stays where it was. REJECT is a fact on the record, not an exit.
+
+**The compute screen** runs `/api/compute-lease`'s four gates — power, fiber,
+zoning, site control — on every compute deal in the current pipeline filter
+that has an address, one at a time from the browser. Grid Atlas lands on
+`grid` (the prescreen); the gates, the verdict, the tranche and the asks land
+on `leaseScreen`; a disqualification is a failing prescreen and nothing else
+is. The questions only a person can answer come back as asks on the deal, and
+answering them is a re-run.
+
+**Design on qualification** is a link today, not a job: a promoted compute
+deal opens the editor with `auto=compute`, its address and its MW, which the
+editor's autopilot runs as the map/parcel/roads/score pass on the loaded
+project until core dispatches that mode to the modular build. There is no
+server-side queue in this repository, so nothing designs itself unattended.
+
+## 9 · What this still does not do
 
 Worth saying out loud, because each is a decision rather than an omission.
 

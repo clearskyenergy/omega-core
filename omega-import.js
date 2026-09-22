@@ -44,6 +44,31 @@
        label: 'Francis Energy',
        commit: function (rows, batchId) { return Promise.all(rows.map(create)); }
      });
+
+   ── ONE IMPORTER, MANY SPECS ──
+   The second thing anybody wanted to bulk-load was not a site but a PRODUCT:
+   a vendor's sheet of modular data-center units for the editor's equipment
+   library. Everything above (parse, header synonyms, refusing a hedge,
+   preview-before-write, the needs-attention sheet) is the same problem, so
+   it is the same code, and what differs is carried by the SPEC:
+
+     headers      column synonyms, per field
+     fields       coercion and limits, per field
+     required     which fields hold a row back when empty
+     dedupe       the field that makes a re-upload an update
+     existingKeys where that id lives on an already-saved record
+     derive(rec)  fill-ins after coercion — MW to kW, metres to feet, a
+                  stable key from manufacturer + model when the sheet has
+                  none. A derived key is why "no id column" is NOT a
+                  warning for equipment: the same product twice is one
+                  product, and there is nothing to spell differently.
+     noun         what a row is, for the preview ("project", "unit")
+     label(rec)   how a row is named in the needs-attention table
+     template     headers + example rows, for a downloadable blank
+
+   OmegaImport.PROJECT_SPEC is the original. OmegaImport.MDC_SPEC is the
+   modular data-center unit. The module still does not know what a project
+   or a Firestore document is; the host page's commit() does.
    ═══════════════════════════════════════════════════════════════════════ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -85,8 +110,14 @@
   };
 
   var PROJECT_SPEC = {
+    noun: 'project',
+    headers: HEADERS,
     required: ['name'],
     dedupe: 'external_id',
+    /* Where a saved record keeps the id a sheet calls external_id. Both
+       spellings are live: portfolio.html writes intakeId. */
+    existingKeys: ['intakeId', 'external_id'],
+    label: function (rec) { return rec.name; },
     fields: {
       name:          { type: 'text',  max: 200 },
       external_id:   { type: 'text',  max: 80 },
@@ -104,6 +135,166 @@
     }
   };
 
+  /* ── MODULAR DATA-CENTER UNITS ──────────────────────────────────────────
+     A vendor's product sheet, one row per unit, into the editor's equipment
+     library (equipment/{doc}, cat 'datacenter', sub 'module') and from there
+     into DC_CATALOG so the unit can be dropped on a site to scale.
+
+     WHAT IS REQUIRED, AND WHY MORE THAN ONE COLUMN THIS TIME. A site can
+     be imported on a name alone because everything else is found out
+     later. A unit cannot: the editor draws it at its real footprint and
+     multiplies its IT load by PUE to size the service, so a unit with no
+     dimensions or no load is not a unit, it is a label. Manufacturer,
+     model, IT load and footprint are the floor. Everything else is
+     optional and read straight off the datasheet when it is there.
+
+     `kw_it` is IT LOAD, not facility draw — same rule as DC_CATALOG. A
+     sheet that gives MW, or metres, or millimetres, is converted in
+     derive(); nobody is asked to re-key a datasheet into our units.
+
+     COOLING IS A PROPERTY OF THE PRODUCT. 'integrated' carries its own
+     plant, 'integrated-closed-loop' does so with no site water, and
+     'external' needs a chiller yard drawn beside it. `water_gpd` of zero
+     is a siting fact worth recording on a dry parcel. */
+  var MDC_HEADERS = {
+    manufacturer: ['manufacturer', 'mfr', 'make', 'vendor', 'oem', 'brand', 'supplier', 'maker'],
+    model:        ['model', 'product', 'model name', 'product name', 'model number',
+                   'model no', 'part number', 'unit name', 'name'],
+    key:          ['key', 'sku', 'id', 'part no', 'unit id', 'product id', 'catalog key',
+                   'catalogue key', 'ref', 'reference', 'external id', 'item'],
+    kw_it:        ['it load kw', 'it kw', 'kw it', 'kw', 'it load', 'power kw', 'it capacity kw',
+                   'critical load kw', 'critical kw', 'capacity kw', 'it power kw', 'kw it load',
+                   'it load kw', 'load kw', 'compute kw'],
+    mw_it:        ['it load mw', 'it mw', 'mw it', 'mw', 'capacity mw', 'it capacity mw',
+                   'critical load mw', 'power mw', 'it power mw', 'load mw', 'compute mw'],
+    length_ft:    ['length ft', 'length', 'l ft', 'length feet', 'len ft', 'long ft', 'l'],
+    width_ft:     ['width ft', 'width', 'w ft', 'width feet', 'wide ft', 'w'],
+    height_ft:    ['height ft', 'height', 'h ft', 'height feet', 'tall ft', 'h'],
+    length_m:     ['length m', 'l m', 'length metres', 'length meters'],
+    width_m:      ['width m', 'w m', 'width metres', 'width meters'],
+    height_m:     ['height m', 'h m', 'height metres', 'height meters'],
+    length_mm:    ['length mm', 'l mm'],
+    width_mm:     ['width mm', 'w mm'],
+    height_mm:    ['height mm', 'h mm'],
+    cooling:      ['cooling', 'cooling type', 'heat rejection', 'cooling system', 'thermal'],
+    cool_kw:      ['cooling kw', 'cool kw', 'cooling capacity kw', 'cooling capacity',
+                   'heat rejection kw'],
+    water_gpd:    ['water gpd', 'water', 'gpd', 'water use gpd', 'water gallons per day',
+                   'water consumption', 'gallons per day', 'water use', 'water use gal day'],
+    volts:        ['volts', 'voltage', 'v', 'utility voltage', 'input voltage', 'ac voltage',
+                   'vac', 'volts ac', 'service voltage'],
+    ups:          ['ups', 'ups included', 'backup', 'power protection', 'ups onboard'],
+    pue:          ['pue', 'design pue', 'rated pue'],
+    acres:        ['acres', 'footprint acres', 'site acres', 'land acres', 'pad acres'],
+    cost_usd:     ['cost usd', 'cost', 'price', 'price usd', 'unit cost', 'unit price', 'capex',
+                   '$', 'cost $', 'price $', 'list price', 'budget price'],
+    verified:     ['verified', 'source', 'datasheet', 'spec sheet', 'url', 'link',
+                   'reference url', 'datasheet url', 'source url'],
+    notes:        ['notes', 'note', 'description', 'comments', 'comment', 'spec', 'specs',
+                   'remarks', 'summary']
+  };
+  var COOLING = ['integrated', 'integrated-closed-loop', 'external'];
+  /* Keys are what norm() makes of a cell: lower case, hyphens to spaces. A
+     word that could mean either side ("liquid", "air") is deliberately NOT
+     here — it is refused with a suggestion rather than guessed at, because a
+     liquid-cooled unit may still want a chiller yard. */
+  var COOLING_ALIAS = {
+    'integrated': 'integrated', 'self contained': 'integrated', 'selfcontained': 'integrated',
+    'onboard': 'integrated', 'on board': 'integrated', 'built in': 'integrated',
+    'builtin': 'integrated', 'included': 'integrated', 'internal': 'integrated',
+    'dx': 'integrated', 'in row': 'integrated', 'inrow': 'integrated', 'yes': 'integrated',
+    'integrated closed loop': 'integrated-closed-loop', 'closed loop': 'integrated-closed-loop',
+    'closed circuit': 'integrated-closed-loop', 'direct to chip': 'integrated-closed-loop',
+    'd2c': 'integrated-closed-loop', 'no site water': 'integrated-closed-loop',
+    'waterless': 'integrated-closed-loop', 'dry': 'integrated-closed-loop',
+    'external': 'external', 'chiller': 'external', 'chillers': 'external',
+    'chiller yard': 'external', 'site chillers': 'external', 'chilled water': 'external',
+    'site water': 'external', 'evaporative': 'external', 'cooling tower': 'external',
+    'none': 'external', 'not included': 'external', 'by others': 'external', 'no': 'external'
+  };
+  var UPS = ['integrated', 'external', 'none'];
+  var UPS_ALIAS = {
+    'integrated': 'integrated', 'yes': 'integrated', 'y': 'integrated', 'true': 'integrated',
+    'included': 'integrated', 'onboard': 'integrated', 'on board': 'integrated',
+    'built in': 'integrated', 'builtin': 'integrated', 'internal': 'integrated',
+    'external': 'external', 'by others': 'external', 'site ups': 'external',
+    'separate': 'external', 'not included': 'external',
+    'none': 'none', 'no': 'none', 'n': 'none', 'false': 'none', 'excluded': 'none'
+  };
+
+  function slugKey(s, max) {
+    return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, max || 24);
+  }
+  function feet(rec, base) {
+    var ft = rec[base + '_ft'], m = rec[base + '_m'], mm = rec[base + '_mm'];
+    delete rec[base + '_m']; delete rec[base + '_mm'];
+    if (ft == null && m != null)  ft = m * 3.28084;
+    if (ft == null && mm != null) ft = mm / 304.8;
+    if (ft == null) { delete rec[base + '_ft']; return; }
+    rec[base + '_ft'] = Math.round(ft * 10) / 10;
+  }
+
+  var MDC_SPEC = {
+    noun: 'unit',
+    headers: MDC_HEADERS,
+    required: ['manufacturer', 'model', 'kw_it', 'length_ft', 'width_ft'],
+    dedupe: 'key',
+    existingKeys: ['key'],
+    label: function (rec) {
+      return [rec.manufacturer, rec.model].filter(Boolean).join(' ');
+    },
+    derive: function (rec) {
+      if (rec.kw_it == null && rec.mw_it != null) rec.kw_it = Math.round(rec.mw_it * 1000);
+      delete rec.mw_it;
+      feet(rec, 'length'); feet(rec, 'width'); feet(rec, 'height');
+      if (rec.key) rec.key = String(rec.key).trim().toUpperCase().replace(/\s+/g, '-');
+      else if (rec.manufacturer && rec.model)
+        rec.key = 'MDC-' + slugKey(rec.manufacturer, 16) + '-' + slugKey(rec.model, 24);
+      return rec;
+    },
+    fields: {
+      manufacturer: { type: 'text',   max: 80 },
+      model:        { type: 'text',   max: 120 },
+      key:          { type: 'text',   max: 60 },
+      kw_it:        { type: 'number', min: 1 },
+      mw_it:        { type: 'number', min: 0.001 },
+      length_ft:    { type: 'number', min: 1 },
+      width_ft:     { type: 'number', min: 1 },
+      height_ft:    { type: 'number', min: 1 },
+      length_m:     { type: 'number', min: 0.3 },
+      width_m:      { type: 'number', min: 0.3 },
+      height_m:     { type: 'number', min: 0.3 },
+      length_mm:    { type: 'number', min: 300 },
+      width_mm:     { type: 'number', min: 300 },
+      height_mm:    { type: 'number', min: 300 },
+      cooling:      { type: 'enum',   values: COOLING, alias: COOLING_ALIAS },
+      cool_kw:      { type: 'number', min: 0 },
+      water_gpd:    { type: 'number', min: 0 },
+      volts:        { type: 'number', min: 100 },
+      ups:          { type: 'enum',   values: UPS, alias: UPS_ALIAS },
+      pue:          { type: 'number', min: 1 },
+      acres:        { type: 'number', min: 0 },
+      cost_usd:     { type: 'money',  min: 0 },
+      verified:     { type: 'text',   max: 300 },
+      notes:        { type: 'text',   max: 2000 }
+    },
+    /* The blank a person downloads. The example is the one published unit
+       DC_CATALOG already carries with a source, so the sheet teaches the
+       units by showing real numbers rather than "1234". */
+    template: {
+      headers: ['Manufacturer', 'Model', 'SKU', 'IT load kW', 'Length ft', 'Width ft', 'Height ft',
+                'Cooling', 'Cooling kW', 'Water gpd', 'Volts', 'UPS', 'PUE', 'Acres', 'Cost USD',
+                'Datasheet', 'Notes'],
+      example: [
+        ['Armada', 'Leviathan', 'MDC-ARMADA-LEVIATHAN', 1770, 119, 45, '', 'integrated-closed-loop',
+         2200, 0, 480, 'integrated', '', 0.12, '', 'armada.ai/product/leviathan',
+         'Three containers on one pad: two 45 ft (compute, power) and one 20 ft (cooling). Air-cooled N+1, no site water.'],
+        ['Generic', '1 MW container', '', 1000, 40, 10, '', 'integrated', '', 0, 480, 'integrated',
+         '', '', '', '', 'Planning block, no vendor datasheet behind it.']
+      ]
+    }
+  };
+
   /* ── coercion ─────────────────────────────────────────────────────────── */
 
   function norm(s) {
@@ -111,14 +302,15 @@
       .replace(/[_\-]+/g, ' ').replace(/[^a-z0-9 $]/g, '').replace(/\s+/g, ' ').trim();
   }
 
-  function mapHeaders(headers) {
+  function mapHeaders(headers, spec) {
+    var H = (spec && spec.headers) || HEADERS;
     var out = {}, used = {};
     for (var i = 0; i < headers.length; i++) {
       var h = norm(headers[i]);
       if (!h) continue;
-      for (var key in HEADERS) {
+      for (var key in H) {
         if (used[key]) continue;
-        var syn = HEADERS[key];
+        var syn = H[key];
         for (var j = 0; j < syn.length; j++) {
           if (h === syn[j]) { out[i] = key; used[key] = true; break; }
         }
@@ -183,8 +375,15 @@
     var f = spec.fields[key] || { type: 'text' };
     var s = String(raw == null ? '' : raw).trim();
     if (!s) return { ok: true, value: '' };
-    if (f.type === 'number') return number(s, false);
-    if (f.type === 'money')  return number(s, true);
+    if (f.type === 'number' || f.type === 'money') {
+      var r = number(s, f.type === 'money');
+      /* `min` was declared on every numeric field and checked nowhere, so a
+         -5 MW site and a 0 kW unit both imported as facts. A floor is a
+         floor: below it is refused, with the number, like a hedge is. */
+      if (r.ok && r.value != null && f.min != null && r.value < f.min)
+        return { ok: false, why: '"' + s + '" is below the minimum of ' + f.min };
+      return r;
+    }
     if (f.type === 'email') {
       if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(s))
         return { ok: false, why: '"' + s + '" is not an email address' };
@@ -211,14 +410,16 @@
   function validate(table, spec, existing) {
     spec = spec || PROJECT_SPEC;
     var headers = table.headers || [], rows = table.rows || [];
-    var map = mapHeaders(headers);
+    var map = mapHeaders(headers, spec);
     var unmapped = [];
     for (var h = 0; h < headers.length; h++)
       if (!map[h] && String(headers[h] || '').trim()) unmapped.push(headers[h]);
 
-    var seen = {}, existingIds = {};
+    var seen = {}, existingIds = {}, exKeys = spec.existingKeys || ['intakeId', 'external_id'];
     (existing || []).forEach(function (d) {
-      var id = d && (d.intakeId || d.external_id);
+      if (!d) return;
+      var id = null;
+      for (var k = 0; k < exKeys.length && !id; k++) id = d[exKeys[k]];
       if (id) existingIds[String(id).toLowerCase()] = d;
     });
 
@@ -231,6 +432,12 @@
         var c = coerce(key, raw[j], spec);
         if (!c.ok) why.push(key + ': ' + c.why);
         else if (c.value !== '' && c.value !== null) rec[key] = c.value;
+      }
+      /* Fill-ins come BEFORE the required check, so a sheet that says MW
+         satisfies a spec that asks for kW. */
+      if (typeof spec.derive === 'function') {
+        try { rec = spec.derive(rec) || rec; }
+        catch (e) { why.push('could not read this row: ' + (e && e.message || e)); }
       }
       for (j = 0; j < spec.required.length; j++)
         if (!rec[spec.required[j]]) why.push(spec.required[j] + ' is empty');
@@ -245,12 +452,30 @@
       if (id && existingIds[id]) { row.updates = existingIds[id]; }
       if (why.length) problems.push(row); else ready.push(row);
     }
+    var mappedDedupe = false;
+    for (var mk in map) if (map[mk] === spec.dedupe) mappedDedupe = true;
+    var derived = ready.length > 0 && ready.filter(function (r) { return !r.rec[spec.dedupe]; }).length === 0;
     return {
       ready: ready, problems: problems, unmapped: unmapped,
       mapped: (function () { var o = []; for (var k in map) o.push(map[k]); return o; })(),
-      hasDedupe: (function () { for (var k in map) if (map[k] === spec.dedupe) return true; return false; })(),
+      /* A mapped id column, or a derive() that gave every row that will
+         land one — either way a corrected re-upload updates in place, and
+         the warning that says otherwise would be wrong. */
+      hasDedupe: mappedDedupe || derived,
       updating: ready.filter(function (r) { return r.updates; }).length
     };
+  }
+
+  /* The blank sheet a person downloads before they have anything to import:
+     the columns in our words, plus example rows carrying real numbers so the
+     units are shown rather than described. Rows for XLSX.utils.aoa_to_sheet. */
+  function templateRows(spec) {
+    spec = spec || PROJECT_SPEC;
+    var t = spec.template;
+    if (t && t.headers) return [t.headers.slice()].concat((t.example || []).map(function (r) { return r.slice(); }));
+    var head = [], k;
+    for (k in spec.fields) head.push(k);
+    return [head];
   }
 
   /* ── parsing ──────────────────────────────────────────────────────────── */
@@ -333,11 +558,12 @@
      hundred-row export is telling them to go hunting; handing back a sheet
      with only those rows and a column saying why is something they can fix
      and send back. */
-  function downloadBad(report, label) {
-    var aoa = [['row', 'why'].concat(Object.keys(PROJECT_SPEC.fields))];
+  function downloadBad(report, label, spec) {
+    spec = spec || PROJECT_SPEC;
+    var aoa = [['row', 'why'].concat(Object.keys(spec.fields))];
     report.problems.forEach(function (p) {
       var line = [p.row, p.why.join('; ')];
-      for (var k in PROJECT_SPEC.fields) line.push(p.rec[k] == null ? '' : p.rec[k]);
+      for (var k in spec.fields) line.push(p.rec[k] == null ? '' : p.rec[k]);
       aoa.push(line);
     });
     var wb = XLSX.utils.book_new();
@@ -348,8 +574,11 @@
   function open(opts) {
     css();
     var label = opts.label || 'Import';
+    var spec = opts.spec || PROJECT_SPEC;
+    var noun = spec.noun || 'project';
+    var nameOf = typeof spec.label === 'function' ? spec.label : function (r) { return r.name; };
     return parse(opts.file).then(function (table) {
-      var rep = validate(table, opts.spec || PROJECT_SPEC, opts.existing || []);
+      var rep = validate(table, spec, opts.existing || []);
       return new Promise(function (resolve) {
         var scrim = document.createElement('div');
         scrim.className = 'oim-scrim';
@@ -359,14 +588,15 @@
         if (!rep.hasDedupe)
           warn += '<div class="oim-warn"><b>No id column found.</b> Nothing in this file '
                +  'identifies a row across uploads, so a corrected file sent later cannot '
-               +  'update these — it would add a second copy of every site. Add an '
-               +  '<code>external_id</code> (or “Site ID”) column and re-export if you can.</div>';
+               +  'update these — it would add a second copy of every ' + esc(noun) + '. Add an '
+               +  '<code>' + esc(spec.dedupe) + '</code> (or “ID”) column and re-export if you can.</div>';
         if (rep.unmapped.length)
           warn += '<div class="oim-warn"><b>Columns ignored:</b> ' + esc(rep.unmapped.join(', '))
-               +  '. Nothing was lost from the file — these simply have no home on a project yet.</div>';
+               +  '. Nothing was lost from the file — these simply have no home on a '
+               +  esc(noun) + ' yet.</div>';
 
         var rows = rep.problems.map(function (p) {
-          return '<tr class="bad"><td>' + p.row + '</td><td>' + esc(p.rec.name || '—')
+          return '<tr class="bad"><td>' + p.row + '</td><td>' + esc(nameOf(p.rec) || '—')
                + '</td><td class="oim-why">' + esc(p.why.join('; ')) + '</td></tr>';
         }).join('');
 
@@ -376,13 +606,14 @@
           + '<p>Nothing is saved until you choose to import. Sheet: ' + esc(table.sheet) + '</p></div>'
           + '<div class="oim-b">'
           + '<div class="oim-sum">'
-          +   '<div class="oim-ok"><b>' + creating + '</b>new project' + (creating === 1 ? '' : 's') + '</div>'
+          +   '<div class="oim-ok"><b>' + creating + '</b>new ' + esc(noun) + (creating === 1 ? '' : 's') + '</div>'
           +   (rep.updating ? '<div class="oim-upd"><b>' + rep.updating + '</b>will update existing</div>' : '')
           +   '<div class="oim-bad"><b>' + rep.problems.length + '</b>need attention</div>'
           + '</div>'
           + warn
           + (rep.problems.length
-              ? '<table class="oim-tbl"><thead><tr><th>Row</th><th>Site</th><th>Why it is held back</th></tr></thead>'
+              ? '<table class="oim-tbl"><thead><tr><th>Row</th><th>' + esc(noun.charAt(0).toUpperCase() + noun.slice(1))
+                + '</th><th>Why it is held back</th></tr></thead>'
                 + '<tbody>' + rows + '</tbody></table>'
               : '<p style="color:var(--dim,#5c6b7a);font-size:13px">Every row read cleanly.</p>')
           + '</div>'
@@ -401,7 +632,7 @@
           if (!b) { if (e.target === scrim) close(null); return; }
           var a = b.getAttribute('data-act');
           if (a === 'cancel') return close(null);
-          if (a === 'dl') return downloadBad(rep, label);
+          if (a === 'dl') return downloadBad(rep, label, spec);
           if (a === 'go') {
             b.disabled = true; b.textContent = 'Importing…';
             var id = batchId();
@@ -419,8 +650,8 @@
   }
 
   return {
-    PROJECT_SPEC: PROJECT_SPEC, KINDS: KINDS, HEADERS: HEADERS, open: open,
-    parse: parse, validate: validate, mapHeaders: mapHeaders,
-    coerce: coerce, number: number, batchId: batchId
+    PROJECT_SPEC: PROJECT_SPEC, MDC_SPEC: MDC_SPEC, KINDS: KINDS, HEADERS: HEADERS,
+    open: open, parse: parse, validate: validate, mapHeaders: mapHeaders,
+    coerce: coerce, number: number, batchId: batchId, templateRows: templateRows
   };
 }));
