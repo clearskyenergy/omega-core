@@ -2,12 +2,15 @@
  * Read-only, authenticated listing snapshots in existing tenant toolData.
  */
 'use strict';
-var A=require('./_lib/admin'),access=require('./site-score')._helpers.entitle,importer=require('./_lib/site-catalog');
+var A=require('./_lib/admin'),access=require('./site-score')._helpers.entitle,importer=require('./_lib/site-catalog'),geo=require('./_lib/geocode-listings');
+/* One staff call finishes as much of the unplaced remainder as fits in the function's
+   60 s ceiling (vercel.json) and publishes; the page calls again until `done`. */
+var GEOCODE_BUDGET_MS=38000;
 var CACHE=Object.create(null);
 async function catalog(db,org){
   var root=db.collection('toolData').doc(org).collection('tools'),snap=await root.doc('sitefinderCatalog').get();
   if(!snap.exists)return {manifest:null,rows:[]};var m=snap.data();
-  if(m.kind!=='sitefinder-catalog'||m.orgId!==org||! /^[a-f0-9]{20}$/.test(m.version)||!Number.isInteger(m.pages)||m.pages<1||m.pages>100)throw A.httpError(503,'Invalid listing catalog');
+  if(m.kind!=='sitefinder-catalog'||m.orgId!==org||! /^[a-f0-9]{20}$/.test(m.version)||!Number.isInteger(m.pages)||m.pages<1||m.pages>250)throw A.httpError(503,'Invalid listing catalog');
   var c=CACHE[org];if(c&&c.manifest.version===m.version&&Date.now()-c.at<60000)return c;
   var rows=[];
   for(var i=0;i<m.pages;i++){var d=await root.doc('sitefinderCatalog_'+m.version+'_'+i).get();if(!d.exists||!Array.isArray(d.data().rows))throw A.httpError(503,'Listing catalog incomplete');rows=rows.concat(d.data().rows);}
@@ -32,7 +35,60 @@ module.exports=A.handler(async function(req,res){
     try{importer.validate(b.catalog,org);}catch(e){throw A.httpError(400,e.message);}
     var result=await importer.publish(A.db(),org,b.catalog);delete CACHE[org];return result;
   }
+  if(b.action==='details'){
+    if(!caller.staff)throw A.httpError(403,'ClearSky staff required');
+    var data=await catalog(A.db(),org);if(!data.manifest)throw A.httpError(404,'No listing snapshot imported for this workspace');
+    var rows=data.rows.map(function(r){return JSON.parse(JSON.stringify(r));}),tally;
+    try{tally=importer.applyCaptures(rows,b.captures);}catch(e){throw A.httpError(400,e.message);}
+    var published=tally.applied?await importer.publish(A.db(),org,{manifest:{orgId:org,source:data.manifest.source},rows:rows}):null;
+    if(tally.applied)delete CACHE[org];
+    return {applied:tally.applied,unknown:tally.unknown,fields:tally.fields,detailed:published?published.manifest.detailed:(data.manifest.detailed||0),count:data.manifest.count,version:published?published.manifest.version:data.manifest.version};
+  }
+  if(b.action==='geocode'){
+    if(!caller.staff)throw A.httpError(403,'ClearSky staff required');
+    return finishMatching(A.db(),org,b);
+  }
   if(b.action&&b.action!=='search')throw A.httpError(400,'Invalid action');
   return select(await catalog(A.db(),org),b);
 });
-module.exports._helpers={select:select,catalog:catalog};
+/* Match the remaining listings to the map. Pass 1 runs the Census geocoder over rows it
+   has not tried yet (a time budget, not a row count, bounds one call); once every row
+   has been tried, the leftovers take an area centre derived from their matched
+   neighbours. Each call publishes a new catalogue version so nothing is lost if the
+   browser closes. `reset:true` clears the "attempted" marks and starts over. */
+async function finishMatching(db,org,b){
+  var data=await catalog(db,org);if(!data.manifest)throw A.httpError(404,'No listing snapshot imported for this workspace');
+  var rows=data.rows.map(function(r){return JSON.parse(JSON.stringify(r));});
+  if(b.reset)rows.forEach(function(r){if(r.lat==null)r.geocode={status:'unmatched',source:'US Census',accuracy:'unknown'};});
+  var budget=Math.min(GEOCODE_BUDGET_MS,Math.max(5000,Number(b.budgetMs)||GEOCODE_BUDGET_MS));
+  var pass=await geo.geocodeRows(rows,b._fetchJson||geo.fetchJson,{budgetMs:budget,concurrency:6});
+  var approximate=0;
+  if(pass.remaining===0&&!pass.transportError)approximate=geo.areaFallback(rows);
+  var changed=pass.matched+approximate>0;
+  var result=changed?await importer.publish(db,org,{manifest:{orgId:org,source:data.manifest.source},rows:rows}):null;
+  if(changed)delete CACHE[org];
+  var m=result?result.manifest:data.manifest,unmatched=rows.filter(function(r){return r.lat==null;}).length;
+  var done=pass.remaining===0&&!pass.transportError;
+  /* Mark the manifest so the scheduled worker stops re-reading a finished catalogue; a fresh import writes a new manifest without the mark. */
+  if(done)await db.collection('toolData').doc(org).collection('tools').doc('sitefinderCatalog').set({matchingDone:true,matchedAt:new Date().toISOString()},{merge:true});
+  return {attempted:pass.attempted,matched:pass.matched,approximate:approximate,transportError:pass.transportError,
+    count:m.count,located:m.located,unmatched:unmatched,remainingToTry:pass.remaining,done:done,version:m.version||null};
+}
+/* The catalogue the scheduled worker should work on next: the first workspace whose
+   catalogue is not marked finished and still has rows without a location. One pass per
+   worker tick, so a 3,677-row catalogue completes on its own within the hour of an
+   import without anyone pressing anything. */
+async function nextCatalogueToMatch(db){
+  var refs=await db.collection('toolData').listDocuments();
+  for(var i=0;i<refs.length;i++){
+    var m=await refs[i].collection('tools').doc('sitefinderCatalog').get();
+    if(!m.exists)continue;var d=m.data();
+    if(d.kind==='sitefinder-catalog'&&!d.matchingDone&&Number(d.count)>Number(d.located||0))return refs[i].id;
+  }
+  return null;
+}
+async function matchNextCatalogue(db,budgetMs){
+  var org=await nextCatalogueToMatch(db);if(!org)return null;
+  var r=await finishMatching(db,org,{budgetMs:budgetMs||25000});r.orgId=org;return r;
+}
+module.exports._helpers={select:select,catalog:catalog,finishMatching:finishMatching,nextCatalogueToMatch:nextCatalogueToMatch,matchNextCatalogue:matchNextCatalogue};

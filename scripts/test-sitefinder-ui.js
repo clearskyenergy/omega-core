@@ -5,7 +5,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('./site-agent/node_modules/playwright');
+/* The optional install in scripts/site-agent, or any playwright(-core) named
+   by PLAYWRIGHT_MODULE; SITEFINDER_BROWSER=bundled runs Playwright's own
+   Chromium instead of the Chrome channel. */
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || './site-agent/node_modules/playwright');
+const launchOpts = { headless: true };
+if (process.env.SITEFINDER_BROWSER !== 'bundled') launchOpts.channel = 'chrome';
 const root = path.resolve(__dirname, '..');
 const rows = [
   { id: 'fixture-a', addr: '100 Test Warehouse', city: 'Test city', state: 'IL', zip: '00000', lat: 41.85, lon: -87.71, type: 'Warehouse', sqft: 80000, lotAcres: 5, annualKwh: { value: 2000000, src: 'metered' }, feederId: 'TEST-A', nameplate: 1500, queue: 100, owner: { name: 'Test Owner LLC' }, photos: [], src: 'test' },
@@ -13,11 +18,11 @@ const rows = [
   { id: 'fixture-c', addr: '300 Unknown Site', city: 'Test city', state: 'IL', zip: '00000', lat: 41.852, lon: -87.712, type: 'Industrial', sqft: null, lotAcres: 2, annualKwh: null, feederId: '', nameplate: null, owner: { name: '' }, photos: [], src: 'test' }
 ];
 (async function () {
-  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  const browser = await chromium.launch(launchOpts);
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
     const errors = [];
-    page.on('pageerror', e => { errors.push(e.message); console.error('Browser error:', e.message); });
+    page.on('pageerror', e => { errors.push(e.message); console.error('Browser error:', e.stack || e.message); });
     await page.addInitScript(() => {
       window._currentUser = { uid: 'test-only', email: 'test@example.com', getIdToken: () => Promise.resolve('fixture-token') };
       window.firebase = { auth: () => ({ currentUser: window._currentUser }) };
@@ -25,7 +30,12 @@ const rows = [
     });
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
-      if (url.hostname === 'cdnjs.cloudflare.com' && url.pathname.includes('/leaflet/')) { await route.continue(); return; }
+      if (url.hostname === 'cdnjs.cloudflare.com' && url.pathname.includes('/leaflet/')) {
+        /* LEAFLET_DIR serves a local copy where the sandbox has no CDN access. */
+        const local = process.env.LEAFLET_DIR && path.join(process.env.LEAFLET_DIR, path.basename(url.pathname));
+        if (local && fs.existsSync(local)) { await route.fulfill({ body: fs.readFileSync(local), contentType: local.endsWith('.css') ? 'text/css' : 'application/javascript' }); return; }
+        await route.continue(); return;
+      }
       if (url.hostname !== 'sitefinder.test') { await route.fulfill({ status: 200, body: '', contentType: 'application/javascript' }); return; }
       if (url.pathname === '/api/site-score') {
         const body = route.request().postDataJSON();
@@ -40,10 +50,21 @@ const rows = [
         await route.fulfill({ json: { scored, weightsSource: 'test fixture', asOf: '2026-09-21' } }); return;
       }
       if (url.pathname === '/api/site-catalog') {
-        await route.fulfill({json:{total:2,hasMore:false,manifest:{count:2,located:1},rows:[
-          {id:'crexi:123',addr:'1 Listed Warehouse',city:'Chicago',state:'IL',zip:'60601',type:'Industrial',sqft:50000,lat:41.8,lon:-87.7,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/123/test',askPrice:100000},geocode:{accuracy:'street-interpolated'},photos:[]},
-          {id:'crexi:124',addr:'2 Unplaced Listing',city:'Chicago',state:'IL',zip:'60601',type:'Office',sqft:null,lat:null,lon:null,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/124/test'},photos:[]}
+        await route.fulfill({json:{total:4,hasMore:false,manifest:{count:4,located:3,approximate:1,unmatched:1,detailed:1},rows:[
+          {id:'crexi:123',addr:'1 Listed Warehouse',city:'Chicago',state:'IL',zip:'60601',type:'Industrial',sqft:50000,lat:41.8,lon:-87.7,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/123/test',askPrice:100000},geocode:{status:'matched',accuracy:'street-interpolated'},photos:[]},
+          {id:'crexi:126',addr:'5730 W Dempster St',city:'Morton Grove',state:'IL',zip:'60053',type:'Industrial',subtype:'Retail | Pharmacy/Drug',sqft:44000,lat:42.04,lon:-87.78,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/126/test',askPrice:null},geocode:{status:'matched',accuracy:'street-interpolated'},photos:[],
+            detail:{unpriced:true,daysOnMarket:1,updated:'Updated 1 day ago',headline:'Walgreens - Morton Grove, IL',noi:375435,occupancy:100,leaseType:'NN',leaseExpiration:'07/31/2028',yearBuilt:2001,listedBy:'JLL',brokers:[{name:'Alex Geanakos',firm:'JLL'},{name:'Mohsin Mirza',firm:'JLL',phone:'(312) 555-0142'}],capturedAt:'2026-09-22T12:00:00Z',src:'crexi-page'}},
+          {id:'crexi:124',addr:'2 Unplaced Listing',city:'Chicago',state:'IL',zip:'60601',type:'Office',sqft:null,lat:null,lon:null,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/124/test'},photos:[]},
+          {id:'crexi:125',addr:'Lot 3 Area Centre Listing',city:'Chicago',state:'IL',zip:'60601',type:'Vacant Land',sqft:null,lotAcres:2,lat:41.81,lon:-87.71,src:'crexi-import',listed:{forSale:true,url:'https://www.crexi.com/properties/125/test',askPrice:250000},geocode:{status:'approximate',source:'derived',accuracy:'area centre of 12 matched listings in ZIP 60601; not the parcel',area:'ZIP 60601'},photos:[]}
         ]}});return;
+      }
+      if (url.pathname === '/api/site-lease') {
+        const b=route.request().postDataJSON();
+        assert.equal(b.site.id,'fixture-a','the lease is priced for the open site');
+        assert.ok(b.kw>0&&b.kwh>0,'the lease is priced against the sized battery');
+        const offer=require('../api/_lib/site-lease').offer({kw:b.kw,kwh:b.kwh,acres:b.acres,termYears:b.termYears});
+        delete offer.components;
+        await route.fulfill({json:{build:'site-lease/1',offer,site:b.site,brand:{name:'Example Energy'},disclaimer:'Indicative host lease, not a binding offer.'}});return;
       }
       if (url.pathname === '/api/price-site' && process.env.SITEFINDER_WALKTHROUGH) {
         const result=require('../api/price-site')._helpers.finish({staff:false},'example.com',route.request().postDataJSON(),{rates:null,installer:null,supplier:null,note:'Illustrative walkthrough using generic model rates, not a supplier quote.'});
@@ -146,12 +167,71 @@ const rows = [
     assert.equal(await page.locator('.card').count(), 1, 'saved view works before any fresh search');
     await page.locator('[data-view="catalog"]').click();
     await page.locator('.card[data-id="crexi:124"]').waitFor();
-    assert.equal(await page.locator('.card').count(),2,'located and unplaced listings both render');
+    assert.equal(await page.locator('.card').count(),4,'located, detailed, unplaced and area-centre listings all render');
+    const walgreens=await page.locator('.card[data-id="crexi:126"] .facts').innerText();
+    assert.match(walgreens,/Unpriced · call for offers/); assert.match(walgreens,/Days on market\s+1 · updated 1 day ago/); assert.match(walgreens,/NOI\s+\$375,435\/yr/);
+    assert.match(walgreens,/Walgreens - Morton Grove, IL · 100% occupied · NN lease · expires 07\/31\/2028/); assert.match(walgreens,/Built\s+2001/);
+    assert.match(walgreens,/Alex Geanakos, JLL\nMohsin Mirza, JLL · \(312\) 555-0142/,'brokers from the captured page are the contact');
+    assert.equal((walgreens.match(/pending API integration/g)||[]).length,3,'value, last sale and owner still say why they are missing');
+    assert.match(await page.locator('#catalogStatus').innerText(),/2 of 4 have Census street positions, 1 sit at the centre of their ZIP, 1 still need a location/);
+    await page.evaluate(()=>{const d=document.getElementById('catalogDetails');d.hidden=false;d.open=true;});
+    assert.match(await page.locator('#captureBookmarklet').getAttribute('href'),/^javascript:\(function crexiCaptureBookmarklet\(\)/,'the bookmarklet is built from the page\'s own function');
+    assert.doesNotMatch(await page.locator('#captureBookmarklet').getAttribute('href'),/\/\/ /,'no line comments inside a javascript: URL');
+    await page.locator('#catalogLinks').click();
+    const queue=JSON.parse(await page.locator('#catalogLinksOut').inputValue());
+    assert.equal(queue.kind,'crexi-capture-queue');
+    assert.deepEqual(queue.urls,['https://www.crexi.com/properties/123/test','https://www.crexi.com/properties/124/test','https://www.crexi.com/properties/125/test'],'the list is every listing on the page without captured details');
+    assert.match(await page.locator('#catalogStatus').innerText(),/1 carry listing page details/);
     assert.equal(await page.locator('a[href="https://www.crexi.com/properties/123/test"]').count(),1);
+    const facts=await page.locator('.card[data-id="crexi:123"] .facts').innerText();
+    assert.match(facts,/Asking\s+\$100,000/,'the snapshot\'s asking price is on the card');
+    assert.equal((facts.match(/pending API integration/g)||[]).length,5,'value, last sale, days on market, owner and contact say why they are missing');
+    assert.match(await page.locator('.card[data-id="crexi:125"]').innerText(),/centre of ZIP 60601, not the parcel/,'an area-centre pin says so on the card');
+    assert.equal(await page.evaluate(()=>{const r=window.__siteTest.ST.byId['crexi:125'];return r.approx&&r.approxKind;}),'area centre','an approximate listing carries the approximate-pin flags');
     await page.locator('.card[data-id="crexi:124"] .energyLead').click();
     assert.equal(await page.locator('#rSave').count(),0,'unplaced listings cannot hold capacity');
     assert.match(await page.locator('#dVerify').innerText(),/Location not verified/i);
+    await page.locator('#dClose').click();
+    /* The host lease offer, from the sized fixture: priced server-side, opened as a document. */
+    await page.locator('[data-view="saved"]').click();
+    await page.locator('.card[data-id="fixture-a"] [data-lease-id]').waitFor();
+    await page.locator('.card[data-id="fixture-a"] .energyLead').click();
+    await page.locator('#siteLease').waitFor();
+    assert.equal(await page.locator('#leaseTerm').inputValue(),'15');
+    await page.locator('#leaseTerm').fill('20');
+    await page.locator('#leaseQuote').click();
+    await page.locator('#leaseOpen').waitFor();
+    const leaseText=await page.locator('#siteLease').innerText();
+    assert.match(leaseText,/per month, year one/); assert.match(leaseText,/over 20 years/,'the term the rep typed is the term priced');
+    const [popup]=await Promise.all([page.waitForEvent('popup'),page.locator('#leaseOpen').click()]);
+    await popup.waitForLoadState();
+    const doc=await popup.content();
+    assert.match(doc,/Your land\.<br>Our battery\./); assert.match(doc,/Test Owner LLC/,'the owner on the card is the host on the proposal');
+    assert.match(doc,/Example Energy/,'the workspace brand is on the proposal'); assert.match(doc,/receive rent for 20 years/);
+    await popup.close();
+    await page.locator('#szKwN').fill('200'); await page.locator('#szKwN').press('Tab');
+    assert.match(await page.locator('#siteLease').innerText(),/changed since this offer was priced/,'a resize marks the offer stale');
+    /* Call the owner: who, what to say, and the log on the site's notes. */
+    const call=await page.locator('#siteCall').innerText();
+    assert.match(call,/Owner\s+Test Owner LLC/); assert.match(call,/number is not on file/);
+    const script=await page.locator('#callScript').inputValue();
+    assert.match(script,/Hi Test, this is Test Rep/); assert.match(script,/100 Test Warehouse/); assert.match(script,/\$[\d,]+ a month, rising 2\.5% a year, for 20 years/,'the priced lease offer is in the talk track');
+    await page.locator('#callOwnerPhone').fill('(312) 555-0199'); await page.locator('#callOwnerSave').click();
+    await page.locator('#siteCall a[href="tel:3125550199"]').waitFor();
+    await page.locator('#callOutcome').selectOption('Spoke — interested'); await page.locator('#callNote').fill('Walk the site Tuesday');
+    await page.locator('#callLogSave').click();
+    await page.locator('.callLog li').waitFor();
+    assert.match(await page.locator('.callLog li').first().innerText(),/Call · Spoke — interested · Test Owner LLC · Walk the site Tuesday/);
+    assert.equal(await page.evaluate(()=>window.OmegaSiteSaves.get('fixture-a').ownerPhone),'(312) 555-0199','the found number is saved on the site');
+    await page.locator('#dClose').click();
+    await page.locator('[data-view="catalog"]').click();
+    await page.locator('.card[data-id="crexi:126"] [data-call-id]').click();
+    await page.locator('#siteCall').waitFor();
+    const brokerCall=await page.locator('#siteCall').innerText();
+    assert.match(brokerCall,/Listing broker\s+Alex Geanakos, JLL number masked/); assert.match(brokerCall,/Mohsin Mirza, JLL · \(312\) 555-0142/);
+    assert.match(await page.locator('#callScript').inputValue(),/Hi Alex,[\s\S]*I know the property is listed/,'a broker gets the broker version of the script');
+    await page.locator('#dClose').click();
     assert.deepEqual(errors, []);
-    console.log('Site Finder browser workflow passed: score/hosting filters, saved visibility, sizing/hold consistency, unknown feeder, mobile layout.');
+    console.log('Site Finder browser workflow passed: score/hosting filters, saved visibility, sizing/hold consistency, unknown feeder, mobile layout, catalogue coverage and area-centre pins, property facts, host lease proposal.');
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

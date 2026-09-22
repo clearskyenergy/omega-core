@@ -1499,3 +1499,36 @@ Verification covers mocked authenticated endpoints, client batching and stale
 responses, save isolation, hold rollback, pricing parity, and a fixture-only
 desktop/mobile browser workflow. Live Crexi and live Firestore verification
 remain environment-dependent.
+
+## Site Finder: finished map, property card, product fit, host lease — September 22, 2026
+
+The Cook County listing snapshot (3,677 rows) had 881 without a map
+location: `scripts/prepare-site-catalog.js` kept only a Census batch
+`Exact` match on a cleanly parsed address. `api/_lib/geocode-listings.js`
+(shared by the prepare script and a staff `action:'geocode'` on
+`api/site-catalog.js`) retries every unplaced row through several spellings
+with the one-line geocoder, then places the remainder at the median of the
+matched listings in its ZIP/city as `geocode.status:'approximate'`. The
+catalogue validator accepts that status only with its accuracy note; the
+manifest carries `located`, `approximate`, `unmatched`. In the browser an
+approximate row takes the existing `approx` flags (no feeder, no hold, pin
+fix on open). `tests/geocode-listings.test.js`, `tests/site-catalog.test.js`.
+
+Product fit moved out of the page into `OmegaBessCatalog.fit` and changed
+rule: fewest units first, then closest (a shortfall counts 1.5×). A 3 MWh
+need is one 3.4 MWh container, not four cabinets. `scripts/test-catalog-fit.js`.
+
+The card prints asking price, value, last sale, days on market, owner and
+contact, with "pending API integration" for what the snapshot does not carry.
+
+Lease pricing is server-side: `api/_lib/site-lease.js` (seed rate card) behind
+`api/site-lease.js`, gated on the Site Finder entitlement, components hidden
+from non-staff. `omega-site-lease.js` renders the host proposal. No rules,
+production data, credentials or deployment changed; the live catalogue is
+re-matched by pressing the button once as staff.
+
+The listing catalogue finishes its own map: `api/logic-worker.js` (the
+five-minute cron) runs one `finishMatching` pass per tick for the first
+workspace whose catalogue is not marked `matchingDone`, so an import is
+fully placed within the hour with nobody pressing anything. The host lease
+rate card (v2) cites its published basis in `RATE_CARD.sources`.

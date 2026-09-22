@@ -424,10 +424,13 @@ ok('the recommendation is right-sized, not maximised', function () {
      closest to the default duration; the maximum survives as a note. */
   var fn = html.slice(html.indexOf('function fitOptions(r)'));
   fn = fn.slice(0, fn.indexOf('function mergeOpt'));
-  assert(/var n = Math\.round\(targetKwh \/ unit\)/.test(fn),
-    'units are still sized against the ceiling rather than the target');
-  assert(/Math\.abs\(a\.kwh - targetKwh\)/.test(fn),
-    'the list is not ordered by closeness to the target');
+  /* The rule now lives in OmegaBessCatalog.fit (scripts/test-catalog-fit.js
+     proves it): sized to the TARGET, fewest units first, then closest. A
+     3 MWh need is one 3.4 MWh container, not four cabinets. */
+  assert(/OmegaBessCatalog\.fit\(prods, pick\.kw, targetKwh/.test(fn),
+    'the pick is not sized against the target through the shared fit rule');
+  assert(/\(a\.units \|\| 0\) !== \(b\.units \|\| 0\)/.test(fn) && /a\.ratio >= 1 \? a\.ratio - 1/.test(fn),
+    'the list is not ordered fewest units first, then closest to the target');
   assert(/biggest/.test(fn),
     'the maximum is no longer computed at all — it is still a real question');
 });
@@ -443,8 +446,8 @@ ok('the maximum is bounded, and says by what', function () {
   fn = fn.slice(0, fn.indexOf('function mergeOpt'));
   assert(/MAX_FIT_HOURS/.test(fn) && /MAX_FIT_UNITS/.test(fn),
     'the maximum is unbounded');
-  assert(/if \(n > MAX_FIT_UNITS\) n = MAX_FIT_UNITS/.test(fn),
-    'the unit cap is not applied, so the smallest product will always win');
+  assert(/maxUnits: MAX_FIT_UNITS/.test(fn),
+    'the unit cap is not handed to the fit rule, so the smallest product could tile its way in');
   assert(/biggest \|\| kMax > biggest\.kwh/.test(fn),
     'the largest configuration is not tracked, so the panel cannot answer '
     + '"how big could this go"');
