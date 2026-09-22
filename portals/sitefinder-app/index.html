@@ -229,7 +229,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
   var DEFAULT_HOURS = 4, MAX_FIT_UNITS = 4;
   var ORG_ALIAS = { "fenecon.de": "fenecon.com", "fenecon.us": "fenecon.com" };
   var STAFF = /^(clearsky-usa\.com|csebuilders\.com)$/;
-  var ST = { user: null, org: "", staff: false, rows: [], byId: {}, sel: null, leases: {}, leaseBusy: {}, projects: {}, projectBusy: {}, saveNote: {}, epoch: 0, view: "find", installPrompt: null, db: null };
+  var ST = { user: null, org: "", staff: false, rows: [], byId: {}, sel: null, leases: {}, leaseBusy: {}, projects: {}, projectBusy: {}, saveNote: {}, confirmed: {}, epoch: 0, view: "find", installPrompt: null, db: null };
 
   /* ── small helpers ─────────────────────────────────────────────────── */
   function $(id) { return document.getElementById(id); }
@@ -250,7 +250,14 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
         .then(function (d) { cb(null, d); })["catch"](cb);
     });
   }
-  function isSaved(id) { try { return !!(SAVES && SAVES.isSaved(id)); } catch (e) { return false; } }
+  /* The shared stream owns the saved list, and it echoes a write a beat after
+     the write is confirmed. In that beat the star used to re-render empty,
+     and a second tap removed the record the first had just saved. A confirmed
+     write is the truth until the stream catches up. */
+  function isSaved(id) {
+    if (ST.confirmed && Object.prototype.hasOwnProperty.call(ST.confirmed, id)) return ST.confirmed[id];
+    try { return !!(SAVES && SAVES.isSaved(id)); } catch (e) { return false; }
+  }
   function savedRec(id) { try { return SAVES ? SAVES.get(id) : null; } catch (e) { return null; } }
 
   /* ── routing ───────────────────────────────────────────────────────── */
@@ -741,6 +748,11 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
      with nothing (shared with the workspace), LOCAL_ONLY (this browser
      only, Firestore unreachable) or a refusal; the star must not fill on a
      refusal, and a rep must not think a phone-only save reached the office. */
+  /* A write the module confirmed (no error, or LOCAL_ONLY which did store)
+     pins the star until the stream's next change; a refusal pins nothing. */
+  function confirmSaved(id, err, starred) {
+    if (!err || err.code === "LOCAL_ONLY") ST.confirmed[id] = starred; else delete ST.confirmed[id];
+  }
   function saveOutcome(r, err, verb) {
     var st = null; try { st = SAVES && SAVES.state(); } catch (e) {}
     if (err && err.code === "LOCAL_ONLY") ST.saveNote[r.id] = { kind: "local", text: verb + " on this phone only — not shared with " + ST.org + " (" + (st && st.why ? st.why : "the workspace could not be reached") + ")." };
@@ -767,8 +779,8 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     if ((b = $("starBtn"))) b.onclick = function () {
       var was = isSaved(r.id);
       ST.saveNote[r.id] = { kind: "saving", text: was ? "Removing…" : "Saving…" }; renderSite(r);
-      if (was) SAVES.remove(r.id, function (err) { saveOutcome(r, err, "Removed"); if (ST.sel === r.id) renderSite(r); });
-      else persist(r, {}, function (err) { saveOutcome(r, err, "Saved"); if (ST.sel === r.id) renderSite(r); });
+      if (was) SAVES.remove(r.id, function (err) { confirmSaved(r.id, err, false); saveOutcome(r, err, "Removed"); if (ST.sel === r.id) renderSite(r); });
+      else persist(r, {}, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); if (ST.sel === r.id) renderSite(r); });
     };
     if ((b = $("szKw"))) b.onchange = function () { r.sizePick = { kw: +this.value, hours: +$("szHrs").value }; renderSite(r); };
     if ((b = $("szHrs"))) b.onchange = function () { r.sizePick = { kw: +$("szKw").value, hours: +this.value }; renderSite(r); };
@@ -792,7 +804,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       if (!name && !phone) return;
       if (name) fields.ownerName = name; if (phone) fields.ownerPhone = phone;
       r.owner = r.owner || {}; if (name) r.owner.name = name; if (phone) r.owner.phone = phone;
-      persist(r, fields, function (err) { saveOutcome(r, err, "Saved"); renderSite(r); });
+      persist(r, fields, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); renderSite(r); });
     };
     if ((b = $("scriptCopy"))) b.onclick = function () {
       var ta = $("script"), btn = this;
@@ -801,7 +813,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
     if ((b = $("callLog"))) b.onclick = function () {
       var note = "Call · " + $("callOutcome").value + ($("callWho").value.trim() ? " · " + $("callWho").value.trim() : "") + ($("callNote").value.trim() ? " · " + $("callNote").value.trim() : "");
       var btn = this; btn.disabled = true;
-      persist(r, { note: note }, function (err) { saveOutcome(r, err, "Saved"); btn.disabled = false; renderSite(r); });
+      persist(r, { note: note }, function (err) { confirmSaved(r.id, err, true); saveOutcome(r, err, "Saved"); btn.disabled = false; renderSite(r); });
     };
   }
 
@@ -876,7 +888,7 @@ textarea.small{width:100%;min-height:56px;font:14px/1.4 inherit;padding:8px;bord
       ST.org = orgFor(u);
       $("topWho").textContent = u.displayName || u.email || "";
       $("topOrg").textContent = ST.org;
-      if (SAVES) { SAVES.init(ST.org, u, function () { if (ST.view === "saved") renderSaved(); if (ST.view === "site" && ST.sel && ST.byId[ST.sel]) renderSite(ST.byId[ST.sel]); }, ST.db); SAVES.onChange(function () { if (ST.view === "saved") renderSaved(); }); }
+      if (SAVES) { SAVES.init(ST.org, u, function () { if (ST.view === "saved") renderSaved(); if (ST.view === "site" && ST.sel && ST.byId[ST.sel]) renderSite(ST.byId[ST.sel]); }, ST.db); SAVES.onChange(function () { ST.confirmed = {}; if (ST.view === "saved") renderSaved(); if (ST.view === "site" && ST.sel && ST.byId[ST.sel]) renderSite(ST.byId[ST.sel]); }); }
       if (L.setIdentity) L.setIdentity(u.uid, u.email || "");
       L.attach(ST.db, ST.org, function () {});
       route();
