@@ -14,10 +14,14 @@
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
 var ROOT = path.join(__dirname, '..');
-var CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-var PW = process.env.PLAYWRIGHT || '/opt/node22/lib/node_modules/playwright';
-if (!fs.existsSync(CHROME) || !fs.existsSync(PW)) { console.log('render-logic-pages: Chromium or Playwright not found; skipped'); process.exit(0); }
-var chromium = require(PW).chromium;
+/* Playwright: $PLAYWRIGHT, else the repo's own node_modules (what CI
+   installs), else the sandbox's global copy. Chromium: $CHROME, else the
+   sandbox's pinned build, else whatever this Playwright downloaded. */
+var PW = process.env.PLAYWRIGHT || (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })();
+var chromium; try { chromium = require(PW).chromium; } catch (e) { console.log('render-logic-pages: Playwright not found (' + PW + '); skipped'); process.exit(0); }
+var SANDBOX_CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+var CHROME = process.env.CHROME || (fs.existsSync(SANDBOX_CHROME) ? SANDBOX_CHROME : chromium.executablePath());
+if (!fs.existsSync(CHROME)) { console.log('render-logic-pages: Chromium not found (' + CHROME + '); skipped'); process.exit(0); }
 var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
 
 require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in a render check'); }, safeOrg: function (x) { return x; } } };
@@ -74,12 +78,24 @@ var officeJson = { owner: false, org: 'cleancell.us', name: 'Clean Cell', brand:
     { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
     { id: 'o3', orderNo: 'CC-26-4421', status: 'new', customer: { name: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
   ], limited: false };
+/* The board, operations and attention pages the manager and the phone app
+   read (api/logic-plant.js page=board|ops|attention), rolled up by the same
+   pure libraries the endpoint uses over the fixture's work order and units. */
+var Board = require('../api/_lib/plant-board'), Ops = require('../api/_lib/plant-ops'), Attention = require('../api/_lib/plant-attention');
+function boardJson(q) {
+  var now = new Date().toISOString(), units = mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); });
+  var rows = [Board.row(wo, units, now)], common = { name: 'Clean Cell', owner: false, flow: flow, brand: brand, asOf: now, rows: rows, limited: false, unitsLimited: false, links: {} };
+  if (/page=board/.test(q)) return common;
+  return Object.assign(common, { floor: Ops.floor([], now, 14), queues: Ops.queues(rows), demand: Ops.demand(rows), stock: Ops.stock([]), completed: Ops.completed(rows), scansLimited: false, stockLimited: false });
+}
 function plantJson(q) {
   if (/map=1/.test(q)) return mapJson();
+  if (/page=board|page=ops/.test(q)) return boardJson(q);
+  if (/page=attention/.test(q)) return Object.assign(Attention.attention(mapUnits, [], flow.routing, new Date().toISOString(), {}), { name: 'Clean Cell', owner: false, brand: brand, sampled: mapUnits.length, sampledLimit: false, links: {} });
   if (/page=works/.test(q)) return { rows: [wo], next: null };
   if (/page=units/.test(q)) return { rows: mapUnits.map(function (u) { return Object.assign({ id: 'cleancell.us__' + u.serial, orgId: 'cleancell.us', woId: 'wo_1' }, u); }), next: null };
   if (/page=stations/.test(q)) return { rows: [], next: null };
-  if (/workOrder=/.test(q)) return { workOrder: wo, units: mapUnits.slice(3, 5).map(function (u) { return Object.assign({}, u, { woId: 'wo_1', progress: { station: u.at, done: 1, total: 3, open: ['2 · Harness', 'Torque busbars'], complete: false } }); }), limited: false };
+  if (/workOrder=/.test(q)) { var wUnits = mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); }), wNow = new Date().toISOString(); return { workOrder: wo, board: Board.row(wo, wUnits, wNow), activity: Board.activity(wUnits, wo, 50), units: mapUnits.slice(3, 5).map(function (u) { return Object.assign({}, u, { woId: 'wo_1', progress: { station: u.at, done: 1, total: 3, open: ['2 · Harness', 'Torque busbars'], complete: false } }); }), limited: false }; }
   return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); }), limited: false };
 }
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
@@ -286,7 +302,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('[data-tab="stock"]'); await p.waitForTimeout(500);
     var stock = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 60); }); });
     ok('the app lists the open work order as a card with progress', cards.length === 1 && /CC-26-4419/.test(cards[0]), cards);
-    ok('  four tabs at the bottom', tabs.join('|') === 'Work|Scan|Stock|Quality', tabs);
+    ok('  five tabs at the bottom, Today first', tabs.join('|') === 'Today|Work|Scan|Stock|Quality', tabs);
     ok('  a work order shows its units with station and step progress', /CC-26-4419/.test(h1) && units.length >= 2 && /1 of 3 steps/.test(units.join(' ')), units);
     ok('  quality lists the held unit', held === 1, held);
     ok('  stock counts finished units and short parts', stock.length >= 5 && /CC-C215.*2 available/.test(stock[0]) && /on hand/.test(stock[1]), stock);

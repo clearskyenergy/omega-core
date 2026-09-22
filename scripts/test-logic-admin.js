@@ -23,7 +23,7 @@ var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0
     getUserByEmail: async function (e) { if (!users[e]) { var err = new Error('no user'); err.code = 'auth/user-not-found'; throw err; } return users[e]; },
     createUser: async function (o) { users[o.email] = { uid: 'u_' + o.email, email: o.email, customClaims: {} }; return users[o.email]; },
     setCustomUserClaims: async function (uid, c) { claims[uid] = c; },
-    generatePasswordResetLink: async function (e) { var l = 'https://reset.test/' + e; links.push(l); return l; } }; } }; } };
+    generatePasswordResetLink: async function (e, o) { if (o && /unlisted\.clearskyomega\.com/.test(o.url)) { var err = new Error('Domain not allowlisted by project'); err.code = 'auth/unauthorized-continue-uri'; throw err; } var l = 'https://reset.test/' + e + '?continue=' + encodeURIComponent(o && o.url || ''); links.push(l); return l; } }; } }; } };
 mock('../api/_lib/admin', A);
 mock('../api/_lib/mail', { configured: function () { return true; }, send: async function (to) { mails.push(to); return { ok: true }; }, layout: function (t, b) { return b; }, button: function (h) { return h; }, esc: function (s) { return s; }, templates: {} });
 var api = require('../api/logic-admin'), billingApi = require('../api/tenant-billing'), brandingApi = require('../api/tenant-branding');
@@ -111,6 +111,9 @@ function seed() {
     assert.equal(db.data.get('omega_orgs/fresh.com'), undefined, 'a refused request writes nothing');
     var sent = await call({ action: 'commission', orgId: 'mailed.com', name: 'Mailed', ownerEmail: 'a@mailed.com', sendMail: true });
     assert.equal(sent.owner.mail, 'sent'); assert.deepEqual(mails, ['a@mailed.com']);
+    /* a host Firebase Auth has not authorized: the link still comes back, continuing to the hub, and says so */
+    var unl = await call({ action: 'commission', orgId: 'unlisted.example.com', name: 'Unlisted', ownerEmail: 'a@unlisted.example.com' });
+    assert.match(unl.owner.resetLink, /continue=https%3A%2F%2Fsilmarillion\.clearskyomega\.com/); assert.match(unl.owner.resetLinkNote, /not an authorized domain/); assert.equal(unl.owner.resetLinkError, null);
   });
 
   await test('4 · the list shows Logic subscribers by default and every tenant on request', async function () {
@@ -131,6 +134,8 @@ function seed() {
     assert.deepEqual(d.hosts.map(function (h) { return h.mirrored; }), [true, true]);
     assert.deepEqual(d.counts, { orders: 2, customers: 1, reps: 1, workOrders: 1, units: 1, stations: 1 });
     assert.ok(Array.isArray(d.audit)); assert.ok(d.links.settings.indexOf('cleancell.us') > 0);
+    var na = await getq({ org: 'newoem.com' });
+    assert.equal(na.audit[0].action, 'commission', 'the trail reads newest first with no index');
     await rejects(getq({ org: 'nobody.com' }), 404);
     await rejects(getq({ org: 'bad org' }), 400);
   });

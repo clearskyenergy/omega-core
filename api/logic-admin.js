@@ -29,7 +29,25 @@ var A = require('./_lib/admin'), X = require('./_lib/logic-access'), L = require
 var zip = require('./_lib/portfolio/zip'), csv = require('./_lib/portfolio/csv'), PUBLIC = require('./_lib/public-domains');
 
 function now() { return new Date().toISOString(); }
-function rid(at) { return at.replace(/[^0-9TZ]/g, '') + '_' + Math.random().toString(36).slice(2, 8); }
+/* The set-password link continues to the tenant's own host — but Firebase
+   Auth only accepts a continue URL on a domain listed under Authentication →
+   Settings → Authorized domains, and a newly commissioned host never is
+   (there is no wildcard). So a refused host falls back to the hub, which is,
+   and the response says so instead of handing staff an error. */
+var HUB = 'https://silmarillion.clearskyomega.com/';
+async function resetLink(auth, email, hostName) {
+  try { return { link: await auth.generatePasswordResetLink(email, { url: 'https://' + hostName + '/' }), error: null, note: null }; }
+  catch (e1) {
+    if (!/allowlist|authorized|unauthorized-continue-uri|invalid-continue-uri/i.test(String(e1 && e1.message || e1))) return { link: null, error: String(e1 && e1.message || e1), note: null };
+    try { return { link: await auth.generatePasswordResetLink(email, { url: HUB }), error: null, note: hostName + ' is not an authorized domain in Firebase Auth yet, so the link continues to the hub; add the host under Authentication → Settings → Authorized domains to change that.' }; }
+    catch (e2) { return { link: null, error: String(e2 && e2.message || e2), note: null }; }
+  }
+}
+/* Audit ids sort NEWEST FIRST under a plain ascending orderBy('__name__'):
+   an inverted millisecond stamp, so the trail needs no composite index (a
+   descending __name__ order on a subcollection does, and the live page
+   found that out). */
+function rid(at) { return String(1e13 - Date.parse(at)).padStart(13, '0') + '_' + Math.random().toString(36).slice(2, 8); }
 
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -89,7 +107,7 @@ module.exports = A.handler(async function (req, res) {
       res.end(zip.build(files)); return;
     }
     var reads = await Promise.all([root.collection('billing').doc('current').get(), root.collection('fulfillment').doc('config').get(), root.collection('storefront').doc('config').get(),
-      root.collection('members').limit(200).get(), db.collection('embed_keys').where('orgId', '==', org).limit(50).get(), root.collection('admin_audit').orderBy('__name__', 'desc').limit(100).get(),
+      root.collection('members').limit(200).get(), db.collection('embed_keys').where('orgId', '==', org).limit(50).get(), root.collection('admin_audit').orderBy('__name__').limit(100).get(),
       Promise.all((orgDoc.domains || []).map(function (h) { return db.collection('tenant_public').doc(String(h).toLowerCase()).get(); })),
       count(db.collection('orders').where('orgId', '==', org)), count(root.collection('customers')), count(root.collection('reps')), count(db.collection('plant_works_orders').where('orgId', '==', org)),
       count(db.collection('plant_units').where('orgId', '==', org)), count(db.collection('plant_stations').where('orgId', '==', org))]);
@@ -117,7 +135,7 @@ module.exports = A.handler(async function (req, res) {
       if (found.empty) throw A.httpError(404, m.email + ' is not a member of this workspace yet; give a role to invite them');
       var doc = found.docs[0], data = doc.data(), out = { uid: doc.id, email: m.email, role: data.role, status: data.status || 'active', account: 'unchanged', claims: false, resetLink: null, resetLinkError: null, mail: null };
       if (m.status) { await doc.ref.set({ status: m.status, updatedAt: now(), updatedBy: caller.email }, { merge: true }); out.status = m.status; }
-      if (m.resetLink) { try { out.resetLink = await auth.generatePasswordResetLink(m.email, { url: 'https://' + hostName + '/' }); } catch (e0) { out.resetLinkError = e0.message; } }
+      if (m.resetLink) { var made0 = await resetLink(auth, m.email, hostName); out.resetLink = made0.link; out.resetLinkError = made0.error; out.resetLinkNote = made0.note; }
       return out;
     }
     try { u = await auth.getUserByEmail(m.email); status = 'existing'; }
@@ -131,8 +149,8 @@ module.exports = A.handler(async function (req, res) {
        staff member's or a partner's claims would move THEIR home workspace. */
     var claims = A.orgOf(m.email) === orgId;
     if (claims && patch.role) await auth.setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { orgId: orgId, role: patch.role }));
-    var link = null, linkError = null, mail = null;
-    if (status === 'created' || m.sendMail) { try { link = await auth.generatePasswordResetLink(m.email, { url: 'https://' + hostName + '/' }); } catch (e2) { linkError = e2.message; } }
+    var link = null, linkError = null, linkNote = null, mail = null;
+    if (status === 'created' || m.sendMail) { var made = await resetLink(auth, m.email, hostName); link = made.link; linkError = made.error; linkNote = made.note; }
     if (m.sendMail && link && M.configured && M.configured()) {
       try {
         var r = await M.send(m.email, orgName + ' on ClearSky-OMEGA — set your password', M.layout('Your ' + orgName + ' workspace is ready',
@@ -141,7 +159,7 @@ module.exports = A.handler(async function (req, res) {
         mail = r && r.ok ? 'sent' : 'not sent';
       } catch (e3) { mail = 'not sent — ' + e3.message; }
     }
-    return { uid: u.uid, email: m.email, role: patch.role || (prev.exists ? prev.data().role : null), status: patch.status, account: status, claims: claims, resetLink: link, resetLinkError: linkError, mail: mail };
+    return { uid: u.uid, email: m.email, role: patch.role || (prev.exists ? prev.data().role : null), status: patch.status, account: status, claims: claims, resetLink: link, resetLinkError: linkError, resetLinkNote: linkNote, mail: mail };
   }
 
   if (action === 'commission') {
