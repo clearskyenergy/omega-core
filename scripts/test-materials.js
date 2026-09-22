@@ -193,6 +193,32 @@ console.log('\nmaterials plan — twelve weeks ahead');
   ok('the horizon is clamped to 1–26 weeks, and unset means twelve', M.projection({ now: NOW, products: CATALOG }, { weeks: 99 }).weeks.length === 26 && M.projection({ now: NOW, products: CATALOG }, { weeks: -5 }).weeks.length === 1 && M.projection({ now: NOW, products: CATALOG }).weeks.length === 12);
 })();
 
+console.log('\nmaterials plan — suppliers and prices');
+(function () {
+  var sourcing = { suppliers: { eve: { name: 'EVE Energy', leadTimeDays: 45 }, catl: { name: 'CATL' }, orion: { name: 'Orion' } },
+    prices: { CELL: [{ supplierId: 'catl', unitCost: 41.2, moq: 2000, preferred: false }, { supplierId: 'eve', unitCost: 38.5, moq: 1000, leadTimeDays: 70, preferred: true }],
+              BMS: [{ supplierId: 'orion', unitCost: 320 }] } };
+  var p = M.plan({ now: NOW, products: CATALOG, sourcing: sourcing,
+    works: [{ id: 'w', orderNo: 'CC-1', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 5 }], dueDate: '2026-12-01' }] });
+  var cell = row(p, 'CELL');
+  ok('the preferred price names the supplier and the cost', cell.supplierId === 'eve' && cell.supplier === 'EVE Energy' && cell.unitCost === 38.5);
+  ok('  and its lead time and MOQ override the component\'s own', cell.leadTimeDays === 70 && cell.moq === 1000 && cell.orderBy === '2026-09-22', cell);
+  ok('  the suggested order is priced: 5,000 cells at $38.50', cell.suggestedOrder === 5000 && cell.spend === 192500, cell.spend);
+  ok('a part with a price but no MOQ or lead on it keeps the component\'s', row(p, 'BMS').unitCost === 320 && row(p, 'BMS').leadTimeDays === 30 && row(p, 'BMS').spend === 5 * 320);
+  ok('a part with no price on file has no spend and is counted unpriced', row(p, 'ENC').unitCost === null && row(p, 'ENC').spend === 0 && p.summary.unpriced === 2, p.summary);
+  ok('the summary totals the priced lines', p.summary.spend === 192500 + 1600, p.summary.spend);
+  var bySup = M.purchaseBySupplier(p);
+  ok('the purchase list groups by supplier, unsourced lines under none', bySup.length === 3 && bySup.some(function (g) { return g.supplierId === 'eve' && g.spend === 192500; }) && bySup.some(function (g) { return g.supplierId === null && g.lines.length === 2; }), bySup.map(function (g) { return g.supplierId + ':' + g.lines.length; }));
+  ok('with no preferred flag the cheapest priced source wins', M.priceFor('CELL', { suppliers: sourcing.suppliers, prices: { CELL: [{ supplierId: 'catl', unitCost: 41.2 }, { supplierId: 'eve', unitCost: 38.5 }] } }).supplierId === 'eve');
+  ok('a supplier\'s default lead time applies when the price has none', M.priceFor('BMS', sourcing) && M.priceFor('CELL', { suppliers: sourcing.suppliers, prices: { CELL: [{ supplierId: 'eve', unitCost: 1 }] } }).leadTimeDays === 45);
+  ok('a poisoned supplier id is ignored, not followed', M.priceFor('CELL', { suppliers: {}, prices: { CELL: [{ supplierId: '__proto__', unitCost: 1 }] } }).supplier === null);
+  ok('a product never carries a price, even if one is on file', row(M.plan({ now: NOW, products: CATALOG, sourcing: { suppliers: {}, prices: { CAB: [{ supplierId: 'x', unitCost: 9 }] } }, works: [{ id: 'w', status: 'awaiting_serials', requirements: [{ sku: 'CAB', qty: 1 }] }] }), 'CAB').unitCost === null);
+  var cfgSrc = fs.readFileSync(path.join(ROOT, 'api/embed-config.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok('api/embed-config.js never names unitCost, spend or suppliers', !/unitCost|\bspend\b|suppliers|fulfillment/.test(cfgSrc));
+  var imp = fs.readFileSync(path.join(ROOT, 'scripts/import-products.js'), 'utf8');
+  ok('the importer still refuses a cost column', /FORBIDDEN = \[[^\]]*'cost'/.test(imp) && !/unitcost/.test(imp));
+})();
+
 console.log('\nbills of materials — the graph is checked');
 (function () {
   rejects('a loop is refused, and the message shows the path', function () {
@@ -322,6 +348,42 @@ console.log('\nthe endpoint');
   await assert.rejects(api({ method: 'GET', query: { org: 'cleancell.us', workOrder: '../x' }, caller: member }, res), /Invalid works order/);
   ok('  and a malformed id is refused', true);
 
+  console.log('\nthe endpoint — suppliers and prices');
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'supplier', name: 'EVE Energy', revision: 0 }, caller: member }, res), /administrator/);
+  ok('a member cannot add a supplier', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'supplier', name: '', revision: 0 }, caller: admin }, res), /Name the supplier/);
+  ok('  and a supplier needs a name', true);
+  var s1 = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'supplier', name: 'EVE Energy', contact: 'Li Wei', email: 'LI@EVE.example', terms: 'Net 30', leadTimeDays: 60, revision: 0 }, caller: admin }, res);
+  ok('an admin adds a supplier and gets its id', s1.ok && /^sup_/.test(s1.supplierId) && s1.revision === 1, s1);
+  var sdoc = db.rows.get('omega_orgs/cleancell.us/fulfillment/suppliers');
+  ok('  stored under fulfillment/, email lowercased, with who and when', sdoc.suppliers[s1.supplierId].email === 'li@eve.example' && sdoc.suppliers[s1.supplierId].leadTimeDays === 60 && sdoc.suppliers[s1.supplierId].createdAt && sdoc.revision === 1);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'supplier', name: 'Again', revision: 0 }, caller: admin }, res), /changed/);
+  ok('  a stale revision is refused', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'price', sku: 'CAB', supplierId: s1.supplierId, unitCost: 9, revision: 1 }, caller: admin }, res), /not a component/);
+  ok('a price on a product is refused', true);
+  await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'price', sku: 'CELL', supplierId: 'ghost', unitCost: 9, revision: 1 }, caller: admin }, res), /No such supplier/);
+  ok('  as is a price from a supplier that does not exist', true);
+  var p1 = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'price', sku: 'CELL', supplierId: s1.supplierId, unitCost: 38.5, moq: 1000, leadTimeDays: 70, supplierSku: 'LF280K', preferred: true, revision: 1 }, caller: admin }, res);
+  sdoc = db.rows.get('omega_orgs/cleancell.us/fulfillment/suppliers');
+  ok('a price is set, preferred, audited', p1.ok && sdoc.prices.CELL.length === 1 && sdoc.prices.CELL[0].unitCost === 38.5 && sdoc.prices.CELL[0].preferred === true && sdoc.revision === 2);
+  var s2 = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'supplier', name: 'CATL', revision: 2 }, caller: admin }, res);
+  await api({ method: 'POST', body: { org: 'cleancell.us', action: 'price', sku: 'CELL', supplierId: s2.supplierId, unitCost: 41.2, preferred: true, revision: 3 }, caller: admin }, res);
+  sdoc = db.rows.get('omega_orgs/cleancell.us/fulfillment/suppliers');
+  ok('a second preferred source un-prefers the first', sdoc.prices.CELL.length === 2 && sdoc.prices.CELL.filter(function (x) { return x.preferred; }).length === 1 && sdoc.prices.CELL.filter(function (x) { return x.preferred; })[0].supplierId === s2.supplierId);
+  got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
+  ok('the plan now buys cells from the preferred supplier at its price', row(got, 'CELL').supplier === 'CATL' && row(got, 'CELL').unitCost === 41.2 && row(got, 'CELL').spend > 0 && got.summary.spend === row(got, 'CELL').spend, row(got, 'CELL'));
+  ok('  and the GET carries the records, the prices and their revision', got.suppliers.length === 2 && got.suppliers[0].name === 'CATL' && got.prices.CELL.length === 2 && got.sourcingRevision === 4 && got.bySupplier.length >= 1);
+  await api({ method: 'POST', body: { org: 'cleancell.us', action: 'price-remove', sku: 'CELL', supplierId: s2.supplierId, revision: 4 }, caller: admin }, res);
+  sdoc = db.rows.get('omega_orgs/cleancell.us/fulfillment/suppliers');
+  ok('removing the preferred source makes the remaining one preferred', sdoc.prices.CELL.length === 1 && sdoc.prices.CELL[0].preferred === true && sdoc.prices.CELL[0].supplierId === s1.supplierId);
+  got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
+  var revNow = got.stockRevision;
+  var poS = await api({ method: 'POST', body: { org: 'cleancell.us', action: 'po', supplierId: s1.supplierId, lines: [{ sku: 'CELL', qty: 100 }], revision: revNow }, caller: admin }, res);
+  var poDoc = db.rows.get('omega_orgs/cleancell.us/purchase_orders/' + poS.poId);
+  ok('a purchase order may name a supplier record, and takes its name', poDoc.supplierId === s1.supplierId && poDoc.supplier === 'EVE Energy');
+  got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
+  await api({ method: 'POST', body: { org: 'cleancell.us', action: 'cancel-po', poId: poS.poId, revision: got.stockRevision }, caller: admin }, res);
+
   console.log('\nthe endpoint — purchase orders');
   var rev = (await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res)).stockRevision;
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'po', supplier: '', lines: [{ sku: 'CELL', qty: 4000 }], revision: rev }, caller: admin }, res), /supplier/);
@@ -343,7 +405,7 @@ console.log('\nthe endpoint');
   ok('  on-order rose by the ordered quantity, in the same write', after.CELL.onOrder === before.onOrder + 4000 && after.HARN.onOrder === 100.5 && after.CELL.onHand === before.onHand, after.CELL);
   ok('  and the stock revision moved, so a stale count is refused next', db.rows.get('omega_orgs/cleancell.us/fulfillment/materials').revision === rev + 1);
   got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
-  ok('the plan lists it and nets against the new on-order (1,000 counted + 4,000 ordered)', got.purchaseOrders.length === 1 && got.purchaseOrders[0].reference === 'PO-1001' && row(got, 'CELL').onOrder === 5000, row(got, 'CELL'));
+  ok('the plan lists it and nets against the new on-order (1,000 counted + 4,000 ordered)', got.purchaseOrders.length === 2 && got.purchaseOrders.some(function (p) { return p.reference === 'PO-1001'; }) && row(got, 'CELL').onOrder === 5000, row(got, 'CELL'));
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'CELL', qty: 5000 }], revision: got.stockRevision }, caller: admin }, res), /more than the 4000 still expected/);
   ok('receiving more than was ordered is refused', true);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: made.poId, lines: [{ sku: 'BMS', qty: 1 }], revision: got.stockRevision }, caller: admin }, res), /not on this purchase order/);
@@ -371,9 +433,9 @@ console.log('\nthe endpoint');
   got = await api({ method: 'GET', query: { org: 'cleancell.us' }, caller: member }, res);
   await assert.rejects(api({ method: 'POST', body: { org: 'cleancell.us', action: 'receive', poId: 'x', lines: [{ sku: 'CELL', qty: 1 }], revision: got.stockRevision }, caller: admin }, res), /not found/);
   ok('another tenant\'s purchase order is not found', true);
-  ok('  and never listed here', got.purchaseOrders.every(function (p) { return p.id !== 'x'; }) && got.purchaseOrders.length === 2);
+  ok('  and never listed here', got.purchaseOrders.every(function (p) { return p.id !== 'x'; }) && got.purchaseOrders.length === 3);
   var audits = []; for (var e2 of db.rows) if (e2[0].startsWith('omega_audit/')) audits.push(e2[1].action);
-  ok('every move is audited', audits.filter(function (a) { return a === 'materials-po'; }).length === 2 && audits.filter(function (a) { return a === 'materials-receive'; }).length === 3 && audits.indexOf('materials-po-cancel') >= 0, audits);
+  ok('every move is audited', audits.filter(function (a) { return a === 'materials-po'; }).length === 3 && audits.filter(function (a) { return a === 'materials-receive'; }).length === 3 && audits.indexOf('materials-po-cancel') >= 0 && audits.indexOf('materials-supplier') >= 0 && audits.indexOf('materials-price') >= 0 && audits.indexOf('materials-price-remove') >= 0, audits);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

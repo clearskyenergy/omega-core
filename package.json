@@ -19,6 +19,7 @@
     "osa:invite": "node scripts/provision-osa-member.js",
     "osa:invite:apply": "node scripts/provision-osa-member.js --apply",
     "rules:check": "node scripts/check-rules.js",
+    "check:pages": "node scripts/render-logic-pages.js",
     "test:sizer": "node scripts/test-bess-sizer.js",
     "test:siteintel": "node scripts/test-site-intel.js",
     "test:caps": "node scripts/test-caps.js",

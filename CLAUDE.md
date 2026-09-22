@@ -253,8 +253,11 @@ user). Do not add a second copy of that list — see what three copies of
     explodes open demand through the bills and nets it against stock counts
     held under `fulfillment/`, which is closed to browsers; purchase orders
     (`purchase_orders/`, equally closed) move quantity on-order → on-hand
-    through the same audited endpoint. Never a buy price on a component:
-    `import-products.js` refuses the column in both sheets.
+    through the same audited endpoint. A buy price lives ONLY in
+    `fulfillment/suppliers` (supplier records + per-part prices, entered by
+    the tenant's office through that endpoint): never in the catalog, never
+    in a CSV — `import-products.js` refuses the column in both sheets — and
+    never in a public projection.
 - `orders` is read from Firestore and written ONLY through `api/orders.js`:
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.

@@ -16,6 +16,15 @@
    it is written with who and when, audited, and revision-checked so two
    people counting the same shelf cannot silently overwrite each other.
 
+   SUPPLIERS AND PRICES live in omega_orgs/{org}/fulfillment/suppliers —
+   supplier records and, per SKU, one price per supplier (unit cost, MOQ,
+   lead time, preferred). action:'supplier' creates or updates a record,
+   action:'price' sets a supplier's price for a part, action:'price-remove'
+   drops it; each is revision-checked on that document and audited. A buy
+   price is exactly what a supplier's spreadsheet leaks, so it exists only
+   here: never in the catalog, never accepted by the importer, never in a
+   public projection. The plan reads it to price the purchase list.
+
    PURCHASE ORDERS close the loop. POST action:'po' records what was sent to
    a supplier (omega_orgs/{org}/purchase_orders/{id}, Admin SDK only — no
    rule grants it) and adds the quantities to `onOrder` in the same
@@ -45,7 +54,7 @@ function dateOf(v) {
    rather than a dotted path because a SKU may contain a dot. */
 function stockOf(d) { var out = {}; Object.keys(d.stock || {}).forEach(function (k) { if (safe(k)) out[k] = d.stock[k]; }); return out; }
 function poView(id, po) {
-  return { id: id, supplier: po.supplier || '', reference: po.reference || '', expectedAt: po.expectedAt || null, note: po.note || '',
+  return { id: id, supplier: po.supplier || '', supplierId: po.supplierId || null, reference: po.reference || '', expectedAt: po.expectedAt || null, note: po.note || '',
     status: po.status || 'open', createdAt: po.createdAt || null, createdBy: po.createdBy || null, receivedAt: po.receivedAt || null,
     lines: (po.lines || []).map(function (l) { return { sku: l.sku, name: l.name, unit: l.unit, qty: l.qty, received: l.received || 0 }; }),
     receipts: (po.receipts || []).slice(-10) };
@@ -65,7 +74,7 @@ module.exports = A.handler(async function (req, res) {
   var ctx = await X.authorize(caller, org, req.method === 'POST');
   var db = A.db(), root = db.collection('omega_orgs').doc(org);
   var catalogRef = root.collection('storefront').doc('config'), stockRef = root.collection('fulfillment').doc('materials');
-  var poCol = root.collection('purchase_orders');
+  var poCol = root.collection('purchase_orders'), supRef = root.collection('fulfillment').doc('suppliers');
 
   if (req.method === 'GET' && req.query.workOrder) {
     /* One works order: can it be built from what is on hand and on order?
@@ -74,10 +83,11 @@ module.exports = A.handler(async function (req, res) {
        for the same stock in this view, and the page says so. */
     var woId = String(req.query.workOrder || '');
     if (!/^[A-Za-z0-9_-]{1,120}$/.test(woId)) throw A.httpError(400, 'Invalid works order');
-    var one = await Promise.all([catalogRef.get(), stockRef.get(), db.collection('plant_works_orders').doc(woId).get()]);
+    var one = await Promise.all([catalogRef.get(), stockRef.get(), db.collection('plant_works_orders').doc(woId).get(), supRef.get()]);
     if (!one[2].exists || one[2].data().orgId !== org) throw A.httpError(404, 'Works order not found');
     var wo = Object.assign({ id: one[2].id }, one[2].data());
-    var solo = M.plan({ products: one[0].exists ? (one[0].data().products || []) : [], stock: one[1].exists ? (one[1].data().stock || {}) : {}, works: [wo], orders: [] });
+    var solo = M.plan({ products: one[0].exists ? (one[0].data().products || []) : [], stock: one[1].exists ? (one[1].data().stock || {}) : {}, works: [wo], orders: [],
+      sourcing: one[3].exists ? one[3].data() : null });
     var short = M.shortfallsByWorksOrder(solo)[String(wo.orderNo || wo.id)] || [];
     return { org: org, workOrder: { id: wo.id, orderNo: wo.orderNo || null, status: wo.status || null, dueDate: wo.dueDate || null },
       feasible: short.length === 0, short: short, unknownSkus: solo.unknownSkus,
@@ -88,13 +98,15 @@ module.exports = A.handler(async function (req, res) {
       catalogRef.get(), stockRef.get(),
       db.collection('orders').where('orgId', '==', org).orderBy('createdAt', 'desc').limit(200).get(),
       db.collection('plant_works_orders').where('orgId', '==', org).orderBy('createdAt', 'desc').limit(200).get(),
-      poCol.orderBy('createdAt', 'desc').limit(PO_LIST).get()
+      poCol.orderBy('createdAt', 'desc').limit(PO_LIST).get(),
+      supRef.get()
     ]);
+    var sourcing = rows[5].exists ? (rows[5].data() || {}) : {};
     var cat = rows[0].exists ? (rows[0].data() || {}) : {}, st = rows[1].exists ? (rows[1].data() || {}) : {};
     var products = Array.isArray(cat.products) ? cat.products : [];
     var orders = rows[2].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
     var works = rows[3].docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
-    var planned = M.plan({ products: products, stock: st.stock || {}, orders: orders, works: works });
+    var planned = M.plan({ products: products, stock: st.stock || {}, orders: orders, works: works, sourcing: sourcing });
     /* Open purchase orders with an expected date are dated supply for the
        week view; what is still expected on each line, at that date. */
     var supplies = [];
@@ -103,7 +115,7 @@ module.exports = A.handler(async function (req, res) {
       if (['open', 'partial'].indexOf(po.status) < 0 || !po.expectedAt) return;
       (po.lines || []).forEach(function (l) { var left = Number(l.qty) - Number(l.received || 0); if (left > 0) supplies.push({ sku: l.sku, qty: left, at: po.expectedAt }); });
     });
-    var weeks = M.projection({ products: products, stock: st.stock || {}, orders: orders, works: works, supplies: supplies }, { weeks: 12 });
+    var weeks = M.projection({ products: products, stock: st.stock || {}, orders: orders, works: works, supplies: supplies, sourcing: sourcing }, { weeks: 12 });
     return { org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org), owner: X.owner(caller),
       asOf: planned.asOf, rows: planned.rows, summary: planned.summary, unknownSkus: planned.unknownSkus,
       stockRevision: st.revision || 0, catalogRevision: cat.catalogRevision || 0,
@@ -111,16 +123,72 @@ module.exports = A.handler(async function (req, res) {
       withBom: products.filter(function (p) { return p && p.active !== false && (p.bom || []).length; }).length,
       purchaseOrders: rows[4].docs.map(function (d) { return poView(d.id, d.data() || {}); }),
       projection: weeks,
+      bySupplier: M.purchaseBySupplier(planned),
+      suppliers: Object.keys(sourcing.suppliers || {}).filter(safe).map(function (id) { return Object.assign({ id: id }, sourcing.suppliers[id]); })
+        .sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }),
+      prices: (function () { var out = {}; Object.keys(sourcing.prices || {}).forEach(function (k) { if (safe(k)) out[k] = sourcing.prices[k]; }); return out; })(),
+      sourcingRevision: sourcing.revision || 0,
       /* 200 is the read cap on each of orders and works orders. Past it the
          plan is computed on the newest 200 and says so, rather than being
          quietly short. */
       limited: rows[2].size === 200 || rows[3].size === 200 };
   }
 
+  /* ── suppliers and prices ───────────────────────────────────────────── */
+  if (b.action === 'supplier' || b.action === 'price' || b.action === 'price-remove') {
+    var srev = Number(b.revision) || 0, sAt = new Date().toISOString();
+    return db.runTransaction(async function (tx) {
+      var ss = await tx.get(supRef), d = ss.exists ? (ss.data() || {}) : {};
+      if ((d.revision || 0) !== srev) throw A.httpError(409, 'Supplier records changed. Reload before saving');
+      var suppliers = {}, prices = {};
+      Object.keys(d.suppliers || {}).forEach(function (k) { if (safe(k)) suppliers[k] = d.suppliers[k]; });
+      Object.keys(d.prices || {}).forEach(function (k) { if (safe(k)) prices[k] = d.prices[k]; });
+      var audit = { orgId: org, action: 'materials-' + b.action, by: caller.email, at: sAt };
+      if (b.action === 'supplier') {
+        var id = text(b.id, 60) || ('sup_' + require('crypto').randomBytes(6).toString('hex'));
+        if (!/^[A-Za-z0-9_-]{1,60}$/.test(id) || !safe(id)) throw A.httpError(400, 'Invalid supplier id');
+        var name = text(b.name, 160);
+        if (!name) throw A.httpError(400, 'Name the supplier');
+        if (!suppliers[id] && Object.keys(suppliers).length >= 200) throw A.httpError(400, 'At most 200 supplier records');
+        var lead = b.leadTimeDays == null || b.leadTimeDays === '' ? null : count(b.leadTimeDays, 'Lead time');
+        var rec = { name: name, contact: text(b.contact, 120), email: text(b.email, 160).toLowerCase(), phone: text(b.phone, 40),
+          terms: text(b.terms, 120), leadTimeDays: lead ? Math.round(lead) : null, notes: text(b.notes, 400),
+          active: b.active !== false, updatedAt: sAt, updatedBy: caller.email, createdAt: (suppliers[id] || {}).createdAt || sAt };
+        audit.supplierId = id; audit.before = suppliers[id] || null; audit.after = rec;
+        suppliers[id] = rec;
+      } else {
+        var psku = text(b.sku, 64), sid = text(b.supplierId, 60);
+        if (!SKU.test(psku) || !safe(psku)) throw A.httpError(400, 'Invalid SKU');
+        if (!suppliers[sid]) throw A.httpError(404, 'No such supplier');
+        var cat = await tx.get(catalogRef), products = cat.exists ? (cat.data().products || []) : [];
+        var comp = products.filter(function (x) { return x && x.sku === psku; })[0];
+        if (!comp || comp.kind !== 'component') throw A.httpError(404, psku + ' is not a component in the catalog');
+        var list = (Array.isArray(prices[psku]) ? prices[psku] : []).filter(function (x) { return x && x.supplierId !== sid; });
+        audit.sku = psku; audit.supplierId = sid; audit.before = (prices[psku] || []).filter(function (x) { return x && x.supplierId === sid; })[0] || null;
+        if (b.action === 'price') {
+          if (list.length >= 6) throw A.httpError(400, 'At most six suppliers per part');
+          var cost = b.unitCost == null || b.unitCost === '' ? null : count(b.unitCost, 'Unit cost');
+          var moq = b.moq == null || b.moq === '' ? null : count(b.moq, 'MOQ'), plead = b.leadTimeDays == null || b.leadTimeDays === '' ? null : count(b.leadTimeDays, 'Lead time');
+          var pr = { supplierId: sid, unitCost: cost, currency: 'USD', moq: moq, leadTimeDays: plead ? Math.round(plead) : null,
+            supplierSku: text(b.supplierSku, 80), preferred: b.preferred === true, updatedAt: sAt, updatedBy: caller.email };
+          if (pr.preferred) list.forEach(function (x) { x.preferred = false; });
+          if (!list.length) pr.preferred = true;    /* the only source is the preferred one */
+          list.push(pr); audit.after = pr;
+        } else { audit.after = null; if (list.length && !list.some(function (x) { return x.preferred; })) list[0].preferred = true; }
+        prices[psku] = list;
+      }
+      var next = (d.revision || 0) + 1;
+      tx.set(supRef, { suppliers: suppliers, prices: prices, revision: next, updatedAt: sAt, updatedBy: caller.email }, { merge: false });
+      tx.create(db.collection('omega_audit').doc(), audit);
+      return { ok: true, revision: next, supplierId: audit.supplierId || null };
+    });
+  }
+
   /* ── purchase orders ────────────────────────────────────────────────── */
   if (b.action === 'po') {
-    var supplier = text(b.supplier, 160), reference = text(b.reference, 80), expectedAt = dateOf(b.expectedAt), poNote = text(b.note, 300);
-    if (!supplier) throw A.httpError(400, 'Name the supplier');
+    var supplier = text(b.supplier, 160), supplierId = text(b.supplierId, 60), reference = text(b.reference, 80), expectedAt = dateOf(b.expectedAt), poNote = text(b.note, 300);
+    if (supplierId && !/^[A-Za-z0-9_-]{1,60}$/.test(supplierId)) throw A.httpError(400, 'Invalid supplier id');
+    if (!supplier && !supplierId) throw A.httpError(400, 'Name the supplier');
     if (!Array.isArray(b.lines) || !b.lines.length) throw A.httpError(400, 'Add at least one line');
     if (b.lines.length > PO_LINES) throw A.httpError(400, 'A purchase order lists at most ' + PO_LINES + ' lines');
     var wanted = [], seenSku = {};
@@ -133,9 +201,14 @@ module.exports = A.handler(async function (req, res) {
     });
     var poRevision = Number(b.revision) || 0, at = new Date().toISOString();
     return db.runTransaction(async function (tx) {
-      var cat = await tx.get(catalogRef), st = await tx.get(stockRef);
+      var cat = await tx.get(catalogRef), st = await tx.get(stockRef), sd = supplierId ? await tx.get(supRef) : null;
       var products = cat.exists ? (cat.data().products || []) : [], d = st.exists ? (st.data() || {}) : {};
       if ((d.revision || 0) !== poRevision) throw A.httpError(409, 'Stock counts changed. Reload before saving');
+      if (supplierId) {
+        var srec = sd && sd.exists && safe(supplierId) ? ((sd.data().suppliers || {})[supplierId]) : null;
+        if (!srec) throw A.httpError(404, 'No such supplier');
+        supplier = text(srec.name, 160) || supplier;
+      }
       var stock = stockOf(d);
       var lines = wanted.map(function (w) {
         var p = products.filter(function (x) { return x && x.sku === w.sku; })[0];
@@ -145,7 +218,7 @@ module.exports = A.handler(async function (req, res) {
         stock[w.sku] = e;
         return { sku: w.sku, name: text(p.name, 120) || w.sku, unit: p.kind === 'component' ? (text(p.unit, 8) || 'ea') : 'ea', qty: w.qty, received: 0 };
       });
-      var po = { orgId: org, supplier: supplier, reference: reference, expectedAt: expectedAt, note: poNote, status: 'open',
+      var po = { orgId: org, supplier: supplier, supplierId: supplierId || null, reference: reference, expectedAt: expectedAt, note: poNote, status: 'open',
         lines: lines, receipts: [], createdAt: at, createdBy: caller.email, receivedAt: null };
       var ref = poCol.doc(), next = (d.revision || 0) + 1;
       tx.create(ref, po);

@@ -121,6 +121,21 @@ undated on-order counts now — so the week view reuses the exact netting and
 cannot disagree with the purchase list. Cumulative: a shortfall appears in
 the week it first bites and stays. The endpoint returns it with the plan.
 
+**Suppliers and prices** (`POST action:'supplier' | 'price' | 'price-remove'`)
+live in `omega_orgs/{org}/fulfillment/suppliers`: supplier records (contact,
+terms, default lead time) and, per component, up to six prices — one per
+supplier, each with unit cost, MOQ, lead time and part number, one marked
+preferred. The plan buys at the preferred price (else the cheapest), lets it
+override the component's own MOQ and lead time, names the supplier on the
+row, prices the suggested order (`spend`, totalled in `summary.spend`, with
+`summary.unpriced` counting lines that have no price on file) and groups the
+purchase list by supplier. A buy price is exactly the number a supplier's
+spreadsheet leaks, so it exists only in that document: never in the catalog,
+never accepted by `scripts/import-products.js` (which still refuses a cost
+column in either sheet), never in any public projection — a test greps
+`api/embed-config.js` for the words. A purchase order may name a supplier
+record and takes its name.
+
 **Lots.** A receipt line may carry the supplier's lot number; it is kept on
 the receipt and on the shelf (`stock[sku].lots`, last twenty), so a unit's
 `trace.lot` at registration can name the lot it was built from.

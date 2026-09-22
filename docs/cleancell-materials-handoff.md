@@ -6,7 +6,11 @@ on `clearskyenergy/omega-core`. Commits past merged PR #45, oldest first:
 `5f96d8d` loose ends · `bee71ab` components, BOM, materials plan ·
 `3256e20` this handoff · `bd2c452` yield, per-works-order feasibility,
 plant-agent actions · `f83a2d3` purchase orders and receiving · `c50b29f`
-the demo step, and sub-assemblies are built not bought.
+the demo step, and sub-assemblies are built not bought · `4563fdb` handoff
+tidy · `973a7e1` competitor benchmark, safety stock, supplier lots ·
+`0acc3d5` twelve-week projection · the head: supplier records, per-part
+prices, a priced purchase list, and the Chromium render check
+(`npm run check:pages`).
 Everything below is committed and pushed; `npm test` is green at the head.
 
 Read `CLAUDE.md` first. The rules in it that bite hardest here: no build step
@@ -72,7 +76,8 @@ that is before today and there is firm net demand.
 
 ```
 npm test                                   # whole suite, green at the head
-node scripts/test-materials.js             # 114 assertions
+node scripts/test-materials.js             # 164 assertions
+npm run check:pages                        # renders the three pages in Chromium; skips if absent
 node scripts/test-plant-agent.js           # 15, eight of them materials
 node scripts/import-products.js --org cleancell.us \
   --file docs/product-list-template.csv --bom docs/bom-template.csv
@@ -96,8 +101,8 @@ with `auth().currentUser.getIdToken()` and `onAuthStateChanged`, and answer
 
 Each of these was a product decision I did not want to improvise. Items 1, 4
 and 5 were then built with the obvious default (the owner asked for whatever
-could be completed unattended), then 2 and 6 as well; only 3 (component
-costs) still needs a decision first.
+could be completed unattended), then 2, 3 and 6 as well. Nothing in this
+list is open.
 
 1. ~~**Scrap / yield.**~~ **Done** (commit after `3256e20`): `yieldPct` on a
    BOM line, applied in the explosion, `yielded` flag on rows, footnote on
@@ -110,11 +115,14 @@ costs) still needs a decision first.
    The page raises one pre-filled from the purchase list. `api/logic-logistics.js`
    turned out to be OUTBOUND only (customer delivery legs), so receiving is
    its own thing here. Still not built: any message to the supplier.
-3. **Component costs → spend forecast.** A buy price on a component is exactly
-   what `CLAUDE.md` forbids in the repo and the importer refuses in both
-   sheets. If Clean Cell wants a dollar forecast, the number must live only in
-   Firestore, set by hand or by a staff-only endpoint, and `api/embed-config.js`
-   must still never name it. Do not add it to the CSV path.
+3. ~~**Component costs → spend forecast.**~~ **Done** with exactly the design
+   this item asked for: supplier records and per-part prices in
+   `fulfillment/suppliers`, written only through `api/logic-materials.js`
+   by the tenant's office; the plan prices the purchase list (`spend`,
+   `summary.spend`, `summary.unpriced`) and groups it by supplier. Never in
+   the catalog, never in the CSV (importer still refuses), never public
+   (a test greps `api/embed-config.js`). Not built: landed cost, inventory
+   valuation, an RFQ to the supplier.
 4. ~~**Plant agent.**~~ **Done**: `advise({materials})` adds `order_material`
    (late component, priority 1) and `material_shortfall` (works order short
    of stock, priority 2); `api/jarvis-operations.js` computes the plan
@@ -142,8 +150,18 @@ costs) still needs a decision first.
 - Supplier lot on a receipt line → `stock[sku].lots` and the receipt.
 - Twelve-week projection: `projection()` in the engine, `projection` on the
   GET, "Twelve weeks ahead" on the page; open POs are dated supply.
-- The comparison now names the next two: supplier records, a second
-  location. Costs stay a decision.
+- Supplier records and per-part prices: `fulfillment/suppliers` (Admin SDK
+  only), POST `supplier` / `price` / `price-remove`, up to six prices per
+  part, the plan buys at the preferred one, `summary.spend` and
+  `summary.unpriced`, `bySupplier` on the GET, a "Suppliers and prices"
+  section and a priced "Suggested order" column on the page, `unitCost` and
+  `lineValue` in the CSV, `supplierId` on a purchase order.
+- `scripts/render-logic-pages.js` (`npm run check:pages`): renders the
+  materials plan, the catalog and the plant manager in Chromium against a
+  fixture and asserts what each shows; not on `npm test` because it needs
+  the browser.
+- What the comparison still lists as open: a second location, finite
+  scheduling, landed cost / valuation, an RFQ to the supplier.
 
 ## 4. Things only a person with credentials can do
 

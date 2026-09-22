@@ -57,8 +57,8 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
 | Supplier lot on receipt → unit genealogy | ✔ | ✔ + expiry | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Time-phased buckets (week-by-week projection) | ✔ 12 weeks, dated PO supply | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Multiple stock locations / transfers | ✘ | ✔ (paid per location) | Enterprise | ✔ | ✔ | ✔ | ✔ |
-| Supplier records, price lists, RFQ to supplier | ✘ | ◐ | ✔ | ◐ | ✔ | ✔ | ✔ |
-| Component cost / landed cost / inventory valuation | ✘ (decision) | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Supplier records, price lists, RFQ to supplier | ◐ records + per-part prices, no RFQ | ◐ | ✔ | ◐ | ✔ | ✔ | ✔ |
+| Component cost / landed cost / inventory valuation | ◐ unit cost per supplier, priced purchase list; no landed cost or valuation | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Finite-capacity scheduling | ✘ | ◐ | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Feasibility check per works order, on its own | ✔ | ✘ | ◐ | ✘ | ◐ | ◐ | ✔ |
 | Demand pulled from the customer's *own* storefront pipeline, classified by firmness | ✔ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
@@ -76,14 +76,16 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
    supply arrived by then (purchase orders count from their expected date),
    so the week view cannot disagree with the purchase list. "Twelve weeks
    ahead" on the plan page, red from the week a shortfall first bites.
-2. **Supplier records.** Ours is a name and a part number on the component.
-   They keep suppliers as records with price lists and multiple sources per
-   part. Cheap to add once costs are decided.
+2. ~~**Supplier records.**~~ Built: supplier records and up to six prices
+   per part (unit cost, MOQ, lead time, part number, preferred), the plan
+   buying at the preferred one and grouping the purchase list by supplier.
+   No RFQ to the supplier — still a person's job.
 3. **Locations.** One shelf. Clean Cell has one plant, so this is not a
    launch blocker, but it is the first thing a second site asks for.
-4. **Costs.** Every one of them prices the purchase list. We deliberately
-   don't until the decision in `docs/cleancell-materials-handoff.md` §3.3
-   is made about where a buy price may live.
+4. ~~**Costs.**~~ Built with the safe design: a buy price lives only in
+   `fulfillment/suppliers`, entered by the office, never in the catalog, the
+   CSV or a public projection. The purchase list is priced and totalled;
+   landed cost and inventory valuation are not.
 5. **Capacity.** None of ours schedules benches. The routing and station
    model exists in `api/_lib/plant-flow.js`; finite scheduling is a
    separate product decision.
@@ -117,6 +119,8 @@ Sources: [Katana pricing](https://katanamrp.com/pricing/) ·
 ## Build order, from this comparison
 
 1. ~~Time-phased weekly projection~~ — done.
-2. Supplier record with per-part lead time and MOQ overrides.
+2. ~~Supplier record with per-part lead time and MOQ overrides~~ — done.
 3. A second location, when a second location exists.
-4. Costs, after the decision.
+4. ~~Costs~~ — done as far as a priced purchase list; landed cost and
+   valuation remain.
+5. Finite-capacity scheduling of benches — a separate product decision.

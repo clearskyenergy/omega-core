@@ -38,12 +38,21 @@
    has money or a works order behind it, and the forecast is reported
    separately as "what you would also need if all of that converted".
 
+   ── SUPPLIERS AND PRICES ─────────────────────────────────────────────────
+   `input.sourcing` is omega_orgs/{org}/fulfillment/suppliers: supplier
+   records, and per SKU a list of prices — one per supplier, each with its
+   own unit cost, MOQ and lead time, one marked preferred. The plan takes
+   the preferred price (else the cheapest) and lets it override the
+   component's own MOQ and lead time, names the supplier on the row, and
+   prices the suggested order (`spend`). A buy price is exactly the number a
+   supplier's spreadsheet leaks, so it lives ONLY in that Firestore document
+   — never in the catalog, never in a CSV (the importer refuses the column),
+   never in any public projection (api/embed-config.js names its keys). This
+   module reads it; it never writes it anywhere else.
+
    ── WHAT IT DELIBERATELY DOES NOT DO ─────────────────────────────────────
-   No unit costs. A component's price is a negotiated buy figure and the
-   catalog is the one document three surfaces read; the number does not
-   belong there and this module never asks for it. No supplier ordering:
-   the output is a list a person sends to a supplier, with the order-by
-   date computed from the lead time they entered.
+   No supplier ordering: the output is a list a person sends to a supplier,
+   with the order-by date computed from the lead time they entered.
 
    SAFETY STOCK. A component may carry `safetyStock`: the quantity the plant
    wants on the shelf at all times. It is netted as a fourth bucket, `buffer`,
@@ -211,11 +220,30 @@ function demandsFrom(input) {
 }
 
 /* ── the plan ──────────────────────────────────────────────────────────── */
-function emptyRow(p) {
+/* The price the plan buys at: the one marked preferred, else the cheapest
+   with a cost, else the first. Null when nothing is on file. */
+function priceFor(sku, sourcing) {
+  if (!isPlain(sourcing) || !isPlain(sourcing.prices) || !safeKey(sku)) return null;
+  var list = Array.isArray(sourcing.prices[sku]) ? sourcing.prices[sku].filter(isPlain) : [];
+  if (!list.length) return null;
+  var pick = list.filter(function (x) { return x.preferred === true; })[0];
+  if (!pick) { var priced = list.filter(function (x) { return num(x.unitCost) > 0; }).sort(function (a, b) { return num(a.unitCost) - num(b.unitCost); }); pick = priced[0] || list[0]; }
+  var sup = isPlain(sourcing.suppliers) && safeKey(String(pick.supplierId || '')) ? sourcing.suppliers[pick.supplierId] : null;
+  return { supplierId: clean(pick.supplierId, 60) || null, supplier: sup ? (clean(sup.name, 160) || null) : null,
+    unitCost: num(pick.unitCost) > 0 ? roundQty(num(pick.unitCost)) : null, currency: clean(pick.currency, 3) || 'USD',
+    moq: num(pick.moq) > 0 ? num(pick.moq) : null,
+    leadTimeDays: num(pick.leadTimeDays) > 0 ? Math.round(num(pick.leadTimeDays)) : (sup && num(sup.leadTimeDays) > 0 ? Math.round(num(sup.leadTimeDays)) : null),
+    supplierSku: clean(pick.supplierSku, 80) || null };
+}
+function emptyRow(p, sourcing) {
+  var pr = p.kind === 'component' ? priceFor(p.sku, sourcing) : null;
   return { sku: p.sku, name: clean(p.name, 120) || p.sku, kind: p.kind === 'component' ? 'component' : (p.kind === 'service' ? 'service' : 'product'),
-    unit: p.kind === 'component' ? (clean(p.unit, 8) || 'ea') : 'ea', supplier: clean(p.supplier, 160) || null,
-    supplierSku: clean(p.supplierSku, 80) || null, moq: num(p.moq) > 0 ? num(p.moq) : null,
-    leadTimeDays: num(p.leadTimeDays) > 0 ? Math.round(num(p.leadTimeDays)) : null,
+    unit: p.kind === 'component' ? (clean(p.unit, 8) || 'ea') : 'ea',
+    supplier: (pr && pr.supplier) || clean(p.supplier, 160) || null, supplierId: pr ? pr.supplierId : null,
+    supplierSku: (pr && pr.supplierSku) || clean(p.supplierSku, 80) || null,
+    unitCost: pr ? pr.unitCost : null, currency: pr ? pr.currency : 'USD', spend: 0,
+    moq: (pr && pr.moq) || (num(p.moq) > 0 ? num(p.moq) : null),
+    leadTimeDays: (pr && pr.leadTimeDays) || (num(p.leadTimeDays) > 0 ? Math.round(num(p.leadTimeDays)) : null),
     safetyStock: num(p.safetyStock) > 0 ? roundQty(num(p.safetyStock)) : 0, belowSafety: false,
     gross: { committed: 0, pipeline: 0, buffer: 0, forecast: 0, total: 0 },
     onHand: 0, onOrder: 0, net: { committed: 0, pipeline: 0, buffer: 0, forecast: 0, total: 0 },
@@ -236,8 +264,9 @@ function plan(input) {
   var today = dateOf(input.now) || new Date().toISOString().slice(0, 10);
   var rows = Object.create(null), unknown = [];
   function driver(row, d) { if (row.drivers.length < MAX_DRIVERS) row.drivers.push(d); }
+  var sourcing = isPlain(input.sourcing) ? input.sourcing : null;
   Object.keys(by).forEach(function (sku) {
-    var r = emptyRow(by[sku]), s = safeKey(sku) && isPlain(stock[sku]) ? stock[sku] : {};
+    var r = emptyRow(by[sku], sourcing), s = safeKey(sku) && isPlain(stock[sku]) ? stock[sku] : {};
     r.onHand = Math.max(0, num(s.onHand)); r.onOrder = Math.max(0, num(s.onOrder));
     if (r.safetyStock > 0) { r.gross.buffer = r.safetyStock; driver(r, { kind: 'safety', ref: 'safety stock', qty: r.safetyStock, needBy: null }); }
     rows[sku] = r;
@@ -273,6 +302,7 @@ function plan(input) {
     } else if (firm > 0) {
       r.suggestedOrder = Math.ceil(firm);   /* units to build */
     }
+    if (r.kind === 'component' && !r.make && r.unitCost && r.suggestedOrder > 0) r.spend = Math.round(r.suggestedOrder * r.unitCost * 100) / 100;
     if (r.needBy) {
       r.orderBy = r.leadTimeDays ? addDays(r.needBy, -r.leadTimeDays) : r.needBy;
       /* "late" is a purchasing fact: a sub-assembly's start-by date is shown
@@ -314,8 +344,22 @@ function plan(input) {
       short: list.filter(function (r) { return r.kind === 'component' && !r.make && r.net.committed + r.net.pipeline + r.net.buffer > 0; }).length,
       toMake: list.filter(function (r) { return r.make && r.net.committed + r.net.pipeline + r.net.buffer > 0; }).length,
       belowSafety: list.filter(function (r) { return r.belowSafety; }).length,
+      spend: Math.round(list.reduce(function (t, r) { return t + (r.spend || 0); }, 0) * 100) / 100,
+      unpriced: list.filter(function (r) { return r.kind === 'component' && !r.make && r.suggestedOrder > 0 && !r.unitCost; }).length,
       late: list.filter(function (r) { return r.late; }).length,
       yielded: list.filter(function (r) { return r.yielded; }).length } };
+}
+
+/* The purchase list grouped by the supplier each line would go to; lines
+   with no supplier on file land under null so nothing is silently dropped. */
+function purchaseBySupplier(planned) {
+  var by = Object.create(null), order = [];
+  purchaseList(planned).forEach(function (r) {
+    var k = r.supplierId || (r.supplier ? 'name:' + r.supplier : '');
+    if (!by[k]) { by[k] = { supplierId: r.supplierId || null, supplier: r.supplier || null, lines: [], spend: 0 }; order.push(k); }
+    by[k].lines.push(r); by[k].spend = Math.round((by[k].spend + (r.spend || 0)) * 100) / 100;
+  });
+  return order.map(function (k) { return by[k]; });
 }
 
 /* Per works order: which components stand between it and the floor. Rows
@@ -371,7 +415,7 @@ function projection(input, opts) {
       stockW[k] = { onHand: num(stock[k].onHand), onOrder: Math.max(0, num(stock[k].onOrder) - (late[k] || 0)) }; });
     Object.keys(late).forEach(function (k) { if (!stockW[k]) stockW[k] = { onHand: 0, onOrder: 0 }; });
     var due = demands.filter(function (d) { return !d.needBy || d.needBy <= cutoff; });
-    var planned = plan({ products: input.products, stock: stockW, demands: due, now: today });
+    var planned = plan({ products: input.products, stock: stockW, demands: due, now: today, sourcing: input.sourcing });
     planned.rows.forEach(function (r) {
       if (!per[r.sku]) { per[r.sku] = []; names[r.sku] = r; }
       var firmGross = r.gross.committed + r.gross.pipeline + r.gross.buffer;
@@ -399,5 +443,6 @@ function purchaseList(planned) {
 }
 
 module.exports = { bomLines: bomLines, validateCatalog: validateCatalog, lowLevelCodes: lowLevelCodes,
-  demandsFrom: demandsFrom, plan: plan, projection: projection, monday: monday, purchaseList: purchaseList, shortfallsByWorksOrder: shortfallsByWorksOrder, UNITS: UNITS,
+  demandsFrom: demandsFrom, plan: plan, projection: projection, monday: monday, purchaseList: purchaseList, purchaseBySupplier: purchaseBySupplier,
+  priceFor: priceFor, shortfallsByWorksOrder: shortfallsByWorksOrder, UNITS: UNITS,
   MAX_LINES: MAX_LINES, MAX_DEPTH: MAX_DEPTH };
