@@ -9,6 +9,8 @@
 | build_ilshines_layer.py | rebuilds the IL SHINES data layer | file only |
 | publish-tools.js | diffs `SEED_TOOLS` against the live `tools/` collection — what the admin console's "Import / Update Applications" button would change; dry-run by default | with `--apply` |
 | test-publish-tools.js | 47 checks over that diff and over `publishToFirestore`'s `--only` filter; no Firestore needed | no |
+| agent-key.js | mint, list or revoke an agent key for `/api/agent/*` (the CFA/OGI JV ChatGPT Action); the plaintext is printed once to stderr and only its SHA-256 is stored; dry-run by default — see `docs/AGENT-CONNECTOR.md` | with `--apply` |
+| test-agent-sites.js | ~100 checks over the agent site API: key scoping, upload shape, additive updates, signed KMZ links, zip round-trip; handlers run against an in-memory Firestore | no |
 
 Cutover order: audit → backfill-orgid → seed (dry) → seed --apply → deploy rules → repoint one tenant's DNS → audit --diff.
 
