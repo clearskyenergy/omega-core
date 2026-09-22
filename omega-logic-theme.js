@@ -66,6 +66,7 @@
     ];
     if (owner) g.push(['ClearSky', [
       ['accounts', 'All OEM accounts', '/omega-logic'],
+      ['admin', 'Subscribers & commissioning', '/logic-admin.html' + (org ? q : '')],
       ['website', 'Website & installation', '/whitelabel-setup.html' + q],
       ['experience', 'Customer experience', '/customer-start.html' + q],
       ['urls', 'URL generator', '/logic-urls.html' + q],

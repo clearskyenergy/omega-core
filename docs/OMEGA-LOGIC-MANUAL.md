@@ -39,6 +39,26 @@ appear only for ClearSky.
 
 ## 2. Setting up a tenant (ClearSky)
 
+0. **Commission the subscriber** from *Subscribers & commissioning*
+   (`/logic-admin.html`, the ClearSky group of every office menu, or the
+   directory's *Manage* link). One form: company email domain (the tenant
+   key), name, hosts, owner email, tier, platform name and attribution,
+   deposit and due terms, ClearSky fee. It writes the tenant record, the
+   subscription (omega-logic + whitelabel add-ons, 30-day trial when the
+   tier is trial), the office terms (not activated — QuickBooks gates that),
+   the public sign-in mirror for every host and the owner's account, and
+   hands back a one-time set-password link (or emails it, if you tick the
+   box). It refuses public email providers, a second record for the same
+   domain and a hostname another tenant holds. The same page is the control
+   panel afterwards: tenant record and hosts, status, subscription (tier,
+   add-ons, tool allowlist, overrides, dates, amounts, payment link), white
+   label, storefront copy / flags / limits / cost basis, people (invite,
+   role, disable, set-password link), hosts and keys, data counts, the
+   **hand-over export** (every collection as CSV + JSON with a README —
+   uploaded documents, ClearSky settlement, QuickBooks identifiers and
+   storefront keys are not in it) and the admin audit trail. Owner-only:
+   `api/logic-admin.js` refuses everybody but the verified ClearSky owner
+   account, the same gate as the directory.
 1. **Products & bills.** Send the customer `docs/product-list-template.csv`
    and `docs/bom-template.csv`. Import with
    `node scripts/import-products.js --org <org> --file products.csv --bom bom.csv`

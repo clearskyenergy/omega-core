@@ -9,33 +9,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var assert = require('node:assert/strict');
-function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
-function get(o, k) { return k.split('.').reduce(function (v, p) { return v == null ? undefined : v[p]; }, o); }
-function patch(o, values) { Object.keys(values).forEach(function (key) { var parts = key.split('.'), last = parts.pop(), t = o; parts.forEach(function (p) { t = t[p] || (t[p] = {}); }); t[last] = clone(values[key]); }); return o; }
-class DB {
-  constructor() { this.data = new Map(); this.seq = 0; }
-  collection(p) { return new Query(this, p); }
-  doc(p) { return new Ref(this, p); }
-  seed(p, v) { this.data.set(p, clone(v)); }
-  runTransaction(fn) { var db = this, writes = [], writing = false; var tx = { get: async function (r) { assert.equal(writing, false, 'no reads after writes'); return r.get(); }, create: function (r, v) { writing = true; writes.push(function () { assert(!db.data.has(r.path)); db.seed(r.path, v); }); }, set: function (r, v, o) { writing = true; writes.push(function () { db.seed(r.path, o && o.merge ? Object.assign({}, db.data.get(r.path) || {}, clone(v)) : v); }); }, update: function (r, v) { writing = true; writes.push(function () { assert(db.data.has(r.path)); db.data.set(r.path, patch(clone(db.data.get(r.path)), v)); }); } }; return Promise.resolve(fn(tx)).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
-}
-class Ref {
-  constructor(db, p) { this.db = db; this.path = p; this.id = p.split('/').pop(); }
-  collection(n) { return new Query(this.db, this.path + '/' + n); }
-  async get() { var v = this.db.data.get(this.path), ref = this; return { id: this.id, ref: ref, exists: v !== undefined, data: function () { return clone(v); } }; }
-  async set(v, o) { this.db.seed(this.path, o && o.merge ? Object.assign({}, this.db.data.get(this.path) || {}, clone(v)) : v); }
-  async update(v) { assert(this.db.data.has(this.path)); this.db.data.set(this.path, patch(clone(this.db.data.get(this.path)), v)); }
-  async create(v) { assert(!this.db.data.has(this.path), 'create must not overwrite ' + this.path); this.db.seed(this.path, v); }
-}
-class Query {
-  constructor(db, p, f, s, cap) { this.db = db; this.path = p; this.f = f || []; this.s = s; this.cap = cap || Infinity; }
-  doc(id) { return new Ref(this.db, this.path + '/' + (id || 'auto' + (++this.db.seq))); }
-  where(k, op, v) { return new Query(this.db, this.path, this.f.concat([[k, op, v]]), this.s, this.cap); }
-  orderBy(k, d) { return new Query(this.db, this.path, this.f, [k, d], this.cap); }
-  limit(n) { return new Query(this.db, this.path, this.f, this.s, n); }
-  select() { return this; }
-  async get() { var self = this, docs = []; for (var e of this.db.data.entries()) { var p = e[0], d = e[1]; if (p.split('/').length !== this.path.split('/').length + 1 || p.indexOf(this.path + '/') !== 0) continue; if (!this.f.every(function (f) { return f[1] === '==' ? get(d, f[0]) === f[2] : f[1] === 'in' ? f[2].indexOf(get(d, f[0])) >= 0 : get(d, f[0]) <= f[2]; })) continue; docs.push(await new Ref(this.db, p).get()); } if (this.s) docs.sort(function (a, b) { var av = self.s[0] === '__name__' ? a.id : get(a.data(), self.s[0]), bv = self.s[0] === '__name__' ? b.id : get(b.data(), self.s[0]); return (av < bv ? -1 : av > bv ? 1 : 0) * (self.s[1] === 'desc' ? -1 : 1); }); docs = docs.slice(0, this.cap); return { docs: docs, size: docs.length, empty: !docs.length }; }
-}
+var FD = require('./_lib/firestore-double'), DB = FD.DB, mock = FD.mock;
 var db, storage = new Map(), storageFails = false;
 var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v || '') ? v : ''; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, authenticate: async function (r) { return r.caller; }, handler: function (f) { return f; }, canActInOrg: async function (c, o) { return c.orgId === o; }, FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; },
   init: function () {
@@ -44,7 +18,6 @@ var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0
       download: async function () { if (!storage.has(path)) throw new Error('missing ' + path); return [storage.get(path)]; } }; } };
     return { storage: function () { return { bucket: function () { return bucket; } }; } };
   } };
-function mock(p, exports) { require.cache[require.resolve(p)] = { id: require.resolve(p), filename: require.resolve(p), loaded: true, exports: exports }; }
 mock('../api/_lib/admin', A);
 var api = require('../api/customer-portfolio'), zip = require('../api/_lib/portfolio/zip'), xlsx = require('../api/_lib/portfolio/xlsx'), csv = require('../api/_lib/portfolio/csv'), T = require('../api/_lib/portfolio/template'), R = require('../api/_lib/portfolio/report'), AG = require('../api/_lib/portfolio/aggregate');
 
