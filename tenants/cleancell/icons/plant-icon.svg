@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Clean Cell plant">
+  <!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+       Clean Cell's own mark: the bolt and the upright bar from their wordmark
+       (scripts/sandbox/app.js bolt()), white on their cyan. -->
+  <rect width="512" height="512" rx="112" fill="#3FAFC6"/>
+  <g transform="translate(140 96) scale(7.2)" fill="#ffffff">
+    <path d="M0 0h6.6v46H0z"/>
+    <path d="M25.5 0 9.5 25.5h7.8L13.6 46 28 18.8h-7.6z"/>
+  </g>
+</svg>

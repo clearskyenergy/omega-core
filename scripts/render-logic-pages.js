@@ -18,9 +18,7 @@ var CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/
 var PW = process.env.PLAYWRIGHT || '/opt/node22/lib/node_modules/playwright';
 if (!fs.existsSync(CHROME) || !fs.existsSync(PW)) { console.log('render-logic-pages: Chromium or Playwright not found; skipped'); process.exit(0); }
 var chromium = require(PW).chromium;
-var shotsAt = (function () { var i = process.argv.indexOf('--shots'); return i >= 0 ? (process.argv[i + 1] || os.tmpdir()) : null; })();
-
-require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; } } };
+require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no Firestore in a render check'); }, safeOrg: function (x) { return x; } } };
 var M = require(path.join(ROOT, 'api/_lib/materials')), C = require(path.join(ROOT, 'api/_lib/logic-catalog'));
 
 var CATALOG = [
@@ -113,6 +111,7 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/logic-materials') === 0) return json(/workOrder=/.test(q) ? soloJson : materialsJson);
   if (u.indexOf('/api/logic-catalog') === 0) return json(catalogJson);
   if (u.indexOf('/api/logic-office') === 0) return json(officeJson);
+  if (u.indexOf('/api/app-manifest') === 0) return json(require('../api/app-manifest').manifestFor('cleancell.us', require('../tenants/cleancell/tenant.json')));
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
   if (u === '/omega-brand.js' || u === '/omega-tenant.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('/* stub */'); }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -274,6 +273,8 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   await check('app', '/plant/app?org=cleancell.us', async function (p) {
     await p.waitForTimeout(500);
     var cards = await p.$$eval('#view .card', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 70); }); });
+    var manifest = await p.evaluate(function () { return { m: document.querySelector('link[rel="manifest"]').getAttribute('href'), i: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'), t: document.querySelector('meta[name="theme-color"]').content }; });
+    ok('the app wears the tenant\'s manifest, icon and colour', /app-manifest\?org=cleancell\.us/.test(manifest.m) && /cleancell\/icons\/plant-180/.test(manifest.i) && manifest.t === '#0B2733', manifest);
     var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
     await p.click('[data-wo="wo_1"]'); await p.waitForTimeout(500);
     var units = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });

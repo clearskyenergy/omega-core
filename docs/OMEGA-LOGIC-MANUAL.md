@@ -198,7 +198,10 @@ map, the bench (tablet and roaming phone) and the phone app in Chromium.
 - Import Clean Cell's real product and BOM sheets with stations and steps;
   publish the production flow with its check steps; pair the tablets and
   the two phones.
-- A tenant-specific app icon: the manifest reuses the OMEGA icons.
+- The phone app's icon comes from `omega_orgs/{org}.appIcon` (paths under
+  the tenant's folder). Clean Cell's set is in `tenants/cleancell/icons/`
+  and in its `tenant.json`; the live record takes it on the next seed run
+  or from the master console. Until then the app shows the OMEGA icon.
 
 **Not built, on purpose or not yet**
 
@@ -208,6 +211,7 @@ map, the bench (tablet and roaming phone) and the phone app in Chromium.
 - Cash settlement from a bank (QuickBooks records are the source; wires are
   recorded, not sent).
 - Push notifications to the phone; the app polls when opened.
+- Icons for tenants other than Clean Cell (each needs a mark of its own).
 - Time per step (the map times stations from arrival to arrival; issues are
   logged with a time but not yet summarised per step).
 - A warranty record separate from the derivation (product years × ship

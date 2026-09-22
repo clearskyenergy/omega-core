@@ -360,6 +360,11 @@ is not built.
   skipped and named, never overwritten.
 - **Assigning a finished unit** to an order is `api/logic-plant.js`
   `allocate`: the whole assembly moves, the works order builds one fewer.
+- **The phone app's manifest is per tenant:** `api/app-manifest.js` builds
+  it from `omega_orgs/{org}` (name, ink, `appIcon` paths under
+  `/tenants/<slug>/icons/`, validated; OMEGA icons as the fallback). A
+  tenant's icon set lives in its folder and its `tenant.json`; the seed
+  copies `appIcon` onto the record. Never a script URL in a manifest.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Silmarillion 2.0 — joint development

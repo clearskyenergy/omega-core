@@ -97,6 +97,17 @@
      no query string to carry it. */
   var ORG = params.get('org') || load('omega_plant_app_org', '') || '';
   if (params.get('org')) store('omega_plant_app_org', params.get('org'));
+  /* The tenant's own name, colours and icon on the home screen
+     (api/app-manifest.js); the static manifest is the fallback. */
+  if (ORG) {
+    var mf = document.querySelector('link[rel="manifest"]'); if (mf) mf.href = '/api/app-manifest?org=' + encodeURIComponent(ORG);
+    fetch('/api/app-manifest?org=' + encodeURIComponent(ORG)).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      if (!m) return;
+      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
+      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
+      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
+    })['catch'](function () {});
+  }
   var TAB = params.get('tab') || 'work', DATA = null, WO = null, UNIT = null, LABELS = {}, MATERIALS = null;
   var q = '?org=' + encodeURIComponent(ORG);
 
