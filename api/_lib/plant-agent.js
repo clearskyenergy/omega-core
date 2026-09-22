@@ -135,6 +135,39 @@ function advise(input) {
       { count: summary.offRouting }));
   }
 
+  /* Materials, when the caller computed the plan (api/_lib/materials.js).
+     Two actions, both bounded: a component past its order-by date, and a
+     works order that cannot be built from what is on hand or on order.
+     Naming them is the whole remit — buying is a person's decision. */
+  var materials = input.materials && typeof input.materials === 'object' ? input.materials : null;
+  summary.materialsShort = 0; summary.materialsLate = 0;
+  if (materials && Array.isArray(materials.rows)) {
+    var late = [], shortByWo = Object.create(null);
+    materials.rows.forEach(function (r) {
+      if (!r || r.kind !== 'component' || r.make) return;   /* a sub-assembly is built, not bought */
+      var firm = number(r.net && r.net.committed) + number(r.net && r.net.pipeline);
+      if (firm <= 0) return;
+      summary.materialsShort++;
+      if (r.late) { summary.materialsLate++; late.push(r); }
+      (r.worksOrders || []).forEach(function (w) {
+        w = text(w, 60); if (!w || ['__proto__', 'constructor', 'prototype'].indexOf(w) >= 0) return;
+        (shortByWo[w] = shortByWo[w] || []).push(text(r.sku, 64) + ' ' + number(firm) + ' ' + text(r.unit, 8));
+      });
+    });
+    late.slice(0, 10).forEach(function (r) {
+      var firm = number(r.net.committed) + number(r.net.pipeline);
+      actionItems.push(action('order_material', 1, 'Order material that is already late',
+        text(r.sku, 64) + ' should have been ordered by ' + text(r.orderBy, 10) + ' — ' + number(firm) + ' ' + text(r.unit, 8) + ' short'
+        + (r.supplier ? ' from ' + text(r.supplier, 60) : '') + '.',
+        { sku: text(r.sku, 64), short: number(firm), unit: text(r.unit, 8), orderBy: text(r.orderBy, 10) || null, needBy: text(r.needBy, 10) || null, suggestedOrder: number(r.suggestedOrder) }));
+    });
+    Object.keys(shortByWo).slice(0, 10).forEach(function (w) {
+      actionItems.push(action('material_shortfall', 2, 'A work order cannot be built from stock',
+        w + ' is short of ' + shortByWo[w].slice(0, 4).join(', ') + (shortByWo[w].length > 4 ? ' and ' + (shortByWo[w].length - 4) + ' more' : '') + '.',
+        { orderNo: w, components: shortByWo[w].slice(0, 12) }));
+    });
+  }
+
   actionItems.sort(function (a, b) { return a.priority - b.priority || a.title.localeCompare(b.title); });
   var queues = Object.keys(queue).map(function (key) { return queue[key]; });
   queues.sort(function (a, b) { return b.count - a.count || a.label.localeCompare(b.label); });
@@ -161,6 +194,8 @@ function replyFor(advice, question) {
     return 'There are accepted orders waiting for serialized work-order release. I can identify them, but release still needs the real serials and component genealogy.';
   }
   if (s.overdue) return s.overdue + ' work order' + (s.overdue === 1 ? ' is' : 's are') + ' overdue without a ready shipping unit. Review the due-date cards first.';
+  if (s.materialsLate) return s.materialsLate + ' component' + (s.materialsLate === 1 ? ' is' : 's are') + ' past the date ' + (s.materialsLate === 1 ? 'it' : 'they') + ' had to be ordered by. Open the materials plan; I can name the shortfall, not place the order.';
+  if (/material|stock|buy|purchase|component|short/.test(q) && s.materialsShort) return s.materialsShort + ' component' + (s.materialsShort === 1 ? ' is' : 's are') + ' short against committed and priced demand. The materials plan has the quantities and order-by dates.';
   if (s.units === 0) return 'There are no released units on this factory floor yet. Accepted orders become traceable only after a serialized work order is released.';
   return s.units + ' serialized unit' + (s.units === 1 ? ' is' : 's are') + ' on the floor: '
     + s.inProgress + ' in progress, ' + s.ready + ' ready, and ' + s.unstarted + ' not started.';

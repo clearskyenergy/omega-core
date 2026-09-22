@@ -246,6 +246,18 @@ user). Do not add a second copy of that list — see what three copies of
   only thing keeping them private. Never replace that with a spread.
   The merge is ADDITIVE and namespaced by org: a saved project references a
   catalogue key, so a shipped entry is never removed or overwritten.
+  - A row may be `kind: 'component'` — what a product is MADE OF, with a
+    `bom[]` on any product or component (`api/_lib/materials.js`). It is
+    never published, drawn, picked or ordered; every one of those surfaces
+    drops the kind by name. The materials plan (`api/logic-materials.js`)
+    explodes open demand through the bills and nets it against stock counts
+    held under `fulfillment/`, which is closed to browsers; purchase orders
+    (`purchase_orders/`, equally closed) move quantity on-order → on-hand
+    through the same audited endpoint. A buy price lives ONLY in
+    `fulfillment/suppliers` (supplier records + per-part prices, entered by
+    the tenant's office through that endpoint): never in the catalog, never
+    in a CSV — `import-products.js` refuses the column in both sheets — and
+    never in a public projection.
 - `orders` is read from Firestore and written ONLY through `api/orders.js`:
   "only ClearSky may price, but the tenant may always cancel their own" is a
   commercial arrangement and does not belong in a rules file.
@@ -312,6 +324,48 @@ user). Do not add a second copy of that list — see what three copies of
 
 Design and the honest list of what is NOT built: `docs/WHITE-LABEL.md`.
 Demo runbook for the Clean Cell account: `docs/DEMO-CLEANCELL.md`.
+
+## Omega Logic — the office and the plant
+
+The manual for the people who use it: `docs/OMEGA-LOGIC-MANUAL.md`. Keep it
+current when a screen changes; its last section is the honest list of what
+is not built.
+
+- **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
+  the header (name · who · Sign out) and the left menu on EVERY office page,
+  in the order the business runs. A page never builds its own menu; it calls
+  `chrome({org, current, owner, brand, who, local})` after its API response.
+  Website, installation and the URL generator are ClearSky's and show only
+  for a ClearSky owner (`ownerFlag` remembers the answer for pages whose
+  endpoint does not say; showing a link is never access).
+- **Stations do the work.** A BOM line may carry `station` (routing key) and
+  `step`; the routing may carry `checks[]` per operation. `api/_lib/plant-work.js`
+  (pure) turns those into the steps a bench shows for a unit, `judgeScan`
+  refuses the NEXT bench while any step is open, and `api/mes-scan.js`
+  `issue` / `step-done` take the part off `fulfillment/materials`, onto the
+  unit (`work{}`) and the works order (`issued{}`), idempotent by scanId. The
+  materials plan nets `issued` and `readyCounts`. A station record with
+  `station:'*'` is a ROAMING phone: the operator names the bench per scan
+  and every scan records both.
+- **The map is derived.** `api/_lib/plant-stats.js` reads `startedAt`,
+  `done{}` and `arrivedAt` off unit records. No second log, no invented
+  numbers: a station with under three timed units has no time.
+- **A customer writes exactly one thing onto an order:** `requests[]`, via
+  `api/my-orders.js` POST. The office answers with `logic-office`
+  `request-resolve`. The change itself goes through the control that owns
+  it. Warranty on the portal is DERIVED (product `warrantyYears` × ship
+  date), not stored.
+- **Many POs at once** go through `api/po-intake.js` `submit-many`, the same
+  order shape the one-at-a-time convert writes; an existing PO number is
+  skipped and named, never overwritten.
+- **Assigning a finished unit** to an order is `api/logic-plant.js`
+  `allocate`: the whole assembly moves, the works order builds one fewer.
+- **The phone app's manifest is per tenant:** `api/app-manifest.js` builds
+  it from `omega_orgs/{org}` (name, ink, `appIcon` paths under
+  `/tenants/<slug>/icons/`, validated; OMEGA icons as the fallback). A
+  tenant's icon set lives in its folder and its `tenant.json`; the seed
+  copies `appIcon` onto the record. Never a script URL in a manifest.
+- Chromium render checks for all of it: `npm run check:pages`.
 
 ## Silmarillion 2.0 — joint development
 

@@ -2,7 +2,7 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops');
+var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops');
 var UNIT_FIELDS=['woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test'];
 /* The CMMS-style board: newest 100 works orders with progress derived from
    their units. Units are read in works-order chunks with a field projection;
@@ -26,6 +26,19 @@ module.exports = A.handler(async function (req, res) {
   var ctx = await X.authorize(caller, org, req.method !== 'GET'), db = A.db();
   var flow=Flow.current(ctx.config), configRef=db.collection('omega_orgs').doc(org).collection('fulfillment').doc('config');
   if (req.method === 'GET') {
+    if(req.query.map){
+      /* The plant as a map (api/_lib/plant-stats.js): the newest units,
+         the routing, and the steps each station carries off the product
+         list. Numbers are what the benches reported; nothing is invented. */
+      var mapRows=await Promise.all([
+        db.collection('plant_units').where('orgId','==',org).orderBy('createdAt','desc').limit(Stats.MAX_UNITS).get(),
+        db.collection('omega_orgs').doc(org).collection('storefront').doc('config').get()]);
+      var mapUnits=mapRows[0].docs.map(function(d){return d.data();}),products=mapRows[1].exists?(mapRows[1].data().products||[]):[];
+      var map=Stats.stationMap(flow.routing,mapUnits,Date.now(),{shipUnitsOnly:true});
+      map.steps=Stats.stepsByStation(flow.routing,products,W.stepsFor);
+      map.lines=flow.lines;map.sampledLimit=mapRows[0].size===Stats.MAX_UNITS;
+      return {name:ctx.org.name||org,owner:X.owner(caller),brand:require('./_lib/logic-brand')(ctx.org),map:map};
+    }
     if(req.query.page==='board'||req.query.page==='ops'){
       var now=new Date().toISOString(),board=await boardRows(db,org,now),common={name:ctx.org.name||org,owner:X.owner(caller),flow:flow,brand:require('./_lib/logic-brand')(ctx.org),asOf:now,
         rows:board.rows,limited:board.limited,unitsLimited:board.unitsLimited,links:plantLinks(org)};
@@ -50,7 +63,13 @@ module.exports = A.handler(async function (req, res) {
       var wr=db.collection('plant_works_orders').doc(P.id(req.query.workOrder)),ws=await wr.get();
       if(!ws.exists||ws.data().orgId!==org)throw A.httpError(404,'Work order not found');
       var members=await db.collection('plant_units').where('orgId','==',org).where('woId','==',ws.id).limit(401).get();
-      var detailUnits=members.docs.slice(0,400).map(function(d){return d.data();}),detailWo=Object.assign({id:ws.id},ws.data());
+      /* Where each unit is AND how far through that bench it is: the steps
+         come off the product's bill (plant-work.js), so one catalog read. */
+      var cat=await db.collection('omega_orgs').doc(org).collection('storefront').doc('config').get(),by={};
+      (cat.exists?cat.data().products||[]:[]).forEach(function(p){if(p&&p.sku&&['__proto__','constructor','prototype'].indexOf(String(p.sku))<0)by[p.sku]=p;});
+      var wo=ws.data();
+      var detailUnits=members.docs.slice(0,400).map(function(d){var u=d.data();if(u.at){var st=(wo.routing||[]).filter(function(s){return s&&s.key===u.at;})[0];var steps=W.stepsFor(by[u.sku]||null,u.at,by,st&&st.checks);if(steps.length){var w=W.statusOf(u,u.at,steps);u.progress={station:u.at,done:w.steps.length-w.open.length,total:w.steps.length,open:w.open.slice(0,6),complete:w.complete};}}return u;});
+      var detailWo=Object.assign({id:ws.id},wo);
       return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60)};
     }
     if (req.query.serial) {
@@ -102,14 +121,62 @@ module.exports = A.handler(async function (req, res) {
       tx.update(stationRef,patch);tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-station',stationId:old.id,by:caller.email,before:Flow.stationView(st,old.id),after:patch,at:new Date().toISOString()});return {ok:true};});
   }
   if (b.action === 'station') {
-    if (Plant.indexOf(flow.routing, b.station) < 0) throw A.httpError(400, 'Unknown station');
+    /* '*' pairs a ROAMING device — the operator's phone, which goes to the
+       bench with them and names the bench on each scan (api/mes-scan.js).
+       Two people building cabinets do not have a tablet bolted to every
+       bench; they have a phone in a pocket. The routing rules are the same
+       and every scan records both the phone and the bench it claimed. */
+    var roaming = b.station === '*';
+    if (!roaming && Plant.indexOf(flow.routing, b.station) < 0) throw A.httpError(400, 'Unknown station');
     var lineId=b.lineId||flow.lines[0].id;if(!flow.lines.some(function(l){return l.id===lineId;}))throw A.httpError(400,'Unknown line');
     var crypto = require('crypto'), token = crypto.randomBytes(32).toString('hex'), ref = db.collection('plant_stations').doc();
-    await ref.create({ orgId: org, station: b.station, label: String(b.label || b.station).slice(0, 100),
+    await ref.create({ orgId: org, station: roaming ? '*' : b.station, roaming: roaming, label: String(b.label || (roaming ? 'Roaming phone' : b.station)).slice(0, 100),
       lineId:lineId,location:Flow.clean(b.location,160),instructions:Flow.clean(b.instructions,2000),revision:0,
-      tokenHash: S.sha(token), machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0, active: true,
+      tokenHash: S.sha(token), machine: !roaming && Plant.MACHINE_STATIONS.indexOf(b.station) >= 0, active: true,
       createdBy: caller.email, createdAt: A.FieldValue().serverTimestamp() });
     return { stationId: ref.id, token: token, machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0 };
+  }
+  if(b.action==='allocate'){
+    /* A finished unit on the shelf, assigned by a person to an order that
+       is short of it. logic-workflow.js release() does the same
+       automatically at deposit time from whatever it can see; this is the
+       office choosing a specific serial afterwards — a unit came off the
+       line for stock, or a rush order arrived. The whole assembly moves
+       (every serial under the same root), the works order builds one
+       fewer, and both records say who did it. */
+    var serial=Plant.serialFrom(b.serial);if(!serial)throw A.httpError(400,'Invalid serial');
+    var orderRef=db.collection('orders').doc(P.id(b.orderId)),unitRef=db.collection('plant_units').doc(org+'__'+serial);
+    return db.runTransaction(async function(tx){
+      var us=await tx.get(unitRef),os=await tx.get(orderRef);
+      if(!us.exists||us.data().orgId!==org)throw A.httpError(404,'Unit not found');
+      var u=us.data();
+      if(!u.shipUnit)throw A.httpError(400,'Only a shipping unit can be assigned; its components travel with it');
+      if(u.orderId)throw A.httpError(409,'This unit is already assigned to '+(u.orderNo||'an order'));
+      if(u.at!=='ready'||u.hold)throw A.httpError(409,'Only a finished unit with no hold can be assigned');
+      if(u.inventoryStatus!=='available')throw A.httpError(409,'This unit is not on the shelf as available stock');
+      if(!os.exists||os.data().orgId!==org)throw A.httpError(404,'Order not found');
+      var o=os.data();
+      if(o.cancelRequested||(o.logic||{}).paymentException)throw A.httpError(409,'Order is on hold');
+      if(!o.worksOrderId||o.status!=='in_fulfilment')throw A.httpError(409,'The order must be accepted, paid and released to the plant before a unit is assigned');
+      var woRef=db.collection('plant_works_orders').doc(o.worksOrderId),ws=await tx.get(woRef);
+      if(!ws.exists||ws.data().orgId!==org)throw A.httpError(404,'Works order not found');
+      var w=ws.data(),req=(w.requirements||[]).map(function(r){return {sku:String(r.sku),qty:Number(r.qty)||0};}),line=req.filter(function(r){return r.sku===u.sku;})[0];
+      var started=Number((w.registeredCounts||{})[u.sku])||0;
+      if(!line||line.qty-started<=0)throw A.httpError(409,'This order does not need another '+u.sku+(line?' — the plant has already started the rest':''));
+      var fam=await tx.get(db.collection('plant_units').where('orgId','==',org).where('rootSerial','==',u.rootSerial||u.serial).limit(201));
+      if(fam.size>200)throw A.httpError(409,'This assembly has too many components to assign in one step');
+      fam.docs.forEach(function(d){var c=d.data();if(c.orderId&&c.serial!==serial)throw A.httpError(409,'Component '+c.serial+' of this unit is already assigned to '+(c.orderNo||'an order'));});
+      var now=new Date().toISOString(),patch={orderId:orderRef.id,orderNo:o.orderNo||null,woId:woRef.id,inventoryStatus:'allocated',sourceWoId:u.woId||null,allocatedAt:now,allocatedBy:caller.email,updatedAt:A.FieldValue().serverTimestamp()};
+      var seen={};fam.docs.forEach(function(d){seen[d.id]=true;tx.update(d.ref,patch);});if(!seen[unitRef.id])tx.update(unitRef,patch);
+      line.qty-=1;
+      var status=w.status;if(status==='awaiting_serials'&&!req.some(function(r){return r.qty>0;}))status=(w.serviceRequirements||[]).length&&!w.serviceCompletion?'awaiting_services':'ready';
+      var allocated=(w.allocatedSerials||[]).concat([serial]);
+      tx.update(woRef,{requirements:req,allocatedSerials:allocated,status:status,shippingUnitCount:(w.shippingUnitCount||0)+1,releasedUnits:(w.releasedUnits||0)+Math.max(1,fam.size),updatedAt:A.FieldValue().serverTimestamp()});
+      tx.update(orderRef,{'logic.allocatedSerials':((o.logic||{}).allocatedSerials||[]).concat([serial]),'logic.requirements':req,updatedAt:A.FieldValue().serverTimestamp()});
+      tx.create(orderRef.collection('events').doc(),{at:now,by:caller.email,what:'Finished unit '+serial+' assigned from stock by the office'});
+      tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-allocate',serial:serial,orderId:orderRef.id,workOrderId:woRef.id,by:caller.email,at:now,after:{requirements:req,status:status}});
+      return {ok:true,serial:serial,orderNo:o.orderNo||null,stillToBuild:Math.max(0,line.qty-started),workOrderStatus:status};
+    });
   }
   if (b.action !== 'register' && b.action !== 'stock') throw A.httpError(400, 'Unknown action');
   var requestId = P.id(b.requestId), woId = b.action === 'stock' ? 'stock_' + P.key(org + ':' + requestId) : P.id(b.workOrderId);

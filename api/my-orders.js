@@ -60,11 +60,14 @@ function requireVerified(caller) {
 }
 
 /* Units for one order, via the works order the release step raises.
-   TODAY THIS IS USUALLY EMPTY: the release handler (deposit → works order)
-   is designed and not built, so most orders have no plant record at all.
-   That is why it returns [] rather than throwing — an order with no units
-   is a normal order early in its life, and milestoneOf() falls back to the
-   order's own status for exactly this case. */
+   api/_lib/logic-workflow.js release() writes plant_works_orders/wo_<orderId>
+   with this order's `orderNo` once the deposit invoice reconciles as paid
+   (api/logic-worker.js runs it every five minutes), and stamps `woId` on
+   every unit it allocates or that the floor registers against it. Both
+   composite indexes are in firestore.indexes.json. Before that moment —
+   which is most of an order's early life, and every order not under Omega
+   Logic — there is no plant record, so this returns [] rather than
+   throwing, and milestoneOf() falls back to the order's own status. */
 function unitsFor(db, orgId, orderNo) {
   if (!orderNo) return Promise.resolve([]);   /* no works order yet: normal */
   return db.collection('plant_works_orders')
@@ -106,14 +109,70 @@ function unitsFor(db, orgId, orderNo) {
 function milestoneMapOf(db, orgId) {
   return db.collection('omega_orgs').doc(orgId).collection('storefront').doc('config').get()
     .then(function (d) {
-      var c = (d && d.exists ? d.data() : {}) || {};
-      return { map: c.milestoneMap || null, showPrice: c.showCustomerPrice === true };
-    }, function () { return { map: null, showPrice: false }; });
+      var c = (d && d.exists ? d.data() : {}) || {}, by = {};
+      /* Only the two fields the warranty needs cross into the portal read;
+         the rest of the product list (cost, bills, suppliers) stays here. */
+      (c.products || []).forEach(function (p) { if (p && p.sku && ['__proto__', 'constructor', 'prototype'].indexOf(String(p.sku)) < 0) by[p.sku] = { warrantyYears: Number(p.warrantyYears) || 0 }; });
+      return { map: c.milestoneMap || null, showPrice: c.showCustomerPrice === true, by: by };
+    }, function () { return { map: null, showPrice: false, by: {} }; });
+}
+
+/* ── POST: the customer asks for something on their order ──────────────
+   Body: { org, orderNo, kind, message, address? }
+   kind: shipping (a new delivery address or date) · information (a
+   question) · change (change the order) · warranty (a claim).
+
+   It is a REQUEST. Nothing on the order changes here: not the address,
+   not the lines, not the status. The office reads it on the order, acts
+   through its own controls (logistics, pricing, cancellation) and answers;
+   the answer comes back to the customer on this same record. Same email
+   proof as the read, same scrubbed 500s. */
+var REQUEST_KINDS = { shipping: true, information: true, change: true, warranty: true };
+var MAX_REQUESTS = 50, MAX_OPEN = 10;
+function requestChange(req) {
+  var b = req.body || {};
+  return A.authenticate(req).then(async function (caller) {
+    var email = requireVerified(caller);
+    var org = A.safeOrg(b.org || '');
+    if (!org) throw A.httpError(400, 'a valid org is required');
+    var orderNo = String(b.orderNo || '').trim().slice(0, 120);
+    if (!orderNo) throw A.httpError(400, 'Which order is this about?');
+    var kind = String(b.kind || '').trim().toLowerCase();
+    if (!REQUEST_KINDS[kind]) throw A.httpError(400, 'Choose what the request is about.');
+    var message = String(b.message || '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, 2000);
+    if (message.length < 5) throw A.httpError(400, 'Tell us what you need, in a few words at least.');
+    var address = null;
+    if (kind === 'shipping' && b.address && typeof b.address === 'object') {
+      var a = b.address; address = { line1: String(a.line1 || '').trim().slice(0, 200), city: String(a.city || '').trim().slice(0, 100), state: String(a.state || '').trim().slice(0, 40), zip: String(a.zip || '').trim().slice(0, 20) };
+      if (!address.line1 && !address.city) address = null;
+    }
+    var db = A.db();
+    var snap = await db.collection('orders').where('orgId', '==', org).where('customer.email', '==', email).where('orderNo', '==', orderNo).limit(1).get();
+    if (snap.empty) throw A.httpError(404, 'We could not find that order on your account.');
+    var ref = snap.docs[0].ref, now = new Date().toISOString();
+    var id = 'rq_' + require('crypto').randomBytes(6).toString('hex');
+    var entry = await db.runTransaction(async function (tx) {
+      var s = await tx.get(ref), o = s.data() || {};
+      var list = Array.isArray(o.requests) ? o.requests : [], open = list.filter(function (r) { return r && r.status === 'open'; }).length;
+      if (open >= MAX_OPEN) throw A.httpError(429, 'You already have ' + MAX_OPEN + ' open requests on this order; we will answer those first.');
+      if (list.length >= MAX_REQUESTS) throw A.httpError(429, 'This order has reached its request limit. Please call us.');
+      var e = { id: id, kind: kind, message: message, address: address, by: email, at: now, status: 'open', answer: null };
+      tx.update(ref, { requests: list.concat([e]), openRequests: open + 1, updatedAt: A.FieldValue().serverTimestamp() });
+      tx.create(ref.collection('events').doc(), { at: now, by: email, what: 'Customer request (' + kind + '): ' + message.slice(0, 200) });
+      return e;
+    });
+    return { ok: true, request: { id: entry.id, kind: entry.kind, message: entry.message, status: entry.status, at: entry.at, answer: null, address: entry.address } };
+  })['catch'](function (e) {
+    if (e && e.status && e.status < 500) throw e;
+    console.error('[my-orders request]', e);
+    throw A.httpError(500, 'Something went wrong on our side. Please try again.');
+  });
 }
 
 module.exports = A.handler(function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method !== 'GET') throw A.httpError(405, 'GET only');
+  if (req.method === 'POST') return requestChange(req);
+  if (req.method !== 'GET') throw A.httpError(405, 'GET or POST only');
 
   return A.authenticate(req).then(async function (caller) {
     var email = requireVerified(caller);
@@ -171,7 +230,7 @@ module.exports = A.handler(function (req, res) {
         });
         return Promise.all(rows.map(function (o) {
           return unitsFor(db, org, o.orderNo).then(function (units) {
-            return P.publicOrder(o, { units: units, milestoneMap: cfg.map, showPrice: cfg.showPrice });
+            return P.publicOrder(o, { units: units, milestoneMap: cfg.map, showPrice: cfg.showPrice, catalogBy: cfg.by });
           });
         })).then(function (orders) {
           /* Reported off the rows actually returned, so a single-order

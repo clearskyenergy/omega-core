@@ -1309,18 +1309,18 @@ everything so there is no scoping work left to do.
 | stage | state | owner |
 |---|---|---|
 | Order intake | live | `api/embed-order.js` |
-| Deposit | **not built** | QuickBooks invoice + payment link (decided 2026-09-20) |
-| Works order | **partial** | `api/plant-release.js` — runs, idempotent, but staff press it |
+| Deposit | live under Omega Logic | QuickBooks installment invoice, `api/_lib/qbo-sales.js`; reconciled by `api/logic-worker.js` every 5 min |
+| Works order | live under Omega Logic | `api/_lib/logic-workflow.js` `release()` on a verified deposit; `api/plant-release.js` remains the staff-pressed path for orders outside it |
 | Production line | live | `api/mes-scan.js`, `api/mes-test-result.js`, `api/plant-control.js` |
-| Unit record | **partial** | captured at release (lot, firmware, capacity, genealogy); no read path |
-| Shipment | **not built** | — |
-| Final payment | **not built** | — |
+| Unit record | live | captured at release; read back by `api/my-orders.js` (customer milestone) and `api/logic-plant.js` |
+| Shipment | live under Omega Logic | `finish(orderId, caller, shipment)` — carrier and tracking, after every serial is Ready |
+| Final payment | live under Omega Logic | balance invoice queued at quality release; shipment waits for it |
 
-`partial` is a real third state and not a hedge. Release runs but nothing
-triggers it; the unit record is written but nothing reads it back. Calling
-either `live` would promise a warranty surface that does not exist; calling
-either `off` would send somebody to rebuild a capture path that
-`api/_lib/plant-release.js` already validates.
+*(Rewritten 2026-09-21. The earlier entry read "not built" for deposit,
+shipment and final payment and "partial" for the works order; PRs #65 and
+its neighbours landed the whole chain for orders carrying `logic`. An order
+placed through the public storefront and never priced under Omega Logic
+still has none of it — which is a state, not a gap.)*
 
 ### The rule the whole view is built on
 

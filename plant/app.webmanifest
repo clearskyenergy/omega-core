@@ -1,0 +1,16 @@
+{
+  "name": "Plant — work orders",
+  "short_name": "Plant",
+  "description": "Work orders, the bench scanner, stock and quality for the people building the units.",
+  "start_url": "/plant/app",
+  "scope": "/plant/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0B2733",
+  "icons": [
+    { "src": "/icons/omega-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

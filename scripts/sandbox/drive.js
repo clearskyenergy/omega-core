@@ -111,6 +111,24 @@ const srv = http.createServer((_, res) => {
   ok((await txt()).includes('Kitting'), 'pushed to the plant — the floor now holds it');
 
   /* ══ 5 · the bench ══════════════════════════════════════════════════════ */
+  /* ══ 5b · the materials plan — before a bench has kitted anything ═════════════════════════════════════════ */
+  console.log('\n— the materials plan —');
+  await who('cc'); await click('[data-go="a/materials"]', 200);
+  ok((await addr()).indexOf('admin.cleancell.us/materials') === 0, 'on ' + (await addr()));
+  const mt = await txt();
+  ok(mt.includes('CC-CELL-280') && mt.includes('EVE Energy'), 'the cells are on the list with their supplier');
+  const shortBefore = await p.$eval('#a-po', () => true).catch(() => false);
+  ok(shortBefore, 'something is short, so a purchase order is offered');
+  ok(mt.includes('MOQ 1,000'), 'the suggested order carries the MOQ');
+  await click('#a-po', 200);
+  const mt2 = await txt();
+  ok(mt2.includes('PO-1001') && mt2.includes('ordered'), 'the purchase order is recorded');
+  ok(!(await p.$('#a-po')), '  and nothing is short any more — on order counts');
+  await click('#a-rcv-PO-1001', 200);
+  const mt3 = await txt();
+  ok(mt3.includes('received') && !(await p.$('#a-rcv-PO-1001')), 'receiving closes it and the stock moved to on hand');
+  ok((await p.evaluate(() => { const s = window.__demoState(); return s.stock['CC-CELL-280'].onOrder === 0 && s.stock['CC-CELL-280'].onHand > 500; })), '  cells: on order back to zero, on hand up');
+
   console.log('\n— the bench tablet —');
   await who('bench');
   ok((await addr()).indexOf('plant.cleancell.us') === 0, 'kiosk on ' + (await addr()));
@@ -207,7 +225,7 @@ const srv = http.createServer((_, res) => {
   await click('#tnote', 140);
 
   const pages = ['home', 'products', 'how', 'size', 'p/orders', 'p/documents', 'p/terms',
-                 'p/account', 'p/design', 'd/studio', 'a/orders', 'a/customers', 'a/production',
+                 'p/account', 'p/design', 'd/studio', 'a/orders', 'a/customers', 'a/production', 'a/materials',
                  'b/scan', 'o/orders', 'o/tenants', 'o/tenant/cleancell.us', 'o/systems'];
   let bad = [];
   await p.setViewportSize({ width: 390, height: 900 });

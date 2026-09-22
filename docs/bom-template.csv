@@ -1,0 +1,6 @@
+parentSku,componentSku,qty,unit,yieldPct,station,step
+CC-215,CC-MOD-52,8,ea,,rack,1 · Fit modules
+CC-215,CC-BMS-M,1,ea,,bms,Fit BMS
+CC-215,CC-ENC-1B,1,ea,,encl,
+CC-MOD-52,CC-CELL-280,104,ea,98,module,1 · Fit cells
+CC-MOD-52,CC-HARN,2.5,m,95,module,2 · Sense harness

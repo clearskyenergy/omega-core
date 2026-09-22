@@ -72,7 +72,7 @@ function planStorefront(t) {
 }
 
 function plan(t) {
-  var org = { name: t.name, slug: t.slug, domains: t.domains || [], logoUrl: t.logoUrl || '', vertical: t.vertical || null, shell: t.shell || 'default',
+  var org = { name: t.name, slug: t.slug, domains: t.domains || [], logoUrl: t.logoUrl || '', appIcon: t.appIcon || null, vertical: t.vertical || null, shell: t.shell || 'default',
     status: t.status || 'active', receivesFullBom: !!t.receivesFullBom, exportBrand: t.exportBrand || { name: t.name, logo: t.logoUrl || '' } };
   /* whiteLabel goes on the ORG record whole — that is the authority, and
      omega-tenant.js mergeEntitlements() reads it there once a user is signed

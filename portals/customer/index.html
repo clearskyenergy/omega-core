@@ -105,6 +105,10 @@
   #gate h1{font-size:23px}
   @media (max-width:560px){ main{padding:22px 16px 60px} .row2{grid-template-columns:1fr}
     .steps{display:none} }
+  .rqs{margin-top:10px;border-top:1px solid var(--line,#e6eef2);padding-top:6px}
+  .rq{padding:8px 0;border-bottom:1px dashed var(--line,#e6eef2);font-size:14px}.rq p{margin:4px 0}.rq .ans{background:var(--sunk,#f1fafc);padding:8px 10px;border-radius:8px}
+  .rqf{margin-top:8px;font-size:14px}.rqf summary{cursor:pointer;color:var(--brand-d,#2A8CA3)}.rqf label{display:block;margin:8px 0 4px}.rqf textarea,.rqf select,.rqf input{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line,#dce4e5);border-radius:8px;margin-bottom:6px}.rqf .addr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:6px}.rqf button{font:inherit;padding:9px 16px;border-radius:999px;border:1px solid var(--brand,#3FAFC6);background:var(--brand,#3FAFC6);color:white;cursor:pointer}
+  @media(max-width:600px){.rqf .addr{grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="/omega-logic-theme.css">
 </head>
@@ -294,6 +298,7 @@
         return '<div><span class="q">' + esc(it.qty || 1) + '&times;</span>'
              + '<span class="n">' + esc(it.name || it.sku || 'Item')
              + (it.kwh ? ' <span class="muted">' + esc(it.kwh) + ' kWh</span>' : '')
+             + (it.warranty ? ' <span class="muted">· warranty to ' + esc(it.warranty.until) + '</span>' : '')
              + '</span></div>';
       }).join('');
       var docs = (o.documents || []).map(function (d) {
@@ -342,9 +347,39 @@
         + checkout
         + (meta.length ? '<div class="meta">' + meta.join('<span>·</span>') + '</div>' : '')
         + (docs ? '<div class="docs">' + docs + '</div>' : '')
+        + requestsHtml(o)
         + '</div>';
     }).join('');
   }
+
+  var KIND = { shipping: 'Delivery address or date', information: 'Question', change: 'Change to the order', warranty: 'Warranty' };
+  function requestsHtml(o) {
+    var reqs = (o.requests || []).map(function (r) {
+      return '<div class="rq ' + esc(r.status) + '"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="muted">' + esc(String(r.at || '').slice(0, 10)) + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span>'
+        + '<p>' + esc(r.message) + '</p>'
+        + (r.address ? '<p class="muted">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
+        + (r.answer ? '<p class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</p>' : '') + '</div>';
+    }).join('');
+    return '<div class="rqs">' + reqs + '<details class="rqf"><summary>Request a change or ask a question</summary>'
+      + '<form data-req="' + esc(o.orderNo) + '"><label>About<select name="kind"><option value="information">A question</option><option value="shipping">Delivery address or date</option><option value="change">Change the order</option><option value="warranty">Warranty</option></select></label>'
+      + '<div class="addr" hidden><input name="line1" maxlength="200" placeholder="New delivery address"><input name="city" maxlength="100" placeholder="City"><input name="state" maxlength="40" placeholder="State"><input name="zip" maxlength="20" placeholder="ZIP"></div>'
+      + '<label>What do you need?<textarea name="message" maxlength="2000" required placeholder="Tell us what you need. We will answer here."></textarea></label>'
+      + '<button type="submit">Send request</button> <span class="muted rq-status"></span></form></details></div>';
+  }
+  $('orders').addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'kind') { var f = e.target.closest('form'); if (f) f.querySelector('.addr').hidden = e.target.value !== 'shipping'; }
+  });
+  $('orders').addEventListener('submit', function (e) {
+    var f = e.target; if (!f || !f.getAttribute('data-req')) return;
+    e.preventDefault();
+    var st = f.querySelector('.rq-status'); st.textContent = 'Sending…';
+    var body = { org: ORG, orderNo: f.getAttribute('data-req'), kind: f.kind.value, message: f.message.value,
+      address: f.kind.value === 'shipping' ? { line1: f.line1.value, city: f.city.value, state: f.state.value, zip: f.zip.value } : null };
+    api('/api/my-orders?org=' + encodeURIComponent(ORG), { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
+      if (!r.ok) { st.textContent = (r.j && r.j.error) || 'Could not send. Please try again.'; return; }
+      st.textContent = 'Sent. We will answer here.'; loadOrders();
+    });
+  });
 
   function loadOrders() {
     api('/api/my-orders?org=' + encodeURIComponent(ORG)).then(function (r) {

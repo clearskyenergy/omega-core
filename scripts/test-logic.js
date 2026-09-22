@@ -181,9 +181,10 @@ ok('asOf is the one we passed in', r.asOf === '2026-09-20T00:00:00Z', r.asOf);
 ok('stations always list all ten benches', r.stations.length === P.DEFAULT_ROUTING.length, r.stations.length);
 ok('  including the empty ones', r.stations.filter(function (s) { return s.count === 0; }).length === 8);
 
-/* The rep's own note is aliased into customer.notes at api/orders.js:258.
-   This is a staff surface so it would be legitimate to show — but it is not
-   named in the projection, and an unnamed field must not appear. */
+/* Rows created before the api/orders.js fix carry the rep's own note aliased
+   into customer.notes. This is a staff surface so it would be legitimate to
+   show — but it is not named in the projection, and an unnamed field must
+   not appear. */
 var ser = JSON.stringify(r);
 ok('nothing unnamed leaks: customer.notes absent', ser.indexOf('shopping us against Tesla') < 0);
 ok('  margin absent (not named)', ser.indexOf('0.22') < 0);

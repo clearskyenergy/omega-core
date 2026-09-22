@@ -94,12 +94,23 @@ says so under **Show what is real**.
 - state survives a reload, no horizontal scroll at 390px across 18 pages,
   dark mode paints, no JS errors
 
+## The materials plan
+
+`admin.cleancell.us/materials` is the third engine in the bundle:
+`api/_lib/materials.js`, read verbatim. The demo catalogue carries a bill of
+materials (cabinet → 41 modules → 104 cells at 98% yield), a seeded shelf, and
+the released works order explodes through it. Recording a purchase order and
+receiving it stand in for `api/logic-materials.js`; the arithmetic — netting
+level by level, stock to the firmest demand first, order-by from the lead
+time — is production's.
+
 ## Known stand-in
 
-The deposit is a button. In the product the Stripe milestone webhook that
-raises the works order is designed (`docs/CUSTOMER-PORTAL.md`) and not
-written, so the ClearSky console names it as the first thing to automate
-rather than pretending it already fires.
+The deposit is a button. In the product it is a QuickBooks installment
+invoice raised by Omega Logic, and `api/_lib/logic-workflow.js` `release()`
+raises the works order on its own once the payment reconciles — the demo has
+no QuickBooks company to reconcile against, so a click stands in for the
+five-minute cron, and the ClearSky console says so.
 
 ## chain.html — the step-by-step version
 

@@ -12,6 +12,7 @@
 
 var A = require('./_lib/admin');
 var Agent = require('./_lib/plant-agent');
+var M = require('./_lib/materials');
 
 var MAX_ORDERS = 250;
 var MAX_WORKS = 250;
@@ -47,19 +48,34 @@ module.exports = A.handler(function (req) {
     return A.isTenantAdmin(caller, org).then(function (may) {
       if (!may) throw A.httpError(403, 'You are not an administrator of that tenant.');
       var db = A.db();
+      var root = db.collection('omega_orgs').doc(org);
       return Promise.all([
         db.collection('orders').where('orgId', '==', org).limit(MAX_ORDERS + 1).get(),
         db.collection('plant_works_orders').where('orgId', '==', org).limit(MAX_WORKS + 1).get(),
-        db.collection('plant_units').where('orgId', '==', org).limit(MAX_UNITS + 1).get()
+        db.collection('plant_units').where('orgId', '==', org).limit(MAX_UNITS + 1).get(),
+        root.collection('storefront').doc('config').get(),
+        root.collection('fulfillment').doc('materials').get()
       ]).then(function (rows) {
         var orderTooMany = rows[0].size > MAX_ORDERS;
         var workTooMany = rows[1].size > MAX_WORKS;
         var unitTooMany = rows[2].size > MAX_UNITS;
+        var orders = mapped(rows[0]).slice(0, MAX_ORDERS), works = mapped(rows[1]).slice(0, MAX_WORKS);
+        /* The materials plan is advisory input. A catalog whose bills of
+           materials fail validation must not take the floor queue down with
+           it, so the plan is best-effort here and the queue says nothing
+           about materials rather than something wrong. */
+        var materials = null;
+        try {
+          var cat = rows[3].exists ? (rows[3].data() || {}) : {}, st = rows[4].exists ? (rows[4].data() || {}) : {};
+          if (Array.isArray(cat.products) && cat.products.some(function (p) { return p && (p.bom || []).length; })) {
+            materials = M.plan({ products: cat.products, stock: st.stock || {}, orders: orders, works: works });
+          }
+        } catch (e) { console.error('[jarvis-operations] materials plan skipped:', e.message); }
         var advice = Agent.advise({
           now: new Date().toISOString(), question: question,
-          orders: mapped(rows[0]).slice(0, MAX_ORDERS),
-          works: mapped(rows[1]).slice(0, MAX_WORKS),
+          orders: orders, works: works,
           units: mapped(rows[2]).slice(0, MAX_UNITS),
+          materials: materials,
           truncated: orderTooMany || workTooMany || unitTooMany
         });
         return {
