@@ -109,6 +109,18 @@
     "192": "/tenants/cleancell/icons/plant-192.png",
     "512": "/tenants/cleancell/icons/plant-512.png",
     "180": "/tenants/cleancell/icons/plant-180.png",
-    "maskable": "/tenants/cleancell/icons/plant-maskable-512.png"
+    "maskable": "/tenants/cleancell/icons/plant-maskable-512.png",
+    "office": {
+      "192": "/tenants/cleancell/icons/office-192.png",
+      "512": "/tenants/cleancell/icons/office-512.png",
+      "180": "/tenants/cleancell/icons/office-180.png",
+      "maskable": "/tenants/cleancell/icons/office-maskable-512.png"
+    },
+    "customer": {
+      "192": "/tenants/cleancell/icons/customer-192.png",
+      "512": "/tenants/cleancell/icons/customer-512.png",
+      "180": "/tenants/cleancell/icons/customer-180.png",
+      "maskable": "/tenants/cleancell/icons/customer-maskable-512.png"
+    }
   }
 }

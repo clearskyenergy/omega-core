@@ -6,7 +6,7 @@ function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
   return { office: '/omega-logic' + q, factory: '/plant/' + q, customer: '/portals/customer/' + q, customers: '/portals/customer/admin.html' + q,
-    start: '/customer-start.html' + q,
+    start: '/customer-start.html' + q, customerApp: '/portals/customer/app' + q, officeApp: '/office/app' + q, plantApp: '/plant/app' + q,
     urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,materials:'/logic-materials.html'+q,board:'/plant/work-orders.html'+q,logistics:'/logic-logistics.html'+q,poInbox:'/po-inbox?office=1&org='+encodeURIComponent(org),
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
     setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,

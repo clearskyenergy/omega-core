@@ -6,7 +6,9 @@ function paths(org) {
   var q = '?org=' + encodeURIComponent(org);
   return { start: ORIGIN + '/customer-start.html' + q,
     account: ORIGIN + '/portals/customer/' + q,
-    design: ORIGIN + '/portals/customer/' + q + '#design' };
+    design: ORIGIN + '/portals/customer/' + q + '#design',
+    /* the phone app: installable, Editor Lite first */
+    app: ORIGIN + '/portals/customer/app' + q };
 }
 async function publicStorefront(db, org) {
   var keys = await db.collection('embed_keys').where('orgId', '==', org).get();

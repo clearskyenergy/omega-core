@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B2733">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Office">
+<link rel="manifest" href="/app-sandbox/office.webmanifest">
+<link rel="apple-touch-icon" href="/tenants/cleancell/icons/office-180.png">
+<title>Office · sandbox</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  office/app.html — the office in a pocket
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  Four people run the business — a project manager, a procurement officer,
+  a commissioning engineer and the builder — and none of them sits at the
+  desk all day. This is the app they install: what needs a person today,
+  every order and where it is, a stack of purchase orders keyed in from a
+  customer's email while it is still open, each customer's terms and
+  balance, and a finished unit assigned to an order from the shelf.
+
+  It is the same office data through the same signed-in endpoints
+  (api/logic-office.js, api/logic-plant.js, api/logic-materials.js,
+  api/buyers.js, api/po-intake.js). The phone adds nothing a browser could
+  not do; it only puts the daily decisions where the person is. Pricing,
+  acceptance, shipment and wire settlement stay on the desktop, where the
+  QuickBooks evidence is in front of whoever signs.
+
+  Same shape as plant/app.html, on purpose: an org remembered once, a
+  bottom tab bar, the tenant's own manifest and icon (api/app-manifest.js,
+  app=office), a shell service worker so it opens and says "offline" instead
+  of a browser error. Office data is never served from cache.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="/omega-logic-theme.css">
+<style>
+  html,body{margin:0;height:100%}
+  body.logic-theme{display:flex;flex-direction:column;min-height:100vh;background:var(--paper);padding-bottom:calc(64px + env(safe-area-inset-bottom,0))}
+  header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
+  header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
+  header.top .sp{flex:1}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px}
+  main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto;min-width:0}
+  main>*{min-width:0}
+  h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}
+  .status{font-size:13px;color:var(--ink2);min-height:18px}
+  .tabs{display:flex;gap:6px;margin:8px 0 12px;overflow-x:auto}.tabs button{flex:1;padding:9px 6px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap}.tabs button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d);font-weight:600}
+  .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit;cursor:pointer}
+  .card.urgent{border-left:4px solid #B42318}
+  .card .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.card .h b{font-size:16px}
+  .card .m{color:var(--ink2);font-size:13px;margin-top:2px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid var(--line);white-space:nowrap}
+  .pill.bad{background:#FDEBE9;color:#B42318;border-color:#F4B4AE}.pill.ok{background:#E9F7F0;color:#198764;border-color:#B8E4CD}
+  .bar{height:8px;background:var(--sunk);border-radius:6px;margin-top:10px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand);border-radius:6px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kv div{padding:10px 12px;background:var(--sunk);border-radius:10px;min-width:0}.kv small{display:block;color:var(--ink2);font-size:12px}.kv b{font-size:20px;overflow-wrap:anywhere}.kv div.bad b{color:#B42318}
+  .unit{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit;min-width:0}
+  .unit>div{min-width:0}.unit small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}.unit .mono{font-family:'IBM Plex Mono',monospace;font-size:14px}
+  .big{display:block;width:100%;padding:16px;border-radius:14px;border:0;background:var(--brand);color:white;font:700 17px 'Poppins',system-ui,sans-serif;margin:12px 0;text-align:center;text-decoration:none}
+  .big.ghost{background:white;color:var(--brand-d);border:1px solid var(--brand)}
+  .big:disabled{opacity:.5}
+  input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
+  textarea{min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  .row{display:flex;gap:8px}.row input,.row select{flex:1;min-width:0}.row button{padding:0 16px;border:1px solid var(--line);background:white}
+  .back{border:0;background:none;color:var(--brand-d);font:inherit;padding:6px 0;cursor:pointer}
+  .note{font-size:12px;color:var(--ink2)}
+  .rq{border-top:1px solid var(--line);padding:10px 0}.rq p{margin:6px 0;white-space:pre-wrap}
+  .ans{background:var(--sunk);border-radius:10px;padding:8px 12px;font-size:14px}
+  ul.plain{padding-left:18px;margin:6px 0}
+  nav.bottom{position:fixed;left:0;right:0;bottom:0;display:flex;background:white;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0);z-index:5}
+  nav.bottom button{flex:1;border:0;background:none;padding:10px 4px 8px;font:600 11px system-ui,sans-serif;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav.bottom button span{font-size:20px;line-height:1}nav.bottom button[aria-current=page]{color:var(--brand-d)}
+  #gate{text-align:center;padding:40px 16px}#gate button{margin-top:14px}
+  .off{background:#FFF5DD;color:#A26718;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
+  .warn{background:#FDEBE9;color:#B42318;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
+</style>
+</head>
+<body class="logic-theme">
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Office</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<main>
+  <div id="gate"><h1>Office</h1><p class="note">Orders, purchase orders, customers and stock — for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
+  <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
+  <p id="status" class="status"></p>
+  <div id="view"></div>
+</main>
+<nav class="bottom" id="nav" hidden>
+  <button data-tab="today" aria-current="page"><span>☀</span>Today</button>
+  <button data-tab="orders"><span>▤</span>Orders</button>
+  <button data-tab="pos"><span>▥</span>POs</button>
+  <button data-tab="customers"><span>◉</span>Customers</button>
+  <button data-tab="stock"><span>▦</span>Stock</button>
+</nav>
+<script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
+<script>
+(function () {
+  'use strict';
+  var cfg = window.CLEARSKY_CONFIG || {}; if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+  var auth = firebase.auth(), params = new URLSearchParams(location.search);
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  /* The org comes with the link once and is remembered: an installed app has
+     no query string to carry it. */
+  var ORG = params.get('org') || load('omega_office_app_org', '') || '';
+  if (params.get('org')) store('omega_office_app_org', params.get('org'));
+  /* The tenant's own name, colours and icon on the home screen
+     (api/app-manifest.js app=office); the static manifest is the fallback. */
+  if (ORG) {
+    var mfUrl = '/api/app-manifest?org=' + encodeURIComponent(ORG) + '&app=office';
+    /* sandbox: the manifest link is static */
+    fetch(mfUrl).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      if (!m) return;
+      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
+      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
+      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
+    })['catch'](function () {});
+  }
+  var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
+  var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
+  var q = '?org=' + encodeURIComponent(ORG);
+  var STAGE_PILL = { exception: 'bad', ship: 'ok', shipped: 'ok', complete: 'ok' };
+  var FILTERS = [['all', 'All', null], ['attention', 'Needs attention', ['exception']], ['quote', 'To price', ['quote', 'priced']], ['deposit', 'Awaiting deposit', ['deposit']], ['build', 'In build', ['release', 'production', 'balance']], ['ship', 'Ready · shipped', ['ship', 'shipped', 'complete']], ['requests', 'Customer requests', null]];
+
+  function api(path, body) {
+    if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
+    return auth.currentUser.getIdToken().then(function (t) {
+      return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(Object.assign({ org: ORG }, body)) : undefined });
+    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }); });
+  }
+  function status(t) { $('status').textContent = t || ''; }
+  function fail(e) { status(e.message || String(e)); }
+  function dollars(c) { return '$' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function day(s) { return s ? String(s).slice(0, 10) : ''; }
+  function openReq(o) { return (o.requests || []).filter(function (r) { return r.status === 'open'; }); }
+  function stageKey(o) { return o.stage ? o.stage.key : o.status; }
+  function stageLabel(o) { return o.stage ? o.stage.label : o.status; }
+  function invoiceSums(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { var i = o.logic.invoices[k]; inv += i.amountCents || 0; pd += i.paidCents || 0; }); return { invoiced: inv, paid: pd, balance: inv - pd }; }
+  function boardFor(o) { if (!BOARD || !o.worksOrderId) return null; return (BOARD.rows || []).filter(function (r) { return r.id === o.worksOrderId; })[0] || null; }
+
+  /* ── data ─────────────────────────────────────────────────────────────── */
+  function loadAll() {
+    status('Loading…'); MAT = null; UNITS = null; BUYERS = null; CUST = null; COMPANIES = null; COMPANY = null;
+    return Promise.all([api('/api/logic-office' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
+      DATA = r[0]; BOARD = r[1];
+      if (DATA.brand) OmegaLogicTheme.apply(DATA.brand);
+      $('who').textContent = (auth.currentUser && auth.currentUser.email) || '';
+      status(''); draw();
+    })['catch'](fail);
+  }
+  function loadMaterials() { return MAT ? Promise.resolve(MAT) : api('/api/logic-materials' + q).then(function (m) { MAT = m; return m; }); }
+  function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=units').then(function (u) { UNITS = u.rows || []; return UNITS; }); }
+  function loadBuyers() { return BUYERS ? Promise.resolve(BUYERS) : api('/api/buyers' + q).then(function (b) { BUYERS = b; return b; }); }
+  function loadCompanies() { return COMPANIES ? Promise.resolve(COMPANIES) : api('/api/po-intake' + q + '&office=1').then(function (c) { COMPANIES = c; return c; }); }
+  function loadCompany(id) { return api('/api/po-intake' + q + '&office=1&customerId=' + encodeURIComponent(id)).then(function (c) { COMPANY = c; return c; }); }
+
+  /* ── views ────────────────────────────────────────────────────────────── */
+  function draw() {
+    if (!DATA) return;
+    Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === TAB ? 'page' : 'false'); });
+    if (TAB === 'today') return PICK ? drawOrder() : drawToday();
+    if (TAB === 'orders') return PICK ? drawOrder() : drawOrders();
+    if (TAB === 'pos') return drawPos();
+    if (TAB === 'customers') return CUST ? drawCustomer() : drawCustomers();
+    if (TAB === 'stock') return drawStock();
+  }
+  function orderCard(o) {
+    var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
+    return '<button class="card' + (key === 'exception' || reqs ? ' urgent' : '') + '" data-order="' + esc(o.id) + '"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : '') + '">' + esc(stageLabel(o)) + '</span></div>'
+      + '<div class="m">' + esc(o.customer.name || o.customer.email) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + '</div>'
+      + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '<div class="m">' + esc(o.stage ? o.stage.next : '') + '</div>')
+      + (b ? '<div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="m">' + (b.progress.units ? b.progress.percent + '% built · ' + b.progress.readyRoots + ' of ' + b.progress.expectedRoots + ' ready' : 'awaiting serials') + (b.late ? ' · <b style="color:#B42318">late</b>' : '') + '</div>' : '')
+      + (reqs ? '<div class="m"><span class="pill bad">' + reqs + ' customer request' + (reqs === 1 ? '' : 's') + ' waiting</span></div>' : '') + '</button>';
+  }
+  function bindOrders() { Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { PICK = b.dataset.order; draw(); window.scrollTo(0, 0); }; }); }
+
+  function drawToday() {
+    var orders = DATA.orders || [], t = DATA.totals || { byStage: {} }, bs = t.byStage || {};
+    var invoiced = 0, paid = 0, depositsOpen = 0, exceptions = 0;
+    orders.forEach(function (o) { var l = o.logic; if (!l) return; Object.keys(l.invoices || {}).forEach(function (k) { var i = l.invoices[k]; invoiced += i.amountCents || 0; paid += i.paidCents || 0; if (k === 'deposit' && (i.paidCents || 0) < (i.amountCents || 0)) depositsOpen += (i.amountCents || 0) - (i.paidCents || 0); }); if (l.lastError || l.paymentException) exceptions++; });
+    var withReq = orders.filter(function (o) { return openReq(o).length; }), attention = orders.filter(function (o) { return stageKey(o) === 'exception'; }), toPrice = orders.filter(function (o) { return ['quote', 'priced'].indexOf(stageKey(o)) >= 0; });
+    var rows = BOARD ? (BOARD.rows || []).filter(function (r) { return r.stage !== 'complete'; }) : null, late = rows ? rows.filter(function (r) { return r.late; }) : [], held = rows ? rows.filter(function (r) { return r.progress.held > 0; }) : [];
+    var intake = DATA.intake || {}, review = (intake.review || 0) + (intake.needsInfo || 0);
+    var needs = [];
+    withReq.forEach(function (o) { needs.push({ o: o, why: openReq(o).length + ' customer request' + (openReq(o).length === 1 ? '' : 's'), pill: 'answer' }); });
+    attention.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
+    toPrice.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: 'price' }); });
+    $('view').innerHTML = '<h1>Today</h1><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
+      + (!DATA.active ? '<div class="warn">Omega Logic is not active on this workspace yet. Orders can be read; pricing and acceptance wait for setup on the desktop.</div>' : '')
+      + '<div class="kv" id="today-kv"><div class="' + ((bs.quote || 0) + (bs.priced || 0) ? '' : '') + '"><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
+      + '<h2>Needs a person · ' + (needs.length + review) + '</h2>'
+      + (review ? '<button class="unit" id="to-review"><div><b>' + review + ' company PO' + (review === 1 ? '' : 's') + ' to review</b><small>uploaded by customers; map the lines and destinations on the desktop</small></div><span class="pill bad">review</span></button>' : '')
+      + (needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('') || (review ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered.</p>'))
+      + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(invoiced) + '</b></div><div><small>Received</small><b>' + dollars(paid) + '</b></div><div class="' + (invoiced - paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(invoiced - paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(depositsOpen) + '</b></div>' + (exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
+      + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
+      + '<a class="big ghost" href="/plant/app' + q + '">Open the plant app</a>';
+    bindOrders();
+    if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
+    loadMaterials().then(function (m) { var s = m.summary || {}, el = $('kv-buy'); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (s.spend != null ? '$' + Number(s.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (s.short || 0) + ' short · ' + (s.late || 0) + ' late</small>'; if (s.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
+  }
+
+  function drawOrders() {
+    var orders = DATA.orders || [];
+    function match(f, o) { var def = FILTERS.filter(function (x) { return x[0] === f; })[0]; if (!def) return true; if (f === 'requests') return openReq(o).length > 0; if (!def[2]) return true; return def[2].indexOf(stageKey(o)) >= 0; }
+    var list = orders.filter(function (o) { return match(ORDER_FILTER, o); });
+    $('view').innerHTML = '<h1>Orders</h1><div class="tabs">' + FILTERS.map(function (f) { var n = orders.filter(function (o) { return match(f[0], o); }).length; return '<button type="button" data-filter="' + f[0] + '" aria-pressed="' + (ORDER_FILTER === f[0]) + '">' + esc(f[1]) + (n ? ' ' + n : '') + '</button>'; }).join('') + '</div>'
+      + '<p class="note">' + list.length + ' order' + (list.length === 1 ? '' : 's') + (DATA.limited ? ' · newest 100' : '') + '. Company POs that are still under review are under POs.</p>'
+      + (list.map(orderCard).join('') || '<p class="note">Nothing here.</p>');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) { b.onclick = function () { ORDER_FILTER = b.dataset.filter; store('omega_office_app_filter', ORDER_FILTER); drawOrders(); }; });
+    bindOrders();
+  }
+  function drawOrder() {
+    var o = (DATA.orders || []).filter(function (x) { return x.id === PICK; })[0];
+    if (!o) { PICK = null; return draw(); }
+    var l = o.logic, c = l && l.commercial, b = boardFor(o), money = invoiceSums(o), key = stageKey(o);
+    var reqs = (o.requests || []).slice().reverse();
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(day(o.createdAt)) : '') + '</p>'
+      + '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(o.stage ? o.stage.next : '') + '</span></p>'
+      + (o.cancelRequested ? '<div class="warn">Cancellation requested. Refund and stock disposition need review on the desktop.</div>' : '')
+      + (l && (l.lastError || l.paymentException) ? '<div class="warn">' + esc(l.paymentException || l.lastError) + '</div>' : '')
+      + '<h2>Lines</h2>' + (o.items || []).map(function (i) { return '<div class="unit"><div>' + esc(i.name || i.sku) + '<small>' + esc(i.sku) + '</small></div><b>' + esc(i.qty) + '</b></div>'; }).join('')
+      + (c ? '<h2>Money</h2><div class="kv"><div><small>Customer total</small><b>' + dollars(c.totalCents) + '</b></div><div><small>Deposit</small><b>' + dollars(c.depositCents) + '</b><small>' + esc(c.terms ? c.terms.depositPct + '% · due in ' + c.terms.dueDays + ' days' : '') + '</small></div><div><small>Received</small><b>' + dollars(money.paid) + '</b></div><div class="' + (money.balance > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(money.balance) + '</b></div></div>'
+          + Object.keys(l.invoices || {}).map(function (k) { var i = l.invoices[k]; return '<div class="unit"><div><b>' + esc(k) + ' invoice</b><small>' + dollars(i.amountCents) + ' · ' + esc(i.status) + ' · recorded ' + dollars(i.paidCents || 0) + '</small></div>' + (i.payUrl ? '<a class="pill" target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">open</a>' : '') + '</div>'; }).join('')
+        : '<h2>Money</h2><p class="note">' + (DATA.owner ? 'Not priced yet. Approve the customer price on the desktop, where the QuickBooks invoice is queued.' : 'Not priced yet. ClearSky approves the customer price.') + '</p>')
+      + (b ? '<h2>Build</h2><div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + b.progress.percent + '%</b><small>' + b.progress.done + ' of ' + b.progress.total + ' steps</small></div><div><small>Ready to ship</small><b>' + b.progress.readyRoots + ' / ' + b.progress.expectedRoots + '</b></div><div class="' + (b.progress.held ? 'bad' : '') + '"><small>On hold</small><b>' + b.progress.held + '</b></div><div><small>' + (b.late ? 'Late · due' : 'Target') + '</small><b style="font-size:15px">' + esc(b.due || '—') + '</b></div></div>' + (l && l.allocatedSerials && l.allocatedSerials.length ? '<p class="note">' + l.allocatedSerials.length + ' unit' + (l.allocatedSerials.length === 1 ? '' : 's') + ' assigned from finished stock: ' + esc(l.allocatedSerials.join(', ')) + '</p>' : '') : (l && l.releasedAt ? '<h2>Build</h2><p class="note">Released to the plant ' + esc(day(l.releasedAt)) + '.</p>' : ''))
+      + (o.shipment ? '<h2>Shipment</h2><p>' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking) + (o.shipment.shippedAt ? ' · ' + esc(day(o.shipment.shippedAt)) : '') + '</p>' : '')
+      + '<h2>Customer requests · ' + openReq(o).length + ' open</h2>'
+      + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(r.kind) + '</b> <span class="note">' + esc(String(r.at || '').slice(0, 16).replace('T', ' ')) + ' · ' + esc(r.by) + ' · ' + esc(r.status) + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">Requested address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.status === 'open' ? '<textarea id="answer-' + esc(r.id) + '" maxlength="2000" placeholder="Answer to the customer" style="min-height:70px;font-family:inherit"></textarea><button class="big ghost" data-resolve="' + esc(r.id) + '">Answer &amp; close</button><p class="note">Make the change through its own control first (Shipping for an address, pricing for a change); this records the answer the customer sees.</p>' : '<div class="ans"><b>Answered:</b> ' + esc(r.answer) + ' <span class="note">' + esc(day(r.answeredAt)) + ' · ' + esc(r.answeredBy || '') + '</span></div>') + '</div>'; }).join('') : '<p class="note">No requests on this order.</p>')
+      + (key === 'balance' || key === 'production' ? '<button class="big ghost" id="act-ready">Verify ready · invoice the balance</button>' : '')
+      + '<a class="big ghost" href="/omega-logic' + q + '&order=' + encodeURIComponent(o.id) + '">Work it on the desktop</a>';
+    $('back').onclick = function () { PICK = null; draw(); };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-resolve]'), function (btn) {
+      btn.onclick = function () {
+        var answer = $('answer-' + btn.dataset.resolve).value.trim(); if (!answer) { status('Write the answer first.'); return; }
+        btn.disabled = true; status('Saving…');
+        api('/api/logic-office', { action: 'request-resolve', orderId: o.id, requestId: btn.dataset.resolve, answer: answer }).then(function () { status('Answered. The customer sees it on their order.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; });
+      };
+    });
+    if ($('act-ready')) $('act-ready').onclick = function () {
+      if (!confirm('Verify every unit passed and invoice the balance for ' + o.orderNo + '?')) return;
+      var btn = this; btn.disabled = true; status('Checking…');
+      api('/api/logic-office', { action: 'ready', orderId: o.id }).then(function (r) { status(r.note || 'Done.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; });
+    };
+  }
+
+  /* ── POs: a stack keyed in from the customer's email ─────────────────── */
+  function drawPos() {
+    $('view').innerHTML = '<h1>Purchase orders</h1><p class="note">A fleet customer sends twenty to fifty at a time. Choose the company, paste the lines, and each becomes an order awaiting pricing — nothing is accepted or charged.</p><div id="pos-body"><p class="note">Loading companies…</p></div>';
+    loadCompanies().then(function (c) {
+      var el = $('pos-body'); if (!el) return;
+      var active = (c.companies || []).filter(function (x) { return x.status === 'active'; });
+      el.innerHTML = '<div class="row"><select id="company"><option value="">Choose a company…</option>' + active.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === COMPANY_ID ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>'
+        + '<details><summary class="note">Add a company account</summary><input id="new-company" placeholder="Company name" maxlength="160"><input id="new-domain" placeholder="Email domain, e.g. inchargeus.com (optional)"><button class="big ghost" id="add-company">Create the account</button></details>'
+        + '<div id="company-body"></div>';
+      $('company').onchange = function () { COMPANY_ID = this.value; store('omega_office_app_company', COMPANY_ID); drawCompany(); };
+      $('add-company').onclick = function () {
+        var name = $('new-company').value.trim(); if (!name) { status('Type the company name.'); return; }
+        var btn = this; btn.disabled = true; status('Creating…');
+        api('/api/po-intake', { office: true, action: 'company', name: name, domain: $('new-domain').value.trim() || undefined }).then(function (r) { COMPANIES = null; COMPANY_ID = r.customerId; store('omega_office_app_company', COMPANY_ID); status(r.duplicate ? 'That company already exists; opened.' : 'Company account created. Assign a login on the desktop so they can see their POs.'); drawPos(); })['catch'](function (e) { fail(e); btn.disabled = false; });
+      };
+      if (COMPANY_ID && active.some(function (x) { return x.id === COMPANY_ID; })) drawCompany();
+    })['catch'](fail);
+  }
+  function drawCompany() {
+    var el = $('company-body'); if (!el || !COMPANY_ID) return;
+    el.innerHTML = '<p class="note">Loading…</p>'; status('');
+    loadCompany(COMPANY_ID).then(function (c) {
+      el = $('company-body'); if (!el) return;
+      var contacts = c.contacts || [], queue = (c.intake || []).filter(function (p) { return !p.convertedAt; });
+      el.innerHTML = '<h2>' + esc(c.company.name) + '</h2><p class="note">Terms: ' + esc(c.terms.depositPct) + '% deposit, due in ' + esc(c.terms.dueDays) + ' days' + (c.company.rep ? ' · rep ' + esc(c.company.rep.name) : '') + '</p>'
+        + '<label class="note">Billing contact for these POs<select id="bulk-contact">' + (contacts.map(function (x) { return '<option value="' + esc(x.email) + '">' + esc(x.name) + ' · ' + esc(x.email) + '</option>'; }).join('') || '<option value="">Assign a company login on the desktop first</option>') + '</select></label>'
+        + '<label class="note">One line per product per PO: <b>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</b></label><textarea id="bulk-text" placeholder="INC-4471, CC-C215, 4, InCharge Bakersfield, 1200 Depot Rd, Bakersfield, CA, 93307, 2026-11-15, dock B" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>'
+        + '<p class="note">Products: ' + esc((c.products || []).map(function (p) { return p.sku; }).join(', ') || 'none published') + '</p>'
+        + '<p id="bulk-preview" class="note">Paste or type lines above.</p><button class="big" id="bulk-go">Enter these purchase orders</button><div id="bulk-result"></div>'
+        + '<h2>Under review · ' + queue.length + '</h2>' + (queue.map(function (p) { return '<div class="unit"><div><b>' + esc(p.poNumber) + '</b><small>' + esc(String(p.status).replace(/_/g, ' ')) + ' · ' + esc(p.source) + ' · ' + esc(day(p.createdAt)) + (p.reviewNote ? ' · ' + esc(p.reviewNote) : '') + '</small></div><a class="pill" href="/customer-po' + q + '&office=1&customerId=' + encodeURIComponent(COMPANY_ID) + '&intake=' + encodeURIComponent(p.id) + '">review</a></div>'; }).join('') || '<p class="note">Nothing uploaded by this company is waiting for review.</p>')
+        + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).slice(0, 20).map(function (o) { return '<div class="unit"><div><b>' + esc(o.orderNo) + '</b>' + (o.poNumber ? ' <span class="note">PO ' + esc(o.poNumber) + '</span>' : '') + '<small>' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join('; ')) + (o.legs && o.legs.length ? ' · ' + o.legs.length + ' load' + (o.legs.length === 1 ? '' : 's') : '') + '</small></div><span class="pill">' + esc(o.status) + '</span></div>'; }).join('') || '<p class="note">No orders yet.</p>')
+        + '<a class="big ghost" href="/po-inbox?office=1&org=' + encodeURIComponent(ORG) + '">Company POs on the desktop</a>';
+      $('bulk-text').oninput = function () { $('bulk-preview').textContent = OmegaPoBulk.summary(OmegaPoBulk.parse(this.value)); };
+      $('bulk-go').onclick = function () {
+        var r = OmegaPoBulk.parse($('bulk-text').value); $('bulk-preview').textContent = OmegaPoBulk.summary(r);
+        if (!OmegaPoBulk.ready(r)) { status('Fix the lines first.'); return; }
+        if (!$('bulk-contact').value) { status('Choose the billing contact.'); return; }
+        if (!confirm('Enter ' + r.pos.length + ' purchase order' + (r.pos.length === 1 ? '' : 's') + ' for ' + c.company.name + '?')) return;
+        var btn = this; btn.disabled = true; status('Entering…');
+        api('/api/po-intake', { office: true, customerId: COMPANY_ID, action: 'submit-many', email: $('bulk-contact').value, pos: r.pos }).then(function (res) {
+          status(res.note || 'Done.');
+          $('bulk-result').innerHTML = (res.created.length ? '<ul class="plain">' + res.created.map(function (x) { return '<li>' + esc(x.number) + ' → ' + esc(x.orderNo) + ' · ' + x.lines + ' line' + (x.lines === 1 ? '' : 's') + ' · ' + esc(x.destination) + '</li>'; }).join('') + '</ul>' : '') + (res.skipped.length ? '<p><b>Not entered:</b></p><ul class="plain">' + res.skipped.map(function (s) { return '<li>' + esc(s.number) + ': ' + esc(s.error) + '</li>'; }).join('') + '</ul>' : '');
+          if (res.created.length) { $('bulk-text').value = ''; DATA = null; }
+          btn.disabled = false;
+        })['catch'](function (e) { fail(e); btn.disabled = false; });
+      };
+    })['catch'](function (e) { fail(e); if ($('company-body')) $('company-body').innerHTML = ''; });
+  }
+
+  /* ── Customers: terms and money per account ──────────────────────────── */
+  function drawCustomers() {
+    $('view').innerHTML = '<h1>Customers</h1><div id="cust-body"><p class="note">Loading…</p></div>';
+    loadBuyers().then(function (b) {
+      var el = $('cust-body'); if (!el) return;
+      var list = b.customers || [];
+      el.innerHTML = '<p class="note">' + list.length + ' account' + (list.length === 1 ? '' : 's') + (b.next ? ' · first 50' : '') + '. Tap one for terms, balance and orders.</p>'
+        + (list.map(function (c) { var u = c.users[0]; return '<button class="card" data-cust="' + esc(u ? u.email : '') + '"' + (u ? '' : ' disabled') + '><div class="h"><b>' + esc(c.company || (u ? u.email : c.id)) + '</b><span class="pill' + (c.status === 'active' ? '' : ' bad') + '">' + esc(c.status) + '</span></div><div class="m">' + esc(c.terms.depositPct) + '% deposit · due in ' + esc(c.terms.dueDays) + ' days · ' + c.users.length + ' login' + (c.users.length === 1 ? '' : 's') + (u ? ' · ' + esc(u.email) : ' · no login yet') + '</div></button>'; }).join('') || '<p class="note">No customer accounts yet. A customer creates one by signing in to the portal; the office creates a company account under POs.</p>');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-cust]'), function (x) { x.onclick = function () { openCustomer(x.dataset.cust); }; });
+    })['catch'](fail);
+  }
+  function openCustomer(email) {
+    status('Loading account…');
+    api('/api/buyers' + q + '&email=' + encodeURIComponent(email)).then(function (c) { CUST = c; status(''); draw(); window.scrollTo(0, 0); })['catch'](fail);
+  }
+  function drawCustomer() {
+    var c = CUST, t = c.totals || {};
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(c.company || c.name || c.email) + '</h1><p class="note">' + esc(c.name || '') + ' · ' + esc(c.email) + (c.phone ? ' · ' + esc(c.phone) : '') + ' · ' + esc(c.plan) + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(c.createdAt)) : '') + (c.activated ? '' : ' · has not signed in yet') + '</p>'
+      + '<div class="kv"><div><small>Invoiced</small><b>' + dollars(t.invoicedCents) + '</b></div><div><small>Received</small><b>' + dollars(t.paidCents) + '</b></div><div class="' + (t.balanceCents > 0 ? 'bad' : '') + '"><small>Balance</small><b>' + dollars(t.balanceCents) + '</b></div><div class="' + (t.openRequests ? 'bad' : '') + '"><small>Open requests</small><b>' + (t.openRequests || 0) + '</b></div></div>'
+      + '<h2>Terms</h2><p class="note">Applies to future prices; issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>'
+      + (c.address ? '<h2>Delivery address</h2><p>' + esc([c.address.line1, c.address.city, c.address.state, c.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
+      + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join(', ')) + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : 'paid') + (o.openRequests ? ' · ' + o.openRequests + ' request' + (o.openRequests === 1 ? '' : 's') : '') + '</small></div></button>'; }).join('') || '<p class="note">No orders.</p>')
+      + '<p class="note">Portal link for this customer: <a href="' + esc(c.portalUrl) + '">' + esc(c.portalUrl) + '</a></p>';
+    $('back').onclick = function () { CUST = null; draw(); };
+    $('save-terms').onclick = function () {
+      var btn = this; btn.disabled = true; status('Saving…');
+      api('/api/buyers', { action: 'terms', email: c.email, terms: { depositPct: Number($('t-dep').value), dueDays: Number($('t-due').value) } }).then(function (r) { status(r.note || 'Saved.'); BUYERS = null; return openCustomer(c.email); })['catch'](function (e) { fail(e); btn.disabled = false; });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { if ((DATA.orders || []).some(function (o) { return o.id === b.dataset.order; })) { CUST = null; PICK = b.dataset.order; TAB = 'orders'; draw(); window.scrollTo(0, 0); } else status('That order is older than the newest 100; open it on the desktop.'); }; });
+  }
+
+  /* ── Stock: assign a finished unit; what is short ────────────────────── */
+  function needs(sku) { return (DATA.orders || []).filter(function (o) { return o.status === 'in_fulfilment' && o.worksOrderId && (o.logic && o.logic.requirements || []).some(function (r) { return r.sku === sku && Number(r.qty) > 0; }); }); }
+  function drawStock() {
+    $('view').innerHTML = '<h1>Stock</h1><div id="stock-body"><p class="note">Loading…</p></div>';
+    Promise.all([loadUnits(), loadMaterials()['catch'](function () { return null; })]).then(function (r) {
+      var el = $('stock-body'); if (!el) return;
+      var units = r[0], m = r[1], by = {};
+      units.forEach(function (u) { if (!u.shipUnit) return; var g = by[u.sku] = by[u.sku] || { available: [], assigned: 0, building: 0 }; if (u.inventoryStatus === 'available' && u.at === 'ready' && !u.hold) g.available.push(u); else if (u.orderId) g.assigned++; else g.building++; });
+      var skus = Object.keys(by).sort();
+      var short = m ? (m.rows || []).filter(function (x) { return x.kind === 'component' && !x.make && (x.net.committed + x.net.pipeline + (x.net.buffer || 0)) > 0; }) : [];
+      var pos = m ? (m.purchaseOrders || []).filter(function (p) { return ['received', 'cancelled'].indexOf(p.status) < 0; }) : [];
+      el.innerHTML = '<h2>Finished units</h2><p class="note">Available is finished, tested and unassigned. Assign one to an order that needs it; the plant then builds one fewer for that order.</p>'
+        + (skus.map(function (s) { var g = by[s], want = needs(s); return '<div class="unit"><div><b>' + esc(s) + '</b><small>' + g.available.length + ' available · ' + g.assigned + ' assigned · ' + g.building + ' building' + (want.length ? ' · ' + want.length + ' order' + (want.length === 1 ? '' : 's') + ' waiting' : '') + '</small></div><span class="pill' + (g.available.length ? ' ok' : '') + '">' + g.available.length + ' on the shelf</span></div>'
+            + g.available.map(function (u) { return '<div class="unit" style="border-top:0;padding-top:0"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.unitType || 'unit') + (u.test && u.test.result ? ' · test ' + esc(u.test.result) : '') + '</small></div>' + (want.length ? '<div class="row" style="flex:1;max-width:60%"><select data-for="' + esc(u.serial) + '"><option value="">Assign to…</option>' + want.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.orderNo) + ' · ' + esc(o.customer.name) + '</option>'; }).join('') + '</select><button data-assign="' + esc(u.serial) + '">Go</button></div>' : '<span class="pill">no order needs it</span>') + '</div>'; }).join(''); }).join('') || '<p class="note">No finished shipping units in the newest 100.</p>')
+        + '<h2>Parts short · ' + short.length + '</h2>' + (m ? (short.map(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); return '<div class="unit"><div>' + esc(x.name) + '<small>' + esc(x.sku) + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + esc(x.orderBy) : '') + (x.supplier ? ' · ' + esc(x.supplier) : '') + '</small></div><span class="pill bad">' + firm + ' ' + esc(x.unit) + (x.late ? ' · late' : '') + '</span></div>'; }).join('') || '<p class="note">✓ Nothing short for the open work.</p>') + '<p class="note">Purchase list value ' + (m.summary && m.summary.spend != null ? '$' + Number(m.summary.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '.</p>' : '<p class="note">Materials plan unavailable.</p>')
+        + '<h2>Purchase orders open · ' + pos.length + '</h2>' + (pos.map(function (p) { var lines = (p.lines || []); return '<div class="unit"><div><b>' + esc(p.reference || p.id) + '</b><small>' + esc(p.supplier || '') + ' · ' + esc(lines.map(function (l) { return (l.received || 0) + '/' + l.qty + ' ' + l.sku; }).join(', ')) + (p.expectedAt ? ' · expected ' + esc(day(p.expectedAt)) : '') + '</small></div><span class="pill">' + esc(String(p.status || '').replace(/_/g, ' ')) + '</span></div>'; }).join('') || '<p class="note">None open.</p>')
+        + '<a class="big ghost" href="/logic-materials.html' + q + '">Buy and receive on the desktop</a>';
+      Array.prototype.forEach.call(el.querySelectorAll('[data-assign]'), function (b) {
+        b.onclick = function () {
+          var sel = el.querySelector('select[data-for="' + b.dataset.assign.replace(/"/g, '') + '"]'); if (!sel || !sel.value) { status('Choose the order first.'); return; }
+          var o = (DATA.orders || []).filter(function (x) { return x.id === sel.value; })[0];
+          if (!confirm('Assign ' + b.dataset.assign + ' to ' + (o ? o.orderNo : sel.value) + '? The plant will build one fewer for that order.')) return;
+          b.disabled = true; status('Assigning…');
+          api('/api/logic-plant', { action: 'allocate', serial: b.dataset.assign, orderId: sel.value }).then(function (d) { status(d.serial + ' assigned to ' + d.orderNo + (d.stillToBuild ? ' · ' + d.stillToBuild + ' still to build' : ' · nothing left to build for it') + '.'); UNITS = null; return loadAll(); })['catch'](function (e) { fail(e); b.disabled = false; });
+        };
+      });
+    })['catch'](fail);
+  }
+
+  /* ── shell ────────────────────────────────────────────────────────────── */
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
+  document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
+  $('refresh').onclick = function () { PICK = null; CUST = null; loadAll(); };
+  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+  $('signin').onclick = function () {
+    var p = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
+  };
+  function paintNet() { $('offline').hidden = navigator.onLine !== false; }
+  window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
+  auth.onAuthStateChanged(function (u) {
+    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
+    if (!u) { $('who').textContent = ''; return; }
+    if (!ORG) { $('gate').hidden = false; $('gate-note').textContent = 'Open the app once from your office link so it knows your workspace.'; $('signin').hidden = true; return; }
+    loadAll();
+  });
+  if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }
+})();
+</script>
+</body>
+</html>

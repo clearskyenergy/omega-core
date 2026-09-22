@@ -360,11 +360,35 @@ is not built.
   skipped and named, never overwritten.
 - **Assigning a finished unit** to an order is `api/logic-plant.js`
   `allocate`: the whole assembly moves, the works order builds one fewer.
-- **The phone app's manifest is per tenant:** `api/app-manifest.js` builds
-  it from `omega_orgs/{org}` (name, ink, `appIcon` paths under
-  `/tenants/<slug>/icons/`, validated; OMEGA icons as the fallback). A
-  tenant's icon set lives in its folder and its `tenant.json`; the seed
-  copies `appIcon` onto the record. Never a script URL in a manifest.
+- **Three phone apps, one pattern, one manifest endpoint.** `plant/app`
+  (the builders), `office/app` (the office) and `portals/customer/app` (the
+  buyer, Editor Lite first) are each one installable page with a bottom tab
+  bar, a shell service worker scoped to its own path (network first; `/api/`
+  never cached), and a manifest from `api/app-manifest.js?org=&app=` built
+  from `omega_orgs/{org}` (name, ink, `appIcon` paths under
+  `/tenants/<slug>/icons/`, validated; an optional set per app under
+  `appIcon.office` / `appIcon.customer`; OMEGA icons as the fallback). A
+  tenant's icon set lives in its folder and its `tenant.json`
+  (`scripts/make-tenant-icons.js <slug>` renders every `<app>-icon.svg`);
+  the seed copies `appIcon` onto the record. Never a script URL in a
+  manifest. The customer app loads NO `omega-tenant.js`, like the portal
+  and for the same reason. The apps add no endpoint of their own: pricing,
+  acceptance, shipment and wires stay on the desktop.
+- **The sandboxes are a build output.** `app-sandbox/` is the four pages
+  (three apps and the bench) with `sandbox.js` in place of Firebase and
+  `/api/`: `scripts/_lib/logic-fixtures.js` (ONE sample tenant; also what
+  `check:pages` renders against) and `scripts/_lib/app-sandbox-shim.js`,
+  bundled with the pure libraries by `scripts/build-app-sandbox.js`, which
+  asserts every rewrite. Never edit the folder; `npm run build:sandbox`
+  and `scripts/tests/tappsandbox.js` fails `npm test` when it is stale.
+  Nothing in it is real and nothing in it reaches the network.
+- **PO loads, one sheet, one parser.** `omega-po-bulk.js` is the ONLY
+  parser of the pasted PO sheet (PO inbox, office app, customer app);
+  `api/po-intake.js` `submit-many` takes what it returns from the office
+  (any company, a named billing contact, 200/day) and from a customer login
+  (its own company, the caller as billing contact, 50/day,
+  `poIntake.source: 'customer-bulk'`). Both doors create the same order
+  awaiting pricing; neither accepts or charges.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —

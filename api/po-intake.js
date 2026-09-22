@@ -48,10 +48,15 @@ module.exports=A.handler(async function(req,res){
        the office typed it, so it waits on PRICING, not on review. Nothing
        is accepted or charged. A PO number that already exists is skipped
        and named, never overwritten. */
-    if(!scope.office)throw A.httpError(403,'Office access required');
+    /* The customer's own login may key in the same stack for ITS company
+       (the fleet buyer on the phone app): the account is the one on the
+       login, never `customerId`, the billing contact is the caller, never
+       `email`, and the record says which door it came through. Pricing,
+       acceptance and the charge stay with the office either way. */
     var list=Array.isArray(b.pos)?b.pos:[];if(!list.length||list.length>50)throw A.httpError(400,'Enter 1–50 purchase orders at a time');
     var bulkCatalog=await root.collection('storefront').doc('config').get(),bulkProducts=bulkCatalog.exists?bulkCatalog.data().products||[]:[];
-    var billing=B.active(await B.lookup(db,org,B.email(b.email)));if(billing.id!==acct.id)throw A.httpError(400,'Billing contact must belong to this company');
+    var billing=B.active(await B.lookup(db,org,B.email(scope.office?b.email:c.email)));if(billing.id!==acct.id)throw A.httpError(400,'Billing contact must belong to this company');
+    var bulkSource=scope.office?'office-bulk':'customer-bulk',bulkDayLimit=scope.office?200:50;
     var seen={},prepared=list.map(function(po,i){try{po=po&&typeof po==='object'?po:{};var input=L.po({poNumber:po.number,items:po.lines,destinations:[{id:'d1',address:po.destination,requestedDate:po.requestedDate||'',items:po.lines}],notes:po.notes||''},bulkProducts);var key=P.key(org+':'+acct.id+':'+input.poNumber.toLowerCase());if(seen[key])throw A.httpError(400,'Duplicate PO number in this batch');seen[key]=true;return {ok:true,input:input,key:key};}catch(e){return {ok:false,number:String(po&&po.number||('row '+(i+1))).slice(0,80),error:e.message};}});
     var good=prepared.filter(function(p){return p.ok;}),created=[],skipped=prepared.filter(function(p){return !p.ok;}).map(function(p){return {number:p.number,error:p.error};});
     if(good.length)await db.runTransaction(async function(tx){
@@ -60,14 +65,14 @@ module.exports=A.handler(async function(req,res){
       var now=new Date().toISOString(),usage=fresh.data().poIntakeUsage||{},day=now.slice(0,10),count=usage.day===day?(usage.count||0):0,terms=P.terms(scope.ctx.config.terms,billing.data.terms);
       good.forEach(function(p,i){
         if(olds[i].exists){skipped.push({number:p.input.poNumber,error:'This PO number already exists — open it from the queue'});return;}
-        if(count>=200){skipped.push({number:p.input.poNumber,error:'Daily intake limit reached'});return;}
+        if(count>=bulkDayLimit){skipped.push({number:p.input.poNumber,error:'Daily intake limit reached'});return;}
         count++;var orderNo='PO-IN-'+p.key.slice(0,10).toUpperCase();
         tx.create(refs[i],{orgId:org,customerId:acct.id,orderNo:orderNo,status:'new',source:'po-intake',fulfilledBy:'clearsky',items:p.input.items,system:{},
           customer:{email:billing.user.email,name:billing.user.name||billing.user.email,company:acct.data.name,phone:billing.user.phone||'',address:p.input.destinations[0].address,notes:p.input.notes},
           purchaseOrder:{number:p.input.poNumber,submittedBy:c.email,submittedAt:now},delivery:{version:1,revision:0,destinations:p.input.destinations,legs:[]},requestedTerms:terms,
-          poIntake:{number:p.input.poNumber,notes:p.input.notes,source:'office-bulk',createdAt:now,submittedBy:c.email,fingerprint:P.key(JSON.stringify([p.input.poNumber.toLowerCase(),p.input.notes,null])),uploadState:'none',files:[],convertedAt:now},
-          history:[{at:now,by:c.email,what:'Entered by the office in a batch of '+good.length+' purchase orders'}],createdAt:A.FieldValue().serverTimestamp(),updatedAt:A.FieldValue().serverTimestamp()});
-        tx.create(refs[i].collection('events').doc(),{at:now,by:c.email,what:'PO entered by the office (batch) and mapped to the catalog; awaiting commercial pricing. No acceptance or charge.'});
+          poIntake:{number:p.input.poNumber,notes:p.input.notes,source:bulkSource,createdAt:now,submittedBy:c.email,fingerprint:P.key(JSON.stringify([p.input.poNumber.toLowerCase(),p.input.notes,null])),uploadState:'none',files:[],convertedAt:now},
+          history:[{at:now,by:c.email,what:'Entered by the '+(scope.office?'office':'customer')+' in a batch of '+good.length+' purchase orders'}],createdAt:A.FieldValue().serverTimestamp(),updatedAt:A.FieldValue().serverTimestamp()});
+        tx.create(refs[i].collection('events').doc(),{at:now,by:c.email,what:'PO entered by the '+(scope.office?'office':'customer')+' (batch) and mapped to the catalog; awaiting commercial pricing. No acceptance or charge.'});
         created.push({id:refs[i].id,number:p.input.poNumber,orderNo:orderNo,lines:p.input.items.length,destination:p.input.destinations[0].address.city});
       });
       tx.update(acct.ref,{poIntakeUsage:{day:day,count:count},hasOrders:true});

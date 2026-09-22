@@ -277,7 +277,7 @@
       if (PORTAL.brand.logoUrl) { $('mark').src=PORTAL.brand.logoUrl; $('mark').hidden=false; }
       $('editor-price').textContent = '$' + (PORTAL.editorLite.monthlyPriceCents / 100).toLocaleString('en-US') + ' / month';
       $('editor-availability').textContent = 'Subscription checkout is not yet enabled. No subscription has been started or charged.';
-      if(PORTAL.links){var sizer=PORTAL.links.start||'';if(sizer){$('size-frame').src=sizer+(sizer.indexOf('?')>=0?'&':'?')+'plain=1';$('size-frame').hidden=false;$('size-open').href=sizer;}else{$('size-single-note').hidden=false;$('size-open').hidden=true;}var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);}
+      if(PORTAL.links){var sizer=PORTAL.links.start||'';if(sizer){$('size-frame').src=sizer+(sizer.indexOf('?')>=0?'&':'?')+'plain=1';$('size-frame').hidden=false;$('size-open').href=sizer;}else{$('size-single-note').hidden=false;$('size-open').hidden=true;}var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);var appEntry=document.getElementById('customer-app');if(!appEntry){appEntry=document.createElement('a');appEntry.id='customer-app';appEntry.textContent='Phone app';document.querySelector('.logic-nav').appendChild(appEntry);}appEntry.href='/portals/customer/app?org='+encodeURIComponent(ORG);}
       return;
     }
     try {
