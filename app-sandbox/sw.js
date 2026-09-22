@@ -3,7 +3,7 @@
    same-origin only, never /api/ (the sandbox answers those on the page and
    they never reach the network), so a rebuild is picked up on the next
    open and the pages still open with no signal.  ES5. */
-var VERSION = 'app-sandbox-v1';
+var VERSION = 'app-sandbox-v2';
 self.addEventListener('install', function () { self.skipWaiting(); });
 self.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (keys) { return Promise.all(keys.filter(function (k) { return k !== VERSION; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });
 self.addEventListener('fetch', function (e) {
