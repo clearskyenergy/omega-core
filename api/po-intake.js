@@ -27,6 +27,41 @@ module.exports=A.handler(async function(req,res){
       tx.create(db.collection('omega_audit').doc(),{action:'buyer-company-contact',orgId:org,customerId:acct.id,email:email,role:role,by:c.email,at:new Date().toISOString()});return {ok:true,note:'Contact assigned. They must sign in with their own verified email; no invitation has been sent.'};});
   }
   if(req.method==='POST'&&b.action==='submit')return await I.submit(org,acct,c,b,scope.office?'office':'customer');
+  if(req.method==='POST'&&b.action==='submit-many'){
+    /* The office keys in a stack of purchase orders at once — a fleet
+       customer sends twenty to fifty in a morning. Each becomes the same
+       order record the one-at-a-time path converts to (lines mapped to the
+       catalog, one destination, requested date), already mapped because
+       the office typed it, so it waits on PRICING, not on review. Nothing
+       is accepted or charged. A PO number that already exists is skipped
+       and named, never overwritten. */
+    if(!scope.office)throw A.httpError(403,'Office access required');
+    var list=Array.isArray(b.pos)?b.pos:[];if(!list.length||list.length>50)throw A.httpError(400,'Enter 1–50 purchase orders at a time');
+    var bulkCatalog=await root.collection('storefront').doc('config').get(),bulkProducts=bulkCatalog.exists?bulkCatalog.data().products||[]:[];
+    var billing=B.active(await B.lookup(db,org,B.email(b.email)));if(billing.id!==acct.id)throw A.httpError(400,'Billing contact must belong to this company');
+    var seen={},prepared=list.map(function(po,i){try{po=po&&typeof po==='object'?po:{};var input=L.po({poNumber:po.number,items:po.lines,destinations:[{id:'d1',address:po.destination,requestedDate:po.requestedDate||'',items:po.lines}],notes:po.notes||''},bulkProducts);var key=P.key(org+':'+acct.id+':'+input.poNumber.toLowerCase());if(seen[key])throw A.httpError(400,'Duplicate PO number in this batch');seen[key]=true;return {ok:true,input:input,key:key};}catch(e){return {ok:false,number:String(po&&po.number||('row '+(i+1))).slice(0,80),error:e.message};}});
+    var good=prepared.filter(function(p){return p.ok;}),created=[],skipped=prepared.filter(function(p){return !p.ok;}).map(function(p){return {number:p.number,error:p.error};});
+    if(good.length)await db.runTransaction(async function(tx){
+      var fresh=await tx.get(acct.ref);if(!fresh.exists||fresh.data().status!=='active')throw A.httpError(403,'Company access inactive');
+      var refs=good.map(function(p){return db.collection('orders').doc('po_'+p.key);}),olds=await Promise.all(refs.map(function(r){return tx.get(r);}));
+      var now=new Date().toISOString(),usage=fresh.data().poIntakeUsage||{},day=now.slice(0,10),count=usage.day===day?(usage.count||0):0,terms=P.terms(scope.ctx.config.terms,billing.data.terms);
+      good.forEach(function(p,i){
+        if(olds[i].exists){skipped.push({number:p.input.poNumber,error:'This PO number already exists — open it from the queue'});return;}
+        if(count>=200){skipped.push({number:p.input.poNumber,error:'Daily intake limit reached'});return;}
+        count++;var orderNo='PO-IN-'+p.key.slice(0,10).toUpperCase();
+        tx.create(refs[i],{orgId:org,customerId:acct.id,orderNo:orderNo,status:'new',source:'po-intake',fulfilledBy:'clearsky',items:p.input.items,system:{},
+          customer:{email:billing.user.email,name:billing.user.name||billing.user.email,company:acct.data.name,phone:billing.user.phone||'',address:p.input.destinations[0].address,notes:p.input.notes},
+          purchaseOrder:{number:p.input.poNumber,submittedBy:c.email,submittedAt:now},delivery:{version:1,revision:0,destinations:p.input.destinations,legs:[]},requestedTerms:terms,
+          poIntake:{number:p.input.poNumber,notes:p.input.notes,source:'office-bulk',createdAt:now,submittedBy:c.email,fingerprint:P.key(JSON.stringify([p.input.poNumber.toLowerCase(),p.input.notes,null])),uploadState:'none',files:[],convertedAt:now},
+          history:[{at:now,by:c.email,what:'Entered by the office in a batch of '+good.length+' purchase orders'}],createdAt:A.FieldValue().serverTimestamp(),updatedAt:A.FieldValue().serverTimestamp()});
+        tx.create(refs[i].collection('events').doc(),{at:now,by:c.email,what:'PO entered by the office (batch) and mapped to the catalog; awaiting commercial pricing. No acceptance or charge.'});
+        created.push({id:refs[i].id,number:p.input.poNumber,orderNo:orderNo,lines:p.input.items.length,destination:p.input.destinations[0].address.city});
+      });
+      tx.update(acct.ref,{poIntakeUsage:{day:day,count:count},hasOrders:true});
+      tx.create(db.collection('omega_audit').doc(),{action:'po-intake-batch',orgId:org,customerId:acct.id,by:c.email,at:now,created:created.length,skipped:skipped.length});
+    });
+    return {ok:true,created:created,skipped:skipped,note:created.length+' purchase order'+(created.length===1?'':'s')+' entered and mapped to the catalog; awaiting pricing. Nothing was accepted or charged.'};
+  }
   if(req.method==='GET'&&!b.id){
     var rows=await db.collection('orders').where('customerId','==',acct.id).limit(200).get();
     var list=rows.docs.filter(function(s){return s.data().orgId===org;});

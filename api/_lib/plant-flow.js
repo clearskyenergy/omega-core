@@ -20,5 +20,5 @@ function normalize(raw){
   return {routing:routing,lines:lines};
 }
 function current(config){var raw=config&&config.production||{},out=normalize(raw);out.version=Number(raw.version)||0;return out;}
-function stationView(s,id){return {id:id,station:s.station,label:s.label||s.station,lineId:s.lineId||'',location:s.location||'',instructions:s.instructions||'',active:s.active!==false,machine:!!s.machine,lastSeenAt:s.lastSeenAt||null,lastSerial:s.lastSerial||null,revision:Number(s.revision)||0};}
+function stationView(s,id){return {id:id,station:s.station,roaming:s.roaming===true,label:s.label||s.station,lineId:s.lineId||'',location:s.location||'',instructions:s.instructions||'',active:s.active!==false,machine:!!s.machine,lastSeenAt:s.lastSeenAt||null,lastSerial:s.lastSerial||null,revision:Number(s.revision)||0};}
 module.exports={normalize:normalize,current:current,clean:clean,stationView:stationView};

@@ -90,12 +90,18 @@ module.exports = A.handler(async function (req, res) {
       tx.update(stationRef,patch);tx.create(db.collection('omega_audit').doc(),{orgId:org,action:'plant-station',stationId:old.id,by:caller.email,before:Flow.stationView(st,old.id),after:patch,at:new Date().toISOString()});return {ok:true};});
   }
   if (b.action === 'station') {
-    if (Plant.indexOf(flow.routing, b.station) < 0) throw A.httpError(400, 'Unknown station');
+    /* '*' pairs a ROAMING device — the operator's phone, which goes to the
+       bench with them and names the bench on each scan (api/mes-scan.js).
+       Two people building cabinets do not have a tablet bolted to every
+       bench; they have a phone in a pocket. The routing rules are the same
+       and every scan records both the phone and the bench it claimed. */
+    var roaming = b.station === '*';
+    if (!roaming && Plant.indexOf(flow.routing, b.station) < 0) throw A.httpError(400, 'Unknown station');
     var lineId=b.lineId||flow.lines[0].id;if(!flow.lines.some(function(l){return l.id===lineId;}))throw A.httpError(400,'Unknown line');
     var crypto = require('crypto'), token = crypto.randomBytes(32).toString('hex'), ref = db.collection('plant_stations').doc();
-    await ref.create({ orgId: org, station: b.station, label: String(b.label || b.station).slice(0, 100),
+    await ref.create({ orgId: org, station: roaming ? '*' : b.station, roaming: roaming, label: String(b.label || (roaming ? 'Roaming phone' : b.station)).slice(0, 100),
       lineId:lineId,location:Flow.clean(b.location,160),instructions:Flow.clean(b.instructions,2000),revision:0,
-      tokenHash: S.sha(token), machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0, active: true,
+      tokenHash: S.sha(token), machine: !roaming && Plant.MACHINE_STATIONS.indexOf(b.station) >= 0, active: true,
       createdBy: caller.email, createdAt: A.FieldValue().serverTimestamp() });
     return { stationId: ref.id, token: token, machine: Plant.MACHINE_STATIONS.indexOf(b.station) >= 0 };
   }
@@ -114,8 +120,9 @@ module.exports = A.handler(async function (req, res) {
       if(!us.exists||us.data().orgId!==org)throw A.httpError(404,'Unit not found');
       var u=us.data();
       if(!u.shipUnit)throw A.httpError(400,'Only a shipping unit can be assigned; its components travel with it');
-      if(u.orderId||u.inventoryStatus!=='available')throw A.httpError(409,'This unit is already assigned to '+(u.orderNo||'an order'));
+      if(u.orderId)throw A.httpError(409,'This unit is already assigned to '+(u.orderNo||'an order'));
       if(u.at!=='ready'||u.hold)throw A.httpError(409,'Only a finished unit with no hold can be assigned');
+      if(u.inventoryStatus!=='available')throw A.httpError(409,'This unit is not on the shelf as available stock');
       if(!os.exists||os.data().orgId!==org)throw A.httpError(404,'Order not found');
       var o=os.data();
       if(o.cancelRequested||(o.logic||{}).paymentException)throw A.httpError(409,'Order is on hold');

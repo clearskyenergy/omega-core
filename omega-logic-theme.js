@@ -47,7 +47,8 @@
       ['Build', [
         ['works', 'Work orders', '/plant/' + q],
         ['board', 'Plant board', '/plant/manager.html' + q],
-        ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations']]],
+        ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations'],
+        ['app', 'Phone app', '/plant/app' + q]]],
       ['Stock & supply', [
         ['inventory', 'Inventory', '/logic-inventory.html' + q],
         ['materials', 'Materials plan', '/logic-materials.html' + q],

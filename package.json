@@ -42,7 +42,7 @@
     "test:import": "node scripts/test-import-products.js",
     "test:wlpreview": "node scripts/test-wl-preview.js",
     "test:toolaccess": "node scripts/tests/ttoolaccess.js",
-    "test:plant": "node scripts/test-plant-scan.js && node scripts/test-plant-release.js && node scripts/test-plant-agent.js",
+    "test:plant": "node scripts/test-plant-scan.js && node scripts/test-plant-release.js && node scripts/test-plant-agent.js && node scripts/test-plant-work.js && node scripts/test-plant-stats.js && node scripts/test-office-ops.js",
     "demo:build": "node scripts/build-demo.js",
     "test:editor-mode": "node scripts/test-editor-mode.js",
     "test:systems": "node scripts/test-systems-manifest.js",

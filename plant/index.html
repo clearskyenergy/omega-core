@@ -22,7 +22,7 @@ document.addEventListener('click',function(e){var btn=e.target.closest('[data-qu
 document.body.classList.add('logic-theme');
 var manager=document.createElement('a');manager.href='/plant/manager?org='+encodeURIComponent(ORG);manager.textContent='Plant manager';manager.style.marginLeft='18px';document.querySelector('header nav').appendChild(manager);
 var flowRefresh=refresh;refresh=function(){return flowRefresh().then(function(){return api();}).then(function(d){
-  $('station').innerHTML=d.flow.routing.map(function(s){return '<option value="'+esc(s.key)+'">'+esc(s.label)+(s.key==='eol'?' (machine only)':'')+'</option>';}).join('');
+  $('station').innerHTML=d.flow.routing.map(function(s){return '<option value="'+esc(s.key)+'">'+esc(s.label)+(s.key==='eol'?' (machine only)':'')+'</option>';}).join('')+'<option value="*">Roaming phone — the operator picks the bench on each scan</option>';
   var line=$('station-line');if(!line){var label=document.createElement('label');label.textContent='Line / location';line=document.createElement('select');line.id='station-line';label.appendChild(line);$('pair').before(label);}
   line.innerHTML=d.flow.lines.map(function(l){return '<option value="'+esc(l.id)+'">'+esc(l.name)+'</option>';}).join('');
   if(params.get('serial')){var serial=params.get('serial');params.delete('serial');return lookup(serial);}

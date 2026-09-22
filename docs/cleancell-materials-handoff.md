@@ -8,9 +8,12 @@ on `clearskyenergy/omega-core`. Commits past merged PR #45, oldest first:
 plant-agent actions · `f83a2d3` purchase orders and receiving · `c50b29f`
 the demo step, and sub-assemblies are built not bought · `4563fdb` handoff
 tidy · `973a7e1` competitor benchmark, safety stock, supplier lots ·
-`0acc3d5` twelve-week projection · the head: supplier records, per-part
-prices, a priced purchase list, and the Chromium render check
-(`npm run check:pages`).
+`0acc3d5` twelve-week projection · `e585b9c` supplier records and prices ·
+then, in order: stations do the work (steps and parts per bench) · one
+office chrome, dashboard, settings, inventory, customer financials · the
+plant map · customer requests, warranty, bulk PO entry, the phone app.
+The user manual is `docs/OMEGA-LOGIC-MANUAL.md`; its last section lists
+what is not built.
 Everything below is committed and pushed; `npm test` is green at the head.
 
 Read `CLAUDE.md` first. The rules in it that bite hardest here: no build step

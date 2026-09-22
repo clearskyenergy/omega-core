@@ -75,8 +75,18 @@ function checksOf(wo, station) { var s = (wo && wo.routing || []).filter(functio
    short (a count was wrong) — the issue is still recorded, the shelf is
    floored at zero and the response says so, because a bench that refuses to
    build over a bad count stops the line to protect a number. */
+/* THE STATION COMES OFF THE RECORD, NEVER THE REQUEST — except for a
+   roaming phone, whose record says '*' and whose operator names the bench
+   on each scan. The name is checked against the routing, stored on the
+   scan next to the phone's id, and the routing rules apply unchanged. */
+function stationOf(st, b) {
+  if (st.roaming !== true) return String(st.station || '');
+  var pick = S.clean(b.station, 32);
+  return /^[a-z][a-z0-9_-]{0,31}$/.test(pick) ? pick : '';
+}
 function issueOrStep(db, FV, b, checked, scanId, serial) {
-  var stRef = checked.ref, st = checked.data, orgId = String(st.orgId || '').toLowerCase(), station = String(st.station || '');
+  var stRef = checked.ref, st = checked.data, orgId = String(st.orgId || '').toLowerCase(), station = stationOf(st, b);
+  if (!station) return Promise.resolve({ ok: false, reason: 'no_station', say: 'Choose the bench you are at first.', serial: serial, station: '', stationLabel: String(st.label || ''), replayed: false, work: null, stockShort: false });
   var scanRef = db.collection('plant_scans').doc(orgId + '__' + scanId);
   return db.runTransaction(function (tx) {
     return tx.get(scanRef).then(function (prev) {
@@ -173,7 +183,9 @@ module.exports = A.handler(function (req, res) {
     if (!rateLimit(stationId)) throw A.httpError(429, 'too many requests from this station');
     return S.verify(A.db(), stationId, token).then(async function (checked) {
       var st = checked.data, org = await A.db().collection('omega_orgs').doc(st.orgId).get();
-      return { ok: true, station: st.station, stationLabel: st.label || st.station,
+      var describeFlow = st.roaming ? require('./_lib/plant-flow').current((await A.db().collection('omega_orgs').doc(st.orgId).collection('fulfillment').doc('config').get()).data() || {}) : null;
+      return { ok: true, station: st.station, stationLabel: st.label || st.station, roaming: st.roaming === true,
+        routing: describeFlow ? describeFlow.routing.filter(function (s) { return P.MACHINE_STATIONS.indexOf(s.key) < 0; }).map(function (s) { return { key: s.key, label: s.label }; }) : null,
         lineId:st.lineId||'',location:st.location||'',instructions:st.instructions||'',revision:st.revision||0,machine:!!st.machine,
         brand: require('./_lib/logic-brand')(org.exists ? org.data() : { name: 'Plant' }) };
     });
@@ -190,8 +202,9 @@ module.exports = A.handler(function (req, res) {
   return S.verify(db, stationId, token).then(function (checked) {
     var stRef = checked.ref, st = checked.data;
     var orgId = String(st.orgId || '').toLowerCase();
-    /* THE STATION COMES OFF THE RECORD, NEVER THE REQUEST. */
-    var station = String(st.station || '');
+    /* THE STATION COMES OFF THE RECORD, NEVER THE REQUEST (stationOf). */
+    var station = stationOf(st, b);
+    if (!station) return { ok: false, reason: 'no_station', say: 'Choose the bench you are at first.', serial: serial, station: '', stationLabel: String(st.label || ''), replayed: false };
     var scanRef = db.collection('plant_scans').doc(orgId + '__' + scanId);
 
     return db.runTransaction(function (tx) {

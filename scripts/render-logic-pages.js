@@ -79,8 +79,8 @@ function plantJson(q) {
   if (/page=works/.test(q)) return { rows: [wo], next: null };
   if (/page=units/.test(q)) return { rows: mapUnits.map(function (u) { return Object.assign({ id: 'cleancell.us__' + u.serial, orgId: 'cleancell.us', woId: 'wo_1' }, u); }), next: null };
   if (/page=stations/.test(q)) return { rows: [], next: null };
-  if (/workOrder=/.test(q)) return { workOrder: wo, units: [], limited: false };
-  return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: [], limited: false };
+  if (/workOrder=/.test(q)) return { workOrder: wo, units: mapUnits.slice(3, 5).map(function (u) { return Object.assign({}, u, { woId: 'wo_1', progress: { station: u.at, done: 1, total: 3, open: ['2 · Harness', 'Torque busbars'], complete: false } }); }), limited: false };
+  return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [wo], units: mapUnits.map(function (u) { return Object.assign({ orgId: 'cleancell.us', woId: 'wo_1', orderNo: 'CC-26-4419' }, u); }), limited: false };
 }
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 /* The bench: a paired station, one unit with two steps at Rack assembly. The
@@ -92,6 +92,7 @@ var benchUnit = { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}
 var benchSteps = W.stepsFor(benchCab, 'rack', benchBy, ['Torque busbars']);
 function benchJson(b) {
   var routing = Plant.DEFAULT_ROUTING.map(function (s) { return { key: s.key, label: s.label }; });
+  if (b.action === 'describe' && b.stationId === 'st-phone') return { ok: true, station: '*', roaming: true, stationLabel: 'Marco’s phone', lineId: 'main', location: '', instructions: '', revision: 1, machine: false, brand: brand, routing: routing.filter(function (s) { return s.key !== 'eol'; }) };
   if (b.action === 'describe') return { ok: true, station: 'rack', stationLabel: 'Bay 2 · Rack assembly', lineId: 'main', location: 'Bay 2', instructions: 'Fit modules bottom-up.', revision: 1, machine: false, brand: brand };
   if (b.action === 'issue' || b.action === 'step-done') {
     var v = b.action === 'issue' ? W.judgeIssue(benchUnit, 'rack', routing, benchSteps, b.code, b.qty) : W.judgeStepDone(benchUnit, 'rack', routing, benchSteps, b.stepId);
@@ -255,6 +256,38 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('a typed lot travels with the issue', /lot LOT-42/.test(lotShown), lotShown);
     ok('after the check the bench is complete and names the next bench', /ok/.test(foot) && /Enclosure/.test(foot), foot);
     return { paired: paired, steps: steps.length, verdict: verdict, foot: foot.slice(0, 60) };
+  });
+  await check('phone', '/plant/station.html', async function (p) {
+    await p.evaluate(function () { localStorage.clear(); }); await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(300);
+    await p.fill('#p-id', 'st-phone'); await p.fill('#p-token', 'tok'); await p.click('#p-go'); await p.waitForTimeout(300);
+    var pick = await p.$$eval('#pick option', function (r) { return r.map(function (x) { return x.value; }); });
+    var pickShown = await p.$eval('#pick', function (e) { return !e.hidden; });
+    await p.fill('#scan', 'CC418-26-44190'); await p.press('#scan', 'Enter'); await p.waitForTimeout(300);
+    var refused = await p.$eval('#say', function (e) { return e.textContent; });
+    await p.selectOption('#pick', 'rack'); await p.fill('#scan', 'CC418-26-44190'); await p.press('#scan', 'Enter'); await p.waitForTimeout(400);
+    var steps = await p.$$eval('#work .step', function (r) { return r.length; });
+    ok('a roaming phone shows a bench picker without the machine station', pickShown && pick.length === 10 && pick.indexOf('eol') < 0, pick);
+    ok('  and refuses to scan until a bench is chosen', /Choose the bench/.test(refused), refused);
+    ok('  then scans like a bench', steps === 3, steps);
+    return { pick: pick.length, refused: refused, steps: steps };
+  });
+  await check('app', '/plant/app?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(500);
+    var cards = await p.$$eval('#view .card', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 70); }); });
+    var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
+    await p.click('[data-wo="wo_1"]'); await p.waitForTimeout(500);
+    var units = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });
+    var h1 = await p.$eval('#view h1', function (e) { return e.textContent; });
+    await p.click('[data-tab="quality"]'); await p.waitForTimeout(300);
+    var held = await p.$$eval('#view .unit', function (r) { return r.length; });
+    await p.click('[data-tab="stock"]'); await p.waitForTimeout(500);
+    var stock = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 60); }); });
+    ok('the app lists the open work order as a card with progress', cards.length === 1 && /CC-26-4419/.test(cards[0]), cards);
+    ok('  four tabs at the bottom', tabs.join('|') === 'Work|Scan|Stock|Quality', tabs);
+    ok('  a work order shows its units with station and step progress', /CC-26-4419/.test(h1) && units.length >= 2 && /1 of 3 steps/.test(units.join(' ')), units);
+    ok('  quality lists the held unit', held === 1, held);
+    ok('  stock counts finished units and short parts', stock.length >= 5 && /CC-C215.*2 available/.test(stock[0]) && /on hand/.test(stock[1]), stock);
+    return { cards: cards.length, tabs: tabs.length, units: units.length, held: held };
   });
   ok('no JS errors', errs.length === 0, errs);
   await b.close(); srv.close();
