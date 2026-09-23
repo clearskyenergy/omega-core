@@ -1385,6 +1385,68 @@ body.arranging .scroll{pointer-events:none}
   .vaultDoc b{color:var(--ink)}
   .vaultDoc .vp{padding:4px 0;opacity:.8}
 :root[data-mode="quantum"] .vaultDoc .vh{color:var(--glow-gold,#ffc35c)}
+/* Messages: thread list left, transcript right, reply box under it. Bubbles
+   are his on the right and theirs on the left — the shape every phone uses,
+   so nobody has to learn which side is which. */
+.msgGrid{grid-template-columns:320px 1fr}
+.msgGrid .panel{display:flex;flex-direction:column;min-height:0}
+.msgRow{display:block;width:100%;text-align:left;padding:8px 9px;margin:0 0 3px;
+  border:1px solid transparent;border-radius:6px;color:var(--ink);font-family:var(--ui)}
+.msgRow:hover{background:rgba(0,243,255,.06)}
+.msgRow.on{background:rgba(0,243,255,.12);border-color:rgba(0,243,255,.35)}
+.msgRow .mt{display:flex;gap:8px;align-items:baseline;font-size:13px}
+.msgRow .mt b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.msgRow .mt i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.msgRow .ml{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.msgRow .mu{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--glow-cyan);
+  border-radius:9px;padding:0 6px}
+.msgLog{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:6px 4px 10px}
+.msgB{max-width:72%;padding:7px 11px;border-radius:14px;font-family:var(--ui);font-size:13px;
+  line-height:1.45;white-space:pre-wrap;word-wrap:break-word;align-self:flex-start;
+  background:rgba(255,255,255,.07);color:var(--ink)}
+.msgB.me{align-self:flex-end;background:rgba(0,243,255,.16);border:1px solid rgba(0,243,255,.25)}
+.msgB .who{display:block;font-size:10px;color:var(--dim);margin-bottom:2px;font-family:var(--mono)}
+.msgB.att{font-style:italic;color:var(--dim)}
+.msgDay{align-self:center;font-family:var(--mono);font-size:10px;color:var(--dim);margin:8px 0 2px}
+.msgReply{display:flex;gap:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+.msgReply textarea{flex:1;min-height:40px;max-height:140px;resize:vertical;font:13px/1.4 var(--ui);
+  color:var(--ink);background:rgba(0,0,0,.35);border:1px solid rgba(0,243,255,.22);border-radius:6px;padding:8px 10px}
+.msgReply textarea:focus{outline:none;border-color:var(--glow-cyan)}
+.msgReply button{min-width:84px}
+.msgNote{font-size:12px;color:var(--dim);padding:4px 2px 0;min-height:18px}
+.msgNote.bad{color:var(--bad)}
+.msgEmpty{padding:18px 6px;color:var(--dim);font-size:13px;line-height:1.5}
+.ccMsg .msgRow{padding:5px 6px}
+/* Sessions: one row shape for both agents — who, what, where, state, age. */
+.sessBar{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.sessBar button{font-size:11px;padding:3px 10px}
+.sessBar button.sel{background:rgba(0,243,255,.14);border-color:var(--glow-cyan)}
+.sessRow{display:grid;grid-template-columns:62px 1fr 200px 70px 78px;gap:10px;align-items:center;
+  padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui);font-size:13px}
+.sessRow .ag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  border-radius:4px;padding:2px 0;text-align:center;background:rgba(0,243,255,.1);color:var(--glow-cyan)}
+.sessRow .ag.codex{background:rgba(61,255,139,.10);color:var(--good)}
+.sessRow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.sessRow .nm small{color:var(--dim);margin-left:6px;font-size:11px}
+.sessRow .cw{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--dim);font-family:var(--mono);font-size:11px;direction:rtl;text-align:left}
+.sessRow .st{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.sessRow .st::before{content:'\25CF  ';opacity:.5}
+.sessRow .st.busy{color:var(--good)}
+.sessRow .st.busy::before{opacity:1}
+.sessRow .st.blocked,.sessRow .st.waiting{color:var(--warn)}
+.sessRow .st.blocked::before,.sessRow .st.waiting::before,.sessRow .st.failed::before{opacity:1}
+.sessRow .st.failed{color:var(--bad)}
+.sessRow .ago{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+.sessHead{color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-bottom-color:rgba(255,255,255,.12)}
+.sessHead .ag{background:none;color:var(--dim)}
+@media(max-width:1100px){
+  .msgGrid{grid-template-columns:minmax(0,1fr)}
+  .msgB{max-width:88%}
+  .sessRow{grid-template-columns:54px 1fr 64px;row-gap:2px}
+  .sessRow .cw{grid-column:2/4;grid-row:2;direction:ltr}
+  .sessRow .ago{display:none}
+}
 /* Installed, there is no browser chrome between the page and the hardware, so
    the page owns the home indicator and the rounded corners. Scoped to
    standalone: in a browser tab Safari still handles all of this, and applying
@@ -1448,6 +1510,8 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
+      <button class="navItem" data-view="messages">✆  Messages<span class="pill" id="nMsg"></span></button>
+      <button class="navItem" data-view="sessions">⧉  Sessions<span class="pill" id="nSess"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
@@ -1512,6 +1576,10 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="conns" style="flex:none">
             <div class="ptitle">Connections</div>
             <div id="conns"></div>
+          </div>
+          <div class="panel ccMsg" data-widget="messages" style="flex:none;max-height:190px">
+            <div class="ptitle">Messages<span class="live" id="ccMsgN"></span></div>
+            <div id="ccMsg" class="scroll"></div>
           </div>
         </div>
 
@@ -1656,6 +1724,54 @@ body.arranging .scroll{pointer-events:none}
           <div class="ptitle">Decisions<span class="live" id="dcN"></span></div>
           <div class="scroll vaultDoc" id="dcDoc"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ========== MESSAGES ==========
+         His iMessage threads, read through the neural link's /messages, which
+         is a proxy to the phone line (jarvis_imessage.py, 8796). The phone
+         line is the ONE reader of chat.db; this view and the Messages orb on
+         the glass are two renderings of it, not two copies. Dark when the Mac
+         is asleep, and it says so rather than claiming there is no mail.
+
+         The reply box is Thomas's own hand on send (decided 2026-09-21). The
+         phone line resolves the recipient and refuses an ambiguous name, and
+         logs every send; the model's tool gate is untouched. -->
+    <section class="view" data-view="messages">
+      <div class="cmdGrid msgGrid">
+        <div class="panel" data-widget="msg-threads">
+          <div class="ptitle">Threads<span class="live" id="msgN"></span></div>
+          <input id="msgQ" class="brainQ" placeholder="Filter by name or text…" autocomplete="off">
+          <div class="scroll" id="msgList" style="flex:1;min-height:0;margin-top:6px"></div>
+        </div>
+        <div class="panel" data-widget="msg-thread">
+          <div class="ptitle"><span id="msgTitle">Messages</span><span class="live" id="msgState"></span></div>
+          <div class="scroll msgLog" id="msgLog"><div class="msgEmpty">Pick a thread.</div></div>
+          <form class="msgReply" id="msgReply" hidden>
+            <textarea id="msgText" rows="2" maxlength="2000" placeholder="Reply — Enter sends, Shift+Enter for a new line"></textarea>
+            <button type="submit" id="msgSend">SEND</button>
+          </form>
+          <div class="msgNote" id="msgNote"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SESSIONS ==========
+         The coding agents running on this Mac, Claude Code and Codex in one
+         list because their row is the same shape. GET /sessions on the neural
+         link; it caches for ten seconds because each read forks the claude
+         CLI. Read-only: nothing here starts, stops or talks to a session. -->
+    <section class="view" data-view="sessions">
+      <div class="panel" data-widget="sessions" style="flex:1;min-height:0">
+        <div class="ptitle">Coding sessions on this Mac<span class="live" id="sessN"></span></div>
+        <div class="sessBar" id="sessBar">
+          <button data-f="all" class="sel">ALL</button>
+          <button data-f="claude">CLAUDE CODE</button>
+          <button data-f="codex">CODEX</button>
+          <button data-f="busy">WORKING NOW</button>
+          <button id="sessRefresh" style="margin-left:auto">REFRESH</button>
+        </div>
+        <div class="scroll" id="sessList" style="flex:1;min-height:0"></div>
       </div>
     </section>
 
@@ -1884,6 +2000,14 @@ const [appMod,authMod]=await Promise.all([import(V+'firebase-app.js'),import(V+'
 const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(FIREBASE_CONFIG);
 const auth=authMod.getAuth(app);
 const el=id=>document.getElementById(id);
+/* For the few panels that build HTML from strings they did not write (vault
+   notes, message text, session names). Everything else here uses textContent.
+   It was called before it existed, so the Open work panel printed
+   "esc is not defined" instead of the vault. */
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 /* Never invent a number. A missing value renders as a dash, so a broken loop
    looks broken instead of looking like 42 degrees. */
@@ -5147,6 +5271,8 @@ const VIEW_WORDS = {
   platform: ['platform','the platform','omega'],
   board:    ['board','the board','whiteboard','white board'],
   openwork: ['open work','openwork','open items','the open work','work'],
+  messages: ['messages','my messages','the messages','texts','my texts','text messages','imessage','imessages'],
+  sessions: ['sessions','my sessions','coding sessions','the sessions','agents','coding agents'],
   index:    ['index','the index'],
   brain:    ['brain','the brain','brain graph','graph'],
   people:   ['people','contacts','the people'],
@@ -5338,6 +5464,245 @@ function loadOpenWork(){
   loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
 }
 
+/* ── Messages ────────────────────────────────────────────────────────────
+   Everything comes from the brain's /messages proxy, which passes the phone
+   line's own answer through untouched: titles out of Contacts, group member
+   names, unread counts, the echo on his own thread already collapsed. This
+   page does none of that work, because a second resolver would be a second
+   answer.
+
+   Like loadVaultDoc it asks the brain directly rather than trusting
+   `brainOn`, which is only set once the signed-in status poll has run. */
+const MSG={threads:[], open:null, openGuid:null, sending:false, last:0};
+async function brainJson(path, opts, ms){
+  const c=new AbortController(); const tm=setTimeout(()=>c.abort(), ms||5000);
+  try{
+    const r=await fetch(BRAIN+path, Object.assign({cache:'no-store',signal:c.signal}, opts||{}));
+    let j=null; try{ j=await r.json(); }catch(_){}
+    return {code:r.status, j:j||{}};
+  }finally{ clearTimeout(tm); }
+}
+/* Unreachable brain and a brain whose phone line is down are different
+   problems with different fixes, so they get different sentences. */
+function feedDown(e){
+  return /abort|failed|networkerror|load failed/i.test(String(e&&e.message||e));
+}
+const MAC_ASLEEP='The Mac is not answering — it is asleep, JARVIS is not running on it, '
+  +'or this is not the Mac. Messages are read on the Mac and nowhere else.';
+function msgWhen(sec){ return sec ? ago(new Date(sec*1000)) : ''; }
+function msgText(t){
+  /* U+FFFC is what Messages stores for an attachment with no caption. */
+  const s=String(t||'').replace(/￼/g,'').trim();
+  return s;
+}
+function msgRowHtml(t, compact){
+  const last=msgText(t.last)||(t.last?'[attachment]':'');
+  return '<button class="msgRow'+(MSG.open===t.handle?' on':'')+'" data-h="'+esc(t.handle)+'">'
+    +'<div class="mt"><b>'+esc(t.title||t.handle)+(t.jarvis?' · Jarvis':'')+'</b>'
+    +(t.unread?'<span class="mu">'+t.unread+'</span>':'')
+    +'<i>'+esc(msgWhen(t.at))+'</i></div>'
+    +(compact?'':'<div class="ml">'+esc(last)+'</div>')+'</button>';
+}
+function msgRenderList(){
+  const q=(el('msgQ')&&el('msgQ').value||'').trim().toLowerCase();
+  const rows=MSG.threads.filter(t=>!q
+    || String(t.title||'').toLowerCase().includes(q)
+    || String(t.handle||'').toLowerCase().includes(q)
+    || String(t.last||'').toLowerCase().includes(q));
+  const host=el('msgList');
+  if(host) host.innerHTML=rows.length?rows.map(t=>msgRowHtml(t,false)).join('')
+    :'<div class="msgEmpty">'+(q?'Nothing matches.':'No threads.')+'</div>';
+  const cc=el('ccMsg');
+  if(cc){
+    /* The Command Center only needs "who is waiting on me": unread first,
+       then the most recent, four rows. */
+    const top=MSG.threads.slice().sort((a,b)=>(b.unread>0)-(a.unread>0)||(b.at||0)-(a.at||0)).slice(0,4);
+    cc.innerHTML=top.length?top.map(t=>msgRowHtml(t,true)).join(''):'<div class="msgEmpty">No threads.</div>';
+  }
+}
+function msgPills(){
+  const waiting=MSG.threads.filter(t=>t.unread>0).length;
+  if(el('nMsg')) el('nMsg').textContent=waiting||'';
+  if(el('msgN')) el('msgN').textContent=MSG.threads.length?(MSG.threads.length+' threads'+(waiting?' · '+waiting+' unread':'')):'';
+  if(el('ccMsgN')) el('ccMsgN').textContent=waiting?(waiting+' unread'):'';
+}
+function msgDown(sentence){
+  MSG.threads=[];
+  ['msgList','ccMsg'].forEach(id=>{ const h=el(id); if(h) h.innerHTML='<div class="msgEmpty">'+esc(sentence)+'</div>'; });
+  msgPills();
+}
+async function loadMessages(){
+  MSG.last=Date.now();
+  try{
+    const {code,j}=await brainJson('/messages');
+    if(!j.ok) return msgDown(j.error||('The phone line answered '+code+'.'));
+    MSG.threads=Array.isArray(j.threads)?j.threads:[];
+    msgRenderList(); msgPills();
+    const onMsgs=((document.querySelector('.view.on')||{}).dataset||{}).view==='messages';
+    if(onMsgs && MSG.open) msgLoadThread(MSG.open, true);
+  }catch(e){
+    msgDown(feedDown(e)?MAC_ASLEEP:('Could not read messages: '+(e.message||e)));
+  }
+}
+async function msgLoadThread(handle, quiet){
+  const t=MSG.threads.find(x=>x.handle===handle)||{handle};
+  const opening=MSG.open!==handle;
+  MSG.open=handle; MSG.openGuid=t.chat_guid||null;
+  if(el('msgTitle')) el('msgTitle').textContent=t.title||handle;
+  msgRenderList();
+  const log=el('msgLog'); if(!log) return;
+  if(opening){
+    log.innerHTML='<div class="msgEmpty">Reading…</div>';
+    if(el('msgNote')){ el('msgNote').textContent=''; el('msgNote').className='msgNote'; }
+    if(el('msgText')) el('msgText').value='';
+  }
+  try{
+    const {code,j}=await brainJson('/messages/thread?h='+encodeURIComponent(handle));
+    if(MSG.open!==handle) return;              /* he clicked away mid-read */
+    if(!j.ok){ log.innerHTML='<div class="msgEmpty">'+esc(j.error||('HTTP '+code))+'</div>'; return; }
+    const ms=(j.messages||[]).slice().sort((a,b)=>(a.at||0)-(b.at||0));
+    const stuck=log.scrollHeight-log.scrollTop-log.clientHeight<40;
+    let day='', out='';
+    ms.forEach(m=>{
+      const d=new Date((m.at||0)*1000);
+      const dk=d.toDateString();
+      if(dk!==day){ day=dk; out+='<div class="msgDay">'+esc(d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}))+'</div>'; }
+      const tx=msgText(m.text);
+      const who=(!m.mine && t.group && (m.who||m.name||m.handle))?'<span class="who">'+esc(m.who||m.name||m.handle)+'</span>':'';
+      out+='<div class="msgB'+(m.mine?' me':'')+(tx?'':' att')+'" title="'+esc(d.toLocaleString())+'">'
+        +who+esc(tx||'[attachment]')+'</div>';
+    });
+    log.innerHTML=out||'<div class="msgEmpty">Nothing in this thread yet.</div>';
+    /* After layout, not before: a thread opened from the Command Center
+       widget is rendered while its view is still switching in. */
+    if(opening||stuck){ log.scrollTop=log.scrollHeight;
+      requestAnimationFrame(()=>{ log.scrollTop=log.scrollHeight; }); }
+    if(el('msgReply')) el('msgReply').hidden=false;
+    if(el('msgState')) el('msgState').textContent=t.group?'GROUP':(t.handle||'');
+    if(opening && !quiet && el('msgText') && !phone.matches) el('msgText').focus();
+  }catch(e){
+    if(MSG.open!==handle) return;
+    log.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)?MAC_ASLEEP:('Could not read it: '+(e.message||e)))+'</div>';
+  }
+}
+/* THE REPLY. The recipient is the open thread's handle plus its chat guid,
+   never a name typed here, so there is nothing to resolve and nothing to
+   guess. A 409 (ambiguous) cannot come back for a handle, but if it ever
+   does the candidates are shown and nothing is retried. The text stays in
+   the box until the phone line says it went, so a failure loses nothing. */
+async function msgSend(){
+  const box=el('msgText'), note=el('msgNote'), btn=el('msgSend');
+  const text=(box&&box.value||'').trim();
+  if(!text||!MSG.open||MSG.sending) return;
+  const t=MSG.threads.find(x=>x.handle===MSG.open)||{handle:MSG.open};
+  MSG.sending=true; if(btn){ btn.disabled=true; btn.textContent='SENDING…'; }
+  note.className='msgNote'; note.textContent='Sending to '+(t.title||t.handle)+'…';
+  try{
+    const body={to:t.handle, text};
+    if(MSG.openGuid) body.chat_guid=MSG.openGuid;
+    const {code,j}=await brainJson('/messages/send',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}, 35000);
+    if(j.ok){
+      box.value=''; note.textContent='Sent to '+(t.title||t.handle)+'.';
+      setTimeout(()=>msgLoadThread(t.handle, true), 1200);
+    }else{
+      note.className='msgNote bad';
+      note.textContent=code===409&&Array.isArray(j.matches)
+        ? 'Not sent — that matches '+j.matches.map(m=>m.name).join(', ')+'.'
+        : 'Not sent — '+(j.error||j.detail||('the phone line answered '+code))+'.';
+    }
+  }catch(e){
+    note.className='msgNote bad';
+    note.textContent=feedDown(e)
+      ? 'Not confirmed — the Mac stopped answering. Check the thread before sending again; it may have gone.'
+      : 'Not sent — '+(e.message||e)+'.';
+  }finally{
+    MSG.sending=false; if(btn){ btn.disabled=false; btn.textContent='SEND'; }
+  }
+}
+function wireMessages(){
+  const list=el('msgList'), cc=el('ccMsg'), q=el('msgQ'), f=el('msgReply'), tx=el('msgText');
+  if(list && !list.dataset.w){ list.dataset.w='1';
+    list.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(b) msgLoadThread(b.dataset.h); }); }
+  if(cc && !cc.dataset.w){ cc.dataset.w='1';
+    cc.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(!b) return;
+      showView('messages'); msgLoadThread(b.dataset.h); }); }
+  if(q && !q.dataset.w){ q.dataset.w='1'; q.addEventListener('input',msgRenderList); }
+  if(f && !f.dataset.w){ f.dataset.w='1';
+    f.addEventListener('submit',e=>{ e.preventDefault(); msgSend(); }); }
+  if(tx && !tx.dataset.w){ tx.dataset.w='1';
+    tx.addEventListener('keydown',e=>{
+      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); msgSend(); } }); }
+}
+
+/* ── Sessions ────────────────────────────────────────────────────────────
+   Claude Code (`claude agents --json`) and Codex Desktop (its own sqlite,
+   read-only) in one list, already normalised by the brain to one row shape.
+   The brain caches for ten seconds; REFRESH forces a fresh read. */
+const SESS={rows:[], f:'all'};
+function sessRender(){
+  const host=el('sessList'); if(!host) return;
+  const rows=SESS.rows.filter(r=>SESS.f==='all'||r.agent===SESS.f
+    ||(SESS.f==='busy'&&r.state==='busy'));
+  const home=/^\/Users\/[^/]+/;
+  host.innerHTML='<div class="sessRow sessHead"><span class="ag">agent</span><span>session</span>'
+    +'<span>folder</span><span>state</span><span style="text-align:right">last</span></div>'
+    +(rows.length?rows.map(r=>{
+      const st=String(r.state||'idle').toLowerCase();
+      const when=r.updatedAt||r.startedAt;
+      return '<div class="sessRow" title="'+esc(r.cwd||'')+(r.branch?' · '+esc(r.branch):'')+'">'
+        +'<span class="ag '+esc(r.agent)+'">'+(r.agent==='codex'?'codex':'claude')+'</span>'
+        +'<span class="nm">'+esc(r.name||'(unnamed)')
+          +(r.kind&&r.kind!=='interactive'?'<small>'+esc(r.kind)+'</small>':'')+'</span>'
+        +'<span class="cw"><bdi>'+esc(String(r.cwd||'').replace(home,'~'))+(r.branch?' · '+esc(r.branch):'')+'</bdi></span>'
+        +'<span class="st '+esc(st)+'">'+esc(st)+'</span>'
+        +'<span class="ago">'+(when?esc(ago(new Date(when*1000))):'—')+'</span></div>';
+    }).join(''):'<div class="msgEmpty">Nothing '+(SESS.f==='busy'?'working right now':'here')+'.</div>');
+}
+async function loadSessions(force){
+  const n=el('sessN'), pill=el('nSess');
+  try{
+    const {code,j}=await brainJson('/sessions'+(force?'?force=1':''),null,40000);
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    SESS.rows=Array.isArray(j.sessions)?j.sessions:[];
+    const busy=SESS.rows.filter(r=>r.state==='busy').length;
+    /* One agent failing is not a broken panel: say which one, show the other. */
+    const gone=['claude','codex'].filter(a=>j[a]&&j[a].ok===false)
+      .map(a=>(a==='claude'?'Claude Code':'Codex')+': '+j[a].error);
+    if(n) n.textContent=SESS.rows.length+' sessions'+(busy?' · '+busy+' working':'')
+      +(gone.length?' · '+gone.join(' · '):'');
+    if(pill) pill.textContent=busy||'';
+    sessRender();
+  }catch(e){
+    SESS.rows=[];
+    if(n) n.textContent=''; if(pill) pill.textContent='';
+    const h=el('sessList');
+    if(h) h.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Sessions are read on the Mac.'
+      :'Could not read sessions: '+(e.message||e))+'</div>';
+  }
+}
+function wireSessions(){
+  const bar=el('sessBar'); if(!bar||bar.dataset.w) return; bar.dataset.w='1';
+  bar.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    if(b.id==='sessRefresh'){ loadSessions(true); return; }
+    SESS.f=b.dataset.f||'all';
+    [...bar.querySelectorAll('button[data-f]')].forEach(x=>x.classList.toggle('sel',x===b));
+    sessRender();
+  });
+}
+/* The feeds poll only while the page is looked at: the thread list every
+   30s (it feeds the nav pill and the Command Center widget), the open view
+   every 10s. A hidden tab asks nothing of the Mac. */
+wireMessages(); wireSessions(); loadMessages();
+setInterval(()=>{
+  if(document.hidden) return;
+  const v=(document.querySelector('.view.on')||{}).dataset||{};
+  if(v.view==='messages' || Date.now()-MSG.last>30000) loadMessages();
+  if(v.view==='sessions') loadSessions(false);
+},10000);
+
 /* ── the Terminal view ───────────────────────────────────────────────────
    Claude Code itself, served by ttyd on loopback and framed here.
 
@@ -5410,6 +5775,8 @@ function showView(name){
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='openwork'){ loadOpenWork(); }
+  if(name==='messages'){ wireMessages(); loadMessages(); }
+  if(name==='sessions'){ wireSessions(); loadSessions(false); }
   if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
@@ -8036,6 +8403,8 @@ const IX_VIEWS=[
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
+  ['messages','Messages','your iMessage threads, and a reply box'],
+  ['sessions','Sessions','Claude Code and Codex, running on this Mac'],
   ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
