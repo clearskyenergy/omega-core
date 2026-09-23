@@ -1429,6 +1429,19 @@ body.arranging .scroll{pointer-events:none}
 .msgNote.bad{color:var(--bad)}
 .msgEmpty{padding:18px 6px;color:var(--dim);font-size:13px;line-height:1.5}
 .ccMsg .msgRow{padding:5px 6px}
+/* Proposals: a title he can act on, the reason in one line, the evidence
+   under it, and two buttons — the only two answers the note understands. */
+.propHead{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--glow-cyan);margin:14px 2px 6px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.09)}
+.propHead:first-child{margin-top:2px}
+.propHead span{color:var(--dim);margin-left:6px}
+.propRow{padding:9px 8px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui)}
+.propT{font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.4}
+.propW{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
+.propE{margin:6px 0 0 18px;padding:0;font-size:12px;color:var(--ink);opacity:.8;line-height:1.5}
+.propB{display:flex;gap:8px;margin-top:8px}
+.propB button{font-size:11px;padding:4px 12px;min-height:32px}
+.propB button[data-a="dismiss"]{color:var(--dim);border-color:rgba(255,255,255,.14)}
 /* Sessions: one row shape for both agents — who, what, where, state, age. */
 .sessBar{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
 .sessBar button{font-size:11px;padding:3px 10px}
@@ -1612,6 +1625,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
       <button class="navItem" data-view="messages">✆  Messages<span class="pill" id="nMsg"></span></button>
       <button class="navItem" data-view="sessions">⧉  Sessions<span class="pill" id="nSess"></span></button>
+      <button class="navItem" data-view="proposals">➤  Proposals<span class="pill" id="nProp"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
@@ -1872,6 +1886,21 @@ body.arranging .scroll{pointer-events:none}
           <button id="sessRefresh" style="margin-left:auto">REFRESH</button>
         </div>
         <div class="scroll" id="sessList" style="flex:1;min-height:0"></div>
+      </div>
+    </section>
+
+    <!-- ========== PROPOSALS ==========
+         L2 of the ladder: what Jarvis thinks he should DO about the people,
+         commitments and questions the meetings, texts and mail have piled up.
+         bin/propose writes them on the Mac (hourly) into the vault note
+         04 - Jarvis/Proposals.md; this reads them through the brain's
+         /proposals. DONE and DISMISS make the same edit as ticking or
+         deleting the line in Obsidian. Nothing here sends, books or changes
+         anything else — acting on a proposal is still his hand. -->
+    <section class="view" data-view="proposals">
+      <div class="panel" data-widget="proposals" style="flex:1;min-height:0">
+        <div class="ptitle">What Jarvis proposes<span class="live" id="propN"></span></div>
+        <div class="scroll" id="propList" style="flex:1;min-height:0"></div>
       </div>
     </section>
 
@@ -5397,6 +5426,7 @@ const VIEW_WORDS = {
   openwork: ['open work','openwork','open items','the open work','work'],
   messages: ['messages','my messages','the messages','texts','my texts','text messages','imessage','imessages'],
   sessions: ['sessions','my sessions','coding sessions','the sessions','agents','coding agents'],
+  proposals: ['proposals','my proposals','the proposals','suggestions','what should i do','what do you propose'],
   index:    ['index','the index'],
   brain:    ['brain','the brain','brain graph','graph'],
   people:   ['people','contacts','the people'],
@@ -5819,12 +5849,69 @@ function wireSessions(){
 /* The feeds poll only while the page is looked at: the thread list every
    30s (it feeds the nav pill and the Command Center widget), the open view
    every 10s. A hidden tab asks nothing of the Mac. */
-wireMessages(); wireSessions(); loadMessages();
+/* ── Proposals ───────────────────────────────────────────────────────────
+   Read through the brain's /proposals, which drops any id already answered
+   in the note, so a DONE from Obsidian and a DONE from here agree. */
+let propRows=[], propSections=[], propLast=0;
+async function loadProposals(){
+  const host=el('propList'), n=el('propN'), pill=el('nProp');
+  propLast=Date.now();
+  try{
+    const {code,j}=await brainJson('/proposals');
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    propRows=j.proposals||[]; propSections=j.sections||[];
+    if(n) n.textContent=(propRows.length||'no')+' open'+(j.builtAt?' · built '+ago(j.builtAt):'');
+    if(pill) pill.textContent=propRows.length||'';
+    propRender();
+  }catch(e){
+    propRows=[]; if(n) n.textContent=''; if(pill) pill.textContent='';
+    if(host) host.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Proposals are made on the Mac.'
+      :'Could not read proposals: '+(e.message||e))+'</div>';
+  }
+}
+function propRender(){
+  const host=el('propList'); if(!host) return;
+  if(!propRows.length){ host.innerHTML='<div class="msgEmpty">Nothing to propose. Every commitment is answered, young, or already followed up.</div>'; return; }
+  host.innerHTML=propSections.map(s=>{
+    const rows=propRows.filter(p=>p.kind===s.kind); if(!rows.length) return '';
+    return '<div class="propHead">'+esc(s.title)+' <span>'+rows.length+'</span></div>'
+      +rows.map(p=>'<div class="propRow" data-id="'+esc(p.id)+'">'
+        +'<div class="propT">'+esc(p.title)+'</div>'
+        +'<div class="propW">'+esc(p.why)+'</div>'
+        +(p.evidence&&p.evidence.length?'<ul class="propE">'+p.evidence.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')
+        +'<div class="propB"><button data-a="done">DONE</button><button data-a="dismiss">DISMISS</button></div>'
+        +'</div>').join('');
+  }).join('');
+}
+function wireProposals(){
+  const host=el('propList'); if(!host||host.dataset.w) return; host.dataset.w='1';
+  host.addEventListener('click',async e=>{
+    const b=e.target.closest('button[data-a]'); if(!b) return;
+    const row=b.closest('.propRow'); const id=row&&row.dataset.id; if(!id) return;
+    row.querySelectorAll('button').forEach(x=>x.disabled=true);
+    try{
+      const {code,j}=await brainJson('/proposals/answer',{method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, answer:b.dataset.a})});
+      if(!j.ok && code!==404) throw new Error(j.error||('HTTP '+code));
+      propRows=propRows.filter(p=>p.id!==id);
+      if(el('nProp')) el('nProp').textContent=propRows.length||'';
+      if(el('propN')) el('propN').textContent=(propRows.length||'no')+' open';
+      propRender();
+    }catch(err){
+      row.querySelectorAll('button').forEach(x=>x.disabled=false);
+      const w=row.querySelector('.propW'); if(w) w.textContent='Not saved — '+(err.message||err);
+    }
+  });
+}
+
+wireMessages(); wireSessions(); wireProposals(); loadMessages(); loadProposals();
 setInterval(()=>{
   if(document.hidden) return;
   const v=(document.querySelector('.view.on')||{}).dataset||{};
   if(v.view==='messages' || Date.now()-MSG.last>30000) loadMessages();
   if(v.view==='sessions') loadSessions(false);
+  if(v.view==='proposals' && Date.now()-propLast>60000) loadProposals();
 },10000);
 
 /* ── the Terminal view ───────────────────────────────────────────────────
@@ -5903,6 +5990,7 @@ function showView(name){
   if(name==='openwork'){ loadOpenWork(); }
   if(name==='messages'){ wireMessages(); loadMessages(); }
   if(name==='sessions'){ wireSessions(); loadSessions(false); }
+  if(name==='proposals'){ wireProposals(); loadProposals(); }
   if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
@@ -8567,6 +8655,7 @@ const IX_VIEWS=[
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
   ['messages','Messages','your iMessage threads, and a reply box'],
   ['sessions','Sessions','Claude Code and Codex, running on this Mac'],
+  ['proposals','Proposals','what Jarvis thinks you should do next, with its evidence'],
   ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
