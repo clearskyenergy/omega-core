@@ -10394,9 +10394,13 @@ function showCard(p, fromEl){
      own provenance says so in its own words. */
   const note=document.createElement('div'); note.className='cardNote';
   note.textContent = p.provenance ? p.provenance
+    /* No count here (2026-09-23). `messages` was the number of 30-minute
+       scans a person turned up in, not mail — four partners read "588" — and
+       `lastSeen` was the scan clock. The twin now records the real newest
+       mail as lastMailAt; until a person has one, the card says nothing
+       rather than a number that means something else. */
     : (p.source === 'mail'
-      ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
-        ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
+      ? 'From your mail, no title on file.' + (p.lastMailAt ? ' Last mail ' + String(p.lastMailAt).slice(0,10) + '.' : '')
       : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : ''));
   card.appendChild(note);
 
