@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Omega Logic · Office app</title>
+<style>
+@page{size:Letter;margin:1.05in 0.55in 0.6in 0.55in}
+*{box-sizing:border-box}
+html,body{margin:0;font:9.6pt/1.42 "Liberation Sans",Arial,Helvetica,sans-serif;color:#1d2b33}
+h2{font-size:14pt;color:#0f2e3f;margin:16px 0 5px;letter-spacing:-.2px;page-break-after:avoid}
+h3{font-size:10.5pt;color:#0e7c8b;margin:9px 0 3px;page-break-after:avoid}
+p{margin:0 0 6px}
+ul,ol{margin:0 0 6px;padding-left:16px}li{margin:0 0 3px}
+b{color:#0f2e3f}
+.callout{background:#e8f3f6;border-radius:6px;padding:8px 11px;margin:8px 0 10px;font-size:9.2pt;page-break-inside:avoid}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;page-break-inside:avoid}
+.side{display:grid;grid-template-columns:minmax(0,1fr) 172px;gap:16px;align-items:start}
+.side.two{grid-template-columns:minmax(0,1fr) 172px 172px}
+.shot{width:172px;border:1px solid #cfdde3;border-radius:10px;overflow:hidden;background:#fff;page-break-inside:avoid;box-shadow:0 1px 2px rgba(15,46,63,.08)}
+.shot img{width:100%;display:block}
+.shot small{display:block;font-size:7.6pt;color:#5a7280;padding:4px 7px;border-top:1px solid #e3edf1}
+table{border-collapse:collapse;width:100%;margin:4px 0 8px;font-size:9pt}
+th,td{text-align:left;padding:5px 7px;border-bottom:1px solid #dbe6ea;vertical-align:top}th{color:#0e7c8b;font-size:8.6pt;text-transform:uppercase;letter-spacing:.05em}
+code{font:8.6pt "Liberation Mono","DejaVu Sans Mono",monospace;color:#0f2e3f}
+.url{font-weight:700;color:#0f2e3f}
+.flow{width:100%;height:auto;margin:6px 0 4px}
+.break{page-break-before:always}
+.keep{page-break-inside:avoid}
+
+.cover{background:#e8f3f6;border-radius:8px;padding:14px 16px;margin:0 0 12px}.cover h1{font-size:20pt;color:#0f2e3f;margin:0 0 4px;letter-spacing:-.3px}.cover p{margin:0;color:#3f5866;font-size:10pt}.steps li{margin:0 0 5px}
+</style></head><body>
+
+<div class="cover"><h1>The Office app</h1><p>The office in a pocket: what needs a person today, orders and customer requests, PO loads, customers, stock, and Sites — what the customer says, receive a load by scan, the unit passport. Clean Cell USA.</p></div>
+<h2>1. What it is and where it lives</h2>
+<table><tr><th>What</th><th>Address</th><th>Sign in</th></tr>
+<tr><td><b>Office app</b></td><td><span class="url">silmarillion.clearskyomega.com/office/app?org=cleancell.us</span></td><td>work Google account of the workspace</td></tr>
+<tr><td><b>Office (desktop)</b></td><td><span class="url">silmarillion.clearskyomega.com/omega-logic?org=cleancell.us</span></td><td>same account</td></tr>
+<tr><td><b>Fleet register</b> (the spreadsheet)</td><td><span class="url">silmarillion.clearskyomega.com/logic-register?org=cleancell.us</span></td><td>same account</td></tr>
+<tr><td>Try it first (sample data)</td><td><span class="url">silmarillion.clearskyomega.com/app-sandbox/office</span></td><td>any email</td></tr></table>
+<p>The desktop office is the full system. The app puts the daily decisions where the person is, and it reads and writes the same orders, customers and units through the same signed-in endpoints, so an answer given on the phone is on the customer's screen the moment it is saved.</p>
+
+<h2>2. Put it on your phone</h2>
+<p>It is a web app: nothing to download from a store, and every update reaches the phone the next time it is opened. Open the address once from the link the office sends; the app remembers the workspace after that. Sign in with the work Google account that is a member of the workspace.</p>
+<div class="cols"><div><h3>iPhone or iPad (Safari)</h3><ol class="steps">
+<li>Open <b>Safari</b> and go to the address above.</li>
+<li>Sign in.</li>
+<li>Tap the <b>Share</b> button (the square with the arrow, at the bottom of the screen).</li>
+<li>Scroll the sheet and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+<li>Open it from the home screen from now on. It opens full screen, with the company's icon and name.</li></ol></div>
+<div><h3>Android (Chrome)</h3><ol class="steps">
+<li>Open <b>Chrome</b> and go to the address above.</li>
+<li>Sign in.</li>
+<li>Tap the Chrome menu (three dots) and choose <b>Install app</b> or <b>Add to Home screen</b>.</li>
+<li>Confirm. The app appears with your other apps, with its own icon.</li></ol></div></div>
+
+<h2>3. The six tabs</h2>
+<div class="side two"><div>
+<ul><li><b>Today</b>: orders to price, awaiting deposit, in build, ready and shipped; <b>needs a person</b>: company POs to review, orders with an open customer request, orders that need attention, orders to price (tap to open); money; the plant. At the bottom, <b>your apps</b>: the plant app, the bench, Sites, and the customer app as the customer sees it.</li>
+<li><b>Orders</b>: every order with its customer, lines, total and balance, and the work order's built % once it is on the floor. Open one: lines, invoices, build, shipment, and the customer's requests. <b>Answer &amp; close</b> a request here.</li>
+<li><b>POs</b>: PO loads. Choose the company, the billing contact, paste the lines: <code>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</code>. Each becomes an order awaiting pricing; nothing is accepted or charged.</li>
+<li><b>Customers</b>: every account with its terms and logins; balance, open requests, the terms to edit, the portal link to send them.</li>
+<li><b>Stock</b>: finished units by product with <b>assign to an order</b>, the parts short, the supplier purchase orders open.</li>
+<li><b>Sites</b>: mirrors <i>Deliver → Sites &amp; custody</i> on the desktop. <b>The customer says</b>: each unit the customer placed at a site from their phone, with <b>Confirm</b>. <b>Going to</b>: destinations named before arrival. <b>Receive a load</b>: choose the load Shipping planned, scan with the camera or type each serial, intact or damaged; shorts and strays are named. <b>Unit passport</b>: custody, who confirmed, warranty and SLA, history, and only the moves that apply (received, assign to the site, going to, installed, commissioned, in service). Then the sites and the exceptions.</li></ul></div>
+<div class="shot"><img src="shots/office-today.png" alt=""><small>Today: stages, who needs a person, money, the plant</small></div>
+<div class="shot"><img src="shots/office-sites.png" alt=""><small>Sites: what the customer says, with Confirm; receive a load by scan</small></div></div>
+<div class="callout"><b>What stays on the desktop, on purpose.</b> Approving a customer price, accepting an order, recording a shipment and settling wires happen on the desktop office pages, next to the QuickBooks evidence. So do the spreadsheet import of site assignments and the coverage templates. The app shows every one of those results and never invents a number.</div>
+<h2 class="break">4. How it links to the main system</h2>
+<div class="side"><div>
+<ol class="keep">
+<li>A customer sends a stack of POs from their app, or the office keys them in here. Each is an order awaiting pricing, on Today and on the desktop Company POs page.</li>
+<li>The office prices and accepts on the desktop; the deposit is invoiced through QuickBooks; when it is paid the order is released to the plant.</li>
+<li>The builders build it bench by bench. The Stock tab shows finished units and what is short; a finished unit built for stock is assigned to the order here.</li>
+<li>The office records the shipment on the desktop (Shipping &amp; receiving). Every serial on the load starts its custody chain: in transit.</li>
+<li>The customer says on their phone where each unit is going and when it arrived; they assign it to the site it is interconnected at. The <b>Sites</b> tab shows what they said, and the office confirms it. The warranty runs from the ship date and is tied to that site.</li>
+<li>The <b>Fleet register</b> on the desktop is the whole thing as one spreadsheet: seller, buyer, reseller, end customer, site, load, carrier, BOL, every date, warranty and SLA — edited in place, exported to CSV.</li></ol></div>
+<div class="shot"><img src="shots/office-unit.png" alt=""><small>Unit passport on the phone: custody, coverage, the moves that apply</small></div></div>
+<h2>5. If something looks wrong</h2>
+<ul>
+<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the address with <code>?org=cleancell.us</code> once; the app remembers it.</li>
+<li><b>The app looks stale</b>: close it fully and open it again. Updates arrive on the next open; data is never shown from a cache.</li>
+<li><b>Offline</b>: the app says so and shows nothing rather than yesterday's list.</li>
+<li><b>Questions</b>: ClearSky Energy Solutions. The full manual is in the workspace documentation.</li></ul>
+<ul><li><b>Nothing loads after sign-in</b>: your email is not a member of the workspace yet. Contact ClearSky or your administrator.</li>
+<li><b>A move is refused</b> (for example commissioning a unit that has not been received): the message says why. The rules are the same on every screen; record the earlier step first.</li></ul>
+
+</body></html>

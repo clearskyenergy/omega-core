@@ -30,7 +30,7 @@ require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin
    libraries the endpoints use, and one state object carries the bench from
    the tablet check into the roaming-phone check. */
 var F = require('./_lib/logic-fixtures');
-var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/cleancell/tenant.json');
+var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/cleancell/tenant.json'), KIT_SENDS = [];
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], q = req.url.split('?')[1] || '';
@@ -52,6 +52,8 @@ var srv = http.createServer(function (req, res) {
   if (u === '/api/logic-custody' && req.method === 'POST') return posted(function (b) { return F.post(STATE, u, q, b, 'demo@cleancell.us'); });
   if (u.indexOf('/api/logic-custody') === 0) { if (/template=/.test(q)) { res.writeHead(200, { 'Content-Type': 'text/csv' }); return res.end(require('../api/_lib/custody').csvTemplate()); } return json(V.custodyJson(q)); }
   if (u.indexOf('/api/logic-logistics') === 0) return json(V.logisticsJson());
+  if (u === '/api/logic-kit' && req.method === 'POST') return posted(function (b) { KIT_SENDS.unshift({ id: 'k' + KIT_SENDS.length, orgId: b.org, audience: b.audience, to: b.to, channel: b.channel || 'email', note: b.note || '', by: 'tom@clearsky-usa.com', at: new Date().toISOString() }); return { ok: true }; });
+  if (u.indexOf('/api/logic-kit') === 0) { var Kit = require('../api/_lib/kit'); if (!/org=/.test(q)) return json({ owner: true, subscribers: [{ id: 'cleancell.us', name: 'Clean Cell', status: 'active', domains: [] }], guides: Kit.GUIDES, items: Kit.ITEMS }); var kit = Kit.forOrg('cleancell.us', { name: 'Clean Cell' }); return json({ owner: true, org: 'cleancell.us', name: 'Clean Cell', status: 'active', brand: F.brand, kit: kit, messages: { plant: Kit.message(kit, 'plant'), office: Kit.message(kit, 'office'), customer: Kit.message(kit, 'customer') }, sends: KIT_SENDS }); }
   if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
   if (u.indexOf('/api/app-manifest') === 0) return json(V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT));
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
@@ -367,6 +369,20 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var r92b = await p.$eval('#reg tbody tr[data-serial="CC418-26-44192"]', function (tr) { var o = {}; Array.prototype.forEach.call(tr.querySelectorAll('td[data-k]'), function (td) { o[td.getAttribute('data-k')] = td.textContent.trim(); }); return o; });
     ok('  search finds by any column; a cell edit saves a detail in place (Enter), and choosing a site in the Site cell assigns the unit through the rules: warranty active, confirmed by the office', found.join('|') === 'CC418-26-44192' && after === 'Valley Power Partners' && /Saved reseller/.test(st) && r92b.site === 'Riverside yard' && /assigned to site/.test(r92b.statusLabel) && /^active/.test(r92b.warrantyStatus) && r92b.warrantyUntil === '2036-09-10' && /^confirmed/.test(r92b.confirmation) && r92b.reseller === 'Valley Power Partners', [found, after, st, r92b]);
     return { rows: rows, cols: heads.length, after: after };
+  });
+  await check('kit', '/logic-kit.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(800);
+    var nav = await p.$eval('.logic-nav a[aria-current="page"]', function (e) { return e.textContent.trim(); });
+    var heads = await p.$$eval('#aud h2', function (r) { return r.map(function (x) { return x.textContent.trim(); }); });
+    var urls = await p.$$eval('#aud .url', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var msg = await p.$eval('#msg-customer', function (e) { return e.value; });
+    var guides = await p.$$eval('#guide-list .url', function (r) { return r.map(function (x) { return x.textContent; }); });
+    ok('Apps & guides lists every app, page, sandbox and guide for the subscriber with a message per audience', nav === 'Apps & guides' && heads.join('|') === 'Customer|Office|Plant' && urls.some(function (u) { return /portals\/customer\/app\?org=cleancell\.us/.test(u); }) && urls.some(function (u) { return /office\/app\?org=cleancell\.us/.test(u); }) && urls.some(function (u) { return /plant\/app\?org=cleancell\.us/.test(u); }) && /Customer app: https:\/\/silmarillion/.test(msg) && /Add to Home Screen/.test(msg) && /Omega-Logic-Customer-App\.pdf/.test(msg) && guides.length === 4 && guides.some(function (g) { return /Omega-Logic-Office-App\.pdf/.test(g); }), [nav, heads, urls.length, msg.slice(0, 120), guides]);
+    await p.fill('#s-to', 'robert.bucher@cleancell.us'); await p.fill('#s-note', 'Customer kit with the PDF'); await p.click('#sent button'); await p.waitForTimeout(800);
+    var log = await p.$$eval('#send-list tbody tr', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    var kst = await p.$eval('#status', function (e) { return e.textContent; });
+    ok('  a send is logged against the subscriber with who, what and when', log.length === 1 && /customer/.test(log[0]) && /robert\.bucher@cleancell\.us/.test(log[0]) && /jarvis/.test(log[0]) && /Customer kit with the PDF/.test(log[0]), [log, kst]);
+    return { heads: heads.length, urls: urls.length, guides: guides.length, log: log.length };
   });
   /* The sandboxes: the same pages with sandbox.js in place of Firebase and
      /api/. Nothing below reaches the stub server's /api/ routes — the page
