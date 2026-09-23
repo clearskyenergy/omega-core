@@ -23,6 +23,22 @@ the original user reference. Original textures remain intact. These are authored
 procedural motions, not motion capture, physics cloth or foot-contact IK.
 The face retains its mask; no phoneme lip sync is claimed.
 
+## Talking mask option
+
+The user supplied `doctor_dooms_mask.glb`, preserved as
+`doctor-dooms-mask.glb`. Its embedded metadata credits **Nicolas_Laube**,
+**Doctor Doom's Mask**, **CC BY 4.0**:
+https://sketchfab.com/3d-models/doctor-dooms-mask-8db5464072f341a994ad1c729d9080f7
+https://sketchfab.com/Nicolas_Laube
+https://creativecommons.org/licenses/by/4.0/
+
+This source contains separate lower-lip, lower-head, chin and teeth meshes,
+but no skeleton, morph targets or animation clips. `OmegaDoom.createMask()`
+opens those authored lower-mouth parts in response to speech state and audio
+energy. It is a speech-driven jaw motion, not phoneme-level lip sync.
+The same authored lower-mouth materials receive a brief green emissive glow
+while he speaks.
+
 `dr-doom-v2-animated.glb` is a portable derived copy with Idle, Walk and Talk clips
 and corrected accessory parents. Walk is in place; the studio adds root travel.
 The exported clips are fixed loops; runtime speaking gestures are randomized.
@@ -42,6 +58,32 @@ Returned controls: `ready`, `setState('idle'|'walk'|'listening'|'speaking')`,
 `createModel(host,arrayBuffer)` imports a self-contained GLB locally, without
 upload. External GLB resources are rejected. Custom rigs need their own mapping.
 `createPortrait(host)` retains the original user image/depth viewer as an option.
+`createMask(host)` loads the talking mask option.
+`createFigure(host, key)` loads any entry of `OmegaDoom.figures`; `credit(key)`
+returns the attribution line a page shows for it.
+
+## Statue and prop figures
+
+Three more user-supplied Sketchfab downloads, none with a skeleton, morph
+targets or clips. `createFigure()` gives them speech presence without a rig:
+a statue breathes, leans in while listening and nods while speaking; a prop
+turns, faster while the voice is active. Each pulses its own emissive toward
+a per-figure colour on speech energy. Textures were reduced with
+gltf-transform (resize + WebP), which the vendored GLTFLoader r128 reads via
+`EXT_texture_webp`; the originals are not in the repo.
+
+| key | file | source | licence |
+|---|---|---|---|
+| `ironman` | `iron-man.glb` (1K WebP, from 31 MB) | Iron Man — Grant Riley, https://sketchfab.com/3d-models/iron-man-69dde1ad49e94852984e3d83928efd65 | **CC BY-NC 4.0** |
+| `witchking` | `witch-king.glb` (1K WebP, from 440 MB) | Lord of the Rings: The Witch-king of Angmar — AndreOrla, https://sketchfab.com/3d-models/lord-of-the-rings-the-witch-king-of-angmar-063e0e96abea42c3a25b0fa64ba1440a | CC BY 4.0 |
+| `onering` | `the-one-ring.glb` (as downloaded) | The One Ring (Lord of The Rings) — Anthony Yanez, https://sketchfab.com/3d-models/the-one-ring-lord-of-the-rings-39eb401be92c49d39520fadd5ecff8d3 | CC BY 4.0 |
+
+The Iron Man model is licensed **non-commercial**. Jarvis is a product page
+of a commercial platform; that licence has to be resolved (a commercial
+licence from the author, or a replacement asset) before this figure ships
+to a customer-facing host. The Witch-king and Ring are Tolkien Estate and
+Marvel likenesses regardless of the model licence; internal use only.
+
 
 Jarvis uses its existing live audio meter and browser-speech boundary fallback.
 The actual authenticated Jarvis voice endpoint has not been exercised in this task.

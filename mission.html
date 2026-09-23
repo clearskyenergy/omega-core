@@ -1745,7 +1745,7 @@ body.arranging .scroll{pointer-events:none}
               <label for="characterMode">Jarvis character</label>
               <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="quantum">Jarvis · Quantum core</option></select>
               <label for="doomCharacter">Doom appearance</label>
-              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="ironman">Iron Man · armour statue</option><option value="witchking">Witch-king of Angmar · statue</option><option value="onering">The One Ring · turning</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
               <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
             </div>
           </div>
@@ -1803,7 +1803,7 @@ body.arranging .scroll{pointer-events:none}
 
 <script src="assets/vendor/three-r128/three.min.js"></script>
 <script src="assets/vendor/three-r128/GLTFLoader.js"></script>
-<script src="omega-doom.js?v=20260921-rigged-5"></script>
+<script src="omega-doom.js?v=20260922-figures-8"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -3670,7 +3670,7 @@ const arc = makeBurst('arc', { scale: 0.60 });
 const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
 let missionDoom = null, characterGeneration = 0, characterState = 'idle';
 let doomCharacter = 'rigged';
-try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','ironman','witchking','onering','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
 function syncDoomCharacter() {
   const generation = ++characterGeneration;
   const layer = el('coreLayer'), host = el('missionDoom');
@@ -3681,12 +3681,15 @@ function syncDoomCharacter() {
   host.style.display = 'block';
   el('characterStatus').textContent = 'Loading character…';
   try {
-    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, doomCharacter);
     missionDoom = actor;
     actor.ready.then(() => {
       if (generation !== characterGeneration) return;
       actor.setState(characterState); layer.classList.add('characterReady');
-      el('missionDoomCredit').style.visibility = doomCharacter === 'rigged' ? 'visible' : 'hidden';
+      const credit = el('missionDoomCredit');
+      const figure = OmegaDoom.figures[doomCharacter];
+      credit.style.visibility = figure ? 'visible' : 'hidden';
+      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(doomCharacter); }
       el('characterStatus').textContent = 'Character ready. Saved on this browser.';
     }).catch(() => {
       if (generation !== characterGeneration) return;
