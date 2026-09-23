@@ -1248,7 +1248,10 @@ body.arranging .scroll{pointer-events:none}
      auto minimum sizes the track to its CONTENT — so one track holding
      something that scrolls sideways grows to the full scroll width and drags
      the whole page with it. */
-  #app{grid-template-columns:minmax(0,1fr)}
+  /* Two rows now, and the spare height goes to the CONTENT row: grid rows
+     default to sharing it, which put a 300px void under the brand on a phone
+     before a single fact. */
+  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);align-content:start}
   .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
         border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
   #nav{flex-direction:row;flex-wrap:wrap;flex:1}
@@ -1509,10 +1512,61 @@ body.arranging .scroll{pointer-events:none}
   .brand{padding-bottom:4px}
   .rail{flex:none;padding-bottom:6px}
   .ptabs{display:flex}
-  body{padding-bottom:calc(var(--ptabH) + env(safe-area-inset-bottom))}
-  .talkBar{bottom:calc(var(--ptabH) + env(safe-area-inset-bottom));
-           padding-bottom:8px;border-bottom:1px solid rgba(0,243,255,.14)}
   .foot{display:none}
+
+  /* The talk bar is fixed above the tab bar, not sticky at the end of a
+     column: a short screen left it floating mid-page with the tabs a hand's
+     width below. --talkH is still measured from the real bar. */
+  .main > .talkBar{position:fixed;left:0;right:0;margin:0;z-index:60;
+           bottom:calc(var(--ptabH) + env(safe-area-inset-bottom));
+           padding:8px 12px;border-bottom:1px solid rgba(0,243,255,.14)}
+  body{padding-bottom:calc(var(--ptabH) + 72px + env(safe-area-inset-bottom))}
+
+  /* ONE COLUMN, WHATEVER THE MARKUP SAYS. Several views set their columns
+     inline (1fr 320px, 1fr 330px); only !important reaches past that. */
+  .cmdGrid,.platGrid,.logicGrid,.brainGrid,.msgGrid{grid-template-columns:minmax(0,1fr)!important}
+  /* Panels sized for a fixed desktop grid (height:132px, max-height:34%) get
+     their natural height in a scrolling column; a list still caps at .scroll. */
+  .view .panel{height:auto!important;max-height:none!important;flex:none!important}
+  .panel .scroll{max-height:62vh}
+
+  /* THE COMMAND CENTER, IN THE ORDER A PHONE READS IT: what is on your plate,
+     what is waiting on you, the conversation, then the day, the buttons, the
+     feed, and the plumbing last. The three desktop columns dissolve
+     (display:contents) so the panels can be ordered as one list. */
+  .view[data-view="command"] .col{display:contents}
+  .view[data-view="command"] .cmdGrid{display:flex;flex-direction:column;gap:10px}
+  .panel[data-widget="overview"]{order:1}
+  .panel[data-widget="needs"]{order:2}
+  .panel[data-widget="conversation"]{order:3}
+  .panel[data-widget="schedule"]{order:4}
+  .panel[data-widget="quick-commands"]{order:5}
+  .panel[data-widget="feed"]{order:6}
+  .panel[data-widget="messages"]{order:7}
+  .panel[data-widget="conns"]{order:8}
+  .panel[data-widget="agent-activity-last-8-runs"]{order:9}
+  /* The window onto the core sits last: a 180px hole between the header and
+     the first number was the first thing the phone showed. */
+  .view[data-view="command"] .coreHole{order:10;height:120px}
+  .panel[data-widget="conversation"] .scroll{max-height:70vh}
+
+  /* Rows: a title gets the width, the small print wraps under it, and the
+     buttons become a row of their own you can hit with a thumb. */
+  .row{font-size:15px;line-height:1.4;gap:8px 10px;flex-wrap:wrap;align-items:center}
+  .row .v{font-size:12.5px}
+  #todos .row .k{flex:1 1 55%}
+  #todos .row .triWhy{flex:1 1 100%;order:3;font-size:10px}
+  #todos .row .tBtns{flex:1 1 100%!important;order:4;margin-left:0!important;gap:8px!important}
+  #todos .row .tBtns button{flex:1;min-height:40px;font-size:12px!important;padding:6px 8px!important}
+  .ixChip{min-height:36px;display:inline-flex;align-items:center;font-size:10.5px}
+  .quick button,.panel button:not(.capBtn):not(.tBtns button){min-height:40px}
+  .addBar .brainQ{min-width:0;flex:1 1 100%}
+  .addBar button{min-height:40px;font-size:11px!important;padding:8px 14px!important}
+
+  /* The brain: the graph first and tall enough to touch; the lists after. */
+  .brainStage{order:-1;min-height:58vh}
+  .brainGrid{display:flex;flex-direction:column}
+  header{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -10px;padding:6px 10px 8px}
 }
 </style>
 </head>
@@ -7476,7 +7530,7 @@ async function queueBuild(taskId, title, tool, box){
 }
 
 function taskButtons(id, row, titleEl){
-  const bar=document.createElement('span');
+  const bar=document.createElement('span'); bar.className='tBtns';
   bar.style.cssText='display:flex;gap:4px;flex:none;margin-left:6px';
   const mk=(label,title,fn)=>{
     const b=document.createElement('button');

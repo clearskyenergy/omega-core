@@ -1582,3 +1582,19 @@ Overview rows that open the screen they count (tasks, outbox, calendar,
 system, people). The sticky talk bar sits above the bar; the caption still
 measures the real talk bar. The sentence still works. Nothing above 700px
 changed. Driven headless at a phone viewport: tab, sheet, door, no errors.
+
+## Mission Control on the phone: every screen in one hand — September 23, 2026
+
+Every one of the seventeen screens rendered at 390px with fixture data and
+fixed where it failed. The rail row no longer shares the viewport's spare
+height with the content (a void under the brand on every screen); views that
+set their columns inline (calendar, board, open work) become one column
+through `!important`; panels sized for the desktop grid take their natural
+height; the talk bar is fixed above the tab bar (the old sticky rule lost to
+`.main > .talkBar{position:relative}` and had never stuck); the Command
+Center's three columns dissolve into one list in reading order: Overview,
+Needs you, Conversation, the day, Quick commands, Feed, Messages,
+Connections, Agent activity, with the window onto the core last instead of
+first. Task rows wrap: title, reason, then DO / done / edit / dismiss as a
+full-width row of 40px buttons; chips and panel buttons are 36–40px; rows
+read at 15px; the brain shows the graph first. Header is sticky. Desktop unchanged.
