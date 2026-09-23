@@ -1568,3 +1568,17 @@ notification tap lands on the Command Center with the new icon. Rendered at a
 phone viewport with auth stubbed: the Command Center and the Phone panel,
 no browser errors. Nothing on the desktop layout changed; the 2026-09-13 rule
 (no tab strip on a phone, navigation is a sentence) stands.
+
+## Mission Control on the phone: a bar, a sheet, and doors — September 23, 2026
+
+From the installed app: "I can't access any of the stuff on the command
+center." The 2026-09-13 rule had removed the seventeen-button strip under
+700px and left navigation to a sentence, which moves well and discovers
+nothing. Under 700px `mission.html` now has a fixed bottom bar (Home, Tasks,
+Outbox, Calendar, More) with the rail's count pills mirrored by a
+MutationObserver, a More sheet built from `#nav` on every open (one list, one
+set of pills, a screen added to the rail appears without a second edit), and
+Overview rows that open the screen they count (tasks, outbox, calendar,
+system, people). The sticky talk bar sits above the bar; the caption still
+measures the real talk bar. The sentence still works. Nothing above 700px
+changed. Driven headless at a phone viewport: tab, sheet, door, no errors.
