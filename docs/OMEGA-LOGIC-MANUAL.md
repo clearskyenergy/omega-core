@@ -154,7 +154,7 @@ appear only for ClearSky.
 
 ### The office app (`/office/app`)
 
-The office in a pocket, for whoever is not at the desk. Five tabs:
+The office in a pocket, for whoever is not at the desk. Six tabs:
 
 - **Today** — the stage counts (to price, awaiting deposit, in build,
   ready · shipped); **needs a person**: company POs to review, orders with
@@ -182,6 +182,15 @@ The office in a pocket, for whoever is not at the desk. Five tabs:
   available serial, the parts short for the open work, and the supplier
   purchase orders still open.
 
+- **Sites** — mirrors *Deliver → Sites & custody* on the desktop: **the
+  customer says** (each unit the customer placed at a site from their
+  phone, with *Confirm*), **going to** (destinations named before arrival),
+  **receive a load** (choose the load Shipping planned, scan with the camera
+  or type each serial, intact or damaged; shorts and strays are named),
+  the **unit passport** (custody, who confirmed, coverage, history, and only
+  the moves that apply: received, assign to the site, going to, installed,
+  commissioned, in service), the sites with their unit counts, and the
+  exceptions. Imports and coverage templates stay on the desktop.
 ### Procurement — stock, materials, vendors
 
 - **Materials plan.** What to buy, what to build, twelve weeks ahead,
@@ -314,6 +323,16 @@ carries where it came from. Results export to CSV, an executive report and
 per-site reports; a sized site can be added to the customer's projects and
 opened in Design Studio. Design, statuses and the honest list of what is not
 built: `docs/PORTFOLIO-SCREENING.md`.
+
+### One account, three apps
+
+A tenant is one record (`omega_orgs/{org}`) and its three apps share it:
+the plant app builds the unit, the office app ships it and confirms where it
+went, the customer app is where the customer says it is going and places
+it. Each app's Today (and the customer's Account) links to the others, and
+a serial opened in any of them is the same record — the plant app's unit
+view shows *After the plant* once the unit has shipped, with a link to its
+custody passport.
 
 ### The customer app (`/portals/customer/app`)
 

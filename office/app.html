@@ -85,12 +85,14 @@
   <p id="status" class="status"></p>
   <div id="view"></div>
 </main>
+<div id="cam" hidden style="position:fixed;inset:0;background:#000;z-index:50"><button type="button" id="cam-x" style="position:absolute;top:14px;right:14px;z-index:51;padding:8px 14px">Close</button><video id="cam-v" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
 <nav class="bottom" id="nav" hidden>
   <button data-tab="today" aria-current="page"><span>☀</span>Today</button>
   <button data-tab="orders"><span>▤</span>Orders</button>
   <button data-tab="pos"><span>▥</span>POs</button>
   <button data-tab="customers"><span>◉</span>Customers</button>
   <button data-tab="stock"><span>▦</span>Stock</button>
+  <button data-tab="sites"><span>◎</span>Sites</button>
 </nav>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
 <script>
@@ -120,6 +122,7 @@
   }
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
+  var CUSTODY = null, LOADS = null, SCANS = [], SERIAL = null, camStream = null, camTimer = null;
   var q = '?org=' + encodeURIComponent(ORG);
   var STAGE_PILL = { exception: 'bad', ship: 'ok', shipped: 'ok', complete: 'ok' };
   var FILTERS = [['all', 'All', null], ['attention', 'Needs attention', ['exception']], ['quote', 'To price', ['quote', 'priced']], ['deposit', 'Awaiting deposit', ['deposit']], ['build', 'In build', ['release', 'production', 'balance']], ['ship', 'Ready · shipped', ['ship', 'shipped', 'complete']], ['requests', 'Customer requests', null]];
@@ -165,6 +168,7 @@
     if (TAB === 'pos') return drawPos();
     if (TAB === 'customers') return CUST ? drawCustomer() : drawCustomers();
     if (TAB === 'stock') return drawStock();
+    if (TAB === 'sites') return SERIAL ? drawSiteUnit() : drawSites();
   }
   function orderCard(o) {
     var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
@@ -195,8 +199,9 @@
       + (needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('') || (review ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered.</p>'))
       + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(invoiced) + '</b></div><div><small>Received</small><b>' + dollars(paid) + '</b></div><div class="' + (invoiced - paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(invoiced - paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(depositsOpen) + '</b></div>' + (exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
       + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
-      + '<a class="big ghost" href="/plant/app' + q + '">Open the plant app</a>';
+      + '<h2>' + esc((DATA.brand && DATA.brand.name) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/plant/station.html" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
     bindOrders();
+    if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
     if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
     loadMaterials().then(function (m) { var s = m.summary || {}, el = $('kv-buy'); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (s.spend != null ? '$' + Number(s.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (s.short || 0) + ' short · ' + (s.late || 0) + ' late</small>'; if (s.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
   }
@@ -354,15 +359,110 @@
     })['catch'](fail);
   }
 
+  /* ── Sites: what the customer says, what is going where, receive by scan ──
+     api/logic-custody.js (the same endpoint as Deliver → Sites & custody on
+     the desktop). The customer places a unit at a site from their phone;
+     here the office confirms it, receives a load against what Shipping
+     planned, and looks a serial up. Every rule is api/_lib/custody.js. */
+  function loadCustody() { return CUSTODY ? Promise.resolve(CUSTODY) : api('/api/logic-custody' + q).then(function (c) { CUSTODY = c; return c; }); }
+  function loadLoads() {
+    if (LOADS) return Promise.resolve(LOADS);
+    return api('/api/logic-logistics' + q).then(function (d) { LOADS = []; (d.orders || []).forEach(function (o) { (o.legs || []).forEach(function (l) { if (l.status !== 'closed' && l.status !== 'received') LOADS.push({ orderId: o.id, orderNo: o.orderNo, legId: l.id, status: l.status, serials: l.serials || [] }); }); }); return LOADS; })['catch'](function () { LOADS = []; return LOADS; });
+  }
+  function covLine(c) { return '<div class="unit"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + ' <span class="mono">' + esc(c.templateId || c.id || '') + '</span><small>' + (c.status === 'active' ? 'until ' + esc(day(c.endDate || c.until)) + ' · from ' + esc(day(c.startDate || c.from)) : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(day(c.endDate || c.until)) : esc(c.status)) + '</small></div><span class="pill' + (c.status === 'active' ? ' ok' : c.status === 'expired' ? ' bad' : '') + '">' + esc(c.status) + '</span></div>'; }
+  function siteName(id) { var s = ((CUSTODY && CUSTODY.sites) || []).filter(function (x) { return x.id === id; })[0]; return s ? s.name : id; }
+  function siteOptions(sel) { return ((CUSTODY && CUSTODY.sites) || []).filter(function (s) { return s.status !== 'inactive'; }).map(function (s) { return '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join(''); }
+  function closeCam() { var c = $('cam'); if (c) c.hidden = true; if (camTimer) { clearInterval(camTimer); camTimer = null; } if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; } }
+  function openCam(onCode) {
+    if (!window.BarcodeDetector || !navigator.mediaDevices) { status('This phone cannot scan with its camera here; type the serial.'); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (st) {
+      camStream = st; var v = $('cam-v'); v.srcObject = st; v.play(); $('cam').hidden = false;
+      var det = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'code_128'] });
+      camTimer = setInterval(function () { det.detect(v).then(function (codes) { if (codes && codes.length) { var val = codes[0].rawValue; closeCam(); onCode(val); } })['catch'](function () {}); }, 300);
+    })['catch'](function () { status('No camera permission.'); });
+  }
+  function drawSites() {
+    $('view').innerHTML = '<h1>Sites</h1><div id="sites-body"><p class="note">Loading…</p></div>';
+    Promise.all([loadCustody(), loadLoads()]).then(function (r) {
+      var el = $('sites-body'); if (!el) return; var c = r[0], loads = r[1], tc = c.toConfirm || [], pl = c.planned || [], counts = c.counts || {};
+      el.innerHTML = '<div class="kv"><div><small>In transit</small><b>' + esc(counts.in_transit || 0) + '</b></div><div><small>Received · assigned</small><b>' + esc((counts.received || 0) + (counts.delivered || 0)) + ' · ' + esc(counts.assigned || 0) + '</b></div><div><small>Installed · commissioned</small><b>' + esc(counts.installed || 0) + ' · ' + esc((counts.commissioned || 0) + (counts.in_service || 0)) + '</b></div><div class="' + ((c.exceptions || []).length ? 'bad' : '') + '"><small>Exceptions</small><b>' + esc((c.exceptions || []).length) + '</b></div></div>'
+        + '<h2>The customer says · ' + tc.length + '</h2><p class="note">Units the customer placed at a site from their phone. Confirm each once the install is verified, or open it to correct it.</p>'
+        + (tc.map(function (u) { return '<div class="unit" data-declared="' + esc(u.serial) + '"><button class="back" data-open="' + esc(u.serial) + '" style="text-align:left;min-width:0"><span class="mono">' + esc(u.serial) + '</span><small>at ' + esc(u.custody.siteName || u.custody.siteId) + (u.custody.position ? ' · ' + esc(u.custody.position) : '') + ' · ' + esc(u.custody.label) + ' · since ' + esc(day(u.custody.declaredAt)) + '</small></button><button data-confirm="' + esc(u.serial) + '" style="padding:8px 14px;border:1px solid var(--brand);background:white;color:var(--brand-d);border-radius:8px">Confirm</button></div>'; }).join('') || '<p class="note">✓ Nothing awaiting confirmation.</p>')
+        + (pl.length ? '<h2>Going to · ' + pl.length + '</h2>' + pl.map(function (u) { return '<button class="unit" data-open="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.custody.label) + ' → ' + esc(u.custody.plannedSiteName || u.custody.plannedSiteId) + ' · said by the ' + esc(u.custody.plannedBy || 'office') + '</small></div><span class="pill">going to</span></button>'; }).join('') : '')
+        + '<h2>Receive a load</h2><p class="note">Choose the load Shipping planned, then scan or type each serial. Shorts and strays are named; a unit the customer already said is going to a site is bound there.</p>'
+        + '<select id="rc-load"><option value="">— choose the load —</option>' + loads.map(function (l, i) { return '<option value="' + i + '">' + esc(l.orderNo) + ' · ' + esc(l.legId) + ' · ' + l.serials.length + ' unit' + (l.serials.length === 1 ? '' : 's') + '</option>'; }).join('') + '</select>'
+        + '<div class="row" style="margin-top:8px"><input id="rc-scan" placeholder="Scan or type a serial, then Enter" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rc-cam" type="button">Camera</button></div><div id="rc-list"></div><button class="big" id="rc-go" disabled>Record 0 scans</button><p class="note" id="rc-result"></p>'
+        + '<h2>Unit passport</h2><div class="row"><input id="su-serial" placeholder="Serial" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="su-go" type="button">Open</button></div>'
+        + '<h2>Sites · ' + (c.sites || []).length + '</h2>' + ((c.sites || []).map(function (st) { var a = st.address || {}, ic = st.interconnection || {}; return '<div class="unit"><div><b>' + esc(st.name) + '</b><small>' + esc([a.city, a.state].filter(Boolean).join(', ')) + (ic.poi ? ' · POI ' + esc(ic.poi) : '') + '</small></div><span class="pill">' + esc(st.units || 0) + ' unit' + (st.units === 1 ? '' : 's') + '</span></div>'; }).join('') || '<p class="note">No sites yet; add one on the desktop or let the customer add theirs.</p>')
+        + ((c.exceptions || []).length ? '<h2>Exceptions · ' + c.exceptions.length + '</h2>' + c.exceptions.slice(0, 20).map(function (x) { return '<button class="unit" data-open="' + esc(x.serial) + '"><div><span class="mono">' + esc(x.serial) + '</span><small>' + esc(x.say) + '</small></div><span class="pill bad">' + esc(String(x.kind).replace(/_/g, ' ').replace(/^state /, '')) + '</span></button>'; }).join('') : '')
+        + '<a class="big ghost" href="/logic-custody.html' + q + '">Sites, imports and coverage on the desktop</a>';
+      function drawScans() {
+        var l = $('rc-load').value !== '' ? loads[Number($('rc-load').value)] : null, exp = {}; if (l) l.serials.forEach(function (x) { exp[x] = true; });
+        $('rc-list').innerHTML = SCANS.map(function (x, i) { return '<div class="unit"><div><span class="mono">' + esc(x.serial) + '</span>' + (l ? '<small>' + (exp[x.serial] ? 'expected on this load' : 'not on this load') + '</small>' : '') + '</div><span class="row"><select data-cond="' + i + '"><option value="accepted"' + (x.condition === 'accepted' ? ' selected' : '') + '>intact</option><option value="damaged"' + (x.condition === 'damaged' ? ' selected' : '') + '>damaged</option></select><button data-rm="' + i + '">×</button></span></div>'; }).join('') + (l ? '<p class="note">' + l.serials.filter(function (x) { return !SCANS.some(function (y) { return y.serial === x; }); }).length + ' of ' + l.serials.length + ' expected still to scan.</p>' : '');
+        $('rc-go').disabled = !SCANS.length; $('rc-go').textContent = 'Record ' + SCANS.length + ' scan' + (SCANS.length === 1 ? '' : 's');
+        Array.prototype.forEach.call(el.querySelectorAll('[data-cond]'), function (sel) { sel.onchange = function () { SCANS[Number(sel.getAttribute('data-cond'))].condition = sel.value; }; });
+        Array.prototype.forEach.call(el.querySelectorAll('[data-rm]'), function (b) { b.onclick = function () { SCANS.splice(Number(b.getAttribute('data-rm')), 1); drawScans(); }; });
+      }
+      function addScan(v) { v = String(v || '').trim(); if (!v) return; if (SCANS.some(function (x) { return x.serial === v; })) { status(v + ' is already in this session.'); return; } SCANS.push({ serial: v, condition: 'accepted' }); status(''); drawScans(); }
+      drawScans();
+      $('rc-load').onchange = drawScans;
+      $('rc-scan').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); addScan($('rc-scan').value); $('rc-scan').value = ''; } };
+      $('rc-cam').onclick = function () { openCam(addScan); };
+      $('rc-go').onclick = function () {
+        var l = $('rc-load').value !== '' ? loads[Number($('rc-load').value)] : null; if (!l) { status('Choose the load first.'); return; }
+        $('rc-go').disabled = true; status('Recording…');
+        api('/api/logic-custody', { action: 'receive-load', orderId: l.orderId, legId: l.legId, received: SCANS, method: 'scan' }).then(function (r) {
+          $('rc-result').textContent = r.received.length + ' received' + (r.damaged.length ? ', ' + r.damaged.length + ' damaged' : '') + (r.short.length ? ', short: ' + r.short.join(', ') : '') + (r.overage.length ? ', not on this load: ' + r.overage.join(', ') : '') + (r.refused.length ? ', refused: ' + r.refused.map(function (x) { return x.serial + ' (' + x.why + ')'; }).join('; ') : '') + '. ' + r.note;
+          status(''); SCANS = []; CUSTODY = null; LOADS = null; var keep = $('rc-result').textContent; drawSites(); setTimeout(function () { if ($('rc-result')) $('rc-result').textContent = keep; }, 900);
+        })['catch'](function (e) { fail(e); $('rc-go').disabled = false; });
+      };
+      $('su-go').onclick = function () { if ($('su-serial').value.trim()) { SERIAL = $('su-serial').value.trim(); draw(); } };
+      $('su-serial').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('su-go').click(); } };
+      Array.prototype.forEach.call(el.querySelectorAll('[data-open]'), function (b) { b.onclick = function () { SERIAL = b.getAttribute('data-open'); draw(); window.scrollTo(0, 0); }; });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-confirm]'), function (b) { b.onclick = function () { b.disabled = true; status('Confirming…'); api('/api/logic-custody', { action: 'confirm', serial: b.getAttribute('data-confirm') }).then(function (r) { status(r.say || 'Confirmed.'); CUSTODY = null; drawSites(); })['catch'](function (e) { fail(e); b.disabled = false; }); }; });
+    })['catch'](function (e) { var el = $('sites-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(e.message) + '</p>'; });
+  }
+  function drawSiteUnit() {
+    $('view').innerHTML = '<button class="back" id="back">‹ Sites</button><div id="su-body"><p class="note">Loading…</p></div>';
+    $('back').onclick = function () { SERIAL = null; draw(); };
+    loadCustody().then(function () { return api('/api/logic-custody' + q + '&serial=' + encodeURIComponent(SERIAL)); }).then(function (d) {
+      var el = $('su-body'); if (!el) return; var u = d.unit, c = u.custody, moves = d.moves || {};
+      function can(m) { return moves[m] && moves[m].from.indexOf(c.status) >= 0 && c.state !== 'scrapped'; }
+      el.innerHTML = '<h1 class="mono" style="font-family:\'IBM Plex Mono\',monospace;font-size:20px">' + esc(u.serial) + '</h1><p class="note">' + esc(d.product ? d.product.name : u.sku) + ' · ' + esc(u.orderNo || 'stock') + '</p>'
+        + '<div class="kv"><div><small>Custody</small><b style="font-size:16px">' + esc(c.label) + '</b>' + (c.state ? '<small style="color:#B42318">' + esc(c.state) + '</small>' : '') + '</div><div><small>Site</small><b style="font-size:16px">' + esc(c.siteName || (c.plannedSiteName ? 'going to ' + c.plannedSiteName : '—')) + '</b>' + (c.position ? '<small>' + esc(c.position) + '</small>' : '') + '</div></div>'
+        + (c.siteId ? (c.confirmation === 'confirmed' ? '<p class="note"><span class="pill ok">confirmed</span> by ' + esc(c.confirmedBy || '') + ' on ' + esc(day(c.confirmedAt)) + '</p>' : '<p class="note"><span class="pill">customer says</span> at ' + esc(c.siteName) + ' since ' + esc(day(c.declaredAt)) + ' · not yet confirmed</p><button class="big" id="su-confirm">Confirm it is at ' + esc(c.siteName) + '</button>') : '')
+        + '<p class="note">' + [c.shippedAt ? 'shipped ' + day(c.shippedAt) : '', c.receivedAt ? 'received ' + day(c.receivedAt) : '', c.installedAt ? 'installed ' + day(c.installedAt) : '', c.commissionedAt ? 'commissioned ' + day(c.commissionedAt) : '', c.installer ? 'by ' + c.installer : ''].filter(Boolean).map(esc).join(' · ') + '</p>'
+        + '<h2>Coverage</h2>' + ((u.coverage || []).map(covLine).join('') || '<p class="note">No coverage template on this product.</p>')
+        + (can('receive') ? '<button class="big ghost" data-move="receive">Received</button>' : '')
+        + (can('assign') ? '<h2>Installed at</h2><div class="row"><select id="su-site">' + (c.siteId ? '' : '<option value="">Choose the site…</option>') + siteOptions(c.siteId) + '</select><input id="su-pos" placeholder="Position" value="' + esc(c.position || '') + '" style="max-width:38%"></div><button class="big ghost" data-move="assign">Assign to the site</button>' : '')
+        + (!c.siteId && ['', 'in_transit', 'delivered', 'received'].indexOf(c.status) >= 0 && c.state !== 'scrapped' ? '<h2>Going to</h2><div class="row"><select id="su-dest"><option value="">— no destination —</option>' + siteOptions(c.plannedSiteId) + '</select><button id="su-dest-go" type="button">Set</button></div>' : '')
+        + (can('install') ? '<button class="big ghost" data-move="install">Installed</button>' : '') + (can('commission') && c.siteId ? '<div class="row"><input type="date" id="su-date"><input id="su-inst" placeholder="Commissioned by"></div><button class="big ghost" data-move="commission">Commissioned</button>' : '') + (can('in-service') ? '<button class="big ghost" data-move="in-service">In service</button>' : '')
+        + '<h2>History</h2>' + ((d.events || []).slice(0, 12).map(function (e) { return '<div class="unit"><div>' + esc(e.type) + (e.siteId ? ' · ' + esc(siteName(e.siteId)) : '') + (e.note ? ' · ' + esc(e.note) : '') + '<small>' + esc(day(e.at)) + ' · ' + esc(e.by) + ' · ' + esc(e.method) + '</small></div></div>'; }).join('') || '<p class="note">No custody events; the unit has not left the plant.</p>')
+        + '<a class="big ghost" href="/logic-custody.html' + q + '&serial=' + encodeURIComponent(u.serial) + '">Full passport on the desktop</a>';
+      function after(r) { status(r.say || 'Recorded.'); CUSTODY = null; drawSiteUnit(); }
+      if ($('su-confirm')) $('su-confirm').onclick = function () { this.disabled = true; api('/api/logic-custody', { action: 'confirm', serial: u.serial }).then(after)['catch'](fail); };
+      if ($('su-dest-go')) $('su-dest-go').onclick = function () { api('/api/logic-custody', { action: 'destination', serial: u.serial, siteId: $('su-dest').value || undefined }).then(after)['catch'](fail); };
+      Array.prototype.forEach.call(el.querySelectorAll('[data-move]'), function (b) {
+        b.onclick = function () {
+          var m = b.getAttribute('data-move'), body = { action: 'move', move: m, serial: u.serial };
+          if (m === 'assign') { if (!$('su-site').value) { status('Choose the site first.'); return; } body.siteId = $('su-site').value; body.position = $('su-pos').value; }
+          if (m === 'commission') { if ($('su-date').value) body.at = $('su-date').value; body.installer = $('su-inst').value; }
+          b.disabled = true; status('Recording…'); api('/api/logic-custody', body).then(after)['catch'](function (e) { fail(e); b.disabled = false; });
+        };
+      });
+    })['catch'](function (e) { var el = $('su-body'); if (el) el.innerHTML = '<p class="note" style="color:#B42318">' + esc(e.message) + '</p>'; });
+  }
+
   /* ── shell ────────────────────────────────────────────────────────────── */
-  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; closeCam(); if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
   document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
-  $('refresh').onclick = function () { PICK = null; CUST = null; loadAll(); };
+  $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
   $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
   $('signin').onclick = function () {
     var p = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
   };
+  $('cam-x').onclick = closeCam;
   function paintNet() { $('offline').hidden = navigator.onLine !== false; }
   window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
   auth.onAuthStateChanged(function (u) {

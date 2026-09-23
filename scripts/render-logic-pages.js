@@ -239,7 +239,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var kv = await p.$$eval('#today-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     var needs = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });
     ok('the office app wears the tenant\'s office manifest and icon', /app-manifest\?org=cleancell\.us&app=office/.test(manifest.m) && /cleancell\/icons\/office-180/.test(manifest.i), manifest);
-    ok('  five tabs: Today, Orders, POs, Customers, Stock', tabs.join('|') === 'Today|Orders|POs|Customers|Stock', tabs);
+    ok('  six tabs: Today, Orders, POs, Customers, Stock, Sites', tabs.join('|') === 'Today|Orders|POs|Customers|Stock|Sites', tabs);
     ok('  today counts the stages and lists who needs a person: the open request and the unpriced order', kv.length === 4 && /To price\s*1/.test(kv[0]) && needs.some(function (t) { return /CC-26-4419.*1 customer request/.test(t); }) && needs.some(function (t) { return /CC-26-4421.*price/.test(t); }), [kv, needs]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300);
     var cards = await p.$$eval('#view .card', function (r) { return r.length; });
@@ -267,6 +267,13 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var assign = await p.$$eval('[data-assign]', function (r) { return r.length; });
     var opts = await p.$$eval('select[data-for] option', function (r) { return r.map(function (x) { return x.textContent; }); });
     ok('  stock counts finished units, offers to assign each available one to the order that needs it, and lists what is short', /CC-C215.*2 available/.test(stock[0]) && assign === 2 && opts.some(function (o) { return /CC-26-4419/.test(o); }) && stock.some(function (t) { return /on hand/.test(t); }) && stock.some(function (t) { return /PO-1001/.test(t); }), [stock, assign, opts]);
+    await p.click('[data-tab="sites"]'); await p.waitForTimeout(600);
+    var h2s = await p.$$eval('#sites-body h2', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    var loadOpts = await p.$$eval('#rc-load option', function (r) { return r.map(function (x) { return x.textContent; }); });
+    await p.fill('#su-serial', 'CC418-26-44192'); await p.click('#su-go'); await p.waitForTimeout(500);
+    var su = await p.$eval('#su-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var moves = await p.$$eval('#su-body [data-move]', function (r) { return r.map(function (x) { return x.getAttribute('data-move'); }); });
+    ok('  the Sites tab mirrors the desktop: the customer says, receive a load, unit passport, sites, and a unit opens with only the moves that apply', /^The customer says/.test(h2s[0]) && h2s.some(function (t) { return /Receive a load/.test(t); }) && h2s.some(function (t) { return /Unit passport/.test(t); }) && h2s.some(function (t) { return /^Sites · 1/.test(t); }) && loadOpts.some(function (t) { return /LOAD-1 · 1 unit/.test(t); }) && /in transit/.test(su) && /going to|no site assigned/.test(su) && moves.join('|') === 'receive', [h2s, loadOpts, su.slice(0, 200), moves]);
     return { tabs: tabs.length, cards: cards, companies: companies, preview: preview, assign: assign };
   });
   await check('custody', '/logic-custody.html?org=cleancell.us', async function (p) {
@@ -362,6 +369,13 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.evaluate(function () { document.querySelector('a[href^="/omega-logic"]').click(); }); await p.waitForTimeout(200);
     var toast = await p.$$eval('.sb-toast', function (r) { return r.map(function (x) { return x.textContent; }); }), url = p.url();
     ok('  a desktop link is caught and explained, not followed', /app-sandbox\/office/.test(url) && toast.length === 1 && /desktop page/.test(toast[0]), [url, toast]);
+    await p.click('[data-tab="sites"]'); await p.waitForTimeout(600);
+    await p.selectOption('#rc-load', '0'); await p.fill('#rc-scan', 'CC418-26-44192'); await p.press('#rc-scan', 'Enter'); await p.waitForTimeout(200); await p.click('#rc-go'); await p.waitForTimeout(1400);
+    var rc = await p.$eval('#rc-result', function (e) { return e.textContent; });
+    await p.fill('#su-serial', 'CC418-26-44192'); await p.click('#su-go'); await p.waitForTimeout(500);
+    await p.selectOption('#su-site', 'site_company-riverside-riverside-yard-93307'); await p.fill('#su-pos', 'Pad 1'); await p.click('[data-move="assign"]'); await p.waitForTimeout(700);
+    var su2 = await p.$eval('#su-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    ok('  on the phone the office receives the load by scan and assigns the unit to the site: confirmed by the office itself, warranty running', /1 received/.test(rc) && /Every expected serial was received/.test(rc) && /assigned to site/.test(su2) && /confirmed by demo@cleancell.us/.test(su2) && /until 2036-09-10/.test(su2), [rc, su2.slice(0, 260)]);
     return { strip: stripLinks.length, kv: kv, answered: answered.length };
   });
   await check('sandbox-plant', '/app-sandbox/plant', async function (p) {
@@ -382,6 +396,8 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   });
   await check('sandbox-customer', '/app-sandbox/customer', async function (p) {
     await p.waitForTimeout(400);
+    /* the three sandboxes share one localStorage state; the office check above received and assigned the unit, so start this one over */
+    p.once('dialog', function (d) { d.accept(); }); await p.click('#sb-reset'); await p.waitForTimeout(900);
     if (await p.$eval('#gate', function (e) { return e.hidden; })) { await p.click('#signout'); await p.waitForTimeout(600); }
     var gate = await p.$eval('#gate', function (e) { return !e.hidden; });
     await p.fill('#g-email', 'ops@riverside.example'); await p.click('#g-link'); await p.waitForTimeout(900);
