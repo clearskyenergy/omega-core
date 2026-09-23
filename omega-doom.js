@@ -126,7 +126,8 @@ return {walk:walk,time:time,phase:stepPhase};
 return {step:poseRig,joints:all.length,reset:function(){all.forEach(function(j){j.bone.quaternion.copy(j.rest);});},mapped:true};
 }
 
-function createModel(host,source){
+function createModel(host,source,opts){
+opts=opts||{};
 var T=root.THREE;if(!T||!T.GLTFLoader)throw new Error('3D model loader is unavailable');
 var renderer=new T.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(root.devicePixelRatio||1,2));renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
 var canvas=renderer.domElement;canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;touch-action:none';canvas.setAttribute('aria-label','Full 3D textured character. Drag to orbit.');host.appendChild(canvas);
@@ -136,7 +137,7 @@ scene.add(new T.HemisphereLight(0xcdeaf2,0x182721,.85));var key=new T.Directiona
 var room=new T.Scene();room.background=new T.Color(0x606866);var roomMesh=new T.Mesh(new T.BoxGeometry(10,10,10),new T.MeshBasicMaterial({color:0x646c6a,side:T.BackSide}));room.add(roomMesh);
 var softbox=new T.Mesh(new T.PlaneGeometry(4,6),new T.MeshBasicMaterial({color:0xffffff}));softbox.position.set(-4,2,0);softbox.rotation.y=Math.PI/2;room.add(softbox);
 var pmrem=new T.PMREMGenerator(renderer),env=pmrem.fromScene(room);scene.environment=env.texture;pmrem.dispose();roomMesh.geometry.dispose();roomMesh.material.dispose();softbox.geometry.dispose();softbox.material.dispose();
-var dead=false,raf=0,last=0,state='idle',energy=0,target=0,paused=false,solid=true,object=null,mixer=null,actions=[],activeAction=null,headBone=null,headRest=null,shoulders=[],bones=0,materials=[],phase=0,nextGesture=0,lastClip=-1,yaw=0,drag=null,rig=null,heading=0;
+var dead=false,raf=0,last=0,state='idle',energy=0,target=0,paused=false,solid=true,object=null,mixer=null,actions=[],activeAction=null,headBone=null,headRest=null,shoulders=[],bones=0,materials=[],phase=0,nextGesture=0,lastClip=-1,yaw=0,drag=null,rig=null,heading=0,maskMouth=[],maskGlow=[];
 var motion=createMotion(),reduced=root.matchMedia&&root.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var manager=new T.LoadingManager();manager.setURLModifier(function(url){if(/^blob:|^data:/i.test(url))return url;throw new Error('Use a self-contained GLB with embedded textures');});var loader=new T.GLTFLoader(manager);
 function chooseClip(){if(!actions.length)return;var pattern=state==='speaking'?/talk|speak|gesture|explain/i:state==='walk'?/walk/i:/idle|stand|breath/i;var found=actions.filter(function(a){return pattern.test(a.getClip().name);});if(!found.length){if(activeAction){activeAction.stop();activeAction=null;}nextGesture=phase+4;return;}var index=Math.floor(Math.random()*found.length);if(found.length>1&&index===lastClip)index=(index+1)%found.length;lastClip=index;var action=found[index];if(action!==activeAction){action.reset().setEffectiveWeight(1).play();if(activeAction)activeAction.crossFadeTo(action,.45,false);activeAction=action;}nextGesture=phase+4+Math.random()*4;}
@@ -146,8 +147,10 @@ loader.parse(bytes,'',function(gltf){if(dead){disposeObject(gltf.scene);return;}
 var box=new T.Box3().setFromObject(object),size=box.getSize(new T.Vector3()),center=box.getCenter(new T.Vector3());if(!isFinite(size.y)||size.y<.00001){disposeObject(object);object=null;reject(new Error('Model has no visible geometry'));return;}
 var scale=2.3/size.y;object.scale.multiplyScalar(scale);object.position.sub(center.multiplyScalar(scale));object.position.y+=1.15;group.add(object);
 object.traverse(function(n){if(n.isBone){bones++;if(/(^|[_:])head$|^head$/i.test(n.name)){headBone=n;headRest=n.quaternion.clone();}if(/upperarm|upper_arm|leftarm|rightarm/i.test(n.name))shoulders.push({bone:n,rest:n.quaternion.clone(),side:/left|_l\b|\.l$/i.test(n.name)?-1:1});}
+if(opts.mask&&/^(lipLower_low|lowerHead_low|chin_low|teeth_low)$/i.test(n.name))maskMouth.push({node:n,position:n.position.clone(),rotation:n.rotation.clone()});
 if(n.isMesh){var list=Array.isArray(n.material)?n.material:[n.material];list.forEach(function(m){if(materials.indexOf(m)<0)materials.push(m);});n.frustumCulled=false;}});
 rig=createDoomRig(object,T);
+maskMouth.forEach(function(part){part.node.traverse(function(n){if(!n.isMesh)return;var list=Array.isArray(n.material)?n.material:[n.material];list.forEach(function(m){if(maskGlow.indexOf(m)<0&&m&&m.emissive){m.userData.maskBaseEmissive=m.emissive.clone();m.userData.maskBaseIntensity=m.emissiveIntensity||0;maskGlow.push(m);}});});});
 materials.forEach(function(m){if(rig&&/^sv_doctordoom01_s01_[14]$/.test(m.name)){m.color.multiply(new T.Color(.18,.28,.20));m.roughness=.85;}if(m.envMapIntensity!==undefined)m.envMapIntensity=.7;});
 mixer=new T.AnimationMixer(object);actions=(gltf.animations||[]).map(function(c){return mixer.clipAction(c);});chooseClip();resolve({bones:bones,proceduralRig:!!rig,clips:actions.map(function(a){return a.getClip().name;})});
 },function(e){reject(new Error(e&&e.message||'Unable to parse this GLB'));});});});
@@ -166,12 +169,18 @@ if(!paused){
     shoulders.forEach(function(s,i){s.bone.quaternion.copy(s.rest).multiply(new T.Quaternion().setFromEuler(new T.Euler(pose[i%2]*.12,0,s.side*pose[6+i%2]*.1)));});
   }
 }
+/* This mask has separate lower-lip, jaw, chin and teeth objects but no face
+   rig or morph targets. Move only those authored parts: it creates a real jaw
+   opening from speech energy without distorting the mask itself. */
+if(maskMouth.length){var mouthOpen=state==='speaking'?(.12+energy*.88)*(reduced?1:.68+.32*Math.sin(phase*16)*Math.sin(phase*16)):0;maskMouth.forEach(function(part){part.node.position.copy(part.position);part.node.rotation.copy(part.rotation);part.node.position.y-=mouthOpen*.035/Math.max(.001,object.scale.y);part.node.rotation.x-=mouthOpen*.09;});maskGlow.forEach(function(m){m.emissive.copy(m.userData.maskBaseEmissive);m.emissiveIntensity=m.userData.maskBaseIntensity+mouthOpen*1.8;if(mouthOpen)m.emissive.add(new T.Color(0,.34,.13));});}
 group.rotation.y=yaw+heading;renderer.render(scene,camera);}
 function down(e){drag=e.clientX;if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId);}function move(e){if(drag===null)return;yaw+=(e.clientX-drag)*.008;drag=e.clientX;}function up(){drag=null;}
 canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);raf=root.requestAnimationFrame(frame);
 return {ready:ready,canvas:canvas,setState:function(v){state=v;chooseClip();},setEnergy:function(v){target=Math.max(0,Math.min(1,Number(v)||0));},setPaused:function(v){paused=!!v;},setSolid:function(v){solid=!!v;materials.forEach(function(m){if(!m.emissive)return;if(!m.userData.doomEmissive)m.userData.doomEmissive=m.emissive.clone();m.emissive.copy(m.userData.doomEmissive);if(!solid)m.emissive.add(new T.Color(.015,.12,.09));});},reset:function(){yaw=0;},destroy:function(){dead=true;root.cancelAnimationFrame(raf);if(mixer){mixer.stopAllAction();mixer.uncacheRoot(object);}disposeObject(object);env.dispose();renderer.dispose();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);if(canvas.parentNode)canvas.parentNode.removeChild(canvas);}};
 }
 
-function createDefault(host){return createModel(host,fetch('/assets/doom/dr-doom-v2.glb').then(function(r){if(!r.ok)throw new Error('Doom model HTTP '+r.status);return r.arrayBuffer();}));}
-root.OmegaDoom={createModel:createModel,createPortrait:createPortrait,create:createDefault,createMotion:createMotion,createDoomRig:createDoomRig,version:"20260921-rigged-5"};
+function loadAsset(path){return fetch(path).then(function(r){if(!r.ok)throw new Error('Doom model HTTP '+r.status);return r.arrayBuffer();});}
+function createDefault(host){return createModel(host,loadAsset('/assets/doom/dr-doom-v2.glb'));}
+function createMask(host){return createModel(host,loadAsset('/assets/doom/doctor-dooms-mask.glb'),{mask:true});}
+root.OmegaDoom={createModel:createModel,createPortrait:createPortrait,create:createDefault,createMask:createMask,createMotion:createMotion,createDoomRig:createDoomRig,version:"20260922-mask-6"};
 })(window);

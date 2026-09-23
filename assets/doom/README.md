@@ -23,6 +23,22 @@ the original user reference. Original textures remain intact. These are authored
 procedural motions, not motion capture, physics cloth or foot-contact IK.
 The face retains its mask; no phoneme lip sync is claimed.
 
+## Talking mask option
+
+The user supplied `doctor_dooms_mask.glb`, preserved as
+`doctor-dooms-mask.glb`. Its embedded metadata credits **Nicolas_Laube**,
+**Doctor Doom's Mask**, **CC BY 4.0**:
+https://sketchfab.com/3d-models/doctor-dooms-mask-8db5464072f341a994ad1c729d9080f7
+https://sketchfab.com/Nicolas_Laube
+https://creativecommons.org/licenses/by/4.0/
+
+This source contains separate lower-lip, lower-head, chin and teeth meshes,
+but no skeleton, morph targets or animation clips. `OmegaDoom.createMask()`
+opens those authored lower-mouth parts in response to speech state and audio
+energy. It is a speech-driven jaw motion, not phoneme-level lip sync.
+The same authored lower-mouth materials receive a brief green emissive glow
+while he speaks.
+
 `dr-doom-v2-animated.glb` is a portable derived copy with Idle, Walk and Talk clips
 and corrected accessory parents. Walk is in place; the studio adds root travel.
 The exported clips are fixed loops; runtime speaking gestures are randomized.
@@ -42,6 +58,7 @@ Returned controls: `ready`, `setState('idle'|'walk'|'listening'|'speaking')`,
 `createModel(host,arrayBuffer)` imports a self-contained GLB locally, without
 upload. External GLB resources are rejected. Custom rigs need their own mapping.
 `createPortrait(host)` retains the original user image/depth viewer as an option.
+`createMask(host)` loads the talking mask option.
 
 Jarvis uses its existing live audio meter and browser-speech boundary fallback.
 The actual authenticated Jarvis voice endpoint has not been exercised in this task.
