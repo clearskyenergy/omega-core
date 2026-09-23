@@ -175,6 +175,12 @@ function views(state) {
     }
     if (/site=/.test(q)) { var sid = decodeURIComponent((/site=([^&]*)/.exec(q) || [])[1] || ''), sd = state.sites.filter(function (s) { return s.id === sid; })[0]; if (!sd) return { status: 404, error: 'Site not found' }; var here = units.filter(function (u) { return Cu.custodyOf(u).siteId === sid; }); return { brand: brand, site: sd, units: here.map(function (u) { return unitView(u, now); }), exceptions: Cu.exceptions(here, cat, now), limited: false }; }
     if (/view=exceptions/.test(q)) return { brand: brand, exceptions: Cu.exceptions(units, cat, now), sampled: units.length, limited: false };
+    if (/view=register/.test(q)) {
+      var custName = {}; state.customers.forEach(function (x) { custName[x.id] = x.company; });
+      var rows = units.map(function (u) { var c = Cu.custodyOf(u), o = state.orders.filter(function (x) { return x.id === u.orderId; })[0] || null, co = state.companyOrders.filter(function (x) { return x.id === u.orderId; })[0], leg = co ? ((co.legs || []).filter(function (l) { return l.id === c.legId || (!c.legId && (l.serials || []).indexOf(u.serial) >= 0); })[0] || null) : null;
+        return Cu.registerRow(u, { product: prodOf(u.sku), order: o ? Object.assign({}, o, { poNumber: co ? co.poNumber : null }) : null, leg: leg, site: c.siteId ? state.sites.filter(function (x) { return x.id === c.siteId; })[0] || null : null, seller: 'Clean Cell', buyer: custName[u.customerId || c.customerId] || (o && o.customer && o.customer.name) || '' }, now); });
+      return { brand: brand, name: 'Clean Cell', owner: false, columns: Cu.REGISTER_COLUMNS, rows: rows, sites: state.sites.filter(function (x) { return x.status !== 'inactive'; }).map(function (x) { return { id: x.id, name: x.name }; }), products: cat.filter(function (p) { return (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name }; }), limited: false, sampled: units.length };
+    }
     var counts = {}; Cu.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; }); var off = []; units.forEach(function (u) { var c = Cu.custodyOf(u); counts[c.status || 'plant']++; if (c.status) off.push(unitView(u, now)); });
     var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; off.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; }); });
     return { brand: brand, name: 'Clean Cell', owner: false, counts: counts, coverage: cov, units: off, unitsShown: off.length, unitsTotal: off.length, sites: state.sites.map(siteRow), exceptions: Cu.exceptions(units, cat, now),
@@ -317,6 +323,12 @@ function post(state, path, query, b, who) {
     var method = ['manual', 'scan', 'import'].indexOf(b.method) >= 0 ? b.method : 'manual';
     if (b.action === 'site') return saveSite(b, null);
     if (b.action === 'mapping-save') { state.custodyMapping = b.mapping || {}; return { ok: true, mapping: state.custodyMapping }; }
+    if (b.action === 'detail') {
+      var tu = unitBy(String(b.serial || '').trim()); if (!tu) return err(404, 'Serial is not registered');
+      var tr; try { tr = Cu.detail(tu, b, who, now); } catch (e) { return err(e.status || 400, e.message); }
+      if (tr.duplicate) return { ok: true, action: 'duplicate', serial: tu.serial, custody: Cu.custodyOf(tu) };
+      patchUnit(tu, tr.patch); logEvent(tu.serial, tr.event); return { ok: true, action: 'detail', serial: tu.serial, changed: tr.event.fields, custody: Cu.custodyOf(tu) };
+    }
     if (b.action === 'confirm' || b.action === 'destination') {
       var xu = unitBy(String(b.serial || '').trim()); if (!xu) return err(404, 'Serial is not registered');
       var xs = b.siteId ? siteBy(b.siteId) : null; if (b.action === 'destination' && b.siteId && !xs) return err(404, 'Site not found');

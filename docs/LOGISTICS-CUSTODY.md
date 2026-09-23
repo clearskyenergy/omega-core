@@ -99,6 +99,71 @@ tracks it and the office confirms it.
   supplier's confirmation*, then *confirmed by your supplier on …*.
   Exceptions: `declared_unconfirmed` after three days.
 
+## The fleet register — the spreadsheet
+
+`/logic-register.html` (Deliver → Fleet register) is one flat row per
+serialized unit, at the plant or beyond, with every column a spreadsheet
+would want, and it is edited in place: click a cell, type, Enter saves and
+steps down, Tab steps across, Escape cancels. `api/_lib/custody.js`
+`registerRow()` builds the row for the endpoint (`?view=register`) and the
+sandbox alike; `REGISTER_COLUMNS` is the one column list.
+
+| Group | Columns |
+|---|---|
+| Unit | serial, product, product name, type, built |
+| Where it is | status, condition (side state), held by, site confirmed (customer says / confirmed on), going to |
+| Parties | **seller** (the tenant), **buyer** (the account that ordered), **reseller** (who sold it on), **end customer** (whose site it runs at) |
+| Site | site, position, address, utility, interconnection point, meter |
+| Shipping | order, customer PO, load, carrier, BOL / tracking, shipped, delivered, received |
+| Install | installed, commissioned, installer, in service |
+| Coverage | warranty status / from / until, SLA status / until / uptime % |
+| Service | replaced by, replaces, RMA opened, notes |
+
+An edit is one of two things. **A detail** (reseller, end customer,
+position, installer, notes, commissioning report: `detail` action,
+event `detail`) links the unit to a party and never moves it. **A move**
+(the Site cell → `assign`; the Installed and Commissioned cells →
+`install` / `commission`) goes through the same status machine as every
+other door, so a refused move stays refused here with its reason, and a
+cell that no move applies to is not editable. Rows can be selected and
+assigned to a site, or given a destination, in one go; the visible sheet
+exports to CSV.
+
+### What Siemens, Schneider and the standards do, and what was taken
+
+The register's shape follows how the large OEMs keep an installed base:
+
+- **Register by serial, from the label.** Schneider's mySchneider registers
+  a product by scanning its QR code or typing the serial, and warranty
+  support asks for the part number, the serial and the factory order
+  number; a customer's installed base is the list of what they registered.
+  Siemens prints an *ID-Link* (IEC 61406) on the nameplate: a QR code that
+  resolves to the unit's digital nameplate with its data, manuals and
+  certificates. Here the plant's serial label is the identifier and the
+  passport is the nameplate; a label that encodes the passport URL
+  (`/logic-custody?org=&serial=`) would be the same idea.
+- **Events, not edits.** GS1's EPCIS records custody as events — *what*
+  (a serialized item, SGTIN), *when*, *where* (a location, GLN), *why* (the
+  business step and disposition) — and keeps product attributes in master
+  data. That is the custody event log under each unit plus the catalog
+  product; the register is the flattened view of both. Pallet-level
+  identity (SSCC) is not modelled.
+- **A passport per battery.** The EU Battery Regulation requires, from
+  February 2027, a passport per individual industrial battery over 2 kWh
+  placed on the EU market: a unique identifier behind a QR code, the
+  manufacturer, place and date of manufacture, chemistry and weight, with
+  a new passport referencing the old one when a battery is repurposed.
+  The unit record already carries identity, product, build date and the
+  full history; what a passport would add (chemistry, weight, carbon
+  footprint, state of health) is product and telemetry data this register
+  does not hold.
+
+Sources consulted 2026-09-23: Schneider Electric mySchneider tailored
+services and warranty registration FAQs (se.com), Siemens Digital ID /
+IEC 61406 ID-Link (siemens.com), GS1 EPCIS and CBV implementation
+guideline (gs1.org), EU battery passport guides (Circularise, OpenDPP,
+automotive-iq).
+
 ## Coverage
 
 A product carries up to ten templates, each `{id, type: warranty|sla,
@@ -142,6 +207,8 @@ and agrees with the default template.
 
 ## Screens
 
+- **Office → Deliver → Fleet register** (`/logic-register.html`): the
+  spreadsheet, above.
 - **Office → Deliver → Sites & custody** (`/logic-custody.html`): where the
   fleet is (counts by status, coverage summary), the unit passport (custody,
   coverage, every event, plant scans, the moves that apply, side states,

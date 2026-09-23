@@ -348,6 +348,26 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('the office sees what the customer declared, confirms it, and the passport says who confirmed and when', rows.length === 1 && /CC418-26-44192/.test(rows[0]) && /Riverside yard · assigned to site/.test(rows[0]) && after === 0 && /confirmed at Riverside yard by demo@cleancell.us/.test(pass) && /confirm · assigned → assigned/.test(pass), [rows, after, pass.slice(0, 400)]);
     return { declared: rows.length, after: after };
   });
+  await check('register', '/logic-register.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(700);
+    var nav = await p.$eval('.logic-nav a[aria-current="page"]', function (e) { return e.textContent.trim(); });
+    var heads = await p.$$eval('#reg thead th', function (r) { return r.map(function (x) { return x.textContent.trim(); }); });
+    var rows = await p.$$eval('#reg tbody tr', function (r) { return r.length; });
+    var r92 = await p.$eval('#reg tbody tr[data-serial="CC418-26-44192"]', function (tr) { var o = {}; Array.prototype.forEach.call(tr.querySelectorAll('td[data-k]'), function (td) { o[td.getAttribute('data-k')] = td.textContent.trim(); }); return o; });
+    ok('the register is one row per unit with the parties, the load, the site and the coverage as columns; the placed unit carries its carrier, BOL, buyer, PO, utility and running warranty', nav === 'Fleet register' && rows === 6 && heads.indexOf('Seller') > 0 && heads.indexOf('Reseller') > 0 && heads.indexOf('End customer') > 0 && heads.indexOf('BOL / tracking') > 0 && heads.indexOf('Warranty until') > 0 && r92.seller === 'Clean Cell' && r92.buyer === 'Riverside Cold Chain' && r92.carrier === 'Estes' && r92.tracking === 'BOL-771' && r92.load === 'LOAD-1' && /assigned to site/.test(r92.statusLabel) && /^active/.test(r92.warrantyStatus) && r92.warrantyUntil === '2036-09-10' && r92.utility === 'PG&E' && r92.poNumber === 'RCC-2200', [nav, rows, heads.length, r92]);
+    await p.fill('#find', 'estes'); await p.waitForTimeout(200);
+    var found = await p.$$eval('#reg tbody tr[data-serial]', function (r) { return r.map(function (x) { return x.getAttribute('data-serial'); }); });
+    await p.fill('#find', ''); await p.waitForTimeout(200);
+    await p.click('#reg tbody tr[data-serial="CC418-26-44192"] td[data-k="reseller"]'); await p.waitForTimeout(150);
+    await p.keyboard.type('Valley Power Partners'); await p.keyboard.press('Enter'); await p.waitForTimeout(600);
+    var after = await p.$eval('#reg tbody tr[data-serial="CC418-26-44192"] td[data-k="reseller"]', function (td) { return td.textContent.trim(); });
+    var st = await p.$eval('#status', function (e) { return e.textContent; });
+    await p.click('#reg tbody tr[data-serial="CC418-26-44192"] td[data-k="site"]'); await p.waitForTimeout(150);
+    await p.selectOption('#reg tbody tr[data-serial="CC418-26-44192"] td select', 'site_company-riverside-riverside-yard-93307'); await p.waitForTimeout(900);
+    var r92b = await p.$eval('#reg tbody tr[data-serial="CC418-26-44192"]', function (tr) { var o = {}; Array.prototype.forEach.call(tr.querySelectorAll('td[data-k]'), function (td) { o[td.getAttribute('data-k')] = td.textContent.trim(); }); return o; });
+    ok('  search finds by any column; a cell edit saves a detail in place (Enter), and choosing a site in the Site cell assigns the unit through the rules: warranty active, confirmed by the office', found.join('|') === 'CC418-26-44192' && after === 'Valley Power Partners' && /Saved reseller/.test(st) && r92b.site === 'Riverside yard' && /assigned to site/.test(r92b.statusLabel) && /^active/.test(r92b.warrantyStatus) && r92b.warrantyUntil === '2036-09-10' && /^confirmed/.test(r92b.confirmation) && r92b.reseller === 'Valley Power Partners', [found, after, st, r92b]);
+    return { rows: rows, cols: heads.length, after: after };
+  });
   /* The sandboxes: the same pages with sandbox.js in place of Firebase and
      /api/. Nothing below reaches the stub server's /api/ routes — the page
      answers itself — and what a tap changes survives a reload. */
