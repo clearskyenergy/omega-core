@@ -12,6 +12,9 @@
                       interconnection details)
         move          receive · assign · install · commission · in-service ·
                       rma-open · rma-return · decommission, one serial
+        destination   "this one is going there" before it is bound; honoured
+                      at receipt
+        confirm       the office confirms a site the customer declared
         state         damaged · lost · quarantined · scrapped · clear
         replace       an RMA'd unit is replaced; coverage transfers its
                       remaining term to the new serial
@@ -45,7 +48,7 @@ function unitRef(db, org, serial) { return db.collection('plant_units').doc(org 
 function view(u, byProduct, now) {
   var c = C.custodyOf(u);
   return { serial: u.serial, sku: u.sku, unitType: u.unitType || 'unit', orderId: u.orderId || null, orderNo: u.orderNo || null, customerId: u.customerId || c.customerId || null, at: u.at || '', hold: u.hold || null,
-    custody: Object.assign({}, c, { label: C.label(c.status) }), coverage: C.coverageWithInheritance(byProduct[u.sku], u, now) };
+    custody: Object.assign({}, c, { label: C.label(c.status), confirmation: C.confirmation(c) }), coverage: C.coverageWithInheritance(byProduct[u.sku], u, now) };
 }
 function eventDoc(unitRef) { return unitRef.collection('custody_events').doc(); }
 
@@ -85,7 +88,9 @@ module.exports = A.handler(async function (req, res) {
     var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; offPlant.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; if (cv.status === 'active' && cv.endDate && (Date.parse(cv.endDate) - Date.parse(now)) / 86400000 <= 90) cov.expiring++; }); });
     var customers = await root(db, org).collection('customers').orderBy('__name__').limit(200).get();
     var mapping = await root(db, org).collection('custody_mappings').doc('assignment').get();
+    var toConfirm = offPlant.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned = offPlant.filter(function (u) { return u.custody.plannedSiteId && !u.custody.siteId; });
     return { brand: brand, name: ctx.org.name || org, owner: X.owner(caller), counts: counts, coverage: cov, units: offPlant.slice(0, 500), unitsShown: Math.min(offPlant.length, 500), unitsTotal: offPlant.length,
+      toConfirm: toConfirm.slice(0, 200), planned: planned.slice(0, 200),
       sites: siteList.map(function (s) { return Object.assign({}, s, { units: perSite[s.id] || 0 }); }), exceptions: C.exceptions(list, prods, now).slice(0, 200),
       customers: customers.docs.map(function (d) { return { id: d.id, name: d.data().name || d.id }; }), products: prods.filter(function (p) { return p && p.sku && (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name, coverage: C.templatesOf(p) }; }),
       mapping: mapping.exists ? mapping.data().columnMap || null : null, columns: C.TEMPLATE_HEADERS, moves: C.MOVES, states: C.STATES, limited: all.limited, sampled: list.length };
@@ -110,6 +115,19 @@ module.exports = A.handler(async function (req, res) {
     });
   }
 
+  if (action === 'confirm' || action === 'destination') {
+    var cserial = C.serial(b.serial), cref = unitRef(db, org, cserial);
+    return db.runTransaction(async function (tx) {
+      var cs = await tx.get(cref); if (!cs.exists || cs.data().orgId !== org) throw A.httpError(404, 'Serial is not registered');
+      var cu = cs.data(), csite = null;
+      if (action === 'destination' && b.siteId) { var csd = await tx.get(root(db, org).collection('sites').doc(P.id(b.siteId))); if (!csd.exists || csd.data().status === 'inactive') throw A.httpError(404, 'Site not found'); csite = Object.assign({ id: csd.id }, csd.data()); }
+      var r = action === 'confirm' ? C.confirm(cu, b, by, now) : C.destination(cu, { siteId: csite ? csite.id : '', siteName: csite ? csite.name : '', position: b.position, note: b.note }, by, now, method);
+      if (r.duplicate) return { ok: true, action: 'duplicate', serial: cserial, say: 'Already confirmed', custody: C.custodyOf(cu) };
+      tx.update(cref, r.patch); tx.create(eventDoc(cref), Object.assign({ orgId: org, serial: cserial }, r.event));
+      var cafter = JSON.parse(JSON.stringify(cu)); Object.keys(r.patch).forEach(function (k) { var parts = k.split('.'), t = cafter; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = r.patch[k]; });
+      return { ok: true, action: action, serial: cserial, say: action === 'confirm' ? 'Confirmed at ' + (cu.custody.siteName || cu.custody.siteId) : (csite ? 'Going to ' + csite.name : 'Destination cleared'), custody: Object.assign(C.custodyOf(cafter), { confirmation: C.confirmation(cafter.custody) }) };
+    });
+  }
   if (action === 'move' || action === 'state' || action === 'replace') {
     var serial = C.serial(b.serial), ref = unitRef(db, org, serial), what = action === 'move' ? String(b.move || '') : action;
     if (action === 'move' && !C.MOVES[what]) throw A.httpError(400, 'Unknown move');

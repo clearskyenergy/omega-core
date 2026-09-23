@@ -163,7 +163,7 @@ function views(state) {
     editorLite: { monthlyPriceCents: 79900, currency: 'USD', interval: 'month', checkoutAvailable: false, includes: ['Guided site design', 'Site-map exports', 'Project quoting', 'Supplier ordering'] } };
   /* ── custody: the office page and the customer's Sites & equipment ── */
   function prodOf(sku) { return benchBy[sku] || null; }
-  function unitView(u, now) { var c = Cu.custodyOf(u); return { serial: u.serial, sku: u.sku, unitType: u.unitType || 'unit', orderId: u.orderId || null, orderNo: u.orderNo || null, customerId: u.customerId || c.customerId || null, at: u.at || '', hold: u.hold || null, custody: Object.assign({}, c, { label: Cu.label(c.status) }), coverage: Cu.coverageWithInheritance(prodOf(u.sku), u, now) }; }
+  function unitView(u, now) { var c = Cu.custodyOf(u); return { serial: u.serial, sku: u.sku, unitType: u.unitType || 'unit', orderId: u.orderId || null, orderNo: u.orderNo || null, customerId: u.customerId || c.customerId || null, at: u.at || '', hold: u.hold || null, custody: Object.assign({}, c, { label: Cu.label(c.status), confirmation: Cu.confirmation(c) }), coverage: Cu.coverageWithInheritance(prodOf(u.sku), u, now) }; }
   function shipUnits() { return state.units.filter(function (u) { return u.shipUnit; }); }
   function siteRow(s) { return Object.assign({}, s, { units: shipUnits().filter(function (u) { return Cu.custodyOf(u).siteId === s.id; }).length }); }
   function custodyJson(q) {
@@ -179,12 +179,13 @@ function views(state) {
     var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; off.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; }); });
     return { brand: brand, name: 'Clean Cell', owner: false, counts: counts, coverage: cov, units: off, unitsShown: off.length, unitsTotal: off.length, sites: state.sites.map(siteRow), exceptions: Cu.exceptions(units, cat, now),
       customers: state.customers.map(function (c) { return { id: c.id, name: c.company }; }), products: cat.filter(function (p) { return (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name, coverage: Cu.templatesOf(p) }; }),
+      toConfirm: off.filter(function (u) { return u.custody.confirmation === 'declared'; }), planned: off.filter(function (u) { return u.custody.plannedSiteId && !u.custody.siteId; }),
       mapping: state.custodyMapping, columns: Cu.TEMPLATE_HEADERS, moves: Cu.MOVES, states: Cu.STATES, limited: false, sampled: units.length };
   }
   function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: one order with one planned load.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
   function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active' }; }
   function pubUnit(u) { var c = Cu.custodyOf(u), p = prodOf(u.sku), now = iso(Date.now()); return { serial: u.serial, sku: u.sku, name: p ? p.name : u.sku, orderNo: u.orderNo || null, status: c.status || (u.at === 'ready' ? 'ready to ship' : 'being built'), label: c.status ? Cu.label(c.status) : (u.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || null,
-    siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || null, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null, replacedBy: c.replacedBy || null, replaces: c.replaces || null,
+    siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || null, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null, replacedBy: c.replacedBy || null, replaces: c.replaces || null, plannedSiteId: c.plannedSiteId || null, plannedSiteName: c.plannedSiteName || null, confirmation: Cu.confirmation(c), confirmedAt: c.confirmedAt || null,
     coverage: Cu.coverageWithInheritance(p, u, now).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) }; }
   function myUnits() { return shipUnits().filter(function (u) { return u.orderId === 'o1'; }); }
   function mySitesJson() { var units = myUnits(), per = {}; units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
@@ -316,6 +317,14 @@ function post(state, path, query, b, who) {
     var method = ['manual', 'scan', 'import'].indexOf(b.method) >= 0 ? b.method : 'manual';
     if (b.action === 'site') return saveSite(b, null);
     if (b.action === 'mapping-save') { state.custodyMapping = b.mapping || {}; return { ok: true, mapping: state.custodyMapping }; }
+    if (b.action === 'confirm' || b.action === 'destination') {
+      var xu = unitBy(String(b.serial || '').trim()); if (!xu) return err(404, 'Serial is not registered');
+      var xs = b.siteId ? siteBy(b.siteId) : null; if (b.action === 'destination' && b.siteId && !xs) return err(404, 'Site not found');
+      var xr; try { xr = b.action === 'confirm' ? Cu.confirm(xu, b, who, now) : Cu.destination(xu, { siteId: xs ? xs.id : '', siteName: xs ? xs.name : '', position: b.position, note: b.note }, who, now, method); } catch (e) { return err(e.status || 400, e.message); }
+      if (xr.duplicate) return { ok: true, action: 'duplicate', serial: xu.serial, say: 'Already confirmed', custody: Cu.custodyOf(xu) };
+      patchUnit(xu, xr.patch); logEvent(xu.serial, xr.event);
+      return { ok: true, action: b.action, serial: xu.serial, say: b.action === 'confirm' ? 'Confirmed at ' + (xu.custody.siteName || xu.custody.siteId) : (xs ? 'Going to ' + xs.name : 'Destination cleared'), custody: Object.assign(Cu.custodyOf(xu), { confirmation: Cu.confirmation(xu.custody) }) };
+    }
     if (b.action === 'move' || b.action === 'state' || b.action === 'replace') {
       var cu = unitBy(String(b.serial || '').trim()); if (!cu) return err(404, 'Serial is not registered');
       if (b.action === 'move' && b.move === 'ship') return err(400, 'Shipping is recorded under Shipping & receiving, on the load');
@@ -357,6 +366,12 @@ function post(state, path, query, b, who) {
   if (path === '/api/my-sites') {
     var CM = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
     if (b.action === 'site') { var sr = saveSite(b, 'company_riverside'); return sr.error ? sr : { ok: true, site: V.pubSite(sr.site) }; }
+    if (b.action === 'destination') {
+      var du = unitBy(String(b.serial || '').trim()); if (!du || du.orderId !== 'o1') return err(404, 'That serial is not on one of your orders');
+      var dsite = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && (!dsite || dsite.customerId !== 'company_riverside')) return err(404, 'Site not found on your account');
+      var dr; try { dr = Cu.destination(du, { siteId: dsite ? dsite.id : '', siteName: dsite ? dsite.name : '', position: b.position, note: b.note }, who, now, 'customer'); } catch (e) { return err(e.status || 400, e.message); }
+      patchUnit(du, dr.patch); logEvent(du.serial, dr.event); return { ok: true, unit: V.pubUnit(du) };
+    }
     if (!CM[b.action]) return err(400, 'Unsupported action');
     var mu = unitBy(String(b.serial || '').trim()); if (!mu || mu.orderId !== 'o1') return err(404, 'That serial is not on one of your orders');
     var ms = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && (!ms || ms.customerId !== 'company_riverside')) return err(404, 'Site not found on your account'); if (CM[b.action] === 'assign' && !ms) return err(400, 'Choose the site');

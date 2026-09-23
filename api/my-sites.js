@@ -8,6 +8,8 @@
         assign      bind a unit they received to one of their sites
         received    the unit arrived (accepted or damaged)
         commissioned the unit was commissioned on a date, by whom
+        destination "this one is going there": a site named before the
+                    unit arrives; receipt binds it there, the office confirms
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
    The END CUSTOMER'S side of custody (api/_lib/custody.js): they receive at
@@ -44,6 +46,7 @@ function pub(u, product, now, order) {
     status: c.status || (u.at === 'ready' ? 'ready to ship' : 'being built'), label: c.status ? C.label(c.status) : (u.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || null,
     siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || shipped, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null,
     replacedBy: c.replacedBy || null, replaces: c.replaces || null,
+    plannedSiteId: c.plannedSiteId || null, plannedSiteName: c.plannedSiteName || null, confirmation: C.confirmation(c), confirmedAt: c.confirmedAt || null,
     coverage: C.coverageWithInheritance(product, u, now, shipped).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) };
 }
 function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active' }; }
@@ -84,6 +87,17 @@ module.exports = A.handler(async function (req, res) {
       });
     }
 
+    if (b.action === 'destination') {
+      var dserial = C.serial(b.serial), dref = db.collection('plant_units').doc(org + '__' + dserial);
+      return db.runTransaction(async function (tx) {
+        var ds = await tx.get(dref); if (!ds.exists || ds.data().orgId !== org || !byOrder[ds.data().orderId]) throw A.httpError(404, 'That serial is not on one of your orders');
+        var dsite = null; if (b.siteId) { dsite = mySites.filter(function (x) { return x.id === P.id(b.siteId); })[0]; if (!dsite) throw A.httpError(404, 'Site not found on your account'); }
+        var dr = C.destination(ds.data(), { siteId: dsite ? dsite.id : '', siteName: dsite ? dsite.name : '', position: b.position, note: b.note }, email, now, 'customer'); dr.event.orderId = ds.data().orderId;
+        tx.update(dref, dr.patch); tx.create(dref.collection('custody_events').doc(), Object.assign({ orgId: org, serial: dserial }, dr.event));
+        var dafter = JSON.parse(JSON.stringify(ds.data())); Object.keys(dr.patch).forEach(function (k) { var parts = k.split('.'), t = dafter; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = dr.patch[k]; });
+        return { ok: true, unit: pub(dafter, byP[dafter.sku], now, byOrder[dafter.orderId]) };
+      });
+    }
     var move = CUSTOMER_MOVES[b.action]; if (!move) throw A.httpError(400, 'Unsupported action');
     var serial = C.serial(b.serial), ref = db.collection('plant_units').doc(org + '__' + serial);
     return db.runTransaction(async function (tx) {

@@ -129,7 +129,10 @@ appear only for ClearSky.
   An order with more than one destination is shipped leg by leg.
 - **Sites & custody.** Every shipping unit after it leaves the plant: who
   holds it, which end site it is bound to, and the warranty or SLA that
-  binds. *Where the fleet is* counts units by status. The *unit passport*
+  binds. *Where the fleet is* counts units by status and lists what **the
+  customer says** — each unit they placed at a site from their phone, with
+  a *Confirm* button — and what is *going to* a site before it arrives. The
+  *unit passport*
   shows one serial's custody, coverage, every event and plant scan, and
   offers only the moves that apply (receive, assign, installed,
   commissioned, in service, RMA, returned, decommissioned), a side state
@@ -342,8 +345,11 @@ endpoints as the desktop portal. Four tabs:
   address); **Sites & equipment** — their sites (with the point of
   interconnection) and every unit on their orders with where it is and its
   warranty or SLA (pending until the unit is bound to a site, then the
-  dates); *Received*, *Assign* to a site, *Commissioned* (date and by whom),
-  *Add a site*; agreements; how to install the app; the desktop portal.
+  dates); *Going to* — name the site while the unit is still in transit, and
+  receiving it binds it there; *Received*, *Assign* to a site, *Commissioned*
+  (date and by whom), *Add a site*. What the customer places is marked
+  *awaiting your supplier's confirmation* until the office confirms it, then
+  *confirmed by your supplier* with the date; agreements; how to install the app; the desktop portal.
 
 A customer login that has no company account yet is told to open Account
 first (the record is created on first sign-in) or to ask the supplier to

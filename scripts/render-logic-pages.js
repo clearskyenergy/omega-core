@@ -323,12 +323,23 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.waitForTimeout(400);
     var sb = await p.$eval('#sites-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
     var acts = await p.$$eval('#sites-body [data-act]', function (r) { return r.map(function (x) { return x.getAttribute('data-act'); }); });
-    ok('  Sites & equipment lists the customer\'s site and the received unit with its warranty pending until a site is chosen; only assign applies', /Riverside yard/.test(sb) && /PG&E · POI MSB-2/.test(sb) && /CC418-26-44192/.test(sb) && /received/.test(sb) && /no site assigned/.test(sb) && acts.join('|') === 'assign', [sb.slice(0, 240), acts]);
+    ok('  Sites & equipment lists the customer\'s site and the received unit with its warranty pending until a site is chosen; going-to and assign apply', /Riverside yard/.test(sb) && /PG&E · POI MSB-2/.test(sb) && /CC418-26-44192/.test(sb) && /received/.test(sb) && /no site assigned/.test(sb) && acts.join('|') === 'destination|assign', [sb.slice(0, 240), acts]);
     await p.selectOption('#sites-body [data-site="0"]', 'site_company-riverside-riverside-yard-93307'); await p.click('#sites-body [data-act="assign"]'); await p.waitForTimeout(700);
     var sb2 = await p.$eval('#sites-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
     var acts2 = await p.$$eval('#sites-body [data-act]', function (r) { return r.map(function (x) { return x.getAttribute('data-act'); }); });
     ok('  binding the unit to the site starts the warranty from the ship date; commissioning is now the customer\'s next move', /assigned to site/.test(sb2) && /until 2036-09-10 · from 2026-09-10/.test(sb2) && /1 unit/.test(sb2) && acts2.join('|') === 'assign|commissioned', [sb2.slice(0, 240), acts2]);
+    ok('  what the customer declared is marked as awaiting the supplier\'s confirmation', /awaiting your supplier's confirmation/.test(sb2), sb2.slice(0, 300));
     return { tabs: tabs.length, plans: plans.length, sized: sized.slice(0, 40), form: form };
+  });
+  await check('custody-confirm', '/logic-custody.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(700);
+    var rows = await p.$$eval('#confirm-list tbody tr', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    await p.click('#confirm-list [data-confirm]'); await p.waitForTimeout(700);
+    var after = await p.$$eval('#confirm-list tbody tr', function (r) { return r.length; });
+    await p.fill('#find-serial', 'CC418-26-44192'); await p.click('#find button'); await p.waitForTimeout(500);
+    var pass = await p.$eval('#unit', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    ok('the office sees what the customer declared, confirms it, and the passport says who confirmed and when', rows.length === 1 && /CC418-26-44192/.test(rows[0]) && /Riverside yard · assigned to site/.test(rows[0]) && after === 0 && /confirmed at Riverside yard by demo@cleancell.us/.test(pass) && /confirm · assigned → assigned/.test(pass), [rows, after, pass.slice(0, 400)]);
+    return { declared: rows.length, after: after };
   });
   /* The sandboxes: the same pages with sandbox.js in place of Firebase and
      /api/. Nothing below reaches the stub server's /api/ routes — the page
@@ -383,6 +394,13 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(800); await p.click('[data-tab="pos"]'); await p.waitForTimeout(500);
     var rows = await p.$$eval('#pos-body .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 50); }); });
     ok('  a PO sent from the phone is an order awaiting pricing after a reload', /INC-9001 → PO-IN-/.test(result) && rows.some(function (t) { return /INC-9001/.test(t); }), [result, rows]);
+    await p.click('[data-tab="account"]'); await p.waitForTimeout(600);
+    var going = await p.$$eval('#sites-body [data-dest]', function (r) { return r.length; });
+    await p.selectOption('#sites-body [data-dest="0"]', 'site_company-riverside-riverside-yard-93307'); await p.click('#sites-body [data-act="destination"]'); await p.waitForTimeout(700);
+    var unit = await p.$eval('#sites-body [data-unit]', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    p.once('dialog', function (d) { d.accept(); }); await p.click('#sites-body [data-act="received"]'); await p.waitForTimeout(700);
+    var unit2 = await p.$eval('#sites-body [data-unit]', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    ok('  "this one is going there": the customer names the site while the unit is in transit; receiving it binds it there, awaiting the supplier\'s confirmation, and the warranty runs', going === 1 && /in transit/.test(unit) && /going to Riverside yard/.test(unit) && /received/.test(unit2) && /at Riverside yard · awaiting your supplier's confirmation/.test(unit2) && /until 2036-09-10/.test(unit2), [going, unit.slice(0, 160), unit2.slice(0, 220)]);
     return { who: who, result: result.slice(0, 40) };
   });
   ok('no JS errors', errs.length === 0, errs);

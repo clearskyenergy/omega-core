@@ -402,7 +402,11 @@ is not built.
   it, and the logistics ledger and the workflow's ship step record ship,
   deliver and receive through the same `apply`. Every custody path is
   Admin-SDK-only in the rules. `ship` is never recorded from the custody
-  page: the load is the record of what left. Design and what is not built:
+  page: the load is the record of what left. The customer DECLARES where a
+  unit went (`declaredBy: 'customer'`, or a `destination` named before it
+  arrives) and the office CONFIRMS (`confirm`); coverage binds on the
+  declaration, confirmation is the office's check and never a gate on the
+  warranty. Design and what is not built:
   `docs/LOGISTICS-CUSTODY.md`.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through

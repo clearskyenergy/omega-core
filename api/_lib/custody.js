@@ -81,7 +81,19 @@ function apply(unit, action, body, by, now, method) {
   if (action === 'ship') { patch['custody.shippedAt'] = dayAt; if (b.legId) { patch['custody.legId'] = clean(b.legId, 120); ev.legId = clean(b.legId, 120); } }
   if (action === 'deliver') { patch['custody.deliveredAt'] = dayAt; }
   if (action === 'receive') { patch['custody.receivedAt'] = dayAt; if (!c.deliveredAt) patch['custody.deliveredAt'] = dayAt; if (b.condition === 'damaged') { patch['custody.state'] = 'damaged'; ev.state = 'damaged'; } }
-  if (action === 'assign' || (b.siteId && ['install', 'commission', 'receive'].indexOf(action) >= 0)) { patch['custody.siteId'] = clean(b.siteId, 80); patch['custody.siteName'] = clean(b.siteName, 160); if (b.position != null) patch['custody.position'] = clean(b.position, 120); if (b.endCustomer) patch['custody.endCustomer'] = clean(b.endCustomer, 160); if (action === 'assign') patch['custody.assignedAt'] = dayAt; ev.siteId = clean(b.siteId, 80); }
+  /* receiving a unit the customer already said was "going to" a site binds
+     it there, as their declaration, unless the receipt names a site itself */
+  if (action === 'receive' && !b.siteId && c.plannedSiteId) { b = Object.assign({}, b, { siteId: c.plannedSiteId, siteName: c.plannedSiteName, position: c.plannedPosition || undefined }); method = c.plannedBy === 'customer' ? 'customer' : method; }
+  if (action === 'assign' || (b.siteId && ['install', 'commission', 'receive'].indexOf(action) >= 0)) {
+    patch['custody.siteId'] = clean(b.siteId, 80); patch['custody.siteName'] = clean(b.siteName, 160); if (b.position != null) patch['custody.position'] = clean(b.position, 120); if (b.endCustomer) patch['custody.endCustomer'] = clean(b.endCustomer, 160); if (action === 'assign') patch['custody.assignedAt'] = dayAt; ev.siteId = clean(b.siteId, 80);
+    /* who says so: the customer DECLARES where a unit went and the office
+       CONFIRMS it; an office record is its own confirmation. A new
+       declaration to another site is unconfirmed again. */
+    var same = c.siteId === patch['custody.siteId'] && c.confirmedAt;
+    patch['custody.declaredBy'] = method === 'customer' ? 'customer' : 'office'; patch['custody.declaredAt'] = now;
+    if (method === 'customer' && !same) { patch['custody.confirmedAt'] = null; patch['custody.confirmedBy'] = null; } else if (!same) { patch['custody.confirmedAt'] = now; patch['custody.confirmedBy'] = by; }
+    if (c.plannedSiteId) { patch['custody.plannedSiteId'] = null; patch['custody.plannedSiteName'] = null; patch['custody.plannedPosition'] = null; patch['custody.plannedBy'] = null; patch['custody.plannedAt'] = null; }
+  }
   if (action === 'install') { patch['custody.installedAt'] = dayAt; if (b.installer) patch['custody.installer'] = clean(b.installer, 120); }
   if (action === 'commission') { patch['custody.commissionedAt'] = dayAt; if (!c.installedAt) patch['custody.installedAt'] = dayAt; if (b.installer) patch['custody.installer'] = clean(b.installer, 120); if (b.reportUrl) patch['custody.commissioningReportUrl'] = clean(b.reportUrl, 600); }
   if (action === 'in-service') patch['custody.inServiceAt'] = dayAt;
@@ -91,6 +103,28 @@ function apply(unit, action, body, by, now, method) {
   if (action === 'decommission') patch['custody.decommissionedAt'] = dayAt;
   return { patch: patch, event: ev };
 }
+/* "this one is going there": a destination named before the unit is bound,
+   by the customer on the phone or the office on the load. Not a move; it
+   is honoured at receipt (apply 'receive') and cleared once assigned. */
+function destination(unit, body, by, now, method) {
+  var c = custodyOf(unit), b = body || {};
+  if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit is tracked past the plant');
+  if (c.state === 'scrapped') throw fail(409, 'A scrapped unit is not sent anywhere');
+  if (['', 'in_transit', 'delivered', 'received'].indexOf(c.status) < 0) throw fail(409, 'The unit is already ' + label(c.status) + '; change its site through assign');
+  var clear = !b.siteId;
+  return { patch: { 'custody.plannedSiteId': clear ? null : clean(b.siteId, 80), 'custody.plannedSiteName': clear ? null : clean(b.siteName, 160), 'custody.plannedPosition': clear ? null : clean(b.position, 120), 'custody.plannedBy': clear ? null : (method === 'customer' ? 'customer' : 'office'), 'custody.plannedAt': clear ? null : now, 'custody.updatedAt': now, 'custody.updatedBy': by },
+    event: { type: clear ? 'destination-clear' : 'destination', from: c.status, to: c.status, siteId: clear ? null : clean(b.siteId, 80), by: by, at: now, method: method || 'manual', note: clean(b.note, 500) } };
+}
+/* the office confirms what the customer declared */
+function confirm(unit, body, by, now) {
+  var c = custodyOf(unit);
+  if (!c.siteId) throw fail(409, 'The unit is not assigned to a site; nothing to confirm');
+  if (c.confirmedAt) return { duplicate: true, patch: {}, event: null };
+  return { patch: { 'custody.confirmedAt': now, 'custody.confirmedBy': by, 'custody.updatedAt': now, 'custody.updatedBy': by },
+    event: { type: 'confirm', from: c.status, to: c.status, siteId: c.siteId, by: by, at: now, method: 'manual', note: clean(body && body.note, 500) } };
+}
+/* what the customer's own record says, for either side to show */
+function confirmation(c) { c = c || {}; return !c.siteId ? null : c.confirmedAt ? 'confirmed' : 'declared'; }
 /* a side state: damaged, lost, quarantined, scrapped, or cleared */
 function state(unit, value, body, by, now, method) {
   var c = custodyOf(unit); value = value === 'clear' ? null : value;
@@ -162,7 +196,7 @@ function coverageWithInheritance(product, unit, now, shippedFallback) {
 
 /* ── exceptions: the gaps that lose warranty claims ────────────────────── */
 function exceptions(units, products, now, opts) {
-  var o = Object.assign({ staleTransitDays: 21, unassignedDays: 30, expiringDays: 90 }, opts || {}), by = {}, out = [];
+  var o = Object.assign({ staleTransitDays: 21, unassignedDays: 30, expiringDays: 90, confirmDays: 3 }, opts || {}), by = {}, out = [];
   (products || []).forEach(function (p) { if (p && p.sku) by[p.sku] = p; });
   var t = new Date(now).getTime();
   function days(iso) { return iso ? Math.floor((t - Date.parse(iso)) / 86400000) : null; }
@@ -173,6 +207,7 @@ function exceptions(units, products, now, opts) {
     if ((s === 'commissioned' || s === 'in_service') && !c.siteId) out.push({ serial: u.serial, kind: 'commissioned_without_site', say: 'Commissioned but assigned to no site: coverage cannot start' });
     if (s === 'in_transit' && days(c.shippedAt) > o.staleTransitDays) out.push({ serial: u.serial, kind: 'stale_in_transit', say: 'In transit for ' + days(c.shippedAt) + ' days' });
     if ((s === 'received' || s === 'delivered') && days(c.receivedAt || c.deliveredAt) > o.unassignedDays) out.push({ serial: u.serial, kind: 'received_not_assigned', say: 'Received ' + days(c.receivedAt || c.deliveredAt) + ' days ago and not assigned to a site' });
+    if (c.siteId && !c.confirmedAt && c.declaredBy === 'customer' && days(c.declaredAt) >= o.confirmDays) out.push({ serial: u.serial, kind: 'declared_unconfirmed', say: 'Customer says it is at ' + (c.siteName || c.siteId) + ' since ' + String(c.declaredAt).slice(0, 10) + '; not yet confirmed' });
     if (c.state && s !== 'replaced' && s !== 'returned') out.push({ serial: u.serial, kind: 'state_' + c.state, say: c.state.charAt(0).toUpperCase() + c.state.slice(1) + (c.stateAt ? ' since ' + String(c.stateAt).slice(0, 10) : '') });
     cov.forEach(function (cv) {
       if (cv.status === 'active' && cv.endDate && (Date.parse(cv.endDate) - t) / 86400000 <= o.expiringDays) out.push({ serial: u.serial, kind: 'coverage_expiring', say: cv.type + ' ' + cv.templateId + ' ends ' + cv.endDate });
@@ -303,6 +338,6 @@ function site(input, existing) {
 function siteId(customerId, s) { return 'site_' + siteKey(customerId, s.name, s.address && s.address.zip).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
 module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LABELS, TRIGGERS: TRIGGERS, COLUMNS: COLUMNS, TEMPLATE_HEADERS: TEMPLATE_HEADERS, MAX_ROWS: MAX_ROWS,
-  custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state,
+  custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation,
   templatesOf: templatesOf, template: template, coverageOf: coverageOf, coverageWithInheritance: coverageWithInheritance, inherited: inherited, addMonths: addMonths,
   exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId };

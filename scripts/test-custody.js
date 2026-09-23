@@ -156,6 +156,21 @@ var NOW = '2026-09-05T12:00:00Z';
     await rejects(cpost({ action: 'commissioned', serial: 'S002', at: '2026-09-06' }), 409, /commissioned/);
     var ev = Array.from(db.data.keys()).filter(function (k) { return k.indexOf('plant_units/' + ORG + '__S002/custody_events/') === 0; }).map(function (k) { return db.data.get(k); }); assert.equal(ev[ev.length - 1].method, 'customer');
   });
+  await test('the customer says where a unit in transit is going; receipt binds it there as their declaration; the office confirms', async function () {
+    db.seed('plant_units/' + ORG + '__S009', unit('S009', { custody: { status: 'in_transit', shippedAt: '2026-09-12', customerId: 'company_riverside' } }));
+    await rejects(cpost({ action: 'destination', serial: 'S009', siteId: 'site_nope' }), 404, /Site not found on your account/);
+    var d = await cpost({ action: 'destination', serial: 'S009', siteId: mySite, position: 'Bay 2' }); assert.equal(d.unit.plannedSiteName, 'Fresno depot'); assert.equal(d.unit.siteId, null); assert.equal(d.unit.confirmation, null);
+    await rejects(cpost({ action: 'destination', serial: 'S002', siteId: mySite }), 409, /already commissioned/, 'a bound unit changes site through assign, not a destination');
+    var r = await cpost({ action: 'received', serial: 'S009' }); assert.equal(r.unit.siteName, 'Fresno depot'); assert.equal(r.unit.position, 'Bay 2'); assert.equal(r.unit.confirmation, 'declared'); assert.equal(r.unit.plannedSiteId, null);
+    var d0 = await get({}); assert.deepEqual(d0.toConfirm.map(function (u) { return u.serial; }).sort(), ['S002', 'S009'], 'S002 was assigned by the customer earlier and is unconfirmed too'); assert.equal(d0.toConfirm[0].custody.confirmation, 'declared');
+    var pass = await get({ serial: 'S009' }); assert.equal(pass.unit.custody.declaredBy, 'customer'); assert.equal(pass.unit.coverage[0].status, 'active', 'a declared site still binds coverage; confirmation is the office\'s check, not a gate');
+    var c = await post({ action: 'confirm', serial: 'S009' }); assert.equal(c.custody.confirmation, 'confirmed'); assert.equal(c.custody.confirmedBy, 'pm@cleancell.us');
+    var again = await post({ action: 'confirm', serial: 'S009' }); assert.equal(again.action, 'duplicate');
+    var mine = await cget(); assert.equal(mine.units.filter(function (u) { return u.serial === 'S009'; })[0].confirmation, 'confirmed');
+    var d1 = await get({}); assert.deepEqual(d1.toConfirm.map(function (u) { return u.serial; }), ['S002']);
+    var re = await cpost({ action: 'assign', serial: 'S009', siteId: mySite, position: 'Bay 3' }); assert.equal(re.unit.confirmation, 'confirmed', 'a new position at the confirmed site stays confirmed');
+    await rejects(post({ action: 'confirm', serial: 'S005' }), 409, /not assigned/);
+  });
 
   console.log('\nreplacement and import');
   await test('an RMA replacement inherits the remaining term and the site; both serials stay linked', async function () {

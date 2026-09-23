@@ -69,8 +69,35 @@ Where each move is recorded:
   planned load: shorts and overages named); the customer's phone.
 - **assign, install, commission, in-service** — the custody page (passport,
   scan session, import) and the customer's phone (assign, installed,
-  commissioned).
+  commissioned). A customer's assign is a declaration the office confirms
+  (next section).
 - **rma-open, rma-return, replace, decommission** — the custody page.
+
+## "This one is going here" — declare and confirm
+
+The customer holds the batteries and says where each one goes; Omega Logic
+tracks it and the office confirms it.
+
+- **Going to.** Before a unit is bound — ready, in transit, delivered or
+  received — the customer (phone) or the office (passport) names its
+  destination site: `custody.plannedSiteId/plannedSiteName/plannedPosition`,
+  `plannedBy`, `plannedAt`, event `destination`. Not a move. When the unit is
+  then received without a site named on the receipt, it is bound to the
+  planned site as that party's declaration.
+- **Declared vs confirmed.** Every site binding records who said so:
+  `custody.declaredBy` (`customer` | `office`) and `declaredAt`. A binding
+  the office records is its own confirmation (`confirmedAt`, `confirmedBy`
+  set). A binding the customer records is *declared* until the office
+  confirms it (`confirm` action, event `confirm`); a new declaration to
+  another site is unconfirmed again. Coverage binds on the declaration —
+  confirmation is the office's check on the record, not a gate on the
+  warranty, so a customer is never uncovered because the office is slow.
+- **Where it shows.** Office overview: *The customer says · awaiting your
+  confirmation* with a Confirm button per serial, and *Going to*; the
+  passport says *customer says … not yet confirmed* or *confirmed by … on …*.
+  Customer app: *going to X* on a unit in transit, *at X · awaiting your
+  supplier's confirmation*, then *confirmed by your supplier on …*.
+  Exceptions: `declared_unconfirmed` after three days.
 
 ## Coverage
 
