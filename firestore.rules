@@ -2162,6 +2162,9 @@ service cloud.firestore {
     match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
+    /* What ClearSky sent each subscriber (api/logic-kit.js): the log of app
+       links and guides that went out, owner-only through the endpoint. */
+    match /omega_orgs/{orgId}/kit_sends/{sendId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and

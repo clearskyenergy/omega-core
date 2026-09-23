@@ -73,6 +73,7 @@
       ['website', 'Website & installation', '/whitelabel-setup.html' + q],
       ['experience', 'Customer experience', '/customer-start.html' + q],
       ['urls', 'URL generator', '/logic-urls.html' + q],
+      ['kit', 'Apps & guides', '/logic-kit.html' + q],
       ['flow', 'Production flow', '/plant/manager.html' + q + '#flow'],
       ['mission', 'Jarvis Mission', '/mission?view=logic&org=' + e]]]);
     return g;

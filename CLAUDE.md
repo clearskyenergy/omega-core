@@ -411,6 +411,13 @@ is not built.
   a cell edit is either a `detail` (reseller, end customer, installer,
   notes — links, never moves) or a move through the same `judge`/`apply`.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
+- **Where everything lives is ONE list**: `api/_lib/kit.js` (apps, pages,
+  sandboxes, PDF guides, per audience, with the address for a workspace).
+  `logic-kit.html` + `api/logic-kit.js` (owner-only) show it per subscriber
+  with a ready message and log each send under `omega_orgs/{org}/kit_sends`
+  (Admin-SDK-only). Jarvis reads `/api/logic-kit?org=`. The guides are
+  built by `scripts/guides/build.js` into `/guides/*.pdf` (served; `docs/`
+  is not). Add an app there, not in a page.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —

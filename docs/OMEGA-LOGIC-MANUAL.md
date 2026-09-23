@@ -57,6 +57,14 @@ appear only for ClearSky.
 
 ## 2. Setting up a tenant (ClearSky)
 
+**Apps & guides** (`/logic-kit.html`, the ClearSky group of the menu) is
+where everything lives, per subscriber: every app, page, sandbox and PDF
+guide with its address; a message per audience (customer, office, plant)
+ready for Jarvis or a person to send with the guide attached; and the log
+of what was sent to whom. `/api/logic-kit?org=` returns the same as JSON
+for Jarvis. The list is one file, `api/_lib/kit.js`; the guides are PDFs
+under `/guides/` built from `scripts/guides/`.
+
 0. **Commission the subscriber** from *Subscribers & commissioning*
    (`/logic-admin.html`, the ClearSky group of every office menu, or the
    directory's *Manage* link). One form: company email domain (the tenant
