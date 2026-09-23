@@ -389,6 +389,21 @@ is not built.
   (its own company, the caller as billing contact, 50/day,
   `poIntake.source: 'customer-bulk'`). Both doors create the same order
   awaiting pricing; neither accepts or charges.
+- **Custody is built ON the unit record, not beside it.** Where a shipped
+  unit is, which end site it is bound to and what warranty or SLA that binds
+  is `plant_units/{org__serial}.custody{}` plus an append-only
+  `custody_events/` subcollection; sites are `omega_orgs/{org}/sites/`;
+  coverage templates are `coverage[]` on the catalog product (with
+  `warrantyYears` as the default) and a unit's coverage is DERIVED at read
+  time, never stored — `pending` until the unit is bound to a site.
+  `api/_lib/custody.js` is the ONE status machine, coverage engine, CSV
+  mapper and receiving reconciliation; `api/logic-custody.js` (office) and
+  `api/my-sites.js` (customer, verified email) only read and write through
+  it, and the logistics ledger and the workflow's ship step record ship,
+  deliver and receive through the same `apply`. Every custody path is
+  Admin-SDK-only in the rules. `ship` is never recorded from the custody
+  page: the load is the record of what left. Design and what is not built:
+  `docs/LOGISTICS-CUSTODY.md`.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —

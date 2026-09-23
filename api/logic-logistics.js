@@ -1,6 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
-var A=require('./_lib/admin'),X=require('./_lib/logic-access'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle');
+var A=require('./_lib/admin'),X=require('./_lib/logic-access'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),C=require('./_lib/custody');
 module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');
   if(['GET','POST'].indexOf(req.method)<0)throw A.httpError(405,'GET or POST only');
@@ -61,7 +61,20 @@ module.exports=A.handler(async function(req,res){
           if(family.empty||family.size>400||!family.docs.some(function(x){return x.data().serial===rootSerial&&x.data().shipUnit;})||family.docs.some(function(x){var u=x.data();return u.orderId!==ref.id||!P.ready(u);}))throw A.httpError(409,'Every serialized component must pass testing and reach Ready without a hold');
         }
       }
+      /* Custody follows the load (api/_lib/custody.js): pickup puts every
+         shipping unit in transit, delivery delivers it, the inspection
+         receives it into the customer's hands — accepted, damaged or lost.
+         Read the units before the writes below; a unit whose custody
+         refuses the move (never happens on a planned load) is skipped and
+         named rather than blocking the carrier evidence. */
+      var custodyUnits=[];if(['pickup','delivered','inspect'].indexOf(b.action)>=0){for(var cs of leg.serials){var cu=await tx.get(db.doc('plant_units/'+org+'__'+cs));if(cu.exists)custodyUnits.push(cu);}}
       var change=L.transition(leg,b.action,b,c.email,now);leg=change.leg;ev=change.event;legs=legs.slice();legs[index]=leg;
+      var skippedCustody=[];custodyUnits.forEach(function(cu){var u=cu.data(),move=b.action==='pickup'?'ship':b.action==='delivered'?'deliver':'receive',body={at:now,legId:legId,note:'Load '+legId};
+        if(move==='receive'){var rc=(leg.receipts||[]).filter(function(r){return r.serial===u.serial;})[0];if(rc&&rc.condition==='missing'){var st=C.state(u,'lost',{note:'Missing on receipt of load '+legId},c.email,now,'logistics');tx.update(cu.ref,st.patch);tx.create(cu.ref.collection('custody_events').doc(),Object.assign({orgId:org,serial:u.serial,legId:legId,orderId:ref.id},st.event));return;}body.condition=rc&&rc.condition==='damaged'?'damaged':'accepted';}
+        var v=C.judge(u,move,body);if(!v.ok){skippedCustody.push(u.serial+': '+v.say);return;}
+        var ap=C.apply(u,move,body,c.email,now,'logistics');if(o.customerId)ap.patch['custody.customerId']=o.customerId;ap.event.legId=legId;ap.event.orderId=ref.id;
+        tx.update(cu.ref,ap.patch);tx.create(cu.ref.collection('custody_events').doc(),Object.assign({orgId:org,serial:u.serial},ap.event));});
+      if(skippedCustody.length)ev.custodySkipped=skippedCustody;
     }
     tx.update(ref,{'delivery.legs':legs,'delivery.revision':d.revision+1,updatedAt:A.FieldValue().serverTimestamp()});
     tx.create(ref.collection('events').doc(),{at:now,by:c.email,what:'Logistics '+b.action+' · '+legId,logistics:Object.assign({legId:legId},ev)});

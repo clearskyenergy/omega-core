@@ -47,6 +47,11 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/customer-portal') === 0) return json(V.portalJson);
   if (u.indexOf('/api/my-account') === 0) return json(V.accountJson());
   if (u.indexOf('/api/my-orders') === 0) return json(V.myOrdersJson());
+  if (u === '/api/my-sites' && req.method === 'POST') return posted(function (b) { return F.post(STATE, u, q, b, 'ops@riverside.example'); });
+  if (u.indexOf('/api/my-sites') === 0) return json(V.mySitesJson());
+  if (u === '/api/logic-custody' && req.method === 'POST') return posted(function (b) { return F.post(STATE, u, q, b, 'demo@cleancell.us'); });
+  if (u.indexOf('/api/logic-custody') === 0) { if (/template=/.test(q)) { res.writeHead(200, { 'Content-Type': 'text/csv' }); return res.end(require('../api/_lib/custody').csvTemplate()); } return json(V.custodyJson(q)); }
+  if (u.indexOf('/api/logic-logistics') === 0) return json(V.logisticsJson());
   if (u.indexOf('/api/customer-design') === 0) return json(V.designJson());
   if (u.indexOf('/api/app-manifest') === 0) return json(V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT));
   if (u === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.CLEARSKY_CONFIG={firebase:{}};'); }
@@ -73,7 +78,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);
     var hs = await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; });
-    if (hs) console.log('  widest: ' + JSON.stringify(await p.evaluate(function () { var worst = null; Array.prototype.forEach.call(document.querySelectorAll('body *'), function (e) { var r = e.getBoundingClientRect(); if (r.right > 392 && (!worst || r.right > worst.right)) worst = { right: Math.round(r.right), tag: e.tagName, cls: String(e.className).slice(0, 40), id: e.id }; }); return worst; })));
+    if (hs) console.log('  widest: ' + JSON.stringify(await p.evaluate(function () { var worst = null; Array.prototype.forEach.call(document.querySelectorAll('body *'), function (e) { if (e.closest('.logic-nav')) return; var r = e.getBoundingClientRect(); if (r.right > 392 && (!worst || r.right > worst.right)) worst = { right: Math.round(r.right), tag: e.tagName, cls: String(e.className).slice(0, 40), id: e.id }; }); return worst; })));
     ok(name + ' has no horizontal scroll at 390px', !hs);
     console.log(name + ' ' + JSON.stringify(out) + ' h-scroll@390: ' + hs);
     await p.close();
@@ -264,6 +269,32 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  stock counts finished units, offers to assign each available one to the order that needs it, and lists what is short', /CC-C215.*2 available/.test(stock[0]) && assign === 2 && opts.some(function (o) { return /CC-26-4419/.test(o); }) && stock.some(function (t) { return /on hand/.test(t); }) && stock.some(function (t) { return /PO-1001/.test(t); }), [stock, assign, opts]);
     return { tabs: tabs.length, cards: cards, companies: companies, preview: preview, assign: assign };
   });
+  await check('custody', '/logic-custody.html?org=cleancell.us', async function (p) {
+    await p.waitForTimeout(700);
+    var nav = await p.$eval('.logic-nav a[aria-current="page"]', function (e) { return e.textContent.trim(); });
+    var counts = await p.$$eval('#counts div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    var sites = await p.$$eval('#site-list tbody tr', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 120); }); });
+    ok('the custody page is the current chrome item and counts the fleet, its sites and coverage', nav === 'Sites & custody' && counts.some(function (t) { return /at the plant\s*5/.test(t); }) && counts.some(function (t) { return /in transit\s*1/.test(t); }) && sites.length === 1 && /Riverside yard/.test(sites[0]) && /PG&E · MSB-2/.test(sites[0]), [nav, counts, sites]);
+    await p.fill('#find-serial', 'CC418-26-44192'); await p.click('#find button'); await p.waitForTimeout(500);
+    var pass = await p.$eval('#unit', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var moves = await p.$$eval('#mv-what option', function (r) { return r.map(function (x) { return x.value; }); });
+    ok('  the passport shows custody, a pending warranty with its reason, the ship event, and only the moves that apply', /in transit/.test(pass) && /warranty/.test(pass) && /pending/.test(pass) && /no site assigned/.test(pass) && /ship · plant → in_transit/.test(pass) && moves.join('|') === 'deliver|receive', [pass.slice(0, 200), moves]);
+    var loadOpts = await p.$$eval('#sc-load option', function (r) { return r.map(function (x) { return x.textContent; }); });
+    await p.selectOption('#sc-load', '0');
+    await p.fill('#scan', 'CC418-26-44192'); await p.press('#scan', 'Enter'); await p.fill('#scan', 'CC418-26-44199'); await p.press('#scan', 'Enter'); await p.waitForTimeout(200);
+    var scanned = await p.$$eval('#scanned .ev', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    await p.click('#sc-go'); await p.waitForTimeout(800);
+    var result = await p.$eval('#sc-result', function (e) { return e.textContent; });
+    var counts2 = await p.$$eval('#counts div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
+    ok('  a scan session receives the planned load: the expected serial is received, the stray one is named, the count moves', loadOpts.some(function (t) { return /CC-26-4419 · LOAD-1 · in_transit · 1 unit/.test(t); }) && scanned.length === 2 && /expected/.test(scanned[0]) && /not on this load/.test(scanned[1]) && /1 received/.test(result) && /not on this load: CC418-26-44199/.test(result) && counts2.some(function (t) { return /received\s*1/.test(t); }), [loadOpts, scanned, result, counts2]);
+    await p.fill('#im-text', 'Serial No,Site,Street,City,State,Zip,Commissioned\nCC418-26-44192,Riverside yard,1200 Depot Rd,Bakersfield,CA,93307,2026-09-20\nCC418-26-44190,Riverside yard,1200 Depot Rd,Bakersfield,CA,93307,\n');
+    await p.selectOption('#im-customer', 'company_riverside'); await p.click('#im-dry'); await p.waitForTimeout(600);
+    var map = await p.$$eval('#im-map select', function (r) { return r.map(function (x) { return x.value; }); });
+    var plan = await p.$eval('#im-plan', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var commit = await p.$eval('#im-commit', function (e) { return { hidden: e.classList.contains('hide'), text: e.textContent }; });
+    ok('  an import is mapped by column name and planned row by row before anything is written; a unit still at the plant is a problem, not a write', map.join('|') === 'serial|siteName|line1|city|state|zip|commissionDate' && /1 row will change/.test(plan) && /1 with problems/.test(plan) && /assign, commission 2026-09-20/.test(plan) && /still at the plant; a received date/.test(plan) && !commit.hidden && /Commit 1 row/.test(commit.text), [map, plan.slice(0, 300), commit]);
+    return { nav: nav, sites: sites.length, moves: moves, result: result.slice(0, 60) };
+  });
   await check('customer-app', '/portals/customer/app?org=cleancell.us', async function (p) {
     await p.waitForTimeout(700);
     var manifest = await p.evaluate(function () { return { m: document.querySelector('link[rel="manifest"]').getAttribute('href'), i: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'), b: document.getElementById('brand').textContent }; });
@@ -289,6 +320,14 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('[data-tab="account"]'); await p.waitForTimeout(400);
     var acct = await p.$$eval('#acct-body .kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     ok('  the account shows its number, rep and terms', acct.some(function (t) { return /company_riverside/.test(t); }) && acct.some(function (t) { return /Sam Rep/.test(t); }) && acct.some(function (t) { return /Deposit\s*40%/.test(t); }), acct);
+    await p.waitForTimeout(400);
+    var sb = await p.$eval('#sites-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var acts = await p.$$eval('#sites-body [data-act]', function (r) { return r.map(function (x) { return x.getAttribute('data-act'); }); });
+    ok('  Sites & equipment lists the customer\'s site and the received unit with its warranty pending until a site is chosen; only assign applies', /Riverside yard/.test(sb) && /PG&E · POI MSB-2/.test(sb) && /CC418-26-44192/.test(sb) && /received/.test(sb) && /no site assigned/.test(sb) && acts.join('|') === 'assign', [sb.slice(0, 240), acts]);
+    await p.selectOption('#sites-body [data-site="0"]', 'site_company-riverside-riverside-yard-93307'); await p.click('#sites-body [data-act="assign"]'); await p.waitForTimeout(700);
+    var sb2 = await p.$eval('#sites-body', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var acts2 = await p.$$eval('#sites-body [data-act]', function (r) { return r.map(function (x) { return x.getAttribute('data-act'); }); });
+    ok('  binding the unit to the site starts the warranty from the ship date; commissioning is now the customer\'s next move', /assigned to site/.test(sb2) && /until 2036-09-10 · from 2026-09-10/.test(sb2) && /1 unit/.test(sb2) && acts2.join('|') === 'assign|commissioned', [sb2.slice(0, 240), acts2]);
     return { tabs: tabs.length, plans: plans.length, sized: sized.slice(0, 40), form: form };
   });
   /* The sandboxes: the same pages with sandbox.js in place of Firebase and

@@ -121,7 +121,7 @@
   var ORG = String(params.get('org') || (cfg.tenant && cfg.tenant.orgId) || load('omega_customer_app_org', '') || '').toLowerCase();
   if (ORG) store('omega_customer_app_org', ORG);
   var q = '?org=' + encodeURIComponent(ORG), LS_EMAIL = 'omega.portal.email';
-  var TAB = params.get('tab') || 'design', PORTAL = null, ACCT = null, ORDERS = null, DESIGN = null, PO = null, SIZE = null, PO_PREFILL = '';
+  var TAB = params.get('tab') || 'design', PORTAL = null, ACCT = null, ORDERS = null, DESIGN = null, PO = null, SIZE = null, SITES = null, PO_PREFILL = '';
   var MODULE_LABEL = { bess: 'Battery storage', compute: 'Compute', ev: 'EV charging', solar: 'Solar' };
   var KIND = { shipping: 'Delivery address or date', information: 'Question', change: 'Change to the order', warranty: 'Warranty' };
   var TONE = { shipped: 'go', cancelled: 'stop' };
@@ -164,7 +164,8 @@
   function loadOrders() { return ORDERS ? Promise.resolve(ORDERS) : api('/api/my-orders' + q).then(function (r) { ORDERS = must(r, 'Could not load your orders.').orders || []; return ORDERS; }); }
   function loadDesign() { return DESIGN ? Promise.resolve(DESIGN) : api('/api/customer-design' + q).then(function (r) { DESIGN = must(r, 'Could not load your site plans.'); return DESIGN; }); }
   function loadPo() { return PO ? Promise.resolve(PO) : api('/api/po-intake' + q).then(function (r) { PO = must(r, 'Could not load your purchase orders.'); return PO; }); }
-  function refresh() { ACCT = null; ORDERS = null; DESIGN = null; PO = null; SIZE = null; draw(); }
+  function loadSites() { return SITES ? Promise.resolve(SITES) : api('/api/my-sites' + q).then(function (r) { SITES = must(r, 'Could not load your sites.'); return SITES; }); }
+  function refresh() { ACCT = null; ORDERS = null; DESIGN = null; PO = null; SIZE = null; SITES = null; draw(); }
 
   /* ── views ────────────────────────────────────────────────────────────── */
   function draw() {
@@ -273,6 +274,52 @@
     })['catch'](function (e) { var el = $('pos-body'); if (el) el.innerHTML = '<p class="note err">' + esc(e.message) + '</p><p class="note">Purchase orders need a customer account with this supplier. Open Account first, or ask your supplier to assign your email to your company.</p>'; });
   }
 
+  /* ── Sites & equipment: where each unit is and what its warranty is ──
+     api/my-sites.js — the customer's own sites (an end location with its
+     interconnection point) and every shipped unit on their orders. They
+     record receipt, bind a unit to a site, and commissioning; the same
+     rules the office uses judge each move, and the warranty or SLA is
+     worked out from the dates every time it is shown. */
+  var COV = { active: 'go', pending: 'wait', expired: 'stop', transferred: '' };
+  function drawSites() {
+    var el = $('sites-body'); if (!el) return;
+    loadSites().then(function (d) {
+      el = $('sites-body'); if (!el) return;
+      var sites = d.sites || [], units = d.units || [], mv = d.moves || {};
+      function can(u, a) { return (mv[a] || []).indexOf(u.status) >= 0 && u.state !== 'scrapped'; }
+      var siteSel = sites.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('');
+      el.innerHTML = '<p class="note">Each unit shows where it is and when its warranty runs. Tell us when a unit arrives and which site it is installed at: the warranty is tied to that site.</p>'
+        + (sites.length ? sites.map(function (s) { var a = s.address || {}, ic = s.interconnection || {}; return '<div class="unit"><div><b>' + esc(s.name) + '</b><small>' + esc([a.line1, a.city, a.state, a.zip].filter(Boolean).join(', ')) + '</small>' + (ic.utility || ic.poi ? '<small>' + esc([ic.utility, ic.poi ? 'POI ' + ic.poi : '', ic.meterNo ? 'meter ' + ic.meterNo : ''].filter(Boolean).join(' · ')) + '</small>' : '') + '</div><span class="pill">' + esc(s.units) + ' unit' + (s.units === 1 ? '' : 's') + '</span></div>'; }).join('') : '<p class="note">No sites yet. Add the location where your units will be interconnected.</p>')
+        + '<button class="big ghost" id="site-add" type="button">Add a site</button>'
+        + '<form id="site-form" hidden><input id="sf-name" placeholder="Site name" required maxlength="160"><input id="sf-line1" placeholder="Street address" maxlength="200"><div class="row"><input id="sf-city" placeholder="City" maxlength="100"><input id="sf-state" placeholder="State ZIP" maxlength="60"></div><div class="row"><input id="sf-utility" placeholder="Utility" maxlength="120"><input id="sf-meter" placeholder="Meter no." maxlength="80"></div><input id="sf-poi" placeholder="Point of interconnection (e.g. MSB-2, 480 V)" maxlength="200"><button class="big" id="sf-save">Save site</button></form>'
+        + (units.length ? '<h2>Your units</h2>' + units.map(function (u, i) {
+          var acts = '';
+          if (can(u, 'received')) acts += '<button type="button" class="big ghost" data-act="received" data-i="' + i + '">Received</button>';
+          if (can(u, 'assign') && sites.length) acts += '<div class="row"><select data-site="' + i + '">' + (u.siteId ? '' : '<option value="">Installed at…</option>') + siteSel + '</select><button type="button" data-act="assign" data-i="' + i + '">Assign</button></div>';
+          if (can(u, 'commissioned') && u.siteId) acts += '<div class="row"><input type="date" data-date="' + i + '"><input data-inst="' + i + '" placeholder="Commissioned by"><button type="button" data-act="commissioned" data-i="' + i + '">Commissioned</button></div>';
+          return '<div class="card" data-unit="' + esc(u.serial) + '"><div class="unit" style="border:0;padding:0"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.name) + (u.orderNo ? ' · ' + esc(u.orderNo) : '') + '</small>' + (u.siteName ? '<small>at ' + esc(u.siteName) + (u.position ? ' · ' + esc(u.position) : '') + '</small>' : '') + '</div><span class="pill ' + (TONE[u.status] || (u.status === 'in_service' || u.status === 'commissioned' ? 'go' : '')) + '">' + esc(u.label) + '</span></div>'
+            + (u.coverage || []).map(function (c) { return '<div class="unit"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + (c.provider && c.provider !== 'oem' ? ' · ' + esc(c.provider) : '') + '<small>' + (c.status === 'active' ? 'until ' + esc(day(c.until)) + (c.from ? ' · from ' + esc(day(c.from)) : '') : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(day(c.until)) : c.status === 'transferred' ? 'moved to the replacement unit' : esc(c.status)) + '</small></div><span class="pill ' + (COV[c.status] || '') + '">' + esc(c.status) + '</span></div>'; }).join('')
+            + (u.state ? '<p class="note err">' + esc(u.state) + '</p>' : '') + acts + '</div>';
+        }).join('') : '<p class="note">No units have shipped yet. They appear here from the day they leave the plant.</p>');
+      $('site-add').onclick = function () { $('site-form').hidden = !$('site-form').hidden; if (!$('site-form').hidden) $('sf-name').focus(); };
+      $('site-form').onsubmit = function (e) {
+        e.preventDefault(); var sp = String($('sf-state').value || '').trim().split(/\s+/); $('sf-save').disabled = true; status('Saving site…');
+        api('/api/my-sites', { action: 'site', name: $('sf-name').value, address: { line1: $('sf-line1').value, city: $('sf-city').value, state: sp[0] || '', zip: sp[1] || '' }, interconnection: { utility: $('sf-utility').value, meterNo: $('sf-meter').value, poi: $('sf-poi').value } })
+          .then(function (r) { must(r, 'Could not save the site.'); status('Site saved.'); SITES = null; drawSites(); })['catch'](fail).then(function () { if ($('sf-save')) $('sf-save').disabled = false; });
+      };
+      Array.prototype.forEach.call(el.querySelectorAll('[data-act]'), function (b) {
+        b.onclick = function () {
+          var u = units[Number(b.getAttribute('data-i'))], act = b.getAttribute('data-act'), body = { action: act, serial: u.serial };
+          if (act === 'assign') { var sel = el.querySelector('[data-site="' + b.getAttribute('data-i') + '"]'); if (!sel.value) { status('Choose the site first.'); return; } body.siteId = sel.value; }
+          if (act === 'commissioned') { var dt = el.querySelector('[data-date="' + b.getAttribute('data-i') + '"]'), ins = el.querySelector('[data-inst="' + b.getAttribute('data-i') + '"]'); if (dt.value) body.at = dt.value; body.installer = ins.value; }
+          if (act === 'received' && !confirm('Record ' + u.serial + ' as received today?')) return;
+          b.disabled = true; status('Recording…');
+          api('/api/my-sites', body).then(function (r) { var d = must(r, 'Could not record that.'); status(d.duplicate ? 'Already recorded.' : 'Recorded: ' + d.unit.label + '.'); SITES = null; drawSites(); })['catch'](fail).then(function () { b.disabled = false; });
+        };
+      });
+    })['catch'](function (e) { var el2 = $('sites-body'); if (el2) el2.innerHTML = '<p class="note err">' + esc(e.message) + '</p>'; });
+  }
+
   /* ── Account: who you are here, your terms, your details ─────────────── */
   function drawAccount() {
     $('view').innerHTML = '<h1>Account</h1><div id="acct-body"><p class="note">Loading…</p></div>';
@@ -284,8 +331,10 @@
         + '<h2>Your details</h2><input id="f-name" placeholder="Your name" value="' + esc(a.you.name || '') + '"><input id="f-company" placeholder="Company" value="' + esc(a.company || '') + '"><input id="f-phone" placeholder="Phone" value="' + esc(a.you.phone || '') + '"><input id="f-line1" placeholder="Delivery address" value="' + esc(ad.line1 || '') + '"><div class="row"><input id="f-city" placeholder="City" value="' + esc(ad.city || '') + '"><input id="f-state" placeholder="State ZIP" value="' + esc([ad.state, ad.zip].filter(Boolean).join(' ')) + '"></div><button class="big ghost" id="save">Save my details</button>'
         + '<p class="note">Signed in as ' + esc(a.you.email) + (a.you.role === 'owner' ? ' · account owner' : '') + (users.length ? ' · also on this account: ' + esc(users.map(function (u) { return u.name || u.email; }).join(', ')) : '') + '</p>'
         + '<h2>Agreements</h2>' + ((a.agreements || []).map(function (g) { return '<div class="unit"><div>' + esc(g.kind) + '<small>' + esc(g.ref) + ' · ' + esc(day(g.signedAt)) + '</small></div></div>'; }).join('') || '<p class="note">No agreements recorded yet.</p>')
+        + '<h2>Sites &amp; equipment</h2><div id="sites-body"><p class="note">Loading…</p></div>'
         + '<h2>This app</h2><p class="note">Add it to your home screen: on iPhone, Share → <b>Add to Home Screen</b>; on Android, the browser’s <b>Install</b>. It opens to your site plans.</p>'
         + (PORTAL && PORTAL.links && PORTAL.links.account ? '<a class="big ghost" href="' + esc(PORTAL.links.account) + '">Full portal on the desktop</a>' : '');
+      drawSites();
       $('save').onclick = function () {
         var sp = String($('f-state').value || '').trim().split(/\s+/), btn = this; btn.disabled = true; status('Saving…');
         api('/api/my-account', { name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value, address: { line1: $('f-line1').value, city: $('f-city').value, state: sp[0] || '', zip: sp[1] || '' } })

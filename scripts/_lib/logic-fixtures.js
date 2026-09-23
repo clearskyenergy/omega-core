@@ -24,7 +24,7 @@
 var M = require('../../api/_lib/materials'), C = require('../../api/_lib/logic-catalog'), Stats = require('../../api/_lib/plant-stats');
 var Board = require('../../api/_lib/plant-board'), Ops = require('../../api/_lib/plant-ops'), Attention = require('../../api/_lib/plant-attention');
 var W = require('../../api/_lib/plant-work'), Plant = require('../../api/_lib/plant'), S = require('../../api/_lib/office-stage');
-var Manifest = require('../../api/app-manifest');
+var Manifest = require('../../api/app-manifest'), Cu = require('../../api/_lib/custody');
 
 var ORG = 'cleancell.us';
 var CATALOG = [
@@ -66,7 +66,7 @@ function initialState() {
     units: [
       { serial: 'CC418-26-44190', sku: 'CC-C215', shipUnit: true, startedAt: T(0), done: { kit: T(2), module: T(10), rack: T(14), encl: T(16), elec: T(20), bms: T(22), eol: T(23), qa: T(25), pack: T(26) }, at: 'ready', arrivedAt: T(26), inventoryStatus: 'available', unitType: 'cabinet' },
       { serial: 'CC418-26-44191', sku: 'CC-C215', shipUnit: true, startedAt: T(1), done: { kit: T(3), module: T(15), rack: T(18), encl: T(20), elec: T(24), bms: T(26), eol: T(27), qa: T(29), pack: T(30) }, at: 'ready', arrivedAt: T(30), inventoryStatus: 'available', unitType: 'cabinet' },
-      { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet' },
+      { serial: 'CC418-26-44192', sku: 'CC-C215', shipUnit: true, startedAt: T(4), done: { kit: T(6), module: T(40), rack: T(43), encl: T(45), elec: T(49), bms: T(51), eol: T(52), qa: T(54), pack: T(55) }, at: 'ready', arrivedAt: T(55), inventoryStatus: 'allocated', orderId: 'o1', orderNo: 'CC-26-4419', unitType: 'cabinet', customerId: 'company_riverside', custody: { status: 'in_transit', custodian: 'carrier', shippedAt: '2026-09-10', legId: 'LOAD-1', customerId: 'company_riverside' } },
       { serial: 'CC418-26-44193', sku: 'CC-C215', shipUnit: true, startedAt: T(60), done: { kit: T(62) }, at: 'module', arrivedAt: T(62), inventoryStatus: 'building', unitType: 'cabinet' },
       { serial: 'CC418-26-44194', sku: 'CC-C215', shipUnit: true, startedAt: T(70), done: { kit: T(71), module: T(90) }, at: 'rack', arrivedAt: T(90), hold: 'NCR-26-89', inventoryStatus: 'building', unitType: 'cabinet' },
       { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
@@ -81,11 +81,17 @@ function initialState() {
       { id: 'company_incharge', company: 'InCharge Energy', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
     ],
     intake: [{ id: 'po_x', orderNo: 'PO-IN-X', customerId: 'company_riverside', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
-    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [] }],
+    companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] }],
     account: { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
       you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: [], agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
     projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
     benchUnit: { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null },
+    /* custody (api/_lib/custody.js): one end site on the customer's account,
+       the load above on its way there, events appended per serial */
+    sites: [{ id: 'site_company-riverside-riverside-yard-93307', orgId: ORG, name: 'Riverside yard', customerId: 'company_riverside', endCustomer: '', address: { line1: '1200 Depot Rd', line2: '', city: 'Bakersfield', state: 'CA', zip: '93307', country: 'US' }, lat: null, lng: null,
+      interconnection: { utility: 'PG&E', accountNo: '', meterNo: '1002233', poi: 'MSB-2, 480 V', serviceVoltage: '480', serviceKw: 500, agreementRef: '' }, contact: { name: 'Dana Ops', phone: '', email: 'ops@riverside.example' }, notes: '', status: 'active', lifecycleSiteId: null, createdAt: '2026-09-01T10:00:00Z', createdBy: 'demo@cleancell.us' }],
+    custodyEvents: { 'CC418-26-44192': [{ type: 'ship', from: '', to: 'in_transit', by: 'demo@cleancell.us', at: '2026-09-10T15:00:00Z', method: 'logistics', legId: 'LOAD-1', orderId: 'o1' }] },
+    custodyMapping: null,
     poUsage: 0
   };
 }
@@ -155,6 +161,35 @@ function views(state) {
   }
   var portalJson = { org: ORG, brand: Object.assign({ logoUrl: '' }, brand), links: { start: '/customer-start.html?org=cleancell.us', account: '/portals/customer/?org=cleancell.us', design: '/portals/customer/?org=cleancell.us#design', app: '/portals/customer/app?org=cleancell.us', storefront: null }, account: { free: true, signup: true },
     editorLite: { monthlyPriceCents: 79900, currency: 'USD', interval: 'month', checkoutAvailable: false, includes: ['Guided site design', 'Site-map exports', 'Project quoting', 'Supplier ordering'] } };
+  /* ── custody: the office page and the customer's Sites & equipment ── */
+  function prodOf(sku) { return benchBy[sku] || null; }
+  function unitView(u, now) { var c = Cu.custodyOf(u); return { serial: u.serial, sku: u.sku, unitType: u.unitType || 'unit', orderId: u.orderId || null, orderNo: u.orderNo || null, customerId: u.customerId || c.customerId || null, at: u.at || '', hold: u.hold || null, custody: Object.assign({}, c, { label: Cu.label(c.status) }), coverage: Cu.coverageWithInheritance(prodOf(u.sku), u, now) }; }
+  function shipUnits() { return state.units.filter(function (u) { return u.shipUnit; }); }
+  function siteRow(s) { return Object.assign({}, s, { units: shipUnits().filter(function (u) { return Cu.custodyOf(u).siteId === s.id; }).length }); }
+  function custodyJson(q) {
+    var now = iso(Date.now()), units = shipUnits(), cat = CATALOG;
+    if (/serial=/.test(q)) {
+      var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { status: 404, error: 'Serial not found' };
+      var c = Cu.custodyOf(u), site = state.sites.filter(function (s) { return s.id === c.siteId; })[0], rb = units.filter(function (x) { return x.serial === c.replacedBy; })[0], rs = units.filter(function (x) { return x.serial === c.replaces; })[0];
+      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
+    }
+    if (/site=/.test(q)) { var sid = decodeURIComponent((/site=([^&]*)/.exec(q) || [])[1] || ''), sd = state.sites.filter(function (s) { return s.id === sid; })[0]; if (!sd) return { status: 404, error: 'Site not found' }; var here = units.filter(function (u) { return Cu.custodyOf(u).siteId === sid; }); return { brand: brand, site: sd, units: here.map(function (u) { return unitView(u, now); }), exceptions: Cu.exceptions(here, cat, now), limited: false }; }
+    if (/view=exceptions/.test(q)) return { brand: brand, exceptions: Cu.exceptions(units, cat, now), sampled: units.length, limited: false };
+    var counts = {}; Cu.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; }); var off = []; units.forEach(function (u) { var c = Cu.custodyOf(u); counts[c.status || 'plant']++; if (c.status) off.push(unitView(u, now)); });
+    var cov = { active: 0, pending: 0, expired: 0, expiring: 0 }; off.forEach(function (u) { u.coverage.forEach(function (cv) { if (cov[cv.status] != null) cov[cv.status]++; }); });
+    return { brand: brand, name: 'Clean Cell', owner: false, counts: counts, coverage: cov, units: off, unitsShown: off.length, unitsTotal: off.length, sites: state.sites.map(siteRow), exceptions: Cu.exceptions(units, cat, now),
+      customers: state.customers.map(function (c) { return { id: c.id, name: c.company }; }), products: cat.filter(function (p) { return (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name, coverage: Cu.templatesOf(p) }; }),
+      mapping: state.custodyMapping, columns: Cu.TEMPLATE_HEADERS, moves: Cu.MOVES, states: Cu.STATES, limited: false, sampled: units.length };
+  }
+  function logisticsJson() { return { owner: false, brand: brand, notice: 'Sandbox: one order with one planned load.', limited: false, orders: state.companyOrders.map(function (o) { return { id: o.id, orderNo: o.orderNo, poNumber: o.poNumber, revision: o.revision, destinations: o.destinations, legs: o.legs || [] }; }) }; }
+  function pubSite(s) { return { id: s.id, name: s.name, address: s.address || {}, endCustomer: s.endCustomer || '', interconnection: s.interconnection || {}, contact: s.contact || {}, notes: s.notes || '', status: s.status || 'active' }; }
+  function pubUnit(u) { var c = Cu.custodyOf(u), p = prodOf(u.sku), now = iso(Date.now()); return { serial: u.serial, sku: u.sku, name: p ? p.name : u.sku, orderNo: u.orderNo || null, status: c.status || (u.at === 'ready' ? 'ready to ship' : 'being built'), label: c.status ? Cu.label(c.status) : (u.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || null,
+    siteId: c.siteId || null, siteName: c.siteName || null, position: c.position || '', shippedAt: c.shippedAt || null, receivedAt: c.receivedAt || null, installedAt: c.installedAt || null, commissionedAt: c.commissionedAt || null, replacedBy: c.replacedBy || null, replaces: c.replaces || null,
+    coverage: Cu.coverageWithInheritance(p, u, now).map(function (cv) { return { id: cv.templateId, type: cv.type, provider: cv.provider, status: cv.status, why: cv.why, from: cv.startDate, until: cv.endDate, termMonths: cv.termMonths, metrics: cv.metrics, docUrl: cv.docUrl }; }) }; }
+  function myUnits() { return shipUnits().filter(function (u) { return u.orderId === 'o1'; }); }
+  function mySitesJson() { var units = myUnits(), per = {}; units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
+    return { org: ORG, brand: brand, customerId: 'company_riverside', sites: state.sites.filter(function (s) { return s.customerId === 'company_riverside' && s.status !== 'inactive'; }).map(function (s) { return Object.assign(pubSite(s), { units: per[s.id] || 0 }); }),
+      units: units.filter(function (u) { return Cu.custodyOf(u).status || u.at === 'ready'; }).map(pubUnit), moves: { received: ['', 'in_transit', 'delivered'], assign: ['delivered', 'received', 'assigned'], installed: ['assigned', 'received'], commissioned: ['assigned', 'installed', 'received'] } }; }
   function accountJson(who) { var a = clone(state.account); if (who) a.you.email = who; return a; }
   function myOrdersJson(who) {
     var mine = state.orders.filter(function (o) { return o.customer.email === (who || 'ops@riverside.example') || o.customer.email === 'ops@riverside.example'; });
@@ -190,7 +225,7 @@ function views(state) {
       workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(unit, 'rack', steps), instructions: 'Fit modules bottom-up.' };
   }
   function manifest(app, tenant) { return Manifest.manifestFor(ORG, tenant, app); }
-  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -263,6 +298,70 @@ function post(state, path, query, b, who) {
     mo.requests = mo.requests || []; if (mo.requests.filter(function (r) { return r.status === 'open'; }).length >= 10) return err(429, 'Ten open requests is the limit');
     var rq = { id: 'rq_' + hex(8), kind: ['shipping', 'information', 'change', 'warranty'].indexOf(b.kind) >= 0 ? b.kind : 'information', message: msg.slice(0, 2000), address: b.kind === 'shipping' && b.address ? b.address : null, by: who, at: now, status: 'open', answer: null };
     mo.requests.push(rq); return { ok: true, request: rq };
+  }
+  function patchUnit(u, patch) { Object.keys(patch).forEach(function (k) { var parts = k.split('.'), t = u; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = patch[k]; }); }
+  function logEvent(serial, ev) { (state.custodyEvents[serial] = state.custodyEvents[serial] || []).push(ev); }
+  function unitBy(serial) { return state.units.filter(function (x) { return x.serial === serial; })[0]; }
+  function siteBy(id) { return state.sites.filter(function (s) { return s.id === id && s.status !== 'inactive'; })[0]; }
+  function moveUnit(u, move, body, method) { var v = Cu.judge(u, move, body); if (!v.ok) return err(409, v.say); if (v.action === 'duplicate') return { ok: true, action: 'duplicate', serial: u.serial, say: v.say, custody: Cu.custodyOf(u) }; var ap = Cu.apply(u, move, body, who, now, method); if (u.customerId && !Cu.custodyOf(u).customerId) ap.patch['custody.customerId'] = u.customerId; patchUnit(u, ap.patch); logEvent(u.serial, ap.event); return { ok: true, action: move, serial: u.serial, say: 'Recorded: ' + Cu.label(Cu.custodyOf(u).status) + (body.siteName ? ' at ' + body.siteName : ''), custody: Cu.custodyOf(u) }; }
+  function saveSite(b, forceCustomer) {
+    var existing = b.id ? state.sites.filter(function (s) { return s.id === b.id; })[0] : null; if (b.id && !existing) return err(404, 'Site not found');
+    var rec; try { rec = Cu.site(forceCustomer ? Object.assign({}, b, { customerId: forceCustomer }) : b, existing || null); } catch (e) { return err(e.status || 400, e.message); }
+    if (forceCustomer) rec.customerId = forceCustomer;
+    var id = existing ? existing.id : Cu.siteId(rec.customerId, rec); if (!existing && state.sites.some(function (s) { return s.id === id; })) return err(409, 'A site with that name and ZIP already exists for this customer: ' + id);
+    var doc = Object.assign({ orgId: ORG, id: id }, rec, { updatedAt: now, updatedBy: who }); if (existing) Object.assign(existing, doc); else state.sites.push(Object.assign(doc, { createdAt: now, createdBy: who }));
+    return { ok: true, siteId: id, site: existing || doc };
+  }
+  if (path === '/api/logic-custody') {
+    var method = ['manual', 'scan', 'import'].indexOf(b.method) >= 0 ? b.method : 'manual';
+    if (b.action === 'site') return saveSite(b, null);
+    if (b.action === 'mapping-save') { state.custodyMapping = b.mapping || {}; return { ok: true, mapping: state.custodyMapping }; }
+    if (b.action === 'move' || b.action === 'state' || b.action === 'replace') {
+      var cu = unitBy(String(b.serial || '').trim()); if (!cu) return err(404, 'Serial is not registered');
+      if (b.action === 'move' && b.move === 'ship') return err(400, 'Shipping is recorded under Shipping & receiving, on the load');
+      var cs = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && !cs) return err(404, 'Site not found');
+      var cb = Object.assign({}, b, { siteId: cs ? cs.id : undefined, siteName: cs ? cs.name : undefined });
+      if (b.action === 'state') { var st; try { st = Cu.state(cu, String(b.state || ''), cb, who, now, method); } catch (e) { return err(e.status || 400, e.message); } patchUnit(cu, st.patch); logEvent(cu.serial, st.event); return { ok: true, serial: cu.serial, state: st.patch['custody.state'] }; }
+      if (b.action === 'replace') {
+        var v0 = Cu.judge(cu, 'replace', cb); if (!v0.ok) return err(409, v0.say); var ru = unitBy(String(b.replacementSerial || '').trim()); if (!ru) return err(404, 'Replacement serial is not registered');
+        var c0 = Cu.custodyOf(cu), rc = Cu.custodyOf(ru), old = Cu.coverageWithInheritance(V.CATALOG.filter(function (p) { return p.sku === cu.sku; })[0], cu, now).map(function (cv) { return Object.assign({}, cv, { serial: cu.serial }); });
+        var apr = Cu.apply(cu, 'replace', cb, who, now, method); patchUnit(cu, apr.patch); logEvent(cu.serial, apr.event);
+        var rp = { 'custody.status': c0.status === 'rma_open' && c0.siteId ? 'assigned' : 'received', 'custody.custodian': c0.siteId ? 'site' : 'customer', 'custody.siteId': c0.siteId || null, 'custody.siteName': c0.siteName || null, 'custody.position': c0.position || '', 'custody.customerId': c0.customerId || cu.customerId || null, 'custody.replaces': cu.serial, 'custody.receivedAt': rc.receivedAt || now.slice(0, 10), 'custody.assignedAt': c0.siteId ? now.slice(0, 10) : null, 'custody.inheritedCoverage': Cu.inherited(old), 'custody.updatedAt': now, 'custody.updatedBy': who };
+        patchUnit(ru, rp); logEvent(ru.serial, { type: 'replacement-of', from: rc.status, to: rp['custody.status'], replaces: cu.serial, siteId: c0.siteId || null, by: who, at: now, method: method });
+        return { ok: true, serial: cu.serial, replacementSerial: ru.serial, siteId: c0.siteId || null, inherited: rp['custody.inheritedCoverage'] };
+      }
+      if (!Cu.MOVES[b.move]) return err(400, 'Unknown move');
+      return moveUnit(cu, b.move, cb, method);
+    }
+    if (b.action === 'receive-load') {
+      var co = state.companyOrders.filter(function (o) { return o.id === b.orderId; })[0], leg = co && (co.legs || []).filter(function (l) { return l.id === b.legId; })[0]; if (!leg) return err(404, 'Load not found on this order');
+      var rec = Cu.reconcile(leg.serials, (b.received || []).map(function (r) { return { serial: String(typeof r === 'string' ? r : r.serial).trim(), condition: r && r.condition === 'damaged' ? 'damaged' : 'accepted' }; })), rsite = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && !rsite) return err(404, 'Site not found');
+      var applied = [], damagedApplied = [], refused = [];
+      rec.received.concat(rec.damaged).forEach(function (sn, i) { var uu = unitBy(sn); if (!uu) { refused.push({ serial: sn, why: 'not registered' }); return; } var body = { at: b.at, condition: i < rec.received.length ? 'accepted' : 'damaged', siteId: rsite ? rsite.id : undefined, siteName: rsite ? rsite.name : undefined, legId: leg.id, note: b.note }; var r = moveUnit(uu, 'receive', body, method); if (r.error) { refused.push({ serial: sn, why: r.error }); return; } (body.condition === 'damaged' ? damagedApplied : applied).push(sn); });
+      if (rec.complete && !refused.length) leg.status = 'received';
+      return { ok: true, legId: leg.id, received: applied, damaged: damagedApplied, short: rec.short, overage: rec.overage, duplicate: rec.duplicate, refused: refused, complete: rec.complete && !refused.length, note: rec.short.length ? rec.short.length + ' expected serial' + (rec.short.length === 1 ? '' : 's') + ' did not arrive; the load stays partial until they do or Shipping records them missing.' : (rec.overage.length ? rec.overage.length + ' serial' + (rec.overage.length === 1 ? ' was' : 's were') + ' not on this load and not received; check the load they belong to.' : 'Every expected serial was received.') };
+    }
+    if (b.action === 'import') {
+      var parsed = Array.isArray(b.rows) ? { headers: Object.keys(b.rows[0] || {}), rows: b.rows } : Cu.parseCsv(b.text), mapping = b.mapping && Object.keys(b.mapping).length ? b.mapping : Cu.guessMapping(parsed.headers, state.custodyMapping);
+      if (!Object.keys(mapping).some(function (h) { return mapping[h] === 'serial'; })) return err(400, 'Map a column to the serial number');
+      var unitsBy = {}; state.units.forEach(function (u) { unitsBy[u.serial] = u; }); var sitesBy = {}, byKey = {}; state.sites.forEach(function (s) { sitesBy[s.id] = s; byKey[Cu.siteKey(s.customerId, s.name, s.address && s.address.zip)] = s; });
+      var planned; try { planned = Cu.plan(parsed.rows, mapping, { units: unitsBy, sites: sitesBy, byKey: byKey, customerId: b.customerId || null, allowNewSites: b.allowNewSites === true }, now); } catch (e) { return err(e.status || 400, e.message); }
+      if (b.dryRun !== false) return { ok: true, dryRun: true, headers: parsed.headers, mapping: mapping, plan: planned };
+      var done = { created: 0, updated: 0, skipped: 0 }, batchId = 'imp_' + hex(6);
+      planned.newSites.forEach(function (s) { state.sites.push(Object.assign({ id: s.id, orgId: ORG }, Cu.site({ name: s.name, customerId: s.customerId, address: s.address, endCustomer: s.endCustomer, interconnection: s.interconnection }), { createdAt: now, createdBy: who, importBatchId: batchId })); done.created++; });
+      planned.items.forEach(function (item) { if (item.problems.length) return; if (!item.actions.length) { done.skipped++; return; } var u = unitsBy[item.serial]; item.actions.forEach(function (a) { var ap = Cu.apply(u, a.action, a, who, now, 'import'); patchUnit(u, ap.patch); ap.event.importBatchId = batchId; logEvent(u.serial, ap.event); }); if (b.customerId) u.custody.customerId = b.customerId; done.updated++; });
+      return { ok: true, dryRun: false, batchId: batchId, mapping: mapping, summary: Object.assign({}, planned.summary, done), errors: planned.items.filter(function (x) { return x.problems.length; }) };
+    }
+    return err(400, 'Unknown custody action');
+  }
+  if (path === '/api/my-sites') {
+    var CM = { received: 'receive', assign: 'assign', installed: 'install', commissioned: 'commission' };
+    if (b.action === 'site') { var sr = saveSite(b, 'company_riverside'); return sr.error ? sr : { ok: true, site: V.pubSite(sr.site) }; }
+    if (!CM[b.action]) return err(400, 'Unsupported action');
+    var mu = unitBy(String(b.serial || '').trim()); if (!mu || mu.orderId !== 'o1') return err(404, 'That serial is not on one of your orders');
+    var ms = b.siteId ? siteBy(b.siteId) : null; if (b.siteId && (!ms || ms.customerId !== 'company_riverside')) return err(404, 'Site not found on your account'); if (CM[b.action] === 'assign' && !ms) return err(400, 'Choose the site');
+    var mr = moveUnit(mu, CM[b.action], { at: b.at, condition: b.condition === 'damaged' ? 'damaged' : 'accepted', siteId: ms ? ms.id : undefined, siteName: ms ? ms.name : undefined, position: b.position, installer: b.installer, endCustomer: ms ? ms.endCustomer : undefined, note: b.note }, 'customer');
+    if (mr.error) return mr; mu.custody.customerId = 'company_riverside'; return { ok: true, duplicate: mr.action === 'duplicate', unit: V.pubUnit(mu) };
   }
   if (path === '/api/my-account') {
     var a = state.account; a.you.name = String(b.name || a.you.name).slice(0, 120); a.company = String(b.company || a.company).slice(0, 160); a.you.phone = String(b.phone || '').slice(0, 40);
