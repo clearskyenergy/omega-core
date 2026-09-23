@@ -1466,16 +1466,53 @@ body.arranging .scroll{pointer-events:none}
        padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }
 
+/* ── THE PHONE BAR ────────────────────────────────────────────────────────
+   Only under 700px (display:none otherwise, .ptabs{display:flex} above). Fixed
+   to the bottom under the sticky talk bar, so the two never overlap and the
+   caption, which measures the talk bar, clears both. */
+:root{--ptabH:58px}
+.ptabs{display:none;position:fixed;left:0;right:0;bottom:0;z-index:70;height:calc(var(--ptabH) + env(safe-area-inset-bottom));
+       padding:0 4px env(safe-area-inset-bottom);background:var(--bg);border-top:1px solid rgba(0,243,255,.22)}
+.ptabs button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+       background:none;border:none;border-radius:0;padding:6px 2px;color:var(--dim);font-family:var(--mono);
+       font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;position:relative;min-height:0}
+.ptabs button .ic{font-size:18px;line-height:1;font-family:var(--ui)}
+.ptabs button.on{color:var(--glow-cyan)}
+.ptabs button.on::after{content:'';position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--glow-cyan)}
+.ptabs .pill{position:absolute;top:3px;right:12%;margin:0;background:rgba(0,243,255,.16);color:var(--glow-cyan);
+       border-radius:9px;padding:0 5px;font-size:9px;line-height:14px}
+.ptabs .pill:empty{display:none}
+.moreBack{position:fixed;inset:0;background:rgba(2,8,19,.7);z-index:80}
+.moreSheet{position:fixed;left:0;right:0;bottom:0;z-index:81;background:#061224;border-top:var(--edge);
+       border-radius:14px 14px 0 0;padding:10px 10px calc(12px + env(safe-area-inset-bottom));max-height:78vh;overflow-y:auto}
+.moreSheet .ptitle{margin:4px 6px 8px}
+.moreSheet .navItem{display:flex;width:100%;min-height:46px;padding:10px 12px;margin-bottom:4px;
+       border:1px solid rgba(0,243,255,.14);border-radius:8px;font-size:14px;white-space:normal;text-align:left}
+.moreSheet .navItem.on{border-color:var(--glow-cyan);background:rgba(0,243,255,.10)}
+.moreSheet .pill{background:rgba(0,243,255,.16);color:var(--glow-cyan);border-radius:9px;padding:0 6px}
+.moreSheet .pill:empty{display:none}
+.rowClick{cursor:pointer}
+.row.rowClick .k::after{content:'  ›';color:var(--dim)}
+
 @media (max-width:700px){
-  /* HIS RULE, 2026-09-13: on the phone, Jarvis is something you TALK to.
-     Thirteen tabs is thirteen things to poke at on a screen with room for
-     one, and asking for a screen is faster than hunting for it — so the
-     strip goes and navigation becomes a sentence (see viewCommand()). The
-     tabs stay on every larger screen, where there is room for them and a
-     mouse to use them. */
+  /* HIS RULE, 2026-09-13, was: on the phone, Jarvis is something you TALK to,
+     so the strip went and navigation became a sentence (viewCommand()).
+     HIS RULE, 2026-09-23, from the installed app: "I can't access any of the
+     stuff on the command center." A sentence is a fine way to move and a poor
+     way to discover, and an installed app with no visible way to its other
+     screens reads as broken. So the seventeen-button strip stays gone, and in
+     its place: a bottom bar with the four screens he opens most, a MORE sheet
+     that lists every other one (built from #nav, so it is the same list with
+     the same count pills), and Overview rows that open the screen they
+     count. The sentence still works. */
   #nav{display:none}
   .brand{padding-bottom:4px}
   .rail{flex:none;padding-bottom:6px}
+  .ptabs{display:flex}
+  body{padding-bottom:calc(var(--ptabH) + env(safe-area-inset-bottom))}
+  .talkBar{bottom:calc(var(--ptabH) + env(safe-area-inset-bottom));
+           padding-bottom:8px;border-bottom:1px solid rgba(0,243,255,.14)}
+  .foot{display:none}
 }
 </style>
 </head>
@@ -1982,6 +2019,17 @@ body.arranging .scroll{pointer-events:none}
   </main>
 
   <div class="foot" id="foot"></div>
+
+  <!-- The phone bar. Hidden above 700px; see THE PHONE BAR in the styles. -->
+  <nav class="ptabs" id="ptabs" aria-label="Screens">
+    <button data-view="command"><span class="ic">◧</span>Home</button>
+    <button data-view="tasks"><span class="ic">▤</span>Tasks<span class="pill" data-for="nTasks"></span></button>
+    <button data-view="outbox"><span class="ic">✉</span>Outbox<span class="pill" data-for="nOut"></span></button>
+    <button data-view="calendar"><span class="ic">▦</span>Calendar<span class="pill" data-for="nCal"></span></button>
+    <button data-view="more" id="moreTab"><span class="ic">⋯</span>More</button>
+  </nav>
+  <div class="moreBack" id="moreBack" hidden></div>
+  <div class="moreSheet" id="moreSheet" hidden><div class="ptitle">Every screen</div><div id="moreList"></div></div>
 </div>
 
 <div class="zoomBack" id="zoomBack" hidden></div>
@@ -5779,6 +5827,8 @@ function wireTerm(){
 function showView(name){
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
+  const inBar=['command','tasks','outbox','calendar'].includes(name);
+  [...document.querySelectorAll('.ptabs button')].forEach(b=>b.classList.toggle('on', b.dataset.view===name || (!inBar && b.dataset.view==='more')));
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='command') try{ quantumCore.resize(); }catch(_){}
@@ -5809,6 +5859,34 @@ function showView(name){
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
 });
+/* ── THE PHONE BAR ── */
+function moreOpen(open){
+  el('moreBack').hidden=!open; el('moreSheet').hidden=!open;
+  if(!open) return;
+  /* Built from #nav every time it opens: one list, one set of pills, and a
+     screen added to the rail later shows up here without a second edit. */
+  const host=el('moreList'); host.textContent='';
+  const cur=document.querySelector('.view.on')?.dataset.view;
+  [...document.querySelectorAll('#nav .navItem')].forEach(src=>{
+    const b=src.cloneNode(true); b.removeAttribute('id');
+    const pill=b.querySelector('.pill'); if(pill) pill.removeAttribute('id');
+    b.classList.toggle('on', src.dataset.view===cur);
+    b.addEventListener('click',()=>{ moreOpen(false); showView(src.dataset.view); window.scrollTo(0,0); });
+    host.appendChild(b);
+  });
+}
+[...document.querySelectorAll('.ptabs button')].forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.view==='more'){ moreOpen(el('moreSheet').hidden); return; }
+    moreOpen(false); showView(b.dataset.view); window.scrollTo(0,0);
+  });
+});
+el('moreBack').addEventListener('click',()=>moreOpen(false));
+/* The bar's pills mirror the rail's, which several renderers write. */
+function syncPhonePills(){
+  [...document.querySelectorAll('.ptabs .pill[data-for]')].forEach(p=>{ const src=el(p.dataset.for); p.textContent=src?src.textContent:''; });
+}
+if(window.MutationObserver){ const nav=el('nav'); if(nav) new MutationObserver(syncPhonePills).observe(nav,{subtree:true,childList:true,characterData:true}); }
 
 /* ── the microphone, on a phone ──────────────────────────────────────────
    On a narrow screen the rail collapses to a strip of tabs and its voice
@@ -7435,6 +7513,14 @@ function renderOverview(s){
     ['IN QUEUE', num(c.queued), (c.queued||0)?'warn':'good'],
     ['PEOPLE KNOWN', num(c.people==null?null:c.people)]
   ]);
+  /* Each count is a door to the screen it counts. On the phone this is the
+     shortest path from "143 on your plate" to the plate. */
+  const doors=['tasks','outbox','calendar','system','people'];
+  [...el('overview').querySelectorAll('.row')].forEach((r,i)=>{
+    if(!doors[i]) return;
+    r.classList.add('rowClick'); r.setAttribute('role','link'); r.tabIndex=0;
+    r.addEventListener('click',()=>{ showView(doors[i]); window.scrollTo(0,0); });
+  });
   const set=(id,v)=>{ const e=el(id); if(e) e.textContent=(v==null?'':v); };
   set('nTasks', c.backlog||''); set('nOut', c.drafts||'');
   set('nCal', (s.schedule||[]).length||''); set('nPeople', c.people||'');
