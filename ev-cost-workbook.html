@@ -1191,8 +1191,25 @@ var NG_PRICE = {
      the charger amount, so it follows the hardware price when that moves. */
   mountingShare: 0.5,
   pad: { mat:512.50, lab:1012.50 },
-  newServicePanelLab: 200
+  newServicePanelLab: 200,
+  /* The customer's all-in price floor, per port, sales tax included:
+     $13,300-$13,400 keeps about $8,500 a plug after expenses (6 plugs
+     ~ $80k). Overridable per job under Program details. */
+  allInPerPort: 13350
 };
+
+/* The markup that brings the job to its all-in floor. The total is linear
+   in the markup (every line and the tax on it scale together), so one
+   unfloored build gives the base and the factor is target / base. 0 when
+   the job is not National Grid or is already above the floor. */
+function ngFloorTarget(){ return num(DATA.ngTargetPerPort) || NG_PRICE.allInPerPort; }
+function ngFloorFactor(form){
+  if(!ngProgramActive()) return 0;
+  var ports=num(DATA.plugs); if(!(ports>0)) return 0;
+  var base=buildModel(form, true), mkU=1+nval('p_markup')/100;
+  var t1=num(base.total)/mkU;
+  return t1>0 ? (ngFloorTarget()*ports)/t1 : 0;
+}
 var NG_FOLDED     = { install:1, shipping:1, activation:1 };   /* inside the two prices above */
 var NG_MOUNT_ROWS = { pedestal:1, charger2:1, mount:1 };
 var NG_PANEL_ROWS = { panel:1, boards:1, meter:1 };
@@ -1290,6 +1307,12 @@ function ngIncentiveHTML(m){
       +'schedule, so treat the figures below as not applying until the category is MUD (5+ residential units).</div>';
   if(!(I.ports>0))
     h+='<div class="warn" style="margin-bottom:8px">Set Number of Ports — every cap is per port.</div>';
+  var _base=buildModel(FORM_NG_MA, true), _pp=I.ports>0 ? I.cost/I.ports : 0;
+  h+='<div class="note" style="margin-bottom:8px">All-in '+$(I.cost)+' = '+$(_pp)+' per port. '
+    +(r2(_base.total)<r2(I.cost)
+      ? 'Raised from '+$(_base.total)+' to the '+$(ngFloorTarget())+'/port floor — every line scaled '
+        +(Math.round((I.cost/_base.total-1)*1000)/10)+'% alike, proposal included.'
+      : 'Already at or above the '+$(ngFloorTarget())+'/port floor.')+'</div>';
   h+='<table class="pv"><tr><td><b>Bucket</b></td><td class="num"><b>Eligible cost</b></td>'
     +'<td><b>Rule</b></td><td class="num"><b>Rebate</b></td><td class="num"><b>Room under cap</b></td></tr>';
   for(i=0;i<I.lines.length;i++){
@@ -1435,6 +1458,8 @@ var FORM_NG_MA = {
       options:['Multi-Unit Dwelling (MUD)','Workplace','Public Parking','Fleet','Destination'] },
     { type:'stack', label:'Environmental Justice Community', k:'ngEjc', type2:'select',
       options:NG_EJC_OPTIONS },
+    { type:'stack', label:'All-in price per port, minimum (blank = $13,350)', k:'ngTargetPerPort',
+      type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Trenching', k:'ftTrench',  type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Conduit',   k:'ftConduit', type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Cable',     k:'ftCable',   type2:'number', fmt:'#,##0' }
@@ -3618,10 +3643,13 @@ function panelHeldSummary(){
   return { n:n, total:r2(t) };
 }
 
-function buildModel(form){
+function buildModel(form, noFloor){
   form = form || proposalForm();
   var BL=form.blocks;
   var mk=1+nval('p_markup')/100;
+  /* A National Grid job never prices below its per-port floor. The floor
+     lifts the markup, never lowers it, and scales every line alike. */
+  if(!noFloor){ var _fl=ngFloorFactor(form); if(_fl>mk) mk=_fl; }
   /* Each form carries its own rate and labor rule. The knob overrides only
      the form it was edited against, so exporting two programs at once can't
      apply one utility's tax treatment to the other's sheet. */
