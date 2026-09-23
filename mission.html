@@ -753,6 +753,33 @@ body.arranging .scroll{pointer-events:none}
   0%,100%{box-shadow:0 0 12px rgba(61,220,132,.40) inset}
   50%    {box-shadow:0 0 22px rgba(61,220,132,.70) inset}}
 
+/* ── THE OTHER MASTERS ───────────────────────────────────────────────────
+   Armour, Witch-king and the Ring are doom mode with a different master in
+   the room: same card frame, same darkened corners, same 3D layer. Only the
+   palette moves, keyed by data-figure, so every rule written for doom mode
+   keeps holding and a new master costs seven variables. */
+:root[data-mode="doom"][data-figure="armour"]{
+  --glow-cyan:#ffb347; --glow-blue:#8a1c12; --ink:#ffe8d4; --dim:#c4906e;
+  --panel:rgba(30,9,6,.62); --edge:1px solid rgba(255,140,70,.32); --bg:#12050a}
+:root[data-mode="doom"][data-figure="armour"] .mark{box-shadow:0 0 12px rgba(255,120,60,.45) inset;animation:none}
+:root[data-mode="doom"][data-figure="armour"] .talkBar{
+  background:linear-gradient(90deg,rgba(138,28,18,.18),rgba(255,179,71,.08),rgba(138,28,18,.18));
+  box-shadow:inset 0 0 20px rgba(138,28,18,.30)}
+:root[data-mode="doom"][data-figure="witchking"]{
+  --glow-cyan:#bcd9ff; --glow-blue:#1c2a4a; --ink:#e4ecff; --dim:#8c9fc2;
+  --panel:rgba(6,9,20,.66); --edge:1px solid rgba(188,217,255,.26); --bg:#04060f}
+:root[data-mode="doom"][data-figure="witchking"] .mark{box-shadow:0 0 12px rgba(188,217,255,.40) inset;animation:none}
+:root[data-mode="doom"][data-figure="witchking"] .talkBar{
+  background:linear-gradient(90deg,rgba(28,42,74,.20),rgba(188,217,255,.07),rgba(28,42,74,.20));
+  box-shadow:inset 0 0 20px rgba(28,42,74,.35)}
+:root[data-mode="doom"][data-figure="onering"]{
+  --glow-cyan:#ffc85c; --glow-blue:#6b3a05; --ink:#fff1cf; --dim:#b8965a;
+  --panel:rgba(26,15,4,.62); --edge:1px solid rgba(255,200,92,.32); --bg:#0f0803}
+:root[data-mode="doom"][data-figure="onering"] .mark{box-shadow:0 0 12px rgba(255,200,92,.45) inset;animation:none}
+:root[data-mode="doom"][data-figure="onering"] .talkBar{
+  background:linear-gradient(90deg,rgba(107,58,5,.20),rgba(255,200,92,.08),rgba(107,58,5,.20));
+  box-shadow:inset 0 0 20px rgba(107,58,5,.35)}
+
 /* ── DOOM MODE: THE CARD IS A CARD ───────────────────────────────────────
    In doom mode a person stops being a dossier and becomes a collectible:
    title bar, art window, type line, text box, flavour, bottom bar. Straight
@@ -1743,9 +1770,11 @@ body.arranging .scroll{pointer-events:none}
             <div class="ptitle">Character & appearance</div>
             <div class="characterSettings">
               <label for="characterMode">Jarvis character</label>
-              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <div id="doomAppearance" style="display:grid;gap:10px">
               <label for="doomCharacter">Doom appearance</label>
-              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="ironman">Iron Man · armour statue</option><option value="witchking">Witch-king of Angmar · statue</option><option value="onering">The One Ring · turning</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              </div>
               <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
             </div>
           </div>
@@ -3234,7 +3263,7 @@ function makeCore(id, opts) {
        cyan globe under a gold name. The command centre has its own sphere;
        this is only the globe agreeing with its label. */
     const quantumNow = document.documentElement.dataset.mode === 'quantum';
-    const cyan = doom ? '61,220,132' : quantumNow ? '255,195,92' : '0,243,255';
+    const cyan = doom ? ((FIGURE_MODES[document.documentElement.dataset.figure]||{}).rgb || '61,220,132') : quantumNow ? '255,195,92' : '0,243,255';
     const hot  = quantumNow ? '255,236,196' : '140,240,255';
     if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
@@ -3670,26 +3699,42 @@ const arc = makeBurst('arc', { scale: 0.60 });
 const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
 let missionDoom = null, characterGeneration = 0, characterState = 'idle';
 let doomCharacter = 'rigged';
-try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','ironman','witchking','onering','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+/* The masters who stand in the room. Doom keeps his appearance menu; the
+   others ARE their figure. Everything else on this page keys off
+   dataset.mode === 'doom', so each of these runs as doom mode with
+   dataset.figure naming who is standing there. */
+const FIGURE_MODES = {
+  doom:      { figure: null,        name: 'D.O.O.M',      tag: 'SOVEREIGN CORE', line: 'Doom mode. Same numbers, worse manners.' },
+  armour:    { figure: 'ironman',   name: 'S.T.A.R.K',    tag: 'ARMOUR CORE',    rgb: '255,179,71', line: 'Armour mode. Suit is online.' },
+  witchking: { figure: 'witchking', name: 'A.N.G.M.A.R',  tag: 'WITCH-KING CORE', rgb: '188,217,255', line: 'Witch-king mode. No man may close this dashboard.' },
+  onering:   { figure: 'onering',   name: 'THE ONE RING', tag: 'PRECIOUS CORE',  rgb: '255,200,92', line: 'Ring mode. One dashboard to rule them all.' }
+};
+function currentFigure() {
+  const fm = FIGURE_MODES[document.documentElement.dataset.figure || 'doom'] || FIGURE_MODES.doom;
+  return fm.figure || doomCharacter;
+}
 function syncDoomCharacter() {
   const generation = ++characterGeneration;
   const layer = el('coreLayer'), host = el('missionDoom');
   if (missionDoom) { missionDoom.destroy(); missionDoom = null; }
   layer.classList.remove('characterReady'); host.style.display = 'none';
   el('doomCharacter').value = doomCharacter;
-  if (document.documentElement.dataset.mode !== 'doom' || doomCharacter === 'classic') return;
+  const figureKey = currentFigure();
+  el('doomAppearance').style.display = (document.documentElement.dataset.figure || 'doom') === 'doom' ? 'grid' : 'none';
+  if (document.documentElement.dataset.mode !== 'doom' || figureKey === 'classic') return;
   host.style.display = 'block';
   el('characterStatus').textContent = 'Loading character…';
   try {
-    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, doomCharacter);
+    const actor = figureKey === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, figureKey);
     missionDoom = actor;
     actor.ready.then(() => {
       if (generation !== characterGeneration) return;
       actor.setState(characterState); layer.classList.add('characterReady');
       const credit = el('missionDoomCredit');
-      const figure = OmegaDoom.figures[doomCharacter];
+      const figure = OmegaDoom.figures[figureKey];
       credit.style.visibility = figure ? 'visible' : 'hidden';
-      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(doomCharacter); }
+      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(figureKey); }
       el('characterStatus').textContent = 'Character ready. Saved on this browser.';
     }).catch(() => {
       if (generation !== characterGeneration) return;
@@ -4591,21 +4636,23 @@ function confirmCommand(cmd){
    means it is instant and costs nothing.
 
    No number changes. A skin that edits the truth is not a skin. */
-const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|armou?r|suit|stark|witch[\s-]*king|nazgul|(?:the\s+)?(?:one\s+)?ring|precious|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODES = ['ironman','doom','armour','witchking','onering','quantum'];
 
 /* Three skins on one page: Iron Man (the burst), Doom (the icosahedron) and
    Quantum (the gold sphere, for the command centre). dataset.mode carries the
    name; '' is Iron Man because that is what every rule written before there
    were modes assumes. */
 function setMode(mode, announce){
-  const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
-  const doom = m==='doom', quantum = m==='quantum';
-  document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  const m = MODES.includes(mode) ? mode : 'ironman';   /* anything else is Iron Man mode */
+  const figureMode = FIGURE_MODES[m], doom = !!figureMode, quantum = m==='quantum';
+  document.documentElement.dataset.mode = doom ? 'doom' : quantum ? m : '';
+  if (doom) document.documentElement.dataset.figure = m; else delete document.documentElement.dataset.figure;
   el('characterMode').value = m;
   syncDoomCharacter();
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
-  const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
-  const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
+  const name = doom ? figureMode.name : 'J.A.R.V.I.S';
+  const tag  = doom ? figureMode.tag : quantum ? 'QUANTUM CORE' : 'AI CORE';
   const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
   if(n) n.textContent = name;
   if(sub) sub.textContent = tag;
@@ -4621,7 +4668,7 @@ function setMode(mode, announce){
   }catch(_){}
   try{ syncBoardTheme(); }catch(_){}
   if(announce){
-    const line = doom    ? 'Doom mode. Same numbers, worse manners.'
+    const line = doom    ? figureMode.line
                : quantum ? 'Quantum mode. Same numbers, in gold.'
                :           'Iron Man mode.';
     say('jarvis', line, 0);
@@ -4630,7 +4677,7 @@ function setMode(mode, announce){
 }
 try{
   const savedMode = localStorage.getItem('jarvisMode');
-  setMode((savedMode==='doom'||savedMode==='quantum') ? savedMode : 'ironman', false);
+  setMode(MODES.includes(savedMode) ? savedMode : 'ironman', false);
 }catch(_){}
 
 function modeCommand(said){
@@ -4642,7 +4689,15 @@ function modeCommand(said){
   /* Bare "quantum" is a word he might say about something else; it needs
      "mode" or a verb — "go quantum" — to be an order. */
   if(word==='quantum' && !/mode|go|switch|enter|activate/i.test(said)) return null;
-  return (word==='doom') ? 'doom' : (word==='quantum') ? 'quantum' : 'ironman';
+  /* "the ring", "suit", "precious" are words with other lives; they need
+     "mode" or a verb to be an order. */
+  if(/ring|precious|suit|stark|armou?r|nazgul/.test(word) && !/mode|go|switch|enter|activate/i.test(said)) return null;
+  if(word==='doom') return 'doom';
+  if(word==='quantum') return 'quantum';
+  if(/armou?r|suit|stark/.test(word)) return 'armour';
+  if(/witch|nazgul/.test(word)) return 'witchking';
+  if(/ring|precious/.test(word)) return 'onering';
+  return 'ironman';
 }
 
 /* One path for typed and spoken. A second code path for the keyboard is how

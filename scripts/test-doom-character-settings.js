@@ -14,8 +14,9 @@ actors[1].resolve();await Promise.resolve();assert(el('coreLayer').classList.con
 vm.runInContext('doomCore.say(0.7)',context);assert.equal(actors[1].state,'speaking');
 vm.runInContext('doomCore.say(0)',context);assert.equal(actors[1].state,'idle');
 vm.runInContext("doomCharacter='mask';syncDoomCharacter()",context);assert(actors[1].dead);actors[2].resolve();await Promise.resolve();assert.equal(actors[2].state,'idle');assert(el('missionDoomCredit').textContent.includes('Mask'));
-vm.runInContext("doomCharacter='onering';syncDoomCharacter()",context);assert(actors[2].dead);actors[3].resolve();await Promise.resolve();assert.equal(el('missionDoomCredit').href,'o');assert.equal(el('missionDoomCredit').style.visibility,'visible');
-vm.runInContext("doomCharacter='classic';syncDoomCharacter()",context);assert(actors[3].dead);assert(!el('coreLayer').classList.contains('characterReady'));
+vm.runInContext("document.documentElement.dataset.figure='onering';syncDoomCharacter()",context);assert(actors[2].dead);actors[3].resolve();await Promise.resolve();assert.equal(el('missionDoomCredit').href,'o');assert.equal(el('missionDoomCredit').style.visibility,'visible');assert.equal(el('doomAppearance').style.display,'none');
+vm.runInContext("delete document.documentElement.dataset.figure",context);
+vm.runInContext("doomCharacter='classic';syncDoomCharacter()",context);assert(actors[3].dead);assert(!el('coreLayer').classList.contains('characterReady'));assert.equal(el('doomAppearance').style.display,'grid');
 vm.runInContext("doomCharacter='rigged';syncDoomCharacter()",context);actors[4].reject();await Promise.resolve();await Promise.resolve();assert(actors[4].dead);assert(el('characterStatus').textContent.includes('classic'));
 console.log('PASS: character switching, mask and figure sources, stale loads, speech state, classic selection and load failure fallback');
 })().catch(e=>{console.error(e);process.exitCode=1;});
