@@ -172,6 +172,17 @@ var NOW = '2026-09-05T12:00:00Z';
     await rejects(post({ action: 'confirm', serial: 'S005' }), 409, /not assigned/);
   });
 
+  await test('the register is one flat row per unit with the parties, the load, the site and the coverage; details are links, not moves', async function () {
+    var r = await get({ view: 'register' }); assert.equal(r.rows.length, 5, 'every shipping unit, at the plant or beyond; the module is not a row'); assert.equal(r.columns[0].key, 'serial');
+    var s9 = r.rows.filter(function (x) { return x.serial === 'S009'; })[0]; assert.equal(s9.site, 'Fresno depot'); assert.equal(s9.confirmation.indexOf('confirmed'), 0); assert.equal(s9.seller, 'Clean Cell'); assert.equal(s9.warrantyStatus, 'active'); assert.equal(s9.warrantyUntil, '2036-09-12'); assert.equal(s9.statusLabel, 'assigned to site');
+    var plant = r.rows.filter(function (x) { return !x.status; })[0]; assert.equal(plant.custodian, 'plant'); assert.ok(/ready to ship|being built/.test(plant.statusLabel));
+    var d = await post({ action: 'detail', serial: 'S009', reseller: 'Valley Power Partners', endCustomer: 'Fresno Cold Storage', notes: 'pad 2, north fence' }); assert.deepEqual(d.changed, ['reseller', 'endCustomer', 'notes']); assert.equal(d.custody.reseller, 'Valley Power Partners');
+    var again = await post({ action: 'detail', serial: 'S009', reseller: 'Valley Power Partners' }); assert.equal(again.action, 'duplicate');
+    await rejects(post({ action: 'detail', serial: 'S009', commissioningReportUrl: 'http://not-https' }), 400, /HTTPS/);
+    var r2 = await get({ view: 'register' }); var s9b = r2.rows.filter(function (x) { return x.serial === 'S009'; })[0]; assert.equal(s9b.reseller, 'Valley Power Partners'); assert.equal(s9b.endCustomer, 'Fresno Cold Storage'); assert.equal(s9b.status, 'assigned', 'a detail never moves the unit');
+    var ev = await get({ serial: 'S009' }); assert.equal(ev.events[0].type, 'detail'); assert.match(ev.events[0].note, /reseller: Valley Power Partners/);
+  });
+
   console.log('\nreplacement and import');
   await test('an RMA replacement inherits the remaining term and the site; both serials stay linked', async function () {
     await post({ action: 'move', move: 'install', serial: 'S001', at: '2026-08-28' }); await post({ action: 'move', move: 'commission', serial: 'S001', at: '2026-09-04' }); await post({ action: 'move', move: 'in-service', serial: 'S001', at: '2026-09-06' });

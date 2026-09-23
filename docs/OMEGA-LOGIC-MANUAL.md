@@ -127,6 +127,19 @@ appear only for ClearSky.
 - **Shipping & receiving.** Destinations, shipment legs with carrier and
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
+- **Fleet register.** The spreadsheet: one row per serialized unit, at the
+  plant or beyond — seller, buyer, reseller, end customer, site and
+  position, order and customer PO, load, carrier and BOL, shipped /
+  delivered / received / installed / commissioned dates, warranty and SLA
+  with their dates. Search any column, filter by status, product or site,
+  sort by any header, show or hide column groups, export the visible rows
+  to CSV. Click a cell to edit it: Enter saves and steps down, Tab steps
+  across, Escape cancels. Reseller, end customer, position, installer and
+  notes save as they are; choosing a **Site** assigns the unit and typing
+  an **Installed** or **Commissioned** date records that move — through the
+  same rules as everywhere else, so a cell no move applies to is not
+  editable. Tick rows to assign them to a site, or give them a
+  destination, in one go. The serial opens the passport.
 - **Sites & custody.** Every shipping unit after it leaves the plant: who
   holds it, which end site it is bound to, and the warranty or SLA that
   binds. *Where the fleet is* counts units by status and lists what **the

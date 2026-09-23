@@ -6,6 +6,9 @@
                                             every custody event and plant scan
         &site=<siteId>                      one site and the units bound to it
         &view=exceptions                    the gaps that lose warranty claims
+        &view=register                      one flat row per unit: parties,
+                                            site, shipping, coverage (the
+                                            spreadsheet)
         &template=assignment                the CSV to send a customer
    POST /api/logic-custody { org, action, … }
         site          create or edit a site (an end location with its
@@ -15,6 +18,8 @@
         destination   "this one is going there" before it is bound; honoured
                       at receipt
         confirm       the office confirms a site the customer declared
+        detail        reseller, end customer, installer, notes, position,
+                      commissioning report — links, not moves
         state         damaged · lost · quarantined · scrapped · clear
         replace       an RMA'd unit is replaced; coverage transfers its
                       remaining term to the new serial
@@ -82,6 +87,20 @@ module.exports = A.handler(async function (req, res) {
       return { brand: brand, site: Object.assign({ id: sd.id }, sd.data()), units: here, exceptions: C.exceptions(list.filter(function (u) { return C.custodyOf(u).siteId === sd.id; }), prods, now), limited: all.limited };
     }
     if (req.query.view === 'exceptions') return { brand: brand, exceptions: C.exceptions(list, prods, now), sampled: list.length, limited: all.limited };
+    if (req.query.view === 'register') {
+      /* one flat row per shipping unit, at the plant or beyond, joined to
+         its order (buyer, PO, load) and its site; the columns a spreadsheet
+         would want. Orders are read one by one (≤ 300 distinct). */
+      var ids = {}; list.forEach(function (u) { if (u.orderId) ids[u.orderId] = true; });
+      var orderIds = Object.keys(ids).slice(0, 300), orderDocs = await Promise.all(orderIds.map(function (id) { return db.collection('orders').doc(id).get(); })), orders = {};
+      orderDocs.forEach(function (d) { if (d.exists && d.data().orgId === org) orders[d.id] = Object.assign({ id: d.id }, d.data()); });
+      var siteRows = await sites(db, org), sitesBy = {}; siteRows.forEach(function (sx) { sitesBy[sx.id] = sx; });
+      var custRows = await root(db, org).collection('customers').orderBy('__name__').limit(200).get(), custBy = {}; custRows.docs.forEach(function (d) { custBy[d.id] = d.data().name || d.id; });
+      var seller = ctx.org.name || org;
+      var rows = list.map(function (u) { var c = C.custodyOf(u), o = orders[u.orderId] || null, leg = o ? (((o.delivery || {}).legs || []).filter(function (l) { return l.id === c.legId || (!c.legId && (l.serials || []).indexOf(u.serial) >= 0); })[0] || null) : null;
+        return C.registerRow(u, { product: byP[u.sku] || null, order: o, leg: leg, site: c.siteId ? sitesBy[c.siteId] || null : null, seller: seller, buyer: custBy[u.customerId || c.customerId || (o && o.customerId)] || (o && o.customer && o.customer.name) || '' }, now); });
+      return { brand: brand, name: seller, owner: X.owner(caller), columns: C.REGISTER_COLUMNS, rows: rows, sites: siteRows.filter(function (sx) { return sx.status !== 'inactive'; }).map(function (sx) { return { id: sx.id, name: sx.name }; }), products: prods.filter(function (p) { return p && p.sku && (p.kind || 'product') === 'product'; }).map(function (p) { return { sku: p.sku, name: p.name }; }), limited: all.limited, sampled: list.length };
+    }
     var counts = {}; C.STATUSES.forEach(function (k) { counts[k || 'plant'] = 0; });
     var offPlant = []; list.forEach(function (u) { var c = C.custodyOf(u); counts[c.status || 'plant']++; if (c.status) offPlant.push(view(u, byP, now)); });
     var siteList = await sites(db, org), perSite = {}; offPlant.forEach(function (u) { if (u.custody.siteId) perSite[u.custody.siteId] = (perSite[u.custody.siteId] || 0) + 1; });
@@ -115,6 +134,16 @@ module.exports = A.handler(async function (req, res) {
     });
   }
 
+  if (action === 'detail') {
+    var tserial = C.serial(b.serial), tref = unitRef(db, org, tserial);
+    return db.runTransaction(async function (tx) {
+      var ts = await tx.get(tref); if (!ts.exists || ts.data().orgId !== org) throw A.httpError(404, 'Serial is not registered');
+      var tr = C.detail(ts.data(), b, by, now); if (tr.duplicate) return { ok: true, action: 'duplicate', serial: tserial, custody: C.custodyOf(ts.data()) };
+      tx.update(tref, tr.patch); tx.create(eventDoc(tref), Object.assign({ orgId: org, serial: tserial }, tr.event));
+      var tafter = JSON.parse(JSON.stringify(ts.data())); Object.keys(tr.patch).forEach(function (k) { var parts = k.split('.'), t = tafter; parts.slice(0, -1).forEach(function (p) { t = t[p] || (t[p] = {}); }); t[parts[parts.length - 1]] = tr.patch[k]; });
+      return { ok: true, action: 'detail', serial: tserial, changed: tr.event.fields, custody: C.custodyOf(tafter) };
+    });
+  }
   if (action === 'confirm' || action === 'destination') {
     var cserial = C.serial(b.serial), cref = unitRef(db, org, cserial);
     return db.runTransaction(async function (tx) {

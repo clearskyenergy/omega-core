@@ -406,8 +406,11 @@ is not built.
   unit went (`declaredBy: 'customer'`, or a `destination` named before it
   arrives) and the office CONFIRMS (`confirm`); coverage binds on the
   declaration, confirmation is the office's check and never a gate on the
-  warranty. Design and what is not built:
-  `docs/LOGISTICS-CUSTODY.md`.
+  warranty. `logic-register.html` is the spreadsheet view of all of it
+  (`registerRow()` / `REGISTER_COLUMNS` in the library, `?view=register`):
+  a cell edit is either a `detail` (reseller, end customer, installer,
+  notes — links, never moves) or a move through the same `judge`/`apply`.
+  Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
 - **ClearSky commissions and controls Logic subscribers from
   `/logic-admin.html`** (`api/logic-admin.js`, owner-only through
   `logic-access.requireOwner`). It owns only what no other endpoint did —

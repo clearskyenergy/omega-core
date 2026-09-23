@@ -123,6 +123,56 @@ function confirm(unit, body, by, now) {
   return { patch: { 'custody.confirmedAt': now, 'custody.confirmedBy': by, 'custody.updatedAt': now, 'custody.updatedBy': by },
     event: { type: 'confirm', from: c.status, to: c.status, siteId: c.siteId, by: by, at: now, method: 'manual', note: clean(body && body.note, 500) } };
 }
+/* free-text links on a unit that are not moves: who resold it, who the end
+   customer is, who installed it, notes, the commissioning report. Nothing
+   here changes status or coverage. */
+var DETAIL_FIELDS = { reseller: 160, endCustomer: 160, notes: 1000, position: 120, installer: 120, commissioningReportUrl: 600, buyerRef: 120 };
+function detail(unit, body, by, now) {
+  var c = custodyOf(unit), b = body || {}, patch = {}, changed = [];
+  if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit is tracked past the plant');
+  Object.keys(DETAIL_FIELDS).forEach(function (k) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return;
+    var v = clean(b[k], DETAIL_FIELDS[k]);
+    if (k === 'commissioningReportUrl' && v && !/^https:\/\//.test(v)) throw fail(400, 'The commissioning report must be an HTTPS link');
+    if ((c[k] || '') === v) return;
+    patch['custody.' + k] = v; changed.push(k);
+  });
+  if (!changed.length) return { duplicate: true, patch: {}, event: null };
+  patch['custody.updatedAt'] = now; patch['custody.updatedBy'] = by;
+  return { patch: patch, event: { type: 'detail', from: c.status, to: c.status, by: by, at: now, method: 'manual', note: changed.map(function (k) { return k + ': ' + (patch['custody.' + k] || '—'); }).join(' · ').slice(0, 500), fields: changed } };
+}
+
+/* ── the register: one flat row per unit, every column a spreadsheet
+   would want, built the same way for the endpoint and the sandbox.
+   Party model follows what an OEM's installed-base register carries:
+   seller (the tenant), buyer (the account that ordered), reseller (who
+   sold it on, if anyone), end customer (whose site it runs at), site
+   (where it is interconnected). Shipping off the load, coverage derived. */
+var REGISTER_COLUMNS = [
+  { key: 'serial', label: 'Serial', group: 'unit', width: 150 }, { key: 'sku', label: 'Product', group: 'unit' }, { key: 'product', label: 'Product name', group: 'unit' }, { key: 'unitType', label: 'Type', group: 'unit' }, { key: 'built', label: 'Built', group: 'unit' },
+  { key: 'statusLabel', label: 'Status', group: 'where' }, { key: 'state', label: 'Condition', group: 'where' }, { key: 'custodian', label: 'Held by', group: 'where' }, { key: 'confirmation', label: 'Site confirmed', group: 'where' }, { key: 'goingTo', label: 'Going to', group: 'where' },
+  { key: 'seller', label: 'Seller', group: 'parties' }, { key: 'buyer', label: 'Buyer', group: 'parties' }, { key: 'reseller', label: 'Reseller', group: 'parties', edit: 'text' }, { key: 'endCustomer', label: 'End customer', group: 'parties', edit: 'text' },
+  { key: 'site', label: 'Site', group: 'site', edit: 'site' }, { key: 'position', label: 'Position', group: 'site', edit: 'text' }, { key: 'siteAddress', label: 'Site address', group: 'site' }, { key: 'utility', label: 'Utility', group: 'site' }, { key: 'poi', label: 'Interconnection point', group: 'site' }, { key: 'meter', label: 'Meter', group: 'site' },
+  { key: 'orderNo', label: 'Order', group: 'shipping' }, { key: 'poNumber', label: 'Customer PO', group: 'shipping' }, { key: 'load', label: 'Load', group: 'shipping' }, { key: 'carrier', label: 'Carrier', group: 'shipping' }, { key: 'tracking', label: 'BOL / tracking', group: 'shipping' }, { key: 'shippedAt', label: 'Shipped', group: 'shipping' }, { key: 'deliveredAt', label: 'Delivered', group: 'shipping' }, { key: 'receivedAt', label: 'Received', group: 'shipping' },
+  { key: 'installedAt', label: 'Installed', group: 'install', edit: 'date:install' }, { key: 'commissionedAt', label: 'Commissioned', group: 'install', edit: 'date:commission' }, { key: 'installer', label: 'Installer', group: 'install', edit: 'text' }, { key: 'inServiceAt', label: 'In service', group: 'install' },
+  { key: 'warrantyStatus', label: 'Warranty', group: 'coverage' }, { key: 'warrantyFrom', label: 'Warranty from', group: 'coverage' }, { key: 'warrantyUntil', label: 'Warranty until', group: 'coverage' }, { key: 'slaStatus', label: 'SLA', group: 'coverage' }, { key: 'slaUntil', label: 'SLA until', group: 'coverage' }, { key: 'slaUptime', label: 'SLA uptime %', group: 'coverage' },
+  { key: 'replacedBy', label: 'Replaced by', group: 'service' }, { key: 'replaces', label: 'Replaces', group: 'service' }, { key: 'rmaOpenedAt', label: 'RMA opened', group: 'service' }, { key: 'notes', label: 'Notes', group: 'service', edit: 'text' }
+];
+function registerRow(unit, ctx, now) {
+  ctx = ctx || {}; var c = custodyOf(unit), p = ctx.product || null, o = ctx.order || null, leg = ctx.leg || null, site = ctx.site || null, ic = (site && site.interconnection) || {}, a = (site && site.address) || {};
+  var cov = coverageWithInheritance(p, unit, now, o && o.shipment && o.shipment.shippedAt ? String(o.shipment.shippedAt).slice(0, 10) : null);
+  var w = cov.filter(function (x) { return x.type === 'warranty'; })[0] || null, sla = cov.filter(function (x) { return x.type === 'sla'; })[0] || null;
+  return { serial: unit.serial, sku: unit.sku, product: p ? p.name : '', unitType: unit.unitType || 'unit', built: String(unit.readyAt || unit.arrivedAt || unit.createdAt || '').slice(0, 10), orderId: unit.orderId || null,
+    status: c.status, statusLabel: c.status ? label(c.status) : (unit.at === 'ready' ? 'ready to ship' : 'being built'), state: c.state || '', custodian: c.status ? (CUSTODIAN[c.status] || '') : 'plant', confirmation: c.siteId ? (c.confirmedAt ? 'confirmed ' + String(c.confirmedAt).slice(0, 10) : 'customer says') : '', goingTo: !c.siteId && c.plannedSiteName ? c.plannedSiteName : '',
+    seller: ctx.seller || '', buyer: ctx.buyer || (o && o.customer && o.customer.name) || '', buyerId: unit.customerId || c.customerId || (o && o.customerId) || null, reseller: c.reseller || '', endCustomer: c.endCustomer || '',
+    siteId: c.siteId || null, site: c.siteName || '', position: c.position || '', siteAddress: [a.line1, a.city, a.state, a.zip].filter(Boolean).join(', '), utility: ic.utility || '', poi: ic.poi || '', meter: ic.meterNo || '',
+    orderNo: unit.orderNo || (o && o.orderNo) || '', poNumber: (o && ((o.purchaseOrder && o.purchaseOrder.number) || o.poNumber)) || '', load: c.legId || (leg && leg.id) || '', carrier: leg ? leg.carrier || '' : '', tracking: leg ? leg.tracking || '' : '',
+    shippedAt: c.shippedAt || (leg && leg.pickedUpAt ? String(leg.pickedUpAt).slice(0, 10) : '') || '', deliveredAt: c.deliveredAt || '', receivedAt: c.receivedAt || '',
+    installedAt: c.installedAt || '', commissionedAt: c.commissionedAt || '', installer: c.installer || '', inServiceAt: c.inServiceAt || '',
+    warrantyStatus: w ? w.status + (w.status === 'pending' && w.why ? ' · ' + w.why : '') : '', warrantyFrom: w ? w.startDate || '' : '', warrantyUntil: w ? w.endDate || '' : '', slaStatus: sla ? sla.status : '', slaUntil: sla ? sla.endDate || '' : '', slaUptime: sla && sla.metrics && sla.metrics.uptimePct != null ? sla.metrics.uptimePct : '',
+    replacedBy: c.replacedBy || '', replaces: c.replaces || '', rmaOpenedAt: c.rma && c.rma.openedAt ? c.rma.openedAt : '', notes: c.notes || '',
+    can: { assign: judge(unit, 'assign', { siteId: '_' }).ok || c.status === 'assigned', install: judge(unit, 'install', {}).ok, commission: judge(unit, 'commission', {}).ok, destination: ['', 'in_transit', 'delivered', 'received'].indexOf(c.status) >= 0 && !c.siteId && c.state !== 'scrapped' } };
+}
 /* what the customer's own record says, for either side to show */
 function confirmation(c) { c = c || {}; return !c.siteId ? null : c.confirmedAt ? 'confirmed' : 'declared'; }
 /* a side state: damaged, lost, quarantined, scrapped, or cleared */
@@ -338,6 +388,6 @@ function site(input, existing) {
 function siteId(customerId, s) { return 'site_' + siteKey(customerId, s.name, s.address && s.address.zip).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
 module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LABELS, TRIGGERS: TRIGGERS, COLUMNS: COLUMNS, TEMPLATE_HEADERS: TEMPLATE_HEADERS, MAX_ROWS: MAX_ROWS,
-  custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation,
+  custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation, detail: detail, DETAIL_FIELDS: DETAIL_FIELDS, REGISTER_COLUMNS: REGISTER_COLUMNS, registerRow: registerRow,
   templatesOf: templatesOf, template: template, coverageOf: coverageOf, coverageWithInheritance: coverageWithInheritance, inherited: inherited, addMonths: addMonths,
   exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId };

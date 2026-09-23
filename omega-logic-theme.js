@@ -59,6 +59,7 @@
       ['Deliver', [
         ['shipping', 'Shipping & receiving', '/logic-logistics.html' + q],
         ['custody', 'Sites & custody', '/logic-custody.html' + q],
+        ['register', 'Fleet register', '/logic-register.html' + q],
         ['quality', 'Quality & serial records', '/plant/' + q + '#records']]],
       ['Money', [
         ['cash', 'Cash flow', '/omega-logic' + q + '#cash']]],
