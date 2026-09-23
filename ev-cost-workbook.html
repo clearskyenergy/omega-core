@@ -1171,26 +1171,40 @@ function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
 
 /* ── NATIONAL GRID PRICE PROFILE ──────────────────────────────────────
    National Grid reimburses more per port than the other programmes, so a
-   National Grid job is priced to what the rep signed off on 33 Hermon St
-   (6 ports, 22 Sep 2026) — the engine's sheet against the rep's:
+   National Grid job is priced to the sheets the reps have signed off —
+   33 Hermon St, 145 West St, 160 S Main St and 750 Union (Sep 2026, 4-10
+   ports). Where they agree it is a rule; where they do not, it is not:
 
-     EVSE hardware       $714/port  + $1,520/port install  ->  $1,850/port
-     Pedestal & mounting $450/unit                         ->  half the hardware
-                                                               ($925/port)
-     Freight, activation billed separately                 ->  folded in
-     Concrete pads       none                              ->  $512.50 + $1,012.50 each
-     Panels, new service $570 labor                        ->  +$200
+     Design/engineering/permitting  $1,424/port        3 of 3 (4, 6, 10 ports)
+     Trench, continuously paved     $30 + $100 per LF  2 of 3 (S Main $40)
+     Pedestals & mounting           $1,150 per pedestal, ONE PER TWO PORTS
+                                                       3 of 3, and Menachem's
+                                                       Hermon correction: the
+                                                       pedestal COUNT is half
+                                                       the charger count
+     Concrete pads                  $500 + $1,000, one per pedestal   2 of 3
+     EVSE hardware                  $1,850/port 50 A (Hermon, signed off)
+                                    $2,525/port 80 A (S Main, 4 x 80 A)
+     Freight, activation, install   folded into the prices above
+     Panels, new service            +$200 labor (Hermon)
+
+   The mixed-amperage sheets (West St, Union) do not solve to one price per
+   amperage, so hardware follows the two clean jobs, and the per-port floor
+   below settles the job total either way.
 
    It is a JOB price, not a sheet price: jobLines() hands the same lines to
    the customer proposal and to the utility sheet, so what National Grid
-   is shown is what the customer is charged. Everything not listed here
-   (civil, conduit, design, networking) keeps the rate card. */
+   is shown is what the customer is charged. Conduit, bollards, networking
+   and the rest keep the rate card. */
 var NG_PRICE = {
-  hardwarePerPort: 1850,
-  /* The rep's first sheet carried $2,035; corrected the same day to HALF
-     the charger amount, so it follows the hardware price when that moves. */
-  mountingShare: 0.5,
-  pad: { mat:512.50, lab:1012.50 },
+  hardware: { a50:1850, a80:2525 },
+  /* kW at or above this is an 80 A unit (19.2 kW); below it, 50 A (~9.6-11.5 kW) */
+  kw80: 15,
+  perPedestal: 1150,
+  portsPerPedestal: 2,
+  pad: { mat:500, lab:1000 },
+  designPerPort: 1424,
+  trenchPaved: { mat:30, lab:100 },
   newServicePanelLab: 200,
   /* The customer's all-in price floor, per port, sales tax included:
      $13,300-$13,400 keeps about $8,500 a plug after expenses (6 plugs
@@ -1217,50 +1231,88 @@ var NG_PANEL_ROWS = { panel:1, boards:1, meter:1 };
 function ngProgramActive(){ return !!(FORM && FORM.writer==='nationalgrid'); }
 function jobLines(){ return ngProgramActive() ? ngPriceLines(LINES) : LINES; }
 
+/* Hardware per port: from the drawing's fleet when it names kW (each unit
+   priced by its amperage, scaled to the port count), else 50 A. */
+function ngHardwarePerPort(){
+  var H=NG_PRICE.hardware, n=0, t=0, i, u, q;
+  if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
+    for(i=0;i<EDITOR_FLEET.length;i++){
+      u=EDITOR_FLEET[i]; q=num(u.qty)||0;
+      if(!q) continue;
+      n+=q; t+=q*((num(u.kw)>=NG_PRICE.kw80) ? H.a80 : H.a50);
+    }
+  }
+  return n ? t/n : H.a50;
+}
+function ngPedestals(ports){
+  return num(DATA.nPedestal) || Math.max(1, Math.ceil(ports/NG_PRICE.portsPerPedestal));
+}
+
 function ngPriceLines(src){
   var ports=num(DATA.plugs), out=[], i, l, c, k;
-  var charger=false, mounting=false, pad=false, panel=false, newSvc=isNewService();
+  var charger=false, mounting=false, pad=false, panel=false, design=false, newSvc=isNewService();
+  var peds=ngPedestals(ports), hw=ngHardwarePerPort();
+  var pads=num(DATA.nPad) || peds;
   function copy(o){ var n={}; for(k in o) if(o.hasOwnProperty(k)) n[k]=o[k]; return n; }
   function money(o){ return num(o.mat)||num(o.lab); }
+  function padLine(base){
+    var p=base?copy(base):{ desc:'EVSE concrete pads', bucket:'mr', row:'concrete' };
+    p.qty=pads; p.fp=0; p.mat=r2(NG_PRICE.pad.mat*pads); p.lab=r2(NG_PRICE.pad.lab*pads);
+    p.note=pads+' pads \u2014 one per pedestal'; return p;
+  }
+  function designLine(base){
+    var p=base?copy(base):{ desc:'Design Costs, Permitting Costs', bucket:'mr', row:'design' };
+    p.row='design'; p.qty=ports; p.fp=0; p.mat=0; p.lab=r2(NG_PRICE.designPerPort*ports);
+    return p;
+  }
   for(i=0;i<src.length;i++){
     l=src[i];
     /* held-out and future-proofing lines pass through untouched */
     if(l.bucket==='fp' || panelHeldOut(l) || civilHeldOut(l)){ out.push(l); continue; }
     if(NG_FOLDED[l.row]) continue;
+    /* design and permitting are ONE per-port figure on every filed sheet */
+    if(l.row==='design' || l.row==='permit'){
+      if(design) continue;
+      design=true; out.push(designLine(l)); continue;
+    }
     if(l.row==='charger'){
       if(charger) continue;
       charger=true; c=copy(l);
-      c.mat=r2(NG_PRICE.hardwarePerPort*ports); c.lab=0; c.qty=ports; c.fp=0;
+      c.mat=r2(hw*ports); c.lab=0; c.qty=ports; c.fp=0;
       out.push(c); continue;
     }
     if(NG_MOUNT_ROWS[l.row]){
       if(mounting) continue;
       mounting=true; c=copy(l);
       c.row='pedestal'; c.bucket='evse'; c.desc='Pedestals & mounting';
-      c.mat=r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports); c.lab=0; c.qty=ports; c.fp=0;
+      c.mat=r2(NG_PRICE.perPedestal*peds); c.lab=0; c.qty=peds; c.fp=0;
+      c.note=peds+' pedestals, one per '+NG_PRICE.portsPerPedestal+' ports';
       out.push(c); continue;
     }
-    if(l.row==='concrete' && l.bucket==='mr' && money(l)) pad=true;
+    if(l.row==='concrete' && l.bucket==='mr'){
+      if(pad) continue;
+      pad=true; out.push(padLine(l)); continue;
+    }
+    if(l.row==='trench' && l.bucket==='mr' && num(l.qty)>0){
+      c=copy(l);
+      c.mat=r2(NG_PRICE.trenchPaved.mat*num(l.qty)); c.lab=r2(NG_PRICE.trenchPaved.lab*num(l.qty));
+      out.push(c); continue;
+    }
     if(newSvc && !panel && l.bucket==='mr' && NG_PANEL_ROWS[l.row] && money(l)){
       panel=true; c=copy(l); c.lab=r2(num(c.lab)+NG_PRICE.newServicePanelLab);
       out.push(c); continue;
     }
     out.push(l);
   }
+  if(ports>0 && !design) out.push(designLine(null));
   if(ports>0 && !charger)
     out.push({ desc:'EVSE hardware', bucket:'evse', row:'charger', qty:ports, fp:0,
-               mat:r2(NG_PRICE.hardwarePerPort*ports), lab:0 });
+               mat:r2(hw*ports), lab:0 });
   if(ports>0 && !mounting)
-    out.push({ desc:'Pedestals & mounting', bucket:'evse', row:'pedestal', qty:ports, fp:0,
-               mat:r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports), lab:0 });
-  /* Pads: the drawing's count when it has one, otherwise one per pedestal
-     placed, otherwise one per dual-port pedestal. */
-  if(ports>0 && !pad){
-    var np=num(DATA.nPad) || num(DATA.nPedestal) || Math.ceil(ports/2);
-    out.push({ desc:'EVSE concrete pads', bucket:'mr', row:'concrete', qty:np, fp:0,
-               mat:r2(NG_PRICE.pad.mat*np), lab:r2(NG_PRICE.pad.lab*np),
-               note:np+' pads' });
-  }
+    out.push({ desc:'Pedestals & mounting', bucket:'evse', row:'pedestal', qty:peds, fp:0,
+               mat:r2(NG_PRICE.perPedestal*peds), lab:0,
+               note:peds+' pedestals, one per '+NG_PRICE.portsPerPedestal+' ports' });
+  if(ports>0 && !pad) out.push(padLine(null));
   return out;
 }
 
