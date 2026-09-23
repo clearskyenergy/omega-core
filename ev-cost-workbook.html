@@ -132,6 +132,7 @@ table.pv td.num{text-align:right;font-variant-numeric:tabular-nums}
 .pv-ng-inel{background:#404040;color:#fff;font-weight:700}
 .pv-ng-hdr{background:#fff;color:#04415C;font-weight:700;text-align:center;border:1.5px solid #04415C!important}
 .pv-ng-lbl{font-weight:700}
+.pv-ng-blk{background:#404040}
 .pv-ng-tot{background:#437085;color:#fff;font-weight:700}
 .pvtabs{display:flex;padding:0 14px;border-bottom:1px solid var(--line2);overflow-x:auto}
 .pvtab{padding:9px 14px;font-size:11px;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);cursor:pointer;white-space:nowrap}
@@ -1155,6 +1156,201 @@ var NG_MUD_INCENTIVE = {
   customerSideCapNewService:10000
 };
 
+/* The EJC tier is a fact about the site (National Grid's EJC map), not a
+   pricing choice, so it defaults to the lowest tier and the panel shows
+   what each higher tier would be worth — a rep checks the map rather than
+   guessing up. */
+var NG_EJC_OPTIONS = ['Not in an EJC',
+                      'In an EJC — not meeting income criteria',
+                      'In an EJC — meets income criteria'];
+function ngTier(){
+  var v=d('ngEjc');
+  return v===NG_EJC_OPTIONS[2] ? 'ejcIncome' : v===NG_EJC_OPTIONS[1] ? 'ejc' : 'none';
+}
+function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
+
+/* ── NATIONAL GRID PRICE PROFILE ──────────────────────────────────────
+   National Grid reimburses more per port than the other programmes, so a
+   National Grid job is priced to what the rep signed off on 33 Hermon St
+   (6 ports, 22 Sep 2026) — the engine's sheet against the rep's:
+
+     EVSE hardware       $714/port  + $1,520/port install  ->  $1,850/port
+     Pedestal & mounting $450/unit                         ->  half the hardware
+                                                               ($925/port)
+     Freight, activation billed separately                 ->  folded in
+     Concrete pads       none                              ->  $512.50 + $1,012.50 each
+     Panels, new service $570 labor                        ->  +$200
+
+   It is a JOB price, not a sheet price: jobLines() hands the same lines to
+   the customer proposal and to the utility sheet, so what National Grid
+   is shown is what the customer is charged. Everything not listed here
+   (civil, conduit, design, networking) keeps the rate card. */
+var NG_PRICE = {
+  hardwarePerPort: 1850,
+  /* The rep's first sheet carried $2,035; corrected the same day to HALF
+     the charger amount, so it follows the hardware price when that moves. */
+  mountingShare: 0.5,
+  pad: { mat:512.50, lab:1012.50 },
+  newServicePanelLab: 200,
+  /* The customer's all-in price floor, per port, sales tax included:
+     $13,300-$13,400 keeps about $8,500 a plug after expenses (6 plugs
+     ~ $80k). Overridable per job under Program details. */
+  allInPerPort: 13350
+};
+
+/* The markup that brings the job to its all-in floor. The total is linear
+   in the markup (every line and the tax on it scale together), so one
+   unfloored build gives the base and the factor is target / base. 0 when
+   the job is not National Grid or is already above the floor. */
+function ngFloorTarget(){ return num(DATA.ngTargetPerPort) || NG_PRICE.allInPerPort; }
+function ngFloorFactor(form){
+  if(!ngProgramActive()) return 0;
+  var ports=num(DATA.plugs); if(!(ports>0)) return 0;
+  var base=buildModel(form, true), mkU=1+nval('p_markup')/100;
+  var t1=num(base.total)/mkU;
+  return t1>0 ? (ngFloorTarget()*ports)/t1 : 0;
+}
+var NG_FOLDED     = { install:1, shipping:1, activation:1 };   /* inside the two prices above */
+var NG_MOUNT_ROWS = { pedestal:1, charger2:1, mount:1 };
+var NG_PANEL_ROWS = { panel:1, boards:1, meter:1 };
+
+function ngProgramActive(){ return !!(FORM && FORM.writer==='nationalgrid'); }
+function jobLines(){ return ngProgramActive() ? ngPriceLines(LINES) : LINES; }
+
+function ngPriceLines(src){
+  var ports=num(DATA.plugs), out=[], i, l, c, k;
+  var charger=false, mounting=false, pad=false, panel=false, newSvc=isNewService();
+  function copy(o){ var n={}; for(k in o) if(o.hasOwnProperty(k)) n[k]=o[k]; return n; }
+  function money(o){ return num(o.mat)||num(o.lab); }
+  for(i=0;i<src.length;i++){
+    l=src[i];
+    /* held-out and future-proofing lines pass through untouched */
+    if(l.bucket==='fp' || panelHeldOut(l) || civilHeldOut(l)){ out.push(l); continue; }
+    if(NG_FOLDED[l.row]) continue;
+    if(l.row==='charger'){
+      if(charger) continue;
+      charger=true; c=copy(l);
+      c.mat=r2(NG_PRICE.hardwarePerPort*ports); c.lab=0; c.qty=ports; c.fp=0;
+      out.push(c); continue;
+    }
+    if(NG_MOUNT_ROWS[l.row]){
+      if(mounting) continue;
+      mounting=true; c=copy(l);
+      c.row='pedestal'; c.bucket='evse'; c.desc='Pedestals & mounting';
+      c.mat=r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports); c.lab=0; c.qty=ports; c.fp=0;
+      out.push(c); continue;
+    }
+    if(l.row==='concrete' && l.bucket==='mr' && money(l)) pad=true;
+    if(newSvc && !panel && l.bucket==='mr' && NG_PANEL_ROWS[l.row] && money(l)){
+      panel=true; c=copy(l); c.lab=r2(num(c.lab)+NG_PRICE.newServicePanelLab);
+      out.push(c); continue;
+    }
+    out.push(l);
+  }
+  if(ports>0 && !charger)
+    out.push({ desc:'EVSE hardware', bucket:'evse', row:'charger', qty:ports, fp:0,
+               mat:r2(NG_PRICE.hardwarePerPort*ports), lab:0 });
+  if(ports>0 && !mounting)
+    out.push({ desc:'Pedestals & mounting', bucket:'evse', row:'pedestal', qty:ports, fp:0,
+               mat:r2(NG_PRICE.hardwarePerPort*NG_PRICE.mountingShare*ports), lab:0 });
+  /* Pads: the drawing's count when it has one, otherwise one per pedestal
+     placed, otherwise one per dual-port pedestal. */
+  if(ports>0 && !pad){
+    var np=num(DATA.nPad) || num(DATA.nPedestal) || Math.ceil(ports/2);
+    out.push({ desc:'EVSE concrete pads', bucket:'mr', row:'concrete', qty:np, fp:0,
+               mat:r2(NG_PRICE.pad.mat*np), lab:r2(NG_PRICE.pad.lab*np),
+               note:np+' pads' });
+  }
+  return out;
+}
+
+/* What National Grid pays on this sheet, bucket by bucket, off the same
+   roll-up the sheet is written from — so the rebate and the sheet can never
+   disagree. Caps are per port on AVERAGE cost ("Customer-side incentive
+   caps are based on average cost"), so a cap is ports x the per-port
+   figure, not a per-line test. `room` is eligible scope still unclaimed
+   under a cap: the place to look for real work missing from the sheet
+   (a pad, a bollard, a panel upgrade), never a number to price toward. */
+function ngIncentive(m, tierKey){
+  var T=NG_MUD_INCENTIVE, key=tierKey||ngTier(), tier=T[key];
+  var byRow=ngRollup(m), ports=num(DATA.plugs), newSvc=isNewService();
+  function line(label, cost, pct, cap, capNote){
+    var claim=r2(cost*pct), reb=(cap==null)?claim:Math.min(claim,cap);
+    return { label:label, cost:cost, pct:pct, cap:cap, capNote:capNote||'', rebate:r2(reb),
+             room:(cap==null)?null:r2(Math.max(0,cap-claim)),
+             over:(cap!=null && claim>cap)?r2(claim-cap):0 };
+  }
+  var csPer = newSvc ? T.customerSideCapNewService : T.customerSideCapPerPort;
+  var lines=[
+    line('Customer-side make-ready (rows 10–19)', ngSum(byRow,10,19), 1, ports*csPer,
+         ports+' ports × $'+csPer.toLocaleString()+(newSvc?' (new service)':'')),
+    line('Utility-side civil (rows 21–25)', ngSum(byRow,21,25), 1, null, 'no cap'),
+    line('EVSE (rows 27–30)', ngSum(byRow,27,30), tier.pct, ports*tier.capPerPort,
+         Math.round(tier.pct*100)+'% up to '+ports+' × $'+tier.capPerPort.toLocaleString()),
+    line('Networking (row 32)', ngSum(byRow,32,32), 1, ports*T.networkPerPort,
+         ports+' × $'+T.networkPerPort)
+  ];
+  var total=0, i;
+  for(i=0;i<lines.length;i++) total+=lines[i].rebate;
+  return { tier:key, tierLabel:tier.label, ports:ports, newService:newSvc, lines:lines,
+           total:r2(total), cost:r2(m.total), mud:ngIsMUD() };
+}
+
+function ngIncentiveHTML(m){
+  var I=ngIncentive(m), h='', i, L;
+  function $(n){ return money(r2(n)); }
+  h+='<div class="card" style="margin-top:12px"><h3>National Grid MUD incentive'
+    +'<span class="hint">table effective 15 Nov 2025</span></h3><div class="body">';
+  if(!I.mud)
+    h+='<div class="warn" style="margin-bottom:8px"><b>This table is the MUD program.</b> Site Category is '
+      +esc(d('category')||'not set')+'. Workplace, public and fleet sites are paid on a different '
+      +'schedule, so treat the figures below as not applying until the category is MUD (5+ residential units).</div>';
+  if(!(I.ports>0))
+    h+='<div class="warn" style="margin-bottom:8px">Set Number of Ports — every cap is per port.</div>';
+  var _base=buildModel(FORM_NG_MA, true), _pp=I.ports>0 ? I.cost/I.ports : 0;
+  h+='<div class="note" style="margin-bottom:8px">All-in '+$(I.cost)+' = '+$(_pp)+' per port. '
+    +(r2(_base.total)<r2(I.cost)
+      ? 'Raised from '+$(_base.total)+' to the '+$(ngFloorTarget())+'/port floor — every line scaled '
+        +(Math.round((I.cost/_base.total-1)*1000)/10)+'% alike, proposal included.'
+      : 'Already at or above the '+$(ngFloorTarget())+'/port floor.')+'</div>';
+  h+='<table class="pv"><tr><td><b>Bucket</b></td><td class="num"><b>Eligible cost</b></td>'
+    +'<td><b>Rule</b></td><td class="num"><b>Rebate</b></td><td class="num"><b>Room under cap</b></td></tr>';
+  for(i=0;i<I.lines.length;i++){
+    L=I.lines[i];
+    h+='<tr><td>'+esc(L.label)+'</td><td class="num">'+$(L.cost)+'</td><td>'+esc(L.capNote)+'</td>'
+      +'<td class="num">'+$(L.rebate)+'</td><td class="num">'
+      +(L.over ? '<span style="color:#b42318">'+$(L.over)+' over — customer pays</span>'
+               : (L.room==null ? '—' : $(L.room)))+'</td></tr>';
+  }
+  h+='<tr><td><b>Total incentive</b></td><td class="num">'+$(I.cost)+' job</td><td>'+esc(I.tierLabel)+'</td>'
+    +'<td class="num"><b>'+$(I.total)+'</b></td><td class="num">net '+$(I.cost-I.total)+'</td></tr></table>';
+
+  /* the tier is the one input that moves the rebate without moving scope */
+  var up=[], k;
+  for(k in {ejc:1, ejcIncome:1}){
+    var alt=ngIncentive(m,k);
+    if(alt.total>I.total+0.5) up.push(NG_MUD_INCENTIVE[k].label+': '+$(alt.total)+' (+'+$(alt.total-I.total)+')');
+  }
+  if(up.length)
+    h+='<div class="note" style="margin-top:8px">If the site is in an Environmental Justice Community: '
+      +esc(up.join(' · '))+'. Check the address on National Grid’s EJC map and set it under Program details.</div>';
+  var cs=I.lines[0];
+  if(!I.newService && cs.cap)
+    h+='<div class="note" style="margin-top:4px">A new service raises the customer-side cap to '
+      +$(I.ports*NG_MUD_INCENTIVE.customerSideCapNewService)+' — only if the site actually takes one.</div>';
+  if(cs.room>0 || I.lines[2].room>0)
+    h+='<div class="note" style="margin-top:4px">Room under a cap is eligible scope not yet on the sheet. '
+      +'Check the drawing for work that is really on the job but missing here — EVSE pads and bases, '
+      +'bollards, panel or service work. Prices stay the prices the customer is charged.</div>';
+  h+='<button class="btn sm" style="margin-top:8px" onclick="ngUseIncentive()">Use '+$(I.total)
+    +' as Total incentive</button></div></div>';
+  return h;
+}
+function ngUseIncentive(){
+  var I=ngIncentive(buildModel(FORM_NG_MA)), el=document.getElementById('b_incent');
+  if(el){ el.value=Math.round(I.total); render(); }
+}
+
 var BLOCKS_NG_MA = [
   { id:'mr', title:'Eligible Design and Permitting costs', fill:'FFBFBFBF', rows:[
       {k:'design',      l:'Design/Engineering/Permitting',                 ng:{row:10, unit:'Total'}},
@@ -1260,6 +1456,10 @@ var FORM_NG_MA = {
   right:[
     { type:'stack', label:'Site Category', k:'category', type2:'select',
       options:['Multi-Unit Dwelling (MUD)','Workplace','Public Parking','Fleet','Destination'] },
+    { type:'stack', label:'Environmental Justice Community', k:'ngEjc', type2:'select',
+      options:NG_EJC_OPTIONS },
+    { type:'stack', label:'All-in price per port, minimum (blank = $13,350)', k:'ngTargetPerPort',
+      type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Trenching', k:'ftTrench',  type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Conduit',   k:'ftConduit', type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Cable',     k:'ftCable',   type2:'number', fmt:'#,##0' }
@@ -3443,10 +3643,13 @@ function panelHeldSummary(){
   return { n:n, total:r2(t) };
 }
 
-function buildModel(form){
+function buildModel(form, noFloor){
   form = form || proposalForm();
   var BL=form.blocks;
   var mk=1+nval('p_markup')/100;
+  /* A National Grid job never prices below its per-port floor. The floor
+     lifts the markup, never lowers it, and scales every line alike. */
+  if(!noFloor){ var _fl=ngFloorFactor(form); if(_fl>mk) mk=_fl; }
   /* Each form carries its own rate and labor rule. The knob overrides only
      the form it was edited against, so exporting two programs at once can't
      apply one utility's tax treatment to the other's sheet. */
@@ -3500,8 +3703,10 @@ function buildModel(form){
   }
 
   var i, l, fp, mm, ll, mirror;
-  for(i=0;i<LINES.length;i++){
-    l=LINES[i];
+  /* the job's lines — on a National Grid job, priced to its profile */
+  var JL=jobLines();
+  for(i=0;i<JL.length;i++){
+    l=JL[i];
     /* Switchgear, MDP lugs and service equipment come across from the
        estimate and map to Electrical Panel. On a site reusing existing
        gear that is thousands of dollars of scope nobody asked for, so it
@@ -3551,8 +3756,8 @@ function buildModel(form){
   var singleMat=0, singleLab=0;
   if(single){
     var q, ln;
-    for(q=0;q<LINES.length;q++){
-      ln=LINES[q];
+    for(q=0;q<JL.length;q++){
+      ln=JL[q];
       if(panelHeldOut(ln)) continue;
       if(inList(taxCfg.matRows, ln.row)) singleMat += num(ln.mat)*mk;
       if(inList(taxCfg.labRows, ln.row)) singleLab += (num(ln.mat)+num(ln.lab))*mk;
@@ -5482,8 +5687,10 @@ function previewFormNG(m, form){
     g=byRow[rowNo] || { mat:0, lab:0, qty:0, notes:[] };
     h+=r(td(String(label).replace(/\n/g,' '))
         +td(uniqJoin(g.notes,' \u00b7 '),'o')
-        +td(unit)+td(r2(g.qty)||0,'num')
-        +td(acct(r2(g.mat)),'num')+td(acct(r2(g.lab)),'num')
+        +td(unit)
+        +(ngBlocked(rowNo,'E') ? td('','pv-ng-blk') : td((g.mat||g.lab)?(r2(g.qty)||0):'','num'))
+        +(ngBlocked(rowNo,'F') ? td('','pv-ng-blk') : td(acct(r2(g.mat)),'num'))
+        +(ngBlocked(rowNo,'G') ? td('','pv-ng-blk') : td(acct(r2(g.lab)),'num'))
         +td(acct(r2(g.mat)+r2(g.lab)),'num'));
   }
 
@@ -5503,7 +5710,7 @@ function previewFormNG(m, form){
       +td(acct(r2(mk+ev+net+stripe+fpT+neT+tax)),'pv-ng-tot num'));
   h+=r(td('Estimate','pv-ng-lbl')+td('Total Utility Side Infrastructure Costs (Civil Work)','pv-ng-tot',5)
       +td(acct(r2(util)),'pv-ng-tot num'));
-  return h+'</table>';
+  return h+'</table>'+ngIncentiveHTML(m);
 }
 
 function previewFormES(m, form){
@@ -6564,9 +6771,12 @@ function ngFillTemplate(ws, m){
     r = NG_LAYOUT[li][0];
     g = byRow[r] || { mat:0, lab:0, qty:0, notes:[] };
     put('C'+r, uniqJoin(g.notes,' \u00b7 '));
-    put('E'+r, r2(g.qty)||0);
-    put('F'+r, r2(g.mat));
-    put('G'+r, r2(g.lab));
+    /* a shaded cell stays empty \u2014 the template ships it blank */
+    /* a quantity only where there is money — 104 ft against a $0 turf
+       row reads as work that was left off */
+    if(!ngBlocked(r,'E')) put('E'+r, (g.mat||g.lab) ? (r2(g.qty)||0) : null);
+    if(!ngBlocked(r,'F')) put('F'+r, r2(g.mat));
+    if(!ngBlocked(r,'G')) put('G'+r, r2(g.lab));
     var tot=r2(r2(g.mat)+r2(g.lab));
     ws.getCell('H'+r).value = tot ? { formula:'F'+r+'+G'+r, result:tot } : 0;
   }
@@ -6781,7 +6991,37 @@ function ngRollup(m){
       if(r.note) byRow[rr].notes.push(r.note);
     }
   }
+  ngMoveBlocked(byRow);
   return byRow;
+}
+
+/* The cells National Grid shades out — navy E10:F10, black G27:G30, G32,
+   G42:G45 — take no entry. Money the model booked there is moved to the
+   cell the reviewer does read, never dropped, so every total is unchanged:
+     design is one labor figure, so its material becomes labor and it has
+     no quantity; installation labor on the EVSE hardware rows goes to
+     row 19 "Other", where all three reference jobs put it; on the fee
+     rows (freight, networking, warranty, activation, validation) the
+     whole charge is the row's cost, so it goes to material. */
+var NG_BLOCKED = { 10:{E:1,F:1}, 27:{G:1}, 28:{G:1}, 29:{G:1}, 30:{G:1},
+                   32:{G:1}, 42:{G:1}, 43:{G:1}, 44:{G:1}, 45:{G:1} };
+var NG_LABOR_TO_INSTALL = { 27:1, 28:1, 30:1 };
+function ngBlocked(row, col){ return !!(NG_BLOCKED[row] && NG_BLOCKED[row][col]); }
+function ngMoveBlocked(byRow){
+  var rr, g, lab;
+  if(byRow[10]){ byRow[10].lab += byRow[10].mat; byRow[10].mat=0; byRow[10].qty=0; }
+  for(rr in NG_BLOCKED){
+    if(!NG_BLOCKED[rr].G || !byRow[rr]) continue;
+    g=byRow[rr]; lab=g.lab; g.lab=0;
+    if(!lab) continue;
+    if(NG_LABOR_TO_INSTALL[rr]){
+      if(!byRow[19]) byRow[19]={ mat:0, lab:0, qty:num(DATA.plugs)||0, notes:[] };
+      byRow[19].lab += lab;
+      byRow[19].notes.push('EVSE installation');
+    } else {
+      g.mat += lab;
+    }
+  }
 }
 function ngSum(byRow, a, b){
   var t=0, r;
