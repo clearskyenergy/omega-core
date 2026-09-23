@@ -755,30 +755,65 @@ body.arranging .scroll{pointer-events:none}
 
 /* ── THE OTHER MASTERS ───────────────────────────────────────────────────
    Armour, Witch-king and the Ring are doom mode with a different master in
-   the room: same card frame, same darkened corners, same 3D layer. Only the
-   palette moves, keyed by data-figure, so every rule written for doom mode
-   keeps holding and a new master costs seven variables. */
+   the room: same card frame, same 3D layer. The palette and the weather move,
+   keyed by data-figure, so every rule written for doom mode keeps holding.
+   The armour is a lit workshop: red steel, gold trim, no darkened corners.
+   The Witch-king is the dark itself: black, cold grey, the light drained.
+   The Ring is Mount Doom: ember and lava on black, the corners glowing red. */
 :root[data-mode="doom"][data-figure="armour"]{
-  --glow-cyan:#ffb347; --glow-blue:#8a1c12; --ink:#ffe8d4; --dim:#c4906e;
-  --panel:rgba(30,9,6,.62); --edge:1px solid rgba(255,140,70,.32); --bg:#12050a}
-:root[data-mode="doom"][data-figure="armour"] .mark{box-shadow:0 0 12px rgba(255,120,60,.45) inset;animation:none}
+  --glow-cyan:#ffcf5a; --glow-blue:#b3170f; --ink:#ffe9d9; --dim:#d29a7e;
+  --panel:rgba(48,9,9,.60); --edge:1px solid rgba(255,207,90,.36); --bg:#160405}
+:root[data-mode="doom"][data-figure="armour"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.10) 50%),
+             linear-gradient(90deg,rgba(255,60,30,.04),rgba(255,207,90,.03),rgba(255,60,30,.04));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="armour"] body::after{
+  background:radial-gradient(118% 88% at 50% 44%,rgba(0,0,0,0) 50%,rgba(60,0,0,.22) 80%,rgba(40,0,0,.40) 100%)}
+:root[data-mode="doom"][data-figure="armour"] .mark{border-color:#ffcf5a;animation:armourBreath 3s ease-in-out infinite}
+@keyframes armourBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,207,90,.45) inset}
+  50%    {box-shadow:0 0 24px rgba(179,23,15,.85) inset}}
 :root[data-mode="doom"][data-figure="armour"] .talkBar{
-  background:linear-gradient(90deg,rgba(138,28,18,.18),rgba(255,179,71,.08),rgba(138,28,18,.18));
-  box-shadow:inset 0 0 20px rgba(138,28,18,.30)}
+  background:linear-gradient(90deg,rgba(179,23,15,.22),rgba(255,207,90,.10),rgba(179,23,15,.22));
+  box-shadow:inset 0 0 20px rgba(179,23,15,.35)}
+:root[data-mode="doom"][data-figure="armour"] .navItem.on{background:rgba(179,23,15,.28);border-color:rgba(255,207,90,.5)}
+
 :root[data-mode="doom"][data-figure="witchking"]{
-  --glow-cyan:#bcd9ff; --glow-blue:#1c2a4a; --ink:#e4ecff; --dim:#8c9fc2;
-  --panel:rgba(6,9,20,.66); --edge:1px solid rgba(188,217,255,.26); --bg:#04060f}
-:root[data-mode="doom"][data-figure="witchking"] .mark{box-shadow:0 0 12px rgba(188,217,255,.40) inset;animation:none}
+  --glow-cyan:#a6adbb; --glow-blue:#16181f; --ink:#c6cbd4; --dim:#5c6270;
+  --good:#8fa39a; --warn:#b9a47a; --bad:#b86b6b;
+  --panel:rgba(3,3,5,.82); --edge:1px solid rgba(166,173,187,.16); --bg:#000}
+:root[data-mode="doom"][data-figure="witchking"] body::before{
+  background:linear-gradient(rgba(0,0,0,0) 50%,rgba(0,0,0,.28) 50%);
+  background-size:100% 3px}
+:root[data-mode="doom"][data-figure="witchking"] body::after{
+  background:radial-gradient(100% 76% at 50% 44%,rgba(0,0,0,0) 22%,rgba(0,0,0,.55) 62%,rgba(0,0,0,.92) 100%)}
+:root[data-mode="doom"][data-figure="witchking"] .mark{border-color:#5c6270;box-shadow:0 0 10px rgba(166,173,187,.18) inset;animation:none}
 :root[data-mode="doom"][data-figure="witchking"] .talkBar{
-  background:linear-gradient(90deg,rgba(28,42,74,.20),rgba(188,217,255,.07),rgba(28,42,74,.20));
-  box-shadow:inset 0 0 20px rgba(28,42,74,.35)}
+  background:linear-gradient(90deg,rgba(0,0,0,.6),rgba(30,32,40,.5),rgba(0,0,0,.6));
+  box-shadow:inset 0 0 24px rgba(0,0,0,.8)}
+:root[data-mode="doom"][data-figure="witchking"] .panel{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 12px 40px rgba(0,0,0,.7)}
+:root[data-mode="doom"][data-figure="witchking"] .navItem.on{background:rgba(166,173,187,.08);border-color:rgba(166,173,187,.3)}
+:root[data-mode="doom"][data-figure="witchking"] .t.good,:root[data-mode="doom"][data-figure="witchking"] .badge{filter:saturate(.35)}
+
 :root[data-mode="doom"][data-figure="onering"]{
-  --glow-cyan:#ffc85c; --glow-blue:#6b3a05; --ink:#fff1cf; --dim:#b8965a;
-  --panel:rgba(26,15,4,.62); --edge:1px solid rgba(255,200,92,.32); --bg:#0f0803}
-:root[data-mode="doom"][data-figure="onering"] .mark{box-shadow:0 0 12px rgba(255,200,92,.45) inset;animation:none}
+  --glow-cyan:#ff6a1f; --glow-blue:#7a0e00; --ink:#ffd6bd; --dim:#b9623f;
+  --panel:rgba(28,3,1,.66); --edge:1px solid rgba(255,106,31,.36); --bg:#0a0100}
+:root[data-mode="doom"][data-figure="onering"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.14) 50%),
+             linear-gradient(90deg,rgba(255,80,0,.05),rgba(120,20,0,.02),rgba(255,80,0,.05));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="onering"] body::after{
+  mix-blend-mode:normal;
+  background:radial-gradient(118% 92% at 50% 40%,rgba(0,0,0,0) 30%,rgba(120,18,0,.28) 66%,rgba(255,70,0,.42) 100%),
+             radial-gradient(60% 30% at 50% 108%,rgba(255,120,20,.55),rgba(255,60,0,0) 70%)}
+:root[data-mode="doom"][data-figure="onering"] .mark{border-color:#ff6a1f;animation:emberBreath 4s ease-in-out infinite}
+@keyframes emberBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,106,31,.45) inset}
+  50%    {box-shadow:0 0 26px rgba(255,170,40,.85) inset}}
 :root[data-mode="doom"][data-figure="onering"] .talkBar{
-  background:linear-gradient(90deg,rgba(107,58,5,.20),rgba(255,200,92,.08),rgba(107,58,5,.20));
-  box-shadow:inset 0 0 20px rgba(107,58,5,.35)}
+  background:linear-gradient(90deg,rgba(122,14,0,.30),rgba(255,106,31,.12),rgba(122,14,0,.30));
+  box-shadow:inset 0 0 22px rgba(255,60,0,.35)}
+:root[data-mode="doom"][data-figure="onering"] .navItem.on{background:rgba(122,14,0,.35);border-color:rgba(255,106,31,.5)}
 
 /* ── DOOM MODE: THE CARD IS A CARD ───────────────────────────────────────
    In doom mode a person stops being a dossier and becomes a collectible:
@@ -1403,7 +1438,6 @@ body.arranging .scroll{pointer-events:none}
     </div>
 
     <nav id="nav">
-      <a class="navItem" href="/" style="text-decoration:none" title="OMEGA home">⌂  OMEGA home</a>
       <button class="navItem on" data-view="command">◧  Command Center</button>
       <button class="navItem" data-view="tasks">▤  Tasks<span class="pill" id="nTasks"></span></button>
       <button class="navItem" data-view="outbox">✉  Outbox<span class="pill" id="nOut"></span></button>
@@ -3706,9 +3740,9 @@ try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','
    dataset.figure naming who is standing there. */
 const FIGURE_MODES = {
   doom:      { figure: null,        name: 'D.O.O.M',      tag: 'SOVEREIGN CORE', line: 'Doom mode. Same numbers, worse manners.' },
-  armour:    { figure: 'ironman',   name: 'S.T.A.R.K',    tag: 'ARMOUR CORE',    rgb: '255,179,71', line: 'Armour mode. Suit is online.' },
-  witchking: { figure: 'witchking', name: 'A.N.G.M.A.R',  tag: 'WITCH-KING CORE', rgb: '188,217,255', line: 'Witch-king mode. No man may close this dashboard.' },
-  onering:   { figure: 'onering',   name: 'THE ONE RING', tag: 'PRECIOUS CORE',  rgb: '255,200,92', line: 'Ring mode. One dashboard to rule them all.' }
+  armour:    { figure: 'ironman',   name: 'S.T.A.R.K',    tag: 'ARMOUR CORE',    rgb: '255,207,90', line: 'Armour mode. Suit is online.' },
+  witchking: { figure: 'witchking', name: 'A.N.G.M.A.R',  tag: 'WITCH-KING CORE', rgb: '166,173,187', line: 'Witch-king mode. No man may close this dashboard.' },
+  onering:   { figure: 'onering',   name: 'THE ONE RING', tag: 'PRECIOUS CORE',  rgb: '255,106,31', line: 'Ring mode. One dashboard to rule them all.' }
 };
 function currentFigure() {
   const fm = FIGURE_MODES[document.documentElement.dataset.figure || 'doom'] || FIGURE_MODES.doom;
