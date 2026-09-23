@@ -174,7 +174,7 @@ button.send:disabled{background:#A8B6C6;cursor:default}
   </header>
   <div style="padding:18px;border-bottom:1px solid var(--cs-border)">
     <label for="voiceCharacter">Voice character</label>
-    <select id="voiceCharacter" style="width:100%;padding:10px;margin-top:8px"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Jarvis · orb</option></select>
+    <select id="voiceCharacter" style="width:100%;padding:10px;margin-top:8px"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="ironman">Iron Man · armour statue</option><option value="witchking">Witch-king of Angmar · statue</option><option value="onering">The One Ring · turning</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Jarvis · orb</option></select>
     <div id="voiceCharacterStatus" class="cost" role="status">Saved on this browser.</div>
   </div>
   <div class="body" id="panelBody"></div>
@@ -205,7 +205,7 @@ button.send:disabled{background:#A8B6C6;cursor:default}
 <div id="doom-avatar" aria-label="Doom voice companion"><a class="doom-credit" href="https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3" target="_blank" rel="noopener noreferrer">Dr Doom V2 · Visiion · CC BY 4.0 · animated adaptation</a></div>
 <script src="assets/vendor/three-r128/three.min.js"></script>
 <script src="assets/vendor/three-r128/GLTFLoader.js"></script>
-<script src="omega-doom.js?v=20260921-rigged-5"></script>
+<script src="omega-doom.js?v=20260922-figures-8"></script>
 
 <div class="captions" id="captions">
   <div class="who" id="capWho">LISTENING</div>
@@ -405,7 +405,7 @@ el('signin').addEventListener('click', async () => {
    difference is obvious the moment you say a long word. */
 let doomAvatar = null, avatarGeneration = 0, avatarState = 'idle';
 let voiceCharacter = 'rigged';
-try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) voiceCharacter = saved; } catch (_) {}
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','ironman','witchking','onering','portrait','classic'].includes(saved)) voiceCharacter = saved; } catch (_) {}
 function loadVoiceCharacter() {
   const generation = ++avatarGeneration, host = el('doom-avatar');
   if (doomAvatar) { doomAvatar.destroy(); doomAvatar = null; }
@@ -414,12 +414,15 @@ function loadVoiceCharacter() {
   el('voiceCharacter').value = voiceCharacter;
   if (voiceCharacter === 'classic') return;
   try {
-    const actor = voiceCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    const actor = voiceCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, voiceCharacter);
     doomAvatar = actor;
     actor.ready.then(() => {
       if (generation !== avatarGeneration) return;
       actor.setState(avatarState); el('orb').style.visibility = 'hidden';
-      host.querySelector('.doom-credit').hidden = voiceCharacter !== 'rigged';
+      const credit = host.querySelector('.doom-credit');
+      const figure = OmegaDoom.figures[voiceCharacter];
+      credit.hidden = !figure;
+      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(voiceCharacter); }
       el('voiceCharacterStatus').textContent = 'Character ready. Saved on this browser.';
     }).catch(() => {
       if (generation !== avatarGeneration) return;

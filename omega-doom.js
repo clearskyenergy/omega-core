@@ -126,17 +126,30 @@ return {walk:walk,time:time,phase:stepPhase};
 return {step:poseRig,joints:all.length,reset:function(){all.forEach(function(j){j.bone.quaternion.copy(j.rest);});},mapped:true};
 }
 
-function createModel(host,source){
+/* Every character the pages can pick, in one place: the file, the credit the
+   licence requires, how the camera frames it and how it moves when it has no
+   rig. Pages read label and credit from here rather than carrying copies. */
+var FIGURES={
+rigged:{label:'Dr Doom V2 · animated 3D',asset:'/assets/doom/dr-doom-v2.glb',title:'Dr Doom V2',author:'Visiion',url:'https://sketchfab.com/3d-models/dr-doom-v2-4c27ab8143b84f07a39c1639c39757c3',license:'CC BY 4.0',note:'animated adaptation',distance:4.8},
+mask:{label:"Doctor Doom's Mask · talking bust",asset:'/assets/doom/doctor-dooms-mask.glb',title:"Doctor Doom's Mask",author:'Nicolas_Laube',url:'https://sketchfab.com/3d-models/doctor-dooms-mask-8db5464072f341a994ad1c729d9080f7',license:'CC BY 4.0',note:'speech jaw adaptation',distance:6.4,mask:true},
+ironman:{label:'Iron Man · armour statue',asset:'/assets/doom/iron-man.glb',title:'Iron Man',author:'Grant Riley',url:'https://sketchfab.com/3d-models/iron-man-69dde1ad49e94852984e3d83928efd65',license:'CC BY-NC 4.0',note:'speech glow adaptation',distance:5.2,statue:true,glow:[.16,.62,1],glowMax:.45},
+witchking:{label:'Witch-king of Angmar · statue',asset:'/assets/doom/witch-king.glb',title:'The Witch-king of Angmar',author:'AndreOrla',url:'https://sketchfab.com/3d-models/lord-of-the-rings-the-witch-king-of-angmar-063e0e96abea42c3a25b0fa64ba1440a',license:'CC BY 4.0',note:'speech glow adaptation',distance:5.4,statue:true,glow:[.42,.9,.72],glowMax:.22},
+onering:{label:'The One Ring · turning',asset:'/assets/doom/the-one-ring.glb',title:'The One Ring (Lord of The Rings)',author:'Anthony Yanez',url:'https://sketchfab.com/3d-models/the-one-ring-lord-of-the-rings-39eb401be92c49d39520fadd5ecff8d3',license:'CC BY 4.0',note:'speech-driven turn',distance:5.6,spin:true,fit:'max',glow:[1,.72,.28],glowMax:1.1}
+};
+function creditLine(key){var f=FIGURES[key];return f?f.title+' · '+f.author+' · '+f.license+' · '+f.note:'';}
+
+function createModel(host,source,opts){
+opts=opts||{};var camDist=opts.distance||4.8;
 var T=root.THREE;if(!T||!T.GLTFLoader)throw new Error('3D model loader is unavailable');
 var renderer=new T.WebGLRenderer({alpha:true,antialias:true});renderer.setPixelRatio(Math.min(root.devicePixelRatio||1,2));renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
 var canvas=renderer.domElement;canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;touch-action:none';canvas.setAttribute('aria-label','Full 3D textured character. Drag to orbit.');host.appendChild(canvas);
-var scene=new T.Scene(),camera=new T.PerspectiveCamera(32,1,.01,100),group=new T.Group();scene.add(group);camera.position.set(0,1.2,4.8);camera.lookAt(0,1.2,0);
+var scene=new T.Scene(),camera=new T.PerspectiveCamera(32,1,.01,100),group=new T.Group();scene.add(group);camera.position.set(0,1.2,camDist);camera.lookAt(0,1.2,0);
 scene.add(new T.HemisphereLight(0xcdeaf2,0x182721,.85));var key=new T.DirectionalLight(0xffefd8,1.9);key.position.set(-3,4,4);scene.add(key);var rim=new T.DirectionalLight(0x8ecbd0,1.25);rim.position.set(3,2,-2);scene.add(rim);
 /* A neutral studio environment gives metal reflections without overwriting maps. */
 var room=new T.Scene();room.background=new T.Color(0x606866);var roomMesh=new T.Mesh(new T.BoxGeometry(10,10,10),new T.MeshBasicMaterial({color:0x646c6a,side:T.BackSide}));room.add(roomMesh);
 var softbox=new T.Mesh(new T.PlaneGeometry(4,6),new T.MeshBasicMaterial({color:0xffffff}));softbox.position.set(-4,2,0);softbox.rotation.y=Math.PI/2;room.add(softbox);
 var pmrem=new T.PMREMGenerator(renderer),env=pmrem.fromScene(room);scene.environment=env.texture;pmrem.dispose();roomMesh.geometry.dispose();roomMesh.material.dispose();softbox.geometry.dispose();softbox.material.dispose();
-var dead=false,raf=0,last=0,state='idle',energy=0,target=0,paused=false,solid=true,object=null,mixer=null,actions=[],activeAction=null,headBone=null,headRest=null,shoulders=[],bones=0,materials=[],phase=0,nextGesture=0,lastClip=-1,yaw=0,drag=null,rig=null,heading=0;
+var dead=false,raf=0,last=0,state='idle',energy=0,target=0,paused=false,solid=true,object=null,mixer=null,actions=[],activeAction=null,headBone=null,headRest=null,shoulders=[],bones=0,materials=[],phase=0,nextGesture=0,lastClip=-1,yaw=0,drag=null,rig=null,heading=0,maskMouth=[],maskGlow=[],figureGlow=[],glowColor=opts.glow?new T.Color(opts.glow[0],opts.glow[1],opts.glow[2]):null;
 var motion=createMotion(),reduced=root.matchMedia&&root.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var manager=new T.LoadingManager();manager.setURLModifier(function(url){if(/^blob:|^data:/i.test(url))return url;throw new Error('Use a self-contained GLB with embedded textures');});var loader=new T.GLTFLoader(manager);
 function chooseClip(){if(!actions.length)return;var pattern=state==='speaking'?/talk|speak|gesture|explain/i:state==='walk'?/walk/i:/idle|stand|breath/i;var found=actions.filter(function(a){return pattern.test(a.getClip().name);});if(!found.length){if(activeAction){activeAction.stop();activeAction=null;}nextGesture=phase+4;return;}var index=Math.floor(Math.random()*found.length);if(found.length>1&&index===lastClip)index=(index+1)%found.length;lastClip=index;var action=found[index];if(action!==activeAction){action.reset().setEffectiveWeight(1).play();if(activeAction)activeAction.crossFadeTo(action,.45,false);activeAction=action;}nextGesture=phase+4+Math.random()*4;}
@@ -144,15 +157,22 @@ var ready=Promise.resolve(source).then(function(bytes){return new Promise(functi
 if(dead){resolve({cancelled:true});return;}
 loader.parse(bytes,'',function(gltf){if(dead){disposeObject(gltf.scene);return;}object=gltf.scene;
 var box=new T.Box3().setFromObject(object),size=box.getSize(new T.Vector3()),center=box.getCenter(new T.Vector3());if(!isFinite(size.y)||size.y<.00001){disposeObject(object);object=null;reject(new Error('Model has no visible geometry'));return;}
-var scale=2.3/size.y;object.scale.multiplyScalar(scale);object.position.sub(center.multiplyScalar(scale));object.position.y+=1.15;group.add(object);
+var scale=2.3/(opts.fit==='max'?Math.max(size.x,size.y,size.z):size.y);object.scale.multiplyScalar(scale);object.position.sub(center.multiplyScalar(scale));object.position.y+=1.15;group.add(object);
 object.traverse(function(n){if(n.isBone){bones++;if(/(^|[_:])head$|^head$/i.test(n.name)){headBone=n;headRest=n.quaternion.clone();}if(/upperarm|upper_arm|leftarm|rightarm/i.test(n.name))shoulders.push({bone:n,rest:n.quaternion.clone(),side:/left|_l\b|\.l$/i.test(n.name)?-1:1});}
+if(opts.mask&&/^(lipLower_low|lowerHead_low|chin_low|teeth_low)$/i.test(n.name))maskMouth.push({node:n,position:n.position.clone(),rotation:n.rotation.clone()});
 if(n.isMesh){var list=Array.isArray(n.material)?n.material:[n.material];list.forEach(function(m){if(materials.indexOf(m)<0)materials.push(m);});n.frustumCulled=false;}});
-rig=createDoomRig(object,T);
+rig=opts.statue||opts.spin?null:createDoomRig(object,T);
+if(glowColor)materials.forEach(function(m){if(m&&m.emissive){m.userData.figureBaseEmissive=m.emissive.clone();m.userData.figureBaseIntensity=m.emissiveIntensity||0;figureGlow.push(m);}});
+/* The mouth parts share one material with the whole face, so they get their
+   own copies: the glow must stay on the jaw, not light the entire mask. The
+   jaw offset is in the part's own units (this export is millimetres under a
+   scaled root), so it is derived from the part's world scale, not assumed. */
+maskMouth.forEach(function(part){part.scale=part.node.getWorldScale(new T.Vector3()).y||1;part.node.traverse(function(n){if(!n.isMesh)return;var own=(Array.isArray(n.material)?n.material:[n.material]).map(function(m){if(!m||!m.emissive)return m;var c=m.clone();c.userData.maskBaseEmissive=c.emissive.clone();c.userData.maskBaseIntensity=c.emissiveIntensity||0;maskGlow.push(c);materials.push(c);return c;});n.material=Array.isArray(n.material)?own:own[0];});});
 materials.forEach(function(m){if(rig&&/^sv_doctordoom01_s01_[14]$/.test(m.name)){m.color.multiply(new T.Color(.18,.28,.20));m.roughness=.85;}if(m.envMapIntensity!==undefined)m.envMapIntensity=.7;});
 mixer=new T.AnimationMixer(object);actions=(gltf.animations||[]).map(function(c){return mixer.clipAction(c);});chooseClip();resolve({bones:bones,proceduralRig:!!rig,clips:actions.map(function(a){return a.getClip().name;})});
 },function(e){reject(new Error(e&&e.message||'Unable to parse this GLB'));});});});
 function disposeObject(o){if(!o)return;var seen=[];o.traverse(function(n){if(n.geometry)n.geometry.dispose();var ms=n.material?(Array.isArray(n.material)?n.material:[n.material]):[];ms.forEach(function(m){if(seen.indexOf(m)>=0)return;seen.push(m);Object.keys(m).forEach(function(k){if(m[k]&&m[k].isTexture)m[k].dispose();});m.dispose();});});}
-function frame(now){if(dead)return;raf=root.requestAnimationFrame(frame);var dt=Math.min(.05,(now-(last||now))/1000);last=now;if(document.hidden)return;var w=host.clientWidth||1,h=host.clientHeight||1;if(canvas.width!==Math.round(w*renderer.getPixelRatio())||canvas.height!==Math.round(h*renderer.getPixelRatio())){renderer.setSize(w,h,false);camera.aspect=w/h;camera.position.z=Math.max(4.8,3.5/camera.aspect);camera.updateProjectionMatrix();}
+function frame(now){if(dead)return;raf=root.requestAnimationFrame(frame);var dt=Math.min(.05,(now-(last||now))/1000);last=now;if(document.hidden)return;var w=host.clientWidth||1,h=host.clientHeight||1;if(canvas.width!==Math.round(w*renderer.getPixelRatio())||canvas.height!==Math.round(h*renderer.getPixelRatio())){renderer.setSize(w,h,false);camera.aspect=w/h;camera.position.z=Math.max(camDist,camDist*.73/camera.aspect);camera.updateProjectionMatrix();}
 energy+=(target-energy)*Math.min(1,dt*9);
 if(!paused){
   if(!reduced){phase+=dt;if(mixer)mixer.update(dt);if(state==='speaking'&&phase>nextGesture)chooseClip();}
@@ -161,17 +181,33 @@ if(!paused){
     group.position.y=Math.abs(Math.sin(movement.phase))*.012*movement.walk;
     var goalHeading=Math.atan2(Math.cos(angle)*.48,-Math.sin(angle)*.18)*movement.walk;
     var turn=Math.atan2(Math.sin(goalHeading-heading),Math.cos(goalHeading-heading));heading+=turn*Math.min(1,dt*3);
-  }else if(!activeAction&&!reduced){var pose=motion.step(dt,state==='speaking',false);
+  }else if(!activeAction&&!reduced&&!opts.statue&&!opts.spin){var pose=motion.step(dt,state==='speaking',false);
     if(headBone)headBone.quaternion.copy(headRest).multiply(new T.Quaternion().setFromEuler(new T.Euler(pose[8]*.45+energy*.018,pose[9]*.45,0)));
     shoulders.forEach(function(s,i){s.bone.quaternion.copy(s.rest).multiply(new T.Quaternion().setFromEuler(new T.Euler(pose[i%2]*.12,0,s.side*pose[6+i%2]*.1)));});
   }
 }
+/* A statue has no rig: the whole figure breathes, leans in to listen and nods
+   as it speaks. A prop turns instead, faster while the voice is active. Both
+   pulse their own emissive toward the figure's colour on speech energy. */
+if(opts.statue||opts.spin){var live=state==='speaking'?energy:0,listen=state==='listening'?1:0;
+  if(!paused&&!reduced){if(opts.spin)heading+=dt*(.35+live*2.4+listen*.4);else{var p=motion.step(dt,state==='speaking',false);group.rotation.x=p[8]*.05+listen*.05+live*.02;group.rotation.z=p[9]*.02;}
+    group.position.y=opts.spin?Math.sin(phase*1.3)*.05:Math.sin(phase*1.1)*.008;}
+  if(opts.spin)group.rotation.x=.45+Math.sin(phase*.7)*.08;
+  var pulse=.06+.04*Math.sin(phase*2.2)+listen*.14+live*(opts.glowMax||.8)*(reduced?1:.8+.2*Math.sin(phase*14)*Math.sin(phase*14));
+  figureGlow.forEach(function(m){m.emissive.copy(m.userData.figureBaseEmissive).add(glowColor.clone().multiplyScalar(pulse));m.emissiveIntensity=Math.max(m.userData.figureBaseIntensity,1);});}
+/* This mask has separate lower-lip, jaw, chin and teeth objects but no face
+   rig or morph targets. Move only those authored parts: it creates a real jaw
+   opening from speech energy without distorting the mask itself. */
+if(maskMouth.length){var mouthOpen=state==='speaking'?(.12+energy*.88)*(reduced?1:.68+.32*Math.sin(phase*16)*Math.sin(phase*16)):0;maskMouth.forEach(function(part){part.node.position.copy(part.position);part.node.rotation.copy(part.rotation);part.node.position.y-=mouthOpen*.04/part.scale;part.node.rotation.x-=mouthOpen*.05;});maskGlow.forEach(function(m){m.emissive.copy(m.userData.maskBaseEmissive);m.emissiveIntensity=m.userData.maskBaseIntensity+mouthOpen*1.8;if(mouthOpen)m.emissive.add(new T.Color(0,.34,.13));});}
 group.rotation.y=yaw+heading;renderer.render(scene,camera);}
 function down(e){drag=e.clientX;if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId);}function move(e){if(drag===null)return;yaw+=(e.clientX-drag)*.008;drag=e.clientX;}function up(){drag=null;}
 canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);raf=root.requestAnimationFrame(frame);
-return {ready:ready,canvas:canvas,setState:function(v){state=v;chooseClip();},setEnergy:function(v){target=Math.max(0,Math.min(1,Number(v)||0));},setPaused:function(v){paused=!!v;},setSolid:function(v){solid=!!v;materials.forEach(function(m){if(!m.emissive)return;if(!m.userData.doomEmissive)m.userData.doomEmissive=m.emissive.clone();m.emissive.copy(m.userData.doomEmissive);if(!solid)m.emissive.add(new T.Color(.015,.12,.09));});},reset:function(){yaw=0;},destroy:function(){dead=true;root.cancelAnimationFrame(raf);if(mixer){mixer.stopAllAction();mixer.uncacheRoot(object);}disposeObject(object);env.dispose();renderer.dispose();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);if(canvas.parentNode)canvas.parentNode.removeChild(canvas);}};
+return {ready:ready,canvas:canvas,setState:function(v){state=v;chooseClip();},setEnergy:function(v){target=Math.max(0,Math.min(1,Number(v)||0));},setPaused:function(v){paused=!!v;},setSolid:function(v){solid=!!v;materials.forEach(function(m){if(!m.emissive)return;if(!m.userData.doomEmissive)m.userData.doomEmissive=m.emissive.clone();m.emissive.copy(m.userData.doomEmissive);if(!solid)m.emissive.add(new T.Color(.015,.12,.09));});},reset:function(){yaw=0;},destroy:function(){dead=true;root.cancelAnimationFrame(raf);if(mixer){mixer.stopAllAction();mixer.uncacheRoot(object);}maskGlow.forEach(function(m){m.dispose();});disposeObject(object);env.dispose();renderer.dispose();canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',up);if(canvas.parentNode)canvas.parentNode.removeChild(canvas);}};
 }
 
-function createDefault(host){return createModel(host,fetch('/assets/doom/dr-doom-v2.glb').then(function(r){if(!r.ok)throw new Error('Doom model HTTP '+r.status);return r.arrayBuffer();}));}
-root.OmegaDoom={createModel:createModel,createPortrait:createPortrait,create:createDefault,createMotion:createMotion,createDoomRig:createDoomRig,version:"20260921-rigged-5"};
+function loadAsset(path){return fetch(path).then(function(r){if(!r.ok)throw new Error('Doom model HTTP '+r.status);return r.arrayBuffer();});}
+function createDefault(host){return createFigure(host,'rigged');}
+function createFigure(host,key){var f=FIGURES[key];if(!f)throw new Error('Unknown character: '+key);return createModel(host,loadAsset(f.asset),f);}
+function createMask(host){return createFigure(host,'mask');}
+root.OmegaDoom={createModel:createModel,createPortrait:createPortrait,create:createDefault,createMask:createMask,createFigure:createFigure,figures:FIGURES,credit:creditLine,createMotion:createMotion,createDoomRig:createDoomRig,version:"20260922-figures-8"};
 })(window);

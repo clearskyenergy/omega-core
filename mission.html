@@ -22,7 +22,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="JARVIS">
 <meta name="theme-color" content="#020813">
-<link rel="apple-touch-icon" href="/icons/omega-180.png">
+<link rel="apple-touch-icon" href="/icons/mission-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/mission-32.png">
 <link rel="manifest" href="/mission.webmanifest">
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
@@ -519,6 +520,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .coreLayer.characterReady #missionDoomCredit{display:block}
 .coreLayer.characterReady .coreLabel{justify-content:flex-end;padding-bottom:2%}
 .characterSettings{padding:14px;display:grid;gap:10px}
+.phoneRows{padding:12px 14px;display:grid;gap:10px}
+.phoneRows .pr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phoneRows .pr>span{flex:1;min-width:160px;font-family:var(--ui);font-size:13px;line-height:1.45;color:var(--dim)}
+.phoneRows .pr>span b{color:var(--ink);display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.phoneRows .pr button{min-height:38px}
+.phoneRows .prNote{font-family:var(--ui);font-size:12px;color:var(--dim)}
+.phoneRows .prNote.bad{color:var(--bad)}
+.phoneRows .prNote.good{color:var(--good)}
 .characterSettings select{width:100%;padding:10px;background:#102029;color:#e5f4ee;border:1px solid #44645b;border-radius:5px}
 
 .coreLayer canvas{width:100%;height:100%;display:block}
@@ -752,6 +761,68 @@ body.arranging .scroll{pointer-events:none}
 @keyframes doomBreath{
   0%,100%{box-shadow:0 0 12px rgba(61,220,132,.40) inset}
   50%    {box-shadow:0 0 22px rgba(61,220,132,.70) inset}}
+
+/* ── THE OTHER MASTERS ───────────────────────────────────────────────────
+   Armour, Witch-king and the Ring are doom mode with a different master in
+   the room: same card frame, same 3D layer. The palette and the weather move,
+   keyed by data-figure, so every rule written for doom mode keeps holding.
+   The armour is a lit workshop: red steel, gold trim, no darkened corners.
+   The Witch-king is the dark itself: black, cold grey, the light drained.
+   The Ring is Mount Doom: ember and lava on black, the corners glowing red. */
+:root[data-mode="doom"][data-figure="armour"]{
+  --glow-cyan:#ffcf5a; --glow-blue:#b3170f; --ink:#ffe9d9; --dim:#d29a7e;
+  --panel:rgba(48,9,9,.60); --edge:1px solid rgba(255,207,90,.36); --bg:#160405}
+:root[data-mode="doom"][data-figure="armour"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.10) 50%),
+             linear-gradient(90deg,rgba(255,60,30,.04),rgba(255,207,90,.03),rgba(255,60,30,.04));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="armour"] body::after{
+  background:radial-gradient(118% 88% at 50% 44%,rgba(0,0,0,0) 50%,rgba(60,0,0,.22) 80%,rgba(40,0,0,.40) 100%)}
+:root[data-mode="doom"][data-figure="armour"] .mark{border-color:#ffcf5a;animation:armourBreath 3s ease-in-out infinite}
+@keyframes armourBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,207,90,.45) inset}
+  50%    {box-shadow:0 0 24px rgba(179,23,15,.85) inset}}
+:root[data-mode="doom"][data-figure="armour"] .talkBar{
+  background:linear-gradient(90deg,rgba(179,23,15,.22),rgba(255,207,90,.10),rgba(179,23,15,.22));
+  box-shadow:inset 0 0 20px rgba(179,23,15,.35)}
+:root[data-mode="doom"][data-figure="armour"] .navItem.on{background:rgba(179,23,15,.28);border-color:rgba(255,207,90,.5)}
+
+:root[data-mode="doom"][data-figure="witchking"]{
+  --glow-cyan:#a6adbb; --glow-blue:#16181f; --ink:#c6cbd4; --dim:#5c6270;
+  --good:#8fa39a; --warn:#b9a47a; --bad:#b86b6b;
+  --panel:rgba(3,3,5,.82); --edge:1px solid rgba(166,173,187,.16); --bg:#000}
+:root[data-mode="doom"][data-figure="witchking"] body::before{
+  background:linear-gradient(rgba(0,0,0,0) 50%,rgba(0,0,0,.28) 50%);
+  background-size:100% 3px}
+:root[data-mode="doom"][data-figure="witchking"] body::after{
+  background:radial-gradient(100% 76% at 50% 44%,rgba(0,0,0,0) 22%,rgba(0,0,0,.55) 62%,rgba(0,0,0,.92) 100%)}
+:root[data-mode="doom"][data-figure="witchking"] .mark{border-color:#5c6270;box-shadow:0 0 10px rgba(166,173,187,.18) inset;animation:none}
+:root[data-mode="doom"][data-figure="witchking"] .talkBar{
+  background:linear-gradient(90deg,rgba(0,0,0,.6),rgba(30,32,40,.5),rgba(0,0,0,.6));
+  box-shadow:inset 0 0 24px rgba(0,0,0,.8)}
+:root[data-mode="doom"][data-figure="witchking"] .panel{box-shadow:0 0 0 1px rgba(0,0,0,.6),0 12px 40px rgba(0,0,0,.7)}
+:root[data-mode="doom"][data-figure="witchking"] .navItem.on{background:rgba(166,173,187,.08);border-color:rgba(166,173,187,.3)}
+:root[data-mode="doom"][data-figure="witchking"] .t.good,:root[data-mode="doom"][data-figure="witchking"] .badge{filter:saturate(.35)}
+
+:root[data-mode="doom"][data-figure="onering"]{
+  --glow-cyan:#ff6a1f; --glow-blue:#7a0e00; --ink:#ffd6bd; --dim:#b9623f;
+  --panel:rgba(28,3,1,.66); --edge:1px solid rgba(255,106,31,.36); --bg:#0a0100}
+:root[data-mode="doom"][data-figure="onering"] body::before{
+  background:linear-gradient(rgba(16,18,16,0) 50%,rgba(0,0,0,.14) 50%),
+             linear-gradient(90deg,rgba(255,80,0,.05),rgba(120,20,0,.02),rgba(255,80,0,.05));
+  background-size:100% 4px,6px 100%}
+:root[data-mode="doom"][data-figure="onering"] body::after{
+  mix-blend-mode:normal;
+  background:radial-gradient(118% 92% at 50% 40%,rgba(0,0,0,0) 30%,rgba(120,18,0,.28) 66%,rgba(255,70,0,.42) 100%),
+             radial-gradient(60% 30% at 50% 108%,rgba(255,120,20,.55),rgba(255,60,0,0) 70%)}
+:root[data-mode="doom"][data-figure="onering"] .mark{border-color:#ff6a1f;animation:emberBreath 4s ease-in-out infinite}
+@keyframes emberBreath{
+  0%,100%{box-shadow:0 0 12px rgba(255,106,31,.45) inset}
+  50%    {box-shadow:0 0 26px rgba(255,170,40,.85) inset}}
+:root[data-mode="doom"][data-figure="onering"] .talkBar{
+  background:linear-gradient(90deg,rgba(122,14,0,.30),rgba(255,106,31,.12),rgba(122,14,0,.30));
+  box-shadow:inset 0 0 22px rgba(255,60,0,.35)}
+:root[data-mode="doom"][data-figure="onering"] .navItem.on{background:rgba(122,14,0,.35);border-color:rgba(255,106,31,.5)}
 
 /* ── DOOM MODE: THE CARD IS A CARD ───────────────────────────────────────
    In doom mode a person stops being a dossier and becomes a collectible:
@@ -1177,7 +1248,10 @@ body.arranging .scroll{pointer-events:none}
      auto minimum sizes the track to its CONTENT — so one track holding
      something that scrolls sideways grows to the full scroll width and drags
      the whole page with it. */
-  #app{grid-template-columns:minmax(0,1fr)}
+  /* Two rows now, and the spare height goes to the CONTENT row: grid rows
+     default to sharing it, which put a 300px void under the brand on a phone
+     before a single fact. */
+  #app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);align-content:start}
   .rail{flex-direction:row;flex-wrap:wrap;border-right:none;padding-right:0;
         border-bottom:1px solid rgba(0,243,255,.14);padding-bottom:10px}
   #nav{flex-direction:row;flex-wrap:wrap;flex:1}
@@ -1323,6 +1397,81 @@ body.arranging .scroll{pointer-events:none}
   .vaultDoc b{color:var(--ink)}
   .vaultDoc .vp{padding:4px 0;opacity:.8}
 :root[data-mode="quantum"] .vaultDoc .vh{color:var(--glow-gold,#ffc35c)}
+/* Messages: thread list left, transcript right, reply box under it. Bubbles
+   are his on the right and theirs on the left — the shape every phone uses,
+   so nobody has to learn which side is which. */
+.msgGrid{grid-template-columns:320px 1fr}
+.msgGrid .panel{display:flex;flex-direction:column;min-height:0}
+.msgRow{display:block;width:100%;text-align:left;padding:8px 9px;margin:0 0 3px;
+  border:1px solid transparent;border-radius:6px;color:var(--ink);font-family:var(--ui)}
+.msgRow:hover{background:rgba(0,243,255,.06)}
+.msgRow.on{background:rgba(0,243,255,.12);border-color:rgba(0,243,255,.35)}
+.msgRow .mt{display:flex;gap:8px;align-items:baseline;font-size:13px}
+.msgRow .mt b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.msgRow .mt i{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.msgRow .ml{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.msgRow .mu{font-family:var(--mono);font-size:10px;color:var(--bg);background:var(--glow-cyan);
+  border-radius:9px;padding:0 6px}
+.msgLog{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:6px 4px 10px}
+.msgB{max-width:72%;padding:7px 11px;border-radius:14px;font-family:var(--ui);font-size:13px;
+  line-height:1.45;white-space:pre-wrap;word-wrap:break-word;align-self:flex-start;
+  background:rgba(255,255,255,.07);color:var(--ink)}
+.msgB.me{align-self:flex-end;background:rgba(0,243,255,.16);border:1px solid rgba(0,243,255,.25)}
+.msgB .who{display:block;font-size:10px;color:var(--dim);margin-bottom:2px;font-family:var(--mono)}
+.msgB.att{font-style:italic;color:var(--dim)}
+.msgDay{align-self:center;font-family:var(--mono);font-size:10px;color:var(--dim);margin:8px 0 2px}
+.msgReply{display:flex;gap:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+.msgReply textarea{flex:1;min-height:40px;max-height:140px;resize:vertical;font:13px/1.4 var(--ui);
+  color:var(--ink);background:rgba(0,0,0,.35);border:1px solid rgba(0,243,255,.22);border-radius:6px;padding:8px 10px}
+.msgReply textarea:focus{outline:none;border-color:var(--glow-cyan)}
+.msgReply button{min-width:84px}
+.msgNote{font-size:12px;color:var(--dim);padding:4px 2px 0;min-height:18px}
+.msgNote.bad{color:var(--bad)}
+.msgEmpty{padding:18px 6px;color:var(--dim);font-size:13px;line-height:1.5}
+.ccMsg .msgRow{padding:5px 6px}
+/* Proposals: a title he can act on, the reason in one line, the evidence
+   under it, and two buttons — the only two answers the note understands. */
+.propHead{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--glow-cyan);margin:14px 2px 6px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.09)}
+.propHead:first-child{margin-top:2px}
+.propHead span{color:var(--dim);margin-left:6px}
+.propRow{padding:9px 8px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui)}
+.propT{font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.4}
+.propW{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
+.propE{margin:6px 0 0 18px;padding:0;font-size:12px;color:var(--ink);opacity:.8;line-height:1.5}
+.propB{display:flex;gap:8px;margin-top:8px}
+.propB button{font-size:11px;padding:4px 12px;min-height:32px}
+.propB button[data-a="dismiss"]{color:var(--dim);border-color:rgba(255,255,255,.14)}
+/* Sessions: one row shape for both agents — who, what, where, state, age. */
+.sessBar{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px}
+.sessBar button{font-size:11px;padding:3px 10px}
+.sessBar button.sel{background:rgba(0,243,255,.14);border-color:var(--glow-cyan)}
+.sessRow{display:grid;grid-template-columns:62px 1fr 200px 70px 78px;gap:10px;align-items:center;
+  padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-family:var(--ui);font-size:13px}
+.sessRow .ag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  border-radius:4px;padding:2px 0;text-align:center;background:rgba(0,243,255,.1);color:var(--glow-cyan)}
+.sessRow .ag.codex{background:rgba(61,255,139,.10);color:var(--good)}
+.sessRow .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.sessRow .nm small{color:var(--dim);margin-left:6px;font-size:11px}
+.sessRow .cw{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--dim);font-family:var(--mono);font-size:11px;direction:rtl;text-align:left}
+.sessRow .st{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.sessRow .st::before{content:'\25CF  ';opacity:.5}
+.sessRow .st.busy{color:var(--good)}
+.sessRow .st.busy::before{opacity:1}
+.sessRow .st.blocked,.sessRow .st.waiting{color:var(--warn)}
+.sessRow .st.blocked::before,.sessRow .st.waiting::before,.sessRow .st.failed::before{opacity:1}
+.sessRow .st.failed{color:var(--bad)}
+.sessRow .ago{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right}
+.sessHead{color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-bottom-color:rgba(255,255,255,.12)}
+.sessHead .ag{background:none;color:var(--dim)}
+@media(max-width:1100px){
+  .msgGrid{grid-template-columns:minmax(0,1fr)}
+  .msgB{max-width:88%}
+  .sessRow{grid-template-columns:54px 1fr 64px;row-gap:2px}
+  .sessRow .cw{grid-column:2/4;grid-row:2;direction:ltr}
+  .sessRow .ago{display:none}
+}
 /* Installed, there is no browser chrome between the page and the hardware, so
    the page owns the home indicator and the rounded corners. Scoped to
    standalone: in a browser tab Safari still handles all of this, and applying
@@ -1333,16 +1482,104 @@ body.arranging .scroll{pointer-events:none}
        padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }
 
+/* ── THE PHONE BAR ────────────────────────────────────────────────────────
+   Only under 700px (display:none otherwise, .ptabs{display:flex} above). Fixed
+   to the bottom under the sticky talk bar, so the two never overlap and the
+   caption, which measures the talk bar, clears both. */
+:root{--ptabH:58px}
+.ptabs{display:none;position:fixed;left:0;right:0;bottom:0;z-index:70;height:calc(var(--ptabH) + env(safe-area-inset-bottom));
+       padding:0 4px env(safe-area-inset-bottom);background:var(--bg);border-top:1px solid rgba(0,243,255,.22)}
+.ptabs button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+       background:none;border:none;border-radius:0;padding:6px 2px;color:var(--dim);font-family:var(--mono);
+       font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;position:relative;min-height:0}
+.ptabs button .ic{font-size:18px;line-height:1;font-family:var(--ui)}
+.ptabs button.on{color:var(--glow-cyan)}
+.ptabs button.on::after{content:'';position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--glow-cyan)}
+.ptabs .pill{position:absolute;top:3px;right:12%;margin:0;background:rgba(0,243,255,.16);color:var(--glow-cyan);
+       border-radius:9px;padding:0 5px;font-size:9px;line-height:14px}
+.ptabs .pill:empty{display:none}
+.moreBack{position:fixed;inset:0;background:rgba(2,8,19,.7);z-index:80}
+.moreSheet{position:fixed;left:0;right:0;bottom:0;z-index:81;background:#061224;border-top:var(--edge);
+       border-radius:14px 14px 0 0;padding:10px 10px calc(12px + env(safe-area-inset-bottom));max-height:78vh;overflow-y:auto}
+.moreSheet .ptitle{margin:4px 6px 8px}
+.moreSheet .navItem{display:flex;width:100%;min-height:46px;padding:10px 12px;margin-bottom:4px;
+       border:1px solid rgba(0,243,255,.14);border-radius:8px;font-size:14px;white-space:normal;text-align:left}
+.moreSheet .navItem.on{border-color:var(--glow-cyan);background:rgba(0,243,255,.10)}
+.moreSheet .pill{background:rgba(0,243,255,.16);color:var(--glow-cyan);border-radius:9px;padding:0 6px}
+.moreSheet .pill:empty{display:none}
+.rowClick{cursor:pointer}
+.row.rowClick .k::after{content:'  ›';color:var(--dim)}
+
 @media (max-width:700px){
-  /* HIS RULE, 2026-09-13: on the phone, Jarvis is something you TALK to.
-     Thirteen tabs is thirteen things to poke at on a screen with room for
-     one, and asking for a screen is faster than hunting for it — so the
-     strip goes and navigation becomes a sentence (see viewCommand()). The
-     tabs stay on every larger screen, where there is room for them and a
-     mouse to use them. */
+  /* HIS RULE, 2026-09-13, was: on the phone, Jarvis is something you TALK to,
+     so the strip went and navigation became a sentence (viewCommand()).
+     HIS RULE, 2026-09-23, from the installed app: "I can't access any of the
+     stuff on the command center." A sentence is a fine way to move and a poor
+     way to discover, and an installed app with no visible way to its other
+     screens reads as broken. So the seventeen-button strip stays gone, and in
+     its place: a bottom bar with the four screens he opens most, a MORE sheet
+     that lists every other one (built from #nav, so it is the same list with
+     the same count pills), and Overview rows that open the screen they
+     count. The sentence still works. */
   #nav{display:none}
   .brand{padding-bottom:4px}
   .rail{flex:none;padding-bottom:6px}
+  .ptabs{display:flex}
+  .foot{display:none}
+
+  /* The talk bar is fixed above the tab bar, not sticky at the end of a
+     column: a short screen left it floating mid-page with the tabs a hand's
+     width below. --talkH is still measured from the real bar. */
+  .main > .talkBar{position:fixed;left:0;right:0;margin:0;z-index:60;
+           bottom:calc(var(--ptabH) + env(safe-area-inset-bottom));
+           padding:8px 12px;border-bottom:1px solid rgba(0,243,255,.14)}
+  body{padding-bottom:calc(var(--ptabH) + 72px + env(safe-area-inset-bottom))}
+
+  /* ONE COLUMN, WHATEVER THE MARKUP SAYS. Several views set their columns
+     inline (1fr 320px, 1fr 330px); only !important reaches past that. */
+  .cmdGrid,.platGrid,.logicGrid,.brainGrid,.msgGrid{grid-template-columns:minmax(0,1fr)!important}
+  /* Panels sized for a fixed desktop grid (height:132px, max-height:34%) get
+     their natural height in a scrolling column; a list still caps at .scroll. */
+  .view .panel{height:auto!important;max-height:none!important;flex:none!important}
+  .panel .scroll{max-height:62vh}
+
+  /* THE COMMAND CENTER, IN THE ORDER A PHONE READS IT: what is on your plate,
+     what is waiting on you, the conversation, then the day, the buttons, the
+     feed, and the plumbing last. The three desktop columns dissolve
+     (display:contents) so the panels can be ordered as one list. */
+  .view[data-view="command"] .col{display:contents}
+  .view[data-view="command"] .cmdGrid{display:flex;flex-direction:column;gap:10px}
+  .panel[data-widget="overview"]{order:1}
+  .panel[data-widget="needs"]{order:2}
+  .panel[data-widget="conversation"]{order:3}
+  .panel[data-widget="schedule"]{order:4}
+  .panel[data-widget="quick-commands"]{order:5}
+  .panel[data-widget="feed"]{order:6}
+  .panel[data-widget="messages"]{order:7}
+  .panel[data-widget="conns"]{order:8}
+  .panel[data-widget="agent-activity-last-8-runs"]{order:9}
+  /* The window onto the core sits last: a 180px hole between the header and
+     the first number was the first thing the phone showed. */
+  .view[data-view="command"] .coreHole{order:10;height:120px}
+  .panel[data-widget="conversation"] .scroll{max-height:70vh}
+
+  /* Rows: a title gets the width, the small print wraps under it, and the
+     buttons become a row of their own you can hit with a thumb. */
+  .row{font-size:15px;line-height:1.4;gap:8px 10px;flex-wrap:wrap;align-items:center}
+  .row .v{font-size:12.5px}
+  #todos .row .k{flex:1 1 55%}
+  #todos .row .triWhy{flex:1 1 100%;order:3;font-size:10px}
+  #todos .row .tBtns{flex:1 1 100%!important;order:4;margin-left:0!important;gap:8px!important}
+  #todos .row .tBtns button{flex:1;min-height:40px;font-size:12px!important;padding:6px 8px!important}
+  .ixChip{min-height:36px;display:inline-flex;align-items:center;font-size:10.5px}
+  .quick button,.panel button:not(.capBtn):not(.tBtns button){min-height:40px}
+  .addBar .brainQ{min-width:0;flex:1 1 100%}
+  .addBar button{min-height:40px;font-size:11px!important;padding:8px 14px!important}
+
+  /* The brain: the graph first and tall enough to touch; the lists after. */
+  .brainStage{order:-1;min-height:58vh}
+  .brainGrid{display:flex;flex-direction:column}
+  header{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -10px;padding:6px 10px 8px}
 }
 </style>
 </head>
@@ -1376,7 +1613,6 @@ body.arranging .scroll{pointer-events:none}
     </div>
 
     <nav id="nav">
-      <a class="navItem" href="/" style="text-decoration:none" title="OMEGA home">⌂  OMEGA home</a>
       <button class="navItem on" data-view="command">◧  Command Center</button>
       <button class="navItem" data-view="tasks">▤  Tasks<span class="pill" id="nTasks"></span></button>
       <button class="navItem" data-view="outbox">✉  Outbox<span class="pill" id="nOut"></span></button>
@@ -1387,6 +1623,9 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
+      <button class="navItem" data-view="messages">✆  Messages<span class="pill" id="nMsg"></span></button>
+      <button class="navItem" data-view="sessions">⧉  Sessions<span class="pill" id="nSess"></span></button>
+      <button class="navItem" data-view="proposals">➤  Proposals<span class="pill" id="nProp"></span></button>
       <button class="navItem" data-view="terminal">▮  Terminal<span class="pill" id="nTerm"></span></button>
       <button class="navItem" data-view="index">⊞  Index<span class="pill" id="nIndex"></span></button>
       <button class="navItem" data-view="brain">✦  Brain<span class="pill" id="nBrain"></span></button>
@@ -1451,6 +1690,10 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="conns" style="flex:none">
             <div class="ptitle">Connections</div>
             <div id="conns"></div>
+          </div>
+          <div class="panel ccMsg" data-widget="messages" style="flex:none;max-height:190px">
+            <div class="ptitle">Messages<span class="live" id="ccMsgN"></span></div>
+            <div id="ccMsg" class="scroll"></div>
           </div>
         </div>
 
@@ -1595,6 +1838,69 @@ body.arranging .scroll{pointer-events:none}
           <div class="ptitle">Decisions<span class="live" id="dcN"></span></div>
           <div class="scroll vaultDoc" id="dcDoc"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ========== MESSAGES ==========
+         His iMessage threads, read through the neural link's /messages, which
+         is a proxy to the phone line (jarvis_imessage.py, 8796). The phone
+         line is the ONE reader of chat.db; this view and the Messages orb on
+         the glass are two renderings of it, not two copies. Dark when the Mac
+         is asleep, and it says so rather than claiming there is no mail.
+
+         The reply box is Thomas's own hand on send (decided 2026-09-21). The
+         phone line resolves the recipient and refuses an ambiguous name, and
+         logs every send; the model's tool gate is untouched. -->
+    <section class="view" data-view="messages">
+      <div class="cmdGrid msgGrid">
+        <div class="panel" data-widget="msg-threads">
+          <div class="ptitle">Threads<span class="live" id="msgN"></span></div>
+          <input id="msgQ" class="brainQ" placeholder="Filter by name or text…" autocomplete="off">
+          <div class="scroll" id="msgList" style="flex:1;min-height:0;margin-top:6px"></div>
+        </div>
+        <div class="panel" data-widget="msg-thread">
+          <div class="ptitle"><span id="msgTitle">Messages</span><span class="live" id="msgState"></span></div>
+          <div class="scroll msgLog" id="msgLog"><div class="msgEmpty">Pick a thread.</div></div>
+          <form class="msgReply" id="msgReply" hidden>
+            <textarea id="msgText" rows="2" maxlength="2000" placeholder="Reply — Enter sends, Shift+Enter for a new line"></textarea>
+            <button type="submit" id="msgSend">SEND</button>
+          </form>
+          <div class="msgNote" id="msgNote"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== SESSIONS ==========
+         The coding agents running on this Mac, Claude Code and Codex in one
+         list because their row is the same shape. GET /sessions on the neural
+         link; it caches for ten seconds because each read forks the claude
+         CLI. Read-only: nothing here starts, stops or talks to a session. -->
+    <section class="view" data-view="sessions">
+      <div class="panel" data-widget="sessions" style="flex:1;min-height:0">
+        <div class="ptitle">Coding sessions on this Mac<span class="live" id="sessN"></span></div>
+        <div class="sessBar" id="sessBar">
+          <button data-f="all" class="sel">ALL</button>
+          <button data-f="claude">CLAUDE CODE</button>
+          <button data-f="codex">CODEX</button>
+          <button data-f="busy">WORKING NOW</button>
+          <button id="sessRefresh" style="margin-left:auto">REFRESH</button>
+        </div>
+        <div class="scroll" id="sessList" style="flex:1;min-height:0"></div>
+      </div>
+    </section>
+
+    <!-- ========== PROPOSALS ==========
+         L2 of the ladder: what Jarvis thinks he should DO about the people,
+         commitments and questions the meetings, texts and mail have piled up.
+         bin/propose writes them on the Mac (hourly) into the vault note
+         04 - Jarvis/Proposals.md; this reads them through the brain's
+         /proposals. DONE and DISMISS make the same edit as ticking or
+         deleting the line in Obsidian. Nothing here sends, books or changes
+         anything else — acting on a proposal is still his hand. -->
+    <section class="view" data-view="proposals">
+      <div class="panel" data-widget="proposals" style="flex:1;min-height:0">
+        <div class="ptitle">What Jarvis proposes<span class="live" id="propN"></span></div>
+        <div class="scroll" id="propList" style="flex:1;min-height:0"></div>
       </div>
     </section>
 
@@ -1743,11 +2049,20 @@ body.arranging .scroll{pointer-events:none}
             <div class="ptitle">Character & appearance</div>
             <div class="characterSettings">
               <label for="characterMode">Jarvis character</label>
-              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <div id="doomAppearance" style="display:grid;gap:10px">
               <label for="doomCharacter">Doom appearance</label>
-              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
+              </div>
               <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
             </div>
+          </div>
+          <!-- The phone: install and notifications. Installed to the home
+               screen, /mission opens on the Command Center with no browser
+               chrome, and only then can iOS deliver a push to it. -->
+          <div class="panel" data-widget="phone" style="flex:none">
+            <div class="ptitle">Phone</div>
+            <div class="phoneRows" id="phone"></div>
           </div>
           <div class="panel" style="flex:none">
             <div class="ptitle">Pipeline</div>
@@ -1787,6 +2102,17 @@ body.arranging .scroll{pointer-events:none}
   </main>
 
   <div class="foot" id="foot"></div>
+
+  <!-- The phone bar. Hidden above 700px; see THE PHONE BAR in the styles. -->
+  <nav class="ptabs" id="ptabs" aria-label="Screens">
+    <button data-view="command"><span class="ic">◧</span>Home</button>
+    <button data-view="tasks"><span class="ic">▤</span>Tasks<span class="pill" data-for="nTasks"></span></button>
+    <button data-view="outbox"><span class="ic">✉</span>Outbox<span class="pill" data-for="nOut"></span></button>
+    <button data-view="calendar"><span class="ic">▦</span>Calendar<span class="pill" data-for="nCal"></span></button>
+    <button data-view="more" id="moreTab"><span class="ic">⋯</span>More</button>
+  </nav>
+  <div class="moreBack" id="moreBack" hidden></div>
+  <div class="moreSheet" id="moreSheet" hidden><div class="ptitle">Every screen</div><div id="moreList"></div></div>
 </div>
 
 <div class="zoomBack" id="zoomBack" hidden></div>
@@ -1803,7 +2129,11 @@ body.arranging .scroll{pointer-events:none}
 
 <script src="assets/vendor/three-r128/three.min.js"></script>
 <script src="assets/vendor/three-r128/GLTFLoader.js"></script>
-<script src="omega-doom.js?v=20260921-rigged-5"></script>
+<script src="omega-doom.js?v=20260922-figures-8"></script>
+<!-- The phone half: push notifications for the installed app. Self-contained
+     (window.JarvisPush), never asks for permission on its own; the Phone
+     panel on the System view is where he turns it on. -->
+<script src="/mission-push.js"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -1821,6 +2151,14 @@ const [appMod,authMod]=await Promise.all([import(V+'firebase-app.js'),import(V+'
 const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(FIREBASE_CONFIG);
 const auth=authMod.getAuth(app);
 const el=id=>document.getElementById(id);
+/* For the few panels that build HTML from strings they did not write (vault
+   notes, message text, session names). Everything else here uses textContent.
+   It was called before it existed, so the Open work panel printed
+   "esc is not defined" instead of the vault. */
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 /* Never invent a number. A missing value renders as a dash, so a broken loop
    looks broken instead of looking like 42 degrees. */
@@ -3234,7 +3572,7 @@ function makeCore(id, opts) {
        cyan globe under a gold name. The command centre has its own sphere;
        this is only the globe agreeing with its label. */
     const quantumNow = document.documentElement.dataset.mode === 'quantum';
-    const cyan = doom ? '61,220,132' : quantumNow ? '255,195,92' : '0,243,255';
+    const cyan = doom ? ((FIGURE_MODES[document.documentElement.dataset.figure]||{}).rgb || '61,220,132') : quantumNow ? '255,195,92' : '0,243,255';
     const hot  = quantumNow ? '255,236,196' : '140,240,255';
     if (doom) { drawDoom(cx, cy, R, yaw, cyan); requestAnimationFrame(frame); return; }
 
@@ -3670,23 +4008,42 @@ const arc = makeBurst('arc', { scale: 0.60 });
 const classicDoomCore = makeCore('arc', { scale: 0.30, doomOnly: true });
 let missionDoom = null, characterGeneration = 0, characterState = 'idle';
 let doomCharacter = 'rigged';
-try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+try { const saved = localStorage.getItem('jarvisDoomCharacter'); if (['rigged','mask','portrait','classic'].includes(saved)) doomCharacter = saved; } catch (_) {}
+/* The masters who stand in the room. Doom keeps his appearance menu; the
+   others ARE their figure. Everything else on this page keys off
+   dataset.mode === 'doom', so each of these runs as doom mode with
+   dataset.figure naming who is standing there. */
+const FIGURE_MODES = {
+  doom:      { figure: null,        name: 'D.O.O.M',      tag: 'SOVEREIGN CORE', line: 'Doom mode. Same numbers, worse manners.' },
+  armour:    { figure: 'ironman',   name: 'S.T.A.R.K',    tag: 'ARMOUR CORE',    rgb: '255,207,90', line: 'Armour mode. Suit is online.' },
+  witchking: { figure: 'witchking', name: 'A.N.G.M.A.R',  tag: 'WITCH-KING CORE', rgb: '166,173,187', line: 'Witch-king mode. No man may close this dashboard.' },
+  onering:   { figure: 'onering',   name: 'THE ONE RING', tag: 'PRECIOUS CORE',  rgb: '255,106,31', line: 'Ring mode. One dashboard to rule them all.' }
+};
+function currentFigure() {
+  const fm = FIGURE_MODES[document.documentElement.dataset.figure || 'doom'] || FIGURE_MODES.doom;
+  return fm.figure || doomCharacter;
+}
 function syncDoomCharacter() {
   const generation = ++characterGeneration;
   const layer = el('coreLayer'), host = el('missionDoom');
   if (missionDoom) { missionDoom.destroy(); missionDoom = null; }
   layer.classList.remove('characterReady'); host.style.display = 'none';
   el('doomCharacter').value = doomCharacter;
-  if (document.documentElement.dataset.mode !== 'doom' || doomCharacter === 'classic') return;
+  const figureKey = currentFigure();
+  el('doomAppearance').style.display = (document.documentElement.dataset.figure || 'doom') === 'doom' ? 'grid' : 'none';
+  if (document.documentElement.dataset.mode !== 'doom' || figureKey === 'classic') return;
   host.style.display = 'block';
   el('characterStatus').textContent = 'Loading character…';
   try {
-    const actor = doomCharacter === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.create(host);
+    const actor = figureKey === 'portrait' ? OmegaDoom.createPortrait(host) : OmegaDoom.createFigure(host, figureKey);
     missionDoom = actor;
     actor.ready.then(() => {
       if (generation !== characterGeneration) return;
       actor.setState(characterState); layer.classList.add('characterReady');
-      el('missionDoomCredit').style.visibility = doomCharacter === 'rigged' ? 'visible' : 'hidden';
+      const credit = el('missionDoomCredit');
+      const figure = OmegaDoom.figures[figureKey];
+      credit.style.visibility = figure ? 'visible' : 'hidden';
+      if (figure) { credit.href = figure.url; credit.textContent = OmegaDoom.credit(figureKey); }
       el('characterStatus').textContent = 'Character ready. Saved on this browser.';
     }).catch(() => {
       if (generation !== characterGeneration) return;
@@ -4088,6 +4445,8 @@ function meter(node, his){
 }
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
+/* mission-push.js runs outside this module and cannot see token(); hand it over. */
+try{ if(window.JarvisPush) window.JarvisPush.setToken(token); }catch(_){}
 
 /* ── getting the RIGHT voice out of a phone ──────────────────────────────
    On a desk Jarvis speaks in the ElevenLabs voice. On a phone he was speaking
@@ -4588,21 +4947,23 @@ function confirmCommand(cmd){
    means it is instant and costs nothing.
 
    No number changes. A skin that edits the truth is not a skin. */
-const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|armou?r|suit|stark|witch[\s-]*king|nazgul|(?:the\s+)?(?:one\s+)?ring|precious|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
+const MODES = ['ironman','doom','armour','witchking','onering','quantum'];
 
 /* Three skins on one page: Iron Man (the burst), Doom (the icosahedron) and
    Quantum (the gold sphere, for the command centre). dataset.mode carries the
    name; '' is Iron Man because that is what every rule written before there
    were modes assumes. */
 function setMode(mode, announce){
-  const m = (mode==='doom'||mode==='quantum') ? mode : 'ironman';   /* anything else is Iron Man mode */
-  const doom = m==='doom', quantum = m==='quantum';
-  document.documentElement.dataset.mode = (doom||quantum) ? m : '';
+  const m = MODES.includes(mode) ? mode : 'ironman';   /* anything else is Iron Man mode */
+  const figureMode = FIGURE_MODES[m], doom = !!figureMode, quantum = m==='quantum';
+  document.documentElement.dataset.mode = doom ? 'doom' : quantum ? m : '';
+  if (doom) document.documentElement.dataset.figure = m; else delete document.documentElement.dataset.figure;
   el('characterMode').value = m;
   syncDoomCharacter();
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
-  const name = doom ? 'D.O.O.M' : 'J.A.R.V.I.S';
-  const tag  = doom ? 'SOVEREIGN CORE' : quantum ? 'QUANTUM CORE' : 'AI CORE';
+  const name = doom ? figureMode.name : 'J.A.R.V.I.S';
+  const tag  = doom ? figureMode.tag : quantum ? 'QUANTUM CORE' : 'AI CORE';
   const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
   if(n) n.textContent = name;
   if(sub) sub.textContent = tag;
@@ -4618,7 +4979,7 @@ function setMode(mode, announce){
   }catch(_){}
   try{ syncBoardTheme(); }catch(_){}
   if(announce){
-    const line = doom    ? 'Doom mode. Same numbers, worse manners.'
+    const line = doom    ? figureMode.line
                : quantum ? 'Quantum mode. Same numbers, in gold.'
                :           'Iron Man mode.';
     say('jarvis', line, 0);
@@ -4627,7 +4988,7 @@ function setMode(mode, announce){
 }
 try{
   const savedMode = localStorage.getItem('jarvisMode');
-  setMode((savedMode==='doom'||savedMode==='quantum') ? savedMode : 'ironman', false);
+  setMode(MODES.includes(savedMode) ? savedMode : 'ironman', false);
 }catch(_){}
 
 function modeCommand(said){
@@ -4639,7 +5000,15 @@ function modeCommand(said){
   /* Bare "quantum" is a word he might say about something else; it needs
      "mode" or a verb — "go quantum" — to be an order. */
   if(word==='quantum' && !/mode|go|switch|enter|activate/i.test(said)) return null;
-  return (word==='doom') ? 'doom' : (word==='quantum') ? 'quantum' : 'ironman';
+  /* "the ring", "suit", "precious" are words with other lives; they need
+     "mode" or a verb to be an order. */
+  if(/ring|precious|suit|stark|armou?r|nazgul/.test(word) && !/mode|go|switch|enter|activate/i.test(said)) return null;
+  if(word==='doom') return 'doom';
+  if(word==='quantum') return 'quantum';
+  if(/armou?r|suit|stark/.test(word)) return 'armour';
+  if(/witch|nazgul/.test(word)) return 'witchking';
+  if(/ring|precious/.test(word)) return 'onering';
+  return 'ironman';
 }
 
 /* One path for typed and spoken. A second code path for the keyboard is how
@@ -5055,6 +5424,9 @@ const VIEW_WORDS = {
   platform: ['platform','the platform','omega'],
   board:    ['board','the board','whiteboard','white board'],
   openwork: ['open work','openwork','open items','the open work','work'],
+  messages: ['messages','my messages','the messages','texts','my texts','text messages','imessage','imessages'],
+  sessions: ['sessions','my sessions','coding sessions','the sessions','agents','coding agents'],
+  proposals: ['proposals','my proposals','the proposals','suggestions','what should i do','what do you propose'],
   index:    ['index','the index'],
   brain:    ['brain','the brain','brain graph','graph'],
   people:   ['people','contacts','the people'],
@@ -5246,6 +5618,302 @@ function loadOpenWork(){
   loadVaultDoc('07 - Resources/Decisions.md','dcDoc','dcN');
 }
 
+/* ── Messages ────────────────────────────────────────────────────────────
+   Everything comes from the brain's /messages proxy, which passes the phone
+   line's own answer through untouched: titles out of Contacts, group member
+   names, unread counts, the echo on his own thread already collapsed. This
+   page does none of that work, because a second resolver would be a second
+   answer.
+
+   Like loadVaultDoc it asks the brain directly rather than trusting
+   `brainOn`, which is only set once the signed-in status poll has run. */
+const MSG={threads:[], open:null, openGuid:null, sending:false, last:0};
+async function brainJson(path, opts, ms){
+  const c=new AbortController(); const tm=setTimeout(()=>c.abort(), ms||5000);
+  try{
+    const r=await fetch(BRAIN+path, Object.assign({cache:'no-store',signal:c.signal}, opts||{}));
+    let j=null; try{ j=await r.json(); }catch(_){}
+    return {code:r.status, j:j||{}};
+  }finally{ clearTimeout(tm); }
+}
+/* Unreachable brain and a brain whose phone line is down are different
+   problems with different fixes, so they get different sentences. */
+function feedDown(e){
+  return /abort|failed|networkerror|load failed/i.test(String(e&&e.message||e));
+}
+const MAC_ASLEEP='The Mac is not answering — it is asleep, JARVIS is not running on it, '
+  +'or this is not the Mac. Messages are read on the Mac and nowhere else.';
+function msgWhen(sec){ return sec ? ago(new Date(sec*1000)) : ''; }
+function msgText(t){
+  /* U+FFFC is what Messages stores for an attachment with no caption. */
+  const s=String(t||'').replace(/￼/g,'').trim();
+  return s;
+}
+function msgRowHtml(t, compact){
+  const last=msgText(t.last)||(t.last?'[attachment]':'');
+  return '<button class="msgRow'+(MSG.open===t.handle?' on':'')+'" data-h="'+esc(t.handle)+'">'
+    +'<div class="mt"><b>'+esc(t.title||t.handle)+(t.jarvis?' · Jarvis':'')+'</b>'
+    +(t.unread?'<span class="mu">'+t.unread+'</span>':'')
+    +'<i>'+esc(msgWhen(t.at))+'</i></div>'
+    +(compact?'':'<div class="ml">'+esc(last)+'</div>')+'</button>';
+}
+function msgRenderList(){
+  const q=(el('msgQ')&&el('msgQ').value||'').trim().toLowerCase();
+  const rows=MSG.threads.filter(t=>!q
+    || String(t.title||'').toLowerCase().includes(q)
+    || String(t.handle||'').toLowerCase().includes(q)
+    || String(t.last||'').toLowerCase().includes(q));
+  const host=el('msgList');
+  if(host) host.innerHTML=rows.length?rows.map(t=>msgRowHtml(t,false)).join('')
+    :'<div class="msgEmpty">'+(q?'Nothing matches.':'No threads.')+'</div>';
+  const cc=el('ccMsg');
+  if(cc){
+    /* The Command Center only needs "who is waiting on me": unread first,
+       then the most recent, four rows. */
+    const top=MSG.threads.slice().sort((a,b)=>(b.unread>0)-(a.unread>0)||(b.at||0)-(a.at||0)).slice(0,4);
+    cc.innerHTML=top.length?top.map(t=>msgRowHtml(t,true)).join(''):'<div class="msgEmpty">No threads.</div>';
+  }
+}
+function msgPills(){
+  const waiting=MSG.threads.filter(t=>t.unread>0).length;
+  if(el('nMsg')) el('nMsg').textContent=waiting||'';
+  if(el('msgN')) el('msgN').textContent=MSG.threads.length?(MSG.threads.length+' threads'+(waiting?' · '+waiting+' unread':'')):'';
+  if(el('ccMsgN')) el('ccMsgN').textContent=waiting?(waiting+' unread'):'';
+}
+function msgDown(sentence){
+  MSG.threads=[];
+  ['msgList','ccMsg'].forEach(id=>{ const h=el(id); if(h) h.innerHTML='<div class="msgEmpty">'+esc(sentence)+'</div>'; });
+  msgPills();
+}
+async function loadMessages(){
+  MSG.last=Date.now();
+  try{
+    const {code,j}=await brainJson('/messages');
+    if(!j.ok) return msgDown(j.error||('The phone line answered '+code+'.'));
+    MSG.threads=Array.isArray(j.threads)?j.threads:[];
+    msgRenderList(); msgPills();
+    const onMsgs=((document.querySelector('.view.on')||{}).dataset||{}).view==='messages';
+    if(onMsgs && MSG.open) msgLoadThread(MSG.open, true);
+  }catch(e){
+    msgDown(feedDown(e)?MAC_ASLEEP:('Could not read messages: '+(e.message||e)));
+  }
+}
+async function msgLoadThread(handle, quiet){
+  const t=MSG.threads.find(x=>x.handle===handle)||{handle};
+  const opening=MSG.open!==handle;
+  MSG.open=handle; MSG.openGuid=t.chat_guid||null;
+  if(el('msgTitle')) el('msgTitle').textContent=t.title||handle;
+  msgRenderList();
+  const log=el('msgLog'); if(!log) return;
+  if(opening){
+    log.innerHTML='<div class="msgEmpty">Reading…</div>';
+    if(el('msgNote')){ el('msgNote').textContent=''; el('msgNote').className='msgNote'; }
+    if(el('msgText')) el('msgText').value='';
+  }
+  try{
+    const {code,j}=await brainJson('/messages/thread?h='+encodeURIComponent(handle));
+    if(MSG.open!==handle) return;              /* he clicked away mid-read */
+    if(!j.ok){ log.innerHTML='<div class="msgEmpty">'+esc(j.error||('HTTP '+code))+'</div>'; return; }
+    const ms=(j.messages||[]).slice().sort((a,b)=>(a.at||0)-(b.at||0));
+    const stuck=log.scrollHeight-log.scrollTop-log.clientHeight<40;
+    let day='', out='';
+    ms.forEach(m=>{
+      const d=new Date((m.at||0)*1000);
+      const dk=d.toDateString();
+      if(dk!==day){ day=dk; out+='<div class="msgDay">'+esc(d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}))+'</div>'; }
+      const tx=msgText(m.text);
+      const who=(!m.mine && t.group && (m.who||m.name||m.handle))?'<span class="who">'+esc(m.who||m.name||m.handle)+'</span>':'';
+      out+='<div class="msgB'+(m.mine?' me':'')+(tx?'':' att')+'" title="'+esc(d.toLocaleString())+'">'
+        +who+esc(tx||'[attachment]')+'</div>';
+    });
+    log.innerHTML=out||'<div class="msgEmpty">Nothing in this thread yet.</div>';
+    /* After layout, not before: a thread opened from the Command Center
+       widget is rendered while its view is still switching in. */
+    if(opening||stuck){ log.scrollTop=log.scrollHeight;
+      requestAnimationFrame(()=>{ log.scrollTop=log.scrollHeight; }); }
+    if(el('msgReply')) el('msgReply').hidden=false;
+    if(el('msgState')) el('msgState').textContent=t.group?'GROUP':(t.handle||'');
+    if(opening && !quiet && el('msgText') && !phone.matches) el('msgText').focus();
+  }catch(e){
+    if(MSG.open!==handle) return;
+    log.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)?MAC_ASLEEP:('Could not read it: '+(e.message||e)))+'</div>';
+  }
+}
+/* THE REPLY. The recipient is the open thread's handle plus its chat guid,
+   never a name typed here, so there is nothing to resolve and nothing to
+   guess. A 409 (ambiguous) cannot come back for a handle, but if it ever
+   does the candidates are shown and nothing is retried. The text stays in
+   the box until the phone line says it went, so a failure loses nothing. */
+async function msgSend(){
+  const box=el('msgText'), note=el('msgNote'), btn=el('msgSend');
+  const text=(box&&box.value||'').trim();
+  if(!text||!MSG.open||MSG.sending) return;
+  const t=MSG.threads.find(x=>x.handle===MSG.open)||{handle:MSG.open};
+  MSG.sending=true; if(btn){ btn.disabled=true; btn.textContent='SENDING…'; }
+  note.className='msgNote'; note.textContent='Sending to '+(t.title||t.handle)+'…';
+  try{
+    const body={to:t.handle, text};
+    if(MSG.openGuid) body.chat_guid=MSG.openGuid;
+    const {code,j}=await brainJson('/messages/send',{method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}, 35000);
+    if(j.ok){
+      box.value=''; note.textContent='Sent to '+(t.title||t.handle)+'.';
+      setTimeout(()=>msgLoadThread(t.handle, true), 1200);
+    }else{
+      note.className='msgNote bad';
+      note.textContent=code===409&&Array.isArray(j.matches)
+        ? 'Not sent — that matches '+j.matches.map(m=>m.name).join(', ')+'.'
+        : 'Not sent — '+(j.error||j.detail||('the phone line answered '+code))+'.';
+    }
+  }catch(e){
+    note.className='msgNote bad';
+    note.textContent=feedDown(e)
+      ? 'Not confirmed — the Mac stopped answering. Check the thread before sending again; it may have gone.'
+      : 'Not sent — '+(e.message||e)+'.';
+  }finally{
+    MSG.sending=false; if(btn){ btn.disabled=false; btn.textContent='SEND'; }
+  }
+}
+function wireMessages(){
+  const list=el('msgList'), cc=el('ccMsg'), q=el('msgQ'), f=el('msgReply'), tx=el('msgText');
+  if(list && !list.dataset.w){ list.dataset.w='1';
+    list.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(b) msgLoadThread(b.dataset.h); }); }
+  if(cc && !cc.dataset.w){ cc.dataset.w='1';
+    cc.addEventListener('click',e=>{ const b=e.target.closest('.msgRow'); if(!b) return;
+      showView('messages'); msgLoadThread(b.dataset.h); }); }
+  if(q && !q.dataset.w){ q.dataset.w='1'; q.addEventListener('input',msgRenderList); }
+  if(f && !f.dataset.w){ f.dataset.w='1';
+    f.addEventListener('submit',e=>{ e.preventDefault(); msgSend(); }); }
+  if(tx && !tx.dataset.w){ tx.dataset.w='1';
+    tx.addEventListener('keydown',e=>{
+      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); msgSend(); } }); }
+}
+
+/* ── Sessions ────────────────────────────────────────────────────────────
+   Claude Code (`claude agents --json`) and Codex Desktop (its own sqlite,
+   read-only) in one list, already normalised by the brain to one row shape.
+   The brain caches for ten seconds; REFRESH forces a fresh read. */
+const SESS={rows:[], f:'all'};
+function sessRender(){
+  const host=el('sessList'); if(!host) return;
+  const rows=SESS.rows.filter(r=>SESS.f==='all'||r.agent===SESS.f
+    ||(SESS.f==='busy'&&r.state==='busy'));
+  const home=/^\/Users\/[^/]+/;
+  host.innerHTML='<div class="sessRow sessHead"><span class="ag">agent</span><span>session</span>'
+    +'<span>folder</span><span>state</span><span style="text-align:right">last</span></div>'
+    +(rows.length?rows.map(r=>{
+      const st=String(r.state||'idle').toLowerCase();
+      const when=r.updatedAt||r.startedAt;
+      return '<div class="sessRow" title="'+esc(r.cwd||'')+(r.branch?' · '+esc(r.branch):'')+'">'
+        +'<span class="ag '+esc(r.agent)+'">'+(r.agent==='codex'?'codex':'claude')+'</span>'
+        +'<span class="nm">'+esc(r.name||'(unnamed)')
+          +(r.kind&&r.kind!=='interactive'?'<small>'+esc(r.kind)+'</small>':'')+'</span>'
+        +'<span class="cw"><bdi>'+esc(String(r.cwd||'').replace(home,'~'))+(r.branch?' · '+esc(r.branch):'')+'</bdi></span>'
+        +'<span class="st '+esc(st)+'">'+esc(st)+'</span>'
+        +'<span class="ago">'+(when?esc(ago(new Date(when*1000))):'—')+'</span></div>';
+    }).join(''):'<div class="msgEmpty">Nothing '+(SESS.f==='busy'?'working right now':'here')+'.</div>');
+}
+async function loadSessions(force){
+  const n=el('sessN'), pill=el('nSess');
+  try{
+    const {code,j}=await brainJson('/sessions'+(force?'?force=1':''),null,40000);
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    SESS.rows=Array.isArray(j.sessions)?j.sessions:[];
+    const busy=SESS.rows.filter(r=>r.state==='busy').length;
+    /* One agent failing is not a broken panel: say which one, show the other. */
+    const gone=['claude','codex'].filter(a=>j[a]&&j[a].ok===false)
+      .map(a=>(a==='claude'?'Claude Code':'Codex')+': '+j[a].error);
+    if(n) n.textContent=SESS.rows.length+' sessions'+(busy?' · '+busy+' working':'')
+      +(gone.length?' · '+gone.join(' · '):'');
+    if(pill) pill.textContent=busy||'';
+    sessRender();
+  }catch(e){
+    SESS.rows=[];
+    if(n) n.textContent=''; if(pill) pill.textContent='';
+    const h=el('sessList');
+    if(h) h.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Sessions are read on the Mac.'
+      :'Could not read sessions: '+(e.message||e))+'</div>';
+  }
+}
+function wireSessions(){
+  const bar=el('sessBar'); if(!bar||bar.dataset.w) return; bar.dataset.w='1';
+  bar.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    if(b.id==='sessRefresh'){ loadSessions(true); return; }
+    SESS.f=b.dataset.f||'all';
+    [...bar.querySelectorAll('button[data-f]')].forEach(x=>x.classList.toggle('sel',x===b));
+    sessRender();
+  });
+}
+/* The feeds poll only while the page is looked at: the thread list every
+   30s (it feeds the nav pill and the Command Center widget), the open view
+   every 10s. A hidden tab asks nothing of the Mac. */
+/* ── Proposals ───────────────────────────────────────────────────────────
+   Read through the brain's /proposals, which drops any id already answered
+   in the note, so a DONE from Obsidian and a DONE from here agree. */
+let propRows=[], propSections=[], propLast=0;
+async function loadProposals(){
+  const host=el('propList'), n=el('propN'), pill=el('nProp');
+  propLast=Date.now();
+  try{
+    const {code,j}=await brainJson('/proposals');
+    if(!j.ok) throw new Error(j.error||('HTTP '+code));
+    propRows=j.proposals||[]; propSections=j.sections||[];
+    if(n) n.textContent=(propRows.length||'no')+' open'+(j.builtAt?' · built '+ago(j.builtAt):'');
+    if(pill) pill.textContent=propRows.length||'';
+    propRender();
+  }catch(e){
+    propRows=[]; if(n) n.textContent=''; if(pill) pill.textContent='';
+    if(host) host.innerHTML='<div class="msgEmpty">'+esc(feedDown(e)
+      ?'The Mac is not answering — it is asleep, JARVIS is not running on it, or this is not the Mac. Proposals are made on the Mac.'
+      :'Could not read proposals: '+(e.message||e))+'</div>';
+  }
+}
+function propRender(){
+  const host=el('propList'); if(!host) return;
+  if(!propRows.length){ host.innerHTML='<div class="msgEmpty">Nothing to propose. Every commitment is answered, young, or already followed up.</div>'; return; }
+  host.innerHTML=propSections.map(s=>{
+    const rows=propRows.filter(p=>p.kind===s.kind); if(!rows.length) return '';
+    return '<div class="propHead">'+esc(s.title)+' <span>'+rows.length+'</span></div>'
+      +rows.map(p=>'<div class="propRow" data-id="'+esc(p.id)+'">'
+        +'<div class="propT">'+esc(p.title)+'</div>'
+        +'<div class="propW">'+esc(p.why)+'</div>'
+        +(p.evidence&&p.evidence.length?'<ul class="propE">'+p.evidence.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')
+        +'<div class="propB"><button data-a="done">DONE</button><button data-a="dismiss">DISMISS</button></div>'
+        +'</div>').join('');
+  }).join('');
+}
+function wireProposals(){
+  const host=el('propList'); if(!host||host.dataset.w) return; host.dataset.w='1';
+  host.addEventListener('click',async e=>{
+    const b=e.target.closest('button[data-a]'); if(!b) return;
+    const row=b.closest('.propRow'); const id=row&&row.dataset.id; if(!id) return;
+    row.querySelectorAll('button').forEach(x=>x.disabled=true);
+    try{
+      const {code,j}=await brainJson('/proposals/answer',{method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify({id, answer:b.dataset.a})});
+      if(!j.ok && code!==404) throw new Error(j.error||('HTTP '+code));
+      propRows=propRows.filter(p=>p.id!==id);
+      if(el('nProp')) el('nProp').textContent=propRows.length||'';
+      if(el('propN')) el('propN').textContent=(propRows.length||'no')+' open';
+      propRender();
+    }catch(err){
+      row.querySelectorAll('button').forEach(x=>x.disabled=false);
+      const w=row.querySelector('.propW'); if(w) w.textContent='Not saved — '+(err.message||err);
+    }
+  });
+}
+
+wireMessages(); wireSessions(); wireProposals(); loadMessages(); loadProposals();
+setInterval(()=>{
+  if(document.hidden) return;
+  const v=(document.querySelector('.view.on')||{}).dataset||{};
+  if(v.view==='messages' || Date.now()-MSG.last>30000) loadMessages();
+  if(v.view==='sessions') loadSessions(false);
+  if(v.view==='proposals' && Date.now()-propLast>60000) loadProposals();
+},10000);
+
 /* ── the Terminal view ───────────────────────────────────────────────────
    Claude Code itself, served by ttyd on loopback and framed here.
 
@@ -5300,6 +5968,8 @@ function wireTerm(){
 function showView(name){
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
+  const inBar=['command','tasks','outbox','calendar'].includes(name);
+  [...document.querySelectorAll('.ptabs button')].forEach(b=>b.classList.toggle('on', b.dataset.view===name || (!inBar && b.dataset.view==='more')));
   try{ localStorage.setItem('jarvisView', name); }catch(_){}
   if(name==='command' && arc && arc.resize) arc.resize();
   if(name==='command') try{ quantumCore.resize(); }catch(_){}
@@ -5318,6 +5988,9 @@ function showView(name){
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='openwork'){ loadOpenWork(); }
+  if(name==='messages'){ wireMessages(); loadMessages(); }
+  if(name==='sessions'){ wireSessions(); loadSessions(false); }
+  if(name==='proposals'){ wireProposals(); loadProposals(); }
   if(name==='terminal'){ wireTerm(); termMount(false); termProbe(); }
   wireZoom();                 /* views built later get the control too */
   applyMin();
@@ -5328,6 +6001,34 @@ function showView(name){
 [...document.querySelectorAll('.navItem')].forEach(b=>{
   b.addEventListener('click',()=>showView(b.dataset.view));
 });
+/* ── THE PHONE BAR ── */
+function moreOpen(open){
+  el('moreBack').hidden=!open; el('moreSheet').hidden=!open;
+  if(!open) return;
+  /* Built from #nav every time it opens: one list, one set of pills, and a
+     screen added to the rail later shows up here without a second edit. */
+  const host=el('moreList'); host.textContent='';
+  const cur=document.querySelector('.view.on')?.dataset.view;
+  [...document.querySelectorAll('#nav .navItem')].forEach(src=>{
+    const b=src.cloneNode(true); b.removeAttribute('id');
+    const pill=b.querySelector('.pill'); if(pill) pill.removeAttribute('id');
+    b.classList.toggle('on', src.dataset.view===cur);
+    b.addEventListener('click',()=>{ moreOpen(false); showView(src.dataset.view); window.scrollTo(0,0); });
+    host.appendChild(b);
+  });
+}
+[...document.querySelectorAll('.ptabs button')].forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.view==='more'){ moreOpen(el('moreSheet').hidden); return; }
+    moreOpen(false); showView(b.dataset.view); window.scrollTo(0,0);
+  });
+});
+el('moreBack').addEventListener('click',()=>moreOpen(false));
+/* The bar's pills mirror the rail's, which several renderers write. */
+function syncPhonePills(){
+  [...document.querySelectorAll('.ptabs .pill[data-for]')].forEach(p=>{ const src=el(p.dataset.for); p.textContent=src?src.textContent:''; });
+}
+if(window.MutationObserver){ const nav=el('nav'); if(nav) new MutationObserver(syncPhonePills).observe(nav,{subtree:true,childList:true,characterData:true}); }
 
 /* ── the microphone, on a phone ──────────────────────────────────────────
    On a narrow screen the rail collapses to a strip of tabs and its voice
@@ -6917,7 +7618,7 @@ async function queueBuild(taskId, title, tool, box){
 }
 
 function taskButtons(id, row, titleEl){
-  const bar=document.createElement('span');
+  const bar=document.createElement('span'); bar.className='tBtns';
   bar.style.cssText='display:flex;gap:4px;flex:none;margin-left:6px';
   const mk=(label,title,fn)=>{
     const b=document.createElement('button');
@@ -6954,6 +7655,14 @@ function renderOverview(s){
     ['IN QUEUE', num(c.queued), (c.queued||0)?'warn':'good'],
     ['PEOPLE KNOWN', num(c.people==null?null:c.people)]
   ]);
+  /* Each count is a door to the screen it counts. On the phone this is the
+     shortest path from "143 on your plate" to the plate. */
+  const doors=['tasks','outbox','calendar','system','people'];
+  [...el('overview').querySelectorAll('.row')].forEach((r,i)=>{
+    if(!doors[i]) return;
+    r.classList.add('rowClick'); r.setAttribute('role','link'); r.tabIndex=0;
+    r.addEventListener('click',()=>{ showView(doors[i]); window.scrollTo(0,0); });
+  });
   const set=(id,v)=>{ const e=el(id); if(e) e.textContent=(v==null?'':v); };
   set('nTasks', c.backlog||''); set('nOut', c.drafts||'');
   set('nCal', (s.schedule||[]).length||''); set('nPeople', c.people||'');
@@ -7944,6 +8653,9 @@ const IX_VIEWS=[
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
+  ['messages','Messages','your iMessage threads, and a reply box'],
+  ['sessions','Sessions','Claude Code and Codex, running on this Mac'],
+  ['proposals','Proposals','what Jarvis thinks you should do next, with its evidence'],
   ['terminal','Terminal','Claude Code itself, on this Mac'],
   ['people','People','who you work with'],
   ['system','System','subsystems and spend']
@@ -9682,9 +10394,13 @@ function showCard(p, fromEl){
      own provenance says so in its own words. */
   const note=document.createElement('div'); note.className='cardNote';
   note.textContent = p.provenance ? p.provenance
+    /* No count here (2026-09-23). `messages` was the number of 30-minute
+       scans a person turned up in, not mail — four partners read "588" — and
+       `lastSeen` was the scan clock. The twin now records the real newest
+       mail as lastMailAt; until a person has one, the card says nothing
+       rather than a number that means something else. */
     : (p.source === 'mail'
-      ? 'From your mail — ' + (p.messages||1) + (p.messages===1?' message':' messages') +
-        ', no title on file.' + (p.lastSeen ? ' Last seen ' + String(p.lastSeen).slice(0,10) + '.' : '')
+      ? 'From your mail, no title on file.' + (p.lastMailAt ? ' Last mail ' + String(p.lastMailAt).slice(0,10) + '.' : '')
       : 'From your roster — title read from their signature.' + (p.note ? ' ' + p.note : ''));
   card.appendChild(note);
 
@@ -9736,6 +10452,60 @@ function renderPeople(s){
   });
 }
 
+/* ── THE PHONE PANEL ───────────────────────────────────────────────────────
+   Two rows, both honest about the device they are on. Install: the browser's
+   own prompt where there is one (Chrome, Edge), the Share → Add to Home Screen
+   words on iOS where there is not, "installed" when running from the tile.
+   Notifications: JarvisPush.describe() says exactly which of the five states
+   this phone is in — including "add to Home Screen first", the iOS case that
+   a naive check reports as unsupported. TEST sends one to this account only
+   (push-send lets anyone ring their own phone; someone else's is staff-only),
+   so a phone that says "on" can prove it before the twin ever needs to. */
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installPrompt=e; try{ renderPhone(); }catch(_){} });
+function phoneNote(text,cls){ const n=el('phoneNote'); if(!n) return; n.textContent=text||''; n.className='prNote'+(cls?' '+cls:''); }
+function renderPhone(){
+  const host=el('phone'); if(!host) return;
+  const P=window.JarvisPush;
+  const installed=!!(P&&P.installed()) || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const st=P?P.state():'unsupported';
+  host.textContent='';
+  const row=(label,text,btns)=>{
+    const r=document.createElement('div'); r.className='pr';
+    const sp=document.createElement('span'); const b=document.createElement('b'); b.textContent=label; sp.appendChild(b); sp.appendChild(document.createTextNode(text)); r.appendChild(sp);
+    (btns||[]).forEach(([t,fn,id])=>{ const bt=document.createElement('button'); bt.textContent=t; if(id) bt.id=id; bt.addEventListener('click',fn); r.appendChild(bt); });
+    host.appendChild(r); return r;
+  };
+  row('Install', installed ? 'Installed. This is the app, opened from the home screen; it starts on the Command Center.'
+    : installPrompt ? 'Put JARVIS on the home screen. It opens on the Command Center with no browser chrome.'
+    : ios ? 'In Safari: tap Share, then Add to Home Screen. It opens on the Command Center, and notifications only work from there.'
+    : 'In Chrome: the browser menu, then Install app or Add to Home screen.',
+    installPrompt && !installed ? [['INSTALL', ()=>{ const p=installPrompt; installPrompt=null; p.prompt(); }]] : []);
+  const btns=[];
+  if(P && (st==='askable'||st==='granted')) btns.push([st==='granted'?'RE-REGISTER':'TURN ON', async ()=>{
+    phoneNote('Asking…');
+    try{ await P.enable(); phoneNote('Notifications are on for this phone.','good'); renderPhone(); }
+    catch(e){ phoneNote(e.message,'bad'); }
+  },'pushOn']);
+  if(P && st==='granted') btns.push(['TEST', async ()=>{
+    phoneNote('Sending…');
+    try{
+      const t=await token();
+      const r=await fetch('/api/push-send',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:'JARVIS',body:'Mission Control can reach this phone.',url:'/mission?view=command',tag:'jarvis-test'})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      phoneNote('Sent to '+(j.sent!=null?j.sent:'your')+' device'+(j.sent===1?'':'s')+'.','good');
+    }catch(e){ phoneNote(e.message,'bad'); }
+  },'pushTest']);
+  if(P && st==='granted') btns.push(['TURN OFF', async ()=>{
+    try{ await P.disable(); const t=await token(); await fetch('/api/push-subscribe',{method:'DELETE',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); }catch(_){}
+    phoneNote('This phone will not be notified.'); renderPhone();
+  },'pushOff']);
+  row('Notifications', P ? P.describe() : 'Notifications are not supported here', btns);
+  const note=document.createElement('div'); note.id='phoneNote'; note.className='prNote'; host.appendChild(note);
+}
 authMod.onAuthStateChanged(auth,u=>{
   el('gate').hidden=!!u;
   el('app').hidden=!u;
@@ -9743,7 +10513,11 @@ authMod.onAuthStateChanged(auth,u=>{
      first measurement has to happen after sign-in, not at load. */
   requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
-  if(u){ try{ showView(logicParams.get('view')==='logic'?'logic':(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
+  /* ?view= names a screen (the installed app starts on ?view=command, so the
+     home-screen tile opens the Command Center whatever was open last);
+     otherwise the last view on this browser. */
+  if(u){ try{ const want=logicParams.get('view'); showView(want&&document.querySelector('.view[data-view="'+want.replace(/[^a-z]/g,'')+'"]')?want:(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
+         try{ renderPhone(); }catch(_){}
          load(); loadThread(); setInterval(load,30000); }
 });
 

@@ -1550,3 +1550,51 @@ strips circuits; only a server re-publish keeps them.
 (`api/_lib/site-lease.js`) and the asking price into buy-versus-lease
 (`api/_lib/project-cost.js`); `omega-project-cost.js` only renders it. No
 rules, data or deployment changed.
+
+## Mission Control is the phone app — September 23, 2026
+
+`/mission` installs as the app and opens on the Command Center.
+`mission.webmanifest` is now scoped to `/mission` (the worker's scope, and
+no longer wrapping every tenant page), starts on `?view=command` (the page
+honours `?view=` for any screen it has; otherwise the last view on that
+browser), and carries its own icon set, `icons/mission-*.png`, rendered by
+`scripts/make-mission-icons.js` through `scripts/make-app-icons.js`, which is
+now also a module (`build(src, size, {bg, inset, tint})`; the OMEGA icons are
+byte-identical). `mission.html` loads `mission-push.js` (the one line
+`docs/push-notifications.md` had left out) and hands it `token()`; a **Phone**
+panel on the System view holds Install and Notifications (turn on, test to
+this account, turn off), each honest about the device it is on. The worker's
+notification tap lands on the Command Center with the new icon. Rendered at a
+phone viewport with auth stubbed: the Command Center and the Phone panel,
+no browser errors. Nothing on the desktop layout changed; the 2026-09-13 rule
+(no tab strip on a phone, navigation is a sentence) stands.
+
+## Mission Control on the phone: a bar, a sheet, and doors — September 23, 2026
+
+From the installed app: "I can't access any of the stuff on the command
+center." The 2026-09-13 rule had removed the seventeen-button strip under
+700px and left navigation to a sentence, which moves well and discovers
+nothing. Under 700px `mission.html` now has a fixed bottom bar (Home, Tasks,
+Outbox, Calendar, More) with the rail's count pills mirrored by a
+MutationObserver, a More sheet built from `#nav` on every open (one list, one
+set of pills, a screen added to the rail appears without a second edit), and
+Overview rows that open the screen they count (tasks, outbox, calendar,
+system, people). The sticky talk bar sits above the bar; the caption still
+measures the real talk bar. The sentence still works. Nothing above 700px
+changed. Driven headless at a phone viewport: tab, sheet, door, no errors.
+
+## Mission Control on the phone: every screen in one hand — September 23, 2026
+
+Every one of the seventeen screens rendered at 390px with fixture data and
+fixed where it failed. The rail row no longer shares the viewport's spare
+height with the content (a void under the brand on every screen); views that
+set their columns inline (calendar, board, open work) become one column
+through `!important`; panels sized for the desktop grid take their natural
+height; the talk bar is fixed above the tab bar (the old sticky rule lost to
+`.main > .talkBar{position:relative}` and had never stuck); the Command
+Center's three columns dissolve into one list in reading order: Overview,
+Needs you, Conversation, the day, Quick commands, Feed, Messages,
+Connections, Agent activity, with the window onto the core last instead of
+first. Task rows wrap: title, reason, then DO / done / edit / dismiss as a
+full-width row of 40px buttons; chips and panel buttons are 36–40px; rows
+read at 15px; the brain shows the graph first. Header is sticky. Desktop unchanged.
