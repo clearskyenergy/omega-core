@@ -42,21 +42,21 @@ self.addEventListener('push', function (event) {
   var title = d.title || 'JARVIS';
   var opts = {
     body: d.body || '',
-    icon: d.icon || '/icons/omega-192.png',
-    badge: d.badge || '/icons/omega-192.png',
+    icon: d.icon || '/icons/mission-192.png',
+    badge: d.badge || '/icons/mission-192.png',
     tag: d.tag || 'jarvis',
     /* Same tag replaces rather than stacks, so ten status pings do not bury
        the phone; renotify makes the replacement actually buzz. */
     renotify: true,
     requireInteraction: !!d.requireInteraction,
-    data: { url: d.url || '/mission' }
+    data: { url: d.url || '/mission?view=command' }
   };
   event.waitUntil(self.registration.showNotification(title, opts));
 });
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  var url = (event.notification.data && event.notification.data.url) || '/mission';
+  var url = (event.notification.data && event.notification.data.url) || '/mission?view=command';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(function (list) {
@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function (event) {
            of a page that holds a live conversation is its own small bug. */
         for (var i = 0; i < list.length; i++) {
           if (list[i].url.indexOf('/mission') >= 0 && 'focus' in list[i]) {
-            if (list[i].navigate && url !== '/mission') { try { list[i].navigate(url); } catch (_) {} }
+            if (list[i].navigate) { try { list[i].navigate(url); } catch (_) {} }
             return list[i].focus();
           }
         }

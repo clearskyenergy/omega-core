@@ -67,20 +67,22 @@ drift: a baked-in key keeps working until someone rotates the server's, and
 then every existing subscription fails at *send* time with a 403 — long after
 the change, in a different system, to a user who did nothing wrong.
 
-## Wiring (the one line, not yet added)
+## Wiring (done 2026-09-23)
 
-`mission.html` has 189 uncommitted lines from another session as of
-2026-09-14, so this was left out rather than cause a merge conflict. When that
-work lands, add:
+`mission.html` loads `/mission-push.js` before its module script and hands it
+`token()` through `JarvisPush.setToken()`. The **Phone** panel on the System
+view is the UI: an Install row (the browser's prompt where there is one, the
+Share → Add to Home Screen words on iOS, "installed" from the tile) and a
+Notifications row that prints `describe()` and offers TURN ON / RE-REGISTER,
+TEST (a `push-send` to this account only) and TURN OFF (unsubscribe plus
+`DELETE /api/push-subscribe`). A notification tap opens `/mission?view=command`.
 
-```html
-<script src="/mission-push.js" defer></script>
-```
-
-and call `JarvisPush.enable()` from a settings row or button. `JarvisPush`
-also exposes `state()`, `describe()` (a ready-made label for that row),
-`disable()` and `installed()`. It needs no other change: it finds the page's
-existing `token()` for auth, or accepts one via `JarvisPush.setToken(fn)`.
+`/mission.webmanifest` is scoped to `/mission` (the worker's scope; a root
+scope would have opened every tenant page inside the app), starts on
+`?view=command` so the tile always opens the Command Center, and uses the
+`icons/mission-*.png` set from `scripts/make-mission-icons.js` (the mark in
+the core's cyan on `--bg`) so the tile is not the white OMEGA mark every
+tenant page installs as.
 
 ## Sending one
 

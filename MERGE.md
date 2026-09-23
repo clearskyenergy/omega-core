@@ -1550,3 +1550,21 @@ strips circuits; only a server re-publish keeps them.
 (`api/_lib/site-lease.js`) and the asking price into buy-versus-lease
 (`api/_lib/project-cost.js`); `omega-project-cost.js` only renders it. No
 rules, data or deployment changed.
+
+## Mission Control is the phone app — September 23, 2026
+
+`/mission` installs as the app and opens on the Command Center.
+`mission.webmanifest` is now scoped to `/mission` (the worker's scope, and
+no longer wrapping every tenant page), starts on `?view=command` (the page
+honours `?view=` for any screen it has; otherwise the last view on that
+browser), and carries its own icon set, `icons/mission-*.png`, rendered by
+`scripts/make-mission-icons.js` through `scripts/make-app-icons.js`, which is
+now also a module (`build(src, size, {bg, inset, tint})`; the OMEGA icons are
+byte-identical). `mission.html` loads `mission-push.js` (the one line
+`docs/push-notifications.md` had left out) and hands it `token()`; a **Phone**
+panel on the System view holds Install and Notifications (turn on, test to
+this account, turn off), each honest about the device it is on. The worker's
+notification tap lands on the Command Center with the new icon. Rendered at a
+phone viewport with auth stubbed: the Command Center and the Phone panel,
+no browser errors. Nothing on the desktop layout changed; the 2026-09-13 rule
+(no tab strip on a phone, navigation is a sentence) stands.

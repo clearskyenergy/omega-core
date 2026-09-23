@@ -1,16 +1,17 @@
 {
+  "id": "/mission",
   "name": "JARVIS // Mission Control",
   "short_name": "JARVIS",
-  "description": "ClearSky OMEGA mission control.",
-  "start_url": "/mission",
-  "scope": "/",
+  "description": "ClearSky OMEGA mission control: the command center, tasks, outbox, calendar, clients and the twin, on your phone.",
+  "start_url": "/mission?view=command",
+  "scope": "/mission",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#020813",
   "theme_color": "#020813",
   "icons": [
-    { "src": "/icons/omega-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/omega-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/mission-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/mission-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/mission-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
