@@ -20,7 +20,7 @@
 window.OMEGA_LEGAL_DOCS = {
 
   /* Bump on ANY wording change. Format: YYYY-MM-DD (add -b, -c for same-day). */
-  version: '2026-09-02',
+  version: '2026-09-23',   /* §6: Service Data replaces the de-identified-statistics promise (Event Layer) */
 
   /* Company details used throughout both agreements. */
   company: {
@@ -85,7 +85,7 @@ window.OMEGA_LEGAL_DOCS = {
       { h: '6. Your data', p: [
         'You retain ownership of the project data, site information, files, and other content you enter into or upload to the platform ("Customer Data"). You grant ClearSky the right to host, store, process, transmit, back up, and display Customer Data as needed to operate the platform and provide support.',
         'You represent that you have the rights necessary to submit Customer Data and that it does not infringe anyone\'s rights or violate any law.',
-        'ClearSky may generate and retain de-identified, aggregated statistics derived from platform usage. Such statistics never identify you, your customers, or your projects, and ClearSky may use them to operate and improve the platform.',
+        'ClearSky collects technical and usage data about how the platform is operated, including tool usage, the inputs supplied to and results produced by its calculation methods, timings and error diagnostics ("Service Data"). Service Data may include Customer Data supplied to those calculations and identifies the account and organization it came from. ClearSky may use Service Data to operate, secure and improve the platform for all customers, including the accuracy of its calculation methods. ClearSky will not sell Service Data, disclose it except to sub-processors acting on its instructions (Google Cloud, Vercel, Anthropic), or use it to identify or target your customers. Individual records are deleted after ninety (90) days; you may ask for your organization\'s Service Data to be exported or deleted, or its collection stopped, at the notice address.',
         'On request within thirty (30) days after termination, ClearSky will make Customer Data available for export in a commercially reasonable format. After that window, ClearSky may delete it.'
       ]},
 
