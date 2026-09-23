@@ -4111,7 +4111,7 @@ let lastStatus={};
 async function load(){
   const u=auth.currentUser; if(!u) return;
   const badge=el('badge');
-  probeBrain().then(relayReminders).catch(()=>{});
+  probeBrain().then(relayReminders).then(relayDrafts).catch(()=>{});
   try{
     const tok=await u.getIdToken();
     const res=await fetch(ENDPOINT,{headers:{Authorization:'Bearer '+tok}});
@@ -5144,6 +5144,33 @@ async function relayReminders(){
     }
   }catch(_){}
   relaying=false;
+}
+/* ── drafts: prepared on the Mac, carried to the twin ─────────────────────
+   Thomas, 2026-09-23: the dashboard may PREPARE email, not send it. Jarvis
+   writes a draft into the brain's draft inbox (the one write its gate allows
+   for this); this page, signed in as him, carries each to the twin's
+   /draft/new, where it becomes an ordinary twin draft. Sending stays where it
+   was — he reads it and says send. Acked on the brain only after the twin
+   has it; the twin is idempotent on the id, so a lost ack never makes two. */
+let relayingDrafts=false;
+async function relayDrafts(){
+  if(!brainOn||relayingDrafts) return; relayingDrafts=true;
+  try{
+    const r=await fetch(BRAIN+'/drafts',{cache:'no-store'});
+    const j=await r.json().catch(()=>({}));
+    for(const it of (j.items||[])){
+      const t=await token(); if(!t) break;
+      const rr=await fetch(CHAT+'/draft/new',{method:'POST',
+        headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({id:it.id,to:it.to||[],cc:it.cc||[],subject:it.subject,body:it.body})});
+      const jj=await rr.json().catch(()=>({}));
+      if(!rr.ok) break;                       /* leave it on the Mac; next poll retries */
+      await fetch(BRAIN+'/drafts/ack',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:it.id,twinId:jj.id||''})}).catch(()=>{});
+      say('jarvis',jj.reply||('In your drafts: '+it.subject+'. Nothing has gone out.'),0);
+    }
+  }catch(_){}
+  relayingDrafts=false;
 }
 /* The face follows the voice: this page speaks, so this page says so. */
 function face(state){
