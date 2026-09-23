@@ -21729,6 +21729,9 @@ function saveBess(){
   const autoAssemble = !fromGuide && document.getElementById('bm-auto-assemble').checked && !S.editBessId;
   if(S.editBessId){const i=S.bessList.findIndex(x=>x.id===S.editBessId);if(i>=0)S.bessList[i]=b;}
   else S.bessList.push(b);
+  try { if (window.OmegaEvents) OmegaEvents.emit('product.selected', { projectId: _projectId || null, category: 'bess',
+    productId: b.catalogKey || [b.mfr, b.model].filter(Boolean).join(' ') || null, qty: b.qty || 1, kwh: +b.kwh || null, kw: +b.kw || null,
+    edit: !!S.editBessId }); } catch (e) {}
   // Update any placed assemblies
   S.elements.filter(e=>e.type==='bess-asm'&&e.bessId===b.id).forEach(el=>{
     el.label=b.name;el.spec=`${b.kwh}kWh . ${b.kw}kW`;
@@ -25325,6 +25328,7 @@ async function createNewProject() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', market: market, source: 'editor-modal' }); } catch (e) {}
     document.getElementById('new-proj-modal').style.display='none';
     document.getElementById('proj-modal').style.display='none';
     const basePath = window.location.pathname.endsWith('.html') 
@@ -25719,6 +25723,8 @@ async function saveProject(){
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
+      try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess',
+        market: payload.wizMode || null, source: (window.__omegaAutopilot && window.__omegaAutopilot.step !== 'idle') ? 'autopilot' : 'editor-save' }); } catch (e) {}
       history.replaceState(null,'',window.location.pathname+'?project='+_projectId);
       // First save: _projectId didn't exist when images were written above.
       // Persist them now under the new id (compressed).
@@ -116799,6 +116805,11 @@ if (_omPrevOmegaGeo) { Object.keys(_omPrevOmegaGeo).forEach(function (k) {
 function request(mode, data, opts) {
  var user=window.firebase && firebase.auth().currentUser;
  if(!user) return Promise.reject(new Error('Sign in to run battery sizing.'));
+ /* Event Layer: tool.run with the full inputs and the answer (omega-events.js). */
+ var work=function(){return send(user,mode,data,opts);};
+ return window.OmegaEvents ? OmegaEvents.run('editor','bess-size.'+mode,{mode:mode,data:data,opts:opts},work,window._projectId||null) : work();
+}
+function send(user, mode, data, opts) {
  return user.getIdToken().then(function(token){return fetch('/api/bess-size',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({mode:mode,data:data,opts:opts})});}).then(function(r){return r.json().then(function(j){if(!r.ok) throw new Error(j.error||'Sizing service unavailable');return j;});});
 }
 window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],defaultTariff:defaultTariff,parseInterval:parseInterval,splitRow:splitRow,detectInterval:detectInterval,roundProduct:roundProduct,summarize:summarize,
@@ -153232,6 +153243,23 @@ function run(cb){
   var body = { lat: s.lat, lng: s.lng, address: s.address, sizeMw: s.sizeMw,
                dealId: (function(){ try { return new URLSearchParams(location.search).get('id') || ''; } catch (e) { return ''; } })() };
 
+  /* Event Layer: every way this run ends goes through cb, so the one wrap
+     records tool.run (inputs, answer, time) and, on an answer, score.computed. */
+  var T0 = Date.now(), _cb = cb;
+  cb = function (j, err) {
+    try {
+      if (window.OmegaEvents) {
+        var pid = window._projectId || null;
+        OmegaEvents.emit('tool.run', { toolId: 'editor', calc: 'grid-atlas', durationMs: Date.now() - T0,
+          ok: !!j, projectId: pid, inputs: body, outputs: j || { error: String(err || '') } });
+        if (j) OmegaEvents.emit('score.computed', { projectId: pid, score: j.score == null ? null : j.score,
+          band: verdict(j).state, inputsVersion: j.model || j.build || null });
+        else OmegaEvents.error('editor', 'grid-atlas', String(err || 'no answer'));
+      }
+    } catch (e) {}
+    return _cb(j, err);
+  };
+
   var done = false;
   var to = setTimeout(function(){
     if (done) return; done = true; BUSY = false;
@@ -157115,7 +157143,7 @@ if (root.console && console.info) {
   if (P && P.ptype) {
     try { if (root.OmegaProjectTypes && OmegaProjectTypes.set) OmegaProjectTypes.set(P.ptype); } catch (e) {}
   }
-  var ST = { params: P, step: 'idle', log: [], stoppedAt: null, error: null, parcel: null,
+  var ST = { t0: Date.now(), params: P, step: 'idle', log: [], stoppedAt: null, error: null, parcel: null,
              roads: 0, centre: null, front: null, stopped: false, fatal: false, armed: false, timers: [] };
   root.__omegaAutopilot = ST;
 
@@ -157257,6 +157285,17 @@ if (root.console && console.info) {
                  zoning: j.zoning || null, county: j.county || null, source: j.source || null };
       });
     });
+    /* Event Layer: tool.run for the lookup. The owner's name and APN are a
+       third party's, not the customer's calculation data — they stay out. */
+    if (window.OmegaEvents) {
+      var t0 = Date.now(), ev = function (ok, v) {
+        OmegaEvents.emit('tool.run', { toolId: 'editor', calc: 'parcel', durationMs: Date.now() - t0, ok: ok,
+          projectId: root._projectId || null, inputs: { lat: +lat, lng: +lng },
+          outputs: v ? { found: true, vertices: v.ring.length, acres: v.acres, zoning: v.zoning,
+                         county: v.county, source: v.source } : { found: false } });
+      };
+      p.then(function (v) { ev(true, v); }, function (e) { ev(false, null); OmegaEvents.error('editor', 'parcel', e); });
+    }
     parcelCache[key] = p;
     p.then(null, function () { delete parcelCache[key]; });
     return p;
@@ -157940,6 +157979,16 @@ if (root.console && console.info) {
     msg.type = 'OMEGA_AUTOPILOT'; msg.projectId = root._projectId || null;
     ST.last = msg;
     if (P.from === 'jarvis') { try { if (root.opener) root.opener.postMessage(msg, root.location.origin); } catch (e) {} }
+    /* Event Layer: once per run, at its end ('poi' is a pause for a human). */
+    if (msg.stoppedAt !== 'poi' && !ST.evSent && root.OmegaEvents) {
+      ST.evSent = true;
+      try {
+        root.OmegaEvents.emit('sitemap.build.completed', { projectId: msg.projectId, stoppedAt: msg.stoppedAt,
+          parcelFound: !!ST.parcel, roadsFound: +ST.roads || 0,
+          scored: msg.gridScore != null || msg.siteScore != null, durationMs: Date.now() - ST.t0,
+          from: P.from || null, mode: P.mode || null });
+      } catch (e) {}
+    }
     log('report ' + msg.stoppedAt);
   }
 

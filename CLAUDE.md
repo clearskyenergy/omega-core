@@ -432,6 +432,30 @@ is not built.
   `scripts/_lib/firestore-double.js`.
 - Chromium render checks for all of it: `npm run check:pages`.
 
+## Event Layer — usage telemetry (step one, 2026-09-23)
+
+Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
+`omega-brand.js`, tagged on the finance portal) → `api/events.js` → Pub/Sub
+`omega-events` → the twin's `eventsIngest` → `twin_events`.
+
+- **Identity is stamped server-side.** The browser names the event; the
+  endpoint takes uid, orgId and host from the verified token and the request.
+  Never add a body field that says who or which tenant.
+- **Three gates, all fail closed:** the user's `termsAcceptances` version must
+  equal `TERMS_VERSION` (kept equal in `api/_lib/events.js`; `tevents.js`
+  asserts it), `event_config/current.enabled`, and no `event_exclusions` doc
+  for the org or `host:<hostname>`. Signed-agreement tenants (Fenecon, the
+  OSA JV) sit in exclusions until counsel clears them — a clickwrap bump does
+  not amend a signed MSA.
+- **The catalogue is an allowlist** (`api/_lib/events.js`). A new event is a
+  line there plus a reason it serves Site Map math, financing throughput or
+  gamification; anything else does not belong.
+- **It must never break a page.** Instrument with
+  `window.OmegaEvents ? OmegaEvents.run(tool, calc, inputs, work) : work()` —
+  `run()` returns the work's own result or rethrows its own error.
+- Bumping `TERMS_VERSION` again means bumping it in `api/_lib/events.js` too,
+  or every event is refused.
+
 ## Silmarillion 2.0 — joint development
 
 The OMEGA operating system is named **Silmarillion 2.0**. Today it is an

@@ -604,6 +604,32 @@ service cloud.firestore {
     }
 
     /* ════════════════════════════════════════════════════════════════════════
+       EVENT LAYER (step one, 2026-09-23)  —  event_config, event_exclusions
+       ════════════════════════════════════════════════════════════════════════
+       api/events.js reads both AS THE CALLER (no service account on that
+       path), so these rules are the whole of their protection.
+
+       event_config/current  { enabled, sampleRate }. Any signed-in user may
+         read it — omega-events.js needs the rate to decide its sample. A
+         missing doc means OFF.
+       event_exclusions/{key}  one doc per excluded org (key = orgId) or host
+         (key = 'host:<hostname>', e.g. the OSA JV, whose members sign in on
+         their own domains). A caller may read ONLY their own org's doc and
+         the host: docs — enough for the endpoint to refuse them, never enough
+         to list which other tenants are held out. This is where tenants on
+         signed agreements (Fenecon, OSA) sit until counsel clears each one.
+       Staff write both. twin_events has no rule here on purpose: the twin's
+       admin SDK writes it and no browser reads it (default deny). */
+    match /event_config/{doc} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+    match /event_exclusions/{key} {
+      allow read:  if signedIn() && (key == userOrg() || key.matches('host:.*') || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
        SIGNED AGREEMENTS  —  legal_acceptances/{uid}__{docVersion}
        ════════════════════════════════════════════════════════════════════════
        Written by omega-legal.js, the signing gate on the sales demo portal. A

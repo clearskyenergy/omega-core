@@ -541,3 +541,19 @@
     accessMessage: accessMessage
   };
 })(window);
+
+/* ── The Event Layer client rides along ───────────────────────────────────
+   Every signed-in page loads this file (37 of them, the editor included), so
+   this is the one place /omega-events.js is added rather than 37 tags. It is
+   inert until the server says the layer is on for this user — see the header
+   of omega-events.js. Skipped where there is no Firebase (the public
+   storefront): nobody is signed in there to attribute an event to. */
+(function () {
+  try {
+    if (window.OmegaEvents || document.getElementById('omega-events-js')) return;
+    if (/^\/(embed|app-sandbox)\//.test(location.pathname)) return;
+    var s = document.createElement('script');
+    s.id = 'omega-events-js'; s.src = '/omega-events.js'; s.async = true;
+    (document.head || document.documentElement).appendChild(s);
+  } catch (e) {}
+})();
