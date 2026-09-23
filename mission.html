@@ -22,7 +22,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="JARVIS">
 <meta name="theme-color" content="#020813">
-<link rel="apple-touch-icon" href="/icons/omega-180.png">
+<link rel="apple-touch-icon" href="/icons/mission-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/mission-32.png">
 <link rel="manifest" href="/mission.webmanifest">
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
@@ -519,6 +520,14 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .coreLayer.characterReady #missionDoomCredit{display:block}
 .coreLayer.characterReady .coreLabel{justify-content:flex-end;padding-bottom:2%}
 .characterSettings{padding:14px;display:grid;gap:10px}
+.phoneRows{padding:12px 14px;display:grid;gap:10px}
+.phoneRows .pr{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phoneRows .pr>span{flex:1;min-width:160px;font-family:var(--ui);font-size:13px;line-height:1.45;color:var(--dim)}
+.phoneRows .pr>span b{color:var(--ink);display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.phoneRows .pr button{min-height:38px}
+.phoneRows .prNote{font-family:var(--ui);font-size:12px;color:var(--dim)}
+.phoneRows .prNote.bad{color:var(--bad)}
+.phoneRows .prNote.good{color:var(--good)}
 .characterSettings select{width:100%;padding:10px;background:#102029;color:#e5f4ee;border:1px solid #44645b;border-radius:5px}
 
 .coreLayer canvas{width:100%;height:100%;display:block}
@@ -1928,6 +1937,13 @@ body.arranging .scroll{pointer-events:none}
               <div id="characterStatus" role="status">Saved on this browser. The depth portrait has limited movement.</div>
             </div>
           </div>
+          <!-- The phone: install and notifications. Installed to the home
+               screen, /mission opens on the Command Center with no browser
+               chrome, and only then can iOS deliver a push to it. -->
+          <div class="panel" data-widget="phone" style="flex:none">
+            <div class="ptitle">Phone</div>
+            <div class="phoneRows" id="phone"></div>
+          </div>
           <div class="panel" style="flex:none">
             <div class="ptitle">Pipeline</div>
             <div id="pipeline"></div>
@@ -1983,6 +1999,10 @@ body.arranging .scroll{pointer-events:none}
 <script src="assets/vendor/three-r128/three.min.js"></script>
 <script src="assets/vendor/three-r128/GLTFLoader.js"></script>
 <script src="omega-doom.js?v=20260922-figures-8"></script>
+<!-- The phone half: push notifications for the installed app. Self-contained
+     (window.JarvisPush), never asks for permission on its own; the Phone
+     panel on the System view is where he turns it on. -->
+<script src="/mission-push.js"></script>
 <script type="module">
 /* Public web config — the endpoint's allowlist is what gates access. */
 const FIREBASE_CONFIG = {
@@ -4294,6 +4314,8 @@ function meter(node, his){
 }
 
 async function token(){ const u=auth.currentUser; return u?u.getIdToken():null; }
+/* mission-push.js runs outside this module and cannot see token(); hand it over. */
+try{ if(window.JarvisPush) window.JarvisPush.setToken(token); }catch(_){}
 
 /* ── getting the RIGHT voice out of a phone ──────────────────────────────
    On a desk Jarvis speaks in the ElevenLabs voice. On a phone he was speaking
@@ -10197,6 +10219,60 @@ function renderPeople(s){
   });
 }
 
+/* ── THE PHONE PANEL ───────────────────────────────────────────────────────
+   Two rows, both honest about the device they are on. Install: the browser's
+   own prompt where there is one (Chrome, Edge), the Share → Add to Home Screen
+   words on iOS where there is not, "installed" when running from the tile.
+   Notifications: JarvisPush.describe() says exactly which of the five states
+   this phone is in — including "add to Home Screen first", the iOS case that
+   a naive check reports as unsupported. TEST sends one to this account only
+   (push-send lets anyone ring their own phone; someone else's is staff-only),
+   so a phone that says "on" can prove it before the twin ever needs to. */
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installPrompt=e; try{ renderPhone(); }catch(_){} });
+function phoneNote(text,cls){ const n=el('phoneNote'); if(!n) return; n.textContent=text||''; n.className='prNote'+(cls?' '+cls:''); }
+function renderPhone(){
+  const host=el('phone'); if(!host) return;
+  const P=window.JarvisPush;
+  const installed=!!(P&&P.installed()) || (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const st=P?P.state():'unsupported';
+  host.textContent='';
+  const row=(label,text,btns)=>{
+    const r=document.createElement('div'); r.className='pr';
+    const sp=document.createElement('span'); const b=document.createElement('b'); b.textContent=label; sp.appendChild(b); sp.appendChild(document.createTextNode(text)); r.appendChild(sp);
+    (btns||[]).forEach(([t,fn,id])=>{ const bt=document.createElement('button'); bt.textContent=t; if(id) bt.id=id; bt.addEventListener('click',fn); r.appendChild(bt); });
+    host.appendChild(r); return r;
+  };
+  row('Install', installed ? 'Installed. This is the app, opened from the home screen; it starts on the Command Center.'
+    : installPrompt ? 'Put JARVIS on the home screen. It opens on the Command Center with no browser chrome.'
+    : ios ? 'In Safari: tap Share, then Add to Home Screen. It opens on the Command Center, and notifications only work from there.'
+    : 'In Chrome: the browser menu, then Install app or Add to Home screen.',
+    installPrompt && !installed ? [['INSTALL', ()=>{ const p=installPrompt; installPrompt=null; p.prompt(); }]] : []);
+  const btns=[];
+  if(P && (st==='askable'||st==='granted')) btns.push([st==='granted'?'RE-REGISTER':'TURN ON', async ()=>{
+    phoneNote('Asking…');
+    try{ await P.enable(); phoneNote('Notifications are on for this phone.','good'); renderPhone(); }
+    catch(e){ phoneNote(e.message,'bad'); }
+  },'pushOn']);
+  if(P && st==='granted') btns.push(['TEST', async ()=>{
+    phoneNote('Sending…');
+    try{
+      const t=await token();
+      const r=await fetch('/api/push-send',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+        body:JSON.stringify({title:'JARVIS',body:'Mission Control can reach this phone.',url:'/mission?view=command',tag:'jarvis-test'})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      phoneNote('Sent to '+(j.sent!=null?j.sent:'your')+' device'+(j.sent===1?'':'s')+'.','good');
+    }catch(e){ phoneNote(e.message,'bad'); }
+  },'pushTest']);
+  if(P && st==='granted') btns.push(['TURN OFF', async ()=>{
+    try{ await P.disable(); const t=await token(); await fetch('/api/push-subscribe',{method:'DELETE',headers:{Authorization:'Bearer '+t}}).catch(()=>{}); }catch(_){}
+    phoneNote('This phone will not be notified.'); renderPhone();
+  },'pushOff']);
+  row('Notifications', P ? P.describe() : 'Notifications are not supported here', btns);
+  const note=document.createElement('div'); note.id='phoneNote'; note.className='prNote'; host.appendChild(note);
+}
 authMod.onAuthStateChanged(auth,u=>{
   el('gate').hidden=!!u;
   el('app').hidden=!u;
@@ -10204,7 +10280,11 @@ authMod.onAuthStateChanged(auth,u=>{
      first measurement has to happen after sign-in, not at load. */
   requestAnimationFrame(measureTalk);
   el('app').style.display = u ? 'grid' : 'none';
-  if(u){ try{ showView(logicParams.get('view')==='logic'?'logic':(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
+  /* ?view= names a screen (the installed app starts on ?view=command, so the
+     home-screen tile opens the Command Center whatever was open last);
+     otherwise the last view on this browser. */
+  if(u){ try{ const want=logicParams.get('view'); showView(want&&document.querySelector('.view[data-view="'+want.replace(/[^a-z]/g,'')+'"]')?want:(localStorage.getItem('jarvisView')||'command')); }catch(_){ showView('command'); }
+         try{ renderPhone(); }catch(_){}
          load(); loadThread(); setInterval(load,30000); }
 });
 

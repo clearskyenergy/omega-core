@@ -1551,27 +1551,20 @@ strips circuits; only a server re-publish keeps them.
 (`api/_lib/project-cost.js`); `omega-project-cost.js` only renders it. No
 rules, data or deployment changed.
 
-## Jarvis: the phone app — September 23, 2026
+## Mission Control is the phone app — September 23, 2026
 
-`/jarvis-app` (`portals/jarvis-app/`) is `jarvis.html` on a phone, built the
-way the Site Finder app was: one installable page with a bottom tab bar,
-a manifest and a service worker beside it (network first, `/api/` and the
-twin never cached, the mission worker's push and notificationclick handlers
-with this app's own URL), Vercel rewrites and `Service-Worker-Allowed` for
-the `/jarvis-app` scope. Chat (the thread, a question, the priced answer,
-factory questions to `/api/jarvis-operations` with `?org=` as on the
-desktop), Voice (tap to talk, the wake word stripped, the reply through
-`twinChat/speak` with the browser's voice as the floor; Record a call, filed
-through `twinChat/meeting`), Account (notifications, install, what Jarvis
-does and spends as switches, sign out). Same account, same server-side
-allowlist; the page adds no endpoint.
-
-Reuse rather than copies: `mission-push.js` now reads
-`window.JARVIS_PUSH_SW_URL` / `window.JARVIS_PUSH_SCOPE` when set before it
-loads, so one subscribe flow serves the console and the app;
-`scripts/make-app-icons.js` is now also a module (`build(src, size, {bg,
-inset, tint})`) and `scripts/make-jarvis-icons.js` renders the app's icons
-through it, with the OMEGA icons byte-identical to before. Deliberately not
-on the phone: the always-on wake word (a phone suspends a background
-microphone) and the 3D avatar. `scripts/test-jarvis-app.js` runs the whole
-flow on fixtures at a phone viewport; `npm run test:jarvis-app`.
+`/mission` installs as the app and opens on the Command Center.
+`mission.webmanifest` is now scoped to `/mission` (the worker's scope, and
+no longer wrapping every tenant page), starts on `?view=command` (the page
+honours `?view=` for any screen it has; otherwise the last view on that
+browser), and carries its own icon set, `icons/mission-*.png`, rendered by
+`scripts/make-mission-icons.js` through `scripts/make-app-icons.js`, which is
+now also a module (`build(src, size, {bg, inset, tint})`; the OMEGA icons are
+byte-identical). `mission.html` loads `mission-push.js` (the one line
+`docs/push-notifications.md` had left out) and hands it `token()`; a **Phone**
+panel on the System view holds Install and Notifications (turn on, test to
+this account, turn off), each honest about the device it is on. The worker's
+notification tap lands on the Command Center with the new icon. Rendered at a
+phone viewport with auth stubbed: the Command Center and the Phone panel,
+no browser errors. Nothing on the desktop layout changed; the 2026-09-13 rule
+(no tab strip on a phone, navigation is a sentence) stands.
