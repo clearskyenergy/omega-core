@@ -28,8 +28,11 @@
 'use strict';
 (function () {
 
-  var SW_URL = '/mission-sw.js';
-  var SCOPE = '/mission';
+  /* The dashboard's worker by default. The Jarvis phone app loads this same
+     file and points it at its own worker and scope BEFORE the script tag, so
+     one subscribe flow serves both and a fix lands in both. */
+  var SW_URL = window.JARVIS_PUSH_SW_URL || '/mission-sw.js';
+  var SCOPE = window.JARVIS_PUSH_SCOPE || '/mission';
 
   function b64ToU8(base64) {
     var pad = '='.repeat((4 - base64.length % 4) % 4);

@@ -101,6 +101,19 @@
       ]
     },
     {
+      "source": "/jarvis-app/sw.js",
+      "headers": [
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/jarvis-app"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(mission-sw|mission-push)\\.js",
       "headers": [
         {
@@ -298,6 +311,14 @@
     {
       "source": "/sitefinder-app/:path*",
       "destination": "/portals/sitefinder-app/:path*"
+    },
+    {
+      "source": "/jarvis-app",
+      "destination": "/portals/jarvis-app"
+    },
+    {
+      "source": "/jarvis-app/:path*",
+      "destination": "/portals/jarvis-app/:path*"
     },
     {
       "source": "/comed-proxy",

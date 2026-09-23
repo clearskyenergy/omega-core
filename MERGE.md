@@ -1550,3 +1550,28 @@ strips circuits; only a server re-publish keeps them.
 (`api/_lib/site-lease.js`) and the asking price into buy-versus-lease
 (`api/_lib/project-cost.js`); `omega-project-cost.js` only renders it. No
 rules, data or deployment changed.
+
+## Jarvis: the phone app — September 23, 2026
+
+`/jarvis-app` (`portals/jarvis-app/`) is `jarvis.html` on a phone, built the
+way the Site Finder app was: one installable page with a bottom tab bar,
+a manifest and a service worker beside it (network first, `/api/` and the
+twin never cached, the mission worker's push and notificationclick handlers
+with this app's own URL), Vercel rewrites and `Service-Worker-Allowed` for
+the `/jarvis-app` scope. Chat (the thread, a question, the priced answer,
+factory questions to `/api/jarvis-operations` with `?org=` as on the
+desktop), Voice (tap to talk, the wake word stripped, the reply through
+`twinChat/speak` with the browser's voice as the floor; Record a call, filed
+through `twinChat/meeting`), Account (notifications, install, what Jarvis
+does and spends as switches, sign out). Same account, same server-side
+allowlist; the page adds no endpoint.
+
+Reuse rather than copies: `mission-push.js` now reads
+`window.JARVIS_PUSH_SW_URL` / `window.JARVIS_PUSH_SCOPE` when set before it
+loads, so one subscribe flow serves the console and the app;
+`scripts/make-app-icons.js` is now also a module (`build(src, size, {bg,
+inset, tint})`) and `scripts/make-jarvis-icons.js` renders the app's icons
+through it, with the OMEGA icons byte-identical to before. Deliberately not
+on the phone: the always-on wake word (a phone suspends a background
+microphone) and the 3D avatar. `scripts/test-jarvis-app.js` runs the whole
+flow on fixtures at a phone viewport; `npm run test:jarvis-app`.
