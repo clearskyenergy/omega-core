@@ -1183,21 +1183,25 @@ function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
                                                        pedestal COUNT is half
                                                        the charger count
      Concrete pads                  $500 + $1,000, one per pedestal   2 of 3
-     EVSE hardware                  $1,850/port 50 A (Hermon, signed off)
-                                    $2,525/port 80 A (S Main, 4 x 80 A)
+     EVSE hardware                  $2,000/port 50 A, $3,050/port 80 A
+                                    ($4,000 / $6,100 per dual pedestal)
      Freight, activation, install   folded into the prices above
      Panels, new service            +$200 labor (Hermon)
 
-   The mixed-amperage sheets (West St, Union) do not solve to one price per
-   amperage, so hardware follows the two clean jobs, and the per-port floor
-   below settles the job total either way.
+   Hardware is fitted, not copied. West St (1 x 80 A + 2 x 50 A pedestals,
+   $14,100) and Union (1 x 80 A + 4 x 50 A, $22,100) solve EXACTLY to
+   $4,000 per 50 A pedestal and $6,100 per 80 A — two independent sheets,
+   one answer. Hermon (3 x 50 A at $3,700) sits $300 a pedestal under it,
+   and Menachem's note on Hermon was to squeeze more; S Main (2 x 80 A at
+   $5,050) is the one sheet below the fit. The per-port floor below
+   settles the job total either way.
 
    It is a JOB price, not a sheet price: jobLines() hands the same lines to
    the customer proposal and to the utility sheet, so what National Grid
    is shown is what the customer is charged. Conduit, bollards, networking
    and the rest keep the rate card. */
 var NG_PRICE = {
-  hardware: { a50:1850, a80:2525 },
+  hardware: { a50:2000, a80:3050 },
   /* kW at or above this is an 80 A unit (19.2 kW); below it, 50 A (~9.6-11.5 kW) */
   kw80: 15,
   perPedestal: 1150,
