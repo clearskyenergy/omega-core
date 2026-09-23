@@ -163,8 +163,12 @@ async function finish(orderId, caller, shipment) {
       if (o.delivery) throw A.httpError(409, 'Use Logistics and receiving for orders with a destination plan');
       if (l.commercial.balanceCents && !(l.invoices.balance || {}).satisfied) throw A.httpError(409, 'Final payment must be recorded before shipment');
       if (!shipment.carrier || !shipment.tracking) throw A.httpError(400, 'Carrier and tracking / bill-of-lading number required');
-      tx.update(ref, { status: 'shipped', shipment: { carrier: String(shipment.carrier).slice(0, 80), tracking: String(shipment.tracking).slice(0, 120), shippedAt: new Date().toISOString() } });
+      var shippedAt = new Date().toISOString();
+      tx.update(ref, { status: 'shipped', shipment: { carrier: String(shipment.carrier).slice(0, 80), tracking: String(shipment.tracking).slice(0, 120), shippedAt: shippedAt } });
       event(tx, ref, caller.email, 'Shipment recorded with passed serial genealogy');
+      /* custody (api/_lib/custody.js): every shipping unit leaves the plant */
+      var C = require('./custody');
+      units.docs.forEach(function (d) { var u = d.data(); if (!u.shipUnit) return; var v = C.judge(u, 'ship', {}); if (!v.ok) return; var ap = C.apply(u, 'ship', { at: shippedAt, note: 'Shipped ' + String(shipment.carrier).slice(0, 80) + ' ' + String(shipment.tracking).slice(0, 120) }, caller.email, shippedAt, 'logistics'); if (o.customerId) ap.patch['custody.customerId'] = o.customerId; ap.event.orderId = ref.id; tx.update(d.ref, ap.patch); tx.create(d.ref.collection('custody_events').doc(), Object.assign({ orgId: o.orgId, serial: u.serial }, ap.event)); });
     } else if (!l.invoices.balance) {
       tx.update(ref, { 'logic.invoices.balance': invoicePlan(ref.id, 'balance', l.commercial.balanceCents), 'logic.readyAt': new Date().toISOString(), 'logic.nextRunAt': Date.now() });
       event(tx, ref, caller.email, 'Quality release complete; final invoice queued');

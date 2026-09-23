@@ -28,6 +28,10 @@ function product(p){
   out.supplier=kind==='component'?clean(p.supplier,160):'';out.supplierSku=kind==='component'?clean(p.supplierSku,80):'';
   if(kind!=='component'){out.moq=null;out.safetyStock=null;}
   out.bom=kind==='service'?[]:M.bomLines(p.bom);
+  /* Coverage templates (api/_lib/custody.js): what a unit of this product
+     carries once it is bound to a site. warrantyYears stays the default
+     template when the list is empty. Ids unique per product. */
+  var C=require('./custody'),ids={};out.coverage=(Array.isArray(p.coverage)?p.coverage:[]).slice(0,10).map(function(t){var v=C.template(t);if(ids[v.id])throw A.httpError(400,'Coverage id "'+v.id+'" is used twice');ids[v.id]=true;return v;});
   return out;
 }
 function designs(config){
@@ -47,5 +51,5 @@ function select(config,sku,target){
 /* The OFFICE projection — the tenant's own catalog page. Sourcing fields and
    the bill of materials are theirs to see; the public projection in
    api/embed-config.js never names them. */
-function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
+function view(p){var out={};['sku','name','blurb','kind','category','active','priceMode','designEnabled','kw','kwh','widthFt','depthFt','listPrice','warrantyYears','leadTimeDays','chemistry','imageUrl','unit','supplier','supplierSku','moq','safetyStock'].forEach(function(k){if(p[k]!=null&&p[k]!=='')out[k]=p[k];});if(Array.isArray(p.coverage)&&p.coverage.length)out.coverage=p.coverage;var g=p.integrates||{};out.integrates={pcs:g.pcs===true,xfmr:g.xfmr===true,disco:g.disco===true};out.bom=(p.bom||[]).map(function(l){var o={sku:String(l.sku),qty:Number(l.qty),unit:String(l.unit||'ea'),yieldPct:Number(l.yieldPct)>0?Number(l.yieldPct):100};if(l.station)o.station=String(l.station);if(l.step)o.step=String(l.step);return o;});return out;}
 module.exports={product:product,designs:designs,select:select,view:view,KINDS:KINDS};

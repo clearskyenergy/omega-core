@@ -64,6 +64,9 @@
     if (path === '/api/customer-portal') return V.portalJson;
     if (path === '/api/my-account') return V.accountJson(who());
     if (path === '/api/my-orders') return V.myOrdersJson(who());
+    if (path === '/api/my-sites') return V.mySitesJson();
+    if (path === '/api/logic-custody') return V.custodyJson(q);
+    if (path === '/api/logic-logistics') return V.logisticsJson();
     if (path === '/api/customer-design') return V.designJson();
     if (path === '/api/app-manifest') return V.manifest((/app=(\w+)/.exec(q) || [])[1], TENANT);
     return { status: 404, error: 'Not in this sandbox: ' + path };

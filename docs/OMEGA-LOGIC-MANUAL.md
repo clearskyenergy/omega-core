@@ -127,6 +127,30 @@ appear only for ClearSky.
 - **Shipping & receiving.** Destinations, shipment legs with carrier and
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
+- **Sites & custody.** Every shipping unit after it leaves the plant: who
+  holds it, which end site it is bound to, and the warranty or SLA that
+  binds. *Where the fleet is* counts units by status and lists what **the
+  customer says** — each unit they placed at a site from their phone, with
+  a *Confirm* button — and what is *going to* a site before it arrives. The
+  *unit passport*
+  shows one serial's custody, coverage, every event and plant scan, and
+  offers only the moves that apply (receive, assign, installed,
+  commissioned, in service, RMA, returned, decommissioned), a side state
+  (damaged, lost, quarantined, scrapped) and, for an open RMA, the
+  replacement — which takes the site and the remaining coverage term. *Sites*
+  are end locations with their interconnection details (utility, account and
+  meter numbers, point of interconnection, service voltage and kW, agreement
+  reference). The *scan session* takes a gun or the camera: *Receive a load*
+  checks each scan against the load Shipping planned and names shorts and
+  overages; *Assign to a site* binds each scan to the chosen site. *Import*
+  takes the customer's or installer's spreadsheet: columns matched by name,
+  the plan shown row by row, nothing written until commit, a second run of
+  the same sheet changes nothing. *Exceptions* is what loses a warranty
+  claim. *Coverage templates* per product: a warranty or SLA term and what
+  starts it (ship, delivery, commissioning, or the earliest of commissioning
+  and ship plus a cap); a unit's coverage is worked out from these every
+  time it is shown and is *pending* until the unit is bound to a site.
+  Design and the honest list: `docs/LOGISTICS-CUSTODY.md`.
 
 ### The office app (`/office/app`)
 
@@ -318,7 +342,14 @@ endpoints as the desktop portal. Four tabs:
   one PO to several sites and for uploading a PO document.
 - **Account** — account number, company, rep, orders; the terms the
   supplier set; their own details to edit (name, company, phone, delivery
-  address); agreements; how to install the app; the desktop portal.
+  address); **Sites & equipment** — their sites (with the point of
+  interconnection) and every unit on their orders with where it is and its
+  warranty or SLA (pending until the unit is bound to a site, then the
+  dates); *Going to* — name the site while the unit is still in transit, and
+  receiving it binds it there; *Received*, *Assign* to a site, *Commissioned*
+  (date and by whom), *Add a site*. What the customer places is marked
+  *awaiting your supplier's confirmation* until the office confirms it, then
+  *confirmed by your supplier* with the date; agreements; how to install the app; the desktop portal.
 
 A customer login that has no company account yet is told to open Account
 first (the record is created on first sign-in) or to ask the supplier to
@@ -336,7 +367,10 @@ PO entry · the plant app · then the **office app** and the **customer app**
 (`api/app-manifest.js?app=`), one bulk-PO parser (`omega-po-bulk.js`) shared
 by the PO inbox and both apps, the batch PO path opened to a customer login
 for its own company, and Clean Cell's office and customer icons
-(`scripts/make-tenant-icons.js` renders a tenant's `<app>-icon.svg` set).
+(`scripts/make-tenant-icons.js` renders a tenant's `<app>-icon.svg` set);
+then **custody**: the status machine and coverage engine
+(`api/_lib/custody.js`), Sites & custody in the office, Sites & equipment
+in the customer app, receipt and shipment hooks in the logistics ledger.
 
 Tests: `npm test` (the plant chain runs `test-plant-work`, `test-plant-stats`,
 `test-office-ops`, `test-app-manifest`; the logic chain `test-po-bulk` and
@@ -377,6 +411,10 @@ sandboxes (sign in, change something, reload) in Chromium.
 - Icons for tenants other than Clean Cell (each needs a mark of its own).
 - Time per step (the map times stations from arrival to arrival; issues are
   logged with a time but not yet summarised per step).
-- A warranty record separate from the derivation (product years × ship
-  date). If a claim process is needed, it starts from the customer's
-  warranty request on the order.
+- A warranty claim process. Coverage is derived (template or product years
+  against the custody dates, bound to a site) and never stored; a claim
+  starts from the customer's warranty request on the order, and an RMA is
+  recorded on the unit under Sites & custody.
+- Containers and pallets, lots, an installer login, onward resale between
+  tenants, site-level SLAs, photos or GPS at commissioning, carrier webhooks
+  and offline scanning (`docs/LOGISTICS-CUSTODY.md` has the list).

@@ -58,6 +58,7 @@
         ['vendors', 'Vendors & prices', '/logic-materials.html' + q + '#suppliers']]],
       ['Deliver', [
         ['shipping', 'Shipping & receiving', '/logic-logistics.html' + q],
+        ['custody', 'Sites & custody', '/logic-custody.html' + q],
         ['quality', 'Quality & serial records', '/plant/' + q + '#records']]],
       ['Money', [
         ['cash', 'Cash flow', '/omega-logic' + q + '#cash']]],

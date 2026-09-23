@@ -2153,6 +2153,15 @@ service cloud.firestore {
        cells on the shelf that never came. No rule grants it, and this line
        says so rather than leaving it to the default. */
     match /omega_orgs/{orgId}/purchase_orders/{poId} { allow read, write: if false; }
+    /* Custody (api/_lib/custody.js): an end site with its interconnection
+       details, the customer's remembered column mapping and each import
+       batch. Read and written only by api/logic-custody.js and
+       api/my-sites.js, which judge every move against the one status
+       machine; a browser that could write a site or a receipt could start a
+       warranty it is not owed. Stated, like the two lines above. */
+    match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
 
     /* ══ PLANT FLOOR ═════════════════════════════════════════════════════
        From docs/firestore.rules.plant.addendum, applied 2026-09-20 and
@@ -2190,6 +2199,9 @@ service cloud.firestore {
          order's own routing. There is no shape of client write that could be
          checked here instead. */
       allow write:  if false;
+      /* The custody chain: append-only events written by the endpoints
+         above; never edited, never deleted, never client-written. */
+      match /custody_events/{eventId} { allow read, write: if false; }
     }
 
     match /plant_scans/{scanId} {
