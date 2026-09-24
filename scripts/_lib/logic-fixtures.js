@@ -5,14 +5,17 @@
 
    A catalog with bills of materials, suppliers and prices, a stock count,
    one work order with six cabinets at real stations with real timings,
-   three orders (one in build with a customer request, one awaiting its
-   deposit, one to price), a company account with an uploaded PO under
-   review, a customer account with a site plan on trial.
+   three orders (one in build with a customer request; one billed on the
+   OEM's own paper and released on a payment that never arrived — the
+   intake template's placeholder bank reference, the Amperage situation the
+   accounting page exists to correct; one to price), a company account with
+   an uploaded PO under review, a customer account with a site plan on
+   trial.
 
    views(state) answers every endpoint the office, plant and customer apps
    read, shaped like api/*.js answers them and computed by the same pure
    libraries (materials, plant-board, plant-stats, plant-work, office-stage,
-   logic-catalog) — so a sandbox shows what the product computes, not a
+   receivables, logic-catalog) — so a sandbox shows what the product computes, not a
    drawing of it. post(state, …) applies the handful of writes a trial
    touches and returns what the endpoint would. State is plain JSON, so the
    sandbox keeps it in localStorage and the render check keeps it in memory.
@@ -25,6 +28,9 @@ var M = require('../../api/_lib/materials'), C = require('../../api/_lib/logic-c
 var Board = require('../../api/_lib/plant-board'), Ops = require('../../api/_lib/plant-ops'), Attention = require('../../api/_lib/plant-attention');
 var W = require('../../api/_lib/plant-work'), Plant = require('../../api/_lib/plant'), S = require('../../api/_lib/office-stage');
 var Manifest = require('../../api/app-manifest'), Cu = require('../../api/_lib/custody');
+/* the receivables rules (pure): the accounting ledger and the three office
+   corrections below apply them; nothing here re-derives money */
+var R = require('../../api/_lib/receivables');
 
 var ORG = 'cleancell.us';
 var CATALOG = [
@@ -75,8 +81,16 @@ function initialState() {
       { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
     ],
     orders: [
-      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
-      { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
+      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid', id: 'QB-1041', date: '2026-09-01' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open', id: 'QB-1042', date: '2026-09-15' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
+      /* billed on the OEM's own paper and released on a payment that never
+         arrived: the intake template's placeholder reference was recorded as
+         the deposit (what happened to the Amperage order in production) */
+      { id: 'o2', orderNo: 'CC-26-4420', status: 'in_fulfilment', createdAt: '2026-08-18T10:00:00Z', purchaseOrder: { number: 'SS-PO-5521' }, customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }],
+        logic: { accounting: 'tenant', commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } },
+          invoices: { deposit: { amountCents: 9022500, id: 'SS-1042', issuedAt: '2026-08-20', date: '2026-08-20', status: 'paid', paidCents: 9022500, balanceCents: 0, satisfied: true,
+            payUrl: 'https://invoice.stripe.com/i/acct_1DEMOCLEANCELL/sandbox-ss-1042',
+            payments: [{ amountCents: 9022500, date: '2026-08-22', bankReference: 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received', by: 'intake@cleancell.us', at: '2026-08-22T15:00:00Z' }] } },
+          acceptedAt: '2026-08-19', releasedAt: '2026-08-22', requirements: [], allocatedSerials: [] } },
       { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_incharge', customer: { name: 'Purchasing', company: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
     ],
     customers: [
@@ -136,9 +150,30 @@ function views(state) {
     if (/serial=/.test(q)) { var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = state.units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { error: 'Unit not found', status: 404 }; return { unit: Object.assign({ orgId: ORG, woId: 'wo_1', orderNo: 'CC-26-4419', work: {} }, u, u.at === 'rack' ? { progress: progressOf(u) } : {}), genealogy: [{ serial: u.serial, unitType: u.unitType, parentSerial: null }], events: [] }; }
     return { name: 'Clean Cell', owner: false, flow: flow, brand: brand, worksOrders: [state.wo], units: unitsWith(), limited: false };
   }
-  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
+  function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o), poNumber: R.poOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
     links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
     orders: orders, totals: S.totals(orders), intake: { review: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_review'; }).length, needsInfo: 0, declined: 0 }, limited: false }; }
+  /* ── accounting (api/logic-accounting.js GET): the receivables ledger by
+     customer ACCOUNT, built by api/_lib/receivables.js exactly as the
+     endpoint builds it — the page prints it and never sums money. The sync
+     status is a workspace on its own Stripe with QuickBooks not configured
+     on the deployment, so both halves of the card render. ── */
+  var SYNC = { available: true, eligible: true, provider: 'stripe', chosenBy: 'demo@cleancell.us', chosenAt: '2026-09-20T12:00:00Z', since: '2026-09-20T12:00:00Z',
+    quickbooks: { configured: false, missing: ['QBO_CLIENT_ID', 'QBO_CLIENT_SECRET', 'QBO_WORKSPACE_REDIRECT_URI'], env: 'production', connectHost: null, connected: false, realmId: null, companyName: null, connectedAt: null, connectedBy: null, refreshExpiresAt: null, lastError: null, itemRef: '', taxCodeRef: 'NON', approved: false },
+    stripe: { configured: true, missing: [], connectHost: null, connected: true, accountId: 'acct_1DEMOCLEANCELL', livemode: false, connectedAt: '2026-09-20T12:05:00Z', connectedBy: 'demo@cleancell.us', webhook: true, lastError: null, paymentMethods: ['card', 'us_bank_account'], sendEmail: false } };
+  function param(q, k) { var m = new RegExp('(?:^|&)' + k + '=([^&]*)').exec(q || ''); return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''; }
+  function filtersFrom(q) { return { status: param(q, 'status') || 'all', customer: param(q, 'customer'), overdue: param(q, 'overdue') === '1' }; }
+  /* the ACCOUNT an order belongs to: its customerId, else the account one of whose active people it is billed to */
+  function accountOf(o) {
+    var c = o.customerId ? state.customers.filter(function (x) { return x.id === o.customerId; })[0] : state.customers.filter(function (x) { return x.users.some(function (u) { return u.status === 'active' && u.email === (o.customer && o.customer.email); }); })[0];
+    return c ? { id: c.id, name: c.company } : null;
+  }
+  function ledgerEntries() {
+    return state.orders.filter(function (o) { return o.logic && o.logic.invoices; }).slice().sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); })
+      .map(function (o) { return { id: o.id, order: o, account: accountOf(o) }; });
+  }
+  function accountingJson(q) { return Object.assign({ owner: false, org: ORG, name: 'Clean Cell', brand: brand, today: NOW, accounting: 'tenant', sync: clone(SYNC), limited: false }, R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' })); }
+  function accountingCsv(q) { return { filename: 'receivables-' + ORG + '-' + NOW + '.csv', csv: R.csv(R.ledger(ledgerEntries(), NOW, filtersFrom(q), { provider: 'stripe' }).rows) }; }
   function money(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { inv += o.logic.invoices[k].amountCents || 0; pd += o.logic.invoices[k].paidCents || 0; }); return { id: o.id, orderNo: o.orderNo, status: o.status, stage: S.stageOf(o), poNumber: o.poNumber || null, billedTo: { name: o.customer.name || '', email: o.customer.email || '' }, items: o.items, invoicedCents: inv, paidCents: pd, balanceCents: inv - pd, shippedAt: o.shipment ? o.shipment.shippedAt : null, openRequests: (o.requests || []).filter(function (r) { return r.status === 'open'; }).length }; }
   function customerOf(email) { return state.customers.filter(function (c) { return c.users.some(function (u) { return u.email === email; }); })[0]; }
   var APP_URL = 'https://silmarillion.clearskyomega.com/portals/customer/app?org=cleancell.us', PORTAL_URL = 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us';
@@ -248,7 +283,7 @@ function views(state) {
       workOrder: 'wo_1', product: 'Cabinet', work: W.statusOf(unit, 'rack', steps), instructions: 'Fit modules bottom-up.' };
   }
   function manifest(app, tenant) { return Manifest.manifestFor(ORG, tenant, app); }
-  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
+  return { materialsJson: materialsJson, soloJson: soloJson, catalogJson: catalogJson, plantJson: plantJson, officeJson: officeJson, accountingJson: accountingJson, accountingCsv: accountingCsv, buyersJson: buyersJson, intakeJson: intakeJson, portalJson: portalJson, accountJson: accountJson, myOrdersJson: myOrdersJson, custodyJson: custodyJson, logisticsJson: logisticsJson, mySitesJson: mySitesJson, pubUnit: pubUnit, pubSite: pubSite, unitView: unitView, designJson: designJson, designPost: designPost, benchJson: benchJson, manifest: manifest, brand: brand, CATALOG: CATALOG, benchCab: benchCab };
 }
 
 /* ── the writes a trial touches ───────────────────────────────────────── */
@@ -263,6 +298,34 @@ function post(state, path, query, b, who) {
     if (b.action === 'request-resolve') { var r = (o.requests || []).filter(function (x) { return x.id === b.requestId; })[0]; if (!r || r.status !== 'open') return err(404, 'Open request not found'); if (!String(b.answer || '').trim()) return err(400, 'Write the answer the customer will read'); r.status = 'resolved'; r.answer = String(b.answer).trim().slice(0, 2000); r.answeredAt = now; r.answeredBy = who; return { ok: true }; }
     if (b.action === 'ready') return o.logic && o.logic.releasedAt ? { ok: true, note: 'Every unit passed; the balance invoice is queued.' } : err(409, 'Release the order to the plant first');
     if (b.action === 'cancel') { o.cancelRequested = true; return { ok: true }; }
+    /* the accounting corrections: the same pure plans api/_lib/logic-workflow.js
+       applies, applied the same way (a payment is voided, never deleted) */
+    if (b.action === 'payment-void' || b.action === 'release-on-po' || b.action === 'invoice-edit') {
+      var lg = o.logic; if (!lg || !lg.invoices) return err(409, 'This order has no invoices yet');
+      try {
+        if (b.action === 'payment-void') {
+          var vp = R.voidPlan(o, b.stage, { bankReference: b.bankReference, reason: b.reason, keepBuilding: b.keepBuilding === true || b.keepBuilding === false ? b.keepBuilding : undefined, poNumber: b.poNumber, by: who, at: now, source: 'office' });
+          if (vp.duplicate) return { ok: true, duplicate: true, invoice: vp.invoice };
+          lg.invoices[b.stage] = vp.invoice;
+          if (vp.creditRelease) lg.creditRelease = vp.creditRelease;
+          if (vp.hold) { lg.paymentHold = vp.hold; lg.paymentException = vp.hold.message; }
+          return { ok: true, invoice: vp.invoice, order: { status: o.status, releasedAt: lg.releasedAt || null, creditRelease: lg.creditRelease || null, paymentHold: lg.paymentHold || null, paymentException: lg.paymentException || null } };
+        }
+        if (b.action === 'release-on-po') {
+          var rp = R.releasePlan(o, { reason: b.reason, poNumber: b.poNumber, by: who, at: now });
+          if (rp.duplicate) return { ok: true, duplicate: true, creditRelease: rp.creditRelease };
+          lg.creditRelease = rp.creditRelease;
+          if (rp.liftHold) { lg.paymentHold = null; lg.paymentException = null; }
+          /* standing in for processOrder's release: the plant starts */
+          if (!lg.releasedAt) { lg.releasedAt = now; o.status = 'in_fulfilment'; }
+          return { ok: true, creditRelease: rp.creditRelease, order: { status: o.status, releasedAt: lg.releasedAt, worksOrderId: o.worksOrderId || null } };
+        }
+        var ep = R.editPlan(o, b.stage, { number: b.number, issuedAt: b.issuedAt, dueAt: b.dueAt, reason: b.reason, by: who, at: now });
+        if (ep.duplicate) return { ok: true, duplicate: true, invoice: ep.invoice };
+        lg.invoices[b.stage] = ep.invoice;
+        return { ok: true, invoice: ep.invoice };
+      } catch (e) { return err(e.status || 400, e.message); }
+    }
     return err(400, 'Not in this sandbox: ' + b.action);
   }
   if (path === '/api/buyers') {

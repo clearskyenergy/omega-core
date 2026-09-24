@@ -68,7 +68,8 @@
         ['register', 'Fleet register', '/logic-register.html' + q],
         ['quality', 'Quality & serial records', '/plant/' + q + '#records']]],
       ['Money', [
-        ['cash', 'Cash flow', '/omega-logic' + q + '#cash']]],
+        ['cash', 'Cash flow', '/omega-logic' + q + '#cash'],
+        ['accounting', 'Accounting', '/logic-accounting.html' + q]]],
       ['Setup', [
         ['products', 'Products & bills', '/logic-catalog.html' + q],
         ['settings', 'Settings', '/logic-settings.html' + q]]]

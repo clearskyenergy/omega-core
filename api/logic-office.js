@@ -1,7 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
-var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo'), S = require('./_lib/office-stage');
+var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo'), S = require('./_lib/office-stage'), R = require('./_lib/receivables');
 function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
   var q = '?org=' + encodeURIComponent(org);
@@ -10,7 +10,7 @@ function links(org, key) {
     urls:'/logic-urls.html'+q,manager:'/plant/manager.html'+q,catalog:'/logic-catalog.html'+q,materials:'/logic-materials.html'+q,board:'/plant/work-orders.html'+q,logistics:'/logic-logistics.html'+q,poInbox:'/po-inbox?office=1&org='+encodeURIComponent(org),
     storefront: key ? '/embed/storefront.html?k=' + encodeURIComponent(key) : null,
     setup: '/whitelabel-setup.html' + q, editor: '/editor-lite.html' + q, preview: '/editor-lite.html' + q,
-    mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html' };
+    mission: '/mission?view=logic&org=' + encodeURIComponent(org), subscription: '/account-settings.html', accounting: '/logic-accounting.html' + q };
 }
 module.exports = A.handler(async function (req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -50,12 +50,13 @@ module.exports = A.handler(async function (req, res) {
       return false;
     }).map(function (s) {
       var o = s.data();
-      return { id: s.id, orderNo: o.orderNo, stage: S.stageOf(o), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
+      return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: S.stageOf(o), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
         createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '', company: (o.customer || {}).company || '' }, customerId: o.customerId || null,
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt,
           releasedAt: o.logic.releasedAt || null, requirements: o.logic.requirements || [], allocatedSerials: o.logic.allocatedSerials || [],
           lastError: o.logic.lastError || null, paymentException: o.logic.paymentException || null,
+          creditRelease: o.logic.creditRelease || null, paymentHold: o.logic.paymentHold || null,
           payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null,
         requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [] };
     });
@@ -134,9 +135,24 @@ module.exports = A.handler(async function (req, res) {
   }
   /* Tenant-billed orders: the OEM's office records its own invoice and the
      money that landed. An active OEM administrator may do this — it is their
-     invoice — as may the ClearSky owner. */
-  if (b.action === 'invoice-issued') return W.issueInvoice(orderId, b.stage, { number: b.number, date: b.date }, caller);
-  if (b.action === 'payment-received') return W.recordPayment(orderId, b.stage, { amount: b.amount, date: b.date, bankReference: b.bankReference }, caller);
+     invoice — as may the ClearSky owner (every POST passed
+     X.authorize(caller, org, true) above). The rules are api/_lib/receivables.js;
+     the one writer is api/_lib/logic-workflow.js; the accounting page
+     (logic-accounting.html) posts these same actions. */
+  if (b.action === 'invoice-issued') return W.issueInvoice(orderId, b.stage, { number: b.number, date: b.date, dueAt: b.dueAt }, caller);
+  if (b.action === 'payment-received') return W.recordPayment(orderId, b.stage, { amount: b.amount, date: b.date, bankReference: b.bankReference, reinstate: b.reinstate === true, reason: b.reason }, caller);
+  /* A recorded payment is never deleted: it is voided with a reason, and the
+     invoice goes back to what has really been received. When the order is in
+     the plant on that deposit, keepBuilding says what happens next. */
+  if (b.action === 'payment-void') return W.voidPayment(orderId, b.stage, { bankReference: b.bankReference, reason: b.reason,
+    keepBuilding: b.keepBuilding === true || b.keepBuilding === false ? b.keepBuilding : undefined, poNumber: b.poNumber }, caller);
+  /* Only the fields the body carries change; `dueAt: ''` (or null) is "back to terms". */
+  if (b.action === 'invoice-edit') {
+    var edit = { reason: b.reason };
+    ['number', 'issuedAt', 'dueAt'].forEach(function (k) { if (b[k] !== undefined) edit[k] = b[k]; });
+    return W.editInvoice(orderId, b.stage, edit, caller);
+  }
+  if (b.action === 'release-on-po') return W.releaseOnPo(orderId, { reason: b.reason, poNumber: b.poNumber }, caller);
   if (b.action === 'cleared' || b.action === 'wire_sent') {
     X.requireOwner(caller);
     var bankRef = clean(b.bankReference, 120);

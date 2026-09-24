@@ -1,0 +1,551 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     logic-accounting.html — the workspace's receivables: every invoice on
+     every order, what has really been received against it, what is late and
+     by how much, per customer ACCOUNT, and the corrections a real office
+     needs when the paperwork and the bank disagree.
+
+     It is a VIEW of api/logic-accounting.js (GET): the ledger rows, the
+     aging buckets and every total are computed on the server by the one pure
+     rule set (api/_lib/receivables.js), filtered there, and printed here.
+     The page never sums money.
+
+     Every correction goes through the ONE writer of order money
+     (api/_lib/logic-workflow.js) by way of api/logic-office.js:
+       invoice-issued · payment-received · payment-void · invoice-edit ·
+       release-on-po
+     A payment is never deleted: a void keeps it on the invoice, struck
+     through, with who voided it and why, and the invoice goes back to what
+     has actually been received. Voiding the payment an order was released
+     on asks the office to choose: keep building on the PO (a recorded
+     credit release) or hold the order. Shipment rules do not change here.
+
+     The ledger sync card chooses where a tenant-billed workspace keeps its
+     OWN books (its QuickBooks or its Stripe) and talks only to
+     api/logic-accounting.js; no token or key ever reaches this page, and a
+     deployment without the credentials says which variables are missing.
+     ES5, no build step, like every office page. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Accounting</title><link rel="stylesheet" href="/omega-logic-theme.css"><style>
+body{margin:0}header{padding:22px 4%;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}main{min-width:0}
+.intro{max-width:820px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
+.logic-main .bar select{width:auto;max-width:100%;padding:8px 10px}
+.logic-main label.chk{display:inline-flex;gap:8px;align-items:center;margin:0;font-size:14px;color:var(--ink)}
+.logic-main input[type=checkbox],.logic-main input[type=radio]{width:auto;margin:0}
+.logic-main textarea{width:100%;resize:vertical}
+.logic-main button:disabled{opacity:.5;cursor:not-allowed}
+.logic-table td.num,.logic-table th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.logic-table td{font-size:14px}
+#ledger td[data-k=order] button,#ledger td[data-k=number],#ledger td[data-k=issued],#ledger td[data-k=due]{white-space:nowrap}
+.sub{display:block;font-size:12px;color:var(--ink2)}.hint{font-size:12px;color:var(--ink3)}
+.tag{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;background:var(--brand-soft);color:var(--brand-d);margin:3px 4px 0 0;white-space:nowrap}
+.tag.overdue,.tag.hold{background:#FDEBE9;color:#B42318}.tag.onpo{background:#FFF4DE;color:#7A4B00}.tag.voided{background:#EEF1F4;color:#3F5D68}
+.logic-main button.open{background:none;border:0;padding:0;color:var(--brand-d);font-weight:600;text-align:left;border-radius:4px}
+.logic-main button.open:hover{text-decoration:underline}
+tr.sel td{background:#F0F7FB}
+.warn{background:#FFF5DE;color:#735312;padding:12px 16px;border-radius:10px;margin:10px 0}
+.alert{color:#A32D2D;background:#FFF0EF;padding:12px 16px;border-radius:10px;margin:10px 0}
+.logic-main .panel h2{margin-top:0}
+.prov{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+.prov h3{margin:0 0 6px}.prov .missing{color:#7A4B00}.prov code{font:12px 'IBM Plex Mono',monospace;background:var(--sunk);padding:1px 5px;border-radius:4px;margin:0 2px;word-break:break-all}
+.provs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+fieldset{border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:14px 0}legend{font-weight:600;padding:0 6px}
+fieldset .chk{margin:6px 16px 6px 0!important}
+/* the drawer: one invoice, its payments, its history and what may be done */
+#drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:100%;background:white;border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(11,39,51,.14);overflow-y:auto;padding:20px 24px 32px;z-index:40}
+#drawer-close{float:right;padding:8px 14px}
+#drawer h2{font-size:22px;margin:4px 0 8px}#drawer h3{font-size:16px;margin:20px 0 6px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+.facts div{padding:9px 12px;background:var(--sunk);border-radius:8px;font-size:14px;min-width:0;overflow-wrap:anywhere}.facts small{display:block;font-size:11px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+.pays,.edits{list-style:none;padding:0;margin:0}.pays li,.edits li{padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;overflow-wrap:anywhere}
+.pays li button{padding:4px 12px;margin-left:8px;font-size:13px}
+s.voided{color:var(--ink3)}
+.dacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+/* dialogs: an overlay with a card, no <dialog> element */
+.logic-dialog{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(11,39,51,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:60;overflow-y:auto}
+.logic-dialog .box{background:white;border-radius:14px;padding:22px 24px;width:520px;max-width:100%;box-shadow:0 20px 50px rgba(11,39,51,.25)}
+.logic-dialog h2{font-size:21px;margin:0 0 8px}.logic-dialog .actions{margin-top:18px}
+.logic-dialog .opt{display:flex!important;gap:10px;align-items:flex-start;font-size:14px!important;color:var(--ink)!important;margin:10px 0!important}
+.logic-dialog .opt input{margin-top:4px}
+.logic-dialog .inner{margin-left:26px!important}.logic-dialog input.inner{width:calc(100% - 26px)}
+.summary{font-weight:600;overflow-wrap:anywhere}
+@media(max-width:700px){#drawer{padding:16px}.facts{grid-template-columns:minmax(0,1fr)}}
+</style></head><body class="logic-theme"><header><b data-product-name>Accounting</b></header><div class="logic-shell"><nav class="logic-nav" aria-label="Office"></nav><main class="logic-main">
+<h1>Accounting</h1>
+<p class="intro">Every invoice on every order: what was invoiced, what has really been received, what is late and by how much, per customer account. Correct a payment that never arrived, release an order on its PO, or fix an invoice’s number or dates — every change is kept with who made it and why.</p>
+<p id="status" class="logic-status" role="status" aria-live="polite">Checking access…</p>
+<div id="content" hidden>
+  <p id="banner" class="warn" hidden>This workspace is billed through ClearSky QuickBooks; payments reconcile there. This page is read-only.</p>
+  <div id="totals" class="logic-kv"></div>
+  <h2>Aging</h2>
+  <div id="aging" class="logic-kv"></div>
+  <p class="hint">Outstanding on issued invoices by days past the due date. The due date is the invoice’s own when one was set, otherwise the invoice date plus the order’s terms.</p>
+  <div id="filters" class="bar">
+    <label for="f-status" class="chk">Status</label><select id="f-status"><option value="all">All</option><option value="open">Open</option><option value="to_issue">To issue</option><option value="paid">Paid</option></select>
+    <label for="f-customer" class="chk">Customer</label><select id="f-customer"><option value="">All customers</option></select>
+    <label class="chk"><input type="checkbox" id="f-overdue"> Overdue only</label>
+    <button type="button" id="csv">Export CSV</button>
+    <span id="count" class="hint"></span>
+  </div>
+  <section id="ledger" class="panel"><h2>Receivables</h2><div class="logic-scroll"><table class="logic-table"><thead><tr><th>Order</th><th>Customer</th><th>Stage</th><th>Invoice</th><th>Issued</th><th>Due</th><th class="num">Amount</th><th class="num">Received</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody></tbody></table></div></section>
+  <section id="customers" class="panel"><h2>By customer account</h2><div id="cust-body"></div></section>
+  <section id="sync" class="panel"></section>
+</div>
+
+<aside id="drawer" aria-labelledby="drawer-h" hidden><button type="button" id="drawer-close">Close</button><div id="drawer-body"></div></aside>
+
+<div id="dlg-void" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-void-h" hidden><div class="box">
+  <h2 id="dlg-void-h">Void a payment</h2>
+  <p id="void-summary" class="summary"></p>
+  <p class="muted">Voiding never deletes the payment: it stays on the invoice, struck through, with your reason, and the invoice goes back to what has really been received.</p>
+  <label for="void-reason">Why is this payment being voided?</label><textarea id="void-reason" rows="3" maxlength="500" required></textarea>
+  <fieldset id="void-choice" hidden><legend>This order is already in the plant on this payment. What now?</legend>
+    <label class="opt"><input type="radio" name="after" id="after-keep" value="keep"><span><b>Keep building on the PO</b><span class="sub">Records a release on PO. The plant keeps going; the deposit shows as open. Shipment still needs the deposit and the balance recorded.</span></span></label>
+    <label for="void-po" class="inner">PO number</label><input id="void-po" class="inner" maxlength="80">
+    <label class="opt"><input type="radio" name="after" id="after-hold" value="hold"><span><b>Hold the order</b><span class="sub">The plant’s scans refuse this order until the payment is recorded or you release it on the PO.</span></span></label>
+  </fieldset>
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="void-go" class="primary" disabled>Void payment</button><button type="button" id="void-cancel" data-cancel>Cancel</button></div>
+</div></div>
+
+<div id="dlg-release" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-release-h" hidden><div class="box">
+  <h2 id="dlg-release-h">Release on PO</h2>
+  <p id="rel-summary" class="summary"></p>
+  <p class="muted">Start the plant on this PO before the deposit arrives. Shipment still needs the deposit and the balance recorded — nothing about shipping changes.</p>
+  <label for="rel-po">PO number</label><input id="rel-po" maxlength="80">
+  <label for="rel-reason">Why may the plant start before the deposit is received?</label><textarea id="rel-reason" rows="3" maxlength="500" required></textarea>
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="rel-go" class="primary" disabled>Release on PO</button><button type="button" data-cancel>Cancel</button></div>
+</div></div>
+
+<div id="dlg-edit" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-edit-h" hidden><div class="box">
+  <h2 id="dlg-edit-h">Edit invoice</h2>
+  <p class="muted">Amounts come from the approved price and are not edited here.</p>
+  <label for="ed-number">Invoice number</label><input id="ed-number" maxlength="80">
+  <label for="ed-issued">Invoice date</label><input id="ed-issued" type="date">
+  <label for="ed-due">Due date</label><input id="ed-due" type="date"><p id="ed-due-hint" class="hint"></p>
+  <label for="ed-reason">Why is the invoice being changed?</label><textarea id="ed-reason" rows="3" maxlength="500" required></textarea>
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="ed-go" class="primary" disabled>Save changes</button><button type="button" data-cancel>Cancel</button></div>
+</div></div>
+
+<div id="dlg-issue" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-issue-h" hidden><div class="box">
+  <h2 id="dlg-issue-h">Record invoice issued</h2>
+  <p id="is-summary" class="summary"></p>
+  <label for="is-number">Your invoice number</label><input id="is-number" maxlength="80">
+  <label for="is-date">Invoice date</label><input id="is-date" type="date">
+  <label for="is-due">Due date (optional)</label><input id="is-due" type="date"><p class="hint">Leave blank to follow the order’s payment terms.</p>
+  <p id="is-sync" class="hint" hidden></p>
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="is-go" class="primary" disabled>Record invoice issued</button><button type="button" data-cancel>Cancel</button></div>
+</div></div>
+
+<div id="dlg-pay" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-pay-h" hidden><div class="box">
+  <h2 id="dlg-pay-h">Record payment received</h2>
+  <p id="pay-summary" class="summary"></p>
+  <p class="muted">Record it when the money has landed, with the bank’s own reference for it. A recorded payment is what accounting has seen, not bank clearance.</p>
+  <label for="pay-amount">Amount received, USD</label><input id="pay-amount" type="number" min="0.01" step="0.01" inputmode="decimal">
+  <label for="pay-date">Received on</label><input id="pay-date" type="date">
+  <label for="pay-ref">Bank reference</label><input id="pay-ref" maxlength="120" placeholder="ACH / wire reference">
+  <div id="pay-re" hidden>
+    <label class="chk" style="margin-top:14px"><input type="checkbox" id="pay-reinstate"> This money has really landed: record the voided reference again</label>
+    <label for="pay-reason">Why is a voided reference being recorded again?</label><textarea id="pay-reason" rows="2" maxlength="500"></textarea>
+  </div>
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="pay-go" class="primary" disabled>Record payment</button><button type="button" data-cancel>Cancel</button></div>
+</div></div>
+
+<div id="dlg-link" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-link-h" hidden><div class="box">
+  <h2 id="dlg-link-h">Link an existing invoice</h2>
+  <p id="ln-summary" class="muted"></p>
+  <label for="ln-id">Invoice id</label><input id="ln-id" maxlength="64" autocomplete="off">
+  <p class="dlg-err alert" role="alert" hidden></p>
+  <div class="actions"><button type="button" id="ln-go" class="primary" disabled>Link invoice</button><button type="button" data-cancel>Cancel</button></div>
+</div></div>
+</main></div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search), org = params.get('org') || '', cfg = window.CLEARSKY_CONFIG || {};
+  if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg);
+  var auth = firebase.auth(), D = null, ROW = null, BUSY = false, CHROMED = false, DLG = null, USER = null;
+  var PROV = { quickbooks: 'QuickBooks', stripe: 'Stripe' };
+  var ACTIONS = ['issue', 'record', 'void', 'edit', 'releaseOnPo', 'push', 'link', 'pull'];
+
+  /* ── small helpers ──────────────────────────────────────────────────── */
+  function $(id) { return document.getElementById(id); }
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  /* display only: every figure arrives in cents from the server */
+  function dollars(c) { return c == null ? '—' : '$' + (Number(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function usd(c) { return 'USD ' + (Number(c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function day(s) { return s ? String(s).slice(0, 10) : ''; }
+  function words(s) { return String(s || '').replace(/_/g, ' '); }
+  function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function prov(p) { return PROV[p] || p || ''; }
+  function days(a, b) { var x = Date.parse(a + 'T00:00:00Z'), y = Date.parse(b + 'T00:00:00Z'); return isNaN(x) || isNaN(y) ? null : Math.round((y - x) / 86400000); }
+  function status(t, bad) { var s = $('status'); s.textContent = t || ''; s.className = 'logic-status' + (bad ? ' error' : ''); }
+  function api(path, body) {
+    if (!auth.currentUser) return Promise.reject(new Error('Sign in through your office to open accounting.'));
+    return auth.currentUser.getIdToken().then(function (t) {
+      return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    }).then(function (r) { return r.json()['catch'](function () { return {}; }).then(function (j) { if (!r.ok || j.ok === false) throw new Error(j.error || 'Request failed'); return j; }); });
+  }
+  function rowBy(key) { return D ? D.rows.filter(function (r) { return r.key === key; })[0] || null : null; }
+  function active(r) { return (r.payments || []).filter(function (p) { return !p.voided; }); }
+  function voided(r) { return (r.payments || []).filter(function (p) { return p.voided; }); }
+  function hasAction(r) { var a = r.actions || {}; return ACTIONS.some(function (k) { return a[k] === true; }); }
+
+  /* ── the GET, with the filters the server applies ───────────────────── */
+  function qs(extra) {
+    var p = ['org=' + encodeURIComponent(org)], st = $('f-status').value, cu = $('f-customer').value;
+    if (st && st !== 'all') p.push('status=' + encodeURIComponent(st));
+    if (cu) p.push('customer=' + encodeURIComponent(cu));
+    if ($('f-overdue').checked) p.push('overdue=1');
+    if (extra) p.push(extra);
+    return p.join('&');
+  }
+  function load() {
+    return api('/api/logic-accounting?' + qs()).then(function (d) {
+      D = d; D.rows = D.rows || [];
+      if (!CHROMED) {
+        OmegaLogicTheme.chrome({ org: org, current: 'accounting', owner: d.owner, brand: d.brand, who: USER && USER.email, local: [{ href: '#ledger', label: 'Receivables' }, { href: '#aging', label: 'Aging' }, { href: '#customers', label: 'By customer' }, { href: '#sync', label: 'QuickBooks / Stripe' }] });
+        CHROMED = true;
+      }
+      draw();
+    });
+  }
+
+  /* ── the page ───────────────────────────────────────────────────────── */
+  function tile(k, label, cents, cls, note) { return '<div data-k="' + esc(k) + '"' + (cls ? ' class="' + cls + '"' : '') + '><small>' + esc(label) + '</small><b>' + dollars(cents || 0) + '</b>' + (note ? '<small>' + esc(note) + '</small>' : '') + '</div>'; }
+  function tags(r) {
+    var h = '', n = voided(r).length;
+    if (r.overdue) h += '<span class="tag overdue">Overdue ' + esc(r.daysOverdue) + ' d</span>';
+    if (r.releasedOnPo) h += '<span class="tag onpo">Released on PO</span>';
+    if (r.hold) h += '<span class="tag hold">On hold</span>';
+    if (n) h += '<span class="tag voided">' + n + ' voided</span>';
+    return h;
+  }
+  function rowHtml(r) {
+    var t = tags(r);
+    return '<tr data-row="' + esc(r.key) + '"' + (r.key === ROW ? ' class="sel"' : '') + '>'
+      + '<td data-k="order"><button type="button" class="open" data-open="' + esc(r.key) + '">' + esc(r.orderNo) + '</button>' + (r.poNumber ? '<span class="sub">PO ' + esc(r.poNumber) + '</span>' : '') + '</td>'
+      + '<td data-k="customer">' + esc(r.customer && r.customer.name) + '</td>'
+      + '<td data-k="stage">' + esc(cap(r.stage)) + (r.billing === 'quickbooks' ? '<span class="sub">ClearSky QuickBooks</span>' : '') + '</td>'
+      + '<td data-k="number">' + esc(r.number || '—') + '</td>'
+      + '<td data-k="issued">' + esc(r.issuedAt || '—') + '</td>'
+      + '<td data-k="due">' + (r.dueAt ? esc(r.dueAt) + (r.dueAtSet ? '' : ' <span class="hint">terms</span>') : '—') + '</td>'
+      + '<td class="num" data-k="amount">' + dollars(r.amountCents) + '</td>'
+      + '<td class="num" data-k="received">' + dollars(r.receivedCents) + '</td>'
+      + '<td class="num" data-k="balance">' + dollars(r.balanceCents) + '</td>'
+      + '<td data-k="status"><span class="st">' + esc(words(r.status)) + '</span>' + (t ? '<br>' + t : '') + '</td></tr>';
+  }
+  function draw() {
+    var d = D, t = d.totals || {}, ag = t.aging || {};
+    $('content').hidden = false;
+    $('banner').hidden = d.accounting === 'tenant';
+    $('totals').innerHTML = tile('invoiced', 'Invoiced', t.invoicedCents) + tile('received', 'Received', t.receivedCents, '', t.voidedCents ? usd(t.voidedCents) + ' voided, not counted' : '')
+      + tile('outstanding', 'Outstanding', t.outstandingCents) + tile('overdue', 'Overdue', t.overdueCents, t.overdueCents > 0 ? 'bad' : '', t.overdueCount ? t.overdueCount + ' invoice' + (t.overdueCount === 1 ? '' : 's') : '')
+      + tile('credit', 'On PO credit', t.creditReleasedCents, '', 'open deposits released on PO') + tile('toIssue', 'To issue', t.toIssueCents);
+    $('aging').innerHTML = [['current', 'Current'], ['1-30', '1–30 days'], ['31-60', '31–60 days'], ['61-90', '61–90 days'], ['90+', '90+ days']].map(function (b) { return tile(b[0], b[1], ag[b[0]], b[0] !== 'current' && ag[b[0]] > 0 ? 'bad' : ''); }).join('');
+    /* the customer filter lists every account on the ledger, not only the filtered ones */
+    var sel = $('f-customer'), cur = sel.value;
+    sel.innerHTML = '<option value="">All customers</option>' + (d.customers || []).map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.key === cur ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('');
+    $('count').textContent = (d.filtered ? d.rows.length + ' of ' + d.allCount : d.rows.length) + ' invoice' + ((d.filtered ? d.allCount : d.rows.length) === 1 ? '' : 's') + (d.limited ? ' · newest 500 orders' : '') + ' · as of ' + (d.today || '');
+    $('ledger').querySelector('tbody').innerHTML = d.rows.length ? d.rows.map(rowHtml).join('') : '<tr><td colspan="10" class="muted">No invoices match.</td></tr>';
+    var by = t.byCustomer || [];
+    $('cust-body').innerHTML = by.length ? '<div class="logic-scroll"><table class="logic-table"><thead><tr><th>Customer</th><th class="num">Invoices</th><th class="num">Invoiced</th><th class="num">Received</th><th class="num">Outstanding</th><th class="num">Overdue</th></tr></thead><tbody>'
+      + by.map(function (c) { return '<tr><td><button type="button" class="open" data-cust="' + esc(c.key) + '">' + esc(c.name) + '</button></td><td class="num">' + esc(c.count) + '</td><td class="num">' + dollars(c.invoicedCents) + '</td><td class="num">' + dollars(c.receivedCents) + '</td><td class="num"><b>' + dollars(c.outstandingCents) + '</b></td><td class="num">' + dollars(c.overdueCents) + '</td></tr>'; }).join('')
+      + '</tbody></table></div><p class="hint">A customer is the ACCOUNT the order belongs to; an order with no account is listed under the email it is billed to.</p>' : '<p class="muted">No invoices match.</p>';
+    syncCard(d.sync);
+  }
+
+  /* ── the drawer: one invoice ────────────────────────────────────────── */
+  function dueNote(r) {
+    if (!r.dueAt) return '';
+    if (!r.dueAtSet) { var n = r.issuedAt ? days(r.issuedAt, r.dueAt) : null; return 'from terms' + (n == null ? '' : n ? ' (' + n + ' days)' : ' (on receipt)'); }
+    var by = null; (r.edits || []).forEach(function (e) { if (e.now && Object.prototype.hasOwnProperty.call(e.now, 'dueAt')) by = e.by; });
+    return by ? 'set by ' + by : 'set when issued';
+  }
+  function payHtml(p, r) {
+    var src = p.source === 'quickbooks' ? ' · from QuickBooks' : p.source === 'stripe' ? ' · from Stripe' : '';
+    var line = usd(p.amountCents) + ' · ' + esc(p.date) + ' · ' + esc(p.bankReference);
+    if (p.voided) return '<li class="pay"><s class="voided">' + line + '</s> <span class="muted">voided ' + esc(day(p.voidedAt)) + ' by ' + esc(p.voidedBy) + ' — ' + esc(p.voidReason) + '</span></li>';
+    return '<li class="pay">' + line + '<span class="hint">' + esc(src) + ' · recorded by ' + esc(p.by) + (p.reinstates != null ? ' · recorded again after a void' : '') + '</span>'
+      + (r.actions && r.actions['void'] ? '<button type="button" data-act="void" data-ref="' + esc(p.bankReference) + '">Void</button>' : '') + '</li>';
+  }
+  function editHtml(e) {
+    var parts = [], w = e.was || {}, n = e.now || {};
+    function show(k, v) { return k === 'dueAt' && !v ? 'terms' : v; }
+    [['number', 'number'], ['issuedAt', 'issued'], ['dueAt', 'due']].forEach(function (f) { if (Object.prototype.hasOwnProperty.call(n, f[0])) parts.push(f[1] + ' ' + show(f[0], w[f[0]]) + ' → ' + show(f[0], n[f[0]])); });
+    return '<li>' + esc(day(e.at)) + ' · ' + esc(e.by) + ' · ' + esc(parts.join('; ')) + ' — ' + esc(e.reason) + '</li>';
+  }
+  function ledgerHtml(r) {
+    var L = r.ledger, chosen = D.sync && D.sync.provider, h = '';
+    if (L && L.invoiceId) h = '<p>In ' + esc(prov(L.provider)) + ' as <b>' + esc(L.invoiceId) + '</b>' + (L.number && L.number !== L.invoiceId ? ' (number ' + esc(L.number) + ')' : '') + (L.lastPullAt ? ' · payments read ' + esc(day(L.lastPullAt)) : '') + '</p>';
+    else if (L && L.state === 'pending') h = '<p>Waiting to be created in ' + esc(prov(L.provider)) + '</p>';
+    else if (r.billing === 'tenant' && chosen && chosen !== 'none') h = '<p>Not in ' + esc(prov(chosen)) + ' yet</p>';
+    if (L && L.error) h += '<p class="alert">' + esc(prov(L.provider)) + ': ' + esc(L.error) + '</p>';
+    if (L && L.warning) h += '<p class="alert">' + esc(L.warning) + '</p>';
+    if (r.syncError) h += '<p class="alert">Ledger sync: ' + esc(r.syncError) + '</p>';
+    return h;
+  }
+  function drawerHtml(r) {
+    var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '';
+    h += '<div class="eyebrow">' + esc(r.orderNo) + (r.poNumber ? ' · PO ' + esc(r.poNumber) : '') + '</div>';
+    h += '<h2 id="drawer-h">' + esc(cap(r.stage)) + ' invoice' + (r.number ? ' ' + esc(r.number) : '') + '</h2>';
+    var who = [r.customer.contact !== r.customer.name ? r.customer.contact : '', r.customer.email].filter(Boolean).join(' · ');
+    h += '<p>' + esc(r.customer.name) + (who ? '<span class="sub">' + esc(who) + '</span>' : '') + '</p>';
+    if (r.orderStage) h += '<p><span class="tag' + (r.orderStage.credit ? ' onpo' : '') + '">' + esc(r.orderStage.label) + '</span> <span class="hint">' + esc(r.orderStage.next) + '</span></p>';
+    if (r.billing === 'quickbooks') h += '<p class="hint">Billed through ClearSky QuickBooks; payments reconcile there.</p>';
+    h += '<div class="facts"><div><small>Invoice</small>' + esc(r.number || 'not issued yet') + '</div><div><small>Status</small>' + esc(words(r.status)) + (r.overdue ? ' · ' + esc(r.daysOverdue) + ' day' + (r.daysOverdue === 1 ? '' : 's') + ' overdue' : '') + '</div>'
+      + '<div><small>Issued</small>' + esc(r.issuedAt || '—') + '</div><div><small>Due</small>' + esc(r.dueAt || '—') + (dueNote(r) ? '<span class="sub">' + esc(dueNote(r)) + '</span>' : '') + '</div>'
+      + '<div><small>Amount</small>' + dollars(r.amountCents) + '</div><div><small>Received</small>' + dollars(r.receivedCents) + '</div><div><small>Balance</small><b>' + dollars(r.balanceCents) + '</b></div></div>';
+    if (/^https:\/\//.test(r.payUrl || '')) h += '<p><a class="paylink" href="' + esc(r.payUrl) + '" target="_blank" rel="noopener">Open payment page ↗</a></p>';
+    h += ledgerHtml(r);
+    if (cr) h += '<p class="warn">Released on PO ' + esc(cr.poNumber || '(no PO number)') + ' by ' + esc(cr.by) + ' on ' + esc(day(cr.at)) + ': ' + esc(cr.reason) + '.' + (r.releasedOnPo ? ' Deposit ' + dollars(r.balanceCents) + ' not yet received.' : '') + '</p>';
+    if (r.hold) h += '<p class="alert">' + esc(r.hold.message) + '</p>';
+    else if (r.exception) h += '<p class="alert">' + esc(r.exception) + '</p>';
+    h += '<h3>Payments</h3>' + ((r.payments || []).length ? '<ul class="pays">' + r.payments.map(function (p) { return payHtml(p, r); }).join('') + '</ul>' : '<p class="muted">No payment recorded.</p>');
+    if ((r.edits || []).length) h += '<h3>Changes to this invoice</h3><ul class="edits">' + r.edits.map(editHtml).join('') + '</ul>';
+    var b = '';
+    if (a.issue) b += '<button type="button" class="primary" data-act="issue">Record invoice issued</button>';
+    if (a.record) b += '<button type="button" class="primary" data-act="record">Record payment</button>';
+    if (a.edit) b += '<button type="button" data-act="edit">Edit invoice</button>';
+    if (a.releaseOnPo) b += '<button type="button" data-act="release">Release on PO</button>';
+    if (a.push) b += '<button type="button" data-act="push">Push to ' + esc(P) + '</button>';
+    if (a.link) b += '<button type="button" data-act="link">Link existing ' + esc(P) + ' invoice</button>';
+    if (a.pull) b += '<button type="button" data-act="pull">Sync payments now</button>';
+    h += b ? '<div class="dacts">' + b + '</div>' : (r.billing === 'tenant' ? '' : '<p class="hint">Nothing to record here: this invoice lives in ClearSky’s QuickBooks.</p>');
+    return h;
+  }
+  function openDrawer(key) {
+    var r = rowBy(key);
+    if (!r) { closeDrawer(); return; }
+    ROW = key; $('drawer-body').innerHTML = drawerHtml(r); $('drawer').hidden = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#ledger tr[data-row]'), function (tr) { tr.className = tr.getAttribute('data-row') === key ? 'sel' : ''; });
+  }
+  function closeDrawer() { ROW = null; $('drawer').hidden = true; Array.prototype.forEach.call(document.querySelectorAll('#ledger tr.sel'), function (tr) { tr.className = ''; }); }
+
+  /* ── dialogs ────────────────────────────────────────────────────────── */
+  function dlgErr(msg) { var e = DLG && DLG.el.querySelector('.dlg-err'); if (!e) return; e.textContent = msg || ''; e.hidden = !msg; }
+  function openDialog(id, row, opener, extra) {
+    closeDialog();
+    DLG = { el: $(id), row: row, opener: opener || document.activeElement, extra: extra || {} };
+    dlgErr('');
+    DLG.el.hidden = false;
+    var first = DLG.el.querySelector('input:not([type=radio]):not([type=checkbox]),textarea');
+    validate();
+    if (first) first.focus();
+  }
+  function closeDialog() {
+    if (!DLG) return;
+    var opener = DLG.opener; DLG.el.hidden = true; DLG = null;
+    if (opener && opener.focus && document.body.contains(opener)) opener.focus();
+  }
+  function reasonOk(id) { return $(id).value.trim().length >= 5; }
+  /* whether each dialog may be submitted; the server checks again */
+  function validate() {
+    if (!DLG || BUSY) return;
+    var id = DLG.el.id;
+    if (id === 'dlg-void') $('void-go').disabled = !(reasonOk('void-reason') && (!DLG.extra.choice || $('after-keep').checked || $('after-hold').checked));
+    if (id === 'dlg-release') $('rel-go').disabled = !reasonOk('rel-reason');
+    if (id === 'dlg-edit') $('ed-go').disabled = !reasonOk('ed-reason');
+    if (id === 'dlg-issue') $('is-go').disabled = !($('is-number').value.trim() && $('is-date').value);
+    if (id === 'dlg-pay') $('pay-go').disabled = !(Number($('pay-amount').value) > 0 && $('pay-date').value && $('pay-ref').value.trim().length >= 4 && (!$('pay-reinstate').checked || reasonOk('pay-reason')));
+    if (id === 'dlg-link') $('ln-go').disabled = !/^[A-Za-z0-9_]{1,64}$/.test($('ln-id').value.trim());
+  }
+  function openVoid(r, ref, opener) {
+    var list = active(r).filter(function (p) { return p.bankReference === ref; }), p = list[list.length - 1];
+    if (!p) return;
+    $('void-summary').textContent = usd(p.amountCents) + ' · ' + p.date + ' · ' + p.bankReference;
+    $('void-reason').value = ''; $('after-keep').checked = false; $('after-hold').checked = false;
+    $('void-po').value = r.poNumber || '';
+    $('void-choice').hidden = !(r.actions && r.actions.voidNeedsChoice);
+    openDialog('dlg-void', r, opener, { ref: p.bankReference, choice: !!(r.actions && r.actions.voidNeedsChoice) });
+  }
+  function openRelease(r, opener) {
+    $('rel-summary').textContent = r.orderNo + ' · deposit ' + usd(r.amountCents) + ' · received ' + usd(r.receivedCents);
+    $('rel-po').value = r.poNumber || ''; $('rel-reason').value = '';
+    openDialog('dlg-release', r, opener);
+  }
+  function openEdit(r, opener) {
+    $('ed-number').value = r.number || ''; $('ed-issued').value = r.issuedAt || ''; $('ed-due').value = r.dueAtSet ? (r.dueAt || '') : ''; $('ed-reason').value = '';
+    var hint = r.dueAtSet ? 'Clear it to follow the order’s terms again.' : 'Blank follows the order’s terms' + (r.dueAt ? ': ' + r.dueAt : '') + '.';
+    $('ed-due').setAttribute('placeholder', r.dueAtSet ? '' : 'from terms: ' + (r.dueAt || '')); $('ed-due-hint').textContent = hint;
+    openDialog('dlg-edit', r, opener);
+  }
+  function openIssue(r, opener) {
+    $('is-summary').textContent = r.orderNo + ' · ' + r.stage + ' · ' + usd(r.amountCents);
+    $('is-number').value = ''; $('is-date').value = D.today || ''; $('is-due').value = '';
+    var p = D.sync && D.sync.provider; $('is-sync').hidden = !(p && p !== 'none'); $('is-sync').textContent = p && p !== 'none' ? 'It will also be created in your ' + prov(p) + '.' : '';
+    openDialog('dlg-issue', r, opener);
+  }
+  function openPay(r, opener) {
+    $('pay-summary').textContent = r.orderNo + ' · ' + r.stage + ' invoice ' + (r.number || '') + ' · balance ' + usd(r.balanceCents);
+    $('pay-amount').value = ''; $('pay-date').value = D.today || ''; $('pay-ref').value = ''; $('pay-re').hidden = true; $('pay-reinstate').checked = false; $('pay-reason').value = '';
+    openDialog('dlg-pay', r, opener);
+  }
+  function openLink(r, opener) {
+    var P = prov(D.sync && D.sync.provider);
+    $('ln-summary').textContent = 'Use this when this invoice is already in your ' + P + ': give its ' + P + ' invoice id. Omega Logic checks the amount and currency match and reads its payments from then on; nothing new is created there.';
+    $('ln-id').value = '';
+    openDialog('dlg-link', r, opener);
+  }
+
+  /* ── writes: ONE door each, then the ledger again ───────────────────── */
+  function run(path, body, say, go, onError) {
+    if (BUSY) return;
+    BUSY = true; if (go) go.disabled = true; status('Working…'); dlgErr('');
+    var key = ROW;
+    api(path, body).then(function (r) {
+      closeDialog();
+      var msg = typeof say === 'function' ? say(r) : say;
+      return load().then(function () { if (key) openDrawer(key); status(msg); });
+    })['catch'](function (e) { status(e.message, true); dlgErr(e.message); if (onError) onError(e); })
+      .then(function () { BUSY = false; if (go) go.disabled = false; validate(); });
+  }
+  function pullSay(r) {
+    if (r.skipped) return r.skipped === 'not-connected' ? 'Not connected: connect ' + prov(r.provider) + ' first.' : 'Ledger sync is off.';
+    var list = r.results || [{ stages: r.stages }], rec = 0, vd = 0, con = [], errs = [];
+    list.forEach(function (x) {
+      if (x.error) errs.push((x.orderNo || '') + ': ' + x.error);
+      var s = x.stages || {}; Object.keys(s).forEach(function (k) { rec += (s[k].recorded || []).length; vd += (s[k].voided || []).length; con = con.concat(s[k].conflicts || []); });
+    });
+    return 'Synced' + (r.results ? ' ' + list.length + ' order' + (list.length === 1 ? '' : 's') : '') + ': ' + rec + ' payment' + (rec === 1 ? '' : 's') + ' recorded, ' + vd + ' voided' + (con.length ? ' · ' + con.join(' · ') : '') + (errs.length ? ' · ' + errs.join(' · ') : '') + '.';
+  }
+  $('void-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    var body = { action: 'payment-void', org: org, orderId: d.row.orderId, stage: d.row.stage, bankReference: d.extra.ref, reason: $('void-reason').value.trim() };
+    if (d.extra.choice) { body.keepBuilding = $('after-keep').checked; if (body.keepBuilding) body.poNumber = $('void-po').value.trim(); }
+    run('/api/logic-office', body, function () { return 'Payment voided' + (body.keepBuilding === true ? '; the order keeps building on its PO.' : body.keepBuilding === false ? '; the order is on hold.' : '.'); }, $('void-go'));
+  };
+  $('rel-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    run('/api/logic-office', { action: 'release-on-po', org: org, orderId: d.row.orderId, reason: $('rel-reason').value.trim(), poNumber: $('rel-po').value.trim() }, 'Released on PO. Shipment still needs the deposit and the balance recorded.', $('rel-go'));
+  };
+  $('ed-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    var r = d.row, body = { action: 'invoice-edit', org: org, orderId: r.orderId, stage: r.stage }, num = $('ed-number').value.trim(), iss = $('ed-issued').value, due = $('ed-due').value;
+    /* only what changed; a cleared due date goes back to the terms */
+    if (num !== (r.number || '')) body.number = num;
+    if (iss !== (r.issuedAt || '')) body.issuedAt = iss;
+    if (r.dueAtSet ? due !== (r.dueAt || '') : due !== '') body.dueAt = due;
+    body.reason = $('ed-reason').value.trim();
+    if (!('number' in body) && !('issuedAt' in body) && !('dueAt' in body)) { dlgErr('Change the number or a date first.'); return; }
+    run('/api/logic-office', body, 'Invoice changed; the change is in its history.', $('ed-go'));
+  };
+  $('is-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    var body = { action: 'invoice-issued', org: org, orderId: d.row.orderId, stage: d.row.stage, number: $('is-number').value.trim(), date: $('is-date').value };
+    if ($('is-due').value) body.dueAt = $('is-due').value;
+    run('/api/logic-office', body, function (r) { return 'Invoice recorded as issued.' + (r && r.sync && r.sync.ok === false ? ' It was not created in your books yet: ' + r.sync.error : ''); }, $('is-go'));
+  };
+  $('pay-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    var body = { action: 'payment-received', org: org, orderId: d.row.orderId, stage: d.row.stage, amount: $('pay-amount').value, date: $('pay-date').value, bankReference: $('pay-ref').value.trim() };
+    if (!$('pay-re').hidden && $('pay-reinstate').checked) { body.reinstate = true; body.reason = $('pay-reason').value.trim(); }
+    run('/api/logic-office', body, function (r) { return r && r.duplicate ? 'That payment was already recorded.' : 'Payment recorded.'; }, $('pay-go'), function (e) {
+      /* a voided reference is refused unless it is recorded again on purpose, with a reason */
+      if (/voided/i.test(e.message || '')) { $('pay-re').hidden = false; validate(); }
+    });
+  };
+  $('ln-go').onclick = function () {
+    var d = DLG; if (!d) return;
+    run('/api/logic-accounting', { action: 'sync-link', org: org, orderId: d.row.orderId, stage: d.row.stage, invoiceId: $('ln-id').value.trim() }, function (r) { return 'Linked to ' + prov(r && r.ledger && r.ledger.provider) + ' invoice ' + ((r && r.ledger && r.ledger.invoiceId) || '') + '.'; }, $('ln-go'));
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('.logic-dialog input, .logic-dialog textarea'), function (el) { el.addEventListener('input', validate); el.addEventListener('change', validate); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-cancel]'), function (b) { b.onclick = function () { closeDialog(); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.logic-dialog'), function (el) { el.addEventListener('click', function (e) { if (e.target === el && !BUSY) closeDialog(); }); });
+  document.addEventListener('keydown', function (e) { if (e.key !== 'Escape' && e.key !== 'Esc') return; if (DLG) { if (!BUSY) closeDialog(); } else if (!$('drawer').hidden) closeDrawer(); });
+
+  /* ── clicks ─────────────────────────────────────────────────────────── */
+  $('drawer-close').onclick = closeDrawer;
+  $('ledger').addEventListener('click', function (e) { var b = e.target.closest('[data-open]'); if (b) openDrawer(b.getAttribute('data-open')); });
+  $('customers').addEventListener('click', function (e) { var b = e.target.closest('[data-cust]'); if (!b) return; $('f-customer').value = b.getAttribute('data-cust'); refilter(); });
+  $('drawer').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b || BUSY) return;
+    var r = rowBy(ROW), a = b.getAttribute('data-act'); if (!r) return;
+    if (a === 'void') openVoid(r, b.getAttribute('data-ref'), b);
+    else if (a === 'issue') openIssue(r, b);
+    else if (a === 'record') openPay(r, b);
+    else if (a === 'edit') openEdit(r, b);
+    else if (a === 'release') openRelease(r, b);
+    else if (a === 'link') openLink(r, b);
+    else if (a === 'push') run('/api/logic-accounting', { action: 'sync-push', org: org, orderId: r.orderId, stage: r.stage }, function (x) { return x && x.ledger ? 'In ' + prov(x.ledger.provider) + ' as ' + x.ledger.invoiceId + '.' + (x.ledger.warning ? ' ' + x.ledger.warning : '') : 'Pushed.'; }, b);
+    else if (a === 'pull') run('/api/logic-accounting', { action: 'sync-pull', org: org, orderId: r.orderId }, pullSay, b);
+  });
+  function refilter() { if (BUSY) return; status('Loading…'); load().then(function () { status(''); if (ROW) openDrawer(ROW); })['catch'](function (e) { status(e.message, true); }); }
+  $('f-status').onchange = refilter; $('f-customer').onchange = refilter; $('f-overdue').onchange = refilter;
+  $('csv').onclick = function () {
+    var btn = $('csv'); btn.disabled = true;
+    api('/api/logic-accounting?' + qs('format=csv')).then(function (x) {
+      var url = URL.createObjectURL(new Blob([x.csv], { type: 'text/csv' })), a = document.createElement('a');
+      a.href = url; a.download = x.filename || 'receivables.csv'; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.parentNode.removeChild(a); }, 1000);
+    })['catch'](function (e) { status(e.message, true); }).then(function () { btn.disabled = false; });
+  };
+
+  /* ── where this workspace keeps its own books ───────────────────────── */
+  function when(s) { return s ? ' since ' + day(s) : ''; }
+  function missingHtml(p) { return p.configured ? '' : '<p class="missing">Not available on this deployment yet — ClearSky must set: ' + (p.missing || []).map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' ') + '</p>'; }
+  function hostNote(p) { return p.connectHost && p.connectHost !== location.host ? '<p class="hint">Connect from ' + esc(p.connectHost) + ' — open this page there.</p>' : ''; }
+  function buttons(k, p) {
+    var off = !p.configured || (p.connectHost && p.connectHost !== location.host);
+    return '<div class="actions">' + (p.connected ? '<button type="button" data-sync="disconnect" data-provider="' + k + '">Disconnect ' + esc(prov(k)) + '</button>' : '<button type="button" data-sync="connect" data-provider="' + k + '"' + (off ? ' disabled' : '') + '>Connect ' + esc(prov(k)) + '</button>') + '</div>';
+  }
+  function syncCard(s) {
+    var el = $('sync');
+    if (!s || !s.eligible) { el.innerHTML = '<h2>QuickBooks / Stripe</h2><p class="muted">Ledger sync is for workspaces that invoice on their own paper. This workspace is billed through ClearSky QuickBooks.</p>'; return; }
+    if (!s.available) { el.innerHTML = '<h2>QuickBooks / Stripe</h2><p class="muted">Ledger sync is not installed on this deployment.</p>'; return; }
+    var qb = s.quickbooks || {}, st = s.stripe || {}, pm = st.paymentMethods || ['card', 'us_bank_account'], chosen = s.provider || 'none';
+    var pullable = chosen !== 'none' && (chosen === 'quickbooks' ? qb.connected : st.connected);
+    el.innerHTML = '<h2>Keep your own books in step</h2><p>Choose where this workspace’s invoices live. Omega Logic creates each invoice there when you record it as issued, reads the payments back, and records them here.</p>'
+      + '<fieldset><legend>Where the invoices live</legend>' + [['none', 'Off'], ['quickbooks', 'Your QuickBooks'], ['stripe', 'Your Stripe']].map(function (o) { return '<label class="chk"><input type="radio" name="provider" id="sp-' + o[0] + '" value="' + o[0] + '"' + (chosen === o[0] ? ' checked' : '') + '> ' + esc(o[1]) + '</label>'; }).join('') + '</fieldset>'
+      + (s.chosenBy ? '<p class="hint">Chosen by ' + esc(s.chosenBy) + (s.chosenAt ? ' on ' + esc(day(s.chosenAt)) : '') + '. Only invoices recorded as issued after that are created there automatically; one issued earlier is pushed or linked from its row, so nothing is entered twice.</p>' : '')
+      + '<div class="provs"><div id="sync-qb" class="prov"><h3>QuickBooks</h3><p>' + (qb.connected ? 'Connected to <b>' + esc(qb.companyName || qb.realmId) + '</b>' + esc(when(qb.connectedAt)) + (qb.env === 'sandbox' ? ' · sandbox' : '') : 'Not connected') + '</p>' + missingHtml(qb)
+      + '<label for="qb-item">QuickBooks item for installment invoices (item id)</label><input id="qb-item" inputmode="numeric" maxlength="20" value="' + esc(qb.itemRef || '') + '">'
+      + '<label for="qb-tax">Tax code</label><input id="qb-tax" maxlength="20" value="' + esc(qb.taxCodeRef || 'NON') + '">'
+      + '<p><label class="chk"><input type="checkbox" id="qb-approved"' + (qb.approved ? ' checked' : '') + '> Our accountant approves this item and tax treatment</label></p>'
+      + (qb.lastError ? '<p class="alert">' + esc(qb.lastError) + '</p>' : '') + buttons('quickbooks', qb) + hostNote(qb) + '</div>'
+      + '<div id="sync-stripe" class="prov"><h3>Stripe</h3><p>' + (st.connected ? 'Connected to <b>' + esc(st.accountId) + '</b> (' + (st.livemode ? 'live' : 'test mode') + ')' + esc(when(st.connectedAt)) : 'Not connected') + '</p>' + missingHtml(st)
+      + '<p class="hint">The customer pays on Stripe’s invoice page, by card or US bank account; that page becomes the invoice’s payment link.</p>'
+      + '<p><label class="chk"><input type="checkbox" id="st-card"' + (pm.indexOf('card') >= 0 ? ' checked' : '') + '> Card</label> &nbsp; <label class="chk"><input type="checkbox" id="st-ach"' + (pm.indexOf('us_bank_account') >= 0 ? ' checked' : '') + '> US bank account (ACH)</label></p>'
+      + '<p><label class="chk"><input type="checkbox" id="st-email"' + (st.sendEmail ? ' checked' : '') + '> Stripe emails the invoice to the customer</label></p>'
+      + (st.configured && !st.webhook ? '<p class="hint">Stripe’s payment notices are not set up on this deployment; payments are read back when the office syncs.</p>' : '')
+      + (st.lastError ? '<p class="alert">' + esc(st.lastError) + '</p>' : '') + buttons('stripe', st) + hostNote(st) + '</div></div>'
+      + '<div class="actions"><button type="button" id="sync-save" class="primary">Save choice</button>' + (pullable ? '<button type="button" id="sync-pull-all">Sync all now</button>' : '') + '</div>';
+  }
+  $('sync').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b || BUSY || b.disabled) return;
+    var k = b.getAttribute('data-provider');
+    if (b.id === 'sync-save') {
+      var picked = document.querySelector('input[name="provider"]:checked'), p = picked ? picked.value : 'none', body = { action: 'sync-choose', org: org, provider: p };
+      if (p === 'quickbooks') body.quickbooks = { itemRef: $('qb-item').value.trim(), taxCodeRef: $('qb-tax').value.trim() || 'NON', approved: $('qb-approved').checked };
+      if (p === 'stripe') { var m = []; if ($('st-card').checked) m.push('card'); if ($('st-ach').checked) m.push('us_bank_account'); body.stripe = { paymentMethods: m, sendEmail: $('st-email').checked }; }
+      run('/api/logic-accounting', body, p === 'none' ? 'Ledger sync is off.' : 'Saved: invoices go to your ' + prov(p) + '.', b);
+    } else if (b.id === 'sync-pull-all') run('/api/logic-accounting', { action: 'sync-pull', org: org }, pullSay, b);
+    else if (b.getAttribute('data-sync') === 'connect') {
+      BUSY = true; b.disabled = true; status('Opening ' + prov(k) + '…');
+      api('/api/logic-accounting', { action: 'sync-connect', org: org, provider: k }).then(function (x) { location.href = x.url; })['catch'](function (err) { status(err.message, true); BUSY = false; b.disabled = false; });
+    } else if (b.getAttribute('data-sync') === 'disconnect') {
+      if (!window.confirm('Disconnect ' + prov(k) + ' from this workspace? Invoices already there stay there; nothing new is created or read until it is connected again.')) return;
+      run('/api/logic-accounting', { action: 'sync-disconnect', org: org, provider: k }, prov(k) + ' disconnected.', b);
+    }
+  });
+
+  /* ── boot ───────────────────────────────────────────────────────────── */
+  auth.onAuthStateChanged(function (u) {
+    USER = u; $('content').hidden = true; closeDrawer();
+    if (!u) { status('Sign in through your office to open accounting.'); return; }
+    if (!org) { status('Open accounting from your office workspace.'); return; }
+    load().then(function () {
+      var c = params.get('connected'), err = params.get('syncError'), want = params.get('order');
+      status(PROV[c] ? PROV[c] + ' connected.' : err ? 'Connection not completed: ' + String(err).slice(0, 60) : '');
+      if (want) {
+        var mine = D.rows.filter(function (r) { return r.orderId === want; }), pick = mine.filter(hasAction)[0] || mine[0];
+        if (pick) openDrawer(pick.key);
+      }
+    })['catch'](function (e) { $('content').hidden = true; status(e.message, true); });
+  });
+})();
+</script></body></html>
