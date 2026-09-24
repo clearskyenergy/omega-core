@@ -163,7 +163,8 @@ on `omega_orgs`, mirrored through `api/_lib/whitelabel.js`'s allowlist to
    with Approve/Reject buttons calling `/api/tenant-approve`; tier/addon
    editors, subscription-due, Stripe create.
 9. **Move pricing/scoring logic server-side** per CLAUDE.md IP section:
-   ev-cost-workbook unit-rate bands, valuestack dispatch, proforma math.
+   ev-cost-workbook unit-rate bands, valuestack dispatch. (Proforma math:
+   done 2026-09-24 — `api/_lib/proforma-engine.js`, see the entry below.)
 10. **Consolidate the orgAlias map** into one exported constant imported by
     the four clients (rules stay hand-mirrored).
 11. **White-label `editor.html`.** ⚠ It now has an ACCESS GATE
@@ -2090,3 +2091,36 @@ Zero-rate demand periods no longer emit a `$0.00` line. That was not
 cosmetic: a caller reading the first demand line got the period that never
 moves, so a battery shaving the window that *is* billed looked like it
 achieved nothing.
+
+---
+
+## BESS Pro Forma 2.0: the investor model moves to the server (2026-09-24)
+
+The old `proforma.html` was NextNRG's legacy EV-charging calculator copied into
+core: every figure computed in the browser, no income tax, the ITC and a lump
+of MACRS subtracted from capex at year zero, degradation computed and never
+applied, a fixed 10-year horizon, and tenant names in a core file. Replaced.
+
+**Moved to `/api/` (CLAUDE.md IP rule):** ITC basis and the §48E rate build,
+MACRS and bonus, state and federal tax, debt sizing, IRR/NPV/payback, levelized
+price, LCOE — `api/_lib/proforma-engine.js` behind `POST /api/proforma`
+(`context | size | model`, gated on the `proforma` tool). The page renders what
+the API returns; `proforma-logic.js` lays out the investor deck (PDF) in the
+producing tenant's brand and computes nothing.
+
+**Method.** The investor one-pagers the deck is modelled on were NREL SAM
+single-owner runs; the engine follows SAM's method, and
+`scripts/tests/tproformaengine.js` reproduces the published Topanga and
+Sunnyside figures to the dollar (ITC, basis, year-1 distribution) and to the
+basis point (IRR, IRR build).
+
+**Sizing** is the unified engine merged in the same release
+(`battery-tool-engine.js` via `api/_lib/proforma-sizing.js`). `econ()` now also
+returns the year-by-year schedule it already computed; sweep rows drop it so
+`/api/bess-size` responses are byte-identical. Its request validation moved to
+`api/_lib/bess-size-validate.js`, shared by both endpoints.
+
+**Follow-up (same branch family):** dashboard styling, PowerPoint export,
+server-side site lookups (energy community, PVWatts, URDB) and
+`docs/PROFORMA.md`.
+
