@@ -365,9 +365,15 @@ is not built.
   buyer, Editor Lite first) are each one installable page with a bottom tab
   bar, a shell service worker scoped to its own path (network first; `/api/`
   never cached), and a manifest from `api/app-manifest.js?org=&app=` built
-  from `omega_orgs/{org}` (name, ink, `appIcon` paths under
-  `/tenants/<slug>/icons/`, validated; an optional set per app under
-  `appIcon.office` / `appIcon.customer`; OMEGA icons as the fallback). A
+  per app. **Omega Logic is ClearSky's product and a tenant is a workspace
+  in it** (QuickBooks is the app; the company is what you sign into): the
+  office app (the Omega Logic app) and the plant app always wear ClearSky's
+  name, colours and icon (`icons/omega-logic.svg` →
+  `scripts/make-omega-logic-icons.js`), with the workspace name shown
+  inside, and so does the desktop office header (`chrome()`; the brand
+  helper's `workspace`). Only the CUSTOMER app wears the tenant's name, ink
+  and `appIcon.customer` (validated paths under `/tenants/<slug>/icons/`;
+  OMEGA icons as the fallback): it is what the tenant's own customers use. A
   tenant's icon set lives in its folder and its `tenant.json`
   (`scripts/make-tenant-icons.js <slug>` renders every `<app>-icon.svg`);
   the seed copies `appIcon` onto the record. Never a script URL in a

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0B2733">
+<meta name="theme-color" content="#0C1824">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Office">
+<meta name="apple-mobile-web-app-title" content="Omega Logic">
 <link rel="manifest" href="/app-sandbox/office.webmanifest">
-<link rel="apple-touch-icon" href="/tenants/cleancell/icons/office-180.png">
-<title>Office · sandbox</title>
+<link rel="apple-touch-icon" href="/icons/omega-logic-180.png">
+<title>Omega Logic · sandbox</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
   office/app.html — the office in a pocket
@@ -42,11 +42,11 @@
   header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
   header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
   header.top .sp{flex:1}
-  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}header.top>div{min-width:0}
   main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto;min-width:0}
   main>*{min-width:0}
   h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}
-  .status{font-size:13px;color:var(--ink2);min-height:18px}
+  .status{font-size:13px;color:var(--ink2);margin:0 0 10px}.status:empty{display:none}
   .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.tabs button{flex:1 1 auto;padding:9px 10px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap}.tabs button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d);font-weight:600}
   .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit;cursor:pointer}
   .card.urgent{border-left:4px solid #B42318}
@@ -86,7 +86,7 @@
   .panel i{width:36px;height:36px;border-radius:50%;background:var(--ink,#0B2733);color:var(--brand,#3FAFC6);display:flex;align-items:center;justify-content:center;font:normal 18px/1 system-ui}
   .panel b{font-size:15px}.panel.open{border:2px solid var(--ink)}
   .rows{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;background:white;overflow:hidden}
-  .rows a,.rows button{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;text-decoration:none}
+  .rows a,.rows button{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:0;border-radius:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;text-decoration:none}
   .rows a:first-child,.rows button:first-child{border-top:0}.rows small{display:block;color:var(--ink2);font-size:12px}.rows .go{margin-left:auto;color:var(--ink2)}
 </style>
 </head>
@@ -160,8 +160,9 @@
     status('Loading…'); MAT = null; UNITS = null; BUYERS = null; CUST = null; COMPANIES = null; COMPANY = null;
     return Promise.all([api('/api/logic-office' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
       DATA = r[0]; BOARD = r[1];
-      if (DATA.brand) OmegaLogicTheme.apply(DATA.brand);
-      $('who').textContent = (auth.currentUser && auth.currentUser.email) || '';
+      /* Omega Logic is ClearSky's app: its own name and colours, with the
+         workspace you are in shown under it, as QuickBooks shows the company */
+      $('who').textContent = [(DATA.brand && DATA.brand.workspace) || DATA.name || ORG, (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
       status(''); draw();
     })['catch'](fail);
   }

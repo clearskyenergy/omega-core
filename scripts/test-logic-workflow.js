@@ -85,7 +85,7 @@ await check('tenant colors persist through the existing branding boundary and dr
   await post(branding,{orgId:'cleancell.us',colors:colors},owner);
   var org=(await db.doc('omega_orgs/cleancell.us').get()).data();assert.deepEqual(org.colors,colors);assert.equal(org.logoUrl,'/tenants/cleancell/logo.png');assert.equal(org.whiteLabel.platformName,'CleanCell Studio');
   assert.deepEqual((await db.doc('tenant_public/design.cleancell.us').get()).data().colors,colors);
-  assert.deepEqual(brand(org),{name:'CleanCell Studio',logoUrl:'/tenants/cleancell/logo.png',primary:colors.primary,accent:colors.accent,ink:colors.ink});
+  assert.deepEqual(brand(org),{name:'CleanCell Studio',workspace:org.name,logoUrl:'/tenants/cleancell/logo.png',primary:colors.primary,accent:colors.accent,ink:colors.ink});assert.equal(brand(org).workspace,'Clean Cell');
   assert.equal(brand({colors:{primary:'red;display:none'}}).primary,'#3FAFC6');
   var styles={},sandbox={window:{},document:{documentElement:{style:{setProperty:function(k,v){styles[k]=v;}}},body:{classList:{add:function(){}}},querySelectorAll:function(){return [];}}};
   require('node:vm').runInNewContext(require('node:fs').readFileSync(require('node:path').join(__dirname,'../omega-logic-theme.js'),'utf8'),sandbox);

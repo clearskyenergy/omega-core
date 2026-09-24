@@ -175,8 +175,11 @@ under `/guides/` built from `scripts/guides/`.
 
 ### The office app (`/office/app`)
 
-**The Omega Logic app** — one app for the whole business, laid out the way
-QuickBooks lays out its app: four tabs for the daily work and a **Menu**
+**The Omega Logic app** — ClearSky's app, with your company as the
+workspace inside it (QuickBooks is the app, your company is what you sign
+into): its name and icon are Omega Logic on every phone, and the workspace
+name shows under it once signed in. One app for the whole business, laid
+out the way QuickBooks lays out its app: four tabs for the daily work and a **Menu**
 that holds everything else. The Menu has a search box, a row of
 *frequently used* circles (Orders, PO loads, Customers, Sites, Stock,
 Register, Plant), and panels that open to their list: Sales & orders,

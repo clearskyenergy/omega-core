@@ -218,7 +218,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.waitForTimeout(500);
     var cards = await p.$$eval('#view .card', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 70); }); });
     var manifest = await p.evaluate(function () { return { m: document.querySelector('link[rel="manifest"]').getAttribute('href'), i: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href'), t: document.querySelector('meta[name="theme-color"]').content }; });
-    ok('the app wears the tenant\'s manifest, icon and colour', /app-manifest\?org=cleancell\.us/.test(manifest.m) && /cleancell\/icons\/plant-180/.test(manifest.i) && manifest.t === '#0B2733', manifest);
+    ok('the plant app is Omega Logic\'s: ClearSky\'s manifest, icon and colour', /app-manifest\?org=cleancell\.us/.test(manifest.m) && /icons\/omega-logic-180/.test(manifest.i) && manifest.t === '#0C1824', manifest);
     var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
     await p.click('[data-wo="wo_1"]'); await p.waitForTimeout(500);
     var units = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });
@@ -240,7 +240,8 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
     var kv = await p.$$eval('#today-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     var needs = await p.$$eval('#view .unit', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); }); });
-    ok('the office app wears the tenant\'s office manifest and icon', /app-manifest\?org=cleancell\.us&app=office/.test(manifest.m) && /cleancell\/icons\/office-180/.test(manifest.i), manifest);
+    var head = await p.evaluate(function () { return { b: document.querySelector('[data-brand-name]').textContent, w: document.getElementById('who').textContent }; });
+    ok('the office app is Omega Logic, ClearSky\'s: its manifest and icon, the workspace shown inside', /app-manifest\?org=cleancell\.us&app=office/.test(manifest.m) && /icons\/omega-logic-180/.test(manifest.i) && head.b === 'Omega Logic' && /^Clean Cell/.test(head.w), [manifest, head]);
     ok('  five tabs, QuickBooks-style: Home, Orders, Customers, Sites, Menu', tabs.join('|') === 'Home|Orders|Customers|Sites|Menu', tabs);
     ok('  today counts the stages and lists who needs a person: the open request and the unpriced order', kv.length === 4 && /To price\s*1/.test(kv[0]) && needs.some(function (t) { return /CC-26-4419.*1 customer request/.test(t); }) && needs.some(function (t) { return /CC-26-4421.*price/.test(t); }), [kv, needs]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300);
@@ -407,7 +408,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('#signin'); await p.waitForTimeout(700);
     var kv = await p.$$eval('#today-kv div', function (r) { return r.length; });
     var who = await p.$eval('#who', function (e) { return e.textContent; });
-    ok('the office sandbox wears the strip, starts signed out and signs in with a tap', stripLinks.length === 4 && /\/app-sandbox\/bench/.test(stripLinks[3]) && fb && who === 'demo@cleancell.us' && kv === 4, [stripLinks, fb, who, kv]);
+    ok('the office sandbox wears the strip, starts signed out and signs in with a tap', stripLinks.length === 4 && /\/app-sandbox\/bench/.test(stripLinks[3]) && fb && /^Clean Cell · demo@cleancell\.us$/.test(who) && kv === 4, [stripLinks, fb, who, kv]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300); await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
     await p.fill('[id^="answer-"]', 'Done — re-routed to Bakersfield, same date.'); await p.click('[data-resolve]'); await p.waitForTimeout(700);
     var st = await p.$eval('#status', function (e) { return e.textContent; });

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0B2733">
+<meta name="theme-color" content="#0C1824">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Plant">
+<meta name="apple-mobile-web-app-title" content="OL Plant">
 <link rel="manifest" href="/plant/app.webmanifest">
 <link rel="apple-touch-icon" href="/icons/omega-192.png">
-<title>Plant</title>
+<title>Omega Logic · Plant</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
   plant/app.html — the plant in a pocket
@@ -39,10 +39,10 @@
   header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
   header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
   header.top .sp{flex:1}
-  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}header.top>div{min-width:0}
   main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto}
   h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}
-  .status{font-size:13px;color:var(--ink2);min-height:18px}
+  .status{font-size:13px;color:var(--ink2);margin:0 0 10px}.status:empty{display:none}
   .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}.tabs button{flex:1 1 auto;padding:9px;border:1px solid var(--line);background:white;font-size:13px}.tabs button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-d);font-weight:600}
   .card{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:14px;background:white;padding:14px;margin:10px 0;font:inherit;color:inherit;cursor:pointer}
   .card.urgent{border-left:4px solid #B42318}
@@ -70,7 +70,7 @@
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Plant</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Plant</h1><p class="note">Work orders, the bench scanner, stock and quality — for the people building the units.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale. The bench scanner keeps its own queue.</div>
@@ -132,8 +132,8 @@
     status('Loading…'); BOARD = null; ATT = null; OPS = null;
     return Promise.all([api('/api/logic-plant' + q), api('/api/logic-plant' + q + '&page=board')['catch'](function () { return null; })]).then(function (r) {
       var d = r[0]; DATA = d; BOARD = r[1]; LABELS = {}; (d.flow && d.flow.routing || []).forEach(function (s) { LABELS[s.key] = s.label; });
-      if (d.brand) OmegaLogicTheme.apply(d.brand);
-      $('who').textContent = (auth.currentUser && auth.currentUser.email) || '';
+      /* Omega Logic's plant hub: ClearSky's name and colours, the workspace under it */
+      $('who').textContent = [(d.brand && d.brand.workspace) || d.name || ORG, 'Plant', (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
       status(''); draw();
     })['catch'](fail);
   }
@@ -223,7 +223,7 @@
            : '<div class="kv"><div><small>Finished</small><b>' + t.done + ' / ' + t.total + '</b></div><div class="' + (units.some(function (u) { return u.hold; }) ? 'bad' : '') + '"><small>On hold</small><b>' + units.filter(function (u) { return u.hold; }).length + '</b></div></div>')
       + (w.managerNotes ? '<p>' + esc(w.managerNotes) + '</p>' : '')
       + '<div class="strip">' + routing.map(function (s) { return '<i>' + esc(s.label || s.key) + (byAt[s.key] ? ' · ' + byAt[s.key] : '') + '</i>'; }).join('') + '</div>'
-      + (MATERIALS ? (MATERIALS.short && MATERIALS.short.length ? '<h2>Short of</h2>' + MATERIALS.short.map(function (s) { return '<div class="unit"><div>' + esc(s.name || s.sku) + '<small>' + esc(s.sku) + ' · on hand ' + s.onHand + ' · on order ' + s.onOrder + '</small></div><span class="pill bad">' + s.short + ' ' + esc(s.unit) + (s.late ? ' · late' : '') + '</span></div>'; }).join('') : (MATERIALS.hasBom ? '<p class="note">✓ Every part for this work order is on the shelf or on order.</p>' : '')) : '')
+      + (MATERIALS ? (MATERIALS.short && MATERIALS.short.length ? '<h2>Short of</h2>' + MATERIALS.short.map(function (s) { return '<div class="unit"><div>' + esc(s.name || s.sku) + '<small>' + esc(s.sku) + ' · on hand ' + s.onHand + ' · on order ' + s.onOrder + '</small></div><span class="pill bad">' + Math.ceil(s.short) + ' ' + esc(s.unit) + (s.late ? ' · late' : '') + '</span></div>'; }).join('') : (MATERIALS.hasBom ? '<p class="note">✓ Every part for this work order is on the shelf or on order.</p>' : '')) : '')
       + '<h2>Units · ' + units.length + '</h2>'
       + (units.length ? units.filter(function (u) { return u.shipUnit !== false; }).concat(units.filter(function (u) { return u.shipUnit === false; })).map(function (u) { var p = u.progress; return '<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.sku) + (u.shipUnit === false ? ' · component' : '') + '</small></div><div style="text-align:right">' + (u.hold ? '<span class="pill bad">hold · ' + esc(u.ncr || '') + '</span>' : '<span class="pill' + (u.at === 'ready' ? ' ok' : '') + '">' + esc(label(u.at)) + '</span>') + (p ? '<small>' + p.done + ' of ' + p.total + ' steps' + (p.complete ? ' ✓' : (p.open.length ? ' · next: ' + esc(p.open[0]) : '')) + '</small>' : '') + '</div></button>'; }).join('') : '<p class="note">No serials registered yet. Register them under Work orders on the desktop, or from the label printer’s sheet.</p>')
       + (WO.limited ? '<p class="note">First 400 units shown.</p>' : '')
@@ -278,7 +278,7 @@
       units.forEach(function (u) { if (!u.shipUnit) return; var g = by[u.sku] = by[u.sku] || { a: 0, b: 0, c: 0 }; if (u.inventoryStatus === 'available' && u.at === 'ready' && !u.hold) g.a++; else if (u.orderId) g.b++; else g.c++; });
       var short = m ? (m.rows || []).filter(function (x) { return x.kind === 'component' && !x.make && (x.net.committed + x.net.pipeline + (x.net.buffer || 0)) > 0; }) : [];
       $('view').innerHTML = '<h1>Stock</h1><h2>Finished units</h2>' + (Object.keys(by).length ? Object.keys(by).sort().map(function (s) { return '<div class="unit"><div><b>' + esc(s) + '</b><small>' + by[s].a + ' available · ' + by[s].b + ' assigned · ' + by[s].c + ' building</small></div><span class="pill' + (by[s].a ? ' ok' : '') + '">' + by[s].a + ' on the shelf</span></div>'; }).join('') : '<p class="note">No finished shipping units in the newest 100.</p>')
-        + '<h2>Parts short</h2>' + (m ? (short.length ? short.map(function (x) { var firm = x.net.committed + x.net.pipeline + (x.net.buffer || 0); return '<div class="unit"><div>' + esc(x.name) + '<small>' + esc(x.sku) + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + esc(x.orderBy) : '') + '</small></div><span class="pill bad">' + firm + ' ' + esc(x.unit) + (x.late ? ' · late' : '') + '</span></div>'; }).join('') + '<p class="note">Purchase list value ' + (m.summary && m.summary.spend != null ? '$' + Number(m.summary.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '. The office orders from the materials plan.</p>' : '<p class="note">✓ Nothing short for the open work.</p>') : '<p class="note">Materials plan unavailable.</p>')
+        + '<h2>Parts short</h2>' + (m ? (short.length ? short.map(function (x) { var firm = Math.ceil(x.net.committed + x.net.pipeline + (x.net.buffer || 0)); return '<div class="unit"><div>' + esc(x.name) + '<small>' + esc(x.sku) + ' · on hand ' + x.onHand + ' · on order ' + x.onOrder + (x.orderBy ? ' · order by ' + esc(x.orderBy) : '') + '</small></div><span class="pill bad">' + firm + ' ' + esc(x.unit) + (x.late ? ' · late' : '') + '</span></div>'; }).join('') + '<p class="note">Purchase list value ' + (m.summary && m.summary.spend != null ? '$' + Number(m.summary.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '. The office orders from the materials plan.</p>' : '<p class="note">✓ Nothing short for the open work.</p>') : '<p class="note">Materials plan unavailable.</p>')
         + '<a class="big ghost" href="/logic-inventory.html' + q + '">Full inventory on the desktop</a>';
       status('');
     })['catch'](fail);

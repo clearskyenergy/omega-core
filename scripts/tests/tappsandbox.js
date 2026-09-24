@@ -21,7 +21,9 @@ ok('the bundle carries the real libraries, not copies', /defs\['api\/_lib\/plant
 ok('  and nothing that needs node', !/require\('crypto'\)|require\('fs'\)|firebase-admin/.test(files['sandbox.js']));
 ok('no page loads Firebase, config.js or the workspace runtime', ['plant.html', 'office.html', 'customer.html', 'bench.html'].every(function (f) { return !/<script src="[^"]*(gstatic\.com|\/config\.js|omega-tenant\.js|omega-brand\.js)/.test(files[f]) && /<script src="\/app-sandbox\/sandbox\.js">/.test(files[f]); }));
 ok('  and no page links to the real bench or registers the real worker', ['plant.html', 'office.html', 'customer.html'].every(function (f) { return !/\/plant\/station\.html|app-sw\.js/.test(files[f]) && /app-sandbox\/sw\.js/.test(files[f]); }));
-ok('three manifests, three ids, one scope, the tenant\'s icons', ['plant', 'office', 'customer'].every(function (a) { var m = JSON.parse(files[a + '.webmanifest']); return m.id === '/app-sandbox/' + a && m.start_url === '/app-sandbox/' + a && m.scope === '/app-sandbox/' && new RegExp('cleancell/icons/' + a + '-192').test(m.icons[0].src); }));
+ok('three manifests, three ids, one scope', ['plant', 'office', 'customer'].every(function (a) { var m = JSON.parse(files[a + '.webmanifest']); return m.id === '/app-sandbox/' + a && m.start_url === '/app-sandbox/' + a && m.scope === '/app-sandbox/'; }));
+ok('  plant and office are Omega Logic, ClearSky\'s product, with its icons', ['plant', 'office'].every(function (a) { var m = JSON.parse(files[a + '.webmanifest']); return /^Omega Logic/.test(m.name) && /\/icons\/omega-logic-192/.test(m.icons[0].src); }));
+ok('  the customer app carries the tenant\'s name and icons', (function () { var m = JSON.parse(files['customer.webmanifest']); return !/Omega Logic/.test(m.name) && /cleancell\/icons\/customer-192/.test(m.icons[0].src); })());
 
 console.log('\nthe sample answers a trial');
 var F = require('../_lib/logic-fixtures'), s = F.initialState(), V = F.views(s);
