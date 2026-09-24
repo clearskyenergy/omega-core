@@ -2170,6 +2170,30 @@ service cloud.firestore {
 
     // Omega Logic accounting credentials and commercial configuration are
     // Admin SDK only. Tenant branding permissions do not extend to these paths.
+    //
+    // Ledger sync (2026-09-24, api/_lib/ledger-sync.js): a tenant-billed
+    // workspace's OWN QuickBooks company or Stripe account. Every new path
+    // lives under integrations/** and is covered by the two lines below —
+    // no new match block, no new top-level collection:
+    //   integrations/quickbooks_workspaces/orgs/{org}            the workspace's QuickBooks tokens
+    //   integrations/quickbooks_workspaces/orgs/{org}/customers/{key}
+    //   integrations/quickbooks_workspaces/orgs/{org}/invoices/{id}
+    //   integrations/stripe_connect/orgs/{org}                   its connected Stripe account id (no token stored)
+    //   integrations/stripe_connect/orgs/{org}/customers/{key}
+    //   integrations/stripe_connect/orgs/{org}/invoices/{in_id}  reverse index for the webhook
+    //   integrations/stripe_connect/accounts/{acct_id}           reverse index: account -> workspace
+    //   integrations/stripe_connect/events/{evt_id}              webhook dedupe
+    //   integrations/ledger_oauth/states/{state}                 one-time OAuth state, both providers
+    // The workspace's choice (fulfillment/config.ledgerSync) sits in the
+    // fulfillment line below, equally closed.
+    // Why no browser may read them, not even the workspace's own admin:
+    // QuickBooks refresh tokens ROTATE on every use, so a browser copy goes
+    // stale the first time the server refreshes and two writers racing a
+    // rotating credential kill the connection; and a connected Stripe
+    // account id plus the platform key can issue invoices on that account,
+    // so the pairing is the server's alone. The accounting page gets status
+    // from api/logic-accounting.js: env var NAMES that are missing, connected
+    // or not, never a token, key or code.
     match /integrations/{integrationId}/{document=**} { allow read, write: if false; }
     match /integrations/{integrationId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/fulfillment/{configId} { allow read, write: if false; }
