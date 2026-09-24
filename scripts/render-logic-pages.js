@@ -269,6 +269,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var assign = await p.$$eval('[data-assign]', function (r) { return r.length; });
     var opts = await p.$$eval('select[data-for] option', function (r) { return r.map(function (x) { return x.textContent; }); });
     ok('  stock counts finished units, offers to assign each available one to the order that needs it, and lists what is short', /CC-C215.*2 available/.test(stock[0]) && assign === 2 && opts.some(function (o) { return /CC-26-4419/.test(o); }) && stock.some(function (t) { return /on hand/.test(t); }) && stock.some(function (t) { return /PO-1001/.test(t); }), [stock, assign, opts]);
+    await p.click('[data-tab="today"]'); await p.waitForTimeout(300);
+    var hubs = await p.$$eval('#hubs [data-hub]', function (r) { return r.length; });
+    await p.click('[data-hub="plant"]'); await p.waitForTimeout(300);
+    var hubRows = await p.$$eval('.rows b', function (r) { return r.map(function (x) { return x.textContent; }); });
+    ok('  sign in, then pick a hub: Home opens on the hubs and a hub opens its list', hubs === 8 && hubRows.join('|') === 'Plant app|Bench scan station|Work orders|Plant board', [hubs, hubRows]);
     await p.click('[data-tab="menu"]'); await p.waitForTimeout(300);
     var freq = await p.$$eval('.freq > *', function (r) { return r.map(function (x) { return x.textContent.replace(/[^A-Za-z ]/g, '').trim(); }); });
     var panels = await p.$$eval('[data-panel]', function (r) { return r.map(function (x) { return x.textContent.replace(/^[^A-Za-z]+/, '').trim(); }); });
