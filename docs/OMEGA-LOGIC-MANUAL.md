@@ -65,7 +65,14 @@ guide with its address; a message per audience (customer, office, plant)
 ready for Jarvis or a person to send with the guide attached; and the log
 of what was sent to whom. `/api/logic-kit?org=` returns the same as JSON
 for Jarvis. The list is one file, `api/_lib/kit.js`; the guides are PDFs
-under `/guides/` built from `scripts/guides/`.
+under `/guides/` built from `scripts/guides/` by `build.js`, with the
+screenshots retaken from the sandboxes by `shots.js` (the sample workspace
+shows as "Your Company", so no public guide names a tenant). The office's
+guide is `/guides/Omega-Logic-App.pdf`, the Omega Logic app guide: getting
+the app on a phone or a computer, signing in, the hub, customers, orders,
+sites, and the customers' own app. The build also writes it as the old
+`Omega-Logic-Office-App.pdf`, which the app's Help menu and links already
+sent still open.
 
 0. **Commission the subscriber** from *Subscribers & commissioning*
    (`/logic-admin.html`, the ClearSky group of every office menu, or the

@@ -1,84 +1,730 @@
 <!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     scripts/guides/office.html — THE OMEGA LOGIC APP GUIDE (guides/Omega-Logic-App.pdf,
+     also written as guides/Omega-Logic-Office-App.pdf). Build: node scripts/guides/build.js
+
+     It is printed as fixed Letter SHEETS, not flowing text, so every page is
+     laid out on purpose: a heading never lands at the foot of a page and a
+     picture is never cut in two. build.js refuses a sheet whose content runs
+     past its page. Two modes, set on <main data-mode>:
+       solo  the guide on its own: each sheet is a full page and draws its own
+             navy band and footer; the front page has neither.
+       book  inside the combined guide (Omega-Logic-Phone-Apps.pdf): build.js
+             switches it, each sheet becomes one page's content box and
+             Chromium's header template draws the band.
+     Every rule is scoped under .olg because in the combined guide this sheet
+     shares a page with the plant and customer guides' stylesheet.
+
+     The guide is PUBLIC (/guides is served) and goes to every Omega Logic
+     customer: it names no workspace. Examples say "your company". The phone
+     and browser pictures are drawn here, schematically: only the buttons a
+     reader has to find carry words; everything else is a grey bar. -->
 <html lang="en"><head><meta charset="utf-8"><title>Omega Logic app guide</title>
 <style>
-@page{size:Letter;margin:1.05in 0.55in 0.6in 0.55in}
-*{box-sizing:border-box}
-html,body{margin:0;font:9.6pt/1.42 "Liberation Sans",Arial,Helvetica,sans-serif;color:#1d2b33}
-h2{font-size:14pt;color:#0f2e3f;margin:16px 0 5px;letter-spacing:-.2px;page-break-after:avoid}
-h3{font-size:10.5pt;color:#0e7c8b;margin:9px 0 3px;page-break-after:avoid}
-p{margin:0 0 6px}
-ul,ol{margin:0 0 6px;padding-left:16px}li{margin:0 0 3px}
-b{color:#0f2e3f}
-.callout{background:#e8f3f6;border-radius:6px;padding:8px 11px;margin:8px 0 10px;font-size:9.2pt;page-break-inside:avoid}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;page-break-inside:avoid}
-.side{display:grid;grid-template-columns:minmax(0,1fr) 172px;gap:16px;align-items:start}
-.side.two{grid-template-columns:minmax(0,1fr) 172px 172px}
-.shot{width:172px;border:1px solid #cfdde3;border-radius:10px;overflow:hidden;background:#fff;page-break-inside:avoid;box-shadow:0 1px 2px rgba(15,46,63,.08)}
-.shot img{width:100%;display:block}
-.shot small{display:block;font-size:7.6pt;color:#5a7280;padding:4px 7px;border-top:1px solid #e3edf1}
-table{border-collapse:collapse;width:100%;margin:4px 0 8px;font-size:9pt}
-th,td{text-align:left;padding:5px 7px;border-bottom:1px solid #dbe6ea;vertical-align:top}th{color:#0e7c8b;font-size:8.6pt;text-transform:uppercase;letter-spacing:.05em}
-code{font:8.6pt "Liberation Mono","DejaVu Sans Mono",monospace;color:#0f2e3f}
-.url{font-weight:700;color:#0f2e3f}
-.flow{width:100%;height:auto;margin:6px 0 4px}
-.break{page-break-before:always}
-.keep{page-break-inside:avoid}
+@page olg-solo{size:Letter;margin:0}
+html,body{margin:0}
+.olg{--navy:#0f2e3f;--ink:#1d2b33;--teal:#0e7c8b;--muted:#5a7280;--wash:#eaf4f7;--line:#cfdde3;--tap:#f26b3a;
+  --neon:linear-gradient(90deg,#9BE870 0%,#2FE3C8 32%,#35C6F4 68%,#3D9DF5 100%);
+  counter-reset:olgpage;font:11pt/1.42 "Liberation Sans",Arial,Helvetica,sans-serif;color:var(--ink);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.olg *{box-sizing:border-box}
+.olg svg.sprite{position:absolute;width:0;height:0;overflow:hidden}
 
-.cover{background:#e8f3f6;border-radius:8px;padding:14px 16px;margin:0 0 12px}.cover h1{font-size:20pt;color:#0f2e3f;margin:0 0 4px;letter-spacing:-.3px}.cover p{margin:0;color:#3f5866;font-size:10pt}.steps li{margin:0 0 5px}
+/* ── sheets ─────────────────────────────────────────────── */
+.olg .sheet{position:relative;overflow:hidden;counter-increment:olgpage;break-after:page;page-break-after:always;break-inside:avoid}
+.olg .sheet:last-of-type{break-after:auto;page-break-after:auto}
+.olg[data-mode=solo] .sheet{page:olg-solo;width:8.5in;height:11in}
+.olg[data-mode=solo] .body{position:absolute;top:1.05in;left:.55in;width:7.4in;height:9.35in;overflow:hidden}
+.olg[data-mode=book] .sheet{width:7.4in;height:9.3in}
+.olg[data-mode=book] .body{position:relative;width:100%;height:100%;overflow:hidden}
+.olg[data-mode=book] .band,.olg[data-mode=book] .foot{display:none}
+@media screen{.olg[data-mode=solo]{background:#d9e2e6;padding:.3in 0}.olg[data-mode=solo] .sheet{margin:0 auto .3in;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18)}}
+.olg .band{position:absolute;top:0;left:0;right:0;height:.8in;background:var(--navy);color:#fff;display:flex;align-items:center;gap:12px;padding:0 .55in}
+.olg .band img{width:46px;height:46px;border-radius:11px;display:block;box-shadow:0 0 0 1px rgba(95,230,214,.35)}
+.olg .band .t{font-size:19pt;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+.olg .band .s{font-size:9.2pt;color:#b9d3dc;margin-top:3px}
+.olg .foot{position:absolute;left:0;right:0;bottom:.2in;text-align:center;font-size:8pt;color:var(--muted)}
+.olg .foot:after{content:"  ·  page " counter(olgpage)}
+
+/* ── type ───────────────────────────────────────────────── */
+.olg .kick{font-size:8.6pt;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:0 0 3px}
+.olg h1{font-size:25pt;line-height:1.08;color:var(--navy);margin:0 0 7px;letter-spacing:-.5px;font-weight:700}
+.olg h2{font-size:14.5pt;line-height:1.2;color:var(--navy);margin:0 0 6px;letter-spacing:-.2px;font-weight:700;page-break-after:auto}
+.olg h3{font-size:11.5pt;line-height:1.25;color:var(--navy);margin:0 0 4px;font-weight:700}
+.olg p{margin:0 0 7px}
+.olg ul,.olg ol{margin:0 0 7px;padding-left:17px}
+.olg li{margin:0 0 4px}
+.olg b{color:var(--navy)}
+.olg .lead{font-size:12.6pt;line-height:1.4;color:#34505e;margin:0 0 16px}
+.olg .small{font-size:9.6pt;color:var(--muted)}
+.olg .k{display:inline;font-weight:700;color:var(--navy);background:#eef5f7;border:1px solid #cbdce2;border-radius:4px;padding:0 3px;white-space:nowrap;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.olg .addr{font-weight:700;color:var(--navy)}
+.olg .ic{display:inline-block;width:1.05em;height:1.05em;vertical-align:-.17em}
+.olg .rule{height:3px;border-radius:2px;background:var(--neon);width:1.2in;margin:0 0 14px}
+
+/* ── boxes ──────────────────────────────────────────────── */
+.olg .box{background:var(--wash);border-radius:10px;padding:10px 13px;font-size:10.4pt}
+.olg .box h3{margin-bottom:3px}
+.olg .box p:last-child,.olg .box ul:last-child{margin-bottom:0}
+.olg .box.warn{background:#fff4ec;border:1px solid #f6c9ad}
+.olg .box.warn h3{color:#a8431b}
+.olg .box.navy{background:var(--navy);color:#dcebf0}
+.olg .box.navy b,.olg .box.navy h3{color:#fff}
+.olg .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.olg .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.olg .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:.17in}
+.olg .mt{margin-top:14px}.olg .mt2{margin-top:22px}
+
+/* the numbered hexagon: the app's hub cell, small */
+.olg .hx{position:relative;display:inline-grid;place-items:center;width:.34in;height:.39in;flex:none;
+  clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:var(--neon)}
+.olg .hx:before{content:"";position:absolute;inset:1.7pt;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:var(--navy)}
+.olg .hx>span{position:relative;color:#fff;font-weight:700;font-size:12.5pt}
+.olg .hx.lg{width:.46in;height:.53in}.olg .hx.lg>span{font-size:16pt}
+
+/* a step under a picture */
+.olg .stx{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:start;margin-top:11px}
+.olg .stx h3{margin:4px 0 0;font-size:11.2pt}
+.olg .stx p{grid-column:1 / -1;font-size:10.1pt;line-height:1.38;margin:2px 0 0}
+
+/* ── a screenshot in a phone bezel ──────────────────────── */
+.olg .dev{margin:0}
+.olg .dev .bz{background:#15212a;border-radius:.2in;padding:.045in}
+.olg .dev img,.olg .dev .shot-missing{display:block;width:100%;height:auto;border-radius:.16in}
+.olg .dev figcaption,.olg .wide figcaption{font-size:9.2pt;line-height:1.3;color:var(--muted);margin-top:6px;text-align:center}
+.olg .dev figcaption b{color:var(--navy)}
+.olg .wide{margin:0}
+.olg .wide img,.olg .wide .shot-missing{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
+
+/* ── drawn phones ───────────────────────────────────────── */
+.olg .ph{position:relative;width:1.48in;height:3.02in;margin:0 auto;border-radius:.24in;background:#15212a;padding:.052in}
+.olg .ph.big{width:2.1in;height:4.3in;border-radius:.3in}
+.olg .scr{position:relative;height:100%;border-radius:.19in;overflow:hidden;background:#fff;font-size:5.8pt;line-height:1.25;color:var(--ink)}
+.olg .ph.big .scr{border-radius:.25in;font-size:7.6pt}
+.olg .isl{position:absolute;top:.05in;left:50%;width:.4in;height:.115in;margin-left:-.2in;border-radius:.06in;background:#15212a;z-index:5}
+.olg .sb{position:relative;height:.21in;display:flex;align-items:center;justify-content:space-between;padding:0 .15in 0 .17in;font-size:5.6pt;font-weight:700;z-index:4}
+.olg .sb i{display:inline-block;width:.15in;height:.065in;border:1px solid #1d2b33;border-radius:2px;position:relative}
+.olg .sb i:after{content:"";position:absolute;inset:1px;right:30%;background:#1d2b33;border-radius:1px}
+.olg .sb.dk{color:#fff}.olg .sb.dk i{border-color:#fff}.olg .sb.dk i:after{background:#fff}
+.olg .gbar{position:absolute;bottom:.05in;left:50%;width:.5in;height:.025in;margin-left:-.25in;border-radius:.02in;background:#1d2b33;z-index:6}
+.olg .gbar.lt{background:#fff}
+/* the app's own screen, drawn: header and sign-in */
+.olg .ahd{display:flex;align-items:center;justify-content:space-between;padding:.03in .09in .05in;border-bottom:1px solid #e1eaee}
+.olg .ahd b{font-size:1.15em;color:#0c2330}
+.olg .ahd span{width:.13in;height:.13in;border:1px solid #cfdde3;border-radius:50%}
+.olg .gate{padding:.16in .1in 0;text-align:center}
+.olg .gate .t1{font-size:1.9em;font-weight:700;color:#0c2330;line-height:1.1}
+.olg .gate .t2{font-size:1.05em;font-weight:700;color:#41606e;margin:.02in 0 .05in}
+.olg .gate .gl{height:.035in;background:#e3ebee;border-radius:2px;margin:.025in .05in}
+.olg .gate .btn{display:block;background:#3fafc6;color:#fff;font-weight:700;border-radius:1em;padding:.045in 0;margin:.08in 0 .04in}
+.olg .gate .or{color:#5a7280;font-size:.9em}
+.olg .gate .fld{display:block;border:1px solid #d5e2e7;border-radius:.05in;padding:.035in .05in;text-align:left;color:#8a9ca5;margin:.04in 0}
+.olg .gate .btn2{display:block;border:1px solid #3fafc6;color:#2b8ea5;font-weight:700;border-radius:1em;padding:.04in 0}
+/* Safari's bottom bar */
+.olg .sf{position:absolute;left:0;right:0;bottom:0;height:.44in;background:linear-gradient(#fff0,#fff 30%);display:flex;align-items:center;gap:.04in;padding:0 .07in .1in;z-index:3}
+.olg .sf .pill{flex:1;min-width:0;height:.22in;border-radius:.11in;background:#fff;box-shadow:0 0 0 .6pt #c3cdd2;display:flex;align-items:center;padding:0 .05in;gap:.03in;font-size:5.1pt;color:#1d2b33}
+.olg .sf .pill .d{flex:1;min-width:0;text-align:center;font-weight:700;white-space:nowrap;overflow:hidden}
+.olg .sf .circ{flex:none;width:.22in;height:.22in;border-radius:50%;background:#fff;box-shadow:0 0 0 .6pt #c3cdd2;display:grid;place-items:center}
+.olg .sf svg,.olg .pill svg{width:.11in;height:.11in;color:#1d2b33}
+.olg .dim{position:absolute;inset:0;background:rgba(15,25,32,.34);z-index:2}
+/* menus, sheets, dialogs */
+.olg .pop{position:absolute;z-index:4;background:#fff;border-radius:.09in;box-shadow:0 0 0 .6pt rgba(0,0,0,.18),0 1.5pt 0 rgba(0,0,0,.12);padding:.03in 0;font-size:6pt}
+.olg .pop .r{display:flex;align-items:center;justify-content:space-between;gap:.05in;padding:.045in .08in;border-bottom:.5px solid #e6ecef}
+.olg .pop .r:last-child{border-bottom:0}
+.olg .pop .r svg{width:.1in;height:.1in;color:#1d2b33;flex:none}
+.olg .bar{display:inline-block;height:.04in;border-radius:.02in;background:#d9e2e6}
+.olg .sheetx{position:absolute;left:0;right:0;bottom:0;top:.62in;background:#f2f4f5;border-radius:.13in .13in 0 0;z-index:4;padding:.05in .07in}
+.olg .grab{width:.28in;height:.03in;border-radius:.02in;background:#b9c3c8;margin:0 auto .06in}
+.olg .shh{display:flex;align-items:center;gap:.05in;margin-bottom:.07in}
+.olg .shh img{width:.2in;height:.2in;border-radius:.05in}
+.olg .shh b{display:block;font-size:6.2pt}
+.olg .shh small{display:block;color:#6b7c85;font-size:5pt}
+.olg .ppl{display:flex;justify-content:space-around;margin:.02in 0 .08in}
+.olg .ppl i{width:.2in;height:.2in;border-radius:50%;background:#d3dbdf}
+.olg .lst{background:#fff;border-radius:.07in;margin-bottom:.05in}
+.olg .lst .r{display:flex;align-items:center;justify-content:space-between;padding:.05in .07in;border-bottom:.5px solid #e6ecef;font-size:6.2pt}
+.olg .lst .r:last-child{border-bottom:0}
+.olg .lst .r svg{width:.11in;height:.11in;color:#1d2b33}
+.olg .tap{position:relative;z-index:1;border-radius:.05in;box-shadow:0 0 0 1.3pt var(--tap),0 0 0 3.2pt rgba(242,107,58,.28)}
+.olg .tapc{border-radius:50%!important;box-shadow:0 0 0 1.3pt var(--tap),0 0 0 3.2pt rgba(242,107,58,.28)!important}
+.olg .up{position:absolute;right:.08in;top:.55in;z-index:5;font-size:5.4pt;font-weight:700;color:var(--tap)}
+/* the Add to Home Screen page */
+.olg .nav{display:flex;align-items:center;justify-content:space-between;padding:.04in .06in .06in;font-size:5pt;white-space:nowrap}
+.olg .nav b{font-size:5.2pt}
+.olg .nav .bl{color:#007aff}
+.olg .nav .bl.st{font-weight:700;padding:.01in .03in}
+.olg .grp{background:#fff;border-radius:.07in;margin:.05in .07in;padding:.06in .07in;display:flex;gap:.06in;align-items:center}
+.olg .grp img{width:.36in;height:.36in;border-radius:.08in}
+.olg .grp .nm{font-size:7pt;font-weight:700;border-bottom:.5px solid #d4dde1;padding-bottom:.02in;margin-bottom:.02in}
+.olg .grp small{display:block;font-size:4.3pt;color:#6b7c85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:.78in}
+.olg .tog{width:.24in;height:.14in;border-radius:.07in;background:#34c759;position:relative;flex:none}
+.olg .tog:after{content:"";position:absolute;right:.015in;top:.015in;width:.11in;height:.11in;border-radius:50%;background:#fff}
+.olg .kb{position:absolute;left:0;right:0;bottom:0;height:.98in;background:#d4d8db;padding:.07in .04in;display:grid;grid-template-columns:repeat(10,1fr);gap:.03in;align-content:start}
+.olg .kb i{height:.18in;background:#fff;border-radius:.025in}
+/* home screens */
+.olg .home{position:absolute;inset:0;background:linear-gradient(160deg,#9fd6d9 0%,#5c97b3 45%,#2b4d6e 100%)}
+.olg .apps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.1in .05in;padding:.12in .09in 0;justify-items:center}
+.olg .app{display:flex;flex-direction:column;align-items:center;gap:.025in;width:100%}
+.olg .app i{display:block;width:.26in;height:.26in;border-radius:.065in;background:rgba(255,255,255,.55)}
+.olg .app img{display:block;width:.26in;height:.26in;border-radius:.065in}
+.olg .app em{display:block;height:.03in;width:.2in;border-radius:.015in;background:rgba(255,255,255,.55)}
+.olg .app b{font-size:4.6pt;color:#fff;white-space:nowrap;font-weight:700}
+.olg .andr .app i,.olg .andr .app img{border-radius:50%}
+/* Chrome on Android */
+.olg .ctb{display:flex;align-items:center;gap:.035in;padding:.02in .06in .05in;border-bottom:1px solid #e3e8ea;background:#fff;position:relative;z-index:3}
+.olg .ctb .om{flex:1;height:.19in;border-radius:.1in;background:#eef1f3;display:flex;align-items:center;gap:.03in;padding:0 .06in;font-size:5.4pt;white-space:nowrap;overflow:hidden}
+.olg .ctb .om svg{width:.08in;height:.08in;flex:none}
+.olg .ctb .tabs{width:.12in;height:.12in;border:1.2px solid #1d2b33;border-radius:.025in;font-size:4.6pt;font-weight:700;display:grid;place-items:center}
+.olg .ctb .mv{width:.14in;height:.18in;display:grid;place-items:center}
+.olg .ctb .mv svg{width:.12in;height:.12in}
+.olg .icons{display:flex;justify-content:space-around;padding:.04in .04in .06in;border-bottom:.5px solid #e6ecef}
+.olg .icons i{width:.08in;height:.08in;border-radius:50%;border:1px solid #9aa9b0}
+.olg .dlg{position:absolute;z-index:4;left:.1in;right:.1in;top:1in;background:#fff;border-radius:.12in;padding:.11in .1in .09in;box-shadow:0 1.5pt 0 rgba(0,0,0,.2)}
+.olg .dlg .who{display:flex;align-items:center;gap:.06in;margin-bottom:.1in}
+.olg .dlg .who img{width:.3in;height:.3in;border-radius:50%}
+.olg .dlg .who b{display:block;font-size:7pt}
+.olg .dlg .who small{display:block;font-size:4.6pt;color:#6b7c85;white-space:nowrap}
+.olg .dlg .btns{display:flex;justify-content:flex-end;gap:.05in;align-items:center}
+.olg .dlg .tb{color:#0b57d0;font-weight:700;font-size:5.6pt;padding:.03in .03in;white-space:nowrap}
+.olg .dlg .fb{background:#0b57d0;color:#fff;font-weight:700;font-size:6pt;padding:.035in .09in;border-radius:.1in}
+
+/* ── a drawn browser window ─────────────────────────────── */
+.olg .win{position:relative;border-radius:9px;border:1px solid #bfcbd1;overflow:hidden;background:#fff;font-size:7pt}
+.olg .win .tabsr{display:flex;align-items:flex-end;gap:6px;height:25px;background:#dde3e7;padding:0 8px}
+.olg .win .dots{display:flex;gap:4px;align-self:center;margin-right:6px}
+.olg .win .dots i{width:7px;height:7px;border-radius:50%;background:#b3bfc5}
+.olg .win .tab{display:flex;align-items:center;gap:5px;background:#fff;border-radius:6px 6px 0 0;padding:4px 9px;font-size:7pt;width:120px}
+.olg .win .tab img{width:11px;height:11px;border-radius:2px}
+.olg .win .tb2{display:flex;align-items:center;gap:7px;padding:5px 8px;border-bottom:1px solid #e1e7ea}
+.olg .win .tb2 svg{width:11px;height:11px;color:#46575f;flex:none}
+.olg .win .omni{flex:1;display:flex;align-items:center;gap:5px;height:21px;border-radius:11px;background:#eef1f3;padding:0 6px 0 9px;font-size:7.4pt}
+.olg .win .omni .u{flex:1;white-space:nowrap}
+.olg .win .omni .ib{width:17px;height:17px;border-radius:50%;display:grid;place-items:center}
+.olg .win .omni .ib svg{width:11px;height:11px;color:#1d2b33}
+.olg .win .pg{height:2.05in;background:#f6f9fa;display:flex;flex-direction:column;align-items:center;padding-top:8px}
+.olg .win .pg .hdr{align-self:stretch;display:flex;justify-content:space-between;padding:0 12px 6px;border-bottom:1px solid #e3eaed;font-size:6.5pt;color:#5a7280}
+.olg .win .pg .hdr b{color:#0c2330;font-size:7.4pt}
+.olg .instpop{position:absolute;z-index:3;right:34px;top:52px;width:2.05in;background:#fff;border-radius:8px;box-shadow:0 0 0 .6pt rgba(0,0,0,.2),0 2pt 0 rgba(0,0,0,.1);padding:10px 11px 9px;font-size:7.4pt}
+.olg .instpop .h{font-weight:700;font-size:8.6pt;margin-bottom:7px}
+.olg .instpop .who{display:flex;gap:7px;align-items:center;margin-bottom:9px}
+.olg .instpop .who img{width:26px;height:26px;border-radius:6px}
+.olg .instpop .who b{display:block;font-size:8pt}
+.olg .instpop .who small{display:block;color:#6b7c85;font-size:6.4pt}
+.olg .instpop .btns{display:flex;justify-content:flex-end;gap:6px}
+.olg .instpop .btns span{border-radius:12px;padding:3px 10px;font-weight:700;font-size:7.2pt}
+.olg .instpop .c{color:#0b57d0;border:1px solid #c7d3da}
+.olg .instpop .i{background:#0b57d0;color:#fff}
+
+/* ── lists with a hexagon, a table for troubles ─────────── */
+.olg .hl{list-style:none;padding:0;margin:0}
+.olg .hl li{display:grid;grid-template-columns:.36in 1fr;gap:9px;align-items:start;margin:0 0 9px}
+.olg .hl li p{margin:0;font-size:10.4pt;line-height:1.36}
+.olg .hl .hx{width:.32in;height:.37in}
+.olg .hl.tight li{margin-bottom:6px;align-items:center}
+.olg .hl.tight li p{font-size:10.2pt;line-height:1.32}
+.olg .dev.crop .bz{position:relative;height:2.05in;overflow:hidden;border-radius:.2in .2in 0 0;padding-bottom:0}
+.olg .dev.crop .bz:after{content:"";position:absolute;left:0;right:0;bottom:0;height:.45in;background:linear-gradient(rgba(255,255,255,0),#fff)}
+.olg .hl .hx>span{font-size:11pt;color:#9FE9F2}
+.olg table.tr{border-collapse:collapse;width:100%;font-size:10pt;line-height:1.35;margin:0}
+.olg table.tr th,.olg table.tr td{text-align:left;vertical-align:top;padding:6px 8px;border:0;border-bottom:1px solid #dbe6ea}
+.olg table.tr th{width:1.85in;color:var(--navy);font-size:10.2pt;text-transform:none;letter-spacing:0;font-weight:700}
+.olg table.tr tr:last-child th,.olg table.tr tr:last-child td{border-bottom:0}
+.olg .tabbar{display:flex;justify-content:space-around;border:1px solid var(--line);border-radius:10px;padding:6px 4px 5px;background:#fff}
+.olg .tabbar div{display:flex;flex-direction:column;align-items:center;font-size:8.6pt;font-weight:700;color:#41606e;gap:1px}
+.olg .tabbar div span{font-size:12pt;line-height:1;color:#41606e;font-family:"DejaVu Sans","Liberation Sans",sans-serif}
+.olg .tabbar div.on,.olg .tabbar div.on span{color:#2b8ea5}
+.olg .sec{display:grid;grid-template-columns:.95in 1fr;gap:0 14px;margin:0}
+.olg .sec dt{font-weight:700;color:var(--navy);font-size:10.8pt;padding:5px 0;border-top:1px solid #e1eaee}
+.olg .sec dd{margin:0;padding:5px 0;font-size:10.3pt;line-height:1.37;border-top:1px solid #e1eaee}
+
+/* ── the front page ─────────────────────────────────────── */
+.olg .front{background:radial-gradient(120% 80% at 50% 30%,#1a4458 0%,#0f2e3f 48%,#0a1f2b 100%);color:#fff}
+.olg[data-mode=book] .front{border-radius:10px}
+.olg .front .hc{position:absolute;inset:0;z-index:0}
+.olg .front .hc svg{display:block;width:100%;height:100%}
+.olg .front .in{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;align-items:center;padding:.55in .7in .5in}
+.olg[data-mode=book] .front .in{padding:.35in .5in .35in}
+.olg .front .top{align-self:stretch;display:flex;justify-content:space-between;font-size:8.8pt;letter-spacing:.16em;text-transform:uppercase;color:#8fc2cf;font-weight:700}
+.olg .front .logo{width:3.05in;height:3.05in;border-radius:.69in;margin-top:.5in;box-shadow:0 0 0 1px rgba(95,230,214,.35),0 0 .5in rgba(47,227,200,.28),0 .12in .35in rgba(0,0,0,.45);display:block}
+.olg[data-mode=book] .front .logo{width:2.35in;height:2.35in;margin-top:.3in;border-radius:.53in}
+.olg .front h1{font-size:52pt;letter-spacing:-1px;color:#fff;margin:.34in 0 0;line-height:1}
+.olg .front .promise{font-size:16.5pt;line-height:1.35;color:#cfe6ec;text-align:center;margin:.14in 0 0}
+.olg .front .rule{margin:.2in auto .12in;width:1.6in}
+.olg .front .hubs{font-size:9.6pt;letter-spacing:.18em;text-transform:uppercase;color:#8fc2cf;font-weight:700}
+.olg .front .qr{margin-top:auto;display:flex;gap:.26in;align-items:center;background:#fff;color:var(--ink);border-radius:.18in;padding:.2in .26in;width:6in;box-shadow:0 .08in .3in rgba(0,0,0,.35)}
+.olg .front .qr img{width:1.55in;height:1.55in;display:block;flex:none}
+.olg .front .qr h2{font-size:18pt;margin:0 0 5px;color:var(--navy)}
+.olg .front .qr p{font-size:10.5pt;line-height:1.4;margin:0 0 8px;color:#34505e}
+.olg .front .qr .typed{display:inline-block;background:#eef5f7;border:1px solid #cbdce2;border-radius:6px;padding:4px 8px;font-size:11pt;font-weight:700;color:var(--navy)}
+.olg .front .by{margin-top:.34in;text-align:center}
+.olg .front .by b{display:block;color:#fff;font-size:12.5pt;letter-spacing:.02em}
+.olg .front .by small{display:block;color:#8fc2cf;font-size:9pt;margin-top:2px}
+.olg[data-mode=book] .front .by{margin-top:.2in}
 </style></head><body>
+<main class="olg" data-mode="solo">
 
-<div class="cover"><h1>The Omega Logic app</h1><p>ClearSky's operations app, with your company as the workspace inside it: what needs a person today, orders and customer requests, PO loads, customers, stock, and Sites — what the customer says, receive a load by scan, the unit passport. Clean Cell USA.</p></div>
-<h2>1. What it is and where it lives</h2>
-<table><tr><th>What</th><th>Address</th><th>Sign in</th></tr>
-<tr><td><b>Omega Logic app</b></td><td><span class="url">silmarillion.clearskyomega.com/office/app?org=cleancell.us</span></td><td>work Google account of the workspace</td></tr>
-<tr><td><b>Office (desktop)</b></td><td><span class="url">silmarillion.clearskyomega.com/omega-logic?org=cleancell.us</span></td><td>same account</td></tr>
-<tr><td><b>Fleet register</b> (the spreadsheet)</td><td><span class="url">silmarillion.clearskyomega.com/logic-register?org=cleancell.us</span></td><td>same account</td></tr>
-<tr><td>Try it first (sample data)</td><td><span class="url">silmarillion.clearskyomega.com/app-sandbox/office</span></td><td>any email</td></tr></table>
-<p>The desktop office is the full system. The app puts the daily decisions where the person is, and it reads and writes the same orders, customers and units through the same signed-in endpoints, so an answer given on the phone is on the customer's screen the moment it is saved.</p>
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M8.5 9H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1.5M12 3.5v11M8.4 7 12 3.4 15.6 7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pagemenu" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h9" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></symbol>
+  <symbol id="i-hamb" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18.5" cy="12" r="2" fill="currentColor"/></symbol>
+  <symbol id="i-kebab" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="18.5" r="2" fill="currentColor"/></symbol>
+  <symbol id="i-tabs" viewBox="0 0 24 24"><rect x="7.5" y="3.5" width="13" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M16.5 20.5h-10a3 3 0 0 1-3-3v-10" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-addhome" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 8.5v7M8.5 12h7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-install" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 20h7M12 7v6M9.4 10.6 12 13.2l2.6-2.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="10" rx="2" fill="currentColor"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95M19 4.5V8h-3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5V21l-7-4.5L5 21z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+</svg>
 
-<h2>2. Put it on your phone</h2>
-<p>It is a web app: nothing to download from a store, and every update reaches the phone the next time it is opened. Open the address once from the link the office sends; the app remembers the workspace after that. Sign in with the work Google account that is a member of the workspace.</p>
-<div class="cols"><div><h3>iPhone or iPad (Safari)</h3><ol class="steps">
-<li>Open <b>Safari</b> and go to the address above.</li>
-<li>Sign in.</li>
-<li>Tap the <b>Share</b> button (the square with the arrow, at the bottom of the screen).</li>
-<li>Scroll the sheet and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-<li>Open it from the home screen from now on. It opens full screen as <b>Omega Logic</b>, ClearSky's app, with your company's workspace shown inside once you sign in.</li></ol></div>
-<div><h3>Android (Chrome)</h3><ol class="steps">
-<li>Open <b>Chrome</b> and go to the address above.</li>
-<li>Sign in.</li>
-<li>Tap the Chrome menu (three dots) and choose <b>Install app</b> or <b>Add to Home screen</b>.</li>
-<li>Confirm. The app appears with your other apps, with its own icon.</li></ol></div></div>
+<!-- ═══ 1 · FRONT ═══════════════════════════════════════════════════ -->
+<section class="sheet front">
+  <div class="hc" data-honeycomb></div>
+  <div class="in">
+    <div class="top"><span>The app guide</span><span>September 2026</span></div>
+    <img class="logo" src="../../icons/omega-logic.svg" alt="Omega Logic">
+    <h1>Omega Logic</h1>
+    <p class="promise">Your business in one app.<br>On your phone and in your browser.</p>
+    <div class="rule"></div>
+    <div class="hubs">Sales · Customers · Plant · Deliver · Stock · Money</div>
+    <div class="qr">
+      <img src="qr/office-app.svg" alt="QR code for silmarillion.clearskyomega.com/office/app">
+      <div>
+        <h2>Point your phone's camera here</h2>
+        <p>Tap the link that pops up. Then follow the steps for your phone: iPhone on page 3, Android on page 4.</p>
+        <p style="margin:0 0 4px;font-size:9.6pt;color:#5a7280">Or type this into your browser:</p>
+        <span class="typed">silmarillion.clearskyomega.com/office/app</span>
+      </div>
+    </div>
+    <div class="by"><b>ClearSky Energy Solutions</b><small>Omega Logic is ClearSky's app. Your company is the workspace inside it.</small></div>
+  </div>
+</section>
 
-<h2>3. Pick a hub, or use the five tabs</h2>
-<div class="side two"><div>
-<p>After you sign in, <b>Home</b> asks <b>Where to?</b> and shows the hubs, the way QuickBooks lays out its app: Sales &amp; orders, Customer hub, Plant, Deliver &amp; sites, Stock &amp; supply, Money, Setup, Help &amp; guides. Tap one and its list opens. Under the hubs, Home shows what needs a person today.</p>
-<ul><li><b>Home</b>: the hubs; orders to price, awaiting deposit, in build, ready and shipped; <b>needs a person</b>: company POs to review, open customer requests, orders that need attention; money; the plant.</li>
-<li><b>Orders</b>: every order with its customer, lines, total and balance, and the work order's built % once it is on the floor. Open one for lines, invoices, build, shipment and the customer's requests. <b>Answer &amp; close</b> a request here. When your company bills its own customers, record <b>invoice issued</b> and <b>payment received</b> on the order.</li>
-<li><b>Customers</b>: the Customer hub. Each customer is a company account with its people on it. Open one for its balance and open requests, <b>People</b> (approve someone who asked to join, turn off someone who left, invite, add a person), the customer app link to send, the terms for the whole account, every order on it, and its sites and shipped units.</li>
-<li><b>Sites</b>: mirrors <i>Deliver → Sites &amp; custody</i> on the desktop. <b>The customer says</b>: each unit the customer placed at a site, with <b>Confirm</b>. <b>Going to</b>: destinations named before arrival. <b>Receive a load</b>: choose the load, scan or type each serial. <b>Unit passport</b>: custody, who confirmed, warranty and SLA, history, and only the moves that apply.</li>
-<li><b>Menu</b>: every function in one place, with a search box and the ones you use most as circles along the top. <b>PO loads</b> (paste a stack of customer POs: <code>PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested date, notes</code>), <b>Stock</b>, the Fleet register, the plant app and every desktop page are here, never more than two taps away.</li></ul></div>
-<div class="shot"><img src="shots/office-today.png" alt=""><small>Home: pick a hub, then what needs a person</small></div>
-<div class="shot"><img src="shots/office-menu.png" alt=""><small>Menu: search, frequently used, every hub</small></div></div>
-<div class="callout"><b>What stays on the desktop, on purpose.</b> Approving a customer price, accepting an order, recording a shipment and settling wires happen on the desktop office pages, next to the QuickBooks evidence. So do the spreadsheet import of site assignments and the coverage templates. The app shows every one of those results and never invents a number.</div>
-<h2 class="break">4. How it links to the main system</h2>
-<div class="side two"><div>
-<ol class="keep">
-<li>A customer sends a stack of POs from their app, or the office keys them in under Menu → PO loads. Each is an order awaiting pricing, on Home and on the desktop Company POs page.</li>
-<li>The office prices and accepts on the desktop; the deposit is invoiced through QuickBooks; when it is paid the order is released to the plant.</li>
-<li>The builders build it bench by bench. The Stock tab shows finished units and what is short; a finished unit built for stock is assigned to the order here.</li>
-<li>The office records the shipment on the desktop (Shipping &amp; receiving). Every serial on the load starts its custody chain: in transit.</li>
-<li>The customer says on their phone where each unit is going and when it arrived; they assign it to the site it is interconnected at. The <b>Sites</b> tab shows what they said, and the office confirms it. The warranty runs from the ship date and is tied to that site.</li>
-<li>The <b>Fleet register</b> on the desktop is the whole thing as one spreadsheet: seller, buyer, reseller, end customer, site, load, carrier, BOL, every date, warranty and SLA — edited in place, exported to CSV.</li></ol></div>
-<div class="shot"><img src="shots/office-sites.png" alt=""><small>Sites: what the customer says, with Confirm; receive a load by scan</small></div>
-<div class="shot"><img src="shots/office-unit.png" alt=""><small>Unit passport on the phone: custody, coverage, the moves that apply</small></div></div>
-<h2>5. If something looks wrong</h2>
-<ul>
-<li><b>"Open the app once from your office link so it knows your workspace"</b>: open the address with <code>?org=cleancell.us</code> once; the app remembers it.</li>
-<li><b>The app looks stale</b>: close it fully and open it again. Updates arrive on the next open; data is never shown from a cache.</li>
-<li><b>Offline</b>: the app says so and shows nothing rather than yesterday's list.</li>
-<li><b>Questions</b>: ClearSky Energy Solutions. The full manual is in the workspace documentation.</li></ul>
-<ul><li><b>Nothing loads after sign-in</b>: your email is not a member of the workspace yet. Contact ClearSky or your administrator.</li>
-<li><b>A move is refused</b> (for example commissioning a unit that has not been received): the message says why. The rules are the same on every screen; record the earlier step first.</li></ul>
+<!-- ═══ 2 · BEFORE YOU START ════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Start here</div>
+  <h1>Before you start</h1>
+  <div class="rule"></div>
+  <p class="lead">Omega Logic is one app for running your business: sales, customers, the plant, deliveries, stock and money. ClearSky makes it. Your company is the <b>workspace</b> inside it, so everyone at your company sees the same orders and the same numbers.</p>
 
+  <h2>What you need</h2>
+  <ul class="hl">
+    <li><span class="hx"><span>✓</span></span><p><b>Your work Google account.</b> The one with your company email, like <span class="addr">you@yourcompany.com</span>. Not a personal Gmail.</p></li>
+    <li><span class="hx"><span>✓</span></span><p><b>A place on your company's workspace.</b> Whoever runs Omega Logic at your company adds you. If your company isn't on Omega Logic yet, ClearSky sets it up.</p></li>
+    <li><span class="hx"><span>✓</span></span><p><b>A phone, tablet or computer.</b> iPhone or iPad with Safari, an Android phone with Chrome, or any computer with Chrome, Edge or Safari.</p></li>
+    <li><span class="hx"><span>✓</span></span><p><b>Nothing from an app store.</b> You add it straight from the web page. It's free to install, and it updates itself every time you open it.</p></li>
+  </ul>
+
+  <h2 class="mt">Three steps, once</h2>
+  <div class="g3">
+    <div class="box"><span class="hx lg"><span>1</span></span><h3 style="margin-top:6px">Open the address</h3><p><span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/office/app</span><br>Or scan the code on the front page with your phone's camera.</p></div>
+    <div class="box"><span class="hx lg"><span>2</span></span><h3 style="margin-top:6px">Put it on your phone</h3><p>iPhone and iPad: <b>page 3</b><br>Android: <b>page 4</b><br>A computer: <b>page 5</b></p></div>
+    <div class="box"><span class="hx lg"><span>3</span></span><h3 style="margin-top:6px">Sign in</h3><p>With your work Google account. Your company's workspace opens by itself. <b>Page 6.</b></p></div>
+  </div>
+
+  <div class="box warn mt">
+    <h3>Open it in Safari or Chrome, not inside another app</h3>
+    <p>If you tap the link in Gmail, Outlook, Teams, Slack, LinkedIn or WhatsApp, it opens inside that app, and there is no way to add it to your phone from there. Look for <span class="k">Open in Safari</span> or <span class="k">Open in browser</span>, or copy the address and paste it into Safari (iPhone) or Chrome (Android). Use a normal window, not a Private or Incognito one.</p>
+  </div>
+
+  <div class="g2 mt">
+    <div><h3>Scanning the code</h3><p style="font-size:10.4pt">iPhone: open the <b>Camera</b>, point it at the code and tap the link that appears at the bottom of the screen. Android: the camera or Google Lens does the same. The page opens in your browser. Carry on from step 2.</p></div>
+    <div><h3>Want to look first?</h3><p style="font-size:10.4pt">A practice copy with made-up data runs at <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/app-sandbox/office</span>. Nothing you do there is real, and nothing reaches your workspace.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══ 3 · IPHONE AND IPAD ═════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Put it on your phone · 1 of 3</div>
+  <h1>iPhone and iPad</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:14px">Use <b>Safari</b>. It takes about a minute and you do it once. The <span style="color:var(--tap);font-weight:700">orange ring</span> in each picture is where you tap.</p>
+
+  <div class="row4">
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div><span class="btn">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+        <div class="sf"><span class="pill"><svg><use href="#i-pagemenu"/></svg><span class="d">clearskyomega.com</span><svg><use href="#i-reload"/></svg></span><span class="circ"><svg><use href="#i-tabs"/></svg></span></div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>1</span></span><h3>Open it in Safari</h3>
+        <p>Type <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/office/app</span> in the address bar and go, or scan the code on the front page.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><span class="btn">Continue with Google</span></div>
+        <div class="pop" style="left:.07in;bottom:.47in;width:1.05in">
+          <div class="r tap"><b>Share</b><svg><use href="#i-share"/></svg></div>
+          <div class="r"><span class="bar" style="width:.5in"></span></div>
+          <div class="r"><span class="bar" style="width:.62in"></span></div>
+          <div class="r"><span class="bar" style="width:.42in"></span></div>
+          <div class="r"><span class="bar" style="width:.55in"></span></div>
+        </div>
+        <div class="sf"><span class="pill"><svg class="tap tapc" style="width:.13in;height:.13in"><use href="#i-pagemenu"/></svg><span class="d">clearskyomega.com</span><svg><use href="#i-reload"/></svg></span><span class="circ"><svg><use href="#i-tabs"/></svg></span></div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>2</span></span><h3>Tap the menu, then Share</h3>
+        <p><b>iOS 27:</b> the <svg class="ic"><use href="#i-pagemenu"/></svg> button at the left of the address bar. <b>iOS 26:</b> the <svg class="ic"><use href="#i-dots"/></svg> at the right. Then tap <span class="k">Share</span>. See a <svg class="ic"><use href="#i-share"/></svg> button? Just tap that.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="dim"></div>
+        <div class="up">↑ swipe up</div>
+        <div class="sheetx"><div class="grab"></div>
+          <div class="shh"><img src="../../icons/omega-logic-180.png" alt=""><div><b>Omega Logic</b><small>clearskyomega.com</small></div></div>
+          <div class="ppl"><i></i><i></i><i></i><i></i></div>
+          <div class="lst"><div class="r"><span class="bar" style="width:.45in"></span><span class="bar" style="width:.1in"></span></div><div class="r"><span class="bar" style="width:.6in"></span><span class="bar" style="width:.1in"></span></div><div class="r"><span class="bar" style="width:.5in"></span><span class="bar" style="width:.1in"></span></div></div>
+          <div class="lst"><div class="r tap"><b>Add to Home Screen</b><svg><use href="#i-addhome"/></svg></div><div class="r"><span class="bar" style="width:.55in"></span><span class="bar" style="width:.1in"></span></div><div class="r"><span class="bar" style="width:.4in"></span><span class="bar" style="width:.1in"></span></div></div>
+        </div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>3</span></span><h3>Add to Home Screen</h3>
+        <p>Swipe up on the sheet, or tap <span class="k">View More</span>. Scroll down and tap <span class="k">Add to Home Screen</span>.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph"><div class="scr" style="background:#f2f4f5"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
+        <div class="nav"><span class="bl">Cancel</span><b>Add to Home Screen</b><span class="bl st tap">Add</span></div>
+        <div class="grp"><img src="../../icons/omega-logic-180.png" alt=""><div style="flex:1"><div class="nm">Omega Logic</div><small>silmarillion.clearskyomega.com</small></div></div>
+        <div class="grp" style="justify-content:space-between;font-size:6pt"><b style="color:#1d2b33">Open as Web App</b><span class="tog"></span></div>
+        <div class="kb"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="grid-column:span 2"></i><i></i><i></i><i></i><i></i><i></i><i></i><i style="grid-column:span 2"></i><i style="grid-column:span 2"></i><i style="grid-column:span 6"></i><i style="grid-column:span 2"></i></div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>4</span></span><h3>Tap Add</h3>
+        <p>The name reads <b>Omega Logic</b>. Leave <span class="k">Open as Web App</span> on (green) and tap <span class="k">Add</span> at the top right.</p></div>
+    </div>
+  </div>
+
+  <div class="box navy mt" style="display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:11px 14px">
+    <div class="app" style="width:auto;gap:4px"><img src="../../icons/omega-logic-180.png" alt="" style="width:.56in;height:.56in;border-radius:.13in" class="tap"><b style="font-size:8.5pt">Omega Logic</b></div>
+    <p style="margin:0;font-size:10.4pt"><b>Done.</b> From now on, open Omega Logic from its icon on your Home Screen, not from Safari. It opens full screen like any other app. <b>Sign in once more inside it</b>: the app keeps its own sign-in, separate from Safari. The icon is only on the phone or iPad where you added it.</p>
+  </div>
+
+  <div class="g3 mt">
+    <div class="box"><h3>iPad</h3><p>Same steps. <span class="k">Share</span> <svg class="ic"><use href="#i-share"/></svg> is at the top right of Safari. Tap it, then <span class="k">Add to Home Screen</span> (on iPadOS 27 tap <span class="k">View More</span> first), keep <span class="k">Open as Web App</span> on and tap <span class="k">Add</span>.</p></div>
+    <div class="box"><h3>Chrome on iPhone</h3><p>Tap <span class="k">Share</span> <svg class="ic"><use href="#i-share"/></svg> at the right of the address bar, then <span class="k">Add to Home Screen</span>, then <span class="k">Add</span>. It works, but Safari is the surer way.</p></div>
+    <div class="box"><h3>No Add to Home Screen?</h3><p>Scroll to the bottom of the share sheet, tap <span class="k">Edit Actions</span> and add it. Still missing? You're inside another app or a Private tab. Open the address in Safari.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══ 4 · ANDROID ═════════════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Put it on your phone · 2 of 3</div>
+  <h1>Android phones and tablets</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:14px">Use <b>Chrome</b>. About a minute, once. Tap where the <span style="color:var(--tap);font-weight:700">orange ring</span> is.</p>
+
+  <div class="row4">
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="gate"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div><span class="btn">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>1</span></span><h3>Open it in Chrome</h3>
+        <p>Type <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/office/app</span> or scan the code on the front page. Opened inside another app? Tap <svg class="ic"><use href="#i-kebab"/></svg> and <span class="k">Open in Chrome</span>.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv tap tapc"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="gate"><div class="t1">Omega Logic</div><div class="gl"></div><div class="gl"></div></div>
+        <div class="pop" style="right:.05in;top:.5in;width:1.15in;padding:0">
+          <div class="icons"><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="r"><span class="bar" style="width:.5in"></span></div>
+          <div class="r"><span class="bar" style="width:.66in"></span></div>
+          <div class="r"><span class="bar" style="width:.4in"></span></div>
+          <div class="r"><span class="bar" style="width:.55in"></span></div>
+          <div class="r tap"><b>Install and create shortcut</b></div>
+          <div class="r"><span class="bar" style="width:.45in"></span></div>
+          <div class="r"><span class="bar" style="width:.35in"></span></div>
+        </div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>2</span></span><h3>Tap <svg class="ic" style="width:.9em"><use href="#i-kebab"/></svg>, then Install</h3>
+        <p><svg class="ic"><use href="#i-kebab"/></svg> is at the right of the address bar. Tap <span class="k">Install and create shortcut</span>. Older Chrome says <span class="k">Add to Home screen</span> or <span class="k">Install app</span>.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph"><div class="scr"><div class="sb" style="padding-left:.12in"><span>9:41</span><i></i></div>
+        <div class="ctb"><span class="om"><svg><use href="#i-lock"/></svg>silmarillion.clearskyomega.com/office/app</span><span class="tabs">1</span><span class="mv"><svg><use href="#i-kebab"/></svg></span></div>
+        <div class="ahd"><b>Omega Logic</b><span></span></div>
+        <div class="gate"><div class="t1">Omega Logic</div><div class="gl"></div><div class="gl"></div></div>
+        <div class="dim"></div>
+        <div class="dlg"><div class="who"><img src="../../icons/omega-logic-180.png" alt=""><div><b>Omega Logic</b><small>silmarillion.clearskyomega.com</small></div></div>
+          <div class="btns"><span class="tb">Create shortcut</span><span class="fb tap" style="border-radius:.1in">Install</span></div></div>
+        <div class="gbar"></div></div></div>
+      <div class="stx"><span class="hx"><span>3</span></span><h3>Tap Install</h3>
+        <p>Chrome shows <b>Omega Logic</b> with its icon. Tap <span class="k">Install</span>, not <span class="k">Create shortcut</span>. If your phone asks where to put it, tap <span class="k">Add</span>.</p></div>
+    </div>
+    <div class="stp">
+      <div class="ph andr"><div class="scr"><div class="home"></div><div class="sb dk" style="padding-left:.12in"><span>9:41</span><i></i></div>
+        <div class="apps" style="position:relative">
+          <div class="app"><i></i><em></em></div><div class="app"><i></i><em></em></div><div class="app"><i></i><em></em></div><div class="app"><i></i><em></em></div>
+          <div class="app"><i></i><em></em></div><div class="app"><img class="tap tapc" src="../../icons/omega-logic-180.png" alt=""><b>Omega Logic</b></div><div class="app"><i></i><em></em></div><div class="app"><i></i><em></em></div>
+          <div class="app"><i></i><em></em></div><div class="app"><i></i><em></em></div>
+        </div>
+        <div class="apps" style="position:absolute;left:0;right:0;bottom:.2in"><div class="app"><i></i></div><div class="app"><i></i></div><div class="app"><i></i></div><div class="app"><i></i></div></div>
+        <div class="gbar lt"></div></div></div>
+      <div class="stx"><span class="hx"><span>4</span></span><h3>Open it from the icon</h3>
+        <p>Omega Logic is on your home screen and in your list of apps. Open it from there and sign in. It opens full screen, like any other app.</p></div>
+    </div>
+  </div>
+
+  <div class="g2 mt2">
+    <div class="box"><h3>Chrome offered to install it by itself?</h3><p>If a bar or a pop-up at the bottom of the screen offers to install Omega Logic, tap <span class="k">Install</span>. Same result, one step.</p></div>
+    <div class="box"><h3>Samsung phones</h3><p>Chrome gives the cleanest install, so use it if you have it. In Samsung Internet (called <b>Samsung Browser</b>, or just <b>Browser</b>, on newer Galaxy phones): tap the install icon in the address bar if there is one. If not, tap <svg class="ic"><use href="#i-hamb"/></svg> at the bottom right, then <span class="k">Add page to</span>, <span class="k">Home screen</span>, <span class="k">Add</span>.</p></div>
+  </div>
+  <div class="g2 mt">
+    <div class="box"><h3>Other browsers</h3><p>Edge and Firefox on Android can add it too, but the steps change often. Use Chrome.</p></div>
+    <div class="box"><h3>No install option at all?</h3><p>You're inside another app (Gmail, Outlook, Teams…) or an Incognito tab. Open the address in a normal Chrome tab.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══ 5 · A COMPUTER ══════════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Put it on your phone · 3 of 3</div>
+  <h1>On a computer</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:14px">Nothing to install unless you want to. Open <span class="addr">silmarillion.<wbr>clearskyomega.com<wbr>/office/app</span> in Chrome, Edge or Safari and sign in. Installing just gives it its own window and an icon on the taskbar or the Dock.</p>
+
+  <div style="display:grid;grid-template-columns:3.55in 1fr;gap:.24in;align-items:start">
+    <div>
+      <div class="win">
+        <div class="tabsr"><span class="dots"><i></i><i></i><i></i></span><span class="tab"><img src="../../icons/omega-logic-180.png" alt="">Omega Logic</span></div>
+        <div class="tb2"><svg><use href="#i-back"/></svg><svg><use href="#i-fwd"/></svg><svg><use href="#i-reload"/></svg>
+          <span class="omni"><svg style="width:9px;height:9px"><use href="#i-lock"/></svg><span class="u">silmarillion.clearskyomega.com/office/app</span><span class="ib tap tapc"><svg><use href="#i-install"/></svg></span><span class="ib"><svg><use href="#i-star"/></svg></span></span>
+          <svg><use href="#i-kebab"/></svg></div>
+        <div class="pg"><div class="hdr"><span><b>Omega Logic</b><br>Your Company · you@yourcompany.com</span><span>Sign out</span></div>
+          <svg viewBox="0 0 220 120" style="width:2in;margin-top:10px" aria-hidden="true">
+            <defs><linearGradient id="wn" x1="0" x2="1"><stop offset="0" stop-color="#9BE870"/><stop offset=".32" stop-color="#2FE3C8"/><stop offset=".68" stop-color="#35C6F4"/><stop offset="1" stop-color="#3D9DF5"/></linearGradient></defs>
+            <rect width="220" height="120" rx="12" fill="#0f1f2c"/>
+            <g fill="#15293a" stroke="url(#wn)" stroke-width="1.6">
+              <polygon points="110,34 128,44.5 128,65.5 110,76 92,65.5 92,44.5"/>
+              <polygon points="90,0 108,10.5 108,31.5 90,42 72,31.5 72,10.5" transform="translate(0,2)"/>
+              <polygon points="130,0 148,10.5 148,31.5 130,42 112,31.5 112,10.5" transform="translate(0,2)"/>
+              <polygon points="150,34 168,44.5 168,65.5 150,76 132,65.5 132,44.5"/>
+              <polygon points="70,34 88,44.5 88,65.5 70,76 52,65.5 52,44.5"/>
+              <polygon points="90,68 108,78.5 108,99.5 90,110 72,99.5 72,78.5" transform="translate(0,-2)"/>
+              <polygon points="130,68 148,78.5 148,99.5 130,110 112,99.5 112,78.5" transform="translate(0,-2)"/>
+            </g></svg></div>
+        <div class="instpop"><div class="h">Install app</div><div class="who"><img src="../../icons/omega-logic-180.png" alt=""><div><b>Omega Logic</b><small>silmarillion.clearskyomega.com</small></div></div>
+          <div class="btns"><span class="c">Cancel</span><span class="i tap">Install</span></div></div>
+      </div>
+      <p class="small" style="margin-top:6px;text-align:center">Chrome: the Install icon <svg class="ic"><use href="#i-install"/></svg> sits at the right end of the address bar.</p>
+    </div>
+    <ul class="hl" style="margin-top:2px">
+      <li><span class="hx"><span>C</span></span><p><b>Chrome</b> (Windows, Mac, Chromebook). Click the Install icon <svg class="ic"><use href="#i-install"/></svg> in the address bar, then <span class="k">Install</span>. No icon? <svg class="ic"><use href="#i-kebab"/></svg> → <span class="k">Cast, save, and share</span> → <span class="k">Install page as app…</span> → <span class="k">Install</span>.</p></li>
+      <li><span class="hx"><span>E</span></span><p><b>Microsoft Edge.</b> Click <span class="k">App available</span> in the address bar, then <span class="k">Install</span>. Or <svg class="ic"><use href="#i-dots"/></svg> → <span class="k">More tools</span> → <span class="k">Apps</span> → <span class="k">Install this site as an app</span>. Tick <span class="k">Pin to taskbar</span> if you like.</p></li>
+      <li><span class="hx"><span>S</span></span><p><b>Safari on a Mac</b> (macOS Sonoma 14 or later). <span class="k">File</span> → <span class="k">Add to Dock</span>, then <span class="k">Add</span>. It keeps its own sign-in, so sign in once inside it.</p></li>
+      <li><span class="hx"><span>F</span></span><p><b>Firefox.</b> On Windows, click <span class="k">Add tab to taskbar</span> in the address bar. On a Mac, bookmark it instead.</p></li>
+      <li><span class="hx"><span>☆</span></span><p><b>Or just bookmark it.</b> <span class="k">Ctrl+D</span> on Windows, <span class="k">Cmd+D</span> on a Mac.</p></li>
+    </ul>
+  </div>
+
+  <h2 class="mt2">The desktop office: more room, same data</h2>
+  <div style="display:grid;grid-template-columns:4.3in 1fr;gap:.24in;align-items:start">
+    <figure class="wide"><img src="shots/desktop-office.png" width="1280" height="800" alt="The desktop office in a browser window"><figcaption>The desktop office in a browser window: the same hub, with room for the detail.</figcaption></figure>
+    <div style="font-size:10.4pt">
+      <p>At a desk, use the <b>desktop office</b>. It is the same workspace and the same data, laid out for a big screen: pricing and accepting orders, shipping and receiving, the fleet register, the materials plan and the full reports.</p>
+      <p>Open it from the app: <b>Menu</b>, then any page that isn't in the app, such as <span class="k">Price &amp; accept</span> under Sales.</p>
+      <p style="margin:0">Whatever you save on the phone is on the desktop straight away, and the other way round.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ═══ 6 · SIGN IN ═════════════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Sign in</div>
+  <h1>Sign in and your workspace</h1>
+  <div class="rule"></div>
+  <p class="lead">One account, one workspace. Omega Logic works out which company you're with from your work email. There is nothing to choose.</p>
+
+  <div style="display:grid;grid-template-columns:2.2in 1fr;gap:.3in;align-items:start">
+    <div class="ph big"><div class="scr"><div class="isl"></div><div class="sb"><span>9:41</span><i></i></div>
+      <div class="ahd"><b>Omega Logic</b><span></span></div>
+      <div class="gate" style="padding-top:.3in"><div class="t1">Omega Logic</div><div class="t2">sign in with your work account</div><div class="gl"></div><div class="gl"></div><div class="gl" style="width:60%;margin:auto"></div>
+        <span class="btn tap" style="margin-top:.12in">Continue with Google</span><span class="or">or with any work email</span><span class="fld">you@company.com</span><span class="btn2">Email me a sign-in link</span></div>
+      <div class="gbar"></div></div></div>
+    <div>
+      <ul class="hl">
+        <li><span class="hx"><span>1</span></span><p>Open <b>Omega Logic</b> from its icon and tap <span class="k">Continue with Google</span>.</p></li>
+        <li><span class="hx"><span>2</span></span><p>Pick your <b>work</b> account, <span class="addr">you@yourcompany.com</span>. If Google shows a personal account first, choose the work one.</p></li>
+        <li><span class="hx"><span>3</span></span><p>Your company's workspace opens by itself. Its name is at the top of the screen, next to your email.</p></li>
+      </ul>
+      <div class="box" style="margin:4px 0 14px"><p><b>No Google account at work?</b> Type your work email and tap <span class="k">Email me a sign-in link</span>, then tap the link in that email on the same phone or computer. On an iPhone or iPad the link opens in Safari, not in the Home Screen app, so use Omega Logic in Safari.</p></div>
+
+      <h3>What the top of the screen tells you</h3>
+      <div style="border:1px solid var(--line);border-radius:10px;padding:8px 11px;display:flex;align-items:center;gap:8px;background:#fff">
+        <div style="flex:1;line-height:1.25"><b style="font-size:12pt;color:#0c2330">Omega Logic</b><br><span style="font-size:9.4pt;color:#41606e"><span style="box-shadow:0 0 0 1.2pt var(--tap);border-radius:3px;padding:0 2px">Your Company</span> · you@yourcompany.com</span></div>
+        <span style="width:.3in;height:.3in;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center"><svg class="ic" style="width:.15in;height:.15in"><use href="#i-reload"/></svg></span>
+        <span style="border:1px solid var(--line);border-radius:14px;padding:5px 10px;font-weight:700;font-size:9.6pt">Sign out</span>
+      </div>
+      <p style="font-size:10.3pt;margin-top:7px"><b>Your Company</b> is the workspace you're in, then who you're signed in as. <svg class="ic"><use href="#i-reload"/></svg> fetches the latest. <b>Sign out</b> is at the right: use it on a shared computer. The app remembers your workspace, so next time you just sign in.</p>
+    </div>
+  </div>
+
+  <div class="g2 mt2">
+    <div class="box warn"><h3>"No workspace at yourcompany.com"</h3><p>You signed in with an account that isn't on a workspace: a personal Gmail, or a work email nobody has added yet. Tap <span class="k">Sign in with another account</span> and use your work account, or ask whoever runs Omega Logic at your company to add you.</p></div>
+    <div class="box"><h3>Who can change what</h3><p>Everyone on the workspace sees the same data. An <b>administrator</b> approves people, sets payment terms and changes settings. If a button isn't there for you, that's why. Ask your administrator.</p></div>
+  </div>
+  <div class="g2 mt">
+    <div class="box"><h3>Your phone and your computer</h3><p>Sign in once on each. On an iPhone or iPad, the app on the Home Screen keeps its own sign-in, separate from Safari, so sign in inside the app even if Safari already is.</p></div>
+    <div class="box"><h3>Company not on Omega Logic yet?</h3><p>ClearSky sets up workspaces. Write to <b>dev@clearsky-usa.com</b> and say who should be the first person on it.</p></div>
+  </div>
+</div></section>
+
+<!-- ═══ 7 · HOME: THE HEX HUB ═══════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Using it · Home</div>
+  <h1>Home: the hex hub</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:12px">Home asks <b>Where to?</b> Seven hexagons, one for each part of the business, drawn from the Omega Logic logo. A red number is how many things there need a person.</p>
+
+  <div style="display:grid;grid-template-columns:2.75in 1fr;gap:.26in;align-items:start">
+    <figure class="dev"><div class="bz"><img src="shots/office-hub.png" width="780" height="1560" alt="The hex hub on Home"></div><figcaption><b>Home.</b> Tap a hexagon.</figcaption></figure>
+    <div>
+      <ul class="hl tight">
+        <li><span class="hx"><span>◷</span></span><p><b>Today</b>, in the middle. Everything that needs a person today: customer requests, orders to price, POs to review, follow-ups that are due. Tap it to jump to the list.</p></li>
+        <li><span class="hx"><span>▤</span></span><p><b>Sales.</b> Orders to price, customer requests to answer, company POs to review.</p></li>
+        <li><span class="hx"><span>◉</span></span><p><b>Customers.</b> Every customer account (page 8). The number is follow-ups due and people asking to join.</p></li>
+        <li><span class="hx"><span>⚙</span></span><p><b>Plant.</b> Work orders: late, on hold, in build.</p></li>
+        <li><span class="hx"><span>◎</span></span><p><b>Deliver.</b> Units ready to ship, units a customer placed at a site for you to confirm, loads on the road.</p></li>
+        <li><span class="hx"><span>▦</span></span><p><b>Stock.</b> Parts short for the open work.</p></li>
+        <li><span class="hx"><span>$</span></span><p><b>Money.</b> Invoices to issue, overdue and open, each with its pay link.</p></li>
+      </ul>
+      <div style="display:grid;grid-template-columns:1.3in 1fr;gap:.2in;align-items:start;margin-top:10px">
+        <figure class="dev crop"><div class="bz"><img src="shots/office-hub-panels.png" width="780" height="1560" alt="A hub's panel under the hub"></div></figure>
+        <div>
+          <h2>Tap a hexagon, its panel opens</h2>
+          <p style="font-size:10.3pt;margin:0">Under the hub: first the live list (tap a line to open it), then <b>Work it</b>, every screen for that part of the business. Tap another hexagon to switch. Below the panels, Home lists what needs a person, then money and the plant.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="mt">Five tabs along the bottom</h2>
+  <div style="display:grid;grid-template-columns:3.1in 1fr;gap:.24in;align-items:center">
+    <div class="tabbar"><div class="on"><span>⌂</span>Home</div><div><span>▤</span>Orders</div><div><span>◉</span>Customers</div><div><span>◎</span>Sites</div><div><span>⋮⋮</span>Menu</div></div>
+    <p style="font-size:10.3pt;margin:0"><b>Home</b> the hub and Today. <b>Orders</b> every order. <b>Customers</b> every account. <b>Sites</b> where every unit is. <b>Menu</b> every screen, with a search box. More on pages 8 and 9.</p>
+  </div>
+</div></section>
+
+<!-- ═══ 8 · CUSTOMERS ═══════════════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Using it · Customers</div>
+  <h1>Customers: the whole account in one place</h1>
+  <div class="rule"></div>
+  <p class="lead" style="margin-bottom:13px">Like the customer hub in QuickBooks. Tap <b>Customers</b>, pick a company, and everything about them is on one screen, in sections across the top. A customer is a company account with its people on it.</p>
+
+  <div class="row4">
+    <figure class="dev"><div class="bz"><img src="shots/office-customers.png" width="780" height="1560" alt="The Customers tab"></div><figcaption><b>Customers.</b> Search, then tap one.</figcaption></figure>
+    <figure class="dev"><div class="bz"><img src="shots/office-account.png" width="780" height="1560" alt="A customer account, Overview"></div><figcaption><b>Overview.</b> Money, requests, quick buttons.</figcaption></figure>
+    <figure class="dev"><div class="bz"><img src="shots/office-activity.png" width="780" height="1560" alt="A customer account, Activity"></div><figcaption><b>Activity.</b> Log a call, set a follow-up.</figcaption></figure>
+    <figure class="dev"><div class="bz"><img src="shots/office-documents.png" width="780" height="1560" alt="A customer account, Documents"></div><figcaption><b>Documents.</b> Upload, choose who sees it.</figcaption></figure>
+  </div>
+
+  <h2 class="mt">The sections</h2>
+  <dl class="sec">
+    <dt>Overview</dt><dd>Invoiced, received, the balance and open requests. Quick buttons: <span class="k">Log a call</span>, <span class="k">Add a contact</span>, <span class="k">Upload a document</span>, <span class="k">Enter a PO</span>. <b>Their app</b>: the link to send them (page 10).</dd>
+    <dt>People</dt><dd>Who signs in to their app: <span class="k">Approve</span> someone who asked to join, <span class="k">Turn off</span> someone who left, <span class="k">Invite</span>, or add a person. Plus contacts who never log in: site leads, accounts payable, engineers.</dd>
+    <dt>Activity</dt><dd>Log a call, email, meeting, note or task. Put a date in <b>Follow up on</b> and it shows on <b>Today</b> that day, until you mark it done.</dd>
+    <dt>Documents</dt><dd>A contract, a drawing, a datasheet, a photo from your phone (up to 2 MB). Tick <span class="k">Share with the customer</span> and they see it in their app; leave it unticked and it stays in your office. What they upload lands here too.</dd>
+    <dt>Orders</dt><dd>Every order and PO on the account. <span class="k">Enter a PO</span> for them: it becomes an order waiting for a price. Nothing is accepted or charged.</dd>
+    <dt>Sites</dt><dd>Their sites and the units at each. Tap a unit for its passport.</dd>
+    <dt>Timeline</dt><dd>All of the above, newest first.</dd>
+  </dl>
+</div></section>
+
+<!-- ═══ 9 · ORDERS, SITES, MENU ═════════════════════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Using it · The tabs</div>
+  <h1>Orders, Sites and the Menu</h1>
+  <div class="rule"></div>
+
+  <div class="g3" style="gap:.22in;margin-top:4px">
+    <div>
+      <figure class="dev"><div class="bz"><img src="shots/office-order.png" width="780" height="1560" alt="An order open in the Orders tab"></div></figure>
+      <h2 style="margin-top:12px">Orders</h2>
+      <p style="font-size:10.3pt">Every order with its customer, stage, total and balance. Open one for its lines, money, build and shipment, and the customer's requests: type the answer and tap <span class="k">Answer &amp; close</span>. If your company invoices on its own paper, mark each invoice <span class="k">Issued</span> and <span class="k">Received</span> here.</p>
+    </div>
+    <div>
+      <figure class="dev"><div class="bz"><img src="shots/office-sites.png" width="780" height="1560" alt="The Sites tab"></div></figure>
+      <h2 style="margin-top:12px">Sites</h2>
+      <p style="font-size:10.3pt"><b>The customer says</b>: each unit your customer placed at a site; tap <span class="k">Confirm</span> once it's checked. <b>Receive a load</b>: pick the load, then scan or type each serial (<span class="k">Camera</span> scans). <b>Unit passport</b>: type a serial to see where it is, its warranty and its history.</p>
+    </div>
+    <div>
+      <figure class="dev"><div class="bz"><img src="shots/office-menu.png" width="780" height="1560" alt="The Menu"></div></figure>
+      <h2 style="margin-top:12px">Menu</h2>
+      <p style="font-size:10.3pt">Every screen in one place, with a search box. The ones you use most are along the top. Then one panel per hub, <b>Setup</b> (products, settings) and <b>Help &amp; guides</b>, where this guide lives.</p>
+    </div>
+  </div>
+
+  <div class="box mt2">
+    <h3>What stays on the desktop, on purpose</h3>
+    <p>Approving a price, accepting an order, recording a shipment and settling a wire happen in the desktop office, next to the paperwork. The app shows every one of those results the moment they're saved, and never makes up a number.</p>
+  </div>
+</div></section>
+
+<!-- ═══ 10 · YOUR CUSTOMERS' APP + GOOD TO KNOW ═════════════════════ -->
+<section class="sheet"><div class="body">
+  <div class="kick">Your customers</div>
+  <h1>Your customers' app</h1>
+  <div class="rule"></div>
+  <div style="display:grid;grid-template-columns:1fr 1.32in;gap:.26in;align-items:start">
+    <div style="font-size:10.5pt">
+      <p style="font-size:11.4pt;color:#34505e">Your customers don't get Omega Logic. They get <b>your company's app</b>, with your name and your icon, and everything they do in it lands in your Customers hub.</p>
+      <ul>
+        <li><b>Send it from their account:</b> <b>Customers</b>, the company, <b>Overview</b>, then <b>Their app</b>. <span class="k">Send the app link</span> opens your phone's share sheet, so you can text or email it. <span class="k">Desktop link</span> is for a computer. Under <b>People</b>, <span class="k">Invite</span> emails a person the link.</li>
+        <li><b>They install it the same way</b> you did: Safari, Share, Add to Home Screen on an iPhone; Chrome, Install on Android.</li>
+        <li><b>In it they can</b> size and design a site, send or upload POs, pay invoices, follow shipping, and keep their fleet and warranties on file.</li>
+        <li><b>You see it all:</b> a PO becomes an order waiting for a price, a question shows on Today, a document lands in Documents.</li>
+      </ul>
+      <p class="small" style="margin:0">Their guide is under <b>Menu → Help &amp; guides → Customer app guide</b>. Send it with the link.</p>
+    </div>
+    <figure class="dev"><div class="bz"><img src="shots/customer-app.png" width="780" height="1560" alt="A customer's app"></div><figcaption>Their app wears <b>your</b> name.</figcaption></figure>
+  </div>
+
+  <h2 class="mt">If something looks wrong</h2>
+  <table class="tr">
+    <tr><th>No Add to Home Screen, no Install</th><td>The link opened inside another app (Gmail, Outlook, Teams, Slack, LinkedIn, WhatsApp) or a Private tab. Open it in Safari on an iPhone, Chrome on Android. iPhone: swipe up on the share sheet; still missing, <span class="k">Edit Actions</span> at the bottom.</td></tr>
+    <tr><th>The icon is a letter or an old picture</th><td>Remove it (touch and hold the icon, <span class="k">Remove App</span>, <span class="k">Delete App</span>) and add it again from Safari. Android: touch and hold, <span class="k">Uninstall</span>, then install again.</td></tr>
+    <tr><th>It looks out of date</th><td>Updates arrive by themselves: the app loads the newest version whenever it opens online. Close it fully and open it again, or tap <svg class="ic"><use href="#i-reload"/></svg>.</td></tr>
+    <tr><th>No signal</th><td>The app says it's offline and shows nothing, rather than yesterday's list. Reconnect and tap <svg class="ic"><use href="#i-reload"/></svg>.</td></tr>
+    <tr><th>"No workspace at…"</th><td>You signed in with the wrong account, or nobody has added you yet. See page 6.</td></tr>
+    <tr><th>A button says no</th><td>The message says why: a unit can't be commissioned before it has been received, for example. Do the earlier step first. The rules are the same on every screen.</td></tr>
+    <tr><th>Removing it</th><td>iPhone: touch and hold, <span class="k">Remove App</span>, <span class="k">Delete App</span>. Android: touch and hold, <span class="k">Uninstall</span>. Computer: in the app's window, open its menu (<svg class="ic"><use href="#i-kebab"/></svg> or <svg class="ic"><use href="#i-dots"/></svg>) and choose <span class="k">Uninstall</span>. Your data stays in the workspace.</td></tr>
+    <tr><th>Still stuck</th><td>Ask whoever runs Omega Logic at your company. Then ClearSky Energy Solutions: <b>dev@clearsky-usa.com</b>.</td></tr>
+  </table>
+</div></section>
+
+</main>
+<script>
+/* ES5, no dependencies. Draws the band and footer on each sheet (solo mode)
+   and the honeycomb behind the front page: the same pointy-top grid the
+   Omega Logic icon stands on, fading out from behind the logo. */
+(function () {
+  var root = document.querySelector('.olg'); if (!root) return;
+  var hc = root.querySelector('[data-honeycomb]');
+  if (hc) {
+    var W = 816, H = 1056, r = 34, w = Math.sqrt(3) * r, fx = W / 2, fy = 330, buckets = {}, i, j;
+    for (j = -1; j * 1.5 * r < H + r; j++) for (i = -1; i * w < W + w; i++) {
+      var x = i * w + (j % 2 ? w / 2 : 0), y = j * 1.5 * r, d = Math.sqrt((x - fx) * (x - fx) + (y - fy) * (y - fy));
+      var level = Math.max(0, Math.min(6, Math.round(6 - d / 95))); if (!level) continue;
+      var p = 'M'; for (var k = 0; k < 6; k++) { var a = Math.PI / 180 * (60 * k - 90); p += (k ? 'L' : '') + (x + r * Math.cos(a)).toFixed(1) + ' ' + (y + r * Math.sin(a)).toFixed(1); }
+      (buckets[level] = buckets[level] || []).push(p + 'Z');
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid slice"><g fill="none" stroke="#5FE6D6" stroke-width="1.4" stroke-linejoin="round">';
+    for (var lv in buckets) svg += '<path stroke-opacity="' + (lv * 0.034).toFixed(3) + '" d="' + buckets[lv].join('') + '"/>';
+    hc.innerHTML = svg + '</g></svg>';
+  }
+  if (root.getAttribute('data-mode') !== 'solo') return;
+  Array.prototype.forEach.call(root.querySelectorAll('.sheet'), function (s) {
+    if (/\bfront\b/.test(s.className)) return;
+    var band = document.createElement('div'); band.className = 'band';
+    band.innerHTML = '<img src="../../icons/omega-logic-180.png" alt=""><div><div class="t">Omega Logic · The app</div><div class="s">Put it on your phone or computer, sign in, and run the business from it. ClearSky-OMEGA</div></div>';
+    s.insertBefore(band, s.firstChild);
+    var f = document.createElement('div'); f.className = 'foot'; f.textContent = 'ClearSky Energy Solutions  ·  silmarillion.clearskyomega.com';
+    s.appendChild(f);
+  });
+})();
+</script>
 </body></html>
