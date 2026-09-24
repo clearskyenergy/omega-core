@@ -73,11 +73,13 @@
       say('');
       var p = new global.firebase.auth.GoogleAuthProvider();
       p.setCustomParameters && p.setCustomParameters({ prompt: 'select_account' });
-      auth.signInWithPopup(p)['catch'](function (e) {
-        /* an installed app on some phones cannot open a pop-up: go by redirect */
+      /* an app installed on the home screen cannot show Google's pop-up (iOS
+         never even reports it blocked): go by redirect there */
+      var installed = global.navigator.standalone === true || (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches);
+      (installed && auth.signInWithRedirect ? auth.signInWithRedirect(p) : auth.signInWithPopup(p)['catch'](function (e) {
         if (/popup-blocked|operation-not-supported|web-storage/.test(String(e && e.code)) && auth.signInWithRedirect) return auth.signInWithRedirect(p);
         throw e;
-      })['catch'](function (e) { say(said(e)); });
+      }))['catch'](function (e) { say(said(e)); });
     };
     el.querySelector('#ols-form').onsubmit = function (ev) {
       ev.preventDefault();
