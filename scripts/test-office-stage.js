@@ -40,5 +40,19 @@ ok('finance: invoiced and recorded are sums of issued invoices; receivable is wh
 ok('finance: expected deposit is the unpaid part of a deposit; expected balance covers work in production and open balance invoices', fin.expectedDepositCents === 20000 && fin.expectedBalanceCents === 120000, fin.expectedBalanceCents);
 ok('finance: open value excludes quotes and shipped; shipped value is separate', fin.openValueCents === 300000 && fin.shippedValueCents === 50000);
 ok('finance: pipeline by stage carries counts and value; wire ledger is owner-only', fin.byStage.balance.count === 1 && fin.byStage.shipped.totalCents === 50000 && fin.wire.pendingCents === 30000 && S.finance(finOrders, false).wire === null);
+/* released on PO (logic.creditRelease): the stage moves on, the deposit is still owed */
+function onPo(extra, invoices) {
+  return { status: 'in_fulfilment', logic: Object.assign({ acceptedAt: 1, releasedAt: 1, creditRelease: { by: 'office@x.co', poNumber: 'PO-1', basis: 'po' }, commercial: { totalCents: 100000, depositCents: 30000 },
+    invoices: Object.assign({ deposit: { amountCents: 30000, paidCents: 0, satisfied: false } }, invoices || {}) }, extra || {}) };
+}
+var fp = S.finance([onPo()]);
+ok('finance: an order released on PO still expects its open deposit, and its balance, and no more', s(onPo()).key === 'production' && fp.expectedDepositCents === 30000 && fp.expectedBalanceCents === 70000, JSON.stringify([fp.expectedDepositCents, fp.expectedBalanceCents]));
+var fb = S.finance([onPo({}, { balance: { amountCents: 70000, paidCents: 70000, satisfied: true } })]);
+ok('finance: balance paid with the deposit still open on PO expects the deposit', s(onPo({}, { balance: { amountCents: 70000, paidCents: 70000, satisfied: true } })).key === 'balance' && fb.expectedDepositCents === 30000 && fb.expectedBalanceCents === 0, JSON.stringify([fb.expectedDepositCents, fb.expectedBalanceCents]));
+var notYet = onPo({ releasedAt: null }); notYet.status = 'accepted';
+var fr = S.finance([notYet]);
+ok('finance: released on PO but not yet in the plant expects the deposit too', s(notYet).key === 'release' && fr.expectedDepositCents === 30000, fr.expectedDepositCents);
+var fpaid = S.finance([onPo({}, { deposit: { amountCents: 30000, paidCents: 30000, satisfied: true } })]);
+ok('finance: once the deposit is recorded a credit release adds nothing', fpaid.expectedDepositCents === 0, fpaid.expectedDepositCents);
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

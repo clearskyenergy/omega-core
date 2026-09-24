@@ -605,8 +605,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('  "send as a PO" lands on the PO sheet with the sized line; the company\'s POs under review and orders are listed', /CC-C215, 4,/.test(prefill) && /1 purchase order, 1 line/.test(preview) && queue.some(function (t) { return /RCC-2211/.test(t); }) && queue.some(function (t) { return /RCC-2200/.test(t); }), [prefill, preview, queue]);
     /* POs: a PO DOCUMENT, uploaded from the phone, lands on the account */
     await p.setInputFiles('#po-file', pdf('RCC-2230.pdf')); await p.fill('#po-note', 'PO RCC-2230 for the Fresno store'); await p.click('#po-up'); await p.waitForTimeout(800);
-    var poSt = await text(p, '#status'), poDocs = await text(p, '#po-docs');
-    ok('  POs: a PO document uploads to the account (category purchase order) and is listed under the upload', /Uploaded\. Clean Cell sees it on your account/.test(poSt) && /PO documents · 1/.test(poDocs) && /RCC-2230\.pdf/.test(poDocs) && /Purchase order/.test(poDocs), [poSt, poDocs]);
+    /* the word about the upload is under its own button, on screen — not in
+       the page's #status a screen above it */
+    var poSt = await text(p, '#po-msg'), poDocs = await text(p, '#po-docs');
+    var poSeen = await p.$eval('#po-msg', function (e) { var r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= window.innerHeight; });
+    ok('  POs: a PO document uploads to the account (category purchase order) and is listed under the upload; the confirmation shows under the Upload button', /Uploaded\. Clean Cell sees it on your account/.test(poSt) && poSeen && /PO documents · 1/.test(poDocs) && /RCC-2230\.pdf/.test(poDocs) && /Purchase order/.test(poDocs), [poSt, poSeen, poDocs]);
     /* Design: the trial from the supplier, and monthly or yearly */
     await p.click('[data-tab="home"]'); await p.waitForTimeout(500); await p.click('#hub .hx[data-hub="design"]'); await p.waitForTimeout(800);
     var hero = await text(p, '.card.hero'), plans = await p.$$eval('#sub-body [data-plan]', function (r) { return r.map(function (x) { return x.getAttribute('data-plan') + ':' + x.textContent.replace(/\s+/g, ' ').trim(); }); });

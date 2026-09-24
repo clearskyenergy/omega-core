@@ -233,7 +233,8 @@ function byDue(x, y) {
 /* audience 'office' sees who uploaded; 'customer' sees a colleague's name on
    their own uploads and never a supplier employee's address. The office's
    NOTE on its own document never leaves the office either: it is typed next
-   to "Share" as an internal remark, not a caption. A customer's own upload
+   to "Share" as an internal remark ("floor is $410/kWh"), not a caption, and
+   stays in the office like every other CRM note. A customer's own upload
    keeps its note — they wrote it. */
 function fileView(id, f, audience) {
   var from = f.from === 'customer' ? 'customer' : 'office';
@@ -352,7 +353,10 @@ function timeline(input, cap) {
   var names = input.contactNames || {};
   (input.activity || []).forEach(function (a) {
     if (!a) return;
-    var withWho = a.contactId && names[a.contactId] ? ' with ' + names[a.contactId] : '';
+    /* The live name, else the one stored at log time: an archived contact
+       is not in contactNames, and the entry still says who (activityView). */
+    var nm = a.contactId ? names[a.contactId] || a.contactName : null;
+    var withWho = nm ? ' with ' + nm : '';
     add(a.at, 'activity-' + a.type, (TYPE_LABEL[a.type] || 'Note') + withWho + ': ' + (a.subject || ''), String(a.body || '').slice(0, 200), a.by, a.orderId);
     if (a.done && a.doneAt) add(a.doneAt, 'follow-up-done', 'Followed up: ' + (a.subject || TYPE_LABEL[a.type] || ''), '', a.doneBy, a.orderId);
   });

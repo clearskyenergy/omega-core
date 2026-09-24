@@ -42,7 +42,11 @@
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), B = require('./_lib/buyer-accounts'), C = require('./_lib/crm'), I = require('./_lib/po-intake');
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
-var LIST_CAP = 200, FOLLOW_SCAN = 500, FOLLOW_CAP = 200, SCAN = 500, UNIT_ORDERS = 100;
+var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500, UNIT_ORDERS = 100;
+/* The design tool's history on one account: every row is read (a monthly
+   subscriber writes about fifteen a year) and the newest EDITOR_SHOWN of
+   each kind go to the timeline. */
+var EDITOR_SCAN = 500, EDITOR_SHOWN = 50;
 
 /* level: 'read' | 'write' | 'admin'. authorize() already refuses a lapsed
    subscription to everyone but ClearSky's owner; the role decides the rest. */
@@ -143,7 +147,13 @@ var handler = A.handler(async function (req, res) {
 
   /* ── Today: every open follow-up in the workspace ─────────────────────
      The index, not a collectionGroup query (see api/_lib/crm.js). Earliest
-     due first; each carries the account's CURRENT name. */
+     due first; each carries the account's CURRENT name.
+     Earliest first is decided HERE, over every open follow-up: a query with
+     no orderBy comes back in document-id order (customerId__activityId), so
+     a short read keeps whichever ACCOUNTS sort first, not what is due first.
+     The read is all of them up to FOLLOW_SCAN (a closed one is open:false
+     and never read) and needs no composite index; past it, `limited` says
+     so. */
   if (req.method === 'GET' && (b.followUps === '1' || b.followUps === 'true' || b.followUps === true)) {
     await access(caller, org, 'read');
     var open = await root.collection('crm_followups').where('open', '==', true).limit(FOLLOW_SCAN).get();
@@ -185,9 +195,14 @@ var handler = A.handler(async function (req, res) {
       B.accountOrders(db, org, null, acct, { limit: LIST_CAP, includeIntake: true }),
       filesCol.orderBy('uploadedAt', 'desc').limit(LIST_CAP).get(),
       root.collection('sites').where('customerId', '==', cid).limit(LIST_CAP).get(),
-      acctRef.collection('projects').orderBy('updatedAt', 'desc').limit(50).get(),
-      audits.where('action', '==', 'buyer-editor-trial').limit(50).get(),
-      audits.where('action', '==', 'customer-editor-lite').limit(50).get()
+      /* Only what the timeline reads: a design's canvasJson is up to 750 KB
+         and fifty of them would be ~37 MB for four fields each. */
+      acctRef.collection('projects').orderBy('updatedAt', 'desc').select('name', 'createdAt', 'updatedAt', 'revision').limit(50).get(),
+      /* No orderBy (that needs a composite index on omega_audit, and a
+         missing one fails this whole read): all of the account's rows, and
+         the newest are chosen below. A cut in id order is a random one. */
+      audits.where('action', '==', 'buyer-editor-trial').limit(EDITOR_SCAN).get(),
+      audits.where('action', '==', 'customer-editor-lite').limit(EDITOR_SCAN).get()
     ]);
     var contactNames = {}, contacts = [];
     got[0].docs.forEach(function (d) { var v = d.data() || {}; contactNames[d.id] = v.name || v.email || ''; if (v.archived !== true) contacts.push(C.contactView(d.id, v)); });
@@ -205,7 +220,10 @@ var handler = A.handler(async function (req, res) {
     var chunks = []; for (var i = 0; i < unitIds.length; i += 10) chunks.push(unitIds.slice(i, i + 10));
     (await Promise.all(chunks.map(function (ids) { return db.collection('plant_units').where('orgId', '==', org).where('orderId', 'in', ids).limit(400).get(); })))
       .forEach(function (s) { s.docs.forEach(function (d) { var u = d.data() || {}; if (u.shipUnit && u.custody) units.push(u); }); });
-    var editorEvents = got[9].docs.concat(got[10].docs).map(function (d) { return d.data() || {}; });
+    var newest = function (snap) {
+      return snap.docs.map(function (d) { return d.data() || {}; }).sort(function (x, y) { return C.millis(y.at) - C.millis(x.at); }).slice(0, EDITOR_SHOWN);
+    };
+    var editorEvents = newest(got[9]).concat(newest(got[10]));
     return {
       customerId: cid, company: acct.data.name || '', status: acct.data.status || 'active',
       contacts: contacts,

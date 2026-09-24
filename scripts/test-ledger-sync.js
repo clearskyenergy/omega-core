@@ -48,10 +48,11 @@ var A = {
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); }, arrayUnion: function () { return Array.from(arguments); } }; }
 };
 mock('../api/_lib/admin', A);
-var synced = [], syncFails = 0;
+var synced = [], syncFails = 0, syncPartial = null;
 mock('../api/_lib/logic-workflow', { syncLedger: async function (orderId, caller, opts) {
   synced.push({ orderId: orderId, caller: caller, opts: opts });
   if (syncFails > 0) { syncFails--; throw httpError(502, 'Stripe request failed (500): upstream'); }
+  if (syncPartial) { var pe = httpError(409, 'deposit invoice: Stripe invoice changed; reconcile by hand'); pe.partial = syncPartial; throw pe; }
   return { ok: true, provider: 'stripe', stages: {} };
 } });
 
@@ -89,7 +90,7 @@ var connectApi = require('../api/ledger-connect'), hook = require('../api/ledger
 var ORG = 'cleancell.us', QB = 'https://quickbooks.api.intuit.com/v3/company/';
 var admin = { uid: 'u-admin', email: 'office@cleancell.us', orgId: ORG, staff: false };
 
-function reset(values) { db = new DB(); calls = []; routes = []; synced = []; syncFails = 0; env(values === undefined ? FULL : values); }
+function reset(values) { db = new DB(); calls = []; routes = []; synced = []; syncFails = 0; syncPartial = null; env(values === undefined ? FULL : values); }
 function qbSeed(org, realm, extra) {
   db.seed('integrations/quickbooks_workspaces/orgs/' + org, Object.assign({ accessToken: 'AT-SECRET-token', expiresAt: Date.now() + 3600000,
     refreshToken: 'RT-SECRET-token', refreshExpiresAt: Date.now() + 90 * 86400000, env: 'production', realmId: realm, orgId: org,
@@ -337,7 +338,8 @@ await check('QuickBooks push: one customer per ACCOUNT, stable request ids, DocN
   assert.equal(body.BillEmail.Address, 'ap@amperage.example'); assert.equal(body.AllowOnlineACHPayment, true);
   var map = db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/customers/' + P.key('account:c1'));
   assert.deepEqual([map.accountKey, map.realmId, map.qboCustomerId, map.matchedExisting], ['account:c1', '9130', '58', false]);
-  assert.equal(db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/145').orderId, 'amp');
+  var ix = db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/9130_145');
+  assert.deepEqual([ix.orderId, ix.stage, ix.realmId, ix.invoiceId], ['amp', 'deposit', '9130', '145'], 'the reverse index is keyed by company and id');
   /* the balance of another order on the SAME account reuses the customer; a short number is the DocNumber */
   calls = [];
   route('GET', /\/9130\/invoice\/146\?include=invoiceLink/, ok({ Invoice: { Id: '146', DocNumber: 'INV-1001', TotalAmt: 1450000, CustomerRef: { value: '58' } } }));
@@ -428,6 +430,40 @@ await check('QuickBooks link: an existing invoice is adopted only when amount an
   await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view(), 'deposit', '145'), { status: 409, message: 'QuickBooks invoice 145 is USD 1349000.00; this invoice is USD 1349099.10' });
   inv.TotalAmt = 1349099.10; inv.CurrencyRef = { value: 'CAD' };
   await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view(), 'deposit', '145'), { status: 409, message: 'QuickBooks invoice 145 is CAD 1349099.10; this invoice is USD 1349099.10' });
+});
+
+await check('QuickBooks reverse index is per company: after moving to another company, its invoice 145 is not the old company\'s 145', async function () {
+  reset(); qbSeed(ORG, '111');
+  var made = { '111': 145, '222': 145 };
+  function inv(realm, id) { return { Id: String(id), TotalAmt: 1349099.10, CustomerRef: { value: '58' }, CurrencyRef: { value: 'USD' } }; }
+  ['111', '222'].forEach(function (realm) {
+    route('GET', new RegExp('/' + realm + '/query\\?query='), ok({ QueryResponse: { Customer: [{ Id: '58' }] } }));
+    route('POST', new RegExp('/' + realm + '/invoice\\?'), function () { return ok({ Invoice: { Id: String(made[realm]) } }); });
+    route('GET', new RegExp('/' + realm + '/invoice/\\d+'), function (c) { return ok({ Invoice: inv(realm, /invoice\/(\d+)/.exec(c.url)[1]) }); });
+  });
+  var a = await LS.providers.quickbooks.pushInvoice(ORG, view({ id: 'orderA', orderNo: 'CC-A' }), 'deposit');
+  assert.equal(a.invoiceId, '145'); assert.equal(a.company, '111');
+  /* the workspace disconnects and connects another company (a supported flow) */
+  route('POST', /developer\.api\.intuit\.com\/v2\/oauth2\/tokens\/revoke/, ok({}));
+  await LS.providers.quickbooks.disconnect(ORG, admin);
+  qbSeed(ORG, '222', { disconnectedAt: null });
+  var before111 = JSON.stringify(db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/111_145'));
+  var b = await LS.providers.quickbooks.pushInvoice(ORG, view({ id: 'orderB', orderNo: 'CC-B', number: 'INV-B' }), 'deposit');
+  assert.equal(b.invoiceId, '145'); assert.equal(b.company, '222');
+  assert.equal(db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/222_145').orderId, 'orderB');
+  assert.equal(JSON.stringify(db.data.get('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/111_145')), before111, 'the old company\'s entry is kept as it was');
+  /* a retry resumes the same invoice; linking it again is the same order */
+  calls = [];
+  assert.equal((await LS.providers.quickbooks.pushInvoice(ORG, view({ id: 'orderB', orderNo: 'CC-B', number: 'INV-B' }), 'deposit')).invoiceId, '145');
+  assert.equal(calls.filter(function (c) { return c.method === 'POST'; }).length, 0, 'resumed, not made twice');
+  assert.equal((await LS.providers.quickbooks.linkInvoice(ORG, view({ id: 'orderB', orderNo: 'CC-B', number: 'INV-B' }), 'deposit', '145')).invoiceId, '145');
+  /* within ONE company an invoice still belongs to one order */
+  await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view({ id: 'orderC' }), 'deposit', '145'), { status: 409, message: 'QuickBooks invoice 145 is already linked to another order (CC-B, deposit)' });
+  /* an entry written under the bare id before the key carried the company is honoured in its own company only */
+  db.seed('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/150', { orderId: 'orderOld', orderNo: 'CC-OLD', stage: 'deposit', realmId: '222' });
+  db.seed('integrations/quickbooks_workspaces/orgs/' + ORG + '/invoices/151', { orderId: 'orderOld', orderNo: 'CC-OLD', stage: 'deposit', realmId: '111' });
+  await assert.rejects(LS.providers.quickbooks.linkInvoice(ORG, view({ id: 'orderD' }), 'deposit', '150'), { status: 409, message: /already linked to another order \(CC-OLD, deposit\)/ });
+  assert.equal((await LS.providers.quickbooks.linkInvoice(ORG, view({ id: 'orderD' }), 'deposit', '151')).invoiceId, '151');
 });
 
 await check('Stripe connect: OAuth URL, token exchange keeps only the account id, account index written, another workspace\'s account refused', async function () {
@@ -692,6 +728,19 @@ await check('ledger-webhook: signature and tolerance, dedupe, unknown account, d
   assert.deepEqual(await deliver(event('evt_9', 'invoice.paid', { id: 'in_1' }, null)), { ok: true, ignored: true });
   assert.equal(db.data.has('integrations/stripe_connect/events/evt_8'), false);
   assert.equal(synced.length, 5);
+  /* the order's OTHER invoice was refused by Stripe: an event about the one
+     that synced is done (retrying it for days changes nothing); an event
+     about the refused one is still a 500, so Stripe retries it */
+  db.seed('integrations/stripe_connect/orgs/' + ORG + '/invoices/in_b', { orderId: 'o2', stage: 'balance', number: 'SS-1043', accountId: 'acct_1CLEAN' });
+  syncPartial = { ok: true, provider: 'stripe', stages: { deposit: { pushed: false, recorded: [], voided: [], conflicts: [], warning: null, error: 'Stripe invoice changed; reconcile by hand' },
+    balance: { pushed: false, recorded: ['stripe:ch_b'], voided: [], conflicts: [], warning: null } } };
+  assert.deepEqual(await deliver(event('evt_4b', 'invoice.paid', { id: 'in_b' })), { ok: true, orderId: 'o2', stage: 'balance', partial: true });
+  ev = db.data.get('integrations/stripe_connect/events/evt_4b');
+  assert.equal(ev.status, 'done'); assert.match(ev.error, /^deposit invoice: /);
+  await assert.rejects(deliver(event('evt_4c', 'invoice.paid', { id: 'in_1' })), { status: 500 });
+  assert.equal(db.data.get('integrations/stripe_connect/events/evt_4c').status, 'failed');
+  syncPartial = null;
+  assert.equal(synced.length, 7);
   /* the account disconnects Omega Logic in Stripe */
   assert.deepEqual(await deliver(event('evt_10', 'account.application.deauthorized', { id: 'ca_ClientId123', object: 'application' })), { ok: true, disconnected: true });
   assert.equal(db.data.get('integrations/stripe_connect/orgs/' + ORG).disconnectedBy, 'stripe');
@@ -700,7 +749,7 @@ await check('ledger-webhook: signature and tolerance, dedupe, unknown account, d
   assert.equal(st.connected, false); assert.match(st.lastError, /disconnected Omega Logic/);
   /* after that, the account's events are ignored */
   assert.deepEqual(await deliver(event('evt_11', 'invoice.paid', { id: 'in_1' })), { ok: true, ignored: true });
-  assert.equal(synced.length, 5);
+  assert.equal(synced.length, 7);
   assert.equal(JSON.stringify(db.data.get('orders/o2')), orderBefore, 'the webhook never writes an order');
 });
 

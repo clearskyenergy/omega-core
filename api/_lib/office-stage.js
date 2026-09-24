@@ -107,6 +107,8 @@ function finance(orders, owner) {
       if (!i.satisfied) f.receivableCents += Math.max(0, (Number(i.amountCents) || 0) - (Number(i.paidCents) || 0));
     });
     if (key === 'deposit') f.expectedDepositCents += inv.deposit ? Math.max(0, (Number(inv.deposit.amountCents) || 0) - (Number(inv.deposit.paidCents) || 0)) : (Number(c.depositCents) || 0);
+    /* released on PO: the order has moved past 'deposit' but the deposit is still owed */
+    else if (key !== 'cancelled') f.expectedDepositCents += creditOpen(o);
     if (key === 'release' || key === 'production') f.expectedBalanceCents += Math.max(0, (Number(c.totalCents) || 0) - (Number(c.depositCents) || 0));
     if (key === 'balance' && inv.balance) f.expectedBalanceCents += Math.max(0, (Number(inv.balance.amountCents) || 0) - (Number(inv.balance.paidCents) || 0));
     if (f.wire && l.payout) { f.wire.eligibleCents += Number(l.payout.eligibleCents) || 0; f.wire.sentCents += Number(l.payout.sentCents) || 0; f.wire.pendingCents += Number(l.payout.pendingCents) || 0; }

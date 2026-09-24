@@ -237,6 +237,11 @@ await check('verified ClearSky owner can use customer designs without granting s
   var save={action:'save',projectId:'owner-site',revision:0,name:'Owner site',module:'bess',kw:1000,hours:2,canvas:{elements:[]},owner:true,email:owner.email,customerId:'forged'};
   await assert.rejects(post(design,save,other),/subscription or approved trial/);
   assert.equal((await post(design,save,owner)).revision,1);
+  /* the list reads four fields a design, never its canvas (up to 750 KB each) */
+  var sel=Query.prototype.select,asked=[];Query.prototype.select=function(){asked.push({path:this.path,fields:Array.prototype.slice.call(arguments)});return this;};
+  try{var listed=await list(owner);}finally{Query.prototype.select=sel;}
+  var projRead=asked.filter(function(a){return /\/customers\/[^/]+\/projects$/.test(a.path);});assert.equal(projRead.length,1,'the design list is read with a projection');
+  assert.deepEqual(projRead[0].fields.slice().sort(),['module','name','revision','updatedAt']);assert.equal(listed.projects[0].name,'Owner site');assert.equal(listed.projects[0].revision,1);
   assert.equal((await post(design,{action:'size',module:'bess',sku:'GENERIC-BESS',kw:1000,hours:2},owner)).kwh,2000);
   var opened=await design({method:'GET',query:{org:'cleancell.us',project:'owner-site'},caller:owner},res);assert.equal(opened.project.customerId,out.customerId);assert.equal(opened.project.createdBy,owner.uid);
   await post(buyers,{action:'editor-trial',email:other.email,days:7});
@@ -424,6 +429,11 @@ await check('a tenant-billed order needs no QuickBooks: the office records its o
   assert.equal((await post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'CCUS-3V3I-0926-01 Rev B',date:'2026-09-23'},admin)).duplicate,true);
   await assert.rejects(post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'OTHER-1',date:'2026-09-23'},admin),/already recorded/);
   var part=await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:899399.40,date:'2026-09-24',bankReference:'ACH 4471'},admin);assert.equal(part.invoice.status,'part_paid');assert.equal(part.invoice.balanceCents,44969970);assert(!db.data.get('orders/one').logic.releasedAt,'a part payment does not release');
+  /* a pay link added to a part-paid invoice by someone else changes the link and nothing else: the status, the issuer and what was paid stand */
+  var linked=await post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'CCUS-3V3I-0926-01 Rev B',date:'2026-09-23',payUrl:'https://pay.cleancell.us/inv/3V3I'});var dep=db.data.get('orders/one').logic.invoices.deposit;
+  assert.equal(linked.payLinkChanged,true);assert.equal(dep.status,'part_paid','still part paid');assert.equal(dep.issuedBy,'factory@cleancell.us','the issuer stays the issuer');assert.equal(dep.issuedAt,'2026-09-23');assert.equal(dep.paidCents,89939940);assert.equal(dep.paidCents,part.invoice.paidCents);assert.equal(dep.balanceCents,44969970);
+  assert.equal(dep.payUrl,'https://pay.cleancell.us/inv/3V3I');assert.equal(dep.payUrlBy,'tom@clearsky-usa.com');assert.equal(require('../api/_lib/portal').publicOrder(db.data.get('orders/one')).checkout.invoices[0].status,'part_paid','the customer still sees part paid');
+  await post(office,{action:'invoice-issued',orderId:'one',stage:'deposit',number:'CCUS-3V3I-0926-01 Rev B',date:'2026-09-23',payUrl:null});dep=db.data.get('orders/one').logic.invoices.deposit;assert.equal(dep.status,'part_paid','removing the link keeps it part paid');assert.equal(dep.payUrl,null);assert.equal(dep.issuedBy,'factory@cleancell.us');
   assert.equal((await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:899399.40,date:'2026-09-24',bankReference:'ACH 4471'},admin)).duplicate,true,'the same bank reference twice is one payment');
   var full=await post(office,{action:'payment-received',orderId:'one',stage:'deposit',amount:449699.70,date:'2026-09-25',bankReference:'ACH 4472'},admin);assert.equal(full.invoice.status,'paid');assert.equal(full.invoice.satisfied,true);
   o=db.data.get('orders/one');assert(o.logic.releasedAt,'deposit paid in full releases the order');assert.equal(o.status,'in_fulfilment');assert.equal(invoiceWrites,0,'nothing was written to QuickBooks');

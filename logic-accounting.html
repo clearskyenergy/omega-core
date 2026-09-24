@@ -188,6 +188,15 @@ s.voided{color:var(--ink3)}
   function prov(p) { return PROV[p] || p || ''; }
   function days(a, b) { var x = Date.parse(a + 'T00:00:00Z'), y = Date.parse(b + 'T00:00:00Z'); return isNaN(x) || isNaN(y) ? null : Math.round((y - x) / 86400000); }
   function status(t, bad) { var s = $('status'); s.textContent = t || ''; s.className = 'logic-status' + (bad ? ' error' : ''); }
+  /* what an action says, where the person is looking: inside the open drawer
+     (it covers the page on a phone, and #status is scrolled away on a long
+     ledger), else in #status, brought into view when it is an error */
+  function say(t, bad) {
+    status(t, bad);
+    var d = !$('drawer').hidden && $('drawer-status');
+    if (d) { d.textContent = t || ''; d.className = 'logic-status' + (bad ? ' error' : ''); if (t && d.scrollIntoView) d.scrollIntoView({ block: 'nearest' }); }
+    else if (t && bad && $('status').scrollIntoView) $('status').scrollIntoView({ block: 'nearest' });
+  }
   function api(path, body) {
     if (!auth.currentUser) return Promise.reject(new Error('Sign in through your office to open accounting.'));
     return auth.currentUser.getIdToken().then(function (t) {
@@ -319,6 +328,7 @@ s.voided{color:var(--ink3)}
     if (a.push) b += '<button type="button" data-act="push">Push to ' + esc(P) + '</button>';
     if (a.link) b += '<button type="button" data-act="link">Link existing ' + esc(P) + ' invoice</button>';
     if (a.pull) b += '<button type="button" data-act="pull">Sync payments now</button>';
+    h += '<p id="drawer-status" class="logic-status" role="status" aria-live="polite"></p>';
     h += b ? '<div class="dacts">' + b + '</div>' : (r.billing === 'tenant' ? '' : '<p class="hint">Nothing to record here: this invoice lives in ClearSky’s QuickBooks.</p>');
     return h;
   }
@@ -397,16 +407,23 @@ s.voided{color:var(--ink3)}
   }
 
   /* ── writes: ONE door each, then the ledger again ───────────────────── */
-  function run(path, body, say, go, onError) {
+  function run(path, body, done, go, onError) {
     if (BUSY) return;
-    BUSY = true; if (go) go.disabled = true; status('Working…'); dlgErr('');
+    BUSY = true; if (go) go.disabled = true; say('Working…'); dlgErr('');
     var key = ROW;
     api(path, body).then(function (r) {
       closeDialog();
-      var msg = typeof say === 'function' ? say(r) : say;
-      return load().then(function () { if (key) openDrawer(key); status(msg); });
-    })['catch'](function (e) { status(e.message, true); dlgErr(e.message); if (onError) onError(e); })
-      .then(function () { BUSY = false; if (go) go.disabled = false; validate(); });
+      var msg = typeof done === 'function' ? done(r) : done;
+      return load().then(function () { if (key) openDrawer(key); say(msg); });
+    })['catch'](function (e) {
+      /* a dialog shows its own error and stays open to be corrected */
+      if (DLG) { status(e.message, true); dlgErr(e.message); if (onError) onError(e); return; }
+      if (onError) onError(e);
+      /* push / pull / the sync card have no dialog: redraw, so what the server
+         kept on the invoice (a failed push's error, the sync error) is on
+         screen, and say it where the person is looking */
+      return load().then(function () { if (key) openDrawer(key); say(e.message, true); }, function () { say(e.message, true); });
+    }).then(function () { BUSY = false; if (go) go.disabled = false; validate(); });
   }
   function pullSay(r) {
     if (r.skipped) return r.skipped === 'not-connected' ? 'Not connected: connect ' + prov(r.provider) + ' first.' : 'Ledger sync is off.';
@@ -421,11 +438,23 @@ s.voided{color:var(--ink3)}
     var d = DLG; if (!d) return;
     var body = { action: 'payment-void', org: org, orderId: d.row.orderId, stage: d.row.stage, bankReference: d.extra.ref, reason: $('void-reason').value.trim() };
     if (d.extra.choice) { body.keepBuilding = $('after-keep').checked; if (body.keepBuilding) body.poNumber = $('void-po').value.trim(); }
-    run('/api/logic-office', body, function () { return 'Payment voided' + (body.keepBuilding === true ? '; the order keeps building on its PO.' : body.keepBuilding === false ? '; the order is on hold.' : '.'); }, $('void-go'));
+    run('/api/logic-office', body, function () { return 'Payment voided' + (body.keepBuilding === true ? '; the order keeps building on its PO.' : body.keepBuilding === false ? '; the order is on hold.' : '.'); }, $('void-go'), function (e) {
+      /* the order reached the plant after this page loaded: the server asks
+         for the choice this row did not offer — offer it now */
+      if (DLG && /keep building on the PO, or hold/i.test(e.message || '')) {
+        DLG.extra.choice = true; $('void-choice').hidden = false;
+        if (!$('void-po').value) $('void-po').value = DLG.row.poNumber || '';
+      } else load().then(function () { if (ROW) openDrawer(ROW); })['catch'](function () {});
+    });
   };
   $('rel-go').onclick = function () {
     var d = DLG; if (!d) return;
-    run('/api/logic-office', { action: 'release-on-po', org: org, orderId: d.row.orderId, reason: $('rel-reason').value.trim(), poNumber: $('rel-po').value.trim() }, 'Released on PO. Shipment still needs the deposit and the balance recorded.', $('rel-go'));
+    run('/api/logic-office', { action: 'release-on-po', org: org, orderId: d.row.orderId, reason: $('rel-reason').value.trim(), poNumber: $('rel-po').value.trim() }, function (r) {
+      /* the credit release is recorded either way; say whether the plant has started */
+      if (r && r.order && r.order.releasedAt) return 'Released on PO. Shipment still needs the deposit and the balance recorded.';
+      if (r && r.workflow && r.workflow.error) return 'Release on PO recorded, but the plant has not started: ' + r.workflow.error;
+      return 'Release on PO recorded; the plant starts on the next workflow run.';
+    }, $('rel-go'));
   };
   $('ed-go').onclick = function () {
     var d = DLG; if (!d) return;
@@ -486,7 +515,7 @@ s.voided{color:var(--ink3)}
       var url = URL.createObjectURL(new Blob([x.csv], { type: 'text/csv' })), a = document.createElement('a');
       a.href = url; a.download = x.filename || 'receivables.csv'; document.body.appendChild(a); a.click();
       setTimeout(function () { URL.revokeObjectURL(url); a.parentNode.removeChild(a); }, 1000);
-    })['catch'](function (e) { status(e.message, true); }).then(function () { btn.disabled = false; });
+    })['catch'](function (e) { say(e.message, true); }).then(function () { btn.disabled = false; });
   };
 
   /* ── where this workspace keeps its own books ───────────────────────── */
@@ -529,8 +558,8 @@ s.voided{color:var(--ink3)}
       run('/api/logic-accounting', body, p === 'none' ? 'Ledger sync is off.' : 'Saved: invoices go to your ' + prov(p) + '.', b);
     } else if (b.id === 'sync-pull-all') run('/api/logic-accounting', { action: 'sync-pull', org: org }, pullSay, b);
     else if (b.getAttribute('data-sync') === 'connect') {
-      BUSY = true; b.disabled = true; status('Opening ' + prov(k) + '…');
-      api('/api/logic-accounting', { action: 'sync-connect', org: org, provider: k }).then(function (x) { location.href = x.url; })['catch'](function (err) { status(err.message, true); BUSY = false; b.disabled = false; });
+      BUSY = true; b.disabled = true; say('Opening ' + prov(k) + '…');
+      api('/api/logic-accounting', { action: 'sync-connect', org: org, provider: k }).then(function (x) { location.href = x.url; })['catch'](function (err) { say(err.message, true); BUSY = false; b.disabled = false; });
     } else if (b.getAttribute('data-sync') === 'disconnect') {
       if (!window.confirm('Disconnect ' + prov(k) + ' from this workspace? Invoices already there stay there; nothing new is created or read until it is connected again.')) return;
       run('/api/logic-accounting', { action: 'sync-disconnect', org: org, provider: k }, prov(k) + ' disconnected.', b);

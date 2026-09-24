@@ -678,7 +678,7 @@ async function main() {
     LS.pullFail = 'QuickBooks invoice changed; reconcile by hand';
     run = await W.processOrder('amp');
     assert.equal(run.ok, true); var err = order().logic.ledgerSyncError;
-    assert.deepEqual([err.provider, err.message], ['quickbooks', 'QuickBooks invoice changed; reconcile by hand']);
+    assert.deepEqual([err.provider, err.message], ['quickbooks', 'deposit invoice: QuickBooks invoice changed; reconcile by hand'], 'the sync error names the invoice the provider refused');
     assert.equal(order().logic.lastError, null); assert.notEqual(S.stageOf(order()).key, 'exception');
     var at = err.at; await W.processOrder('amp'); assert.equal(order().logic.ledgerSyncError.at, at, 'written only when it changes');
     await rejects(post(accounting, { action: 'sync-pull', orderId: 'amp' }), 409, /reconcile by hand/);
@@ -714,6 +714,135 @@ async function main() {
     await post(office, { action: 'release-on-po', orderId: 'amp', reason: 'Credit approved on the PO' });
     x = (await call(office, 'GET', {}, ADMIN)).orders[0];
     assert.equal(x.logic.paymentHold, null); assert.equal(x.logic.creditRelease.basis, 'hold-lifted');
+  });
+
+  /* ───────────────────────── review findings, pinned ───────────────────── */
+  var HALF = DEP / 2;
+  await test('one invoice takes its payments from one place: a hand-recorded part payment is not counted again when the linked QuickBooks invoice is pulled', async function () {
+    /* (a) decision 9's link path: half the deposit recorded by hand, then the
+       invoice linked to the workspace's QuickBooks, which holds the same wire */
+    seed(); await priced(); await issued();
+    await paid('FEDWIRE 20261002-0001', HALF / 100, '2026-10-02');
+    assert.equal(dep().status, 'part_paid');
+    await post(accounting, { action: 'sync-choose', provider: 'quickbooks', quickbooks: { itemRef: '5', approved: true } });
+    await post(accounting, { action: 'sync-link', orderId: 'amp', stage: 'deposit', invoiceId: '145' });
+    LS.pull = [{ ref: 'qbo:88', amountCents: HALF, date: '2026-10-02', reversed: false, external: { paymentId: '88' } }];
+    await W.processOrder('amp');   /* the 5-minute worker, nobody clicked anything */
+    assert.equal(dep().paidCents, HALF, 'the same wire is not counted twice'); assert.equal(dep().status, 'part_paid');
+    assert.equal(order().status, 'accepted'); assert.equal(order().logic.releasedAt || null, null, 'not released on money that did not arrive');
+    assert.equal(keys('plant_works_orders/').length, 0);
+    assert.deepEqual(dep().payments.map(function (p) { return p.bankReference; }), ['FEDWIRE 20261002-0001']);
+    assert.match(dep().ledger.warning, /^qbo:88: This invoice has payments recorded by hand \(FEDWIRE 20261002-0001\), so the QuickBooks payment of USD 674549\.55 is not recorded/);
+    /* the office cannot add hand entries to an invoice that lives in its QuickBooks, and the page does not offer it */
+    await rejects(paid('FEDWIRE 20261003-0002', HALF / 100, '2026-10-03'), 409, /This invoice is in QuickBooks \(145\); apply the payment there and sync/);
+    var row = (await call(accounting, 'GET', {}, ADMIN)).rows[0];
+    assert.equal(row.actions.record, false); assert.equal(row.actions.void, true);
+    /* void the hand entry QuickBooks now holds: the pull records it once */
+    await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'FEDWIRE 20261002-0001', reason: 'QuickBooks holds this wire as payment 88' });
+    await post(accounting, { action: 'sync-pull', orderId: 'amp' });
+    assert.equal(dep().paidCents, HALF); assert.equal(dep().status, 'part_paid'); assert.equal(order().logic.releasedAt || null, null);
+    assert.deepEqual(dep().payments.filter(function (p) { return !p.voidedAt; }).map(function (p) { return p.bankReference; }), ['qbo:88']);
+    assert.equal(dep().ledger.warning, null);
+    /* the workspace stops syncing: its office records by hand again, even on the invoice once linked */
+    await post(accounting, { action: 'sync-choose', provider: 'none' });
+    await paid('ACH 5', HALF / 100, '2026-10-04');
+    assert.equal(dep().status, 'paid');
+    assert.equal((await call(accounting, 'GET', {}, ADMIN)).rows[0].actions.record, false, 'paid: nothing left to record');
+
+    /* (b) the other order: QuickBooks chosen first, the pull records half, then the office tries the same wire by hand */
+    seed(); await priced();
+    await post(accounting, { action: 'sync-choose', provider: 'quickbooks', quickbooks: { itemRef: '5', approved: true } });
+    await issued(); assert.equal(dep().ledger.state, 'pushed');
+    LS.pull = [{ ref: 'qbo:88', amountCents: HALF, date: '2026-10-02', reversed: false, external: { paymentId: '88' } }];
+    await W.processOrder('amp');
+    assert.equal(dep().paidCents, HALF);
+    assert.equal((await call(accounting, 'GET', {}, ADMIN)).rows[0].actions.record, false);
+    await rejects(paid('FEDWIRE 20261002-0001', HALF / 100, '2026-10-02'), 409, /This invoice is in QuickBooks/);
+    assert.equal(dep().paidCents, HALF); assert.equal(order().logic.releasedAt || null, null);
+
+    /* (c) Stripe: a wire recorded by hand stays the documented path above Stripe's cap, and a Stripe receipt then is a conflict, never a second count */
+    seed(); await priced();
+    await post(accounting, { action: 'sync-choose', provider: 'stripe' });
+    await issued(); assert.equal(dep().ledger.provider, 'stripe');
+    LS.pull = [];
+    await paid('FEDWIRE 20261002-8841', DEP / 100, '2026-10-02');
+    assert.equal(dep().status, 'paid'); assert(order().logic.releasedAt);
+    LS.pull = [{ ref: 'stripe:ch_1', amountCents: DEP, date: '2026-10-03', reversed: false, external: { invoiceId: 'in_1', chargeId: 'ch_1' } }];
+    var pl = await post(accounting, { action: 'sync-pull', orderId: 'amp' });
+    assert.equal(dep().paidCents, DEP); assert.equal(dep().payments.length, 1);
+    assert.match(pl.results[0].stages.deposit.conflicts[0], /recorded by hand \(FEDWIRE 20261002-8841\), so the Stripe payment/);
+  });
+  await test('a QuickBooks payment deleted and entered again under a new id is a void then a receipt, not a hold on a paid order', async function () {
+    seed(); await priced();
+    await post(accounting, { action: 'sync-choose', provider: 'quickbooks', quickbooks: { itemRef: '5', approved: true } });
+    await issued();
+    LS.pull = [{ ref: 'qbo:88', amountCents: DEP, date: '2026-10-01', reversed: false, external: { paymentId: '88' } }];
+    await W.processOrder('amp');
+    assert.equal(order().status, 'in_fulfilment');
+    /* as the provider returns it: the new payment first, the vanished one appended */
+    LS.pull = [{ ref: 'qbo:90', amountCents: DEP, date: '2026-10-02', reversed: false, external: { paymentId: '90' } },
+      { ref: 'qbo:88', amountCents: DEP, date: '2026-10-01', reversed: true, external: { paymentId: '88' } }];
+    var pl = await post(accounting, { action: 'sync-pull', orderId: 'amp' }), st = pl.results[0].stages.deposit;
+    assert.deepEqual([st.recorded, st.voided, st.conflicts], [['qbo:90'], ['qbo:88'], []]);
+    assert.equal(dep().status, 'paid'); assert.equal(dep().paidCents, DEP);
+    assert.equal(order().logic.paymentHold, null); assert.equal(order().logic.paymentException, null); assert.equal(dep().ledger.warning, null);
+    assert.equal(order().status, 'in_fulfilment'); assert.notEqual(S.stageOf(order()).key, 'exception'); assert.equal(keys('plant_works_orders/').length, 1);
+  });
+  await test('the office may take back its own void of a QuickBooks payment; the entry is QuickBooks\' again and a real reversal still voids it', async function () {
+    seed(); await priced();
+    await post(accounting, { action: 'sync-choose', provider: 'quickbooks', quickbooks: { itemRef: '5', approved: true } });
+    await issued();
+    LS.pull = [{ ref: 'qbo:88', amountCents: DEP, date: '2026-10-01', reversed: false, external: { paymentId: '88' } }];
+    await W.processOrder('amp'); assert(order().logic.releasedAt);
+    /* voided by mistake, with hold */
+    await post(office, { action: 'payment-void', orderId: 'amp', stage: 'deposit', bankReference: 'qbo:88', reason: 'Thought it was a duplicate', keepBuilding: false });
+    assert(order().logic.paymentHold); assert.equal(dep().status, 'awaiting_payment');
+    /* the page's pay dialog shows its reinstate box on a message that says "voided" */
+    await rejects(paid('qbo:88', DEP / 100, '2026-10-01'), 409, /voided/);
+    await rejects(paid('qbo:88', DEP / 100, '2026-10-01', 'deposit', 'amp', { reinstate: true, reason: 'no' }), 400, /Say why/);
+    await rejects(paid('qbo:88', 1, '2026-10-01', 'deposit', 'amp', { reinstate: true, reason: 'QuickBooks has it; voided by mistake' }), 400, /qbo:88 was recorded from QuickBooks as USD 1349099\.1; reinstate it for that amount/);
+    var back = await paid('qbo:88', DEP / 100, '2026-10-01', 'deposit', 'amp', { reinstate: true, reason: 'QuickBooks has it; voided by mistake' });
+    assert.equal(back.invoice.status, 'paid');
+    var e = dep().payments[1];
+    assert.deepEqual([e.bankReference, e.source, e.reinstates, e.by], ['qbo:88', 'quickbooks', 0, ADMIN.email]); assert.deepEqual(e.external, { paymentId: '88' });
+    assert.equal(order().logic.paymentHold, null); assert.equal(order().logic.paymentException, null);
+    /* the next pull matches it: no conflict, no warning */
+    var pl = await post(accounting, { action: 'sync-pull', orderId: 'amp' });
+    assert.deepEqual(pl.results[0].stages.deposit.conflicts, []); assert.equal(dep().ledger.warning, null); assert.equal(dep().payments.length, 2);
+    /* the office still cannot mint a qbo: reference */
+    await rejects(paid('qbo:99', 1, '2026-10-01', 'deposit', 'amp', { reinstate: true, reason: 'Made up by hand' }), 400, /written by the ledger sync/);
+    /* a real reversal in QuickBooks voids the reinstated entry and holds */
+    LS.pull = [{ ref: 'qbo:88', amountCents: DEP, date: '2026-10-01', reversed: true, external: { paymentId: '88' } }];
+    pl = await post(accounting, { action: 'sync-pull', orderId: 'amp' });
+    assert.deepEqual(pl.results[0].stages.deposit.voided, ['qbo:88']);
+    assert.equal(dep().payments[1].voidSource, 'quickbooks'); assert.equal(dep().status, 'awaiting_payment'); assert.equal(order().logic.paymentHold.source, 'quickbooks');
+  });
+  await test('one invoice refused by the provider does not stop the other: the balance paid in QuickBooks is recorded while the deposit is reconciled by hand', async function () {
+    seed({ qty: 2 }); await priced();
+    await post(accounting, { action: 'sync-choose', provider: 'quickbooks', quickbooks: { itemRef: '5', approved: true } });
+    await issued();
+    LS.pull = [{ ref: 'qbo:88', amountCents: DEP, date: '2026-10-01', reversed: false, external: { paymentId: '88' } }];
+    await W.processOrder('amp'); assert(order().logic.releasedAt);
+    readyUnits(2); await W.processOrder('amp');
+    assert.equal(order().logic.invoices.balance.status, 'to_issue');
+    await issued('amp', 'balance', 'B-1', '2026-10-10');
+    assert.equal(order().logic.invoices.balance.ledger.state, 'pushed');
+    LS.pull = function (view, stage) {
+      if (stage === 'deposit') { var e = new Error('QuickBooks invoice changed; reconcile by hand'); e.status = 409; throw e; }
+      return [{ ref: 'qbo:99', amountCents: BAL, date: '2026-10-12', reversed: false, external: { paymentId: '99' } }];
+    };
+    var before = LS_CALLS.length;
+    var run = await W.processOrder('amp');
+    var pulls = LS_CALLS.slice(before).filter(function (c) { return c.fn === 'pull'; }).map(function (c) { return c.stage; });
+    assert.deepEqual(pulls, ['deposit', 'balance'], 'the balance is still pulled');
+    assert.equal(run.ok, true); assert.equal(order().logic.invoices.balance.status, 'paid'); assert.equal(order().logic.invoices.balance.payments[0].bankReference, 'qbo:99');
+    assert.equal(order().logic.lastError, null); assert.equal(order().logic.ledgerSyncError.message, 'deposit invoice: QuickBooks invoice changed; reconcile by hand');
+    assert.equal(S.stageOf(order()).key, 'ship');
+    /* the explicit sync says which invoice failed; the bulk sync still reports what the other one did */
+    await rejects(post(accounting, { action: 'sync-pull', orderId: 'amp' }), 409, /^deposit invoice: QuickBooks invoice changed/);
+    var bulk = await post(accounting, { action: 'sync-pull' });
+    assert.match(bulk.results[0].error, /^deposit invoice: /); assert.equal(bulk.results[0].stages.deposit.error, 'QuickBooks invoice changed; reconcile by hand'); assert(bulk.results[0].stages.balance);
+    LS.pull = [];
   });
 
   console.log('\n' + count + ' accounting tests passed. No network calls.');
