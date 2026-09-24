@@ -41,8 +41,14 @@
   body.logic-theme{display:flex;flex-direction:column;min-height:100vh;background:var(--paper);padding-bottom:calc(64px + env(safe-area-inset-bottom,0))}
   header.top{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top,0)) 16px 12px;border-bottom:1px solid var(--line);background:white;position:sticky;top:0;z-index:5}
   header.top b{font-size:17px}header.top small{display:block;color:var(--ink2);font-size:12px}
-  header.top .sp{flex:1}
-  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}header.top>div{min-width:0}
+  /* the name and "Company · email" never push the buttons off a phone:
+     they shrink and end in an ellipsis instead */
+  header.top>div{min-width:0;flex:1 1 auto;overflow:hidden}header.top b,header.top small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  header.top .sp{flex:0 0 0}
+  header.top button{padding:7px 12px;border:1px solid var(--line);background:white;font-size:13px;white-space:nowrap;flex:none}
+  @media (max-width:430px){header.top{gap:6px}header.top button{padding:7px 10px}
+    /* Switch becomes an icon on a phone; its title still says what it does */
+    #switch{font-size:0;padding:7px 11px}#switch:before{content:'\21C4';font-size:16px;line-height:1}}
   main{flex:1;padding:14px 16px;max-width:720px;width:100%;margin:0 auto;min-width:0}
   main>*{min-width:0}
   h1{font-size:24px;margin:6px 0 10px}h2{font-size:18px;margin:18px 0 8px}
