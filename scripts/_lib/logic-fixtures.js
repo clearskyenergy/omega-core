@@ -46,7 +46,10 @@ var STOCK = { 'CC-MOD-52': { onHand: 8 }, 'CC-CELL-280': { onHand: 500, onOrder:
 var WORKS = [{ id: 'wo_1', orderNo: 'CC-26-4419', status: 'awaiting_serials', requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14' }];
 var MAT_ORDERS = [{ id: 'a', orderNo: 'CC-26-4420', status: 'accepted', items: [{ sku: 'CC-C215', qty: 2 }], promisedShipAt: '2026-12-05' }, { id: 'b', orderNo: 'CC-26-4421', status: 'new', items: [{ sku: 'CC-C418', qty: 3 }] }];
 var NOW = '2026-09-21';
-var brand = { name: 'Clean Cell', primary: '#3FAFC6', accent: '#EE5A4F', ink: '#0B2733' };
+/* the shape api/_lib/logic-brand.js returns: the customer-facing name, the
+   workspace (the tenant's own name, shown inside Omega Logic) and the
+   contract's "powered by" line */
+var brand = { name: 'Clean Cell', shortName: 'Clean Cell', workspace: 'Clean Cell', primary: '#3FAFC6', accent: '#EE5A4F', ink: '#0B2733', supportEmail: '', attribution: 'Powered by ClearSky OMEGA' };
 var flow = { version: 1, lines: [{ id: 'line_1', name: 'North line', location: 'Building A' }], routing: [{ key: 'kit', label: 'Kitting' }, { key: 'eol', label: 'EOL test' }, { key: 'ready', label: 'Ready' }] };
 var wo = { id: 'wo_1', orgId: ORG, orderNo: 'CC-26-4419', status: 'awaiting_serials', lineId: 'line_1', routing: flow.routing, flowVersion: 1, requirements: [{ sku: 'CC-C215', qty: 5 }], dueDate: '2026-11-14', managerRevision: 0 };
 /* the bench: one cabinet with two parts steps and a check at Rack assembly */
@@ -72,18 +75,21 @@ function initialState() {
       { serial: 'CC418-26-44195', sku: 'CC-C215', shipUnit: true, at: '', done: {}, inventoryStatus: 'building', unitType: 'cabinet' }
     ],
     orders: [
-      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customer: { name: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
+      { id: 'o1', orderNo: 'CC-26-4419', status: 'in_fulfilment', createdAt: '2026-09-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' }, items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], worksOrderId: 'wo_1', logic: { commercial: { baseCents: 50000000, feeCents: 125000, totalCents: 50125000, depositCents: 15037500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 15037500, paidCents: 15037500, status: 'paid' }, balance: { amountCents: 35087500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-01', releasedAt: '2026-09-02', requirements: [{ sku: 'CC-C215', qty: 4 }], allocatedSerials: ['CC418-26-44192'] }, requests: [{ id: 'r1', kind: 'shipping', message: 'Deliver to the Bakersfield yard instead', status: 'open', at: '2026-09-20T10:00:00Z', by: 'ops@riverside.example', address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, answer: null }] },
       { id: 'o2', orderNo: 'CC-26-4420', status: 'accepted', createdAt: '2026-09-18T10:00:00Z', customer: { name: 'Sierra Storage', email: 'buy@sierra.example' }, items: [{ sku: 'CC-C418', name: '418 kWh', qty: 2 }], logic: { commercial: { baseCents: 30000000, feeCents: 75000, totalCents: 30075000, depositCents: 9022500, terms: { depositPct: 30, dueDays: 0 } }, invoices: { deposit: { amountCents: 9022500, paidCents: 0, status: 'open' } }, acceptedAt: '2026-09-18', requirements: [], allocatedSerials: [] } },
-      { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customer: { name: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
+      { id: 'o3', orderNo: 'CC-26-4421', status: 'new', createdAt: '2026-09-20T10:00:00Z', customerId: 'company_incharge', customer: { name: 'Purchasing', company: 'InCharge Energy', email: 'po@incharge.example' }, items: [{ sku: 'CC-C215', name: '215 kWh', qty: 20 }], logic: null }
     ],
     customers: [
-      { id: 'company_riverside', company: 'Riverside Cold Chain', status: 'active', terms: { depositPct: 40, dueDays: 0 }, users: [{ email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner', activated: true }], usersLimited: false },
-      { id: 'company_incharge', company: 'InCharge Energy', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
+      { id: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', domain: 'riverside.example', status: 'active', terms: { depositPct: 40, dueDays: 0 }, usersLimited: false, users: [
+        { email: 'ops@riverside.example', name: 'Dana Ops', role: 'owner', status: 'active', activated: true },
+        { email: 'finance@riverside.example', name: 'Riley Finance', role: 'user', status: 'active', activated: false },
+        { email: 'new.hire@riverside.example', name: '', role: 'user', status: 'pending', activated: true, requestedAt: '2026-09-23T15:00:00Z' }] },
+      { id: 'company_incharge', company: 'InCharge Energy', accountType: 'company', domain: '', status: 'active', terms: { depositPct: 30, dueDays: 0 }, users: [], usersLimited: false }
     ],
     intake: [{ id: 'po_x', orderNo: 'PO-IN-X', customerId: 'company_riverside', poNumber: 'RCC-2211', status: 'po_review', source: 'customer', notes: 'see attached', createdAt: '2026-09-19T10:00:00Z', reviewNote: '', convertedAt: null, rep: null, files: [] }],
     companyOrders: [{ id: 'o1', customerId: 'company_riverside', orderNo: 'CC-26-4419', status: 'in_fulfilment', poNumber: 'RCC-2200', items: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet', qty: 5 }], destinations: [{ id: 'd1', address: { name: 'Riverside yard', city: 'Bakersfield', state: 'CA' }, items: [{ sku: 'CC-C215', qty: 5 }] }], revision: 1, legs: [{ id: 'LOAD-1', status: 'in_transit', carrier: 'Estes', tracking: 'BOL-771', destinationId: 'd1', serials: ['CC418-26-44192'], lastConfirmedLocation: { label: 'Fresno, CA' } }] }],
     account: { customerId: 'company_riverside', company: 'Riverside Cold Chain', accountType: 'company', since: '2026-08-01T00:00:00Z', rep: { name: 'Sam Rep', email: 'sam@cleancell.us' }, plan: 'free', status: 'active',
-      you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: [], agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
+      you: { email: 'ops@riverside.example', name: 'Dana Ops', phone: '', role: 'owner' }, address: { line1: '1200 Depot Rd', city: 'Bakersfield', state: 'CA', zip: '93307' }, terms: { depositPct: 40, dueDays: 0, netDays: 30 }, users: null, agreements: [{ kind: 'MSA', ref: 'MSA-2026-04', signedAt: '2026-08-02' }], orders: 1 },
     projects: [{ id: 'p1', name: 'Bakersfield yard', module: 'bess', updatedAt: '2026-09-18T10:00:00Z', revision: 3 }],
     benchUnit: { serial: 'CC418-26-44190', sku: 'CC-C215', at: 'rack', work: {}, hold: null },
     /* custody (api/_lib/custody.js): one end site on the customer's account,
@@ -133,17 +139,26 @@ function views(state) {
   function officeJson() { var orders = state.orders.map(function (o) { return Object.assign({}, o, { stage: S.stageOf(o) }); }); return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 } }, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
     links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
     orders: orders, totals: S.totals(orders), intake: { review: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_review'; }).length, needsInfo: 0, declined: 0 }, limited: false }; }
-  function money(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { inv += o.logic.invoices[k].amountCents || 0; pd += o.logic.invoices[k].paidCents || 0; }); return { id: o.id, orderNo: o.orderNo, status: o.status, stage: S.stageOf(o), items: o.items, invoicedCents: inv, paidCents: pd, balanceCents: inv - pd, shippedAt: o.shipment ? o.shipment.shippedAt : null, openRequests: (o.requests || []).filter(function (r) { return r.status === 'open'; }).length }; }
+  function money(o) { var inv = 0, pd = 0; Object.keys((o.logic && o.logic.invoices) || {}).forEach(function (k) { inv += o.logic.invoices[k].amountCents || 0; pd += o.logic.invoices[k].paidCents || 0; }); return { id: o.id, orderNo: o.orderNo, status: o.status, stage: S.stageOf(o), poNumber: o.poNumber || null, billedTo: { name: o.customer.name || '', email: o.customer.email || '' }, items: o.items, invoicedCents: inv, paidCents: pd, balanceCents: inv - pd, shippedAt: o.shipment ? o.shipment.shippedAt : null, openRequests: (o.requests || []).filter(function (r) { return r.status === 'open'; }).length }; }
   function customerOf(email) { return state.customers.filter(function (c) { return c.users.some(function (u) { return u.email === email; }); })[0]; }
-  function buyerDetail(email) {
-    var c = customerOf(email); if (!c) return { error: 'Customer not found', status: 404 };
-    var orders = state.orders.filter(function (o) { return o.customer.email === email; }).map(money);
-    return { customerId: c.id, company: c.company, name: c.users[0].name, email: email, phone: '', address: state.account.customerId === c.id ? state.account.address : null, activated: true, createdAt: '2026-08-01T00:00:00Z', plan: 'free', status: c.status, terms: c.terms, portalUrl: 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us',
+  var APP_URL = 'https://silmarillion.clearskyomega.com/portals/customer/app?org=cleancell.us', PORTAL_URL = 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us';
+  /* the office's view of one ACCOUNT: its people, every order on it (its
+     customerId, or billed to one of its people), terms, links */
+  function buyerDetail(id) {
+    var c = state.customers.filter(function (x) { return x.id === id; })[0]; if (!c) return { error: 'Customer not found', status: 404 };
+    var emails = c.users.filter(function (u) { return u.status === 'active'; }).map(function (u) { return u.email; });
+    var orders = state.orders.filter(function (o) { return o.customerId === c.id || (!o.customerId && emails.indexOf(o.customer.email) >= 0); }).map(money);
+    var contact = c.users.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || c.users[0] || null;
+    return { customerId: c.id, company: c.company, accountType: c.accountType || 'company', domain: c.domain || '', rep: null, owner: false, editorAccess: { status: 'none' },
+      name: contact ? contact.name : '', email: contact ? contact.email : '', phone: '', activated: !!(contact && contact.activated), contactStatus: contact ? contact.status : null,
+      people: clone(c.users), address: state.account.customerId === c.id ? state.account.address : null, createdAt: '2026-08-01T00:00:00Z', plan: 'free', status: c.status, terms: c.terms, portalUrl: PORTAL_URL, appUrl: APP_URL,
       orders: orders, totals: orders.reduce(function (t, m) { t.invoicedCents += m.invoicedCents; t.paidCents += m.paidCents; t.balanceCents += m.balanceCents; t.openRequests += m.openRequests; return t; }, { invoicedCents: 0, paidCents: 0, balanceCents: 0, openRequests: 0 }), limited: false };
   }
   function buyersJson(q) {
-    if (/email=/.test(q)) return buyerDetail(decodeURIComponent((/email=([^&]*)/.exec(q) || [])[1] || ''));
-    return { org: ORG, name: 'Clean Cell', brand: brand, owner: false, portalUrl: 'https://silmarillion.clearskyomega.com/portals/customer/?org=cleancell.us', next: null, customers: clone(state.customers) };
+    if (/customerId=/.test(q)) return buyerDetail(decodeURIComponent((/customerId=([^&]*)/.exec(q) || [])[1] || ''));
+    if (/email=/.test(q)) { var c = customerOf(decodeURIComponent((/email=([^&]*)/.exec(q) || [])[1] || '')); return c ? buyerDetail(c.id) : { error: 'Customer not found', status: 404 }; }
+    return { org: ORG, name: 'Clean Cell', brand: brand, owner: false, portalUrl: PORTAL_URL, appUrl: APP_URL, next: null,
+      customers: state.customers.map(function (c) { return Object.assign(clone(c), { pending: c.users.filter(function (u) { return u.status === 'pending'; }).length }); }) };
   }
   function companyJson(id, office) {
     var c = state.customers.filter(function (x) { return x.id === id; })[0]; if (!c) return { error: 'Active company account not found', status: 404 };
@@ -197,7 +212,8 @@ function views(state) {
   function mySitesJson() { var units = myUnits(), per = {}; units.forEach(function (u) { var sid = Cu.custodyOf(u).siteId; if (sid) per[sid] = (per[sid] || 0) + 1; });
     return { org: ORG, brand: brand, customerId: 'company_riverside', sites: state.sites.filter(function (s) { return s.customerId === 'company_riverside' && s.status !== 'inactive'; }).map(function (s) { return Object.assign(pubSite(s), { units: per[s.id] || 0 }); }),
       units: units.filter(function (u) { return Cu.custodyOf(u).status || u.at === 'ready'; }).map(pubUnit), moves: { received: ['', 'in_transit', 'delivered'], assign: ['delivered', 'received', 'assigned'], installed: ['assigned', 'received'], commissioned: ['assigned', 'installed', 'received'] } }; }
-  function accountJson(who) { var a = clone(state.account); if (who) a.you.email = who; return a; }
+  function riverside() { return state.customers.filter(function (c) { return c.id === 'company_riverside'; })[0]; }
+  function accountJson(who) { var a = clone(state.account); if (who) a.you.email = who; a.users = riverside().users.map(function (u) { return { email: u.email, name: u.name, role: u.role, status: u.status, activated: u.activated, requestedAt: u.requestedAt || null }; }); return a; }
   function myOrdersJson(who) {
     var mine = state.orders.filter(function (o) { return o.customer.email === (who || 'ops@riverside.example') || o.customer.email === 'ops@riverside.example'; });
     return { orders: mine.map(function (o) {
@@ -205,9 +221,9 @@ function views(state) {
       var ms = { received: { label: 'Received', index: 0, say: 'We have your order and will confirm it shortly.' }, confirmed: { label: 'Confirmed', index: 1, say: 'Confirmed. Building starts when the deposit is in.' }, building: { label: 'Building', index: 2, say: 'Your units are on the line.' }, shipped: { label: 'Shipped', index: 5, say: 'On its way.' } }[key];
       return { orderNo: o.orderNo, soldBy: 'Clean Cell', placedAt: o.createdAt, poNumber: o.id === 'o1' ? 'RCC-2200' : (o.poNumber || null), milestone: Object.assign({ key: key, of: 6 }, ms),
         items: o.items.map(function (i) { var p = benchBy[i.sku] || {}; return { sku: i.sku, name: i.name || i.sku, qty: i.qty, kw: p.kw || null, kwh: p.kwh || null, warranty: o.shipment && p.warrantyYears ? { years: p.warrantyYears, from: o.shipment.shippedAt.slice(0, 10), until: String(Number(o.shipment.shippedAt.slice(0, 4)) + p.warrantyYears) + o.shipment.shippedAt.slice(4, 10) } : null }; }),
-        checkout: c ? { currency: 'USD', total: c.totalCents / 100, processingFee: c.feeCents / 100, depositPercent: c.terms.depositPct, invoices: Object.keys(l.invoices).map(function (k) { return { stage: k, amount: l.invoices[k].amountCents / 100, status: l.invoices[k].status, payUrl: null }; }) } : null,
+        checkout: c ? { currency: 'USD', total: c.totalCents / 100, processingFee: c.feeCents / 100, accounting: (l && l.accounting) === 'tenant' ? 'tenant' : 'quickbooks', depositPercent: c.terms.depositPct, invoices: Object.keys(l.invoices).map(function (k) { return { stage: k, amount: l.invoices[k].amountCents / 100, status: l.invoices[k].status, payUrl: null }; }) } : null,
         documents: [], destinations: o.id === 'o1' ? [{ id: 'd1', name: 'Riverside yard', city: 'Bakersfield', state: 'CA', items: [{ sku: 'CC-C215', qty: 5 }] }] : [], loads: [], shipment: o.shipment || null, cancelRequested: !!o.cancelRequested,
-        requests: (o.requests || []).map(function (r) { return { id: r.id, kind: r.kind, message: r.message, status: r.status, at: r.at, address: r.address || null, answer: r.answer || null }; }) };
+        requests: (o.requests || []).map(function (r) { return { id: r.id, kind: r.kind, message: r.message, by: r.by || null, status: r.status, at: r.at, address: r.address || null, answer: r.answer || null }; }) };
     }), limited: false };
   }
   function designJson() { return { org: ORG, customerId: 'company_riverside', brand: brand, access: { active: true, status: 'trial', expiresAt: iso(Date.now() + 7 * 86400000), modules: ['bess'] }, designProducts: C.designs({ products: CATALOG }), products: [{ sku: 'CC-C215', name: '215 kWh outdoor cabinet' }, { sku: 'CC-C418', name: '418 kWh outdoor cabinet' }], projects: clone(state.projects), limited: false }; }
@@ -250,7 +266,25 @@ function post(state, path, query, b, who) {
     return err(400, 'Not in this sandbox: ' + b.action);
   }
   if (path === '/api/buyers') {
-    if (b.action === 'terms') { var c = state.customers.filter(function (x) { return x.users.some(function (u) { return u.email === b.email; }); })[0]; if (!c) return err(404, 'Create this customer first'); var t = { depositPct: Number(b.terms.depositPct), dueDays: Number(b.terms.dueDays) }; if (!(t.depositPct >= 0 && t.depositPct <= 100)) return err(400, 'Deposit must be 0–100%'); c.terms = t; if (state.account.customerId === c.id) state.account.terms = Object.assign({}, state.account.terms, t); return { ok: true, terms: t, note: 'Applies to future prices. Existing invoices retain their agreed terms.' }; }
+    function acctOf() { return b.customerId ? state.customers.filter(function (x) { return x.id === b.customerId; })[0] : state.customers.filter(function (x) { return x.users.some(function (u) { return u.email === b.email; }); })[0]; }
+    if (b.action === 'user-add') {
+      var ac = acctOf(), em = String(b.email || '').trim().toLowerCase(); if (!ac) return err(404, 'Active customer account not found');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return err(400, 'A valid customer email is required');
+      if (state.customers.some(function (x) { return x.users.some(function (u) { return u.email === em; }); })) return err(409, 'This person is already on an account; their access was preserved');
+      ac.users.push({ email: em, name: String(b.name || '').slice(0, 120), role: b.role === 'owner' ? 'owner' : 'user', status: 'active', activated: false });
+      return { ok: true, person: { email: em, role: b.role === 'owner' ? 'owner' : 'user', status: 'active' }, note: 'Added. They sign in with ' + em + '; send them the customer app link.' };
+    }
+    if (b.action === 'user-status') {
+      var ax = acctOf(), p = ax && ax.users.filter(function (u) { return u.email === b.email; })[0]; if (!p) return err(404, 'That person is not on this account');
+      var next = { status: b.status || p.status, role: b.role || p.role };
+      var wasOwner = p.role === 'owner' && p.status === 'active';
+      if (wasOwner && !(next.role === 'owner' && next.status === 'active') && !ax.users.some(function (u) { return u.email !== p.email && u.role === 'owner' && u.status === 'active'; })) return err(409, 'An account needs at least one active owner; make someone else the owner first');
+      var declined = p.status === 'pending' && next.status === 'disabled'; if (declined) p.declined = true; else if (next.status === 'active') delete p.declined;
+      p.status = next.status; p.role = next.role; return { ok: true, person: { email: p.email, status: p.status, role: p.role, declined: declined }, note: declined ? 'Request declined. They were not added.' : p.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+    }
+    if (b.action === 'profile') { var ap = acctOf(); if (!ap) return err(404, 'Customer not found'); if (b.company !== undefined) ap.company = String(b.company || ap.company); if (b.status !== undefined) ap.status = b.status === 'suspended' ? 'suspended' : 'active'; if (b.domain !== undefined) ap.domain = String(b.domain || ''); return { ok: true, note: 'Customer profile saved. Existing orders, invoices and subscription billing were not changed.' }; }
+    if (b.action === 'invite') return err(409, 'Customer email delivery is not configured. Share the customer app link instead.');
+    if (b.action === 'terms') { var c = acctOf(); if (!c) return err(404, 'Create this customer first'); var t = { depositPct: Number(b.terms.depositPct), dueDays: Number(b.terms.dueDays) }; if (!(t.depositPct >= 0 && t.depositPct <= 100)) return err(400, 'Deposit must be 0–100%'); c.terms = t; if (state.account.customerId === c.id) state.account.terms = Object.assign({}, state.account.terms, t); return { ok: true, terms: t, note: 'Applies to future prices. Existing invoices retain their agreed terms.' }; }
     return err(400, 'Not in this sandbox: ' + b.action);
   }
   if (path === '/api/po-intake') {
@@ -274,7 +308,7 @@ function post(state, path, query, b, who) {
         var id = 'po_' + hex(10), orderNo = 'PO-IN-' + id.slice(3, 13).toUpperCase(), d = po.destination || {};
         var items = po.lines.map(function (l) { var p = CATALOG.filter(function (x) { return x.sku === l.sku; })[0]; return { sku: l.sku, name: p.name, qty: Number(l.qty) }; });
         state.companyOrders.unshift({ id: id, customerId: cust.id, orderNo: orderNo, status: 'new', poNumber: number, items: items, destinations: [{ id: 'd1', address: { name: d.name, line1: d.line1, city: d.city, state: d.state, zip: d.zip }, requestedDate: po.requestedDate || null, items: po.lines.map(function (l) { return { sku: l.sku, qty: Number(l.qty) }; }) }], revision: 0, legs: [] });
-        state.orders.unshift({ id: id, orderNo: orderNo, status: 'new', createdAt: now, customer: { name: cust.company, email: billing.email }, items: items, logic: null, poNumber: number, requests: [] });
+        state.orders.unshift({ id: id, orderNo: orderNo, status: 'new', createdAt: now, customerId: cust.id, customer: { name: billing.name || billing.email, company: cust.company, email: billing.email }, items: items, logic: null, poNumber: number, requests: [] });
         created.push({ id: id, number: number, orderNo: orderNo, lines: items.length, destination: d.city || '' });
       });
       return { ok: true, created: created, skipped: skipped, note: created.length + ' purchase order' + (created.length === 1 ? '' : 's') + ' entered and mapped to the catalog; awaiting pricing. Nothing was accepted or charged.' };
@@ -391,6 +425,21 @@ function post(state, path, query, b, who) {
     if (mr.error) return mr; mu.custody.customerId = 'company_riverside'; return { ok: true, duplicate: mr.action === 'duplicate', unit: V.pubUnit(mu) };
   }
   if (path === '/api/my-account') {
+    var rv = state.customers.filter(function (x) { return x.id === 'company_riverside'; })[0];
+    if (b.action === 'add-user') {
+      var ne = String(b.email || '').trim().toLowerCase();
+      if (ne.split('@')[1] !== 'riverside.example') return err(400, 'Add colleagues with an @riverside.example email. Anyone else, ask your supplier to add.');
+      if (state.customers.some(function (x) { return x.users.some(function (u) { return u.email === ne; }); })) return err(409, 'This person is already on the account; their access was preserved');
+      rv.users.push({ email: ne, name: String(b.name || '').slice(0, 120), role: 'user', status: 'active', activated: false });
+      return { ok: true, person: { email: ne, role: 'user', status: 'active' }, users: V.accountJson(who).users, note: 'Added. They sign in with ' + ne + ' and see this account.' };
+    }
+    if (b.action === 'user-status') {
+      var pu = rv.users.filter(function (u) { return u.email === b.email; })[0]; if (!pu) return err(404, 'That person is not on this account');
+      if (pu.email === (who || state.account.you.email)) return err(400, 'You cannot change your own access');
+      var dec = pu.status === 'pending' && b.status === 'disabled'; if (dec) pu.declined = true;
+      pu.status = b.status === 'disabled' ? 'disabled' : 'active';
+      return { ok: true, person: { email: pu.email, status: pu.status, role: pu.role }, users: V.accountJson(who).users, note: dec ? 'Request declined. They were not added.' : pu.status === 'active' ? 'Access on.' : 'Access off. Their past activity stays on the account.' };
+    }
     var a = state.account; a.you.name = String(b.name || a.you.name).slice(0, 120); a.company = String(b.company || a.company).slice(0, 160); a.you.phone = String(b.phone || '').slice(0, 40);
     if (b.address) a.address = { line1: String(b.address.line1 || ''), city: String(b.address.city || ''), state: String(b.address.state || ''), zip: String(b.address.zip || '') };
     return V.accountJson(who);

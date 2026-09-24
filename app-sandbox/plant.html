@@ -70,7 +70,7 @@
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Plant</h1><p class="note">Work orders, the bench scanner, stock and quality — for the people building the units.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale. The bench scanner keeps its own queue.</div>
@@ -98,8 +98,8 @@
      no query string to carry it. */
   var ORG = params.get('org') || load('omega_plant_app_org', '') || '';
   if (params.get('org')) store('omega_plant_app_org', params.get('org'));
-  /* The tenant's own name, colours and icon on the home screen
-     (api/app-manifest.js); the static manifest is the fallback. */
+  /* Omega Logic's plant app on every workspace's phone (api/app-manifest.js);
+     the static manifest is the fallback. */
   if (ORG) {
     /* sandbox: the manifest link is static */
     fetch('/api/app-manifest?org=' + encodeURIComponent(ORG)).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
@@ -206,7 +206,7 @@
       a.failed.filter(function (u) { return !u.onHold; }).slice(0, 3).forEach(function (u) { items.push('<button class="unit" data-unit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>failed ' + esc(u.failureCode || 'a test') + ' and is not on hold</small></div><span class="pill bad">review</span></button>'); });
       a.silent.slice(0, 3).forEach(function (st) { items.push('<div class="unit"><div><b>' + esc(st.label) + '</b><small>' + esc(st.operation) + ' · ' + (st.hoursSince == null ? 'never scanned' : 'quiet ' + hrs(st.hoursSince)) + '</small></div><span class="pill">bench</span></div>'); });
       el.innerHTML = (items.join('') || '<p class="note">Nothing stuck, held or failed, and every bench has scanned recently.</p>') + '<p class="note">Stuck = over ' + a.thresholds.stuckHours + ' h at one bench. Of the newest ' + a.sampled + ' units.</p>'
-        + '<h2>' + esc((DATA.brand && DATA.brand.name) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record: what you build here is what the office ships and the customer places at a site.</p><div class="kv"><a href="/office/app?org=' + encodeURIComponent(ORG) + '" style="text-decoration:none;color:inherit"><small>Office</small><b style="font-size:15px">Orders, POs, sites</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a></div>';
+        + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record: what you build here is what the office ships and the customer places at a site.</p><div class="kv"><a href="/office/app?org=' + encodeURIComponent(ORG) + '" style="text-decoration:none;color:inherit"><small>Office</small><b style="font-size:15px">Orders, POs, sites</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a></div>';
       Array.prototype.forEach.call(el.querySelectorAll('[data-unit]'), function (b) { b.onclick = function () { WO = null; openUnit(b.dataset.unit); }; });
     })['catch'](function (e) { if ($('today-att')) $('today-att').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; });
   }

@@ -19,6 +19,7 @@
     { "collectionGroup": "plant_units", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     { "collectionGroup": "plant_works_orders", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     { "collectionGroup": "plant_scans", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "serial", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "orgId", "order": "ASCENDING" }, { "fieldPath": "customerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] },
     {
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",

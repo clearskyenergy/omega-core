@@ -70,4 +70,19 @@ function publicRecord(orgId, org, updatedAt) {
   return out;
 }
 
-module.exports = { WL_PUBLIC: WL_PUBLIC, pickPublic: pickPublic, publicRecord: publicRecord, TIER_PUBLIC: TIER_PUBLIC };
+/* Is the white label on? The same test omega-whitelabel.js active() uses:
+   explicitly enabled or not switched off, AND a platform name to show. */
+function isOn(wl) { return !!(wl && wl.enabled !== false && wl.platformName); }
+/* The ONE server-side rule for the "powered by" line, mirroring
+   omega-whitelabel.js attribution(): '' when the white label is off or the
+   contract removed our name ('none'); otherwise the tenant's text or ours.
+   A white label with no explicit `attribution` still carries our name —
+   removing it is a decision somebody wrote down. */
+function attributionLine(wl) {
+  if (!isOn(wl)) return '';
+  var mode = wl.attribution || 'powered-by';
+  if (mode === 'none') return '';
+  return String(wl.attributionText || 'Powered by ClearSky OMEGA').slice(0, 120);
+}
+
+module.exports = { WL_PUBLIC: WL_PUBLIC, pickPublic: pickPublic, publicRecord: publicRecord, TIER_PUBLIC: TIER_PUBLIC, isOn: isOn, attributionLine: attributionLine };

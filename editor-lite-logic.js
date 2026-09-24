@@ -105,7 +105,9 @@
         if (customer) {
           // Branding only; this does not initialize a tenant or change identity.
           var ec=engine.CLEARSKY_CONFIG||(engine.CLEARSKY_CONFIG={});
-          ec.tenant={orgId:context.org,name:context.name,logo:context.logoUrl,whiteLabel:{enabled:true,platformName:context.name,shortName:context.name,markUrl:context.logoUrl,attribution:'none'}};
+          // "Powered by" follows the supplier's contract (logic-brand attribution: '' = none), never a literal.
+          var line=context.brand&&context.brand.attribution||'';
+          ec.tenant={orgId:context.org,name:context.name,logo:context.logoUrl,whiteLabel:{enabled:true,platformName:context.name,shortName:context.name,markUrl:context.logoUrl,attribution:line?'powered-by':'none',attributionText:line||undefined}};
           if(engine.OmegaWhiteLabel)engine.OmegaWhiteLabel.apply();
           engine.saveProject = saveCustomer;
           loadCustomer().then(function () {

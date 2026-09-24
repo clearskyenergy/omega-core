@@ -41,10 +41,12 @@ compute is the product's own arithmetic; what they show is not real.
 
 Three phone apps, one pattern: open the link once, then **Add to Home
 Screen** (iPhone: Share → Add to Home Screen; Android: the browser's
-Install). Each wears the tenant's own name and icon (`omega_orgs/{org}.appIcon`,
-with a set per app under `appIcon.office` and `appIcon.customer`), opens
-offline and says so, and never shows yesterday's data — the shell is cached,
-the data never is.
+Install). The Omega Logic app and the Plant app are ClearSky's and wear
+Omega Logic's name and icon on every workspace's phone, with the workspace
+named inside; only the customer app wears the tenant's own name and icon
+(`omega_orgs/{org}.appIcon`, or a set under `appIcon.customer`), because the
+tenant's customers use it. Each opens offline and says so, and never shows
+yesterday's data — the shell is cached, the data never is.
 
 Sign out is top right on every office page. The left menu runs in the order
 the business runs: **Run the business** (Dashboard, Orders, Company POs,
@@ -205,10 +207,20 @@ Bottom tabs: Home, Orders, Customers, Sites, Menu. The screens:
   paste the lines — same sheet as Company POs — and *Enter these purchase
   orders*. The company's uploaded POs under review and its orders are
   listed beneath.
-- **Customers** — every account with its terms and logins; tap one for
-  invoiced, received, balance and open requests, the terms to edit (deposit
-  %, due days — future prices only), every order with its money, and the
-  portal link to send them.
+- **Customers** — the Customer hub. A customer is a COMPANY ACCOUNT with
+  its people on it (Amperage Capital: Shannon and his colleagues), so each
+  card is a company — how many people, the owner, the deposit, anyone
+  *asking to join* — with a search box and *Load more*. Open one for
+  invoiced, received, balance and open requests across the whole account;
+  **People** — each person, their role and whether they have signed in:
+  *Approve* someone who asked to join, *Turn off* someone who left (never the
+  last owner), *Invite*; **Add a person** (their work email, user or owner —
+  a colleague who already signed in on their own is moved onto the company
+  when that account is empty); **Their app** — the customer app link to send,
+  and the desktop link; the **company email domain** (people who sign in
+  from it ask to join); the terms for the whole account; every order on the
+  account and who it is billed to; and the account's sites and shipped
+  units, each opening its passport. An order opens its account too.
 - **Stock** — finished units by product with **assign to an order** on each
   available serial, the parts short for the open work, and the supplier
   purchase orders still open.
@@ -413,9 +425,12 @@ endpoints as the desktop portal. Four tabs:
   overwritten; fifty per day from a customer login. Beneath: their uploaded
   POs under review and the orders their POs became, with loads. Links for
   one PO to several sites and for uploading a PO document.
-- **Account** — account number, company, rep, orders; the terms the
-  supplier set; their own details to edit (name, company, phone, delivery
-  address); **Sites & equipment** — their sites (with the point of
+- **Account** — account number, company, rep, the account's orders; the
+  terms the supplier set; **People on this account** — everyone on the
+  company's account; the OWNER adds a colleague at the company's own email
+  domain, approves someone who asked to join, and turns access off and on;
+  their own details to edit (name, phone; the owner also the company and
+  delivery address); **Sites & equipment** — their sites (with the point of
   interconnection) and every unit on their orders with where it is and its
   warranty or SLA (pending until the unit is bound to a site, then the
   dates); *Going to* — name the site while the unit is still in transit, and
@@ -424,9 +439,13 @@ endpoints as the desktop portal. Four tabs:
   *awaiting your supplier's confirmation* until the office confirms it, then
   *confirmed by your supplier* with the date; agreements; how to install the app; the desktop portal.
 
-A customer login that has no company account yet is told to open Account
-first (the record is created on first sign-in) or to ask the supplier to
-assign the email to the company.
+Everyone on a customer's account sees the same orders, sites and units: the
+account is what is shown, not the person. Someone signing in for the first
+time from the email domain of a company the office set up asks to join it and
+sees *Almost there* until the owner or the office approves. A stranger at no
+known company gets an account of their own, as its owner. The customer app
+prints the supplier's *Powered by …* line when the contract keeps ClearSky's
+name (`whiteLabel.attribution`, default on).
 
 ## 6. Build notes — what landed in this pass, and what did not
 
@@ -491,3 +510,9 @@ sandboxes (sign in, change something, reload) in Chromium.
 - Containers and pallets, lots, an installer login, onward resale between
   tenants, site-level SLAs, photos or GPS at commissioning, carrier webhooks
   and offline scanning (`docs/LOGISTICS-CUSTODY.md` has the list).
+- Merging two customer accounts that both have history (orders, sites,
+  designs). Only an EMPTY stray login moves onto its company, from the
+  office's *Add a person*; a real merge is a reviewed script that has not
+  been written (`docs/CUSTOMER-PORTAL.md` §2).
+- A supplier-branded sign-in email for customers (the login link comes from
+  Firebase's project-wide template).

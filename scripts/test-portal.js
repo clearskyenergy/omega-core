@@ -255,15 +255,22 @@ ok('a 500-item order is capped rather than echoed whole',
 
   /* The endpoint must narrow in the query, not after the page limit. */
   var fs = require('fs'), path = require('path');
+  /* my-orders reads through the ONE account reader, api/_lib/buyer-accounts.js
+     accountOrders(): the account's orders, not only the caller's. */
   var mo = fs.readFileSync(path.join(__dirname, '..', 'api', 'my-orders.js'), 'utf8');
-  ok('my-orders narrows by orderNo IN THE QUERY, not after the limit',
-     /q = q\.where\('orderNo', '==', wanted\)/.test(mo));
-  ok('  and orders in the query rather than sorting Timestamps in JS',
-     /orderBy\('createdAt', 'desc'\)/.test(mo) && !/String\(b\.createdAt/.test(mo));
+  var ba = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'buyer-accounts.js'), 'utf8');
+  ok('my-orders reads the ACCOUNT through buyer-accounts, narrowing by orderNo',
+     /B\.accountOrders\(db, org, email, account, wanted \? \{ orderNo: wanted/.test(mo));
+  ok('  narrowed IN THE QUERY, not after the limit',
+     /if \(opts\.orderNo\) x = x\.where\('orderNo', '==', opts\.orderNo\);/.test(ba));
+  ok('  and the per-person list is ordered in the query; the merge sorts on millis, never Timestamp strings',
+     /x = x\.orderBy\('createdAt', 'desc'\)/.test(ba) && /millis\(\(b\.data\(\) \|\| \{\}\)\.createdAt\)/.test(ba) && !/String\(b\.createdAt/.test(ba));
   /* The four-field composite that a sorted orderNo lookup would need does
      not exist in firestore.indexes.json, so the lookup must not sort. */
   ok('  and does NOT sort the single-order lookup (no such index)',
-     /q = q\.where\('orderNo'[^)]*\);[\s\S]{0,40}\} else \{/.test(mo));
+     /if \(opts\.orderNo\) x = x\.where\('orderNo', '==', opts\.orderNo\);\s*else if/.test(ba));
+  ok('  and the ORDER BY account query is equality-only (no composite to deploy first)',
+     !/where\('customerId', '==', [^)]*\)\.orderBy/.test(ba));
   var idx = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
   var needed = (idx.indexes || []).some(function (i) {
     if (i.collectionGroup !== 'orders') return false;

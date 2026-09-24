@@ -15,9 +15,14 @@ async function request(path, body, requestId, realm) {
   if (!r.ok || j.Fault) throw A.httpError(502, 'QuickBooks request failed (' + r.status + '); review the integration and retry');
   return j;
 }
+/* The QuickBooks customer is the customer ACCOUNT (the company), keyed by
+   its customerId, so every person on it is billed to one customer and one
+   payment can settle several of the company's invoices. An order with no
+   account (a storefront buyer) stays keyed by its email, as before; an order
+   already invoiced keeps the customerRef stored on it. */
 async function customer(order, realm) {
   var email = String(order.customer.email).toLowerCase();
-  var display = 'OMEGA-' + P.key(order.orgId + ':' + email).slice(0, 28);
+  var display = 'OMEGA-' + P.key(order.orgId + ':' + (order.customerId ? 'account:' + order.customerId : email)).slice(0, 28);
   var query = await request('query?query=' + encodeURIComponent("select * from Customer where DisplayName = '" + display + "'"), null, null, realm);
   var found = (query.QueryResponse || {}).Customer || [];
   if (found.length) return String(found[0].Id);

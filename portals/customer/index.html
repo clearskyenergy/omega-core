@@ -187,6 +187,7 @@
       <div class="kv" id="terms"></div>
       <p class="muted" id="terms-note" style="font-size:13px;margin-top:12px"></p>
     </div>
+    <div id="people" style="margin-top:22px"></div>
     <h2 style="margin-top:22px">Your details</h2>
     <label for="f-name">Your name</label><input id="f-name">
     <div class="row2">
@@ -200,9 +201,11 @@
     </div>
     <div class="actions">
       <button type="button" class="btn p" id="save">Save my details</button>
+      <span class="muted" id="owner-note" style="align-self:center;font-size:13px" hidden>Only the account owner changes the company and delivery address.</span>
       <span class="muted" id="save-msg" style="align-self:center;font-size:13.5px"></span>
     </div>
   </section>
+  <p class="muted" id="attribution" data-omega-attribution hidden style="font-size:12.5px;margin-top:32px"></p>
 </main>
 </div>
 
@@ -275,6 +278,7 @@
       $('brand').textContent = PORTAL.brand.name;
       document.title = 'Your account · ' + PORTAL.brand.name;
       if (PORTAL.brand.logoUrl) { $('mark').src=PORTAL.brand.logoUrl; $('mark').hidden=false; }
+      $('attribution').textContent = PORTAL.brand.attribution || ''; $('attribution').hidden = !PORTAL.brand.attribution;
       $('editor-price').textContent = '$' + (PORTAL.editorLite.monthlyPriceCents / 100).toLocaleString('en-US') + ' / month';
       $('editor-availability').textContent = 'Subscription checkout is not yet enabled. No subscription has been started or charged.';
       if(PORTAL.links){var sizer=PORTAL.links.start||'';if(sizer){$('size-frame').src=sizer+(sizer.indexOf('?')>=0?'&':'?')+'plain=1';$('size-frame').hidden=false;$('size-open').href=sizer;}else{$('size-single-note').hidden=false;$('size-open').hidden=true;}var poEntry=document.getElementById('customer-po');if(!poEntry){poEntry=document.createElement('a');poEntry.id='customer-po';poEntry.textContent='Company POs & deliveries';document.querySelector('.logic-nav').appendChild(poEntry);}poEntry.href='/po-inbox?org='+encodeURIComponent(ORG);var appEntry=document.getElementById('customer-app');if(!appEntry){appEntry=document.createElement('a');appEntry.id='customer-app';appEntry.textContent='Phone app';document.querySelector('.logic-nav').appendChild(appEntry);}appEntry.href='/portals/customer/app?org='+encodeURIComponent(ORG);}
@@ -342,11 +346,12 @@
       var meta = [];
       var checkout = '';
       if (o.checkout) {
+        var own = o.checkout.accounting === 'tenant';
         checkout = '<div class="lines"><b>Order total $' + Number(o.checkout.total).toFixed(2) + '</b>'
-          + '<p class="muted">Includes a ClearSky processing fee of $' + Number(o.checkout.processingFee).toFixed(2) + '. '
-          + esc(o.checkout.depositPercent) + '% deposit; collected by ClearSky for fulfillment.</p>'
+          + (own ? '<p class="muted">' + esc(o.checkout.depositPercent) + '% deposit. Invoiced by ' + esc(PORTAL && PORTAL.brand ? PORTAL.brand.name : 'your supplier') + '.</p>'
+                 : '<p class="muted">Includes a ClearSky processing fee of $' + Number(o.checkout.processingFee).toFixed(2) + '. ' + esc(o.checkout.depositPercent) + '% deposit; collected by ClearSky for fulfillment.</p>')
           + (o.checkout.invoices || []).map(function (i) {
-            return '<p>' + esc(i.stage) + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(i.status)
+            return '<p>' + esc(i.stage) + (i.number ? ' · invoice ' + esc(i.number) : '') + (i.issuedAt ? ' · issued ' + esc(i.issuedAt) : '') + ' · $' + Number(i.amount).toFixed(2) + ' · ' + esc(String(i.status).replace(/_/g, ' '))
               + (i.payUrl && /^https:\/\/([a-z0-9-]+\.)*intuit\.com\//i.test(i.payUrl) ? ' · <a target="_blank" rel="noopener" href="' + esc(i.payUrl) + '">View / pay secure QuickBooks invoice →</a>' : '') + '</p>';
           }).join('') + '</div>';
       }
@@ -390,7 +395,7 @@
   var KIND = { shipping: 'Delivery address or date', information: 'Question', change: 'Change to the order', warranty: 'Warranty' };
   function requestsHtml(o) {
     var reqs = (o.requests || []).map(function (r) {
-      return '<div class="rq ' + esc(r.status) + '"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="muted">' + esc(String(r.at || '').slice(0, 10)) + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span>'
+      return '<div class="rq ' + esc(r.status) + '"><b>' + esc(KIND[r.kind] || r.kind) + '</b> <span class="muted">' + esc(String(r.at || '').slice(0, 10)) + (r.by ? ' · ' + esc(r.by) : '') + ' · ' + (r.status === 'open' ? 'waiting for an answer' : 'answered') + '</span>'
         + '<p>' + esc(r.message) + '</p>'
         + (r.address ? '<p class="muted">New address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
         + (r.answer ? '<p class="ans"><b>' + esc(o.soldBy || 'Answer') + ':</b> ' + esc(r.answer) + '</p>' : '') + '</div>';
@@ -426,11 +431,51 @@
   }
 
   /* ── account ────────────────────────────────────────────────────────── */
+  /* A colleague whose company already has an account asked to join it on
+     their first sign-in; nothing of the account shows until the owner or the
+     supplier approves. */
+  function drawPending(a) {
+    $('acct').innerHTML = '<div style="grid-column:1/-1"><div class="k">Waiting for approval</div><div class="v">You asked to join ' + esc(a.company || 'your company') + '.</div><p class="muted">Its account owner, or your supplier, approves new people. Once they do, your company’s orders, sites and equipment appear here. <button type="button" class="btn" id="pending-check">Check again</button></p></div>';
+    $('people').innerHTML = ''; $('terms-wrap').hidden = true;
+    ['f-name', 'f-company', 'f-phone', 'f-line1', 'f-city', 'f-state', 'save'].forEach(function (id) { if ($(id)) $(id).disabled = true; });
+    $('pending-check').onclick = function () { loadAccount(); loadOrders(); };
+  }
+  /* The people on the account; the owner adds, approves and turns access
+     off and on (api/my-account.js add-user · user-status). */
+  function drawPeople(a) {
+    var owner = a.you.role === 'owner', list = a.users || [];
+    $('people').innerHTML = '<h2>People on this account · ' + list.length + '</h2>' + list.map(function (u) {
+      var me = u.email === a.you.email, st = u.status || 'active';
+      var act = !owner || me ? '' : st === 'pending' ? '<button type="button" class="btn p" data-person="' + esc(u.email) + '" data-to="active">Approve</button> <button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Decline</button>' : st === 'disabled' ? '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="active">Turn on</button>' : '<button type="button" class="btn" data-person="' + esc(u.email) + '" data-to="disabled">Turn off</button>';
+      return '<div class="ord" style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><b>' + esc(u.name || u.email) + (me ? ' (you)' : '') + '</b> <span class="muted">' + esc(u.email) + (u.role === 'owner' ? ' · owner' : '') + (st === 'pending' ? ' · asked to join' : st === 'disabled' ? ' · access off' : '') + (owner && u.activated === false && st === 'active' ? ' · not signed in yet' : '') + '</span></div><div>' + act + '</div></div>';
+    }).join('')
+      + (owner ? '<div class="row2" style="margin-top:10px"><div><label for="p-email">Add a colleague (work email)</label><input id="p-email" type="email" placeholder="colleague@' + esc(String(a.you.email).split('@')[1] || 'company.com') + '"></div><div><label for="p-name">Their name</label><input id="p-name"></div></div><div class="actions"><button type="button" class="btn p" id="p-add">Add to the account</button><span class="muted" id="p-msg" style="align-self:center;font-size:13.5px"></span></div>'
+        : '<p class="muted" style="font-size:13px">The account owner adds and removes people. Everyone here sees the same orders, sites and equipment.</p>');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-person]'), function (b) {
+      b.onclick = function () {
+        var to = b.getAttribute('data-to'), who = b.getAttribute('data-person');
+        if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
+        b.disabled = true;
+        api('/api/my-account', { method: 'POST', body: JSON.stringify({ org: ORG, action: 'user-status', email: who, status: to }) }).then(function (r) {
+          if (!r.ok) { alert(r.j.error || 'Could not change access.'); b.disabled = false; return; }
+          a.users = r.j.users || a.users; drawPeople(a);
+        })['catch'](function () { b.disabled = false; });
+      };
+    });
+    if ($('p-add')) $('p-add').onclick = function () {
+      var btn = this; btn.disabled = true; $('p-msg').textContent = 'Adding…';
+      api('/api/my-account', { method: 'POST', body: JSON.stringify({ org: ORG, action: 'add-user', email: $('p-email').value, name: $('p-name').value }) }).then(function (r) {
+        btn.disabled = false;
+        if (!r.ok) { $('p-msg').textContent = r.j.error || 'Could not add them.'; return; }
+        a.users = r.j.users || a.users; drawPeople(a); $('p-msg') && ($('p-msg').textContent = r.j.note || 'Added.');
+      })['catch'](function () { btn.disabled = false; $('p-msg').textContent = 'Could not reach the server.'; });
+    };
+  }
   function drawAccount(a) {
+    if (a.pending) return drawPending(a);
     /* The account card a buyer expects from any industrial supplier: account
        number, who they are, who looks after them, what terms they have. */
     var rep = a.rep && a.rep.name ? esc(a.rep.name) + (a.rep.email ? ' · <a href="mailto:' + esc(a.rep.email) + '">' + esc(a.rep.email) + '</a>' : '') : '<span class="muted">Not assigned yet</span>';
-    var users = (a.users || []).filter(function (u) { return u.email !== a.you.email; });
     $('acct').innerHTML =
         '<div><div class="k">Account number</div><div class="v" style="font-family:ui-monospace,monospace;font-size:13px">' + esc(a.customerId || '—') + '</div></div>'
       + '<div><div class="k">Company</div><div class="v">' + esc(a.company || '—') + '</div></div>'
@@ -438,10 +483,10 @@
       + (a.since ? '<div><div class="k">Customer since</div><div class="v">' + esc(String(a.since).slice(0, 10)) + '</div></div>' : '')
       + '<div><div class="k">Your account rep</div><div class="v">' + rep + '</div></div>'
       + '<div><div class="k">Signed in as</div><div class="v">' + esc(a.you.email) + (a.you.role === 'owner' ? ' <span class="muted">· account owner</span>' : '') + '</div></div>'
-      + '<div><div class="k">Orders</div><div class="v">' + esc(a.orders) + '</div></div>'
+      + '<div><div class="k">Orders on the account</div><div class="v">' + esc(a.orders) + '</div></div>'
       + (a.plan === 'designer'
-          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '')
-      + '<div><div class="k">Users on this account</div><div class="v" style="font-weight:500;font-size:14px">' + (users.length ? users.map(function (u) { return esc(u.name || u.email) + (u.role === 'owner' ? ' <span class="muted">(owner)</span>' : ''); }).join('<br>') : '<span class="muted">Only you</span>') + '</div></div>';
+          ? '<div><div class="k">Plan</div><div class="v">Designer</div></div>' : '');
+    drawPeople(a);
 
     var t = a.terms || {};
     var any = t.depositPct != null || t.netDays != null || t.discountPct != null || t.poRequired;
@@ -455,6 +500,12 @@
       $('terms-note').textContent = 'Set by ' + (a.rep && a.rep.name ? a.rep.name : (a.company ? 'your account manager' : 'the team')) + '. Ask them if anything here looks wrong.';
     }
 
+    var owner = a.you.role === 'owner';
+    ['f-name', 'f-phone', 'save'].forEach(function (id) { $(id).disabled = false; });
+    ['f-company', 'f-line1', 'f-city', 'f-state'].forEach(function (id) { $(id).disabled = !owner; });
+    /* the supplier keeps the name of a company it set up */
+    if (a.companyLocked) { $('f-company').disabled = true; $('f-company').title = 'Your supplier keeps the company name; ask them to change it.'; }
+    $('owner-note').hidden = owner;
     $('f-name').value = a.you.name || '';
     $('f-company').value = a.company || '';
     $('f-phone').value = a.you.phone || '';
@@ -468,6 +519,7 @@
     api('/api/my-account?org=' + encodeURIComponent(ORG)).then(function (r) {
       if (!r.ok) { $('acct').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; return; }
       drawAccount(r.j);
+      if (r.j.pending) return;
       loadDesigns();
       $('agreements').innerHTML='<h3>Agreements</h3>'+((r.j.agreements||[]).map(function(a){return '<p>'+esc(a.kind)+' · '+esc(a.ref)+' · '+esc(a.signedAt)+'</p>';}).join('')||'<p class="muted">No agreements recorded yet.</p>');
     })['catch'](function () {});
@@ -488,18 +540,18 @@
     $('save-msg').textContent = 'Saving…';
     api('/api/my-account', { method: 'POST', body: JSON.stringify({
       org: ORG,
-      name: $('f-name').value, company: $('f-company').value, phone: $('f-phone').value,
+      name: $('f-name').value, company: $('f-company').disabled ? undefined : $('f-company').value, phone: $('f-phone').value,
       address: { line1: $('f-line1').value, city: $('f-city').value,
                  state: sp[0] || '', zip: sp[1] || '' }
     }) }).then(function (r) {
       if (!r.ok) { $('save-msg').textContent = r.j.error || 'Could not save.'; return; }
-      $('save-msg').textContent = 'Saved.';
+      $('save-msg').textContent = r.j.note || (r.j.ignored ? 'Saved your name and phone. Only the account owner changes the company and address.' : 'Saved.');
       drawAccount(r.j);
     })['catch'](function () { $('save-msg').textContent = 'Could not reach the server.'; });
   });
 
   /* ── sign in ────────────────────────────────────────────────────────── */
-  $('g-create').onclick=function(){ $('g-h').textContent='Create a customer account';$('g-p').textContent='Verify your work email to open a free customer account. If your company already has an account, ask your supplier to assign your email before joining.';$('g-link').textContent='Verify email and continue';$('g-email').focus(); };
+  $('g-create').onclick=function(){ $('g-h').textContent='Create a customer account';$('g-p').textContent='Verify your work email. If your company already has an account here, you are asked to join it and its owner lets you in; otherwise a free customer account opens for you.';$('g-link').textContent='Verify email and continue';$('g-email').focus(); };
   function sendLink() {
     var e = String($('g-email').value || '').trim();
     if (!e || e.indexOf('@') < 0) { $('g-msg').textContent = 'Please enter your email address.'; return; }

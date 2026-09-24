@@ -2784,28 +2784,43 @@ service cloud.firestore {
            sales-led account. A browser-created record is pinned to this org. */
         allow create: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
                       && request.resource.data.get('orgId', orgId) == orgId
-                      && request.resource.data.get('status', 'active') in ['active', 'suspended'];
+                      && request.resource.data.get('status', 'active') in ['active', 'suspended']
+                      && (isOmegaStaff() || !('editorLite' in request.resource.data));
 
         /* `mergedInto` is written by a script, never by a browser — a merge
-           that a page could trigger is a merge nobody reviewed. */
+           that a page could trigger is a merge nobody reviewed. `supersededBy`
+           (a stray login moved onto its company by api/buyers.js) is the same
+           kind of record. `editorLite` is a paid entitlement on the ACCOUNT —
+           every person on it gets it — written only by ClearSky's endpoint or
+           a billing provider, never by the tenant from a browser. */
         allow update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
                       && request.resource.data.get('orgId', orgId) == resource.data.get('orgId', orgId)
                       && request.resource.data.get('createdAt', '') == resource.data.get('createdAt', '')
-                      && request.resource.data.get('mergedInto', '') == resource.data.get('mergedInto', '');
+                      && request.resource.data.get('mergedInto', '') == resource.data.get('mergedInto', '')
+                      && request.resource.data.get('supersededBy', '') == resource.data.get('supersededBy', '')
+                      && (isOmegaStaff() || request.resource.data.get('editorLite', null) == resource.data.get('editorLite', null));
 
         allow delete: if false;          /* flag, don't drop */
 
-        /* The people on an account. A tenant admin may invite and remove
-           them; a person's own profile edits go through api/my-account.js,
-           which is also what stamps `uid` — a uid the client chose is a uid
-           the client chose, and it is the one field here that could be used
-           to impersonate. Removing somebody is not destroying a record of a
-           person: the orders they placed stay on the account. */
+        /* The people on an account. A person JOINS through the endpoints
+           (api/buyers.js, api/po-intake.js, api/my-account.js), because
+           joining is two writes that must happen together — this doc AND the
+           customer_index pointer, which is write:false below. A browser that
+           created only this doc would make a person the sign-in cannot find:
+           their first sign-in would open a separate account. So no create.
+           A tenant admin may still correct a name, phone, role or access
+           here; `uid` is stamped by the endpoint only — a uid the client
+           chose is the one field that could be used to impersonate.
+           Disable, don't delete: a deleted person leaves a pointer to
+           nothing, and the orders they placed stay on the account. */
         match /users/{emailLower} {
           allow read: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
-          allow create, update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
-                                && request.resource.data.get('role', 'user') in ['owner', 'user'];
-          allow delete: if isOmegaStaff() || isTenantAdmin(orgAlias(orgId));
+          allow create: if false;
+          allow update: if (isOmegaStaff() || isTenantAdmin(orgAlias(orgId)))
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'role', 'status', 'updatedAt'])
+                        && request.resource.data.get('role', 'user') in ['owner', 'user']
+                        && request.resource.data.get('status', 'active') in ['active', 'disabled', 'pending'];
+          allow delete: if false;
         }
 
         // OEM buyers are not platform tenant members. Customer design APIs

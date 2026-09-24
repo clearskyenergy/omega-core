@@ -16,7 +16,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13.5px}table.t th{text-ali
 .msg{font-size:13.5px;margin:8px 0;color:var(--ink2)}.msg.err{color:var(--bad,#a12626)}.msg.ok{color:var(--ok,#0f6b3a)}pre.link{white-space:pre-wrap;word-break:break-all;background:var(--paper2,#f5f8f9);padding:10px;border-radius:8px;font-size:12px}
 .eyebrow{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);font-weight:700}.muted{color:var(--ink2)}.scroll{overflow:auto}
 </style></head><body class="logic-theme">
-<header><b data-brand-name>Omega Logic · Subscribers</b><span><a id="office" href="/omega-logic">Home</a></span></header>
+<header><b data-product-name>Omega Logic · Subscribers</b><span><a id="office" href="/omega-logic">Home</a></span></header>
 <main><p id="status" class="msg">Checking your sign-in…</p><div id="content"></div></main>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script>
 (function(){'use strict';var params=new URLSearchParams(location.search),org=(params.get('org')||'').toLowerCase(),cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);var auth=firebase.auth();

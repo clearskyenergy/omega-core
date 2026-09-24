@@ -589,7 +589,7 @@
     sel.onchange = function () { store('omega_station_pick', sel.value); current = null; paintWork(); show('', '⌁', 'Ready', sel.value ? 'Scan a unit at ' + sel.options[sel.selectedIndex].text : 'Choose the bench you are at', ''); focusScan(); };
   }
   function paintHeader() {
-    if (cfg && cfg.brand && window.OmegaLogicTheme) OmegaLogicTheme.apply(cfg.brand);
+    /* the bench is Omega Logic's plant, in its own colours on every workspace */
     paintPick();
     $('h-station').textContent = (cfg && cfg.label) || 'Station';
     $('h-seq').textContent = cfg ? [cfg.lineId, cfg.location, cfg.roaming ? 'roaming · pick the bench per scan' : (cfg.station || cfg.stationId)].filter(Boolean).join(' · ') : '';

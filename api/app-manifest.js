@@ -13,11 +13,12 @@
    is opened by people who are not tenant members, which is why this stays
    unauthenticated.)
 
-   Icons come from omega_orgs/{org}.appIcon — { "192", "512", "180",
-   "maskable" } as same-origin paths (a tenant folder, /tenants/<slug>/icons/)
-   or https URLs — with an optional per-app override under appIcon.office /
+   The customer app's icons come from omega_orgs/{org}.appIcon — { "192",
+   "512", "180", "maskable" } as same-origin paths (a tenant folder,
+   /tenants/<slug>/icons/) or https URLs — with an optional override under
    appIcon.customer of the same shape — and fall back to the OMEGA icons when
-   none are set. A path is validated, never trusted: a manifest that points
+   none are set. (appIcon.office is no longer read: the office and plant apps
+   wear Omega Logic's icons on every phone.) A path is validated, never trusted: a manifest that points
    at a foreign script would be a phishing kit with our name on it.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
@@ -51,15 +52,15 @@ function iconPath(v) {
   return '';
 }
 
-/* The three apps. `suffix` is what follows the tenant's name; the customer
-   app carries the platform name alone, because to the buyer that IS the
-   product. `id` keeps the three installs distinct on one phone. */
+/* The three apps. Office and plant are ClearSky's (`product`); the customer
+   app carries the tenant's customer-facing name alone, because to the buyer
+   that IS the product. `id` keeps the installs distinct on one phone. */
 var APPS = {
   plant: { product: 'Omega Logic · Plant', short: 'OL Plant', start: '/plant/app', scope: '/plant/',
     description: 'Omega Logic for the plant: work orders, the bench scanner, stock and quality for the people building the units.' },
   office: { product: 'Omega Logic', short: 'Omega Logic', start: '/office/app', scope: '/office/',
     description: 'Omega Logic by ClearSky: orders, purchase orders, customers, the plant, stock and every unit to its site.' },
-  customer: { suffix: '', start: '/portals/customer/app', scope: '/portals/customer/',
+  customer: { start: '/portals/customer/app', scope: '/portals/customer/',
     description: 'Design your sites, place purchase orders and follow every order from your supplier.' }
 };
 function appKey(v) { return APPS.hasOwnProperty(String(v || '')) ? String(v) : 'plant'; }
@@ -85,10 +86,14 @@ function manifestFor(org, record, app) {
   var own = base[app] && typeof base[app] === 'object' ? base[app] : null;
   var ai = own && iconSet(own).length ? own : base;
   var icons = iconSet(ai);
-  var short = String(wl.shortName || record.name || 'Plant').slice(0, 12);
-  var name = String(wl.platformName || wl.shortName || record.name || '').slice(0, 40) || short;
+  /* the customer-facing name, by the same rule as the customer app's own
+     header (logic-brand): the white label when it is on, else the tenant */
+  var short = String((require('./_lib/whitelabel').isOn(wl) && wl.shortName) || record.name || 'Your account').slice(0, 12);
+  var name = String(b.name && b.name !== 'Customer portal' ? b.name : (record.name || '')).slice(0, 40) || short;
   return {
-    id: A2.start,
+    /* one install PER SUPPLIER: every tenant's customer app is served from
+       the same origin, and an origin + id is what a phone calls one app */
+    id: A2.start + '?org=' + encodeURIComponent(org),
     name: name,
     short_name: short,
     description: A2.description,

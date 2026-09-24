@@ -29,7 +29,8 @@
    terms. docs/order-intake-template.json is the shape. Every step is
    idempotent where the endpoint is (a serial or a company that exists is
    reported, not duplicated); an order is created once per PO number —
-   re-running finds it by orderNo written back into the report. */
+   re-running finds it by that PO number and ties it to the customer ACCOUNT
+   (customerId), so every person on the account sees it. */
 'use strict';
 var fs = require('fs'), path = require('path'), os = require('os');
 var ROOT = path.join(__dirname, '..');
@@ -58,23 +59,7 @@ if (!APPLY) {
   db.seed('omega_orgs/' + org + '/members/tom', { role: 'owner', status: 'active' });
 } else {
   A = require(adminPath);
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-    /* the Firebase CLI's signed-in account: firebase-tools keeps a refresh
-       token in its configstore; firebase-admin accepts one as a credential.
-       The client id/secret are firebase-tools' own public OAuth client. */
-    var store = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.config/configstore/firebase-tools.json'), 'utf8'));
-    var tokens = store.tokens || (store.activeAccounts && store.activeAccounts[0] && store.activeAccounts[0].tokens);
-    if (!tokens || !tokens.refresh_token) throw new Error('Not signed in: run `firebase login` (or set FIREBASE_SERVICE_ACCOUNT)');
-    /* Firestore accepts the CLI account only as an application-default
-       credential: an authorized_user file, written to the OS temp dir for
-       this run and removed on exit, never into the repo. */
-    var adcPath = path.join(os.tmpdir(), 'omega-intake-adc-' + process.pid + '.json');
-    fs.writeFileSync(adcPath, JSON.stringify({ type: 'authorized_user', client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com', client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi', refresh_token: tokens.refresh_token }), { mode: 384 });
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = adcPath; process.on('exit', function () { try { fs.unlinkSync(adcPath); } catch (e) {} });
-    var admin = require('firebase-admin');
-    admin.initializeApp({ credential: admin.credential.applicationDefault(), projectId: 'clearsky-portal' });
-    A.init = function () { return admin; }; A.db = function () { return admin.firestore(); };
-  }
+  require('./_lib/live-admin')(A);
   A.authenticate = async function (req) { return req.caller || OWNER; };
 }
 mock(path.join(ROOT, 'api/_lib/mail'), { send: function () { return Promise.resolve(); }, layout: function () { return ''; } });
@@ -101,16 +86,39 @@ function money(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFrac
   var product = Object.assign({}, existing || {}, ORDER.product);
   var saved = await call(catalog, { action: 'save', revision: cat.revision, product: product }); step('catalog product ' + product.sku + (existing ? ' updated' : ' added'), { revision: saved.revision, coverage: (product.coverage || []).length });
   /* 2. the company account and its terms */
-  var c = ORDER.customer, acct = await call(buyers, { action: 'create', email: c.email, company: c.company, name: c.contact, terms: c.terms }); step('customer account ' + acct.customerId + (acct.created ? ' created' : ' existed'), { note: acct.note });
-  if (c.terms) { var t = await call(buyers, { action: 'terms', email: c.email, terms: c.terms }); step('terms ' + JSON.stringify(t.terms), null); }
-  /* 3. the order — once per PO number */
-  var listing = await call(office, null, OWNER), found = (listing.orders || []).filter(function (o) { return o.poNumber === ORDER.order.poNumber || (o.customer && o.customer.email === c.email && o.items && o.items.length && o.items[0].sku === ORDER.order.items[0].sku && o.items[0].qty === ORDER.order.items[0].qty); })[0];
-  var orderId, orderNo;
-  if (found) { orderId = found.id; orderNo = found.orderNo; step('order ' + orderNo + ' already exists', { id: orderId }); }
+  /* The customer is a company ACCOUNT with people on it: a new contact at a
+     company that already has an account joins it rather than splitting it. */
+  var c = ORDER.customer, acct;
+  try { acct = await call(buyers, { action: 'create', email: c.email, company: c.company, name: c.contact, terms: c.terms, domain: c.domain || undefined }); }
+  catch (e) {
+    if (e.status !== 409 || !/already has an account/.test(e.message)) throw e;
+    var same = await require(path.join(ROOT, 'api/_lib/buyer-accounts')).findByName(A.db(), org, c.company);
+    if (!same) throw e;
+    await call(buyers, { action: 'user-add', customerId: same.id, email: c.email, name: c.contact, role: 'user' });
+    acct = { customerId: same.id, created: false, note: c.email + ' added to the existing ' + c.company + ' account (' + same.id + ', made by ' + (same.data.source || 'legacy') + ')' };
+  }
+  step('customer account ' + acct.customerId + (acct.created ? ' created' : ' existed'), { note: acct.note });
+  if (c.terms) { var t = await call(buyers, { action: 'terms', customerId: acct.customerId, terms: c.terms }); step('terms ' + JSON.stringify(t.terms), null); }
+  /* 3. the order — once per PO number, found by the PO number itself (not by
+     who it is billed to or what is on it: a second PO for the same SKU and
+     quantity is a second order) */
+  var orderId, orderNo, found = null;
+  if (ORDER.order.poNumber) {
+    var byPo = await A.db().collection('orders').where('orgId', '==', org).where('purchaseOrder.number', '==', ORDER.order.poNumber).limit(5).get();
+    found = byPo.docs.filter(function (d) { var v = d.data() || {}; return v.customerId === acct.customerId || ((v.customer || {}).email || '').toLowerCase() === String(c.email).toLowerCase(); })[0] || null;
+  }
+  if (found) { orderId = found.id; orderNo = found.data().orderNo; step('order ' + orderNo + ' already exists', { id: orderId }); }
   else {
     var created = await call(orders, { action: 'create', orgId: org, customer: { name: c.contact, company: c.company, email: c.email, phone: c.phone || '', notes: c.notes || '', address: c.billingAddress || {} }, items: ORDER.order.items, note: ORDER.order.note || ('PO ' + ORDER.order.poNumber + (ORDER.order.proposal ? ' · proposal ' + ORDER.order.proposal : '')) });
     orderId = created.id || created.orderId; orderNo = created.orderNo; step('order ' + orderNo + ' created', { id: orderId, lines: ORDER.order.items });
     if (ORDER.order.poNumber) { await A.db().collection('orders').doc(orderId).update({ purchaseOrder: { number: ORDER.order.poNumber, receivedAt: ORDER.order.poDate || null, proposal: ORDER.order.proposal || null }, requestedDate: ORDER.order.requestedDate || null, destinationNote: ORDER.order.destinationNote || null }); step('PO ' + ORDER.order.poNumber + ' recorded on the order', null); }
+  }
+  /* The order belongs to the ACCOUNT, so everyone on it sees it — stamped on
+     both branches, so re-running repairs an order made before this rule. */
+  var current = (await A.db().collection('orders').doc(orderId).get()).data() || {};
+  if (current.customerId !== acct.customerId) {
+    if (current.customerId) throw new Error('Order ' + orderNo + ' belongs to another customer account (' + current.customerId + '); not changing it');
+    await A.db().collection('orders').doc(orderId).update({ customerId: acct.customerId }); step('order ' + orderNo + ' tied to customer account ' + acct.customerId, null);
   }
   /* 4. the approved price, accepted */
   var priced = await call(office, { action: 'price', orderId: orderId, total: ORDER.order.total, accept: true }).catch(function (e) { if (/locked|already/.test(e.message)) return { duplicate: true }; throw e; });

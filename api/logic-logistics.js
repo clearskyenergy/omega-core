@@ -68,11 +68,13 @@ module.exports=A.handler(async function(req,res){
          refuses the move (never happens on a planned load) is skipped and
          named rather than blocking the carrier evidence. */
       var custodyUnits=[];if(['pickup','delivered','inspect'].indexOf(b.action)>=0){for(var cs of leg.serials){var cu=await tx.get(db.doc('plant_units/'+org+'__'+cs));if(cu.exists)custodyUnits.push(cu);}}
+      /* whose units these are: the order's customer ACCOUNT (its stamp, or the account of the person it is billed to) */
+      var loadAcct=custodyUnits.length?await require('./_lib/buyer-accounts').accountOfOrder(db,org,o):null;
       var change=L.transition(leg,b.action,b,c.email,now);leg=change.leg;ev=change.event;legs=legs.slice();legs[index]=leg;
       var skippedCustody=[];custodyUnits.forEach(function(cu){var u=cu.data(),move=b.action==='pickup'?'ship':b.action==='delivered'?'deliver':'receive',body={at:now,legId:legId,note:'Load '+legId};
         if(move==='receive'){var rc=(leg.receipts||[]).filter(function(r){return r.serial===u.serial;})[0];if(rc&&rc.condition==='missing'){var st=C.state(u,'lost',{note:'Missing on receipt of load '+legId},c.email,now,'logistics');tx.update(cu.ref,st.patch);tx.create(cu.ref.collection('custody_events').doc(),Object.assign({orgId:org,serial:u.serial,legId:legId,orderId:ref.id},st.event));return;}body.condition=rc&&rc.condition==='damaged'?'damaged':'accepted';}
         var v=C.judge(u,move,body);if(!v.ok){skippedCustody.push(u.serial+': '+v.say);return;}
-        var ap=C.apply(u,move,body,c.email,now,'logistics');if(o.customerId)ap.patch['custody.customerId']=o.customerId;ap.event.legId=legId;ap.event.orderId=ref.id;
+        var ap=C.apply(u,move,body,c.email,now,'logistics');if(loadAcct&&!C.custodyOf(u).customerId)ap.patch['custody.customerId']=loadAcct;ap.event.legId=legId;ap.event.orderId=ref.id;
         tx.update(cu.ref,ap.patch);tx.create(cu.ref.collection('custody_events').doc(),Object.assign({orgId:org,serial:u.serial},ap.event));});
       if(skippedCustody.length)ev.custodySkipped=skippedCustody;
     }

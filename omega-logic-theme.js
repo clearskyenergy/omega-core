@@ -22,8 +22,14 @@
       style.setProperty('--brand-soft','rgba('+rgb+',0.13)');
     }
     document.body.classList.add('logic-theme');
-    Array.prototype.forEach.call(document.querySelectorAll('[data-brand-name]'), function (e) { e.textContent = brand.name || 'Customer portal'; });
+    /* Only when a name was given: a colour-only call (a theme preview) must
+       not rename anything. The office header's "Omega Logic" is marked
+       data-product-name, never data-brand-name, so no tenant name reaches it. */
+    if (brand.name) Array.prototype.forEach.call(document.querySelectorAll('[data-brand-name]'), function (e) { e.textContent = brand.name; });
   }
+
+  /* Back to the product's own colours (after a preview of a tenant's). */
+  function reset() { var style = document.documentElement.style; ['--brand', '--cta', '--green', '--brand-d', '--accent', '--ink', '--brand-soft'].forEach(function (p) { style.removeProperty(p); }); }
 
   /* Who is a ClearSky owner is decided by every endpoint; this only
      remembers, for the pages that do not say, whether to SHOW the ClearSky
@@ -97,7 +103,7 @@
          site anyone has used; Home in the account nav says the same thing in words. An OEM's
          home is its dashboard; ClearSky's, with no org in the URL, is the directory of accounts. */
       var home = org ? '/omega-logic?org=' + encodeURIComponent(org) : '/omega-logic';
-      header.innerHTML = '<div><a class="logic-home" href="' + esc(home) + '" title="Home"><b data-brand-name>' + esc(name) + '</b></a><div class="muted logic-sub">' + esc([workspace, o.subtitle || (owner ? 'managed by ClearSky' : 'office workspace')].filter(Boolean).join(' · ')) + '</div></div>'
+      header.innerHTML = '<div><a class="logic-home" href="' + esc(home) + '" title="Home"><b data-product-name>' + esc(name) + '</b></a><div class="muted logic-sub">' + esc([workspace, o.subtitle || (owner ? 'managed by ClearSky' : 'office workspace')].filter(Boolean).join(' · ')) + '</div></div>'
         + '<nav class="logic-who" aria-label="Account"><a href="' + esc(home) + '">Home</a><span id="who">' + esc(o.who || '') + '</span>'
         + (owner ? '<a href="/login">Where to?</a>' : '')
         + '<button type="button" id="signout" class="logic-signout">Sign out</button></nav>';
@@ -129,5 +135,5 @@
     nav.innerHTML = h;
   }
 
-  window.OmegaLogicTheme = { apply: apply, chrome: chrome, groups: groups };
+  window.OmegaLogicTheme = { apply: apply, reset: reset, chrome: chrome, groups: groups };
 })();

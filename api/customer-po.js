@@ -9,12 +9,12 @@ module.exports=A.handler(async function(req,res){
     if(!org)throw A.httpError(400,'Valid supplier required');
     if(!c.claims||c.claims.email_verified!==true)throw A.httpError(403,'Verify your customer email first');
     var ctx=await B.context(org),db=A.db(),email=B.email(c.email),acct=B.active(await B.lookup(db,org,email));
-    if(!acct)throw A.httpError(403,'Open your customer account first');
     if(req.method==='GET'){
-      var rows=await db.collection('orders').where('orgId','==',org).where('customer.email','==',email).orderBy('createdAt','desc').limit(50).get();
+      // The ACCOUNT's orders, not the caller's: every person on the company sees them.
+      var rows=await B.accountOrders(db,org,email,acct,{limit:50});
       var catalog=await db.doc('omega_orgs/'+org+'/storefront/config').get();
       return {brand:require('./_lib/logic-brand')(ctx.org),products:(catalog.exists?catalog.data().products||[]:[]).filter(function(p){return p.active!==false&&!p.placeholder&&p.sku!=='GENERIC-BESS';}).map(function(p){return {sku:p.sku,name:p.name,kind:p.kind||'product'};}),
-        orders:rows.docs.map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.size===50,terms:P.terms(ctx.config.terms,acct.data.terms)};
+        orders:rows.docs.map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.truncated,terms:P.terms(ctx.config.terms,acct.data.terms)};
     }
     if(b.action!=='submit')throw A.httpError(400,'Unsupported action');
     return db.runTransaction(async function(tx){

@@ -51,7 +51,7 @@ module.exports = A.handler(async function (req, res) {
     }).map(function (s) {
       var o = s.data();
       return { id: s.id, orderNo: o.orderNo, stage: S.stageOf(o), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
-        createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '' },
+        createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '', company: (o.customer || {}).company || '' }, customerId: o.customerId || null,
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt,
           releasedAt: o.logic.releasedAt || null, requirements: o.logic.requirements || [], allocatedSerials: o.logic.allocatedSerials || [],
@@ -86,21 +86,9 @@ module.exports = A.handler(async function (req, res) {
     }, { merge: true });
     await batch.commit(); return { ok: true };
   }
-  if (b.action === 'terms') {
-    X.requireOwner(caller);
-    var email = clean(b.email, 160).toLowerCase();
-    if (!/^[^@/\s]+@[^@/\s]+\.[^@/\s]+$/.test(email)) throw A.httpError(400, 'Valid customer email required');
-    var root = db.collection('omega_orgs').doc(org), ptr = root.collection('customer_index').doc(email);
-    return db.runTransaction(async function (tx) {
-      var s = await tx.get(ptr), cid = s.exists ? P.id(s.data().customerId) : P.key(org + ':' + email);
-      var ref = root.collection('customers').doc(cid), customer = await tx.get(ref);
-      if (!s.exists) tx.create(ptr, { email: email, customerId: cid });
-      if (!s.exists) tx.create(ref.collection('users').doc(email), { email: email, role: 'owner', createdAt: new Date().toISOString() });
-      tx.set(ref, Object.assign(customer.exists ? {} : { orgId: org, name: email, plan: 'free', status: 'active', source: 'office', createdAt: new Date().toISOString() },
-        { terms: P.terms(ctx.config.terms, b.terms), termsUpdatedBy: caller.email, termsUpdatedAt: new Date().toISOString() }), { merge: true });
-      return { ok: true };
-    });
-  }
+  /* Customer terms have ONE writer: api/buyers.js 'terms', keyed by the
+     account. The branch that used to live here created an account per email
+     and split companies; it is gone on purpose. */
   var orderId = P.id(b.orderId), ref = db.collection('orders').doc(orderId), row = await ref.get();
   if (!row.exists || row.data().orgId !== org) throw A.httpError(404, 'Order not found in this workspace');
   if (b.action === 'price') return W.price(orderId, b.total, caller, b.accept === true);

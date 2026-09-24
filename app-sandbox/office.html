@@ -30,8 +30,8 @@
   QuickBooks evidence is in front of whoever signs.
 
   Same shape as plant/app.html, on purpose: an org remembered once, a
-  bottom tab bar, the tenant's own manifest and icon (api/app-manifest.js,
-  app=office), a shell service worker so it opens and says "offline" instead
+  bottom tab bar, Omega Logic's manifest and icon on every workspace's phone
+  (api/app-manifest.js, app=office), a shell service worker so it opens and says "offline" instead
   of a browser error. Office data is never served from cache.
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -63,6 +63,9 @@
   .big:disabled{opacity:.5}
   input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
   textarea{min-height:120px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+  /* a small action beside a person or a unit (Approve, Turn off, Invite) */
+  button.act{flex:none;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:white;font:600 13px system-ui,sans-serif;color:var(--brand-d);white-space:nowrap}button.act.go{background:var(--brand);border-color:var(--brand);color:white}
+  button.unit{border-radius:0}
   .row{display:flex;gap:8px}.row input,.row select{flex:1;min-width:0}.row button{padding:0 16px;border:1px solid var(--line);background:white}
   .back{border:0;background:none;color:var(--brand-d);font:inherit;padding:6px 0;cursor:pointer}
   .note{font-size:12px;color:var(--ink2)}
@@ -91,7 +94,7 @@
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-product-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="switch" hidden title="Open another company">Switch</button><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
   <div id="gate"><h1>Omega Logic</h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
@@ -106,7 +109,7 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
+<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-logic-signin.js"></script>
 <script>
 (function () {
   'use strict';
@@ -116,26 +119,25 @@
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
-  /* The org comes with the link once and is remembered: an installed app has
-     no query string to carry it. */
-  var ORG = params.get('org') || load('omega_office_app_org', '') || '';
-  if (params.get('org')) store('omega_office_app_org', params.get('org'));
-  /* The tenant's own name, colours and icon on the home screen
-     (api/app-manifest.js app=office); the static manifest is the fallback. */
-  if (ORG) {
-    var mfUrl = '/api/app-manifest?org=' + encodeURIComponent(ORG) + '&app=office';
-    /* sandbox: the manifest link is static */
-    fetch(mfUrl).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
-      if (!m) return;
-      var ti = document.querySelector('link[rel="apple-touch-icon"]'); if (ti && m.apple_touch_icon) ti.href = m.apple_touch_icon;
-      var tc = document.querySelector('meta[name="theme-color"]'); if (tc && /^#[0-9a-f]{6}$/i.test(m.theme_color || '')) tc.content = m.theme_color;
-      var tt = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (tt && m.short_name) tt.content = m.short_name;
-    })['catch'](function () {});
+  /* Omega Logic is ClearSky's app and a company is a workspace inside it, so
+     the address carries no company: you sign in to Omega Logic and
+     /api/logic-workspaces says which company is yours (omega-logic-signin.js).
+     The choice is remembered on this device; a link that still carries
+     ?org= (older invitations) preselects it. The home-screen name, colours
+     and icon are Omega Logic's on every phone: the static manifest
+     /office/app.webmanifest, the same for everyone. */
+  var HINT = params.get('org') || '', ORG = load('omega_office_app_org', '') || HINT;
+  if (HINT) {
+    if (!load('omega_office_app_org', '')) store('omega_office_app_org', HINT);
+    /* the hint is used once; the address goes back to having no company */
+    params.delete('org'); try { history.replaceState(null, '', location.pathname + (String(params) ? '?' + params : '') + location.hash); } catch (e) {}
   }
+  var WS = null, REFUSED = {}, UID = null;
   var TAB = params.get('tab') || 'today', DATA = null, BOARD = null, MAT = null, PICK = null, ORDER_FILTER = load('omega_office_app_filter', 'all');
   var BUYERS = null, CUST = null, COMPANIES = null, COMPANY_ID = load('omega_office_app_company', ''), COMPANY = null, UNITS = null;
   var CUSTODY = null, LOADS = null, SCANS = [], SERIAL = null, camStream = null, camTimer = null;
   var q = '?org=' + encodeURIComponent(ORG);
+  function setOrg(org) { ORG = org || ''; q = '?org=' + encodeURIComponent(ORG); store('omega_office_app_org', ORG || null); }
   var STAGE_PILL = { exception: 'bad', ship: 'ok', shipped: 'ok', complete: 'ok' };
   var FILTERS = [['all', 'All', null], ['attention', 'Needs attention', ['exception']], ['quote', 'To price', ['quote', 'priced']], ['deposit', 'Awaiting deposit', ['deposit']], ['build', 'In build', ['release', 'production', 'balance']], ['ship', 'Ready · shipped', ['ship', 'shipped', 'complete']], ['requests', 'Customer requests', null]];
 
@@ -143,7 +145,7 @@
     if (!auth.currentUser) return Promise.reject(new Error('Sign in first.'));
     return auth.currentUser.getIdToken().then(function (t) {
       return fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(Object.assign({ org: ORG }, body)) : undefined });
-    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }); });
+    }).then(function (r) { return r.json().then(function (d) { if (!r.ok) { var e = new Error(d.error || 'Request failed'); e.status = r.status; throw e; } return d; }); });
   }
   function status(t) { $('status').textContent = t || ''; }
   function fail(e) { status(e.message || String(e)); }
@@ -163,8 +165,13 @@
       /* Omega Logic is ClearSky's app: its own name and colours, with the
          workspace you are in shown under it, as QuickBooks shows the company */
       $('who').textContent = [(DATA.brand && DATA.brand.workspace) || DATA.name || ORG, (auth.currentUser && auth.currentUser.email) || ''].filter(Boolean).join(' · ');
-      status(''); draw();
-    })['catch'](fail);
+      status(''); draw(); showSwitch();
+    })['catch'](function (e) {
+      /* the company remembered on this device is not (or no longer) this
+         person's: forget it and ask Omega Logic where they belong */
+      if ([400, 403, 404].indexOf(e.status) >= 0) { REFUSED[ORG] = true; setOrg(''); WS = null; return front(); }
+      fail(e);
+    });
   }
   function loadMaterials() { return MAT ? Promise.resolve(MAT) : api('/api/logic-materials' + q).then(function (m) { MAT = m; return m; }); }
   function loadUnits() { return UNITS ? Promise.resolve(UNITS) : api('/api/logic-plant' + q + '&page=units').then(function (u) { UNITS = u.rows || []; return UNITS; }); }
@@ -232,7 +239,7 @@
   function orderCard(o) {
     var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
     return '<button class="card' + (key === 'exception' || reqs ? ' urgent' : '') + '" data-order="' + esc(o.id) + '"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : '') + '">' + esc(stageLabel(o)) + '</span></div>'
-      + '<div class="m">' + esc(o.customer.name || o.customer.email) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + '</div>'
+      + '<div class="m">' + esc(o.customer.company || o.customer.name || o.customer.email) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + '</div>'
       + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '<div class="m">' + esc(o.stage ? o.stage.next : '') + '</div>')
       + (b ? '<div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="m">' + (b.progress.units ? b.progress.percent + '% built · ' + b.progress.readyRoots + ' of ' + b.progress.expectedRoots + ' ready' : 'awaiting serials') + (b.late ? ' · <b style="color:#B42318">late</b>' : '') + '</div>' : '')
       + (reqs ? '<div class="m"><span class="pill bad">' + reqs + ' customer request' + (reqs === 1 ? '' : 's') + ' waiting</span></div>' : '') + '</button>';
@@ -255,10 +262,10 @@
       + '<div class="kv" id="today-kv"><div class="' + ((bs.quote || 0) + (bs.priced || 0) ? '' : '') + '"><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
       + '<h2>Needs a person · ' + (needs.length + review) + '</h2>'
       + (review ? '<button class="unit" id="to-review"><div><b>' + review + ' company PO' + (review === 1 ? '' : 's') + ' to review</b><small>uploaded by customers; map the lines and destinations on the desktop</small></div><span class="pill bad">review</span></button>' : '')
-      + (needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('') || (review ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered.</p>'))
+      + (needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('') || (review ? '' : '<p class="note">Nothing waiting on the office. Every order is priced, every request answered.</p>'))
       + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(invoiced) + '</b></div><div><small>Received</small><b>' + dollars(paid) + '</b></div><div class="' + (invoiced - paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(invoiced - paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(depositsOpen) + '</b></div>' + (exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
       + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
-      + '<h2>' + esc((DATA.brand && DATA.brand.name) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
+      + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
     bindOrders(); bindHubs();
     if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
     if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
@@ -280,7 +287,7 @@
     if (!o) { PICK = null; return draw(); }
     var l = o.logic, c = l && l.commercial, b = boardFor(o), money = invoiceSums(o), key = stageKey(o);
     var reqs = (o.requests || []).slice().reverse();
-    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(day(o.createdAt)) : '') + '</p>'
+    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + (o.customer.company ? '<b>' + esc(o.customer.company) + '</b> · ' : '') + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(day(o.createdAt)) : '') + '</p>' + (o.customerId ? '<button class="back" id="open-acct" style="margin:0 0 8px">Open the ' + esc(o.customer.company || 'customer') + ' account ›</button>' : '')
       + '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(o.stage ? o.stage.next : '') + '</span></p>'
       + (o.cancelRequested ? '<div class="warn">Cancellation requested. Refund and stock disposition need review on the desktop.</div>' : '')
       + (l && (l.lastError || l.paymentException) ? '<div class="warn">' + esc(l.paymentException || l.lastError) + '</div>' : '')
@@ -296,6 +303,7 @@
       + (key === 'balance' || key === 'production' ? '<button class="big ghost" id="act-ready">Verify ready · invoice the balance</button>' : '')
       + '<a class="big ghost" href="/omega-logic' + q + '&order=' + encodeURIComponent(o.id) + '">Work it on the desktop</a>';
     $('back').onclick = function () { PICK = null; draw(); };
+    if ($('open-acct')) $('open-acct').onclick = function () { PICK = null; openCustomer(o.customerId); };
     Array.prototype.forEach.call(document.querySelectorAll('[data-resolve]'), function (btn) {
       btn.onclick = function () {
         var answer = $('answer-' + btn.dataset.resolve).value.trim(); if (!answer) { status('Write the answer first.'); return; }
@@ -361,35 +369,103 @@
     })['catch'](function (e) { fail(e); if ($('company-body')) $('company-body').innerHTML = ''; });
   }
 
-  /* ── Customers: terms and money per account ──────────────────────────── */
+  /* ── Customers: the Customer hub ─────────────────────────────────────────
+     A customer is a COMPANY ACCOUNT with people on it (Amperage Capital:
+     Shannon and his colleagues). The hub opens the account — its people,
+     every order on it, money, sites and units — never one person's slice. */
+  var CUST_FILTER = '';
   function drawCustomers() {
-    $('view').innerHTML = '<h1>Customers</h1><div id="cust-body"><p class="note">Loading…</p></div>';
+    $('view').innerHTML = '<h1>Customers</h1><input class="qsearch" id="c-find" placeholder="Find a customer" value="' + esc(CUST_FILTER) + '" autocomplete="off"><div id="cust-body"><p class="note">Loading…</p></div>';
     loadBuyers().then(function (b) {
       var el = $('cust-body'); if (!el) return;
-      var list = b.customers || [];
-      el.innerHTML = '<p class="note">' + list.length + ' account' + (list.length === 1 ? '' : 's') + (b.next ? ' · first 50' : '') + '. Tap one for terms, balance and orders.</p>'
-        + (list.map(function (c) { var u = c.users[0]; return '<button class="card" data-cust="' + esc(u ? u.email : '') + '"' + (u ? '' : ' disabled') + '><div class="h"><b>' + esc(c.company || (u ? u.email : c.id)) + '</b><span class="pill' + (c.status === 'active' ? '' : ' bad') + '">' + esc(c.status) + '</span></div><div class="m">' + esc(c.terms.depositPct) + '% deposit · due in ' + esc(c.terms.dueDays) + ' days · ' + c.users.length + ' login' + (c.users.length === 1 ? '' : 's') + (u ? ' · ' + esc(u.email) : ' · no login yet') + '</div></button>'; }).join('') || '<p class="note">No customer accounts yet. A customer creates one by signing in to the portal; the office creates a company account under POs.</p>');
-      Array.prototype.forEach.call(document.querySelectorAll('[data-cust]'), function (x) { x.onclick = function () { openCustomer(x.dataset.cust); }; });
+      function paintList() {
+        var f = CUST_FILTER.toLowerCase().trim(), list = (b.customers || []).slice().sort(function (x, y) { return String(x.company || x.id).toLowerCase().localeCompare(String(y.company || y.id).toLowerCase()); })
+          .filter(function (c) { return !f || (String(c.company) + ' ' + c.users.map(function (u) { return u.email + ' ' + u.name; }).join(' ')).toLowerCase().indexOf(f) >= 0; });
+        el.innerHTML = '<p class="note">' + list.length + ' account' + (list.length === 1 ? '' : 's') + (b.next ? ' loaded' : '') + '. Tap one for its people, orders, money, sites and units.</p>'
+          + (list.map(function (c) {
+            var owner = c.users.filter(function (u) { return u.role === 'owner' && u.status === 'active'; })[0] || c.users[0];
+            return '<button class="card" data-cust="' + esc(c.id) + '"><div class="h"><b>' + esc(c.company || (owner ? owner.email : c.id)) + '</b><span class="pill' + (c.status === 'active' ? '' : ' bad') + '">' + esc(c.status) + '</span></div><div class="m">' + c.users.length + ' ' + (c.users.length === 1 ? 'person' : 'people') + (owner ? ' · ' + esc(owner.name || owner.email) : ' · nobody on it yet') + ' · ' + esc(c.terms.depositPct) + '% deposit' + (c.pending ? ' · <b>' + c.pending + ' asking to join</b>' : '') + '</div></button>';
+          }).join('') || '<p class="note">' + (f ? 'No customer matches.' : 'No customer accounts yet. Add a company under Menu → PO loads, or a customer signs in to the customer app.') + '</p>')
+          + (b.next ? '<button class="big ghost" id="c-more">Load more customers</button>' : '');
+        Array.prototype.forEach.call(el.querySelectorAll('[data-cust]'), function (x) { x.onclick = function () { openCustomer(x.dataset.cust); }; });
+        if ($('c-more')) $('c-more').onclick = function () {
+          var btn = this; btn.disabled = true; status('Loading more…');
+          api('/api/buyers' + q + '&after=' + encodeURIComponent(b.next)).then(function (more) { b.customers = (b.customers || []).concat(more.customers || []); b.next = more.next; status(''); paintList(); })['catch'](function (e) { fail(e); btn.disabled = false; });
+        };
+      }
+      paintList();
+      $('c-find').oninput = function () { CUST_FILTER = this.value; paintList(); };
     })['catch'](fail);
   }
-  function openCustomer(email) {
+  function openCustomer(id) {
     status('Loading account…');
-    api('/api/buyers' + q + '&email=' + encodeURIComponent(email)).then(function (c) { CUST = c; status(''); draw(); window.scrollTo(0, 0); })['catch'](fail);
+    return api('/api/buyers' + q + '&customerId=' + encodeURIComponent(id)).then(function (c) { CUST = c; TAB = 'customers'; status(''); draw(); window.scrollTo(0, 0); })['catch'](fail);
+  }
+  function shareLink(url, title) {
+    if (navigator.share) return navigator.share({ title: title, url: url })['catch'](function () {});
+    try { navigator.clipboard.writeText(url).then(function () { status('Link copied.'); }, function () { window.prompt('Copy this link', url); }); } catch (e) { window.prompt('Copy this link', url); }
   }
   function drawCustomer() {
-    var c = CUST, t = c.totals || {};
-    $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(c.company || c.name || c.email) + '</h1><p class="note">' + esc(c.name || '') + ' · ' + esc(c.email) + (c.phone ? ' · ' + esc(c.phone) : '') + ' · ' + esc(c.plan) + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(c.createdAt)) : '') + (c.activated ? '' : ' · has not signed in yet') + '</p>'
+    var c = CUST, t = c.totals || {}, people = c.people || [];
+    var orderIds = {}; (c.orders || []).forEach(function (o) { orderIds[o.id] = true; });
+    $('view').innerHTML = '<button class="back" id="back">‹ Customers</button><h1>' + esc(c.company || c.email || c.customerId) + '</h1><p class="note">' + esc(c.accountType === 'company' ? 'Company account' : 'Account') + ' · ' + esc(c.status) + (c.createdAt ? ' · since ' + esc(day(c.createdAt)) : '') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '') + '</p>'
       + '<div class="kv"><div><small>Invoiced</small><b>' + dollars(t.invoicedCents) + '</b></div><div><small>Received</small><b>' + dollars(t.paidCents) + '</b></div><div class="' + (t.balanceCents > 0 ? 'bad' : '') + '"><small>Balance</small><b>' + dollars(t.balanceCents) + '</b></div><div class="' + (t.openRequests ? 'bad' : '') + '"><small>Open requests</small><b>' + (t.openRequests || 0) + '</b></div></div>'
-      + '<h2>Terms</h2><p class="note">Applies to future prices; issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>'
+      + '<h2>People · ' + people.length + '</h2>' + (people.map(function (u) {
+          var st = u.status || 'active', lastOwner = u.role === 'owner' && st === 'active' && people.filter(function (x) { return x.role === 'owner' && (x.status || 'active') === 'active'; }).length === 1;
+          return '<div class="unit"><div><b>' + esc(u.name || u.email) + '</b><small>' + (u.name ? esc(u.email) + ' · ' : '') + esc(u.role) + (st === 'pending' ? ' · asked to join ' + esc(day(u.requestedAt)) : st === 'disabled' ? ' · access off' : u.activated ? '' : ' · not signed in yet') + '</small></div><span style="display:flex;gap:6px;align-items:center;flex:none">'
+            + (st === 'pending' ? '<button class="act go" data-pact="active" data-email="' + esc(u.email) + '">Approve</button><button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Decline</button>' : st === 'disabled' ? '<button class="act" data-pact="active" data-email="' + esc(u.email) + '">Turn on</button>' : lastOwner ? '' : '<button class="act" data-pact="disabled" data-email="' + esc(u.email) + '">Turn off</button>')
+            + (st === 'active' ? '<button class="act" data-pinv="' + esc(u.email) + '">Invite</button>' : '') + '</span></div>';
+        }).join('') || '<p class="note">Nobody on this account yet.</p>')
+      + '<div class="card"><b>Add a person</b><input id="np-email" type="email" placeholder="Their work email" autocomplete="off"><input id="np-name" placeholder="Their name"><select id="np-role"><option value="user">User</option><option value="owner">Owner (manages the people)</option></select><button class="big" id="np-add">Add to ' + esc(c.company || 'the account') + '</button><p class="note">They sign in to the customer app with this email and see the whole account. Someone at the company who already signed in on their own is moved onto it, when their own account is empty.</p></div>'
+      + '<h2>Their app</h2><div class="card"><b>' + esc((DATA && DATA.brand && DATA.brand.name) || 'Customer app') + '</b><div class="m" style="overflow-wrap:anywhere">' + esc(c.appUrl || '') + '</div><div class="row" style="margin-top:8px"><button id="app-share">Send the app link</button><button id="portal-share">Desktop link</button></div></div>'
+      + '<label class="note" for="c-domain">Company email domain — people who sign in from it ask to join this account</label><div class="row"><input id="c-domain" placeholder="e.g. amperagecapital.com" value="' + esc(c.domain || '') + '" autocomplete="off" autocapitalize="off"><button id="c-domain-save">Save</button></div>'
+      + '<h2>Terms</h2><p class="note">For the whole account; applies to future prices, issued invoices keep theirs.</p><div class="row"><input id="t-dep" type="number" min="0" max="100" value="' + esc(c.terms.depositPct) + '" aria-label="Deposit %"><input id="t-due" type="number" min="0" value="' + esc(c.terms.dueDays) + '" aria-label="Due in days"></div><p class="note">Deposit % · due in days</p><button class="big ghost" id="save-terms">Save terms</button>'
       + (c.address ? '<h2>Delivery address</h2><p>' + esc([c.address.line1, c.address.city, c.address.state, c.address.zip].filter(Boolean).join(', ')) + '</p>' : '')
-      + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join(', ')) + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : 'paid') + (o.openRequests ? ' · ' + o.openRequests + ' request' + (o.openRequests === 1 ? '' : 's') : '') + '</small></div></button>'; }).join('') || '<p class="note">No orders.</p>')
-      + '<p class="note">Portal link for this customer: <a href="' + esc(c.portalUrl) + '">' + esc(c.portalUrl) + '</a></p>';
+      + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + (o.poNumber ? ' · PO ' + esc(o.poNumber) : '') + '</b><small>' + esc(o.stage ? o.stage.label : o.status) + ' · ' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join(', ')) + (o.billedTo && o.billedTo.name ? ' · ' + esc(o.billedTo.name) : '') + (o.shippedAt ? ' · shipped ' + esc(day(o.shippedAt)) : '') + '</small></div><div style="text-align:right"><b>' + dollars(o.invoicedCents) + '</b><small>' + (o.balanceCents > 0 ? dollars(o.balanceCents) + ' open' : o.invoicedCents ? 'paid' : 'not invoiced') + (o.openRequests ? ' · ' + o.openRequests + ' request' + (o.openRequests === 1 ? '' : 's') : '') + '</small></div></button>'; }).join('') || '<p class="note">No orders.</p>') + (c.limited ? '<p class="note">Newest 100 shown.</p>' : '')
+      + '<h2>Sites &amp; units</h2><div id="cust-sites"><p class="note">Loading…</p></div>';
     $('back').onclick = function () { CUST = null; draw(); };
+    function reopen(note) { BUYERS = null; return openCustomer(c.customerId).then(function () { if (note) status(note); }); }
     $('save-terms').onclick = function () {
       var btn = this; btn.disabled = true; status('Saving…');
-      api('/api/buyers', { action: 'terms', email: c.email, terms: { depositPct: Number($('t-dep').value), dueDays: Number($('t-due').value) } }).then(function (r) { status(r.note || 'Saved.'); BUYERS = null; return openCustomer(c.email); })['catch'](function (e) { fail(e); btn.disabled = false; });
+      api('/api/buyers', { action: 'terms', customerId: c.customerId, terms: { depositPct: Number($('t-dep').value), dueDays: Number($('t-due').value) } }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
     };
+    $('c-domain-save').onclick = function () {
+      var btn = this; btn.disabled = true; status('Saving…');
+      api('/api/buyers', { action: 'profile', customerId: c.customerId, domain: $('c-domain').value.trim() }).then(function () { return reopen('Saved. People who sign in from that domain now ask to join ' + (c.company || 'this account') + '.'); })['catch'](function (e) { fail(e); btn.disabled = false; });
+    };
+    $('np-add').onclick = function () {
+      var btn = this, e = $('np-email').value.trim(); if (!e) { status('Enter their email.'); return; }
+      btn.disabled = true; status('Adding…');
+      api('/api/buyers', { action: 'user-add', customerId: c.customerId, email: e, name: $('np-name').value, role: $('np-role').value }).then(function (r) { return reopen(r.note || 'Added.'); })['catch'](function (x) { fail(x); btn.disabled = false; });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pact]'), function (bt) {
+      bt.onclick = function () {
+        var to = bt.getAttribute('data-pact'), who = bt.getAttribute('data-email');
+        if (to === 'disabled' && !window.confirm('Turn off access for ' + who + '? What they did stays on the account.')) return;
+        bt.disabled = true; status('Saving…');
+        api('/api/buyers', { action: 'user-status', customerId: c.customerId, email: who, status: to }).then(function (r) { return reopen(r.note || 'Saved.'); })['catch'](function (e) { fail(e); bt.disabled = false; });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pinv]'), function (bt) {
+      bt.onclick = function () {
+        var who = bt.getAttribute('data-pinv'); bt.disabled = true; status('Sending…');
+        api('/api/buyers', { action: 'invite', customerId: c.customerId, email: who }).then(function (r) { status(r.note || 'Sent.'); })['catch'](function (e) { status(e.message + ' Sending the link instead.'); shareLink(c.appUrl, c.company || 'Your account'); }).then(function () { bt.disabled = false; });
+      };
+    });
+    $('app-share').onclick = function () { shareLink(c.appUrl, c.company || 'Your account'); };
+    $('portal-share').onclick = function () { shareLink(c.portalUrl, c.company || 'Your account'); };
     Array.prototype.forEach.call(document.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { if ((DATA.orders || []).some(function (o) { return o.id === b.dataset.order; })) { CUST = null; PICK = b.dataset.order; TAB = 'orders'; draw(); window.scrollTo(0, 0); } else status('That order is older than the newest 100; open it on the desktop.'); }; });
+    /* Sites and shipped units from the custody overview the Sites tab
+       already loads: the account's sites, and any unit on one of its orders
+       or bound to it. */
+    loadCustody().then(function (cu) {
+      var el = $('cust-sites'); if (!el || CUST !== c) return;
+      var sites = (cu.sites || []).filter(function (st) { return st.customerId === c.customerId; });
+      var units = (cu.units || []).filter(function (u) { return u.customerId === c.customerId || orderIds[u.orderId]; });
+      el.innerHTML = (sites.map(function (st) { var a = st.address || {}; return '<div class="unit"><div><b>' + esc(st.name) + '</b><small>' + esc([a.city, a.state].filter(Boolean).join(', ')) + '</small></div><span class="pill">' + esc(st.units || 0) + ' unit' + (st.units === 1 ? '' : 's') + '</span></div>'; }).join('') || '<p class="note">No sites on this account yet. The customer adds theirs in the app, or add one on the desktop.</p>')
+        + '<h2>Units shipped · ' + units.length + '</h2>' + (units.slice(0, 60).map(function (u) { return '<button class="unit" data-cunit="' + esc(u.serial) + '"><div><span class="mono">' + esc(u.serial) + '</span><small>' + esc(u.custody.label) + (u.custody.siteName ? ' · ' + esc(u.custody.siteName) : '') + '</small></div><span class="go">›</span></button>'; }).join('') || '<p class="note">Nothing shipped yet; units still in the plant are on the Plant app.</p>') + (units.length > 60 ? '<p class="note">First 60 shown; the Fleet register has them all.</p>' : '') + (cu.unitsTotal > (cu.units || []).length ? '<p class="note">The newest ' + (cu.units || []).length + ' shipped units in the workspace were checked.</p>' : '');
+      Array.prototype.forEach.call(el.querySelectorAll('[data-cunit]'), function (b) { b.onclick = function () { CUST = null; SERIAL = b.getAttribute('data-cunit'); TAB = 'sites'; draw(); window.scrollTo(0, 0); }; });
+    })['catch'](function () { var el = $('cust-sites'); if (el) el.innerHTML = '<p class="note">Sites unavailable.</p>'; });
   }
 
   /* ── Stock: assign a finished unit; what is short ────────────────────── */
@@ -519,19 +595,52 @@
   Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.onclick = function () { TAB = b.dataset.tab; PICK = null; CUST = null; SERIAL = null; closeCam(); if (DATA) draw(); else loadAll(); window.scrollTo(0, 0); }; });
   document.getElementById('home').onclick = function (e) { e.preventDefault(); TAB = 'today'; PICK = null; CUST = null; draw(); window.scrollTo(0, 0); };
   $('refresh').onclick = function () { PICK = null; CUST = null; CUSTODY = null; LOADS = null; loadAll(); };
-  $('signout').onclick = function () { auth.signOut().then(function () { location.reload(); }); };
+  /* signing out forgets the company too: the next person on this phone
+     signs in to Omega Logic and lands in their own */
+  function signOut() { setOrg(''); WS = null; auth.signOut().then(function () { location.replace(location.pathname); }); }
+  $('signout').onclick = signOut;
   $('signin').onclick = function () {
     var p = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(p)['catch'](function () { return auth.signInWithRedirect(p); })['catch'](fail);
   };
+  $('switch').onclick = function () { front(true); };
+  /* The Omega Logic sign-in, then "which company". */
+  function gate(on) { $('gate').hidden = !on; $('nav').hidden = on; $('view').hidden = on; }
+  function enter(org) { setOrg(org); resetCaches(); gate(false); TAB = 'today'; loadAll(); }
+  /* everything drawn for one workspace (or one person) is dropped before
+     another is opened, so Switch never shows the last company's units */
+  function resetCaches() { DATA = null; BOARD = null; MAT = null; UNITS = null; BUYERS = null; CUST = null; COMPANIES = null; COMPANY = null; CUSTODY = null; LOADS = null; SCANS = []; SERIAL = null; PICK = null; closeCam(); }
+  function front(picking) {
+    gate(true); status('');
+    if (!window.OmegaLogicSignIn) { $('gate-note').textContent = 'Could not load the sign-in. Refresh the page.'; return; }
+    $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px">Finding your company…</p>';
+    (WS ? Promise.resolve(WS) : OmegaLogicSignIn.resolve(auth)).then(function (d) {
+      WS = d;
+      var open = d.workspaces.filter(function (w) { return !REFUSED[w.orgId]; });
+      if (!picking && !d.owner && open.length === 1) return enter(open[0].orgId);
+      if (!picking && !d.owner && d.workspaces.length && !open.length) d = { email: d.email, workspaces: [], reason: 'none', note: 'Your company refused this sign-in just now. Ask its Omega Logic administrator to check your access.' };
+      OmegaLogicSignIn.choose($('gate'), d, enter, signOut, auth);
+    })['catch'](function (e) { $('gate').innerHTML = '<p class="note" style="text-align:center;margin-top:40px;color:#B42318">' + esc(e.message) + '</p>'; });
+  }
+  /* "Switch" appears only for someone with more than one company */
+  function showSwitch() {
+    if (WS) { $('switch').hidden = !(WS.owner || WS.workspaces.length > 1); return; }
+    if (!window.OmegaLogicSignIn || !auth.currentUser) return;
+    OmegaLogicSignIn.resolve(auth).then(function (d) { WS = d; $('switch').hidden = !(d.owner || d.workspaces.length > 1); })['catch'](function () {});
+  }
   $('cam-x').onclick = closeCam;
   function paintNet() { $('offline').hidden = navigator.onLine !== false; }
   window.addEventListener('online', paintNet); window.addEventListener('offline', paintNet); paintNet();
   auth.onAuthStateChanged(function (u) {
-    $('gate').hidden = !!u; $('nav').hidden = !u; $('signout').hidden = !u; $('view').innerHTML = '';
-    if (!u) { $('who').textContent = ''; return; }
-    if (!ORG) { $('gate').hidden = false; $('gate-note').textContent = 'Open the app once from your office link so it knows your workspace.'; $('signin').hidden = true; return; }
-    loadAll();
+    /* a different person (or nobody) on this page: nothing of the last
+       person's survives — their company, their list, their data */
+    var uid = u ? u.uid || u.email : null;
+    if (UID !== null && uid !== UID) { WS = null; REFUSED = {}; setOrg(''); resetCaches(); }
+    UID = uid;
+    $('signout').hidden = !u; $('view').innerHTML = ''; $('switch').hidden = true;
+    if (!u) { $('who').textContent = ''; gate(true); if (window.OmegaLogicSignIn) OmegaLogicSignIn.signIn($('gate'), { auth: auth }); return; }
+    if (!ORG) return front();
+    gate(false); loadAll();
   });
   if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('/app-sandbox/sw.js', { scope: '/app-sandbox/' })['catch'](function () {}); } catch (e) {} }
 })();
