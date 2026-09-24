@@ -35,11 +35,14 @@ class Ref {
 class Query {
   constructor(db, p, f, s, cap) { this.db = db; this.path = p; this.f = f || []; this.s = s; this.cap = cap || Infinity; }
   doc(id) { return new Ref(this.db, this.path + '/' + (id || 'auto' + (++this.db.seq))); }
-  where(k, op, v) { return new Query(this.db, this.path, this.f.concat([[k, op, v]]), this.s, this.cap); }
-  orderBy(k, d) { return new Query(this.db, this.path, this.f, [k, d], this.cap); }
-  limit(n) { return new Query(this.db, this.path, this.f, this.s, n); }
+  where(k, op, v) { return this.keep(new Query(this.db, this.path, this.f.concat([[k, op, v]]), this.s, this.cap)); }
+  orderBy(k, d) { return this.keep(new Query(this.db, this.path, this.f, [k, d], this.cap)); }
+  limit(n) { return this.keep(new Query(this.db, this.path, this.f, this.s, n)); }
+  /* startAfter(value of the orderBy field, or a doc id for '__name__') */
+  startAfter(v) { var q = this.keep(new Query(this.db, this.path, this.f, this.s, this.cap)); q.after = v && v.id !== undefined && typeof v.data === 'function' ? v.id : v; return q; }
+  keep(q) { q.after = this.after; return q; }
   select() { return this; }
-  async get() { var self = this, docs = []; for (var e of this.db.data.entries()) { var p = e[0], d = e[1]; if (p.split('/').length !== this.path.split('/').length + 1 || p.indexOf(this.path + '/') !== 0) continue; if (!this.f.every(function (f) { return f[1] === '==' ? get(d, f[0]) === f[2] : f[1] === 'in' ? f[2].indexOf(get(d, f[0])) >= 0 : get(d, f[0]) <= f[2]; })) continue; docs.push(await new Ref(this.db, p).get()); } if (this.s) docs.sort(function (a, b) { var av = self.s[0] === '__name__' ? a.id : get(a.data(), self.s[0]), bv = self.s[0] === '__name__' ? b.id : get(b.data(), self.s[0]); return (av < bv ? -1 : av > bv ? 1 : 0) * (self.s[1] === 'desc' ? -1 : 1); }); docs = docs.slice(0, this.cap); return { docs: docs, size: docs.length, empty: !docs.length, forEach: function (fn) { docs.forEach(fn); } }; }
+  async get() { var self = this, docs = []; for (var e of this.db.data.entries()) { var p = e[0], d = e[1]; if (p.split('/').length !== this.path.split('/').length + 1 || p.indexOf(this.path + '/') !== 0) continue; if (!this.f.every(function (f) { return f[1] === '==' ? get(d, f[0]) === f[2] : f[1] === 'in' ? f[2].indexOf(get(d, f[0])) >= 0 : get(d, f[0]) <= f[2]; })) continue; docs.push(await new Ref(this.db, p).get()); } if (this.s) docs.sort(function (a, b) { var av = self.s[0] === '__name__' ? a.id : get(a.data(), self.s[0]), bv = self.s[0] === '__name__' ? b.id : get(b.data(), self.s[0]); return (av < bv ? -1 : av > bv ? 1 : 0) * (self.s[1] === 'desc' ? -1 : 1); }); if (this.after !== undefined && this.after !== null && this.s) { var af = this.after; docs = docs.filter(function (x) { var v = self.s[0] === '__name__' ? x.id : get(x.data(), self.s[0]); return self.s[1] === 'desc' ? v < af : v > af; }); } docs = docs.slice(0, this.cap); return { docs: docs, size: docs.length, empty: !docs.length, forEach: function (fn) { docs.forEach(fn); } }; }
 }
 
 /* Additions over the first version: batches, delete, add — what the

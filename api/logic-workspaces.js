@@ -36,9 +36,16 @@ module.exports = A.handler(async function (req, res) {
   if (!caller.claims || caller.claims.email_verified !== true) return { email: email, owner: false, workspaces: [], reason: 'verify', note: WHY.verify };
 
   if (X.owner(caller)) {
-    var all = await db.collection('omega_orgs').orderBy('__name__').limit(300).get(), mine = [];
-    all.forEach(function (s) { var d = s.data() || {}; if (listed(d)) mine.push({ orgId: s.id, name: d.name || s.id, role: 'clearsky', status: d.status || 'active' }); });
-    return { email: email, owner: true, workspaces: mine, limited: all.size === 300 };
+    /* every omega_orgs record, a page at a time (self-serve signup makes one
+       per company domain, so the Logic workspaces can sort anywhere) */
+    var mine = [], after = null, pages = 0, page;
+    do {
+      var qy = db.collection('omega_orgs').orderBy('__name__'); if (after) qy = qy.startAfter(after);
+      page = await qy.limit(300).get(); pages++;
+      page.forEach(function (s) { var d = s.data() || {}; if (listed(d)) mine.push({ orgId: s.id, name: d.name || s.id, role: 'clearsky', status: d.status || 'active' }); });
+      after = page.size ? page.docs[page.size - 1].id : null;
+    } while (page.size === 300 && pages < 20);
+    return { email: email, owner: true, workspaces: mine, limited: page.size === 300 };
   }
 
   var candidates = [];

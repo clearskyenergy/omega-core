@@ -115,7 +115,7 @@ function build(outDir) {
    own origin, so the strip links out rather than routing). Nothing here is
    committed; scripts/publish-app-sandbox.js hands the folders to the
    Artifact tool. */
-var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js'];
+var SHARED = ['omega-logic-theme.css', 'omega-logic-theme.js', 'omega-po-bulk.js', 'omega-logic-signin.js'];
 var TITLES = { plant: 'Omega Logic Plant', office: 'Omega Logic', customer: 'Clean Cell Account', bench: 'Omega Logic Bench' };
 function artifactPage(p, files, links) {
   var s = files[p.out], icon = p.bench ? null : p.icon;
