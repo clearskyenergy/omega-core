@@ -25,6 +25,7 @@ var A = require('./_lib/admin'), X = require('./_lib/logic-access');
 /* why a person has nowhere to go, in words they can act on */
 var WHY = {
   verify: 'Confirm your email address first: we sent you a link. Then sign in again.',
+  inactive: 'Your company\u2019s Omega Logic subscription is not active, so its workspace is closed for now. Contact ClearSky to restore it.',
   none: 'This email is not on an Omega Logic workspace yet. Ask your company’s Omega Logic administrator to add you, or sign in with your work account.'
 };
 function listed(d) { return d.logicDirectoryHidden !== true && !d.supersededBy && (d.omegaLogic === true || d.vertical === 'oem' || (d.whiteLabel || {}).enabled); }
@@ -53,14 +54,15 @@ module.exports = A.handler(async function (req, res) {
   var grant = await db.collection('org_members').doc(email).get();
   if (grant.exists && grant.data().active !== false && grant.data().orgId && candidates.indexOf(grant.data().orgId) < 0) candidates.push(grant.data().orgId);
 
-  var out = [];
+  var out = [], inactive = false;
   for (var i = 0; i < candidates.length; i++) {
     var org = A.safeOrg(candidates[i]); if (!org) continue;
     try {
       var ctx = await X.authorize(caller, org, false);
       var m = await db.doc('omega_orgs/' + org + '/members/' + caller.uid).get();
       out.push({ orgId: org, name: ctx.org.name || org, role: (m.exists && m.data().role) || 'member', status: ctx.org.status || 'active' });
-    } catch (e) { if (!e.status || e.status >= 500) throw e; /* not theirs: not listed */ }
+    } catch (e) { if (!e.status || e.status >= 500) throw e; if (e.reason === 'inactive') inactive = true; /* not theirs, or closed: not listed */ }
   }
-  return out.length ? { email: email, owner: false, workspaces: out } : { email: email, owner: false, workspaces: [], reason: 'none', note: WHY.none };
+  if (out.length) return { email: email, owner: false, workspaces: out };
+  return inactive ? { email: email, owner: false, workspaces: [], reason: 'inactive', note: WHY.inactive } : { email: email, owner: false, workspaces: [], reason: 'none', note: WHY.none };
 });

@@ -111,6 +111,8 @@
     }
   ],
   "rewrites": [
+    { "source": "/__/auth/:path*", "destination": "https://clearsky-portal.firebaseapp.com/__/auth/:path*" },
+    { "source": "/__/firebase/:path*", "destination": "https://clearsky-portal.firebaseapp.com/__/firebase/:path*" },
     {
       "source": "/",
       "has": [

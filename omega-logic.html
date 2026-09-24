@@ -8,9 +8,9 @@
 <header><div><b>Ω &nbsp; OMEGA LOGIC</b><div class="muted" style="color:#afc4c9">ClearSky · OEM operating system</div></div><nav><a href="/login">Where to?</a> &nbsp; / &nbsp; <a id="mission" href="/mission?view=logic">Jarvis Mission</a> &nbsp; <span id="who"></span></nav></header>
 <main><div id="message" role="status" aria-live="polite"></div><section id="gate"><h1>One order. Every operation.</h1><p class="muted">Sign in to your authorized ClearSky or OEM workspace.</p><button id="signin" class="primary">Sign in with Google</button></section><div id="content" hidden></div><footer>OEM subscription + platform lite + white-label sitemap editor resale. Processing fees apply to orders separately. No AI agent executes this workflow.</footer></main>
 <script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script>
-<script src="/omega-logic-theme.js"></script><script src="/omega-logic-signin.js"></script><script>
+<script src="/omega-logic-theme.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script><script>
 'use strict';
-var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(cfg.firebase||cfg);
+var cfg=window.CLEARSKY_CONFIG||{};if(!firebase.apps.length)firebase.initializeApp(window.OmegaLogicSignIn?OmegaLogicSignIn.config(cfg.firebase||cfg):(cfg.firebase||cfg));
 var auth=firebase.auth(), ORG=new URLSearchParams(location.search).get('org')||'', DATA=null, PICK=new URLSearchParams(location.search).get('order')||'', BUSY=false;
 function $(id){return document.getElementById(id);}function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}function dollars(c){return c==null?'—':'$'+(Number(c)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function message(s,bad){$('message').className=bad?'alert':'warn';$('message').textContent=s||'';}
@@ -112,12 +112,14 @@ $('signin').onclick=function(){auth.signInWithPopup(new firebase.auth.GoogleAuth
    directory of every workspace. */
 function goTo(org){location.replace('/omega-logic?org='+encodeURIComponent(org)+location.hash);}
 function signOut(){auth.signOut().then(function(){location.replace('/omega-logic');});}
-function front(){$('gate').hidden=false;$('content').hidden=true;$('gate').innerHTML='<p class="muted" style="text-align:center;margin:60px 0">Finding your company…</p>';
+function front(){message('');$('gate').hidden=false;$('content').hidden=true;$('gate').innerHTML='<p class="muted" style="text-align:center;margin:60px 0">Finding your company…</p>';
   OmegaLogicSignIn.resolve(auth).then(function(d){
     if(d.owner){$('gate').hidden=true;$('content').hidden=false;return load();}
     if(d.workspaces.length===1)return goTo(d.workspaces[0].orgId);
     OmegaLogicSignIn.choose($('gate'),d,goTo,signOut,auth);
-  })['catch'](error);}
+  })['catch'](function(){/* never leave "Finding your company…" with no way out */
+    $('gate').innerHTML='<div style="text-align:center;margin:60px 0"><p>Could not reach Omega Logic just now. Check your connection and try again.</p><p><button type="button" class="primary" id="fd-retry">Try again</button> <button type="button" id="fd-out">Sign out</button></p></div>';
+    $('fd-retry').onclick=front;$('fd-out').onclick=signOut;});}
 auth.onAuthStateChanged(function(u){$('gate').hidden=!!u;$('content').hidden=!u;
   if(u){if($('who'))$('who').textContent=u.email;if(!ORG&&window.OmegaLogicSignIn)return front();load()['catch'](function(e){/* any refusal of the company in the address (not theirs, email not
    verified, subscription lapsed) goes back to Omega Logic's front door,
