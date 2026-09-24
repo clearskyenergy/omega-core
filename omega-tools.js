@@ -89,8 +89,8 @@
       icon:'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01' },
 
     { key:'proforma', name:'BESS Pro Forma', category:'finance',
-      desc:'IRR, NPV, value stack & incentives in 8 steps.',
-      file:'/proforma.html', tier:TIER.STANDARD, savesData:true,
+      desc:'Investor pro forma & branded deck, sized by the OMEGA engine.',
+      file:'/proforma.html', tier:TIER.STANDARD, savesData:true, version:'2.0.0',
       icon:'M18 20V10M12 20V4M6 20v-6' },
 
     { key:'dcfc', name:'DCFC BESS Pro Forma', category:'finance',
@@ -149,7 +149,7 @@
       icon:'M12 3v2M5.6 5.6l1.4 1.4M3 12h2M17 7l1.4-1.4M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M3 19h13v3H3zM18 20h2' },
 
     { key:'batterysizer', name:'Battery Sizer', category:'finance',
-      desc:'Size a BESS from utility bills, bill PDFs or an 8760 \u2014 peak-shave dispatch, demand savings, payback & NPV.',
+      desc:'Size a BESS from utility bills, bill PDFs or an 8760 \u2014 peak-shave dispatch, demand savings, payback & NPV, then the engineering design: containers, converters, transformer, breakers, cable, fault duty and a bill of quantities.',
       file:'/battery-sizer.html', badge:'new', tier:TIER.STANDARD,
       icon:'M2 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zM22 11v2M11 9l-2 3.5h2.5L10 16' },
 

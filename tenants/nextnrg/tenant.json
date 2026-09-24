@@ -7,6 +7,17 @@
   "vertical": "developer",
   "tier": "enterprise",
   "logoUrl": "/tenants/nextnrg/nextnrg-logo.png",
+  "colors": {
+    "primary": "#54B442",
+    "accent": "#3E8A30",
+    "ink": "#1A1D23"
+  },
+  "exportBrand": {
+    "name": "NextNRG",
+    "logo": "/tenants/nextnrg/nextnrg-logo.png",
+    "accent": "#54B442",
+    "tagline": "Powering what’s NEXT"
+  },
   "shell": "default",
   "status": "active",
   "receivesFullBom": false,
