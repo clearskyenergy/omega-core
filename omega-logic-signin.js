@@ -52,7 +52,7 @@
   function said(e) {
     var c = String((e && e.code) || '');
     if (/popup-closed|cancelled-popup/.test(c)) return '';
-    if (/wrong-password|user-not-found|invalid-credential|invalid-login/.test(c)) return 'That email and password do not match. Try again, or use \u201cForgot password?\u201d.';
+    if (/wrong-password|user-not-found|invalid-credential|invalid-login/.test(c)) return 'That email and password do not match. If you have only ever used Google, tap \u201cForgot password?\u201d to set a password, then sign in here.';
     if (/invalid-email/.test(c)) return 'That does not look like an email address.';
     if (/too-many-requests/.test(c)) return 'Too many tries. Wait a minute, or reset your password.';
     if (/network/.test(c)) return 'No connection. Check your signal and try again.';
@@ -63,7 +63,10 @@
 
   function signIn(el, opts) {
     opts = opts || {}; style();
-    var auth = opts.auth, canLink = !!(opts.linkUrl && auth && typeof auth.sendSignInLinkToEmail === 'function'), byLink = canLink;
+    /* an emailed sign-in link opens in Safari, never inside an app on the
+       home screen: there it is email and password */
+    var installed = global.navigator.standalone === true;
+    var auth = opts.auth, canLink = !installed && !!(opts.linkUrl && auth && typeof auth.sendSignInLinkToEmail === 'function'), byLink = canLink;
     el.innerHTML = '<div class="ols">' + MARK + '<h1>Sign in to Omega Logic</h1><p class="ols-lede">' + esc(opts.lede || 'Your business in one place. Sign in with your work account and you go straight to your company.') + '</p>'
       + '<button type="button" class="ols-google" id="signin">' + G + 'Continue with Google</button>'
       + '<div class="ols-or">' + (canLink ? 'or with any work email' : 'or with email') + '</div>'
@@ -84,19 +87,32 @@
     }
     mode();
     if (canLink) el.querySelector('#ols-mode').onclick = function () { byLink = !byLink; say(''); mode(); };
+    /* the installed app signs in through this host (config.js); ask once
+       whether Google accepts that yet (api/auth-check), so nobody is sent
+       to Google's "Access blocked" page. null = could not tell = try. */
+    var googleHere = installed && global.fetch ? global.fetch('/api/auth-check', { credentials: 'omit' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) { return d && typeof d.google === 'boolean' ? d.google : null; }, function () { return null; }) : null;
     el.querySelector('#signin').onclick = function () {
       say('');
       var p = new global.firebase.auth.GoogleAuthProvider();
       p.setCustomParameters && p.setCustomParameters({ prompt: 'select_account' });
-      /* an app installed on the home screen cannot show Google's pop-up (iOS
-         never even reports it blocked): go by redirect there */
       /* an iPhone home-screen app (navigator.standalone) cannot use Google's
-         pop-up, and a redirect through clearsky-portal.firebaseapp.com loses
-         the result to Safari's storage partitioning: the pages switch the
-         auth domain to this site there (OmegaLogicSignIn.authDomain, served
-         by the /__/auth proxy in vercel.json), and the redirect is
+         pop-up (iOS never even reports it blocked), and a redirect through
+         clearsky-portal.firebaseapp.com loses the result to Safari's storage
+         partitioning: config.js points the auth domain at this site there
+         (served by the /__/auth proxy in vercel.json), so the redirect is
          same-origin. Everywhere else: pop-up first, redirect if blocked. */
-      var installed = global.navigator.standalone === true;
+      if (installed && googleHere) {
+        var gb = el.querySelector('#signin'); gb.disabled = true; say('One moment\u2026', true);
+        return googleHere.then(function (ok) {
+          gb.disabled = false;
+          if (ok === false) {
+            say('Google sign-in is not switched on for the installed app yet. Sign in with your email and password below (only ever used Google? Type your email and tap \u201cForgot password?\u201d to set one), or open ' + global.location.host + '/logic in Safari and continue with Google there.');
+            var em = el.querySelector('#ols-email'); if (em) em.focus();
+            return;
+          }
+          say(''); auth.signInWithRedirect(p)['catch'](function (e) { say(said(e)); });
+        });
+      }
       (installed && auth.signInWithRedirect ? auth.signInWithRedirect(p) : auth.signInWithPopup(p)['catch'](function (e) {
         if (/popup-blocked|operation-not-supported|web-storage/.test(String(e && e.code)) && auth.signInWithRedirect) return auth.signInWithRedirect(p);
         throw e;
@@ -177,11 +193,11 @@
      is not lost to Safari's storage partitioning. Needs
      https://<this host>/__/auth/handler among the Google OAuth client's
      authorised redirect URIs. */
-  function config(cfg) {
-    cfg = cfg || {};
-    if (global.navigator.standalone !== true || !cfg.authDomain) return cfg;
-    var out = {}; for (var k in cfg) if (Object.prototype.hasOwnProperty.call(cfg, k)) out[k] = cfg[k];
-    out.authDomain = global.location.host; return out;
-  }
+  /* config.js now makes that choice itself, before any script loads:
+     omega-tenant.js starts Firebase as soon as it loads, so a switch made
+     here, in the page's own start-up, came too late and the installed app
+     kept redirecting through firebaseapp.com and coming back signed out.
+     Kept so a page that still calls it gets the config unchanged. */
+  function config(cfg) { return cfg || {}; }
   global.OmegaLogicSignIn = { signIn: signIn, resolve: resolve, choose: choose, config: config };
 })(window);

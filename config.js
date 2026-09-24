@@ -31,3 +31,25 @@ window.CLEARSKY_CONFIG = {
   supportEmail: 'support@csebuilders.com',
   hub: 'https://app.clearskyomega.com'
 };
+
+/* An Omega Logic app installed on an iPhone home screen signs in THROUGH
+   THIS HOST. There, Google's pop-up cannot report back, so sign-in goes by
+   redirect, and a redirect through clearsky-portal.firebaseapp.com loses
+   its result to Safari's storage partitioning: Google says yes, the app
+   comes back signed out, and the person lands on the sign-in page again.
+   vercel.json serves /__/auth and /__/firebase from the project's
+   firebaseapp.com, so the redirect stays on this host.
+
+   It is decided HERE, before any script loads, because the first script to
+   start Firebase fixes the auth domain for the page — omega-tenant.js starts
+   it as soon as it loads, before the page's own start-up runs. Needs
+   https://<this host>/__/auth/handler among the Google OAuth client's
+   authorised redirect URIs; until then api/auth-check says Google is not
+   available here and omega-logic-signin.js offers email and password
+   instead of Google's error page. */
+(function (c) {
+  try {
+    var app = /^\/(office\/app|plant\/app|portals\/customer\/app|omega-logic)(\/|\.html)?$/.test(location.pathname);
+    if (app && navigator.standalone === true && c.firebase && c.firebase.authDomain) c.firebase.authDomain = location.host;
+  } catch (e) {}
+})(window.CLEARSKY_CONFIG);

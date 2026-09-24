@@ -343,6 +343,13 @@ is not built.
   One company: straight in; several: pick; none: said plainly. The phone
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
+  An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
+  (the `/__/auth` proxy in vercel.json): `config.js` decides that, because
+  `omega-tenant.js` starts Firebase the moment it loads and the first start
+  fixes the auth domain. Google needs `https://<host>/__/auth/handler` on
+  the OAuth client's redirect URIs; `api/auth-check.js` asks Google whether
+  it has it, and until it does the installed app offers email and password
+  (no emailed link: that opens Safari) instead of Google's error page.
   The phone header is the guide's: Omega Logic over "Company · email"
   (the email ellipsizes), Switch as a small link on that line for someone
   with more than one company, a round ↻ and a Sign out pill — it fits a
