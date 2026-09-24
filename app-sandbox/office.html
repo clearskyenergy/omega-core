@@ -75,24 +75,36 @@
   #gate{text-align:center;padding:40px 16px}#gate button{margin-top:14px}
   .off{background:#FFF5DD;color:#A26718;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
   .warn{background:#FDEBE9;color:#B42318;font-size:13px;padding:8px 12px;border-radius:10px;margin:8px 0}
+
+  /* Menu: QuickBooks' shape — search, frequently used circles, panels that open */
+  .qsearch{width:100%;padding:12px 14px;border-radius:12px;border:0;background:var(--sunk);font:inherit;margin:4px 0 14px}
+  .freq{display:flex;gap:14px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}.freq::-webkit-scrollbar{display:none}
+  .freq a,.freq button{flex:0 0 76px;display:flex;flex-direction:column;align-items:center;gap:6px;border:0;background:none;font:12px/1.2 system-ui,sans-serif;color:var(--ink);text-align:center;text-decoration:none;padding:0}
+  .freq i{width:60px;height:60px;border-radius:50%;border:1px solid var(--line);background:white;display:flex;align-items:center;justify-content:center;font:normal 22px/1 system-ui;color:var(--brand-d)}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .panel{border:1px solid var(--line);border-radius:16px;background:white;padding:14px;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:14px;min-height:104px}
+  .panel i{width:36px;height:36px;border-radius:50%;background:var(--ink,#0B2733);color:var(--brand,#3FAFC6);display:flex;align-items:center;justify-content:center;font:normal 18px/1 system-ui}
+  .panel b{font-size:15px}.panel.open{border:2px solid var(--ink)}
+  .rows{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;background:white;overflow:hidden}
+  .rows a,.rows button{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border:0;border-top:1px solid var(--line);background:none;font:inherit;color:inherit;text-align:left;text-decoration:none}
+  .rows a:first-child,.rows button:first-child{border-top:0}.rows small{display:block;color:var(--ink2);font-size:12px}.rows .go{margin-left:auto;color:var(--ink2)}
 </style>
 </head>
 <body class="logic-theme">
-<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Office</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
+<header class="top"><div><a id="home" href="#" style="color:inherit;text-decoration:none" title="Today"><b data-brand-name>Omega Logic</b></a><small id="who"></small></div><span class="sp"></span><button type="button" id="refresh" title="Refresh">↻</button><button type="button" id="signout" hidden>Sign out</button></header>
 <main>
-  <div id="gate"><h1>Office</h1><p class="note">Orders, purchase orders, customers and stock — for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
+  <div id="gate"><h1>Omega Logic</h1><p class="note">Orders, purchase orders, customers, the plant, stock and every unit to its site — one app for the people running the business.</p><button class="big" id="signin">Sign in</button><p class="note" id="gate-note"></p></div>
   <div id="offline" class="off" hidden>Offline — showing nothing rather than something stale.</div>
   <p id="status" class="status"></p>
   <div id="view"></div>
 </main>
 <div id="cam" hidden style="position:fixed;inset:0;background:#000;z-index:50"><button type="button" id="cam-x" style="position:absolute;top:14px;right:14px;z-index:51;padding:8px 14px">Close</button><video id="cam-v" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
 <nav class="bottom" id="nav" hidden>
-  <button data-tab="today" aria-current="page"><span>☀</span>Today</button>
+  <button data-tab="today" aria-current="page"><span>⌂</span>Home</button>
   <button data-tab="orders"><span>▤</span>Orders</button>
-  <button data-tab="pos"><span>▥</span>POs</button>
   <button data-tab="customers"><span>◉</span>Customers</button>
-  <button data-tab="stock"><span>▦</span>Stock</button>
   <button data-tab="sites"><span>◎</span>Sites</button>
+  <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
 <script src="/app-sandbox/sandbox.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script>
 <script>
@@ -169,6 +181,52 @@
     if (TAB === 'customers') return CUST ? drawCustomer() : drawCustomers();
     if (TAB === 'stock') return drawStock();
     if (TAB === 'sites') return SERIAL ? drawSiteUnit() : drawSites();
+    if (TAB === 'menu') return drawMenu();
+  }
+
+  /* ── Menu: every function in one place, the way QuickBooks lays it out.
+     In-app screens open here (data-go); the rest open their page. One list,
+     so nothing in the business is more than two taps away. ─────────────── */
+  var MENU_OPEN = null;
+  function menuPanels() {
+    var d = '?org=' + encodeURIComponent(ORG);
+    return [
+      { key: 'sales', icon: '▤', name: 'Sales & orders', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map'], ['href', '/omega-logic' + d, 'Price & accept', 'Approve a price, accept, record shipment']] },
+      { key: 'customers', icon: '◉', name: 'Customer hub', rows: [['go', 'customers', 'Customers', 'Accounts, terms, balances, logins'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop']] },
+      { key: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/app-sandbox/bench', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
+      { key: 'deliver', icon: '◎', name: 'Deliver & sites', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
+      { key: 'stock', icon: '▦', name: 'Stock & supply', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders']] },
+      { key: 'money', icon: '$', name: 'Money', rows: [['href', '/omega-logic' + d + '#cash', 'Cash flow', 'Invoiced, received, outstanding'], ['go', 'orders', 'Invoices & payments', 'Record an invoice issued or a payment received on the order']] },
+      { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage'], ['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']] },
+      { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF']] }
+    ];
+  }
+  /* Home opens on the hubs: sign in, pick where you are working. A hub is a
+     Menu panel; tapping one opens the Menu with its list open. */
+  function hubsHtml() { return '<h1>Where to?</h1><div class="panels" id="hubs">' + menuPanels().map(function (p) { return '<button type="button" class="panel" data-hub="' + p.key + '"><i>' + p.icon + '</i><b>' + esc(p.name) + '</b></button>'; }).join('') + '</div>'; }
+  function bindHubs() { Array.prototype.forEach.call(document.querySelectorAll('[data-hub]'), function (b) { b.onclick = function () { MENU_OPEN = b.dataset.hub; TAB = 'menu'; draw(); window.scrollTo(0, 0); }; }); }
+  function rowHtml(r) { var inner = '<div><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></div><span class="go">›</span>'; return r[0] === 'go' ? '<button type="button" data-go="' + esc(r[1]) + '">' + inner + '</button>' : '<a href="' + esc(r[1]) + '">' + inner + '</a>'; }
+  function drawMenu(filter) {
+    var panels = menuPanels(), f = String(filter || '').toLowerCase().trim();
+    var freq = [['go', 'orders', '▤', 'Orders'], ['go', 'pos', '▥', 'PO loads'], ['go', 'customers', '◉', 'Customers'], ['go', 'sites', '◎', 'Sites'], ['go', 'stock', '▦', 'Stock'], ['href', '/logic-register.html?org=' + encodeURIComponent(ORG), '▦', 'Register'], ['href', '/plant/app?org=' + encodeURIComponent(ORG), '⚙', 'Plant']];
+    var html = '<h1>Menu</h1><input class="qsearch" id="qsearch" placeholder="Search menu items" value="' + esc(filter || '') + '" autocomplete="off">';
+    if (f) {
+      var hits = []; panels.forEach(function (p) { p.rows.forEach(function (r) { if ((r[2] + ' ' + r[3] + ' ' + p.name).toLowerCase().indexOf(f) >= 0) hits.push(r); }); });
+      html += '<div class="rows">' + (hits.map(rowHtml).join('') || '<p class="note" style="padding:14px 16px">Nothing matches.</p>') + '</div>';
+    } else {
+      html += '<h2>Frequently used</h2><div class="freq">' + freq.map(function (x) { return x[0] === 'go' ? '<button type="button" data-go="' + x[1] + '"><i>' + x[2] + '</i>' + esc(x[3]) + '</button>' : '<a href="' + esc(x[1]) + '"><i>' + x[2] + '</i>' + esc(x[3]) + '</a>'; }).join('') + '</div><h2>All</h2><div class="panels">';
+      panels.forEach(function (p, i) {
+        html += '<button type="button" class="panel' + (MENU_OPEN === p.key ? ' open' : '') + '" data-panel="' + p.key + '"><i>' + p.icon + '</i><b>' + esc(p.name) + '</b></button>';
+        /* the open panel's list sits under its row of two, as in QuickBooks */
+        var rowEnd = i % 2 === 1 || i === panels.length - 1, openHere = panels.slice(i - (i % 2), i + 1).filter(function (x) { return x.key === MENU_OPEN; })[0];
+        if (rowEnd && openHere) html += '<div class="rows">' + openHere.rows.map(rowHtml).join('') + '</div>';
+      });
+      html += '</div>';
+    }
+    $('view').innerHTML = html;
+    var qs = $('qsearch'); qs.oninput = function () { var v = qs.value; drawMenu(v); var n = $('qsearch'); n.focus(); n.setSelectionRange(v.length, v.length); };
+    Array.prototype.forEach.call(document.querySelectorAll('[data-panel]'), function (b) { b.onclick = function () { MENU_OPEN = MENU_OPEN === b.dataset.panel ? null : b.dataset.panel; drawMenu(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-go]'), function (b) { b.onclick = function () { TAB = b.dataset.go; PICK = null; CUST = null; SERIAL = null; draw(); window.scrollTo(0, 0); }; });
   }
   function orderCard(o) {
     var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
@@ -191,7 +249,7 @@
     withReq.forEach(function (o) { needs.push({ o: o, why: openReq(o).length + ' customer request' + (openReq(o).length === 1 ? '' : 's'), pill: 'answer' }); });
     attention.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
     toPrice.forEach(function (o) { needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: 'price' }); });
-    $('view').innerHTML = '<h1>Today</h1><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
+    $('view').innerHTML = hubsHtml() + '<h2>Today</h2><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
       + (!DATA.active ? '<div class="warn">Omega Logic is not active on this workspace yet. Orders can be read; pricing and acceptance wait for setup on the desktop.</div>' : '')
       + '<div class="kv" id="today-kv"><div class="' + ((bs.quote || 0) + (bs.priced || 0) ? '' : '') + '"><small>To price</small><b>' + ((bs.quote || 0) + (bs.priced || 0)) + '</b></div><div><small>Awaiting deposit</small><b>' + (bs.deposit || 0) + '</b></div><div><small>In build</small><b>' + ((bs.release || 0) + (bs.production || 0) + (bs.balance || 0)) + '</b></div><div><small>Ready · shipped</small><b>' + ((bs.ship || 0) + (bs.shipped || 0)) + '</b></div></div>'
       + '<h2>Needs a person · ' + (needs.length + review) + '</h2>'
@@ -200,7 +258,7 @@
       + '<h2>Money</h2><div class="kv"><div><small>Invoiced</small><b>' + dollars(invoiced) + '</b></div><div><small>Received</small><b>' + dollars(paid) + '</b></div><div class="' + (invoiced - paid > 0 ? 'bad' : '') + '"><small>Outstanding</small><b>' + dollars(invoiced - paid) + '</b></div><div><small>Deposits awaiting</small><b>' + dollars(depositsOpen) + '</b></div>' + (exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + exceptions + '</b></div>' : '') + '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div></div>'
       + '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>')
       + '<h2>' + esc((DATA.brand && DATA.brand.name) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv"><a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/app-sandbox/bench" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a><a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a><a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a></div>';
-    bindOrders();
+    bindOrders(); bindHubs();
     if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
     if ($('to-review')) $('to-review').onclick = function () { TAB = 'pos'; draw(); };
     loadMaterials().then(function (m) { var s = m.summary || {}, el = $('kv-buy'); if (!el) return; el.innerHTML = '<small>Purchase list value</small><b>' + (s.spend != null ? '$' + Number(s.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—') + '</b><small>' + (s.short || 0) + ' short · ' + (s.late || 0) + ' late</small>'; if (s.late) el.className = 'bad'; })['catch'](function () { if ($('kv-buy')) $('kv-buy').innerHTML = '<small>Purchase list value</small><b>—</b>'; });
