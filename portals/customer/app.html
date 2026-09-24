@@ -383,11 +383,15 @@
 
   /* ── views ────────────────────────────────────────────────────────────── */
   var VIEWS = { home: drawHome, orders: drawOrders, pos: drawPos, fleet: drawFleet, account: drawAccount, size: drawSize, design: drawDesign, pay: drawPay, shipping: drawShipping, warranty: drawWarranty };
+  /* Set by the waiting screen's Check again and spent by the next draw, so
+     the answer "still waiting" is said once, right after the check. */
+  var PENDING_RECHECK = false;
   function draw() {
-    var navKey = TABS.indexOf(TAB) >= 0 ? TAB : 'home';
+    var navKey = TABS.indexOf(TAB) >= 0 ? TAB : 'home', rechecked = PENDING_RECHECK;
+    PENDING_RECHECK = false;
     Array.prototype.forEach.call(document.querySelectorAll('#nav button'), function (b) { b.setAttribute('aria-current', b.dataset.tab === navKey ? 'page' : 'false'); });
     status('');
-    if (ACCT && ACCT.pending) return drawPending(ACCT);
+    if (ACCT && ACCT.pending) return drawPending(ACCT, rechecked);
     (VIEWS[TAB] || drawHome)();
   }
   function go(view) { if (!VIEWS[view]) return; TAB = view; draw(); window.scrollTo(0, 0); }
@@ -577,6 +581,11 @@
         else back = '<p class="note">The payment went through; the subscription has not shown up yet. Refresh in a minute, or ask ' + esc(repName()) + '.</p>';
       } else if (CHECKOUT === 'done') { back = '<p class="note"><span class="pill go">subscribed</span> Thank you. Everyone on ' + esc(co) + ' can design now.</p>'; CHECKOUT = null; }
       else if (CHECKOUT === 'cancelled') { back = '<p class="note">Checkout was cancelled. Nothing was charged.</p>'; CHECKOUT = null; }
+      /* Just paid, the grant not here yet: the message and nothing else. A
+         plan button now would sell the same customer a second subscription.
+         The address no longer says checkout=done, so a reload draws the
+         normal card. */
+      if (CHECKOUT === 'done' && !paid) { el.innerHTML = back; return; }
       if (paid) {
         var ok = s.status === 'active', plan = s.plan === 'year' ? 'Yearly' : s.plan === 'month' ? 'Monthly' : '';
         el.innerHTML = back + '<div class="card" id="sub-card"><div class="h"><b>Your subscription' + (plan ? ' · ' + plan : '') + '</b><span class="pill ' + (ok ? 'go' : 'stop') + '">' + (ok ? 'active' : 'payment due') + '</span></div>'
@@ -877,10 +886,12 @@
   /* ── Waiting to be let in ───────────────────────────────────────────────
      A colleague whose company already has an account here asked to join it
      on their first sign-in; the owner or the supplier approves. Nothing of
-     the account is shown until then. */
-  function drawPending(a) {
-    $('view').innerHTML = '<h1>Almost there</h1><div class="card"><b>You asked to join ' + esc(a.company || 'your company') + '</b><p class="note">Its account owner, or ' + esc(brandName()) + ', approves new people. Once they do, your company’s orders, sites and equipment appear here.</p><p class="note">Signed in as ' + esc(a.you && a.you.email) + (a.requestedAt ? ' · asked ' + esc(day(a.requestedAt)) : '') + '</p></div><button class="big ghost" id="pending-check">Check again</button>';
-    $('pending-check').onclick = function () { refresh(); };
+     the account is shown until then. After Check again, the screen says the
+     check happened and when, under the button, so the tap is never mute. */
+  function drawPending(a, rechecked) {
+    $('view').innerHTML = '<h1>Almost there</h1><div class="card"><b>You asked to join ' + esc(a.company || 'your company') + '</b><p class="note">Its account owner, or ' + esc(brandName()) + ', approves new people. Once they do, your company’s orders, sites and equipment appear here.</p><p class="note">Signed in as ' + esc(a.you && a.you.email) + (a.requestedAt ? ' · asked ' + esc(day(a.requestedAt)) : '') + '</p></div><button class="big ghost" id="pending-check">Check again</button>'
+      + (rechecked ? '<p class="note" id="pending-said" role="status">Still waiting for approval · checked ' + esc(new Date().toLocaleTimeString()) + '.</p>' : '');
+    $('pending-check').onclick = function () { PENDING_RECHECK = true; refresh(); };
   }
 
   /* ── Account: your company, its people, your details, documents ──────── */
@@ -966,22 +977,28 @@
       + '<input id="' + p + '-file" type="file" accept="' + DOC_ACCEPT + '">'
       + (o.fixed ? '' : '<select id="' + p + '-cat" aria-label="What it is">' + DOC_CATS.map(function (c) { return '<option value="' + esc(c[0]) + '">' + esc(c[1]) + '</option>'; }).join('') + '</select>')
       + '<input id="' + p + '-note" maxlength="500" placeholder="' + esc(o.notePlaceholder || 'Note (optional): which site, which order') + '">'
-      + '<button type="button" class="big" id="' + p + '-up"' + (o.fixed ? ' data-cat="' + esc(o.fixed) + '"' : '') + '>Upload</button></div>';
+      + '<button type="button" class="big" id="' + p + '-up"' + (o.fixed ? ' data-cat="' + esc(o.fixed) + '"' : '') + '>Upload</button>'
+      + '<p class="status" id="' + p + '-msg" role="status" aria-live="polite"></p></div>';
   }
+  /* Every word about an upload lands under its own Upload button: the page's
+     #status is a screen away from it on a phone, and a tap that shows
+     nothing reads as a dead button. The line is looked up on every call,
+     because Account's `after` redraws the card it sits in. */
   function bindUpload(p, after) {
     var btn = $(p + '-up'); if (!btn) return;
+    function say(t, bad) { var m = $(p + '-msg'); if (!m) return status(t); m.className = 'status' + (bad ? ' err' : ''); m.textContent = t || ''; }
     btn.onclick = function () {
       var input = $(p + '-file'), file = input.files && input.files[0], cat = btn.getAttribute('data-cat') || ($(p + '-cat') ? $(p + '-cat').value : 'other'), note = $(p + '-note').value;
-      if (!file) { status('Choose a file first.'); return; }
-      if (file.size > MAX_DOC) { status(file.name + ' is ' + kb(file.size) + '; the limit is 2 MB. Send a smaller copy, or ask ' + brandName() + ' for another way.'); return; }
-      btn.disabled = true; status('Uploading ' + file.name + '…');
+      if (!file) { say('Choose a file first.', true); return; }
+      if (file.size > MAX_DOC) { say(file.name + ' is ' + kb(file.size) + '; the limit is 2 MB. Send a smaller copy, or ask ' + brandName() + ' for another way.', true); return; }
+      btn.disabled = true; say('Uploading ' + file.name + '…');
       readBase64(file).then(function (b64) { return api('/api/my-files', { action: 'upload', file: { name: file.name, base64: b64 }, category: cat, note: note }); })
         .then(function (r) {
           if (missing(r)) throw new Error('Documents are not switched on for this account yet.');
           var j = must(r, 'Could not upload.'); FILES = null; input.value = ''; if ($(p + '-note')) $(p + '-note').value = '';
-          status(j.duplicate ? 'That document is already on your account.' : 'Uploaded. ' + brandName() + ' sees it on your account.');
-          btn.disabled = false; if (after) after();
-        })['catch'](function (e) { fail(e); btn.disabled = false; });
+          var done = j.duplicate ? 'That document is already on your account.' : 'Uploaded. ' + brandName() + ' sees it on your account.';
+          btn.disabled = false; if (after) after(); say(done);
+        })['catch'](function (e) { say(e.message || String(e), true); btn.disabled = false; });
     };
   }
   /* The account's documents: what the supplier shared, and what anybody on

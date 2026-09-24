@@ -18,7 +18,8 @@
        in private Storage under crm/{org}/{customerId}/{fileId} and served
        only by the endpoint; the path is never taken from the request
      · the customer sees what was shared plus the account's own uploads,
-       never an office-only document or another account's; a pending person
+       never an office-only document or another account's, and never the
+       office's note on a document it shared; a pending person
        sees nothing; 20 uploads a day per account, counted where no browser
        can reset it; a duplicate does not spend the allowance
      · every write is audited, and the audit never says "uploaded" for bytes
@@ -133,6 +134,7 @@ async function upload(caller, api, name, base64, extra) {
     got = await call(crm, 'GET', { customerId: AMP }, PM);
     assert.deepEqual(got.contacts.map(function (c) { return c.name; }), ['Ann Finance']);
     assert.equal(got.activity[0].contactName, 'Bob Site', 'logged activity keeps the archived contact\'s name');
+    assert.ok(got.timeline.some(function (e) { return e.title === 'Call with Bob Site: Walked the site'; }), 'the timeline entry reads the same after the contact is archived');
     assert.equal(db.data.get(O + '/customers/' + AMP + '/contacts/' + a.id).archived, true, 'kept, flagged');
     await rejects(call(crm, 'POST', { customerId: AMP, action: 'contact-save', id: a.id, name: 'Back' }, PM), 409);
     await rejects(call(crm, 'POST', { customerId: AMP, action: 'log', type: 'call', subject: 'x', contactId: a.id }, PM), 400, /archived/);
@@ -168,6 +170,22 @@ async function upload(caller, api, name, base64, extra) {
     assert.ok(acct.timeline.some(function (e) { return e.kind === 'follow-up-done' && /Deposit timing/.test(e.title); }));
     assert.equal(audits('crm-log').length, 4); assert.equal(audits('crm-done').length, 2);
   });
+  await test('Today is earliest due first across the whole workspace, however the accounts\' ids sort', async function () {
+    /* 600 open follow-ups due next year on accounts whose ids sort first,
+       one due today on an account whose id sorts last, and a closed one.
+       The double answers a query with no orderBy in the order records were
+       written, which stands in for Firestore's document-id order. */
+    function fu(cid, act, subject, day, open) {
+      db.seed(O + '/crm_followups/' + cid + '__' + act, { orgId: ORG, customerId: cid, company: cid, activityId: act, type: 'call', subject: subject, followUpAt: day, open: open, at: '2026-09-01T00:00:00Z' });
+    }
+    for (var i = 0; i < 600; i++) fu('acct_a' + String(i).padStart(4, '0'), 'act' + i, 'Next year ' + i, '2027-09-24', true);
+    fu('zXacct', 'actClosed', 'Done already', '2026-09-01', false);
+    fu('zXacct', 'actToday', 'Due today', '2026-09-24', true);
+    var today = await call(crm, 'GET', { followUps: '1' }, PM);
+    assert.equal(today.followUps[0].subject, 'Due today', 'the item due today is first, not cut');
+    assert.equal(today.followUps.length, 200); assert.equal(today.limited, true, 'more are open than the page shows');
+    assert.ok(!today.followUps.some(function (f) { return f.activityId === 'actClosed'; }), 'a done follow-up is never on Today');
+  });
   await test('an order is logged against the account only when it is the account\'s', async function () {
     var ok = await call(crm, 'POST', { customerId: AMP, action: 'log', type: 'email', subject: 'Billed to Shannon, never stamped', orderId: 'amp2' }, PM);
     assert.equal(ok.activity.orderNo, 'CC-2');
@@ -196,13 +214,18 @@ async function upload(caller, api, name, base64, extra) {
     var theirs = await call(myFiles, 'GET', {}, CFO);
     assert.deepEqual(theirs.files.map(function (f) { return [f.name, f.from]; }), [['Supply agreement.pdf', 'office']]);
     assert.equal(theirs.files[0].uploadedBy, undefined, 'a supplier employee\'s address is not shown to the customer');
+    assert.equal(theirs.files[0].note, '', 'the office\'s note on its own document stays in the office');
+    assert.ok(!/signed copy/.test(JSON.stringify(theirs)), 'nowhere in the customer\'s answer');
     var r = res(); await call(myFiles, 'GET', { file: up.id }, CFO, r);
     assert.equal(r.headers['Content-Type'], 'application/octet-stream'); assert.equal(r.headers['X-Content-Type-Options'], 'nosniff');
     assert.equal(r.headers['Content-Disposition'], 'attachment; filename="Supply agreement.pdf"'); assert.equal(String(r.body).slice(0, 5), '%PDF-');
     var mine = await upload(SHANNON, myFiles, 'bill.csv', b64('month,kwh\nJan,1200\n'), { category: 'utility-bill', note: 'Jan' });
     assert.equal(mine.file.from, 'customer'); assert.equal(mine.file.uploadedBy, 'shannon@amperagecapital.com');
+    assert.equal(mine.file.note, 'Jan', 'the customer\'s own note is theirs');
+    assert.equal((await call(myFiles, 'GET', {}, CFO)).files.filter(function (f) { return f.name === 'bill.csv'; })[0].note, 'Jan', 'and a colleague sees it');
     var office = await call(crm, 'GET', { customerId: AMP }, PM);
     assert.deepEqual(office.files.map(function (f) { return [f.name, f.from, f.shared]; }).sort(), [['Supply agreement.pdf', 'office', true], ['bill.csv', 'customer', true]]);
+    assert.deepEqual(office.files.map(function (f) { return f.note; }).sort(), ['Jan', 'signed copy'], 'the office sees both notes');
     assert.ok(office.timeline.some(function (e) { return e.kind === 'file-uploaded' && e.title === 'bill.csv uploaded by the customer'; }));
     var r2 = res(); await call(crm, 'GET', { customerId: AMP, file: mine.id }, PM, r2); assert.match(String(r2.body), /Jan,1200/);
     await rejects(call(crm, 'POST', { customerId: AMP, action: 'file-share', id: mine.id, shared: false }, PM), 409, /customer uploaded this/);
@@ -334,6 +357,43 @@ async function upload(caller, api, name, base64, extra) {
     var sub = C.timeline({ editorEvents: [{ action: 'customer-editor-lite', at: '2026-09-21T00:00:00Z', by: 'stripe', grant: { status: 'past_due', plan: 'month' } }], editorLite: { status: 'active', source: 'provider', updatedAt: '2026-09-20T00:00:00Z' } });
     assert.deepEqual(sub.map(function (e) { return e.title; }), ['Design tool subscription payment overdue']);
     assert.deepEqual(C.timeline({ orders: [{ id: 'x', createdAt: 'not a date', orderNo: 'N' }] }), [], 'no time on the record: left out, not invented');
+  });
+  await test('the design tool\'s newest change is on the timeline however many audit rows the account has', async function () {
+    /* 54 monthly renewals, then the subscription ended. Written oldest
+       first: with no orderBy the double returns them in that order (as
+       Firestore returns auto ids in an order that says nothing of time),
+       so a cut at 50 before sorting would lose the ending. */
+    for (var i = 0; i < 54; i++) db.seed('omega_audit/lite' + String(i).padStart(2, '0'), { action: 'customer-editor-lite', orgId: ORG, customerId: AMP, by: 'Stripe', source: 'stripe', at: new Date(Date.UTC(2022, i, 1)).toISOString(), grant: { status: 'active', plan: 'month' } });
+    db.seed('omega_audit/liteEnd', { action: 'customer-editor-lite', orgId: ORG, customerId: AMP, by: 'Stripe', source: 'stripe', at: '2026-09-20T00:00:00Z', grant: { status: 'inactive', plan: 'month' } });
+    db.seed('omega_audit/liteOther', { action: 'customer-editor-lite', orgId: ORG, customerId: OTH, by: 'Stripe', at: '2026-09-23T00:00:00Z', grant: { status: 'active' } });
+    var subs = (await call(crm, 'GET', { customerId: AMP }, PM)).timeline.filter(function (e) { return e.kind === 'design-subscription'; });
+    assert.equal(subs[0].title, 'Design tool subscription ended', 'the newest change is shown');
+    assert.equal(subs[0].at, '2026-09-20T00:00:00.000Z');
+    assert.equal(subs.length, 50, 'the newest fifty, not another account\'s');
+  });
+  await test('opening an account reads only the four fields of each design the timeline draws, never the canvas', async function () {
+    var select = FD.Query.prototype.select, asked = [];
+    /* a projection that behaves like Firestore's: only the named fields come back */
+    FD.Query.prototype.select = function () {
+      var fields = Array.prototype.slice.call(arguments); asked.push({ path: this.path, fields: fields });
+      function projected(q) {
+        return { orderBy: function (k, d) { return projected(q.orderBy(k, d)); }, limit: function (n) { return projected(q.limit(n)); },
+          get: async function () {
+            var snap = await q.get(), docs = snap.docs.map(function (d) { var full = d.data() || {}, o = {}; fields.forEach(function (k) { if (full[k] !== undefined) o[k] = full[k]; }); return { id: d.id, ref: d.ref, exists: d.exists, data: function () { return FD.clone(o); } }; });
+            return { docs: docs, size: docs.length, empty: !docs.length, forEach: function (fn) { docs.forEach(fn); } };
+          } };
+      }
+      return projected(this);
+    };
+    try {
+      db.seed(O + '/customers/' + AMP + '/projects/p1', { name: 'Farm A layout', module: 'bess', revision: 3, createdAt: '2026-09-16T00:00:00Z', updatedAt: '2026-09-18T12:00:00Z', canvasJson: JSON.stringify({ bg: 'x'.repeat(5000) }) });
+      var tl = (await call(crm, 'GET', { customerId: AMP }, PM)).timeline;
+      var designs = asked.filter(function (a) { return a.path === O + '/customers/' + AMP + '/projects'; });
+      assert.equal(designs.length, 1, 'the designs are read with a projection');
+      assert.deepEqual(designs[0].fields.slice().sort(), ['createdAt', 'name', 'revision', 'updatedAt']);
+      assert.ok(tl.some(function (e) { return e.title === 'Design Farm A layout started by the customer'; }));
+      assert.ok(tl.some(function (e) { return e.title === 'Design Farm A layout saved by the customer' && e.detail === 'revision 3'; }), 'the timeline draws from those four fields alone');
+    } finally { FD.Query.prototype.select = select; }
   });
 
   console.log('\n' + count + ' passed');

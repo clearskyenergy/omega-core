@@ -2825,13 +2825,18 @@ function byDue(x, y) {
   return String(x.at || '').localeCompare(String(y.at || ''));
 }
 /* audience 'office' sees who uploaded; 'customer' sees a colleague's name on
-   their own uploads and never a supplier employee's address. */
+   their own uploads and never a supplier employee's address. The office's
+   NOTE on its own document never leaves the office either: it is typed next
+   to "Share" as an internal remark ("floor is $410/kWh"), not a caption, and
+   stays in the office like every other CRM note. A customer's own upload
+   keeps its note — they wrote it. */
 function fileView(id, f, audience) {
   var from = f.from === 'customer' ? 'customer' : 'office';
   var out = { id: id, name: f.name || 'document', type: f.type || '', size: Number(f.size) || 0, category: f.category || 'other', note: f.note || '',
     from: from, source: from, shared: from === 'customer' || f.shared === true, uploadedAt: iso(f.uploadedAt) };
   if (audience === 'office') { out.uploadedBy = f.uploadedBy || null; out.sha256 = f.sha256 || null; out.archived = f.archived === true; }
   else if (from === 'customer') out.uploadedBy = f.uploadedBy || null;
+  else out.note = '';
   return out;
 }
 /* An open follow-up, from its index record (api/crm.js writes it with the
@@ -2942,7 +2947,10 @@ function timeline(input, cap) {
   var names = input.contactNames || {};
   (input.activity || []).forEach(function (a) {
     if (!a) return;
-    var withWho = a.contactId && names[a.contactId] ? ' with ' + names[a.contactId] : '';
+    /* The live name, else the one stored at log time: an archived contact
+       is not in contactNames, and the entry still says who (activityView). */
+    var nm = a.contactId ? names[a.contactId] || a.contactName : null;
+    var withWho = nm ? ' with ' + nm : '';
     add(a.at, 'activity-' + a.type, (TYPE_LABEL[a.type] || 'Note') + withWho + ': ' + (a.subject || ''), String(a.body || '').slice(0, 200), a.by, a.orderId);
     if (a.done && a.doneAt) add(a.doneAt, 'follow-up-done', 'Followed up: ' + (a.subject || TYPE_LABEL[a.type] || ''), '', a.doneBy, a.orderId);
   });
@@ -3025,97 +3033,13 @@ module.exports = { TYPES: TYPES, TYPE_LABEL: TYPE_LABEL, CATEGORIES: CATEGORIES,
 
   };
   defs['api/_lib/logic-policy.js'] = function (module, exports, require) {
-/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
-'use strict';
-var crypto = require('node:crypto');
-function fail(message) { var e = new Error(message); e.status = 400; throw e; }
-function id(value) {
-  var s = String(value || '');
-  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(s)) fail('Invalid record identifier');
-  return s;
-}
-function cents(value) {
-  if (value === null || value === '' || typeof value === 'boolean') fail('Amount required');
-  var n = Number(value);
-  if (!isFinite(n) || n < 0 || n > 100000000) fail('Invalid amount');
-  return Math.round(n * 100);
-}
-function terms(defaults, overrides) {
-  var out = { depositPct: 30, dueDays: 0 };
-  [defaults, overrides].forEach(function (v) {
-    if (v && v.dueDays == null && v.netDays != null) out.dueDays = Number(v.netDays);
-    ['depositPct', 'dueDays'].forEach(function (k) {
-      if (v && v[k] != null) out[k] = Number(v[k]);
-    });
-  });
-  if (!isFinite(out.depositPct) || out.depositPct < 0 || out.depositPct > 100) fail('Deposit must be 0–100%');
-  if (!Number.isInteger(out.dueDays) || out.dueDays < 0 || out.dueDays > 365) fail('Due days must be 0–365');
-  return out;
-}
-function snapshot(total, defaults, overrides, fee) {
-  var base = cents(total), t = terms(defaults, overrides);
-  if (!base) fail('An approved customer price greater than zero is required');
-  var rate = fee && fee.percent != null ? Number(fee.percent) : 0.25;
-  var fixed = fee && fee.fixed != null ? cents(fee.fixed) : 0;
-  if (rate != null && (!isFinite(rate) || rate < 0 || rate > 100)) fail('Fee must be 0–100%');
-  var retained = Math.round(base * rate / 100) + fixed, amount = base + retained;
-  var down = Math.round(amount * t.depositPct / 100);
-  return { baseCents: base, totalCents: amount, depositCents: down, balanceCents: amount - down, currency: 'USD',
-    terms: t, feeCents: retained, feePolicy: { percent: rate, fixedCents: fixed, mode: 'added_to_price' } };
-}
-function key(value) { return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 40); }
+/* sandbox: api/_lib/logic-policy.js is server-only commercial logic. The bundle carries
+   only paymentLink, lifted from it by scripts/build-app-sandbox.js. */
 function paymentLink(value) {
   try { var u = new URL(value); return u.protocol === 'https:' && /(^|\.)intuit\.com$/.test(u.hostname) && !u.username && !u.password ? u.href : null; }
   catch (e) { return null; }
 }
-function receipt(invoice, payments, expected, customerId) {
-  if (!invoice || cents(invoice.TotalAmt) !== expected || String((invoice.CustomerRef || {}).value) !== String(customerId) ||
-      ((invoice.CurrencyRef || {}).value || 'USD') !== 'USD') fail('QuickBooks invoice changed; reconciliation needs review');
-  var paid = 0, ids = [];
-  (payments || []).forEach(function (p) {
-    if (!p || !p.Id || ids.indexOf(String(p.Id)) >= 0) return;
-    if (String((p.CustomerRef || {}).value) !== String(customerId)) fail('Payment customer mismatch');
-    if (((p.CurrencyRef || {}).value || 'USD') !== 'USD') fail('Payment currency mismatch');
-    var applied = 0;
-    (p.Line || []).forEach(function (line) {
-      var links = line.LinkedTxn || [];
-      if (links.some(function (l) { return l.TxnType === 'Invoice' && String(l.TxnId) === String(invoice.Id); })) {
-        // Ambiguous split lines cannot prove this invoice's allocation.
-        if (links.length !== 1) fail('Ambiguous QuickBooks payment allocation');
-        applied += cents(line.Amount);
-      }
-    });
-    if (applied > cents(p.TotalAmt)) fail('Invalid QuickBooks payment allocation');
-    paid += applied; ids.push(String(p.Id));
-  });
-  paid = Math.min(expected, paid);
-  return { paidCents: paid, paymentIds: ids, satisfied: paid >= expected && cents(invoice.Balance) === 0,
-    balanceCents: cents(invoice.Balance), payUrl: paymentLink(invoice.InvoiceLink || invoice.invoiceLink) };
-}
-function quantities(items) {
-  var out = Object.create(null);
-  (items || []).forEach(function (it) {
-    var sku = String(it.sku || ''), n = Number(it.qty);
-    if (!/^[A-Za-z0-9._-]{1,100}$/.test(sku) || ['__proto__', 'constructor', 'prototype'].indexOf(sku) >= 0 || !Number.isInteger(n) || n <= 0 || n > 10000) fail('Each item needs a SKU and whole-unit quantity (1–10000)');
-    out[sku] = (out[sku] || 0) + n;
-  });
-  if (!Object.keys(out).length) fail('Add catalog items before accepting an order');
-  return out;
-}
-function ready(unit) { return unit && unit.at === 'ready' && !unit.hold && !unit.ncr && unit.test && unit.test.result === 'pass'; }
-function rootSerial(unit, units) {
-  var current = unit, seen = {};
-  while (current.parentSerial) {
-    if (seen[current.serial]) fail('Genealogy cycle');
-    seen[current.serial] = true;
-    current = units.filter(function (u) { return u.serial === current.parentSerial; })[0];
-    if (!current) fail('Missing component parent');
-  }
-  return current.serial;
-}
-module.exports = { id: id, cents: cents, terms: terms, snapshot: snapshot, key: key, paymentLink: paymentLink,
-  receipt: receipt, quantities: quantities, ready: ready, rootSerial: rootSerial };
-
+module.exports = { paymentLink: paymentLink };
   };
   defs['api/_lib/portal.js'] = function (module, exports, require) {
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4385,12 +4309,18 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
 (function (global) {
   'use strict';
   var F = global.OmegaSandboxFixtures, TENANT = global.OMEGA_SANDBOX_TENANT || {};
+  /* Which of the four pages this is. Under /app-sandbox/ it is the path
+     (the committed pages set nothing); a private test link is its own origin
+     at '/', so the build writes OMEGA_SANDBOX_APP into the page and that
+     wins. Decided BEFORE the sign-in key, which depends on it. */
+  var APP = global.OMEGA_SANDBOX_APP || (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
   /* the buyer is a different person from the office staff: the customer
      app keeps its own sign-in, so trying the office sample first does not
-     open the customer app as the office */
+     open the customer app as the office (with the owner's controls), and
+     signing out of one does not sign the other out */
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
      prices; a phone that kept the v1 sample starts over on the new one */
-  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -4478,10 +4408,9 @@ module.exports = { initialState: initialState, views: views, post: post, ORG: OR
   function reset() { try { [KEY, USER_KEY, 'omega_station_v1', 'omega_station_pick', 'omega_plant_app_filter', 'omega_office_app_filter', 'omega_office_app_company'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {} location.reload(); }
   /* Where the other three pages are. Under /app-sandbox/ they are siblings;
      published as private test links (one artifact per app, each its own
-     origin) the build writes OMEGA_SANDBOX_LINKS and OMEGA_SANDBOX_APP into
-     the page. A link to another origin opens as a link, not a route. */
+     origin) the build writes OMEGA_SANDBOX_LINKS (and APP, above) into the
+     page. A link to another origin opens as a link, not a route. */
   var LINKS = global.OMEGA_SANDBOX_LINKS || { plant: '/app-sandbox/plant', office: '/app-sandbox/office', customer: '/app-sandbox/customer', bench: '/app-sandbox/bench' };
-  var APP = global.OMEGA_SANDBOX_APP || (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
   /* A private test link's frame answers confirm() with false before anyone
      sees it; the pages ask before a stack of POs or an assignment. Nothing
      in a sandbox needs guarding, so say what would have been asked and go. */

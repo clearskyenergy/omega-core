@@ -9,6 +9,7 @@
 
      OmegaHexHub.render(el, {
        items: [ { key, label, icon, badge, hint } × up to 7 ],  // [0] is the centre
+                                        // badge: a count (over 99 reads 99+) or a short mark
        onPick: function (key) {},
        title: 'Where to?',              // optional heading inside the tile
        caption: 'Clean Cell'            // optional line under the heading
@@ -47,6 +48,33 @@
   /* reading order around the centre: top-left, top-right, right,
      bottom-right, bottom-left, left */
   var RING = [[-0.5, -1], [0.5, -1], [1, 0], [0.5, 1], [-0.5, 1], [-1, 0]];
+  /* A badge is a count, capped the way the office caps its own (1234
+     units reads 99+, never a count cut to its first digits), or a short
+     mark such as '!'. It is drawn as a pill that is a circle
+     for one or two characters and grows LEFT, into its own cell, for
+     three: the centre's top-right neighbour is drawn after it and would
+     cover a pill that grew right. */
+  var BADGE_R = 12, BADGE_EM = 7.7, HINT_MAX = 88;
+  function badgeText(b) {
+    if (!b) return '';
+    var t = String(b);
+    return /^\d+$/.test(t) && Number(t) > 99 ? '99+' : t.slice(0, 3);
+  }
+  function pillWidth(textWidth) { return Math.max(2 * BADGE_R, textWidth + 10); }
+  /* once laid out, fit the pill to the badge's real width and squeeze a
+     hint wider than the cell (88: the hex at the bottom of the hint's line,
+     less its stroke) instead of letting it run over the neon edge. Hidden
+     when drawn: the estimate stands. */
+  function fit(g) {
+    try {
+      var bt = g.querySelector('.bt'), bd = g.querySelector('.bd'), ht = g.querySelector('.ht'), w, right, pw;
+      if (bt && bd && (w = bt.getComputedTextLength()) > 0) {
+        right = Number(bd.getAttribute('data-right')); pw = pillWidth(w);
+        bd.setAttribute('width', pw.toFixed(1)); bd.setAttribute('x', (right - pw).toFixed(1)); bt.setAttribute('x', (right - pw / 2).toFixed(1));
+      }
+      if (ht && ht.getComputedTextLength() > HINT_MAX) { ht.setAttribute('textLength', String(HINT_MAX)); ht.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+    } catch (e) { /* not laid out yet: the drawn estimate stands */ }
+  }
   function render(el, opts) {
     if (!el) return;
     injectCss(); opts = opts || {};
@@ -59,13 +87,13 @@
     }
     var cells = items.map(function (it, n) {
       var p = n === 0 ? [0, 0] : RING[n - 1], x = cx + p[0] * W, y = cy + p[1] * H;
-      var label = esc(it.label), badge = it.badge ? String(it.badge).slice(0, 4) : '';
+      var label = esc(it.label), badge = badgeText(it.badge), pcx = x + R * 0.55, pcy = y - R * 0.62, bw = pillWidth(badge.length * BADGE_EM);
       return '<g class="hx' + (n === 0 ? ' center' : '') + '" role="button" tabindex="0" data-hub="' + esc(it.key) + '" aria-label="' + label + (badge ? ', ' + esc(badge) : '') + '">'
         + '<polygon class="halo" points="' + hex(x, y, R) + '"/><polygon class="cell" points="' + hex(x, y, R) + '"/>'
         + '<text class="ic" x="' + x.toFixed(1) + '" y="' + (y - 6).toFixed(1) + '">' + esc(it.icon || '') + '</text>'
         + '<text class="lb" x="' + x.toFixed(1) + '" y="' + (y + 17).toFixed(1) + '">' + label + '</text>'
         + (it.hint ? '<text class="ht" x="' + x.toFixed(1) + '" y="' + (y + 32).toFixed(1) + '">' + esc(String(it.hint).slice(0, 22)) + '</text>' : '')
-        + (badge ? '<circle class="bd" cx="' + (x + R * 0.55).toFixed(1) + '" cy="' + (y - R * 0.62).toFixed(1) + '" r="12"/><text class="bt" x="' + (x + R * 0.55).toFixed(1) + '" y="' + (y - R * 0.62 + 4).toFixed(1) + '">' + esc(badge) + '</text>' : '')
+        + (badge ? '<rect class="bd" x="' + (pcx + BADGE_R - bw).toFixed(1) + '" y="' + (pcy - BADGE_R).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + 2 * BADGE_R + '" rx="' + BADGE_R + '" data-right="' + (pcx + BADGE_R).toFixed(1) + '"/><text class="bt" x="' + (pcx + BADGE_R - bw / 2).toFixed(1) + '" y="' + (pcy + 4).toFixed(1) + '">' + esc(badge) + '</text>' : '')
         + '</g>';
     }).join('');
     el.innerHTML = '<div class="hexhub">' + (opts.title ? '<h2>' + esc(opts.title) + '</h2>' : '') + (opts.caption ? '<div class="hh-cap">' + esc(opts.caption) + '</div>' : '')
@@ -79,6 +107,7 @@
       function go(e) { if (e) e.preventDefault(); if (typeof opts.onPick === 'function') opts.onPick(g.getAttribute('data-hub')); }
       g.addEventListener('click', go);
       g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') go(e); });
+      fit(g);
     });
   }
   window.OmegaHexHub = { render: render };

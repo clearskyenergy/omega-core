@@ -22,12 +22,18 @@
 (function (global) {
   'use strict';
   var F = global.OmegaSandboxFixtures, TENANT = global.OMEGA_SANDBOX_TENANT || {};
+  /* Which of the four pages this is. Under /app-sandbox/ it is the path
+     (the committed pages set nothing); a private test link is its own origin
+     at '/', so the build writes OMEGA_SANDBOX_APP into the page and that
+     wins. Decided BEFORE the sign-in key, which depends on it. */
+  var APP = global.OMEGA_SANDBOX_APP || (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
   /* the buyer is a different person from the office staff: the customer
      app keeps its own sign-in, so trying the office sample first does not
-     open the customer app as the office */
+     open the customer app as the office (with the owner's controls), and
+     signing out of one does not sign the other out */
   /* v2: the sample grew a CRM, documents, a pay link and the design tool's
      prices; a phone that kept the v1 sample starts over on the new one */
-  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (global.OMEGA_SANDBOX_APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
+  var KEY = 'omega_sandbox_v2', USER_KEY = 'omega_sandbox_user_v1' + (APP === 'customer' ? '_customer' : ''), ORG = 'cleancell.us';
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function seedIfMissing(k, v) { try { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -115,10 +121,9 @@
   function reset() { try { [KEY, USER_KEY, 'omega_station_v1', 'omega_station_pick', 'omega_plant_app_filter', 'omega_office_app_filter', 'omega_office_app_company'].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {} location.reload(); }
   /* Where the other three pages are. Under /app-sandbox/ they are siblings;
      published as private test links (one artifact per app, each its own
-     origin) the build writes OMEGA_SANDBOX_LINKS and OMEGA_SANDBOX_APP into
-     the page. A link to another origin opens as a link, not a route. */
+     origin) the build writes OMEGA_SANDBOX_LINKS (and APP, above) into the
+     page. A link to another origin opens as a link, not a route. */
   var LINKS = global.OMEGA_SANDBOX_LINKS || { plant: '/app-sandbox/plant', office: '/app-sandbox/office', customer: '/app-sandbox/customer', bench: '/app-sandbox/bench' };
-  var APP = global.OMEGA_SANDBOX_APP || (/\/app-sandbox\/(\w+)/.exec(location.pathname) || [])[1] || '';
   /* A private test link's frame answers confirm() with false before anyone
      sees it; the pages ask before a stack of POs or an assignment. Nothing
      in a sandbox needs guarding, so say what would have been asked and go. */

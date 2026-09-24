@@ -23,8 +23,9 @@
    WHAT. A document the office marked shared, or one somebody on the account
    uploaded — never an office-only document, never an archived one, never
    another account's (a file id from elsewhere is simply not found here).
-   The storage path and the office's own names never leave: the office's
-   uploads say "shared by" the supplier.
+   The storage path, the office's own names and the office's note on its
+   own document never leave (api/_lib/crm.js fileView): the office's uploads
+   say "shared by" the supplier.
 
    HOW MUCH. 2 MB a file, the types api/_lib/crm.js fileInput() decides by
    the bytes, and 20 uploads a day per ACCOUNT (not per person — a company

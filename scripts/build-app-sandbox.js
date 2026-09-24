@@ -10,8 +10,10 @@
          the bench link pointed at the sandbox bench
      sandbox.js   scripts/_lib/logic-fixtures.js and every pure library it
          requires (materials, plant-board, plant-stats, plant-work,
-         office-stage, logic-catalog, the manifest builder), bundled with a
-         forty-line CommonJS loader, then scripts/_lib/app-sandbox-shim.js
+         office-stage, logic-catalog, receivables, custody, crm, portal, the
+         manifest builder), bundled with a forty-line CommonJS loader, then
+         scripts/_lib/app-sandbox-shim.js — and NEVER the server-only
+         commercial logic (SERVER_ONLY below: the build fails first)
      <app>.webmanifest, sw.js, README.md
 
    Every rewrite is an asserted string replacement: if a page changes shape
@@ -26,29 +28,106 @@
                                                   # per app, for private
                                                   # test links              */
 'use strict';
-var fs = require('fs'), path = require('path');
+var fs = require('fs'), path = require('path'), vm = require('vm');
 var ROOT = path.join(__dirname, '..');
 var ADMIN = path.join(ROOT, 'api/_lib/admin.js');
 var TENANT = JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants/cleancell/tenant.json'), 'utf8'));
+function idOf(abs) { return path.relative(ROOT, abs).split(path.sep).join('/'); }
+function stubAdmin() { require.cache[require.resolve(ADMIN)] = { id: ADMIN, filename: ADMIN, loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no db'); }, safeOrg: function (x) { return x; } } }; }
+
+/* ── what the public sandbox never carries ───────────────────────────── */
+/* app-sandbox/ is a static folder: anybody can fetch sandbox.js without
+   signing in. Pricing, the fee and deposit snapshot, the QuickBooks rules,
+   the order machine and site pricing and scoring run in /api/ and never in
+   a browser (CLAUDE.md, IP protection), so a bundled library that requires
+   one of these modules FAILS THE BUILD — unless every name it takes is on
+   that module's list here. Then the bundle carries those functions alone,
+   lifted out of the real file at build time (no second copy), refused if
+   they lean on anything else in it, and checked against the real export on
+   PROBES before they ship. The one such name today is paymentLink, the
+   intuit.com pin on a QuickBooks pay link, which the fixtures and portal.js
+   use to drop a link that is not QuickBooks'. */
+var SERVER_ONLY = {
+  'api/_lib/logic-policy.js': ['paymentLink'],
+  'api/_lib/qbo.js': [], 'api/_lib/qbo-sales.js': [], 'api/_lib/logic-workflow.js': [], 'api/_lib/order-lifecycle.js': [],
+  'api/_lib/value-stack.js': [], 'api/_lib/cost-model.js': [], 'api/_lib/site-score.js': [], 'api/_lib/project-cost.js': [], 'api/_lib/site-lease.js': []
+};
+var PROBES = {
+  paymentLink: [['https://app.qbo.intuit.com/app/invoice?txnId=1'], ['https://intuit.com/pay'], ['http://intuit.com/pay'], ['https://evilintuit.com/pay'],
+    ['https://intuit.com.evil.example/pay'], ['https://u:p@intuit.com/pay'], ['javascript:alert(1)'], ['not a url'], [''], [null], [undefined], [42]]
+};
+/* the named top-level function's source, braces balanced (strings skipped) */
+function liftFunction(src, name, file) {
+  var m = new RegExp('(^|\\n)function ' + name + '\\s*\\(').exec(src);
+  if (!m) throw new Error('build-app-sandbox: ' + file + ' has no top-level function ' + name + ' to lift');
+  var start = m.index + m[1].length, i = src.indexOf('{', start), depth = 0, quote = null, c;
+  for (; i < src.length; i++) {
+    c = src.charAt(i);
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error('build-app-sandbox: could not find the end of ' + file + ' ' + name);
+}
+function lift(abs) {
+  var file = idOf(abs), names = SERVER_ONLY[file], src = fs.readFileSync(abs, 'utf8'), real;
+  stubAdmin(); real = require(abs);
+  var tops = []; src.replace(/(^|\n)(?:function|var)\s+(\w+)/g, function (m, nl, n) { tops.push(n); return m; });
+  var parts = names.map(function (name) {
+    var text = liftFunction(src, name, file), fn, probes = PROBES[name];
+    tops.forEach(function (t) { if (names.indexOf(t) < 0 && new RegExp('\\b' + t + '\\b').test(text)) throw new Error('build-app-sandbox: ' + file + ' ' + name + ' uses ' + t + ', which the sandbox must not carry'); });
+    if (!probes || !probes.length) throw new Error('build-app-sandbox: add PROBES for ' + name + ' before lifting it into the sandbox');
+    fn = vm.runInContext('(' + text + ')', vm.createContext({ URL: URL }));
+    probes.forEach(function (args) {
+      var got = JSON.stringify(fn.apply(null, args)), want = JSON.stringify(real[name].apply(null, args));
+      if (got !== want) throw new Error('build-app-sandbox: the lifted ' + name + '(' + JSON.stringify(args).slice(1, -1) + ') gives ' + got + ', the real one ' + want);
+    });
+    return text;
+  });
+  return '/* sandbox: ' + file + ' is server-only commercial logic. The bundle carries\n   only ' + names.join(', ') + ', lifted from it by scripts/build-app-sandbox.js. */\n'
+    + parts.join('\n') + '\nmodule.exports = { ' + names.map(function (n) { return n + ': ' + n; }).join(', ') + ' };';
+}
+/* what a bundled library takes from a server-only module it requires: every
+   use of the binding must be `.name` with the name on the list */
+function takesOnly(src, at, call, dep, from) {
+  /* `name = require(…)` binds it (never `a.b = require(…)`, which exports
+     the whole module); `require(…).name` takes one name directly */
+  var allowed = SERVER_ONLY[dep], used = [], direct = /^\s*\.\s*(\w+)/.exec(src.slice(at + call.length)), bound = /(?:^|[^.\w$])(\w+)(\s*=\s*)$/.exec(src.slice(0, at));
+  if (direct) used.push(direct[1]);
+  else if (bound) {
+    var re = new RegExp('\\b' + bound[1] + '\\b', 'g'), declAt = at - bound[2].length - bound[1].length, hit, after, prop;
+    while ((hit = re.exec(src))) {
+      if (hit.index === declAt) continue;
+      after = src.slice(hit.index + bound[1].length); prop = /^\s*\.\s*(\w+)/.exec(after);
+      if (prop) used.push(prop[1]); else if (/^\s*[\[(),;=}:?]/.test(after)) used.push('the whole module');
+    }
+  } else used.push('the whole module');
+  var bad = used.filter(function (n) { return allowed.indexOf(n) < 0; });
+  if (bad.length) throw new Error('build-app-sandbox: ' + from + ' takes ' + bad.join(', ') + ' from ' + dep + ', which is server-only commercial logic; the public sandbox must not bundle it' + (allowed.length ? ' (only ' + allowed.join(', ') + ' may be lifted)' : ''));
+}
 
 /* ── a small CommonJS bundle ─────────────────────────────────────────── */
 /* Node built-ins a bundled library NAMES but the sample never CALLS: the
-   CRM library (api/_lib/crm.js) and the payment policy hash an upload and
-   mint ids with crypto; the fixtures do neither (they validate what a
+   CRM library (api/_lib/crm.js) hashes an upload and mints ids with
+   crypto; the fixtures do neither (they validate what a
    browser can and keep plain ids). The stand-in throws if that changes, so
    a sandbox never quietly computes something the product would not. Any
    other node module still fails the build. */
 var NODE_STUBS = { crypto: "module.exports = { createHash: function () { throw new Error('no crypto in the sandbox'); }, randomBytes: function () { throw new Error('no crypto in the sandbox'); } };" };
 function resolveFile(p) { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; if (fs.existsSync(p + '.js')) return p + '.js'; if (fs.existsSync(p + '.json')) return p + '.json'; throw new Error('cannot resolve ' + p); }
 function bundle(entry) {
-  var mods = {}, order = [], stubs = {};
-  function id(abs) { return path.relative(ROOT, abs).split(path.sep).join('/'); }
+  var mods = {}, order = [], stubs = {}, id = idOf;
   function visit(abs) {
     if (mods[abs] !== undefined) return;
     if (abs === ADMIN) { mods[abs] = null; order.push(abs); return; }
+    if (SERVER_ONLY[id(abs)]) {
+      if (!SERVER_ONLY[id(abs)].length) throw new Error('build-app-sandbox: ' + id(abs) + ' is server-only commercial logic; the public sandbox must not bundle it');
+      mods[abs] = lift(abs); order.push(abs); return;
+    }
     var src = fs.readFileSync(abs, 'utf8').replace(/require\((['"])(\w+)\1\)/g, function (m, q, name) { if (!NODE_STUBS[name]) return m; stubs[name] = true; return "require('node:" + name + "')"; });
     if (/require\((['"])(?!\.|node:)/.test(src)) throw new Error(id(abs) + ' requires a node module; the sandbox cannot bundle it');
-    mods[abs] = src.replace(/require\((['"])(\.[^'"]+)\1\)/g, function (m, q, rel) { var dep = resolveFile(path.resolve(path.dirname(abs), rel)); visit(dep); return "require('" + id(dep) + "')"; });
+    mods[abs] = src.replace(/require\((['"])(\.[^'"]+)\1\)/g, function (m, q, rel, at) { var dep = resolveFile(path.resolve(path.dirname(abs), rel)); if (SERVER_ONLY[id(dep)]) takesOnly(src, at, m, id(dep), id(abs)); visit(dep); return "require('" + id(dep) + "')"; });
     order.push(abs);
   }
   visit(entry);
@@ -101,7 +180,7 @@ function page(p) {
   return s;
 }
 function manifest(app) {
-  require.cache[require.resolve(ADMIN)] = { id: ADMIN, filename: ADMIN, loaded: true, exports: { httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, handler: function (f) { return f; }, db: function () { throw new Error('no db'); }, safeOrg: function (x) { return x; } } };
+  stubAdmin();
   var m = require('../api/app-manifest').manifestFor('cleancell.us', TENANT, app);
   m.id = '/app-sandbox/' + app; m.start_url = '/app-sandbox/' + app; m.scope = '/app-sandbox/'; m.description = 'Sandbox — ' + m.description + ' Nothing is real.';
   return JSON.stringify(m, null, 2) + '\n';
@@ -153,7 +232,7 @@ function buildArtifacts(outDir, links) {
   });
   return made;
 }
-module.exports = { build: build, buildArtifacts: buildArtifacts, PAGES: PAGES, TITLES: TITLES };
+module.exports = { build: build, buildArtifacts: buildArtifacts, bundle: bundle, PAGES: PAGES, TITLES: TITLES, SERVER_ONLY: SERVER_ONLY };
 if (require.main === module) {
   var ai = process.argv.indexOf('--artifacts');
   if (ai > 0) { var linksArg = process.argv[ai + 2] ? JSON.parse(process.argv[ai + 2]) : {}; var made = buildArtifacts(path.resolve(process.argv[ai + 1]), linksArg); console.log('artifact folders: ' + Object.keys(made).map(function (k) { return k + ' → ' + made[k]; }).join('\n                  ')); }

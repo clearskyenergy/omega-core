@@ -73,9 +73,14 @@ function seed(billing) {
 var PRICED = { customerEditorLite: { monthlyPriceCents: 79900, yearlyPriceCents: 799000, currency: 'USD' } };
 function account() { return db.data.get(O + '/customers/' + AMP); }
 
-/* the webhook, as Vercel calls it: raw bytes in, status + JSON out */
-async function deliver(evt, sig) {
+/* the webhook, as Vercel calls it: raw bytes in, status + JSON out. A
+   subscription event is what Stripe holds at that moment, so the stub's
+   live subscription becomes the payload — unless `stale`: an event that
+   arrives late, after Stripe's copy has moved on. */
+async function deliver(evt, sig, stale) {
   nextEvent = evt;
+  var o = evt && evt.data && evt.data.object;
+  if (!stale && o && /^customer\.subscription\./.test(evt.type)) subs[o.id] = JSON.parse(JSON.stringify(o));
   var req = Readable.from([Buffer.from(JSON.stringify({ id: evt && evt.id }))]); req.method = 'POST'; req.headers = { 'stripe-signature': sig || 'good' };
   var out = { code: 0, body: null, status: function (c) { this.code = c; return this; }, json: function (b) { if (this.body == null) this.body = b; return this; }, send: function (b) { this.body = b; return this; }, end: function () { return this; } };
   await hook(req, out); return out;
@@ -171,7 +176,7 @@ async function checkoutDone(again) {
     assert.equal(again.body.customerEditorLite.duplicate, true);
     assert.equal(Array.from(db.data.values()).filter(function (v) { return v && v.action === 'customer-editor-lite'; }).length, 1);
     await deliver(evt('evt_pd', 'customer.subscription.updated', sub('sub_A', 'past_due'), NOW + 100));
-    var stale = await deliver(evt('evt_old', 'customer.subscription.updated', sub('sub_A', 'active'), NOW - 100));
+    var stale = await deliver(evt('evt_old', 'customer.subscription.updated', sub('sub_A', 'active'), NOW - 100), null, true);
     assert.match(stale.body.customerEditorLite.ignored, /older/);
     assert.equal(account().editorLite.status, 'past_due');
   });
@@ -211,6 +216,56 @@ async function checkoutDone(again) {
     var spoof = sub('sub_D', 'active', { customer: 'cus_T9' });
     assert.match((await deliver(evt('evt_spoof', 'customer.subscription.updated', spoof))).body.customerEditorLite.ignored, /another account/);
     assert.equal(account().editorLite.stripeSubscriptionId, 'sub_C');
+  });
+  await test('out of order: a late "created" never re-grants a cancelled subscription, and a stale event for an ended one never displaces the live one', async function () {
+    seed(PRICED);
+    /* (A) the deletion is delivered first, then the creation it followed */
+    var del = await deliver(evt('evt_Adel', 'customer.subscription.deleted', sub('sub_A', 'canceled', { ended_at: NOW + 60, canceled_at: NOW + 60 }), NOW + 60));
+    assert.match(del.body.customerEditorLite.ignored, /not the subscription/);
+    var late = await deliver(evt('evt_Anew', 'customer.subscription.created', sub('sub_A', 'active'), NOW), null, true);
+    assert.equal(late.code, 200); assert(late.body.customerEditorLite.ignored, 'Stripe holds it as canceled now');
+    assert.equal(account().editorLite, undefined, 'no grant for a cancelled subscription');
+    assert.equal(D.entitlement(await X.context(ORG), account(), null).active, false);
+    assert.deepEqual(calls.retrieve, ['sub_A', 'sub_A'], 'every subscription event re-reads the subscription');
+    /* (B) a yearly sub_B is live; a stale 'updated' for the ended sub_A arrives days late */
+    var YEAR = 365 * 86400, yearly = { data: [{ price: { recurring: { interval: 'year' }, metadata: {} } }] };
+    await deliver(evt('evt_Bnew', 'customer.subscription.created', sub('sub_B', 'active', { current_period_end: NOW + YEAR, items: yearly }), NOW + 100));
+    assert.equal(account().editorLite.stripeSubscriptionId, 'sub_B');
+    var old = await deliver(evt('evt_Aold', 'customer.subscription.updated', sub('sub_A', 'active', { current_period_end: NOW - 86400 }), NOW - 5 * 86400), null, true);
+    assert(old.body.customerEditorLite.ignored);
+    var g = account().editorLite;
+    assert.deepEqual([g.stripeSubscriptionId, g.status, g.plan], ['sub_B', 'active', 'year'], 'the paying customer keeps the yearly grant');
+    assert.equal(D.entitlement(await X.context(ORG), account(), null).active, true);
+    var gone = await deliver(evt('evt_Bdel', 'customer.subscription.deleted', sub('sub_B', 'canceled', { ended_at: NOW + 200 }), NOW + 200));
+    assert.equal(gone.body.customerEditorLite.applied, 'inactive', 'sub_B\'s own lapse still ends it');
+  });
+  await test('an event about our Stripe customer that carries no grant (customer.created / .updated) is acknowledged, never sent to the tenant branch', async function () {
+    seed(PRICED); var tenantBefore = JSON.stringify(db.data.get(O + '/billing/current'));
+    var cus = { id: 'cus_T1', object: 'customer', email: 'cfo@amperagecapital.com', metadata: { kind: 'customer-editor-lite', org: ORG, customerId: AMP } };
+    for (var type of ['customer.created', 'customer.updated']) {
+      var r = await deliver(evt('evt_' + type.replace('.', ''), type, cus));
+      assert.equal(r.code, 200, type + ' must not 500 (Stripe would retry it for days)');
+      assert.match(r.body.customerEditorLite.ignored, /not a grant event/);
+    }
+    assert.equal(calls.retrieve.length, 0); assert.equal(account().editorLite, undefined);
+    assert.equal(JSON.stringify(db.data.get(O + '/billing/current')), tenantBefore, 'the supplier\'s billing/current is not touched');
+  });
+  await test('an event whose object has no customer (a Customer made by a payment link or in the dashboard) is acknowledged, not a 500', async function () {
+    seed(PRICED); var tenantBefore = JSON.stringify(db.data.get(O + '/billing/current'));
+    /* Firestore refuses where('==', undefined); the stand-in does the same */
+    var lookups = [];
+    db.collectionGroup = function () { return { where: function (f, op, v) { lookups.push(v); if (v === undefined) throw new Error('Cannot use "undefined" as a Firestore value'); return { limit: function () { return { get: async function () { return { empty: true, docs: [] }; } }; } }; } }; };
+    try {
+      for (var type of ['customer.created', 'customer.updated']) {
+        var r = await deliver(evt('evt_x' + type.replace('.', ''), type, { id: 'cus_DASH', object: 'customer', email: 'someone@example.com', metadata: {} }));
+        assert.equal(r.code, 200, type + ' with no customer field must not 500 (Stripe would retry it for days)');
+        assert.match(String(r.body.ignored), /no customer on customer\./);
+      }
+      var other = await deliver(evt('evt_xinv', 'invoice.paid', { id: 'in_x', customer: 'cus_NOBODY', lines: { data: [] } }));
+      assert.equal(other.code, 200); assert.match(String(other.body.ignored), /no org for cus_NOBODY/, 'a customer id still gets its lookup');
+    } finally { delete db.collectionGroup; }
+    assert.deepEqual(lookups, ['cus_NOBODY'], 'no billing lookup by an undefined customer');
+    assert.equal(JSON.stringify(db.data.get(O + '/billing/current')), tenantBefore, 'the supplier\'s billing/current is not touched');
   });
   await test('the tenant\'s own Stripe events still run the original branches, and a bad signature is refused', async function () {
     seed(PRICED);

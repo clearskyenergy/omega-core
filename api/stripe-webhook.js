@@ -30,10 +30,15 @@ module.exports = function (req, res) {
     if (lite) return res.status(200).json({ received: true, customerEditorLite: lite });
     var obj = evt.data.object, FV = A.FieldValue(), db = A.db();
     var orgId = (obj.metadata && obj.metadata.orgId) || null;
-    var byCustomer = orgId ? Promise.resolve(orgId)
-      : db.collectionGroup('billing').where('stripeCustomerId', '==', obj.customer).limit(1).get().then(function (q) { return q.empty ? null : q.docs[0].ref.parent.parent.id; });
+    /* Not every event object HAS a `customer` field: a Customer itself
+       (customer.created / .updated from a payment link or the Stripe
+       dashboard) does not, and `where('==', undefined)` throws — a 500 that
+       Stripe retries for days. No customer id, no lookup: acknowledged. */
+    var cus = typeof obj.customer === 'string' && obj.customer ? obj.customer : '';
+    var byCustomer = orgId ? Promise.resolve(orgId) : !cus ? Promise.resolve(null)
+      : db.collectionGroup('billing').where('stripeCustomerId', '==', cus).limit(1).get().then(function (q) { return q.empty ? null : q.docs[0].ref.parent.parent.id; });
     return byCustomer.then(function (org) {
-      if (!org) return res.status(200).json({ ignored: 'no org for ' + obj.customer });
+      if (!org) return res.status(200).json({ ignored: cus ? 'no org for ' + cus : 'no customer on ' + evt.type });
       var ref = db.collection('omega_orgs').doc(org).collection('billing').doc('current');
       var patch = { updatedAt: FV.serverTimestamp(), lastStripeEvent: evt.type };
       if (evt.type === 'invoice.paid') {

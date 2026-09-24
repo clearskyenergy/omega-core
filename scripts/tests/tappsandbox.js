@@ -19,11 +19,63 @@ ok('every generated file matches app-sandbox/ (else: npm run build:sandbox)', st
 ok('nothing in app-sandbox/ is unaccounted for', extra.length === 0, extra);
 ok('the bundle carries the real libraries, not copies', /defs\['api\/_lib\/plant-board\.js'\]/.test(files['sandbox.js']) && /defs\['api\/_lib\/materials\.js'\]/.test(files['sandbox.js']) && /defs\['scripts\/_lib\/logic-fixtures\.js'\]/.test(files['sandbox.js']));
 ok('  and nothing that needs node', !/require\('crypto'\)|require\('fs'\)|firebase-admin/.test(files['sandbox.js']));
+
+console.log('\nthe public sandbox carries no server-only commercial logic');
+/* app-sandbox/sandbox.js is served to anybody. The fee and deposit snapshot
+   and the QuickBooks receipt rules were bundled once (logic-policy.js, for
+   one pay-link check); the build now lifts that one function and refuses
+   the rest. */
+var SB = files['sandbox.js'];
+ok('no fee snapshot, pricing terms or QuickBooks reconciliation in sandbox.js', !/function (snapshot|receipt|terms|cents)\(|Ambiguous QuickBooks|feePolicy: \{ percent/.test(SB));
+ok('  every server-only module is absent, or is its lifted names and nothing else', Object.keys(B.SERVER_ONLY).every(function (id) {
+  var at = SB.indexOf("defs['" + id + "']"); if (at < 0) return true;
+  var body = SB.slice(at, SB.indexOf('\n  };\n', at)), fns = (body.match(/\nfunction (\w+)/g) || []).map(function (f) { return f.slice(10); });
+  return body.indexOf('/* sandbox: ' + id + ' is server-only') >= 0 && !/require\(/.test(body) && fns.join() === B.SERVER_ONLY[id].join();
+}));
+ok('  logic-policy gives the sandbox paymentLink only', (function () { var at = SB.indexOf("defs['api/_lib/logic-policy.js']"); return at < 0 || /module\.exports = \{ paymentLink: paymentLink \};\n  \};/.test(SB.slice(at, at + 2000)); })());
+var tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tappsandbox-'));
+function entry(name, body) { var f = path.join(tmp, name + '.js'); fs.writeFileSync(f, body); return f; }
+function relTo(lib) { var r = path.relative(tmp, path.join(ROOT, lib)).split(path.sep).join('/'); return r.charAt(0) === '.' ? r : './' + r; }
+function refused(f) { try { B.bundle(f); return ''; } catch (e) { return e.message; } }
+ok('the build refuses a library that requires the order machine, QuickBooks or site pricing', ['api/_lib/logic-workflow.js', 'api/_lib/order-lifecycle.js', 'api/_lib/qbo.js', 'api/_lib/qbo-sales.js', 'api/_lib/cost-model.js'].every(function (lib, i) {
+  return /server-only commercial logic/.test(refused(entry('w' + i, "var W = require('" + relTo(lib) + "');\nmodule.exports = W;"))) && /server-only commercial logic/.test(refused(entry('u' + i, "require('" + relTo(lib) + "');")));
+}));
+ok('  and one that takes the fee snapshot from logic-policy', /takes snapshot from api\/_lib\/logic-policy\.js/.test(refused(entry('p1', "var P = require('" + relTo('api/_lib/logic-policy.js') + "');\nmodule.exports = { ok: P.paymentLink('https://intuit.com/x'), fee: P.snapshot(100, {}, {}, 0.25) };"))));
+ok('  or the whole of logic-policy, however it is bound', ['module.exports = require(X);', 'var P = require(X);\nmodule.exports = P;', 'var P = require(X);\nmodule.exports = P[\'snap\' + \'shot\'];', 'module.exports = require(X).receipt;'].every(function (b, i) {
+  return /server-only commercial logic/.test(refused(entry('q' + i, b.replace('X', "'" + relTo('api/_lib/logic-policy.js') + "'"))));
+}));
+var lifted = ''; try { lifted = B.bundle(entry('p3', "var P = require('" + relTo('api/_lib/logic-policy.js') + "');\nmodule.exports = P.paymentLink('https://intuit.com/pay');")); } catch (e) { lifted = 'THREW ' + e.message; }
+ok('  but may take the intuit.com pay-link pin alone, lifted from the real file', /\nfunction paymentLink\(value\)/.test(lifted) && !/function (snapshot|receipt)\(/.test(lifted), lifted.slice(0, 160));
+try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
 ok('no page loads Firebase, config.js or the workspace runtime', ['plant.html', 'office.html', 'customer.html', 'bench.html'].every(function (f) { return !/<script src="[^"]*(gstatic\.com|\/config\.js|omega-tenant\.js|omega-brand\.js)/.test(files[f]) && /<script src="\/app-sandbox\/sandbox\.js">/.test(files[f]); }));
 ok('  and no page links to the real bench or registers the real worker', ['plant.html', 'office.html', 'customer.html'].every(function (f) { return !/\/plant\/station\.html|app-sw\.js/.test(files[f]) && /app-sandbox\/sw\.js/.test(files[f]); }));
 ok('three manifests, three ids, one scope', ['plant', 'office', 'customer'].every(function (a) { var m = JSON.parse(files[a + '.webmanifest']); return m.id === '/app-sandbox/' + a && m.start_url === '/app-sandbox/' + a && m.scope === '/app-sandbox/'; }));
 ok('  plant and office are Omega Logic, ClearSky\'s product, with its icons', ['plant', 'office'].every(function (a) { var m = JSON.parse(files[a + '.webmanifest']); return /^Omega Logic/.test(m.name) && /\/icons\/omega-logic-192/.test(m.icons[0].src); }));
 ok('  the customer app carries the tenant\'s name and icons', (function () { var m = JSON.parse(files['customer.webmanifest']); return !/Omega Logic/.test(m.name) && /cleancell\/icons\/customer-192/.test(m.icons[0].src); })());
+
+console.log('\nthe customer app keeps its own sign-in');
+/* The committed pages set no OMEGA_SANDBOX_APP (only a private test link
+   does), so the path decides — before the sign-in key is chosen. It once
+   did after, and the customer app opened as the office's owner. */
+var vm = require('vm');
+function openPage(pathname, app, store) {
+  var ctx = { URL: URL, setTimeout: function () {}, location: { pathname: pathname, host: 'sandbox.test', href: 'https://sandbox.test' + pathname }, document: { addEventListener: function () {} },
+    localStorage: { getItem: function (k) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; }, setItem: function (k, v) { store[k] = String(v); }, removeItem: function (k) { delete store[k]; } } };
+  if (app) ctx.OMEGA_SANDBOX_APP = app;
+  ctx.window = ctx; vm.createContext(ctx); vm.runInContext(files['sandbox.js'], ctx);
+  return ctx.firebase.auth();
+}
+function email(a) { return a.currentUser ? a.currentUser.email : null; }
+var store = {}, office = openPage('/app-sandbox/office', null, store); office.signInWithPopup();
+ok('the office signs in as the office', email(office) === 'demo@cleancell.us', email(office));
+var cust = openPage('/app-sandbox/customer', null, store);
+ok('  and the committed customer page still asks who you are, not the office', email(cust) === null, email(cust));
+cust.signInWithEmailLink('ops@riverside.example');
+ok('  the buyer signs in as the buyer, and the office is still the office', email(openPage('/app-sandbox/customer.html', null, store)) === 'ops@riverside.example' && email(openPage('/app-sandbox/office', null, store)) === 'demo@cleancell.us');
+ok('  the plant and the bench share the office sign-in', email(openPage('/app-sandbox/plant', null, store)) === 'demo@cleancell.us' && email(openPage('/app-sandbox/bench', null, store)) === 'demo@cleancell.us');
+cust.signOut();
+ok('  signing out of the customer app leaves the office signed in', email(openPage('/app-sandbox/customer', null, store)) === null && email(openPage('/app-sandbox/office', null, store)) === 'demo@cleancell.us');
+ok('  a private test link (its own origin, at /) is told which app it is', email(openPage('/', 'customer', store)) === null && email(openPage('/', 'office', store)) === 'demo@cleancell.us');
 
 console.log('\nthe sample answers a trial');
 var F = require('../_lib/logic-fixtures'), s = F.initialState(), V = F.views(s);

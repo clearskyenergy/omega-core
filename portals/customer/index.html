@@ -321,8 +321,15 @@
     design: ['Design studio', 'Design your own sites, on your own account.'],
     account: ['Account', 'Your contact details and delivery information.']
   };
+  /* Someone still waiting to join an account sees Home and the waiting card
+     on Account, never a page stuck on Loading: nothing of the account loads
+     until they are let in. ASKED keeps the page they wanted, so the moment
+     Check again finds them approved, loadAccount takes them there. */
+  var ASKED = 'home';
   function view(key) {
     if (!views[key]) key = 'home';
+    ASKED = key;
+    if (ACCT && ACCT.pending && key !== 'home' && key !== 'account') key = 'account';
     $('hello').textContent = views[key][0]; $('sub').textContent = views[key][1];
     Array.prototype.forEach.call(document.querySelectorAll('[data-page]'), function (e) { e.hidden = e.getAttribute('data-page') !== key; });
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (e) { if (e.getAttribute('data-view') === key) e.setAttribute('aria-current', 'page'); else e.removeAttribute('aria-current'); });
@@ -528,14 +535,19 @@
       + (to ? '<p style="margin:10px 0 0"><a href="' + esc(to) + '">See all ›</a></p>' : '') + '</section>';
   }
   function drawHome() {
-    drawHub();
-    var el = $('home-panels'), kv = $('home-kv'); if (!el || !kv) return;
+    var el = $('home-panels'), kv = $('home-kv');
+    /* waiting to be let in: no hub — every cell would open a page that has
+       nothing to load until the owner or the supplier approves */
     if (ACCT && ACCT.pending) {
+      if ($('hub')) $('hub').innerHTML = '';
+      if (!el || !kv) return;
       kv.innerHTML = '<p><b>Waiting for approval.</b> You asked to join ' + esc(ACCT.company || 'your company') + '. Its account owner, or ' + esc(brandName()) + ', approves new people.</p><p><a class="btn" href="#account">Your account</a> <button type="button" class="btn" id="home-check">Check again</button></p>';
       el.innerHTML = '';
-      $('home-check').onclick = function () { loadAccount(); loadOrders(); };
+      $('home-check').onclick = function () { checkAgain(this); };
       return;
     }
+    drawHub();
+    if (!el || !kv) return;
     var units = SITES ? SITES.units || [] : [], now = Date.now(), inv = ORDERS ? invoicesOf(ORDERS) : [], due = inv.filter(isDue), prep = inv.filter(isPreparing);
     var owed = due.reduce(function (n, x) { return n + x.left; }, 0), late = due.filter(overdue);
     kv.innerHTML = '<div class="kv"><div><small>To pay</small><b' + (late.length ? ' class="due-over"' : '') + '>' + (ORDERS ? usd(owed) : '—') + '</b></div><div><small>Units</small><b>' + (SITES ? units.length : '—') + '</b></div><div><small>Sites</small><b>' + (SITES ? (SITES.sites || []).length : '—') + '</b></div><div><small>Orders</small><b>' + (ORDERS ? ORDERS.length : '—') + '</b></div><div><small>Warranty pending</small><b>' + (SITES ? units.filter(pendingCover).length : '—') + '</b></div><div><small>Design</small><b>' + esc(SUB && SUB.status ? ({ active: 'subscribed', trial: 'trial', past_due: 'payment due' }[SUB.status] || 'not active') : '—') + '</b></div></div>'
@@ -821,6 +833,10 @@
     else if (CHECKOUT === 'cancelled') { SAID = '<p class="muted">Checkout was cancelled. Nothing was charged.</p>'; CHECKOUT = null; }
     /* said once per visit, and kept while the page redraws around it */
     back = back || SAID;
+    /* Just paid, the grant not here yet: the message and nothing else. A plan
+       button now would sell the same customer a second subscription. The
+       address no longer says checkout=done, so a reload draws the normal card. */
+    if (CHECKOUT === 'done' && !paid) { el.innerHTML = back; return; }
     if (paid) {
       var ok = s.status === 'active', plan = s.plan === 'year' ? 'Yearly' : s.plan === 'month' ? 'Monthly' : '';
       el.innerHTML = back + '<div class="card2" id="sub-card"><div class="h"><b>Your subscription' + (plan ? ' · ' + plan : '') + '</b><span class="pill ' + (ok ? 'go' : 'stop') + '">' + (ok ? 'active' : 'payment due') + '</span></div>'
@@ -1010,7 +1026,27 @@
     $('acct').innerHTML = '<div style="grid-column:1/-1"><div class="k">Waiting for approval</div><div class="v">You asked to join ' + esc(a.company || 'your company') + '.</div><p class="muted">Its account owner, or your supplier, approves new people. Once they do, your company’s orders, sites and equipment appear here. <button type="button" class="btn" id="pending-check">Check again</button></p></div>';
     $('people').innerHTML = ''; $('terms-wrap').hidden = true;
     ['f-name', 'f-company', 'f-phone', 'f-line1', 'f-city', 'f-state', 'save'].forEach(function (id) { if ($(id)) $(id).disabled = true; });
-    $('pending-check').onclick = function () { loadAccount(); loadOrders(); };
+    $('pending-check').onclick = function () { checkAgain(this); };
+  }
+  /* Check again, from Home or from Account. The button says it is checking,
+     and when the answer is still "waiting" the card says so, with the time:
+     a tap that changes nothing on screen reads as a dead button. loadAccount
+     and loadOrders both settle on failure, so the button is never left
+     disabled; a check that did not get an answer says that instead. */
+  function checkAgain(btn) {
+    var before = ACCT;
+    btn.disabled = true; btn.textContent = 'Checking…';
+    Promise.all([loadAccount(), loadOrders()]).then(function () {
+      btn.disabled = false; btn.textContent = 'Check again';
+      if (!ACCT || !ACCT.pending) return;
+      var said = ACCT !== before ? 'Still waiting for approval · checked ' + new Date().toLocaleTimeString() + '.' : 'Could not check just now. Please try again.';
+      ['home-check', 'pending-check'].forEach(function (id) {
+        var b = $(id); if (!b) return;
+        var n = b.nextElementSibling;
+        if (!n || !n.hasAttribute('data-checked')) { b.insertAdjacentHTML('afterend', ' <span class="muted" data-checked role="status"></span>'); n = b.nextElementSibling; }
+        n.textContent = said;
+      });
+    });
   }
   /* The people on the account; the owner adds, approves and turns access
      off and on (api/my-account.js add-user · user-status). */
@@ -1090,7 +1126,10 @@
   function loadAccount() {
     return api('/api/my-account' + Q).then(function (r) {
       if (!r.ok) { $('acct').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; $('home-kv').innerHTML = '<p class="err">' + esc(r.j.error || 'Could not load your account.') + '</p>'; return; }
-      ACCT = r.j; drawAccount(r.j); drawHome();
+      /* now that the account's state is known, route again: a person
+         waiting to join is moved off a page that would never load, and the
+         moment they are let in they land on the page they asked for */
+      ACCT = r.j; drawAccount(r.j); drawHome(); view(ASKED);
       if (r.j.pending) return;
       loadDesigns(); loadSites(); loadFiles(); loadSub(); loadPo();
       $('agreements').innerHTML='<h3>Agreements</h3>'+((r.j.agreements||[]).map(function(a){return '<p>'+esc(a.kind)+' · '+esc(a.ref)+' · '+esc(a.signedAt)+'</p>';}).join('')||'<p class="muted">No agreements recorded yet.</p>');

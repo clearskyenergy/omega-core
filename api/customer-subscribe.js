@@ -49,10 +49,12 @@
        subscribedBy, updatedAt, stripeEventAt }
    which is the shape api/_lib/buyer-design.js entitlement() accepts (source
    provider + active + unexpired + the supplier's Editor Lite on). Deduped by
-   Stripe event id (stripe_events/{evt_…}); an event older than the one
-   already applied to the same subscription is ignored; a lapse never
-   revokes a trial or a DIFFERENT subscription; every change is audited in
-   omega_audit with what it was.
+   Stripe event id (stripe_events/{evt_…}); every event re-reads the
+   subscription from Stripe, so a late or out-of-order one applies what is
+   true NOW (a cancelled subscription is never re-granted by its own old
+   'created'); an event older than the one already applied to the same
+   subscription is ignored; a lapse never revokes a trial or a DIFFERENT
+   subscription; every change is audited in omega_audit with what it was.
 
    Scrubs its own 500s, like api/my-orders.js: a Stripe or helper message
    must never reach a battery customer's screen.
@@ -181,7 +183,12 @@ module.exports = A.handler(function (req, res) {
 async function webhook(evt, s) {
   var obj = (evt && evt.data && evt.data.object) || {}, meta = obj.metadata || {}, type = String(evt && evt.type || '');
   var sub = /^customer\.subscription\.(created|updated|deleted)$/.test(type), done = type === 'checkout.session.completed', inv = /^invoice\./.test(type);
-  if (!sub && !done && !inv) return null;
+  /* Any other event about something WE made (the account's Stripe customer
+     carries our metadata: customer.created / customer.updated) is still
+     ours: acknowledged here, never handed to the tenant branch, which would
+     look for a billing record by a `customer` field a Customer does not
+     have. */
+  if (!sub && !done && !inv) return meta.kind === KIND ? { kind: KIND, ignored: 'not a grant event' } : null;
   var db = A.db(), cus = cusId(obj.customer), ptr = null;
   var ours = meta.kind === KIND || (inv && obj.subscription_details && (obj.subscription_details.metadata || {}).kind === KIND);
   if (!ours && cus) {
@@ -194,11 +201,16 @@ async function webhook(evt, s) {
      tenant's branch. */
   if (inv) return { kind: KIND, ignored: 'invoice events are carried by the subscription events' };
   if (done && obj.mode !== 'subscription') return { kind: KIND, ignored: 'not a subscription checkout' };
-  var subscription = obj;
-  if (done) {
-    if (!subId(obj.subscription)) return { kind: KIND, ignored: 'checkout without a subscription' };
-    subscription = typeof obj.subscription === 'object' ? obj.subscription : await s.subscriptions.retrieve(obj.subscription);
-  }
+  /* Stripe does not deliver events in order, and a retry can land days
+     late. The grant follows the subscription as Stripe holds it NOW, never
+     the payload of whichever event arrived last: a late 'created' for a
+     subscription since cancelled reads canceled (inactive), and apply()
+     then refuses to let it re-grant or displace the live subscription. A
+     failed retrieve throws, api/stripe-webhook.js answers 500 and Stripe
+     retries. */
+  var sid = done ? subId(obj.subscription) : subId(obj.id);
+  if (!sid) return { kind: KIND, ignored: done ? 'checkout without a subscription' : 'event without a subscription' };
+  var subscription = await s.subscriptions.retrieve(sid);
   return apply(db, evt, subscription, meta, ptr);
 }
 async function apply(db, evt, sub, meta, ptr) {
