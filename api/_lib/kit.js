@@ -18,10 +18,10 @@ var ITEMS = [
     what: 'Work orders, every unit and its step, the bench scanner, stock, quality holds. For the builders.', signin: 'Work Google account of the workspace' },
   { key: 'bench', audience: 'plant', kind: 'page', name: 'Bench scan station', path: '/plant/station.html', org: false, sandbox: '/app-sandbox/bench', guide: '/guides/Omega-Logic-Plant-App.pdf', install: 'tablet',
     what: 'A tablet at a bench, or a builder\'s phone paired as a roaming phone: scan a unit in, issue its parts, finish the step, send it on.', signin: 'Station credential from Work orders' },
-  { key: 'office-app', audience: 'office', kind: 'app', name: 'Omega Logic app', path: '/office/app', org: true, sandbox: '/app-sandbox/office', guide: '/guides/Omega-Logic-App.pdf', install: 'home-screen',
-    what: 'The whole business in one app, laid out like QuickBooks: Home, Orders, Customers, Sites and a Menu that holds every other function — PO loads, stock, plant, fleet register, shipping, money, setup, guides.', signin: 'Work Google account of the workspace' },
-  { key: 'office-desktop', audience: 'office', kind: 'desktop', name: 'Office (desktop)', path: '/omega-logic', org: true, sandbox: null, guide: '/guides/Omega-Logic-App.pdf', install: null,
-    what: 'The full system: pricing, acceptance, shipping, wires, the fleet register, sites and custody, the materials plan, products and bills.', signin: 'Work Google account of the workspace' },
+  { key: 'office-app', audience: 'office', kind: 'app', name: 'Omega Logic app', path: '/office/app', org: true, sandbox: '/app-sandbox/office', guide: '/guides/Omega-Logic-Office-App.pdf', install: 'home-screen',
+    what: 'The whole business in one app, laid out like QuickBooks: Home, Orders, Customers, Sites and a Menu that holds every other function — PO loads, stock, plant, fleet register, shipping, money, setup, guides.', signin: 'Work Google account, or work email and password, of the workspace' },
+  { key: 'office-desktop', audience: 'office', kind: 'desktop', name: 'Office (desktop)', path: '/omega-logic', org: true, sandbox: null, guide: '/guides/Omega-Logic-Office-App.pdf', install: null,
+    what: 'The full system: pricing, acceptance, shipping, wires, the fleet register, sites and custody, the materials plan, products and bills.', signin: 'Work Google account, or work email and password, of the workspace' },
   { key: 'register', audience: 'office', kind: 'desktop', name: 'Fleet register', path: '/logic-register.html', org: true, sandbox: null, guide: null, install: null,
     what: 'One spreadsheet row per serialized unit: seller, buyer, reseller, end customer, site, load, shipping and warranty dates, edited in place.', signin: 'Work Google account of the workspace' },
   { key: 'custody', audience: 'office', kind: 'desktop', name: 'Sites & custody', path: '/logic-custody.html', org: true, sandbox: null, guide: null, install: null,
@@ -38,11 +38,14 @@ var ITEMS = [
 ];
 var GUIDES = [
   { key: 'plant', name: 'Plant app guide', path: '/guides/Omega-Logic-Plant-App.pdf', audience: 'plant', covers: 'Install on a phone, the five tabs, the bench, how it meets the office and the customer.' },
-  /* THE office guide. scripts/guides/build.js writes it under this name and
-     under the old Omega-Logic-Office-App.pdf, which the apps' Help menus and
-     links already sent still open. The key stays 'office' (the audience), as
+  /* THE office guide, the Omega Logic app guide. scripts/guides/build.js
+     writes it as Omega-Logic-Office-App.pdf (the name the apps' Help menus
+     and every link already sent open) and also as Omega-Logic-App.pdf. The
+     kit links the first until a build with the new guide's screenshots has
+     written the second: a link the kit sends must never 404
+     (scripts/test-kit.js). The key stays 'office' (the audience), as
      build.js keys its files and as /api/logic-kit hands it to Jarvis. */
-  { key: 'office', name: 'Omega Logic app guide', path: '/guides/Omega-Logic-App.pdf', audience: 'office', covers: 'Get the app on a phone (iPhone, Android) or a computer, sign in, the hub, customers, orders, sites, and your customers\' own app.' },
+  { key: 'office', name: 'Omega Logic app guide', path: '/guides/Omega-Logic-Office-App.pdf', audience: 'office', covers: 'Get the app on a phone (iPhone, Android) or a computer, sign in, the hub, customers, orders, sites, and your customers\' own app.' },
   { key: 'customer', name: 'Customer app guide', path: '/guides/Omega-Logic-Customer-App.pdf', audience: 'customer', covers: 'Install on a phone, sign in, Design, Orders, POs, Sites & equipment, how it reaches the office.' },
   { key: 'all', name: 'All three apps (one document)', path: '/guides/Omega-Logic-Phone-Apps.pdf', audience: 'all', covers: 'The three apps and the bench together, the flow of one order, the sandboxes.' }
 ];
@@ -58,13 +61,16 @@ function forOrg(org, opts) {
     items: ITEMS.map(function (it) { return { key: it.key, audience: it.audience, kind: it.kind, name: it.name, what: it.what, signin: it.signin, install: it.install, url: url(it.path, it.org ? org : null, host), sandbox: it.sandbox && (!it.sandboxOrg || it.sandboxOrg === org) ? ORIGIN + it.sandbox : null, guide: it.guide ? ORIGIN + it.guide : null }; }),
     guides: GUIDES.map(function (g) { return { key: g.key, name: g.name, audience: g.audience, covers: g.covers, url: ORIGIN + g.path }; }) };
 }
-/* How an app goes on a device, in words that stay true across browser
-   versions (Chrome for Android's menu item now reads "Install and create
-   shortcut", older phones "Add to Home screen"). The office also works the
-   app from a computer, so its line says how to install it there. */
+/* How an app goes on a device, said so it holds across browser versions:
+   in Safari's default layout (iOS 26 and later) Share sits behind ••• or the
+   page-menu button in the address bar, and Chrome for Android's item reads
+   "Install app", "Install and create shortcut" or, on older phones, "Add to
+   Home screen". The steps match the Omega Logic app guide, pages 3-5. The
+   office also works the app from a computer, so its line says how to
+   install it there. */
 var INSTALL = {
-  phone: '  Open it on your phone, then Share → Add to Home Screen (iPhone) or the browser menu → Install app (Android).',
-  office: '  On a phone: open it in Safari, then Share → Add to Home Screen (iPhone), or in Chrome tap ⋮ → Install (Android). On a computer: open it in Chrome or Edge and click Install in the address bar, or in Safari on a Mac choose File → Add to Dock.'
+  phone: '  Open it on your phone. iPhone: in Safari tap Share (no Share button? tap ••• or the menu button in the address bar first) → Add to Home Screen → Add. Android: in Chrome tap ⋮ → Install (it may read Install app, Install and create shortcut or Add to Home screen) → Install.',
+  office: '  On a phone: iPhone, open it in Safari and tap Share (no Share button? tap ••• or the menu button in the address bar first) → Add to Home Screen → Add. Android, open it in Chrome and tap ⋮ → Install and create shortcut (older Chrome: Install app or Add to Home screen) → Install. On a computer: open it in Chrome or Edge and click Install in the address bar, or in Safari on a Mac choose File → Add to Dock.'
 };
 /* a message Jarvis (or a person) can send as is: the links for one audience and the guide to attach */
 function message(kit, audience) {
