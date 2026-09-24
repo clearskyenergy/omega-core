@@ -74,5 +74,25 @@ const ranked = R.closestToMarket([{ name: 'empty' }, {
 ok(ranked[0].deal.name === 'full', 'closestToMarket ranks the more complete project first');
 ok(ranked.length === 2, 'and keeps every project in the list');
 
+/* ── The upgrade is ADDITIVE ──────────────────────────────────────────────
+   Buyer-folder readiness answers a different question from the Matrix, so it
+   was added as a fifth rendering rather than replacing anything. These pin
+   that: the Matrix and the JD partners view in particular were called out as
+   must-keeps, and a future tidy-up that "simplifies" the portfolio views would
+   otherwise take them silently. */
+const fs2 = require('fs');
+const page = fs2.readFileSync(
+  path.join(__dirname, '..', '..', 'tenants', 'osa', 'portfolio.html'), 'utf8');
+
+['matrix', 'jd', 'partners', 'funding', 'supply', 'inbox',
+ 'design', 'work', 'users', 'settings', 'orgs', 'verify'].forEach(function (v) {
+  ok(page.indexOf('data-view="' + v + '"') >= 0, 'the ' + v + ' sidebar entry survives');
+});
+ok(page.indexOf('id="v-matrix"') >= 0, 'the Matrix view survives');
+ok(page.indexOf('id="v-jd"') >= 0, 'the JD partners view survives');
+ok(page.indexOf('id="v-buyer"') >= 0, 'and the Buyer Folder view was added');
+ok(/label:'Matrix'/.test(page) && /label:'Buyer Folder'/.test(page),
+   'the portfolio switcher gained Buyer Folder without losing Matrix');
+
 if (fails) { console.log('trouteready: ' + fails + ' failed'); process.exit(1); }
 console.log('trouteready: all passed');
