@@ -205,7 +205,7 @@
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <div id="view"></div>
 </main>
-<div id="cam" hidden style="position:fixed;inset:0;background:#000;z-index:50"><button type="button" id="cam-x" style="position:absolute;top:14px;right:14px;z-index:51;padding:8px 14px">Close</button><video id="cam-v" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
+<div id="cam" hidden style="position:fixed;inset:0;background:#000;z-index:50"><button type="button" id="cam-x" style="position:absolute;top:14px;right:14px;z-index:51;padding:8px 14px">Close</button><video id="cam-v" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover"></video><p id="cam-hint" style="position:absolute;left:0;right:0;bottom:28px;margin:0;text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000">Point the camera at the serial label</p></div>
 <nav class="bottom" id="nav" hidden>
   <button data-tab="today" aria-current="page"><span>⌂</span>Home</button>
   <button data-tab="orders"><span>▤</span>Orders</button>
@@ -213,7 +213,7 @@
   <button data-tab="sites"><span>◎</span>Sites</button>
   <button data-tab="menu"><span>⋮⋮</span>Menu</button>
 </nav>
-<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script><script src="/omega-hexhub.js"></script>
+<script>window.OMEGA_NO_HUB_ROUTE = true; /* Omega Logic resolves its own workspace (omega-logic-signin.js) */</script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-logic-theme.js"></script><script src="/omega-po-bulk.js"></script><script src="/omega-auth-errors.js"></script><script src="/omega-logic-signin.js"></script><script src="/omega-hexhub.js"></script><script src="/omega-scan.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1313,14 +1313,16 @@
   function covLine(c) { return '<div class="unit"><div>' + esc(c.type === 'sla' ? 'Service level' : 'Warranty') + ' <span class="mono">' + esc(c.templateId || c.id || '') + '</span><small>' + (c.status === 'active' ? 'until ' + esc(day(c.endDate || c.until)) + ' · from ' + esc(day(c.startDate || c.from)) : c.status === 'pending' ? esc(c.why || 'not started') : c.status === 'expired' ? 'ended ' + esc(day(c.endDate || c.until)) : esc(c.status)) + '</small></div><span class="pill' + (c.status === 'active' ? ' ok' : c.status === 'expired' ? ' bad' : '') + '">' + esc(c.status) + '</span></div>'; }
   function siteName(id) { var s = ((CUSTODY && CUSTODY.sites) || []).filter(function (x) { return x.id === id; })[0]; return s ? s.name : id; }
   function siteOptions(sel) { return ((CUSTODY && CUSTODY.sites) || []).filter(function (s) { return s.status !== 'inactive'; }).map(function (s) { return '<option value="' + esc(s.id) + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join(''); }
-  function closeCam() { var c = $('cam'); if (c) c.hidden = true; if (camTimer) { clearInterval(camTimer); camTimer = null; } if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; } }
+  /* the camera reads the label (omega-scan.js: the browser's own reader, or
+     ZXing where there is none — every iPhone) */
+  function closeCam() { var c = $('cam'); if (c) c.hidden = true; if (camTimer) { clearInterval(camTimer); camTimer = null; } if (camStream) { var s = camStream; camStream = null; if (typeof s === 'function') s(); else s.getTracks().forEach(function (t) { t.stop(); }); } }
   function openCam(onCode) {
-    if (!window.BarcodeDetector || !navigator.mediaDevices) { status('This phone cannot scan with its camera here; type the serial.'); return; }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (st) {
-      camStream = st; var v = $('cam-v'); v.srcObject = st; v.play(); $('cam').hidden = false;
-      var det = new window.BarcodeDetector({ formats: ['qr_code', 'data_matrix', 'code_128'] });
-      camTimer = setInterval(function () { det.detect(v).then(function (codes) { if (codes && codes.length) { var val = codes[0].rawValue; closeCam(); onCode(val); } })['catch'](function () {}); }, 300);
-    })['catch'](function () { status('No camera permission.'); });
+    if (!window.OmegaScan) { status('The camera reader did not load. Refresh the page, or type the serial.'); return; }
+    closeCam(); $('cam').hidden = false; status('Starting the camera…');
+    OmegaScan.start($('cam-v'), function (val) { camStream = null; closeCam(); status(''); onCode(val); }).then(function (stop) {
+      if ($('cam').hidden) { stop(); return; }
+      camStream = stop; status('');
+    }, function (e) { closeCam(); status(e.message); });
   }
   function drawSites() {
     $('view').innerHTML = '<h1>Sites</h1><div id="sites-body"><p class="note">Loading…</p></div>';
@@ -1333,7 +1335,7 @@
         + '<h2>Receive a load</h2><p class="note">Choose the load Shipping planned, then scan or type each serial. Shorts and strays are named; a unit the customer already said is going to a site is bound there.</p>'
         + '<select id="rc-load"><option value="">— choose the load —</option>' + loads.map(function (l, i) { return '<option value="' + i + '">' + esc(l.orderNo) + ' · ' + esc(l.legId) + ' · ' + l.serials.length + ' unit' + (l.serials.length === 1 ? '' : 's') + '</option>'; }).join('') + '</select>'
         + '<div class="row" style="margin-top:8px"><input id="rc-scan" placeholder="Scan or type a serial, then Enter" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="rc-cam" type="button">Camera</button></div><div id="rc-list"></div><button class="big" id="rc-go" disabled>Record 0 scans</button><p class="note" id="rc-result"></p>'
-        + '<h2>Unit passport</h2><div class="row"><input id="su-serial" placeholder="Serial" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="su-go" type="button">Open</button></div>'
+        + '<h2>Unit passport</h2><div class="row"><input id="su-serial" placeholder="Serial" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="su-go" type="button">Open</button><button id="su-cam" type="button">Camera</button></div>'
         + '<h2>Sites · ' + (c.sites || []).length + '</h2>' + ((c.sites || []).map(function (st) { var a = st.address || {}, ic = st.interconnection || {}; return '<div class="unit"><div><b>' + esc(st.name) + '</b><small>' + esc([a.city, a.state].filter(Boolean).join(', ')) + (ic.poi ? ' · POI ' + esc(ic.poi) : '') + '</small></div><span class="pill">' + esc(st.units || 0) + ' unit' + (st.units === 1 ? '' : 's') + '</span></div>'; }).join('') || '<p class="note">No sites yet; add one on the desktop or let the customer add theirs.</p>')
         + ((c.exceptions || []).length ? '<h2>Exceptions · ' + c.exceptions.length + '</h2>' + c.exceptions.slice(0, 20).map(function (x) { return '<button class="unit" data-open="' + esc(x.serial) + '"><div><span class="mono">' + esc(x.serial) + '</span><small>' + esc(x.say) + '</small></div><span class="pill bad">' + esc(String(x.kind).replace(/_/g, ' ').replace(/^state /, '')) + '</span></button>'; }).join('') : '')
         + '<a class="big ghost" href="/logic-custody.html' + q + '">Sites, imports and coverage on the desktop</a>';
@@ -1357,7 +1359,8 @@
           status(''); SCANS = []; CUSTODY = null; LOADS = null; var keep = $('rc-result').textContent; drawSites(); setTimeout(function () { if ($('rc-result')) $('rc-result').textContent = keep; }, 900);
         })['catch'](function (e) { fail(e); $('rc-go').disabled = false; });
       };
-      $('su-go').onclick = function () { if ($('su-serial').value.trim()) { SERIAL = $('su-serial').value.trim(); draw(); } };
+      $('su-go').onclick = function () { var v = $('su-serial').value.trim(); if (!v) { status('Type or scan a serial, then tap Open.'); $('su-serial').focus(); return; } SERIAL = v; draw(); };
+      $('su-cam').onclick = function () { openCam(function (val) { $('su-serial').value = val; $('su-go').click(); }); };
       $('su-serial').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('su-go').click(); } };
       Array.prototype.forEach.call(el.querySelectorAll('[data-open]'), function (b) { b.onclick = function () { SERIAL = b.getAttribute('data-open'); draw(); window.scrollTo(0, 0); }; });
       Array.prototype.forEach.call(el.querySelectorAll('[data-confirm]'), function (b) { b.onclick = function () { b.disabled = true; status('Confirming…'); api('/api/logic-custody', { action: 'confirm', serial: b.getAttribute('data-confirm') }).then(function (r) { status(r.say || 'Confirmed.'); CUSTODY = null; drawSites(); })['catch'](function (e) { fail(e); b.disabled = false; }); }; });

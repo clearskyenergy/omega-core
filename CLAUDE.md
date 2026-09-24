@@ -511,6 +511,13 @@ is not built.
   browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
   every one of these routes, so `check:pages` and the sandboxes exercise
   them.
+- **Scanning is `omega-scan.js`.** The office app, the bench and the
+  desktop Sites page read labels (QR, Data Matrix, Code 128) through it:
+  the browser's own BarcodeDetector where it reads all three, else ZXing
+  (barcode-detector + zxing-wasm, MIT/Apache) self-hosted under
+  `/vendor/zxing/<version>/` — Safari has no BarcodeDetector, so every
+  iPhone takes that road. No CDN at scan time. `check:pages` feeds a fake
+  camera a printed label and requires the passport and the bench to open.
 - Chromium render checks for all of it: `npm run check:pages`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
